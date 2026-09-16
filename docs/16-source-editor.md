@@ -30,7 +30,7 @@
 ```ts
 export interface PreviewResult {
   /** 预览使用的流程入口。 */
-  action: 'search' | 'book-info' | 'toc' | 'content' | 'review'
+  action: 'explore' | 'search' | 'book-info' | 'toc' | 'content' | 'review'
   /** 脱敏后的请求和规则中间结果。 */
   trace: Array<{
     /** 当前步骤名称。 */
@@ -114,7 +114,7 @@ JSON 源导出时必须保留规则对象与 JSON 字符串的兼容形态、未
 
 ### 结构化编辑
 
-- 按 `BookSource` schema 编辑基础字段和规则对象；
+- 按 `BookSource` schema 编辑基础字段、发现分类和规则对象；
 - 每个字段显示结果类型：元素列表、字符串、字符串列表、布尔值或 URL；
 - 支持 JSON 书源和 JS 书源切换，但切换前保护未保存内容；
 - 导入 JSON、远程 URL、文件 URI 和 JS 文本；
@@ -144,7 +144,7 @@ JSON 源导出时必须保留规则对象与 JSON 字符串的兼容形态、未
   -> 最终字段值
 ```
 
-搜索、详情、目录、正文各有预览入口；网络请求使用 fake/代理 host，由用户显式触发。预览结果要展示请求 URL、method、headers（脱敏）、body、最终响应 URL 和解析结果。
+发现分类、发现列表、搜索、详情、目录、正文各有预览入口；网络请求使用 fake/代理 host，由用户显式触发。分类预览要显示原始 `exploreUrl`、解析后的分类类型、选定 URL 和 `infoMap` 快照；请求预览要展示 URL、method、headers（脱敏）、body、最终响应 URL 和解析结果。
 
 预览协议至少包含 `action`、书源候选、流程输入、脱敏响应、capability 集合和网络白名单。结果必须返回请求轨迹、每个规则步骤的输入输出、最终 DTO、诊断和资源清理状态；真实网络预览需要显式确认，每次预览创建独立请求上下文，不得复用保存页或其他用户的 Cookie、变量和 JS scope。
 

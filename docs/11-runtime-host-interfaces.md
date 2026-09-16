@@ -1,6 +1,6 @@
 # TypeScript 宿主接口
 
-本章定义独立库需要的目标端口，不是 Android API 的逐名翻译。核心层负责书源导入、规则解析和搜索、详情、目录、正文编排，宿主负责网络、解析器、脚本沙箱、Cookie、缓存、限流和日志。接口名可以调整，但职责和数据边界不能混入流程代码。
+本章定义独立库需要的目标端口，不是 Android API 的逐名翻译。核心层负责书源导入、规则解析和发现、搜索、详情、目录、正文编排，宿主负责网络、解析器、脚本沙箱、Cookie、缓存、限流和日志。接口名可以调整，但职责和数据边界不能混入流程代码。
 
 ## 请求和响应
 
@@ -268,7 +268,7 @@ export interface JavaApi {
 
 文件、进程、真实浏览器和验证码 API 默认关闭。`importScript`、`downloadFile`、`webView`、`webViewGetSource`、登录 UI 和交互式播放器只有对应 capability 开启时才注入；未注入的函数不能由脚本自行模拟。所有脚本绑定都要按请求和书源身份创建，不能引用模块级可变对象。
 
-本节列出的 `JavaApi`、`JsCacheApi`、`JsCookieApi` 和 `SourceApi` 是第一版 source-core 的核心 allowlist。`JsExtensions` 中未列出的 Android UI、阅读器交互或其他平台专用方法不自动进入独立库；若某个 adapter 需要支持它，必须增加版本化接口、明确 capability 和 conformance fixture。
+本节列出的 `JavaApi`、`JsCacheApi`、`JsCookieApi` 和 `SourceApi` 是先实施的核心 allowlist。`JsExtensions` 中未列出的 Android UI、阅读器交互或其他平台专用方法仍属于能力盘点对象；移植时逐项判断它是否承担书源处理行为。需要支持的行为通过版本化接口、明确 capability 和 conformance fixture 增加；建议放弃的行为须经用户审核。
 
 脚本 scope 必须按调用或请求隔离。SSR 不能把 `source`、Cookie、变量表、JS 全局对象或缓存身份放在模块级可变单例中。`JavaScriptRuntime` 不得使用宿主 `eval`、Node 全局对象或未限制的文件、进程和网络能力。没有脚本沙箱时，普通声明式书源仍可运行，但 JS 源必须报告能力缺失，不能返回伪造成功。
 
@@ -350,7 +350,7 @@ export interface RuntimeCapabilities {
 ```ts
 export type RuntimeStage =
   | 'import' | 'url' | 'request' | 'rule'
-  | 'search' | 'book-info' | 'toc' | 'content' | 'review' | 'javascript'
+  | 'explore' | 'search' | 'book-info' | 'toc' | 'content' | 'review' | 'javascript'
   | 'storage' | 'capability' | 'lifecycle' | 'editor'
 
 export interface RuntimeDiagnostic {

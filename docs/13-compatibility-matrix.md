@@ -1,13 +1,14 @@
 # 兼容性矩阵
 
-本矩阵同时记录目标承诺、Android 事实证据和 TypeScript 当前完成度。它是迁移验收清单，不是“已经兼容”的声明。当前仓库尚未实现 TypeScript runtime，因此所有尚未标记为已验证的 TS 项都不能被当作完成。
+本矩阵同时记录目标承诺、Android 事实证据和 TypeScript 当前完成度。它是迁移验收清单，不是“已经兼容”的声明。当前仓库尚未实现 TypeScript runtime，因此所有尚未标记为已验证的 TS 项都不能被当作完成。完整能力类别及需要补写的规格见 [书源能力清单与审核决策](19-capability-inventory.md)。
 
 状态含义：
 
-- `目标必须兼容`：第一版核心库的行为承诺。
+- `目标必须兼容`：已确定的核心行为承诺。
 - `声明存在时必须兼容`：书源声明该能力后，运行时必须保持其契约；没有声明时不强制启用。
-- `目标可选能力`：由宿主能力标记决定，核心库需要可诊断地降级。
-- `明确不支持`：第一版不实现，但导入、编辑器和运行时必须保留清晰错误。
+- `目标宿主能力`：由宿主能力标记决定，核心库需要可诊断地降级；目标仍是完整支持。
+- `低优先待实现`：排在后续实施，不代表决定放弃。
+- `低优先待核实`：源码有字段，但尚无足够执行证据定义兼容行为。
 - `目标设计`：上层产品能力，不是 Android 运行时兼容项。
 
 | 能力 | 目标状态 | Android 证据 | TypeScript 当前状态 |
@@ -22,11 +23,11 @@
 | 索引、负索引、范围、负步长和排除 | 目标必须兼容 | `AnalyzeByJSoupDomTest`、`AnalyzeRule` | 未实现 runtime，待 fixture |
 | `$n`、`##match##replace`、`@put/@get`、`{{}}` | 目标必须兼容 | `AnalyzeRule`、变量规则源码 | 未实现 runtime，待 fixture |
 | 连续 `<js>` 和 `@js:` | 目标必须兼容 | `AnalyzeRule`、JS 规则测试 | 未实现 runtime，待 fixture |
-| `@webjs:` | 目标可选能力 | `AnalyzeRule`、WebView 相关流程 | 未实现 runtime，需 capability 设计 |
+| `@webjs:` | 目标宿主能力 | `AnalyzeRule`、WebView 相关流程 | 未实现 runtime，需 capability 设计 |
 | URL 页码、URL options、表单编码 | 目标必须兼容 | `AnalyzeUrl`、`AnalyzeUrlNetworkOptionsTest` | 未实现 runtime，待 fixture |
 | Cookie、静态登录头和最终域名 | 目标必须兼容 | `AnalyzeUrl`、网络选项测试 | 未实现 runtime，待 fixture |
 | `@js` 改写登录 URL 后的跨域登录头 | 目标必须兼容 | `AnalyzeUrl` 登录头判断源码 | 未实现 runtime，需 golden |
-| 复杂登录 UI、验证码和多步骤登录 | 明确不支持 | `BookSource` 登录字段、WebView 流程 | 不纳入第一版 |
+| 复杂登录 UI、验证码和多步骤登录 | 低优先待实现 | `BookSource` 登录字段、WebView 流程 | 未实现 runtime，需登录交互规格 |
 | 搜索、详情、目录、正文流程 | 目标必须兼容 | `WebBook`、四类流程测试 | 未实现 runtime，待 golden |
 | 目录和正文分页、循环保护 | 目标必须兼容 | `BookChapterList`、`WebBook` | 未实现 runtime，待 fixture |
 | 搜索精准匹配中的书名、作者和分类 | 目标必须兼容 | `SearchModel` | 未实现 runtime，待 fixture |
@@ -36,7 +37,13 @@
 | JS 源返回值和字段归一化 | 目标必须兼容 | `JsSourceMarshallerTest`、`JsSourceEngineTest` | 未实现 runtime，待 fixture |
 | `getContentBatch` 和 `contentBatch` | 声明存在时必须兼容 | `JsSourceConfig`、JS 源测试 | 未实现 runtime，待 fixture |
 | 段评摘要、详情和回复 | 声明存在时必须兼容 | `JsSourceConfig`、`JsSourceReview` | 未实现 runtime，待 fixture |
-| WebView 真实页面行为 | 目标可选能力 | WebView 相关流程 | 需 adapter 和 capability error |
+| WebView 真实页面行为 | 目标宿主能力 | WebView 相关流程 | 需 adapter 和 capability error |
+| 发现分类、`infoMap` 与发现列表 | 目标必须兼容 | `BookSourceExtensions`、`ExploreKind`、`WebBook.exploreBookAwait` | 未实现 runtime，待分类和列表 fixture |
+| 图片与封面解密 | 目标宿主能力 | `ImageUtils`、`ContentRule.imageDecode`、`BookSource.coverDecodeJs` | 未实现 runtime，待字节流程规格 |
+| 付费动作与购买后刷新 | 低优先待实现 | `ContentRule.payAction`、`ReadBookActivity.payAction` | 未实现 runtime，待交互规格 |
+| 段评写入、投票和删除 | 低优先待核实 | `ReviewRule` 有字段；已核对的 `ReviewController` 入口主要是读取 | 尚无可核实的 Android 写入流程，不能生成等价 golden |
+| 书源事件和自定义按钮 | 目标宿主能力 | `SourceCallBack`、`BookSource.eventListener/customButton` | 未实现 runtime，待事件协议规格 |
+| 音频、图片、视频和文件结果 | 目标必须兼容 | `BookSource.bookSourceType`、`Book`、`BookChapter`、相关调用点 | 未实现 runtime，待类型专属 fixture |
 | 编辑器预览与诊断 | 目标设计 | `modules/web` 配置和测试 | 仅规划，未实现独立编辑器 |
 
 ## Android 证据索引

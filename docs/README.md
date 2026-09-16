@@ -1,6 +1,6 @@
 # Legado 书源运行时迁移文档
 
-本文档体系记录当前 Legado Android/Kotlin 实现的可观察行为，并将这些行为整理为 TypeScript 独立库的实现契约。目标读者是需要实现书源导入、规则解释、网络请求、搜索、详情、目录和正文流程的工程师。
+本文档体系记录当前 Legado Android/Kotlin 实现的可观察行为，并将这些行为整理为 TypeScript 独立库的实现契约。目标是完整登记书源能力，并为每项能力定义处理流程、宿主条件和验证依据。目标读者是实现或维护书源 package 的工程师。
 
 当前交付阶段只生成和修订文档，不包含 TypeScript runtime、Node/Next.js adapter 或独立编辑器实现。文档中的“目标必须兼容”是待实现的验收承诺，只有在 Android 事实证据、脱敏 fixture、golden 输出和 TypeScript 自动断言都具备后，才能标记为已验证。
 
@@ -23,6 +23,16 @@
 15. [迁移实施顺序](14-migration-guide.md)
 16. [一致性测试基线](15-conformance-tests.md)
 17. [书源编辑器规划](16-source-editor.md)
+18. [发现流程与分类规则](17-explore-flow.md)
+19. [独立 package 的调用契约](18-package-usage.md)
+20. [书源能力清单与审核决策](19-capability-inventory.md)
+21. [与书源关联的媒体和交互流程](20-adjacent-source-flows.md)
+22. [实施总路线与阶段交付](21-implementation-roadmap.md)
+23. [阶段 A：模型、导入与编辑基础](22-implement-codec-editor.md)
+24. [阶段 B：规则引擎与请求计划](23-implement-rules-request.md)
+25. [阶段 C：发现、搜索、详情、目录与正文](24-implement-workflows.md)
+26. [阶段 D：JavaScript 书源与扩展能力](25-implement-extended-capabilities.md)
+27. [阶段 E：应用接入、部署验证与 package 维护](26-implement-integration-verification.md)
 
 ## 证据标记
 

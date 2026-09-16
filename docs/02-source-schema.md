@@ -2,7 +2,7 @@
 
 本文件是迁移时的字段总表。字段注释同时说明 Android 持久化形态和 TypeScript 运行时形态，不能只按 TypeScript 类型推断默认值、空值和覆盖规则。
 
-本章列出的 `BookSource`、规则对象、`SearchBook`、`BookChapter`、`Book`、`BookReadConfig` 和段评对象的每个公开字段都必须保留字段注释。注释至少说明业务含义、输入/输出类型、默认值或空值、是否持久化、覆盖权限和所属流程；未列入结构化模型的字段进入未知字段保留区，不得因为没有表单控件而丢失。
+本章列出的 `BookSource`、规则对象、`ExploreKind`、`ExploreStyle`、`SearchBook`、`BookChapter`、`Book`、`BookReadConfig` 和段评对象的每个公开字段都必须保留字段注释。注释至少说明业务含义、输入/输出类型、默认值或空值、是否持久化、覆盖权限和所属流程；未列入结构化模型的字段进入未知字段保留区，不得因为没有表单控件而丢失。
 
 ## 1. 书源原始与规范化模型
 
@@ -37,7 +37,7 @@ export interface BookSource {
   concurrentRate?: string | null
   /** 默认请求头文本，通常是 JSON 对象。 */
   header?: string | null
-  /** 登录入口地址。复杂登录 UI 不属于第一版核心运行时。 */
+  /** 登录入口地址；交互登录属于后续宿主能力，字段必须保留。 */
   loginUrl?: string | null
   /** 登录 UI 配置或兼容标记。 */
   loginUi?: string | null
@@ -71,7 +71,7 @@ export interface BookSource {
   ruleToc?: RuleObject<TocRule>
   /** 正文页规则；规范化后为 ContentRule。 */
   ruleContent?: RuleObject<ContentRule>
-  /** 段评规则；第一版可以作为可选能力，但导入导出不能丢失。 */
+  /** 段评规则；读取与交互均纳入完整能力清单，导入导出不能丢失。 */
   ruleReview?: RuleObject<ReviewRule>
   /** 纯 JavaScript 书源脚本。非空时优先走 JS 源流程。 */
   mainJs?: string | null
@@ -114,6 +114,40 @@ export interface BookListRule {
 
 export interface ExploreRule extends BookListRule {
   /** 发现流程复用 BookListRule 字段，不增加额外字段。 */
+}
+
+export interface ExploreKind {
+  /** 分类标题；普通文本格式的 :: 左侧。 */
+  title: string
+  /** 选中分类后交给发现流程的 URL；非 URL 控件或无链接分类可为空。 */
+  url?: string | null
+  /** 分类交互类型，Android 支持 url、text、button、toggle 和 select。 */
+  type?: string
+  /** 控件触发时使用的脚本或动作文本；执行由具备该能力的宿主负责。 */
+  action?: string | null
+  /** select、toggle 等控件可用的选项文本；允许空选项。 */
+  chars?: Array<string | null> | null
+  /** 控件的初始值；没有配置时由上层界面决定展示。 */
+  default?: string | null
+  /** 动态显示名规则或文本，是否执行取决于宿主能力。 */
+  viewName?: string | null
+  /** Android 分类控件的布局参数；跨端保留，Web 适配器按能力解释。 */
+  style?: ExploreStyle | null
+}
+
+export interface ExploreStyle {
+  /** Flex 增长比例，Android 默认 0。 */
+  layout_flexGrow?: number
+  /** Flex 收缩比例，Android 默认 1。 */
+  layout_flexShrink?: number
+  /** 交叉轴对齐方式，Android 默认 auto。 */
+  layout_alignSelf?: string
+  /** 基础宽度占比，Android 默认 -1。 */
+  layout_flexBasisPercent?: number
+  /** 当前控件前是否换行，Android 默认 false。 */
+  layout_wrapBefore?: boolean
+  /** 控件内部水平对齐方式，Android 默认 auto。 */
+  layout_justifySelf?: string
 }
 
 export interface SearchRule extends BookListRule {

@@ -1,4 +1,6 @@
-# 迁移实施顺序
+# 迁移实施顺序概览
+
+实际编码的阶段划分、建议文件位置、公开接口、处理步骤和验收条件见 [实施总路线与阶段交付](21-implementation-roadmap.md)，再按阶段 A 至 E 的详细文档执行。本页保留行为依赖顺序的速览；两个视图描述同一迁移过程，阶段 A 先完成 codec，阶段 B 完成规则与请求计划，阶段 C 完成 Node 宿主和主流程，阶段 D 逐项增加扩展能力，阶段 E 完成应用接入和部署验证。
 
 ## 当前交付状态
 
@@ -8,7 +10,7 @@
 
 ## 阶段一：行为基线
 
-先完成规则、URL 和四流程的 Android fixture，记录输入 body、规则文本、上下文变量、输出 JSON、异常类型和日志阶段。fixture 必须脱敏，不保存真实 Cookie、Token 或账号。
+先完成规则、URL、发现、搜索、详情、目录和正文流程的 Android fixture，记录输入 body、规则文本、上下文变量、输出 JSON、异常类型和日志阶段。fixture 必须脱敏，不保存真实 Cookie、Token 或账号。
 
 行为基线还必须记录每条流程的状态转换、请求启动与完成顺序、缓存命中与写入、持久化变更、事件/回调顺序、取消出口和资源清理结果。只有结果 JSON 没有这些处理记录时，不能证明流程兼容。
 
@@ -30,19 +32,19 @@
 
 实现 URL 规则展开与请求描述，不在核心中绑定 fetch、axios、undici 或某个 DOM 库。同步补齐 `VariableStore`、`JavaApi`、`SourceApi` 和 capability 接口，明确每个端口的输入、输出、错误和所有权。Node adapter 先实现普通 HTTP；WebView、代理、DNS 覆盖和复杂认证以能力接口增加。
 
-## 阶段四：四条流程
+## 阶段四：发现与四条主流程
 
-依次实现搜索、详情、目录、正文。流程代码只调用规则核心和 host port，不重新实现字段规则。每个流程要固化输入 DTO、状态机、请求和解析顺序、空值、分页、取消、超时、缓存、持久化、回调和重复数据；每个阶段都要有成功、部分失败和清理后的输出。
+先实现发现分类，再依次实现发现列表、搜索、详情、目录、正文。流程代码只调用规则核心和 host port，不重新实现字段规则。每个流程要固化输入 DTO、状态机、请求和解析顺序、空值、分页、取消、超时、缓存、持久化、回调和重复数据；每个阶段都要有成功、部分失败和清理后的输出。
 
 ## 阶段五：JS 源
 
-实现配置抽取、脚本沙箱、返回值 JSON 归一化、marshaller 和 [JavaScript 书源宿主 API](11-runtime-host-interfaces.md#javascript-书源宿主-api)。先支持普通函数和静态变量，再增加批量；复杂登录和 WebView 作为可选 adapter，但登录函数配对、静态登录头和 capability error 必须先有 fixture。
+实现配置抽取、脚本沙箱、返回值 JSON 归一化、marshaller 和 [JavaScript 书源宿主 API](11-runtime-host-interfaces.md#javascript-书源宿主-api)。先支持普通函数和静态变量，再增加批量；复杂登录和 WebView 排在后续宿主能力，但登录函数配对、静态登录头和 capability error 必须先有 fixture。完整能力的实施状态按 [能力清单](19-capability-inventory.md) 逐项推进，不因当前阶段尚未实现就删掉目标。
 
 ## 阶段六：应用和编辑器
 
-Node API 作为 SPA/Next.js 代理边界；编辑器复用 schema、规则词法解析、诊断和 preview session。只有核心结果稳定后，才拆分 `@legado/source-core`、Node adapter 和编辑器包。
+Node API 作为 SPA/Next.js 代理边界；编辑器复用 schema、规则词法解析、诊断和 preview session。`source-core` 的独立边界从阶段 A 就建立，Node 宿主在阶段 C 接入；是否另建编辑器包由应用复用需求决定，不能把编辑器 UI 变成规则语义的依赖。
 
-阶段六必须同时完成一致性测试和编辑器验收：使用 `15-conformance-tests.md` 中的全部用例 ID 建立 fixture、golden 和 TypeScript 断言；使用 `16-source-editor.md` 中的会话状态建立导入导出 round-trip、预览、dirty、conflict、保存失败和 preserve-only 字段测试。没有这些证据时，只能交付设计文档，不能把实现标记为兼容。
+阶段六完成当前已实施能力的一致性测试和应用接入验收：为对应的用例 ID 建立 fixture、golden 和 TypeScript 断言；编辑器数据层与静态诊断在阶段 A 建立，规则预览在阶段 B、C 接入，独立 UI 的布局和交互可在应用接入时再实现。使用 `16-source-editor.md` 中的会话状态验证导入导出 round-trip、预览、dirty、conflict、保存失败和 preserve-only 字段。低优先级能力保持待实现状态，不能被标记为兼容，也不能从 [能力清单](19-capability-inventory.md) 删除。
 
 ## 每阶段完成门槛
 
@@ -52,4 +54,4 @@ Node API 作为 SPA/Next.js 代理边界；编辑器复用 schema、规则词法
 - SSR 无模块级可变请求状态；
 - 文档中的每个“目标必须兼容”都有 Android 事实来源；若要标记 TypeScript 已验证，还必须有独立 fixture、golden 输出和可执行断言。
 - 当前只完成文档时，应明确记录“TS runtime 未实现”或“fixture 待建立”，不能用源码路径替代 TypeScript 测试证据。
-- 书源编辑器还要通过 JSON/JS 导入导出 round-trip、schema 字段覆盖、dirty/conflict 状态、fake 预览、capability error 和保存失败测试，才能进入独立编辑器实现阶段。
+- 独立编辑器交付前，还要通过 JSON/JS 导入导出 round-trip、schema 字段覆盖、dirty/conflict 状态、fake 预览、capability error 和保存失败测试。

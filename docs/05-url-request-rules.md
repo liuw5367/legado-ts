@@ -105,7 +105,7 @@ raw rule URL
 
 请求前把 CookieStore 中对应域的 Cookie 与 URL 选项中的 `Cookie` 合并，临时 URL 选项优先；启用 CookieJar 时保存响应中的 Set-Cookie。当前 Cookie 域按解析后的目标 URL 计算，封面 CDN 不应错误使用书源站点 Cookie。
 
-登录头默认只发往书源同站二级域名；需要跨域时由 URL 选项显式提供。注意，当前保护逻辑依据初始 URL 判断，URL 中的 `@js` 如果把地址改写到跨域目标，不能假设登录头一定会被重新拦截。TypeScript 迁移应将这一点作为兼容事实和安全告警分别记录。复杂登录 UI 不在第一版核心范围内，但静态 Header、Cookie、Token 和 loginCheckJs 的宿主端口必须保留。
+登录头默认只发往书源同站二级域名；需要跨域时由 URL 选项显式提供。注意，当前保护逻辑依据初始 URL 判断，URL 中的 `@js` 如果把地址改写到跨域目标，不能假设登录头一定会被重新拦截。TypeScript 迁移应将这一点作为兼容事实和安全告警分别记录。静态 Header、Cookie、Token 和 `loginCheckJs` 优先实现；复杂登录 UI 作为低优先级宿主能力保留在完整移植清单。
 
 `followRedirects=false` 时，普通请求返回 3xx，不进入 WebView；开启时使用最终 URL 作为 redirectUrl。书源流程使用最终 URL 解析相对资源，同时保留初始 URL 用于去重和分页循环判断。
 

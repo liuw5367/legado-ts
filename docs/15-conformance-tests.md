@@ -78,6 +78,12 @@
 | `IMP-008` | JS 导入 | `config`、旧版 `source`、配置字段错误、脚本错误和必备函数错误 |
 | `IMP-009` | JS 导入 | `exploreUrl/explore`、`loginUi/login/loginAction` 的成对校验 |
 | `IMP-010` | JS 导入 | 段评函数配对、`maxBatchSize/getContentBatch` 配对、剥离规则与 `mainJs` 原文保留 |
+| `EXP-001` | 发现分类 | 空入口、普通文本 `&&`/换行与 `::`、无 URL 项和输入顺序 |
+| `EXP-002` | 发现分类 | JSON `ExploreKind` 的五类控件、未知字段保留与错误诊断 |
+| `EXP-003` | 发现分类 | `@js:`/`<js>`、`infoMap`、分类缓存更新及跨会话隔离 |
+| `EXP-004` | 发现列表 | 声明式 `ruleExplore`、`ruleSearch` 回退、响应最终 URL 和同源去重 |
+| `EXP-005` | 发现列表 | JS 源 `explore(url, page)` 返回归一化、非法结果与取消 |
+| `EXP-006` | 发现生命周期 | 换分类、换页、旧请求迟到、分类 URL 为空和宿主能力缺失 |
 | `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`、`@CSS` 元素选择和字符串终端输出 |
 | `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出 |
 | `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
@@ -109,9 +115,20 @@
 | `JS-002` | JS | `ajax`、`ajaxAll`、`connect` 的请求描述、错误兼容文本和取消传播 |
 | `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |
 | `JS-004` | 段评 | 摘要索引、详情分页、回复展平、内容协议和函数配对错误 |
+| `MEDIA-001` | 媒体 | 文本、音频、图片、视频和文件类型从列表到详情的身份与结果类型 |
+| `MEDIA-002` | 图片 | 封面和正文图片 bytes 解密、失败回退、Cookie 和缓存隔离 |
+| `MEDIA-003` | 文件 | 下载地址归一化、空地址错误、下载能力缺失和资源清理 |
+| `ACTION-001` | 购买 | VIP/已购买状态、用户触发 `payAction`、成功刷新与失败保留原状态 |
+| `ACTION-002` | 段评写入 | 先核实 Android 是否存在执行入口；若只存在规则字段，测试保留与诊断，Web 新增写入流程另列目标设计测试，不宣称 Android 等价 |
+| `ACTION-003` | 书源事件 | `eventListener`、`callBackJs`、`customButton` 的事件上下文、取消和权限 |
+| `LOGIN-001` | 登录 | 静态 Header/Cookie、`loginCheckJs`、登录过期与重试边界 |
+| `LOGIN-002` | 登录 | 静态和动态登录 UI、验证码/多步骤流程的宿主能力与隔离 |
 | `HOST-001` | Host | Http/HTML/XPath/JSONPath/JS/Cookie/Cache 端口的空值、错误和资源释放 |
 | `HOST-002` | Node | requestId、响应限制、来源白名单、错误到 HTTP DTO、Cookie 隔离和 abort |
 | `HOST-003` | Next | SSR 请求隔离、动态缓存键、客户端断开、模块级状态扫描和响应脱敏 |
+| `HOST-004` | Edge/Node | 同一公开入口在不同宿主的能力报告；缺失能力不能伪造成功 |
+| `API-001` | package | 从导入候选确认到搜索、详情、目录和正文的公开入口组合流程 |
+| `API-002` | package | 编辑保存后规则版本变更、旧请求迟到、缓存失效和用户字段保护 |
 | `EDIT-001` | 编辑器 | JSON/JS 导入、规范化、字段诊断、未知字段和完整 `mainJs` 保留 |
 | `EDIT-002` | 编辑器 | JSON/JS 切换、未保存保护、dirty 状态和原文回退 |
 | `EDIT-003` | 编辑器 | fake 预览请求、逐步 trace、脱敏 header、capability error 和资源清理 |
@@ -129,6 +146,11 @@ fixtures/
   url/
   workflows/
   javascript/
+  explore/
+  media/
+  actions/
+  login/
+  package-api/
   editor/
 goldens/android/
 goldens/typescript/
@@ -149,7 +171,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 
 测试命令和门槛必须随 runtime 一起提交：纯规则、流程组合、Node adapter、Next adapter 和编辑器分别可独立执行，全部 `verified` fixture 还要有一次全量命令。任何用例缺少 Android 证据、golden、TypeScript 断言或资源清理断言时，状态只能是 `ts-pending`，兼容矩阵不能标记已验证。
 
-覆盖审计按以下关系执行：`02-source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`04-rule-language.md` 和 `05-url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；`06-search-flow.md` 至 `10-javascript-source.md` 的每个状态、分支、输出和宿主能力至少映射一个流程/JS 用例；`16-source-editor.md` 的每个编辑动作至少映射一个编辑器用例。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
+覆盖审计按以下关系执行：`02-source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`04-rule-language.md` 和 `05-url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`19-capability-inventory.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
 
 ## 必须覆盖的规则样本
 
