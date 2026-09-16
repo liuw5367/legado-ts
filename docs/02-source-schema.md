@@ -2,6 +2,8 @@
 
 本文件是迁移时的字段总表。字段注释同时说明 Android 持久化形态和 TypeScript 运行时形态，不能只按 TypeScript 类型推断默认值、空值和覆盖规则。
 
+本章列出的 `BookSource`、规则对象、`SearchBook`、`BookChapter`、`Book`、`BookReadConfig` 和段评对象的每个公开字段都必须保留字段注释。注释至少说明业务含义、输入/输出类型、默认值或空值、是否持久化、覆盖权限和所属流程；未列入结构化模型的字段进入未知字段保留区，不得因为没有表单控件而丢失。
+
 ## 1. 书源原始与规范化模型
 
 外部 JSON 的规则字段允许是规则对象，也允许是序列化后的 JSON 字符串。导入层先保留原始字段，再生成规范化对象。未知字段默认保留，是否交给运行时执行由能力检查决定，不能在导入时静默删除。
@@ -284,7 +286,7 @@ export interface SearchBook {
   origin: string
   /** 书源名称。 */
   originName: string
-  /** 书籍类型，使用 BookType，而不是 BookSourceType。 */
+  /** 书籍类型，使用 BookType；它与 BookSourceType 的取值语义不同。 */
   type: number
   /** 书名，缺失时条目被丢弃。 */
   name: string
@@ -445,6 +447,7 @@ export interface Book {
   persistedCoverUrl?: string | null
   /** 详情和目录响应的临时缓存。 */
   infoHtml?: string | null
+  /** 详情流程准备的目录响应临时缓存。 */
   tocHtml?: string | null
   /** 文件源下载地址，仅文件源流程使用。 */
   downloadUrls?: string[] | null

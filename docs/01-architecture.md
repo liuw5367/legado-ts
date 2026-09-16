@@ -39,7 +39,8 @@
 - `HtmlParser`：Jsoup 兼容的 HTML/CSS/属性/文本节点访问；
 - `XPathParser` 与 `JsonPathParser`；
 - `JavaScriptRuntime`：受限脚本执行、超时和取消；
-- `CookieStore`、`CacheStore`、`Logger`、`RateLimiter`。
+- `CookieStore`、`CacheStore`、`VariableStoreFactory`、`Logger`、`RateLimiter`；
+- `JavaApi`、`SourceApi`：仅作为 JS 源脚本的受限兼容外观，由宿主按 capability 注入。
 
 ### 上层应用
 
@@ -52,3 +53,22 @@
 - 规则执行错误和网络错误必须带阶段、字段、书源 URL 和原始规则，方便编辑器显示。
 - `mainJs` 与声明式规则是两条执行路径；不能将 JavaScript 书源自动转换成声明式规则后丢弃原脚本。
 
+## 统一处理流程
+
+所有领域流程都遵循同一条边界：
+
+```text
+上层输入 DTO
+  -> 创建 requestId、RuleContext、VariableStore 和 AbortSignal
+  -> 书源分流
+  -> URL 展开与请求计划
+  -> Host 执行请求
+  -> AnalyzeRule 等价规则解析
+  -> 领域对象归一化
+  -> 领域级去重、分页、排序或正文处理
+  -> 生成事件、诊断和持久化变更
+  -> 上层提交或返回 DTO
+  -> finally 清理请求资源
+```
+
+核心流程输出“结果加变更”，宿主或上层应用负责提交变更。每个阶段都要明确成功、空结果、可继续错误、终止错误、取消和清理行为；四条流程的具体状态机分别见搜索、详情、目录和正文文档。

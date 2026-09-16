@@ -6,21 +6,51 @@
 
 `AnalyzeRule.setContent` 接收字符串、DOM 节点、JSON 对象或列表。当前实现的内容判断是：DOM `Node` 按 HTML 处理；其他值转文本后，若被判断为 JSON 则按 JSON 处理。设置新内容会清空 HTML、XPath、JSONPath 解析器缓存，但保留当前规则对象的变量和脚本缓存。
 
-一个规则字段的执行上下文至少包含以下字段。`Book`、`BookChapter` 和规则对象以 [docs/02-source-schema.md](02-source-schema.md) 为唯一字段来源，`VariableStore` 是运行时接口，不能由每个流程各自实现一套：
+一个规则字段的执行上下文至少包含以下字段。`Book`、`BookChapter` 和规则对象以 [书源数据模型](02-source-schema.md) 为唯一字段来源，`VariableStore` 是运行时接口，不能由每个流程各自实现一套：
 
 ```ts
-interface RuleContext {
+export interface RuleContext {
+  /** 当前请求或独立预览会话的稳定身份。 */
+  requestId: string
+  /** 当前规则输入，可以是 HTML 文本、DOM 节点、JSON 值或值列表。 */
   content: unknown
+  /** 空 URL 的回退基准；详情、目录和正文流程分别传入当前阶段基准。 */
   baseUrl?: string
+  /** 非空相对 URL 的解析基准，通常是最终响应 URL。 */
   redirectUrl?: string
-  source: BookSource
+  /** 当前书源，只读暴露给规则。 */
+  readonly source: BookSource
+  /** 当前书籍；搜索阶段可以为空。 */
   book?: Book
+  /** 当前章节；搜索和详情阶段可以为空。 */
   chapter?: BookChapter
+  /** 当前章节的下一章 URL，用于正文分页保护。 */
   nextChapterUrl?: string
+  /** 当前调用可见的变量存储。 */
   variables: VariableStore
+  /** 取消规则、请求和后续分页的信号。 */
   signal?: AbortSignal
 }
+
+export type VariableScope = 'local' | 'chapter' | 'book' | 'rule-data' | 'source'
+
+export interface VariableStore {
+  /** 按 Android 兼容优先级读取变量，不存在时返回 undefined。 */
+  get(name: string): string | undefined
+  /** 写入最具体的可用持久化层；local 变量只在当前 RuleContext 存活。 */
+  set(name: string, value: string | null, scope?: VariableScope): void
+  /** 只删除指定作用域中的变量，不能误删其他书籍或请求的变量。 */
+  delete(name: string, scope?: VariableScope): void
+  /** 判断指定查找优先级中是否存在非空变量。 */
+  has(name: string): boolean
+  /** 返回指定作用域的只读快照，供调试和脱敏 fixture 使用。 */
+  snapshot(scope?: VariableScope): Readonly<Record<string, string>>
+}
 ```
+
+默认写入目标和读取顺序必须与 Android 一致：写入优先尝试当前章节、当前书籍、当前规则数据，最后写入书源变量；读取先查 `local`，再查章节变量、书变量、规则数据变量和书源变量。读取结果为空字符串时继续查找下一层，全部没有结果时返回空字符串给 `@get` 和 `{{}}`。`bookName` 和 `title` 是保留名称，分别映射当前书名和章节标题。`set` 使用 `null` 表示删除，`snapshot` 不得包含 Cookie、Token、密码或 Authorization。
+
+变量作用域由流程创建：搜索至少创建 `rule-data` 和 `source`，详情、目录和正文额外创建 `book`，章节规则额外创建 `chapter`，每次规则调用创建新的 `local`。书源变量是跨调用、按书源身份保存的持久化数据；书籍和章节变量随对应对象保存；`rule-data` 和 `local` 在本次流程或规则实例结束后释放。SSR 必须为每个请求创建独立的变量视图，不能把 `VariableStore` 放在模块级单例中。
 
 `content` 的类型由当前阶段决定，可以是 HTML 字符串、DOM 节点、JSON 对象或列表。`baseUrl` 用于空 URL 回退，`redirectUrl` 用于非空相对 URL 归一化；二者不能在流程适配器中混为一个字段。
 
@@ -48,7 +78,7 @@ interface RuleContext {
 
 `<js>...</js>` 和 `@js:...` 会成为 `Mode.Js` 规则块；`@webjs:...` 成为 `Mode.WebJs` 规则块。普通文本和脚本块可以组合，脚本块的结果成为后续链条的输入。
 
-**待验证兼容点**：当前 `splitSourceRule` 分别扫描 JS 和 WebJS 标记，迁移时必须用连续混合标记 fixture 固化现有顺序，再决定词法扫描器是否严格按源文本位置输出。
+**兼容测试要求**：当前 `splitSourceRule` 分别扫描 JS 和 WebJS 标记，迁移时必须用连续混合标记 fixture 固化现有顺序，再决定词法扫描器是否严格按源文本位置输出。
 
 ### `&&`、`||`、`%%`
 
@@ -129,7 +159,7 @@ JSONPath 解析失败时当前实现记录错误并返回空/空列表，不能�
 - `{{expression}}` 若以 `@`、`$.`、`$[` 或 `//` 开头，视为规则递归执行；否则视为 JS；
 - JS 结果中的整数 Double 要以无小数位文本输出，其他结果使用字符串化；`null` 不插入文本。
 
-变量查找优先级是：当前规则局部变量、章节变量、书变量、通用规则数据变量、书源变量；`bookName` 和 `title` 是保留含义，分别优先映射书名和章节标题。TypeScript 要把变量存储作为接口注入，但保留这个优先级。
+变量查找优先级是：当前规则局部变量、章节变量、书变量、通用规则数据变量、书源变量；`bookName` 和 `title` 是保留含义，分别优先映射书名和章节标题。`@put` 写入后，后续规则步骤和同一流程可以读取；流程结束后的持久化结果由宿主提交，规则引擎不能自行开启数据库事务。
 
 ### `##match##replace`
 

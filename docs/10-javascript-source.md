@@ -14,6 +14,8 @@ function getContent(chapter, book) {}
 
 文件源（`bookSourceType == 3`）要求 `search` 和 `getBookInfo`，不要求普通目录和正文函数。配置 `exploreUrl` 时必须同时提供 `explore(url, page)`。
 
+登录声明有两种互斥形式：`config.loginUi` 是静态登录表单配置时，脚本必须提供 `login(...)`；脚本提供 `loginUi(...)` 函数时，配置中不能再有 `loginUi`，并且必须同时提供 `loginAction(...)`。只有 `loginUi` 或只有 `loginAction` 都属于导入错误。第一版核心可以报告复杂登录 UI、验证码和多步骤认证的 capability error，但不能把不支持认证误报成普通书源成功。
+
 普通 JS 源的函数契约可以抽象为：
 
 ```ts
@@ -31,6 +33,15 @@ export interface JsSourceFunctions {
   /** 声明 maxBatchSize 时必须存在，通过 java.cacheContent 回存章节正文。 */
   getContentBatch?(chapters: BookChapter[], book: Book): unknown
 }
+
+export interface JsLoginFunctions {
+  /** 静态 loginUi 配置对应的提交函数；参数由宿主按登录表单配置注入。 */
+  login?(...args: unknown[]): unknown
+  /** 动态登录表单函数；与 loginAction 成对出现。 */
+  loginUi?(...args: unknown[]): unknown
+  /** 动态登录提交函数；与函数形式的 loginUi 成对出现。 */
+  loginAction?(...args: unknown[]): unknown
+}
 ```
 
 这些是 JavaScript 脚本边界的逻辑类型，不表示脚本可以直接返回运行时实例。实际调用先执行脚本自身的 JSON 归一化，再由 marshaller 校验数组、对象、必需字段、来源身份、URL 和可覆盖字段。`search`、`explore` 返回数组以外的结果是调用错误；`getBookInfo` 的 `Partial<Book>` 只代表允许字段集合，不能覆盖 `bookUrl`、阅读状态或用户自定义字段。
@@ -41,7 +52,7 @@ export interface JsSourceFunctions {
 
 每次函数调用都创建新的调用 scope，绑定运行时 API、源对象和调用参数，再执行主脚本和函数表达式。源级共享 scope 如被宿主启用，必须显式声明共享键；默认迁移实现应按请求和调用隔离，防止 SSR 用户之间共享变量。
 
-规则和源脚本可见绑定包括 `java`、`source`、`sourceApi`、`baseUrl`、`cookie`、`cache`，以及 `key`、`page`、`book`、`chapter`、`chapters`、`result`、`nextChapterUrl` 等流程变量。绑定名称和对象角色是兼容契约。
+规则和源脚本可见绑定包括 `java`、`source`、`sourceApi`、`baseUrl`、`cookie`、`cache`，以及 `key`、`page`、`book`、`chapter`、`chapters`、`result`、`nextChapterUrl` 等流程变量。绑定名称和对象角色是兼容契约，脚本可调用方法、返回值、异常和能力开关见 [宿主接口](11-runtime-host-interfaces.md#javascript-书源宿主-api)。
 
 ## 返回值归一化
 
@@ -58,11 +69,11 @@ export interface JsSourceFunctions {
 
 ### 详情
 
-`getBookInfo` 返回对象，只合并允许的详情字段；`bookUrl`、阅读状态等字段不由脚本覆盖。变量支持对象或 JSON 字符串。下载 URL必须是字符串数组，过滤空值、`javascript:`，转绝对 URL并去重。
+`getBookInfo` 返回对象，只合并允许的详情字段；`bookUrl`、阅读状态等字段不由脚本覆盖。变量支持对象或 JSON 字符串。下载 URL 必须是字符串数组，过滤空值、`javascript:`，转绝对 URL 并去重。
 
 ### 目录
 
-`getChapters` 返回数组。缺少 `title`/`url` 的项丢弃；相对 URL相对 `book.tocUrl` 解析；卷节点在标题等于 URL时保留占位语义；索引、书籍 URL和 base URL由运行时注入。
+`getChapters` 返回数组。缺少 `title`/`url` 的项丢弃；相对 URL 相对 `book.tocUrl` 解析；卷节点在标题等于 URL 时保留占位语义；索引、书籍 URL 和 base URL 由运行时注入。
 
 ### 正文和批量
 
@@ -74,7 +85,9 @@ export interface JsSourceFunctions {
 
 ```ts
 export interface JsSourceReviewFunctions {
+  /** 返回章节和正文段落的评论摘要。 */
   getReviewSummary(chapter: BookChapter, book: Book): ReviewParagraph[]
+  /** 返回指定段落的评论分页。 */
   getReviewDetail(
     chapter: BookChapter,
     book: Book,
@@ -82,6 +95,7 @@ export interface JsSourceReviewFunctions {
     paraData: string,
     page: number,
   ): ReviewPage
+  /** 返回指定评论的回复分页；宿主在支持时才注入。 */
   getReviewReplies?(
     chapter: BookChapter,
     book: Book,
@@ -128,11 +142,15 @@ export interface ReviewItemInput {
   badge?: string | string[]
   /** 内容文本或段评内容协议 JSON。 */
   content?: string | Record<string, unknown>
-  /** 图片、音频、时间、点赞数和回复数可通过 content 协议提供。 */
+  /** 图片地址，可为相对地址。 */
   img?: string
+  /** 音频地址，可为相对地址。 */
   audio?: string
+  /** 评论发布时间文本。 */
   time?: string
+  /** 点赞数量。 */
   likeCount?: number
+  /** 回复数量。 */
   replyCount?: number
   /** 详情项可以带嵌套回复，回复分页返回后由运行时递归展平。 */
   replies?: ReviewItemInput[]
@@ -141,13 +159,15 @@ export interface ReviewItemInput {
 
 `getReviewSummary` 必须返回数组。运行时只接受 `paraIndex == -1` 或正数且 `count > 0` 的项目；缺少 `paraData` 时以段落索引文本作为回退键。非法项目和无效数量被忽略，脚本返回空值或不能解析为数组时得到空摘要。
 
-`getReviewDetail` 返回评论项分页对象，至少包含 `items` 数组，可以包含 `nextPageUrl`；缺少或不是数组时该详情页结果为无结果。每个项目至少需要有内容、昵称、图片或音频之一，否则会被丢弃。`content` 如果是包含 `text`、`replyToName`、`img`、`audio`、`time`、`likeCount` 或 `replyCount` 的协议对象，运行时会解析协议并将图片、音频相对当前响应 URL转换为绝对地址。
+`getReviewDetail` 返回评论项分页对象，至少包含 `items` 数组，可以包含 `nextPageUrl`；缺少或不是数组时该详情页结果为无结果。每个项目至少需要有内容、昵称、图片或音频之一，否则会被丢弃。`content` 如果是包含 `text`、`replyToName`、`img`、`audio`、`time`、`likeCount` 或 `replyCount` 的协议对象，运行时会解析协议并将图片、音频相对当前响应 URL 转换为绝对地址。
 
 `getReviewReplies` 返回 `{ items }`，没有独立的 `nextPageUrl` 字段；运行时会把嵌套 `replies` 展平成回复列表，并清除回复项继续嵌套的结构。返回值不是对象、缺少 `items` 或 `items` 不是数组时属于返回格式错误。回复函数只有在摘要和详情函数都存在时才允许导入，调用时由宿主传入 `reviewId`，不是由脚本自行从全局变量读取。
 
 导入校验必须区分以下情况：段评函数声明存在但不是函数、摘要函数缺失、摘要存在但详情缺失、回复函数单独存在。摘要和详情构成一对基本能力，回复是可选的第三层能力。函数缺失不能被当作空评论成功，宿主不支持该能力时应返回明确的 capability error。
 
 段评函数的参数由运行时统一注入，不能要求脚本自行从全局变量猜测当前章节。`paraIndex`、`paraData`、`reviewId` 和 `page` 必须在摘要、详情、回复之间保持稳定。Android 侧的校验和调用入口以 `JsSourceConfig`、`JsSourceReview` 为行为依据。
+
+JS 源导入完成后，配置对象中的声明式规则会被剥离，`mainJs` 保留完整原文。运行时每次函数调用都重新创建调用 scope，执行主脚本，再调用目标函数；书源共享 scope 只有在宿主明确启用并按书源身份隔离时才允许存在。脚本执行期间的网络、缓存、Cookie、文件和浏览器操作都必须经过宿主 API，不能直接访问 Node 全局对象。
 
 ## 安全边界
 

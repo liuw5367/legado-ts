@@ -13,6 +13,12 @@
 - `app/src/test/java/io/legado/app/model/jsSource/JsSourceMarshallerTest.kt`：搜索/详情/章节返回值归一化；
 - `app/src/test/java/io/legado/app/model/jsSource/JsSourceEngineTest.kt`：scope 绑定、脚本返回值、toJSON/getter、undefined 和取消；
 - `app/src/test/java/io/legado/app/model/jsSource/JsSourceBookTest.kt`、`WebBookTest.kt`：卷节点、空正文和文件源；
+- `app/src/test/java/io/legado/app/model/jsSource/JsSourceReviewTest.kt`：段评摘要、详情、回复和嵌套回复归一化；
+- `app/src/test/java/io/legado/app/model/jsSource/JsSourceUpsertTest.kt`、`JsSourceDispatchSentinelTest.kt`、`JsSourceTocWriteBackSentinelTest.kt`：JS 源保存、流程分流和目录回写边界；
+- `app/src/test/java/io/legado/app/ui/association/BookSourceImportTest.kt`：书源输入分类、远程导入和候选写入边界；
+- `app/src/test/java/io/legado/app/api/JsSourceWebApiContractTest.kt`、`app/src/test/java/io/legado/app/help/config/JsSourceApiTokenTest.kt`：Node/API 访问令牌和 JS 源接口契约；
+- `app/src/test/java/io/legado/app/ui/book/source/edit/JsSourceDirectDebugTest.kt`、`JsSourceEditRedirectTest.kt`：编辑器调试、重定向和保存流程；
+- `app/src/test/java/io/legado/app/ui/book/read/JsSourceReviewDispatchSourceTest.kt`：段评运行时分流；
 - `modules/web/tests/sourceEditor.test.js`：现有 Web 编辑器的响应式布局、脚本模板、状态恢复、保存和访问令牌行为。
 
 当前没有与这些 Kotlin 规则结果直接对照的 TypeScript runtime 测试；需要新增独立 fixture 和 golden 输出。
@@ -35,15 +41,115 @@
   "androidEvidence": {
     "kind": "test",
     "path": "app/src/test/java/io/legado/app/model/analyzeRule/AnalyzeByJSoupDomTest.kt",
-    "case": "待补充确切测试用例"
+    "case": "textNodes-and-index-normalization"
   },
-  "tsAssertion": "待实现"
+  "tsAssertion": {
+    "path": "packages/source-core/tests/rules/default-text-nodes.test.ts",
+    "test": "rule-default-text-nodes-001"
+  },
+  "http": [],
+  "lifecycle": {
+    "expectedEvents": [],
+    "expectedWrites": [],
+    "mustRelease": ["rule-scope"]
+  }
 }
 ```
 
-字段约定：`id` 是稳定且不可复用的用例标识；`status` 使用 `android-verified`、`android-source-only`、`ts-pending` 或 `verified`；`source` 是脱敏后的书源身份；`input` 是解析器或流程输入；`context` 是显式注入的运行上下文；`operation` 描述调用类型和原始规则；`expected` 是稳定输出；`androidEvidence` 指向事实来源；`tsAssertion` 指向 TypeScript 测试或记录待办。真实 fixture 不得写入 Cookie、Token、密码或账号。
+字段约定：`id` 是稳定且不可复用的用例标识；`status` 使用 `android-verified`、`android-source-only`、`ts-pending` 或 `verified`；`source` 是脱敏后的书源身份；`input` 是解析器或流程输入；`context` 是显式注入的运行上下文；`operation` 描述调用类型和原始规则；`expected` 是稳定输出；`androidEvidence` 指向事实来源；`tsAssertion` 指向一个实际存在的 TypeScript 测试文件；`http` 是脱敏且可重复的请求记录；`lifecycle` 固定事件、写入和清理断言。真实 fixture 不得写入 Cookie、Token、密码或账号。
 
-golden 中只保存稳定输出。错误 fixture 还要保存 `stage`、错误类别、是否允许流程继续和能力标记，不比较平台特有的堆栈文本。网络流程应保存请求描述和脱敏响应，不直接依赖真实站点。
+网络 fixture 的每条记录至少包含 `method`、展开后的 `url`、请求头白名单、请求体、响应状态、最终 URL、脱敏响应头、响应体和模拟延迟。`retry` 用例还要记录每次尝试及最终错误；分页用例要记录请求启动顺序、响应完成顺序和最终收集顺序。golden 只保存稳定输出、稳定错误码、阶段、能力状态、事件顺序、写入结果和清理结果，不比较平台特有的堆栈文本。
+
+错误 fixture 必须明确 `continue`、`partialResult` 和 `writes`。例如字段读取失败可以继续并留下空字段，必需函数缺失必须终止 JS 源导入，单个书源搜索失败可以继续其他书源，目录分页失败不能提交不完整目录，正文保存 token 过期不能覆盖新正文。每个流程都至少有成功、空值、失败、取消、超时和资源清理样本。
+
+## 用例目录和覆盖矩阵
+
+以下 ID 是实现前必须建立的最小目录。每个 ID 对应一个独立 fixture 和一个自动断言；同一 fixture 可以被 Node 和 Next adapter 复用，但不能用单元测试替代流程组合测试。
+
+| 用例 ID | 范围 | 场景与必须断言 |
+| --- | --- | --- |
+| `IMP-001` | 导入 | 单对象、数组对象和非空 `bookSourceUrl`，输出候选顺序和诊断 |
+| `IMP-002` | 导入 | JSON、绝对 URL、URI、JS 文本分类，记录 fetch/parse 阶段 |
+| `IMP-003` | 导入 | `sourceUrls` 外层远程列表，重复 URL 去重、输入顺序、取消和失败项隔离 |
+| `IMP-004` | 导入 | 远程内容再次包含 `sourceUrls`、空项、空响应和非法内容，拒绝写入 |
+| `IMP-005` | 导入 | 规则对象与 JSON 字符串归一化，未知字段保留，原始字段可导出 |
+| `IMP-006` | 导入 | 替换规则按名称和 URL 命中，严格 JSON、宽松 JSON、替换失败和原文回退 |
+| `IMP-007` | 导入 | 同 URL 本地源的 new/update/same/conflict，用户字段覆盖策略和事务原子性 |
+| `IMP-008` | JS 导入 | `config`、旧版 `source`、配置字段错误、脚本错误和必备函数错误 |
+| `IMP-009` | JS 导入 | `exploreUrl/explore`、`loginUi/login/loginAction` 的成对校验 |
+| `IMP-010` | JS 导入 | 段评函数配对、`maxBatchSize/getContentBatch` 配对、剥离规则与 `mainJs` 原文保留 |
+| `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`、`@CSS` 元素选择和字符串终端输出 |
+| `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出 |
+| `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
+| `SCH-004` | 规则 | `@XPath`、XML 声明、表格片段补容器、节点/字符串/空结果归一化 |
+| `SCH-005` | 规则 | `@Json`、自动 JSON、对象/数组/标量、嵌套插值和非法 JSONPath |
+| `SCH-006` | 规则 | `&&`、`||`、`%%` 在括号、引号、JSONPath、CSS 属性和代码中的平衡切分 |
+| `SCH-007` | 规则 | 全规则 Regex、`$1` 捕获组、`##match##replace`、首个替换和非法正则回退 |
+| `SCH-008` | 规则 | `<js>`、`@js:`、`@webjs:` 连续混合块的源文本顺序和 capability error |
+| `VAR-001` | 变量 | local、chapter、book、rule-data、source 的读取优先级和空字符串继续查找 |
+| `VAR-002` | 变量 | `@put`、`@get`、`{{}}` 写入、读取、删除、序列化和请求隔离 |
+| `URL-001` | URL | URL JS、`{{}}`、页码占位、URL options 的展开顺序和整数格式化 |
+| `URL-002` | URL | GET/HEAD query、POST 表单/JSON/XML、charset、escape 和空字段保留 |
+| `URL-003` | URL | headers、Cookie 合并、最终域名、登录头、跨域 `@js` 改写和 CDN 隔离 |
+| `URL-004` | URL | timeout、call timeout、retry 次数、取消、重定向关闭/开启和循环保护 |
+| `URL-005` | URL | DNS 字面量、非法地址、proxy 冲突、bodyJs、XML 补声明和 bytes 响应 |
+| `FLOW-001` | 搜索 | 单源列表/详情页回退、书名丢弃、同源去重、精准搜索和分类组 |
+| `FLOW-002` | 搜索 | 多源并发、30 秒超时、progress/callback 顺序、持久化先于成功事件 |
+| `FLOW-003` | 搜索 | pause/resume、新请求取消旧 page owner、迟到结果和所有源失败 |
+| `FLOW-004` | 详情 | infoHtml 命中、请求/重定向/loginCheckJs、init、新旧字段覆盖和 canReName |
+| `FLOW-005` | 详情 | 字段级异常继续、目录缓存、文件下载 URL 为空、Book 提交和失败回滚 |
+| `FLOW-006` | 目录 | tocHtml 命中、preUpdateJs、单页串行、多页并发、重复 URL 和循环停止 |
+| `FLOW-007` | 目录 | 卷节点、空 URL 占位、VIP/购买、字数、`-`/`+` 与 `readConfig.reverseToc` |
+| `FLOW-008` | 目录 | 去重、重新编号、formatJs 失败、旧章节元数据合并、统计更新和事务边界 |
+| `FLOW-009` | 正文 | 缓存命中/失效、下一章保护、单页/多页、空正文和资源类型 |
+| `FLOW-010` | 正文 | subContent、replaceRegex、标题图片、歌词/弹幕、响应 URL 和清理 |
+| `FLOW-011` | 正文 | save token、旧请求覆盖保护、保存失败、取消、章节元数据和保存事件 |
+| `FLOW-012` | 批量 | contentBatch/getContentBatch、章节对象识别、重复 URL 歧义、锁、漏存兜底 |
+| `JS-001` | JS | 每次调用 scope、绑定对象、共享 scope 显式开关、toJSON/getter/循环引用 |
+| `JS-002` | JS | `ajax`、`ajaxAll`、`connect` 的请求描述、错误兼容文本和取消传播 |
+| `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |
+| `JS-004` | 段评 | 摘要索引、详情分页、回复展平、内容协议和函数配对错误 |
+| `HOST-001` | Host | Http/HTML/XPath/JSONPath/JS/Cookie/Cache 端口的空值、错误和资源释放 |
+| `HOST-002` | Node | requestId、响应限制、来源白名单、错误到 HTTP DTO、Cookie 隔离和 abort |
+| `HOST-003` | Next | SSR 请求隔离、动态缓存键、客户端断开、模块级状态扫描和响应脱敏 |
+| `EDIT-001` | 编辑器 | JSON/JS 导入、规范化、字段诊断、未知字段和完整 `mainJs` 保留 |
+| `EDIT-002` | 编辑器 | JSON/JS 切换、未保存保护、dirty 状态和原文回退 |
+| `EDIT-003` | 编辑器 | fake 预览请求、逐步 trace、脱敏 header、capability error 和资源清理 |
+| `EDIT-004` | 编辑器 | 导入导出 round-trip、版本冲突、覆盖确认和保存失败 |
+| `EDIT-005` | 编辑器 | 所有 ReviewRule 字段保留、preserve-only 显示、移动端布局和访问令牌行为 |
+
+## 测试目录、断言和执行门槛
+
+建议的子仓库测试资源布局如下，目录建立后 fixture、golden 和断言必须一一对应：
+
+```text
+fixtures/
+  import/
+  rules/
+  url/
+  workflows/
+  javascript/
+  editor/
+goldens/android/
+goldens/typescript/
+packages/source-core/tests/
+packages/source-node/tests/
+packages/source-next/tests/
+packages/source-editor/tests/
+```
+
+每个测试至少断言四类结果：
+
+1. 领域结果，包括字段值、列表顺序、去重、来源集合、章节索引和正文内容；
+2. 处理轨迹，包括请求顺序、规则阶段、分页完成顺序、回调顺序、缓存命中和持久化写入；
+3. 失败语义，包括稳定错误码、阶段、是否继续、是否允许部分结果和 capability 状态；
+4. 生命周期，包括 AbortSignal 传播、超时后不再重试、旧请求不能回写、scope/Cookie/变量/监听器/批量上下文已释放。
+
+fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、Token、密码、Authorization、私有请求体和真实账号做脱敏。golden 的比较应采用结构化比较，集合只有在契约声明无序时才允许排序，事件和网络记录必须按顺序比较。时间、随机数、堆栈、线程名和平台路径使用占位断言，不能写死到兼容结果中。
+
+测试命令和门槛必须随 runtime 一起提交：纯规则、流程组合、Node adapter、Next adapter 和编辑器分别可独立执行，全部 `verified` fixture 还要有一次全量命令。任何用例缺少 Android 证据、golden、TypeScript 断言或资源清理断言时，状态只能是 `ts-pending`，兼容矩阵不能标记已验证。
+
+覆盖审计按以下关系执行：`02-source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`04-rule-language.md` 和 `05-url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；`06-search-flow.md` 至 `10-javascript-source.md` 的每个状态、分支、输出和宿主能力至少映射一个流程/JS 用例；`16-source-editor.md` 的每个编辑动作至少映射一个编辑器用例。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
 
 ## 必须覆盖的规则样本
 

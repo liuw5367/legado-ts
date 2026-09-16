@@ -75,13 +75,39 @@ WebView 请求使用 `webJs` 或调用方传入的 JS，并可以传入 `sourceR
 
 `type` 非空时走字节响应，当前 Android 路径返回十六进制字符串给 `StrResponse`。TypeScript 应在响应类型中区分 `text`、`bytes` 和媒体 URL，不能把二进制误解码成 UTF-8。
 
+## 请求处理状态机
+
+请求对象的生命周期为：
+
+```text
+raw rule URL
+  -> execute URL js
+  -> interpolate {{}}
+  -> replace page placeholder
+  -> parse URL options
+  -> resolve absolute URL and redirect base
+  -> merge headers/Cookie and validate proxy/DNS
+  -> encode query or request body
+  -> rate limit
+  -> HTTP/WebView attempt
+  -> decode text or preserve bytes
+  -> bodyJs or XML normalization
+  -> response
+```
+
+每个请求必须记录 `requestId`、原始规则、最终 URL、请求方法、响应最终 URL、尝试次数、状态码、是否使用 WebView 和失败阶段。重试只适用于宿主明确允许的请求失败，不能重复执行解析、`bodyJs` 或正文保存；每次重试都必须继续使用同一取消信号和请求级 Cookie 视图。Android 将 `retry` 传给 HTTP 客户端，具体退避算法由宿主决定，但实现必须固定最大尝试次数并在 fixture 中记录。
+
+超时至少区分单次 HTTP 读取超时、整次调用超时和流程总超时。取消优先级高于重试、分页和脚本执行，收到取消后不得启动下一次尝试。重定向关闭时返回 3xx 响应，重定向开启时只把最终 URL 交给解析层；若发生重定向循环或超过宿主上限，返回 `request` 阶段的 `redirect-error`。
+
+请求状态包括 `created`、`expanded`、`queued`、`attempting`、`redirecting`、`decoded`、`post-processed`、`completed`、`failed` 和 `cancelled`。只有 `completed` 的响应可以进入规则解析；网络错误、非法选项、解码错误和能力缺失必须带稳定错误阶段返回，不能以空 body 伪装成功。
+
 ## 5. Cookie、登录头和重定向
 
 请求前把 CookieStore 中对应域的 Cookie 与 URL 选项中的 `Cookie` 合并，临时 URL 选项优先；启用 CookieJar 时保存响应中的 Set-Cookie。当前 Cookie 域按解析后的目标 URL 计算，封面 CDN 不应错误使用书源站点 Cookie。
 
 登录头默认只发往书源同站二级域名；需要跨域时由 URL 选项显式提供。注意，当前保护逻辑依据初始 URL 判断，URL 中的 `@js` 如果把地址改写到跨域目标，不能假设登录头一定会被重新拦截。TypeScript 迁移应将这一点作为兼容事实和安全告警分别记录。复杂登录 UI 不在第一版核心范围内，但静态 Header、Cookie、Token 和 loginCheckJs 的宿主端口必须保留。
 
-`followRedirects=false` 时，普通请求返回 3xx，不进入 WebView；开启时使用最终 URL 作为 redirectUrl。书源流程使用最终 URL解析相对资源，同时保留初始 URL用于去重和分页循环判断。
+`followRedirects=false` 时，普通请求返回 3xx，不进入 WebView；开启时使用最终 URL 作为 redirectUrl。书源流程使用最终 URL 解析相对资源，同时保留初始 URL 用于去重和分页循环判断。
 
 ## 6. DNS、代理和超时边界
 
