@@ -1,0 +1,30 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+**/node_modules
+/npm-debug.log*
+/yarn-error.log
+
+# production
+/dist
+**/dist
+
+# misc
+.DS_Store
+
+*.zip
+.idea
+
+*.local
+*.local.*
+
+# Ignore auto generated CSS declarations
+*.module.css.d.ts
+*.module.sass.d.ts
+*.module.scss.d.ts
+*.module.less.d.ts
+*.module.styl.d.ts
+*.module.stylus.d.ts
+
+**/prisma/generated

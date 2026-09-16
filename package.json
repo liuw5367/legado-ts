@@ -1,0 +1,15 @@
+{
+  "name": "typescript",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "author": "",
+  "main": "index.js",
+  "keywords": [],
+  "packageManager": "pnpm@11.27.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {},
+  "dependencies": {}
+}
