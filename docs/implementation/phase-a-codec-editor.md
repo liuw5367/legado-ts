@@ -2,6 +2,37 @@
 
 先建立不依赖网络、DOM 或应用数据库的书源数据层。它负责识别输入、保留原文、规范化字段、产生诊断和可写入候选。宿主可以提供远程读取与 URI 读取，但是否保存候选始终由调用方决定。行为依据是 [书源模型](../reference/source-schema.md)、[导入协议](../workflows/import-protocol.md) 和 [编辑器规划](../guides/source-editor.md)。
 
+## 阶段输入与输出
+
+```ts
+interface RawSource {
+  text: string
+  kind: 'json' | 'json-array' | 'url' | 'uri' | 'file' | 'javascript'
+  location?: string
+  unknownFields: Record<string, unknown>
+}
+
+interface SourceSnapshot {
+  userId: string
+  sourceId: string
+  sourceRevision: string
+  source: NormalizedSource
+  userState: UserSourceState
+}
+
+interface ImportCandidate {
+  id: string
+  raw: RawSource
+  source?: NormalizedSource
+  diagnostics: ImportDiagnostic[]
+  localMatch: 'new' | 'same' | 'update' | 'conflict'
+  writable: boolean
+  status: 'ready' | 'invalid' | 'cancelled'
+}
+```
+
+缺失字段、显式 `null`、空字符串和空数组必须分别进入字段校验；未知字段进入 `unknownFields`。严格 JSON 解析失败后才允许按兼容规则尝试宽松解析，并记录诊断；替换失败保留原始候选，不能把部分替换标记为 `ready`。取消、读取错误和临时资源清理分别记录 `cancelled`、稳定错误和 cleanup 结果。
+
 ## 实现顺序
 
 1. 定义公开的 `RawSource`、`NormalizedSource`、`ImportCandidate`、`ImportDiagnostic` 与 `SourceSnapshot`。`RawSource` 保留原文、输入位置、规则字段原始形态和未知字段；`NormalizedSource` 只用于运行与表单，不覆盖原文；用户状态和源版本由 `SourceSnapshot` 承载。
@@ -25,7 +56,7 @@
   -> 导出文本或应用事务保存
 ```
 
-应用保存完成后才发布书源更新事件，携带书源身份和新版本。后续缓存与运行上下文用该版本避免旧规则结果覆盖新结果。编辑器保存失败仍保留原始文本和 dirty 状态，不能只留下规范化对象。
+应用保存完成后才发布书源更新事件，携带书源身份和新版本。后续缓存与运行上下文用该版本避免旧规则结果覆盖新结果。编辑器保存失败仍保留原始文本和 dirty 状态，不能只留下规范化对象。保存结果必须区分 `new/same/update/conflict/invalid/cancelled/stale`，并明确是否已经提交。
 
 ## 对外接口与验收
 

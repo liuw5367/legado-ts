@@ -51,8 +51,8 @@ export interface SourceRepository {
   save(input: SaveSourceInput): Promise<SaveSourceResult>
   /** 在一个事务中提交已经通过计划校验的整批变更。 */
   saveBatch(input: SaveBatchInput): Promise<SaveBatchResult>
-  /** 删除源及应用明确允许清理的关联状态。 */
-  remove(input: RemoveSourceInput): Promise<void>
+  /** 删除源及应用明确允许清理的关联状态；版本不匹配返回冲突。 */
+  remove(input: RemoveSourceInput): Promise<RemoveSourceResult>
   /** 在同一数据库事务中执行版本断言、保存和状态失效。 */
   transaction<T>(work: (tx: SourceTransaction) => Promise<T>): Promise<T>
 }
@@ -73,23 +73,37 @@ export interface SaveSourceInput {
   userId: string
   /** 要保存的规范化书源，不包含 Cookie、密码或 token 明文。 */
   source: NormalizedSource
+  /** 编辑已有源或改名时的旧身份；新建时为空。 */
+  previousSourceId?: string
+  /** 导入时保留的原文；从结构化 API 保存时可以为空。 */
+  rawText?: string
+  /** 导入未识别的字段；保存时不得静默丢弃。 */
+  unknownFields?: Record<string, unknown>
+  /** 用户独立状态；缺失时由 Repository 使用现有值或默认值。 */
+  userState?: UserSourceState
   /** 编辑开始时读取的源版本；新建时为空。 */
   expectedSourceRevision?: string
   /** 跨 HTTP 重试保持不变的保存意图身份。 */
   idempotencyKey: string
-  /** 是否已经完成应用层确认；兼容 API 可由 adapter 选择直接保存模式。 */
+  /** 是否已经完成应用层确认；false 必须返回 confirmation-required，不得写入。 */
   confirmed: boolean
   /** 导入、编辑、订阅或兼容 API 等来源。 */
   origin: SourceOrigin
 }
 
 export interface SaveSourceResult {
-  /** 保存后的完整用户源记录。 */
-  record: SourceRecord
+  /** 保存结论；same 表示没有领域变化但仍可返回当前记录。 */
+  status: 'new' | 'same' | 'updated' | 'conflict' | 'invalid' | 'cancelled' | 'stale'
+  /** 保存后的完整用户源记录；非提交状态为空。 */
+  record?: SourceRecord
   /** 本次提交的字段变化。 */
   changes: SourceChange[]
-  /** 保存后生成的不透明源版本。 */
-  sourceRevision: string
+  /** 保存后生成的不透明源版本；未提交时为空。 */
+  sourceRevision?: string
+  /** 稳定错误；conflict/invalid/cancelled/stale 必须可直接处理。 */
+  error?: { code: string; message: string; canRetry: boolean }
+  /** 是否已经产生持久化提交。 */
+  committed: boolean
 }
 
 export interface SaveBatchInput {
@@ -174,6 +188,16 @@ export interface RemoveSourceInput {
   sourceId: string
   /** 删除开始时的源版本；不匹配时拒绝删除。 */
   expectedSourceRevision?: string
+  /** safe 要求版本断言；android-compatible 才能显式使用旧式无版本删除。 */
+  mode: 'web-safe' | 'android-compatible'
+}
+
+export interface RemoveSourceResult {
+  status: 'deleted' | 'not-found' | 'conflict' | 'cancelled' | 'partial'
+  sourceId: string
+  cleaned: string[]
+  pending: string[]
+  error?: { code: string; message: string; canRetry: boolean }
 }
 
 export interface SourceChange {
@@ -228,6 +252,8 @@ Repository 不是规则执行器。package 返回 `ImportCandidate`、领域结�
 
 保存时至少需要区分 `new`、`same`、`update`、`conflict` 和 `invalid`。同一用户在两个标签页同时编辑时，后提交者不能静默覆盖前一个版本；应用可以让用户选择重新载入、强制覆盖或导出副本。
 
+`confirmed=false` 只产生 `confirmation-required` 诊断，不产生数据库写入；兼容 API 若需要保留旧式直接保存，必须由 adapter 显式选择 `android-compatible` 模式并记录来源。取消发生在原子提交前时返回 `cancelled` 且不写入；提交已经成功后才收到取消时返回 `success`/`partial` 并说明已提交的 effects，不能报告为“未保存”。提交结果未知时保留幂等键和审计记录，重试必须先查询幂等结果，不能盲目重复写入。
+
 ## 5. 更新和删除副作用
 
 ### 源内容发生变化
@@ -245,7 +271,7 @@ Repository 不是规则执行器。package 返回 `ImportCandidate`、领域结�
 
 ### 删除书源
 
-删除至少要处理源记录、校验状态、订阅绑定、分类缓存、源变量、并发记录和书源专属运行缓存。书籍和正文是否删除是独立的应用策略，不能因为删除书源就自动删除用户书架数据。
+删除至少要处理源记录、校验状态、订阅绑定、分类缓存、源变量、Cookie/SecretStore 引用、并发记录和书源专属运行缓存。SecretStore 中的秘密必须撤销或删除，不能只删除指针后继续允许旧会话读取。书籍和正文是否删除是独立的应用策略，不能因为删除书源就自动删除用户书架数据。清理失败返回 `partial` 和待清理资源，不把已删除源伪装成完全清理成功。
 
 ## 6. 插入策略与兼容实现事实
 

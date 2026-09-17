@@ -60,8 +60,8 @@ export interface SourceCheckState {
   status: SourceCheckStatus
   /** 完成或失败时间；运行中为空。 */
   checkedAt?: number
-  /** 校验期间观察到的响应时间；目标设计，Android 存于 BookSource.respondTime（BookSource.kt L77），不在检查状态表。 */
-  respondTime?: number
+  /** 本次检查会话观察到的响应时间；与 BookSource.respondTime 的持久化摘要分开。 */
+  responseTimeMs?: number
   /** 可安全展示的摘要信息。 */
   detail: string
   /** 各阶段的完整结果；可按存储策略只保留摘要或引用。 */
@@ -76,9 +76,9 @@ export interface SourceCheckState {
 }
 ```
 
-以上 `SourceCheckStatus`（含 RUNNING/CANCELLED/STALE）、`stages`/`failedStages`、`sessionId` 和挂在检查状态上的 `respondTime` 字段是目标设计；Android 的响应时间存于 `BookSource.respondTime`（`BookSource.kt` L77），不在检查状态表。Android 的 `BookSourceCheckState` 只有 `NEEDS_CHECK`/`PASSED`/`FAILED` 三个状态（`data/entities/BookSourceCheckState.kt`）。
+以上 `SourceCheckStatus`（含 RUNNING/CANCELLED/STALE）、`stages`/`failedStages`、`sessionId` 和 `responseTimeMs` 字段是目标设计；Android 的响应时间存于 `BookSource.respondTime`（`BookSource.kt` L77），它是源记录上的持久化摘要，不是检查状态的会话指标。Android 的 `BookSourceCheckState` 只有 `NEEDS_CHECK`/`PASSED`/`FAILED` 三个状态（`data/entities/BookSourceCheckState.kt`）。
 
-校验状态不进入 `BookSource` 导出 JSON；但 `respondTime` 是 `BookSource` 字段，会随导出 JSON 序列化，它由校验流程更新，属于校验产物。书源导入、编辑或订阅更新只要改变可执行内容，就必须使旧的 `sourceRevision` 结果失效。
+校验状态不进入 `BookSource` 导出 JSON；但 `BookSource.respondTime` 是 `BookSource` 字段，会随导出 JSON 序列化，它由校验流程更新，属于校验产物。书源导入、编辑或订阅更新只要改变可执行内容，就必须使旧的 `sourceRevision` 结果失效。
 
 ```ts
 export interface SourceCheckRepository {
@@ -117,7 +117,7 @@ export interface CompleteSourceCheckInput {
   /** 终态；不能由 complete 写入 RUNNING。 */
   status: Exclude<SourceCheckStatus, 'NEEDS_CHECK' | 'RUNNING'>
   checkedAt?: number
-  respondTime?: number
+  responseTimeMs?: number
   detail: string
   stages: SourceCheckStageResult[]
   failedStages: SourceCheckState['failedStages']
@@ -126,7 +126,7 @@ export interface CompleteSourceCheckInput {
 
 Android 实际没有 RUNNING 会话：`BookSourceDao.beginCheck` 重置为 `NEEDS_CHECK` 并生成新的 `revision`（任务版本 UUID），保留 `sourceRevision`；写回不以 `status==RUNNING` 为前提，`finishCheck` 的 CAS 条件是 `status='NEEDS_CHECK' AND revision=:revision`（`BookSourceDao.kt` L298-313）。迟到结果由 `completeCheck` 返回 false 拒绝，不落 STALE 状态。`BookSourcePart` 通过 coalesce JOIN 呈现 `checkStatus`/`checkRevision`/`sourceRevision`/`checkedAt`/`checkDetail`（`BookSourcePart.kt` L21-25）。
 
-`SourceCheckStatus` 和 `SourceCheckStageStatus` 是 package 与持久层的规范状态，统一使用大写字符串。若某个 HTTP/WebSocket adapter 为兼容既有客户端而输出小写状态，必须在 adapter 中显式映射，并在输入边界恢复为规范状态；核心结果、数据库记录和测试 golden 不混用两套拼写。
+`SourceCheckStatus` 和 `SourceCheckStageStatus` 是 package 与持久层的规范状态，统一使用大写字符串。`book-info` 是详情阶段的唯一规范值；流程文档中的 `info` 只可作为旧客户端显示别名，adapter 必须在边界转换。若某个 HTTP/WebSocket adapter 为兼容既有客户端而输出小写状态，必须在 adapter 中显式映射，并在输入边界恢复为规范状态；核心结果、数据库记录和测试 golden 不混用两套拼写。
 
 | 规范状态 | 兼容小写 DTO（仅在 adapter 需要时） |
 | --- | --- |

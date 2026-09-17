@@ -2,9 +2,15 @@
 
 本阶段使用 B 的 Node/基础 JS 宿主实现声明式和 JS 主流程，并通过最小真实部署验收。流程只调用共享层，不重新解释规则。行为以 [搜索流程](../workflows/search-flow.md)、[详情流程](../workflows/book-info-flow.md)、[目录流程](../workflows/chapter-list-flow.md)、[正文流程](../workflows/content-flow.md) 和 [发现流程](../workflows/explore-flow.md) 为准。
 
+## 阶段公共契约
+
+每个流程入口接收不可变 `SourceSnapshot`、领域输入、`requestId`、`operationId`、预算、`RuntimeHost` 和 `AbortSignal`；输出包含 `status`、领域值、逐阶段诊断、effects、changes 和 cleanup。`success`、`empty`、`partial`、`failed`、`cancelled`、`stale`、`capability-missing` 的含义与[运行时统一契约](../reference/runtime-contracts.md)一致。
+
+书源级失败只能影响当前源，流程级存储/清理失败必须升级为流程诊断；空搜索、空目录、卷节点空正文和文件源下载地址缺失分别按各流程定义，不把所有空值统一成成功。已提交的缓存、Cookie、变量或用户确认副作用不因后续取消自动回滚；未通过版本/CAS 的 changes 不得提交。
+
 ## 共同调用框架
 
-公开入口接收不可变书源快照、领域输入、请求身份和取消信号。流程创建 `RuleContext`、`VariableStore` 和当前用户的 `RuntimeHost` 视图；返回领域结果、诊断、可提交变更与事件。调用方核对书源版本及请求所有权后再提交。失败、超时或取消走同一清理路径，不得把部分目录或旧正文写入应用存储。
+公开入口接收不可变书源快照、领域输入、请求身份和取消信号。流程创建 `RuleContext`、`RuleVariableView` 和当前用户的 `RuntimeHost` 视图；返回领域结果、诊断、可提交变更与事件。调用方核对书源版本及请求所有权后再提交。失败、超时或取消走同一清理路径，不得把部分目录或旧正文写入应用存储。
 
 Node 宿主端口在 B 建立，C 增加领域存储和组合验收。JS 基础配置、网络和 marshaller 是 C 依赖；未实现扩展方法返回具体能力缺失。所有组合测试从公开入口执行，不以手工组装内部处理器替代。
 
@@ -32,4 +38,4 @@ Node 宿主端口在 B 建立，C 增加领域存储和组合验收。JS 基础�
 
 本阶段覆盖 EXP-001–006、FLOW-001–011、HOST、API 的声明式和基础 JS 路径；批量 FLOW-012 在 D。至少从导入开始经过发现/搜索、详情、目录至首章，另外覆盖失败、取消、乱序响应、旧写和缓存冲突。以 DEP-001–007 验证参考 Node 部署，Edge 缺能力按实际报告，不要求伪造通过。
 
-阶段 C 交付 Node 上声明式和基础 JS 的读取流程；WebView、复杂登录及扩展互操作仍按能力状态报告，不宣称所有书源兼容。
+阶段 C 的目标是交付 Node 上声明式和基础 JS 的读取流程；在 runtime 尚未实现前，这些内容仍属于实施设计。WebView、复杂登录及扩展互操作按能力状态报告，不宣称所有书源兼容。

@@ -56,11 +56,11 @@ Android 行为与上表不同：`BookSourceCheckState.sourceRevision` 在插入�
 4. 新操作已取得更新代次、源已编辑、目录已刷新或 operation 已取消时，旧写入返回 stale/cancelled，不覆盖旧缓存。
 5. 底层存储无法原子写大正文与元数据时，先写不可变内容，再原子发布引用；发布失败留下可回收的未引用内容，不能公布半完成结果。
 
-ContentIdentity 使用上表的身份字段；ContentSaveToken 包含 key（ContentIdentity）、operationId 和 writeVersion，类型定义见 [正文流程](../workflows/content-flow.md)。Android folderName 仅留在文件 adapter。单进程锁只保证单进程；多实例需跨实例原子比较写入。
+`ContentIdentity` 使用上表的身份字段，并额外绑定 `tocRevision`、`chapterIndex` 和正文章节身份；`ContentSaveToken` 包含 `identity`（`ContentIdentity`）、`operationId`、`writeVersion` 和可选过期时间。规范接口定义在[宿主接口](runtime-host-interfaces.md)，正文流程只补充本流程的使用顺序。Android `folderName` 仅留在文件 adapter。单进程锁只保证单进程；多实例需跨实例原子比较写入。
 
 ## 取消与清理
 
-operation 具有 `active -> settling -> closed` 生命周期，结果独立为 success/partial/failed/cancelled。进入 settling 后不启动新分页、重试、脚本或普通保存。取消信号发出后等待子任务停止，再释放脚本句柄、DOM、监听器与响应体；清理失败保留原错误并附加 lifecycle 诊断。
+operation 具有 `active -> settling -> closed` 生命周期，结果独立为 success/empty/partial/failed/cancelled/stale/capability-missing。进入 settling 后不启动新分页、重试、脚本或普通保存。取消信号发出后等待子任务停止，再释放脚本句柄、DOM、监听器与响应体；清理失败保留原错误并附加 lifecycle 诊断。
 
 Android 的书源校验取消通过 `CheckSourceService` 的 `IntentAction.stop` 服务消息（`checkJob?.cancel()`）实现，没有 `active -> settling -> closed` 状态机；上述生命周期是目标契约。
 

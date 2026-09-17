@@ -48,8 +48,11 @@ export interface SearchRequest {
   key: string
   /** 从 1 开始的页码。 */
   page: number
-  /** 已按搜索范围确定顺序的书源快照。 */
-  sources: BookSource[]
+  /** 已按搜索范围确定顺序的不可变书源快照。 */
+  sources: ReadonlyArray<{
+    source: BookSource
+    sourceRevision: string
+  }>
   /** 是否启用名称、作者和分类的精准过滤。 */
   precision: boolean
   /** 取消本次搜索、请求和回调的信号。 */
@@ -60,11 +63,46 @@ export interface SearchResultSink {
   /** 在发布 source-success 前保存本次书源结果；不需要持久化时由上层提供内存实现。 */
   save(items: SearchBook[], request: SearchRequest): Promise<void>
 }
+
+export type SearchSourceStatus = 'source-success' | 'empty-result' | 'source-error' | 'cancelled' | 'storage-error'
+
+export interface SearchSourceResult {
+  sourceId: string
+  status: SearchSourceStatus
+  items: SearchBook[]
+  error?: { code: string; message: string; canRetry: boolean }
+  operationId: string
+}
+
+export interface SearchResult {
+  /** 最终合并结果的可判别状态；逐源状态保留在 sourceResults。 */
+  status: OperationStatus
+  searchId: string
+  operationId: string
+  page: number
+  items: SearchBook[]
+  sourceResults: SearchSourceResult[]
+  isEmpty: boolean
+  hasMore: boolean
+  diagnostics: RuntimeDiagnostic[]
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
+}
+
+export interface SearchEvent {
+  type: 'start' | 'progress' | 'source-success' | 'completed' | 'cancelled'
+  searchId: string
+  page: number
+  pageOwner: string
+  source?: SearchSourceResult
+  items?: SearchBook[]
+  isEmpty?: boolean
+  hasMore?: boolean
+}
 ```
 
 处理阶段固定为：
 
-1. 创建请求上下文，清理同一调用方旧的 `searchId`，清空上一轮合并列表；没有关键字或启用书源为空时直接结束并报告取消或空范围。
+1. 创建请求上下文，清理同一调用方旧的 `searchId`，清空上一轮合并列表；空关键字直接以合法空结果结束，不自动发布取消事件；启用书源为空时进入空范围分支并发布带 `pageOwner` 的完成事件。
 2. 为每个书源创建子任务。子任务先等待暂停状态，再执行 URL 展开、网络请求、登录检测和声明式/JS 解析；单个书源的失败记录阶段错误，不阻断其他书源。
 3. 书源结果先释放临时 HTML，再写入搜索结果存储，随后执行同源去重和跨源合并。Android 是先写入 `searchBookDao` 再发布成功回调，独立库通过 `SearchResultSink` 暴露同样的先后关系。
 4. 每次合并后的快照都带 `searchId` 和 `page` 发布，调用方只能接收当前 `pageOwner` 的事件；旧请求的迟到结果不能覆盖新请求。
@@ -72,7 +110,7 @@ export interface SearchResultSink {
 
 状态转换为 `created -> running -> paused -> running -> completed`，异常取消为 `running/paused -> cancelled`。换页沿用同一个 `searchId` 并递增 `page`；新关键字创建新的 `searchId`，先取消旧请求。多书源任务的并发完成顺序影响中间回调时机，但最终合并规则和同一快照内的排序必须稳定。
 
-事件顺序必须满足：正常请求为 `start -> progress/source-success* -> finish`，取消请求为 `start -> cancel`；`source-success` 发生前必须完成结果归一化和存储。资源清理包括子任务、并发池、暂停等待、AbortSignal 监听和进度报告器，必须在成功、失败、取消和超时路径执行。
+事件顺序必须满足：正常请求为 `start -> progress/source-success* -> completed`，取消请求为 `start -> cancelled`；`source-success` 发生前必须完成结果归一化和存储。资源清理包括子任务、并发池、暂停等待、AbortSignal 监听和进度报告器，必须在成功、失败、取消和超时路径执行。
 
 ## 失败和空值
 
@@ -84,10 +122,10 @@ export interface SearchResultSink {
 - Web 结果另外携带每源状态：全部请求失败与全部成功但无匹配不能只用同一个 isEmpty 表达；
 - 取消搜索：终止当前 page owner 和工作池，迟到的回调不能重新发布结果。
 
-书源级失败不能写入成功结果；但已经成功的其他书源结果仍然可以发布。全局错误只用于请求上下文失效、结果存储失败或资源清理失败等流程级问题。实现时必须区分 `source-error`、`empty-result`、`cancelled` 和 `storage-error`，上层据此决定提示、重试或继续展示已有结果。
+书源级失败不能写入成功结果；但已经成功的其他书源结果仍然可以发布。全局错误只用于请求上下文失效、结果存储失败或资源清理失败等流程级问题。实现时必须区分 `source-error`、`empty-result`、`cancelled` 和 `storage-error`，上层据此决定提示、重试或继续展示已有结果。`isEmpty=true` 只能表示最终没有可展示项目，不能抹掉逐源状态。
 
 ## 迁移验收
 
 必须分别测试详情页搜索、列表搜索、`+/-` 列表前缀、相对 URL、空书名、列表回退、同源去重、跨源合并、精准搜索、30 秒超时和取消后迟到结果。原项目的 `SearchPaginationContractTest` 已固定 page owner 的注册、完成、取消和回调顺序。
 
-Web 调用中 searchId 是一次查询会话身份，operationId 是一次页调用身份；核心只管理本次子任务，应用显式取消上一操作，不通过模块级“当前搜索”取消其他用户。输入 sources 使用不可变 SourceSnapshot[]（含版本），SearchRequest 中 BookSource[] 是原逻辑投影。完成清理只释放请求视图，不清除会话状态。多源最终同分排序保持原合并规则，不新增字母排序；跨源到达次序影响“首次条目”，测试应固定调度。
+Web 调用中 searchId 是一次查询会话身份，operationId 是一次页调用身份；核心只管理本次子任务，应用显式取消上一操作，不通过模块级“当前搜索”取消其他用户。输入 `sources` 使用不可变快照数组，保留 `source` 和 `sourceRevision`；兼容 Android 的 `BookSource[]` 只能作为进入核心前的运行时投影。完成清理只释放请求视图，不清除会话状态。多源最终同分排序保持原合并规则，不新增字母排序；跨源到达次序影响“首次条目”，测试应固定调度。

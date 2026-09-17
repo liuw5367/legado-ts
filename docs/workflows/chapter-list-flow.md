@@ -50,14 +50,22 @@
 
 ```ts
 export interface ChapterListResult {
+  /** `success`、`empty`、`partial`、`failed`、`cancelled` 或 `stale`。 */
+  status: OperationStatus
   /** 去重、排序、编号和格式化后的完整章节列表。 */
   chapters: BookChapter[]
   /** 目录流程更新的书籍统计和当前章节标题。 */
   book: Book
-  /** 参与处理的页面 URL，按请求实际访问顺序记录。 */
+  /** 参与处理的页面 URL，按输入调度和逻辑归并顺序记录；不承诺并发请求的物理完成顺序。 */
   visitedUrls: string[]
+  /** 读取旧目录时使用的修订；提交时用于拒绝并发旧写。 */
+  tocRevision: string
+  /** 本次目录操作身份。 */
+  operationId: string
   /** 页面、字段和持久化前诊断。 */
   diagnostics: RuntimeDiagnostic[]
+  /** 并发请求、脚本和监听器的最终清理状态。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 ```
 
@@ -75,7 +83,7 @@ export interface ChapterListResult {
 
 当 `readConfig.reverseToc=true` 时，最终结果再反转一次。多页目录还要先按当前实现收集页面结果，再执行上面的整体顺序处理，不能在每页解析时提前反转。
 
-真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。输入需要旧目录及 tocRevision，才能合并元数据和拒绝并发旧写；输出更新书籍统计与完整目录，由应用在同一提交边界保存，见 [状态契约](../reference/state-and-effects.md)。
+真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。输入需要旧目录及 `tocRevision`，才能合并元数据和拒绝并发旧写；输出更新书籍统计与完整目录，由应用在同一提交边界保存，见 [状态契约](../reference/state-and-effects.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
 
 BookChapter.equals/hashCode 只按 url 判断，因此 LinkedHashSet 不是按全部章节字段判断相等。相同 URL 不同标题也会去重；先反转的分支保留原收集顺序中最后出现的同 URL 章节。不能误用 JSON 深比较。isTrue 对空白及精确字符串 `null` 返回默认 false，trim 后忽略大小写的 false/no/not/0/0.0 为 false，其他文本为 true。
 
@@ -90,3 +98,4 @@ BookChapter.equals/hashCode 只按 url 判断，因此 LinkedHashSet 不是按�
 - 分页循环：已访问 URL 必须停止；
 - 单页请求失败：按流程策略向上报告，不把未取得的页面当作空章节页；
 - 取消必须在分页、每个章节和最终编号前检查。
+- 取消后必须停止新的分页和章节解析，等待已经启动的请求、并发任务、脚本和监听器释放；清理尚未完成时返回 `cancelled` 并携带待清理资源，不能只依赖同步的 cancel 调用。

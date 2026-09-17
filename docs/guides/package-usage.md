@@ -19,11 +19,27 @@
 
 上述能力复用 [模型](../reference/source-schema.md)、[宿主](../reference/runtime-host-interfaces.md) 和 [状态契约](../reference/state-and-effects.md)。编辑预览调用同一入口，使用临时会话，不提交用户状态。
 
+每个入口都接受不可变书源快照、`operationId`、预算和取消信号。成功返回可以是 `success` 或合法空结果 `empty`；存在已归一化部分结果时使用 `partial`；规则/网络/存储失败使用 `failed`；取消、版本过期和能力缺失分别使用 `cancelled`、`stale`、`capability-missing`。入口必须返回或抛出稳定的 `code`/`stage`，不能用 `[]`、`null` 或 HTTP 状态单独表达失败。
+
 ## 公共调用协议
 
 运行时工厂持有不可变 parser 配置；每个异步入口接收 `CallContext` 与操作输入，返回 `OperationResult<T>`，致命失败抛出带稳定 code/stage 的 SourceRuntimeError。CallContext 包含 requestId、operationId、sessionId、不可变 SourceSnapshot（sourceId/sourceRevision/source/userState）、signal、预算及当前宿主视图；sessionId 由宿主认证注入。规范名称见[运行时统一契约](../reference/runtime-contracts.md)。
 
-OperationResult 包含 value（各入口下表结果）、diagnostics、effects（见[状态与副作用](../reference/state-and-effects.md)）、changes（尚未提交的领域变更）、operationId、sourceRevision。成功空列表与失败不同；多源/批量返回分项状态，致命取消错误仍携带已经提交的 effects，不伪造全批回滚。
+OperationResult 包含 `status`、value（各入口下表结果）、diagnostics、effects（见[状态与副作用](../reference/state-and-effects.md)）、changes（尚未提交的领域变更）、operationId、sourceRevision 和 `cleanup`。成功空列表与失败不同；多源/批量返回分项状态，致命取消错误仍携带已经提交的 effects，不伪造全批回滚。`cleanup.status=complete` 只在请求、脚本、监听器和变量视图都已结算后返回；取消入口返回不等于资源已经释放。
+
+公开结果的最小形状为：
+
+```ts
+interface PublicOperationResult<T> {
+  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'capability-missing'
+  value?: T
+  diagnostics: RuntimeDiagnostic[]
+  effects: EffectRecord[]
+  changes: unknown[]
+  operationId: string
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
+}
+```
 
 changes 每项包含资源身份、baseRevision、允许更新字段及目标值；应用按 expectedSourceRevision compare-and-set 提交。DOM、Set、脚本句柄、AbortSignal、宿主对象不得进入 HTTP DTO。DTO 使用普通对象、数组和字符串；bytes 由独立二进制响应返回，不能 JSON 字符串化为正文。
 
@@ -46,7 +62,7 @@ changes 每项包含资源身份、baseRevision、允许更新字段及目标值
 
 单源搜索输入 key/page；多源额外接收有序 SourceSnapshot[]、precision 和 SearchResultSink。详情接收 canReName；目录接收旧目录、tocRevision 与刷新选项；正文接收 tocRevision、nextChapterUrl 或目录快照及 needSave（默认 false）。分页 page 为一基正整数；不合法输入在网络前失败。searchMany 每源返回 success/empty/failed/cancelled 状态，全部失败与全部成功但无匹配分别表达。
 
-事件通过调用方订阅器接收：start、progress、source-success、source-error、completed、cancelled、saved；包含 operationId 和递增序号。订阅异常不能阻断核心。只有 sink/ContentStore 确认后发布相应保存事件；completed 不表示应用已提交 changes。所有入口结束前等待本次资源关闭。
+事件通过调用方订阅器接收：`start`、`progress`、`source-success`、`source-error`、`completed`、`cancelled`、`saved`；包含 operationId、递增序号和 page/source owner。`completed` 与 `cancelled` 互斥，终态事件只能发布一次；重复或迟到事件按 operationId/version 丢弃。订阅异常不能阻断核心。只有 sink/ContentStore 确认后发布相应保存事件；completed 不表示应用已提交 changes。所有入口结束前等待本次资源关闭。
 
 ## 创建运行时与单次调用
 
@@ -60,7 +76,7 @@ changes 每项包含资源身份、baseRevision、允许更新字段及目标值
   -> 处理进度、结果、诊断和结构化错误
   -> 核对本次请求仍是当前请求
   -> 按结果中的变更描述提交应用数据或正文缓存
-  -> 释放请求资源
+  -> 等待请求、脚本、监听器和变量视图释放
 ```
 
 应用持有书源配置及版本，package 接受一次调用使用的不可变书源快照。用户编辑并保存书源后，新调用使用新版本；旧调用的结果不得覆盖新版本的缓存或用户数据。应用保存源时，以 `bookSourceUrl` 识别同一书源，执行导入冲突策略和原文保留策略，详见 [导入协议](../workflows/import-protocol.md) 与 [书源编辑器规划](source-editor.md)。

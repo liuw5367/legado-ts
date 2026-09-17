@@ -2,6 +2,10 @@
 
 本阶段把前面已经定义的 codec、规则执行和领域流程接入用户数据，但仍不实现完整阅读应用。目标是让 package 的运行结果可以安全地保存、并发更新、检测和刷新，同时保持 package 不依赖 Supabase 或具体 Web 框架。
 
+## 阶段数据契约
+
+本阶段的应用服务输入至少包含可信 `userId`、候选原文/规范化源、`sourceId`、`expectedSourceRevision`、`idempotencyKey`、确认状态和 `web-safe/android-compatible` 模式；Repository 输出必须区分 `new/same/updated/conflict/invalid/cancelled/stale`，并返回 `committed`、changes、effects、诊断和待清理资源。检查输入固定 `SourceSnapshot + sessionId + checkRevision + config + signal`，阶段只允许 `PASSED/FAILED/SKIPPED/UNSUPPORTED`，源最终状态使用 `NEEDS_CHECK/RUNNING/PASSED/FAILED/CANCELLED/STALE`。
+
 ## 依赖与交付
 
 依赖阶段 A 的 `NormalizedSource/ImportCandidate`、阶段 C 的流程结果和阶段 D 的订阅差异入口；实体与订阅类型以[书源相关实体边界](../reference/artifact-model.md)为准。交付：
@@ -26,7 +30,7 @@
 2. 内容相同不递增版本，规则变化递增版本并使检查状态失效；
 3. 事务接口支持整批候选提交、失败回滚和幂等键；
 4. `remove` 清理派生状态，按策略保留书架和阅读进度；
-5. 检测回写使用 sourceRevision/checkSession 条件；
+5. 检测回写使用 sourceRevision/sessionId/checkRevision 条件；
 6. 所有返回值脱敏，不暴露 SecretStore 明文。
 
 内存实现不是生产存储，但可以先让 `REPO-*`、`CHECK-*` 和 API 流程测试稳定运行。
@@ -45,7 +49,7 @@ Supabase SDK 只在 adapter 包出现。浏览器不持有 service key；Edge/No
 
 ### 5. 实现书源检测编排
 
-实现 `checkSources(snapshot, config, host, signal)`：固定版本快照，创建 session，逐源隔离超时和取消，按 domain → search/discovery → info → category → content 的依赖运行。每阶段都返回规范的 `PASSED/FAILED/SKIPPED/UNSUPPORTED`；不把空搜索结果当网络错误。状态定义和兼容 DTO 映射见[书源校验状态](../reference/source-check-state.md)。
+实现 `checkSources(snapshot, config, host, signal)`：固定版本快照，创建 `sessionId`，逐源隔离请求超时和单源总预算，按 domain → search/discovery → book-info → category → toc → content 的依赖运行。每阶段都返回规范的 `PASSED/FAILED/SKIPPED/UNSUPPORTED`；不把空搜索结果当网络错误。状态定义和兼容 DTO 映射见[书源校验状态](../reference/source-check-state.md)。
 
 检测只生成诊断和状态变更，不保存书、章节或正文。完成回写前执行 CAS；源已编辑或删除时返回 stale 并丢弃旧回写。实时进度通过应用 adapter 输出为 SSE/WebSocket，核心不绑定传输方式。
 
@@ -78,7 +82,7 @@ async function saveConfirmedSources(input: SavePlanInput) {
 }
 ```
 
-伪代码只表达事务边界，不规定 ORM。缓存失效、检测任务和订阅通知在 commit 后投递；消费者必须以 sourceRevision 幂等处理。
+伪代码只表达事务边界，不规定 ORM。读取失败、版本断言失败、回滚、提交后通知失败和重复执行都必须返回稳定结果；缓存失效、检测任务和订阅通知在 commit 后投递，消费者必须以 sourceRevision 和 idempotencyKey 幂等处理。取消发生在 commit 前不写入，commit 后取消只影响未开始的通知和清理。
 
 ## 测试门槛
 

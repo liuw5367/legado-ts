@@ -10,6 +10,22 @@ Node 是参考宿主；浏览器只承载编辑及领域结果，Edge 按入口�
 
 Node API 可用不代表脚本安全；node:vm 不是安全隔离机制。worker 是资源和终止边界，也不能单独证明不可信代码无法访问宿主。[Node vm 文档](https://nodejs.org/api/vm.html)
 
+每次联网或脚本操作都要先形成不可变预算：
+
+```ts
+interface OperationBudget {
+  deadlineMs: number
+  maxRequests: number
+  maxPages: number
+  maxResponseBytes: number
+  maxTotalBytes: number
+  maxScriptMemoryBytes: number
+  maxScriptTimeMs: number
+}
+```
+
+缺失、`NaN`、`+Infinity`、`-Infinity`、非正值或已经过期的预算必须在创建上下文前拒绝；signal、单请求超时、单源总预算和平台截止时间分别记录，不能互相覆盖。
+
 ## 脚本实现参考与决定
 
 核对两个项目的实现机制：
@@ -37,6 +53,8 @@ Node API 可用不代表脚本安全；node:vm 不是安全隔离机制。worker
 | 日志泄露 | 输出前脱敏头、查询参数、body、脚本绑定与异常 | trace 只返回受控摘要 |
 
 宿主必须显式提供 `deadlineMs`（绝对毫秒截止时间）、`maxRequests`、`maxPages`、`maxResponseBytes`、`maxTotalBytes`、`maxScriptMemoryBytes`、`maxScriptTimeMs`。这些是目标策略字段，没有虚构的现有默认值；缺失或非正有限值时拒绝创建联网执行上下文。适配器配置须短于平台限制，并在部署报告中给出数值。脚本跳过源限流不能跳过这些总预算。
+
+运行结果至少能区分 `policy-denied`、`budget-exceeded`、`capability-missing`、`timeout`、`cancelled`、`stale`、`upstream-error` 和 `storage-error`，并包含 `stage`、`operationId`、安全 message、是否可重试和 cleanup。取消先停止新请求/脚本/分页，再等待已启动资源释放；客户端断开不能直接当作 cleanup 完成。
 
 ## 不可信书源与数据边界
 

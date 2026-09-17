@@ -148,6 +148,31 @@ export interface ContentWriteInput {
   saveChapterMetadata: boolean
 }
 
+export interface ContentIdentity {
+  /** 源、书和章节的稳定身份；不得只使用章节 URL。 */
+  sessionId: string
+  sourceId: string
+  bookUrl: string
+  chapterKey: string
+  /** 目录刷新和章节索引，防止旧目录正文回写到新目录。 */
+  tocRevision: string
+  chapterIndex: number
+  /** 规则语义和源版本，防止旧规则写入新缓存。 */
+  sourceRevision: string
+  semanticVersion: string
+}
+
+export interface ContentSaveToken {
+  /** 一次正文或资源写入的操作身份。 */
+  operationId: string
+  /** 为目标资源保留的写入代次。 */
+  writeVersion: string
+  /** 生成 token 时使用的内容身份。 */
+  identity: ContentIdentity
+  /** token 失效时返回 stale，不允许继续写入。 */
+  expiresAt?: number
+}
+
 export interface ContentStore {
   /** 按稳定资源身份读取缓存，不递增写入代次。 */
   read(identity: ContentIdentity): Promise<string | undefined>
@@ -365,6 +390,8 @@ export interface VariableStoreContext {
 }
 ```
 
+`VariableStore` 是宿主持久化视图；规则引擎使用的 `RuleVariableView` 负责 `set/delete/has/snapshot`。宿主实现可以通过 adapter 把规则视图的作用域写入 `VariableStore`，但两者不能继续使用同一个接口名描述不同方法。
+
 ```ts
 export type RuntimeCapability =
   | 'network'
@@ -427,8 +454,11 @@ export class SourceRuntimeError extends Error {
       sourceUrl?: string
       /** 发生错误的字段路径。 */
       field?: string
-      /** 触发错误的原始规则，输出前应按策略脱敏。 */
-      rule?: string
+      /** 规则身份；公共输出使用此身份和摘要，不暴露原文。 */
+      ruleId?: string
+      ruleSummary?: string
+      /** 编辑器内部可选的原始规则；不得进入公共 DTO、日志或审计记录。 */
+      rawRule?: string
       /** 底层异常，仅供日志和调试，不作为稳定断言文本。 */
       cause?: unknown
     },

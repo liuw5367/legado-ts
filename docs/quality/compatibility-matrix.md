@@ -11,6 +11,20 @@
 - `低优先待核实`：源码有字段，但尚无足够执行证据定义兼容行为。
 - `目标设计`：上层产品能力，不是 Android 运行时兼容项。
 
+## 五维记录格式
+
+矩阵中的一行只是阅读摘要，不能把“有 Android 证据”误读为“TypeScript 已实现”。正式记录必须把下面五个维度分开保存；同一能力可以有 `evidence=source`，但仍然是 `implementation=absent`、`execution=not-run`。
+
+| 维度 | 允许值 | 含义 |
+| --- | --- | --- |
+| `evidence` | `source` / `test-run` / `design` | 证据来自 Android 源码、已执行测试，或 Web/TypeScript 设计 |
+| `spec` | `defined` / `blocked` | 兼容规则是否已经写成可执行规格；缺少关键事实时必须为 `blocked` |
+| `implementation` | `absent` / `partial` / `implemented` | TypeScript runtime 或宿主适配器的实现程度 |
+| `execution` | `not-run` / `pass` / `fail` | 对应 fixture/golden 是否实际执行，以及执行结果 |
+| `priority` | `required` / `host` / `later` / `verify` | 兼容必需、宿主能力、后续实现或待核实 |
+
+只有 `spec=defined`、`implementation=implemented` 且相关 fixture 的 `execution=pass`，才能在发布说明中称为“已验证兼容”。`target status` 仍用于表达产品承诺，但不替代上述字段。
+
 | 能力 | 目标状态 | Android 证据 | TypeScript 当前状态 |
 | --- | --- | --- | --- |
 | 书源 JSON 对象和数组 | 目标必须兼容 | `BookSourceImport`、`BookSource.kt` | 未实现 runtime，待 fixture |

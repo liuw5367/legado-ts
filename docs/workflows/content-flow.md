@@ -49,33 +49,22 @@ BookSource + Book + BookChapter + nextChapterUrl
 ```
 
 ```ts
-export interface ContentIdentity {
-  /** 宿主认证后的用户或匿名会话身份。 */
+本流程使用[宿主接口](../reference/runtime-host-interfaces.md)中的 `ContentIdentity` 和 `ContentSaveToken`。正文身份必须同时绑定 `sessionId`、`sourceId`、`bookUrl`、`chapterKey`、`sourceRevision`、`semanticVersion`、`tocRevision` 和 `chapterIndex`；保存 token 的 `identity`、`operationId`、`writeVersion` 和过期信息必须在同一原子边界校验。这样既不会把不同会话的缓存混用，也不会让旧目录的章节覆盖新目录。
+
+```ts
+export interface ContentOperationContext {
   sessionId: string
-  /** 原始书源主键。 */
-  sourceId: string
-  /** 书源执行快照版本。 */
-  sourceRevision: string
-  /** package 规则语义版本。 */
-  semanticVersion: string
-  /** 源内书籍地址。 */
-  bookUrl: string
-  /** 目录修订，刷新改变章节身份时必须改变。 */
+  identity: ContentIdentity
   tocRevision: string
-  /** 当前目录修订内的零基索引，不是跨刷新永久身份。 */
   chapterIndex: number
 }
-
-export interface ContentSaveToken {
-  /** 书籍和章节的稳定身份。 */
-  key: ContentIdentity
-  /** 待写入操作身份，取消后失去提交资格。 */
-  operationId: string
-  /** 宿主原子分配的写入代次，提交时比较；与缓存有效版本分开。 */
-  writeVersion: string
-}
+```
 
 export interface ContentResult {
+  /** `success`、`empty`、`partial`、`failed`、`cancelled` 或 `stale`。 */
+  status: OperationStatus
+  /** 本次正文操作身份，用于丢弃迟到分页和保存回调。 */
+  operationId: string
   /** 领域内容种类，由书籍类型和流程确定，不根据 URL 后缀猜测。 */
   kind: 'text' | 'image-content' | 'audio' | 'video' | 'file-links'
   /** 归一化后的正文、资源 URL 或文件链接；二进制实体由 ResourceStore 保存。 */
@@ -86,6 +75,8 @@ export interface ContentResult {
   book: Pick<Book, 'bookUrl' | 'origin'>
   /** 是否从有效正文缓存返回。 */
   cacheHit: boolean
+  /** 最终响应 URL；缓存命中时使用缓存记录中的响应 URL。 */
+  finalUrl: string
   /** 本次正文访问过的分页 URL。 */
   visitedUrls: string[]
   /** 正文保存是否成功；needSave=false 时为 false。 */
@@ -94,6 +85,8 @@ export interface ContentResult {
   auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
   /** 分阶段诊断，保存失败不能伪装为规则失败。 */
   diagnostics: RuntimeDiagnostic[]
+  /** 请求、分页、脚本和保存资源的最终清理状态。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 ```
 
@@ -101,7 +94,7 @@ export interface ContentResult {
 
 `nextChapterUrl` 未显式传入时，Android 查询下一索引 URL，再回退目录首章 URL。Web 调用方提供目录快照/保护 URL，核心不能直接查数据库。分页遇到下一章即停止。多 URL 分支使用 FlowExtensions.mapAsync，按输入 URL 顺序收集，不能按响应完成顺序合并；测试必须设置后页先返回，断言正文仍按输入顺序组成。
 
-正文归一化完成后，核心库返回 `content`、章节标题和 `imgUrl` 更新、音频歌词或视频弹幕附加数据、最终响应 URL、已访问分页 URL 以及诊断。`source-core` 不直接写文件或数据库，宿主通过正文存储端口提交结果；Android 的 `BookHelp.saveContent` 行为由适配器复现。
+正文归一化完成后，核心库返回 `content`、章节标题和 `imgUrl` 更新、音频歌词或视频弹幕附加数据、最终响应 URL、已访问分页 URL 以及诊断。`source-core` 不直接写文件或数据库，宿主通过正文存储端口提交结果；Android 的 `BookHelp.saveContent` 行为由适配器复现。`finalUrl` 是结果字段的一部分，不能只在说明文字中承诺。
 
 ## 保存和批量
 

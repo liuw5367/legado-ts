@@ -18,6 +18,24 @@
 
 应用拥有订阅记录、调度、确认和事务。package 的 `refreshSubscription` 接收订阅快照、当前本地 artifact 快照、`operationId`、`idempotencyKey` 和取消/预算上下文，下载后复用 `importSources`，返回 `SubscriptionRefreshAttempt`、逐项 diff 和可提交计划。不会自行创建定时器、数据库任务或后台服务。URL 可一次提供多个源，sourceUrls 的外层限制仍然有效。
 
+刷新结果的最小结构为：
+
+```ts
+interface SubscriptionRefreshAttempt {
+  subscriptionId: string
+  operationId: string
+  baseSubscriptionRevision: string
+  status: 'unchanged' | 'updated' | 'partial' | 'conflict' | 'failed' | 'cancelled' | 'stale'
+  startedAt: number
+  finishedAt?: number
+  diffs: Array<{ sourceId: string; kind: 'added' | 'updated' | 'unchanged' | 'conflict' | 'remote-missing'; fields: string[]; error?: string }>
+  commitPlan: { sourceIds: string[]; requiresConfirmation: boolean }
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
+}
+```
+
+`baseline`、本地快照和远端快照都按 `sourceId` 保存；attempt 只在成功提交后更新 `baseline` 和 `subscriptionRevision`。取消、超时或非法成员保留旧 baseline，并返回可重试的 attempt 状态。
+
 ## Android `RuleSub` 兼容
 
 Web 设计中的订阅记录需要能够承接 Android 的 `RuleSub`，但不应把 Android 数据库实体原样暴露为核心 package API。
@@ -36,7 +54,7 @@ Web 设计中的订阅记录需要能够承接 Android 的 `RuleSub`，但不应
 | `showRule` | 订阅展示/筛选规则 | 应用展示层或订阅解析器 |
 | `sourceUrl` | 订阅项绑定的源链接，可供源运行时调用资源 | baseline 与 binding |
 
-Android 的订阅刷新 `RuleUpdate.cacheSource` 只把响应整体按 `type` 解析为对应实体数组（`GSON.fromJsonArray<BookSource>` 等），不支持 `sourceUrls` 外层 JSON 数组；`sourceUrls` 只属于导入流程（见 [导入协议](import-protocol.md) 的 `parseBookSourceJson`）。订阅与导入请求都支持 `#requestWithoutUA` 标记。移植时应将这些解析和请求选项记录到 refresh plan；自动更新只改变“是否触发刷新”，不改变保存事务。`update` 在 Android 中记录最近一次尝试，网络失败后仍会影响下一次间隔判断；Web 调度器若改用 `lastSuccessAt`，必须在适配层明确记录这是目标策略而非 Android 原样行为。
+Android 的订阅刷新 `RuleUpdate.cacheSource` 只把响应整体按 `type` 解析为对应实体数组（`GSON.fromJsonArray<BookSource>` 等），不支持 `sourceUrls` 外层 JSON 数组；`sourceUrls` 只属于导入流程（见 [导入协议](import-protocol.md) 的 `parseBookSourceJson`）。因此 `sourceUrls` 逐项解析只适用于 Web 目标或导入适配器，Android-compatible 订阅适配器必须拒绝该形态或显式转入导入协议。订阅与导入请求都支持 `#requestWithoutUA` 标记。移植时应将这些解析和请求选项记录到 refresh plan；自动更新只改变“是否触发刷新”，不改变保存事务。`update` 在 Android 中记录最近一次尝试，网络失败后仍会影响下一次间隔判断；Web 调度器若改用 `lastSuccessAt`，必须在适配层明确记录这是目标策略而非 Android 原样行为。
 
 ### `type` 与静默更新的兼容边界
 
@@ -94,8 +112,8 @@ HTTP 304 只在存在对应成功 baseline 时表示 unchanged；没有 baseline
 `SUB-007`：remote 修改 A 规则，local 只修改分组，候选采用远端规则并保留本地分组。
 `SUB-008`：同时间戳但 mainJs 改变，报告更新或冲突，不视为相同。
 `SUB-009`：RuleSub 的 `autoUpdate=false` 时调度器不请求；到期且为 true 时才创建刷新任务。
-`SUB-010`：静默刷新只自动采用无冲突变更，规则冲突和远端删除保留待用户确认。
-`SUB-011`：订阅响应为 `sourceUrls` 数组时逐项解析；一个非法成员有逐项诊断，不覆盖旧 baseline。
+`SUB-010`：Web safe 静默刷新只自动采用无冲突变更，规则冲突和远端删除保留待用户确认；Android-compatible 模式按兼容策略直接采用更新，并单独记录该副作用。
+`SUB-011`：Web 目标或导入适配器收到 `sourceUrls` 数组时逐项解析；一个非法成员有逐项诊断，不覆盖旧 baseline；Android-compatible 订阅入口不把该数组当作 `RuleUpdate` 响应。
 `SUB-012`：`#requestWithoutUA` 只影响该请求的 User-Agent 策略，不改变 sourceId、缓存键或鉴权策略。
 `SUB-013`：`update` 为最近一次尝试时间；未到 `updateInterval` 时不发请求，到期后请求前先更新尝试时间，失败不能冒充 `lastSuccessAt`。
 `SUB-014`：`type=0` 解析并比较 `BookSource[]`，`type=1` 解析 `RssSource[]`，两者不能共用错误的实体解析器或主键。

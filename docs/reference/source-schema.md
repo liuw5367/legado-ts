@@ -101,6 +101,25 @@ export type NormalizedSource = Omit<
 }
 ```
 
+## 1.1 导入与规范化处理
+
+导入层把原始输入转换为可执行的 `NormalizedSource`，同时保留可以再次导出的原始信息。输入类别和结果边界如下：
+
+| 输入 | 解析步骤 | 失败或空值结果 |
+| --- | --- | --- |
+| 单个 JSON 对象 | 解析对象、识别规则字段、校验 `bookSourceUrl`、生成一个候选 | URL 缺失或为空时候选无效；名称缺失可保留并产生诊断 |
+| JSON 数组 | 逐项解析，每项独立产生候选和诊断 | 非对象成员只标记该成员失败；其他成员可以继续 |
+| 本地文件、URI、远程文本 | 先读取并记录来源，再按文本内容识别 JSON/JS | 读取失败是输入级错误；取消必须清理 URI、请求和临时文件 |
+| JavaScript 源文本 | 提取 URL、名称和配置绑定，保留 `mainJs` 原文 | URL 或 JS 源名称缺失时不生成可保存候选 |
+
+每个 `ImportCandidate` 至少包含 `rawText`、输入 `kind`、脱敏 `location`、解析后的 `source`、`unknownFields`、诊断、可写状态和局部匹配状态。解析过程不因为表单没有控件而删除未知字段，也不把 `null`、空字符串、缺失字段和空数组悄悄改成同一个值。
+
+规则字段按以下顺序解析：对象直接复制并校验；字符串先尝试严格 JSON，失败时按兼容规则记录诊断并决定是否尝试宽松解析；`null` 和空字符串按字段默认值处理；数组成员逐项校验。解析失败的可选字段进入诊断并保持原始字段，必需字段失败才使候选不可写。
+
+`mainJs` 非空时进入 JavaScript 书源流程；否则进入声明式规则流程。分流不会删除 `mainJs`、未知字段或原始文本。规范化结果只把六个规则字段转换为对象或 `null`，运行时不直接消费序列化规则字符串；导出时未修改候选可以原样输出，修改后只保证字段语义、未知字段和脚本文本保留，不保证空白和 key 顺序不变。
+
+导入生命周期为 `reading -> parsed -> normalized -> ready/invalid -> saved/cancelled`。取消停止新读取和脚本执行，等待在途请求结束，删除临时资源，并返回 `cancelled` 及清理结果；批量导入不会把已生成但尚未提交的候选伪装成已保存。
+
 （设计契约，packages 尚无实现）`parseBookSourceJson` 只对 `bookSourceUrl` 调用非空校验；JSON 源缺名称不能误报为 Android 导入失败。JS 配置抽取同时要求 URL 与名称非空。URL 主键原样比较，不对尾斜杠、路径大小写或查询参数做规范化。`bookSourceType` 已知值为 0 到 4，未知值保留原文并报告能力诊断，未经兼容证据不静默改成文本类型。
 
 ### 字段通用约定
@@ -126,7 +145,7 @@ export type NormalizedSource = Omit<
 
 `BookSource` 不是全部书源数据。Android 的订阅实体 `RuleSub`、用户覆盖、source revision、检查状态、cookie/变量和缓存属于管理或运行时模型，不能塞进书源导出 JSON，也不能因未出现在本接口中而丢失。它们的所有权、保存和清理见 [书源状态与副作用](source-management-and-state.md)；检测状态见 [书源检测状态模型](source-check-state.md)。
 
-ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。`ExploreStyle` 是 Android `FlexChildStyle`（`data/entities/rule/FlexChildStyle.kt`）的 TS 投影，字段名与默认值保持一致，跨端实现按能力解释，不承诺 Flexbox 行为。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。`Book.group`、`BookChapter.start/end` 与 `BookReadConfig.delTag` 在 Android 为 `Long`（`Book.kt` L508；`delTag` 为位掩码，实际值很小：hTag=2L/rubyTag=4L，L491-492）；TS `number` 可覆盖实际取值范围，但超过 2^53 的精确整数边界未在类型层提示，迁移和序列化需保留精度。
+ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。`ExploreStyle` 是 Android `FlexChildStyle`（`data/entities/rule/FlexChildStyle.kt`）的 TS 投影，字段名与默认值保持一致，跨端实现按能力解释，不承诺 Flexbox 行为。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。`Book.group`、`BookChapter.start/end` 与 `BookReadConfig.delTag` 在 Android 为 `Long`（`Book.kt` L508；`delTag` 为位掩码，实际值很小：hTag=2L/rubyTag=4L，L491-492）；TS 内部使用 `bigint` 或十进制字符串保存超出 `Number.MAX_SAFE_INTEGER` 的值，JSON 边界统一序列化为十进制字符串；能够证明值始终安全时才可使用 `number`。
 
 ### 登录表单 RowUi
 

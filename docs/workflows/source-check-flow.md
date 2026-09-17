@@ -12,7 +12,7 @@ package 对外提供检测编排和结果模型；应用层提供 HTTP/浏览器
 读取用户 source snapshot
         │
         ▼
-创建 checkSession + checkRevision，状态 NEEDS_CHECK → RUNNING
+创建 sessionId + checkRevision，状态 NEEDS_CHECK → RUNNING
         │
         ▼
 逐书源隔离执行：超时、取消、阶段日志、错误归类
@@ -33,9 +33,11 @@ package 对外提供检测编排和结果模型；应用层提供 HTTP/浏览器
 
 ```ts
 export interface SourceCheckConfig {
-  /** 单个请求的超时时间；不能让一个失效源阻塞整批任务。 */
-  timeoutMs: number;
-  /** 失败时是否把简短错误写入书源备注；Android 的 `wSourceComment` 默认 true，并以 `// Error: ` 前缀写入书源注释。 */
+  /** 单个 HTTP 请求超时时间；不包含其他阶段和清理。 */
+  requestTimeoutMs: number;
+  /** 单个书源的总预算，覆盖所有阶段、重试和清理等待。 */
+  sourceTimeoutMs: number;
+  /** 失败时是否把内存中的简短错误摘要交给应用；不代表直接更新 book_sources 备注。 */
   writeErrorComment: boolean;
   /** 是否检查域名、基础连接和 URL 可达性。 */
   domain: boolean;
@@ -43,7 +45,7 @@ export interface SourceCheckConfig {
   search: boolean;
   /** 是否验证发现/分类入口和 exploreRule。 */
   discovery: boolean;
-  /** 是否从搜索或发现结果验证详情规则。 */
+  /** 是否从搜索或发现结果验证详情规则；规范阶段名为 book-info。 */
   info: boolean;
   /** 是否验证目录规则；文件型书源可跳过。 */
   category: boolean;
@@ -54,7 +56,7 @@ export interface SourceCheckConfig {
 }
 ```
 
-默认超时、错误备注、域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应；其中错误备注默认开启并写 `// Error: ` 前缀。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
+默认请求超时、单源总预算、错误摘要、域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应。Android 的 `wSourceComment` 只影响内存中的 source 对象，最终 detail 由检查状态保存；package 不直接更新 `book_sources` 的备注。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
 
 ## 阶段和依赖
 
@@ -63,7 +65,7 @@ export interface SourceCheckConfig {
 | domain | 有有效书源 URL | URL、请求客户端 | DNS/连接/响应满足策略 | 标记域名失败；可继续收集其他阶段证据 |
 | search | `searchRule` 存在 | 安全关键字 | 得到可解析的书籍结果 | 详情阶段没有可靠样本时跳过 |
 | discovery | `exploreRule` 存在且有入口 | 分类/发现 URL | 至少得到一个可解析结果 | 可继续搜索路径 |
-| info | 有搜索或发现样本 | 详情 URL、`bookInfoRule` | 书名/作者等核心字段可提取 | 目录/正文通常跳过 |
+| book-info | 有搜索或发现样本 | 详情 URL、`bookInfoRule` | 书名/作者等核心字段可提取 | 目录/正文通常跳过 |
 | category | 有详情样本且非文件源 | 目录 URL、`tocRule` | 得到非空章节列表 | 正文阶段按样本策略跳过 |
 | content | 有章节样本且 `contentRule` 存在 | 正文 URL | 得到非空、可接受的正文 | 仅当前书源正文失败 |
 
@@ -78,7 +80,7 @@ export interface SourceCheckConfig {
 3. 按配置执行阶段。每个阶段记录 `startedAt`、`finishedAt`、请求 URL（脱敏 query/header）、HTTP 状态、解析结果摘要和错误分类。
 4. 在详情、目录和正文阶段使用前置阶段得到的第一个可靠样本，避免无限遍历全站；样本选择规则必须稳定并可测试。
 5. 聚合阶段结果、总耗时、错误信息和可展示的建议。不要把远程响应原文或秘密写入普通日志。
-6. 回写前以 `(userId, sourceId, sourceRevision, checkSessionId)` 做条件检查。版本不一致则标记结果 `STALE` 并丢弃持久化更新。
+6. 回写前以 `(userId, sourceId, sourceRevision, sessionId)` 做条件检查。版本不一致则标记结果 `STALE` 并丢弃持久化更新。
 
 ## 状态转换
 
@@ -102,7 +104,7 @@ export type SourceCheckStage =
   | "domain"
   | "search"
   | "discovery"
-  | "info"
+  | "book-info"
   | "category"
   | "content";
 
@@ -135,7 +137,7 @@ export interface SourceCheckResult {
 }
 ```
 
-实时事件可以复用同一结果模型的增量版本，但客户端不能把 `RUNNING` 结果当作最终通过。若兼容层输出小写状态，必须按[状态模型](../reference/source-check-state.md)的映射表转换；WebSocket 或 SSE 只是应用传输方式，检测核心不应依赖某一种推送协议。
+实时事件可以复用同一结果模型的增量版本，但客户端不能把 `RUNNING` 结果当作最终通过。阶段状态允许值为 `PASSED`、`FAILED`、`SKIPPED`、`UNSUPPORTED`；源最终状态允许值为 `NEEDS_CHECK`、`RUNNING`、`PASSED`、`FAILED`、`CANCELLED`、`STALE`。若兼容层输出小写状态，必须按[状态模型](../reference/source-check-state.md)的映射表转换；WebSocket 或 SSE 只是应用传输方式，检测核心不应依赖某一种推送协议。
 
 ## Android 兼容语义
 

@@ -45,7 +45,7 @@ export interface ImportReplacement {
 
 export type ImportStage =
   | 'input' | 'fetch' | 'parse' | 'normalize'
-  | 'replace' | 'conflict' | 'storage'
+  | 'replace' | 'conflict' | 'storage' | 'cancel'
 
 export interface ImportDiagnostic {
   /** 诊断阶段，例如 parse、replace 或 conflict。 */
@@ -65,6 +65,8 @@ export interface ImportCandidate {
   rawText: string
   /** 解析并归一化后的书源对象，校验失败时为空。 */
   source?: NormalizedSource
+  /** 未知字段和原始结构保留区；不能因没有表单控件而丢弃。 */
+  unknownFields: Record<string, unknown>
   /** 按顺序记录命中的替换规则及前后差异摘要。 */
   replacements: ImportReplacement[]
   /** 输入、解析、字段、冲突和持久化前诊断。 */
@@ -73,7 +75,13 @@ export interface ImportCandidate {
   localMatch?: 'new' | 'update' | 'same' | 'conflict'
   /** 是否可以进入用户确认和保存阶段。 */
   writable: boolean
+  /** 候选当前生命周期状态。 */
+  status: 'ready' | 'invalid' | 'cancelled' | 'persisted'
+  /** 候选级稳定错误；没有错误时为空。 */
+  error?: { code: string; message: string; canRetry: boolean }
 }
+
+导入批次的整体结果还需要记录 `operationId`、输入顺序、候选数组、是否有可写候选和清理状态。候选 `cancelled` 表示读取、网络、脚本或临时资源尚未完成时被停止；它不能与 `invalid` 混用，也不能因为已有候选而把整批报告为 `persisted`。批量持久化仍由应用在确认后调用 Repository 完成。
 ```
 
 替换失败不能静默使用部分替换结果作为有效书源。候选应保留错误、命中的规则 ID 和可回退的原始版本，编辑器可以据此显示诊断。

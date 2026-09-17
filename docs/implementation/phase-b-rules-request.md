@@ -2,9 +2,15 @@
 
 规则引擎是书源 package 的解释层，应用和编辑器只通过公开入口使用它。先实现可重复的规则求值与请求描述，再接入真实网络。精确语义以 [规则语言](../reference/rule-language.md)、[URL 与请求规则](../reference/url-request-rules.md) 和 [宿主接口](../reference/runtime-host-interfaces.md) 为准；本章说明实现依赖和验证顺序。
 
+## 阶段输入、输出与失败边界
+
+规则入口接收 `source snapshot + requestId + operationId + RuleContext + budget + AbortSignal + RuntimeHost`，输出 `OperationResult<T>`。结果必须包含 `status`、可选值、诊断、effects、changes 和 cleanup；合法空列表使用 `empty`，脚本/宿主能力缺失使用 `capability-missing`，取消和版本变化分别使用 `cancelled`/`stale`。`RuntimeDiagnostic.canContinue` 只决定当前字段能否继续，不能把取消、预算耗尽或资源清理失败降级为普通字段警告。
+
+规则中间表示至少记录 mode、原文、位置、输入类型和下一步输入；请求中间表示至少记录绝对 URL、method、headers、body、charset、重定向策略、responseType、超时、最大请求数和 signal。HTTP 响应保留最终 URL、状态码、响应头和 bytes；重定向、空 body、超时、取消、字节上限和 bodyJs 失败必须分别有稳定诊断。
+
 ## 规则求值的实现顺序
 
-1. 建立统一 `RuleContext`：当前书源、书籍、章节、原始响应、基准 URL、变量存储、脚本绑定和取消信号。每次公开调用创建新上下文；字段规则在同一流程中按原实现约定共享必要变量。
+1. 建立统一 `RuleContext`：当前书源、书籍、章节、原始响应、基准 URL、`RuleVariableView`、脚本绑定和取消信号。每次公开调用创建新上下文；字段规则在同一流程中按原实现约定共享必要变量。
 2. 按[规则语言](../reference/rule-language.md)的兼容边界实现扫描器，区分 RuleAnalyzer 的规则平衡和代码平衡。不得全局保护原实现未保护的引号，不改 JS/WebJS 两次扫描顺序。诊断与求值共享位置记录，但额外诊断不改变执行语义。
 3. 对每段规则识别默认/Jsoup、CSS、XPath、JSONPath、Regex 和 JS 模式，输出带原始文本与位置的中间表示。模式选择与求值分开，编辑器诊断和运行时共享同一个扫描结果。
 4. 通过解析器端口执行 DOM、XPath 和 JSONPath。核心层解释旧式选择器、节点链、索引、范围、排除、终端文本/属性读取和 `getString`/`getStringList`/`getElements` 的归一化。端口返回节点、对象、列表与标量时保留类型，直到输出 API 确定目标类型。
@@ -32,7 +38,7 @@ URL fixture 同时断言请求描述和执行轨迹。B 先用 fake HTTP 验证�
 
 ## 基础脚本与宿主
 
-按 [运行边界与部署验收](../operations/runtime-security-and-deployment.md) 的候选方向提供受限 JS runtime；先用同步 java.ajax 延迟响应、无限循环终止、嵌套桥接、两会话和句柄清理案例验收，再固定依赖版本。动态 JS 导入与配置配对在此阶段完成，主函数 marshaller 可用固定输入单测。基本编码/bytes 方法与网络一起实现；缺失重载明确 capability-missing。
+按 [运行边界与部署验收](../operations/runtime-security-and-deployment.md) 的候选方向提供受限 JS runtime；先用同步 java.ajax 延迟响应、无限循环终止、嵌套桥接、两会话和句柄清理案例验收，再固定依赖版本。动态 JS 导入与配置配对在此阶段完成，主函数 marshaller 可用固定输入单测。基本编码/bytes 方法与网络一起实现；缺失重载明确 capability-missing。预算必须覆盖脚本时间、调用深度、返回 bytes/字符串大小和并发桥接数；超限后停止新桥接，等待 scope 关闭并返回 `budget-exceeded` 或 `cancelled`。
 
 源码 Java 对象互操作不能默认等价，遇到新重载先补参数/返回/错误案例。宿主提供显式预算、会话 Cookie 和变量视图，关闭视图不清持久数据。若桥接机制不能满足参考环境，记录 B 的 JS 验收阻塞，不增加未经批准的执行服务。
 

@@ -80,8 +80,19 @@ export interface RequestBudget {
 所有公开流程返回 `OperationResult<T>`，其中 `value` 可以是成功空列表，但不能用空列表表示失败：
 
 ```ts
+export type OperationStatus =
+  | 'success'
+  | 'empty'
+  | 'partial'
+  | 'failed'
+  | 'cancelled'
+  | 'stale'
+  | 'capability-missing'
+
 export interface OperationResult<T> {
-  /** 领域结果；部分成功时仍可存在。 */
+  /** 可判别终态；空列表成功必须使用 empty，而非 failed。 */
+  status: OperationStatus
+  /** 领域结果；partial/cancelled 时允许保留已产生但未提交的部分结果。 */
   value?: T
   /** 可继续处理的警告和阶段诊断。 */
   diagnostics: RuntimeDiagnostic[]
@@ -89,6 +100,11 @@ export interface OperationResult<T> {
   effects: EffectRecord[]
   /** 尚未由应用提交的领域变更。 */
   changes: unknown[]
+  /** 请求资源的最终收尾结果；cancelled 也必须等待资源所有者结算。 */
+  cleanup: {
+    status: 'complete' | 'partial' | 'failed'
+    pending: string[]
+  }
   operationId: string
   sourceRevision?: string
 }

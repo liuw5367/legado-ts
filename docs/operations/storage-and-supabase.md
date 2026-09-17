@@ -2,7 +2,7 @@
 
 ## 结论
 
-书源 package 必须存储无关；在 Web 应用中，默认采用托管 Postgres（Supabase 是合适的第一实现）保存用户书源、版本和状态。Supabase client、RLS、认证和 Edge/Node 部署代码只能存在应用/adapter 层，不能进入核心 package。
+书源 package 必须存储无关；在 Web 应用中，托管 Postgres（Supabase 可作为第一实现）是目标实现候选，用于保存用户书源、版本和状态。当前文档没有部署结果，不能把 Supabase 描述成已启用事实。Supabase client、RLS、认证和 Edge/Node 部署代码只能存在应用/adapter 层，不能进入核心 package。
 
 Supabase 的 JSON/JSONB 适合保存规范化书源和未知字段，但 JSONB 不是完整的数据边界：用户归属、版本、检查状态、订阅关系和秘密仍应有独立字段/表。Supabase 官方说明见 [JSON 数据类型](https://supabase.com/docs/guides/database/json)、[Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) 和 [服务端认证包选择](https://supabase.com/docs/guides/auth/choosing-a-server-package)。
 
@@ -32,10 +32,10 @@ application service
 | `source_revisions` | `user_id`, `source_id`, `source_revision`, raw/normalized snapshot, origin, actor | 版本和审计；是否保留全部历史由容量策略决定 |
 | `source_subscriptions` | `user_id`, `subscription_id`, URL, options, update metadata | 订阅自身，不与某一条书源混为一谈 |
 | `source_subscription_items` | subscription/item identity, source_id, baseline revision, last result | 订阅条目与用户覆盖、基线分离 |
-| `source_check_states` | `user_id`, `source_id`, source/check revision, status, summary, stage results, timestamps | 见[检测状态](../reference/source-check-state.md)；旧结果条件写入 |
+| `source_check_states` | `user_id`, `source_id`, `session_id`, `source_revision`, `check_revision`, status, summary, stage results, timestamps | 见[检测状态](../reference/source-check-state.md)；旧结果条件写入 |
 | `source_runtime_state` | `user_id`, `source_id`, variables/cache refs, timestamps | 可失效、可重建，不能替代书源权威数据 |
 | `source_secrets` | owner, source ref, encrypted value/secret provider ref, expiry | 只允许服务端使用，默认不随书源 JSON 导出 |
-| `jobs` | owner, kind, input snapshot, status, lease, error | 检测和订阅刷新在无状态部署中的任务协调 |
+| `jobs` | owner, kind, `input_snapshot`, params, status, lease, error, output, cleanup | 检测和订阅刷新在无状态部署中的任务协调 |
 
 ## 实施基线
 
@@ -59,7 +59,7 @@ application service
 
 保存书源时使用 `expectedSourceRevision` 做 CAS：只有当前 `sourceRevision` 与预期相等时才写入新版本。source、current pointer、check invalidation 和审计记录必须在同一事务完成；缓存失效和任务通知在提交后执行并可重试。
 
-检测回写必须带 `user_id + source_id + source_revision + check_session_id` 条件。订阅刷新也必须走相同保存边界：远程失败保留上一次成功版本，部分有效条目逐项记录，不得清空用户已有书源。
+检测回写必须带 `user_id + source_id + session_id + source_revision + check_revision` 条件；数据库字段统一使用 `session_id`，应用 DTO 的 `sessionId` 在 adapter 边界转换。订阅刷新也必须走相同保存边界：远程失败保留上一次成功版本，部分有效条目逐项记录，不得清空用户已有书源。
 
 ## 数据内容与秘密处理
 
@@ -68,6 +68,8 @@ application service
 - 用户覆盖（启用、排序、分组等）与订阅基线分开，避免下一次刷新覆盖用户选择。
 - cookie、密码、token、Authorization、JS 私密配置不放在普通 `normalized_source` 或日志中；保存加密值或外部 Secret Manager 引用。
 - 导出默认脱敏；测试 fixture、错误追踪和 URL 日志也要脱敏。
+
+Repository 最小返回必须包含操作状态、是否已提交、sourceRevision、changes、effects 和 cleanup；数据库不可用、RLS 拒绝、CAS 冲突、SecretStore 失败和幂等键重复不能返回空列表或通用成功。保存草稿由应用保留，核心不把未提交候选写入权威表。
 
 ## Vercel、Next.js 与 Edge/Node
 

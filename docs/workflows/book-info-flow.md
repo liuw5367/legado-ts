@@ -47,6 +47,8 @@ BookSource + Book + canReName
 
 ```ts
 export interface BookInfoResult {
+  /** 与运行时统一契约相同；空字段继续不等于流程失败。 */
+  status: OperationStatus
   /** 详情字段更新后的书籍副本，不包含未提交的数据库状态。 */
   book: Book
   /** 是否直接使用了已有 infoHtml。 */
@@ -59,6 +61,10 @@ export interface BookInfoResult {
   updatedFields: string[]
   /** 字段级警告或流程错误诊断。 */
   diagnostics: RuntimeDiagnostic[]
+  /** 结果来源；事件中的 origin 应直接使用此值。 */
+  origin: 'cache' | 'network' | 'javascript'
+  /** 请求、脚本和解析资源的最终清理状态。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 ```
 
@@ -70,6 +76,6 @@ export interface BookInfoResult {
 
 ## JavaScript 源差异
 
-JS 源的 `getBookInfo(book)` 是可选函数，缺失或返回空时保留搜索阶段字段。返回对象只允许覆盖明确的详情字段，包括 `tocUrl`；不能覆盖 `bookUrl`、阅读进度等运行状态。`downloadUrls` 必须是字符串数组，过滤空字符串、`javascript:` 和重复 URL；`variable` 支持对象或 JSON 字符串并替换现有书籍变量。
+JS 源的 `getBookInfo(book)` 是可选函数，缺失或返回空时保留搜索阶段字段。返回对象只允许覆盖明确的详情字段，包括 `tocUrl`；不能覆盖 `bookUrl`、阅读进度等运行状态。`downloadUrls` 的兼容归一化规则是：非数组值忽略并记录诊断；数组中只保留非空字符串；大小写不敏感地过滤以 `javascript` 开头的协议值；相对 URL 按 `book.bookUrl` 转为绝对 URL；最后按绝对 URL 去重并保持首次出现顺序。`variable` 支持对象或 JSON 字符串并替换现有书籍变量。
 
 Web 输入绑定 sourceRevision 和 Book 的 baseRevision。返回的 updatedFields 是明确允许提交的集合，不执行整对象覆盖；失败返回诊断并保持输入对象不变。infoHtml/tocHtml 复用必须同时带最终响应 URL、源版本和会话身份；跨 HTTP 使用服务端缓存引用，不能仅传一段 HTML 就假定属于当前源。成功返回后应用提交 changes，提交失败与规则解析失败分开。

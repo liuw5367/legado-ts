@@ -6,7 +6,7 @@
 
 `AnalyzeRule.setContent` 接收字符串、DOM 节点、JSON 对象或列表。当前实现的内容判断是：DOM `Node` 按 HTML 处理；其他值转文本后，若被判断为 JSON 则按 JSON 处理。设置新内容会清空 HTML、XPath、JSONPath 解析器缓存，但保留当前规则对象的变量和脚本缓存。
 
-一个规则字段的执行上下文至少包含以下字段。`Book`、`BookChapter` 和规则对象以 [书源数据模型](source-schema.md) 为唯一字段来源，`VariableStore` 是运行时接口，不能由每个流程各自实现一套：
+一个规则字段的执行上下文至少包含以下字段。`Book`、`BookChapter` 和规则对象以 [书源数据模型](source-schema.md) 为唯一字段来源，`RuleVariableView` 是规则执行接口，不能由每个流程各自实现一套：
 
 ```ts
 export interface RuleContext {
@@ -26,15 +26,15 @@ export interface RuleContext {
   chapter?: BookChapter
   /** 当前章节的下一章 URL，用于正文分页保护。 */
   nextChapterUrl?: string
-  /** 当前调用可见的变量存储。 */
-  variables: VariableStore
+  /** 当前调用可见的规则变量视图。 */
+  variables: RuleVariableView
   /** 取消规则、请求和后续分页的信号。 */
   signal?: AbortSignal
 }
 
 export type VariableScope = 'local' | 'chapter' | 'book' | 'rule-data' | 'source'
 
-export interface VariableStore {
+export interface RuleVariableView {
   /** 按 Android 兼容优先级读取变量，不存在时返回 undefined。 */
   get(name: string): string | undefined
   /** 写入最具体的可用持久化层；local 变量只在当前 RuleContext 存活。 */
@@ -54,6 +54,30 @@ export interface VariableStore {
 
 `content` 的类型由当前阶段决定，可以是 HTML 字符串、DOM 节点、JSON 对象或列表。`baseUrl` 用于空 URL 回退，`redirectUrl` 用于非空相对 URL 归一化；二者不能在流程适配器中混为一个字段。
 
+规则引擎使用的 `RuleVariableView` 是执行层视图；宿主的 `VariableStore` 负责持久化、作用域关闭和等待在途写入，二者通过宿主 adapter 连接。这样规则语义中的 `set/delete/has/snapshot` 不会与宿主接口的 `put/close` 产生同名冲突。
+
+## 1.1 一次规则求值的完整结算
+
+一次求值必须按以下阶段结算，调用方不需要通过 Android 类名补全顺序：
+
+1. 固定 `requestId`、`operationId`、`sourceRevision`、`baseUrl`、`redirectUrl`、预算和 `AbortSignal`，创建本次规则的 `RuleVariableView`。
+2. 根据输入值判断 HTML/DOM、JSON、普通文本或列表；保留 `null`、`undefined`、空字符串、空数组、空对象和合法节点集合的差异。
+3. 先扫描 JS/WebJS 块，再识别前缀和默认模式；按括号、方括号、字符串和插值边界拆分 `&&`、`||`、`%%`。
+4. 按模式执行选择器、XPath、JSONPath、Regex、Js 或 WebJs；每一步输出中间值、诊断和下一步输入，不把对象或节点提前转成字符串。
+5. 按规则顺序应用索引/范围/排除、变量读写、插值、字段正则和 `##` 替换，再按 `getElement`、`getElements`、`getString`、`getStringList` 或 `getObject` 归一化。
+6. 返回结果、诊断、变量变更和能力/资源状态；流程结束时关闭变量视图并等待脚本、解析器和请求资源释放。
+
+| 情况 | 规则层结果 | 流程层终态 |
+| --- | --- | --- |
+| 合法匹配或合法转换 | 节点、标量、对象或列表 | `success` |
+| 合法无匹配、空字段或空列表 | 空值或空列表，并保留阶段 | `empty`；若字段允许继续则可继续后续流程 |
+| 单字段 JSONPath/选择器/正则错误 | 诊断，按字段策略返回空值或跳过 | 可继续时保留诊断，否则 `failed` |
+| 必需规则失败、脚本异常或请求失败 | 稳定错误码、阶段和字段 | `failed` |
+| 宿主没有所需 JS/WebView/浏览器能力 | 不执行替代路径 | `capability-missing` |
+| signal、预算或资源释放请求 | 停止新步骤，等待已启动资源收尾 | `cancelled`；若版本已变化则 `stale` |
+
+`null` 表示规则明确产生空值，`undefined` 表示没有该字段或能力没有返回值；流程是否把它们归一化为空字符串由输出 API 决定。规则诊断必须说明 `canContinue`，但不能把取消或预算耗尽包装成普通字段错误。
+
 ## 2. 模式识别
 
 当前模式名称是 `XPath`、`Json`、`Default`、`Js`、`Regex`、`WebJs`。
@@ -69,6 +93,8 @@ export interface VariableStore {
 | `@webjs:...` | WebJs | 在后台 WebView/浏览器上下文中执行 |
 
 `@@` 会去掉前缀。`@XPath:` 和 `@Json:` 会去掉前缀。`@CSS:` 由 HTML 解析器识别并去掉前缀。以 `$.` 或 `$[` 开头的规则即使省略 `@Json:` 也会进入 JSON 模式。以 `/` 开头的 XPath 不要求写 `@XPath:`。
+
+`@CSS:`、`@XPath:` 和 `@Json:` 的前缀匹配不区分大小写，例如 `@css:`、`@xPaTh:` 和 `@JSON:` 分别进入相同模式。前缀后的规则正文仍按对应模式原样解析，不能因为前缀大小写被改写就改变选择器或路径内容。
 
 `:` 只有在 `splitSourceRule(..., allInOne = true)` 的入口且位于规则首字符时才强制 Regex；这也是它与 CSS 伪类冒号冲突的原因。迁移时不能把任意包含冒号的规则都判断成正则。
 
@@ -144,7 +170,7 @@ JSONPath 解析失败时当前实现记录错误并返回空/空列表，不能�
 
 两种正则语义必须分开：
 
-1. `:regex` 全规则模式：`AnalyzeByRegex.getElements` 返回每次匹配的捕获组列表；`getElement` 返回首个匹配及其组，并可用多个正则串联。该语法主要给书籍列表和目录列表使用。
+1. `:regex` 全规则模式：`AnalyzeByRegex.getElements` 为每次匹配返回一个列表，列表第 0 项是完整匹配文本，后续依次是捕获组；不存在的捕获组以空字符串占位。`getElement` 返回首个匹配的同样结构，并可用多个正则串联。串联时，后一个正则作用于前一个正则产生的完整匹配文本集合，不作用于前一个正则的各个捕获组。该语法主要给书籍列表和目录列表使用。
 2. 字段规则中的 `$1`、`$2`：当字段最终被识别为 Regex 时，先执行其它片段得到捕获组列表，再用 `$n` 取组。组不存在时保留原 `$n` 文本。
 
 ## 8. 内嵌变量、JS 和替换
@@ -163,7 +189,7 @@ JSONPath 解析失败时当前实现记录错误并返回空/空列表，不能�
 
 ### `##match##replace`
 
-字段结果支持在末尾附加正则替换：`规则##匹配##替换`。第四段存在时只替换首个匹配。替换发生在当前规则步骤结果生成之后；正文的 `replaceRegex` 则是在多页正文合并后再次执行。
+字段结果支持在末尾附加正则替换：`规则##匹配##替换`。第三段可以省略，`规则##匹配` 等价于使用空字符串替换，即删除匹配内容；第四段只要存在就只替换首个匹配。替换发生在当前规则步骤结果生成之后；正文的 `replaceRegex` 则是在多页正文合并后再次执行。
 
 当前实现编译正则失败时对全量替换回退为字面字符串替换；迁移必须以测试固定这一历史行为，不应直接依赖 JavaScript `String.replace` 的差异语义。
 

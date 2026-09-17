@@ -42,10 +42,15 @@ export interface PreviewResult {
   }>
   /** 最终领域结果或结构化错误。 */
   output?: unknown
+  /** 预览终态；空结果不等于失败。 */
+  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'capability-missing'
+  /** 稳定操作身份和版本，防止迟到 trace 覆盖新候选。 */
+  operationId: string
+  sourceRevision?: string
   /** 预览期间产生的诊断。 */
   diagnostics: EditorDiagnostic[]
-  /** 预览结束时 scope、Cookie、变量和请求监听器是否已释放。 */
-  resourcesReleased: boolean
+  /** 预览结束时 scope、Cookie、变量和请求监听器的收尾结果。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 
 export interface SourceEditorSession {
@@ -67,6 +72,11 @@ export interface SourceEditorSession {
   dirty: boolean
   /** 最近一次预览结果。 */
   preview?: PreviewResult
+  /** 当前加载、预览、保存和导出状态；互相独立。 */
+  loadState: 'idle' | 'loading' | 'ready' | 'failed'
+  previewState: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled' | 'stale'
+  saveState: 'idle' | 'saving' | 'saved' | 'conflict' | 'failed' | 'cancelled'
+  exportState: 'idle' | 'exporting' | 'completed' | 'failed'
 }
 
 export interface EditorDiagnostic {
@@ -92,7 +102,9 @@ export interface SourcePosition {
 }
 ```
 
-状态分成正交维度：load=closed/loading/ready，validity=valid/invalid，preview=idle/running/failed，save=idle/saving/conflict/failed。dirty 仅由 rawText 与 baseText 的差异决定，预览本身不改变 dirty。解析失败保留原文；保存比较 baseRevision，冲突由用户选择重载、覆盖或导出。切换、关闭和离开时检查 dirty，未经确认不丢弃修改。
+保存输入至少包含 `sessionId`、`baseRevision`、`source`、`rawText`、`unknownFields`、用户覆盖选择、`confirmed` 和 `idempotencyKey`；保存结果使用 `new/same/updated/conflict/invalid/cancelled/stale`，并明确 `committed`、新 `sourceRevision`、changes 和错误。`confirmed=false` 不产生写入。预览中的 HTTP/解析/脚本/能力错误只影响预览状态，不自动修改 dirty 或持久化源。
+
+状态分成正交维度：load=idle/loading/ready/failed，validity=valid/invalid，preview=idle/running/completed/failed/cancelled/stale，save=idle/saving/saved/conflict/failed/cancelled，export=idle/exporting/completed/failed。dirty 仅由 rawText 与 baseText 的差异决定，预览本身不改变 dirty。解析失败保留原文；保存比较 baseRevision，冲突由用户选择重载、覆盖或导出。切换、关闭和离开时检查 dirty，未经确认不丢弃修改；迟到 preview 只有 operationId 和 sourceRevision 同时仍然匹配时才能更新会话。
 
 导入、编辑、诊断、预览、保存和导出的数据流为：
 
@@ -171,7 +183,7 @@ source-editor UI
 
 编辑器组件只能调用 codec、诊断器和 preview host，不得在 UI 内复制 URL 展开、变量查找、规则解析或字段合并逻辑。保存和导出必须经过同一 codec；预览必须经过同一核心流程，保证编辑器显示的结果与 Node、SSR 运行结果来自同一套规则语义。
 
-预览默认使用固定响应与临时 Cookie/缓存/变量空间。用户触发真实请求时展示目标及能力，不提交用户持久状态，不执行购买和段评写入；已发送的网络请求不因预览结束而撤回。预览结果带候选版本，编辑后迟到 trace 不覆盖新候选诊断。保存无效草稿与保存可运行源分开：草稿可导出，运行入口必须校验能力与字段，不通过高亮推断可执行。
+预览默认使用固定响应与临时 Cookie/缓存/变量空间。用户触发真实请求时展示目标及能力，不提交用户持久状态，不执行购买和段评写入；已发送的网络请求不因预览结束而撤回。预览结果带候选版本，编辑后迟到 trace 不覆盖新候选诊断。保存无效草稿与保存可运行源分开：草稿可导出，运行入口必须校验能力与字段，不通过高亮推断可执行。预览取消时停止新请求并等待 cleanup；已经完成的外部请求不因取消自动回滚。
 
 ## 安全和权限
 

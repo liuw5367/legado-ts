@@ -39,7 +39,30 @@ Repository.save/saveBatch(... expectedSourceRevision)
 
 ## 输入与输出契约
 
-`SourceRepository`、`SourceTransaction`、`SaveSourceInput`、`SaveSourceResult`、`SaveBatchInput`、版本断言和审计输入的完整定义只维护在[书源管理与状态](../reference/source-management-and-state.md#3-repository-边界)。本流程使用该接口，不在流程文档复制一份可能漂移的公开类型定义；版本字段名称以[运行时统一契约](../reference/runtime-contracts.md)为准。
+当前流程的最小输入和输出如下；完整字段由[书源管理与状态](../reference/source-management-and-state.md#3-repository-边界)维护，但读者不打开该文件也能判断保存边界：
+
+```ts
+interface PersistenceFlowInput {
+  userId: string
+  candidate: { source: NormalizedSource; rawText?: string; unknownFields: Record<string, unknown> }
+  previousSourceId?: string
+  expectedSourceRevision?: string
+  idempotencyKey: string
+  confirmed: boolean
+  mode: 'web-safe' | 'android-compatible'
+}
+
+interface PersistenceFlowResult {
+  status: 'new' | 'same' | 'updated' | 'conflict' | 'invalid' | 'cancelled' | 'stale'
+  committed: boolean
+  sourceRevision?: string
+  changes: SourceChange[]
+  effects: string[]
+  error?: { code: string; message: string; canRetry: boolean }
+}
+```
+
+`changes` 只表示待提交或已提交的领域变更，`effects` 表示检查失效、缓存清理、审计和秘密撤销等外部动作；两者不能只用一个布尔值代替。
 
 `RemoveSourceInput` 至少包含可信的 `userId`、`sourceId` 和可选的 `expectedSourceRevision`；其余字段由[书源管理与状态](../reference/source-management-and-state.md)的 Repository 契约统一定义。Web 目标中版本使用由 Repository 生成的不透明字符串（可编码单调递增序列），`lastUpdateTime` 仍只是源内容元数据，不可替代并发版本；Android 的导入和订阅刷新仍以 `lastUpdateTime` 大小判断新增或更新，没有独立的并发版本比较。
 
@@ -49,7 +72,7 @@ Repository.save/saveBatch(... expectedSourceRevision)
 
 1. 应用层先读取用户身份、目标 sourceId 和当前版本，不能接受客户端传入的 userId 作为授权依据。
 2. package 解析原文，保留未知字段，规范化空值、数组、URL 和规则字段，并返回逐项诊断。
-3. 对每个候选项执行结构校验和最小业务校验：名称、书源 URL、规则对象类型必须有效；不满足条件的项进入错误列表，不应写入。
+3. 对每个候选项执行结构校验和最小业务校验：书源 URL 和规则对象类型必须有效；JS 源名称必须有效，JSON 源名称缺省或为空可以保留并产生诊断；不满足条件的项进入错误列表，不应写入。
 4. 与当前快照比较，区分“新建”“内容相同”“规则变化”“用户覆盖变化”“sourceId 冲突”和“版本过期”。
 5. 批量导入应先完成整批预览，再按用户选择提交；预览阶段不得改变用户书源、检查状态或订阅基线。
 
@@ -82,6 +105,8 @@ Android 没有等价的保存/删除版本断言：`BookSourceDao.insertSources`
 一次保存至少应保证以下动作原子完成：写入 source revision、更新当前指针、写入审计来源、重置/失效检查状态。批量保存通过规范中的 `saveBatch`/`transaction` 完成；任何一步失败都不能留下“新书源 + 旧检查状态”“旧书源 + 新版本号”或部分批量写入的组合。
 
 数据库提交成功后再触发非关键副作用，例如清理缓存、通知订阅任务或排队检查。缓存清理失败应可重试，不能回滚已经提交的书源；检查任务必须携带 sourceRevision，防止旧任务覆盖新结果。
+
+取消发生在数据库原子提交前时，返回 `cancelled` 且保证不产生 source revision；提交已完成后收到取消时，结果仍报告已提交的 revision，并把取消限制在未开始的后续副作用。提交过程中无法确认结果时保留 `idempotencyKey` 和审计记录，重试先查询幂等结果；不能把未知结果当作失败后重复写入。
 
 ## 删除流程
 

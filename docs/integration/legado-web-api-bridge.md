@@ -16,7 +16,7 @@
 | `GET /getBookSource` | 按 URL 查询单个书源 | 授权、查询和脱敏 | source snapshot 模型 |
 | `GET /getBookSources` | 返回当前实例的书源列表 | 改为当前用户范围；不得泄露其他用户 | 无存储实现 |
 | `GET /getBookSourcesForManagement` | 在同一事务快照中返回书源及对应检测状态；可用 `urls` JSON 数组筛选 | 保持 `sources`/`states` 同快照、按当前用户授权并脱敏 | 源快照与检测状态模型 |
-| `DELETE /deleteBookSources` | 按 URL 批量删除，并清理相关运行时状态 | 授权、确认、事务删除和审计 | 删除副作用契约 |
+| `POST /deleteBookSources` | 按 URL 批量删除，并清理相关运行时状态 | 授权、确认、事务删除和审计 | 删除副作用契约 |
 | `GET /getBookSourceCheckStates` | 读取书源检测状态 | 返回用户范围状态和脱敏摘要 | 检测状态模型 |
 | `POST /startBookSourceCheck` | 校验当前 source snapshot/checkContent，创建会话 token | 启动任务并返回 session；避免旧版本写回 | 检测编排 |
 | `POST /stopBookSourceCheck` | 用会话 token 停止任务 | 取消任务并回传状态 | 取消信号接口 |
@@ -24,6 +24,49 @@
 | WS `bookSourceDebug` | 调试指定规则/URL，并在 Android 侧要求书源已保存 | 鉴权、限流、调试数据脱敏 | 规则执行/诊断 |
 
 端点名称、字段和状态码以 `api.md` 与实际 Controller 为准；本表是迁移边界，不是新的公开 API 规范。
+
+## 适配器最小 DTO
+
+外层 `api.md` 可以继续作为版本差异证据，但适配器至少要能独立处理以下结构：
+
+```ts
+interface SourceBatchRequest {
+  userId: string // 由认证上下文提供，body 中同名字段不具备授权效力
+  sources: unknown[]
+  mode: 'android-compatible' | 'web-safe'
+  expectedSourceRevisions?: Record<string, string>
+  idempotencyKey: string
+}
+
+interface SourceBatchResponse {
+  status: 'success' | 'partial' | 'failed' | 'conflict' | 'cancelled'
+  accepted: Array<{ sourceId: string; sourceRevision?: string }>
+  skipped: Array<{ index: number; sourceId?: string; code: string; message: string }>
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
+}
+
+interface CheckRequest {
+  sourceIds: string[]
+  sourceRevisions: Record<string, string>
+  sessionId: string
+  config: Record<string, unknown>
+}
+```
+
+单条保存使用相同字段的单项形式；查询只返回当前用户范围的脱敏 `SourceRecord`/`SourceCheckState`。`accepted`、`skipped` 和逐项错误必须同时出现，不能用 HTTP 200 表示所有成员都已保存。`web-safe` 要求确认、版本断言和 Repository 事务；`android-compatible` 仅在明确兼容旧 Controller 时允许直接保存，但仍不能绕过鉴权、用户隔离、秘密脱敏和幂等记录。
+
+WebSocket 的最小帧协议为：
+
+```ts
+type BridgeFrame =
+  | { type: 'hello'; sessionId: string; operationId: string }
+  | { type: 'progress'; sequence: number; payload: unknown }
+  | { type: 'result'; sequence: number; status: 'success' | 'empty' | 'partial'; payload: unknown }
+  | { type: 'error'; sequence: number; code: string; message: string }
+  | { type: 'end'; sequence: number; status: 'completed' | 'cancelled' | 'failed' }
+```
+
+首帧必须唯一、可解析并在约定时间内到达；重复、乱序、无效 JSON、错误 session 或旧 sourceRevision 直接返回稳定错误并关闭当前操作。客户端断开触发取消，但服务端要等待请求和脚本 cleanup；已经提交的保存/缓存 effects 不回滚。
 
 ## 关键兼容细节
 
@@ -33,7 +76,7 @@
 
 ### JS 书源
 
-JS source 上传应使用 `text/plain`（允许 `charset` 参数），禁止 `Transfer-Encoding`，必须提供不超过 1 MiB 的正确 `Content-Length`。访问令牌在读取 body 前校验；通过后再在约 30 秒读取/保存时限内处理，HTTP 层去除脚本文本首尾空白，拒绝不符合传输约束的请求。解析时保留来源 URL；`openedSourceUrl` 用来判断关联旧脚本是否存在，重命名时清理旧记录并保留允许继承的用户状态。JS source 的脚本执行不能默认放进 Edge：需要 WebView、动态脚本或 Node 能力时必须通过 capability 检查路由到 Node worker。
+JS source 上传的 1 MiB body 上限、`Content-Length`/`Transfer-Encoding` 约束和约 30 秒处理时限属于当前兼容入口事实；实现时应按对应 API 版本重新核验并作为 adapter 配置，不写成 package 的普遍限制。访问令牌在读取 body 前校验；通过后再读取和保存，HTTP 层去除脚本文本首尾空白，拒绝不符合传输约束的请求。解析时保留来源 URL；`openedSourceUrl` 用来判断关联旧脚本是否存在，重命名时清理旧记录并保留允许继承的用户状态。JS source 的脚本执行不能默认放进 Edge：需要 WebView、动态脚本或 Node 能力时必须通过 capability 检查路由到 Node worker。
 
 ### 查询、删除与秘密
 

@@ -22,6 +22,19 @@ Android 行为基线来自 `LegadoTeam/legado` 的本地提交 `32a87b253e7cc282
 
 回归处理顺序：收集脱敏最小源与输入 → 固定版本和操作 → 重现差异 → 判断源码事实或 Web 策略 → 增加具体断言 → 修复对应层 → 运行受影响组合测试 → 更新矩阵。失败站点不是规则引擎缺陷的充分证据。
 
+每次能力或契约变更都记录以下维护条目：
+
+| 字段 | 内容 |
+| --- | --- |
+| `capabilityId` | 受影响的 CAP/FLOW/API/DEP ID |
+| `baseline` | Android 提交、TypeScript 文档版本和 fixture 基线 |
+| `changeKind` | `behavior-fix`、`compatibility`、`design`、`host` 或 `breaking` |
+| `evidence` | 源码符号、测试名、fixture/golden ID 和行号 |
+| `verification` | `not-run`、`passed`、`failed`、`blocked` 及阻塞原因 |
+| `rollback` | 旧语义、旧缓存命名空间和应用回退方式 |
+
+未运行的案例必须标记 `execution=not-run`；能力清单中的“已登记”不能替代实现或执行证据。
+
 ## 来源和许可记录
 
 父仓库 LICENSE 为 GNU GPL v3 文本。复制、翻译或改写代码、复用测试与文档材料时逐项记录来源、许可证和修改；发布前核查 package 许可证与分发要求，不能因改写为 TypeScript 就自行标成无来源的宽松许可。本章记录项目事实，不给出具体分发方式的法律结论。

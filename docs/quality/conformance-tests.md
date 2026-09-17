@@ -35,12 +35,17 @@
   "id": "rule-default-text-nodes-001",
   "evidence": "test-run",
   "spec": "defined",
+  "implementation": "absent",
   "execution": "not-run",
+  "priority": "required",
   "source": "https://fixture.invalid/source",
   "input": { "kind": "html", "body": "..." },
   "context": { "baseUrl": "https://fixture.invalid/book/" },
   "operation": { "kind": "string", "rule": "div@textNodes" },
   "expected": { "value": "..." },
+  "events": [],
+  "error": null,
+  "writes": [],
   "androidEvidence": {
     "kind": "test",
     "path": "app/src/test/java/io/legado/app/model/analyzeRule/AnalyzeByJSoupDomTest.kt",
@@ -54,16 +59,19 @@
   "lifecycle": {
     "expectedEvents": [],
     "expectedWrites": [],
+    "cleanup": "not-applicable",
     "mustRelease": ["rule-scope"]
   }
 }
 ```
 
-字段约定：id 稳定且不可复用，source 为脱敏身份，input/context/operation/expected 为具体输入和期望。androidEvidence 指明源码或实际执行测试；Web 新设计使用 designEvidence 指向规格。tsAssertion 在设计阶段为计划路径，只有实际存在并执行后才是验证证据。status 是旧摘要字段，新记录分别使用 evidence=source/test-run/design、spec=defined/blocked、execution=not-run/pass/fail；不把三个维度压成一个完成状态。上方 JSON 是格式示意，真实案例禁止用省略号作输入或期望。fixture 不保存秘密。
+字段约定：id 稳定且不可复用，source 为脱敏身份，input/context/operation/expected 为具体输入和期望。`implementation` 和 `priority` 必须与兼容性矩阵使用同一枚举；`events`、`error`、`writes` 和 `lifecycle` 用于断言轨迹、失败语义、领域写入和资源清理。androidEvidence 指明源码或实际执行测试；Web 新设计使用 designEvidence 指向规格。tsAssertion 在设计阶段为计划路径，只有实际存在并执行后才是验证证据。status 是旧摘要字段，新记录分别使用 evidence=source/test-run/design、spec=defined/blocked、implementation=absent/partial/implemented、execution=not-run/pass/fail、priority=required/host/later/verify；不把五个维度压成一个完成状态。上方 JSON 是格式示意，真实案例禁止用省略号作输入或期望。fixture 不保存秘密。
+
+`expected` 至少包含领域结果或明确的空结果；`error` 在成功案例中为 `null`，在失败/取消/超时案例中包含稳定 `code`、`stage`、`retryable` 和 `continue`；`writes` 记录是否提交、提交版本和拒绝原因；`events` 按发生顺序记录 `started`、`progress`、`completed`、`empty`、`partial`、`failed`、`cancelled` 或 `stale`。有资源的案例必须填写 `lifecycle.cleanup` 和 `mustRelease`，纯值转换没有资源时使用 `cleanup=not-applicable`，不伪造释放事件。
 
 网络 fixture 的每条记录至少包含 `method`、展开后的 `url`、请求头白名单、请求体、响应状态、最终 URL、脱敏响应头、响应体和模拟延迟。`retry` 用例还要记录每次尝试及最终错误；分页用例要记录请求启动顺序、响应完成顺序和最终收集顺序。golden 只保存稳定输出、稳定错误码、阶段、能力状态、事件顺序、写入结果和清理结果，不比较平台特有的堆栈文本。
 
-错误 fixture 必须明确 `continue`、`partialResult` 和 `writes`。例如字段读取失败可以继续并留下空字段，必需函数缺失必须终止 JS 源导入，单个书源搜索失败可以继续其他书源，目录分页失败不能提交不完整目录，正文保存 token 过期不能覆盖新正文。每个流程都至少有成功、空值、失败、取消、超时和资源清理样本。
+错误 fixture 必须明确 `continue`、`partialResult` 和 `writes`。例如字段读取失败可以继续并留下空字段，必需函数缺失必须终止 JS 源导入，单个书源搜索失败可以继续其他书源，目录分页失败不能提交不完整目录，正文保存 token 过期不能覆盖新正文。每个有资源的流程都至少有成功、空值、失败、取消、超时和资源清理样本；纯值转换至少覆盖成功、空值和失败，并明确清理不适用。
 
 ## 用例目录和覆盖矩阵
 
@@ -87,7 +95,7 @@
 | `EXP-004` | 发现列表 | 声明式 `ruleExplore`、`ruleSearch` 回退、响应最终 URL 和同源去重 |
 | `EXP-005` | 发现列表 | JS 源 `explore(url, page)` 返回归一化、非法结果与取消 |
 | `EXP-006` | 发现生命周期 | 换分类、换页、旧请求迟到、分类 URL 为空和宿主能力缺失 |
-| `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`、`@CSS` 元素选择和字符串终端输出 |
+| `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`、`@CSS` 元素选择、字符串终端输出和模式前缀大小写不敏感 |
 | `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出 |
 | `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
 | `SCH-004` | 规则 | `@XPath`、XML 声明、表格片段补容器、节点/字符串/空结果归一化 |
@@ -204,12 +212,12 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 
 ### 解析器
 
-- 默认选择、`@CSS:`、`@XPath:`、`@Json:` 和自动 JSON 识别；
+- 默认选择、`@CSS:`、`@XPath:`、`@Json:` 和自动 JSON 识别；三种显式模式前缀大小写不敏感；
 - `&&` 拼接、`||` 首个成功、`%%` 按索引交错；
 - 选择器和 JSONPath 中含 `&&`/`||` 的平衡切分；
 - `@` 链、`text`、`textNodes`、`ownText`、`html`、`all` 和属性；
 - 正索引、负索引、范围、负步长、排除和越界；
-- `:regex`、`$1`、`##match##replace`、首个替换；
+- `:regex` 的完整匹配/捕获组列表、`$1`、`##match##replace` 的省略替换文本和首个替换；
 - `@put`、`@get`、规则型/JS 型 `{{}}`、多个变量和变量优先级；
 - 空规则、空列表、字段缺失、null、非法 JSON、非法正则和不平衡括号；
 - 连续 `<js>`/`@js:`/`@webjs:` 混合块的顺序。
@@ -242,11 +250,11 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 4. Node/Next adapter 测试：真实 fetch 入口、AbortSignal、Cookie 隔离和响应限制；
 5. 编辑器测试：诊断、预览、未保存修改、导入导出和移动端布局。
 
-测试资源必须在每个用例结束时释放。网络真实站点只用于人工诊断，不作为稳定 golden 来源。任何兼容性结论都要同时注明 Android 证据和 TypeScript 断言，不能只依赖文档示例或人工截图。
+测试资源必须在每个需要资源的用例结束时释放；纯值转换应记录 `cleanup=not-applicable`。网络真实站点只用于人工诊断，不作为稳定 golden 来源。任何兼容性结论都要同时注明 Android 证据和 TypeScript 断言，不能只依赖文档示例或人工截图。
 
 ## 具体状态与交叉案例
 
-下表全部为设计案例，当前未执行。`fixture.invalid` 由 fake HTTP 提供，A/B 为两个不同 sourceId，s1/s2 为不同会话，v1/v2 为保存版本。缺省前置条件：预算充足、无预存数据、无用户凭据；表中“无写入”指领域存储，网络已发生等事实另外记录。每个案例结束均断言 operation closed、无在途请求与脚本句柄。
+下表全部为设计案例，当前未执行。`fixture.invalid` 由 fake HTTP 提供，A/B 为两个不同 sourceId，s1/s2 为不同会话，v1/v2 为保存版本。缺省前置条件：预算充足、无预存数据、无用户凭据；表中“无写入”指领域存储，网络已发生等事实另外记录。有资源的案例结束均断言 operation closed、无在途请求与脚本句柄；纯值转换案例改为断言 `cleanup=not-applicable`。
 
 | 子案例 | 具体输入/调度 | 必须断言 |
 | --- | --- | --- |
@@ -257,10 +265,13 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | IMP-004/nested | 外层 u，u 响应 `{"sourceUrls":["v"]}` | parse 失败，不请求 v |
 | IMP-005/roundtrip | A 含未知对象 x={a:1}，ruleSearch 为 JSON 字符串 | 未编辑导出原文；改分组后 x 与规则形态仍保留 |
 | IMP-008/js-name | JS config 仅 bookSourceUrl=A，必需函数齐全 | 缺名称配置错误，与 JSON 名称规则不同 |
+| SCH-001/prefix-case | HTML `<div class="book">A</div>`、JSON `{"book":"A"}`，分别比较 `@CSS:`/`@css:`、`@XPath:`/`@xPaTh:` 和 `@Json:`/`@JSON:` | 前缀大小写不影响模式识别；规范写法与混合大小写写法输出一致 |
 | SCH-002/text-nodes | `<div>A<b>B</b>C</div>`，`tag.div@textNodes` | 直接文本 `A\nC`，不包含 B；对照原测试确认实体细节 |
 | SCH-003/nonmutating | 三个 a 的文本为 A/B/C，先排除索引 0，再读全部 | 首次 B/C，第二次仍 A/B/C |
 | SCH-006/bracket | `a[href="x\|\|y"]@text` | 属性中的组合符不切断 |
+| SCH-007/capture-zero | 输入 `abc123`，`:([a-z]+)(\\d+)`，另测可选捕获组未命中的情况 | 返回列表第 0 项为完整匹配，后续项为捕获组；缺失捕获组以空字符串保留；链式正则只使用前一阶段完整匹配文本 |
 | SCH-007/literal-fallback | 已取值 `a[b`，替换 pattern=`[`、replacement=`X` | 非法正则按原字面回退得到 aXb |
+| SCH-007/replace-optional | 已取值 `a1b2`，分别使用 `规则##数字` 与 `规则##数字##X##extra` | 省略 replacement 时删除全部匹配；存在第四段时只替换首个匹配 |
 | VAR-001/empty-fallback | local.k=""，book.k="B"，source.k="S" | get k 为 B；写 local.k=L 后为 L |
 | URL-001/page | URL `/p/<a,b>`，page=3 | 选最后项 b，生成 /p/b |
 | URL-003/redirect-policy | 公网初始地址重定向到 127.0.0.1 | 宿主拒绝第二跳，无内网请求，policy-denied |

@@ -2,6 +2,10 @@
 
 应用层只组织书源操作：选择书源、创建调用上下文、调用 package、展示进度和诊断、保存结果。书架和阅读器的完整需求以后单独设计。本章定义 SPA、Next.js 与 React Router 可以共享的服务端边界，以及 package 发布前的验证方式。
 
+## 入口契约
+
+每个服务端 action 接收 `requestId`、`operationId`、认证产生的 `userId/sessionId`、`sourceId/sourceRevision`、领域输入、预算和取消信号；响应包含 `status`、value、diagnostics、effects、changes、错误和 cleanup。HTTP/WebSocket 只负责传输，不能把断开、超时、取消或能力缺失都转成普通 500。
+
 本阶段依赖 [阶段 E-1 的持久化、订阅与检测边界](phase-e-storage-and-check.md)。先完成用户归属、Repository、CAS、检测状态和任务存储，再接入框架入口；框架层不重新实现保存或规则处理。
 
 ## 一个服务端入口服务所有前端形态
@@ -17,7 +21,7 @@ SPA 只通过服务端接口调用书源。Next.js 使用 route handler 承载�
 
 ## Node 先作为参考宿主
 
-最小 Node 部署验证已经属于 C；本阶段复用该证据并增加真实应用入口、产物安装和版本回退。平台事实以 [运行边界与部署验收](../operations/runtime-security-and-deployment.md) 为准，版本与发布以 [package 维护与迁移证据](../operations/package-maintenance.md) 为准。
+阶段 C 只定义 Node 参考宿主和流程验收；在 runtime 尚未实现或真实部署证据缺失时，本阶段不能把 Node 验证写成已完成。本阶段增加真实应用入口、产物安装和版本回退。平台事实以 [运行边界与部署验收](../operations/runtime-security-and-deployment.md) 为准，版本与发布以 [package 维护与迁移证据](../operations/package-maintenance.md) 为准。
 
 优先在 Node 运行时完成书源宿主，再选择页面框架。Vercel 的 [Node.js Functions 文档](https://vercel.com/docs/functions/runtimes/node-js)说明该运行时提供 Node.js API；[Next.js 路由运行时文档](https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config)也把 `nodejs` 作为默认运行时。这个选择服务于需要受限脚本执行、解析器和可能的浏览器适配器的书源，不意味着 Node 可以安全地直接 `eval` 不可信脚本。脚本仍须经过独立隔离与资源限制。
 

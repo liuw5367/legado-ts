@@ -64,18 +64,38 @@ Repository 是 package 的端口实现，不是规则解析器的内部全局状
 
 ## 关键边界
 
-- HTML 解析器产生的 DOM 是规则输入；`getElements` 返回 DOM 节点引用或其适配对象。
+- HTML 解析器产生的 DOM 是规则输入；`getElements` 只在规则执行内部返回 DOM 节点引用或适配对象，公开 DTO 不包含节点或脚本句柄。
 - JSONPath 规则可以返回对象、数组或标量；进入 `getString`/`getStringList` 时才转换为文本。
-- 规则执行错误和网络错误必须带阶段、字段、书源 URL 和原始规则，方便编辑器显示。
+- 规则执行错误和网络错误必须带阶段、字段、书源 URL 和规则标识。编辑器内部诊断可以按权限保留受控原文；公共 DTO、日志和审计记录使用脱敏 URL、规则 ID 和摘要。
 - `mainJs` 与声明式规则是两条执行路径；不能将 JavaScript 书源自动转换成声明式规则后丢弃原脚本。
 
-## 统一处理流程
+媒体、登录和交互能力由核心声明端口、宿主能力和应用服务共同承担：核心描述输入、输出和能力要求，宿主执行网络/字节/浏览器操作，应用服务负责用户确认、凭据、UI 和持久化。Repository 是 `SourceApplicationService` 使用的端口实现，不是规则解释器的全局状态。
+
+## TypeScript 目标：统一处理流程
+
+以下流程是 TypeScript 目标设计。当前 Android 调用关系仍以本页上方的事实图和各流程文档中的“Android 实际”段落为准。
+
+每次领域调用至少接受以下输入：
+
+```ts
+interface OperationInput {
+  source: SourceSnapshot
+  requestId: string
+  operationId: string
+  options: Record<string, unknown>
+  budget: { timeoutMs?: number; deadlineMs?: number; maxRequests?: number }
+  signal?: AbortSignal
+  host: RuntimeHost
+}
+```
+
+领域结果至少包含 `status`、可选 `value`、诊断、已发生的 `effects`、尚未提交的 `changes` 和清理结果。空列表或无匹配属于 `empty`；取消、版本不匹配、能力缺失和部分成功必须使用可判别状态，不能只返回空值。取消请求与资源释放是两个完成条件：操作结算后，资源所有者仍须完成请求、脚本、监听器和并发子任务的清理；已提交的外部副作用不因取消自动回滚。
 
 所有领域流程都遵循同一条边界：
 
 ```text
 上层输入 DTO
-  -> 创建 requestId、RuleContext、VariableStore 和 AbortSignal
+  -> 创建 requestId、VariableStore、RuleVariableView、RuleContext 和 AbortSignal
   -> 书源分流
   -> URL 展开与请求计划
   -> Host 执行请求
@@ -84,7 +104,7 @@ Repository 是 package 的端口实现，不是规则解析器的内部全局状
   -> 领域级去重、分页、排序或正文处理
   -> 生成事件、诊断和持久化变更
   -> 上层提交或返回 DTO
-  -> finally 清理请求资源
+  -> finally 清理请求资源并结算 cleanup
 ```
 
 核心流程输出“结果加变更”，宿主或上层应用负责提交变更。每个阶段都要明确成功、空结果、可继续错误、终止错误、取消和清理行为；领域流程分别见发现、搜索、详情、目录和正文文档。应用调用顺序见 [独立 package 的调用契约](../guides/package-usage.md)。
