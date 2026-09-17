@@ -56,7 +56,7 @@
 }
 ```
 
-字段约定：`id` 是稳定且不可复用的用例标识；`status` 使用 `android-verified`、`android-source-only`、`ts-pending` 或 `verified`；`source` 是脱敏后的书源身份；`input` 是解析器或流程输入；`context` 是显式注入的运行上下文；`operation` 描述调用类型和原始规则；`expected` 是稳定输出；`androidEvidence` 指向事实来源；`tsAssertion` 指向一个实际存在的 TypeScript 测试文件；`http` 是脱敏且可重复的请求记录；`lifecycle` 固定事件、写入和清理断言。真实 fixture 不得写入 Cookie、Token、密码或账号。
+字段约定：id 稳定且不可复用，source 为脱敏身份，input/context/operation/expected 为具体输入和期望。androidEvidence 指明源码或实际执行测试；Web 新设计使用 designEvidence 指向规格。tsAssertion 在设计阶段为计划路径，只有实际存在并执行后才是验证证据。status 是旧摘要字段，新记录分别使用 evidence=source/test-run/design、spec=defined/blocked、execution=not-run/pass/fail；不把三个维度压成一个完成状态。上方 JSON 是格式示意，真实案例禁止用省略号作输入或期望。fixture 不保存秘密。
 
 网络 fixture 的每条记录至少包含 `method`、展开后的 `url`、请求头白名单、请求体、响应状态、最终 URL、脱敏响应头、响应体和模拟延迟。`retry` 用例还要记录每次尝试及最终错误；分页用例要记录请求启动顺序、响应完成顺序和最终收集顺序。golden 只保存稳定输出、稳定错误码、阶段、能力状态、事件顺序、写入结果和清理结果，不比较平台特有的堆栈文本。
 
@@ -64,13 +64,13 @@
 
 ## 用例目录和覆盖矩阵
 
-以下 ID 是实现前必须建立的最小目录。每个 ID 对应一个独立 fixture 和一个自动断言；同一 fixture 可以被 Node 和 Next adapter 复用，但不能用单元测试替代流程组合测试。
+以下 ID 是测试分组，不是单个完成断言。实现时按本章具体子案例使用 `父ID/场景`，每个子案例有独立输入和期望；同一 fixture 可在多个宿主复用，不用单元测试替代组合测试。
 
 | 用例 ID | 范围 | 场景与必须断言 |
 | --- | --- | --- |
 | `IMP-001` | 导入 | 单对象、数组对象和非空 `bookSourceUrl`，输出候选顺序和诊断 |
 | `IMP-002` | 导入 | JSON、绝对 URL、URI、JS 文本分类，记录 fetch/parse 阶段 |
-| `IMP-003` | 导入 | `sourceUrls` 外层远程列表，重复 URL 去重、输入顺序、取消和失败项隔离 |
+| `IMP-003` | 导入 | sourceUrls 外层列表保持重复项和输入顺序；Web 逐项错误收集与原版事实分开 |
 | `IMP-004` | 导入 | 远程内容再次包含 `sourceUrls`、空项、空响应和非法内容，拒绝写入 |
 | `IMP-005` | 导入 | 规则对象与 JSON 字符串归一化，未知字段保留，原始字段可导出 |
 | `IMP-006` | 导入 | 替换规则按名称和 URL 命中，严格 JSON、宽松 JSON、替换失败和原文回退 |
@@ -89,9 +89,9 @@
 | `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
 | `SCH-004` | 规则 | `@XPath`、XML 声明、表格片段补容器、节点/字符串/空结果归一化 |
 | `SCH-005` | 规则 | `@Json`、自动 JSON、对象/数组/标量、嵌套插值和非法 JSONPath |
-| `SCH-006` | 规则 | `&&`、`||`、`%%` 在括号、引号、JSONPath、CSS 属性和代码中的平衡切分 |
+| `SCH-006` | 规则 | `&&`、`\|\|`、`%%` 在括号、引号、JSONPath、CSS 属性和代码中的平衡切分 |
 | `SCH-007` | 规则 | 全规则 Regex、`$1` 捕获组、`##match##replace`、首个替换和非法正则回退 |
-| `SCH-008` | 规则 | `<js>`、`@js:`、`@webjs:` 连续混合块的源文本顺序和 capability error |
+| `SCH-008` | 规则 | JS 先扫描、WebJS 后扫描的兼容顺序和 capability error，不擅自按原文排序 |
 | `VAR-001` | 变量 | local、chapter、book、rule-data、source 的读取优先级和空字符串继续查找 |
 | `VAR-002` | 变量 | `@put`、`@get`、`{{}}` 写入、读取、删除、序列化和请求隔离 |
 | `URL-001` | URL | URL JS、`{{}}`、页码占位、URL options 的展开顺序和整数格式化 |
@@ -169,7 +169,7 @@ packages/source-editor/tests/
 
 fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、Token、密码、Authorization、私有请求体和真实账号做脱敏。golden 的比较应采用结构化比较，集合只有在契约声明无序时才允许排序，事件和网络记录必须按顺序比较。时间、随机数、堆栈、线程名和平台路径使用占位断言，不能写死到兼容结果中。
 
-测试命令和门槛必须随 runtime 一起提交：纯规则、流程组合、Node adapter、Next adapter 和编辑器分别可独立执行，全部 `verified` fixture 还要有一次全量命令。任何用例缺少 Android 证据、golden、TypeScript 断言或资源清理断言时，状态只能是 `ts-pending`，兼容矩阵不能标记已验证。
+真实测试命令随 runtime 提交；当前 package.json 的 test 是失败占位。兼容案例须有 Android 证据、golden、TS 断言及相关清理断言；Web 新设计只要求对应设计证据与目标断言，不强迫虚构 Android golden。纯值转换无资源时标注清理不适用。未执行的案例一律 execution=not-run。
 
 覆盖审计按以下关系执行：`02-source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`04-rule-language.md` 和 `05-url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`19-capability-inventory.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
 
@@ -216,3 +216,63 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 5. 编辑器测试：诊断、预览、未保存修改、导入导出和移动端布局。
 
 测试资源必须在每个用例结束时释放。网络真实站点只用于人工诊断，不作为稳定 golden 来源。任何兼容性结论都要同时注明 Android 证据和 TypeScript 断言，不能只依赖文档示例或人工截图。
+
+## 具体状态与交叉案例
+
+下表全部为设计案例，当前未执行。`fixture.invalid` 由 fake HTTP 提供，A/B 为两个不同 sourceId，s1/s2 为不同会话，v1/v2 为保存版本。缺省前置条件：预算充足、无预存数据、无用户凭据；表中“无写入”指领域存储，网络已发生等事实另外记录。每个案例结束均断言 operation closed、无在途请求与脚本句柄。
+
+| 子案例 | 具体输入/调度 | 必须断言 |
+| --- | --- | --- |
+| IMP-001/no-name | JSON `{"bookSourceUrl":"A"}` | 一个候选，名称缺省诊断，不误报缺 URL |
+| IMP-001/invalid-member | `[{"bookSourceUrl":"A"},{}]` | 数组整体失败，无可保存成功数组 |
+| IMP-001/empty | `[]` | 零候选成功，无网络无写入 |
+| IMP-003/repeated | sourceUrls 为 `[u,u]`，u 每次返回 A | 保留两个输入位置；保存冲突显式表达，不静默去重 |
+| IMP-004/nested | 外层 u，u 响应 `{"sourceUrls":["v"]}` | parse 失败，不请求 v |
+| IMP-005/roundtrip | A 含未知对象 x={a:1}，ruleSearch 为 JSON 字符串 | 未编辑导出原文；改分组后 x 与规则形态仍保留 |
+| IMP-008/js-name | JS config 仅 bookSourceUrl=A，必需函数齐全 | 缺名称配置错误，与 JSON 名称规则不同 |
+| SCH-002/text-nodes | `<div>A<b>B</b>C</div>`，`tag.div@textNodes` | 直接文本 `A\nC`，不包含 B；对照原测试确认实体细节 |
+| SCH-003/nonmutating | 三个 a 的文本为 A/B/C，先排除索引 0，再读全部 | 首次 B/C，第二次仍 A/B/C |
+| SCH-006/bracket | `a[href="x\|\|y"]@text` | 属性中的组合符不切断 |
+| SCH-007/literal-fallback | 已取值 `a[b`，替换 pattern=`[`、replacement=`X` | 非法正则按原字面回退得到 aXb |
+| VAR-001/empty-fallback | local.k=""，book.k="B"，source.k="S" | get k 为 B；写 local.k=L 后为 L |
+| URL-001/page | URL `/p/<a,b>`，page=3 | 选最后项 b，生成 /p/b |
+| URL-003/redirect-policy | 公网初始地址重定向到 127.0.0.1 | 宿主拒绝第二跳，无内网请求，policy-denied |
+| URL-004/cancel-retry | retry=2，第一次请求未完成时取消 | 不启动第 2/3 次，cancelled 而非空成功 |
+| FLOW-001/nameless | 列表两项 name="" 与 name="书" | 丢弃第一项；只返回后一项 |
+| FLOW-002/partial | A 返回一本书，B 超时 | 保留 A，B 有错误；sink 完成先于 A 的 source-success |
+| FLOW-003/all-failed | A/B 均请求失败 | 无结果但有两个失败，区别于两个合法空列表 |
+| FLOW-004/rename | 已有 name=旧，规则 name=新；canReName 配置 `false` 非空、调用权限 false | 保留旧；权限 true 时按非空开关可覆盖，不能求值配置字符串 |
+| FLOW-005/atomic | 文件源解析到新名称但 downloadUrls=[] | 失败且旧 Book 未修改 |
+| FLOW-006/input-order | nextUrls=[u1,u2]，u2 先返回，u1 后返回，各产出 C1/C2 | 收集顺序 C1/C2，响应顺序 u2/u1；最终再执行目录反转规则 |
+| FLOW-008/duplicate | P=[(u,旧),(v,V),(u,新)]，无前缀、reverseToc=false | 反转→按 URL 去重→反转，结果 [(v,V),(u,新)] |
+| FLOW-008/format-state | 两章，formatJs 增加 gInt 后返回 String(gInt) | 标题为 1、2，gInt 不逐章归零 |
+| FLOW-009/next-chapter | 当前 /c1，下一章 /c2，nextContentUrl=/c2 | 不请求 /c2，不把下一章拼入正文 |
+| FLOW-010/input-order | 正文分页 [u1,u2]，u2 先返回 B、u1 后返回 A | 拼接顺序 A 后 B，不能按到达顺序 |
+| FLOW-012/partial-save | 批量 3 章，第 1 章回存成功后脚本抛错 | 第 1 章保留 committed，2/3 为剩余，兜底不重复保存 1 |
+| JS-001/serialization | 返回带 toJSON 的对象；另例循环对象 | 调用 toJSON 的结果被使用；循环对象序列化失败 |
+| JS-002/sync-network | 脚本 `java.ajax(u).length`，u 延迟返回 abc | 得到 3 而非 Promise 属性；取消等待后不恢复脚本 |
+| JS-003/late-save | 批量上下文关闭后回调 cacheContent | 拒绝写入，原缓存不变 |
+| EDIT-002/preview-clean | rawText=baseText，预览成功或失败 | dirty 仍 false；诊断/预览状态可改变 |
+| EDIT-004/conflict | 编辑基于 v1，外部先保存 v2，再提交 v1 | conflict，保留草稿及 v2，不静默覆盖 |
+| STATE-001/read-version | 缓存命中且已有在途写入 token=t1 | 读取不改变 t1 代次 |
+| STATE-002/stale-write | 同资源先 reserve t1，再 reserve t2；t2 先写成功 | t1 写入拒绝，内容仍为 t2 |
+| STATE-003/session | s1 写 Cookie X=1，s2 请求相同源 | s2 不含 X；s1 下次调用仍能读 X |
+| STATE-004/cleanup | 一次请求结束关闭视图，再发同会话请求 | 会话 Cookie/源变量保留，局部变量消失 |
+| STATE-005/source-edit | v1 请求在途，源保存 v2，再返回 v1 | v1 不能覆盖 v2 缓存或领域结果 |
+| STATE-006/toc-revision | r1 第 0 章=A，r2 第 0 章=B，r1 正文迟到 | 不能保存为 B 正文 |
+| STATE-007/callback | 第一个进度订阅器抛错，第二个正常 | 第二个仍收到事件，核心结果不变 |
+| MEDIA-002/decode-fail | bytes=[1,2]，图片解密脚本抛错 | 无损坏输出缓存，返回解码错误 |
+| ACTION-001/no-confirm | payAction 存在，confirmed=false | 不执行脚本、不请求购买、不清正文 |
+| ACTION-003/late-event | 页面操作已失效后返回 open-url | 应用不执行旧页面导航 |
+| EXT-001/tick | 新命名空间连续 tick 两次 | 返回 0、1；另一源第一次为 0 |
+| EXT-002/lock-name | name="" 或 257 个字符 | 参数错误，不执行 action |
+| EXT-003/archive-path | 归档项名为 ../outside | policy-denied，不写命名空间外文件 |
+| EXT-004/encoding | bytes [0x41] UTF-8 解码；abc Base64 编码/解码 | A；YWJj/abc，二进制与字符串返回型保持区别 |
+
+SUB-001–008 在 [订阅文档](28-source-subscriptions.md#验收)，DEP-001–007 在 [部署文档](29-runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。
+
+## 覆盖完成的判定
+
+上表解决高风险路径，不能代表所有重载已完善。CAP-ENCODE 加密工厂、CAP-FONT、动态登录等已登记未完整定义的项，必须保留 spec=blocked，不能以存在 EXT 分组标为完成。每个字段至少映射 `IMP-005/字段路径` 的往返案例；每个可执行规则字段再映射对应流程案例。父组通过比例不能代替子案例状态。
+
+有限资源测试采用最小值、恰好上限、超过上限三例；字符串位置另含代理对。并发事件只断言契约要求的先后关系（例如保存先于成功），不强制不同源回调总顺序；分页收集顺序则是固定契约。时间与随机数由测试宿主注入，真实站点波动不进入 golden。

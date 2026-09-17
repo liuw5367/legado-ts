@@ -15,9 +15,11 @@ SPA 只通过服务端接口调用书源。Next.js 使用 route handler 承载�
 
 ## Node 先作为参考宿主
 
+最小 Node 部署验证已经属于 C；本阶段复用该证据并增加真实应用入口、产物安装和版本回退。平台事实以 [29](29-runtime-security-and-deployment.md) 为准，版本与发布以 [30](30-package-maintenance.md) 为准。
+
 优先在 Node 运行时完成书源宿主，再选择页面框架。Vercel 的 [Node.js Functions 文档](https://vercel.com/docs/functions/runtimes/node-js)说明该运行时提供 Node.js API；[Next.js 路由运行时文档](https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config)也把 `nodejs` 作为默认运行时。这个选择服务于需要受限脚本执行、解析器和可能的浏览器适配器的书源，不意味着 Node 可以安全地直接 `eval` 不可信脚本。脚本仍须经过独立隔离与资源限制。
 
-Edge 作为后续宿主逐项验证。[Vercel Edge Runtime 文档](https://vercel.com/docs/functions/runtimes/edge)说明它只提供部分 Node API，且禁止动态代码执行；因此，不能把需要直接执行书源 JS 的完整运行时默认部署到 Edge。纯规则、静态诊断或其他已通过 Edge fixture 的入口可以使用 Edge；其他入口在服务端路由到具备能力的 Node 宿主，或返回 capability error。部署限制和可用 API 会变动，实施时以目标平台当前文档和实际构建、运行结果重新确认。
+Edge 按入口验证；具体限制及核对日期见 29。缺能力时明确返回诊断，只有应用已配置且授权目标宿主时才转发，不能自动向其他服务传送会话凭据。
 
 [Vercel 的 React Router 文档](https://vercel.com/docs/frameworks/frontend/react-router)说明其可用于 SSR 与 SPA 模式，并提供 Vercel Preset。选择 React Router 时在服务端入口复用同一处理器；选择 Next.js 时在 route handler 复用它。框架选择不改变 `BookSource`、规则解析、书籍结果和保存 token 的定义。
 

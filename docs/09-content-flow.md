@@ -50,22 +50,34 @@ BookSource + Book + BookChapter + nextChapterUrl
 
 ```ts
 export interface ContentIdentity {
-  /** 书籍的稳定身份。 */
+  /** 宿主认证后的用户或匿名会话身份。 */
+  sessionId: string
+  /** 原始书源主键。 */
+  sourceId: string
+  /** 书源执行快照版本。 */
+  sourceVersion: string
+  /** package 规则语义版本。 */
+  semanticVersion: string
+  /** 源内书籍地址。 */
   bookUrl: string
-  /** 章节在当前书籍目录中的稳定索引。 */
+  /** 目录修订，刷新改变章节身份时必须改变。 */
+  tocRevision: string
+  /** 当前目录修订内的零基索引，不是跨刷新永久身份。 */
   chapterIndex: number
 }
 
 export interface ContentSaveToken {
   /** 书籍和章节的稳定身份。 */
   key: ContentIdentity
-  /** 当前书籍缓存目录身份，防止书籍重命名后误写旧文件。 */
-  folderName: string
-  /** 请求开始时的版本，提交时必须使用比较并交换语义。 */
-  version: number
+  /** 待写入操作身份，取消后失去提交资格。 */
+  operationId: string
+  /** 宿主原子分配的写入代次，提交时比较；与缓存有效版本分开。 */
+  writeVersion: string
 }
 
 export interface ContentResult {
+  /** 领域内容种类，由书籍类型和流程确定，不根据 URL 后缀猜测。 */
+  kind: 'text' | 'image-content' | 'audio' | 'video'
   /** 归一化后的正文或音频/视频资源 URL。 */
   content: string
   /** 章节标题、图片、歌词和弹幕等章节更新。 */
@@ -78,14 +90,16 @@ export interface ContentResult {
   visitedUrls: string[]
   /** 正文保存是否成功；needSave=false 时为 false。 */
   saved: boolean
+  /** 音频歌词或视频弹幕，与正文资源地址分开；不存在时省略。 */
+  auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
   /** 分阶段诊断，保存失败不能伪装为规则失败。 */
   diagnostics: RuntimeDiagnostic[]
 }
 ```
 
-状态转换为 `created -> cache-check -> loading -> parsing -> paginating -> normalized -> validated -> saving -> completed`。缓存命中直接从 `cache-check -> completed`；请求、规则、分页或非卷空正文错误进入 `failed`；取消可以从任意活动状态进入 `cancelled`。失败和取消都不能发布“正文已保存”事件，也不能用本次失败正文覆盖旧缓存。
+状态为 `created -> cache-check -> loading -> parsing -> paginating -> normalized -> validated -> saving/completed`。needSave=false 跳过 saving；缓存命中直接 completed。错误和取消不启动新保存；已完成提交如实记录，不能因后续取消否认已保存事件。文件源从详情返回下载链接，不强行进入 ContentResult。
 
-`nextChapterUrl` 未显式传入时，Android 依次使用当前章节下一索引 URL，再回退到目录首章 URL；实现必须在请求正文前完成这一步。正文分页只把当前章节的页面加入 `contentList`，当下一页等于下一章节 URL 时停止，不能继续请求下一章。串行分页按规则返回的第一个 URL 继续；多 URL 分页按实际任务完成顺序合并，因此 fixture 必须同时固定输入 URL、响应延迟和收集顺序。
+`nextChapterUrl` 未显式传入时，Android 查询下一索引 URL，再回退目录首章 URL。Web 调用方提供目录快照/保护 URL，核心不能直接查数据库。分页遇到下一章即停止。多 URL 分支使用 FlowExtensions.mapAsync，按输入 URL 顺序收集，不能按响应完成顺序合并；测试必须设置后页先返回，断言正文仍按输入顺序组成。
 
 正文归一化完成后，核心库返回 `content`、章节标题和 `imgUrl` 更新、音频歌词或视频弹幕附加数据、最终响应 URL、已访问分页 URL 以及诊断。`source-core` 不直接写文件或数据库，宿主通过正文存储端口提交结果；Android 的 `BookHelp.saveContent` 行为由适配器复现。
 
@@ -93,17 +107,17 @@ export interface ContentResult {
 
 ### 正文缓存提交
 
-每次正文请求开始时生成 `ContentSaveToken`，至少包含 `bookUrl`、章节索引、书籍缓存目录身份和版本号。缓存读取必须验证书籍、章节和版本；只使用章节 URL 不能区分同 URL 多章节，也不能阻止旧请求覆盖新请求。
+先按 ContentIdentity 读取缓存；未命中且 needSave=true 才 reserve 新 ContentSaveToken。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。详情见 [状态契约](27-state-and-effects.md)。
 
 提交顺序固定为：
 
-1. 校验 token 仍属于当前书籍、章节和缓存目录；
+1. 原子校验 token 的身份、源/目录版本、operation 资格和写入代次；
 2. 在同一提交边界内写正文文件或缓存值；
 3. 按需要写入章节标题、图片等元数据；
 4. 只有正文和元数据都通过当前版本校验后，才发布保存事件；
 5. token 过期返回未保存结果，保留较新的缓存，不能抛出普通规则错误。
 
-保存失败必须返回 `storage-error`，并保留章节原有元数据。取消、超时和流程失败必须释放临时分页结果、脚本 scope、请求监听器和批量上下文。
+保存失败返回 storage-error 并保留原元数据；token 过期返回 saved=false 与 stale-write 诊断。取消与提交竞争按宿主原子结果记录，已提交结果不能被“取消”抹除。needSave=false 返回可提交变更但不 reserve 或写入；所有路径释放分页、scope 和监听器。
 
 ### 批量正文
 

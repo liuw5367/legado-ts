@@ -6,6 +6,8 @@
 
 ## 阅读顺序
 
+按任务选择入口：实现 package 从 19 能力索引、02 字段、27 状态、04/05 语义到 21 实施路线；应用使用者从 18 调用契约、12 框架入口、29 部署边界开始；书源维护者从 03 导入、16 编辑、28 订阅、15 案例开始。每项事实只在所属主题定义，实施文档引用它。
+
 1. [目标与边界](00-goals-and-boundaries.md)
 2. [架构与职责映射](01-architecture.md)
 3. [书源数据模型](02-source-schema.md)
@@ -31,8 +33,12 @@
 23. [阶段 A：模型、导入与编辑基础](22-implement-codec-editor.md)
 24. [阶段 B：规则引擎与请求计划](23-implement-rules-request.md)
 25. [阶段 C：发现、搜索、详情、目录与正文](24-implement-workflows.md)
-26. [阶段 D：JavaScript 书源与扩展能力](25-implement-extended-capabilities.md)
+26. [阶段 D：批量、媒体与交互扩展](25-implement-extended-capabilities.md)
 27. [阶段 E：应用接入、部署验证与 package 维护](26-implement-integration-verification.md)
+28. [身份、状态与副作用](27-state-and-effects.md)
+29. [订阅与刷新](28-source-subscriptions.md)
+30. [运行边界与部署验收](29-runtime-security-and-deployment.md)
+31. [package 维护与迁移证据](30-package-maintenance.md)
 
 ## 证据标记
 
@@ -42,3 +48,5 @@
 - **待验证**：当前源码已经显示出行为，但还没有足够 fixture 固化，迁移前必须补测试。
 
 当前 Android 实现的主要事实源是 `app/src/main/java/io/legado/app/model/analyzeRule/` 和 `app/src/main/java/io/legado/app/model/webBook/`。`modules/web/` 是管理界面，不能替代运行时规则引擎。
+
+当前文档已区分目标契约与源码证据，并提供具体案例设计，但没有生成 Android golden、实现 TS 或完成部署测试。扩展宿主逐重载、字体、动态登录及 JS 引擎部署仍有明确验收阻塞，见 [能力清单](19-capability-inventory.md#尚不能进入完整实现验收的项目)。不得将“文档覆盖”解释为“所有能力规格和兼容验证均完成”。

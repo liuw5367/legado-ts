@@ -15,7 +15,7 @@ type SourceVariables = Record<string, string>
 export interface BookSource {
   /** 书源唯一地址，也是 Android 数据库中的主键。导入时必须是非空字符串。 */
   bookSourceUrl: string
-  /** 书源显示名称。导入时必须是非空字符串。 */
+  /** 书源显示名称。JSON 导入允许缺省或空值并提示；JS 配置要求非空。构造默认空字符串。 */
   bookSourceName: string
   /** 书源分组；空值表示未分组。 */
   bookSourceGroup?: string | null
@@ -49,9 +49,9 @@ export interface BookSource {
   bookSourceComment?: string | null
   /** 书源自定义变量的说明文本。 */
   variableComment?: string | null
-  /** 书源最后更新时间，默认 0，用于导入比较和排序。 */
+  /** 书源最后更新时间，毫秒时间戳，默认 0；不是应用保存版本。 */
   lastUpdateTime: number
-  /** 最近响应时间，Android 默认 180000，用于排序或统计。 */
+  /** 最近响应时间，单位毫秒，Android 默认 180000，用于排序或统计。 */
   respondTime: number
   /** 智能排序权重，默认 0。 */
   weight: number
@@ -84,7 +84,34 @@ export interface BookSource {
 }
 ```
 
-`bookSourceUrl` 和 `bookSourceName` 在数据库模型中可以有空字符串默认值，但导入协议仍要求它们非空。`bookSourceType` 必须限制在 0 到 4，非法值应进入诊断或回退策略，不能当作普通文本类型悄悄吞掉。
+`parseBookSourceJson` 只对 `bookSourceUrl` 调用非空校验；JSON 源缺名称不能误报为 Android 导入失败。JS 配置抽取同时要求 URL 与名称非空。URL 主键原样比较，不对尾斜杠、路径大小写或查询参数做规范化。`bookSourceType` 已知值为 0 到 4，未知值保留原文并报告能力诊断，未经兼容证据不静默改成文本类型。
+
+### 字段通用约定
+
+以下规则与逐字段注释共同构成契约，不只按 TypeScript 可选符号推断行为。
+
+| 字段族 | 缺省、空值和类型 | 所有权、输出及保存 |
+| --- | --- | --- |
+| BookSource 可空文本 | 构造默认 null；raw 区分缺失和显式 null，执行时按字段判空 | 用户配置，导出保留；并非所有文本都是求值规则 |
+| 六个 rule 对象 | 原始对象、JSON 字符串、null；执行快照仅对象或 null | codec 解析一次，保留原形态及未知字段 |
+| 规则对象可空字符串 | 构造默认 null；空规则按 04 的具体入口转换 | 表单编辑、流程读取，不写回规则文本 |
+| name/author/intro/kind/lastChapter/updateTime/wordCount 规则 | 产出文本或由流程连接的文本列表 | 按所属流程归一化和处理错误 |
+| bookList/chapterList/summaryListRule/detailListRule/replyListRule | 节点或对象列表 | DOM 仅在本次解析使用 |
+| bookUrl/coverUrl/tocUrl/chapterUrl/nextTocUrl/nextContentUrl/downloadUrls | 单 URL 或列表，空值回退由流程定义 | 使用 baseUrl/redirectUrl，网络策略由宿主执行 |
+| isVolume/isVip/isPay | 规则结果使用 Android isTrue 转换，不能用 JS Boolean(string) 替代 | 写入章节布尔字段 |
+| preUpdateJs/formatJs/webJs 等脚本 | 缺失不执行；非空需要相应宿主 | 参数和副作用由流程定义 |
+| canReName | 非空配置开关，不求值，另需调用方权限 | 仅控制书名/作者覆盖 |
+| ReviewRule.enabled / ContentRule.maxBatchSize | false / null；批量大于 1 启用，上限 50 | 其他段评字段构造默认 null |
+| Book/Chapter 用户字段及阅读进度 | 应用提供，不制造阅读器默认设置 | 核心仅修改流程明确列出的字段 |
+| infoHtml/tocHtml/origins | 临时响应 / 来源集合 | 不属于源导出；跨 HTTP 的 Set 变为有序数组 |
+
+`BookSource` 是交换模型；`NormalizedSource` 将 rule 字段限制为已解析对象或 null。`RawSource` 包含原文 text、输入 kind、来源 location 与诊断。未修改原文可逐字导出，修改后只承诺结构与未知值保留。
+
+ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。
+
+### 登录表单 RowUi
+
+原实体 `data/entities/rule/RowUi.kt` 包含 name（显示名，默认空串）、type（text/password/button/label/toggle/select，默认 text）、action（动作）、chars（允许空成员的选项数组）、default（初值）、viewName（动态名称）、style（ExploreStyle）、key（提交键）、hint（提示）、value（值）、options（字符串列表）、countdown（倒计时整数）。除 name/type 外构造默认 null。原始 loginUi 完整保留；控件属于低优先级登录协议。countdown 单位和动态动作参数需要登录调用点对照后启用，不能仅从字段名推断。
 
 ## 2. 列表与搜索规则
 

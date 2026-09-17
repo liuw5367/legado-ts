@@ -20,13 +20,13 @@
 ## 多页和顺序
 
 - 后续 URL 只有一个时串行跟随，直到空 URL 或遇到已访问 URL；
-- 多个后续 URL 时并发请求，单页结果按完成收集；
+- 多个后续 URL 时并发请求，mapAsync 按输入顺序收集单页结果，不按网络完成顺序收集；
 - 初始 `chapterList` 的 `+` 只表示去掉控制前缀；`-` 会设置目录流程的反转标志，但不会立即反转每个页面的提取结果；
-- 所有目录页收集完成后，未设置 `-` 时先做一次整体反转，然后再根据 `book.readConfig.reverseToc` 做书籍级反转，最后用 `LinkedHashSet` 按章节对象去重；因此 `-` 和 `book.readConfig.reverseToc` 不能拆成互不相关的两个开关；
+- 所有页收集后，未设置 `-` 时先整体反转，再用 LinkedHashSet 按章节对象去重，最后在 book.getReverseToc() 为 false 时再次反转。第一次反转决定重复项保留方向，不能把去重移到最后；
 - `Book.readConfig.reverseToc` 是书籍刷新顺序，Android 通过 `book.getReverseToc()` 读取；`readConfig.reverseTocDisplay` 只影响展示，不能改写下一次刷新输入顺序；
 - 去重和最终顺序确定后重新从 0 编号，再执行 `formatJs`。
 
-`formatJs` 每章获得 `index`（从 1 开始）、`chapter`、`title` 和初始 `gInt=0`，返回值非空时覆盖标题。标题格式化失败记录日志但保留原标题。
+`formatJs` 在整个循环开始时设置 gInt=0，每章更新一基 index、chapter、title；gInt 可跨章累计。返回值不为 null 时覆盖标题，空字符串也覆盖；异常保留该章原标题。依据为 BookChapterList.analyzeChapterList 的 bindings 循环。
 
 ## 数据流、状态和持久化边界
 
@@ -61,7 +61,7 @@ export interface ChapterListResult {
 }
 ```
 
-状态转换为 `created -> page-loading -> page-parsing -> collecting -> ordered -> committed -> completed`。分页请求失败进入 `failed`，已经收集的章节不能被当作完整目录提交；取消可以从加载、解析或收集状态进入 `cancelled`，并停止后续请求和编号。一个后续 URL 串行跟随时，下一 URL 只取当前页规则结果的第一个；多个 URL 并发时，结果按任务完成顺序收集，不能假设输入 URL 顺序就是最终目录顺序。
+核心状态为 `created -> page-loading -> page-parsing -> collecting -> ordered -> completed`，应用提交在返回后单独进行。分页失败或取消不提交不完整目录。单 URL 分支以后只跟随首个下一页；多 URL 分支只收集这一批返回的章节，不递归展开每页新 URL。FlowExtensions.mapAsync 按发送 deferred 的输入顺序 await，后页先完成也不提前合并。
 
 提交前必须完成空标题过滤、URL 占位、VIP/购买标记、去重、编号和标题格式化。提交会更新 `durChapterTitle`、`latestChapterTitle`、`lastCheckTime`、`lastCheckCount`、`latestChapterTime` 和 `totalChapterNum`；启用章节字数时，还要按索引与标题把已有章节的 `wordCount`、`variable`、`imgUrl` 合并回新列表。核心库返回这些更新和章节列表，宿主负责数据库事务或其他持久化。任何一步失败都不能只保存统计字段而丢失章节列表的一致性。
 
@@ -74,6 +74,10 @@ export interface ChapterListResult {
 | `-` | 否 | `reverse(P)` |
 
 当 `readConfig.reverseToc=true` 时，最终结果再反转一次。多页目录还要先按当前实现收集页面结果，再执行上面的整体顺序处理，不能在每页解析时提前反转。
+
+真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。输入需要旧目录及 tocRevision，才能合并元数据和拒绝并发旧写；输出更新书籍统计与完整目录，由应用在同一提交边界保存，见 [状态契约](27-state-and-effects.md)。
+
+BookChapter.equals/hashCode 只按 url 判断，因此 LinkedHashSet 不是按全部章节字段判断相等。相同 URL 不同标题也会去重；先反转的分支保留原收集顺序中最后出现的同 URL 章节。不能误用 JSON 深比较。isTrue 对空白及精确字符串 `null` 返回默认 false，trim 后忽略大小写的 false/no/not/0/0.0 为 false，其他文本为 true。
 
 ## JavaScript 源目录
 

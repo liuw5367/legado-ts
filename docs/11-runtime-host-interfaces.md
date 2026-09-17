@@ -1,6 +1,6 @@
 # TypeScript 宿主接口
 
-本章定义独立库需要的目标端口，不是 Android API 的逐名翻译。核心层负责书源导入、规则解析和发现、搜索、详情、目录、正文编排，宿主负责网络、解析器、脚本沙箱、Cookie、缓存、限流和日志。接口名可以调整，但职责和数据边界不能混入流程代码。
+本章定义独立库的目标端口。核心负责规则与流程，宿主负责网络、解析器、脚本、状态与日志。以下名称作为目标契约维护；状态和副作用的单一事实源为 [27](27-state-and-effects.md)。接口示意不代表已有实现。
 
 ## 请求和响应
 
@@ -8,7 +8,7 @@
 export type HttpMethod = 'GET' | 'POST' | 'HEAD'
 
 export interface HttpRequest {
-  /** URL 规则展开、相对 URL 解析和重定向策略处理后的请求 URL。 */
+  /** 规则展开后的初始绝对 URL；重定向发生在请求执行期间。 */
   url: string
   /** HTTP 方法。默认值由 URL 规则层决定，宿主不能自行改写。 */
   method: HttpMethod
@@ -31,10 +31,8 @@ export interface HttpResponse {
   status: number
   /** 响应头。重复头可以保留为数组，不能静默丢失 Set-Cookie。 */
   headers: Record<string, string | string[]>
-  /** 按请求字符集解码后的文本响应。 */
-  body?: string
-  /** 二进制响应。body 和 bytes 至少有一个可用于当前内容类型。 */
-  bytes?: Uint8Array
+  /** HTTP 解压后的原始响应字节；核心经字符集端口解码后再执行 bodyJs。 */
+  bytes: Uint8Array
   /** 是否发生过重定向。不能仅根据 url 是否变化推断。 */
   redirected: boolean
 }
@@ -42,6 +40,13 @@ export interface HttpResponse {
 export interface HttpClient {
   /** 执行一次已经由核心层展开的请求，并保留取消和超时语义。 */
   request(request: HttpRequest): Promise<HttpResponse>
+}
+
+export interface CharsetCodec {
+  /** 将请求参数或文本按指定字符集编码；不支持时返回能力错误。 */
+  encode(text: string, charset: string): Uint8Array
+  /** 按核心选定的响应字符集解码，保留 bytes 供诊断及二进制分支使用。 */
+  decode(bytes: Uint8Array, charset: string): string
 }
 ```
 
@@ -67,8 +72,8 @@ export interface HtmlDocument {
 }
 
 export interface HtmlParser {
-  /** 解析 HTML，不修改调用方传入的原始字符串或二进制。 */
-  parse(input: string | Uint8Array, baseUrl?: string): HtmlDocument
+  /** 解析已经解码的文本；XML 声明使用 xml 模式，表格容器补齐由核心处理。 */
+  parse(input: string, baseUrl?: string, mode?: 'html' | 'xml'): HtmlDocument
 }
 
 export interface XPathParser {
@@ -84,7 +89,7 @@ export interface JsonPathParser {
 
 解析器端口只表达平台能力，规则模式、链条、索引、组合符号、替换和 URL 归一化仍由核心规则引擎控制。`HtmlDocument` 必须支持规则文档所需的元素选择、链式节点、属性、`text`、`textNodes`、`ownText`、`html`、`all` 和非破坏性索引过滤。`XPathParser` 和 `JsonPathParser` 要让核心层区分节点、对象、列表、字符串及空结果，不能把所有结果提前转成字符串。
 
-解析器适配器还要遵守以下不变量：同一次 `parse` 返回的节点 ID 在 `select`、`child` 和后续规则步骤中保持稳定；`child` 只创建节点视图，不从原文档删除节点；空选择、空字符串、空列表、`null` 和 `undefined` 不能互相替换。HTML 解析使用 HTML 模式，XML 声明和表格片段补容器的兼容处理由核心层在调用适配器前完成。CSS 选择器错误、XPath 语法错误和 JSONPath 语法错误必须分别返回可识别的 parser error，合法但无匹配属于空结果。
+解析器适配器不变量：parse 返回的节点 ID 在 select/child 中稳定，child 不删除节点；空选择、空字符串、空列表、null、undefined 可区分。核心选择 HTML/XML 模式并补表格容器。CSS/XPath/JSONPath 语法错误分别可识别，合法无匹配是空结果。核心在兼容 JSONPath 入口捕获特定 parser error 转为空值，不能吞取消或预算错误。
 
 `HtmlDocument.read` 的输出只负责文本和 HTML 序列化，节点选择仍通过 `HtmlNode` 传递；核心层负责旧式 `class.foo`、`tag.a`、`id.main`、索引、范围、排除和 `@` 终端输出的解释。这样同一个 parser adapter 可以被规则预览和运行时流程复用，而不会在编辑器中复制选择器语义。
 
@@ -110,7 +115,7 @@ export interface CookieStore {
   get(url: string): Promise<string | undefined>
   /** 保存响应中的 Cookie，并按域、路径和安全属性处理。 */
   set(url: string, setCookie: string | string[]): Promise<void>
-  /** 清理当前请求上下文的 Cookie，不得默认影响其他用户。 */
+  /** 显式清除当前会话/书源 Cookie；不能作为请求 finally 的清理动作。 */
   clear(): Promise<void>
 }
 
@@ -126,7 +131,7 @@ export interface CacheStore {
 export interface CacheWriteOptions {
   /** 缓存存活时间，未提供时使用宿主默认值。 */
   ttlMs?: number
-  /** 规则或流程版本标识，用于阻止旧结果覆盖新结果。 */
+  /** 缓存有效版本，隔离规则结果；防旧写入另用 ContentSaveToken。 */
   versionToken?: string
 }
 
@@ -142,12 +147,12 @@ export interface ContentWriteInput {
 }
 
 export interface ContentStore {
-  /** 按书籍和章节身份读取正文；token 失效或不存在时返回 undefined。 */
-  read(token: ContentSaveToken): Promise<string | undefined>
+  /** 按稳定资源身份读取缓存，不递增写入代次。 */
+  read(identity: ContentIdentity): Promise<string | undefined>
   /** 只在 token 仍为当前版本时写正文和章节元数据，返回是否实际写入。 */
   write(input: ContentWriteInput): Promise<boolean>
-  /** 为下一次正文请求生成当前版本 token。 */
-  token(book: Book, chapter: BookChapter): Promise<ContentSaveToken>
+  /** 为要求保存的新操作原子预留写入代次；缓存命中时不调用。 */
+  reserve(identity: ContentIdentity, operationId: string): Promise<ContentSaveToken>
 }
 
 export interface RateLimiter {
@@ -201,8 +206,9 @@ export interface JsCacheApi {
   putMemory(key: string, value: string): void
   /** 删除只存在于内存的缓存。 */
   deleteMemory(key: string): void
-  /** 读写受宿主能力限制的文本文件缓存。 */
+  /** 读取当前书源命名空间的文本文件缓存，不存在时为 null。 */
   getFile(key: string): string | null
+  /** 写入受文件能力限制的缓存，saveTimeSec 单位秒。 */
   putFile(key: string, value: string, saveTimeSec?: number): void
 }
 
@@ -234,6 +240,7 @@ export interface SourceApi {
   removeLoginInfo(): void
   /** 书源自定义键值存储，键空间必须按书源身份隔离。 */
   get(key: string): string
+  /** 写入当前源命名空间，返回兼容 API 定义的文本结果。 */
   put(key: string, value: string): string
 }
 
@@ -262,15 +269,15 @@ export interface JavaApi {
 }
 ```
 
-绑定关系固定为：`java` 实现 `JavaApi`，`source` 和 `sourceApi` 指向同一 `SourceApi` 视图，`cookie` 实现 `JsCookieApi`，`cache` 实现 `JsCacheApi`。`source` 对象本身还可以作为详情、目录和正文的输入对象，但脚本不得通过它修改 `bookUrl`、阅读进度或用户自定义字段。
+绑定关系：java 是当前规则/JS 源提供的兼容外观，source/sourceApi 是书源配置与方法视图，cookie/cache 为会话隔离视图。book/chapter 是独立绑定，不能把 source 当成 Book。JavaApi 表是起始子集，完整继承方法及重载登记见 [能力清单](19-capability-inventory.md)。
 
-脚本 API 的错误处理必须区分三类：调用参数或上下文错误直接抛出 `javascript` 阶段错误；宿主能力未提供返回 `capability` 错误；兼容 Android 的 `ajax` 和 `connect` 网络失败可以返回错误文本或错误响应，但必须在调试事件中保留原始阶段，不能让流程把该文本当作已验证正文。`cacheContent` 章节不唯一、非批量调用、批量上下文已关闭或版本 token 过期时不得静默写入其他章节。
+脚本 API 错误分为参数/上下文错误、能力缺失和兼容返回错误。ajax/connect 的错误文本仍按原 API 返回给脚本，另记录 request 诊断；不擅自截断原脚本对该文本的处理。最终是否为正文成功由正文规则判断，不能宣称网络成功。cacheContent 歧义、非批量、关闭或旧 token 均不得误写其他章节。
 
 文件、进程、真实浏览器和验证码 API 默认关闭。`importScript`、`downloadFile`、`webView`、`webViewGetSource`、登录 UI 和交互式播放器只有对应 capability 开启时才注入；未注入的函数不能由脚本自行模拟。所有脚本绑定都要按请求和书源身份创建，不能引用模块级可变对象。
 
 本节列出的 `JavaApi`、`JsCacheApi`、`JsCookieApi` 和 `SourceApi` 是先实施的核心 allowlist。`JsExtensions` 中未列出的 Android UI、阅读器交互或其他平台专用方法仍属于能力盘点对象；移植时逐项判断它是否承担书源处理行为。需要支持的行为通过版本化接口、明确 capability 和 conformance fixture 增加；建议放弃的行为须经用户审核。
 
-脚本 scope 必须按调用或请求隔离。SSR 不能把 `source`、Cookie、变量表、JS 全局对象或缓存身份放在模块级可变单例中。`JavaScriptRuntime` 不得使用宿主 `eval`、Node 全局对象或未限制的文件、进程和网络能力。没有脚本沙箱时，普通声明式书源仍可运行，但 JS 源必须报告能力缺失，不能返回伪造成功。
+脚本 scope 按调用隔离，不把用户状态放在模块单例。没有 JS 能力时，仅不含任何脚本依赖的声明式操作可运行；含插值、URL JS、loginCheckJs 或 mainJs 都必须报告 javascript 能力缺失。详见 29 的执行边界。
 
 ## RuntimeHost
 
@@ -280,6 +287,8 @@ export interface RuntimeHost {
   capabilities: RuntimeCapabilities
   /** URL 规则展开后的 HTTP 请求执行器。 */
   http: HttpClient
+  /** 受支持字符集的字节转换，不默认以 UTF-8 替代未知字符集。 */
+  charset: CharsetCodec
   /** HTML 文档和 DOM 规则所需的解析器。 */
   html: HtmlParser
   /** XPath 规则解析器。 */
@@ -309,6 +318,15 @@ export interface VariableStoreFactory {
   create(input: VariableStoreContext): VariableStore
 }
 
+export interface VariableStore {
+  /** 按 local/chapter/book/rule-data/source 优先级查询；空串继续查找。 */
+  get(key: string): string | undefined
+  /** 写入指定作用域，书籍/章节变更随领域结果提交。 */
+  put(scope: 'local' | 'chapter' | 'book' | 'rule-data' | 'source', key: string, value: string | null): void
+  /** 释放本次视图，等待在途操作，不清除持久化会话数据。 */
+  close(): Promise<void>
+}
+
 export interface VariableStoreContext {
   /** 当前 HTTP 或预览请求的身份。 */
   requestId: string
@@ -326,6 +344,11 @@ export interface VariableStoreContext {
 ```ts
 export type RuntimeCapability =
   | 'network'
+  | 'javascript'
+  | 'charset'
+  | 'archive'
+  | 'font'
+  | 'crypto'
   | 'batch-content'
   | 'file-cache'
   | 'webview'
@@ -368,8 +391,12 @@ export interface RuntimeDiagnostic {
 
 export class SourceRuntimeError extends Error {
   constructor(
+    /** 可安全展示的简短说明，不包含原始凭据或堆栈。 */
     message: string,
+    /** 稳定分类和供服务端诊断的上下文。 */
     readonly detail: {
+      /** 稳定错误码；不能只依赖 message 判断失败类别。 */
+      code: string
       /** 失败发生的核心阶段。 */
       stage: RuntimeStage
       /** 发生错误的书源 URL。 */

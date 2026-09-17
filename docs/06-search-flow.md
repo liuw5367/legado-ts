@@ -81,6 +81,7 @@ export interface SearchResultSink {
 - 规则列表为空但可识别详情页：按详情页解析；
 - 单个字段规则失败：保留书名后继续，字段为空；
 - 所有书源未返回结果：流程正常结束并标记空结果；
+- Web 结果另外携带每源状态：全部请求失败与全部成功但无匹配不能只用同一个 isEmpty 表达；
 - 取消搜索：终止当前 page owner 和工作池，迟到的回调不能重新发布结果。
 
 书源级失败不能写入成功结果；但已经成功的其他书源结果仍然可以发布。全局错误只用于请求上下文失效、结果存储失败或资源清理失败等流程级问题。实现时必须区分 `source-error`、`empty-result`、`cancelled` 和 `storage-error`，上层据此决定提示、重试或继续展示已有结果。
@@ -88,3 +89,5 @@ export interface SearchResultSink {
 ## 迁移验收
 
 必须分别测试详情页搜索、列表搜索、`+/-` 列表前缀、相对 URL、空书名、列表回退、同源去重、跨源合并、精准搜索、30 秒超时和取消后迟到结果。原项目的 `SearchPaginationContractTest` 已固定 page owner 的注册、完成、取消和回调顺序。
+
+Web 调用中 searchId 是一次查询会话身份，operationId 是一次页调用身份；核心只管理本次子任务，应用显式取消上一操作，不通过模块级“当前搜索”取消其他用户。输入 sources 使用不可变 SourceSnapshot[]（含版本），SearchRequest 中 BookSource[] 是原逻辑投影。完成清理只释放请求视图，不清除会话状态。多源最终同分排序保持原合并规则，不新增字母排序；跨源到达次序影响“首次条目”，测试应固定调度。

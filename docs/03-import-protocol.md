@@ -9,9 +9,9 @@
 3. URI：读取 URI 内容后按文本解析；
 4. 其他文本：作为 JavaScript 书源交给 `JsSourceConfig.extract`。
 
-JSON 对象带 `sourceUrls` 时表示远程书源 URL 列表。导入器递归下载这些 URL；列表项为空时拒绝。远程 URL 返回的 JSON 在当前流程中禁止再次携带 `sourceUrls`，以避免递归协议和错误来源混淆。
+JSON 对象带 `sourceUrls` 时表示外层远程书源 URL 列表。导入器按顺序下载这些 URL；列表项为空白时拒绝。远程返回的 JSON 禁止再次携带 `sourceUrls`，不是任意深度递归。
 
-`sourceUrls` 的处理必须有明确的边界：先规范化 URL 并按规范化地址去重，再按输入顺序下载；请求失败、响应为空、内容不是书源或远程内容再次包含 `sourceUrls` 时，该项进入导入错误列表，不能写入部分结果。当前兼容行为只允许外层 JSON 指向远程书源，远程书源不得继续递归；实现若提供更深层递归，必须显式增加最大深度、已访问 URL 集合、总数量上限和取消传播，否则会形成无限导入或资源耗尽。
+`ImportBookSourceViewModel.importBookSourceJson` 逐项调用 importSourceUrl，没有先去重的证据。兼容导入保持顺序与重复项，为各来源生成候选位置，同 sourceId 保存冲突单独诊断。Web 目标可收集不同链接的错误和成功候选，但不宣称这是 Android 已有的逐项错误隔离。只有用户选中的有效候选进入保存事务；下载失败不自动写入。宿主限制数量、响应大小与总预算，不扩展递归深度。
 
 JSON 数组中的每一个对象都必须有非空 `bookSourceUrl`。单个 JSON 对象也必须有该字段；缺失时统一报告“不是书源”类错误。
 
@@ -89,7 +89,11 @@ export interface ImportCandidate {
 
 最终写入由 `SourceHelp.insertBookSource` 和 `BookSourceDao` 完成，同 URL 的数据库冲突策略是替换。迁移库不应把导入和持久化绑在一起：核心返回 `ImportCandidate[]`，Node/应用层决定是否保存、如何确认更新和是否保留本地名称、分组、启用状态。
 
-比较本地版本时，以规范化后的 `bookSourceUrl` 作为身份，以 `lastUpdateTime` 判断新增、更新或跳过；本地名称、分组、启用状态等用户字段是否覆盖必须作为显式策略传入，不能由导入器隐式决定。导入、替换和持久化的错误要区分 `input`、`fetch`、`parse`、`normalize`、`replace`、`conflict` 和 `storage` 阶段。
+比较本地版本时，以原始 `bookSourceUrl` 为身份；Android 使用 lastUpdateTime 参与比较，Web 同时比较内容，不因时间戳相同忽略变化。用户字段覆盖策略必须显式传入；sourceVersion 是独立保存版本。错误区分 `input`、`fetch`、`parse`、`normalize`、`replace`、`conflict`、`storage`。
+
+JSON 数组含一个无 URL 项时，原解析器整组抛错；空数组是零候选。sourceUrls 为 null 或含空白项是错误。JSON 名称缺省允许导入并诊断，JS 名称缺省是配置错误。远程导入 `#requestWithoutUA` 后缀会被剥离并将 UA 设置为字符串 `null`，不改变源身份。URI 由受控读取端口处理，不允许服务端读取任意用户路径。
+
+持续订阅见 [订阅协议](28-source-subscriptions.md)。导出基于原始快照与用户修改，未修改原样返回；修改后保留未知字段和 mainJs，并再导入检查结构等价，不承诺空白及 key 顺序完全不变。
 
 ## JavaScript 书源导入
 

@@ -78,7 +78,7 @@ export interface VariableStore {
 
 `<js>...</js>` 和 `@js:...` 会成为 `Mode.Js` 规则块；`@webjs:...` 成为 `Mode.WebJs` 规则块。普通文本和脚本块可以组合，脚本块的结果成为后续链条的输入。
 
-**兼容测试要求**：当前 `splitSourceRule` 分别扫描 JS 和 WebJS 标记，迁移时必须用连续混合标记 fixture 固化现有顺序，再决定词法扫描器是否严格按源文本位置输出。
+**兼容要求**：splitSourceRule 先扫描全部 JS，再扫描 WebJS，并共享 start 游标。兼容路径按此顺序复现，不改成统一按源文本排序。混合标记 golden 尚未执行；更合理的扫描顺序属于另一语义版本。
 
 ### `&&`、`||`、`%%`
 
@@ -187,3 +187,16 @@ URL 模式中，空字符串回退 `baseUrl`；非空字符串相对 `redirectUr
 ## 11. 迁移验收重点
 
 实现顺序应是：平衡切分器 -> 模式识别 -> Default 元素选择 -> XPath/JSONPath -> Regex -> 变量/插值 -> 替换 -> 输出归一化。每完成一层都用固定 fixture 对比 Android 结果。不能先选择 TypeScript 生态中最方便的 CSS/JSONPath 库，再假设其语义天然一致。
+
+## 12. 跨语言差异与诊断
+
+| 语义 | 实现要求 | 差异样本 |
+| --- | --- | --- |
+| 切分 | 复现 RuleAnalyzer 的规则/代码平衡分支，不全局保护所有引号 | CSS 属性内与顶层引号内的 `\|\|` 分开验证 |
+| 正则 | 适配 Java Pattern 的语法、flag、捕获与替换 | `$1`、反斜杠、零宽匹配、非法模式回退 |
+| 字符 | 编辑位置为 UTF-16；字符变换按原 API 的 code point 行为 | emoji 与代理对 |
+| 数值空值 | 整数 Double、null/undefined、空数组分别转换 | `1.0`、null 插值、空变量继续查找 |
+| DOM | 保持容错、文本拼接、实体及节点身份 | 表格片段、畸形 HTML、textNodes、重复读取 |
+| XPath/JSONPath | 实际方言与返回类型在输出 API 处归一化 | 标量、对象、空选择、非法路径、嵌套插值 |
+
+诊断器可以提示可疑规则，但不改变执行结果。原入口把非法 JSONPath 转为空值时，静态诊断不能擅自禁止整源保存。中间表示记录 mode、原文、位置与替换信息；编译缓存不得携带上次 DOM、变量值或 JS scope。

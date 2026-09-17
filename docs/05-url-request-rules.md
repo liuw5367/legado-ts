@@ -119,6 +119,12 @@ raw rule URL
 
 这些边界已有 `AnalyzeUrlNetworkOptionsTest` 覆盖，包括 timeout、布尔解析、DNS 字面量、目标域名范围、代理冲突、重定向和派生 call timeout。TypeScript 应保留同等断言。
 
+## 响应字节与宿主策略
+
+HttpClient 返回解压后的 bytes、响应头、状态及最终 URL；核心通过字符集端口解码，然后执行 bodyJs/XML 处理。不能先由 fetch.text() 固定 UTF-8 再尝试恢复原字节。请求参数 charset 和响应 charset 是两个用途，不默认等同。正文 bytes 分支继续保留原 Android 十六进制规则输入，媒体二进制输出通过独立 DTO 表达。
+
+缺失/无效 timeout 在 URL 兼容层按原行为忽略，宿主最终仍必须有正的截止时间；这与“进入 HttpClient 的有效 timeout 必须合法”不冲突。重试次数服从源配置与宿主策略共同约束，POST 或上游写入不能因网络错误自动重复；被拒绝的重试报告 policy-denied 诊断，不伪称原客户端同等行为。跨域凭据和 SSRF 的策略差异见 [部署边界](29-runtime-security-and-deployment.md)。
+
 ## 7. 浏览器和 SSR 约束
 
 浏览器不能默认跨域访问所有书源，SPA 需要 Node/Next.js 代理或站点 CORS。Next.js 服务端代理不得复用跨请求 CookieStore、JS scope 或变量 map。HTTP 适配器要提供请求级 header/cookie 计算，并允许上层设置来源白名单和 SSR 超时。

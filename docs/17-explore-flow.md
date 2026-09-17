@@ -46,3 +46,5 @@ BookSource + 用户会话
 - 发现响应失败、列表规则失败或取消：沿用单书源列表流程的错误和清理约定，不能覆写较新分类的结果。
 
 至少用静态 JSON、普通文本、动态 JS、`infoMap`、`ruleExplore` 到 `ruleSearch` 回退、JS 源 `explore`、分类切换取消和用户会话隔离建立 fixture。`type` 为非 URL 的控件需分别证明原样保留与能力诊断。用例归属见 [一致性测试基线](15-conformance-tests.md)。
+
+Web 分类身份由源版本、分类位置及当前 infoMap 快照共同界定，不仅用显示 title。控件更新先产生新的 infoMap 再发起列表 operation；旧 operation 迟到结果只清理，不覆盖新分类。动态分类整个脚本失败时不虚构“其他分类仍可用”，只能保留上一次成功结果并明确 stale，或显示错误。分类与书籍结果分别缓存，未配置 exploreUrl 返回空分类且零网络请求。

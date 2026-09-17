@@ -1,6 +1,6 @@
 # 独立 package 的调用契约
 
-本章是目标设计，不代表 TypeScript 代码已经实现。对外契约应让应用只处理书源选择、用户交互和数据保存；规则解释、请求展开及发现/搜索/详情/目录/正文解析由同一个书源 package 完成。接口名称可以在实现时调整，但输入输出、所有权和错误语义必须保持一致。
+本章是目标设计，不代表已有代码。以下名称作为公开契约维护，改名或更改输入输出须同步规格与案例。应用组织书源和提交数据，package 解释规则并编排流程。
 
 ## 最小公开能力
 
@@ -16,7 +16,36 @@
 | `getChapterList` | 书源、书籍快照、刷新选项 | 章节列表与目录元数据变更 | package 计算；应用提交 |
 | `getContent` | 书源、书籍、章节、下一章 URL | 正文与可保存的元数据变更 | package 计算；宿主保存 |
 
-上述公开能力复用 [书源数据模型](02-source-schema.md)、[宿主接口](11-runtime-host-interfaces.md) 和 [错误模型](11-runtime-host-interfaces.md#错误模型)。段评、批量正文、文件下载、图片解密、登录和书源交互事件也属于完整能力清单；其公开入口或宿主事件协议需要在相应行为规格确认后补充，不能靠应用直接执行书源脚本绕开 package。编辑预览调用同一组能力，但使用独立预览上下文和可控的网络宿主。
+上述能力复用 [模型](02-source-schema.md)、[宿主](11-runtime-host-interfaces.md) 和 [状态契约](27-state-and-effects.md)。编辑预览调用同一入口，使用临时会话，不提交用户状态。
+
+## 公共调用协议
+
+运行时工厂持有不可变 parser 配置；每个异步入口接收 `CallContext` 与操作输入，返回 `OperationResult<T>`，致命失败抛出带稳定 code/stage 的 SourceRuntimeError。CallContext 包含 requestId、operationId、sessionId、不可变 SourceSnapshot（sourceId/sourceVersion/normalized）、signal、预算及当前宿主视图；sessionId 由宿主认证注入。
+
+OperationResult 包含 value（各入口下表结果）、diagnostics、effects（27 定义的已发生副作用）、changes（尚未提交的领域变更）、operationId、sourceVersion。成功空列表与失败不同；多源/批量返回分项状态，致命取消错误仍携带已经提交的 effects，不伪造全批回滚。
+
+changes 每项包含资源身份、baseVersion、允许更新字段及目标值；应用 compare-and-set 提交。DOM、Set、脚本句柄、AbortSignal、宿主对象不得进入 HTTP DTO。DTO 使用普通对象、数组和字符串；bytes 由独立二进制响应返回，不能 JSON 字符串化为正文。
+
+| 入口补充 | 输入 | 输出与边界 |
+| --- | --- | --- |
+| exportSource | RawSource 与明确字段修改、json/javascript 格式 | 文本与诊断；不丢未知字段，不执行脚本 |
+| evaluateRule | 规则、输出模式、脱敏输入与规则上下文 | typed value 与 trace；只在提供宿主能力时执行 JS |
+| planRequest | URL 规则、page/key/baseUrl 与会话视图 | 请求计划与诊断；需要 JS/状态时有相应副作用，不宣称纯函数 |
+| previewSource | 候选源、操作名、固定响应或显式网络选项 | 相同领域结果及逐步 trace；临时命名空间 |
+| refreshSubscription | 订阅 revision/baseline、本地快照 | 28 定义的 diff 与提交计划，不调度、不保存 |
+| getContentBatch | 源、Book、带 tocRevision 的章节列表 | 每章 saved/stale/failed/unfilled、效果记录及剩余章节；不重复保存成功章 |
+| getReviewSummary | Book、Chapter | ReviewParagraph[]，空摘要合法 |
+| getReviewDetail | Book、Chapter、paraIndex/paraData/page | ReviewPage，保留下一页语义 |
+| getReviewReplies | 上述输入加 reviewId | 回复列表，未声明函数时 capability-missing |
+| decodeImage | Book、src、bytes、isCover | bytes 或解码错误；无规则原样返回 |
+| resolveDownload | 文件源及 Book | 详情规则生成的下载地址列表；实际文件写入由宿主负责 |
+| executeSourceAction | pay 或已知 event 名、Book/Chapter、用户确认及操作身份 | open-url/refresh-toc/intercept-default/continue-default；未知事件拒绝，写入不自动重试 |
+| getLoginForm / submitLogin | 源、挑战身份、表单输入 | 登录表单/挑战/认证结果；低优先级，完整动态参数未核实前报能力缺失 |
+| inspectCapabilities | 源快照及宿主报告 | required/supported/missing/dynamicUnknown；动态 JS 不能靠静态扫描保证全部依赖 |
+
+单源搜索输入 key/page；多源额外接收有序 SourceSnapshot[]、precision 和 SearchResultSink。详情接收 canReName；目录接收旧目录、tocRevision 与刷新选项；正文接收 tocRevision、nextChapterUrl 或目录快照及 needSave（默认 false）。分页 page 为一基正整数；不合法输入在网络前失败。searchMany 每源返回 success/empty/failed/cancelled 状态，全部失败与全部成功但无匹配分别表达。
+
+事件通过调用方订阅器接收：start、progress、source-success、source-error、completed、cancelled、saved；包含 operationId 和递增序号。订阅异常不能阻断核心。只有 sink/ContentStore 确认后发布相应保存事件；completed 不表示应用已提交 changes。所有入口结束前等待本次资源关闭。
 
 ## 创建运行时与单次调用
 

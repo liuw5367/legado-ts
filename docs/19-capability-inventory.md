@@ -2,7 +2,7 @@
 
 目标是完整移植 `BookSource` 的可观察行为。优先级表示实施顺序，不表示放弃。若某项收益低且显著增加架构成本，应先给出使用场景、原实现证据、替代方案和兼容损失，再由用户审核是否舍弃。未经审核的能力保留在清单中，未实现时必须返回能力状态和可识别的错误。
 
-本清单以 `BookSource`、规则对象、`WebBook`、`AnalyzeRule`、`AnalyzeUrl`、`JsSourceBook` 及调用它们的 Android 入口为盘点起点。它记录已发现的能力类别，不等于已经完成逐字段与逐调用点的行为验证；兼容结论仍以 [兼容性矩阵](13-compatibility-matrix.md) 和独立 fixture 为准。`RssSource` 是另一个实体与处理体系，是否纳入同一个 package 需要单独评估，不能把它当成 `BookSource` 的已支持能力。
+本清单以 BookSource、规则实体、WebBook、AnalyzeRule/AnalyzeUrl、JsSourceBook 及其调用者为证据入口。字段登记不等于逐调用点验证；兼容结论以 [矩阵](13-compatibility-matrix.md) 和实际案例为准。RssSource 是另一个实体体系，本轮不纳入，不能与下载多个 BookSource 的书源订阅混淆。
 
 | 能力组 | 需要形成的行为规格 | 当前文档位置 | 优先级与待核对内容 |
 | --- | --- | --- | --- |
@@ -29,3 +29,49 @@
 能力状态应分开记录：`已登记`、`行为已核对`、`规格已完成`、`TypeScript 已实现`、`目标宿主已验证`。此外记录优先级和宿主能力要求。若某个目标宿主缺少能力，仍可在其他宿主实现该能力；只有用户审核并明确同意后，才能把能力状态改为 `放弃`。低优先级不能写成永久不支持。
 
 图片解密、付费、事件回调、媒体结果和段评交互的已核对调用关系见 [与书源关联的媒体和交互流程](20-adjacent-source-flows.md)。下一轮审查应继续追踪未核实的调用点，并把对应测试加入 [一致性测试基线](15-conformance-tests.md)。书源编辑器的字段覆盖也应按本清单反查，确保能导入、显示、保留和导出尚未执行的能力字段。
+
+## 稳定能力索引
+
+能力 ID 表示行为范围，不表示实现完成。字段级子 ID 使用 `父ID/字段路径`，宿主方法使用 `父ID/方法名/重载参数列表`；原字段表与方法列表是覆盖审计依据。证据基线见 [维护说明](30-package-maintenance.md)。
+
+| ID | 范围与规格 | 测试组 | 证据成熟度 |
+| --- | --- | --- | --- |
+| CAP-IMPORT | 03 的 JSON/JS/远程/URI、替换及导出 | IMP、EDIT | JSON 校验和外层 sourceUrls 已核对源码 |
+| CAP-SCHEMA | 02 的全部 BookSource/rule 字段、RowUi | IMP-005、EDIT-005 | 字段已核对；登录动态协议仍有待核实项 |
+| CAP-RULE | 04 的模式、链、变量、替换及转换 | SCH、VAR | 核心源码与现有测试定位；golden 未运行 |
+| CAP-REQUEST | 05 请求/响应/Cookie/DNS/代理 | URL | 有源码及测试定位 |
+| CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001–003、EXP | 有调用源码；exploreScreen 仅保留 |
+| CAP-INFO / CAP-TOC / CAP-CONTENT | 07–09 | FLOW-004–012 | 已核对排序、去重及 mapAsync；需运行对照 |
+| CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008–010 | 函数与返回模型有证据；引擎适配未验证 |
+| CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取有入口，段评写入仅字段证据 |
+| CAP-EDITOR | 16 | EDIT | Web 目标设计与现有 UI 证据分开 |
+| CAP-STATE / CAP-SUBSCRIPTION | 27、28 | STATE、SUB | Web 目标设计 |
+| CAP-HOST / CAP-DEPLOY | 11、12、29 | HOST、DEP | 目标契约，尚未实现或部署 |
+| CAP-ENCODE / CAP-ARCHIVE / CAP-FONT / CAP-CONCURRENCY | 下表及 11、20 | EXT | 已登记实际宿主方法，细分语义成熟度见下表 |
+
+## 宿主方法补充盘点
+
+以下来自 `help/JsExtensions.kt` 及其继承的 JsEncodeUtils；不能因为 11 的示意接口没列出而视为放弃。每个方法的重载都需单独案例，尚未完成逐重载语义对照的方法不能标记“规格完成”。
+
+| 能力 | 方法族 | 处理要求与核实状态 |
+| --- | --- | --- |
+| 网络 | ajax、ajaxAll、ajaxTestAll、connect、get、head、post | 网络 get 与单参数键值 get 是不同重载；返回 StrResponse/Connection.Response 不能混成同一未经适配对象 |
+| 编码 | strToBytes、bytesToStr、base64Decode、base64DecodeToByteArray、base64Encode、hexDecodeToByteArray、hexDecodeToString、hexEncodeToString、encodeURI | 保留 charset、flags、null 和 bytes 返回差异；逐重载 fixture 由阶段 B 完成 |
+| 加密 | md5Encode、md5Encode16、createSymmetricCrypto、createAsymmetricCrypto、createSign；aesDecodeToByteArray/aesDecodeToString/aesDecodeArgsBase64Str/aesBase64DecodeToByteArray/aesBase64DecodeToString；aesEncodeToByteArray/aesEncodeToString/aesEncodeToBase64ByteArray/aesEncodeToBase64String/aesEncodeArgsBase64Str；desDecodeToString/desBase64DecodeToString/desEncodeToString/desEncodeToBase64String；tripleDESDecodeStr/tripleDESDecodeArgsBase64Str/tripleDESEncodeBase64Str/tripleDESEncodeArgsBase64Str；digestHex/digestBase64Str/HMacHex/HMacBase64 | JsEncodeUtils 有实现；算法、padding、key/IV 编码及工厂返回方法尚需逐项契约，不假设 WebCrypto 同名即等价 |
+| 文本/时间 | timeFormatUTC、timeFormat、htmlFormat、t2s、s2t、toNumChapter、toURL | locale、时区、格式语法和 Unicode 需固定，宿主缺能力不能返回原文假成功 |
+| 文件/脚本 | importScript、cacheFile、downloadFile、getFile、readFile、readTxtFile、deleteFile、getTxtInFolder | 只允许宿主私有命名空间；返回 Java File 需适配，不暴露真实路径 |
+| 归档 | unzipFile、un7zFile、unrarFile、unArchiveFile、getZipStringContent/getZipByteArrayContent、getRarStringContent/getRarByteArrayContent、get7zStringContent/get7zByteArrayContent | 下载/读取 → 限制解包 → 选择路径 → bytes/解码文本；不存在条目与损坏归档分开；阶段 D 对照 |
+| 字体 | queryBase64TTF、queryTTF、replaceFont | 获取字体 → 解析轮廓 → Unicode 映射 → 替换；不能用普通字符串替换冒充字体解码，阶段 D 对照 |
+| 并发 | singleFlight、lock、tick | 默认等待 15000ms，允许 0–300000ms；名称非空且不超过 256；源身份隔离，详见下段 |
+| 浏览器/交互 | webView、webViewGetSource、webViewGetOverrideUrl、startBrowser、startBrowserAwait、showBrowser、getVerificationCode、openVideoPlayer、openUrl、getWebViewUA | 需要真实宿主协议；低优先级保留，不能以 fetch 等价替代 |
+| 日志/设备/应用 | toast、longToast、log、logType、randomUUID、androidId、refreshBookInfo、refreshBookToc、refreshContent、getReadBookConfig、getReadBookConfigMap、getThemeMode、getThemeConfig、getThemeConfigMap | 可映射宿主事件或受控配置；androidId 的 Web 替代语义未决定，缺能力明确诊断 |
+| 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、登录 UI/action 方法 | 源配置对象继承 JsExtensions，不仅是 11 中少数 getter；按会话隔离持久状态 |
+
+SourceLock.singleFlight 让同批等待者在一次成功执行后跳过 action，并非给所有调用者返回相同 Promise 值；同线程重入直接跳过。lock 每个调用都执行 action。tick 返回递增前值，初次 0，达到 Int.MAX_VALUE 后归零，4096 项 LRU。Web 多实例范围必须由宿主说明，不能把 Android 进程内锁误称为分布式锁。
+
+## 尚不能进入完整实现验收的项目
+
+- JS 引擎同步桥接、Rhino 互操作及部署：阶段 B 负责人按 29 的专项案例验证；未通过前不承诺完整 JS 兼容。
+- 编码/加密工厂返回对象、字体与归档逐重载：对应 B/D 负责人核对实现和样本后补全原子案例；当前登记不等于规格完成。
+- exploreScreen、RowUi 动态动作细节、段评写入：对应 D 负责人追踪调用点；无入口则保持字段保留，不擅自新增请求语义。
+- 设备与阅读器绑定的替代行为：应用需求尚未定义，保留 capability-missing；任何舍弃须用户审核。

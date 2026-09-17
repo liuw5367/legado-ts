@@ -80,19 +80,19 @@ export interface EditorDiagnostic {
   severity: 'info' | 'warning' | 'error'
   /** 面向编辑器用户的诊断说明。 */
   message: string
-  /** 可选的字符位置，脚本和规则字段使用零基或一基必须统一声明。 */
+  /** 原文中的零基 UTF-16 偏移范围；编辑器自行转换为行列。 */
   position?: SourcePosition
 }
 
 export interface SourcePosition {
-  /** 位置起点，采用与编辑器组件一致的索引约定。 */
+  /** 零基 UTF-16 起点，包含此位置。 */
   start: number
-  /** 位置终点，采用与编辑器组件一致的索引约定。 */
+  /** 零基 UTF-16 终点，不包含此位置；start <= end。 */
   end: number
 }
 ```
 
-状态转换为 `closed -> loading -> parsed -> diagnosing -> ready/invalid -> previewing -> dirty -> saving -> saved`。解析失败进入 `invalid`，但必须保留原文；预览失败回到 `dirty` 并保留诊断；保存时发现远端或本地版本变化进入 `conflict`，只能由用户选择覆盖、重新载入或导出副本。关闭、切换 JSON/JS 模式、导入新源和离开页面都要先检查 `dirty`，用户未确认时不得丢弃当前原文。
+状态分成正交维度：load=closed/loading/ready，validity=valid/invalid，preview=idle/running/failed，save=idle/saving/conflict/failed。dirty 仅由 rawText 与 baseText 的差异决定，预览本身不改变 dirty。解析失败保留原文；保存比较 baseVersion，冲突由用户选择重载、覆盖或导出。切换、关闭和离开时检查 dirty，未经确认不丢弃修改。
 
 导入、编辑、诊断、预览、保存和导出的数据流为：
 
@@ -108,7 +108,7 @@ rawText
   -> 用户确认后写入或导出
 ```
 
-JSON 源导出时必须保留规则对象与 JSON 字符串的兼容形态、未知字段、字段顺序策略和原始值；JS 源导出必须使用完整 `mainJs`，不能从剥离后的 `rule*` 对象重建脚本。导出失败不得覆盖原文。保存接口至少接收 `sessionId`、`baseVersion`、候选原文和用户覆盖确认，返回新版本或结构化冲突，不能返回一个没有版本信息的布尔值。
+未编辑导出原文；编辑后保留规则对象/字符串形态、未知值及完整 mainJs，允许 JSON 空白和 key 顺序变化。不能承诺编辑后字节不变。保存输入包含编辑会话身份、baseVersion、候选原文和覆盖选择，返回新版本或结构化冲突；编辑会话 sessionId 与宿主认证会话不是同一个身份，不可用于授权。
 
 ## 目标能力
 
@@ -168,6 +168,8 @@ source-editor UI
 表单配置可以继续采用 `namespace + id + type + hint`，但字段的类型、默认值、是否必需、规则结果类型和能力要求应来自 TypeScript schema。这样 UI、导入校验、运行时错误和测试 fixture 使用同一份定义。
 
 编辑器组件只能调用 codec、诊断器和 preview host，不得在 UI 内复制 URL 展开、变量查找、规则解析或字段合并逻辑。保存和导出必须经过同一 codec；预览必须经过同一核心流程，保证编辑器显示的结果与 Node、SSR 运行结果来自同一套规则语义。
+
+预览默认使用固定响应与临时 Cookie/缓存/变量空间。用户触发真实请求时展示目标及能力，不提交用户持久状态，不执行购买和段评写入；已发送的网络请求不因预览结束而撤回。预览结果带候选版本，编辑后迟到 trace 不覆盖新候选诊断。保存无效草稿与保存可运行源分开：草稿可导出，运行入口必须校验能力与字段，不通过高亮推断可执行。
 
 ## 安全和权限
 

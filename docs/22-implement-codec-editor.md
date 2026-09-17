@@ -8,8 +8,9 @@
 2. 实现 JSON 对象、数组、远程 URL、URI 与 JS 文本的分类。远程和 URI 只通过读取端口取得文本，再回到同一解析入口；`sourceUrls` 只允许文档定义的外层展开，并限制数量、响应大小、深度和取消。
 3. 先按原文解析，再按书源名和 URL 依次应用导入替换规则；严格解析失败时按兼容路径尝试宽松 JSON，并记录诊断。替换失败留下原候选与错误，不把部分替换写入存储。
 4. 对 `BookSource`、`ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent`、`ruleReview` 做字段级校验。规则字段的对象与 JSON 字符串形态均被接受，未知字段和历史值保留。为每个字段记录默认值、空值含义、执行能力和导入导出策略。
-5. 以规范化 `bookSourceUrl` 生成候选身份，与调用方提供的本地快照比较，返回 `new/update/same/conflict`。库不调用数据库；应用确认后按显式覆盖策略事务写入，并返回新版本。
-6. 导出 JSON 时从保留原文与修改差异生成输出，验证再导入后已知字段与未知字段不丢失。JS 源的 `mainJs` 始终保留完整原文；本阶段只完成分类与静态诊断，需执行脚本取得配置的完整 JS 导入在 [阶段 D](25-implement-extended-capabilities.md) 完成。
+5. 以原始 bookSourceUrl 生成候选身份，不进行网络地址规范化；与本地快照比较 new/update/same/conflict，由应用确认后事务保存。
+6. 导出验证未知字段和规则形态；JS 原文保持完整，动态配置抽取在 [阶段 B](23-implement-rules-request.md) 完成。
+7. 实现 [订阅差异](28-source-subscriptions.md) 的纯比较入口：base/remote/local 三方比较、用户字段保护与 sourceVersion 冲突；下载使用读取端口，定时器和持久化仍属于应用。
 
 ## 编辑器如何复用这一层
 
@@ -30,4 +31,4 @@
 
 本阶段需要稳定的 `importSources`、`diagnoseSource`、`exportSource` 和候选比较入口。输入接受 `AbortSignal` 与读取端口；输出只包含候选、诊断及可安全展示的差异摘要，不自动暴露原始 Cookie 或私有 Header。JS 动态配置尚不能执行时，候选必须明确 `requires-javascript`，不能伪装成完整可运行的书源。
 
-以 `IMP-001` 至 `IMP-010`、`EDIT-001`、`EDIT-002` 和 `EDIT-004` 为用例目录；其中需要 JS 动态配置的断言在阶段 D 转为可执行，阶段 A 先验证原文保留与静态错误。另用编辑前后往返样本检查每个 `BookSource` 字段、每个规则对象、`ExploreKind` 和未知字段。验收时从公开入口导入、修改、导出、再次导入，确认候选顺序、冲突策略、版本和原文保留均稳定。应用数据库测试只覆盖确认后保存、冲突和事务失败，不把数据库实现纳入核心 package。
+以 IMP、EDIT 的具体子案例及 SUB-001–008 验收；JS 动态配置断言在 B 执行，A 不伪称 JS 已可导入运行。每个字段分别做往返断言，从公开入口导入、修改、导出、重导入。应用存储测试覆盖确认、并发冲突与事务失败，不把数据库实现纳入核心。

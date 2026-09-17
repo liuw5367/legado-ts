@@ -71,3 +71,5 @@ export interface BookInfoResult {
 ## JavaScript 源差异
 
 JS 源的 `getBookInfo(book)` 是可选函数，缺失或返回空时保留搜索阶段字段。返回对象只允许覆盖明确的详情字段；不能覆盖 `bookUrl`、阅读进度等运行状态。`downloadUrls` 必须是字符串数组，过滤空字符串、`javascript:` 和重复 URL；`variable` 支持对象或 JSON 字符串并替换现有书籍变量。
+
+Web 输入绑定 sourceVersion 和 Book 的 baseVersion。返回的 updatedFields 是明确允许提交的集合，不执行整对象覆盖；失败返回诊断并保持输入对象不变。infoHtml/tocHtml 复用必须同时带最终响应 URL、源版本和会话身份；跨 HTTP 使用服务端缓存引用，不能仅传一段 HTML 就假定属于当前源。成功返回后应用提交 changes，提交失败与规则解析失败分开。

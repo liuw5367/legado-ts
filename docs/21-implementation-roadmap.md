@@ -23,13 +23,17 @@ fixtures/             脱敏输入和预期结果
 
 | 阶段 | 可交付能力 | 详细文档 | 本阶段验收 |
 | --- | --- | --- | --- |
-| A | JSON 导入、规范化、导出、静态诊断和 JS 原文保留 | [模型与导入](22-implement-codec-editor.md) | 可从公开入口完成 JSON 候选与 JS 原文往返；JS 动态配置仍待阶段 D |
-| B | 规则语言、变量、URL 请求计划，使用 fixture 宿主求值 | [规则与请求](23-implement-rules-request.md) | 可从公开入口对固定 HTML/JSON 和 URL fixture 求值 |
-| C | Node 宿主加发现、搜索、详情、目录、正文 | [主流程](24-implement-workflows.md) | 可通过真实 package 入口与 fake HTTP 完成一书一章流程 |
-| D | JS 源、媒体、段评、事件、认证和浏览器能力 | [扩展能力](25-implement-extended-capabilities.md) | 每项能力分别具有实现状态、宿主条件和对应 fixture |
+| A | JSON 导入、规范化、导出、静态诊断、订阅差异计算和 JS 原文保留 | [模型与导入](22-implement-codec-editor.md) | JSON 往返、订阅冲突可独立使用；JS 动态配置在 B |
+| B | 规则、请求、变量、基础 JS 桥接与 Node 参考宿主 | [规则与请求](23-implement-rules-request.md) | 固定规则求值、JS 配置抽取、同步网络外观、取消和清理；可独立预览 |
+| C | 声明式与基础 JS 的发现、搜索、详情、目录、正文；最小部署验收 | [主流程](24-implement-workflows.md) | 公开入口一书一章、本地 HTTP 及目标 Node 部署验收 |
+| D | 批量、媒体、段评、事件、复杂认证和浏览器等扩展 | [扩展能力](25-implement-extended-capabilities.md) | 每项单独验收，不影响 C 已有能力 |
 | E | SPA 服务端接口、框架接入、部署验证与维护 | [接入和发布](26-implement-integration-verification.md) | 应用只调用 package，Node 端到端流程与目标宿主验证通过 |
 
 阶段 A 和 B 已能独立服务书源编辑、诊断与规则预览；阶段 C 可用于普通书源的完整阅读流程。阶段 D 按能力逐项增加，已实现能力持续可用。阶段 E 只增加服务端入口和维护机制，不改变规则结果。每个阶段完成后都更新 [兼容性矩阵](13-compatibility-matrix.md)，记录已实现与未实现能力，而不是以整个 package 的单一“完成”状态代替。
+
+基础 JS 与真实 Node 网络不能全部留到 D：声明式规则的 URL、插值和 loginCheckJs 已依赖它们。B 的无 JS 子集可先发布预览能力，但 B 的完整验收必须通过同步桥接专项测试。C 的部署入口是验收 harness；E 才增加面向应用的完整适配和维护，不把首次部署检查推迟到 E。
+
+阶段负责人遇到 [能力阻塞](19-capability-inventory.md#尚不能进入完整实现验收的项目) 时，只暂停依赖该能力的验收。是否新增服务或舍弃能力由用户决策；不能以阶段编号完成替代细项验证。版本、发布及来源记录以 [维护文档](30-package-maintenance.md) 为准。
 
 ## 开工前的基线
 
