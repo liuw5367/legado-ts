@@ -4,6 +4,8 @@
 
 本章列出的 `BookSource`、规则对象、`ExploreKind`、`ExploreStyle`、`SearchBook`、`BookChapter`、`Book`、`BookReadConfig` 和段评对象的每个公开字段都必须保留字段注释。注释至少说明业务含义、输入/输出类型、默认值或空值、是否持久化、覆盖权限和所属流程；未列入结构化模型的字段进入未知字段保留区，不得因为没有表单控件而丢失。
 
+字段与实体的所有权、用户覆盖和订阅合并见[字段所有权与合并规则](source-field-ownership.md)；`BookSource` 的实体级方法行为和 RSS/替换规则边界见[书源相关实体边界](artifact-model.md)。字段表不能替代方法级兼容测试。
+
 ## 1. 书源原始与规范化模型
 
 外部 JSON 的规则字段允许是规则对象，也允许是序列化后的 JSON 字符串。导入层先保留原始字段，再生成规范化对象。未知字段默认保留，是否交给运行时执行由能力检查决定，不能在导入时静默删除。
@@ -84,6 +86,21 @@ export interface BookSource {
 }
 ```
 
+```ts
+export type NormalizedSource = Omit<
+  BookSource,
+  'ruleExplore' | 'ruleSearch' | 'ruleBookInfo' | 'ruleToc' | 'ruleContent' | 'ruleReview'
+> & {
+  /** 规范化后只允许对象或 null；原始字符串形态由 RawSource/codec 单独保留。 */
+  ruleExplore?: ExploreRule | null
+  ruleSearch?: SearchRule | null
+  ruleBookInfo?: BookInfoRule | null
+  ruleToc?: TocRule | null
+  ruleContent?: ContentRule | null
+  ruleReview?: ReviewRule | null
+}
+```
+
 `parseBookSourceJson` 只对 `bookSourceUrl` 调用非空校验；JSON 源缺名称不能误报为 Android 导入失败。JS 配置抽取同时要求 URL 与名称非空。URL 主键原样比较，不对尾斜杠、路径大小写或查询参数做规范化。`bookSourceType` 已知值为 0 到 4，未知值保留原文并报告能力诊断，未经兼容证据不静默改成文本类型。
 
 ### 字段通用约定
@@ -94,7 +111,7 @@ export interface BookSource {
 | --- | --- | --- |
 | BookSource 可空文本 | 构造默认 null；raw 区分缺失和显式 null，执行时按字段判空 | 用户配置，导出保留；并非所有文本都是求值规则 |
 | 六个 rule 对象 | 原始对象、JSON 字符串、null；执行快照仅对象或 null | codec 解析一次，保留原形态及未知字段 |
-| 规则对象可空字符串 | 构造默认 null；空规则按 04 的具体入口转换 | 表单编辑、流程读取，不写回规则文本 |
+| 规则对象可空字符串 | 构造默认 null；空规则按[规则语言](rule-language.md)的具体入口转换 | 表单编辑、流程读取，不写回规则文本 |
 | name/author/intro/kind/lastChapter/updateTime/wordCount 规则 | 产出文本或由流程连接的文本列表 | 按所属流程归一化和处理错误 |
 | bookList/chapterList/summaryListRule/detailListRule/replyListRule | 节点或对象列表 | DOM 仅在本次解析使用 |
 | bookUrl/coverUrl/tocUrl/chapterUrl/nextTocUrl/nextContentUrl/downloadUrls | 单 URL 或列表，空值回退由流程定义 | 使用 baseUrl/redirectUrl，网络策略由宿主执行 |
@@ -106,6 +123,8 @@ export interface BookSource {
 | infoHtml/tocHtml/origins | 临时响应 / 来源集合 | 不属于源导出；跨 HTTP 的 Set 变为有序数组 |
 
 `BookSource` 是交换模型；`NormalizedSource` 将 rule 字段限制为已解析对象或 null。`RawSource` 包含原文 text、输入 kind、来源 location 与诊断。未修改原文可逐字导出，修改后只承诺结构与未知值保留。
+
+`BookSource` 不是全部书源数据。Android 的订阅实体 `RuleSub`、用户覆盖、source revision、检查状态、cookie/变量和缓存属于管理或运行时模型，不能塞进书源导出 JSON，也不能因未出现在本接口中而丢失。它们的所有权、保存和清理见 [书源状态与副作用](source-management-and-state.md)；检测状态见 [书源检测状态模型](source-check-state.md)。
 
 ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。
 

@@ -55,7 +55,7 @@ export interface ContentIdentity {
   /** 原始书源主键。 */
   sourceId: string
   /** 书源执行快照版本。 */
-  sourceVersion: string
+  sourceRevision: string
   /** package 规则语义版本。 */
   semanticVersion: string
   /** 源内书籍地址。 */
@@ -77,8 +77,8 @@ export interface ContentSaveToken {
 
 export interface ContentResult {
   /** 领域内容种类，由书籍类型和流程确定，不根据 URL 后缀猜测。 */
-  kind: 'text' | 'image-content' | 'audio' | 'video'
-  /** 归一化后的正文或音频/视频资源 URL。 */
+  kind: 'text' | 'image-content' | 'audio' | 'video' | 'file-links'
+  /** 归一化后的正文、资源 URL 或文件链接；二进制实体由 ResourceStore 保存。 */
   content: string
   /** 章节标题、图片、歌词和弹幕等章节更新。 */
   chapter: BookChapter

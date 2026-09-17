@@ -8,6 +8,7 @@
 - [阶段 B：规则引擎与请求计划](phase-b-rules-request.md)
 - [阶段 C：发现、搜索、详情、目录与正文](phase-c-workflows.md)
 - [阶段 D：批量、媒体与交互扩展](phase-d-extended-capabilities.md)
-- [阶段 E：应用接入、部署验证与 package 维护](phase-e-integration.md)
+- [阶段 E-1：书源持久化、订阅刷新与书源检测](phase-e-storage-and-check.md)
+- [阶段 E-2：应用接入、部署验证与 package 维护](phase-e-integration.md)
 
 阶段完成状态以 [质量与验证](../quality/README.md) 的矩阵和测试证据为准。能力取舍仍需用户单独审核。

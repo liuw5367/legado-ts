@@ -19,7 +19,7 @@ Node API 可用不代表脚本安全；node:vm 不是安全隔离机制。worker
 | [quickjs-emscripten runtime](https://github.com/justjake/quickjs-emscripten/blob/main/packages/quickjs-emscripten-core/src/runtime.ts) 与 [Asyncify runtime](https://github.com/justjake/quickjs-emscripten/blob/main/packages/quickjs-emscripten-core/src/runtime-asyncify.ts) | 独立 runtime、内存/栈限制、中断回调、显式 dispose；异步变体独立处理宿主等待 | Node 参考实现优先评估嵌入式解释器加受控桥接，保留脚本同步外观；不可将 JS Promise 暴露给原有同步 java.ajax 调用 |
 | [isolated-vm reference_handle](https://github.com/laverdet/isolated-vm/blob/main/src/module/reference_handle.cc) 与 [isolate_handle](https://github.com/laverdet/isolated-vm/blob/main/src/module/isolate_handle.cc) | 隔离对象引用、复制/引用传输及 isolate 管理 | 只传序列化数据和最小能力，不传 Node 对象；原生扩展的打包和运行要求更强，保留为替代方案，不作为 Edge 默认依赖 |
 
-这是一项有证据的候选方向，不是已验证的引擎选型。本轮未安装或运行上述引擎。阶段 B 负责人必须通过同步网络返回、嵌套规则回调、取消等待、无限循环终止、句柄清理和 Rhino 返回值对照后，才能固定依赖版本。失败只阻塞 JS 宿主验收，codec 和纯规则仍可实现；若需独立执行服务，提交成本与能力影响供用户审核。
+这是一项有证据的候选方向，不是已验证的引擎选型。本轮未安装或运行上述引擎。阶段 B 负责人必须通过同步网络返回、嵌套规则回调、取消等待、无限循环终止、句柄清理和 Rhino 返回值对照后，才能固定依赖版本。同步 `java.ajax/connect` 是完整旧式 JS 兼容的前置条件，不是可在实现后再忽略的优化；若 Node/Edge 无法安全提供同步网络外观，必须改为独立 JS 执行服务，或由用户审核后缩小 JS 兼容范围。失败只阻塞 JS 宿主验收，codec 和纯规则仍可实现。
 
 桥接调用携带 operationId、sessionId 和 sourceId。等待 HTTP 期间宿主事件循环仍可处理取消；宿主不得在同一个暂停中的解释器上重入，嵌套规则执行使用受控调用栈或独立上下文，并共享同一总预算。远端响应回到已关闭操作时丢弃结果，不恢复脚本或写缓存。
 
@@ -37,6 +37,14 @@ Node API 可用不代表脚本安全；node:vm 不是安全隔离机制。worker
 | 日志泄露 | 输出前脱敏头、查询参数、body、脚本绑定与异常 | trace 只返回受控摘要 |
 
 宿主必须显式提供 `deadlineMs`（绝对毫秒截止时间）、`maxRequests`、`maxPages`、`maxResponseBytes`、`maxTotalBytes`、`maxScriptMemoryBytes`、`maxScriptTimeMs`。这些是目标策略字段，没有虚构的现有默认值；缺失或非正有限值时拒绝创建联网执行上下文。适配器配置须短于平台限制，并在部署报告中给出数值。脚本跳过源限流不能跳过这些总预算。
+
+## 不可信书源与数据边界
+
+书源 JSON、规则文本、`mainJs`、`bodyJs`、订阅响应和远端 HTML 都是不可信输入。它们只能访问当前 operation 显式注入的 `RuntimeHost` 能力，不能读取 Node 进程、环境变量、其他用户的 Cookie/变量/缓存、真实文件路径或数据库 client。应用返回浏览器前还必须对正文 HTML、资源地址和调试信息执行呈现层清理。
+
+威胁处理至少覆盖：源 URL 和每次重定向的 SSRF/DNS rebinding、代理/DNS 绕过、脚本和正则资源耗尽、压缩/归档炸弹、跨用户缓存键碰撞、Cookie/Authorization 泄露、HTML 注入、日志和导出泄露。`policy-denied`、`budget-exceeded`、`capability-missing` 与规则解析失败必须区分。
+
+脱敏规则应在 adapter 中集中实现：Cookie、Authorization、密码、token、服务端 URL 查询凭据和私有请求体默认删除或掩码；`rule`、body 和 HTML 只保留受限摘要。任何 fixture、任务诊断、审计记录和 API 错误都不得通过字段名变化绕过该策略。
 
 ## Serverless 状态与调用
 

@@ -32,12 +32,7 @@ JSON 数组中的每一个对象都必须有非空 `bookSourceUrl`。单个 JSON
 核心导入结果使用候选对象承载流程状态：
 
 ```ts
-export interface ImportOrigin {
-  /** 输入分类，例如 json、remote-url、uri 或 javascript。 */
-  kind: string
-  /** 原始文件、URI 或 URL，展示时需要脱敏。 */
-  location?: string
-}
+export type ImportOrigin = SourceOrigin
 
 export interface ImportReplacement {
   /** 命中的导入替换规则身份。 */
@@ -69,7 +64,7 @@ export interface ImportCandidate {
   /** 未经替换的原始文本，供回退和导出保留。 */
   rawText: string
   /** 解析并归一化后的书源对象，校验失败时为空。 */
-  source?: BookSource
+  source?: NormalizedSource
   /** 按顺序记录命中的替换规则及前后差异摘要。 */
   replacements: ImportReplacement[]
   /** 输入、解析、字段、冲突和持久化前诊断。 */
@@ -85,11 +80,21 @@ export interface ImportCandidate {
 
 导入候选的生命周期为 `read -> classify -> fetch/parse -> normalize -> replace -> validate -> compare-local -> await-confirmation -> persist`。每个候选至少保留 `rawText`、规范化对象、来源位置、替换记录、诊断和可写入版本；验证失败或用户拒绝时只能丢弃候选，不得改动本地书源。保存多个候选时使用单次持久化事务，事务失败时不能出现只有部分书源写入的状态。
 
+### 核心导入与 Android API 保存的边界
+
+这里描述的是 package 推荐的导入协议，不应直接推断为 Android Web API 的完整保存语义。核心流程在 `persist` 前等待应用确认，并通过 `SourceRepository` 处理 userId、expectedSourceRevision、检查状态失效和缓存副作用；导入器本身不写数据库。
+
+现有 Android `/saveBookSource` 会对单个 JSON 做名称/URL 的最小校验后直接保存，`/saveBookSources` 会逐项解析并跳过无效成员后直接写入 DAO。兼容 adapter 必须保留这种行为并返回逐项结果，但新 Web 应用应使用预览、确认、CAS 和事务保存。JS source 的大小、读取时限、`openedSourceUrl` 和重命名清理也属于 adapter 入口约束，见 [Legado Web API 适配](../integration/legado-web-api-bridge.md)。
+
 ## 写入语义
 
-最终写入由 `SourceHelp.insertBookSource` 和 `BookSourceDao` 完成，同 URL 的数据库冲突策略是替换。迁移库不应把导入和持久化绑在一起：核心返回 `ImportCandidate[]`，Node/应用层决定是否保存、如何确认更新和是否保留本地名称、分组、启用状态。
+Android 应用的最终写入由 `SourceHelp.insertBookSource` 和 `BookSourceDao` 完成，同 URL 的数据库冲突策略是替换；`SourceHelp` 还可能拦截配置中的域名，并修正越界或重复的 `customOrder`。独立 package 不直接调用 Android helper：新 Web 应用应在应用层执行 `web-safe` 插入策略后调用[书源 Repository](../reference/source-management-and-state.md#6-插入策略与兼容实现事实)，兼容旧 API 时才选择 `android-compatible` 的直接 DAO 语义。两种入口的策略差异必须记录并测试。
 
-比较本地版本时，以原始 `bookSourceUrl` 为身份；Android 使用 lastUpdateTime 参与比较，Web 同时比较内容，不因时间戳相同忽略变化。用户字段覆盖策略必须显式传入；sourceVersion 是独立保存版本。错误区分 `input`、`fetch`、`parse`、`normalize`、`replace`、`conflict`、`storage`。
+迁移库不应把导入和持久化绑在一起：核心返回 `ImportCandidate[]`，Node/应用层决定是否保存、如何确认更新和是否保留本地名称、分组、启用状态。
+
+保存成功后，若规则内容发生变化，必须重置或标记过期的书源检查状态，并使规则相关缓存失效；仅改变用户排序、分组或启用状态时不应误重置检查。删除还要清理变量、cookie 引用和检查记录，书籍/章节/阅读进度按应用策略单独处理。完整的数据写入和删除边界见 [书源保存与状态持久化流程](source-persistence-flow.md)。
+
+比较本地版本时，以原始 `bookSourceUrl` 为身份；Android 使用 lastUpdateTime 参与比较，Web 同时比较内容，不因时间戳相同忽略变化。用户字段覆盖策略必须显式传入；sourceRevision 是独立保存版本。错误区分 `input`、`fetch`、`parse`、`normalize`、`replace`、`conflict`、`storage`。
 
 JSON 数组含一个无 URL 项时，原解析器整组抛错；空数组是零候选。sourceUrls 为 null 或含空白项是错误。JSON 名称缺省允许导入并诊断，JS 名称缺省是配置错误。远程导入 `#requestWithoutUA` 后缀会被剥离并将 UA 设置为字符串 `null`，不改变源身份。URI 由受控读取端口处理，不允许服务端读取任意用户路径。
 

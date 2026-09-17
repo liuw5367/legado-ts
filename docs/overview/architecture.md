@@ -45,7 +45,22 @@
 
 ### 上层应用
 
-上层应用负责书源列表、持久化、搜索与发现进度展示、登录页面、代理路由和编辑器 UI。上层不能自行重新解释规则字段；预览和运行时必须调用同一个核心解析器。书源交互能力通过版本化宿主接口与应用对接，不因属于 Android UI 就从能力清单中删除。
+上层应用负责书源列表、当前用户持久化、搜索与发现进度展示、登录页面、代理路由和编辑器 UI。上层不能自行重新解释规则字段；预览和运行时必须调用同一个核心解析器。书源交互能力通过版本化宿主接口与应用对接，不因属于 Android UI 就从能力清单中删除。
+
+书源管理还需要独立于规则执行的应用服务：
+
+```text
+请求用户/认证
+    -> SourceApplicationService
+       -> SourceRepository       当前源、版本、用户覆盖
+       -> SubscriptionRepository 订阅、基线和关联
+       -> SourceCheckRepository  检测会话和状态
+       -> SecretStore            cookie、token、密码引用
+       -> Cache/JobStore         可重建缓存和异步任务
+    -> source-core package       解析、比较、执行、结构化结果
+```
+
+Repository 是 package 的端口实现，不是规则解析器的内部全局状态。这样 SPA、Next.js SSR、Node function 和受限 Edge adapter 可以共享同一核心；Supabase/RLS 只出现在应用边界，详见 [存储与 Supabase 部署方案](../operations/storage-and-supabase.md)。
 
 ## 关键边界
 
@@ -77,3 +92,5 @@
 “结果加变更”用于领域对象；Cookie、source.putVariable、脚本 cache 和批量回存可能在执行期间即时生效，不能假设整次调用可回滚。它们通过同一受控宿主记录 effects，具体时机见 [状态与副作用](../reference/state-and-effects.md)。
 
 远程导入、订阅刷新和编辑均使用同一 codec；静态规则预览与生产流程使用同一解释器。执行层依赖端口，端口实现可以调用网络和存储，但不依赖 UI。公开类型仅含可序列化数据；DOM/脚本句柄留在调用内部。
+
+书源保存、删除和检测是完整的业务流程，不是 DTO 转换：保存需要用户确认、版本条件写入、规则变化后的检查失效和缓存清理；检测需要固定 source snapshot、阶段依赖、取消及旧结果防覆盖。对应流程见 [书源保存](../workflows/source-persistence-flow.md) 和 [书源检测](../workflows/source-check-flow.md)。

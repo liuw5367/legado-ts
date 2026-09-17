@@ -15,6 +15,8 @@
 | --- | --- | --- | --- |
 | 书源 JSON 对象和数组 | 目标必须兼容 | `BookSourceImport`、`BookSource.kt` | 未实现 runtime，待 fixture |
 | `sourceUrls` 外层展开和远程来源限制 | 目标必须兼容 | `BookSourceImport`、导入流程 | 未实现 runtime，待 fixture |
+| `RuleSub` 自动刷新时间与类型分支 | 目标设计；兼容 adapter 需保留 Android 事实 | `RuleSub.kt`、`RuleUpdate.kt` | `type=0/1/2` 已登记；`type=3` 注释/实现有差异，待决策与 fixture |
+| `RuleSub.silentUpdate` 直接采用与 Web 三方确认 | 目标设计；两种模式必须可区分 | `RuleUpdate.kt`、`SourceHelp.kt`、订阅流程 | Android-compatible 与 web-safe 均未实现，待对照 fixture |
 | JS 源 `config` 和旧版 `source` | 目标必须兼容 | `JsSourceConfigTest` | 未实现 runtime，待 fixture |
 | 默认旧式选择器 | 目标必须兼容 | `AnalyzeByJSoupDomTest`、`AnalyzeByJSoup` | 未实现 runtime，待 fixture |
 | `@CSS:`、`@XPath:`、`@Json:` | 目标必须兼容 | `AnalyzeRule`、规则测试 | 未实现 runtime，待 fixture |
@@ -50,7 +52,7 @@
 
 能力 ID 以 [能力清单的稳定索引](../reference/capability-inventory.md#稳定能力索引) 为准。上表是阅读摘要，不能替代逐字段/逐方法审计。所有 TS 实现和宿主验证当前均为未执行；“目标必须兼容”不等于规格已完整。订阅、状态隔离与部署策略是 Web 目标设计，分别由 SUB、STATE、DEP 案例验证。
 
-补充能力 CAP-ENCODE、CAP-ARCHIVE、CAP-FONT、CAP-CONCURRENCY 已登记原方法，其逐重载完成度及阻塞条件见 19；不因原表缺行而排除。每项记录五个独立维度：evidence（field/source/test）、spec（registered/defined/blocked）、implementation（absent/implemented）、verification（not-run/pass/fail，按宿主）、priority。只有具体案例实际通过才写 pass。
+补充能力 CAP-ENCODE、CAP-ARCHIVE、CAP-FONT、CAP-CONCURRENCY 已登记原方法，其逐重载完成度及阻塞条件见[能力清单](../reference/capability-inventory.md)；不因原表缺行而排除。每项记录五个独立维度：evidence（field/source/test）、spec（registered/defined/blocked）、implementation（absent/implemented）、verification（not-run/pass/fail，按宿主）、priority。只有具体案例实际通过才写 pass。
 
 矩阵中的简称按以下索引解析。建立 fixture 时，除了填写索引键，还必须填写具体源码行或测试用例名称；仅填写类名不能证明某一条行为已经被验证。
 

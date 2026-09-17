@@ -7,14 +7,14 @@
 | 名称 | 含义与比较规则 |
 | --- | --- |
 | `sourceId` | 通过校验的原始 `bookSourceUrl` 字符串；不做 URL 大小写、尾斜杠、query 排序等网络规范化。它是源主键，不保证是可请求地址 |
-| `sourceVersion` | 应用每次保存源时生成的非空、不透明版本；与 `lastUpdateTime` 分离，后者是不可信的源元数据 |
+| `sourceRevision` | 应用每次保存源时生成的非空、不透明版本；与 `lastUpdateTime` 分离，后者是不可信的源元数据 |
 | `semanticVersion` | package 的规则语义版本，参与派生结果缓存键 |
 | `sessionId` | 宿主认证后注入的用户/匿名会话命名空间；不能信任请求体自报身份 |
 | `operationId` | 一次调用的唯一身份；重试 HTTP attempt 不改变它，新调用必定改变 |
 | `requestId` | 服务端请求的日志关联标识；一次请求可包含多个 operation |
 | `bookKey` | `(sessionId, sourceId, bookUrl)`；跨源同 URL 不合并持久化身份 |
 | `chapterKey` | `(bookKey, tocRevision, index)`；目录刷新可改变索引，URL 仅供匹配与兼容脚本查询 |
-| `resourceKey` | 以上相关身份加资源种类、sourceVersion、semanticVersion；用户相关响应默认不跨会话缓存 |
+| `resourceKey` | 以上相关身份加资源种类、sourceRevision、semanticVersion；用户相关响应默认不跨会话缓存 |
 | `writeVersion` | 宿主给一次待保存操作的写入代次，提交时原子比较；不等于缓存有效版本 |
 
 `sourceId` 改变视为新源候选；原源、旧书籍与订阅归属不能静默改名。目录修订变化后旧章节 token 失效。无内容变化的目录刷新可保留 tocRevision，由宿主比较完整规范化目录后决定。原文 hash 用于检测变化，不作为用户身份或权限凭证。
@@ -50,7 +50,7 @@
 
 1. 按稳定 resourceKey 读取缓存，不递增 writeVersion；读取不能使其他正在执行的写入失效。
 2. 缓存未命中且要求保存时，通过 ContentStore.reserve 取得写入 token；宿主原子增加该资源代次。
-3. 网络、规则及分页完成后，比较 sourceVersion、tocRevision、operation 资格和 writeVersion，并在同一原子边界写入正文与元数据。
+3. 网络、规则及分页完成后，比较 sourceRevision、tocRevision、operation 资格和 writeVersion，并在同一原子边界写入正文与元数据。
 4. 新操作已取得更新代次、源已编辑、目录已刷新或 operation 已取消时，旧写入返回 stale/cancelled，不覆盖旧缓存。
 5. 底层存储无法原子写大正文与元数据时，先写不可变内容，再原子发布引用；发布失败留下可回收的未引用内容，不能公布半完成结果。
 

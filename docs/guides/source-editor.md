@@ -56,11 +56,11 @@ export interface SourceEditorSession {
   /** 用户当前编辑的原始文本。 */
   rawText: string
   /** 解析后用于表单和预览的规范化书源。 */
-  source?: BookSource
+  source?: NormalizedSource
   /** 打开时的原文和版本快照。 */
   baseText: string
   /** 打开时的持久化版本，用于保存时的冲突比较。 */
-  baseVersion?: string
+  baseRevision?: string
   /** 当前字段、语法和能力诊断。 */
   diagnostics: Array<EditorDiagnostic>
   /** 是否存在尚未保存的修改。 */
@@ -92,7 +92,7 @@ export interface SourcePosition {
 }
 ```
 
-状态分成正交维度：load=closed/loading/ready，validity=valid/invalid，preview=idle/running/failed，save=idle/saving/conflict/failed。dirty 仅由 rawText 与 baseText 的差异决定，预览本身不改变 dirty。解析失败保留原文；保存比较 baseVersion，冲突由用户选择重载、覆盖或导出。切换、关闭和离开时检查 dirty，未经确认不丢弃修改。
+状态分成正交维度：load=closed/loading/ready，validity=valid/invalid，preview=idle/running/failed，save=idle/saving/conflict/failed。dirty 仅由 rawText 与 baseText 的差异决定，预览本身不改变 dirty。解析失败保留原文；保存比较 baseRevision，冲突由用户选择重载、覆盖或导出。切换、关闭和离开时检查 dirty，未经确认不丢弃修改。
 
 导入、编辑、诊断、预览、保存和导出的数据流为：
 
@@ -108,7 +108,9 @@ rawText
   -> 用户确认后写入或导出
 ```
 
-未编辑导出原文；编辑后保留规则对象/字符串形态、未知值及完整 mainJs，允许 JSON 空白和 key 顺序变化。不能承诺编辑后字节不变。保存输入包含编辑会话身份、baseVersion、候选原文和覆盖选择，返回新版本或结构化冲突；编辑会话 sessionId 与宿主认证会话不是同一个身份，不可用于授权。
+未编辑导出原文；编辑后保留规则对象/字符串形态、未知值及完整 mainJs，允许 JSON 空白和 key 顺序变化。不能承诺编辑后字节不变。保存输入包含编辑会话身份、baseRevision、候选原文和覆盖选择，返回新版本或结构化冲突；编辑会话 sessionId 与宿主认证会话不是同一个身份，不可用于授权。
+
+编辑器保存不能直接调用数据库或把 Android API 当作核心依赖。它应把会话转换为 `SaveSourceInput`，由应用 service 重新读取当前用户快照、校验 `baseRevision`、计算规则与用户字段变化，再调用 `SourceRepository` 原子提交；规则变化后的检查失效和缓存清理遵循[书源持久化流程](../workflows/source-persistence-flow.md)。兼容 Android API 的保存由 adapter 单独映射，见[API 适配](../integration/legado-web-api-bridge.md)。
 
 ## 目标能力
 

@@ -2,7 +2,7 @@
 
 目标是完整移植 `BookSource` 的可观察行为。优先级表示实施顺序，不表示放弃。若某项收益低且显著增加架构成本，应先给出使用场景、原实现证据、替代方案和兼容损失，再由用户审核是否舍弃。未经审核的能力保留在清单中，未实现时必须返回能力状态和可识别的错误。
 
-本清单以 BookSource、规则实体、WebBook、AnalyzeRule/AnalyzeUrl、JsSourceBook 及其调用者为证据入口。字段登记不等于逐调用点验证；兼容结论以 [矩阵](../quality/compatibility-matrix.md) 和实际案例为准。RssSource 是另一个实体体系，本轮不纳入，不能与下载多个 BookSource 的书源订阅混淆。
+本清单以 BookSource、规则实体、WebBook、AnalyzeRule/AnalyzeUrl、JsSourceBook 及其调用者为证据入口。字段登记不等于逐调用点验证；兼容结论以 [矩阵](../quality/compatibility-matrix.md) 和实际案例为准。下载多个 `BookSource` 的订阅属于书源导入范围；`RssSource` 与 `ReplaceRule` 是另一个实体体系，当前仅登记订阅 `type` 分支和兼容边界，独立 CRUD 是否纳入 package 必须单独审核，不能静默视为支持或放弃。
 
 | 能力组 | 需要形成的行为规格 | 当前文档位置 | 优先级与待核对内容 |
 | --- | --- | --- | --- |
@@ -21,6 +21,8 @@
 | 浏览器行为 | WebView 请求、`@webjs:`、资源嗅探和页面脚本 | [请求](url-request-rules.md)、[宿主](runtime-host-interfaces.md) | 后续宿主能力；不能把普通 HTTP 当成等价实现 |
 | 书源交互与事件 | `eventListener`、`customButton`、正文回调和宿主 UI 动作 | [模型](source-schema.md) | 后续规格；需核对 `SourceCallBack` 和调用方事件协议 |
 | 书源编辑与诊断 | 字段编辑、未知字段保留、规则预览、保存冲突、导入导出 | [编辑](../guides/source-editor.md) | 优先；所有能力字段至少可见、可保留、可诊断 |
+| 书源校验与健康状态 | 域名、搜索、发现、详情、目录、正文、会话、版本和结果写回 | [校验流程](../workflows/source-check-flow.md)、[校验状态](source-check-state.md) | 优先；不能用一次搜索成功替代全流程校验 |
+| 用户持久化与状态清理 | 用户归属、版本、源变量、Cookie、缓存、校验状态和删除副作用 | [管理状态](source-management-and-state.md)、[持久化](../workflows/source-persistence-flow.md) | 优先；存储由应用适配器提供 |
 
 ## 处理规则
 
@@ -45,8 +47,10 @@
 | CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008–010 | 函数与返回模型有证据；引擎适配未验证 |
 | CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取有入口，段评写入仅字段证据 |
 | CAP-EDITOR | 16 | EDIT | Web 目标设计与现有 UI 证据分开 |
-| CAP-STATE / CAP-SUBSCRIPTION | 27、28 | STATE、SUB | Web 目标设计 |
-| CAP-HOST / CAP-DEPLOY | 11、12、29 | HOST、DEP | 目标契约，尚未实现或部署 |
+| CAP-STATE / CAP-SUBSCRIPTION | [状态与副作用](state-and-effects.md)、[订阅流程](../workflows/source-subscriptions.md) | STATE、SUB | Web 目标设计 |
+| CAP-ARTIFACT | [书源相关实体边界](artifact-model.md) | SUB、MODEL | BookSource 已纳入；RssSource/ReplaceRule 需独立 adapter 验收 |
+| CAP-HOST / CAP-DEPLOY | [宿主接口](runtime-host-interfaces.md)、[运行边界与部署](../operations/runtime-security-and-deployment.md) | HOST、DEP | 目标契约，尚未实现或部署 |
+| CAP-JOB | [任务执行与 Serverless 边界](../operations/job-and-execution.md) | JOB、DEP | 目标契约，尚未实现执行器 |
 | CAP-ENCODE / CAP-ARCHIVE / CAP-FONT / CAP-CONCURRENCY | 下表及 11、20 | EXT | 已登记实际宿主方法，细分语义成熟度见下表 |
 
 ## 宿主方法补充盘点
@@ -71,7 +75,7 @@ SourceLock.singleFlight 让同批等待者在一次成功执行后跳过 action�
 
 ## 尚不能进入完整实现验收的项目
 
-- JS 引擎同步桥接、Rhino 互操作及部署：阶段 B 负责人按 29 的专项案例验证；未通过前不承诺完整 JS 兼容。
+- JS 引擎同步桥接、Rhino 互操作及部署：阶段 B 负责人按[运行边界与部署验收](../operations/runtime-security-and-deployment.md)的专项案例验证；未通过前不承诺完整 JS 兼容。
 - 编码/加密工厂返回对象、字体与归档逐重载：对应 B/D 负责人核对实现和样本后补全原子案例；当前登记不等于规格完成。
 - exploreScreen、RowUi 动态动作细节、段评写入：对应 D 负责人追踪调用点；无入口则保持字段保留，不擅自新增请求语义。
 - 设备与阅读器绑定的替代行为：应用需求尚未定义，保留 capability-missing；任何舍弃须用户审核。

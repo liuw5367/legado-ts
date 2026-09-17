@@ -129,6 +129,30 @@
 | `HOST-004` | Edge/Node | 同一公开入口在不同宿主的能力报告；缺失能力不能伪造成功 |
 | `API-001` | package | 从导入候选确认到搜索、详情、目录和正文的公开入口组合流程 |
 | `API-002` | package | 编辑保存后规则版本变更、旧请求迟到、缓存失效和用户字段保护 |
+| `API-003` | adapter | `/saveBookSources` 的逐项无效跳过、accepted/skipped 结果和兼容直接保存语义 |
+| `API-004` | adapter | JS source 的 `text/plain`、Content-Length/Transfer-Encoding、1 MiB/30 秒限制、body 前 token 校验、trim、`openedSourceUrl` 和重命名清理 |
+| `API-005` | adapter | 已保存书源前置条件、用户鉴权、脱敏响应和 source check session/token |
+| `API-006` | adapter | `/getBookSourcesForManagement` 的 `sources`/`states` 同快照、`urls` 去重筛选和跨用户隔离 |
+| `API-007` | adapter | `searchBook` 首帧 `{key}`、`bookSourceDebug` 首帧 `{tag,key}`、唯一首帧、10 秒超时和连接清理 |
+| `API-008` | adapter | `web-safe` 与 `android-compatible` 插入策略的域名拦截、排序修正和直接 DAO 差异 |
+| `SUB-001` | 订阅 | 多 `BookSource` 订阅、RuleSub 时间/类型分支、三方差异、静默模式、失败保留和 subscriptionRevision 并发控制 |
+| `MODEL-001` | 模型 | 源配置与用户状态分离、远程管理字段覆盖、原文/未知字段回写和改名冲突 |
+| `MODEL-002` | 模型 | BookSource、RssSource、ReplaceRule 的类型边界和未知 artifact 诊断 |
+| `REQUEST-001` | 运行时 | RequestPlan 的执行提示、bytes、字符集和宿主物化边界 |
+| `JOB-001` | 任务 | 幂等创建、租约竞争、恢复、取消、unknown 和旧源版本保护 |
+| `RESOURCE-001` | 资源 | ContentStore/ResourceStore、MIME、bytes、文件链接、大小限制和清理 |
+| `SECURITY-003` | 安全 | Cookie、变量、任务和资源的跨用户隔离及不存在性保护 |
+| `CHECK-001` | 书源检测 | 配置开关、阶段依赖、空结果/规则缺失/网络错误/跳过状态和阶段统计 |
+| `CHECK-002` | 书源检测 | 单源超时、批量部分失败、取消信号和 session 状态转换 |
+| `CHECK-003` | 书源检测 | sourceRevision/checkRevision 条件回写，旧检测结果和删除后结果不能覆盖新状态 |
+| `CHECK-004` | 书源检测 | 文件源、JS/登录能力缺失和 Edge capability error 的明确结果 |
+| `REPO-001` | 存储 | 两个用户相同 sourceId 的读写隔离、source/check/subscription 关联隔离 |
+| `REPO-002` | 存储 | expectedSourceRevision CAS、规则变更重置检查、纯用户字段变更不误重置 |
+| `REPO-003` | 存储 | 批量导入原子提交、事务失败回滚和旧 baseline 保留 |
+| `REPO-004` | 存储 | 删除后的变量/cookie 引用/检查/缓存清理以及书架和阅读进度保留策略 |
+| `REPO-005` | 存储 | SourceHelp 插入策略与 Repository 保存边界分离；拒绝项无写入，兼容直接保存的差异可审计 |
+| `SEC-001` | 安全 | RLS 与服务端授权双重校验；SPA 无 service key，越权读写和旧任务回写均拒绝 |
+| `SEC-002` | 安全 | 导入、错误、调试、导出和数据库日志中的 cookie/token/password/header 脱敏 |
 | `EDIT-001` | 编辑器 | JSON/JS 导入、规范化、字段诊断、未知字段和完整 `mainJs` 保留 |
 | `EDIT-002` | 编辑器 | JSON/JS 切换、未保存保护、dirty 状态和原文回退 |
 | `EDIT-003` | 编辑器 | fake 预览请求、逐步 trace、脱敏 header、capability error 和资源清理 |
@@ -254,6 +278,23 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | JS-003/late-save | 批量上下文关闭后回调 cacheContent | 拒绝写入，原缓存不变 |
 | EDIT-002/preview-clean | rawText=baseText，预览成功或失败 | dirty 仍 false；诊断/预览状态可改变 |
 | EDIT-004/conflict | 编辑基于 v1，外部先保存 v2，再提交 v1 | conflict，保留草稿及 v2，不静默覆盖 |
+| CHECK-001/config | `domain=false, content=false`，搜索成功但无结果，详情规则缺失 | 关闭阶段无请求；搜索为空与规则缺失分别记录；阶段为 `SKIPPED`/diagnostic |
+| CHECK-002/partial | A 搜索成功，B 超时，用户在 content 阶段发送 abort | A 结果保留，B 为 timeout，任务为 `CANCELLED`；不产生虚假 `PASSED` |
+| CHECK-003/stale | 检测固定 v1，执行中保存源 v2 后检测完成 | 回写被拒绝或标为 stale；v2 的 NEEDS_CHECK/STALE 不被 v1 覆盖 |
+| CHECK-004/file-source | 文件型源无目录网络入口，登录源无凭据 | category/content 为 `SKIPPED` 或 `UNSUPPORTED`；不把能力缺失报为规则失败 |
+| API-003/batch-skip | 数组含有效 A、缺 URL B、规则类型错误 C | 兼容 adapter 保存 A，明确返回 B/C 的 skipped 诊断；不声称整批均成功 |
+| API-004/js-limit | `text/plain` 恰好上限、超过上限、错误 Content-Length、Transfer-Encoding、读取超过 30 秒 | 上限内继续解析；传输约束、大小或超时失败时拒绝；不写入半截脚本 |
+| API-005/precondition | 未保存 sourceId 调用搜索/调试；旧 check token 调用 stop | 返回 SOURCE_NOT_FOUND 或 session unauthorized；不产生缓存和任务副作用 |
+| API-006/management-snapshot | 同一事务中源 A 的 revision 与状态同时读取；`urls=[A,A,B]`，B 属于其他用户 | 返回去重后的授权源及匹配状态；不泄露 B；源和状态不能来自不同提交 |
+| API-007/ws-first-frame | search 首帧 `{key:"x"}`；debug 首帧 `{tag:"A",key:"x"}`；空帧、第二帧和超过 10 秒 | search 不读取首帧 source URL；debug 按已保存 tag 查找；非法/迟到/重复帧关闭并释放任务 |
+| API-008/insert-policy | `customOrder` 越界/重复、配置拦截域名、旧 API 直接保存同一候选 | web-safe 拒绝或修正且无拒绝写入；android-compatible 保留直接 DAO 结果；两种结果带模式记录 |
+| REPO-001/isolation | u1/u2 保存相同 sourceId=A，分别读、改、删 | 只能看到自己的 A；一方删除不影响另一方及其检查状态 |
+| REPO-002/cas | 两次编辑都基于 v1；先提交 v2，后提交 v1 | 后者返回 revision conflict；规则变更重置检查，纯分组变更不重置 |
+| REPO-003/atomic | 三个候选保存到第 2 个时事务失败 | A/B/C 均不成为部分新版本；旧源、旧 baseline 和旧状态保持一致 |
+| REPO-004/delete | 删除 A，存在变量、cookie 引用、check state、缓存和书架书 | A 的派生状态清理；默认保留书架/进度；秘密不可再读 |
+| REPO-005/source-help-policy | A 命中域名拦截，B 的 `customOrder` 越界，C 与旧 API 相同 | web-safe 的 A 不写入、B 按策略修正；android-compatible 仅执行 Controller 最小校验和直接 DAO 语义；策略差异可追踪 |
+| SEC-001/rls | u1 请求带 u2 sourceId，或伪造 body.userId=u2 | DB/app 至少一层拒绝；不返回存在性差异；旧任务也不能越权写入 |
+| SEC-002/redaction | 错误 URL/header/body 含 cookie、token、password | 响应、日志、fixture、导出均不含秘密明文，仅保留脱敏摘要 |
 | STATE-001/read-version | 缓存命中且已有在途写入 token=t1 | 读取不改变 t1 代次 |
 | STATE-002/stale-write | 同资源先 reserve t1，再 reserve t2；t2 先写成功 | t1 写入拒绝，内容仍为 t2 |
 | STATE-003/session | s1 写 Cookie X=1，s2 请求相同源 | s2 不含 X；s1 下次调用仍能读 X |
@@ -268,8 +309,22 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | EXT-002/lock-name | name="" 或 257 个字符 | 参数错误，不执行 action |
 | EXT-003/archive-path | 归档项名为 ../outside | policy-denied，不写命名空间外文件 |
 | EXT-004/encoding | bytes [0x41] UTF-8 解码；abc Base64 编码/解码 | A；YWJj/abc，二进制与字符串返回型保持区别 |
+| MODEL-001/user-state | 远程更新规则并携带 enabled=false、customOrder=9 | 源配置更新，用户状态保持本地值，并记录远程管理字段被忽略 |
+| MODEL-002/export-precedence | rawText 未改动、显式 null、未知字段对象和规则字符串 | 原文优先逐字导出；编辑后未知字段、null 和规则形态仍可重建 |
+| MODEL-003/rename-conflict | 当前 sourceId=A 改名为 B，B 已存在 | 返回目标冲突，不删除 A、不覆盖 B；明确改名所需事务 |
+| MODEL-004/artifact-type | 订阅同时返回 BookSource、RssSource、ReplaceRule 和未知 type | 三类分别解析；未知类型保留原文并返回 UNSUPPORTED_ARTIFACT_TYPE |
+| REQUEST-001/plan-hints | URL options 同时包含 bodyJs、dnsIp、proxy、webView、serverID | RequestPlan 保留执行提示；宿主不把代理/DNS/WebView 静默丢失或改写成普通 Header |
+| REQUEST-002/body-bytes | 非 UTF-8 body、bytes 响应、Content-Type 和 charset 不一致 | 参数与响应分别按契约处理；原始 bytes 保留，不能先固定 UTF-8 |
+| JOB-001/idempotency | 相同 userId/idempotencyKey 重复 enqueue | 只创建一个任务，重复请求返回同一任务身份 |
+| JOB-002/lease-race | 两个 worker 同时 claim；租约过期后再次 claim | 只有一个 worker 获得当前租约；过期任务可恢复且旧 worker 不能 complete |
+| JOB-003/unknown | 外部请求已发出，worker 在响应前崩溃 | 任务进入 unknown 或人工确认路径，不自动重复不可证明幂等的写入 |
+| JOB-004/old-revision | 任务固定 sourceRevision=v1，执行期间源变为 v2 | 任务不写入 v1 结果，状态为 stale/unknown，v2 检测状态保持有效 |
+| CHECK-005/stage-persistence | 检测各阶段分别产生通过、跳过、失败和能力缺失 | SourceCheckState 的阶段结果可恢复；整体状态不把 SKIPPED/UNSUPPORTED 当 PASSED |
+| RESOURCE-001/binary | 图片解密返回 bytes，文件返回 file-links，正文返回 text | ContentStore 与 ResourceStore 分工正确；MIME、bytes、文件链接和正文类型不混淆 |
+| RESOURCE-002/size | 二进制恰好上限、超过上限、解密后超过上限 | 超限资源不写缓存；流和脚本句柄释放，返回 resource/budget 错误 |
+| SECURITY-003/cross-user-state | u1 的 Cookie、变量、任务和资源 key 被 u2 请求复用 | u2 不可读取或写入 u1 状态；不存在性不能通过错误差异泄露 |
 
-SUB-001–008 在 [订阅文档](../workflows/source-subscriptions.md#验收)，DEP-001–007 在 [部署文档](../operations/runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。
+SUB-001–018 在 [订阅文档](../workflows/source-subscriptions.md#验收)，DEP-001–007 在 [部署文档](../operations/runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。
 
 ## 覆盖完成的判定
 

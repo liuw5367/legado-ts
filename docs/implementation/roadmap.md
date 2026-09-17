@@ -7,17 +7,18 @@
 ```text
 packages/source-core/
   src/codec/           原文、schema、导入导出和诊断
+  src/artifacts/       BookSource 及订阅 artifact 边界
   src/rules/           规则切分、模式识别、求值和变量
   src/request/         URL 展开、请求描述和响应归一化
   src/flows/           发现、搜索、详情、目录和正文
   src/javascript/      JS 源配置、调用与返回值归一化
   src/public/          稳定的 package 入口和错误类型
-packages/source-node/  Node 宿主端口实现
+packages/source-node/  Node 宿主端口和 Worker 执行实现
 apps/source-harness/   开发与验收入口，不承担规则语义
 fixtures/             脱敏输入和预期结果
 ```
 
-依赖方向为 `public -> flows -> rules/request/codec -> host ports`。宿主实现只实现端口，不反向调用应用内部状态。`apps/source-harness` 从公开入口调用 package，用来证明它无需 Android UI 或数据库也能工作。Next.js、React Router 或 SPA 服务端复用同一 package API；实现前不要为每个框架复制规则层。
+依赖方向为 `public -> flows -> rules/request/codec -> host ports`，应用 service 通过 Repository/JobStore 与 package 解耦。宿主实现只实现端口，不反向调用应用内部状态。`apps/source-harness` 从公开入口调用 package，用来证明它无需 Android UI 或数据库也能工作。Next.js、React Router 或 SPA 服务端复用同一 package API；实现前不要为每个框架复制规则层。
 
 ## 实施阶段
 
@@ -27,11 +28,13 @@ fixtures/             脱敏输入和预期结果
 | B | 规则、请求、变量、基础 JS 桥接与 Node 参考宿主 | [规则与请求](phase-b-rules-request.md) | 固定规则求值、JS 配置抽取、同步网络外观、取消和清理；可独立预览 |
 | C | 声明式与基础 JS 的发现、搜索、详情、目录、正文；最小部署验收 | [主流程](phase-c-workflows.md) | 公开入口一书一章、本地 HTTP 及目标 Node 部署验收 |
 | D | 批量、媒体、段评、事件、复杂认证和浏览器等扩展 | [扩展能力](phase-d-extended-capabilities.md) | 每项单独验收，不影响 C 已有能力 |
-| E | SPA 服务端接口、框架接入、部署验证与维护 | [接入和发布](phase-e-integration.md) | 应用只调用 package，Node 端到端流程与目标宿主验证通过 |
+| E-1 | 书源 Repository、用户隔离、订阅刷新、书源检测和兼容保存边界 | [持久化与检测](phase-e-storage-and-check.md) | 内存/Postgres 保存、CAS、RLS、检测状态、任务租约和旧结果防覆盖通过 |
+| E-2 | SPA 服务端接口、框架接入、部署验证与维护 | [接入和发布](phase-e-integration.md) | 应用只调用 package，Node 端到端流程与目标宿主验证通过 |
 
-阶段 A 和 B 已能独立服务书源编辑、诊断与规则预览；阶段 C 可用于普通书源的完整阅读流程。阶段 D 按能力逐项增加，已实现能力持续可用。阶段 E 只增加服务端入口和维护机制，不改变规则结果。每个阶段完成后都更新 [兼容性矩阵](../quality/compatibility-matrix.md)，记录已实现与未实现能力，而不是以整个 package 的单一“完成”状态代替。
+阶段 A 和 B 已能独立服务书源编辑、诊断与规则预览；阶段 C 可用于普通书源的完整阅读流程。阶段 D 按能力逐项增加，已实现能力持续可用。阶段 E-1 增加用户数据、订阅和检测的应用服务边界，E-2 再接入具体 Web 框架；两者都不改变规则结果。每个阶段完成后都更新 [兼容性矩阵](../quality/compatibility-matrix.md)，记录已实现与未实现能力，而不是以整个 package 的单一“完成”状态代替细项验证。
+阶段 A 和 B 已能独立服务书源编辑、诊断与规则预览；阶段 C 可用于普通书源的完整阅读流程，但完整旧式 JS 兼容必须先通过同步桥接门槛。阶段 D 按能力逐项增加，已实现能力持续可用。阶段 E-1 增加用户数据、订阅、检测和可恢复任务的应用服务边界，E-2 再接入具体 Web 框架；两者都不改变规则结果。每个阶段完成后都更新 [兼容性矩阵](../quality/compatibility-matrix.md)，记录已实现与未实现能力，而不是以整个 package 的单一“完成”状态代替细项验证。
 
-基础 JS 与真实 Node 网络不能全部留到 D：声明式规则的 URL、插值和 loginCheckJs 已依赖它们。B 的无 JS 子集可先发布预览能力，但 B 的完整验收必须通过同步桥接专项测试。C 的部署入口是验收 harness；E 才增加面向应用的完整适配和维护，不把首次部署检查推迟到 E。
+基础 JS 与真实 Node 网络不能全部留到 D：声明式规则的 URL、插值和 loginCheckJs 已依赖它们。B 的无 JS 子集可先发布预览能力，但 B 的完整验收必须通过同步桥接专项测试。C 的部署入口是验收 harness；E-1 先增加面向用户数据的保存/检测服务，E-2 再增加面向应用的框架适配和维护，不把首次部署检查推迟到最后。
 
 阶段负责人遇到 [能力阻塞](../reference/capability-inventory.md#尚不能进入完整实现验收的项目) 时，只暂停依赖该能力的验收。是否新增服务或舍弃能力由用户决策；不能以阶段编号完成替代细项验证。版本、发布及来源记录以 [维护文档](../operations/package-maintenance.md) 为准。
 

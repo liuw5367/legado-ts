@@ -20,6 +20,8 @@ export interface HttpRequest {
   timeoutMs?: number
   /** 是否跟随重定向。未提供时使用核心层定义的默认值。 */
   followRedirects?: boolean
+  /** 来自 RequestPlan 的 WebView、DNS、代理、节点和响应执行提示。 */
+  execution?: RequestExecutionHints
   /** 取消当前请求、规则执行和后续分页的信号。 */
   signal?: AbortSignal
 }
@@ -50,7 +52,7 @@ export interface CharsetCodec {
 }
 ```
 
-`HttpClient` 接收的是已经展开的 `HttpRequest`。页码、关键字、URL 内嵌 JavaScript、请求体编码、Cookie 合并和相对 URL 解析属于核心层。代理、DNS 覆盖、WebView 和真实浏览器行为属于宿主能力，不能通过偷偷修改 `url` 或 `headers` 来伪装成普通 HTTP。
+`HttpClient` 接收的是已经展开的 `HttpRequest`。页码、关键字、URL 内嵌 JavaScript、请求体编码、Cookie 合并和相对 URL 解析属于核心层。代理、DNS 覆盖、WebView 和真实浏览器行为属于宿主能力，通过[运行时统一契约](runtime-contracts.md)的 `RequestExecutionHints` 显式传递，不能通过偷偷修改 `url` 或 `headers` 来伪装成普通 HTTP。
 
 ## 解析器端口
 
@@ -152,6 +154,26 @@ export interface ContentStore {
   /** 只在 token 仍为当前版本时写正文和章节元数据，返回是否实际写入。 */
   write(input: ContentWriteInput): Promise<boolean>
   /** 为要求保存的新操作原子预留写入代次；缓存命中时不调用。 */
+  reserve(identity: ContentIdentity, operationId: string): Promise<ContentSaveToken>
+}
+
+export interface ResourceValue {
+  /** 资源最终 URL；可与二进制 bytes 同时存在。 */
+  url?: string
+  /** MIME 类型；未知时为空，不根据 URL 后缀强行猜测。 */
+  mimeType?: string
+  /** 资源编码；二进制资源通常为空。 */
+  charset?: string
+  /** 解密或下载后的原始字节。 */
+  bytes: Uint8Array
+}
+
+export interface ResourceStore {
+  /** 按资源身份读取图片、音频、视频或文件；不递增写入代次。 */
+  read(identity: ContentIdentity): Promise<ResourceValue | undefined>
+  /** 只有 token 仍有效时保存资源和关联元数据。 */
+  write(input: { token: ContentSaveToken; resource: ResourceValue }): Promise<boolean>
+  /** 为资源写入预留代次，语义与 ContentStore 一致。 */
   reserve(identity: ContentIdentity, operationId: string): Promise<ContentSaveToken>
 }
 
@@ -277,7 +299,7 @@ export interface JavaApi {
 
 本节列出的 `JavaApi`、`JsCacheApi`、`JsCookieApi` 和 `SourceApi` 是先实施的核心 allowlist。`JsExtensions` 中未列出的 Android UI、阅读器交互或其他平台专用方法仍属于能力盘点对象；移植时逐项判断它是否承担书源处理行为。需要支持的行为通过版本化接口、明确 capability 和 conformance fixture 增加；建议放弃的行为须经用户审核。
 
-脚本 scope 按调用隔离，不把用户状态放在模块单例。没有 JS 能力时，仅不含任何脚本依赖的声明式操作可运行；含插值、URL JS、loginCheckJs 或 mainJs 都必须报告 javascript 能力缺失。详见 29 的执行边界。
+脚本 scope 按调用隔离，不把用户状态放在模块单例。没有 JS 能力时，仅不含任何脚本依赖的声明式操作可运行；含插值、URL JS、loginCheckJs 或 mainJs 都必须报告 javascript 能力缺失。详见[运行边界与部署验收](../operations/runtime-security-and-deployment.md)。
 
 ## RuntimeHost
 
@@ -305,6 +327,8 @@ export interface RuntimeHost {
   cache: CacheStore
   /** 正文内容、章节元数据和版本 token 的存储。 */
   content: ContentStore
+  /** 图片、音频、视频和文件等二进制资源。 */
+  resources: ResourceStore
   /** 可选的书源级限流器。 */
   rateLimiter?: RateLimiter
   /** 可选的结构化日志器。 */

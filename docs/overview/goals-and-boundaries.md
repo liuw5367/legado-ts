@@ -44,11 +44,14 @@
 
 @legado/source-editor  (可选上层包)
   schema form / rule diagnostics / preview / import-export
+
+@legado/source-artifacts (可选扩展包)
+  RssSource / ReplaceRule / subscription artifact adapters
 ```
 
 第一阶段可放在一个 TypeScript package 中，以 `core` 和 `adapters` 目录隔离。只有规则语义和接口稳定后再拆包。
 
-上述包名是职责视图，不要求一次发布四个 npm 包。框架适配器只转换请求和结果；SPA、Next.js、React Router 不各自拥有规则层。Node 参考宿主先验证，Edge 的适用能力按 [运行边界](../operations/runtime-security-and-deployment.md) 判断。完整 JS 兼容不能用“TypeScript 可构建”替代实际执行证明。
+上述包名是职责视图，不要求一次发布全部 npm 包。框架适配器只转换请求和结果；SPA、Next.js、React Router 不各自拥有规则层。Node 参考宿主先验证，Edge 的适用能力按 [运行边界](../operations/runtime-security-and-deployment.md) 判断。完整 JS 兼容不能用“TypeScript 可构建”替代实际执行证明。RSS 与替换规则是否合并为一个扩展包，取决于实体实现和发布策略，但不得并入 `BookSource` 的错误模型。
 
 完整能力的优先级和待审核项目见 [书源能力清单与审核决策](../reference/capability-inventory.md)。公开入口与上层调用顺序见 [独立 package 的调用契约](../guides/package-usage.md)。应用层文档只描述书源选择、调用、结果保存和错误处理；书架、阅读器与阅读进度以后单独设计。
 

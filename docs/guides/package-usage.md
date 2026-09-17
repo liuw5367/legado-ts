@@ -15,16 +15,17 @@
 | `getBookInfo` | 书源、已有书籍快照 | 更新后的书籍结果与变更描述 | package 计算；应用提交 |
 | `getChapterList` | 书源、书籍快照、刷新选项 | 章节列表与目录元数据变更 | package 计算；应用提交 |
 | `getContent` | 书源、书籍、章节、下一章 URL | 正文与可保存的元数据变更 | package 计算；宿主保存 |
+| `checkSources` | 用户选择的书源快照、校验配置和关键字 | 分源校验状态、进度、诊断和可提交状态变更 | package 执行；应用保存结果 |
 
 上述能力复用 [模型](../reference/source-schema.md)、[宿主](../reference/runtime-host-interfaces.md) 和 [状态契约](../reference/state-and-effects.md)。编辑预览调用同一入口，使用临时会话，不提交用户状态。
 
 ## 公共调用协议
 
-运行时工厂持有不可变 parser 配置；每个异步入口接收 `CallContext` 与操作输入，返回 `OperationResult<T>`，致命失败抛出带稳定 code/stage 的 SourceRuntimeError。CallContext 包含 requestId、operationId、sessionId、不可变 SourceSnapshot（sourceId/sourceVersion/normalized）、signal、预算及当前宿主视图；sessionId 由宿主认证注入。
+运行时工厂持有不可变 parser 配置；每个异步入口接收 `CallContext` 与操作输入，返回 `OperationResult<T>`，致命失败抛出带稳定 code/stage 的 SourceRuntimeError。CallContext 包含 requestId、operationId、sessionId、不可变 SourceSnapshot（sourceId/sourceRevision/source/userState）、signal、预算及当前宿主视图；sessionId 由宿主认证注入。规范名称见[运行时统一契约](../reference/runtime-contracts.md)。
 
-OperationResult 包含 value（各入口下表结果）、diagnostics、effects（27 定义的已发生副作用）、changes（尚未提交的领域变更）、operationId、sourceVersion。成功空列表与失败不同；多源/批量返回分项状态，致命取消错误仍携带已经提交的 effects，不伪造全批回滚。
+OperationResult 包含 value（各入口下表结果）、diagnostics、effects（见[状态与副作用](../reference/state-and-effects.md)）、changes（尚未提交的领域变更）、operationId、sourceRevision。成功空列表与失败不同；多源/批量返回分项状态，致命取消错误仍携带已经提交的 effects，不伪造全批回滚。
 
-changes 每项包含资源身份、baseVersion、允许更新字段及目标值；应用 compare-and-set 提交。DOM、Set、脚本句柄、AbortSignal、宿主对象不得进入 HTTP DTO。DTO 使用普通对象、数组和字符串；bytes 由独立二进制响应返回，不能 JSON 字符串化为正文。
+changes 每项包含资源身份、baseRevision、允许更新字段及目标值；应用按 expectedSourceRevision compare-and-set 提交。DOM、Set、脚本句柄、AbortSignal、宿主对象不得进入 HTTP DTO。DTO 使用普通对象、数组和字符串；bytes 由独立二进制响应返回，不能 JSON 字符串化为正文。
 
 | 入口补充 | 输入 | 输出与边界 |
 | --- | --- | --- |
@@ -32,7 +33,7 @@ changes 每项包含资源身份、baseVersion、允许更新字段及目标值�
 | evaluateRule | 规则、输出模式、脱敏输入与规则上下文 | typed value 与 trace；只在提供宿主能力时执行 JS |
 | planRequest | URL 规则、page/key/baseUrl 与会话视图 | 请求计划与诊断；需要 JS/状态时有相应副作用，不宣称纯函数 |
 | previewSource | 候选源、操作名、固定响应或显式网络选项 | 相同领域结果及逐步 trace；临时命名空间 |
-| refreshSubscription | 订阅 revision/baseline、本地快照 | 28 定义的 diff 与提交计划，不调度、不保存 |
+| refreshSubscription | 订阅 revision/baseline、本地快照 | [订阅流程](../workflows/source-subscriptions.md)定义的 diff 与提交计划，不调度、不保存 |
 | getContentBatch | 源、Book、带 tocRevision 的章节列表 | 每章 saved/stale/failed/unfilled、效果记录及剩余章节；不重复保存成功章 |
 | getReviewSummary | Book、Chapter | ReviewParagraph[]，空摘要合法 |
 | getReviewDetail | Book、Chapter、paraIndex/paraData/page | ReviewPage，保留下一页语义 |
@@ -71,8 +72,12 @@ changes 每项包含资源身份、baseVersion、允许更新字段及目标值�
 3. 用户打开一本书。应用保留书源身份和 `bookUrl`，调用详情入口；需要章节时调用目录入口，并在成功后提交目录变更。
 4. 用户打开章节。应用先检查与书源版本和章节身份匹配的正文缓存；未命中时调用正文入口。正文写入通过版本 token 检查，旧请求不得覆盖新内容。
 5. 用户编辑书源。编辑器通过同一个导入 codec、诊断器和预览入口工作；保存后应用递增版本并失效相关分类、搜索、目录和正文缓存。
+6. 用户或系统检测书源。应用读取当前用户的不可变快照，调用 `checkSources`，把阶段进度和诊断写入 `SourceCheckRepository`；检测不写入书籍/章节/正文，旧版本结果不得回写。
+7. 订阅到期时，应用调度刷新任务；package 解析多个候选并生成三方差异，应用确认或按安全的静默策略提交，失败保留旧 baseline。
 
 这条链路只描述书源相关操作。书架、阅读器展示和阅读进度属于后续应用设计，但应用需要保存足够的书源、书籍和章节身份，才能再次调用详情、目录和正文入口。
+
+书源管理本身也是应用的一条调用链：应用先以当前用户读取源快照，再调用 package 生成导入候选、差异或校验计划；只有用户确认且版本比较成功后，Repository 才提交。package 不接收 Supabase client，也不直接写入用户数据库。保存、更新、删除和校验状态的具体副作用见 [书源持久化流程](../workflows/source-persistence-flow.md) 和 [书源校验流程](../workflows/source-check-flow.md)。
 
 ## Node、Edge 与框架接入
 
