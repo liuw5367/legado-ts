@@ -15,7 +15,7 @@
 
 ## URL 与请求计划
 
-URL 层分为请求计划与宿主执行；没有脚本及状态读取的静态展开才是纯函数。依 05 执行 JS、插值、页码、选项、地址、Header/Cookie 及编码，返回 HttpRequest。宿主返回 bytes，核心通过字符集端口解码后执行 bodyJs/XML 处理。
+URL 层分为请求计划与宿主执行；没有脚本及状态读取的静态展开才是纯函数。依 [URL 与请求规则](../reference/url-request-rules.md) 执行 JS、插值、页码、选项、地址、Header/Cookie 及编码，返回 HttpRequest。宿主返回 bytes，核心通过字符集端口解码后执行 bodyJs/XML 处理。
 
 ```text
 书源 URL 规则 + page/key/context

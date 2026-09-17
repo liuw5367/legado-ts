@@ -1,5 +1,7 @@
 # 书源字段所有权与合并规则
 
+本章定义独立库的目标契约。Android 的订阅刷新、导入保留和版本控制行为与下文目标策略存在差异，差异在"与 Android 实际行为的差异"一节标注。以下名称作为目标契约维护；接口示意不代表已有实现。
+
 本文定义书源字段在导入、编辑、订阅刷新和运行时之间的所有权。它解决“同一个字段由谁修改、保存在哪里、什么时候覆盖”的问题，是 `BookSource` 交换模型与用户源记录之间的桥梁。
 
 ## 三层模型
@@ -74,6 +76,17 @@ export interface SourceSnapshot {
 | 用户同时编辑同一源 | 返回版本冲突，不自动合并规则文本 |
 | 远程删除条目 | 保留本地源并标记订阅缺失，不能自动删除 |
 | 用户明确删除 | 走删除流程，按策略清理源专属状态 |
+
+### 与 Android 实际行为的差异
+
+上表和"合并规则"是目标契约，Android 当前行为并不等同：
+
+- 静默订阅更新（`RuleUpdate.cacheSource` 的 `silentUpdate` 分支）只保留 `bookSourceGroup`，其余字段被远端值整体 `REPLACE` 覆盖（`RuleUpdate.kt` L56-61 + `BookSourceDao.insertSources` 的 `OnConflictStrategy.REPLACE`）；非静默导入走导入页差异确认，`customOrder` 总是保留，`enabled`/`enabledExplore` 仅在 `AppConfig.importKeepEnable=true`（默认 false）时保留（`ImportBookSourceViewModel.importSelect` L140-153）。
+- Android 没有 `expectedSourceRevision` CAS、没有版本冲突检测、没有远程删除缺失标记；静默路径不比较规则差异，只看 `lastUpdateTime` 整行替换。
+- 源内容指纹有两个：`BookSource.checkContent()` 排除 `customOrder/enabled/enabledExplore/lastUpdateTime/respondTime/weight`，用于判断是否需要重置检查状态；`BookSource.equal()` 包含 `customOrder`、`enabled`、`enabledExplore`、`bookSourceGroup` 等用户状态，用于判断整源是否变化。
+- 静默更新书源后立即触发 `ContentProcessor.upReplaceRules()`；`SourceHelp.insertBookSource` 通过 `Coroutine.async` 异步调用 `adjustSortNumber()`，在 `maxOrder>99999`、`minOrder<-99999` 或 `hasDuplicateOrder` 时把全部 `customOrder` 重排为索引。
+- `SourceHelp.deleteBookSource` 清理源变量和相关运行缓存，但不清理 Cookie 表（`CookieDao` 无关联删除调用）。
+- 导入保留行为由 `AppConfig.importKeepName`/`importKeepGroup`/`importKeepEnable` 控制，默认均关闭。
 
 ## 导入与导出
 

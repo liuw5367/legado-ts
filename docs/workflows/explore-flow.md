@@ -12,7 +12,7 @@ Android 的 `BookSource.exploreKinds()` 在 `exploreUrl` 为空时返回空列�
 | 普通文本 | 按 `&&` 或换行分项，再按 `::` 分出标题和 URL；没有 URL 的项仍可解析，但不能直接请求列表 |
 | `@js:` 或 `<js>...</js>` | 执行脚本得到文本，再按 JSON 数组或普通文本解释；脚本可以访问本书源的 `infoMap` |
 
-以上是 `app/src/main/java/io/legado/app/help/source/BookSourceExtensions.kt` 的现状。TypeScript 目标应把分类解释放在书源 package 中，返回分类结果与诊断；脚本执行和分类结果缓存通过宿主能力提供。Android 的缓存键由书源 URL 与 `exploreUrl` 组成，分类文本改变时会重新计算。移植时还要考虑用户会话或 `infoMap` 对脚本结果的影响，不能把依赖用户状态的分类结果跨用户共享。
+以上是 `app/src/main/java/io/legado/app/help/source/BookSourceExtensions.kt` 的现状。TypeScript 目标应把分类解释放在书源 package 中，返回分类结果与诊断；脚本执行和分类结果缓存通过宿主能力提供。Android 的缓存键由书源 URL 与 `exploreUrl` 组成（`MD5(bookSourceUrl + exploreUrl)`），脚本分类结果同时写入内存 `exploreKindsMap` 和磁盘 `aCache`，分类文本改变时会重新计算。`BookList.analyzeBookList` 通过 `exploreKindsJson()` 读取缓存原文做调试出口；编辑或调试书源时调用 `clearExploreKindsCache()` 显式失效内存与磁盘缓存。移植时还要考虑用户会话或 `infoMap` 对脚本结果的影响，不能把依赖用户状态的分类结果跨用户共享。
 
 JSON 分类中的 `type: url` 可以提供可请求的 URL。`text`、`button`、`toggle`、`select` 及 `action`、`viewName` 是现有 Android 发现界面的交互协议。package 负责解析、保留和报告所需能力；应用适配器负责显示控件和执行用户动作。这些交互能力属于完整移植清单，若某个宿主尚未实现，应返回明确诊断，不能把它解释成普通 URL。`exploreScreen` 在当前实体中存在，但本次核对的发现请求链没有读取它；导入和导出保留该字段，执行语义待源码与样本进一步验证。
 

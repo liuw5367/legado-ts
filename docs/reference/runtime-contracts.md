@@ -106,6 +106,8 @@ export interface EffectRecord {
 
 错误必须使用既有 `RuntimeStage` 和稳定 `code`。`cancelled`、`stale`、`budget-exceeded`、`capability-missing`、`policy-denied`、`storage-error`、`revision-conflict` 和上游网络失败不能互相伪装。
 
+映射示例：宿主启用 `blockSourceNavigation` 且在 `SuppressSourceNavigation` 上下文阻止 `openUrl`/`openVideoPlayer` 时，适配器应把该拒绝报告为 `policy-denied`，不能伪装成网络错误或能力缺失。
+
 ## 契约边界
 
 ```text

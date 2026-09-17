@@ -26,7 +26,7 @@ export interface SubscriptionRecord {
   name: string
   /** 是否自动刷新。 */
   autoUpdate: boolean
-  /** 两次自动刷新之间的间隔，单位毫秒。 */
+  /** 两次自动刷新之间的间隔，单位毫秒。Android RuleSub.updateInterval 的单位是小时，迁移时需将原值乘以 3600*1000。 */
   updateIntervalMs: number
   /** 最近一次刷新尝试时间，而非最近一次成功时间。 */
   lastAttemptAt?: number
@@ -78,6 +78,8 @@ export interface SubscriptionRepository {
   }): Promise<boolean>
 }
 ```
+
+`SubscriptionRecord`、`SubscriptionItem` 和 `SubscriptionRefreshAttempt` 是目标设计，不代表 Android 现有实现。Android 的 `RuleSub` 刷新没有 `userId` 维度，也没有逐条 `lastResult` 状态机或 `operationId`/`idempotencyKey`：非静默更新是整批缓存在 `RuleUpdate.cacheBookSourceMap` 后由导入页做差异确认；静默更新直接按 `lastUpdateTime` 比较后整行写入。ReplaceRule 的更新判定基于 `pattern`/`replacement`/`previewText` 变化，而不是 `remoteHash`；且 ReplaceRule 以远端 `id` 匹配本地实体，存在跨设备 id 冲突风险。迁移这些字段时需要显式映射，不能把目标状态机当作 Android 已提供的语义。
 
 ## 扩展边界
 

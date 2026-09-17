@@ -13,7 +13,7 @@
 2. 非卷节点的 `contentRule.content` 为空时直接返回章节 URL，这是当前兼容回退，不是错误；
 3. 创建 `AnalyzeRule`，设置 body、章节、下一章 URL、baseUrl 和 redirectUrl；
 4. 获取正文规则字符串，关闭默认 HTML unescape；
-5. 文本书对 `<usehtml>...</usehtml>` 做占位保护，调用 `HtmlFormatter.formatKeepImg`，再做 HTML unescape，最后还原占位内容；
+5. 文本书在 `adaptSpecialStyle` 开启时对 `<usehtml>...</usehtml>` 做占位保护；随后调用 `HtmlFormatter.formatKeepImg`，再做 HTML unescape，最后还原占位内容；
 6. 音频和视频书把结果当资源 URL，不执行文本 HTML 格式化；
 7. `nextContentUrl` 获取当前章节的分页 URL。
 
@@ -21,7 +21,7 @@
 
 ## 副文、替换和标题
 
-- `subContent` 在正文解析上下文中执行；文本书拼接到正文后，在线文本按其上层语义处理；音频保存为歌词，视频保存为弹幕；
+- `subContent` 在正文解析上下文中执行：只有在线文本书（`isOnLineTxt`）把副文追加进正文列表；以 `http` 开头（`startsWith("http", true)` 忽略大小写，`BookContent.kt` L140）的副文会再次请求并取响应 body；音频保存为歌词，视频保存为弹幕，普通文本书不追加；副文处理（请求、解析、追加）由 `runCatching` 包裹，失败仅记日志，但规则字符串提取 `analyzeRule.getString(subContentRule)` 在 `runCatching` 之外（`BookContent.kt` L133-134），提取异常会向上传播使本章正文失败；
 - `replaceRegex` 在所有正文分页合并后执行；正文行会先 trim 再替换，在线文本替换后为每行增加缩进；
 - `title` 在正文提取后执行，非空时覆盖章节标题；标题里包含图片 URL 时拆出 `imgUrl`，保留标题前缀或回退原章节标题；
 - 非卷章节正文最终为空抛出 `ContentEmptyException`；卷章节允许空正文。
@@ -115,7 +115,7 @@ export interface ContentResult {
 2. 在同一提交边界内写正文文件或缓存值；
 3. 按需要写入章节标题、图片等元数据；
 4. 只有正文和元数据都通过当前版本校验后，才发布保存事件；
-5. token 过期返回未保存结果，保留较新的缓存，不能抛出普通规则错误。
+5. token 过期返回未保存结果，保留较新的缓存，不能抛出普通规则错误。Android 单章保存此时优先返回新缓存，取不到则抛 `正文缓存已更新,请重试`。
 
 保存失败返回 storage-error 并保留原元数据；token 过期返回 saved=false 与 stale-write 诊断。取消与提交竞争按宿主原子结果记录，已提交结果不能被“取消”抹除。needSave=false 返回可提交变更但不 reserve 或写入；所有路径释放分页、scope 和监听器。
 

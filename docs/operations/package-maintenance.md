@@ -4,7 +4,7 @@
 
 Android 行为基线来自 `LegadoTeam/legado` 的本地提交 `32a87b253e7cc28273c3850de86242caac83f1fd`。核对日期 2026-09-16；当日工作区已有旧 docs 迁移与 .gitignore 等差异，文档不把这些差异视为已提交的上游行为。实现前须确认对应源码是否有本地补丁。
 
-源码引用采用“仓库 + 提交 + 相对路径 + 符号/测试名”，行号只辅助定位。例如 [BookSourceImport.kt](https://github.com/LegadoTeam/legado/blob/32a87b253e7cc28273c3850de86242caac83f1fd/app/src/main/java/io/legado/app/ui/association/BookSourceImport.kt) 的 parseBookSourceJson。若该提交未发布或远端不可达，以保留该 Git 对象的源码快照核验，不假设链接可公开访问。
+源码引用采用“仓库 + 提交 + 相对路径 + 符号/测试名”，行号只辅助定位。例如 [BookSourceImport.kt](https://github.com/LegadoTeam/legado/blob/32a87b253e7cc28273c3850de86242caac83f1fd/app/src/main/java/io/legado/app/ui/association/BookSourceImport.kt) 的 parseBookSourceJson。该提交当前仅存在于父仓库本地分支 `codex/docs-source-runtime`，尚未推送远端。若该提交未发布或远端不可达，以保留该 Git 对象的源码快照核验，不假设链接可公开访问。
 
 子仓库应可独立使用：不能要求工程师从 `../app` 自动寻找事实源；交付 fixture 时记录其来源快照与生成方式。示例文件目前位于父仓库 examples，不是子仓库已附带的测试资产。
 

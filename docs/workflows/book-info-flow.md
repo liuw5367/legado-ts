@@ -64,12 +64,12 @@ export interface BookInfoResult {
 
 状态转换为 `created -> loading -> parsing -> normalized -> completed`。缓存命中从 `created -> parsing`，请求失败、必需输入失败或文件源无下载地址进入 `failed`；取消可以从任意活动状态进入 `cancelled`，不得提交部分 Book 更新。提交应在所有字段处理完成后执行一次，字段处理中间值只存在于局部副本，避免详情失败时污染已有书籍。
 
-字段失败策略必须保留 Android 的差异：`init`、书名、作者和目录地址属于主流程，失败可以终止详情；分类、字数、最新章节、简介和封面读取失败记录字段诊断并继续；文件源的 `downloadUrls` 为空是流程失败。`canReName` 由调用方权限和规则字段非空共同决定，不能由书源页面内容动态改变。
+字段失败策略必须保留 Android 的差异：`init`、书名、作者和目录地址属于主流程，解析失败直接抛出异常，不产生字段级诊断；分类、字数、最新章节、简介和封面读取失败记录字段诊断并继续；文件源的 `downloadUrls` 为空是流程失败。`canReName` 由调用方权限和规则字段非空共同决定，不能由书源页面内容动态改变。
 
 完成事件应携带 `bookUrl`、`origin`、最终响应 URL、更新字段集合和诊断。若 `tocUrl` 等于详情响应基准 URL，必须同时保存 `tocHtml`，目录流程随后直接消费该响应；若目录地址不同，只保存地址，不提前请求目录。
 
 ## JavaScript 源差异
 
-JS 源的 `getBookInfo(book)` 是可选函数，缺失或返回空时保留搜索阶段字段。返回对象只允许覆盖明确的详情字段；不能覆盖 `bookUrl`、阅读进度等运行状态。`downloadUrls` 必须是字符串数组，过滤空字符串、`javascript:` 和重复 URL；`variable` 支持对象或 JSON 字符串并替换现有书籍变量。
+JS 源的 `getBookInfo(book)` 是可选函数，缺失或返回空时保留搜索阶段字段。返回对象只允许覆盖明确的详情字段，包括 `tocUrl`；不能覆盖 `bookUrl`、阅读进度等运行状态。`downloadUrls` 必须是字符串数组，过滤空字符串、`javascript:` 和重复 URL；`variable` 支持对象或 JSON 字符串并替换现有书籍变量。
 
 Web 输入绑定 sourceRevision 和 Book 的 baseRevision。返回的 updatedFields 是明确允许提交的集合，不执行整对象覆盖；失败返回诊断并保持输入对象不变。infoHtml/tocHtml 复用必须同时带最终响应 URL、源版本和会话身份；跨 HTTP 使用服务端缓存引用，不能仅传一段 HTML 就假定属于当前源。成功返回后应用提交 changes，提交失败与规则解析失败分开。

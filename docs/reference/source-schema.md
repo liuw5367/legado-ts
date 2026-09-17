@@ -101,7 +101,7 @@ export type NormalizedSource = Omit<
 }
 ```
 
-`parseBookSourceJson` 只对 `bookSourceUrl` 调用非空校验；JSON 源缺名称不能误报为 Android 导入失败。JS 配置抽取同时要求 URL 与名称非空。URL 主键原样比较，不对尾斜杠、路径大小写或查询参数做规范化。`bookSourceType` 已知值为 0 到 4，未知值保留原文并报告能力诊断，未经兼容证据不静默改成文本类型。
+（设计契约，packages 尚无实现）`parseBookSourceJson` 只对 `bookSourceUrl` 调用非空校验；JSON 源缺名称不能误报为 Android 导入失败。JS 配置抽取同时要求 URL 与名称非空。URL 主键原样比较，不对尾斜杠、路径大小写或查询参数做规范化。`bookSourceType` 已知值为 0 到 4，未知值保留原文并报告能力诊断，未经兼容证据不静默改成文本类型。
 
 ### 字段通用约定
 
@@ -122,15 +122,15 @@ export type NormalizedSource = Omit<
 | Book/Chapter 用户字段及阅读进度 | 应用提供，不制造阅读器默认设置 | 核心仅修改流程明确列出的字段 |
 | infoHtml/tocHtml/origins | 临时响应 / 来源集合 | 不属于源导出；跨 HTTP 的 Set 变为有序数组 |
 
-`BookSource` 是交换模型；`NormalizedSource` 将 rule 字段限制为已解析对象或 null。`RawSource` 包含原文 text、输入 kind、来源 location 与诊断。未修改原文可逐字导出，修改后只承诺结构与未知值保留。
+（设计契约，packages 尚无实现）`BookSource` 是交换模型；`NormalizedSource` 将 rule 字段限制为已解析对象或 null。`RawSource` 包含原文 text、输入 kind、来源 location 与诊断。未修改原文可逐字导出，修改后只承诺结构与未知值保留。
 
 `BookSource` 不是全部书源数据。Android 的订阅实体 `RuleSub`、用户覆盖、source revision、检查状态、cookie/变量和缓存属于管理或运行时模型，不能塞进书源导出 JSON，也不能因未出现在本接口中而丢失。它们的所有权、保存和清理见 [书源状态与副作用](source-management-and-state.md)；检测状态见 [书源检测状态模型](source-check-state.md)。
 
-ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。
+ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。`ExploreStyle` 是 Android `FlexChildStyle`（`data/entities/rule/FlexChildStyle.kt`）的 TS 投影，字段名与默认值保持一致，跨端实现按能力解释，不承诺 Flexbox 行为。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。`Book.group`、`BookChapter.start/end` 与 `BookReadConfig.delTag` 在 Android 为 `Long`（`Book.kt` L508；`delTag` 为位掩码，实际值很小：hTag=2L/rubyTag=4L，L491-492）；TS `number` 可覆盖实际取值范围，但超过 2^53 的精确整数边界未在类型层提示，迁移和序列化需保留精度。
 
 ### 登录表单 RowUi
 
-原实体 `data/entities/rule/RowUi.kt` 包含 name（显示名，默认空串）、type（text/password/button/label/toggle/select，默认 text）、action（动作）、chars（允许空成员的选项数组）、default（初值）、viewName（动态名称）、style（ExploreStyle）、key（提交键）、hint（提示）、value（值）、options（字符串列表）、countdown（倒计时整数）。除 name/type 外构造默认 null。原始 loginUi 完整保留；控件属于低优先级登录协议。countdown 单位和动态动作参数需要登录调用点对照后启用，不能仅从字段名推断。
+原实体 `data/entities/rule/RowUi.kt` 包含 name（显示名，默认空串）、type（text/password/button/label/toggle/select，默认 text）、action（动作）、chars（允许空成员的选项数组）、default（初值）、viewName（动态名称）、style（ExploreStyle，对应 Android `FlexChildStyle`）、key（提交键）、hint（提示）、value（值）、options（字符串列表）、countdown（倒计时整数）。除 name/type 外构造默认 null。原始 loginUi 完整保留；控件属于低优先级登录协议。countdown 单位和动态动作参数需要登录调用点对照后启用，不能仅从字段名推断。
 
 ## 2. 列表与搜索规则
 
@@ -384,7 +384,7 @@ export interface SearchBook {
   latestChapterTitle?: string | null
   /** 目录地址。 */
   tocUrl: string
-  /** 创建或发现时间。 */
+  /** 创建或发现时间；Android 构造默认 System.currentTimeMillis()，数据库列无显式默认。 */
   time: number
   /** 书源变量，Android 持久化为 JSON 字符串。 */
   variable?: string | SourceVariables | null
@@ -427,9 +427,9 @@ export interface BookChapter {
   tag?: string | null
   /** 本章节字数。 */
   wordCount?: string | null
-  /** 本地或 EPUB 章节起始位置。 */
+  /** 本地或 EPUB 章节起始位置；Android 为 Long，精度边界见 1 节末说明。 */
   start?: number | null
-  /** 本地或 EPUB 章节结束位置。 */
+  /** 本地或 EPUB 章节结束位置；Android 为 Long，精度边界见 1 节末说明。 */
   end?: number | null
   /** EPUB 当前章节 fragmentId。 */
   startFragmentId?: string | null
@@ -452,6 +452,42 @@ export interface BookReadConfig {
   reverseToc?: boolean
   /** 只改变目录界面展示顺序，不改变刷新输入顺序。 */
   reverseTocDisplay?: boolean
+  /** 目录默认展开，Android 默认 true。 */
+  tocExpanded?: boolean
+  /** 翻页动画模式，null 表示跟随全局设置。 */
+  pageAnim?: number | null
+  /** 是否重新分段，Android 默认 false。 */
+  reSegment?: boolean
+  /** 图片样式，null 表示跟随全局。 */
+  imageStyle?: string | null
+  /** 正文是否使用净化替换规则；null 时按书源类型回退。 */
+  useReplaceRule?: boolean | null
+  /** 去除标签位掩码，Android 为 Long。 */
+  delTag?: number
+  /** TTS 引擎标识。 */
+  ttsEngine?: string | null
+  /** 超长章节拆分开关，Android 默认 true。 */
+  splitLongChapter?: boolean
+  /** 模拟阅读开关，Android 默认 false。 */
+  readSimulating?: boolean
+  /** 模拟阅读起始日期，ISO 文本。 */
+  startDate?: string | null
+  /** 模拟阅读起始章节。 */
+  startChapter?: number | null
+  /** 每日模拟章节数，Android 默认 3。 */
+  dailyChapters?: number
+  /** 音频片头秒数。 */
+  openCredits?: number
+  /** 音频片尾秒数。 */
+  closeCredits?: number
+  /** 音频播放模式。 */
+  playMode?: number
+  /** 音频播放速度。 */
+  playSpeed?: number
+  /** 是否使用全局音频跳过设置。 */
+  useGlobalAudioSkip?: boolean
+  /** 阅读页手动选择的替换规则 id。 */
+  manualReplaceRuleIds?: number[]
   /** 阅读器或应用层的其他配置，核心库只透传。 */
   [key: string]: unknown
 }
@@ -485,7 +521,7 @@ export interface Book {
   charset?: string | null
   /** BookType 类型。 */
   type: number
-  /** 自定义分组索引。 */
+  /** 自定义分组索引；Android 为 Long。 */
   group: number
   /** 最新章节标题。 */
   latestChapterTitle?: string | null
@@ -511,11 +547,11 @@ export interface Book {
   durChapterTime: number
   /** 字数文本。 */
   wordCount?: string | null
-  /** 刷新书架时是否更新书籍信息。 */
+  /** 刷新书架时是否更新书籍信息，默认 true（Android 数据库默认 "1"）。 */
   canUpdate: boolean
-  /** 手动排序值。 */
+  /** 手动排序值，默认 0。 */
   order: number
-  /** 书源排序值。 */
+  /** 书源排序值，默认 0。 */
   originOrder: number
   /** 书籍变量，Android 持久化为 JSON 字符串。 */
   variable?: string | SourceVariables | null
@@ -533,5 +569,7 @@ export interface Book {
   downloadUrls?: string[] | null
 }
 ```
+
+时间字段 `latestChapterTime`、`lastCheckTime`、`durChapterTime` 的 Android 构造默认是 `System.currentTimeMillis()`，而数据库列默认 `"0"`。`"不制造阅读器默认设置"`（字段通用约定表）约束的是核心库不要主动初始化这些字段，不是否定 Android 实体构造默认值；迁移时不能把任一默认当作权威。
 
 JS 详情返回值只能覆盖明确允许的详情字段：`name`、`author`、`intro`、`coverUrl`、`kind`、`wordCount`、`latestChapterTitle`、`tocUrl`、`downloadUrls`、`variable` 和合法的 `type`。不得覆盖 `bookUrl`、阅读进度、用户自定义字段或缓存状态。

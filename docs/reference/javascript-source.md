@@ -1,5 +1,7 @@
 # JavaScript 书源
 
+本章定义 JavaScript 书源的目标契约。函数签名、导入校验、宿主绑定与 capability error 均作为目标契约维护；接口示意和行为约定不代表 Android 当前实现已全部具备，实际行为以源码核对为准。
+
 ## 配置和必备函数
 
 导入器在受限 JavaScript runtime 中执行完整脚本，读取顶层 `config`；若 `config` 不完整则兼容旧版顶层 `source`。`bookSourceUrl` 和 `bookSourceName` 必须非空。
@@ -14,7 +16,7 @@ function getContent(chapter, book) {}
 
 文件源（`bookSourceType == 3`）要求 `search` 和 `getBookInfo`，不要求普通目录和正文函数。配置 `exploreUrl` 时必须同时提供 `explore(url, page)`。
 
-登录声明有两种互斥形式：`config.loginUi` 是静态登录表单配置时，脚本必须提供 `login(...)`；脚本提供 `loginUi(...)` 函数时，配置中不能再有 `loginUi`，并且必须同时提供 `loginAction(...)`。只有 `loginUi` 或只有 `loginAction` 都属于导入错误。复杂登录 UI、验证码和多步骤认证可以后续实施；尚未提供对应宿主能力时必须报告 capability error，不能把不支持认证误报成普通书源成功。
+登录声明有两种互斥形式：`config.loginUi` 是静态登录表单配置时，脚本必须提供 `login(...)`；脚本提供 `loginUi(...)` 函数时，配置中不能再有 `loginUi`，并且必须同时提供 `loginAction(...)`。只有 `loginUi` 函数（缺少配对的 `loginAction`）或只有 `config.loginUi`（缺少配对的 `login` 函数）都属于导入错误；单独声明 `loginAction` 函数而无 `loginUi` 时不会报错，会静默通过导入；但该函数不会被登录流程调用——仅当 `loginUi` 为函数时配置才进入 v2 登录流程（`JsSourceConfig.kt` L146），`evalLoginUiV2`/`evalLoginActionV2` 才会触发。复杂登录 UI、验证码和多步骤认证可以后续实施；尚未提供对应宿主能力时必须报告 capability error，不能把不支持认证误报成普通书源成功。
 
 普通 JS 源的函数契约可以抽象为：
 
@@ -170,7 +172,7 @@ export interface ReviewItemInput {
 
 `getReviewSummary` 必须返回数组。运行时只接受 `paraIndex == -1` 或正数且 `count > 0` 的项目；缺少 `paraData` 时以段落索引文本作为回退键。非法项目和无效数量被忽略，脚本返回空值或不能解析为数组时得到空摘要。
 
-`getReviewDetail` 返回评论项分页对象，至少包含 `items` 数组，可以包含 `nextPageUrl`；缺少或不是数组时该详情页结果为无结果。每个项目至少需要有内容、昵称、图片或音频之一，否则会被丢弃。`content` 如果是包含 `text`、`replyToName`、`img`、`audio`、`time`、`likeCount` 或 `replyCount` 的协议对象，运行时会解析协议并将图片、音频相对当前响应 URL 转换为绝对地址。
+`getReviewDetail` 返回评论项分页对象，至少包含 `items` 数组，可以包含 `nextPageUrl`；缺少或不是数组时该详情页结果为无结果。每个项目必须有非空 `content`，仅有昵称、图片或音频而缺少 `content` 的项目会被丢弃。`content` 如果是包含 `text`、`replyToName`、`img`、`audio`、`time`、`likeCount` 或 `replyCount` 的协议对象，运行时会解析协议并将图片、音频相对当前响应 URL 转换为绝对地址；若协议对象的七个字段全部为空，`parseContentProtocol` 返回 null，此时对象 JSON 会被当作纯文本 `content` 保留。对象型 `content` 经 `optContent` 转为 JSON 字符串后只要非空即有效，最终解析出的纯文本可为空；仅含 `img`/`audio` 的评论项会保留（`JsSourceReviewTest` 断言 `reply.content == ""` 但 `imageUrl` 保留）。
 
 `getReviewReplies` 返回 `{ items }`，没有独立的 `nextPageUrl` 字段；运行时会把嵌套 `replies` 展平成回复列表，并清除回复项继续嵌套的结构。返回值不是对象、缺少 `items` 或 `items` 不是数组时属于返回格式错误。回复函数只有在摘要和详情函数都存在时才允许导入，调用时由宿主传入 `reviewId`，不是由脚本自行从全局变量读取。
 

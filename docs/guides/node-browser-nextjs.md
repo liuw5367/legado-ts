@@ -1,5 +1,7 @@
 # Node、Edge、浏览器和框架入口
 
+本章是目标设计，不代表已有代码。以下描述 Node 服务、浏览器 SPA、Next.js/React Router 与 Edge 作为候选宿主的接入边界和预期数据流；当前仓库尚未实现 TypeScript runtime，流程与能力描述不代表已有实现。
+
 | 能力 | Node 服务 | 浏览器 SPA | Next.js SSR |
 | --- | --- | --- | --- |
 | 直连书源 | 可以，受网络和站点限制 | 通常受 CORS 限制 | 服务端可以 |

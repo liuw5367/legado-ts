@@ -1,5 +1,7 @@
 # 书源管理与状态
 
+本章定义独立库的目标契约。以下状态分层、Repository 接口和生命周期作为目标契约维护；Android 的实际管理行为与目标设计存在差异，差异在相应章节标注。接口示意不代表已有实现。
+
 本章定义书源从导入到删除的管理边界。它是独立 package 与应用存储之间的契约，不把 Android Room、Supabase 或其他数据库实现放入核心规则引擎。
 
 ## 1. 状态分层
@@ -17,9 +19,9 @@
 | 校验状态 | 用户、源版本 | 否 | CheckRepository |
 | 书籍、目录、正文缓存 | 用户、书籍、源版本 | 否 | 应用/ContentStore |
 
-`bookSourceUrl` 是兼容层的 `sourceId`。它按原字符串比较，不自动做尾斜杠、大小写、查询参数或域名规范化。不同用户可以拥有相同 `sourceId`，不能使用全局 URL 作为数据库唯一键。
+`bookSourceUrl` 是兼容层的 `sourceId`。它按原字符串比较，不自动做尾斜杠、大小写、查询参数或域名规范化。（目标设计）不同用户可以拥有相同 `sourceId`，不能使用全局 URL 作为数据库唯一键；Android `BookSource` 的主键即 `bookSourceUrl`，单用户、无 `userId` 维度。
 
-版本名称以[运行时统一契约](runtime-contracts.md)为准：`sourceRevision` 是持久化源版本，`baseRevision` 是修改时读取的旧版本，`checkRevision` 是检测任务版本，`writeVersion` 是正文/资源写入代次。`lastUpdateTime` 是源文件元数据，不能替代任何一种版本。
+版本名称以[运行时统一契约](runtime-contracts.md)为准：`sourceRevision` 是持久化源版本，`baseRevision` 是修改时读取的旧版本，`checkRevision` 是检测任务版本，`writeVersion` 是正文/资源写入代次。`lastUpdateTime` 是源文件元数据，不能替代任何一种版本。该句是目标契约：Android 静默更新实际以 `lastUpdateTime` 比较后整行 REPLACE（`RuleUpdate.kt` L56-61），与"不能替代任何版本"存在张力。
 
 ## 2. 书源生命周期
 
@@ -247,7 +249,7 @@ Repository 不是规则执行器。package 返回 `ImportCandidate`、领域结�
 
 ## 6. 插入策略与兼容实现事实
 
-Android 的 `SourceHelp.insertBookSource` 不是普通 DAO 保存的同义词。它会按配置拦截部分域名，并在 `customOrder` 越界或排序值重复时调整排序；删除还会清理源变量和相关运行缓存。独立 package 不调用 `SourceHelp`，但应用必须显式选择并记录插入策略：
+Android 的 `SourceHelp.insertBookSource` 不是普通 DAO 保存的同义词。它会拦截内置 18+ 名单域名（assets/18PlusList.txt，base64 解码后匹配二级域名），并在 `customOrder` 越界或排序值重复时调整排序；删除还会清理源变量和相关运行缓存。独立 package 不调用 `SourceHelp`，但应用必须显式选择并记录插入策略：
 
 | 模式 | 适用入口 | 必须保留的行为 |
 | --- | --- | --- |
@@ -256,4 +258,4 @@ Android 的 `SourceHelp.insertBookSource` 不是普通 DAO 保存的同义词。
 
 兼容 API 的直接写入与新 Web 应用的安全策略可能产生不同结果，这是适配层的明确兼容选择。无论选择哪种模式，解析、规范化、版本检查、用户隔离和秘密处理仍遵循本文与[导入协议](../workflows/import-protocol.md)。
 
-Android 的 DAO 保存会在书源内容变化时重置 `BookSourceCheckState`；`SourceHelp` 删除书源时会清除源变量和相关运行缓存；JS 源改名会检查目标冲突、清理旧源并保留启用、分组、排序和权重等用户状态。独立 package 需要保留这些可观察约束，但由 Repository 和 Host 分别承担，而不是复制 Android 全局单例。用户状态字段和远程更新优先级以[字段所有权与合并规则](source-field-ownership.md)为准。
+Android 的 DAO 保存会在书源内容变化时重置 `BookSourceCheckState`；`SourceHelp` 删除书源时会清除源变量和相关运行缓存；JS 源改名会检查目标冲突、清理旧源并保留启用、分组、排序和权重等用户状态。`SourceHelp.insertBookSource` 通过 `Coroutine.async` 异步触发 `adjustSortNumber()`，仅在 `maxOrder>99999`、`minOrder<-99999` 或 `hasDuplicateOrder` 时把全部 `customOrder` 重排为索引（`SourceHelp.kt` L174-186）。JS 源保存路径 `JsSourceUpsert.preserveUserState` 除保留启用、分组、排序和权重外还保留 `respondTime`，分组仅在目标源分组空白时继承（`JsSourceUpsert.kt` L152-161）；`bookSourceUrl` 或 `exploreUrl` 变化会清 `exploreKindsCache`，`jsLib` 变化会移除 `SharedJsScope`（`JsSourceUpsert.kt` L65-73）。独立 package 需要保留这些可观察约束，但由 Repository 和 Host 分别承担，而不是复制 Android 全局单例。用户状态字段和远程更新优先级以[字段所有权与合并规则](source-field-ownership.md)为准。

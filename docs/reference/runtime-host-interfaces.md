@@ -200,7 +200,7 @@ export interface Logger {
 export interface JsResponse {
   /** 请求最终 URL。 */
   url: string
-  /** 真实 HTTP 状态码；兼容 ajax/connect 捕获错误时也可能是合成响应，需结合 error 判断。 */
+  /** 真实 HTTP 状态码；兼容 ajax/connect 捕获错误时也可能是合成响应，需结合 error 判断。Android StrResponse 以 code() 方法暴露，无 status 属性，移植时需适配访问器差异。 */
   status: number
   /** 响应头。 */
   headers: Record<string, string | string[]>
@@ -281,9 +281,9 @@ export interface JavaApi {
   downloadFile(url: string): string
   /** 读取按书源域隔离的 Cookie。 */
   getCookie(tag: string, key?: string): string
-  /** 书源级键值存储的兼容别名。 */
-  get(key: string): string
-  put(key: string, value: string): string
+  // 键值 get/put 定义在 BaseSource（source/sourceApi 绑定，见 SourceApi），JavaApi 不重复声明。
+  // Android 的 BaseSource.evalJS 中 bindings["java"] = this（BaseSource.kt L410），java 与 source 别名化、该路径可达；
+  // 但 JS 源运行时 JsSourceEngine 的 java 绑定仅实现 JsExtensions（JsSourceEngine.kt L108），无键值 get/put。
   /** 使用 WebView 加载页面，属于可选能力。 */
   webView?(html: string | null, url: string | null, js: string | null): string | null
   /** 使用 WebView 获取经过脚本处理的页面源码，属于可选能力。 */

@@ -7,6 +7,7 @@
 - `app/src/test/java/io/legado/app/model/analyzeRule/AnalyzeByJSoupDomTest.kt`：自闭合链接、`textNodes`、链式选择、节点身份、正向/负向/排除索引和 DOM 非破坏性；
 - `app/src/test/java/io/legado/app/model/analyzeRule/AnalyzeRuleElementsNormalizationTest.kt`：JS 数组结果过滤 null；
 - `app/src/test/java/io/legado/app/model/analyzeRule/AnalyzeUrlNetworkOptionsTest.kt`：Cookie 域、timeout、布尔选项、DNS 字面量、代理冲突、重定向和客户端超时；
+- `app/src/test/java/io/legado/app/model/analyzeRule/AnalyzeUrlLoginHeaderContractTest.kt`：`url` 索引登录请求头契约；
 - `app/src/androidTest/java/io/legado/app/model/webBook/SourceContentCompatibilityTest.kt`：正文 textNodes/替换、Base64 JS 内容和目录刷新顺序；
 - `app/src/test/java/io/legado/app/model/webBook/SearchPaginationContractTest.kt`：搜索 page owner、回调时序和取消；
 - `app/src/test/java/io/legado/app/model/jsSource/JsSourceConfigTest.kt`：配置抽取、必备函数、文件源、批量、发现、登录和脚本剥离；
@@ -23,7 +24,7 @@
 
 当前没有与这些 Kotlin 规则结果直接对照的 TypeScript runtime 测试；需要新增独立 fixture 和 golden 输出。
 
-当前仓库中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们可以作为 fixture 模板，但在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
+外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板——例如 `rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
 
 ## Fixture 格式
 
@@ -32,7 +33,9 @@
 ```json
 {
   "id": "rule-default-text-nodes-001",
-  "status": "ts-pending",
+  "evidence": "test-run",
+  "spec": "defined",
+  "execution": "not-run",
   "source": "https://fixture.invalid/source",
   "input": { "kind": "html", "body": "..." },
   "context": { "baseUrl": "https://fixture.invalid/book/" },
@@ -41,7 +44,7 @@
   "androidEvidence": {
     "kind": "test",
     "path": "app/src/test/java/io/legado/app/model/analyzeRule/AnalyzeByJSoupDomTest.kt",
-    "case": "textNodes-and-index-normalization"
+    "case": "self closing links preserve legacy direct text nodes"
   },
   "tsAssertion": {
     "path": "packages/source-core/tests/rules/default-text-nodes.test.ts",

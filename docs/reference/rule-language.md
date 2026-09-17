@@ -68,7 +68,7 @@ export interface VariableStore {
 | `<js>...</js>`、`@js:...` | Js | Rhino JavaScript 片段 |
 | `@webjs:...` | WebJs | 在后台 WebView/浏览器上下文中执行 |
 
-`@@` 会去掉前缀。`@XPath:` 和 `@Json:` 会去掉前缀。`@CSS:` 由 HTML 解析器识别并去掉前缀。以 `$` 开头的规则即使省略 `@Json:` 也会进入 JSON 模式。以 `/` 开头的 XPath 不要求写 `@XPath:`。
+`@@` 会去掉前缀。`@XPath:` 和 `@Json:` 会去掉前缀。`@CSS:` 由 HTML 解析器识别并去掉前缀。以 `$.` 或 `$[` 开头的规则即使省略 `@Json:` 也会进入 JSON 模式。以 `/` 开头的 XPath 不要求写 `@XPath:`。
 
 `:` 只有在 `splitSourceRule(..., allInOne = true)` 的入口且位于规则首字符时才强制 Regex；这也是它与 CSS 伪类冒号冲突的原因。迁移时不能把任意包含冒号的规则都判断成正则。
 
@@ -122,9 +122,9 @@ export interface VariableStore {
 
 ## 5. XPath 规则
 
-XPath 返回节点列表，再由 `getString` 以换行连接 `asString()` 结果；`getStringList` 保留列表。XPath 与 `&&`、`||`、`%%` 的组合规则和 Default 模式一致。
+XPath 返回节点列表，再由 `getString` 以换行连接 `asString()` 结果；`getStringList` 保留列表。该等价关系依赖 JsoupXpath 内部实现，迁移中待验证。XPath 与 `&&`、`||`、`%%` 的组合规则和 Default 模式一致。
 
-HTML/XML 解析必须保持当前差异：XML 声明开头使用 XML parser；普通文本使用 HTML parser；以 `</td>`、`</tr>` 或 `</tbody>` 结尾的片段会补最小表格容器后再做 XPath。迁移时应使用同一套规范化 DOM 供 CSS 和 XPath 访问。
+HTML/XML 解析必须保持当前差异：XML 声明开头使用 XML parser；普通文本使用 HTML parser；以 `</td>`、`</tr>` 或 `</tbody>` 结尾的片段会补最小表格容器后再做 XPath。旧版 jsoup 书源依赖 HTML 自闭合标签直接闭合（如 `<a/>`），当前解析器会把新 HTML 标签设为自闭合，CSS 与 XPath 共用该 DOM，迁移时不得改变 textNodes 语义。
 
 ## 6. JSONPath 规则
 
@@ -178,9 +178,13 @@ JSONPath 解析失败时当前实现记录错误并返回空/空列表，不能�
 
 URL 模式中，空字符串回退 `baseUrl`；非空字符串相对 `redirectUrl` 转绝对 URL。`getStringList(isUrl = true)` 丢弃空 URL 并去重。
 
+当输入内容为 NativeObject（原生段评对象）时，`getStringList` 只使用第一条规则：先执行其 `@put` 映射；`Mode.Js` 时以该对象为 `result` 执行脚本；`Mode.Json` 时对对象执行 JSONPath 读取列表；规则带多个参数时返回规则文本用于 `{{}}` 插值；否则把规则文本作为键直接访问对象属性。
+
 ## 10. JS 绑定和错误边界
 
 规则 JS 当前可见绑定包括：`java`、`cookie`、`cache`、`source`、`book`、`result`、`baseUrl`、`chapter`、`chapters`、`title`、`src`、`nextChapterUrl`、`rssArticle`、`fromBookInfo`，以及批量场景的 `paraIndex`、`paraData`、`page`。
+
+`java` 绑定含 `openUrl`、`openVideoPlayer`、`startBrowser` 等 UI 跳转方法。宿主启用 `blockSourceNavigation` 且当前协程上下文携带 `SuppressSourceNavigation`（换源、批量检测等后台流程）时，这些跳转和 WebView 弹窗会被阻止；Android 当前行为是静默 `return`，JS 仅得到 `undefined`（`JsExtensions.kt` L1251/L390/L405），`policy-denied` 诊断是迁移设计，映射示例见 [运行时统一契约](runtime-contracts.md)。TypeScript 宿主应输出空结果或显式的策略拒绝，不能弹出书源网页或视频。
 
 脚本异常向上抛出；JSONPath 读取异常通常转为空值并记录；不平衡的规则括号会抛出解析错误；取消必须原样传播，不能被普通异常兜底吞掉。`@webjs` 必须在后台宿主执行，核心库没有浏览器时应返回明确的能力缺失错误。
 

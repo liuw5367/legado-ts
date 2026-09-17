@@ -36,15 +36,15 @@ Web 设计中的订阅记录需要能够承接 Android 的 `RuleSub`，但不应
 | `showRule` | 订阅展示/筛选规则 | 应用展示层或订阅解析器 |
 | `sourceUrl` | 订阅项绑定的源链接，可供源运行时调用资源 | baseline 与 binding |
 
-Android 的更新流程还支持 `sourceUrls` JSON 数组和 `#requestWithoutUA` 请求标记。移植时应将这些解析和请求选项记录到 refresh plan；自动更新只改变“是否触发刷新”，不改变保存事务。`update` 在 Android 中记录最近一次尝试，网络失败后仍会影响下一次间隔判断；Web 调度器若改用 `lastSuccessAt`，必须在适配层明确记录这是目标策略而非 Android 原样行为。
+Android 的订阅刷新 `RuleUpdate.cacheSource` 只把响应整体按 `type` 解析为对应实体数组（`GSON.fromJsonArray<BookSource>` 等），不支持 `sourceUrls` 外层 JSON 数组；`sourceUrls` 只属于导入流程（见 [导入协议](import-protocol.md) 的 `parseBookSourceJson`）。订阅与导入请求都支持 `#requestWithoutUA` 标记。移植时应将这些解析和请求选项记录到 refresh plan；自动更新只改变“是否触发刷新”，不改变保存事务。`update` 在 Android 中记录最近一次尝试，网络失败后仍会影响下一次间隔判断；Web 调度器若改用 `lastSuccessAt`，必须在适配层明确记录这是目标策略而非 Android 原样行为。
 
 ### `type` 与静默更新的兼容边界
 
-`RuleSub.kt` 的字段注释把替换规则写成类型 `3`，但当前 `RuleUpdate.kt` 的实际 `when` 分支处理类型 `2`。这不是可以静默猜测的映射：适配器必须保留原始整数，类型 `3` 默认返回 `UNSUPPORTED_SUBSCRIPTION_TYPE` 并记录诊断，除非后续 Android 版本证据或迁移决策明确将其映射为 `ReplaceRule`。类型 `1` 和 `2` 不得被当成 `BookSource[]` 解析。
+`RuleSub.kt` 的字段注释把替换规则写成类型 `3`，但当前 `RuleUpdate.kt` 的实际 `when` 分支处理类型 `2`。Android 的 `when` 对类型 `3` 没有分支，会静默跳过：不缓存、不写库、也不返回错误。这不是可以静默猜测的映射：适配器必须保留原始整数，Web 目标中类型 `3` 默认返回 `UNSUPPORTED_SUBSCRIPTION_TYPE` 并记录诊断，除非后续 Android 版本证据或迁移决策明确将其映射为 `ReplaceRule`。类型 `1` 和 `2` 不得被当成 `BookSource[]` 解析。
 
 不同实体使用各自的稳定关联键：`BookSource` 使用 `bookSourceUrl/sourceId`，`RssSource` 使用其 `sourceUrl`，`ReplaceRule` 使用规则 `id`。只有 `BookSource` 条目进入本 package 的 source repository；另外两类必须由独立 adapter 或未来扩展 repository 负责，不能把它们强制转换为 `SourceRecord`。
 
-Android `silentUpdate=true` 的实际路径是：发现本地不存在或 `lastUpdateTime` 更旧的条目后直接插入；已有书源只保留本地分组，然后调用 `SourceHelp.insertBookSource`，完成后更新替换规则处理。它没有本流程定义的三方冲突确认。Web package 的推荐路径仍是保存前计算 base/remote/local 差异；若兼容 adapter 需要复刻 Android 静默行为，必须显式使用 `android-compatible` 模式，并仍执行用户隔离、版本写入、脚本隔离和秘密保护。
+Android `silentUpdate=true` 的实际路径是：发现本地不存在或 `lastUpdateTime` 更旧的条目后直接插入；已有书源只保留本地分组，然后调用 `SourceHelp.insertBookSource`，完成后更新替换规则处理。它没有本流程定义的三方冲突确认。`silentUpdate=false` 时 `RuleUpdate.cacheSource` 不写库，而是把更新后的列表写入 `cacheBookSourceMap[url]` 并返回，由导入流程的 `ImportBookSourceViewModel.importSourceUrl` 消费，进入导入预览和用户确认。Web package 的推荐路径仍是保存前计算 base/remote/local 差异；若兼容 adapter 需要复刻 Android 静默行为，必须显式使用 `android-compatible` 模式，并仍执行用户隔离、版本写入、脚本隔离和秘密保护。
 
 ## 刷新流程
 

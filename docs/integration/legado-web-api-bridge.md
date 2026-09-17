@@ -57,6 +57,8 @@ Android 的搜索/调试 API 依赖已保存书源，不能把任意未保存 JS
 
 `api.md` 中的书架、阅读进度、书籍缓存、RSS 管理、内容提供者、替换规则、MCP 和设备控制等能力不属于当前书源核心 package。本 package 可以为“取得书/章节/正文”提供领域结果；订阅链接返回多个 `BookSource` 仍属于书源导入范围。`RssSource` 与 `ReplaceRule` 是独立实体能力，当前只在订阅适配器中登记 `type` 分支和兼容边界，尚未纳入核心 CRUD；是否扩展为独立 package 能力必须按能力清单单独审核，不能静默视为已支持或已放弃。
 
+段评读取端点 `getReviewSummary`/`getReviewDetail`/`getReviewReplies` 不在“不纳入”之列：它们由 package 的公开入口提供领域结果（见 [独立 package 的调用契约](../guides/package-usage.md)），适配器只负责路由、鉴权和脱敏。`getHttpLogs`/`getHttpLog` 属于调试日志读取，`GET /getJsSourceApiTokenRequired` 返回当前实例是否要求 JS 源访问令牌，两者都是适配器与 Controller 的宿主职责，不纳入核心 package。
+
 ## 验收标准
 
 - 兼容端点的输入校验、批量跳过、JS 限制、已保存前置条件和检测会话语义都有测试。

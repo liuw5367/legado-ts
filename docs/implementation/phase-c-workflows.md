@@ -1,6 +1,6 @@
 # 阶段 C：发现、搜索、详情、目录与正文
 
-本阶段使用 B 的 Node/基础 JS 宿主实现声明式和 JS 主流程，并通过最小真实部署验收。流程只调用共享层，不重新解释规则。行为以 06–09 和 17 为准。
+本阶段使用 B 的 Node/基础 JS 宿主实现声明式和 JS 主流程，并通过最小真实部署验收。流程只调用共享层，不重新解释规则。行为以 [搜索流程](../workflows/search-flow.md)、[详情流程](../workflows/book-info-flow.md)、[目录流程](../workflows/chapter-list-flow.md)、[正文流程](../workflows/content-flow.md) 和 [发现流程](../workflows/explore-flow.md) 为准。
 
 ## 共同调用框架
 

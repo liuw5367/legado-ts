@@ -19,6 +19,8 @@
 
 `sourceId` 改变视为新源候选；原源、旧书籍与订阅归属不能静默改名。目录修订变化后旧章节 token 失效。无内容变化的目录刷新可保留 tocRevision，由宿主比较完整规范化目录后决定。原文 hash 用于检测变化，不作为用户身份或权限凭证。
 
+Android 行为与上表不同：`BookSourceCheckState.sourceRevision` 在插入和规则内容变化（`BookSourceDao.update` 的 `checkContent()` 比较）时生成新 UUID；`upGroup` 修改 `bookSourceGroup` 时经 `update()` 触发（`checkContent()` 未清零分组字段，`BookSource.kt` L259-263）；`beginCheck` 保留 `sourceRevision`、只生成新的 `revision`（任务版本 UUID，`BookSourceDao.kt` L304）；`enable`/`enableExplore`/`upOrder` 走独立 `@Query` SQL（`BookSourceDao.kt` L354/364/377），不触发。`writeVersion` 可类比的是 `BookSourceCheckState.revision`（`finishCheck` 的 CAS 键），而不是 `sourceRevision`。章节在 Android 的主键是 `(bookUrl, url)`，并有唯一索引 `(bookUrl, index)`；`chapterKey` 以 `index` 为身份组件会遗漏唯一索引冲突。`beginCheck` 对已不存在（或 `lastUpdateTime`/`checkRevision` 已变化）的源不写状态，直接返回 `selected.copy()` 作为身份失效分支。
+
 ## 状态所有权
 
 | 状态 | 所有者 / 生命周期 | 跨调用与失败处理 |
@@ -59,6 +61,8 @@ ContentIdentity 使用上表的身份字段；ContentSaveToken 包含 key（Cont
 ## 取消与清理
 
 operation 具有 `active -> settling -> closed` 生命周期，结果独立为 success/partial/failed/cancelled。进入 settling 后不启动新分页、重试、脚本或普通保存。取消信号发出后等待子任务停止，再释放脚本句柄、DOM、监听器与响应体；清理失败保留原错误并附加 lifecycle 诊断。
+
+Android 的书源校验取消通过 `CheckSourceService` 的 `IntentAction.stop` 服务消息（`checkJob?.cancel()`）实现，没有 `active -> settling -> closed` 状态机；上述生命周期是目标契约。
 
 提交与取消竞争由存储端口原子结算：提交先完成则记录 committed，取消先撤销资格则拒绝提交。不得用“已取消”否认实际完成的上游或存储副作用。事件订阅者异常仅增加日志诊断，不改变已结算业务结果。
 

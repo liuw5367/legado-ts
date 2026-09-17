@@ -35,7 +35,7 @@ package 对外提供检测编排和结果模型；应用层提供 HTTP/浏览器
 export interface SourceCheckConfig {
   /** 单个请求的超时时间；不能让一个失效源阻塞整批任务。 */
   timeoutMs: number;
-  /** 失败时是否把简短错误写入书源备注；默认应为 false 或脱敏写入。 */
+  /** 失败时是否把简短错误写入书源备注；Android 的 `wSourceComment` 默认 true，并以 `// Error: ` 前缀写入书源注释。 */
   writeErrorComment: boolean;
   /** 是否检查域名、基础连接和 URL 可达性。 */
   domain: boolean;
@@ -54,7 +54,7 @@ export interface SourceCheckConfig {
 }
 ```
 
-默认超时、错误备注、域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
+默认超时、错误备注、域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应；其中错误备注默认开启并写 `// Error: ` 前缀。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
 
 ## 阶段和依赖
 
@@ -81,6 +81,8 @@ export interface SourceCheckConfig {
 6. 回写前以 `(userId, sourceId, sourceRevision, checkSessionId)` 做条件检查。版本不一致则标记结果 `STALE` 并丢弃持久化更新。
 
 ## 状态转换
+
+以下状态机为 Web 目标设计。Android 的 `BookSourceCheckState` 只有 `NEEDS_CHECK`/`PASSED`/`FAILED` 三种持久化状态；`RUNNING` 只存在于会话层，`CANCELLED` 与 `STALE` 在 Android 没有对应持久化状态，版本过期、书源已删除或回写失败在会话结果层以 `CheckSourceStatus.NOT_COMPLETED` 表达；用户取消时未处理的书源仅从会话快照缺失，不会合成该状态。
 
 ```text
 NEEDS_CHECK ──start──► RUNNING ──all stages pass──► PASSED
@@ -137,9 +139,9 @@ export interface SourceCheckResult {
 
 ## Android 兼容语义
 
-Android 检测接口会从当前书源快照启动会话，校验提交的 source snapshot/checkContent，并用会话 token 停止任务；DAO 在完成回写时还会检查版本，避免旧任务覆盖新结果。移植时保留这些语义，但把 Android token、WebSocket 子协议和 DAO 细节放在 adapter 层。
+Android 检测接口会从当前书源快照启动会话，校验提交的 source snapshot/checkContent，并用会话 token 停止任务；DAO 在完成回写时还会检查版本，避免旧任务覆盖新结果。启动时 `BookSourceDao.beginCheck` 会把每个仍有效的待检源重置为新的 `NEEDS_CHECK` 状态并更新 `checkRevision`；书源在排队期间被修改则跳过重置，不写新状态；该源随后因 `lastUpdateTime`/`checkRevision` 不匹配在结果层记 `NOT_COMPLETED`（"书源已变更，校验结果未写回"），不执行实际检测。移植时保留这些语义，但把 Android token、WebSocket 子协议和 DAO 细节放在 adapter 层。
 
-Android 服务还会分别统计响应时间、域名错误、搜索/发现错误、详情/目录/正文错误，并可把失败书源按原因分组。package 应提供结构化 stage result，让应用自行决定列表分组、错误备注和通知方式。
+Android 服务还会分别统计响应时间、域名错误、搜索/发现错误、详情/目录/正文错误，并可把失败书源按原因分组。失败书源的分组标签（如 `校验超时`、`js失效`、`网站失效`、`搜索失效`、`发现失效`、`域名失效`）与 `// Error: ` 错误注释只修改内存中的 source 对象（`CheckSourceService` 无 `bookSourceDao.update` 调用），随 `completeCheck` 的 detail 字符串持久化到 `book_source_check_states.detail` 字段，不更新 `book_sources` 行的分组或备注。package 应提供结构化 stage result，让应用自行决定列表分组、错误备注和通知方式。
 
 ## 应用责任
 

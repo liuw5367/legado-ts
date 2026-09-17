@@ -4,7 +4,7 @@
 
 ## 图片与封面解密
 
-`ImageUtils.decode` 根据 `isCover` 选择 `BookSource.coverDecodeJs` 或 `ContentRule.imageDecode`。规则为空时原样返回输入 bytes 或输入流；规则非空时执行脚本，绑定 `book`、`result` 和 `src`，要求结果是字节数组。Android 在脚本失败时记录错误并返回 `null`。它会影响封面与正文图片的实际显示，不能只在 schema 中保留脚本文本。
+`ImageUtils.decode` 根据 `isCover` 选择 `BookSource.coverDecodeJs` 或 `ContentRule.imageDecode`。规则为空时原样返回输入 bytes 或输入流；规则非空时执行脚本，绑定 `book`、`result` 和 `src`，要求结果是字节数组。Android 在脚本失败时记录错误并返回 `null`。`ImageUtils.skipDecode` 在解密规则为空时返回 true，图片加载器用它跳过脚本开销。它会影响封面与正文图片的实际显示，不能只在 schema 中保留脚本文本。
 
 目标流程为：书源结果提供图片 URL，宿主按该 URL 获取 bytes，package 选择解密脚本并通过受限 JS runtime 执行，返回解密 bytes 或明确的解密失败。图片缓存键应包含书源身份、URL、解密规则版本和会话边界；未启用解密时避免无意义的脚本开销。Node、Edge、Next.js 适配器各自验证二进制请求、字节传递、取消与内存限制。
 
@@ -22,7 +22,7 @@ Web 目标应把用户确认、跳转和目录刷新分开：应用确认动作�
 
 ## 书源事件与自定义按钮
 
-`BookSource.eventListener` 与 `ContentRule.callBackJs` 控制书源回调。`SourceCallBack` 定义点击作者、书名、自定义按钮、分享、清缓存、书架变动、开始与结束阅读等事件。按钮事件绑定 `event`、`java`、`result`、`book`、`chapter`；脚本返回真值时拦截默认动作，非真值时调用默认动作。Android 为同一自定义按钮请求去重，并在任务完成时释放占用。书籍事件和源事件走不同入口，超时与错误处理也不同。
+`BookSource.eventListener` 与 `ContentRule.callBackJs` 控制书源回调。`SourceCallBack` 定义点击作者、书名、自定义按钮、分享、清缓存、书架变动、开始与结束阅读等事件。按钮事件绑定 `event`、`java`、`result`、`book`、`chapter`；脚本返回真值时拦截默认动作，非真值时调用默认动作。Android 为同一自定义按钮请求去重，并在任务完成时释放占用。书籍事件和源事件走不同入口，超时与错误处理也不同：`callBackSource` 的脚本超时为 30 秒，`callBackBook`/`callBackBooks` 为 60 秒；`callBackBooks` 接收 `(source, book)` 批量列表逐项触发，`callBackSource` 只处理单个源级事件。
 
 package 需要版本化的事件输入和执行结果协议，宿主注入允许的 UI 动作。Web 应用可以只发送自己实际产生的事件，但不能把未知事件解释成某个已有事件。未实现的 UI 动作返回 capability error；超时、取消、组件离开和重复点击都必须释放按钮占用。用户可见的默认动作是否执行，应由脚本结果与错误策略共同决定，不能让异步回调在页面已变更后触发旧动作。
 

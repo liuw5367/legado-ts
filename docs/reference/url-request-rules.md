@@ -45,7 +45,7 @@ https://example.com/search,{
 | `followRedirects` | 支持布尔、`0/1`、`false/true` 字符串；其他值忽略 |
 | `dnsIp` | 当前目标域名使用的 IPv4/IPv6 字面量列表；`resolveIp` 是旧别名 |
 | `js` | URL 选项解析后执行，结果写回 URL |
-| `serverID` | 服务端路由/节点提示 |
+| `serverID` | 服务端路由/节点提示；实际由 WebDAV 远端存储消费，作为 WebDAV 服务器配置 ID（`WebDav.fromPath` 解析 URL 中的 `serverID` 选择授权配置，缺失时直接失败） |
 | `webViewDelayTime` | WebView 加载后的非负等待毫秒数 |
 
 宽松 JSON 仅用于历史兼容，并应记录警告。严格 JSON 优先。
@@ -128,3 +128,5 @@ HttpClient 返回解压后的 bytes、响应头、状态及最终 URL；核心�
 ## 7. 浏览器和 SSR 约束
 
 浏览器不能默认跨域访问所有书源，SPA 需要 Node/Next.js 代理或站点 CORS。Next.js 服务端代理不得复用跨请求 CookieStore、JS scope 或变量 map。HTTP 适配器要提供请求级 header/cookie 计算，并允许上层设置来源白名单和 SSR 超时。
+
+宿主启用 `blockSourceNavigation` 且当前流程携带 `SuppressSourceNavigation` 时，java 侧 UI 跳转（`openUrl`、`openVideoPlayer`、`startBrowser` 及 WebView 弹窗）应被阻止并报告 `policy-denied` 诊断，不能静默打开书源网页或视频。

@@ -55,7 +55,7 @@
 
 ## 宿主方法补充盘点
 
-以下来自 `help/JsExtensions.kt` 及其继承的 JsEncodeUtils；不能因为 11 的示意接口没列出而视为放弃。每个方法的重载都需单独案例，尚未完成逐重载语义对照的方法不能标记“规格完成”。
+以下主要来自 `help/JsExtensions.kt` 及其继承的 JsEncodeUtils，键值 get/put 等源方法定义在 `BaseSource`（见源方法行）；不能因为 11 的示意接口没列出而视为放弃。每个方法的重载都需单独案例，尚未完成逐重载语义对照的方法不能标记“规格完成”。
 
 | 能力 | 方法族 | 处理要求与核实状态 |
 | --- | --- | --- |
@@ -69,7 +69,7 @@
 | 并发 | singleFlight、lock、tick | 默认等待 15000ms，允许 0–300000ms；名称非空且不超过 256；源身份隔离，详见下段 |
 | 浏览器/交互 | webView、webViewGetSource、webViewGetOverrideUrl、startBrowser、startBrowserAwait、showBrowser、getVerificationCode、openVideoPlayer、openUrl、getWebViewUA | 需要真实宿主协议；低优先级保留，不能以 fetch 等价替代 |
 | 日志/设备/应用 | toast、longToast、log、logType、randomUUID、androidId、refreshBookInfo、refreshBookToc、refreshContent、getReadBookConfig、getReadBookConfigMap、getThemeMode、getThemeConfig、getThemeConfigMap | 可映射宿主事件或受控配置；androidId 的 Web 替代语义未决定，缺能力明确诊断 |
-| 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、登录 UI/action 方法 | 源配置对象继承 JsExtensions，不仅是 11 中少数 getter；按会话隔离持久状态 |
+| 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、evalLoginUiV2/evalLoginActionV2（登录 UI/action 的宿主方法名） | 源配置对象继承 JsExtensions，不仅是 11 中少数 getter；按会话隔离持久状态 |
 
 SourceLock.singleFlight 让同批等待者在一次成功执行后跳过 action，并非给所有调用者返回相同 Promise 值；同线程重入直接跳过。lock 每个调用都执行 action。tick 返回递增前值，初次 0，达到 Int.MAX_VALUE 后归零，4096 项 LRU。Web 多实例范围必须由宿主说明，不能把 Android 进程内锁误称为分布式锁。
 

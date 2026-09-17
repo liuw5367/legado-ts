@@ -15,7 +15,7 @@ JSON 对象带 `sourceUrls` 时表示外层远程书源 URL 列表。导入器�
 
 JSON 数组中的每一个对象都必须有非空 `bookSourceUrl`。单个 JSON 对象也必须有该字段；缺失时统一报告“不是书源”类错误。
 
-导入器对 `ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 和 `ruleReview` 都应接受对象形式以及持久化层可能出现的 JSON 字符串形式，再统一归一化为规则对象。规则对象内部的未知字段不能在导入时静默丢弃，至少要进入 `unknownFields` 或原始字段保留区，供编辑器导出和兼容性诊断使用。字段的默认值和是否允许空字符串以 [书源数据模型](../reference/source-schema.md) 为准。
+导入器对 `ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 和 `ruleReview` 都应接受对象形式以及持久化层可能出现的 JSON 字符串形式，再统一归一化为规则对象。Web 目标要求规则对象内部的未知字段不能在导入时静默丢弃，至少要进入 `unknownFields` 或原始字段保留区，供编辑器导出和兼容性诊断使用；Android 的 GSON 反序列化会直接丢弃未知字段。字段的默认值和是否允许空字符串以 [书源数据模型](../reference/source-schema.md) 为准。
 
 ## 导入候选与替换
 
@@ -24,7 +24,7 @@ JSON 数组中的每一个对象都必须有非空 `bookSourceUrl`。单个 JSON
 1. 将原书源序列化为 JSON；
 2. 按源名称和源 URL 匹配启用的导入替换规则；
 3. 依次对 JSON 文本应用替换；
-4. 严格 JSON 解析失败时尝试历史宽松 JSON 解析，并记录非规范提示；
+4. 严格 JSON 解析失败时尝试历史宽松 JSON 解析，并记录非规范提示（Web 目标设计；Android 导入只做一次 GSON 宽松解析，没有严格到宽松的回退）；
 5. 生成原始候选、替换候选和替换错误；
 6. 与本地同 `bookSourceUrl` 的源按 `lastUpdateTime` 判断新增或更新；
 7. 用户确认后再写入。
@@ -92,13 +92,13 @@ Android 应用的最终写入由 `SourceHelp.insertBookSource` 和 `BookSourceDa
 
 迁移库不应把导入和持久化绑在一起：核心返回 `ImportCandidate[]`，Node/应用层决定是否保存、如何确认更新和是否保留本地名称、分组、启用状态。
 
-保存成功后，若规则内容发生变化，必须重置或标记过期的书源检查状态，并使规则相关缓存失效；仅改变用户排序、分组或启用状态时不应误重置检查。删除还要清理变量、cookie 引用和检查记录，书籍/章节/阅读进度按应用策略单独处理。完整的数据写入和删除边界见 [书源保存与状态持久化流程](source-persistence-flow.md)。
+保存成功后，若规则内容发生变化，必须重置或标记过期的书源检查状态，并使规则相关缓存失效（Android 的 `BookSourceDao.update` 在 `checkContent()` 变化时重置检查状态）。Web 目标要求仅改变用户排序或启用状态时不应误重置检查；Android 的 `bookSourceGroup` 属于 `checkContent()` 的一部分，修改分组仍会重置检查状态。删除还要清理变量、cookie 引用和检查记录，书籍/章节/阅读进度按应用策略单独处理。完整的数据写入和删除边界见 [书源保存与状态持久化流程](source-persistence-flow.md)。
 
 比较本地版本时，以原始 `bookSourceUrl` 为身份；Android 使用 lastUpdateTime 参与比较，Web 同时比较内容，不因时间戳相同忽略变化。用户字段覆盖策略必须显式传入；sourceRevision 是独立保存版本。错误区分 `input`、`fetch`、`parse`、`normalize`、`replace`、`conflict`、`storage`。
 
-JSON 数组含一个无 URL 项时，原解析器整组抛错；空数组是零候选。sourceUrls 为 null 或含空白项是错误。JSON 名称缺省允许导入并诊断，JS 名称缺省是配置错误。远程导入 `#requestWithoutUA` 后缀会被剥离并将 UA 设置为字符串 `null`，不改变源身份。URI 由受控读取端口处理，不允许服务端读取任意用户路径。
+JSON 数组含一个无 URL 项时，原解析器整组抛错；空数组是零候选。sourceUrls 为 null 或含空白项是错误。Web 目标要求 JSON 名称缺省允许导入并诊断；Android 只校验 `bookSourceUrl`，名称缺省不产生诊断。JS 名称缺省是配置错误（`JsSourceConfig.extract` 直接抛错）。远程导入 `#requestWithoutUA` 后缀会被剥离并将 UA 设置为字符串 `null`，不改变源身份。URI 由受控读取端口处理，不允许服务端读取任意用户路径。
 
-持续订阅见 [订阅协议](source-subscriptions.md)。导出基于原始快照与用户修改，未修改原样返回；修改后保留未知字段和 mainJs，并再导入检查结构等价，不承诺空白及 key 顺序完全不变。
+持续订阅见 [订阅协议](source-subscriptions.md)。Android 非静默订阅（`silentUpdate=false`）在 `RuleUpdate.cacheSource` 检测到更新后把列表写入 `cacheBookSourceMap[url]`，由 `ImportBookSourceViewModel.importSourceUrl` 消费进入导入预览，保存后调用 `ContentProcessor.upReplaceRules()` 重建替换规则；`reimportSourceUrl` 对应的源通过 `selectExisting` 预选中。手动替换模式由 `automaticSourceReplacement` 与 `manualRuleIds` 控制，切换时逐项重新生成替换候选。导出基于原始快照与用户修改，未修改原样返回；修改后保留未知字段和 mainJs，并再导入检查结构等价，不承诺空白及 key 顺序完全不变。
 
 ## JavaScript 书源导入
 

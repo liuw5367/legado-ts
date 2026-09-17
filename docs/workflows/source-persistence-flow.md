@@ -41,7 +41,7 @@ Repository.save/saveBatch(... expectedSourceRevision)
 
 `SourceRepository`、`SourceTransaction`、`SaveSourceInput`、`SaveSourceResult`、`SaveBatchInput`、版本断言和审计输入的完整定义只维护在[书源管理与状态](../reference/source-management-and-state.md#3-repository-边界)。本流程使用该接口，不在流程文档复制一份可能漂移的公开类型定义；版本字段名称以[运行时统一契约](../reference/runtime-contracts.md)为准。
 
-`RemoveSourceInput` 至少包含可信的 `userId`、`sourceId` 和可选的 `expectedSourceRevision`；其余字段由[书源管理与状态](../reference/source-management-and-state.md)的 Repository 契约统一定义。版本使用由 Repository 生成的不透明字符串（可编码单调递增序列），`lastUpdateTime` 仍只是源内容元数据，不可替代并发版本。
+`RemoveSourceInput` 至少包含可信的 `userId`、`sourceId` 和可选的 `expectedSourceRevision`；其余字段由[书源管理与状态](../reference/source-management-and-state.md)的 Repository 契约统一定义。Web 目标中版本使用由 Repository 生成的不透明字符串（可编码单调递增序列），`lastUpdateTime` 仍只是源内容元数据，不可替代并发版本；Android 的导入和订阅刷新仍以 `lastUpdateTime` 大小判断新增或更新，没有独立的并发版本比较。
 
 `NormalizedSource`、`SourceRecord`、`SourceChange` 的职责见[书源状态与副作用](../reference/source-management-and-state.md)。其中 `sourceId` 默认由原始 `bookSourceUrl` 字符串稳定生成；URL 变化应作为“删除旧 ID + 新建新 ID”处理，而不是静默覆盖另一条书源。
 
@@ -69,11 +69,13 @@ Repository.save/saveBatch(... expectedSourceRevision)
 
 ### 用户覆盖变化
 
-用户自定义排序、启用状态、分组等元数据与书源规则分离保存。只改变这些字段时，不应重置规则检查状态；但若改变了执行规则，仍按规则变化处理。
+用户自定义排序、启用状态、分组等元数据与书源规则分离保存。Web 目标要求只改变这些字段时，不应重置规则检查状态；但若改变了执行规则，仍按规则变化处理。Android 的 `BookSourceDao.update` 用 `checkContent()` 判断是否重置检查状态，`bookSourceGroup` 属于 `checkContent()` 的一部分，因此修改分组会重置检查状态；排序、启用和启用发现不参与 `checkContent()` 比较，修改它们不会重置。
 
 ### 并发冲突
 
 `expectedSourceRevision` 存在且不等于数据库当前 `sourceRevision` 时拒绝写入，返回 `SOURCE_REVISION_CONFLICT`。应用重新读取快照后展示差异，由用户选择合并或覆盖；不能用最后写入者覆盖来掩盖冲突。
+
+Android 没有等价的保存/删除版本断言：`BookSourceDao.insertSources` 使用 `REPLACE` 直接覆盖，删除无版本条件。唯一带版本条件的回写是检查完成时的 `finishCheck`，它要求 `revision` 匹配且状态仍为 `NEEDS_CHECK`，不匹配则放弃回写。
 
 ## 事务边界与副作用
 
@@ -95,6 +97,8 @@ Repository.save/saveBatch(... expectedSourceRevision)
 ```
 
 默认建议保留用户书架和阅读进度，只删除书源拥有的配置、凭据引用、检查记录和可重建缓存。若产品选择级联删除内容，必须单独确认并在 API 中明确提示。
+
+Android 的 `SourceHelp.deleteBookSource` 在删除书源行（`book_source_check_states` 经外键级联清理）和 `cacheDao.deleteSourceVariables` 之外，还会调用 `clearSharedGlobalStateBySourceKey` 清理该源在共享 JS 全局状态中的条目，并触发 `SourceConfig.removeSources(sourceKeys)` 与 `AppCacheManager.clearSourceVariables()`。
 
 ## 订阅刷新与 API 保存
 
