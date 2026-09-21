@@ -19,8 +19,11 @@
     "htmlparser2": "catalog:",
     "iconv-lite": "catalog:",
     "jsonpath-plus": "catalog:",
+    "quickjs-emscripten": "0.32.0",
     "tough-cookie": "catalog:"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false
 }
