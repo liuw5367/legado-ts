@@ -16,7 +16,7 @@
 | JavaScript 书源 | 配置抽取、函数调用、返回值、同步兼容 API、变量和脚本 scope | [JS](javascript-source.md)、[宿主](runtime-host-interfaces.md) | 优先；核对 `JsExtensions` 中未列出的实际书源依赖 |
 | 图片与封面解密 | `coverDecodeJs`、`imageDecode` 的字节输入、脚本输出与缓存 | [模型](source-schema.md) | 后续规格；需核对 `ImageUtils` 及图片请求链 |
 | 付费与受限章节 | VIP/购买标识、`payAction`、授权状态、执行后刷新 | [目录](../workflows/chapter-list-flow.md)、[模型](source-schema.md) | 后续规格；需核对用户触发、凭据和失败恢复 |
-| 段评读取与交互 | 摘要、详情、回复、点赞、发送和删除规则 | [JS](javascript-source.md)、[模型](source-schema.md) | 读取行为已发现；写入目前只有字段证据，先核实执行入口 |
+| 段评读取与交互 | 结构化摘要、详情、回复，旧式段评页面桥接，以及点赞、发送和删除规则 | [段评流程](../workflows/review-flow.md)、[JS](javascript-source.md)、[模型](source-schema.md) | 结构化读取和旧式页面桥接均有 Android 入口；写入目前只有字段证据，先核实执行入口 |
 | 登录与认证 | 静态 Header/Cookie、`loginCheckJs`、登录表单、验证码和动态登录 | [请求](url-request-rules.md)、[JS](javascript-source.md) | 静态能力优先；交互登录低优先级，保留完整目标 |
 | 浏览器行为 | WebView 请求、`@webjs:`、资源嗅探和页面脚本 | [请求](url-request-rules.md)、[宿主](runtime-host-interfaces.md) | 后续宿主能力；不能把普通 HTTP 当成等价实现 |
 | 书源交互与事件 | `eventListener`、`customButton`、正文回调和宿主 UI 动作 | [模型](source-schema.md) | 后续规格；需核对 `SourceCallBack` 和调用方事件协议 |
@@ -53,10 +53,11 @@
 | CAP-SCHEMA | 02 的全部 BookSource/rule 字段、RowUi | IMP-005、EDIT-005 | 字段已核对；登录动态协议仍有待核实项 |
 | CAP-RULE | 04 的模式、链、变量、替换及转换 | SCH、VAR | 核心源码与现有测试定位；golden 未运行 |
 | CAP-REQUEST | 05 请求/响应/Cookie/DNS/代理 | URL | 有源码及测试定位 |
-| CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001–003、EXP | 有调用源码；exploreScreen 仅保留 |
-| CAP-INFO / CAP-TOC / CAP-CONTENT | 07–09 | FLOW-004–012 | 已核对排序、去重及 mapAsync；需运行对照 |
-| CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008–010 | 函数与返回模型有证据；引擎适配未验证 |
+| CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP | 有调用源码；exploreScreen 仅保留 |
+| CAP-INFO / CAP-TOC / CAP-CONTENT | 07 至 09 | FLOW-004 至 012 | 已核对排序、去重及 mapAsync；需运行对照 |
+| CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008 至 010 | 函数与返回模型有证据；引擎适配未验证 |
 | CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取有入口，段评写入仅字段证据 |
+| CAP-REVIEW | 段评流程的声明式摘要/详情/回复、JS 函数及旧式网页桥接 | JS-004、REVIEW-001、[段评流程](../workflows/review-flow.md) | 结构化读取和旧式桥接规格已补；TypeScript 与宿主尚未实现，写入保持待核实 |
 | CAP-EDITOR | 16 | EDIT | Web 目标设计与现有 UI 证据分开 |
 | CAP-STATE / CAP-SUBSCRIPTION | [状态与副作用](state-and-effects.md)、[订阅流程](../workflows/source-subscriptions.md) | STATE、SUB | Web 目标设计 |
 | CAP-ARTIFACT | [书源相关实体边界](artifact-model.md) | SUB、MODEL | BookSource 已纳入；RssSource/ReplaceRule 需独立 adapter 验收 |
@@ -70,17 +71,17 @@
 
 | 能力 | 方法族 | 处理要求与核实状态 |
 | --- | --- | --- |
-| 网络 | ajax、ajaxAll、ajaxTestAll、connect、get、head、post | 网络 get 与单参数键值 get 是不同重载；返回 StrResponse/Connection.Response 不能混成同一未经适配对象 |
+| 网络 | ajax、ajaxAll、ajaxTestAll、connect、get、head、post | 网络 get 与单参数键值 get 是不同重载；`ajaxAll/ajaxTestAll` 的 `skipRateLimit` 可绕过书源限流但不绕过宿主并发上限；返回 StrResponse/Connection.Response 不能混成同一未经适配对象 |
 | 编码 | strToBytes、bytesToStr、base64Decode、base64DecodeToByteArray、base64Encode、hexDecodeToByteArray、hexDecodeToString、hexEncodeToString、encodeURI | 保留 charset、flags、null 和 bytes 返回差异；逐重载 fixture 由阶段 B 完成 |
 | 加密 | md5Encode、md5Encode16、createSymmetricCrypto、createAsymmetricCrypto、createSign；aesDecodeToByteArray/aesDecodeToString/aesDecodeArgsBase64Str/aesBase64DecodeToByteArray/aesBase64DecodeToString；aesEncodeToByteArray/aesEncodeToString/aesEncodeToBase64ByteArray/aesEncodeToBase64String/aesEncodeArgsBase64Str；desDecodeToString/desBase64DecodeToString/desEncodeToString/desEncodeToBase64String；tripleDESDecodeStr/tripleDESDecodeArgsBase64Str/tripleDESEncodeBase64Str/tripleDESEncodeArgsBase64Str；digestHex/digestBase64Str/HMacHex/HMacBase64 | JsEncodeUtils 有实现；算法、padding、key/IV 编码及工厂返回方法尚需逐项契约，不假设 WebCrypto 同名即等价 |
 | 文本/时间 | timeFormatUTC、timeFormat、htmlFormat、t2s、s2t、toNumChapter、toURL | locale、时区、格式语法和 Unicode 需固定，宿主缺能力不能返回原文假成功 |
 | 文件/脚本 | importScript、cacheFile、downloadFile、getFile、readFile、readTxtFile、deleteFile、getTxtInFolder | 只允许宿主私有命名空间；返回 Java File 需适配，不暴露真实路径 |
 | 归档 | unzipFile、un7zFile、unrarFile、unArchiveFile、getZipStringContent/getZipByteArrayContent、getRarStringContent/getRarByteArrayContent、get7zStringContent/get7zByteArrayContent | 下载/读取 → 限制解包 → 选择路径 → bytes/解码文本；不存在条目与损坏归档分开；阶段 D 对照 |
 | 字体 | queryBase64TTF、queryTTF、replaceFont | 获取字体 → 解析轮廓 → Unicode 映射 → 替换；不能用普通字符串替换冒充字体解码，阶段 D 对照 |
-| 并发 | singleFlight、lock、tick | 默认等待 15000ms，允许 0–300000ms；名称非空且不超过 256；源身份隔离，详见下段 |
+| 并发 | singleFlight、lock、tick | 默认等待 15000ms，允许 0 至 300000ms；名称非空且不超过 256；源身份隔离，详见下段 |
 | 浏览器/交互 | webView、webViewGetSource、webViewGetOverrideUrl、startBrowser、startBrowserAwait、showBrowser、getVerificationCode、openVideoPlayer、openUrl、getWebViewUA | 需要真实宿主协议；低优先级保留，不能以 fetch 等价替代 |
 | 日志/设备/应用 | toast、longToast、log、logType、randomUUID、androidId、refreshBookInfo、refreshBookToc、refreshContent、getReadBookConfig、getReadBookConfigMap、getThemeMode、getThemeConfig、getThemeConfigMap | 可映射宿主事件或受控配置；androidId 的 Web 替代语义未决定，缺能力明确诊断 |
-| 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、evalLoginUiV2/evalLoginActionV2（登录 UI/action 的宿主方法名） | 源配置对象继承 JsExtensions，不仅是 11 中少数 getter；按会话隔离持久状态 |
+| 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、evalLoginUiV2/evalLoginActionV2（登录 UI/action 的宿主方法名） | 源配置对象继承 JsExtensions，不仅是 11 中少数 getter；`putConcurrent` 更新书源级限流，编辑/覆盖/删除后清理 source key 记录；按会话隔离持久状态 |
 
 SourceLock.singleFlight 让同批等待者在一次成功执行后跳过 action，并非给所有调用者返回相同 Promise 值；同线程重入直接跳过。lock 每个调用都执行 action。tick 返回递增前值，初次 0，达到 Int.MAX_VALUE 后归零，4096 项 LRU。Web 多实例范围必须由宿主说明，不能把 Android 进程内锁误称为分布式锁。
 

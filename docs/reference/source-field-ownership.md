@@ -28,7 +28,7 @@ export interface UserSourceState {
 }
 
 export interface SourceSnapshot {
-  /** 当前用户和原始 bookSourceUrl 组成的稳定身份。 */
+  /** 原始 bookSourceUrl/sourceId；userId 单独作为用户作用域，不拼入 sourceId。 */
   sourceId: string
   /** 当前用户作用域。 */
   userId: string
@@ -42,6 +42,8 @@ export interface SourceSnapshot {
 ```
 
 `BookSource` 仍然是 Android 兼容的交换投影，可能带有 `enabled`、`enabledExplore`、`customOrder`、`weight` 和分组字段。Repository 内部必须把这些字段映射到 `UserSourceState` 的权威值；不能因为导入 JSON 同时携带这些字段，就让远程订阅静默覆盖用户状态。
+
+`NormalizedSource` 保留这些兼容字段以便规则导出和 Android adapter 使用，但 `SourceSnapshot.userState` 是运行时唯一的用户状态来源；合并视图生成时以 `userState` 覆盖同名交换字段。没有用户状态的导入候选只能携带候选值，不能把它当作已授权的当前用户设置。
 
 ## 字段所有权
 
@@ -71,7 +73,7 @@ export interface SourceSnapshot {
 | 场景 | 结果 |
 | --- | --- |
 | 远程只改变规则 | 更新源配置，保留用户状态，使检查状态失效 |
-| 远程改变名称 | 默认更新显示名称，保留启用、分组、排序和权重 |
+| 远程改变名称 | 按采用 baseline 判断：本地仍等于 baseline 时跟随远端；本地已编辑时保留本地并报告字段差异；显式覆盖时采用远端 |
 | 远程携带管理字段 | 默认忽略其对用户状态的覆盖，并记录诊断 |
 | 用户同时编辑同一源 | 返回版本冲突，不自动合并规则文本 |
 | 远程删除条目 | 保留本地源并标记订阅缺失，不能自动删除 |

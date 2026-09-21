@@ -15,8 +15,8 @@
 2. 若 `bookUrlPattern` 与响应 URL 匹配，把整个响应当作详情页，直接执行详情规则；
 3. 否则使用 `ruleSearch` 的 `bookList` 获取元素列表；
 4. `bookList` 以 `-` 开头表示解析后反转，以 `+` 开头表示去掉控制前缀但不反转；
-5. 对每个元素执行 `name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`；
-6. 书名为空丢弃；作者、简介等字段按各自字段错误策略处理；
+5. 对每个元素执行 `name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`；书名和作者分别先经过 `formatBookName`/`formatBookAuthor` 清洗（规则见[书源数据模型](../reference/source-schema.md#书名和作者清洗)）；
+6. 清洗后的书名为空丢弃；作者、简介等字段按各自字段错误策略处理；
 7. 相对封面和详情 URL 按响应 URL 转绝对 URL；详情 URL 为空时回退响应 URL；
 8. 同书源内按 `SearchBook.bookUrl` 去重；
 9. 列表为空且没有 `bookUrlPattern` 时，回退为详情页解析。

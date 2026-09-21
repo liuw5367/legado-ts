@@ -149,13 +149,22 @@ export interface CacheWriteOptions {
   versionToken?: string
 }
 
-export interface ContentWriteInput {
-  /** 当前正文请求生成的书籍、章节和版本身份。 */
-  token: ContentSaveToken
-  /** 归一化后的正文或资源 URL。 */
+export interface ContentCacheRecord {
+  /** 归一化后的正文、资源 URL 或文件链接。 */
   content: string
-  /** 需要一起更新的章节元数据。 */
+  /** 生成正文时收到的最终响应 URL；缓存命中必须原样返回。 */
+  finalUrl: string
+  /** 与正文一起产生的章节更新。 */
   chapter: BookChapter
+  /** 音频歌词或视频弹幕；普通正文没有该字段。 */
+  auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
+}
+
+export interface ContentWriteInput {
+  /** 当前正文请求生成的内容身份和版本 token。 */
+  token: ContentSaveToken
+  /** 正文及其最终 URL、章节元数据和附加资源必须作为一个缓存记录提交。 */
+  record: ContentCacheRecord
   /** 是否在正文写入边界内保存章节标题、图片等元数据。 */
   saveChapterMetadata: boolean
 }
@@ -188,9 +197,9 @@ export interface ContentSaveToken {
 }
 
 export interface ContentStore {
-  /** 按稳定资源身份读取缓存，不递增写入代次。 */
-  read(identity: ContentIdentity): Promise<string | undefined>
-  /** 只在 token 仍为当前版本时写正文和章节元数据。 */
+  /** 按稳定资源身份读取缓存，不递增写入代次；旧的不完整记录按未命中处理。 */
+  read(identity: ContentIdentity): Promise<ContentCacheRecord | undefined>
+  /** 只在 token 仍为当前版本时写正文、最终 URL、章节元数据和附加资源。 */
   write(input: ContentWriteInput): Promise<StoreWriteResult>
   /** 为要求保存的新操作原子预留写入代次；缓存命中时不调用。 */
   reserve(identity: ContentIdentity, operationId: string): Promise<ContentSaveToken>
@@ -227,8 +236,18 @@ export interface StoreWriteResult {
 }
 
 export interface RateLimiter {
-  /** 等待当前书源允许发起下一次请求。 */
-  wait(sourceUrl: string, signal?: AbortSignal): Promise<void>
+  /** 更新书源级共享限流记录；空值或 0 表示不额外限流。已有记录更新时，非法配置沿用旧记录，首次非法值的 Android fallback 见请求规则。 */
+  configure(sourceId: string, concurrentRate?: string | null): void
+  /** 清理书源编辑/删除后的共享记录，避免旧配置影响新请求。 */
+  clear(sourceId: string): void
+  /** 按 sourceId 共享窗口记录，等待当前书源允许发起下一次请求；bypass 时跳过书源限流。 */
+  wait(sourceId: string, options?: RateLimitWaitOptions): Promise<void>
+}
+
+export interface RateLimitWaitOptions {
+  signal?: AbortSignal
+  /** Android 的 ajaxAll/ajaxTestAll 在此开关为 true 时绕过限流，但仍受宿主线程/并发上限约束。 */
+  bypass?: boolean
 }
 
 export interface Logger {
@@ -313,15 +332,23 @@ export interface SourceApi {
   get(key: string): string
   /** 写入当前源命名空间，返回兼容 API 定义的文本结果。 */
   put(key: string, value: string): string
+  /** 更新书源级 concurrentRate；编辑或删除源后宿主必须清理对应限流记录。 */
+  putConcurrent(value: string): void
 }
 
 export interface JavaApi {
+  /** 声明式规则 JS 的变量读取；绑定对象是 AnalyzeRule，按 local/chapter/book/rule-data/source 顺序执行。 */
+  get?(key: string): string
+  /** 声明式规则 JS 的变量写入；绑定对象是 AnalyzeRule，按 chapter/book/rule-data/source 选择目标。 */
+  put?(key: string, value: string): string
   /** 批量正文中保存单章正文；只允许在批量上下文调用。 */
   cacheContent(chapter: BookChapter | string, content: string): boolean
   /** 使用当前书源访问文本 URL；失败时按 Android 兼容策略返回错误文本或 null。 */
   ajax(url: string, callTimeoutMs?: number): string | null
   /** 并发访问多个 URL，结果顺序与输入数组一致，受书源限流和并发上限约束。 */
   ajaxAll(urls: string[], skipRateLimit?: boolean): JsResponse[]
+  /** 并发测试多个 URL；skipRateLimit=true 时只绕过书源限流，不绕过宿主并发上限。 */
+  ajaxTestAll(urls: string[], timeoutMs: number, skipRateLimit?: boolean): JsResponse[]
   /** 访问文本 URL 并返回结构化响应；错误响应可按 Android 兼容形态返回，但不得伪造成成功。 */
   connect(url: string, headerJson?: string, callTimeoutMs?: number): JsResponse
   /** 下载或读取缓存中的文本脚本文件。 */
@@ -330,9 +357,9 @@ export interface JavaApi {
   downloadFile(url: string): string
   /** 读取按书源域隔离的 Cookie。 */
   getCookie(tag: string, key?: string): string
-  // 键值 get/put 定义在 BaseSource（source/sourceApi 绑定，见 SourceApi），JavaApi 不重复声明。
-  // Android 的 BaseSource.evalJS 中 bindings["java"] = this（BaseSource.kt L410），java 与 source 别名化、该路径可达；
-  // 但 JS 源运行时 JsSourceEngine 的 java 绑定仅实现 JsExtensions（JsSourceEngine.kt L108），无键值 get/put。
+  // AnalyzeRule、AnalyzeUrl、BaseSource 和 JsSourceEngine 的 java 绑定不是同一个完整对象。
+  // 声明式规则中的 java.get/put 由 AnalyzeRule 提供；source/sourceApi 的 get/put 是书源级存储。
+  // JS 源的 java 绑定只注入 JsExtensions 子集，未注入的方法必须报告 capability-missing，不能凭 source API 补齐。
   /** 使用 WebView 加载页面，属于可选能力。 */
   webView?(html: string | null, url: string | null, js: string | null): string | null
   /** 使用 WebView 获取经过脚本处理的页面源码，属于可选能力。 */
@@ -405,7 +432,7 @@ export interface VariableStoreFactory {
 }
 
 export interface VariableStore {
-  /** 按 local/chapter/book/rule-data/source 优先级查询；空串继续查找。 */
+  /** 按 local/chapter/book/rule-data/source 优先级查询；local 命中空串即返回，其他作用域空串继续查找。 */
   get(key: string): string | undefined
   /** 写入指定作用域，书籍/章节变更随领域结果提交。 */
   put(scope: 'local' | 'chapter' | 'book' | 'rule-data' | 'source', key: string, value: string | null): void

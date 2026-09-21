@@ -29,10 +29,12 @@ export interface RequestPlan {
   method: 'GET' | 'POST' | 'HEAD'
   /** 已解析的请求头。 */
   headers: Record<string, string>
-  /** 已按 charset 和 Content-Type 准备好的请求体。 */
+  /** 已按 requestCharset 和 Content-Type 准备好的请求体。 */
   body?: string | Uint8Array
-  /** 请求体和响应使用的字符集提示。 */
-  charset?: string
+  /** 请求参数和表单 body 使用的字符集；不决定响应解码。 */
+  requestCharset?: string
+  /** 响应 bytes 解码和 bodyJs/XML 处理使用的字符集；缺失时由响应头或宿主默认值决定。 */
+  responseCharset?: string
   /** 最大尝试次数；不代表一定重试。 */
   maxAttempts: number
   /** 是否允许跟随重定向。 */
@@ -52,6 +54,8 @@ export interface RequestExecutionHints {
   useWebView: boolean
   /** WebView 页面脚本。 */
   webJs?: string
+  /** WebView/资源嗅探使用的正则；由正文请求透传给宿主，不能在普通 HTTP 路径静默执行。 */
+  sourceRegex?: string
   /** DNS 覆盖地址；安全策略仍由宿主校验。 */
   dnsIp?: string
   /** 代理提示；不能绕过宿主出口策略。 */

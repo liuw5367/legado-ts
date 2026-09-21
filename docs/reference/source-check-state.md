@@ -36,10 +36,10 @@ export interface SourceCheckStageResult {
   stage: SourceCheckStage
   /** 阶段结论。 */
   status: SourceCheckStageStatus
-  /** 稳定错误码；通过时可以为空。 */
+  /** 稳定错误码；通过或未执行时可以为空。 */
   code?: string
-  /** 阶段耗时，单位毫秒。 */
-  durationMs: number
+  /** 阶段耗时，单位毫秒；未执行阶段省略。 */
+  durationMs?: number
   /** 可安全展示的阶段摘要。 */
   detail?: string
 }

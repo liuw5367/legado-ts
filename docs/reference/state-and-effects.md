@@ -41,7 +41,7 @@ Android 行为与上表不同：`BookSourceCheckState.sourceRevision` 在插入�
 | 网络请求、响应 Set-Cookie | 请求执行期间，按 enabledCookieJar 和策略更新 | 已发送的请求不可撤回，已经接受的 Cookie 不随正文失败回滚 |
 | `source.putVariable`、脚本 cache 写入 | 脚本调用时，允许本次后续读取 | 已完成写入记录 effect；不得声称整个调用没有副作用 |
 | 普通详情、目录和 Book/Chapter 变量 | 形成完整结果后产生变更 | 应用比较源/目录版本后原子提交；失败保持旧领域数据 |
-| 单章正文 `needSave=true` | 归一化成功后调用 ContentStore | 正文与相关元数据一起提交；过期 token 为 stale，不是规则错误 |
+| 单章正文 `needSave=true` | 归一化成功后调用 ContentStore | 正文、最终响应 URL、章节元数据和歌词/弹幕附加数据一起提交；旧的不完整缓存记录按未命中处理，过期 token 为 stale，不是规则错误 |
 | `java.cacheContent` | 批量脚本执行中，逐章比较 token 后提交 | 已保存章保留，失败与未回存章分别返回；禁止再次保存已成功章 |
 | 搜索 sink | 单源解析成功后、source-success 之前 | sink 失败是 storage-error；内存 sink 可满足无数据库调用 |
 | 用户购买、发帖等上游写入 | 明确用户动作后 | 不自动重试；未知结果明确标记，不假装失败后可安全重发 |

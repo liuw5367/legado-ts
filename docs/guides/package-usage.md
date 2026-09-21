@@ -52,16 +52,19 @@ interface PublicOperationResult<T> {
 | previewSource | 候选源、操作名、固定响应或显式网络选项 | 相同领域结果及逐步 trace；临时命名空间 |
 | refreshSubscription | 订阅 revision/baseline、本地快照 | [订阅流程](../workflows/source-subscriptions.md)定义的 diff 与提交计划，不调度、不保存 |
 | getContentBatch | 源、Book、带 tocRevision 的章节列表 | 每章 saved/stale/failed/unfilled、效果记录及剩余章节；不重复保存成功章 |
-| getReviewSummary | Book、Chapter | ReviewParagraph[]，空摘要合法 |
-| getReviewDetail | Book、Chapter、paraIndex/paraData/page | ReviewPage，保留下一页语义 |
-| getReviewReplies | 上述输入加 reviewId | 回复列表，未声明函数时 capability-missing |
+| getReviewSummary | Book、Chapter | ReviewParagraph[]，空摘要合法；读取分支见[段评流程](../workflows/review-flow.md) |
+| getReviewDetail | Book、Chapter、paraIndex/paraData/page | ReviewPage；声明式入口保留游标校验，JS 缺失必需函数返回 capability-missing/failed，空返回仍是合法空页 |
+| getReviewReplies | 上述输入加 reviewId | `status=empty` 的 ReviewPage；JS 未声明可选函数时在 diagnostics 标记 capability-missing，声明式和 JS 的分页规则不同 |
+| openLegacyReview | 书籍、章节、旧式 `url/index/src`、frame origin | 旧式页面会话的 `id`/`nonce` 与页面元数据；受支持的 `getDP/getZP` 脚本走浏览器桥接，不转换为结构化 ReviewPage |
+| legacyReviewPage | 会话 `id`、`nonce` | 受 CSP/sandbox 保护的旧式页面；会话无效或过期返回明确错误 |
+| runLegacyReview | 会话 `id`、不超过 64 KiB 的脚本 | HTML 或带 `html` 的 JSON 结果，继续执行图片重写；书源变更、nonce 错误和脚本错误不返回空评论 |
 | decodeImage | Book、src、bytes、isCover | `BinaryReference` 或解码错误；无规则原样返回，原始 bytes 只通过独立二进制响应返回 |
 | resolveDownload | 文件源及 Book | 详情规则生成的下载地址列表；实际文件写入由宿主负责 |
 | executeSourceAction | pay 或已知 event 名、Book/Chapter、用户确认及操作身份 | open-url/refresh-toc/intercept-default/continue-default；未知事件拒绝，写入不自动重试 |
 | getLoginForm / submitLogin | 源、挑战身份、表单输入 | 登录表单/挑战/认证结果；低优先级，完整动态参数未核实前报能力缺失 |
 | inspectCapabilities | 源快照及宿主报告 | required/supported/missing/dynamicUnknown；动态 JS 不能靠静态扫描保证全部依赖 |
 
-单源搜索输入 key/page；多源额外接收有序 SourceSnapshot[]、precision 和 SearchResultSink。详情接收 canReName；目录接收旧目录、tocRevision 与刷新选项；正文接收 tocRevision、nextChapterUrl 或目录快照及 needSave（默认 false）。分页 page 为一基正整数；不合法输入在网络前失败。searchMany 每源返回 success/empty/failed/cancelled 状态，全部失败与全部成功但无匹配分别表达。
+单源搜索输入 key/page；多源额外接收有序 SourceSnapshot[]、precision 和 SearchResultSink。详情接收 canReName；目录接收旧目录、tocRevision 与刷新选项；正文接收 tocRevision、nextChapterUrl 或目录快照及 needSave（默认 false），缓存读取条件和 Android-compatible 差异见[正文流程](../workflows/content-flow.md)。分页 page 为一基正整数；不合法输入在网络前失败。searchMany 每源返回 success/empty/failed/cancelled 状态，全部失败与全部成功但无匹配分别表达。
 
 事件通过调用方订阅器接收：`start`、`progress`、`source-success`、`source-error`、`completed`、`cancelled`、`saved`；包含 operationId、递增序号和 page/source owner。`completed` 与 `cancelled` 互斥，终态事件只能发布一次；重复或迟到事件按 operationId/version 丢弃。订阅异常不能阻断核心。只有 sink/ContentStore 确认后发布相应保存事件；completed 不表示应用已提交 changes。所有入口结束前等待本次资源关闭。
 

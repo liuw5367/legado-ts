@@ -28,7 +28,7 @@ package 需要版本化的事件输入和执行结果协议，宿主注入允许
 
 ## 段评交互字段
 
-`ReviewRule` 定义摘要、详情与回复读取规则，还保存点赞、点踩、发送评论、发送回复和删除地址。当前已核对的 `ReviewController` 与 `ReviewRuleParser` 主要执行读取与解析；仅凭写入字段存在，不能宣称 Android 已有相同的写入协议。因此，交互字段必须在导入、编辑和导出中保留，写入操作先继续追踪调用点和可观察行为。若原项目没有执行入口，Web 侧新增写入能力应标为目标设计，不能放入 Android 等价 golden。
+`ReviewRule` 定义摘要、详情与回复读取规则，还保存点赞、点踩、发送评论、发送回复和删除地址。摘要、详情和回复的读取顺序、参数、游标和空结果见[段评流程](review-flow.md)。当前已核对的 `ReviewController` 与 `ReviewRuleParser` 主要执行读取与解析；仅凭写入字段存在，不能宣称 Android 已有相同的写入协议。因此，交互字段必须在导入、编辑和导出中保留，写入操作先继续追踪调用点和可观察行为。若原项目没有执行入口，Web 侧新增写入能力应标为目标设计，不能放入 Android 等价 golden。
 
 写入能力的目标规格至少应说明用户确认、认证身份、请求构造、重复提交、失败恢复和服务端响应；缺少可核实语义时不让 package 根据 URL 字段自行猜测 HTTP 方法或请求体。读取摘要、详情与回复仍按 [JavaScript 书源](../reference/javascript-source.md) 和 [规则模型](../reference/source-schema.md) 验收。
 

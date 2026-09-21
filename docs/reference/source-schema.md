@@ -40,7 +40,7 @@ export interface BookSource {
   jsLib?: string | null
   /** 是否自动保存请求 Cookie；JSON/对象导入省略时按 Kotlin 构造默认值 true，显式 null 和数据库旧行缺失值按请求判断规则归一化为 false。 */
   enabledCookieJar?: boolean | null
-  /** 并发率配置文本，由宿主限流器解释。 */
+  /** 书源级并发率配置文本；语法和窗口共享规则见 [URL 与请求规则](url-request-rules.md#concurrentrate)。 */
   concurrentRate?: string | null
   /** 默认请求头文本，通常是 JSON 对象。 */
   header?: string | null
@@ -187,6 +187,10 @@ export interface BookListRule {
 export interface ExploreRule extends BookListRule {
   /** 发现流程复用 BookListRule 字段，不增加额外字段。 */
 }
+
+### 书名和作者清洗
+
+搜索列表和详情字段在后续过滤或覆盖前都调用同一组 Android 兼容清洗函数：`formatBookName` 先删除 `\s+作\s*者.*` 或 `\s+\S+\s+著`，再去除首尾空白；`formatBookAuthor` 先删除 `^\s*作\s*者[:：\s]+` 或 `\s+著`，再去除首尾空白。清洗只作用于运行时得到的书名和作者，不改写规则原文；书名清洗为空时搜索项丢弃，详情清洗为空时不覆盖已有字段。
 
 export interface ExploreKind {
   /** 分类标题；普通文本格式的 :: 左侧。 */

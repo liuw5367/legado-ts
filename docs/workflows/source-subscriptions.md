@@ -65,7 +65,7 @@ Android 的订阅刷新 `RuleUpdate.cacheSource` 只把响应整体按 `type` �
 
 不同实体使用各自的稳定关联键：`BookSource` 使用 `bookSourceUrl/sourceId`，`RssSource` 使用其 `sourceUrl`，`ReplaceRule` 使用规则 `id`。只有 `BookSource` 条目进入本 package 的 source repository；另外两类必须由独立 adapter 或未来扩展 repository 负责，不能把它们强制转换为 `SourceRecord`。
 
-Android `silentUpdate=true` 的实际路径是：发现本地不存在或 `lastUpdateTime` 更旧的条目后直接插入；已有书源只保留本地分组，然后调用 `SourceHelp.insertBookSource`，完成后更新替换规则处理。它没有本流程定义的三方冲突确认。`silentUpdate=false` 时 `RuleUpdate.cacheSource` 不写库，而是把更新后的列表写入 `cacheBookSourceMap[url]` 并返回，由导入流程的 `ImportBookSourceViewModel.importSourceUrl` 消费，进入导入预览和用户确认。Web package 的推荐路径仍是保存前计算 base/remote/local 差异；若兼容 adapter 需要复刻 Android 静默行为，必须显式使用 `android-compatible` 模式，并仍执行用户隔离、版本写入、脚本隔离和秘密保护。
+Android `silentUpdate=true` 的实际路径是：发现本地不存在或 `lastUpdateTime` 更旧的条目后直接插入；已有书源只保留本地分组，然后调用 `SourceHelp.insertBookSource`，完成后更新替换规则处理。它没有本流程定义的三方冲突确认，名称也不会采用本节的 baseline 感知策略，而是随远端整行替换。`silentUpdate=false` 时 `RuleUpdate.cacheSource` 不写库，而是把更新后的列表写入 `cacheBookSourceMap[url]` 并返回，由导入流程的 `ImportBookSourceViewModel.importSourceUrl` 消费，进入导入预览和用户确认。Web package 的推荐路径仍是保存前计算 base/remote/local 差异；若兼容 adapter 需要复刻 Android 静默行为，必须显式使用 `android-compatible` 模式，并仍执行用户隔离、版本写入、脚本隔离和秘密保护。
 
 ## 刷新流程
 
@@ -98,7 +98,7 @@ HTTP 304 只在存在对应成功 baseline 时表示 unchanged；没有 baseline
 | 同批 remote 重复 sourceId 且配置不同 | conflict，不使用最后一个静默覆盖 |
 | 多个订阅提供同 sourceId | 多来源冲突，保留来源身份，由应用选择采用项 |
 
-用户字段 `bookSourceName`、`bookSourceGroup`、`enabled`、`enabledExplore`、`customOrder` 默认保留本地值，同时保留远端原值供比较。规则对象按字段路径比较；mainJs 作为整体文本比较，不能自动拼接两段脚本。没有本地编辑记录时，用本地配置与已采用 baseline 比较确定变化。
+`bookSourceGroup`、`enabled`、`enabledExplore`、`customOrder` 和 `weight` 默认保留本地值，同时保留远端原值供比较。`bookSourceName` 采用基线感知策略：本地名称仍等于已采用 baseline 时，远程改名可随更新采用；本地名称已被用户编辑时保留本地名称并报告字段差异；无 baseline 的新源保留用户当前名称，显式确认覆盖时才采用远程名称。规则对象按字段路径比较；mainJs 作为整体文本比较，不能自动拼接两段脚本。没有本地编辑记录时，用本地配置与已采用 baseline 比较确定变化。
 
 内容指纹基于保留未知字段的结构化内容；对象 key 排序用于指纹，不改变导出文本，数组顺序和字符串内容参与比较。时间戳相同但内容不同仍是变更；时间戳更大但内容相同仍是 unchanged。导入替换后的有效候选与远端原文分别保存，变更替换规则必须重新计算候选。
 
@@ -124,5 +124,6 @@ HTTP 304 只在存在对应成功 baseline 时表示 unchanged；没有 baseline
 `SUB-016`：收到 `type=3` 时保留原始类型并返回 `UNSUPPORTED_SUBSCRIPTION_TYPE`，不得未经决策静默映射为 `type=2`。
 `SUB-017`：Android 兼容静默更新只保留本地分组并直接采用远端更新；Web 安全模式对规则冲突不自动覆盖，两个模式的结果和审计信息可区分。
 `SUB-018`：同一订阅刷新失败、取消或出现非法成员时，旧 source snapshot、baseline、revision 和成功时间均保留；尝试时间和失败诊断可更新。
+`SUB-019`：本地名称等于 baseline 时远程改名可进入更新候选；本地名称已编辑时保留本地并报告差异；无 baseline 的新源保留当前名称，显式覆盖才采用远程名称。
 
 以上为设计案例，尚无运行断言；证据与实现状态遵循 [测试基线](../quality/conformance-tests.md)。

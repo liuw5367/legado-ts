@@ -41,6 +41,7 @@
 | 连续 `<js>` 和 `@js:` | 目标必须兼容 | `AnalyzeRule`、JS 规则测试 | 未实现 runtime，待 fixture |
 | `@webjs:` | 目标宿主能力 | `AnalyzeRule`、WebView 相关流程 | 未实现 runtime，需 capability 设计 |
 | URL 页码、URL options、表单编码 | 目标必须兼容 | `AnalyzeUrl`、`AnalyzeUrlNetworkOptionsTest` | 未实现 runtime，待 fixture |
+| `concurrentRate` 书源级限流 | 目标必须兼容 | `ConcurrentRateLimiter`、`AnalyzeUrl` | 未实现 runtime，待窗口/取消 fixture |
 | Cookie、静态登录头和最终域名 | 目标必须兼容 | `AnalyzeUrl`、网络选项测试 | 未实现 runtime，待 fixture |
 | `@js` 改写登录 URL 后的跨域登录头 | 目标必须兼容 | `AnalyzeUrl` 登录头判断源码 | 未实现 runtime，需 golden |
 | 复杂登录 UI、验证码和多步骤登录 | 低优先待实现 | `BookSource` 登录字段、WebView 流程 | 未实现 runtime，需登录交互规格 |
@@ -52,7 +53,8 @@
 | 卷节点空正文和非卷空正文回退 | 目标必须兼容 | `WebBook`、`JsSourceBookTest` | 未实现 runtime，待 fixture |
 | JS 源返回值和字段归一化 | 目标必须兼容 | `JsSourceMarshallerTest`、`JsSourceEngineTest` | 未实现 runtime，待 fixture |
 | `getContentBatch` 和 `contentBatch` | 声明存在时必须兼容 | `JsSourceConfig`、JS 源测试 | 未实现 runtime，待 fixture |
-| 段评摘要、详情和回复 | 声明存在时必须兼容 | `JsSourceConfig`、`JsSourceReview` | 未实现 runtime，待 fixture |
+| 结构化段评摘要、详情和回复 | 声明存在时必须兼容 | `ReviewController`、`ReviewRuleParser`、`JsSourceReview` | 读取规格见[段评流程](../workflows/review-flow.md)，runtime 未实现，待 fixture |
+| 旧式段评网页桥接 | 受支持的 `getDP/getZP` 链接必须兼容 | `ReviewController`、`HttpServer`、`ReviewWebApiContractTest` | 会话 nonce、2 小时 TTL、64 KiB 脚本上限、CSP/sandbox 和图片重写见[段评流程](../workflows/review-flow.md)，runtime 未实现，待安全 fixture |
 | WebView 真实页面行为 | 目标宿主能力 | WebView 相关流程 | 需 adapter 和 capability error |
 | 发现分类、`infoMap` 与发现列表 | 目标必须兼容 | `BookSourceExtensions`、`ExploreKind`、`WebBook.exploreBookAwait` | 未实现 runtime，待分类和列表 fixture |
 | 图片与封面解密 | 目标宿主能力 | `ImageUtils`、`ContentRule.imageDecode`、`BookSource.coverDecodeJs` | 未实现 runtime，待字节流程规格 |

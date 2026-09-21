@@ -58,11 +58,13 @@ export interface SourceCheckConfig {
 
 `sourceTimeoutMs`、错误摘要和域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应；`requestTimeoutMs` 是 Web 目标新增的宿主约束。Android 的单书源总预算由 `CheckSource.timeout` 包围整个检测流程，域名探测另有固定的局部超时，普通 HTTP 请求仍使用 `AnalyzeUrl`/HTTP 客户端自身配置。`info` 和 `category` 是 Android 配置别名，核心结果统一使用 `book-info` 和 `toc`；适配器不能把两个名称作为两个独立阶段执行。`keyword` 省略时固定使用 `我的`，只有调用方明确传入非空关键字时才覆盖该值。Android 的 `wSourceComment` 只影响内存中的 source 对象，最终 detail 由检查状态保存；package 不直接更新 `book_sources` 的备注。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
 
+兼容 Android 的关键字选择由 `BookSource.getCheckKeyword` 完成：非空的 `checkKeyWord` 只有在不包含 `http`、`::`、`++`、`--` 时才采用，否则回退为 `我的`；空白值也回退。域名检查失败或域名不可达时，该源立即结束检测，不进入搜索、发现和后续书籍阶段；不能按“收集其他阶段证据”继续发请求。
+
 ## 阶段和依赖
 
 | 阶段 | 前置条件 | 输入 | 成功标准 | 失败影响 |
 | --- | --- | --- | --- | --- |
-| domain | 有有效书源 URL | URL、请求客户端 | DNS/连接/响应满足策略 | 标记域名失败；可继续收集其他阶段证据 |
+| domain | 有有效书源 URL | URL、请求客户端 | DNS/连接/响应满足策略 | 标记域名失败并结束该源的后续阶段 |
 | search | `searchRule` 存在 | 安全关键字 | 得到可解析的书籍结果 | 详情阶段没有可靠样本时跳过 |
 | discovery | `exploreRule` 存在且有入口 | 分类/发现 URL | 至少得到一个可解析结果 | 可继续搜索路径 |
 | book-info | 有搜索或发现样本 | 详情 URL、`bookInfoRule` | 书名/作者等核心字段可提取 | 目录/正文通常跳过 |
@@ -82,6 +84,13 @@ export interface SourceCheckConfig {
 5. 聚合阶段结果、总耗时、错误信息和可展示的建议。不要把远程响应原文或秘密写入普通日志。
 6. 回写前以 `(userId, sourceId, sourceRevision, checkRevision, sessionId)` 做条件检查。任一版本或会话不一致则标记结果 `STALE` 并丢弃持久化更新。
 
+### Android 阶段门槛
+
+- 搜索和发现是独立入口；各自启用时分别取第一条可解析结果。某入口返回空列表会记录该入口的业务失败并继续尝试另一入口，不能把空列表当成网络异常。
+- `checkInfo=false` 时，书籍详情、目录和正文全部不执行。详情检查开启时，已有 `book.tocUrl` 的书籍跳过详情请求；只有 `tocUrl` 为空时才调用详情规则补齐书籍信息。
+- `checkCategory=false` 或书源是文件类型时，目录和正文全部不执行。目录检查通过后，`checkContent=false` 只结束在目录阶段，不请求正文。
+- 目录样本过滤掉卷占位章节（`isVolume && url.startsWith(title)`），从剩余章节取第一章作为正文样本，并把第二个可读章节的 URL 作为 `nextChapterUrl`；只有一条可读章节时使用该章自身 URL 作为保护值；没有可读章节时返回目录为空，不能拿卷节点或任意最后一章代替保护 URL。
+
 ## 状态转换
 
 以下状态机为 Web 目标设计。Android 的 `BookSourceCheckState` 只有 `NEEDS_CHECK`/`PASSED`/`FAILED` 三种持久化状态；`RUNNING` 只存在于会话层，`CANCELLED` 与 `STALE` 在 Android 没有对应持久化状态，版本过期、书源已删除或回写失败在会话结果层以 `CheckSourceStatus.NOT_COMPLETED` 表达；用户取消时未处理的书源仅从会话快照缺失，不会合成该状态。
@@ -100,14 +109,6 @@ NEEDS_CHECK ──start──► RUNNING ──all stages pass──► PASSED
 ## 结果契约
 
 ```ts
-export type SourceCheckStage =
-  | "domain"
-  | "search"
-  | "discovery"
-  | "book-info"
-  | "toc"
-  | "content";
-
 export interface SourceCheckResult {
   /** 本次检测会话标识。 */
   sessionId: string;
@@ -123,19 +124,8 @@ export interface SourceCheckResult {
   operationId: string;
   /** 最终状态或实时阶段状态，使用规范的大写状态。 */
   status: SourceCheckStatus;
-  /** 每个阶段的结构化结果；跳过阶段也要有记录。 */
-  stages: Array<{
-    /** 阶段名称。 */
-    stage: SourceCheckStage;
-    /** 该阶段的结论，不把 SKIPPED 当作 PASSED。 */
-    status: SourceCheckStageStatus;
-    /** 阶段耗时；未执行阶段为空。 */
-    durationMs?: number;
-    /** 稳定错误码；通过或跳过时为空。 */
-    errorCode?: string;
-    /** 脱敏、可展示的诊断文本。 */
-    message?: string;
-  }>;
+  /** 每个阶段的结构化结果；跳过阶段也要有记录。字段以[书源校验状态](../reference/source-check-state.md)的 `SourceCheckStageResult` 为准。 */
+  stages: SourceCheckStageResult[];
   /** 供列表展示的脱敏摘要。 */
   summary: string;
   /** 分阶段诊断；不得包含响应原文或秘密。 */

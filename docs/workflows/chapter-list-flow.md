@@ -10,8 +10,8 @@
 
 1. 创建 `AnalyzeRule(book, source)`，设置 body、baseUrl、redirectUrl；
 2. 对 `chapterList` 执行 `getElements`；
-3. 对每个元素执行 `chapterName`、`chapterUrl`、`updateTime`、`isVolume`、`isVip`、`isPay`；
-4. 标题为空的节点丢弃；
+3. 对每个元素执行 `chapterName`、`chapterUrl`、`updateTime` 和 `isVolume`；
+4. 标题为空的节点直接丢弃，不执行该节点的 `isVip`/`isPay` 规则；标题非空时才继续解析 VIP 和购买标记；
 5. URL 为空时，卷节点使用 `title + index` 作为稳定占位 URL，普通章节使用当前 baseUrl；
 6. 卷名节点把 `updateTime` 放入 tag；普通章节把它放入 tag，并可从 tag 识别字数；
 7. VIP/购买规则的结果使用当前 `isTrue` 语义判断；

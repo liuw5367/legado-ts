@@ -20,11 +20,12 @@
 - `app/src/test/java/io/legado/app/api/JsSourceWebApiContractTest.kt`、`app/src/test/java/io/legado/app/help/config/JsSourceApiTokenTest.kt`：Node/API 访问令牌和 JS 源接口契约；
 - `app/src/test/java/io/legado/app/ui/book/source/edit/JsSourceDirectDebugTest.kt`、`JsSourceEditRedirectTest.kt`：编辑器调试、重定向和保存流程；
 - `app/src/test/java/io/legado/app/ui/book/read/JsSourceReviewDispatchSourceTest.kt`：段评运行时分流；
+- `app/src/test/java/io/legado/app/api/ReviewWebApiContractTest.kt`：结构化段评 HTTP 入口、旧式页面桥接、nonce、CSP/sandbox 和脚本执行边界；
 - `modules/web/tests/sourceEditor.test.js`：现有 Web 编辑器的响应式布局、脚本模板、状态恢复、保存和访问令牌行为。
 
 当前没有与这些 Kotlin 规则结果直接对照的 TypeScript runtime 测试；需要新增独立 fixture 和 golden 输出。
 
-外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板——例如 `rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
+外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板。例如，`rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
 
 ## Fixture 格式
 
@@ -103,29 +104,32 @@
 | `SCH-006` | 规则 | `&&`、`\|\|`、`%%` 在括号、引号、JSONPath、CSS 属性和代码中的平衡切分 |
 | `SCH-007` | 规则 | 全规则 Regex、`$1` 捕获组、`##match##replace`、首个替换和非法正则回退 |
 | `SCH-008` | 规则 | JS 先扫描、WebJS 后扫描的兼容顺序和 capability error，不擅自按原文排序 |
-| `VAR-001` | 变量 | local、chapter、book、rule-data、source 的读取优先级和空字符串继续查找 |
+| `VAR-001` | 变量 | local、chapter、book、rule-data、source 的读取优先级；local 空值命中与其他作用域空值回退 |
 | `VAR-002` | 变量 | `@put`、`@get`、`{{}}` 写入、读取、删除、序列化和请求隔离 |
 | `URL-001` | URL | URL JS、`{{}}`、页码占位、URL options 的展开顺序和整数格式化 |
 | `URL-002` | URL | GET/HEAD query、POST 表单/JSON/XML、charset、escape 和空字段保留 |
 | `URL-003` | URL | headers、Cookie 合并、最终域名、登录头、跨域 `@js` 改写和 CDN 隔离 |
 | `URL-004` | URL | timeout、call timeout、retry 次数、取消、重定向关闭/开启和循环保护 |
 | `URL-005` | URL | DNS 字面量、非法地址、proxy 冲突、bodyJs、XML 补声明和 bytes 响应 |
+| `URL-006` | URL | 已发出写请求后的 unknown 结果、幂等身份和禁止不安全自动重试 |
+| `URL-007` | URL | `concurrentRate` 的空值/0、次数/毫秒语法、同源共享、窗口重置、非法配置和取消等待 |
 | `FLOW-001` | 搜索 | 单源列表/详情页回退、书名丢弃、同源去重、精准搜索和分类组 |
 | `FLOW-002` | 搜索 | 多源并发、30 秒超时、progress/callback 顺序、持久化先于成功事件 |
 | `FLOW-003` | 搜索 | pause/resume、新请求取消旧 page owner、迟到结果和所有源失败 |
 | `FLOW-004` | 详情 | infoHtml 命中、请求/重定向/loginCheckJs、init、新旧字段覆盖和 canReName |
 | `FLOW-005` | 详情 | 字段级异常继续、目录缓存、文件下载 URL 为空、Book 提交和失败回滚 |
 | `FLOW-006` | 目录 | tocHtml 命中、preUpdateJs、单页串行、多页并发、重复 URL 和循环停止 |
-| `FLOW-007` | 目录 | 卷节点、空 URL 占位、VIP/购买、字数、`-`/`+` 与 `readConfig.reverseToc` |
+| `FLOW-007` | 目录 | 卷节点、空标题短路 VIP/购买、空 URL 占位、VIP/购买、字数、`-`/`+` 与 `readConfig.reverseToc` |
 | `FLOW-008` | 目录 | 去重、重新编号、formatJs 失败、旧章节元数据合并、统计更新和事务边界 |
 | `FLOW-009` | 正文 | 缓存命中/失效、下一章保护、单页/多页、空正文和资源类型 |
 | `FLOW-010` | 正文 | subContent、replaceRegex、标题图片、歌词/弹幕、响应 URL 和清理 |
 | `FLOW-011` | 正文 | save token、旧请求覆盖保护、保存失败、取消、章节元数据和保存事件 |
 | `FLOW-012` | 批量 | contentBatch/getContentBatch、章节对象识别、重复 URL 歧义、锁、漏存兜底 |
 | `JS-001` | JS | 每次调用 scope、绑定对象、共享 scope 显式开关、toJSON/getter/循环引用 |
-| `JS-002` | JS | `ajax`、`ajaxAll`、`connect` 的请求描述、错误兼容文本和取消传播 |
+| `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播和 `skipRateLimit` 绕过语义 |
 | `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |
-| `JS-004` | 段评 | 摘要索引、详情分页、回复展平、内容协议和函数配对错误 |
+| `JS-004` | 段评 | 声明式/JS 摘要索引、详情游标、回复分页展平、内容协议、函数配对/缺失终态和媒体基准地址 |
+| `REVIEW-001` | 旧式段评 | `getDP/getZP` 页面打开、nonce 会话、CSP/sandbox 桥接、脚本上限、书源变更和图片重写 |
 | `MEDIA-001` | 媒体 | 文本、音频、图片、视频和文件类型从列表到详情的身份与结果类型 |
 | `MEDIA-002` | 图片 | 封面和正文图片 bytes 解密、失败回退、Cookie 和缓存隔离 |
 | `MEDIA-003` | 文件 | 下载地址归一化、空地址错误、下载能力缺失和资源清理 |
@@ -149,7 +153,7 @@
 | `SUB-001` | 订阅 | 多 `BookSource` 订阅、RuleSub 时间/类型分支、三方差异、静默模式、失败保留和 subscriptionRevision 并发控制 |
 | `MODEL-001` | 模型 | 源配置与用户状态分离、远程管理字段覆盖、原文/未知字段回写和改名冲突 |
 | `MODEL-002` | 模型 | BookSource、RssSource、ReplaceRule 的类型边界和未知 artifact 诊断 |
-| `REQUEST-001` | 运行时 | RequestPlan 的执行提示、bytes、字符集和宿主物化边界 |
+| `REQUEST-001` | 运行时 | RequestPlan 的执行提示、bytes、requestCharset/responseCharset 分离和宿主物化边界 |
 | `JOB-001` | 任务 | 幂等创建、租约竞争、恢复、取消、unknown 和旧源版本保护 |
 | `RESOURCE-001` | 资源 | ContentStore/ResourceStore、MIME、bytes、文件链接、大小限制和清理 |
 | `SECURITY-003` | 安全 | Cookie、变量、任务和资源的跨用户隔离及不存在性保护 |
@@ -271,8 +275,11 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | SCH-006/bracket | `a[href="x\|\|y"]@text` | 属性中的组合符不切断 |
 | SCH-007/capture-zero | 输入 `abc123`，`:([a-z]+)(\\d+)`，另测可选捕获组未命中的情况 | 返回列表第 0 项为完整匹配，后续项为捕获组；缺失捕获组以空字符串保留；链式正则只使用前一阶段完整匹配文本 |
 | SCH-007/literal-fallback | 已取值 `a[b`，替换 pattern=`[`、replacement=`X` | 非法正则按原字面回退得到 aXb |
-| SCH-007/replace-optional | 已取值 `a1b2`，分别使用 `规则##数字` 与 `规则##数字##X##extra` | 省略 replacement 时删除全部匹配；存在第四段时只替换首个匹配 |
-| VAR-001/empty-fallback | local.k=""，book.k="B"，source.k="S" | get k 为 B；写 local.k=L 后为 L |
+| SCH-007/replace-optional | 已取值 `a1b2`，分别使用 `规则##数字`、`规则##数字##X##extra` 和无匹配规则 | 省略 replacement 时删除全部匹配；第四段只在首个完整匹配片段内替换并丢弃前后缀，得到 `X`；无匹配返回空字符串 |
+| SCH-007/invalid-first | 已取值 `a1b2`，首个匹配分支使用非法 pattern `[`，非首个分支也使用 `[` | 首个分支直接返回 replacement；非首个分支按字面执行完整替换 |
+| VAR-001/empty-local | local.k=""，book.k="B"，source.k="S" | get k 立即返回空串，不回退到 B/S；写 local.k=L 后为 L |
+| VAR-001/missing-local | local 未定义，book.k="B"，source.k="S" | get k 回退到 B；book 未定义时再回退 source |
+| VAR-002/context-bindings | 同一 key 分别存在 chapter/book/rule-data/source；声明式规则、URL 规则、BaseSource 和 JS 源各执行一次 `java.get/put` | 声明式按 AnalyzeRule 局部变量和作用域写入；source get/put 只改书源命名空间；JS 源只看到注入的 JsExtensions，未注入方法报告 capability-missing |
 | URL-001/page | URL `/p/<a,b>`，page=3 | 选最后项 b，生成 /p/b |
 | URL-003/redirect-policy | 公网初始地址重定向到 127.0.0.1 | 宿主拒绝第二跳，无内网请求，policy-denied |
 | URL-004/cancel-retry | retry=2，第一次请求未完成时取消 | 不启动第 2/3 次，cancelled 而非空成功 |
@@ -281,12 +288,18 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | FLOW-002/partial | A 返回一本书，B 超时 | 保留 A，B 有错误；sink 完成先于 A 的 source-success |
 | FLOW-003/all-failed | A/B 均请求失败 | 无结果但有两个失败，区别于两个合法空列表 |
 | FLOW-004/rename | 已有 name=旧，规则 name=新；canReName 配置 `false` 非空、调用权限 false | 保留旧；权限 true 时按非空开关可覆盖，不能求值配置字符串 |
+| FLOW-004/name-author-cleanup | 搜索/详情分别输入 `作者：甲`、`乙 著` 和清洗后空串 | 先按 `formatBookName`/`formatBookAuthor` 清洗再过滤或覆盖；清洗为空的搜索项丢弃，详情不覆盖已有值 |
 | FLOW-005/atomic | 文件源解析到新名称但 downloadUrls=[] | 失败且旧 Book 未修改 |
 | FLOW-006/input-order | nextUrls=[u1,u2]，u2 先返回，u1 后返回，各产出 C1/C2 | 收集顺序 C1/C2，响应顺序 u2/u1；最终再执行目录反转规则 |
-| FLOW-008/duplicate | P=[(u,旧),(v,V),(u,新)]，无前缀、reverseToc=false | 反转→按 URL 去重→反转，结果 [(v,V),(u,新)] |
+| FLOW-007/empty-title | 目录元素标题规则返回空串，VIP/购买规则脚本记录是否被执行 | 丢弃该节点且不执行 `isVip`/`isPay`；其他节点仍正常解析 |
+| FLOW-008/duplicate | `P=[(u,旧),(v,V),(u,新)]`，无前缀、reverseToc=false | 反转→按 URL 去重→反转，结果 `[(v,V),(u,新)]` |
 | FLOW-008/format-state | 两章，formatJs 增加 gInt 后返回 String(gInt) | 标题为 1、2，gInt 不逐章归零 |
 | FLOW-009/next-chapter | 当前 /c1，下一章 /c2，nextContentUrl=/c2 | 不请求 /c2，不把下一章拼入正文 |
+| FLOW-009/cache-gate | `needSave=false`、缓存 token.version=0、version>0 各运行一次 | Android-compatible 路径前两种不读缓存并执行规则，version>0 命中才直接返回；检测/预览不被旧正文短路 |
 | FLOW-010/input-order | 正文分页 [u1,u2]，u2 先返回 B、u1 后返回 A | 拼接顺序 A 后 B，不能按到达顺序 |
+| FLOW-010/sub-content | 在线文本副文为 `https://x/sub`；音频副文为 URL；普通离线文本副文为原文 | 在线文本不发额外请求且追加 URL 原文；音频请求后保存歌词；提取异常传播，处理异常只记录诊断 |
+| FLOW-010/cache-record | 缓存记录缺少 `finalUrl` 或章节附加数据 | 按未命中重新获取；命中记录同时恢复 content、finalUrl、章节更新和歌词/弹幕 |
+| FLOW-010/request-hints | 首页配置 `webJs` 与 `sourceRegex`，串行/并发分页各有下一页 | 首页同时传递两项；Android 后续页只传 `webJs`，JS 源按函数自身行为处理，不能假设所有分页都做资源嗅探 |
 | FLOW-012/partial-save | 批量 3 章，第 1 章回存成功后脚本抛错 | 第 1 章保留 committed，2/3 为剩余，兜底不重复保存 1 |
 | FLOW-013/event-taxonomy | 多源 A 成功、B 解析失败、A sink 保存完成 | 依次只能使用 `source-success`/`source-error`/`saved` 等统一事件；`partial` 是结果状态，不作为事件类型；completed 只发布一次 |
 | JS-001/serialization | 返回带 toJSON 的对象；另例循环对象 | 调用 toJSON 的结果被使用；循环对象序列化失败 |
@@ -295,6 +308,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | EDIT-002/preview-clean | rawText=baseText，预览成功或失败 | dirty 仍 false；诊断/预览状态可改变 |
 | EDIT-004/conflict | 编辑基于 v1，外部先保存 v2，再提交 v1 | conflict，保留草稿及 v2，不静默覆盖 |
 | CHECK-001/config | `domain=false, content=false`，搜索成功但无结果，详情规则缺失 | 关闭阶段无请求；搜索为空与规则缺失分别记录；阶段为 `SKIPPED`/diagnostic |
+| CHECK-001/gates | 域名失败；info=false；已有 tocUrl；category=false；文件源；仅一条可读章和卷占位章 | 域名失败短路该源；info=false 不进详情/目录/正文；已有 tocUrl 跳过详情；category=false/文件源不进目录正文；跳过卷占位并用下一可读章保护正文，只有一章时用自身 URL |
 | CHECK-002/partial | A 搜索成功，B 超时，用户在 content 阶段发送 abort | A 结果保留，B 为 timeout，任务为 `CANCELLED`；不产生虚假 `PASSED` |
 | CHECK-003/stale | 检测固定 v1，执行中保存源 v2 后检测完成 | 回写被拒绝或标为 stale；v2 的 NEEDS_CHECK/STALE 不被 v1 覆盖 |
 | CHECK-004/file-source | 文件型源无目录网络入口，登录源无凭据 | category/content 为 `SKIPPED` 或 `UNSUPPORTED`；不把能力缺失报为规则失败 |
@@ -330,20 +344,30 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | MODEL-002/export-precedence | rawText 未改动、显式 null、未知字段对象和规则字符串 | 原文优先逐字导出；编辑后未知字段、null 和规则形态仍可重建 |
 | MODEL-003/rename-conflict | 当前 sourceId=A 改名为 B，B 已存在 | 返回目标冲突，不删除 A、不覆盖 B；明确改名所需事务 |
 | MODEL-004/artifact-type | 订阅同时返回 BookSource、RssSource、ReplaceRule 和未知 type | 三类分别解析；未知类型保留原文并返回 UNSUPPORTED_ARTIFACT_TYPE |
+| MODEL-005/name-baseline | 本地名称分别等于 baseline、已被编辑、无 baseline，远端均改名 | 前者可随远端更新，中者保留本地并报告差异，后者保留当前名称；显式覆盖才采用远端 |
 | REQUEST-001/plan-hints | URL options 同时包含 bodyJs、dnsIp、proxy、webView、serverID | RequestPlan 保留执行提示；宿主不把代理/DNS/WebView 静默丢失或改写成普通 Header |
-| REQUEST-002/body-bytes | 非 UTF-8 body、bytes 响应、Content-Type 和 charset 不一致 | 参数与响应分别按契约处理；原始 bytes 保留，不能先固定 UTF-8 |
+| REQUEST-002/body-bytes | 非 UTF-8 body、bytes 响应、Content-Type 和 request/response charset 不一致 | 参数与响应分别按契约处理；原始 bytes 保留，不能先固定 UTF-8 |
 | JOB-001/idempotency | 相同 userId/idempotencyKey 重复 enqueue | 只创建一个任务，重复请求返回同一任务身份 |
 | JOB-002/lease-race | 两个 worker 同时 claim；租约过期后再次 claim | 只有一个 worker 获得当前租约；过期任务可恢复且旧 worker 不能 complete |
 | JOB-003/unknown | 外部请求已发出，worker 在响应前崩溃 | 任务进入 unknown 或人工确认路径，不自动重复不可证明幂等的写入 |
 | JOB-004/old-revision | 任务固定 sourceRevision=v1，执行期间源变为 v2 | 任务不写入 v1 结果，状态为 stale/unknown，v2 检测状态保持有效 |
 | CHECK-005/stage-persistence | 检测各阶段分别产生通过、跳过、失败和能力缺失 | SourceCheckState 的阶段结果可恢复；整体状态不把 SKIPPED/UNSUPPORTED 当 PASSED |
 | CHECK-006/aliases-and-defaults | 配置使用 Android `info/category`，省略 keyword，另测显式 keyword | 阶段结果统一为 `book-info/toc`；省略值固定使用“我的”；显式关键字覆盖默认值 |
+| CHECK-006/keyword-filter | `checkKeyWord` 分别为合法词、空串、含 `http`/`::`/`++`/`--` | 合法非空值优先；其他全部回退“我的” |
+| JS-004/summary-declarative | 声明式摘要索引不可解析、count=0、重复段索引 | 索引回退下标+1；只保留正 count；重复索引后值覆盖前值 |
+| JS-004/detail-cursor | 声明式详情第 1 页、后续页无 cursor、跨章节 cursor、JS 源后续页 | 第 1 页不接受 cursor；后续页校验上下文和页码；JS 源不使用 cursor；无效游标返回可诊断错误 |
+| JS-004/replies | 声明式回复 body 为空、列表为空、列表非空但解析为空；JS 回复缺函数、返回空值或缺 items | 空 body/解析为空保留错误；合法空列表为空结果；JS 缺函数为空页并带能力诊断，缺 items 为格式错误；hasMore 按各自分支规则计算 |
+| JS-004/function-state | JS 只声明摘要、只声明详情、回复单独存在、函数声明但不是函数；运行时详情函数缺失或返回 null | 导入阶段按函数配对规则失败；详情缺失是 capability/脚本错误；详情空返回是合法空页；回复缺失是可诊断空页 |
+| JS-004/media-base | 声明式请求发生重定向，JS 返回相对头像/图片/音频，旧式页面返回 HEIF 图片 | 声明式按响应最终 URL，JS 按 `chapter.url`，旧式页面按书籍 URL 交给图片代理；三条路径不能共用错误基准 |
+| REVIEW-001/legacy-bridge | `src` 含 `getDP(1,2)` 或 `getZP(3)`，分别测试空 HTML、过期/错误 nonce、书源变更、>64 KiB 脚本和 HEIF 图片 | open 返回 id/nonce；页面只在 nonce 有效时返回并带 no-store/CSP/sandbox；run 重新校验源上下文、拒绝超长脚本并重写图片 |
+| URL-007/rate-window | `concurrentRate=2/1000`，同源三次请求，跨源一次，等待期间取消；另测首次非法配置 | 同源前两次立即通过，第三次等待窗口；异源不共享；跨窗口重置计数；取消不再启动请求；已有记录更新保留旧值，首次非法值按 Android fallback 并有诊断 |
+| URL-007/rate-bypass | `ajaxAll(urls,true)`、`ajaxTestAll(urls,timeout,true)`、普通 ajax/connect、源编辑覆盖和删除 | bypass 只跳过书源限流，不跳过宿主并发上限；普通请求仍限流；更新/删除后 source key 记录被清理 |
 | RESOURCE-001/binary | 图片解密返回 bytes，文件返回 file-links，正文返回 text | ContentStore 与 ResourceStore 分工正确；MIME、bytes、文件链接和正文类型不混淆 |
 | RESOURCE-002/size | 二进制恰好上限、超过上限、解密后超过上限 | 超限资源不写缓存；流和脚本句柄释放，返回 resource/budget 错误 |
 | RESOURCE-003/kind-collision | 同一章节同时产生 text、image、audio 和 file 资源 | ContentIdentity.resourceKind 使四类资源使用不同 resourceKey；不能互相覆盖 |
 | SECURITY-003/cross-user-state | u1 的 Cookie、变量、任务和资源 key 被 u2 请求复用 | u2 不可读取或写入 u1 状态；不存在性不能通过错误差异泄露 |
 
-SUB-001–018 在 [订阅文档](../workflows/source-subscriptions.md#验收)，DEP-001–007 在 [部署文档](../operations/runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。
+SUB-001 至 019 在 [订阅文档](../workflows/source-subscriptions.md#验收)，DEP-001 至 007 在 [部署文档](../operations/runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。
 
 ## 覆盖完成的判定
 

@@ -52,6 +52,12 @@ https://example.com/search,{
 
 `proxy` 不是 `UrlOption` 的独立字段。当前 Android 路径从已合并的请求头中读取特殊的 `proxy` 值并移出普通 Header；TypeScript Host 应把这条兼容行为单独记录，不能把它误当成普通远端请求头。`headers` 的键名要原样保留，因为当前 `Content-Type` 判断存在大小写敏感路径。
 
+### `concurrentRate`
+
+`BookSource.concurrentRate` 是书源级共享限流配置，不是单请求重试配置。空值、缺失值和 `"0"` 表示不额外限流；`"accessLimit/interval"` 要求两部分都是正数，分别表示时间窗口内允许的访问次数和窗口毫秒数；单个正整数按 `1/interval` 解释，不能当作并发数。更新已有记录时，非法配置保留原值并沿用当前限流记录；首次请求遇到非法非空值时，Android 会按兼容路径创建 fallback 记录，迁移实现必须记录诊断并用 fixture 固定该行为，不能把两条路径混为一个规则。
+
+同一书源的普通请求共享按 `source.getKey()` 建立的记录。第一次请求立即通过；窗口内达到次数后，后续请求挂起到 `nextTime`，窗口重置时把时间设为当前时刻并重新计数。更新配置时只更新该书源的速率和共享记录，不为每个 URL 创建独立计数器；取消等待必须释放挂起请求。`ajaxAll(urls, true)` 和 `ajaxTestAll(urls, timeout, true)` 是 Android 明确的 bypass 路径，跳过书源限流但仍受宿主线程/并发上限约束；普通 `ajax`、`connect` 和未传 bypass 的批量请求仍走共享记录。书源编辑、导入覆盖或删除后必须清理该 source key 的记录。
+
 ## 3. 参数编码
 
 GET/HEAD：
@@ -66,6 +72,8 @@ POST：
 - 其他 body 按 `key=value&...` 解析并进行表单编码；
 - 空值字段和无等号字段要保留当前分隔语义；
 - `charset` 未提供时使用 UTF-8，`escape` 使用 escape 模式。
+
+规则中的 `charset` 只决定请求参数或表单 body 的编码，物化为 `RequestPlan.requestCharset`；响应 bytes 的解码使用独立的 `responseCharset`，由响应头、流程配置或宿主默认值决定，不能把两者绑定为同一提示。
 
 ## 4. 响应和执行路径
 

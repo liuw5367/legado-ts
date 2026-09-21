@@ -2,7 +2,7 @@
 
 ## 入口和缓存
 
-`WebBook.getContentAwait` 先查询正文缓存。命中且版本有效时直接返回。未命中时：
+Android 的 `WebBook.getContentAwait` 只有在 `needSave=true` 且缓存 token 的 `version > 0` 时才读取正文缓存；命中并通过版本检查才直接返回。`needSave=false` 会绕过这次缓存读取并执行规则，避免预览或检查被旧正文短路。TypeScript 的 Android-compatible adapter 应保持该条件，若 Web 目标提供 cache-first 模式，必须在调用配置和结果中明确标记。未命中时：
 
 - JS 源调用 `getContent(chapter, book, nextChapterUrl)`；
 - 声明式源检查卷占位章节、正文规则和详情页缓存，再请求章节 URL。
@@ -21,14 +21,14 @@
 
 ## 副文、替换和标题
 
-- `subContent` 在正文解析上下文中执行：只有在线文本书（`isOnLineTxt`）把副文追加进正文列表；以 `http` 开头（`startsWith("http", true)` 忽略大小写，`BookContent.kt` L140）的副文会再次请求并取响应 body；音频保存为歌词，视频保存为弹幕，普通文本书不追加；副文处理（请求、解析、追加）由 `runCatching` 包裹，失败仅记日志，但规则字符串提取 `analyzeRule.getString(subContentRule)` 在 `runCatching` 之外（`BookContent.kt` L133-134），提取异常会向上传播使本章正文失败；
+- `subContent` 在正文解析上下文中执行：在线文本书（`isOnLineTxt`）无条件把提取到的副文原文追加进正文列表，即使它看起来像 `http` URL，也不会再次请求；非在线类型在副文以 `http` 开头（`startsWith("http", true)` 忽略大小写）时请求并读取响应 body，否则保留副文原文，音频把最终值保存为歌词，视频把最终值保存为弹幕，其他类型不追加；副文请求、解析和保存由 `runCatching` 包裹，失败仅记日志，但规则字符串提取 `analyzeRule.getString(subContentRule)` 在 `runCatching` 之外（`BookContent.kt` L133-134），提取异常会向上传播使本章正文失败；
 - `replaceRegex` 在所有正文分页合并后执行；正文行会先 trim 再替换，在线文本替换后为每行增加缩进；
 - `title` 在正文提取后执行，非空时覆盖章节标题；标题里包含图片 URL 时拆出 `imgUrl`，保留标题前缀或回退原章节标题；
 - 非卷章节正文最终为空抛出 `ContentEmptyException`；卷章节允许空正文。
 
 ## 请求选项
 
-正文请求把 `webJs` 和 `sourceRegex` 传给 `AnalyzeUrl`。`webJs` 用于页面脚本加载，`sourceRegex` 用于资源嗅探。响应的最终 URL 用于正文中的相对图片/链接。
+首个章节请求把 `webJs` 和 `sourceRegex` 传给 `AnalyzeUrl`；`webJs` 用于页面脚本加载，`sourceRegex` 用于资源嗅探。Android 的串行和并发正文分页只把 `webJs` 传给后续 `AnalyzeUrl`，不会再次传入 `sourceRegex`，不能把首页参数推广到分页分支。JS 源由自身 `getContent` 函数决定请求参数。每次响应的最终 URL 用于正文中的相对图片/链接。
 
 ## 数据流和状态转换
 
@@ -98,7 +98,7 @@ export interface ContentResult {
 }
 ```
 
-状态为 `created -> cache-check -> loading -> parsing -> paginating -> normalized -> validated -> saving/completed`。needSave=false 跳过 saving；缓存命中直接 completed。错误和取消不启动新保存；已完成提交如实记录，不能因后续取消否认已保存事件。文件源从详情返回下载链接，不强行进入 ContentResult。
+状态为 `created -> cache-check -> loading -> parsing -> paginating -> normalized -> validated -> saving/completed`。只有满足 Android 缓存读取条件的命中才直接 `completed`；needSave=false 跳过 cache read 和 saving，错误和取消不启动新保存；已完成提交如实记录，不能因后续取消否认已保存事件。文件源从详情返回下载链接，不强行进入 ContentResult。
 
 `nextChapterUrl` 未显式传入时，Android 查询下一索引 URL，再回退目录首章 URL。Web 调用方提供目录快照/保护 URL，核心不能直接查数据库。分页遇到下一章即停止。多 URL 分支使用 FlowExtensions.mapAsync，按输入 URL 顺序收集，不能按响应完成顺序合并；测试必须设置后页先返回，断言正文仍按输入顺序组成。
 
@@ -108,7 +108,7 @@ export interface ContentResult {
 
 ### 正文缓存提交
 
-先按 ContentIdentity 读取缓存；未命中且 needSave=true 才 reserve 新 ContentSaveToken。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。详情见 [状态契约](../reference/state-and-effects.md)。
+仅在 `needSave=true` 且已有 token `version > 0` 时按 ContentIdentity 读取缓存；未命中且 needSave=true 才 reserve 新 ContentSaveToken。缓存记录必须同时包含正文、`finalUrl`、章节更新和歌词/弹幕附加数据，旧的只有字符串正文的记录按未命中处理。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。详情见 [状态契约](../reference/state-and-effects.md)。
 
 提交顺序固定为：
 

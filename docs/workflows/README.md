@@ -9,6 +9,7 @@
 - [书籍详情流程](book-info-flow.md)：详情请求、字段归一化、缓存和提交。
 - [章节目录流程](chapter-list-flow.md)：目录分页、顺序、去重、刷新和回写。
 - [章节正文流程](content-flow.md)：正文分页、格式化、缓存、批量和保存。
+- [段评流程](review-flow.md)：结构化段评统计、详情分页、回复，旧式网页桥接和 JavaScript/声明式源差异。
 - [发现流程与分类规则](explore-flow.md)：分类入口、发现列表和筛选状态。
 - [与书源关联的媒体和交互流程](adjacent-source-flows.md)：媒体、解密、付费、事件和交互。
 - [书源订阅与刷新](source-subscriptions.md)：订阅链接、多书源刷新、差异和确认。
