@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "fixtures": [
+    { "id": "IMP-001/object", "capability": "import", "source": "source-schema.md", "input": "object.json", "expected": "one-ready-candidate", "sensitive": "none", "android": "not-run", "typescript": "test" },
+    { "id": "IMP-001/array", "capability": "import", "source": "source-schema.md", "input": "array.json", "expected": "two-candidates-one-invalid", "sensitive": "none", "android": "not-run", "typescript": "test" },
+    { "id": "IMP-002/unknown-fields", "capability": "round-trip", "source": "source-schema.md", "input": "unknown-fields.json", "expected": "unknown-field-preserved", "sensitive": "none", "android": "not-run", "typescript": "test" },
+    { "id": "IMP-003/static-js", "capability": "javascript-import", "source": "import-protocol.md", "input": "static-config.js", "expected": "main-js-preserved", "sensitive": "none", "android": "not-run", "typescript": "test" },
+    { "id": "SUB-001/added", "capability": "subscription-diff", "source": "source-subscriptions.md", "input": "subscription-added.json", "expected": "added-and-confirmation", "sensitive": "none", "android": "not-run", "typescript": "test" },
+    { "id": "SUB-002/conflict", "capability": "subscription-diff", "source": "source-subscriptions.md", "input": "subscription-conflict.json", "expected": "conflict-and-local-revision", "sensitive": "none", "android": "not-run", "typescript": "test" }
+  ]
+}

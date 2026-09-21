@@ -1,0 +1,13 @@
+{
+  "name": "@legado/source-core",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/public/index.d.ts",
+      "import": "./dist/public/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false
+}

@@ -5,6 +5,47 @@ settings:
   excludeLinksFromLockfile: false
   injectWorkspacePackages: true
 
+catalogs:
+  default:
+    '@types/node':
+      specifier: 24.0.0
+      version: 24.0.0
+    typescript:
+      specifier: 6.0.2
+      version: 6.0.2
+
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.0.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.2
+
+  packages/source-core: {}
+
+packages:
+
+  '@types/node@24.0.0':
+    resolution: {integrity: sha512-yZQa2zm87aRVcqDyH5+4Hv9KYgSdgwX1rFnGvpbzMaC7YAljmhBET93TPiTd3ObwTL+gSpIzPKg5BqVxdCvxKg==}
+
+  typescript@6.0.2:
+    resolution: {integrity: sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  undici-types@7.8.0:
+    resolution: {integrity: sha512-9UJ2xGDvQ43tYyVMpuHlsgApydB8ZKfVYTsLDhXkFL/6gfkp+U8xTGdh8pMJv1SpZna0zxG1DwsKZsreLbXBxw==}
+
+snapshots:
+
+  '@types/node@24.0.0':
+    dependencies:
+      undici-types: 7.8.0
+
+  typescript@6.0.2: {}
+
+  undici-types@7.8.0: {}
