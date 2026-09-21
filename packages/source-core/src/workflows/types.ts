@@ -112,3 +112,64 @@ export interface DetailInput extends WorkflowOptions {
   candidates: readonly BookCandidate[]
   cursor?: PageCursor
 }
+
+export interface ChapterIdentity {
+  sourceId: string
+  bookUrl: string
+  chapterUrl: string
+  index: number
+  volume?: string
+}
+
+export interface Chapter extends ChapterIdentity {
+  title: string
+  rawFields: JsonObject
+  traceRef: string
+}
+
+export interface TocInput extends WorkflowOptions {
+  source: NormalizedSource
+  book: BookMetadata
+  cursor?: PageCursor
+  maxPages?: number
+  maxBytes?: number
+}
+
+export interface ContentResource {
+  kind: 'image'
+  url: string
+}
+
+export interface ChapterContent {
+  chapter: ChapterIdentity
+  contentType: 'text' | 'html'
+  raw: string
+  cleaned: string
+  pages: string[]
+  resources: ContentResource[]
+}
+
+export interface ContentInput extends WorkflowOptions {
+  source: NormalizedSource
+  chapter: ChapterIdentity
+  contentType?: 'text' | 'html'
+  replacements?: readonly ContentReplacement[]
+  maxPages?: number
+  maxBytes?: number
+  maxOutputBytes?: number
+}
+
+export interface ContentReplacement {
+  pattern: string
+  replacement: string
+  all?: boolean
+}
+
+export interface ContentCache {
+  get(key: string, signal?: AbortSignal): Promise<string | undefined>
+  set(key: string, value: string, signal?: AbortSignal): Promise<void>
+}
+
+export interface ReadingPorts extends WorkflowPorts {
+  cache?: ContentCache
+}
