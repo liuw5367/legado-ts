@@ -149,30 +149,28 @@ export interface ReviewItemInput {
   avatar?: string
   /** 发布者昵称。 */
   name?: string
-  /** 被回复者昵称。 */
-  replyToName?: string
   /** 徽章字符串或字符串数组。 */
   badge?: string | string[]
-  /** 内容文本或段评内容协议 JSON。 */
-  content?: string | Record<string, unknown>
-  /** 图片地址，可为相对地址。 */
-  img?: string
-  /** 音频地址，可为相对地址。 */
-  audio?: string
-  /** 评论发布时间文本。 */
-  time?: string
-  /** 点赞数量。 */
-  likeCount?: number
-  /** 回复数量。 */
-  replyCount?: number
+  /** 内容文本或段评内容协议 JSON；图片、音频和互动字段必须放在协议对象中。 */
+  content?: string | ReviewContentProtocol | Record<string, unknown>
   /** 详情项可以带嵌套回复，回复分页返回后由运行时递归展平。 */
   replies?: ReviewItemInput[]
+}
+
+export interface ReviewContentProtocol {
+  text?: string
+  replyToName?: string
+  img?: string
+  audio?: string
+  time?: string
+  likeCount?: number
+  replyCount?: number
 }
 ```
 
 `getReviewSummary` 必须返回数组。运行时只接受 `paraIndex == -1` 或正数且 `count > 0` 的项目；缺少 `paraData` 时以段落索引文本作为回退键。非法项目和无效数量被忽略，脚本返回空值或不能解析为数组时得到空摘要。
 
-`getReviewDetail` 返回评论项分页对象，至少包含 `items` 数组，可以包含 `nextPageUrl`；缺少或不是数组时该详情页结果为无结果。每个项目必须有非空 `content`，仅有昵称、图片或音频而缺少 `content` 的项目会被丢弃。`content` 如果是包含 `text`、`replyToName`、`img`、`audio`、`time`、`likeCount` 或 `replyCount` 的协议对象，运行时会解析协议并将图片、音频相对当前响应 URL 转换为绝对地址；若协议对象的七个字段全部为空，`parseContentProtocol` 返回 null，此时对象 JSON 会被当作纯文本 `content` 保留。对象型 `content` 经 `optContent` 转为 JSON 字符串后只要非空即有效，最终解析出的纯文本可为空；仅含 `img`/`audio` 的评论项会保留（`JsSourceReviewTest` 断言 `reply.content == ""` 但 `imageUrl` 保留）。
+`getReviewDetail` 返回评论项分页对象，至少包含 `items` 数组，可以包含 `nextPageUrl`；缺少或不是数组时该详情页结果为无结果。Android 只从评论项顶层读取 `id`、`avatar`、`name`、`badge`、`content` 和 `replies`，顶层的 `replyToName`、`img`、`audio`、`time`、`likeCount`、`replyCount` 不会被读取。每个项目必须有非空 `content`，仅有昵称或缺少 `content` 的项目会被丢弃；图片、音频及互动字段必须放在 `content` 协议对象中。`content` 如果是包含 `text`、`replyToName`、`img`、`audio`、`time`、`likeCount` 或 `replyCount` 的协议对象，运行时会解析协议并将图片、音频相对当前响应 URL 转换为绝对地址；若协议对象的七个字段全部为空，`parseContentProtocol` 返回 null，此时对象 JSON 会被当作纯文本 `content` 保留。对象型 `content` 经 `optContent` 转为 JSON 字符串后只要非空即有效，最终解析出的纯文本可为空；仅含 `img`/`audio` 的协议内容会保留（`JsSourceReviewTest` 断言 `reply.content == ""` 但 `imageUrl` 保留）。
 
 `getReviewReplies` 返回 `{ items }`，没有独立的 `nextPageUrl` 字段；运行时会把嵌套 `replies` 展平成回复列表，并清除回复项继续嵌套的结构。返回值不是对象、缺少 `items` 或 `items` 不是数组时属于返回格式错误。回复函数只有在摘要和详情函数都存在时才允许导入，调用时由宿主传入 `reviewId`，不是由脚本自行从全局变量读取。
 

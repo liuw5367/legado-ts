@@ -13,6 +13,11 @@
 ```ts
 type RuleObject<T> = T | string | null
 type SourceVariables = Record<string, string>
+/**
+ * Android Long 的 TypeScript 投影。number 只允许保存仍在
+ * Number.MAX_SAFE_INTEGER 范围内的值；跨 JSON 边界统一使用十进制字符串。
+ */
+type Int64 = number | bigint | string
 
 export interface BookSource {
   /** 书源唯一地址，也是 Android 数据库中的主键。导入时必须是非空字符串。 */
@@ -147,7 +152,7 @@ export type NormalizedSource = Omit<
 
 `BookSource` 不是全部书源数据。Android 的订阅实体 `RuleSub`、用户覆盖、source revision、检查状态、cookie/变量和缓存属于管理或运行时模型，不能塞进书源导出 JSON，也不能因未出现在本接口中而丢失。它们的所有权、保存和清理见 [书源状态与副作用](source-management-and-state.md)；检测状态见 [书源检测状态模型](source-check-state.md)。
 
-ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。`ExploreStyle` 是 Android `FlexChildStyle`（`data/entities/rule/FlexChildStyle.kt`）的 TS 投影，字段名与默认值保持一致，跨端实现按能力解释，不承诺 Flexbox 行为。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。`Book.group`、`BookChapter.start/end` 与 `BookReadConfig.delTag` 在 Android 为 `Long`（`Book.kt` L508；`delTag` 为位掩码，实际值很小：hTag=2L/rubyTag=4L，L491-492）；TS 内部使用 `bigint` 或十进制字符串保存超出 `Number.MAX_SAFE_INTEGER` 的值，JSON 边界统一序列化为十进制字符串；能够证明值始终安全时才可使用 `number`。
+ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。`ExploreStyle` 是 Android `FlexChildStyle`（`data/entities/rule/FlexChildStyle.kt`）的 TS 投影，字段名与默认值保持一致，跨端实现按能力解释，不承诺 Flexbox 行为。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。`Book.group`、`BookChapter.start/end` 与 `BookReadConfig.delTag` 在 Android 为 `Long`（`Book.kt` L508；`delTag` 为位掩码，实际值很小：hTag=2L/rubyTag=4L，L491-492）。下方模型使用 `Int64`：TS 内部对超出 `Number.MAX_SAFE_INTEGER` 的值使用 `bigint` 或十进制字符串，JSON 边界统一序列化为十进制字符串；能够证明值始终安全时才可使用 `number`。
 
 ### 登录表单 RowUi
 
@@ -222,6 +227,8 @@ export interface SearchRule extends BookListRule {
   checkKeyWord?: string | null
 }
 ```
+
+`SearchRule` 和 `ExploreRule` 中的 `updateTime` 字段需要保留以兼容书源 JSON，但当前 Android `BookList` 列表解析不会读取或写入它；它不能按目录规则中的同名字段处理。目录流程的 `TocRule.updateTime` 才会写入章节的 `tag`，具体见[章节目录流程](../workflows/chapter-list-flow.md)。
 
 `bookList` 的 `-`、`+` 前缀只属于流程控制，不是选择器语法。搜索流程中 `-` 会在列表解析完成后反转结果；目录流程的 `-` 语义不同，见目录文档，不能共用一条解释。
 
@@ -451,9 +458,9 @@ export interface BookChapter {
   /** 本章节字数。 */
   wordCount?: string | null
   /** 本地或 EPUB 章节起始位置；Android 为 Long，精度边界见 1 节末说明。 */
-  start?: number | null
+  start?: Int64 | null
   /** 本地或 EPUB 章节结束位置；Android 为 Long，精度边界见 1 节末说明。 */
-  end?: number | null
+  end?: Int64 | null
   /** EPUB 当前章节 fragmentId。 */
   startFragmentId?: string | null
   /** EPUB 下一章节 fragmentId。 */
@@ -486,7 +493,7 @@ export interface BookReadConfig {
   /** 正文是否使用净化替换规则；null 时按书源类型回退。 */
   useReplaceRule?: boolean | null
   /** 去除标签位掩码，Android 为 Long。 */
-  delTag?: number
+  delTag?: Int64
   /** TTS 引擎标识。 */
   ttsEngine?: string | null
   /** 超长章节拆分开关，Android 默认 true。 */
@@ -545,7 +552,7 @@ export interface Book {
   /** BookType 类型。 */
   type: number
   /** 自定义分组索引；Android 为 Long。 */
-  group: number
+  group: Int64
   /** 最新章节标题。 */
   latestChapterTitle?: string | null
   /** 最新章节标题更新时间。 */

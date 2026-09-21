@@ -33,9 +33,9 @@ package 对外提供检测编排和结果模型；应用层提供 HTTP/浏览器
 
 ```ts
 export interface SourceCheckConfig {
-  /** 单个 HTTP 请求超时时间；不包含其他阶段和清理。 */
+  /** Web 目标的单个 HTTP 请求超时时间；Android 没有对应的统一配置项。 */
   requestTimeoutMs: number;
-  /** 单个书源的总预算，覆盖所有阶段、重试和清理等待。 */
+  /** 单个书源的总预算；对应 Android 的 CheckSource.timeout。 */
   sourceTimeoutMs: number;
   /** 失败时是否把内存中的简短错误摘要交给应用；不代表直接更新 book_sources 备注。 */
   writeErrorComment: boolean;
@@ -56,7 +56,7 @@ export interface SourceCheckConfig {
 }
 ```
 
-默认请求超时、单源总预算、错误摘要、域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应。`info` 和 `category` 是 Android 配置别名，核心结果统一使用 `book-info` 和 `toc`；适配器不能把两个名称作为两个独立阶段执行。`keyword` 省略时固定使用 `我的`，只有调用方明确传入非空关键字时才覆盖该值。Android 的 `wSourceComment` 只影响内存中的 source 对象，最终 detail 由检查状态保存；package 不直接更新 `book_sources` 的备注。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
+`sourceTimeoutMs`、错误摘要和域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应；`requestTimeoutMs` 是 Web 目标新增的宿主约束。Android 的单书源总预算由 `CheckSource.timeout` 包围整个检测流程，域名探测另有固定的局部超时，普通 HTTP 请求仍使用 `AnalyzeUrl`/HTTP 客户端自身配置。`info` 和 `category` 是 Android 配置别名，核心结果统一使用 `book-info` 和 `toc`；适配器不能把两个名称作为两个独立阶段执行。`keyword` 省略时固定使用 `我的`，只有调用方明确传入非空关键字时才覆盖该值。Android 的 `wSourceComment` 只影响内存中的 source 对象，最终 detail 由检查状态保存；package 不直接更新 `book_sources` 的备注。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
 
 ## 阶段和依赖
 
