@@ -48,8 +48,7 @@ BookSource + Book + BookChapter + nextChapterUrl
   -> 返回正文、章节更新和诊断
 ```
 
-```ts
-本流程使用[宿主接口](../reference/runtime-host-interfaces.md)中的 `ContentIdentity` 和 `ContentSaveToken`。正文身份必须同时绑定 `sessionId`、`sourceId`、`bookUrl`、`chapterKey`、`sourceRevision`、`semanticVersion`、`tocRevision` 和 `chapterIndex`；保存 token 的 `identity`、`operationId`、`writeVersion` 和过期信息必须在同一原子边界校验。这样既不会把不同会话的缓存混用，也不会让旧目录的章节覆盖新目录。
+本流程使用[宿主接口](../reference/runtime-host-interfaces.md)中的 `ContentIdentity` 和 `ContentSaveToken`。正文身份必须同时绑定 `sessionId`、`sourceId`、`bookUrl`、`chapterKey`、`resourceKind`、`sourceRevision`、`semanticVersion`、`tocRevision` 和 `chapterIndex`；保存 token 的 `identity`、`operationId`、`writeVersion` 和过期信息必须在同一原子边界校验。这样既不会把不同会话的缓存混用，也不会让旧目录的章节覆盖新目录。
 
 ```ts
 export interface ContentOperationContext {
@@ -60,12 +59,15 @@ export interface ContentOperationContext {
 }
 ```
 
+```ts
 export interface ContentResult {
-  /** `success`、`empty`、`partial`、`failed`、`cancelled` 或 `stale`。 */
+  /** `success`、`empty`、`partial`、`failed`、`cancelled`、`stale` 或 `unknown`。 */
   status: OperationStatus
   /** 本次正文操作身份，用于丢弃迟到分页和保存回调。 */
   operationId: string
-  /** 领域内容种类，由书籍类型和流程确定，不根据 URL 后缀猜测。 */
+  /** 结果基于的书源版本。 */
+  sourceRevision: string
+  /** 领域内容种类，由书籍类型和流程确定，不根据 URL 后缀猜测；image-content/file-links 分别映射为 image/file resourceKind。 */
   kind: 'text' | 'image-content' | 'audio' | 'video' | 'file-links'
   /** 归一化后的正文、资源 URL 或文件链接；二进制实体由 ResourceStore 保存。 */
   content: string
@@ -81,10 +83,16 @@ export interface ContentResult {
   visitedUrls: string[]
   /** 正文保存是否成功；needSave=false 时为 false。 */
   saved: boolean
+  /** needSave=true 时的存储结算；不能只依赖 saved 判断未知提交。 */
+  saveResult?: StoreWriteResult
   /** 音频歌词或视频弹幕，与正文资源地址分开；不存在时省略。 */
   auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
   /** 分阶段诊断，保存失败不能伪装为规则失败。 */
   diagnostics: RuntimeDiagnostic[]
+  /** 尚未由应用提交的正文、章节和资源变更。 */
+  changes: DomainChange[]
+  /** 已发生的请求、Cookie 和存储副作用。 */
+  effects: EffectRecord[]
   /** 请求、分页、脚本和保存资源的最终清理状态。 */
   cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }

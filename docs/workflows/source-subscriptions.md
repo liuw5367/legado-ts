@@ -16,25 +16,28 @@
 | bindings | 该订阅提供的源及本地源关联，记录采用的上游版本与本地 sourceRevision |
 | lastAttempt | 最近刷新时间和 success/failed/cancelled/conflict 状态，不代替 baseline |
 
-应用拥有订阅记录、调度、确认和事务。package 的 `refreshSubscription` 接收订阅快照、当前本地 artifact 快照、`operationId`、`idempotencyKey` 和取消/预算上下文，下载后复用 `importSources`，返回 `SubscriptionRefreshAttempt`、逐项 diff 和可提交计划。不会自行创建定时器、数据库任务或后台服务。URL 可一次提供多个源，sourceUrls 的外层限制仍然有效。
+应用拥有订阅记录、调度、确认和事务。package 的 `refreshSubscription` 接收订阅快照、当前本地 artifact 快照、`operationId`、`idempotencyKey` 和取消/预算上下文，下载后复用 `importSources`，返回 `SubscriptionRefreshPlan`；应用再把任务生命周期写入 `SubscriptionRefreshAttempt`。package 不会自行创建定时器、数据库任务或后台服务。URL 可一次提供多个源，sourceUrls 的外层限制仍然有效。
 
-刷新结果的最小结构为：
+刷新计划的最小结构为。任务级执行记录使用[实体模型](../reference/artifact-model.md)中的 `SubscriptionRefreshAttempt`；本节的 `SubscriptionRefreshPlan` 只表示比较和提交前的领域结果，避免重复定义任务状态：
 
 ```ts
-interface SubscriptionRefreshAttempt {
+interface SubscriptionRefreshPlan {
   subscriptionId: string
   operationId: string
   baseSubscriptionRevision: string
-  status: 'unchanged' | 'updated' | 'partial' | 'conflict' | 'failed' | 'cancelled' | 'stale'
-  startedAt: number
-  finishedAt?: number
+  outcome: 'unchanged' | 'updated' | 'partial' | 'conflict' | 'failed' | 'cancelled' | 'stale' | 'unknown'
   diffs: Array<{ sourceId: string; kind: 'added' | 'updated' | 'unchanged' | 'conflict' | 'remote-missing'; fields: string[]; error?: string }>
-  commitPlan: { sourceIds: string[]; requiresConfirmation: boolean }
-  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
+  commitPlan: {
+    sourceIds: string[]
+    expectedSourceRevisions: Record<string, string | undefined>
+    requiresConfirmation: boolean
+  }
 }
 ```
 
 `baseline`、本地快照和远端快照都按 `sourceId` 保存；attempt 只在成功提交后更新 `baseline` 和 `subscriptionRevision`。取消、超时或非法成员保留旧 baseline，并返回可重试的 attempt 状态。
+
+`commitPlan.expectedSourceRevisions` 必须逐源校验；只比较 `subscriptionRevision` 不能保护用户在刷新期间编辑过的书源。默认刷新模式是原子提交：远端存在非法成员时可以展示合法候选，但不能提交候选源、更新 baseline 或递增 subscriptionRevision；只有显式选择兼容模式并完成逐项确认后，才允许应用层按条目提交，并为每个条目记录结果。
 
 ## Android `RuleSub` 兼容
 

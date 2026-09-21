@@ -20,14 +20,29 @@ interface SourceSnapshot {
   userState: UserSourceState
 }
 
+interface ImportOrigin {
+  kind: 'file' | 'text' | 'url' | 'subscription' | 'editor' | 'api' | 'json' | 'remote-url' | 'uri' | 'javascript'
+  location?: string
+}
+
+interface ImportReplacement {
+  ruleId: string
+  applied: boolean
+  error?: string
+}
+
 interface ImportCandidate {
   id: string
-  raw: RawSource
+  origin: ImportOrigin
+  rawText: string
   source?: NormalizedSource
+  unknownFields: Record<string, unknown>
+  replacements: ImportReplacement[]
   diagnostics: ImportDiagnostic[]
-  localMatch: 'new' | 'same' | 'update' | 'conflict'
+  localMatch?: 'new' | 'same' | 'update' | 'conflict'
   writable: boolean
-  status: 'ready' | 'invalid' | 'cancelled'
+  status: 'ready' | 'invalid' | 'cancelled' | 'persisted'
+  error?: { code: string; message: string; canRetry: boolean }
 }
 ```
 

@@ -89,11 +89,13 @@ export interface SaveSourceInput {
   confirmed: boolean
   /** 导入、编辑、订阅或兼容 API 等来源。 */
   origin: SourceOrigin
+  /** web-safe 或 android-compatible；应用和 Repository 必须使用同一模式。 */
+  mode: 'web-safe' | 'android-compatible'
 }
 
 export interface SaveSourceResult {
   /** 保存结论；same 表示没有领域变化但仍可返回当前记录。 */
-  status: 'new' | 'same' | 'updated' | 'conflict' | 'invalid' | 'cancelled' | 'stale'
+  status: 'new' | 'same' | 'updated' | 'conflict' | 'invalid' | 'confirmation-required' | 'cancelled' | 'stale' | 'partial' | 'unknown'
   /** 保存后的完整用户源记录；非提交状态为空。 */
   record?: SourceRecord
   /** 本次提交的字段变化。 */
@@ -104,6 +106,14 @@ export interface SaveSourceResult {
   error?: { code: string; message: string; canRetry: boolean }
   /** 是否已经产生持久化提交。 */
   committed: boolean
+  /** 本次领域调用身份；重试不改变。 */
+  operationId: string
+  /** 结果未知时用于查询已提交结果。 */
+  idempotencyKey: string
+  /** 检查失效、缓存清理和审计等副作用。 */
+  effects: EffectRecord[]
+  /** 所有资源的最终清理状态。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 
 export interface SaveBatchInput {
@@ -122,10 +132,17 @@ export interface SaveBatchInput {
 }
 
 export interface SaveBatchResult {
+  /** 整批保存的最终状态；unknown 必须先查询幂等结果，不能直接重试写入。 */
+  status: 'success' | 'partial' | 'conflict' | 'invalid' | 'confirmation-required' | 'cancelled' | 'unknown'
   /** 整批保存后的源记录；事务失败时不返回部分成功结果。 */
   records: SourceRecord[]
   /** 整批实际提交的字段变化。 */
   changes: SourceChange[]
+  committed: boolean
+  operationId: string
+  idempotencyKey: string
+  effects: EffectRecord[]
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 
 export interface SourceRevision {
@@ -190,19 +207,30 @@ export interface RemoveSourceInput {
   expectedSourceRevision?: string
   /** safe 要求版本断言；android-compatible 才能显式使用旧式无版本删除。 */
   mode: 'web-safe' | 'android-compatible'
+  /** 跨请求重试保持不变的删除意图身份。 */
+  idempotencyKey: string
+  /** false 时只返回确认要求，不执行删除。 */
+  confirmed: boolean
 }
 
 export interface RemoveSourceResult {
-  status: 'deleted' | 'not-found' | 'conflict' | 'cancelled' | 'partial'
+  status: 'deleted' | 'not-found' | 'conflict' | 'cancelled' | 'partial' | 'unknown'
   sourceId: string
   cleaned: string[]
   pending: string[]
+  committed: boolean
+  operationId: string
+  idempotencyKey: string
+  effects: EffectRecord[]
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
   error?: { code: string; message: string; canRetry: boolean }
 }
 
-export interface SourceChange {
+export interface SourceChange extends DomainChange {
   /** 变化对应的源身份。 */
   sourceId: string
+  /** 与通用 DomainChange.resourceKey 相同；固定为 source:userId:sourceId 形式。 */
+  resourceKey: string
   /** 计算差异时读取的版本；新建时为空。 */
   baseRevision?: string
   /** 变化类别，供应用决定是否失效检查和缓存。 */

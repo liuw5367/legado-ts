@@ -21,8 +21,8 @@ export interface BookSource {
   bookSourceName: string
   /** 书源分组；空值表示未分组。 */
   bookSourceGroup?: string | null
-  /** 书源类型：0 文本、1 音频、2 图片、3 文件下载、4 视频。 */
-  bookSourceType: 0 | 1 | 2 | 3 | 4
+  /** 书源类型：0 文本、1 音频、2 图片、3 文件下载、4 视频；未知整数保留并由能力检查报告。 */
+  bookSourceType: number
   /** 详情页 URL 正则。搜索响应 URL 命中时按详情页解析。 */
   bookUrlPattern?: string | null
   /** 手动排序值，默认 0。 */
@@ -33,7 +33,7 @@ export interface BookSource {
   enabledExplore: boolean
   /** 书源级 JavaScript 库文本。 */
   jsLib?: string | null
-  /** 是否自动保存请求 Cookie；Kotlin 构造默认 true，数据库列默认 false，字段本身允许为空。 */
+  /** 是否自动保存请求 Cookie；JSON/对象导入省略时按 Kotlin 构造默认值 true，显式 null 和数据库旧行缺失值按请求判断规则归一化为 false。 */
   enabledCookieJar?: boolean | null
   /** 并发率配置文本，由宿主限流器解释。 */
   concurrentRate?: string | null
@@ -85,6 +85,8 @@ export interface BookSource {
   [key: string]: unknown
 }
 ```
+
+`bookSourceType` 使用单值枚举：`0=default/text`、`1=audio`、`2=image`、`3=file`、`4=video`。未知值必须保留原始值并报告 `capability-missing`，不能静默按文本源执行。
 
 ```ts
 export type NormalizedSource = Omit<
@@ -377,6 +379,8 @@ export interface ReviewRule {
 
 `SearchBook` 的持久化字段、临时 HTML 缓存和合并来源集合必须分开标记。`variable` 在 Android 实体中是 JSON 字符串，在 TypeScript 运行时可规范化为对象，但导出时必须能还原原始兼容形态。
 
+`BookType` 是可按位组合的输出类型，当前 Legado 常量为：`video=4`、`text=8`、`updateError=16`、`audio=32`、`image=64`、`webFile=128`、`local=256`、`archive=512`、`notShelf=1024`。书源类型到书籍类型的兼容映射为：`default -> text`、`audio -> audio`、`image -> image`、`file -> text | webFile`、`video -> video`；`local`、`archive` 和 `notShelf` 是书籍状态位，不能由 `BookSourceType` 直接生成。
+
 ```ts
 export interface SearchBook {
   /** 详情页地址，也是同一书源内去重键。 */
@@ -385,7 +389,7 @@ export interface SearchBook {
   origin: string
   /** 书源名称。 */
   originName: string
-  /** 书籍类型，使用 BookType；它与 BookSourceType 的取值语义不同。 */
+  /** 书籍类型，使用可按位组合的 BookType；它与 BookSourceType 的取值语义不同。 */
   type: number
   /** 书名，缺失时条目被丢弃。 */
   name: string

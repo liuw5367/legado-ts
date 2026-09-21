@@ -4,7 +4,7 @@
 
 ## 阶段数据契约
 
-本阶段的应用服务输入至少包含可信 `userId`、候选原文/规范化源、`sourceId`、`expectedSourceRevision`、`idempotencyKey`、确认状态和 `web-safe/android-compatible` 模式；Repository 输出必须区分 `new/same/updated/conflict/invalid/cancelled/stale`，并返回 `committed`、changes、effects、诊断和待清理资源。检查输入固定 `SourceSnapshot + sessionId + checkRevision + config + signal`，阶段只允许 `PASSED/FAILED/SKIPPED/UNSUPPORTED`，源最终状态使用 `NEEDS_CHECK/RUNNING/PASSED/FAILED/CANCELLED/STALE`。
+本阶段的应用服务输入至少包含可信 `userId`、候选原文/规范化源、`sourceId`、`expectedSourceRevision`、`idempotencyKey`、确认状态和 `web-safe/android-compatible` 模式；Repository 输出必须区分 `new/same/updated/conflict/invalid/confirmation-required/partial/cancelled/stale/unknown`，并返回 `committed`、changes、effects、诊断和待清理资源。检查输入固定 `SourceSnapshot + sessionId + checkRevision + config + signal`，阶段只允许 `PASSED/FAILED/SKIPPED/UNSUPPORTED`，源最终状态使用 `NEEDS_CHECK/RUNNING/PASSED/FAILED/CANCELLED/STALE`。
 
 ## 依赖与交付
 
@@ -49,7 +49,7 @@ Supabase SDK 只在 adapter 包出现。浏览器不持有 service key；Edge/No
 
 ### 5. 实现书源检测编排
 
-实现 `checkSources(snapshot, config, host, signal)`：固定版本快照，创建 `sessionId`，逐源隔离请求超时和单源总预算，按 domain → search/discovery → book-info → category → toc → content 的依赖运行。每阶段都返回规范的 `PASSED/FAILED/SKIPPED/UNSUPPORTED`；不把空搜索结果当网络错误。状态定义和兼容 DTO 映射见[书源校验状态](../reference/source-check-state.md)。
+实现 `checkSources(snapshot, config, host, signal)`：固定版本快照，创建 `sessionId` 和 `checkRevision`，逐源隔离请求超时和单源总预算，按 domain → search/discovery → book-info → toc → content 的依赖运行。每阶段都返回规范的 `PASSED/FAILED/SKIPPED/UNSUPPORTED`；不把空搜索结果当网络错误。Android 配置中的 `category` 只在 adapter 输入边界映射为 `toc`。状态定义和兼容 DTO 映射见[书源校验状态](../reference/source-check-state.md)。
 
 检测只生成诊断和状态变更，不保存书、章节或正文。完成回写前执行 CAS；源已编辑或删除时返回 stale 并丢弃旧回写。实时进度通过应用 adapter 输出为 SSE/WebSocket，核心不绑定传输方式。
 

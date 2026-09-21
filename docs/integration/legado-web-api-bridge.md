@@ -61,12 +61,14 @@ WebSocket 的最小帧协议为：
 type BridgeFrame =
   | { type: 'hello'; sessionId: string; operationId: string }
   | { type: 'progress'; sequence: number; payload: unknown }
-  | { type: 'result'; sequence: number; status: 'success' | 'empty' | 'partial'; payload: unknown }
+  | { type: 'result'; sequence: number; status: 'success' | 'empty' | 'partial' | 'unknown'; payload: unknown }
   | { type: 'error'; sequence: number; code: string; message: string }
-  | { type: 'end'; sequence: number; status: 'completed' | 'cancelled' | 'failed' }
+  | { type: 'end'; sequence: number; status: 'completed' | 'cancelled' | 'failed' | 'unknown' }
 ```
 
-首帧必须唯一、可解析并在约定时间内到达；重复、乱序、无效 JSON、错误 session 或旧 sourceRevision 直接返回稳定错误并关闭当前操作。客户端断开触发取消，但服务端要等待请求和脚本 cleanup；已经提交的保存/缓存 effects 不回滚。
+旧 Android 客户端的首帧仍由 adapter 接收：搜索的原始首帧是文本 `{ key }`，调试的原始首帧是 `{ tag, key }`；adapter 在鉴权并生成服务端 `sessionId`、`operationId` 后，转换为内部 `hello` 加领域请求。新客户端直接发送 `hello`。因此 `sessionId` 不能接受客户端自报值，原始兼容帧也不能直接进入核心流程。
+
+首帧必须唯一、可解析并在约定时间内到达；每个连接限制单帧大小、累计 payload 大小、未确认序列数和发送缓冲区，超限返回 `budget-exceeded` 并关闭操作。重复、乱序、无效 JSON、错误 session 或旧 sourceRevision 直接返回稳定错误并关闭当前操作；`payload` 只允许领域 DTO，日志和调试响应必须先脱敏。客户端断开触发取消，但服务端要等待请求和脚本 cleanup；已经提交的保存/缓存 effects 不回滚。
 
 ## 关键兼容细节
 

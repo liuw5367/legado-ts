@@ -49,6 +49,10 @@ BookSource + Book + canReName
 export interface BookInfoResult {
   /** 与运行时统一契约相同；空字段继续不等于流程失败。 */
   status: OperationStatus
+  /** 本次领域操作身份；重试不改变。 */
+  operationId: string
+  /** 结果基于的书源版本。 */
+  sourceRevision: string
   /** 详情字段更新后的书籍副本，不包含未提交的数据库状态。 */
   book: Book
   /** 是否直接使用了已有 infoHtml。 */
@@ -61,6 +65,10 @@ export interface BookInfoResult {
   updatedFields: string[]
   /** 字段级警告或流程错误诊断。 */
   diagnostics: RuntimeDiagnostic[]
+  /** 尚未由应用提交的 Book 领域变更。 */
+  changes: DomainChange[]
+  /** 已发生的缓存、Cookie 或变量副作用。 */
+  effects: EffectRecord[]
   /** 结果来源；事件中的 origin 应直接使用此值。 */
   origin: 'cache' | 'network' | 'javascript'
   /** 请求、脚本和解析资源的最终清理状态。 */

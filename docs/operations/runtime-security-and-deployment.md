@@ -37,7 +37,7 @@ interface OperationBudget {
 
 这是一项有证据的候选方向，不是已验证的引擎选型。本轮未安装或运行上述引擎。阶段 B 负责人必须通过同步网络返回、嵌套规则回调、取消等待、无限循环终止、句柄清理和 Rhino 返回值对照后，才能固定依赖版本。同步 `java.ajax/connect` 是完整旧式 JS 兼容的前置条件，不是可在实现后再忽略的优化；若 Node/Edge 无法安全提供同步网络外观，必须改为独立 JS 执行服务，或由用户审核后缩小 JS 兼容范围。失败只阻塞 JS 宿主验收，codec 和纯规则仍可实现。
 
-桥接调用携带 operationId、sessionId 和 sourceId。等待 HTTP 期间宿主事件循环仍可处理取消；宿主不得在同一个暂停中的解释器上重入，嵌套规则执行使用受控调用栈或独立上下文，并共享同一总预算。远端响应回到已关闭操作时丢弃结果，不恢复脚本或写缓存。
+桥接调用携带 operationId、sessionId 和 sourceId。等待 HTTP 期间宿主事件循环仍可处理取消；宿主不得在同一个暂停中的解释器上重入，嵌套规则执行使用受控调用栈或独立上下文，并共享同一总预算。每次 `JavaScriptRuntime.execute` 都必须接收剩余 deadline、最大内存、调用深度和返回值大小，不能只设置独立的脚本超时。远端响应回到已关闭操作时丢弃结果，不恢复脚本或写缓存。
 
 ## 网络及内容策略
 
@@ -63,6 +63,10 @@ interface OperationBudget {
 威胁处理至少覆盖：源 URL 和每次重定向的 SSRF/DNS rebinding、代理/DNS 绕过、脚本和正则资源耗尽、压缩/归档炸弹、跨用户缓存键碰撞、Cookie/Authorization 泄露、HTML 注入、日志和导出泄露。`policy-denied`、`budget-exceeded`、`capability-missing` 与规则解析失败必须区分。
 
 脱敏规则应在 adapter 中集中实现：Cookie、Authorization、密码、token、服务端 URL 查询凭据和私有请求体默认删除或掩码；`rule`、body 和 HTML 只保留受限摘要。任何 fixture、任务诊断、审计记录和 API 错误都不得通过字段名变化绕过该策略。
+
+文件和媒体能力也必须在宿主执行层限制：路径只能是当前 sessionId/sourceId 私有命名空间中的相对 key，拒绝绝对路径、`.`、`..`、NUL 和符号链接跳转；限制单文件大小、总缓存大小、归档条目数和解压后大小；写入失败或取消时清理临时文件，过期资源由宿主回收。MIME 类型只能来自受信响应或解码结果，不能仅凭文件扩展名信任。
+
+会产生外部写入的脚本调用（例如购买、发帖、投票、登录提交）必须经过 capability allowlist、明确的用户动作确认和稳定的 `idempotencyKey`。请求已发出但结果未知时记录 `EffectRecord.status=unknown`，等待查询或人工确认；不能把超时当成失败后自动重试。
 
 ## Serverless 状态与调用
 

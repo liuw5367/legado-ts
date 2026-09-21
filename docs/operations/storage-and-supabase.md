@@ -59,7 +59,7 @@ application service
 
 保存书源时使用 `expectedSourceRevision` 做 CAS：只有当前 `sourceRevision` 与预期相等时才写入新版本。source、current pointer、check invalidation 和审计记录必须在同一事务完成；缓存失效和任务通知在提交后执行并可重试。
 
-检测回写必须带 `user_id + source_id + session_id + source_revision + check_revision` 条件；数据库字段统一使用 `session_id`，应用 DTO 的 `sessionId` 在 adapter 边界转换。订阅刷新也必须走相同保存边界：远程失败保留上一次成功版本，部分有效条目逐项记录，不得清空用户已有书源。
+检测回写必须带 `user_id + source_id + session_id + source_revision + check_revision` 条件；数据库字段统一使用 `session_id`，应用 DTO 的 `sessionId` 在 adapter 边界转换。订阅刷新也必须走相同保存边界：远程失败保留上一次成功版本，部分有效条目可以逐项记录在刷新计划和诊断中，但默认原子模式不得提交这些条目、更新 baseline 或递增 subscriptionRevision；只有显式兼容模式并完成确认后才允许逐项保存，不得清空用户已有书源。
 
 ## 数据内容与秘密处理
 

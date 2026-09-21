@@ -69,6 +69,16 @@ export interface RequestBudget {
   deadlineMs?: number
   /** 页面、重试和分页共享的上限。 */
   maxRequests: number
+  /** 分页和目录展开共享的页面上限。 */
+  maxPages: number
+  /** 单次响应解压后的最大字节数。 */
+  maxResponseBytes: number
+  /** 当前操作所有请求累计的最大解压字节数。 */
+  maxTotalBytes: number
+  /** 请求体的最大字节数；宿主在发送前校验。 */
+  maxRequestBodyBytes: number
+  /** 重定向跳转的最大次数。 */
+  maxRedirects: number
   signal?: AbortSignal
 }
 ```
@@ -87,7 +97,19 @@ export type OperationStatus =
   | 'failed'
   | 'cancelled'
   | 'stale'
+  | 'unknown'
   | 'capability-missing'
+
+export interface DomainChange {
+  /** 变化对应的稳定资源身份；不能包含秘密。 */
+  resourceKey: string
+  /** 计算变化时读取的版本；新建资源时为空。 */
+  baseRevision?: string
+  /** 变化类别；应用只允许提交已登记的类别。 */
+  kind: 'create' | 'update' | 'content-update' | 'delete' | 'user-override' | 'invalidate'
+  /** 允许提交的字段及目标值；不能隐式替换整个实体。 */
+  fields: Record<string, unknown>
+}
 
 export interface OperationResult<T> {
   /** 可判别终态；空列表成功必须使用 empty，而非 failed。 */
@@ -98,14 +120,16 @@ export interface OperationResult<T> {
   diagnostics: RuntimeDiagnostic[]
   /** 已发生或已提交的副作用。 */
   effects: EffectRecord[]
-  /** 尚未由应用提交的领域变更。 */
-  changes: unknown[]
+  /** 尚未由应用提交的领域变更；已提交的变化仍通过 effects 记录。 */
+  changes: DomainChange[]
   /** 请求资源的最终收尾结果；cancelled 也必须等待资源所有者结算。 */
   cleanup: {
     status: 'complete' | 'partial' | 'failed'
     pending: string[]
   }
   operationId: string
+  /** 写入类操作跨 HTTP 重试使用的幂等身份。 */
+  idempotencyKey?: string
   sourceRevision?: string
 }
 
@@ -117,10 +141,16 @@ export interface EffectRecord {
   /** 已提交、被拒绝或结果未知。 */
   status: 'committed' | 'rejected' | 'unknown'
   operationId: string
+  /** 外部写入的授权来源；只对需要用户确认的 effect 提供。 */
+  authorization?: { kind: 'user-confirmation' | 'system-policy'; reference: string }
+  /** 外部写入跨请求重试使用的幂等身份。 */
+  idempotencyKey?: string
 }
 ```
 
 错误必须使用既有 `RuntimeStage` 和稳定 `code`。`cancelled`、`stale`、`budget-exceeded`、`capability-missing`、`policy-denied`、`storage-error`、`revision-conflict` 和上游网络失败不能互相伪装。
+
+`unknown` 只表示外部请求或存储提交已经可能发生，但调用方在当前生命周期内无法确认结果；它不是普通失败，也不能由重试策略自动转换为 `failed`。
 
 映射示例：宿主启用 `blockSourceNavigation` 且在 `SuppressSourceNavigation` 上下文阻止 `openUrl`/`openVideoPlayer` 时，适配器应把该拒绝报告为 `policy-denied`，不能伪装成网络错误或能力缺失。
 

@@ -64,7 +64,14 @@ export interface SearchResultSink {
   save(items: SearchBook[], request: SearchRequest): Promise<void>
 }
 
-export type SearchSourceStatus = 'source-success' | 'empty-result' | 'source-error' | 'cancelled' | 'storage-error'
+export type SearchSourceStatus =
+  | 'source-success'
+  | 'empty-result'
+  | 'source-error'
+  | 'cancelled'
+  | 'stale'
+  | 'capability-missing'
+  | 'storage-error'
 
 export interface SearchSourceResult {
   sourceId: string
@@ -79,17 +86,26 @@ export interface SearchResult {
   status: OperationStatus
   searchId: string
   operationId: string
+  /** 结果基于的书源快照版本；多源搜索可按 sourceResults 分别记录。 */
+  sourceRevision?: string
   page: number
   items: SearchBook[]
   sourceResults: SearchSourceResult[]
   isEmpty: boolean
   hasMore: boolean
   diagnostics: RuntimeDiagnostic[]
+  /** 尚未由应用提交的搜索结果变更。 */
+  changes: DomainChange[]
+  /** 已发生的搜索 sink、Cookie 或变量副作用。 */
+  effects: EffectRecord[]
   cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 
 export interface SearchEvent {
-  type: 'start' | 'progress' | 'source-success' | 'completed' | 'cancelled'
+  /** 与 package-usage 约定一致；source-error 和 saved 都是正式事件。 */
+  type: 'start' | 'progress' | 'source-success' | 'source-error' | 'completed' | 'cancelled' | 'saved'
+  operationId: string
+  sequence: number
   searchId: string
   page: number
   pageOwner: string
@@ -97,6 +113,7 @@ export interface SearchEvent {
   items?: SearchBook[]
   isEmpty?: boolean
   hasMore?: boolean
+  diagnostics?: RuntimeDiagnostic[]
 }
 ```
 
@@ -106,11 +123,11 @@ export interface SearchEvent {
 2. 为每个书源创建子任务。子任务先等待暂停状态，再执行 URL 展开、网络请求、登录检测和声明式/JS 解析；单个书源的失败记录阶段错误，不阻断其他书源。
 3. 书源结果先释放临时 HTML，再写入搜索结果存储，随后执行同源去重和跨源合并。Android 是先写入 `searchBookDao` 再发布成功回调，独立库通过 `SearchResultSink` 暴露同样的先后关系。
 4. 每次合并后的快照都带 `searchId` 和 `page` 发布，调用方只能接收当前 `pageOwner` 的事件；旧请求的迟到结果不能覆盖新请求。
-5. 所有子任务结束后发布完成事件，携带 `isEmpty` 和 `hasMore`；取消时只发布取消事件，不能把取消伪装成正常空结果。
+5. 所有子任务结束后发布完成事件，携带 `isEmpty` 和 `hasMore`；取消时只发布取消事件，不能把取消伪装成正常空结果。某源保存完成后再发布 `saved`，保存失败发布带 `storage-error` 的 `source-error`。
 
 状态转换为 `created -> running -> paused -> running -> completed`，异常取消为 `running/paused -> cancelled`。换页沿用同一个 `searchId` 并递增 `page`；新关键字创建新的 `searchId`，先取消旧请求。多书源任务的并发完成顺序影响中间回调时机，但最终合并规则和同一快照内的排序必须稳定。
 
-事件顺序必须满足：正常请求为 `start -> progress/source-success* -> completed`，取消请求为 `start -> cancelled`；`source-success` 发生前必须完成结果归一化和存储。资源清理包括子任务、并发池、暂停等待、AbortSignal 监听和进度报告器，必须在成功、失败、取消和超时路径执行。
+事件顺序必须满足：正常请求为 `start -> progress/source-success/source-error/saved* -> completed`，取消请求为 `start -> cancelled`；`source-success` 发生前必须完成结果归一化，`saved` 只在 sink 确认后发布。所有事件携带同一 `operationId` 和递增 `sequence`，旧 `pageOwner` 的事件必须丢弃。资源清理包括子任务、并发池、暂停等待、AbortSignal 监听和进度报告器，必须在成功、失败、取消和超时路径执行。
 
 ## 失败和空值
 

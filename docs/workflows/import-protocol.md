@@ -80,9 +80,9 @@ export interface ImportCandidate {
   /** 候选级稳定错误；没有错误时为空。 */
   error?: { code: string; message: string; canRetry: boolean }
 }
+```
 
 导入批次的整体结果还需要记录 `operationId`、输入顺序、候选数组、是否有可写候选和清理状态。候选 `cancelled` 表示读取、网络、脚本或临时资源尚未完成时被停止；它不能与 `invalid` 混用，也不能因为已有候选而把整批报告为 `persisted`。批量持久化仍由应用在确认后调用 Repository 完成。
-```
 
 替换失败不能静默使用部分替换结果作为有效书源。候选应保留错误、命中的规则 ID 和可回退的原始版本，编辑器可以据此显示诊断。
 

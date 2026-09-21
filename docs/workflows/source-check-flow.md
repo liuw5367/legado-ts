@@ -20,7 +20,7 @@ package 对外提供检测编排和结果模型；应用层提供 HTTP/浏览器
         ├─ domain
         ├─ search（需要 searchRule）
         ├─ discovery/explore（需要 exploreRule）
-        └─ info → category/toc → content（依赖可用的书籍样本）
+        └─ book-info → toc → content（依赖可用的书籍样本）
         │
         ▼
 聚合 SourceCheckResult[]
@@ -45,18 +45,18 @@ export interface SourceCheckConfig {
   search: boolean;
   /** 是否验证发现/分类入口和 exploreRule。 */
   discovery: boolean;
-  /** 是否从搜索或发现结果验证详情规则；规范阶段名为 book-info。 */
+  /** 是否从搜索或发现结果验证详情规则；结果阶段名为 book-info。 */
   info: boolean;
-  /** 是否验证目录规则；文件型书源可跳过。 */
+  /** 是否验证目录规则；结果阶段名为 toc，文件型书源可跳过。 */
   category: boolean;
   /** 是否请求并验证正文规则；必须受超时和大小限制。 */
   content: boolean;
-  /** 可选的检测关键字；为空时使用实现定义的安全默认值。 */
+  /** 可选的检测关键字；省略时必须使用兼容 Android 的“我的”。 */
   keyword?: string;
 }
 ```
 
-默认请求超时、单源总预算、错误摘要、域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应。Android 的 `wSourceComment` 只影响内存中的 source 对象，最终 detail 由检查状态保存；package 不直接更新 `book_sources` 的备注。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
+默认请求超时、单源总预算、错误摘要、域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应。`info` 和 `category` 是 Android 配置别名，核心结果统一使用 `book-info` 和 `toc`；适配器不能把两个名称作为两个独立阶段执行。`keyword` 省略时固定使用 `我的`，只有调用方明确传入非空关键字时才覆盖该值。Android 的 `wSourceComment` 只影响内存中的 source 对象，最终 detail 由检查状态保存；package 不直接更新 `book_sources` 的备注。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
 
 ## 阶段和依赖
 
@@ -66,7 +66,7 @@ export interface SourceCheckConfig {
 | search | `searchRule` 存在 | 安全关键字 | 得到可解析的书籍结果 | 详情阶段没有可靠样本时跳过 |
 | discovery | `exploreRule` 存在且有入口 | 分类/发现 URL | 至少得到一个可解析结果 | 可继续搜索路径 |
 | book-info | 有搜索或发现样本 | 详情 URL、`bookInfoRule` | 书名/作者等核心字段可提取 | 目录/正文通常跳过 |
-| category | 有详情样本且非文件源 | 目录 URL、`tocRule` | 得到非空章节列表 | 正文阶段按样本策略跳过 |
+| toc | 有详情样本且非文件源 | 目录 URL、`tocRule` | 得到非空章节列表 | 正文阶段按样本策略跳过 |
 | content | 有章节样本且 `contentRule` 存在 | 正文 URL | 得到非空、可接受的正文 | 仅当前书源正文失败 |
 
 “空结果”与“执行失败”必须分开：搜索成功但无结果是业务结果；网络错误、解析异常、超时和规则缺失是诊断结果；由于前置阶段失败而未执行是 `SKIPPED`，不能伪装成 `PASSED`。
@@ -80,7 +80,7 @@ export interface SourceCheckConfig {
 3. 按配置执行阶段。每个阶段记录 `startedAt`、`finishedAt`、请求 URL（脱敏 query/header）、HTTP 状态、解析结果摘要和错误分类。
 4. 在详情、目录和正文阶段使用前置阶段得到的第一个可靠样本，避免无限遍历全站；样本选择规则必须稳定并可测试。
 5. 聚合阶段结果、总耗时、错误信息和可展示的建议。不要把远程响应原文或秘密写入普通日志。
-6. 回写前以 `(userId, sourceId, sourceRevision, sessionId)` 做条件检查。版本不一致则标记结果 `STALE` 并丢弃持久化更新。
+6. 回写前以 `(userId, sourceId, sourceRevision, checkRevision, sessionId)` 做条件检查。任一版本或会话不一致则标记结果 `STALE` 并丢弃持久化更新。
 
 ## 状态转换
 
@@ -105,7 +105,7 @@ export type SourceCheckStage =
   | "search"
   | "discovery"
   | "book-info"
-  | "category"
+  | "toc"
   | "content";
 
 export interface SourceCheckResult {
@@ -117,6 +117,10 @@ export interface SourceCheckResult {
   sourceId: string;
   /** 开始检测时的书源版本。 */
   sourceRevision: string;
+  /** 当前检测任务版本；用于拒绝迟到结果。 */
+  checkRevision: string;
+  /** 领域调用身份；同一调用的重试不改变。 */
+  operationId: string;
   /** 最终状态或实时阶段状态，使用规范的大写状态。 */
   status: SourceCheckStatus;
   /** 每个阶段的结构化结果；跳过阶段也要有记录。 */
@@ -134,8 +138,18 @@ export interface SourceCheckResult {
   }>;
   /** 供列表展示的脱敏摘要。 */
   summary: string;
+  /** 分阶段诊断；不得包含响应原文或秘密。 */
+  diagnostics: RuntimeDiagnostic[];
+  /** 已发生的状态写入和缓存失效等副作用。 */
+  effects: EffectRecord[];
+  /** 尚未由应用提交的检查状态变更。 */
+  changes: DomainChange[];
+  /** 请求、脚本和任务资源的最终清理状态。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] };
 }
 ```
+
+`SourceCheckResult` 是检测领域值；package 公开入口仍返回 `OperationResult<SourceCheckResult>`。外层 `status` 使用运行时统一契约的小写状态，值内的 `status` 保留 Android 兼容的大写检查状态，adapter 负责两者映射，不能让调用方把两套状态混为同一字段。
 
 实时事件可以复用同一结果模型的增量版本，但客户端不能把 `RUNNING` 结果当作最终通过。阶段状态允许值为 `PASSED`、`FAILED`、`SKIPPED`、`UNSUPPORTED`；源最终状态允许值为 `NEEDS_CHECK`、`RUNNING`、`PASSED`、`FAILED`、`CANCELLED`、`STALE`。若兼容层输出小写状态，必须按[状态模型](../reference/source-check-state.md)的映射表转换；WebSocket 或 SSE 只是应用传输方式，检测核心不应依赖某一种推送协议。
 

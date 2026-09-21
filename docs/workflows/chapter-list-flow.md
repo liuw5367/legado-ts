@@ -50,8 +50,10 @@
 
 ```ts
 export interface ChapterListResult {
-  /** `success`、`empty`、`partial`、`failed`、`cancelled` 或 `stale`。 */
+  /** `success`、`empty`、`partial`、`failed`、`cancelled`、`stale` 或 `unknown`。 */
   status: OperationStatus
+  /** 本次目录操作基于的书源版本。 */
+  sourceRevision: string
   /** 去重、排序、编号和格式化后的完整章节列表。 */
   chapters: BookChapter[]
   /** 目录流程更新的书籍统计和当前章节标题。 */
@@ -64,6 +66,10 @@ export interface ChapterListResult {
   operationId: string
   /** 页面、字段和持久化前诊断。 */
   diagnostics: RuntimeDiagnostic[]
+  /** 尚未由应用提交的目录和 Book 领域变更。 */
+  changes: DomainChange[]
+  /** 已发生的缓存、Cookie 或变量副作用。 */
+  effects: EffectRecord[]
   /** 并发请求、脚本和监听器的最终清理状态。 */
   cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }

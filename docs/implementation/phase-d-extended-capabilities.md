@@ -15,20 +15,30 @@ type MarshalledValue =
   | { kind: 'array'; value: MarshalledValue[] }
   | { kind: 'object'; value: Record<string, MarshalledValue> }
 
+interface BinaryReference {
+  /** 二进制响应的独立资源身份；实际 bytes 通过宿主二进制响应返回。 */
+  resourceId: string
+  mimeType?: string
+  size: number
+  url?: string
+}
+
 type MediaValue =
   | { kind: 'text'; content: string }
-  | { kind: 'image' | 'audio' | 'video' | 'file'; url?: string; bytes?: Uint8Array; mimeType?: string }
+  | { kind: 'image' | 'audio' | 'video' | 'file'; url?: string; resource?: BinaryReference; mimeType?: string }
 
 interface ExtendedResult<T> {
-  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'capability-missing'
+  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'unknown' | 'capability-missing'
   value?: T
   diagnostics: RuntimeDiagnostic[]
   effects: EffectRecord[]
+  changes: DomainChange[]
+  operationId: string
   cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 ```
 
-数组顺序、`null`、空数组、未回存章节、批量乱序回调、媒体 bytes 元数据和解密失败都必须由结果字段表达；“脚本返回了对象”不构成可保存的领域对象。
+数组顺序、`null`、空数组、未回存章节、批量乱序回调、媒体资源元数据和解密失败都必须由结果字段表达；`Uint8Array` 只能存在于宿主内部或独立二进制响应，不能进入 `ExtendedResult` 的 JSON DTO；“脚本返回了对象”不构成可保存的领域对象。
 
 ## 基础 JS 前置与批量扩展
 

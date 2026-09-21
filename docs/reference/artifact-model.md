@@ -57,10 +57,14 @@ export interface SubscriptionRefreshAttempt {
   /** 幂等提交身份。 */
   idempotencyKey: string
   subscriptionId: string
+  /** 计算本次刷新时读取的订阅版本。 */
+  baseSubscriptionRevision: string
   startedAt: number
   finishedAt?: number
   status: 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled' | 'unknown'
   diagnostics: RuntimeDiagnostic[]
+  /** 任务结束时必须记录资源收尾结果。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 
 export interface SubscriptionRepository {
@@ -75,11 +79,17 @@ export interface SubscriptionRepository {
     expectedSubscriptionRevision: string
     attempt: SubscriptionRefreshAttempt
     items: SubscriptionItem[]
-  }): Promise<boolean>
+  }): Promise<{
+    status: 'committed' | 'conflict' | 'unknown'
+    subscriptionRevision?: string
+    pending?: string[]
+  }>
 }
 ```
 
 `SubscriptionRecord`、`SubscriptionItem` 和 `SubscriptionRefreshAttempt` 是目标设计，不代表 Android 现有实现。Android 的 `RuleSub` 刷新没有 `userId` 维度，也没有逐条 `lastResult` 状态机或 `operationId`/`idempotencyKey`：非静默更新是整批缓存在 `RuleUpdate.cacheBookSourceMap` 后由导入页做差异确认；静默更新直接按 `lastUpdateTime` 比较后整行写入。ReplaceRule 的更新判定基于 `pattern`/`replacement`/`previewText` 变化，而不是 `remoteHash`；且 ReplaceRule 以远端 `id` 匹配本地实体，存在跨设备 id 冲突风险。迁移这些字段时需要显式映射，不能把目标状态机当作 Android 已提供的语义。
+
+刷新比较结果由[订阅流程](../workflows/source-subscriptions.md)的 `SubscriptionRefreshPlan` 承载；`SubscriptionRefreshAttempt` 只记录一次任务的生命周期和结算状态，不能再次声明 `updated/conflict/stale` 等比较结果。
 
 ## 扩展边界
 

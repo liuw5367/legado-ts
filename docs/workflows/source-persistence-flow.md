@@ -53,18 +53,21 @@ interface PersistenceFlowInput {
 }
 
 interface PersistenceFlowResult {
-  status: 'new' | 'same' | 'updated' | 'conflict' | 'invalid' | 'cancelled' | 'stale'
+  status: 'new' | 'same' | 'updated' | 'conflict' | 'invalid' | 'confirmation-required' | 'cancelled' | 'stale' | 'partial' | 'unknown'
   committed: boolean
+  operationId: string
+  idempotencyKey: string
   sourceRevision?: string
   changes: SourceChange[]
-  effects: string[]
+  effects: EffectRecord[]
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
   error?: { code: string; message: string; canRetry: boolean }
 }
 ```
 
-`changes` 只表示待提交或已提交的领域变更，`effects` 表示检查失效、缓存清理、审计和秘密撤销等外部动作；两者不能只用一个布尔值代替。
+`changes` 只表示待提交或已提交的领域变更，`effects` 表示检查失效、缓存清理、审计和秘密撤销等外部动作；两者不能只用一个布尔值代替。`committed=false` 不等于未提交：当状态为 `unknown` 时，Repository 必须先按 `idempotencyKey` 查询结果，再决定是否继续。
 
-`RemoveSourceInput` 至少包含可信的 `userId`、`sourceId` 和可选的 `expectedSourceRevision`；其余字段由[书源管理与状态](../reference/source-management-and-state.md)的 Repository 契约统一定义。Web 目标中版本使用由 Repository 生成的不透明字符串（可编码单调递增序列），`lastUpdateTime` 仍只是源内容元数据，不可替代并发版本；Android 的导入和订阅刷新仍以 `lastUpdateTime` 大小判断新增或更新，没有独立的并发版本比较。
+`RemoveSourceInput` 至少包含可信的 `userId`、`sourceId`、`idempotencyKey`、`confirmed` 和可选的 `expectedSourceRevision`；其余字段由[书源管理与状态](../reference/source-management-and-state.md)的 Repository 契约统一定义。Web 目标中版本使用由 Repository 生成的不透明字符串（可编码单调递增序列），`lastUpdateTime` 仍只是源内容元数据，不可替代并发版本；Android 的导入和订阅刷新仍以 `lastUpdateTime` 大小判断新增或更新，没有独立的并发版本比较。
 
 `NormalizedSource`、`SourceRecord`、`SourceChange` 的职责见[书源状态与副作用](../reference/source-management-and-state.md)。其中 `sourceId` 默认由原始 `bookSourceUrl` 字符串稳定生成；URL 变化应作为“删除旧 ID + 新建新 ID”处理，而不是静默覆盖另一条书源。
 

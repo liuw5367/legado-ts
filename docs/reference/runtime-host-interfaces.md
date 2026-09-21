@@ -22,6 +22,8 @@ export interface HttpRequest {
   followRedirects?: boolean
   /** 来自 RequestPlan 的 WebView、DNS、代理、节点和响应执行提示。 */
   execution?: RequestExecutionHints
+  /** 当前操作的请求/响应/总字节预算；宿主必须在发送和解压过程中执行。 */
+  budget?: RequestBudget
   /** 取消当前请求、规则执行和后续分页的信号。 */
   signal?: AbortSignal
 }
@@ -33,7 +35,7 @@ export interface HttpResponse {
   status: number
   /** 响应头。重复头可以保留为数组，不能静默丢失 Set-Cookie。 */
   headers: Record<string, string | string[]>
-  /** HTTP 解压后的原始响应字节；核心经字符集端口解码后再执行 bodyJs。 */
+  /** HTTP 解压后的原始响应字节；宿主必须先执行 maxResponseBytes/maxTotalBytes，超限不得返回部分成功。 */
   bytes: Uint8Array
   /** 是否发生过重定向。不能仅根据 url 是否变化推断。 */
   redirected: boolean
@@ -105,15 +107,25 @@ export interface JavaScriptRuntime {
     bindings: Record<string, unknown>
     /** 要执行的脚本或函数表达式。 */
     code: string
+    /** 当前调用身份；嵌套脚本不能脱离该操作创建新命名空间。 */
+    operationId: string
     /** 脚本超时时间，单位为毫秒。 */
     timeoutMs?: number
+    /** 脚本内存、调用深度和返回值大小限制。 */
+    budget: {
+      maxScriptMemoryBytes: number
+      maxScriptTimeMs: number
+      maxCallDepth: number
+      maxResultBytes: number
+      deadlineMs: number
+    }
     /** 与请求绑定的取消信号。 */
     signal?: AbortSignal
   }): Promise<unknown>
 }
 
 export interface CookieStore {
-  /** 读取目标 URL 域和路径可见的 Cookie。 */
+  /** 读取当前 sessionId + sourceId 命名空间内、目标 URL 域和路径可见的 Cookie。 */
   get(url: string): Promise<string | undefined>
   /** 保存响应中的 Cookie，并按域、路径和安全属性处理。 */
   set(url: string, setCookie: string | string[]): Promise<void>
@@ -122,7 +134,7 @@ export interface CookieStore {
 }
 
 export interface CacheStore {
-  /** 按稳定键读取缓存，并校验版本 token。 */
+  /** 按当前 sessionId + sourceId 命名空间读取缓存，并校验版本 token。 */
   get<T>(key: string, versionToken?: string): Promise<T | undefined>
   /** 写入带身份、过期时间和版本 token 的缓存。 */
   set<T>(key: string, value: T, options?: CacheWriteOptions): Promise<void>
@@ -157,6 +169,8 @@ export interface ContentIdentity {
   /** 目录刷新和章节索引，防止旧目录正文回写到新目录。 */
   tocRevision: string
   chapterIndex: number
+  /** 资源种类；正文、图片、音频、视频和文件必须使用不同身份。 */
+  resourceKind: 'text' | 'image' | 'audio' | 'video' | 'file'
   /** 规则语义和源版本，防止旧规则写入新缓存。 */
   sourceRevision: string
   semanticVersion: string
@@ -176,8 +190,8 @@ export interface ContentSaveToken {
 export interface ContentStore {
   /** 按稳定资源身份读取缓存，不递增写入代次。 */
   read(identity: ContentIdentity): Promise<string | undefined>
-  /** 只在 token 仍为当前版本时写正文和章节元数据，返回是否实际写入。 */
-  write(input: ContentWriteInput): Promise<boolean>
+  /** 只在 token 仍为当前版本时写正文和章节元数据。 */
+  write(input: ContentWriteInput): Promise<StoreWriteResult>
   /** 为要求保存的新操作原子预留写入代次；缓存命中时不调用。 */
   reserve(identity: ContentIdentity, operationId: string): Promise<ContentSaveToken>
 }
@@ -197,9 +211,19 @@ export interface ResourceStore {
   /** 按资源身份读取图片、音频、视频或文件；不递增写入代次。 */
   read(identity: ContentIdentity): Promise<ResourceValue | undefined>
   /** 只有 token 仍有效时保存资源和关联元数据。 */
-  write(input: { token: ContentSaveToken; resource: ResourceValue }): Promise<boolean>
+  write(input: { token: ContentSaveToken; resource: ResourceValue }): Promise<StoreWriteResult>
   /** 为资源写入预留代次，语义与 ContentStore 一致。 */
   reserve(identity: ContentIdentity, operationId: string): Promise<ContentSaveToken>
+}
+
+export interface StoreWriteResult {
+  /** 已确认提交、被拒绝、因版本/取消失效，或无法确认底层结果。 */
+  status: 'committed' | 'rejected' | 'stale' | 'cancelled' | 'unknown'
+  /** 仅为兼容调用方保留；判断结果必须使用 status。 */
+  committed: boolean
+  operationId: string
+  resourceKey: string
+  reason?: string
 }
 
 export interface RateLimiter {
@@ -241,9 +265,9 @@ export interface JsResponse {
 }
 
 export interface JsCacheApi {
-  /** 读取持久化文本缓存，不存在或过期时返回 null。 */
+  /** 读取当前 sessionId + sourceId 命名空间的持久化文本缓存，不存在或过期时返回 null。 */
   get(key: string, onlyDisk?: boolean): string | null
-  /** 写入缓存，saveTimeSec 为 0 表示不过期。 */
+  /** 写入当前命名空间的缓存，saveTimeSec 为 0 表示不过期；宿主仍执行大小和总量限制。 */
   put(key: string, value: string, saveTimeSec?: number): void
   /** 删除缓存和对应内存副本。 */
   delete(key: string): void
@@ -253,9 +277,9 @@ export interface JsCacheApi {
   putMemory(key: string, value: string): void
   /** 删除只存在于内存的缓存。 */
   deleteMemory(key: string): void
-  /** 读取当前书源命名空间的文本文件缓存，不存在时为 null。 */
+  /** 读取当前书源命名空间的文本文件缓存；key 只能是相对 opaque key，不存在时为 null。 */
   getFile(key: string): string | null
-  /** 写入受文件能力限制的缓存，saveTimeSec 单位秒。 */
+  /** 写入受文件大小、总量、过期和私有权限限制的缓存，saveTimeSec 单位秒。 */
   putFile(key: string, value: string, saveTimeSec?: number): void
 }
 
@@ -302,7 +326,7 @@ export interface JavaApi {
   connect(url: string, headerJson?: string, callTimeoutMs?: number): JsResponse
   /** 下载或读取缓存中的文本脚本文件。 */
   cacheFile(url: string, saveTimeSec?: number): string
-  /** 下载文件并返回宿主私有缓存中的相对标识。 */
+  /** 下载文件并返回宿主私有缓存中的 opaque 相对标识；拒绝绝对路径、路径穿越和超出资源预算的响应。 */
   downloadFile(url: string): string
   /** 读取按书源域隔离的 Cookie。 */
   getCookie(tag: string, key?: string): string
@@ -329,9 +353,22 @@ export interface JavaApi {
 ## RuntimeHost
 
 ```ts
+export interface RuntimeScope {
+  /** 宿主认证后的用户或匿名会话命名空间。 */
+  sessionId: string
+  /** 已认证用户；匿名调用为空。 */
+  userId?: string
+  /** 当前书源身份。 */
+  sourceId: string
+  /** 当前领域操作身份。 */
+  operationId: string
+}
+
 export interface RuntimeHost {
   /** 当前宿主明确开放的能力集合。 */
   capabilities: RuntimeCapabilities
+  /** 所有 Cookie、缓存、变量和文件能力都必须绑定到该作用域。 */
+  scope: RuntimeScope
   /** URL 规则展开后的 HTTP 请求执行器。 */
   http: HttpClient
   /** 受支持字符集的字节转换，不默认以 UTF-8 替代未知字符集。 */
@@ -379,6 +416,12 @@ export interface VariableStore {
 export interface VariableStoreContext {
   /** 当前 HTTP 或预览请求的身份。 */
   requestId: string
+  /** 当前领域操作身份；重试不改变。 */
+  operationId: string
+  /** 当前用户/匿名会话命名空间；不能由规则文本自报。 */
+  sessionId: string
+  /** 已认证用户；匿名调用为空。 */
+  userId?: string
   /** 当前书源身份。 */
   sourceUrl: string
   /** 可选的书籍身份。 */

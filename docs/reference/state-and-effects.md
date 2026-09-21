@@ -46,7 +46,7 @@ Android 行为与上表不同：`BookSourceCheckState.sourceRevision` 在插入�
 | 搜索 sink | 单源解析成功后、source-success 之前 | sink 失败是 storage-error；内存 sink 可满足无数据库调用 |
 | 用户购买、发帖等上游写入 | 明确用户动作后 | 不自动重试；未知结果明确标记，不假装失败后可安全重发 |
 
-统一记录 `effects[]`：每项包含 `kind`、`resourceKey`、`status`（committed/rejected/unknown）、`operationId` 和脱敏诊断；不包含 Cookie 内容。执行结束不等于存储提交。`progress`、`source-success`、`completed` 是执行事件；`saved` 仅在对应存储确认后发布。
+统一记录 `effects[]`：每项包含 `kind`、`resourceKey`、`status`（committed/rejected/unknown）、`operationId` 和脱敏诊断；不包含 Cookie 内容。需要用户确认的外部写入还必须记录授权来源和 `idempotencyKey`，并由宿主 allowlist 在执行点拒绝未授权动作。执行结束不等于存储提交。`progress`、`source-success`、`completed` 是执行事件；`saved` 仅在对应存储确认后发布。
 
 ## 正文缓存与防旧写入
 

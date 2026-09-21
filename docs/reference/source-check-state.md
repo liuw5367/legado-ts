@@ -28,7 +28,6 @@ export type SourceCheckStage =
   | 'search'
   | 'discovery'
   | 'book-info'
-  | 'category'
   | 'toc'
   | 'content'
 
@@ -87,9 +86,16 @@ export interface SourceCheckRepository {
   /** 创建 RUNNING 会话，并固定 sourceRevision/checkRevision。 */
   begin(input: BeginSourceCheckInput): Promise<SourceCheckState>
   /** 仅在版本和会话仍匹配时完成回写。 */
-  complete(result: CompleteSourceCheckInput): Promise<boolean>
+  complete(result: CompleteSourceCheckInput): Promise<CheckStateWriteResult>
   /** 取消当前会话；已完成会话不可被旧取消覆盖。 */
-  cancel(userId: string, sourceId: string, sessionId: string): Promise<boolean>
+  cancel(userId: string, sourceId: string, sessionId: string, operationId: string): Promise<CheckStateWriteResult>
+}
+
+export interface CheckStateWriteResult {
+  /** 已确认写入、因版本/会话不匹配拒绝，或无法确认底层写入。 */
+  status: 'committed' | 'rejected' | 'unknown'
+  state?: SourceCheckState
+  pending?: string[]
 }
 
 export interface BeginSourceCheckInput {
@@ -101,6 +107,8 @@ export interface BeginSourceCheckInput {
   sourceRevision: string
   /** 应用生成的校验会话身份。 */
   sessionId: string
+  /** 本次领域调用身份；同一调用重试不改变。 */
+  operationId: string
 }
 
 export interface CompleteSourceCheckInput {
@@ -114,6 +122,8 @@ export interface CompleteSourceCheckInput {
   checkRevision: string
   /** 只允许 RUNNING 会话结算。 */
   sessionId: string
+  /** 与结果和日志关联的领域调用身份。 */
+  operationId: string
   /** 终态；不能由 complete 写入 RUNNING。 */
   status: Exclude<SourceCheckStatus, 'NEEDS_CHECK' | 'RUNNING'>
   checkedAt?: number
@@ -123,6 +133,8 @@ export interface CompleteSourceCheckInput {
   failedStages: SourceCheckState['failedStages']
 }
 ```
+
+`category` 只作为 Android `CheckSource` 配置和旧适配器的输入别名，归一化后的状态、结果和 fixture 统一使用 `toc`；`info` 同理映射为 `book-info`。
 
 Android 实际没有 RUNNING 会话：`BookSourceDao.beginCheck` 重置为 `NEEDS_CHECK` 并生成新的 `revision`（任务版本 UUID），保留 `sourceRevision`；写回不以 `status==RUNNING` 为前提，`finishCheck` 的 CAS 条件是 `status='NEEDS_CHECK' AND revision=:revision`（`BookSourceDao.kt` L298-313）。迟到结果由 `completeCheck` 返回 false 拒绝，不落 STALE 状态。`BookSourcePart` 通过 coalesce JOIN 呈现 `checkStatus`/`checkRevision`/`sourceRevision`/`checkedAt`/`checkDetail`（`BookSourcePart.kt` L21-25）。
 

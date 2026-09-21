@@ -19,7 +19,7 @@
 
 上述能力复用 [模型](../reference/source-schema.md)、[宿主](../reference/runtime-host-interfaces.md) 和 [状态契约](../reference/state-and-effects.md)。编辑预览调用同一入口，使用临时会话，不提交用户状态。
 
-每个入口都接受不可变书源快照、`operationId`、预算和取消信号。成功返回可以是 `success` 或合法空结果 `empty`；存在已归一化部分结果时使用 `partial`；规则/网络/存储失败使用 `failed`；取消、版本过期和能力缺失分别使用 `cancelled`、`stale`、`capability-missing`。入口必须返回或抛出稳定的 `code`/`stage`，不能用 `[]`、`null` 或 HTTP 状态单独表达失败。
+每个入口都接受不可变书源快照、`operationId`、预算和取消信号。成功返回可以是 `success` 或合法空结果 `empty`；存在已归一化部分结果时使用 `partial`；规则/网络/存储失败使用 `failed`；取消、版本过期、外部提交未知和能力缺失分别使用 `cancelled`、`stale`、`unknown`、`capability-missing`。入口必须返回或抛出稳定的 `code`/`stage`，不能用 `[]`、`null` 或 HTTP 状态单独表达失败。
 
 ## 公共调用协议
 
@@ -31,17 +31,18 @@ OperationResult 包含 `status`、value（各入口下表结果）、diagnostics
 
 ```ts
 interface PublicOperationResult<T> {
-  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'capability-missing'
+  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'unknown' | 'capability-missing'
   value?: T
   diagnostics: RuntimeDiagnostic[]
   effects: EffectRecord[]
-  changes: unknown[]
+  changes: DomainChange[]
+  idempotencyKey?: string
   operationId: string
   cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 ```
 
-changes 每项包含资源身份、baseRevision、允许更新字段及目标值；应用按 expectedSourceRevision compare-and-set 提交。DOM、Set、脚本句柄、AbortSignal、宿主对象不得进入 HTTP DTO。DTO 使用普通对象、数组和字符串；bytes 由独立二进制响应返回，不能 JSON 字符串化为正文。
+`changes` 每项包含资源身份、baseRevision、允许更新字段及目标值，结构见[运行时统一契约](../reference/runtime-contracts.md#结果与错误)的 `DomainChange`；应用按 expectedSourceRevision compare-and-set 提交。`unknown` 表示外部提交是否完成无法确认，不能自动按失败重试。DOM、Set、脚本句柄、AbortSignal、宿主对象不得进入 HTTP DTO。DTO 使用普通对象、数组和字符串；bytes 由独立二进制响应返回，不能 JSON 字符串化为正文。
 
 | 入口补充 | 输入 | 输出与边界 |
 | --- | --- | --- |
@@ -54,7 +55,7 @@ changes 每项包含资源身份、baseRevision、允许更新字段及目标值
 | getReviewSummary | Book、Chapter | ReviewParagraph[]，空摘要合法 |
 | getReviewDetail | Book、Chapter、paraIndex/paraData/page | ReviewPage，保留下一页语义 |
 | getReviewReplies | 上述输入加 reviewId | 回复列表，未声明函数时 capability-missing |
-| decodeImage | Book、src、bytes、isCover | bytes 或解码错误；无规则原样返回 |
+| decodeImage | Book、src、bytes、isCover | `BinaryReference` 或解码错误；无规则原样返回，原始 bytes 只通过独立二进制响应返回 |
 | resolveDownload | 文件源及 Book | 详情规则生成的下载地址列表；实际文件写入由宿主负责 |
 | executeSourceAction | pay 或已知 event 名、Book/Chapter、用户确认及操作身份 | open-url/refresh-toc/intercept-default/continue-default；未知事件拒绝，写入不自动重试 |
 | getLoginForm / submitLogin | 源、挑战身份、表单输入 | 登录表单/挑战/认证结果；低优先级，完整动态参数未核实前报能力缺失 |

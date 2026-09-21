@@ -67,7 +67,7 @@
 
 字段约定：id 稳定且不可复用，source 为脱敏身份，input/context/operation/expected 为具体输入和期望。`implementation` 和 `priority` 必须与兼容性矩阵使用同一枚举；`events`、`error`、`writes` 和 `lifecycle` 用于断言轨迹、失败语义、领域写入和资源清理。androidEvidence 指明源码或实际执行测试；Web 新设计使用 designEvidence 指向规格。tsAssertion 在设计阶段为计划路径，只有实际存在并执行后才是验证证据。status 是旧摘要字段，新记录分别使用 evidence=source/test-run/design、spec=defined/blocked、implementation=absent/partial/implemented、execution=not-run/pass/fail、priority=required/host/later/verify；不把五个维度压成一个完成状态。上方 JSON 是格式示意，真实案例禁止用省略号作输入或期望。fixture 不保存秘密。
 
-`expected` 至少包含领域结果或明确的空结果；`error` 在成功案例中为 `null`，在失败/取消/超时案例中包含稳定 `code`、`stage`、`retryable` 和 `continue`；`writes` 记录是否提交、提交版本和拒绝原因；`events` 按发生顺序记录 `started`、`progress`、`completed`、`empty`、`partial`、`failed`、`cancelled` 或 `stale`。有资源的案例必须填写 `lifecycle.cleanup` 和 `mustRelease`，纯值转换没有资源时使用 `cleanup=not-applicable`，不伪造释放事件。
+`expected` 至少包含领域结果或明确的空结果；`error` 在成功案例中为 `null`，在失败/取消/超时案例中包含稳定 `code`、`stage`、`retryable` 和 `continue`；`writes` 记录是否提交、提交版本和拒绝原因；`events` 按发生顺序记录统一事件类型 `start`、`progress`、`source-success`、`source-error`、`saved`、`completed` 或 `cancelled`。`empty`、`partial`、`failed`、`stale` 和 `unknown` 是结果状态，不是事件类型，应记录在事件或最终结果的 `status` 字段中。有资源的案例必须填写 `lifecycle.cleanup` 和 `mustRelease`，纯值转换没有资源时使用 `cleanup=not-applicable`，不伪造释放事件。
 
 网络 fixture 的每条记录至少包含 `method`、展开后的 `url`、请求头白名单、请求体、响应状态、最终 URL、脱敏响应头、响应体和模拟延迟。`retry` 用例还要记录每次尝试及最终错误；分页用例要记录请求启动顺序、响应完成顺序和最终收集顺序。golden 只保存稳定输出、稳定错误码、阶段、能力状态、事件顺序、写入结果和清理结果，不比较平台特有的堆栈文本。
 
@@ -276,6 +276,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | URL-001/page | URL `/p/<a,b>`，page=3 | 选最后项 b，生成 /p/b |
 | URL-003/redirect-policy | 公网初始地址重定向到 127.0.0.1 | 宿主拒绝第二跳，无内网请求，policy-denied |
 | URL-004/cancel-retry | retry=2，第一次请求未完成时取消 | 不启动第 2/3 次，cancelled 而非空成功 |
+| URL-006/request-unknown | POST 已发出，响应前连接断开 | 返回 `unknown`/`request-unknown`，不自动重发；保留 operationId 和 idempotencyKey |
 | FLOW-001/nameless | 列表两项 name="" 与 name="书" | 丢弃第一项；只返回后一项 |
 | FLOW-002/partial | A 返回一本书，B 超时 | 保留 A，B 有错误；sink 完成先于 A 的 source-success |
 | FLOW-003/all-failed | A/B 均请求失败 | 无结果但有两个失败，区别于两个合法空列表 |
@@ -287,6 +288,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | FLOW-009/next-chapter | 当前 /c1，下一章 /c2，nextContentUrl=/c2 | 不请求 /c2，不把下一章拼入正文 |
 | FLOW-010/input-order | 正文分页 [u1,u2]，u2 先返回 B、u1 后返回 A | 拼接顺序 A 后 B，不能按到达顺序 |
 | FLOW-012/partial-save | 批量 3 章，第 1 章回存成功后脚本抛错 | 第 1 章保留 committed，2/3 为剩余，兜底不重复保存 1 |
+| FLOW-013/event-taxonomy | 多源 A 成功、B 解析失败、A sink 保存完成 | 依次只能使用 `source-success`/`source-error`/`saved` 等统一事件；`partial` 是结果状态，不作为事件类型；completed 只发布一次 |
 | JS-001/serialization | 返回带 toJSON 的对象；另例循环对象 | 调用 toJSON 的结果被使用；循环对象序列化失败 |
 | JS-002/sync-network | 脚本 `java.ajax(u).length`，u 延迟返回 abc | 得到 3 而非 Promise 属性；取消等待后不恢复脚本 |
 | JS-003/late-save | 批量上下文关闭后回调 cacheContent | 拒绝写入，原缓存不变 |
@@ -300,13 +302,14 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | API-004/js-limit | `text/plain` 恰好上限、超过上限、错误 Content-Length、Transfer-Encoding、读取超过 30 秒 | 上限内继续解析；传输约束、大小或超时失败时拒绝；不写入半截脚本 |
 | API-005/precondition | 未保存 sourceId 调用搜索/调试；旧 check token 调用 stop | 返回 SOURCE_NOT_FOUND 或 session unauthorized；不产生缓存和任务副作用 |
 | API-006/management-snapshot | 同一事务中源 A 的 revision 与状态同时读取；`urls=[A,A,B]`，B 属于其他用户 | 返回去重后的授权源及匹配状态；不泄露 B；源和状态不能来自不同提交 |
-| API-007/ws-first-frame | search 首帧 `{key:"x"}`；debug 首帧 `{tag:"A",key:"x"}`；空帧、第二帧和超过 10 秒 | search 不读取首帧 source URL；debug 按已保存 tag 查找；非法/迟到/重复帧关闭并释放任务 |
+| API-007/ws-first-frame | search 首帧 `{key:"x"}`；debug 首帧 `{tag:"A",key:"x"}`；新协议首帧 `hello`；空帧、第二帧和超过 10 秒 | 旧帧只在 adapter 转换为内部 hello 后进入核心；sessionId 由服务端生成；非法/迟到/重复帧关闭并释放任务 |
 | API-008/insert-policy | `customOrder` 越界/重复、配置拦截域名、旧 API 直接保存同一候选 | web-safe 拒绝或修正且无拒绝写入；android-compatible 保留直接 DAO 结果；两种结果带模式记录 |
 | REPO-001/isolation | u1/u2 保存相同 sourceId=A，分别读、改、删 | 只能看到自己的 A；一方删除不影响另一方及其检查状态 |
 | REPO-002/cas | 两次编辑都基于 v1；先提交 v2，后提交 v1 | 后者返回 revision conflict；规则变更重置检查，纯分组变更不重置 |
 | REPO-003/atomic | 三个候选保存到第 2 个时事务失败 | A/B/C 均不成为部分新版本；旧源、旧 baseline 和旧状态保持一致 |
 | REPO-004/delete | 删除 A，存在变量、cookie 引用、check state、缓存和书架书 | A 的派生状态清理；默认保留书架/进度；秘密不可再读 |
 | REPO-005/source-help-policy | A 命中域名拦截，B 的 `customOrder` 越界，C 与旧 API 相同 | web-safe 的 A 不写入、B 按策略修正；android-compatible 仅执行 Controller 最小校验和直接 DAO 语义；策略差异可追踪 |
+| REPO-006/unknown-write | 保存响应前数据库连接中断，随后用同一 idempotencyKey 查询 | 结果为 unknown 时不重复写入；查询能区分已提交、未提交和清理待处理 |
 | SEC-001/rls | u1 请求带 u2 sourceId，或伪造 body.userId=u2 | DB/app 至少一层拒绝；不返回存在性差异；旧任务也不能越权写入 |
 | SEC-002/redaction | 错误 URL/header/body 含 cookie、token、password | 响应、日志、fixture、导出均不含秘密明文，仅保留脱敏摘要 |
 | STATE-001/read-version | 缓存命中且已有在途写入 token=t1 | 读取不改变 t1 代次 |
@@ -334,8 +337,10 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | JOB-003/unknown | 外部请求已发出，worker 在响应前崩溃 | 任务进入 unknown 或人工确认路径，不自动重复不可证明幂等的写入 |
 | JOB-004/old-revision | 任务固定 sourceRevision=v1，执行期间源变为 v2 | 任务不写入 v1 结果，状态为 stale/unknown，v2 检测状态保持有效 |
 | CHECK-005/stage-persistence | 检测各阶段分别产生通过、跳过、失败和能力缺失 | SourceCheckState 的阶段结果可恢复；整体状态不把 SKIPPED/UNSUPPORTED 当 PASSED |
+| CHECK-006/aliases-and-defaults | 配置使用 Android `info/category`，省略 keyword，另测显式 keyword | 阶段结果统一为 `book-info/toc`；省略值固定使用“我的”；显式关键字覆盖默认值 |
 | RESOURCE-001/binary | 图片解密返回 bytes，文件返回 file-links，正文返回 text | ContentStore 与 ResourceStore 分工正确；MIME、bytes、文件链接和正文类型不混淆 |
 | RESOURCE-002/size | 二进制恰好上限、超过上限、解密后超过上限 | 超限资源不写缓存；流和脚本句柄释放，返回 resource/budget 错误 |
+| RESOURCE-003/kind-collision | 同一章节同时产生 text、image、audio 和 file 资源 | ContentIdentity.resourceKind 使四类资源使用不同 resourceKey；不能互相覆盖 |
 | SECURITY-003/cross-user-state | u1 的 Cookie、变量、任务和资源 key 被 u2 请求复用 | u2 不可读取或写入 u1 状态；不存在性不能通过错误差异泄露 |
 
 SUB-001–018 在 [订阅文档](../workflows/source-subscriptions.md#验收)，DEP-001–007 在 [部署文档](../operations/runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。

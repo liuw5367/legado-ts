@@ -48,9 +48,13 @@ interface ActionRequest<T> {
 interface ActionResponse<T> {
   requestId: string
   operationId: string
-  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'capability-missing'
+  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'unknown' | 'capability-missing'
   value?: T
   diagnostics: RuntimeDiagnostic[]
+  effects: EffectRecord[]
+  changes: DomainChange[]
+  idempotencyKey?: string
+  sourceRevision?: string
   cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 ```

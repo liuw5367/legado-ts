@@ -95,7 +95,7 @@ raw rule URL
   -> response
 ```
 
-每个请求必须记录 `requestId`、原始规则、最终 URL、请求方法、响应最终 URL、尝试次数、状态码、是否使用 WebView 和失败阶段。重试只适用于宿主明确允许的请求失败，不能重复执行解析、`bodyJs` 或正文保存；每次重试都必须继续使用同一取消信号和请求级 Cookie 视图。Android 将 `retry` 传给 HTTP 客户端，具体退避算法由宿主决定，但实现必须固定最大尝试次数并在 fixture 中记录。
+每个请求必须记录 `requestId`、原始规则、最终 URL、请求方法、响应最终 URL、尝试次数、状态码、是否使用 WebView 和失败阶段。重试只适用于宿主明确允许的请求失败，不能重复执行解析、`bodyJs` 或正文保存；每次重试都必须继续使用同一取消信号和请求级 Cookie 视图。Android 将 `retry` 传给 HTTP 客户端，具体退避算法由宿主决定，但实现必须固定最大尝试次数并在 fixture 中记录。统一错误分类至少包含 `retryable`、`policy-denied`、`budget-exceeded` 和 `request-unknown`；请求已发出但响应未知时只能返回 `unknown`，不能自动重发 POST、购买、发帖或其他外部写入。
 
 超时至少区分单次 HTTP 读取超时、整次调用超时和流程总超时。取消优先级高于重试、分页和脚本执行，收到取消后不得启动下一次尝试。重定向关闭时返回 3xx 响应，重定向开启时只把最终 URL 交给解析层；若发生重定向循环或超过宿主上限，返回 `request` 阶段的 `redirect-error`。
 
@@ -103,7 +103,7 @@ raw rule URL
 
 ## 5. Cookie、登录头和重定向
 
-请求前把 CookieStore 中对应域的 Cookie 与 URL 选项中的 `Cookie` 合并，临时 URL 选项优先；启用 CookieJar 时保存响应中的 Set-Cookie。当前 Cookie 域按解析后的目标 URL 计算，封面 CDN 不应错误使用书源站点 Cookie。
+请求前把 CookieStore 中对应域的 Cookie 与 URL 选项中的 `Cookie` 合并，临时 URL 选项优先；启用 CookieJar 时保存响应中的 Set-Cookie。当前 Cookie 域按解析后的目标 URL 计算，封面 CDN 不应错误使用书源站点 Cookie。导入层归一化 `enabledCookieJar` 时，JSON/对象省略值使用 Kotlin 构造默认值 `true`；显式 `null` 和数据库旧行缺失值按 `enabledCookieJar == true` 判断为关闭，只有显式 `true` 才保存响应 Cookie。
 
 登录头默认只发往书源同站二级域名；需要跨域时由 URL 选项显式提供。注意，当前保护逻辑依据初始 URL 判断，URL 中的 `@js` 如果把地址改写到跨域目标，不能假设登录头一定会被重新拦截。TypeScript 迁移应将这一点作为兼容事实和安全告警分别记录。静态 Header、Cookie、Token 和 `loginCheckJs` 优先实现；复杂登录 UI 作为低优先级宿主能力保留在完整移植清单。
 

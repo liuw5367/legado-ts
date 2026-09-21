@@ -43,7 +43,7 @@ export interface PreviewResult {
   /** 最终领域结果或结构化错误。 */
   output?: unknown
   /** 预览终态；空结果不等于失败。 */
-  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'capability-missing'
+  status: 'success' | 'empty' | 'partial' | 'failed' | 'cancelled' | 'stale' | 'unknown' | 'capability-missing'
   /** 稳定操作身份和版本，防止迟到 trace 覆盖新候选。 */
   operationId: string
   sourceRevision?: string
@@ -74,8 +74,8 @@ export interface SourceEditorSession {
   preview?: PreviewResult
   /** 当前加载、预览、保存和导出状态；互相独立。 */
   loadState: 'idle' | 'loading' | 'ready' | 'failed'
-  previewState: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled' | 'stale'
-  saveState: 'idle' | 'saving' | 'saved' | 'conflict' | 'failed' | 'cancelled'
+  previewState: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled' | 'stale' | 'unknown'
+  saveState: 'idle' | 'saving' | 'saved' | 'conflict' | 'stale' | 'unknown' | 'failed' | 'cancelled'
   exportState: 'idle' | 'exporting' | 'completed' | 'failed'
 }
 
@@ -102,9 +102,9 @@ export interface SourcePosition {
 }
 ```
 
-保存输入至少包含 `sessionId`、`baseRevision`、`source`、`rawText`、`unknownFields`、用户覆盖选择、`confirmed` 和 `idempotencyKey`；保存结果使用 `new/same/updated/conflict/invalid/cancelled/stale`，并明确 `committed`、新 `sourceRevision`、changes 和错误。`confirmed=false` 不产生写入。预览中的 HTTP/解析/脚本/能力错误只影响预览状态，不自动修改 dirty 或持久化源。
+保存输入至少包含 `sessionId`、`baseRevision`、`source`、`rawText`、`unknownFields`、用户覆盖选择、`confirmed`、`SaveSourceInput.mode` 和 `idempotencyKey`；保存结果使用 `new/same/updated/conflict/invalid/confirmation-required/cancelled/stale/partial/unknown`，并明确 `committed`、新 `sourceRevision`、changes、effects、cleanup 和错误。`confirmed=false` 不产生写入；`unknown` 必须先查询幂等结果，不能直接重试。预览中的 HTTP/解析/脚本/能力错误只影响预览状态，不自动修改 dirty 或持久化源。
 
-状态分成正交维度：load=idle/loading/ready/failed，validity=valid/invalid，preview=idle/running/completed/failed/cancelled/stale，save=idle/saving/saved/conflict/failed/cancelled，export=idle/exporting/completed/failed。dirty 仅由 rawText 与 baseText 的差异决定，预览本身不改变 dirty。解析失败保留原文；保存比较 baseRevision，冲突由用户选择重载、覆盖或导出。切换、关闭和离开时检查 dirty，未经确认不丢弃修改；迟到 preview 只有 operationId 和 sourceRevision 同时仍然匹配时才能更新会话。
+状态分成正交维度：load=idle/loading/ready/failed，validity=valid/invalid，preview=idle/running/completed/failed/cancelled/stale/unknown，save=idle/saving/saved/conflict/stale/unknown/failed/cancelled，export=idle/exporting/completed/failed。dirty 仅由 rawText 与 baseText 的差异决定，预览本身不改变 dirty。解析失败保留原文；保存比较 baseRevision，冲突或 stale 由用户选择重载、合并、覆盖或导出，unknown 先查询幂等结果。切换、关闭和离开时检查 dirty，未经确认不丢弃修改；迟到 preview 只有 operationId 和 sourceRevision 同时仍然匹配时才能更新会话。
 
 导入、编辑、诊断、预览、保存和导出的数据流为：
 

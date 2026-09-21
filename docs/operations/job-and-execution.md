@@ -52,8 +52,8 @@ export interface JobRecord {
   output?: Record<string, unknown>
   /** 稳定失败或未知原因；message 必须脱敏。 */
   error?: { code: string; stage?: string; message: string; canRetry: boolean }
-  /** 任务资源和子任务清理结果。 */
-  cleanup?: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
+  /** 任务资源和子任务清理结果；任务进入任一终态后必须存在。 */
+  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
 }
 
 export interface JobStore {
@@ -63,12 +63,18 @@ export interface JobStore {
   claim(workerId: string, leaseMs: number): Promise<JobRecord | null>
   /** 只有当前 worker 和当前租约能续租。 */
   renew(jobId: string, workerId: string, leaseToken: string, leaseMs: number): Promise<boolean>
-  /** 提交结果；源版本不匹配时只能结算为 stale/unknown。 */
-  complete(jobId: string, workerId: string, leaseToken: string, result: JobCompletion): Promise<boolean>
+  /** 提交结果；源版本不匹配时只能结算为 stale/unknown，连接中断时返回 unknown。 */
+  complete(jobId: string, workerId: string, leaseToken: string, result: JobCompletion): Promise<JobWriteResult>
   /** 取消排队或当前租约任务。 */
   cancel(jobId: string, userId: string): Promise<boolean>
   /** 查询用户可见的任务状态。 */
   get(jobId: string, userId: string): Promise<JobRecord | null>
+}
+
+export interface JobWriteResult {
+  /** 已确认写入、租约/版本拒绝，或无法确认任务是否已结算。 */
+  status: 'committed' | 'rejected' | 'unknown'
+  job?: JobRecord
 }
 
 export interface JobCompletion {
