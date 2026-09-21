@@ -6,8 +6,8 @@
   "packageManager": "pnpm@11.27.0",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json",
-    "test": "node --test packages/source-core/tests/*.test.ts"
+    "build": "tsc -p tsconfig.build.json && tsc -p packages/source-node/tsconfig.build.json",
+    "test": "node --test packages/source-core/tests/*.test.ts packages/source-node/tests/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",

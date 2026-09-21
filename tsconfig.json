@@ -14,7 +14,12 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "types": ["node"],
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@legado/source-core": ["packages/source-core/src/public/index.ts"]
+    }
   },
   "include": ["packages/**/*.ts", "packages/**/*.json", "tests/**/*.ts"],
   "exclude": ["**/dist/**", "node_modules"]

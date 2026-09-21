@@ -9,5 +9,15 @@ packages:
   - 'packages/*'
 
 catalog:
+  '@xmldom/xmldom': 0.9.12
   '@types/node': 24.0.0
+  css-select: 7.0.0
+  dom-serializer: 3.1.1
+  domhandler: 6.0.1
+  domutils: 4.0.2
+  fontoxpath: 3.34.0
+  htmlparser2: 12.0.0
+  iconv-lite: 0.7.3
+  jsonpath-plus: 10.4.0
+  tough-cookie: 6.0.2
   typescript: 6.0.2

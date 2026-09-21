@@ -1,0 +1,26 @@
+{
+  "name": "@legado/source-node",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@legado/source-core": "workspace:*",
+    "@xmldom/xmldom": "catalog:",
+    "css-select": "catalog:",
+    "dom-serializer": "catalog:",
+    "domhandler": "catalog:",
+    "domutils": "catalog:",
+    "fontoxpath": "catalog:",
+    "htmlparser2": "catalog:",
+    "iconv-lite": "catalog:",
+    "jsonpath-plus": "catalog:",
+    "tough-cookie": "catalog:"
+  },
+  "files": ["dist"],
+  "sideEffects": false
+}
