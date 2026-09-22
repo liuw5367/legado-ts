@@ -10,5 +10,8 @@
 - [阶段 D：批量、媒体与交互扩展](phase-d-extended-capabilities.md)
 - [阶段 E-1：书源持久化、订阅刷新与书源检测](phase-e-storage-and-check.md)
 - [阶段 E-2：应用接入、部署验证与 package 维护](phase-e-integration.md)
+- [任务 07-FONT：字体映射与文字解码](phase-07-font.md)
+- [任务 07-A：书源解析兼容测试](phase-07-a-source-conformance.md)
+- [任务 07-B：真实书源文件测试](phase-07-b-source-fixtures.md)
 
 阶段完成状态以 [质量与验证](../quality/README.md) 的矩阵和测试证据为准。能力取舍仍需用户单独审核。

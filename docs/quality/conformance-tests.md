@@ -208,7 +208,7 @@ packages/source-editor/tests/
 
 fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、Token、密码、Authorization、私有请求体和真实账号做脱敏。golden 的比较应采用结构化比较，集合只有在契约声明无序时才允许排序，事件和网络记录必须按顺序比较。时间、随机数、堆栈、线程名和平台路径使用占位断言，不能写死到兼容结果中。
 
-真实测试命令随 runtime 提交；当前 package.json 的 test 是失败占位。兼容案例须有 Android 证据、golden、TS 断言及相关清理断言；Web 新设计只要求对应设计证据与目标断言，不强迫虚构 Android golden。纯值转换无资源时标注清理不适用。未执行的案例一律 execution=not-run。
+真实测试命令随 runtime 提交。书源解析运行时的兼容测试拆分为两个任务：`07-A` 负责 schema、规则、请求、解析器、QuickJS、工作流和宿主能力的无公网 conformance；`07-B` 负责读取 `fixtures/source` 下的真实书源文件，并验证集合导入与单个导入的一致性。任务 11 保留跨模块集成、存储、编辑器和发布门禁，不再把书源文件回归测试混在其中。兼容案例须有 Android 证据、golden、TS 断言及相关清理断言；Web 新设计只要求对应设计证据与目标断言，不强迫虚构 Android golden。纯值转换无资源时标注清理不适用。未执行的案例一律 execution=not-run。
 
 覆盖审计按以下关系执行：`reference/source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`reference/rule-language.md` 和 `reference/url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`reference/capability-inventory.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
 
