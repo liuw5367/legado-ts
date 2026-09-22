@@ -198,7 +198,9 @@ test('搜索快照按书源完成顺序发布并按匹配等级稳定排序', as
   try {
     const operation = await application.search('测试书', undefined, undefined, undefined, (snapshot) => snapshots.push(snapshot))
     assert.ok(snapshots.length >= 3)
-    assert.equal(snapshots.some((snapshot) => snapshot.results.length > 0 && snapshot.sources.length === 1), true)
+    const early = snapshots.find((snapshot) => snapshot.results.length > 0 && snapshot.sources.length === 1)
+    assert.notEqual(early, undefined)
+    assert.notEqual(early?.results[0]?.searchId, operation.searchId)
     assert.deepEqual(operation.groups.map((group) => group.rank), ['exact', 'contains', 'other'])
     assert.equal(operation.groups[0]?.source.source.bookSourceName, '快书源')
     assert.ok(operation.sources.every((item) => item.durationMs >= 0))

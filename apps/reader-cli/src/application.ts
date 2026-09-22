@@ -235,7 +235,7 @@ export class ReaderApplication {
     const startedClock = Date.now()
     const entries = usableSources(this.catalog).filter((entry) => sourceIds === undefined || sourceIds.includes(entry.id) || sourceIds.includes(entry.source.bookSourceUrl))
     const results: SourceSearchResult[] = []
-    const activeSources = new Set<string>()
+    const activeSources = new Map<string, number>()
     let completed = 0
     let progressCandidates = 0
     let arrivalIndex = 0
@@ -243,18 +243,24 @@ export class ReaderApplication {
     const emitProgress = (): void => {
       if (onProgress === undefined) return
       try {
-        onProgress({ total: entries.length, completed, activeSources: [...activeSources], candidates: progressCandidates, elapsedMs: Date.now() - startedClock, ...progressCounts })
+        onProgress({ total: entries.length, completed, activeSources: [...activeSources.keys()], candidates: progressCandidates, elapsedMs: Date.now() - startedClock, ...progressCounts })
       } catch {
         // UI progress callbacks must not alter the search result.
       }
     }
     const snapshot = (cancelled = false, completedAt = new Date().toISOString()): SearchOperationResult => {
-      const flattened = results.flatMap((item) => item.candidates)
+      const clones = new Map<SearchResult, SearchResult>()
+      for (const item of results) {
+        for (const candidate of item.candidates) {
+          clones.set(candidate, { ...candidate, candidate: { ...candidate.candidate, rawFields: { ...candidate.candidate.rawFields } } })
+        }
+      }
+      const flattened = results.flatMap((item) => item.candidates.map((candidate) => clones.get(candidate)!))
       return {
         searchId,
         keyword: trimmed,
         results: flattened,
-        sources: results.map((item) => ({ ...item, candidates: [...item.candidates] })),
+        sources: results.map((item) => ({ ...item, candidates: item.candidates.map((candidate) => clones.get(candidate)!) })),
         groups: groupSearchResults(trimmed, flattened),
         elapsedMs: Date.now() - startedClock,
         startedAt,
@@ -282,7 +288,7 @@ export class ReaderApplication {
         if (source === undefined) return
         const session = this.sessions.get(source.id)
         if (session === undefined) continue
-        activeSources.add(source.source.bookSourceName)
+        activeSources.set(source.source.bookSourceName, (activeSources.get(source.source.bookSourceName) ?? 0) + 1)
         emitProgress()
         let sourceStartedClock = Date.now()
         try {
@@ -307,7 +313,9 @@ export class ReaderApplication {
           if (signal.aborted) progressCounts.cancelled += 1
           else progressCounts.failed += 1
         } finally {
-          activeSources.delete(source.source.bookSourceName)
+          const activeCount = activeSources.get(source.source.bookSourceName) ?? 0
+          if (activeCount <= 1) activeSources.delete(source.source.bookSourceName)
+          else activeSources.set(source.source.bookSourceName, activeCount - 1)
           completed += 1
           emitProgress()
           emitUpdate(signal.aborted)
