@@ -21,6 +21,8 @@
 8. 同书源内按 `SearchBook.bookUrl` 去重；
 9. 列表为空且没有 `bookUrlPattern` 时，回退为详情页解析。
 
+TypeScript 工作流展开 `searchUrl` 时同时接受 Android 常见的 `{{key}}` 和运行时别名 `{{keyword}}`，两者都使用同一份 UTF-8 URL 编码关键词。列表字段读取兼容 Android 的 `name`、`author`、`coverUrl`、`intro` 与内部历史别名 `bookName`、`bookAuthor`、`bookCoverUrl`、`bookIntro`。
+
 发现列表复用 `BookList` 的字段解析，但它还有独立的分类入口、选定 URL、`infoMap` 和取消边界。详见 [发现流程与分类规则](explore-flow.md)。
 
 ## 多书源合并

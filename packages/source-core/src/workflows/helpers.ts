@@ -35,7 +35,17 @@ export function sourceNumber(source: NormalizedSource, key: string): number | un
 
 export function ruleString(source: NormalizedSource, group: string, field: string): string | undefined {
   const rules = asRecord(source[group])
-  return rules === undefined || typeof rules[field] !== 'string' ? undefined : rules[field] as string
+  if (rules === undefined) return undefined
+  // Android 的列表规则字段名是 name/author/coverUrl/intro；工作流内部保留 book* 名称，读取时兼容两种写法。
+  const aliases: Readonly<Record<string, readonly string[]>> = {
+    bookName: ['bookName', 'name'],
+    bookAuthor: ['bookAuthor', 'author'],
+    bookCoverUrl: ['bookCoverUrl', 'coverUrl'],
+    bookIntro: ['bookIntro', 'intro'],
+  }
+  const keys = aliases[field] ?? [field]
+  for (const key of keys) if (typeof rules[key] === 'string') return rules[key] as string
+  return undefined
 }
 
 export function template(value: string, replacements: Readonly<Record<string, string>>): string {

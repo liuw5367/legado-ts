@@ -11,7 +11,8 @@ export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Pro
   if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 0 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
   const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 0
   const url = sourceString(input.source, 'searchUrl')
-  const expanded = url === undefined ? undefined : template(url, { keyword: encodeKeyword(input.keyword), page: String(page), pageIndex: String(page) })
+  const encodedKeyword = encodeKeyword(input.keyword)
+  const expanded = url === undefined ? undefined : template(url, { keyword: encodedKeyword, key: encodedKeyword, page: String(page), pageIndex: String(page) })
   return listWorkflow(ports, 'search', input.source, expanded, ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, { keyword: input.keyword })
 }
 

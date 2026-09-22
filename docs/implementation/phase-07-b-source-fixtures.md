@@ -24,3 +24,4 @@
 ## 完成记录
 
 - 2026-09-22：纳入 `fixtures/source` 的 4 个真实 JSON 文件，共 316 个候选；新增受控 file reader、原始文本、已解析值、集合成员/单个入口一致性测试，并记录 230/84 个集合源和 2 个单源文件的状态/诊断统计。测试不访问公网。
+- 2026-09-22：新增 `packages/source-node/tests/source-file-smoke.test.ts`，使用真实书源配置和本地响应覆盖 JSON 搜索工作流、HTML/CSS、XPath、QuickJS；字体二进制映射仍由 `packages/source-node/tests/font.test.ts` 单独覆盖。同步兼容 Android 的列表字段别名和 `{{key}}` 搜索占位符。
