@@ -115,7 +115,7 @@ test('07-B 真实书源文件可贯通解析、搜索、切换、详情、目录
   assert.equal(details.status, 'success')
   const book = details.value?.items[0]
   assert.ok(book)
-  assert.equal(book.tocUrl, '/books/local-book/toc')
+  assert.equal(book.tocUrl, 'https://www.bbqqgg.com/books/local-book/toc')
 
   const toc = await loadTableOfContents(ports, { source: sourceB, book })
   assert.equal(toc.status, 'success')

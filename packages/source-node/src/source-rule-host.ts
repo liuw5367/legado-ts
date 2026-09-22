@@ -257,7 +257,7 @@ export class SourceRuleHost implements WorkflowRulePort {
     this.check(state)
     const script = sourceScript(rule)
     if (script !== undefined) {
-      const output = await this.runJavaScript(script.code, this.javascriptStage(state.request.stage), state.source, content, state.request.signal)
+      const output = await this.runJavaScript(script.code, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
       if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
       return script.tail === undefined ? output.value : this.evaluateText(script.tail, state, output.value)
     }
@@ -271,7 +271,7 @@ export class SourceRuleHost implements WorkflowRulePort {
       const code = rule.slice(jsIndex + '@js:'.length).trim()
       if (selectorRule.length > 0 && code.length > 0) {
         const selected = await this.evaluateText(selectorRule, state, content)
-        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, selected, state.request.signal)
+        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, selected, state.request.signal, state.request)
         if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
         return output.value
       }
@@ -329,7 +329,7 @@ export class SourceRuleHost implements WorkflowRulePort {
     else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content)
     else if (rule.mode === 'Regex') value = this.evaluateRegex(rule.body, content)
     else if (rule.mode === 'Js') {
-      const result = await this.runJavaScript(rule.body, this.javascriptStage(state.request.stage), state.source, content, state.request.signal)
+      const result = await this.runJavaScript(rule.body, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
       if (result.status !== 'success') throw new SourceRuleError(result.status === 'capability-missing' ? 'capability-missing' : result.status === 'cancelled' ? 'cancelled' : 'failed', result.message ?? 'JavaScript 规则执行失败')
       value = result.value
     } else throw new SourceRuleError('capability-missing', 'WebView 规则需要浏览器宿主')
@@ -411,19 +411,23 @@ export class SourceRuleHost implements WorkflowRulePort {
     return first === null ? '' : first[0].replace(new RegExp(rule.replacement.pattern, 'g'), rule.replacement.replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: Pick<WorkflowRuleRequest, 'baseUrl' | 'redirectUrl' | 'content'>): Promise<WorkflowRuleOutput> {
     const bindings = {
       ...this.bindings,
       result: content,
+      src: context?.content ?? content,
       sourceKey: source.bookSourceUrl,
       sourceName: source.bookSourceName,
-      baseUrl: source.bookSourceUrl,
+      baseUrl: context?.baseUrl ?? source.bookSourceUrl,
+      redirectUrl: context?.redirectUrl ?? context?.baseUrl ?? source.bookSourceUrl,
     }
     const prelude = [
       'globalThis.result = bindings.result;',
+      'globalThis.src = bindings.src;',
       'globalThis.key = bindings.key;',
       'globalThis.page = bindings.page;',
       'globalThis.baseUrl = bindings.baseUrl;',
+      'globalThis.redirectUrl = bindings.redirectUrl;',
       'globalThis.source = { getKey: () => bindings.sourceKey, key: bindings.sourceKey, getVariable: (name) => name === undefined ? getVar("__source__") : getVar(String(name)), setVariable: (name, value) => value === undefined ? setVar("__source__", name) : setVar(String(name), value) };',
       'const bookValue = bindings.book ?? {};',
       'globalThis.book = { ...bookValue, getVariable: (name) => name === undefined ? getVar("__book__") : getVar(String(name)), setVariable: (name, value) => value === undefined ? setVar("__book__", name) : setVar(String(name), value), putVariable: (name, value) => setVar(String(name), value) };',

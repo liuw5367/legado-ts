@@ -54,6 +54,34 @@ test('规则宿主的 JavaScript 可以使用书源 bridge 的编码能力', asy
   assert.equal(result.value, '5oiR5pys5peg5oSP5oiQ5LuZ')
 })
 
+test('目录 JavaScript 可以读取当前响应和 URL 上下文', async () => {
+  const host = new SourceRuleHost()
+  const result = await host.evaluate({
+    source,
+    stage: 'detail',
+    field: 'chapterList',
+    rule: '@js:JSON.stringify({src, baseUrl, redirectUrl})',
+    content: '<div>toc</div>',
+    baseUrl: 'https://fixture.invalid/book/1',
+    redirectUrl: 'https://cdn.fixture.invalid/toc/1',
+  })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    src: '<div>toc</div>',
+    baseUrl: 'https://fixture.invalid/book/1',
+    redirectUrl: 'https://cdn.fixture.invalid/toc/1',
+  })
+
+  const transformed = await host.evaluate({
+    source,
+    stage: 'detail',
+    field: 'chapterList',
+    rule: '.item@js:src',
+    content: '<section><div class="item">第一章</div></section>',
+  })
+  assert.equal(transformed.value, '<section><div class="item">第一章</div></section>')
+})
+
 test('规则宿主兼容真实书源中的 var result 和 Java 变量读取写入', async () => {
   const host = new SourceRuleHost()
   const result = await evaluate(host, '<js>var result = result + "-changed"; java.put("page", 2); result</js>', 'fixture')

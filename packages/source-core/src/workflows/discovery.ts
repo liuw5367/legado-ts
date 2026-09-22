@@ -1,5 +1,5 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
-import { detailFields, encodeKeyword, evaluateField, jsonValue, listFields, pageResult, requestPage, ruleString, sourceNumber, sourceString, statusFromDiagnostics, template } from './helpers.ts'
+import { detailFields, encodeKeyword, evaluateField, jsonValue, listFields, pageResult, requestPage, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, template } from './helpers.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
@@ -141,13 +141,16 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex, message: '详情候选缺少 URL', retryable: false })
       continue
     }
-    const content = await requestPage(ports, input.source, candidate.bookUrl, 'detail', input, diagnostics, trace)
-    if (content === undefined) continue
+    const page = await requestPageResponse(ports, input.source, candidate.bookUrl, 'detail', input, diagnostics, trace)
+    if (page === undefined) continue
+    const content = page.content
     const metadata: BookMetadata = { ...candidate, rawFields: { ...candidate.rawFields }, emptyFields: [], fieldErrors: {} }
     for (const [ruleField, outputField] of detailFields) {
       const rule = ruleString(input.source, 'ruleBookInfo', ruleField)
       if (rule === undefined) continue
-      const result = await evaluateField(ports, input.source, 'detail', ruleField, rule, content, itemIndex, trace, input.signal)
+      // Android 将空 tocUrl 规则视为“使用详情页”，而不是“返回整页内容”。
+      if (ruleField === 'tocUrl' && rule.length === 0) continue
+      const result = await evaluateField(ports, input.source, 'detail', ruleField, rule, content, itemIndex, trace, input.signal, { baseUrl: page.url, redirectUrl: page.url })
       if (result.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
       if (result.state === 'empty') {
         metadata.emptyFields.push(outputField)
@@ -169,12 +172,26 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       if (outputField === 'updateTime') metadata.updateTime = value
       trace.push({ stage: 'detail', event: 'field', target: outputField, itemIndex })
     }
+    const tocUrl = resolveUrl(metadata.tocUrl, page.url) ?? page.url
+    metadata.tocUrl = tocUrl
+    if (tocUrl === page.url) metadata.tocHtml = content
     items.push(metadata)
   }
   const endIndex = Math.min(input.candidates.length, cursor.index + maxItems)
   const value: WorkflowPage<BookMetadata> = { items, cursor, ...(endIndex < input.candidates.length ? { nextCursor: { index: endIndex } } : {}) }
   if (items.length === 0) diagnostics.push({ code: 'empty-page', stage: 'detail', message: '没有可补全的详情', retryable: false })
   return { status: statusFromDiagnostics(diagnostics, items.length), value, diagnostics, trace }
+}
+
+function resolveUrl(value: string | undefined, baseUrl: string): string | undefined {
+  if (value === undefined || value.length === 0) return undefined
+  // 旧版本可能把目录响应正文误存进 tocUrl，不能把 HTML 编码成可请求地址。
+  if (value.trimStart().startsWith('<')) return undefined
+  try {
+    return new URL(value, baseUrl).toString()
+  } catch {
+    return undefined
+  }
 }
 
 function text(value: unknown): string {

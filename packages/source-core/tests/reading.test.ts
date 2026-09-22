@@ -6,7 +6,7 @@ import type { BookMetadata, ChapterIdentity, NormalizedSource, ReadingPorts } fr
 const source = {
   bookSourceUrl: 'https://source.test',
   bookSourceName: 'Source',
-  ruleToc: { chapterList: 'toc-list', chapterName: 'chapter-name', chapterUrl: 'chapter-url', chapterVolume: 'chapter-volume', nextPage: 'toc-next' },
+  ruleToc: { chapterList: 'toc-list', chapterName: 'chapter-name', chapterUrl: 'chapter-url', chapterVolume: 'chapter-volume', nextTocUrl: 'toc-next' },
   ruleContent: { content: 'content', nextPage: 'content-next' },
   contentType: 'html',
 } as unknown as NormalizedSource
@@ -39,7 +39,7 @@ function readingPorts(calls: string[], failing: string | undefined = undefined):
         if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
         if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
         if (field === 'chapterVolume') return { status: 'success', value: (content as { volume?: string }).volume ?? null }
-        if (field === 'nextPage' && (content === 'toc-1' || content === 'toc-2')) return { status: content === 'toc-1' ? 'success' : 'empty', value: content === 'toc-1' ? '/toc2' : null }
+        if (field === 'nextTocUrl' && (content === 'toc-1' || content === 'toc-2')) return { status: content === 'toc-1' ? 'success' : 'empty', value: content === 'toc-1' ? '/toc2' : null }
         if (field === 'content') {
           if (content === 'content-1') return { status: 'success', value: '<p>One</p><img src="../img/a.png"><script>bad()</script>' }
           if (content === 'content-2') return { status: 'success', value: '<!-- hidden --><p>Two</p><img src="https://img.test/a.png">' }
@@ -59,9 +59,87 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
   assert.equal(result.value?.items.length, 3)
   assert.equal(result.value?.items[0]?.volume, 'Volume 1')
   assert.equal(result.value?.items[1]?.volume, 'Volume 1')
-  assert.equal(result.value?.items[2]?.chapterUrl, 'https://source.test/c3')
+  assert.deepEqual(result.value?.items.map((chapter) => [chapter.title, chapter.chapterUrl]), [
+    ['Same title', 'https://source.test/c2'],
+    ['Third', 'https://source.test/c3'],
+    ['Duplicate', 'https://source.test/c1'],
+  ])
   assert.equal(calls.length, 2)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
+})
+
+test('目录复用详情页内容并按最终响应地址解析相对章节', async () => {
+  const calls: string[] = []
+  const contexts: Array<{ baseUrl: string | undefined; redirectUrl: string | undefined }> = []
+  const result = await loadTableOfContents({
+    network: { request: async () => { throw new Error('不应重复请求详情页') } },
+    rules: {
+      evaluate: async (request) => {
+        contexts.push({ baseUrl: request.baseUrl, redirectUrl: request.redirectUrl })
+        if (request.field === 'chapterList') return { status: 'success', value: [{ title: '第一章', url: 'chapter/1' }] }
+        if (request.field === 'chapterName') return { status: 'success', value: (request.content as { title: string }).title }
+        if (request.field === 'chapterUrl') return { status: 'success', value: (request.content as { url: string }).url }
+        return { status: 'empty', value: null }
+      },
+    },
+  }, { source, book: { ...book, tocUrl: 'https://redirect.test/book/a', tocHtml: '<div>toc</div>' } })
+  assert.equal(calls.length, 0)
+  assert.equal(result.value?.items[0]?.chapterUrl, 'https://redirect.test/book/chapter/1')
+  assert.deepEqual(contexts[0], { baseUrl: 'https://redirect.test/book/a', redirectUrl: 'https://redirect.test/book/a' })
+})
+
+test('普通章节缺少 URL 时使用目录基准地址', async () => {
+  const result = await loadTableOfContents({
+    network: {
+      request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: false }),
+    },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'chapterList') return { status: 'success', value: [{ title: '第一章' }] }
+        if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+        if (field === 'chapterUrl') return { status: 'empty', value: null }
+        return { status: 'empty', value: null }
+      },
+    },
+  }, { source, book })
+  assert.equal(result.value?.items[0]?.chapterUrl, book.bookUrl)
+})
+
+test('已持久化的非法目录地址回退书籍详情地址', async () => {
+  const calls: string[] = []
+  await loadTableOfContents(readingPorts(calls), { source, book: { ...book, tocUrl: '<!doctype html><html></html>' } })
+  assert.equal(calls[0], book.bookUrl)
+})
+
+test('目录缓存保留最终响应地址', async () => {
+  const values = new Map<string, string>()
+  let requests = 0
+  const ports: ReadingPorts = {
+    network: {
+      request: async () => {
+        requests += 1
+        return { url: 'https://cdn.test/catalog/index.html', status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: true }
+      },
+    },
+    rules: {
+      evaluate: async ({ field }) => field === 'chapterList'
+        ? { status: 'success', value: [{ title: '第一章', url: 'chapter/1' }] }
+        : field === 'chapterName'
+          ? { status: 'success', value: '第一章' }
+          : field === 'chapterUrl'
+            ? { status: 'success', value: 'chapter/1' }
+            : { status: 'empty', value: null },
+    },
+    cache: {
+      get: async (key) => values.get(key),
+      set: async (key, value) => { values.set(key, value) },
+    },
+  }
+  const first = await loadTableOfContents(ports, { source, book })
+  const second = await loadTableOfContents(ports, { source, book })
+  assert.equal(first.value?.items[0]?.chapterUrl, 'https://cdn.test/catalog/chapter/1')
+  assert.equal(second.value?.items[0]?.chapterUrl, 'https://cdn.test/catalog/chapter/1')
+  assert.equal(requests, 1)
 })
 
 test('正文工作流拼接多页、净化 HTML、解析图片资源并支持缓存', async () => {

@@ -99,7 +99,6 @@ test('07-A public entry runs one source through discover/search/detail/toc/conte
     'https://fixture.invalid/explore?page=1',
     'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87&page=0',
     'https://fixture.invalid/book/one',
-    'https://fixture.invalid/book/one',
     'https://fixture.invalid/chapter/one',
   ])
 })

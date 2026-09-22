@@ -39,6 +39,8 @@ export interface BookCandidate extends BookIdentity {
 
 export interface BookMetadata extends BookCandidate {
   tocUrl?: string
+  /** 详情页同时是目录页时保留的临时响应；不应持久化。 */
+  tocHtml?: string
   /** 详情规则明确返回空字符串的字段。 */
   emptyFields: string[]
   /** 详情规则执行失败的字段及脱敏原因。 */
@@ -74,6 +76,10 @@ export interface WorkflowRuleRequest {
   field: string
   rule: string
   content: unknown
+  /** 当前阶段请求的基准地址，空 URL 按此地址回退。 */
+  baseUrl?: string
+  /** 当前响应经过重定向后的最终地址。 */
+  redirectUrl?: string
   itemIndex?: number
   signal?: AbortSignal
 }

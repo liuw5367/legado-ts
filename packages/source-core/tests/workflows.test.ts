@@ -111,8 +111,51 @@ test('详情工作流只覆盖有值字段，记录明确空值和字段失败',
   assert.equal(result.value?.items[0]?.name, 'A detail')
   assert.deepEqual(result.value?.items[0]?.emptyFields, ['author'])
   assert.equal(result.value?.items[0]?.fieldErrors.intro, 'detail parser failed')
-  assert.equal(result.value?.items[0]?.tocUrl, '/toc/a')
+  assert.equal(result.value?.items[0]?.tocUrl, 'https://source.test/toc/a')
   assert.equal(calls[0], 'https://source.test/book/a')
+})
+
+test('空目录规则回退详情响应地址并保留同页内容', async () => {
+  const calls: string[] = []
+  const emptyTocSource = {
+    ...source,
+    ruleBookInfo: { name: 'detail-name', tocUrl: '' },
+  } as unknown as NormalizedSource
+  const workflowPorts = ports(calls)
+  workflowPorts.network = {
+    request: async (plan) => {
+      calls.push(plan.url)
+      return { url: 'https://redirect.test/book/a', status: 200, headers: {}, bytes: new TextEncoder().encode('<div class="chapters">toc</div>'), redirected: true }
+    },
+  }
+  const evaluated: string[] = []
+  const baseEvaluate = workflowPorts.rules.evaluate
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      return baseEvaluate(request)
+    },
+  }
+  const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'A', rawFields: {}, traceRef: 'search:0' }
+  const result = await loadBookDetails(workflowPorts, { source: emptyTocSource, candidates: [candidate] })
+  assert.equal(result.value?.items[0]?.tocUrl, 'https://redirect.test/book/a')
+  assert.equal(result.value?.items[0]?.tocHtml, '<div class="chapters">toc</div>')
+  assert.equal(evaluated.includes(''), false)
+})
+
+test('目录地址规则误返回 HTML 时回退详情响应地址', async () => {
+  const calls: string[] = []
+  const workflowPorts = ports(calls)
+  const baseEvaluate = workflowPorts.rules.evaluate
+  workflowPorts.rules = {
+    evaluate: async (request) => request.rule === 'detail-toc'
+      ? { status: 'success', value: '<!doctype html><html></html>' }
+      : baseEvaluate(request),
+  }
+  const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'A', rawFields: {}, traceRef: 'search:0' }
+  const result = await loadBookDetails(workflowPorts, { source, candidates: [candidate] })
+  assert.equal(result.value?.items[0]?.tocUrl, 'https://source.test/book/a')
+  assert.equal(result.value?.items[0]?.tocHtml, 'https://source.test/book/a')
 })
 
 test('工作流取消不会继续发起下一次请求', async () => {

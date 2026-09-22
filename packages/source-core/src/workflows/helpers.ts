@@ -161,7 +161,12 @@ export function responseText(response: Parameters<NonNullable<WorkflowPorts['dec
   return new TextDecoder().decode(response.bytes)
 }
 
-export async function requestPage(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<string | undefined> {
+export interface WorkflowPageResponse {
+  content: string
+  url: string
+}
+
+export async function requestPageResponse(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<WorkflowPageResponse | undefined> {
   if (options.signal?.aborted === true) {
     diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
     return undefined
@@ -184,7 +189,7 @@ export async function requestPage(ports: WorkflowPorts, source: NormalizedSource
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
-    return responseText(response, source, ports)
+    return { content: responseText(response, source, ports), url: response.url }
   } catch {
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
@@ -195,11 +200,15 @@ export async function requestPage(ports: WorkflowPorts, source: NormalizedSource
   }
 }
 
-export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
+export async function requestPage(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<string | undefined> {
+  return (await requestPageResponse(ports, source, url, stage, options, diagnostics, trace))?.content
+}
+
+export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined, context?: { baseUrl?: string; redirectUrl?: string }): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
   trace.push({ stage, event: 'rule', target: field, ...(itemIndex === undefined ? {} : { itemIndex }) })
   let output: WorkflowRuleOutput
   try {
-    output = await ports.rules.evaluate({ source, stage, field, rule, content, ...(itemIndex === undefined ? {} : { itemIndex }), ...(signal === undefined ? {} : { signal }) })
+    output = await ports.rules.evaluate({ source, stage, field, rule, content, ...context, ...(itemIndex === undefined ? {} : { itemIndex }), ...(signal === undefined ? {} : { signal }) })
   } catch {
     output = { status: 'failed', value: null, message: '规则宿主失败' }
   }

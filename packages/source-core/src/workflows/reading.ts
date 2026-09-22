@@ -1,5 +1,5 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
-import { evaluateField, jsonValue, requestPage, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import { evaluateField, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function loadTableOfContents(ports: ReadingPorts, input: TocInput): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
@@ -16,16 +16,19 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const visited = new Set<string>()
   const chapters: Chapter[] = []
-  const identities = new Set<string>()
   const pageBodies = new Set<string>()
-  const bookBaseUrl = resolveUrl(input.book.tocUrl ?? input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
-  let pageUrl = bookBaseUrl
+  const reverseByRule = listRule.startsWith('-')
+  const bookBaseUrl = resolveUrl(input.book.tocUrl ?? input.book.bookUrl, input.source.bookSourceUrl)
+    ?? resolveUrl(input.book.bookUrl, input.source.bookSourceUrl)
+    ?? input.source.bookSourceUrl
+  const pendingPages = [{ url: bookBaseUrl, followNext: true }]
   let totalBytes = 0
   let volume: string | undefined
-  let nextPagePending = false
-  for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+  const listRuleBody = normalizeChapterListRule(listRule)
+  for (let pageIndex = 0; pageIndex < maxPages && pendingPages.length > 0; pageIndex += 1) {
     if (input.signal?.aborted === true) return cancelled('目录工作流已取消', diagnostics, trace)
-    nextPagePending = false
+    const pendingPage = pendingPages.shift()!
+    const pageUrl = pendingPage.url
     const normalizedUrl = resolveUrl(pageUrl, input.source.bookSourceUrl)
     if (normalizedUrl === undefined) {
       diagnostics.push({ code: 'item-skipped', stage, message: '目录下一页 URL 无效', retryable: false })
@@ -36,8 +39,11 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       break
     }
     visited.add(normalizedUrl)
-    const body = await cachedPage(ports, input.source, normalizedUrl, 'toc', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
-    if (body === undefined) break
+    const page = pageIndex === 0 && input.book.tocHtml !== undefined && normalizedUrl === bookBaseUrl
+      ? { body: input.book.tocHtml, url: normalizedUrl }
+      : await cachedPage(ports, input.source, normalizedUrl, 'toc', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
+    if (page === undefined) break
+    const body = page.body
     totalBytes += new TextEncoder().encode(body).byteLength
     if (totalBytes > maxBytes) {
       diagnostics.push({ code: 'item-skipped', stage, message: '目录累计响应超过字节预算', retryable: false })
@@ -48,7 +54,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       break
     }
     pageBodies.add(body)
-    const list = await evaluateField(ports, input.source, stage, 'chapterList', listRule, body, pageIndex, trace, input.signal)
+    const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
+    visited.add(responseUrl)
+    const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
+    const list = await evaluateField(ports, input.source, stage, 'chapterList', listRuleBody, body, pageIndex, trace, input.signal, context)
     if (list.state === 'cancelled') return cancelled('目录规则执行已取消', diagnostics, trace)
     if (list.state === 'capability-missing') {
       diagnostics.push({ code: 'capability-missing', stage, field: 'chapterList', message: list.message ?? '目录规则能力不可用', retryable: false })
@@ -60,47 +69,47 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     }
     const rawItems = Array.isArray(list.value) ? list.value : list.state === 'value' ? [list.value] : []
     for (const [itemIndex, rawItem] of rawItems.entries()) {
-      const fields = await chapterFields(ports, input.source, rawItem, pageIndex * 100000 + itemIndex, input.signal, diagnostics, trace, volume)
+      const fields = await chapterFields(ports, input.source, rawItem, pageIndex * 100000 + itemIndex, input.signal, diagnostics, trace, volume, context)
       if (input.signal !== undefined && input.signal.aborted) return cancelled('目录工作流已取消', diagnostics, trace)
       if (fields.volume !== undefined && fields.volume.length > 0) volume = fields.volume
-      if (fields.url === undefined || fields.url.length === 0 || fields.title === undefined || fields.title.length === 0) {
-        diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '章节缺少标题或 URL', retryable: false })
+      if (fields.title === undefined || fields.title.length === 0) {
+        diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '章节缺少标题', retryable: false })
         continue
       }
-      const chapterUrl = resolveUrl(fields.url, bookBaseUrl)
+      const chapterUrl = fields.url === undefined || fields.url.length === 0 ? normalizedUrl : resolveUrl(fields.url, responseUrl)
       if (chapterUrl === undefined) {
         diagnostics.push({ code: 'item-skipped', stage, itemIndex, message: '章节 URL 无效', retryable: false })
         continue
       }
-      const identityKey = `${input.source.bookSourceUrl}\u0000${input.book.bookUrl}\u0000${chapterUrl}`
-      if (identities.has(identityKey)) {
-        diagnostics.push({ code: 'duplicate-item', stage, itemIndex, message: '重复章节已折叠', retryable: false })
-        continue
-      }
-      identities.add(identityKey)
       const chapter: Chapter = { sourceId: input.source.bookSourceUrl, bookUrl: input.book.bookUrl, chapterUrl, index: chapters.length, title: fields.title, rawFields: fields.rawFields, traceRef: `toc:${chapters.length}` }
       if (volume !== undefined) chapter.volume = volume
       chapters.push(chapter)
       trace.push({ stage, event: 'candidate', target: `chapter:${chapter.index}`, itemIndex })
     }
-    const nextRule = ruleString(input.source, 'ruleToc', 'nextPage')
-    if (nextRule === undefined) break
-    const next = await evaluateField(ports, input.source, stage, 'nextPage', nextRule, body, pageIndex, trace, input.signal)
+    if (!pendingPage.followNext) continue
+    const nextRule = ruleString(input.source, 'ruleToc', 'nextTocUrl')
+    if (nextRule === undefined) continue
+    const next = await evaluateField(ports, input.source, stage, 'nextTocUrl', nextRule, body, pageIndex, trace, input.signal, context)
     if (next.state === 'cancelled') return cancelled('目录下一页规则已取消', diagnostics, trace)
-    if (next.state !== 'value' || textValue(next.value).length === 0) break
-    const nextUrl = resolveUrl(textValue(next.value), normalizedUrl)
-    if (nextUrl === undefined) {
-      diagnostics.push({ code: 'item-skipped', stage, field: 'nextPage', message: '目录下一页 URL 无效', retryable: false })
-      break
+    if (next.state !== 'value') continue
+    const nextValues = listValues(next.value)
+    for (const value of nextValues) {
+      const nextUrl = resolveUrl(value, responseUrl)
+      if (nextUrl === undefined) {
+        diagnostics.push({ code: 'item-skipped', stage, field: 'nextTocUrl', message: '目录下一页 URL 无效', retryable: false })
+        continue
+      }
+      if (!visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: nextValues.length === 1 })
     }
-    pageUrl = nextUrl
-    nextPagePending = true
   }
-  if (pageUrl !== input.book.bookUrl && visited.size >= maxPages) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
-  if (input.source.reverseToc === true) chapters.reverse()
-  if (chapters.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '目录为空', retryable: false })
-  const value: WorkflowPage<Chapter> = { items: chapters, cursor, ...(nextPagePending && visited.size >= maxPages ? { nextCursor: { index: cursor.index + 1 } } : {}) }
-  const status = chapters.length === 0 && diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed') ? 'failed' : statusFromDiagnostics(diagnostics, chapters.length)
+  if (pendingPages.length > 0 && visited.size >= maxPages) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
+  if (!reverseByRule) chapters.reverse()
+  const uniqueChapters = deduplicateChapters(chapters, diagnostics, stage)
+  if (input.source.reverseToc !== true) uniqueChapters.reverse()
+  uniqueChapters.forEach((chapter, index) => { chapter.index = index })
+  if (uniqueChapters.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '目录为空', retryable: false })
+  const value: WorkflowPage<Chapter> = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}) }
+  const status = uniqueChapters.length === 0 && diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed') ? 'failed' : statusFromDiagnostics(diagnostics, uniqueChapters.length)
   return { status, value, diagnostics, trace }
 }
 
@@ -140,8 +149,9 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       break
     }
     visited.add(normalizedUrl)
-    const body = await cachedPage(ports, input.source, normalizedUrl, 'content', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
-    if (body === undefined) break
+    const page = await cachedPage(ports, input.source, normalizedUrl, 'content', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
+    if (page === undefined) break
+    const body = page.body
     totalBytes += new TextEncoder().encode(body).byteLength
     if (totalBytes > maxBytes) {
       diagnostics.push({ code: 'item-skipped', stage, message: '正文累计响应超过字节预算', retryable: false })
@@ -158,16 +168,16 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       diagnostics.push({ code: 'rule-failed', stage, field: 'content', message: result.message ?? '正文规则失败', retryable: false })
       break
     }
-    const page = result.state === 'value' ? textValue(result.value) : ''
-    if (page.length > 0 && seenPages.has(page)) {
+    const contentPage = result.state === 'value' ? textValue(result.value) : ''
+    if (contentPage.length > 0 && seenPages.has(contentPage)) {
       diagnostics.push({ code: 'item-skipped', stage, message: '正文重复页面已停止', retryable: false })
       stoppedByLimit = true
       break
     }
-    if (page.length > 0) {
-      seenPages.add(page)
-      pages.push(page)
-      resources.push(...extractResources(page, contentType, normalizedUrl))
+    if (contentPage.length > 0) {
+      seenPages.add(contentPage)
+      pages.push(contentPage)
+      resources.push(...extractResources(contentPage, contentType, normalizedUrl))
     }
     const nextRule = ruleString(input.source, 'ruleContent', 'nextPage')
     if (nextRule === undefined) break
@@ -206,25 +216,35 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   return { status, value, diagnostics, trace }
 }
 
-async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<string | undefined> {
+async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<{ body: string; url: string } | undefined> {
   const cacheKey = `${source.bookSourceUrl}\u0000${scope}\u0000${url}`
+  const responseUrlKey = `${cacheKey}\u0000response-url`
   if (ports.cache !== undefined) {
     try {
       const cached = await ports.cache.get(cacheKey, options.signal)
-      if (cached !== undefined) return cached
+      if (cached !== undefined) {
+        let responseUrl = url
+        try {
+          responseUrl = await ports.cache.get(responseUrlKey, options.signal) ?? url
+        } catch {
+          // 旧缓存没有最终响应地址时仍可复用正文。
+        }
+        return { body: cached, url: responseUrl }
+      }
     } catch {
       // 缓存失败不得改变无缓存读取语义。
     }
   }
-  const value = await requestPage(ports, source, url, stage, options, diagnostics, trace)
+  const value = await requestPageResponse(ports, source, url, stage, options, diagnostics, trace)
   if (value !== undefined && ports.cache !== undefined) {
     try {
-      await ports.cache.set(cacheKey, value, options.signal)
+      await ports.cache.set(cacheKey, value.content, options.signal)
+      await ports.cache.set(responseUrlKey, value.url, options.signal)
     } catch {
       // 缓存写入失败只影响缓存，不影响本次结果。
     }
   }
-  return value
+  return value === undefined ? undefined : { body: value.content, url: value.url }
 }
 
 function pageOptions(options: WorkflowOptions, maxBytes: number, usedBytes: number): WorkflowOptions {
@@ -240,12 +260,12 @@ interface ChapterFields {
   rawFields: JsonObject
 }
 
-async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined): Promise<ChapterFields> {
+async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }): Promise<ChapterFields> {
   const result: ChapterFields = { rawFields: {} }
   for (const [ruleField, outputField] of [['chapterName', 'title'], ['chapterUrl', 'url'], ['chapterVolume', 'volume']] as const) {
     const rule = ruleString(source, 'ruleToc', ruleField)
     if (rule === undefined) continue
-    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal)
+    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, context)
     if (field.state === 'cancelled') return result
     if (field.state === 'failed' || field.state === 'capability-missing') {
       diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: ruleField, itemIndex, message: field.message ?? '章节字段失败', retryable: false })
@@ -261,6 +281,29 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
   }
   if (result.volume === undefined && inheritedVolume !== undefined) result.volume = inheritedVolume
   return result
+}
+
+function listValues(value: unknown): string[] {
+  return (Array.isArray(value) ? value : [value]).map(textValue).filter((item) => item.length > 0)
+}
+
+function normalizeChapterListRule(value: string): string {
+  let rule = value
+  if (rule.startsWith('-')) rule = rule.slice(1)
+  if (rule.startsWith('+')) rule = rule.slice(1)
+  return rule
+}
+
+function deduplicateChapters(chapters: Chapter[], diagnostics: WorkflowDiagnostic[], stage: WorkflowStage): Chapter[] {
+  const seen = new Set<string>()
+  return chapters.filter((chapter) => {
+    if (seen.has(chapter.chapterUrl)) {
+      diagnostics.push({ code: 'duplicate-item', stage, itemIndex: chapter.index, message: '重复章节已折叠', retryable: false })
+      return false
+    }
+    seen.add(chapter.chapterUrl)
+    return true
+  })
 }
 
 function cleanContent(value: string, contentType: 'text' | 'html', baseUrl: string): string {
@@ -293,6 +336,7 @@ function resolveResource(value: string, baseUrl: string): string {
 }
 
 function resolveUrl(value: string, baseUrl: string): string | undefined {
+  if (value.trimStart().startsWith('<')) return undefined
   try {
     return new URL(value, baseUrl).toString()
   } catch {

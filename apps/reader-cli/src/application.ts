@@ -121,15 +121,21 @@ class SourceSession implements ReaderSourceSession {
   }
 
   public async detail(candidate: BookCandidate, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadBookDetails>>> {
+    this.tocPage = undefined
     const operation = this.createOperation()
     operation.rules.setBindings({ key: candidate.name ?? '', book: candidate })
-    return loadBookDetails(operation.ports, { source: this.source, candidates: [candidate], ...(signal === undefined ? {} : { signal }) })
+    const result = await loadBookDetails(operation.ports, { source: this.source, candidates: [candidate], ...(signal === undefined ? {} : { signal }) })
+    const metadata = result.value?.items[0]
+    if (metadata?.tocHtml !== undefined && metadata.tocUrl !== undefined) this.tocPage = { bookUrl: candidate.bookUrl, url: metadata.tocUrl, html: metadata.tocHtml }
+    return result
   }
 
   public async toc(book: BookMetadata, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadTableOfContents>>> {
     const operation = this.createOperation()
     operation.rules.setBindings({ key: book.name ?? '', book })
-    return loadTableOfContents({ ...operation.ports, cache: this.cache }, { source: this.source, book, ...(signal === undefined ? {} : { signal }), maxPages: 32 })
+    const cachedPage = this.tocPage?.bookUrl === book.bookUrl ? this.tocPage : undefined
+    const inputBook = cachedPage !== undefined && cachedPage.url === book.tocUrl ? { ...book, tocHtml: cachedPage.html } : book
+    return loadTableOfContents({ ...operation.ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), maxPages: 32 })
   }
 
   public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
@@ -145,6 +151,7 @@ class SourceSession implements ReaderSourceSession {
   }
 
   private cacheStore?: ReturnType<ReaderStorage['workflowCache']>
+  private tocPage?: { bookUrl: string; url: string; html: string }
 
   public attachCache(storage: ReaderStorage): void {
     this.cacheStore = storage.workflowCache(sourceDefinitionFingerprint(this.source))

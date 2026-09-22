@@ -54,7 +54,7 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
   assert.equal(details.status, 'success')
   const book = details.value?.items[0]
   assert.ok(book)
-  assert.equal(book.tocUrl, '/book/local/toc')
+  assert.equal(book.tocUrl, 'https://www.bbqqgg.com/book/local/toc')
 
   ruleHost.setBindings({ key: '我本无意成仙', book })
   const toc = await loadTableOfContents(ports, { source, book, maxPages: 3 })
