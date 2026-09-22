@@ -1,176 +1,43 @@
 import { randomUUID } from 'node:crypto'
-import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks, sourceDefinitionFingerprint } from '@legado/source-core'
-import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentCache, NormalizedSource, WorkflowPorts, WorkflowStatus } from '@legado/source-core'
-import { KeyedConcurrencyHost, NodeCookieStore, NodeNetworkHost, SourceRequestHost, SourceRuleHost } from '@legado/source-node'
+import type { BookCandidate, BookMetadata, Chapter, ChapterContent } from '@legado/source-core'
+import { KeyedConcurrencyHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
 import { usableSources } from './source-catalog.ts'
 import { editionKey, ReaderStorage } from './storage.ts'
-import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, ReadingRecord, SearchHistoryEntry } from './storage.ts'
+import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, SearchHistoryEntry } from './storage.ts'
+import type {
+  OpenBookResult,
+  ReaderApplicationOptions,
+  ReaderSourceSession,
+  SearchOperationResult,
+  SearchProgressListener,
+  SearchResult,
+  SearchUpdateListener,
+  SourceSearchResult,
+  TocResult,
+} from './application-model.ts'
+import { SourceSession } from './source-session.ts'
+import { filterSearchSnapshot, groupSearchResults, isAuthorMatch, isBookTitleMatch, normalizeAuthor } from './search-results.ts'
 
-export interface SearchResult {
-  candidate: BookCandidate
-  source: SourceEntry
-  searchId: string
-  /** 全局搜索返回顺序，用于同一匹配等级下保持稳定排序。 */
-  arrivalIndex: number
-  /** 候选所属书源本次搜索耗时，单位毫秒。 */
-  searchDurationMs?: number
-}
-
-export interface SourceSearchResult {
-  source: SourceEntry
-  status: WorkflowStatus
-  candidates: SearchResult[]
-  /** 从该书源真正开始执行请求到返回终态的耗时，单位毫秒。 */
-  durationMs: number
-  message?: string
-}
-
-export type SearchMatchRank = 'exact' | 'contains' | 'other'
-
-export interface SearchResultGroup {
-  key: string
-  candidate: BookCandidate
-  source: SourceEntry
-  candidates: SearchResult[]
-  rank: SearchMatchRank
-  firstArrivalIndex: number
-}
-
-export interface SearchOperationResult {
-  searchId: string
-  keyword: string
-  results: SearchResult[]
-  sources: SourceSearchResult[]
-  groups: SearchResultGroup[]
-  elapsedMs: number
-  startedAt: string
-  completedAt: string
-  cancelled: boolean
-}
-
-export type SearchUpdateListener = (snapshot: SearchOperationResult) => void
-
-export interface SearchProgress {
-  total: number
-  completed: number
-  activeSources: string[]
-  candidates: number
-  elapsedMs: number
-  success: number
-  partial: number
-  empty: number
-  failed: number
-  capabilityMissing: number
-  cancelled: number
-}
-
-export type SearchProgressListener = (progress: SearchProgress) => void
-
-export interface OpenBookResult {
-  book: BookDocument
-  source: SourceEntry
-  metadata?: BookMetadata
-  sources: KnownSource[]
-  onBookshelf: boolean
-  reading?: ReadingRecord
-}
-
-export interface TocResult {
-  chapters: Chapter[]
-  revision: string
-  source: SourceEntry
-  edition: KnownSource
-}
-
-export interface ReaderApplicationOptions {
-  catalog: SourceCatalogResult
-  storage: ReaderStorage
-  maxConcurrentSources?: number
-  sessionFactory?: (source: NormalizedSource) => ReaderSourceSession
-}
-
-export interface ReaderSourceSession {
-  search(keyword: string, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof searchBooks>>>
-  detail(candidate: BookCandidate, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadBookDetails>>>
-  toc(book: BookMetadata, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadTableOfContents>>>
-  content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<Awaited<ReturnType<typeof loadChapterContent>>>
-  attachCache(storage: ReaderStorage): void
-}
+export type {
+  OpenBookResult,
+  ReaderApplicationOptions,
+  ReaderSourceSession,
+  SearchMatchRank,
+  SearchOperationResult,
+  SearchProgress,
+  SearchProgressListener,
+  SearchResult,
+  SearchResultGroup,
+  SearchUpdateListener,
+  SourceSearchResult,
+  TocResult,
+} from './application-model.ts'
+export { groupSearchResults, searchMatchRank, searchMatchRankLabel } from './search-results.ts'
 
 interface TrackedOperation {
   controller: AbortController
   promise: Promise<unknown>
-}
-
-class SourceSession implements ReaderSourceSession {
-  private readonly source: NormalizedSource
-  private readonly cookieStore: NodeCookieStore
-  private readonly network: NodeNetworkHost
-
-  public constructor(source: NormalizedSource) {
-    this.source = source
-    this.cookieStore = new NodeCookieStore()
-    this.network = new NodeNetworkHost({ cookieStore: this.cookieStore })
-  }
-
-  public async search(keyword: string, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof searchBooks>>> {
-    const operation = this.createOperation()
-    operation.rules.setBindings({ key: keyword })
-    return searchBooks(operation.ports, { source: this.source, keyword, ...(signal === undefined ? {} : { signal }), maxItems: 100 })
-  }
-
-  public async detail(candidate: BookCandidate, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadBookDetails>>> {
-    this.tocPage = undefined
-    const operation = this.createOperation()
-    operation.rules.setBindings({ key: candidate.name ?? '', book: candidate })
-    const result = await loadBookDetails(operation.ports, { source: this.source, candidates: [candidate], ...(signal === undefined ? {} : { signal }) })
-    const metadata = result.value?.items[0]
-    if (metadata?.tocHtml !== undefined && metadata.tocUrl !== undefined) this.tocPage = { bookUrl: candidate.bookUrl, url: metadata.tocUrl, html: metadata.tocHtml }
-    return result
-  }
-
-  public async toc(book: BookMetadata, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadTableOfContents>>> {
-    const operation = this.createOperation()
-    operation.rules.setBindings({ key: book.name ?? '', book })
-    const cachedPage = this.tocPage?.bookUrl === book.bookUrl ? this.tocPage : undefined
-    const inputBook = cachedPage !== undefined && cachedPage.url === book.tocUrl ? { ...book, tocHtml: cachedPage.html } : book
-    return loadTableOfContents({ ...operation.ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), maxPages: 32 })
-  }
-
-  public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
-    const operation = this.createOperation()
-    operation.rules.setBindings({ key: book.name ?? '', book, chapter })
-    const cache: ContentCache = options?.refresh === true ? { get: async () => undefined, set: (key, value, cacheSignal) => this.cache.set(key, value, cacheSignal) } : this.cache
-    return loadChapterContent({ ...operation.ports, cache }, { source: this.source, chapter, ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
-  }
-
-  public readonly cache = {
-    get: async (key: string, signal?: AbortSignal): Promise<string | undefined> => this.cacheStore?.get(key, signal),
-    set: async (key: string, value: string, signal?: AbortSignal): Promise<void> => this.cacheStore?.set(key, value, signal),
-  }
-
-  private cacheStore?: ReturnType<ReaderStorage['workflowCache']>
-  private tocPage: { bookUrl: string; url: string; html: string } | undefined
-
-  public attachCache(storage: ReaderStorage): void {
-    this.cacheStore = storage.workflowCache(sourceDefinitionFingerprint(this.source))
-  }
-
-  private createOperation(): { rules: SourceRuleHost; ports: WorkflowPorts } {
-    const request = new SourceRequestHost({ network: this.network, cookieStore: this.cookieStore })
-    const rules = new SourceRuleHost({ request: (input, signal) => request.requestFromBridge(input, signal) })
-    request.attachRuleHost(rules)
-    return {
-      rules,
-      ports: {
-        network: this.network,
-        rules,
-        request: (input) => request.request(input),
-        decodeResponse: (response) => request.decodeResponse(response),
-      },
-    }
-  }
 }
 
 export class ReaderApplication {
@@ -559,75 +426,6 @@ function updateBook(book: BookDocument, metadata: BookMetadata, activeEditionKey
 
 function mergeMetadataIntoSource(source: KnownSource, metadata: BookMetadata): KnownSource {
   return { ...source, ...(metadata.name === undefined ? {} : { name: metadata.name }), ...(metadata.author === undefined ? {} : { author: metadata.author }), ...(metadata.intro === undefined ? {} : { intro: metadata.intro }), ...(metadata.coverUrl === undefined ? {} : { coverUrl: metadata.coverUrl }), ...(metadata.tocUrl === undefined ? {} : { tocUrl: metadata.tocUrl }), ...(metadata.lastChapter === undefined ? {} : { lastChapter: metadata.lastChapter }), ...(metadata.updateTime === undefined ? {} : { updateTime: metadata.updateTime }), rawFields: { ...source.rawFields, ...metadata.rawFields } }
-}
-
-export function groupSearchResults(keyword: string, results: readonly SearchResult[]): SearchResultGroup[] {
-  const groups = new Map<string, SearchResultGroup>()
-  for (const result of [...results].sort((left, right) => left.arrivalIndex - right.arrivalIndex)) {
-    const title = normalizeTitle(result.candidate.name)
-    const author = normalizeAuthor(result.candidate.author)
-    // 作者缺失时只在同一书源同一 URL 内折叠，避免同名书被错误合并。
-    const key = title.length > 0 && author.length > 0 ? `title-author:${title}\u0000${author}` : `edition:${result.candidate.sourceId}\u0000${result.candidate.bookUrl}`
-    const existing = groups.get(key)
-    if (existing === undefined) {
-      groups.set(key, {
-        key,
-        candidate: result.candidate,
-        source: result.source,
-        candidates: [result],
-        rank: searchMatchRank(keyword, result.candidate.name),
-        firstArrivalIndex: result.arrivalIndex,
-      })
-      continue
-    }
-    existing.candidates.push(result)
-  }
-  return [...groups.values()].sort((left, right) => matchRankValue(left.rank) - matchRankValue(right.rank) || left.firstArrivalIndex - right.firstArrivalIndex)
-}
-
-export function searchMatchRank(keyword: string, name: string | undefined): SearchMatchRank {
-  const expected = normalizeTitle(keyword)
-  const actual = normalizeTitle(name)
-  if (expected.length > 0 && actual === expected) return 'exact'
-  if (expected.length > 0 && actual.includes(expected)) return 'contains'
-  return 'other'
-}
-
-export function searchMatchRankLabel(rank: SearchMatchRank): string {
-  return rank === 'exact' ? '完全匹配' : rank === 'contains' ? '包含关键词' : '其他'
-}
-
-function filterSearchSnapshot(snapshot: SearchOperationResult, expectedTitle: string, expectedAuthor: string | undefined): SearchOperationResult {
-  const results = snapshot.results.filter((item) => isBookTitleMatch(item.candidate.name, expectedTitle) && isAuthorMatch(item.candidate.author, expectedAuthor))
-  const allowed = new Set(results)
-  const sources = snapshot.sources.map((item) => ({ ...item, candidates: item.candidates.filter((candidate) => allowed.has(candidate)) }))
-  return { ...snapshot, results, sources, groups: groupSearchResults(expectedTitle, results) }
-}
-
-function matchRankValue(rank: SearchMatchRank): number {
-  return rank === 'exact' ? 0 : rank === 'contains' ? 1 : 2
-}
-
-function normalizeTitle(value: string | undefined): string {
-  // Search identity ignores punctuation and spacing so full-width and half-width
-  // forms can contribute candidates to one logical book without merging books.
-  return (value ?? '').normalize('NFKC').toLocaleLowerCase('zh-Hans').replace(/[\s\p{P}\p{S}]+/gu, '')
-}
-
-function isBookTitleMatch(candidate: string | undefined, expected: string | undefined): boolean {
-  const left = normalizeTitle(candidate)
-  const right = normalizeTitle(expected)
-  return left.length > 0 && right.length > 0 && left === right
-}
-
-function isAuthorMatch(candidate: string | undefined, expected: string | undefined): boolean {
-  const left = normalizeAuthor(candidate)
-  const right = normalizeAuthor(expected)
-  return left.length > 0 && right.length > 0 && left === right
-}
-
-function normalizeAuthor(value: string | undefined): string {
-  return (value ?? '').normalize('NFKC').toLocaleLowerCase('zh-Hans').replace(/\s+/gu, '')
 }
 
 function errorMessage(error: unknown): string {
