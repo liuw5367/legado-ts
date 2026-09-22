@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent, NormalizedSource, RuntimeResult, WorkflowPage } from '@legado/source-core'
 import { ReaderApplication } from '../src/application.ts'
+import type { SearchOperationResult } from '../src/application.ts'
 import type { ReaderSourceSession } from '../src/application.ts'
 import type { SourceCatalogResult, SourceEntry } from '../src/source-catalog.ts'
 import { ReaderStorage, editionKey } from '../src/storage.ts'
@@ -115,7 +116,7 @@ test('手动搜索更多书源会合并匹配书源到本地记录', async () =>
   const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
   const firstUrl = 'https://source.test/one/book'
   try {
-    await storage.upsertBook({ bookId, name: '测试书', activeEditionKey: editionKey(first.source.bookSourceUrl, firstUrl), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.upsertBook({ bookId, name: '测试书', author: '作者', activeEditionKey: editionKey(first.source.bookSourceUrl, firstUrl), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
     await storage.mergeKnownSources(bookId, [{ editionKey: editionKey(first.source.bookSourceUrl, firstUrl), sourceId: first.source.bookSourceUrl, sourceFingerprint: first.fingerprint, bookUrl: firstUrl, name: '测试书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
     const operation = await application.searchMoreSources(bookId)
     assert.equal(operation.results.length, 1)
@@ -154,8 +155,8 @@ test('缺少候选书名时不会把不同书源候选错误合并', async () =>
   const second = entry(source('https://source.test/two', '第二个书源'), 1)
   const application = new ReaderApplication({ catalog: { entries: [first, second], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: (_value) => new FakeSession([]) })
   try {
-    const selected = { candidate: { sourceId: first.source.bookSourceUrl, bookUrl: 'https://source.test/one/book', rawFields: {}, traceRef: 'selected' }, source: first, searchId: 'search-1' }
-    const related = { candidate: { sourceId: second.source.bookSourceUrl, bookUrl: 'https://source.test/two/book', rawFields: {}, traceRef: 'related' }, source: second, searchId: 'search-1' }
+    const selected = { candidate: { sourceId: first.source.bookSourceUrl, bookUrl: 'https://source.test/one/book', rawFields: {}, traceRef: 'selected' }, source: first, searchId: 'search-1', arrivalIndex: 0 }
+    const related = { candidate: { sourceId: second.source.bookSourceUrl, bookUrl: 'https://source.test/two/book', rawFields: {}, traceRef: 'related' }, source: second, searchId: 'search-1', arrivalIndex: 1 }
     const opened = await application.openSearchResult(selected, [selected, related])
     assert.equal(opened.sources.length, 1)
   } finally {
@@ -171,9 +172,61 @@ test('详情请求失败时不会提交孤儿书籍和书源记录', async () =>
   const sourceEntry = entry(source(), 0)
   const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => new FakeSession([], 0, true) })
   try {
-    const selected = { candidate: { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/book/failure', name: '失败书', rawFields: {}, traceRef: 'selected' }, source: sourceEntry, searchId: 'search-1' }
+    const selected = { candidate: { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/book/failure', name: '失败书', rawFields: {}, traceRef: 'selected' }, source: sourceEntry, searchId: 'search-1', arrivalIndex: 0 }
     await assert.rejects(() => application.openSearchResult(selected), /详情请求失败/)
     assert.deepEqual(await storage.listBooks(), [])
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('搜索快照按书源完成顺序发布并按匹配等级稳定排序', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-ranking-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const first = entry(source('https://source.test/slow', '慢书源'), 0)
+  const second = entry(source('https://source.test/fast', '快书源'), 1)
+  const snapshots: SearchOperationResult[] = []
+  const application = new ReaderApplication({
+    catalog: { entries: [first, second], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false },
+    storage,
+    sessionFactory: (value) => value.bookSourceUrl.includes('slow')
+      ? new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/other`, name: '其他结果', author: '作者', rawFields: {}, traceRef: 'other' }], 25)
+      : new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/exact`, name: '测试书', author: '作者', rawFields: {}, traceRef: 'exact' }, { sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/contains`, name: '测试书：续集', author: '作者', rawFields: {}, traceRef: 'contains' }]),
+  })
+  try {
+    const operation = await application.search('测试书', undefined, undefined, undefined, (snapshot) => snapshots.push(snapshot))
+    assert.ok(snapshots.length >= 3)
+    assert.equal(snapshots.some((snapshot) => snapshot.results.length > 0 && snapshot.sources.length === 1), true)
+    assert.deepEqual(operation.groups.map((group) => group.rank), ['exact', 'contains', 'other'])
+    assert.equal(operation.groups[0]?.source.source.bookSourceName, '快书源')
+    assert.ok(operation.sources.every((item) => item.durationMs >= 0))
+    assert.ok(operation.elapsedMs >= 0)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('换源搜索只接受书名和作者完整匹配的候选', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-source-match-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const first = entry(source('https://source.test/one', '第一个书源'), 0)
+  const second = entry(source('https://source.test/two', '第二个书源'), 1)
+  const catalog: SourceCatalogResult = { entries: [first, second], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }
+  const application = new ReaderApplication({ catalog, storage, sessionFactory: (value) => new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '测试书', author: value.bookSourceUrl.includes('/two') ? '其他作者' : '作者', rawFields: {}, traceRef: 'fake' }]) })
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const firstUrl = 'https://source.test/one/book'
+  try {
+    await storage.upsertBook({ bookId, name: '测试书', author: '作者', activeEditionKey: editionKey(first.source.bookSourceUrl, firstUrl), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: editionKey(first.source.bookSourceUrl, firstUrl), sourceId: first.source.bookSourceUrl, sourceFingerprint: first.fingerprint, bookUrl: firstUrl, name: '测试书', author: '作者', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    const updates: SearchOperationResult[] = []
+    const result = await application.searchMoreSources(bookId, undefined, undefined, (snapshot) => updates.push(snapshot))
+    assert.equal(result.results.length, 0)
+    assert.equal(updates.at(-1)?.results.length, 0)
+    assert.equal((await storage.listKnownSources(bookId)).length, 1)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

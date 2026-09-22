@@ -90,6 +90,8 @@ interface ExtractedFields {
   bookUrl?: string
   coverUrl?: string
   intro?: string
+  lastChapter?: string
+  updateTime?: string
   rawFields: JsonObject
 }
 
@@ -110,6 +112,8 @@ async function extractFields(ports: WorkflowPorts, source: NormalizedSource, sta
       if (outputField === 'bookUrl') extracted.bookUrl = value
       if (outputField === 'coverUrl') extracted.coverUrl = value
       if (outputField === 'intro') extracted.intro = value
+      if (outputField === 'lastChapter') extracted.lastChapter = value
+      if (outputField === 'updateTime') extracted.updateTime = value
     }
   }
   return extracted
@@ -159,6 +163,8 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       if (outputField === 'intro') metadata.intro = value
       if (outputField === 'coverUrl') metadata.coverUrl = value
       if (outputField === 'tocUrl') metadata.tocUrl = value
+      if (outputField === 'lastChapter') metadata.lastChapter = value
+      if (outputField === 'updateTime') metadata.updateTime = value
       trace.push({ stage: 'detail', event: 'field', target: outputField, itemIndex })
     }
     items.push(metadata)

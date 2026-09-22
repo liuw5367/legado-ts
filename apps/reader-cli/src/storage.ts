@@ -74,6 +74,10 @@ export interface KnownSource {
   intro?: string
   coverUrl?: string
   tocUrl?: string
+  lastChapter?: string
+  updateTime?: string
+  /** 本次搜索从书源请求真正开始到返回终态的耗时，单位毫秒。 */
+  searchDurationMs?: number
   rawFields: JsonObject
   discoveredAt: string
   searchId?: string
@@ -122,6 +126,7 @@ export interface HomeBookView {
   reading?: ReadingRecord
   isOnBookshelf: boolean
   lastReadAt?: string
+  currentChapter?: string
 }
 
 export interface KnownSourceView extends KnownSource {
@@ -160,6 +165,15 @@ export function chapterKey(input: { editionKey: string; tocRevision?: string; ch
 
 export function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
+}
+
+/** 搜索历史的去重键只代表搜索框名称，不代表某本书的永久身份。 */
+export function normalizeSearchName(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-Hans')
+}
+
+function searchHistoryTime(entry: Pick<SearchHistoryEntry, 'startedAt' | 'completedAt'>): string {
+  return entry.completedAt ?? entry.startedAt
 }
 
 function iso(now: () => Date): string {
@@ -238,7 +252,13 @@ export class ReaderStorage {
 
   public async listSearchHistory(limit = 20): Promise<SearchHistoryEntry[]> {
     const value = await this.readFile<SearchHistoryEntry[]>(join(this.paths.dataRoot, 'search-history.json'), [])
-    return [...value].sort((left, right) => right.startedAt.localeCompare(left.startedAt)).slice(0, limit)
+    const latest = new Map<string, SearchHistoryEntry>()
+    for (const item of value) {
+      const key = normalizeSearchName(item.keyword)
+      const current = latest.get(key)
+      if (current === undefined || searchHistoryTime(item).localeCompare(searchHistoryTime(current)) > 0) latest.set(key, item)
+    }
+    return [...latest.values()].sort((left, right) => searchHistoryTime(right).localeCompare(searchHistoryTime(left))).slice(0, limit)
   }
 
   public async addSearchHistory(entry: Omit<SearchHistoryEntry, 'id'>): Promise<SearchHistoryEntry> {
@@ -246,8 +266,9 @@ export class ReaderStorage {
       const path = join(this.paths.dataRoot, 'search-history.json')
       const records = await this.readFile<SearchHistoryEntry[]>(path, [])
       const saved: SearchHistoryEntry = { ...entry, id: randomUUID(), openedBookIds: [...entry.openedBookIds] }
-      records.unshift(saved)
-      await this.writeFile(path, records.slice(0, MAX_SEARCH_HISTORY))
+      const name = normalizeSearchName(saved.keyword)
+      const next = [saved, ...records.filter((item) => normalizeSearchName(item.keyword) !== name)]
+      await this.writeFile(path, next.slice(0, MAX_SEARCH_HISTORY))
       return saved
     })
   }
@@ -409,7 +430,9 @@ export class ReaderStorage {
     const readingMap = new Map(readings.map((item) => [item.bookId, item]))
     return books.map((book) => {
       const reading = readingMap.get(book.bookId)
-      return { book, ...(reading === undefined ? {} : { reading }), isOnBookshelf: shelfIds.has(book.bookId), ...(reading?.lastReadAt === undefined ? {} : { lastReadAt: reading.lastReadAt }) }
+      const currentEdition = reading?.activeEditionKey ?? book.activeEditionKey
+      const currentChapter = currentEdition === undefined ? undefined : reading?.positions[currentEdition]?.title
+      return { book, ...(reading === undefined ? {} : { reading }), isOnBookshelf: shelfIds.has(book.bookId), ...(reading?.lastReadAt === undefined ? {} : { lastReadAt: reading.lastReadAt }), ...(currentChapter === undefined ? {} : { currentChapter }) }
     }).sort((left, right) => (right.lastReadAt ?? right.book.updatedAt).localeCompare(left.lastReadAt ?? left.book.updatedAt))
   }
 

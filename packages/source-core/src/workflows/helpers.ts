@@ -9,6 +9,8 @@ export const listFields = [
   ['bookUrl', 'bookUrl'],
   ['bookCoverUrl', 'coverUrl'],
   ['bookIntro', 'intro'],
+  ['bookLastChapter', 'lastChapter'],
+  ['bookUpdateTime', 'updateTime'],
 ] as const
 
 export const detailFields = [
@@ -17,6 +19,8 @@ export const detailFields = [
   ['intro', 'intro'],
   ['coverUrl', 'coverUrl'],
   ['tocUrl', 'tocUrl'],
+  ['lastChapter', 'lastChapter'],
+  ['updateTime', 'updateTime'],
 ] as const
 
 export function asRecord(value: JsonValue | undefined): JsonObject | undefined {
@@ -42,6 +46,8 @@ export function ruleString(source: NormalizedSource, group: string, field: strin
     bookAuthor: ['bookAuthor', 'author'],
     bookCoverUrl: ['bookCoverUrl', 'coverUrl'],
     bookIntro: ['bookIntro', 'intro'],
+    bookLastChapter: ['bookLastChapter', 'lastChapter'],
+    bookUpdateTime: ['bookUpdateTime', 'updateTime'],
   }
   const keys = aliases[field] ?? [field]
   for (const key of keys) if (typeof rules[key] === 'string') return rules[key] as string

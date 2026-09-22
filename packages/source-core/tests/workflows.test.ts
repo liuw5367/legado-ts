@@ -70,6 +70,31 @@ test('搜索工作流编码关键词并区分空关键词', async () => {
   assert.equal(calls.length, 1)
 })
 
+test('搜索和详情工作流保留最新章节与更新时间字段', async () => {
+  const calls: string[] = []
+  const latestSource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookUrl: 'url', bookLastChapter: 'last-chapter', bookUpdateTime: 'updated-at' },
+    ruleBookInfo: { name: 'detail-name', author: 'detail-author', intro: 'detail-intro', tocUrl: 'detail-toc', lastChapter: 'detail-last-chapter', updateTime: 'detail-updated-at' },
+  } as unknown as NormalizedSource
+  const base = ports(calls)
+  base.rules = {
+    evaluate: async (request) => {
+      if (request.rule === 'last-chapter') return { status: 'success', value: '列表最新章' }
+      if (request.rule === 'updated-at') return { status: 'success', value: '2026-09-22' }
+      if (request.rule === 'detail-last-chapter') return { status: 'success', value: '详情最新章' }
+      if (request.rule === 'detail-updated-at') return { status: 'success', value: '2026-09-23' }
+      return ports(calls).rules.evaluate(request)
+    },
+  }
+  const searched = await searchBooks(base, { source: latestSource, keyword: '中文' })
+  assert.equal(searched.value?.items[0]?.lastChapter, '列表最新章')
+  assert.equal(searched.value?.items[0]?.updateTime, '2026-09-22')
+  const detailed = await loadBookDetails(base, { source: latestSource, candidates: [searched.value!.items[0]!] })
+  assert.equal(detailed.value?.items[0]?.lastChapter, '详情最新章')
+  assert.equal(detailed.value?.items[0]?.updateTime, '2026-09-23')
+})
+
 test('搜索 URL 模板支持书源地址和安全页码算术表达式', async () => {
   const calls: string[] = []
   const templated = { ...source, searchPageStart: 1, searchUrl: '/search?start={{(page-1)*10}}&source={{source.bookSourceUrl}}&q={{key}}' } as unknown as NormalizedSource

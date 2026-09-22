@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { defaultStoragePaths, ReaderStorage, editionKey } from '../src/storage.ts'
+import { defaultStoragePaths, normalizeSearchName, ReaderStorage, editionKey } from '../src/storage.ts'
 
 async function temporaryStorage(): Promise<{ storage: ReaderStorage; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-'))
@@ -14,9 +14,26 @@ async function temporaryStorage(): Promise<{ storage: ReaderStorage; root: strin
 
 test('默认缓存目录位于用户配置目录', () => {
   const home = '/tmp/reader-cli-test-home'
-  for (const platform of ['darwin', 'linux', 'win32']) {
+  for (const platform of ['darwin', 'linux', 'win32'] as const) {
     const paths = defaultStoragePaths(platform, { HOME: home, LOCALAPPDATA: '/tmp/local-app-data', XDG_STATE_HOME: '/tmp/state', XDG_CACHE_HOME: '/tmp/cache' })
     assert.equal(paths.cacheRoot, join(home, '.config', 'reader-cli'))
+  }
+})
+
+test('搜索历史按规范化名称只保留最新记录并显示完成时间', async () => {
+  const { storage, root } = await temporaryStorage()
+  try {
+    assert.equal(normalizeSearchName('  Ｔｅｓｔ\t书  '), 'test 书')
+    await storage.addSearchHistory({ keyword: '三体', sourceScope: 'all', startedAt: '2026-01-01T00:00:00.000Z', completedAt: '2026-01-01T00:00:01.000Z', summary: { searched: 1, success: 1, empty: 0, failed: 0, capabilityMissing: 0, candidates: 1 }, openedBookIds: [] })
+    await storage.addSearchHistory({ keyword: '  三体 ', sourceScope: 'all', startedAt: '2026-01-02T00:00:00.000Z', completedAt: '2026-01-02T00:00:02.000Z', summary: { searched: 2, success: 2, empty: 0, failed: 0, capabilityMissing: 0, candidates: 3 }, openedBookIds: [] })
+    const history = await storage.listSearchHistory()
+    assert.equal(history.length, 1)
+    assert.equal(history[0]?.keyword, '  三体 ')
+    assert.equal(history[0]?.completedAt, '2026-01-02T00:00:02.000Z')
+    assert.equal(JSON.parse(await readFile(join(root, 'data-v1', 'search-history.json'), 'utf8')).data.length, 1)
+  } finally {
+    await storage.close()
+    await rm(root, { recursive: true, force: true })
   }
 })
 

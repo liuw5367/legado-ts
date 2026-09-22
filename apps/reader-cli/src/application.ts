@@ -11,13 +11,30 @@ export interface SearchResult {
   candidate: BookCandidate
   source: SourceEntry
   searchId: string
+  /** 全局搜索返回顺序，用于同一匹配等级下保持稳定排序。 */
+  arrivalIndex: number
+  /** 候选所属书源本次搜索耗时，单位毫秒。 */
+  searchDurationMs?: number
 }
 
 export interface SourceSearchResult {
   source: SourceEntry
   status: WorkflowStatus
   candidates: SearchResult[]
+  /** 从该书源真正开始执行请求到返回终态的耗时，单位毫秒。 */
+  durationMs: number
   message?: string
+}
+
+export type SearchMatchRank = 'exact' | 'contains' | 'other'
+
+export interface SearchResultGroup {
+  key: string
+  candidate: BookCandidate
+  source: SourceEntry
+  candidates: SearchResult[]
+  rank: SearchMatchRank
+  firstArrivalIndex: number
 }
 
 export interface SearchOperationResult {
@@ -25,14 +42,21 @@ export interface SearchOperationResult {
   keyword: string
   results: SearchResult[]
   sources: SourceSearchResult[]
+  groups: SearchResultGroup[]
+  elapsedMs: number
+  startedAt: string
+  completedAt: string
   cancelled: boolean
 }
+
+export type SearchUpdateListener = (snapshot: SearchOperationResult) => void
 
 export interface SearchProgress {
   total: number
   completed: number
   activeSources: string[]
   candidates: number
+  elapsedMs: number
   success: number
   partial: number
   empty: number
@@ -200,29 +224,54 @@ export class ReaderApplication {
     return this.storage.listSearchHistory(limit)
   }
 
-  public search(keyword: string, sourceIds?: readonly string[], signal?: AbortSignal, onProgress?: SearchProgressListener): Promise<SearchOperationResult> {
-    return this.trackOperation(signal, (operationSignal) => this.searchInternal(keyword, sourceIds, operationSignal, onProgress))
+  public search(keyword: string, sourceIds?: readonly string[], signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener): Promise<SearchOperationResult> {
+    return this.trackOperation(signal, (operationSignal) => this.searchInternal(keyword, sourceIds, operationSignal, onProgress, onUpdate))
   }
 
-  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener): Promise<SearchOperationResult> {
+  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener): Promise<SearchOperationResult> {
     const trimmed = keyword.trim()
     const searchId = randomUUID()
     const startedAt = new Date().toISOString()
+    const startedClock = Date.now()
     const entries = usableSources(this.catalog).filter((entry) => sourceIds === undefined || sourceIds.includes(entry.id) || sourceIds.includes(entry.source.bookSourceUrl))
     const results: SourceSearchResult[] = []
     const activeSources = new Set<string>()
     let completed = 0
     let progressCandidates = 0
+    let arrivalIndex = 0
     const progressCounts = { success: 0, partial: 0, empty: 0, failed: 0, capabilityMissing: 0, cancelled: 0 }
     const emitProgress = (): void => {
       if (onProgress === undefined) return
       try {
-        onProgress({ total: entries.length, completed, activeSources: [...activeSources], candidates: progressCandidates, ...progressCounts })
+        onProgress({ total: entries.length, completed, activeSources: [...activeSources], candidates: progressCandidates, elapsedMs: Date.now() - startedClock, ...progressCounts })
       } catch {
         // UI progress callbacks must not alter the search result.
       }
     }
+    const snapshot = (cancelled = false, completedAt = new Date().toISOString()): SearchOperationResult => {
+      const flattened = results.flatMap((item) => item.candidates)
+      return {
+        searchId,
+        keyword: trimmed,
+        results: flattened,
+        sources: results.map((item) => ({ ...item, candidates: [...item.candidates] })),
+        groups: groupSearchResults(trimmed, flattened),
+        elapsedMs: Date.now() - startedClock,
+        startedAt,
+        completedAt,
+        cancelled,
+      }
+    }
+    const emitUpdate = (cancelled = false): void => {
+      if (onUpdate === undefined) return
+      try {
+        onUpdate(snapshot(cancelled))
+      } catch {
+        // UI snapshots must not alter the search result or worker lifecycle.
+      }
+    }
     emitProgress()
+    emitUpdate()
     let nextIndex = 0
     const worker = async (): Promise<void> => {
       while (true) {
@@ -235,10 +284,17 @@ export class ReaderApplication {
         if (session === undefined) continue
         activeSources.add(source.source.bookSourceName)
         emitProgress()
+        let sourceStartedClock = Date.now()
         try {
-          const response = await this.concurrency.run(source.id, (innerSignal) => session.search(trimmed, innerSignal), signal)
+          const response = await this.concurrency.run(source.id, (innerSignal) => {
+            // 并发宿主可能先排队；耗时从真正进入书源会话开始计算，不包含队列等待。
+            sourceStartedClock = Date.now()
+            return session.search(trimmed, innerSignal)
+          }, signal)
           const found = response.value?.items ?? []
-          results.push({ source, status: response.status, candidates: found.map((candidate) => ({ candidate, source, searchId })), ...(response.diagnostics[0] === undefined ? {} : { message: response.diagnostics[0].message }) })
+          const durationMs = Date.now() - sourceStartedClock
+          const candidates = found.map((candidate) => ({ candidate, source, searchId, arrivalIndex: arrivalIndex++, searchDurationMs: durationMs }))
+          results.push({ source, status: response.status, candidates, durationMs, ...(response.diagnostics[0] === undefined ? {} : { message: response.diagnostics[0].message }) })
           progressCandidates += found.length
           if (response.status === 'success') progressCounts.success += 1
           else if (response.status === 'partial') progressCounts.partial += 1
@@ -247,13 +303,14 @@ export class ReaderApplication {
           else if (response.status === 'cancelled') progressCounts.cancelled += 1
           else if (response.status === 'failed') progressCounts.failed += 1
         } catch (error) {
-          results.push({ source, status: signal?.aborted ? 'cancelled' : 'failed', candidates: [], message: errorMessage(error) })
+          results.push({ source, status: signal?.aborted ? 'cancelled' : 'failed', candidates: [], durationMs: Date.now() - sourceStartedClock, message: errorMessage(error) })
           if (signal.aborted) progressCounts.cancelled += 1
           else progressCounts.failed += 1
         } finally {
           activeSources.delete(source.source.bookSourceName)
           completed += 1
           emitProgress()
+          emitUpdate(signal.aborted)
         }
       }
     }
@@ -272,7 +329,9 @@ export class ReaderApplication {
       for (const candidate of source.candidates) candidate.searchId = history.id
     }
     results.sort((left, right) => left.source.source.bookSourceName.localeCompare(right.source.source.bookSourceName, 'zh-Hans'))
-    const operation: SearchOperationResult = { searchId: history.id, keyword: trimmed, results: results.flatMap((item) => item.candidates), sources: results, cancelled }
+    const completedAt = new Date().toISOString()
+    const operation: SearchOperationResult = { ...snapshot(cancelled, completedAt), searchId: history.id, completedAt }
+    emitUpdate(cancelled)
     return operation
   }
 
@@ -282,8 +341,7 @@ export class ReaderApplication {
 
   private async openSearchResultInternal(selected: SearchResult, related: readonly SearchResult[], signal: AbortSignal): Promise<OpenBookResult> {
     throwIfAborted(signal)
-    const selectedTitle = normalizeTitle(selected.candidate.name)
-    const sameTitle = selectedTitle.length === 0 ? [] : related.filter((item) => normalizeTitle(item.candidate.name) === selectedTitle)
+    const sameTitle = related.filter((item) => isBookTitleMatch(item.candidate.name, selected.candidate.name) && isAuthorMatch(item.candidate.author, selected.candidate.author))
     const candidates = [selected, ...sameTitle.filter((item) => item !== selected)]
     let bookId = await this.storage.findBookIdByEdition(selected.candidate.sourceId, selected.candidate.bookUrl)
     const timestamp = new Date().toISOString()
@@ -336,7 +394,7 @@ export class ReaderApplication {
     })
   }
 
-  public searchMoreSources(bookId: string, signal?: AbortSignal, onProgress?: SearchProgressListener): Promise<SearchOperationResult> {
+  public searchMoreSources(bookId: string, signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener): Promise<SearchOperationResult> {
     return this.trackOperation(signal, async (operationSignal) => {
       throwIfAborted(operationSignal)
       const book = await this.storage.getBook(bookId)
@@ -344,14 +402,15 @@ export class ReaderApplication {
       const known = await this.storage.listKnownSources(bookId)
       const valid = new Set(known.filter((item) => this.catalog.entries.some((entry) => entry.source.bookSourceUrl === item.sourceId && entry.fingerprint === item.sourceFingerprint && entry.state === 'available')).map((item) => item.sourceId))
       const sourceIds = usableSources(this.catalog).filter((entry) => !valid.has(entry.source.bookSourceUrl)).map((entry) => entry.id)
-      const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress)
+      const update = onUpdate === undefined ? undefined : (snapshot: SearchOperationResult): void => onUpdate(filterSearchSnapshot(snapshot, book.name, book.author))
+      const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update)
       throwIfAborted(operationSignal)
-      const matching = result.results.filter((item) => isBookTitleMatch(item.candidate.name, book.name))
+      const matching = result.results.filter((item) => isBookTitleMatch(item.candidate.name, book.name) && isAuthorMatch(item.candidate.author, book.author))
       if (matching.length > 0) {
         const selected = matching[0]!
         await this.storage.mergeKnownSources(bookId, matching.map((item) => toKnownSource(item, selected, false)))
       }
-      return result
+      return filterSearchSnapshot(result, book.name, book.author)
     })
   }
 
@@ -368,7 +427,7 @@ export class ReaderApplication {
     if (edition === undefined) throw new Error('书籍没有已知书源')
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
-    const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
+    const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
     const result = await session.toc(metadata, signal)
     throwIfAborted(signal)
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '目录加载失败')
@@ -389,7 +448,7 @@ export class ReaderApplication {
     if (edition === undefined) throw new Error('正文来源未记录')
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
-    const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
+    const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
     const result = await session.content(chapter, metadata, signal)
     throwIfAborted(signal)
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '正文加载失败')
@@ -424,7 +483,7 @@ export class ReaderApplication {
     if (state !== 'available') throw new Error('目标书源需要重新搜索或已被移除')
     const source = this.requireSource(target)
     const session = this.requireSession(source)
-    const candidate: BookCandidate = { sourceId: target.sourceId, bookUrl: target.bookUrl, ...(target.name === undefined ? {} : { name: target.name }), ...(target.author === undefined ? {} : { author: target.author }), ...(target.intro === undefined ? {} : { intro: target.intro }), ...(target.coverUrl === undefined ? {} : { coverUrl: target.coverUrl }), rawFields: target.rawFields, traceRef: `stored:${target.editionKey}` }
+    const candidate: BookCandidate = { sourceId: target.sourceId, bookUrl: target.bookUrl, ...(target.name === undefined ? {} : { name: target.name }), ...(target.author === undefined ? {} : { author: target.author }), ...(target.intro === undefined ? {} : { intro: target.intro }), ...(target.coverUrl === undefined ? {} : { coverUrl: target.coverUrl }), ...(target.lastChapter === undefined ? {} : { lastChapter: target.lastChapter }), ...(target.updateTime === undefined ? {} : { updateTime: target.updateTime }), rawFields: target.rawFields, traceRef: `stored:${target.editionKey}` }
     const details = await session.detail(candidate, signal)
     throwIfAborted(signal)
     if (details.value === null) throw new Error(details.diagnostics[0]?.message ?? '目标书源详情加载失败')
@@ -470,7 +529,7 @@ export class ReaderApplication {
 
 function toKnownSource(result: SearchResult, selected: SearchResult, isSelected: boolean): KnownSource {
   const candidate = result.candidate
-  return { editionKey: editionKey(candidate.sourceId, candidate.bookUrl), sourceId: candidate.sourceId, sourceFingerprint: result.source.fingerprint, bookUrl: candidate.bookUrl, ...(candidate.name === undefined ? {} : { name: candidate.name }), ...(candidate.author === undefined ? {} : { author: candidate.author }), ...(candidate.intro === undefined ? {} : { intro: candidate.intro }), ...(candidate.coverUrl === undefined ? {} : { coverUrl: candidate.coverUrl }), rawFields: candidate.rawFields, discoveredAt: new Date().toISOString(), searchId: result.searchId, matchKind: isSelected ? 'selected' : normalizeAuthor(candidate.author) !== '' && normalizeAuthor(candidate.author) === normalizeAuthor(selected.candidate.author) ? 'title-author' : 'title-only' }
+  return { editionKey: editionKey(candidate.sourceId, candidate.bookUrl), sourceId: candidate.sourceId, sourceFingerprint: result.source.fingerprint, bookUrl: candidate.bookUrl, ...(candidate.name === undefined ? {} : { name: candidate.name }), ...(candidate.author === undefined ? {} : { author: candidate.author }), ...(candidate.intro === undefined ? {} : { intro: candidate.intro }), ...(candidate.coverUrl === undefined ? {} : { coverUrl: candidate.coverUrl }), ...(candidate.lastChapter === undefined ? {} : { lastChapter: candidate.lastChapter }), ...(candidate.updateTime === undefined ? {} : { updateTime: candidate.updateTime }), ...(result.searchDurationMs === undefined ? {} : { searchDurationMs: result.searchDurationMs }), rawFields: candidate.rawFields, discoveredAt: new Date().toISOString(), searchId: result.searchId, matchKind: isSelected ? 'selected' : normalizeAuthor(candidate.author) !== '' && normalizeAuthor(candidate.author) === normalizeAuthor(selected.candidate.author) ? 'title-author' : 'title-only' }
 }
 
 function updateBook(book: BookDocument, metadata: BookMetadata, activeEditionKey: string, timestamp: string): BookDocument {
@@ -478,7 +537,54 @@ function updateBook(book: BookDocument, metadata: BookMetadata, activeEditionKey
 }
 
 function mergeMetadataIntoSource(source: KnownSource, metadata: BookMetadata): KnownSource {
-  return { ...source, ...(metadata.name === undefined ? {} : { name: metadata.name }), ...(metadata.author === undefined ? {} : { author: metadata.author }), ...(metadata.intro === undefined ? {} : { intro: metadata.intro }), ...(metadata.coverUrl === undefined ? {} : { coverUrl: metadata.coverUrl }), ...(metadata.tocUrl === undefined ? {} : { tocUrl: metadata.tocUrl }), rawFields: { ...source.rawFields, ...metadata.rawFields } }
+  return { ...source, ...(metadata.name === undefined ? {} : { name: metadata.name }), ...(metadata.author === undefined ? {} : { author: metadata.author }), ...(metadata.intro === undefined ? {} : { intro: metadata.intro }), ...(metadata.coverUrl === undefined ? {} : { coverUrl: metadata.coverUrl }), ...(metadata.tocUrl === undefined ? {} : { tocUrl: metadata.tocUrl }), ...(metadata.lastChapter === undefined ? {} : { lastChapter: metadata.lastChapter }), ...(metadata.updateTime === undefined ? {} : { updateTime: metadata.updateTime }), rawFields: { ...source.rawFields, ...metadata.rawFields } }
+}
+
+export function groupSearchResults(keyword: string, results: readonly SearchResult[]): SearchResultGroup[] {
+  const groups = new Map<string, SearchResultGroup>()
+  for (const result of [...results].sort((left, right) => left.arrivalIndex - right.arrivalIndex)) {
+    const title = normalizeTitle(result.candidate.name)
+    const author = normalizeAuthor(result.candidate.author)
+    // 作者缺失时只在同一书源同一 URL 内折叠，避免同名书被错误合并。
+    const key = title.length > 0 && author.length > 0 ? `title-author:${title}\u0000${author}` : `edition:${result.candidate.sourceId}\u0000${result.candidate.bookUrl}`
+    const existing = groups.get(key)
+    if (existing === undefined) {
+      groups.set(key, {
+        key,
+        candidate: result.candidate,
+        source: result.source,
+        candidates: [result],
+        rank: searchMatchRank(keyword, result.candidate.name),
+        firstArrivalIndex: result.arrivalIndex,
+      })
+      continue
+    }
+    existing.candidates.push(result)
+  }
+  return [...groups.values()].sort((left, right) => matchRankValue(left.rank) - matchRankValue(right.rank) || left.firstArrivalIndex - right.firstArrivalIndex)
+}
+
+export function searchMatchRank(keyword: string, name: string | undefined): SearchMatchRank {
+  const expected = normalizeTitle(keyword)
+  const actual = normalizeTitle(name)
+  if (expected.length > 0 && actual === expected) return 'exact'
+  if (expected.length > 0 && actual.includes(expected)) return 'contains'
+  return 'other'
+}
+
+export function searchMatchRankLabel(rank: SearchMatchRank): string {
+  return rank === 'exact' ? '完全匹配' : rank === 'contains' ? '包含关键词' : '其他'
+}
+
+function filterSearchSnapshot(snapshot: SearchOperationResult, expectedTitle: string, expectedAuthor: string | undefined): SearchOperationResult {
+  const results = snapshot.results.filter((item) => isBookTitleMatch(item.candidate.name, expectedTitle) && isAuthorMatch(item.candidate.author, expectedAuthor))
+  const allowed = new Set(results)
+  const sources = snapshot.sources.map((item) => ({ ...item, candidates: item.candidates.filter((candidate) => allowed.has(candidate)) }))
+  return { ...snapshot, results, sources, groups: groupSearchResults(expectedTitle, results) }
+}
+
+function matchRankValue(rank: SearchMatchRank): number {
+  return rank === 'exact' ? 0 : rank === 'contains' ? 1 : 2
 }
 
 function normalizeTitle(value: string | undefined): string {
@@ -490,6 +596,12 @@ function normalizeTitle(value: string | undefined): string {
 function isBookTitleMatch(candidate: string | undefined, expected: string | undefined): boolean {
   const left = normalizeTitle(candidate)
   const right = normalizeTitle(expected)
+  return left.length > 0 && right.length > 0 && left === right
+}
+
+function isAuthorMatch(candidate: string | undefined, expected: string | undefined): boolean {
+  const left = normalizeAuthor(candidate)
+  const right = normalizeAuthor(expected)
   return left.length > 0 && right.length > 0 && left === right
 }
 
