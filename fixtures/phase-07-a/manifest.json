@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "fixtures": [
+    { "id": "IMP-001/source-object", "capability": "import", "source": "phase-07-a-source-conformance.md", "input": "inline-source-object", "expected": "ready-normalized-source", "sensitive": "none", "android": "not-run", "typescript": "source-conformance.test.ts" },
+    { "id": "SCH-006/public-rule-entry", "capability": "rule", "source": "phase-07-a-source-conformance.md", "input": "inline-workflow-rules", "expected": "rule-output-through-workflow", "sensitive": "none", "android": "not-run", "typescript": "source-conformance.test.ts" },
+    { "id": "URL-001/workflow-request", "capability": "request-plan", "source": "phase-07-a-source-conformance.md", "input": "relative-source-urls", "expected": "absolute-request-order", "sensitive": "none", "android": "not-run", "typescript": "source-conformance.test.ts" },
+    { "id": "FLOW-API-001/source-to-content", "capability": "workflow", "source": "phase-07-a-source-conformance.md", "input": "explore-search-detail-toc-content", "expected": "ordered-domain-results", "sensitive": "none", "android": "not-run", "typescript": "source-conformance.test.ts" },
+    { "id": "FLOW-CANCEL-001/source-abort", "capability": "lifecycle", "source": "phase-07-a-source-conformance.md", "input": "already-aborted-signal", "expected": "cancelled-without-request", "sensitive": "none", "android": "not-run", "typescript": "source-conformance.test.ts" }
+  ]
+}

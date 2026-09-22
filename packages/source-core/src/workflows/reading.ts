@@ -18,14 +18,15 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const chapters: Chapter[] = []
   const identities = new Set<string>()
   const pageBodies = new Set<string>()
-  let pageUrl = input.book.bookUrl
+  const bookBaseUrl = resolveUrl(input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  let pageUrl = bookBaseUrl
   let totalBytes = 0
   let volume: string | undefined
   let nextPagePending = false
   for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
     if (input.signal?.aborted === true) return cancelled('目录工作流已取消', diagnostics, trace)
     nextPagePending = false
-    const normalizedUrl = resolveUrl(pageUrl, input.book.bookUrl)
+    const normalizedUrl = resolveUrl(pageUrl, input.source.bookSourceUrl)
     if (normalizedUrl === undefined) {
       diagnostics.push({ code: 'item-skipped', stage, message: '目录下一页 URL 无效', retryable: false })
       break
@@ -66,7 +67,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
         diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '章节缺少标题或 URL', retryable: false })
         continue
       }
-      const chapterUrl = resolveUrl(fields.url, input.book.bookUrl)
+      const chapterUrl = resolveUrl(fields.url, bookBaseUrl)
       if (chapterUrl === undefined) {
         diagnostics.push({ code: 'item-skipped', stage, itemIndex, message: '章节 URL 无效', retryable: false })
         continue
@@ -120,12 +121,14 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const seenPages = new Set<string>()
   const pages: string[] = []
   const resources: ContentResource[] = []
-  let pageUrl = input.chapter.chapterUrl
+  const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  let pageUrl = resolveUrl(input.chapter.chapterUrl, bookUrl) ?? input.chapter.chapterUrl
+  const contentBaseUrl = resolveUrl(pageUrl, bookUrl) ?? bookUrl
   let totalBytes = 0
   let stoppedByLimit = false
   for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
     if (input.signal?.aborted === true) return cancelled('正文工作流已取消', diagnostics, trace)
-    const normalizedUrl = resolveUrl(pageUrl, input.chapter.chapterUrl)
+    const normalizedUrl = resolveUrl(pageUrl, bookUrl)
     if (normalizedUrl === undefined) {
       diagnostics.push({ code: 'item-skipped', stage, message: '正文下一页 URL 无效', retryable: false })
       stoppedByLimit = true
@@ -188,7 +191,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     diagnostics.push({ code: 'item-skipped', stage, message: '正文替换规则无效', retryable: false })
     stoppedByLimit = true
   }
-  const cleaned = cleanContent(replaced, contentType, input.chapter.chapterUrl)
+  const cleaned = cleanContent(replaced, contentType, contentBaseUrl)
   const outputBytes = new TextEncoder().encode(cleaned).byteLength
   if (outputBytes > maxOutputBytes) {
     diagnostics.push({ code: 'item-skipped', stage, message: '正文清洗结果超过输出预算', retryable: false })
