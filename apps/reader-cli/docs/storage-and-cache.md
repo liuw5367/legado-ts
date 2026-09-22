@@ -3,21 +3,21 @@
 ## 目录
 
 ```text
-data-v1/
-  manifest.json
-  search-history.json
-  reading-history.json
-  bookshelf.json
-  books/<bookId>/
-    book.json
-    sources.json
-
 ~/.config/reader-cli/
-  index.json
-  source-input/<sha256>.json
-  toc/<sha256>.json
-  content/<sha256>.json
-  tmp/
+  data-v1/
+    manifest.json
+    search-history.json
+    reading-history.json
+    bookshelf.json
+    books/<bookId>/
+      book.json
+      sources.json
+  cache-v1/
+    index.json
+    source-input/<sha256>.json
+    toc/<sha256>.json
+    content/<sha256>.json
+    tmp/
 ```
 
 每个持久 JSON 文件都有 `schemaVersion`、`revision`、`updatedAt` 和 `data` 封装。缺失文件按空集合初始化；损坏文件保留为带时间戳的 `.corrupt-*.json`，不会静默删除。写入使用同目录临时文件、`fsync` 和原子替换。

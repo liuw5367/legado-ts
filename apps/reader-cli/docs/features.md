@@ -4,13 +4,13 @@
 
 | 功能 | 默认行为 | 持久化或副作用 |
 | --- | --- | --- |
-| 书源加载 | 从 `--source` 或 `LEGADO_READER_SOURCE` 加载 JSON/JavaScript，目录递归导入并过滤不可用能力 | 远程来源成功响应写入 `~/.config/reader-cli/source-input` |
+| 书源加载 | 从 `--source` 或 `LEGADO_READER_SOURCE` 加载 JSON/JavaScript，目录递归导入并过滤不可用能力 | 远程来源成功响应写入 `~/.config/reader-cli/cache-v1/source-input` |
 | 首页 | 分为书架、最近阅读、搜索记录三个区域；书架和最近阅读使用不同过滤条件 | 只读 `bookshelf.json`、`reading-history.json`、`search-history.json`、`books/*` |
 | 搜索 | 最多四个来源并发；显示 `completed/total`、活动来源、候选数和分源状态 | 新增一条搜索历史；打开候选后回填 `openedBookIds` |
 | 详情 | 对选中候选请求详情，显示作者、简介、当前书源和书架状态 | 写入 `books/<bookId>/book.json`，并合并本次搜索中的同名 `sources.json` |
 | 已知书源 | 首次进入只读取本地候选；`m` 才对未记录或规则已变化的来源执行额外搜索 | 只将匹配当前书名的候选合并到 `sources.json`，不自动切换活动版本 |
-| 目录 | 使用当前活动书源加载章节，打开阅读记录时定位上次章节 | 目录结果进入可删除的 `~/.config/reader-cli/toc` |
-| 正文 | 以终端宽度换行，按段落锚点恢复位置，支持上一章/下一章和翻页 | 正文进入 `~/.config/reader-cli/content`；成功保存后更新 `reading-history.json` |
+| 目录 | 使用当前活动书源加载章节，打开阅读记录时定位上次章节 | 目录结果进入可删除的 `~/.config/reader-cli/cache-v1/toc` |
+| 正文 | 以终端宽度换行，按段落锚点恢复位置，支持上一章/下一章和翻页 | 正文进入 `~/.config/reader-cli/cache-v1/content`；成功保存后更新 `reading-history.json` |
 | 书架 | `a` 添加或移出书架；移出不删除书籍、书源和阅读记录 | 只改写 `bookshelf.json` |
 | 取消与退出 | `Esc` 取消当前输入或异步工作流；`q`/`Ctrl+C` 先取消再退出 | 应用等待工作流、写队列和缓存索引释放后删除锁 |
 

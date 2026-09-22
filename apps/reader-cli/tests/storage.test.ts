@@ -16,7 +16,8 @@ test('默认缓存目录位于用户配置目录', () => {
   const home = '/tmp/reader-cli-test-home'
   for (const platform of ['darwin', 'linux', 'win32'] as const) {
     const paths = defaultStoragePaths(platform, { HOME: home, LOCALAPPDATA: '/tmp/local-app-data', XDG_STATE_HOME: '/tmp/state', XDG_CACHE_HOME: '/tmp/cache' })
-    assert.equal(paths.cacheRoot, join(home, '.config', 'reader-cli'))
+    assert.equal(paths.dataRoot, join(home, '.config', 'reader-cli', 'data-v1'))
+    assert.equal(paths.cacheRoot, join(home, '.config', 'reader-cli', 'cache-v1'))
   }
 })
 

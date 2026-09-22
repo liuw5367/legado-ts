@@ -56,7 +56,7 @@ LEGADO_READER_SOURCE=https://example.test/sources.json node apps/reader-cli/dist
 
 ![阅读页预览](docs/screenshots/reader.svg)
 
-默认持久数据目录为 Linux 的 `~/.local/state/legado-reader/data-v1`、macOS 的 `~/Library/Application Support/legado-reader/data-v1`、Windows 的 `%LOCALAPPDATA%/legado-reader/data-v1`。缓存目录统一为用户目录下的 `~/.config/reader-cli`。
+默认数据目录为 `~/.config/reader-cli/data-v1`，缓存目录为 `~/.config/reader-cli/cache-v1`。
 
 ## 验证
 

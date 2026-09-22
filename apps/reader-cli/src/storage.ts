@@ -144,14 +144,11 @@ const MAX_SEARCH_HISTORY = 100
 const MAX_UNSHELVED_READING = 200
 const MAX_CACHE_BYTES = 512 * 1024 * 1024
 
-export function defaultStoragePaths(platform = process.platform, environment: NodeJS.ProcessEnv = process.env): StoragePaths {
+export function defaultStoragePaths(_platform = process.platform, environment: NodeJS.ProcessEnv = process.env): StoragePaths {
   const home = environment.HOME ?? homedir()
-  const dataRoot = platform === 'darwin'
-    ? join(home, 'Library', 'Application Support', 'legado-reader', 'data-v1')
-    : platform === 'win32'
-      ? join(environment.LOCALAPPDATA ?? join(home, 'AppData', 'Local'), 'legado-reader', 'data-v1')
-      : join(environment.XDG_STATE_HOME ?? join(home, '.local', 'state'), 'legado-reader', 'data-v1')
-  const cacheRoot = join(home, '.config', 'reader-cli')
+  const root = join(home, '.config', 'reader-cli')
+  const dataRoot = join(root, 'data-v1')
+  const cacheRoot = join(root, 'cache-v1')
   return { dataRoot, cacheRoot }
 }
 
