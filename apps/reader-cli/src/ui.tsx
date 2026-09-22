@@ -518,7 +518,14 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
           if (mountedRef.current && isCurrent(operation)) setMessage(errorMessage(refreshError))
         })
       }).catch((error: unknown) => {
-        if (isCurrent(operation) && !isAbortError(error)) { setSourceSearchState('error'); setMessage(errorMessage(error)) }
+        if (!isCurrent(operation)) return
+        if (isAbortError(error)) {
+          setSourceSearchState('cancelled')
+          setMessage('搜索已取消，保留已有书源')
+        } else {
+          setSourceSearchState('error')
+          setMessage(errorMessage(error))
+        }
       }).finally(() => finishOperation(operation))
       return
     }

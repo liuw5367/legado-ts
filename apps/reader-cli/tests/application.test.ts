@@ -254,3 +254,38 @@ test('换源搜索只接受书名和作者完整匹配的候选', async () => {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('取消换源搜索仍保留已经返回的严格匹配书源', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-source-cancel-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const first = entry(source('https://source.test/one', '第一个书源'), 0)
+  const second = entry(source('https://source.test/two', '第二个书源'), 1)
+  const third = entry(source('https://source.test/three', '第三个书源'), 2)
+  const catalog: SourceCatalogResult = { entries: [first, second, third], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }
+  const application = new ReaderApplication({
+    catalog,
+    storage,
+    maxConcurrentSources: 1,
+    sessionFactory: (value) => value.bookSourceUrl.includes('/three')
+      ? new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '其他书', author: '其他作者', rawFields: {}, traceRef: 'slow' }], 80)
+      : new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '测试书', author: '作者', rawFields: {}, traceRef: 'match' }]),
+  })
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const firstUrl = 'https://source.test/one/book'
+  try {
+    await storage.upsertBook({ bookId, name: '测试书', author: '作者', activeEditionKey: editionKey(first.source.bookSourceUrl, firstUrl), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: editionKey(first.source.bookSourceUrl, firstUrl), sourceId: first.source.bookSourceUrl, sourceFingerprint: first.fingerprint, bookUrl: firstUrl, name: '测试书', author: '作者', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    const controller = new AbortController()
+    const pending = application.searchMoreSources(bookId, controller.signal)
+    setTimeout(() => controller.abort(), 10)
+    const result = await pending
+    assert.equal(result.cancelled, true)
+    assert.equal(result.results.length, 1)
+    assert.equal((await storage.listKnownSources(bookId)).length, 2)
+    assert.equal((await storage.listKnownSources(bookId)).some((item) => item.sourceId === second.source.bookSourceUrl), true)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})

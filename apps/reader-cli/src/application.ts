@@ -415,7 +415,8 @@ export class ReaderApplication {
       const sourceIds = usableSources(this.catalog).filter((entry) => !valid.has(entry.source.bookSourceUrl)).map((entry) => entry.id)
       const update = onUpdate === undefined ? undefined : (snapshot: SearchOperationResult): void => onUpdate(filterSearchSnapshot(snapshot, book.name, book.author))
       const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update)
-      throwIfAborted(operationSignal)
+      // searchInternal 在取消后仍会返回已完成书源的快照；先持久化其中的
+      // 严格匹配候选，再把 cancelled 结果交给 UI，避免 Esc 丢失已返回书源。
       const matching = result.results.filter((item) => isBookTitleMatch(item.candidate.name, book.name) && isAuthorMatch(item.candidate.author, book.author))
       if (matching.length > 0) {
         const selected = matching[0]!
