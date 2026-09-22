@@ -13,6 +13,8 @@
 
 `@legado/source-core` 不读取文件、不管理书架，也不持有 TUI 状态。它只接收一次调用所需的不可变来源和宿主端口。
 
+内部实现保留三个稳定门面：`ui.tsx` 负责页面状态、输入和动作编排，`application.ts` 负责跨书源用例和生命周期，`storage.ts` 负责搜索、阅读、书架和书籍持久化。纯页面模型与渲染位于 `ui-model.ts`/`ui-pages.tsx`，书源会话与搜索聚合位于 `source-session.ts`/`search-results.ts`，存储模型、版本化 JSON 文件和可删除缓存分别位于 `storage-model.ts`、`json-store.ts` 和 `cache-store.ts`。这些内部模块不改变三个门面的公开导出，也不各自创建写队列或进程锁。
+
 ## 数据流
 
 ```text
