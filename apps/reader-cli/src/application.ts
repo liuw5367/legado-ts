@@ -376,13 +376,16 @@ export class ReaderApplication {
 
   public async knownSources(bookId: string): Promise<KnownSourceView[]> {
     const known = await this.storage.listKnownSources(bookId)
-    const entries = new Map(this.catalog.entries.map((entry) => [entry.source.bookSourceUrl, entry]))
+    const entries = new Map<string, SourceEntry[]>()
+    for (const entry of this.catalog.entries) entries.set(entry.source.bookSourceUrl, [...(entries.get(entry.source.bookSourceUrl) ?? []), entry])
     return known.map((item) => {
-      const entry = entries.get(item.sourceId)
-      if (entry === undefined) return { ...item, state: 'removed' as const }
-      if (entry.fingerprint !== item.sourceFingerprint) return { ...item, state: 'stale' as const, sourceName: entry.source.bookSourceName }
-      if (entry.state === 'conflict') return { ...item, state: 'conflict' as const, sourceName: entry.source.bookSourceName }
-      return { ...item, state: 'available' as const, sourceName: entry.source.bookSourceName }
+      const matches = entries.get(item.sourceId) ?? []
+      const entry = matches.find((candidate) => candidate.fingerprint === item.sourceFingerprint)
+      const sourceName = entry?.source.bookSourceName ?? matches[0]?.source.bookSourceName
+      if (matches.length === 0) return { ...item, state: 'removed' as const }
+      if (matches.some((candidate) => candidate.state === 'conflict')) return { ...item, state: 'conflict' as const, ...(sourceName === undefined ? {} : { sourceName }) }
+      if (entry === undefined) return { ...item, state: 'stale' as const, ...(sourceName === undefined ? {} : { sourceName }) }
+      return { ...item, state: 'available' as const, ...(sourceName === undefined ? {} : { sourceName }) }
     })
   }
 

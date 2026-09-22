@@ -83,6 +83,26 @@ test('已知书源页面读取本地候选，不触发搜索', async () => {
   }
 })
 
+test('来源目录存在同一 sourceId 的冲突定义时保留冲突状态', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-source-conflict-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const first = entry(source('https://source.test/conflict', '冲突书源 A'), 0)
+  const second = entry(source('https://source.test/conflict', '冲突书源 B'), 1)
+  first.state = 'conflict'
+  second.state = 'conflict'
+  const application = new ReaderApplication({ catalog: { entries: [first, second], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage })
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  try {
+    await storage.upsertBook({ bookId, name: '冲突书', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: editionKey(first.source.bookSourceUrl, 'https://source.test/conflict/book'), sourceId: first.source.bookSourceUrl, sourceFingerprint: first.fingerprint, bookUrl: 'https://source.test/conflict/book', name: '冲突书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    assert.equal((await application.knownSources(bookId))[0]?.state, 'conflict')
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('搜索进度包含书源总数、已完成数和当前书源', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-progress-'))
   const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
