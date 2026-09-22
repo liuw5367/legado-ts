@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
   <title id="title">命令行阅读器搜索结果预览</title>
-  <desc id="desc">搜索结果页面按候选、作者和书源列出结果。</desc>
+  <desc id="desc">搜索结果页面动态显示候选，按匹配等级排序并合并同书名同作者的书源。</desc>
   <rect width="960" height="520" fill="#0f141a"/>
   <rect x="18" y="16" width="924" height="488" rx="10" fill="#111923" stroke="#334155" stroke-width="2"/>
   <rect x="18" y="16" width="924" height="36" rx="10" fill="#1a2531"/>
@@ -10,10 +10,10 @@
   <text x="44" y="116" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">./sources · 6/6 个可用 · 就绪</text>
   <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
   <text x="44" y="182" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">搜索结果 · 三体</text>
-  <text x="44" y="222" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 三体 · 刘慈欣 · 本地精选</text>
-  <text x="44" y="254" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  三体全集 · 刘慈欣 · 通用书源</text>
-  <text x="44" y="286" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  三体（完） · 刘慈欣 · 阅读空间</text>
-  <text x="44" y="318" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  三体：黑暗森林 · 作者未知 · 网络书库</text>
+  <text x="44" y="214" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">3 本书 · 总耗时 1.8s</text>
+  <text x="44" y="250" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 三体 · 刘慈欣 · 本地精选 · +2 个书源 · 完全匹配 · 耗时 240ms</text>
+  <text x="44" y="282" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  三体全集 · 刘慈欣 · 通用书源 · 包含关键词 · 耗时 410ms</text>
+  <text x="44" y="314" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  三体：黑暗森林 · 作者未知 · 网络书库 · 其他 · 耗时 1.2s</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 确认  [Esc] 返回  [d] 诊断  [?] 帮助  [q] 退出</text>
+  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 详情  [t] 目录  [o] 操作  [Esc] 返回</text>
 </svg>

@@ -10,9 +10,9 @@
   <text x="44" y="116" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">./sources · 6/6 个可用 · 就绪</text>
   <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
   <text x="44" y="182" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">已知书源 · 本地记录</text>
-  <text x="44" y="222" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 本地精选 · 可用</text>
-  <text x="44" y="254" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  通用书源 · 可用</text>
-  <text x="44" y="286" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  旧版书源 · 需要重新搜索</text>
+  <text x="44" y="222" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">&gt; 本地精选 · 可用 · 搜索耗时 240ms · 最新章节：第三部 · 更新时间：2026-09-22</text>
+  <text x="44" y="254" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  通用书源 · 可用 · 搜索耗时 410ms · 最新章节：第三部 · 更新时间：2026-09-21</text>
+  <text x="44" y="286" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  旧版书源 · 需要重新搜索 · 搜索耗时 680ms · 最新章节：未知</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 确认  [Esc] 返回  [d] 诊断  [?] 帮助  [q] 退出</text>
+  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 换源  [m] 搜索更多  [o] 操作  [Esc] 返回</text>
 </svg>
