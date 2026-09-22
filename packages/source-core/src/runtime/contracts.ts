@@ -195,6 +195,35 @@ export interface ConcurrencyHost {
   clear(): void
 }
 
+export interface FontMapping {
+  /** 查询 Unicode 对应的 glyph id；未找到时返回 0。 */
+  glyphIdByUnicode(unicode: number): number
+  /** 查询 Unicode 对应的轮廓签名；缺少轮廓时返回 undefined。 */
+  glyphByUnicode(unicode: number): string | undefined
+  /** 用轮廓签名反查 Unicode；未找到时返回 0。 */
+  unicodeByGlyph(glyph: string | undefined): number
+  /** Android 兼容的空白 Unicode 判断。 */
+  isBlankUnicode(unicode: number): boolean
+}
+
+export interface FontQueryOptions {
+  /** 是否使用宿主内存缓存；默认开启。 */
+  useCache?: boolean
+  /** 单个字体允许解析的最大字节数。 */
+  maxBytes?: number
+  /** 解析开始前的取消信号；同步解析无法在同一线程中被外部打断。 */
+  signal?: AbortSignal
+}
+
+export interface FontHost {
+  /** 解析 TTF/TrueType sfnt bytes；不接受文件路径，不访问全局文件系统。 */
+  queryTTF(input: Uint8Array, options?: FontQueryOptions): FontMapping
+  /** 解析 Base64 字体；与 queryTTF 使用同一缓存和预算语义。 */
+  queryBase64TTF(input: string, options?: FontQueryOptions): FontMapping
+  /** 按 Android replaceFont 语义将错误字体文字映射为正确文字。 */
+  replaceFont(text: string, error: FontMapping | null, correct: FontMapping | null, filter?: boolean): string
+}
+
 export interface ParserNode {
   /** 文档内稳定节点身份。 */
   readonly id: string

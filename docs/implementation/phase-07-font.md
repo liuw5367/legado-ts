@@ -23,3 +23,7 @@
 - 缺少 glyph、非法 cmap、截断文件、超大输入和取消均有可判别结果；
 - `filter=false/true`、多字节 Unicode 和缓存命中均有测试；
 - 未覆盖的字体格式返回 `capability-unavailable`，不得静默返回原文成功。
+
+## 完成记录
+
+- 2026-09-22：`NodeFontHost` 已支持 TrueType sfnt 的 cmap 0/4/6、glyf 轮廓签名反查、Base64 输入、四项 LRU 缓存、输入字节预算、取消前检查和 `replaceFont` 过滤语义；不包含字体渲染、全局文件读取、WOFF/WOFF2/CFF 支持。
