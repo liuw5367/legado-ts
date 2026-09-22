@@ -609,11 +609,11 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (input === 'o' && ['home', 'results', 'detail', 'toc', 'reader', 'sources', 'mapping'].includes(page)) { openMenu(); return }
     if (page === 'home') handleHomeInput(input, key)
     else if (page === 'results') handleResultsInput(input, key)
-    else if (page === 'detail') { handleDetailInput(input, key); if (key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
+    else if (page === 'detail') { handleDetailInput(input, key); if (key.downArrow || key.upArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
     else if (page === 'toc') handleTocInput(input, key)
     else if (page === 'reader') handleReaderInput(input, key)
     else if (page === 'sources') handleSourcesInput(input, key)
-    else if (page === 'mapping') handleMappingInput(input, key)
+    else if (page === 'mapping') { handleMappingInput(input, key); if (key.downArrow || key.upArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
     else if (page === 'help' || page === 'diagnostics' || page === 'config') handlePageScroll(input, key)
   })
 
