@@ -151,7 +151,7 @@ class SourceSession implements ReaderSourceSession {
   }
 
   private cacheStore?: ReturnType<ReaderStorage['workflowCache']>
-  private tocPage?: { bookUrl: string; url: string; html: string }
+  private tocPage: { bookUrl: string; url: string; html: string } | undefined
 
   public attachCache(storage: ReaderStorage): void {
     this.cacheStore = storage.workflowCache(sourceDefinitionFingerprint(this.source))
