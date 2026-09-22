@@ -168,6 +168,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const operation = beginOperation('search')
     setSearch(undefined)
     setSearchState('running')
+    selectedGroupKeyRef.current = undefined
     setSearchProgress(undefined)
     setMessage(`正在搜索“${display(query.trim())}”…`)
     setPage('results')
@@ -189,6 +190,9 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setSearchState(result.cancelled ? 'cancelled' : 'complete')
       setSelected((current) => restoreGroupSelection(result.groups, current, selectedGroupKeyRef.current))
       setMessage(result.cancelled ? '搜索已取消，已保留已返回结果' : `找到 ${result.groups.length} 本书`)
+      void refreshHome().catch((refreshError: unknown) => {
+        if (mountedRef.current && isCurrent(operation)) setMessage(errorMessage(refreshError))
+      })
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) {
         setSearchState('error')
@@ -359,7 +363,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       if (group !== undefined) {
         target = { kind: 'search', groupKey: group.key }
         hasBook = true
-        hasSources = group.candidates.length > 1
+        hasSources = group.candidates.length > 0
       }
     } else if (book !== undefined && ['detail', 'toc', 'reader', 'sources', 'mapping'].includes(page)) {
       target = { kind: 'book', bookId: book.book.bookId }
