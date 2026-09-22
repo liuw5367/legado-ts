@@ -68,6 +68,8 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     if (fields.author !== undefined) candidate.author = fields.author
     if (fields.intro !== undefined) candidate.intro = fields.intro
     if (fields.coverUrl !== undefined) candidate.coverUrl = fields.coverUrl
+    if (fields.lastChapter !== undefined) candidate.lastChapter = fields.lastChapter
+    if (fields.updateTime !== undefined) candidate.updateTime = fields.updateTime
     candidates.push(candidate)
   }
   if (candidates.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '列表没有可用候选', retryable: false })
