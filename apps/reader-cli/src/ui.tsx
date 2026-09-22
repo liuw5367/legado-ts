@@ -128,14 +128,15 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (operation !== undefined) setMessage(text)
   }
 
-  const cancelActiveSearch = (): void => {
+  const cancelActiveSearch = (): Promise<void> => {
     const operation = operationRef.current
-    if (operation?.kind !== 'search' && operation?.kind !== 'source-search') return
+    if (operation?.kind !== 'search' && operation?.kind !== 'source-search') return Promise.resolve()
     operation.controller.abort()
     setBusy(true)
     setMessage('正在取消搜索，等待书源请求释放…')
     if (operation.kind === 'search') setSearchState('cancelling')
     else setSourceSearchState('cancelling')
+    return operation.promise?.then(() => undefined, () => undefined) ?? Promise.resolve()
   }
 
   const refreshHome = async (): Promise<void> => {
@@ -225,7 +226,9 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const openSelected = async (): Promise<OpenBookResult | undefined> => {
     const group = search?.groups[selected]
-    if (group === undefined || busy || searchState === 'running' || searchState === 'cancelling') return undefined
+    if (group === undefined) return undefined
+    if (operationRef.current?.kind === 'search') await cancelActiveSearch()
+    if (operationRef.current !== undefined) return undefined
     return openSearchGroup(group)
   }
 
@@ -319,8 +322,10 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         finishOperation(operation)
       }
     }
+    if (operationRef.current?.kind === 'search') await cancelActiveSearch()
+    if (operationRef.current !== undefined) return undefined
     const group = search?.groups.find((item) => item.key === target.groupKey)
-    if (group === undefined || searchState === 'running' || searchState === 'cancelling') return undefined
+    if (group === undefined) return undefined
     return openSearchGroup(group)
   }
 
@@ -379,7 +384,9 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }
     if (target === undefined) return
     const menuPage = page === 'home' || page === 'results' || page === 'detail' || page === 'toc' || page === 'reader' || page === 'sources' || page === 'mapping' ? page : 'detail'
-    const items = actionMenuItems({ hasBook, hasSources, hasToc: hasBook, page: menuPage, busy })
+    // 已返回候选的搜索结果可以在搜索中打开菜单；执行动作会先取消并等待剩余来源。
+    const searchCanOpenReturnedCandidate = page === 'results' && target.kind === 'search' && operationRef.current?.kind === 'search'
+    const items = actionMenuItems({ hasBook, hasSources, hasToc: hasBook, page: menuPage, busy: busy && !searchCanOpenReturnedCandidate })
     setMenu({ target, items, index: 0 })
   }
 
