@@ -211,7 +211,7 @@ export async function importSources(input: ImportInput, options: ImportOptions =
 
   if (text !== undefined) {
     if (byteLength(text) > limits.maxBytes) return [invalidCandidate(emptyRaw(text, inputKind, location), [diagnostic('response-too-large', 'input', '输入超过字节限制', { retryable: false })], 'too-large')]
-    if (inputKind === 'javascript' || /\b(?:config|source)\s*=/.test(text) && !text.trimStart().startsWith('{')) add(parseJavaScript(text, 'source-0', options))
+    if (inputKind === 'javascript') add(parseJavaScript(text, 'source-0', options))
     else {
       const parsed = parseJson(text)
       if (parsed.value === undefined) add(parseJavaScript(text, 'source-0', options, /\b(?:config|source)\s*=/.test(text)))
