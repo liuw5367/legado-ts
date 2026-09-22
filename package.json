@@ -7,7 +7,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json && tsc -p packages/source-node/tsconfig.build.json",
-    "test": "node --test packages/source-core/tests/*.test.ts packages/source-node/tests/*.test.ts"
+    "test": "node --test packages/source-core/tests/*.test.ts packages/source-node/tests/*.test.ts",
+    "test:source": "node --test packages/source-core/tests/source-fixtures.test.ts packages/source-core/tests/source-conformance.test.ts packages/source-node/tests/source-file-smoke.test.ts packages/source-node/tests/source-file-flow.test.ts",
+    "test:source:flow": "node --test packages/source-node/tests/source-file-flow.test.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -18,7 +18,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const chapters: Chapter[] = []
   const identities = new Set<string>()
   const pageBodies = new Set<string>()
-  const bookBaseUrl = resolveUrl(input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  const bookBaseUrl = resolveUrl(input.book.tocUrl ?? input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
   let pageUrl = bookBaseUrl
   let totalBytes = 0
   let volume: string | undefined
