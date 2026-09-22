@@ -103,6 +103,25 @@ test('来源目录存在同一 sourceId 的冲突定义时保留冲突状态', a
   }
 })
 
+test('已禁用或不支持的来源不会把缓存候选标成可用', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-source-state-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/disabled'), 0)
+  sourceEntry.state = 'disabled'
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage })
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  try {
+    await storage.upsertBook({ bookId, name: '缓存书', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: editionKey(sourceEntry.source.bookSourceUrl, 'https://source.test/disabled/book'), sourceId: sourceEntry.source.bookSourceUrl, sourceFingerprint: sourceEntry.fingerprint, bookUrl: 'https://source.test/disabled/book', name: '缓存书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    const view = await application.knownSources(bookId)
+    assert.equal(view[0]?.state, 'stale')
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('搜索进度包含书源总数、已完成数和当前书源', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-progress-'))
   const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })

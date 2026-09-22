@@ -385,6 +385,7 @@ export class ReaderApplication {
       if (matches.length === 0) return { ...item, state: 'removed' as const }
       if (matches.some((candidate) => candidate.state === 'conflict')) return { ...item, state: 'conflict' as const, ...(sourceName === undefined ? {} : { sourceName }) }
       if (entry === undefined) return { ...item, state: 'stale' as const, ...(sourceName === undefined ? {} : { sourceName }) }
+      if (entry.state !== 'available') return { ...item, state: 'stale' as const, ...(sourceName === undefined ? {} : { sourceName }) }
       return { ...item, state: 'available' as const, ...(sourceName === undefined ? {} : { sourceName }) }
     })
   }
