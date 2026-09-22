@@ -13,6 +13,8 @@
   "dependencies": {
     "@legado/source-core": "workspace:*",
     "@legado/source-node": "workspace:*",
+    "domhandler": "catalog:",
+    "htmlparser2": "catalog:",
     "ink": "catalog:",
     "react": "catalog:",
     "wrap-ansi": "catalog:"

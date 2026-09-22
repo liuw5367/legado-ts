@@ -24,6 +24,19 @@ export function pageIndex(index: number, total: number, visible: number, directi
   return moveIndex(index, total, Math.max(1, visible - 1) * direction)
 }
 
+/**
+ * Lists use the same page movement for PageUp/PageDown and the left/right
+ * arrows. Keeping the alias here prevents individual pages from drifting.
+ */
+export function pageIndexForKey(
+  index: number,
+  total: number,
+  visible: number,
+  direction: 'previous' | 'next',
+): number {
+  return pageIndex(index, total, visible, direction === 'previous' ? -1 : 1)
+}
+
 export function viewportFor(index: number, total: number, visible: number, start: number): ViewportRange {
   return keepIndexVisible(index, total, visible, start)
 }

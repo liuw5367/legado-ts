@@ -75,6 +75,12 @@ importers:
       '@legado/source-node':
         specifier: workspace:*
         version: link:../../packages/source-node
+      domhandler:
+        specifier: 'catalog:'
+        version: 6.0.1
+      htmlparser2:
+        specifier: 'catalog:'
+        version: 12.0.0
       ink:
         specifier: 'catalog:'
         version: 7.1.1(@types/react@19.2.17)(react@19.3.0)

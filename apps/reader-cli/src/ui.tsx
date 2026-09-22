@@ -5,9 +5,12 @@ import { ReaderApplication } from './application.ts'
 import type { OpenBookResult, SearchOperationResult, SearchProgress, SearchResultGroup, TocResult } from './application.ts'
 import type { HomeBookView, KnownSourceView } from './storage.ts'
 import { layoutContent, lineAtParagraphOffset, paragraphOffsetAtLine, sanitizeTerminalText } from './content-layout.ts'
+import { formatChapterContent } from './content-format.ts'
 import { actionMenuItems, actionMenuLabel } from './action-menu.ts'
 import type { ActionMenuItem, ReaderAction } from './action-menu.ts'
-import { keepIndexVisible, moveIndex, pageIndex, viewportFor } from './viewport.ts'
+import { keepIndexVisible, moveIndex, pageIndexForKey, viewportFor } from './viewport.ts'
+import { formatDisplayTime, formatSourceTime } from './time-format.ts'
+import { layoutFooter, type FooterAction } from './ui-actions.ts'
 
 type Page = 'config' | 'home' | 'search' | 'results' | 'detail' | 'toc' | 'reader' | 'sources' | 'mapping' | 'help' | 'diagnostics'
 type SearchUiState = 'idle' | 'running' | 'cancelling' | 'complete' | 'cancelled' | 'error'
@@ -38,6 +41,8 @@ interface MenuState {
 interface InputKey {
   downArrow?: boolean
   upArrow?: boolean
+  leftArrow?: boolean
+  rightArrow?: boolean
   pageDown?: boolean
   pageUp?: boolean
   home?: boolean
@@ -53,7 +58,7 @@ interface InputKey {
 export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactElement {
   const { exit } = useApp()
   const { columns, rows } = useWindowSize()
-  const [page, setPage] = useState<Page>(catalog.entries.length === 0 ? 'config' : 'home')
+  const [page, setPageState] = useState<Page>(catalog.entries.length === 0 ? 'config' : 'home')
   const [home, setHome] = useState<HomeBookView[]>([])
   const [history, setHistory] = useState<Awaited<ReturnType<ReaderApplication['searchHistory']>>>([])
   const [homeArea, setHomeArea] = useState(0)
@@ -72,11 +77,13 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [readerLine, setReaderLine] = useState(0)
   const [sources, setSources] = useState<KnownSourceView[]>([])
   const [sourceSearchStart, setSourceSearchStart] = useState(0)
+  const [sourceSearchSelected, setSourceSearchSelected] = useState(0)
   const [mappingTarget, setMappingTarget] = useState<KnownSourceView>()
   const [mappingToc, setMappingToc] = useState<TocResult>()
   const [mappingIndex, setMappingIndex] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessageState] = useState('')
+  const [messageOwner, setMessageOwner] = useState<Page>(catalog.entries.length === 0 ? 'config' : 'home')
   const [searchProgress, setSearchProgress] = useState<SearchProgress>()
   const [menu, setMenu] = useState<MenuState>()
   const operationRef = useRef<UiOperation | undefined>(undefined)
@@ -84,6 +91,18 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const selectedGroupKeyRef = useRef<string | undefined>(undefined)
   const pageRef = useRef(page)
   const mountedRef = useRef(true)
+
+  const setMessage = (text: string): void => {
+    setMessageState(text)
+    setMessageOwner(pageRef.current)
+  }
+
+  const setPage = (next: Page): void => {
+    pageRef.current = next
+    setMessageState('')
+    setMessageOwner(next)
+    setPageState(next)
+  }
 
   const bodyHeight = Math.max(4, rows - 7)
 
@@ -269,15 +288,16 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       const result = await application.loadContent(currentBook.book.bookId, chapter, currentToc.edition.editionKey, operation.controller.signal)
       if (!isCurrent(operation)) return
       const width = Math.max(8, columns - 4)
-      const layout = layoutContent(sanitizeTerminalText(result.content.cleaned), width)
+      const formatted = formatChapterContent(result.content.cleaned, result.content.contentType)
+      const layout = layoutContent(formatted.text, width)
       const saved = currentBook.reading?.positions[currentToc.edition.editionKey]
       const resumeLine = saved?.chapterUrl === chapter.chapterUrl ? lineAtParagraphOffset(layout, saved.paragraphIndex, saved.offset, width) : 0
       setBook(currentBook)
       setChapterIndex(index)
-      setContent(result.content.cleaned)
+      setContent(formatted.text)
       setReaderLine(resumeLine)
       setPage('reader')
-      setMessage(`${result.content.contentType === 'html' ? '正文已加载，HTML 已清洗为文本' : '正文已加载'}${resumeLine > 0 ? ' · 已恢复上次位置' : ''}`)
+      setMessage(`${result.content.contentType === 'html' ? '正文已加载，已按段落排版' : '正文已加载'}${resumeLine > 0 ? ' · 已恢复上次位置' : ''}`)
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
     } finally {
@@ -298,6 +318,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setSourceSearch(undefined)
       setSourceSearchState('idle')
       setSourceSearchStart(0)
+      setSourceSearchSelected(0)
       setPage('sources')
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
@@ -370,7 +391,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         hasBook = true
         hasSources = group.candidates.length > 0
       }
-    } else if (book !== undefined && ['detail', 'toc', 'reader', 'sources', 'mapping'].includes(page)) {
+    } else if (page === 'detail' && book !== undefined) {
       target = { kind: 'book', bookId: book.book.bookId }
       hasSources = book.sources.length > 0 || sources.length > 0
     } else if (page === 'home') {
@@ -383,7 +404,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       }
     }
     if (target === undefined) return
-    const menuPage = page === 'home' || page === 'results' || page === 'detail' || page === 'toc' || page === 'reader' || page === 'sources' || page === 'mapping' ? page : 'detail'
+    const menuPage = page === 'home' || page === 'results' || page === 'detail' ? page : 'detail'
     // 已返回候选的搜索结果可以在搜索中打开菜单；执行动作会先取消并等待剩余来源。
     const searchCanOpenReturnedCandidate = page === 'results' && target.kind === 'search' && operationRef.current?.kind === 'search'
     const items = actionMenuItems({ hasBook, hasSources, hasToc: hasBook, page: menuPage, busy: busy && !searchCanOpenReturnedCandidate })
@@ -482,8 +503,8 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const height = Math.max(4, rows - 8)
     if (input === 'j' || key.downArrow) setReaderLine((value) => value + 1)
     if (input === 'k' || key.upArrow) setReaderLine((value) => Math.max(0, value - 1))
-    if (input === ' ' || key.pageDown) setReaderLine((value) => value + height - 2)
-    if (input === 'b' || key.pageUp) setReaderLine((value) => Math.max(0, value - height + 2))
+    if (input === ' ' || key.pageDown || key.rightArrow) setReaderLine((value) => value + height - 2)
+    if (input === 'b' || key.pageUp || key.leftArrow) setReaderLine((value) => Math.max(0, value - height + 2))
     if (input === '[' && chapterIndex > 0 && !busy) void loadChapter(chapterIndex - 1)
     if (input === ']' && toc !== undefined && chapterIndex < toc.chapters.length - 1 && !busy) void loadChapter(chapterIndex + 1)
     if (input === 't' && !busy) setPage('toc')
@@ -498,6 +519,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setSourceSearch(undefined)
       setSourceSearchState('running')
       setSourceSearchStart(0)
+      setSourceSearchSelected(0)
       setMessage('正在搜索更多书源…')
       const request = application.searchMoreSources(book.book.bookId, operation.controller.signal, (progress) => {
         if (isCurrent(operation)) setSearchProgress(progress)
@@ -532,8 +554,11 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (sourceSearchState === 'running' || sourceSearchState === 'cancelling') {
       const matchedCount = sourceSearch?.results.length ?? 0
       const visible = Math.max(1, bodyHeight - 3)
-      const next = navigationPage(sourceSearchStart, matchedCount, input, key, visible)
-      if (next !== sourceSearchStart) setSourceSearchStart(next)
+      const next = navigationIndex(sourceSearchSelected, matchedCount, input, key, visible)
+      if (next !== sourceSearchSelected) {
+        setSourceSearchSelected(next)
+        setSourceSearchStart((start) => keepIndexVisible(next, matchedCount, visible, start).start)
+      }
       return
     }
     const total = sources.length
@@ -624,19 +649,20 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setPage(previousPage(page))
       return
     }
-    if (input === 'o' && ['home', 'results', 'detail', 'toc', 'reader', 'sources', 'mapping'].includes(page)) { openMenu(); return }
+    if (input === 'o' && ['home', 'results', 'detail'].includes(page)) { openMenu(); return }
     if (page === 'home') handleHomeInput(input, key)
     else if (page === 'results') handleResultsInput(input, key)
-    else if (page === 'detail') { handleDetailInput(input, key); if (key.downArrow || key.upArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
+    else if (page === 'detail') { handleDetailInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
     else if (page === 'toc') handleTocInput(input, key)
     else if (page === 'reader') handleReaderInput(input, key)
     else if (page === 'sources') handleSourcesInput(input, key)
-    else if (page === 'mapping') { handleMappingInput(input, key); if (key.downArrow || key.upArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
+    else if (page === 'mapping') { handleMappingInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
     else if (page === 'help' || page === 'diagnostics' || page === 'config') handlePageScroll(input, key)
   })
 
   const currentLines = content === undefined ? [] : layoutContent(sanitizeTerminalText(content), Math.max(8, columns - 4)).lines
-  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, query, search, searchState, searchProgress, book, toc, chapterIndex, contentLines: currentLines, readerLine, rows, sources, sourceSearch, sourceSearchState, sourceSearchStart, mappingToc, mappingIndex, mappingTarget, pageScroll, message }
+  const visibleMessage = messageOwner === page ? message : ''
+  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, query, search, searchState, searchProgress, book, toc, chapterIndex, contentLines: currentLines, readerLine, rows, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage }
   const visiblePage = menu === undefined ? renderPage(page, state) : renderActionMenu(menu)
   return (
     <Box flexDirection="column" width={columns} height={rows}>
@@ -645,7 +671,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       <Text>{'─'.repeat(Math.max(8, Math.min(columns, 120)))}</Text>
       {visiblePage}
       <Text>{'─'.repeat(Math.max(8, Math.min(columns, 120)))}</Text>
-      <Text dimColor>{footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea)}</Text>
+      {footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea).map((line) => <Text key={line} dimColor>{line}</Text>)}
     </Box>
   )
 }
@@ -673,6 +699,7 @@ interface RenderState {
   sourceSearch: SearchOperationResult | undefined
   sourceSearchState: SearchUiState
   sourceSearchStart: number
+  sourceSearchSelected: number
   mappingToc: TocResult | undefined
   mappingIndex: number
   mappingTarget: KnownSourceView | undefined
@@ -688,7 +715,7 @@ function renderPage(page: Page, state: RenderState): React.ReactElement {
   if (page === 'detail') return renderDetail(state.book, state.pageScroll, state.bodyHeight, state.columns, state.message)
   if (page === 'toc') return renderToc(state.toc, state.chapterIndex, state.listStart, state.bodyHeight, state.message)
   if (page === 'reader') return renderReader(state.book, state.toc, state.chapterIndex, state.contentLines, state.readerLine, state.rows, state.message)
-  if (page === 'sources') return renderSources(state.sources, state.selected, state.listStart, state.sourceSearch, state.sourceSearchState, state.sourceSearchStart, state.bodyHeight, state.searchProgress, state.message)
+  if (page === 'sources') return renderSources(state.sources, state.selected, state.listStart, state.sourceSearch, state.sourceSearchState, state.sourceSearchStart, state.sourceSearchSelected, state.bodyHeight, state.searchProgress, state.message)
   if (page === 'mapping') return renderMapping(state.book, state.toc, state.chapterIndex, state.mappingToc, state.mappingIndex, state.mappingTarget, state.pageScroll, state.bodyHeight, state.message)
   if (page === 'help') return renderHelp(state.pageScroll, state.bodyHeight)
   return renderDiagnostics(state.catalog.diagnostics, state.pageScroll, state.bodyHeight, state.message)
@@ -701,8 +728,8 @@ export function homeItemsForArea(items: readonly HomeBookView[], area: number): 
 }
 
 function renderConfig(catalog: SourceCatalogResult, message: string, scroll: number, height: number): React.ReactElement {
-  const lines = ['需要配置书源', '使用 legado-reader --source <文件、目录或 HTTP(S) JSON 地址>', '或设置 LEGADO_READER_SOURCE 后重新启动。', ...catalog.diagnostics.map((item) => `[!] ${item}`), ...(message.length > 0 ? [message] : [])]
-  return renderLineViewport(lines, scroll, height)
+  const lines = ['需要配置书源', '使用 legado-reader --source <文件、目录或 HTTP(S) JSON 地址>', '或设置 LEGADO_READER_SOURCE 后重新启动。', ...catalog.diagnostics.map((item) => `[!] ${item}`)]
+  return renderLineViewport(lines, scroll, height, message)
 }
 
 function renderHome(items: HomeBookView[], history: Awaited<ReturnType<ReaderApplication['searchHistory']>>, area: number, selected: number, start: number, height: number, message: string): React.ReactElement {
@@ -712,7 +739,7 @@ function renderHome(items: HomeBookView[], history: Awaited<ReturnType<ReaderApp
     const range = viewportFor(selected, history.length, Math.max(1, height - 2), start)
     const body = history.slice(range.start, range.end).map((item, offset) => {
       const index = range.start + offset
-      return <Text key={item.id} color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{display(item.keyword)} · {formatSearchTime(item)} · {item.summary.candidates} 个结果</Text>
+      return <Text key={item.id} color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{index + 1}. {display(item.keyword)} · {formatDisplayTime(item.completedAt ?? item.startedAt)} · {item.summary.candidates} 个结果</Text>
     })
     return <Box flexDirection="column"><Text bold>{title}</Text>{body.length === 0 ? <Text>还没有搜索记录。</Text> : body}{message.length > 0 ? <Text color="yellow">{display(message)}</Text> : null}</Box>
   }
@@ -720,13 +747,13 @@ function renderHome(items: HomeBookView[], history: Awaited<ReturnType<ReaderApp
   const range = viewportFor(selected, books.length, visible, start)
   const body = books.slice(range.start, range.end).map((item, offset) => {
     const index = range.start + offset
-    return <Box key={item.book.bookId} flexDirection="column"><Text color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{display(item.book.name)} · {display(item.book.author ?? '作者未知')} {item.isOnBookshelf ? '[书架]' : item.reading === undefined ? '' : '[未加入]'}</Text><Text dimColor>  当前章节：{display(item.currentChapter ?? '尚未开始阅读')} · 上次阅读：{display(item.lastReadAt ?? '—')}</Text></Box>
+    return <Box key={item.book.bookId} flexDirection="column"><Text color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{index + 1}. {display(item.book.name)} · {display(item.book.author ?? '作者未知')} {item.isOnBookshelf ? '[书架]' : item.reading === undefined ? '' : '[未加入]'}</Text><Text dimColor>  当前章节：{display(item.currentChapter ?? '尚未开始阅读')} · 上次阅读：{item.lastReadAt === undefined ? '—' : formatDisplayTime(item.lastReadAt)}</Text></Box>
   })
   return <Box flexDirection="column"><Text bold>{title}</Text>{body.length === 0 ? <Text>{area === 0 ? '书架为空，可按 Ctrl+K 搜索书籍。' : '还没有阅读记录。'}</Text> : body}{message.length > 0 ? <Text color="yellow">{display(message)}</Text> : null}</Box>
 }
 
 function renderSearch(query: string, progress: SearchProgress | undefined, message: string): React.ReactElement {
-  return <Box flexDirection="column"><Text bold>搜索书籍</Text><Text>书名  {display(query)}█</Text>{progress === undefined ? <Text>{message || 'Enter 提交搜索，Esc 返回。'}</Text> : <Text color="cyan">{formatProgress(progress)}</Text>}{message.length > 0 && progress !== undefined ? <Text color="yellow">{display(message)}</Text> : null}</Box>
+  return <Box flexDirection="column"><Text bold>搜索书籍</Text><Text>书名  {display(query)}█</Text>{progress === undefined ? message.length > 0 ? <Text color="yellow">{display(message)}</Text> : <Text>Enter 提交搜索，Esc 返回。</Text> : <Text color="cyan">{formatProgress(progress)}</Text>}{message.length > 0 && progress !== undefined ? <Text color="yellow">{display(message)}</Text> : null}</Box>
 }
 
 function renderResults(search: SearchOperationResult | undefined, selected: number, start: number, height: number, state: SearchUiState, progress: SearchProgress | undefined, message: string): React.ReactElement {
@@ -737,7 +764,7 @@ function renderResults(search: SearchOperationResult | undefined, selected: numb
     const first = group.candidates[0]
     const sourceCount = group.candidates.length > 1 ? ` · +${group.candidates.length - 1} 个书源` : ''
     const duration = first?.searchDurationMs === undefined ? '耗时未知' : `耗时 ${formatDuration(first.searchDurationMs)}`
-    return <Text key={group.key} color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{display(group.candidate.name ?? group.candidate.bookUrl)} · {display(group.candidate.author ?? '作者未知')} · {display(group.source.source.bookSourceName)}{sourceCount} · {searchMatchLabel(group.rank)} · {duration}</Text>
+    return <Text key={group.key} color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{index + 1}. {display(group.candidate.name ?? group.candidate.bookUrl)} · {display(group.candidate.author ?? '作者未知')} · {display(group.source.source.bookSourceName)}{sourceCount} · {searchMatchLabel(group.rank)} · {duration}</Text>
   })
   const status = state === 'running' || state === 'cancelling' ? (progress === undefined ? '正在搜索…' : formatProgress(progress)) : state === 'cancelled' ? '搜索已取消，保留已返回结果' : `${search?.groups.length ?? 0} 本书 · 总耗时 ${search === undefined ? '未知' : formatDuration(search.elapsedMs)}`
   return <Box flexDirection="column"><Text bold>搜索结果 · {display(search?.keyword ?? '')}</Text><Text color="cyan">{status}</Text>{body.length === 0 ? <Text>{state === 'running' || state === 'cancelling' ? '等待第一个书源返回…' : '没有匹配结果。'}</Text> : body}{message.length > 0 ? <Text color="yellow">{display(message)}</Text> : null}</Box>
@@ -751,14 +778,13 @@ function renderDetail(book: OpenBookResult | undefined, scroll: number, height: 
     `作者       ${book?.book.author ?? '未知'}`,
     `当前书源   ${book?.source.source.bookSourceName ?? '未知'} · 搜索耗时 ${active?.searchDurationMs === undefined ? '未知' : formatDuration(active.searchDurationMs)}`,
     `最新章节   ${active?.lastChapter ?? book?.metadata?.lastChapter ?? '未知'}`,
-    `更新时间   ${active?.updateTime ?? book?.metadata?.updateTime ?? '未知'}`,
+    `更新时间   ${formatSourceTime(active?.updateTime ?? book?.metadata?.updateTime)}`,
     `书架       ${book?.onBookshelf === true ? '已加入 · [a] 移出书架' : '未加入 · [a] 加入书架'}`,
-    `阅读记录   ${book?.reading?.lastReadAt ?? '暂无'} · 当前章节：${activeReadingChapter(book)}`,
+    `阅读记录   ${book?.reading?.lastReadAt === undefined ? '暂无' : formatDisplayTime(book.reading.lastReadAt)} · 当前章节：${activeReadingChapter(book)}`,
     '简介',
     ...introLines.map((line) => `  ${line}`),
-    ...(message.length > 0 ? [message] : []),
   ]
-  return renderLineViewport(lines, scroll, height)
+  return renderLineViewport(lines, scroll, height, message)
 }
 
 function renderToc(toc: TocResult | undefined, selected: number, start: number, height: number, message: string): React.ReactElement {
@@ -775,50 +801,54 @@ function renderReader(book: OpenBookResult | undefined, toc: TocResult | undefin
   return <Box flexDirection="column"><Text bold>{display(book?.book.name ?? '')} · {display(toc?.chapters[index]?.title ?? '')}</Text>{lines.slice(line, line + Math.max(1, rows - 8)).map((value, offset) => <Text key={`${line + offset}-${value}`}>{display(value)}</Text>)}{message.length > 0 ? <Text color="yellow">{display(message)}</Text> : null}</Box>
 }
 
-function renderSources(items: KnownSourceView[], selected: number, start: number, sourceSearch: SearchOperationResult | undefined, state: SearchUiState, sourceSearchStart: number, height: number, progress: SearchProgress | undefined, message: string): React.ReactElement {
+function renderSources(items: KnownSourceView[], selected: number, start: number, sourceSearch: SearchOperationResult | undefined, state: SearchUiState, sourceSearchStart: number, sourceSearchSelected: number, height: number, progress: SearchProgress | undefined, message: string): React.ReactElement {
   const searching = state === 'running' || state === 'cancelling'
   const range = viewportFor(selected, items.length, Math.max(1, height - (sourceSearch === undefined ? 1 : 2)), start)
   const body = items.slice(range.start, range.end).map((item, offset) => {
     const index = range.start + offset
-    return <Text key={item.editionKey} color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{display(item.sourceName ?? item.name ?? item.sourceId)} · {sourceState(item.state)} · 搜索耗时 {item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)} · 最新章节：{display(item.lastChapter ?? '未知')} · 更新时间：{display(item.updateTime ?? '未知')}</Text>
+    return <Text key={item.editionKey} color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{index + 1}. {display(item.sourceName ?? item.name ?? item.sourceId)} · {sourceState(item.state)} · 搜索耗时 {item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)} · 最新章节：{display(item.lastChapter ?? '未知')} · 更新时间：{formatSourceTime(item.updateTime)}</Text>
   })
-  const matchedRows = sourceSearch?.results.map((item) => <Text key={`${item.candidate.sourceId}:${item.candidate.bookUrl}`} color="green">+ {display(item.source.source.bookSourceName)} · {display(item.candidate.name ?? '未知')} · {display(item.candidate.author ?? '未知')} · 搜索耗时 {item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)} · 最新章节：{display(item.candidate.lastChapter ?? '未知')} · 更新时间：{display(item.candidate.updateTime ?? '未知')}</Text>) ?? []
+  const matchedRows = sourceSearch?.results.map((item, index) => <Text key={`${item.candidate.sourceId}:${item.candidate.bookUrl}`} color={index === sourceSearchSelected ? 'yellow' : 'green'}>{index === sourceSearchSelected ? '> ' : '+ '}{index + 1}. {display(item.source.source.bookSourceName)} · {display(item.candidate.name ?? '未知')} · {display(item.candidate.author ?? '未知')} · 搜索耗时 {item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)} · 最新章节：{display(item.candidate.lastChapter ?? '未知')} · 更新时间：{formatSourceTime(item.candidate.updateTime)}</Text>) ?? []
   const matched = sourceSearch?.results.length ?? 0
   const unmatched = progress === undefined ? 0 : Math.max(0, progress.candidates - matched)
   const searchLines = sourceSearch === undefined ? [] : [searching ? `${progress === undefined ? '搜索更多书源…' : formatProgress(progress)} · 已匹配 ${matched} 个 · 未匹配 ${unmatched} 个` : `已匹配 ${matched} 个候选 · 总耗时 ${formatDuration(sourceSearch.elapsedMs)}`]
-  const matchedRange = viewportFor(sourceSearchStart, matchedRows.length, Math.max(1, height - 3), sourceSearchStart)
+  const matchedRange = viewportFor(sourceSearchSelected, matchedRows.length, Math.max(1, height - 3), sourceSearchStart)
   const visibleMatchedRows = matchedRows.slice(matchedRange.start, matchedRange.end)
   const visibleBody = searching ? [] : body
   return <Box flexDirection="column"><Text bold>已知书源 · 本地记录</Text>{searchLines.map((item) => <Text key={item} color="cyan">{item}</Text>)}{searching ? visibleMatchedRows : null}{visibleBody.length === 0 && visibleMatchedRows.length === 0 ? <Text>{sourceSearch === undefined ? '尚未搜索到书源。' : '没有书名和作者都完整匹配的候选。'}</Text> : visibleBody}{message.length > 0 ? <Text color="yellow">{display(message)}</Text> : null}</Box>
 }
 
 function renderMapping(book: OpenBookResult | undefined, toc: TocResult | undefined, index: number, targetToc: TocResult | undefined, targetIndex: number, target: KnownSourceView | undefined, scroll: number, height: number, message: string): React.ReactElement {
-  const lines = ['确认切换书源', `书籍  ${book?.book.name ?? ''}`, `原源  ${toc?.source.source.bookSourceName ?? book?.source.source.bookSourceName ?? ''}`, `目标源  ${target?.sourceName ?? target?.name ?? ''}`, `当前章节  ${toc?.chapters[index]?.title ?? '尚未选择章节'}`, `目标章节  ${targetToc?.chapters[targetIndex]?.title ?? '未找到，需要手动选择'}`, message]
-  return renderLineViewport(lines, scroll, height)
+  const lines = ['确认切换书源', `书籍  ${book?.book.name ?? ''}`, `原源  ${toc?.source.source.bookSourceName ?? book?.source.source.bookSourceName ?? ''}`, `目标源  ${target?.sourceName ?? target?.name ?? ''}`, `当前章节  ${toc?.chapters[index]?.title ?? '尚未选择章节'}`, `目标章节  ${targetToc?.chapters[targetIndex]?.title ?? '未找到，需要手动选择'}`]
+  return renderLineViewport(lines, scroll, height, message)
 }
 
 function renderHelp(scroll: number, height: number): React.ReactElement {
-  return renderLineViewport(['帮助', 'Ctrl+K 搜索书籍，j/k 或方向键移动，Enter 确认，Esc 返回，d 查看诊断。', '书籍页面按 o 打开操作菜单：继续阅读、书籍信息、章节列表、书源切换。', '阅读页：空格/PageDown 翻页，b/PageUp 回退，[ ] 切章，t 目录，s 书源，a 书架。', '已知书源页：Enter 使用已记录书源，m 手动搜索更多书源；搜索过程中 Esc 只取消任务。'], scroll, height)
+  return renderLineViewport(['帮助', 'Ctrl+K 搜索书籍，j/k 或上下方向键移动，左右方向键或 PageUp/PageDown 翻页，Enter 确认，Esc 返回，d 查看诊断。', '书架、搜索结果和详情页按 o 打开操作菜单：继续阅读、书籍信息、章节列表、书源切换。', '阅读页：空格/左右键翻页，j/k 或上下键逐行，b/PageUp 回退，[ ] 切章，t 目录，s 书源，a 书架。', '章节目录和已知书源页不显示操作菜单；书源页使用 Enter 换源、m 搜索更多，搜索过程中 Esc 只取消任务。'], scroll, height)
 }
 
 function renderDiagnostics(items: readonly string[], scroll: number, height: number, message: string): React.ReactElement {
-  return renderLineViewport(['诊断', ...(items.length === 0 ? ['没有诊断信息。'] : items.map((item) => `[!] ${item}`)), ...(message.length > 0 ? [message] : [])], scroll, height)
+  return renderLineViewport(['诊断', ...(items.length === 0 ? ['没有诊断信息。'] : items.map((item) => `[!] ${item}`))], scroll, height, message)
 }
 
-function renderLineViewport(lines: readonly string[], scroll: number, height: number): React.ReactElement {
-  const range = viewportFor(scroll, lines.length, Math.max(1, height), scroll)
-  return <Box flexDirection="column">{lines.slice(range.start, range.end).map((line, index) => <Text key={`${range.start + index}-${line}`}>{display(line)}</Text>)}</Box>
+function renderLineViewport(lines: readonly string[], scroll: number, height: number, message = ''): React.ReactElement {
+  const allLines = message.length > 0 ? [...lines, message] : [...lines]
+  const range = viewportFor(scroll, allLines.length, Math.max(1, height), scroll)
+  return <Box flexDirection="column">{allLines.slice(range.start, range.end).map((line, index) => {
+    const absolute = range.start + index
+    return <Text key={`${absolute}-${line}`} {...(message.length > 0 && absolute === allLines.length - 1 ? { color: 'yellow' as const } : {})}>{display(line)}</Text>
+  })}</Box>
 }
 
 function renderActionMenu(menu: MenuState): React.ReactElement {
-  return <Box flexDirection="column"><Text bold>操作</Text>{menu.items.map((item, index) => <Text key={item.action} color={index === menu.index ? 'yellow' : item.enabled ? 'white' : 'gray'}>{index === menu.index ? '> ' : '  '}{display(actionMenuLabel(item))}</Text>)}</Box>
+  return <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}><Text bold color="cyan">操作</Text>{menu.items.map((item, index) => <Text key={item.action} color={index === menu.index ? 'yellow' : item.enabled ? 'white' : 'gray'}>{index === menu.index ? '> ' : '  '}{display(actionMenuLabel(item))}</Text>)}</Box>
 }
 
 function navigationIndex(index: number, total: number, input: string, key: InputKey, visible: number): number {
   if (input === 'j' || key.downArrow) return moveIndex(index, total, 1)
   if (input === 'k' || key.upArrow) return moveIndex(index, total, -1)
-  if (key.pageDown) return pageIndex(index, total, visible, 1)
-  if (key.pageUp) return pageIndex(index, total, visible, -1)
+  if (key.pageDown || key.rightArrow) return pageIndexForKey(index, total, visible, 'next')
+  if (key.pageUp || key.leftArrow) return pageIndexForKey(index, total, visible, 'previous')
   if (key.home) return 0
   if (key.end) return Math.max(0, total - 1)
   return index
@@ -827,8 +857,8 @@ function navigationIndex(index: number, total: number, input: string, key: Input
 function navigationPage(scroll: number, total: number, input: string, key: InputKey, visible: number): number {
   if (input === 'j' || key.downArrow) return Math.min(Math.max(0, total - visible), scroll + 1)
   if (input === 'k' || key.upArrow) return Math.max(0, scroll - 1)
-  if (key.pageDown) return Math.min(Math.max(0, total - visible), scroll + Math.max(1, visible - 1))
-  if (key.pageUp) return Math.max(0, scroll - Math.max(1, visible - 1))
+  if (key.pageDown || key.rightArrow) return Math.min(Math.max(0, total - visible), scroll + Math.max(1, visible - 1))
+  if (key.pageUp || key.leftArrow) return Math.max(0, scroll - Math.max(1, visible - 1))
   if (key.home) return 0
   if (key.end) return Math.max(0, total - visible)
   return scroll
@@ -858,11 +888,6 @@ function detailLineCount(book: OpenBookResult | undefined, width: number, messag
   return 9 + introLines + (message.length > 0 ? 1 : 0)
 }
 
-function formatSearchTime(item: { completedAt?: string; startedAt: string }): string {
-  const value = item.completedAt ?? item.startedAt
-  return value.replace('T', ' ').slice(0, 16)
-}
-
 function formatDuration(milliseconds: number): string {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return '未知'
   return milliseconds < 1000 ? `${milliseconds}ms` : `${(milliseconds / 1000).toFixed(1)}s`
@@ -880,20 +905,89 @@ function normalizeChapterTitle(value: string): string { return display(value).no
 function pageLabel(page: Page): string { return ({ config: '配置', home: '首页', search: '搜索', results: '搜索结果', detail: '详情', toc: '目录', reader: '阅读', sources: '已知书源', mapping: '章节映射', help: '帮助', diagnostics: '诊断' } as Record<Page, string>)[page] }
 function previousPage(page: Page): Page { return page === 'config' ? 'config' : page === 'home' ? 'home' : page === 'search' ? 'home' : page === 'results' ? 'search' : page === 'detail' ? 'results' : page === 'toc' ? 'detail' : page === 'reader' ? 'toc' : page === 'sources' ? 'detail' : page === 'mapping' ? 'sources' : 'home' }
 function sourceState(value: KnownSourceView['state']): string { return value === 'available' ? '可用' : value === 'stale' ? '需要重新搜索' : value === 'removed' ? '书源已移除' : '定义冲突' }
-function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number): string {
-  if (menuOpen) return '[Enter] 执行  [j/k] 选择  [Esc] 关闭'
-  if (columns < 48) return busy ? '处理中 · Esc 取消' : 'Esc 返回 · ? 帮助 · d 诊断 · q 退出'
-  if (page === 'home') return homeArea === 2 ? '[Enter] 重复搜索  [j/k] 移动  [Esc] 返回' : '[Enter] 打开  [o] 操作  [j/k] 移动  [Esc] 返回'
-  if (page === 'search') return '[Enter] 搜索  [Esc] 返回'
-  if (page === 'results') return searchState === 'running' || searchState === 'cancelling' ? '[Esc] 取消搜索  [o] 操作  [j/k] 移动' : '[Enter] 详情  [t] 目录  [o] 操作  [Esc] 返回'
-  if (page === 'sources' && (sourceSearchState === 'running' || sourceSearchState === 'cancelling')) return '[Esc] 取消搜索  [j/k] 滚动已匹配书源'
-  if (busy) return '处理中 · Esc 取消'
-  if (page === 'detail') return '[Enter] 开始/继续阅读  [t] 目录  [s] 换源  [a] 加入/移出书架  [o] 操作'
-  if (page === 'toc') return '[Enter] 阅读  [o] 操作  [j/k] 移动  [Esc] 返回'
-  if (page === 'reader') return '[ ] 上下章  [t] 目录  [s] 换源  [a] 书架  [o] 操作'
-  if (page === 'sources') return '[Enter] 换源  [m] 搜索更多  [o] 操作  [Esc] 返回'
-  if (page === 'mapping') return '[Enter] 确认切换  [o] 操作  [Esc] 取消'
-  return '[j/k] 滚动  [Esc] 返回  [d] 诊断  [?] 帮助  [q] 退出'
+function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number): string[] {
+  if (menuOpen) return layoutFooter([
+    { keys: 'Enter', label: '执行', priority: 0 },
+    { keys: 'j/k ↑/↓', label: '选择', priority: 1 },
+    { keys: '←/→', label: '翻页', priority: 2 },
+    { keys: 'Esc', label: '关闭', priority: 0 },
+  ], columns)
+  const common: FooterAction[] = [
+    { keys: 'Esc', label: '返回', priority: 0 },
+    { keys: '?', label: '帮助', priority: 8 },
+    { keys: 'd', label: '诊断', priority: 9 },
+    { keys: 'q', label: '退出', priority: 10 },
+  ]
+  if (page === 'home') return layoutFooter([
+    { keys: 'Enter', label: homeArea === 2 ? '重复搜索' : '打开', priority: 0 },
+    ...(homeArea === 2 ? [] : [{ keys: 'o', label: '操作', priority: 1 }]),
+    { keys: 'j/k ↑/↓', label: '移动', priority: 2 },
+    { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 3 },
+    { keys: 'Home/End', label: '首尾', priority: 4 },
+    ...common,
+  ], columns)
+  if (page === 'search') return layoutFooter([
+    { keys: 'Enter', label: '搜索', priority: 0 },
+    { keys: 'Esc', label: '返回', priority: 0 },
+  ], columns)
+  if (page === 'results') return layoutFooter([
+    ...(searchState === 'running' || searchState === 'cancelling' ? [{ keys: 'Esc', label: '取消搜索', priority: 0 }] : [{ keys: 'Enter', label: '详情', priority: 0 }, { keys: 't', label: '目录', priority: 1 }]),
+    { keys: 'o', label: '操作', priority: 2 },
+    { keys: 'j/k ↑/↓', label: '移动', priority: 3 },
+    { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 4 },
+    { keys: 'Home/End', label: '首尾', priority: 5 },
+    ...common,
+  ], columns)
+  if (busy && page === 'sources') return layoutFooter([
+    { keys: 'Esc', label: '取消搜索', priority: 0 },
+    { keys: 'j/k ↑/↓', label: '移动', priority: 1 },
+    { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 2 },
+    { keys: 'Home/End', label: '首尾', priority: 3 },
+    ...common.slice(1),
+  ], columns)
+  if (busy) return layoutFooter([{ keys: 'Esc', label: '取消处理中', priority: 0 }, ...common.slice(1)], columns)
+  if (page === 'detail') return layoutFooter([
+    { keys: 'Enter', label: '开始/继续阅读', priority: 0 },
+    { keys: 't', label: '目录', priority: 1 },
+    { keys: 's', label: '换源', priority: 1 },
+    { keys: 'a', label: '加入/移出书架', priority: 1 },
+    { keys: 'o', label: '操作', priority: 2 },
+    { keys: 'j/k ↑/↓', label: '滚动', priority: 3 },
+    { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 4 },
+    ...common,
+  ], columns)
+  if (page === 'toc') return layoutFooter([
+    { keys: 'Enter', label: '阅读', priority: 0 },
+    { keys: 'j/k ↑/↓', label: '移动', priority: 1 },
+    { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 2 },
+    { keys: 'Home/End', label: '首尾', priority: 3 },
+    ...common,
+  ], columns)
+  if (page === 'reader') return layoutFooter([
+    { keys: '[ ]', label: '上下章', priority: 0 },
+    { keys: 'Space ←/→ b', label: '翻页', priority: 1 },
+    { keys: 'j/k ↑/↓', label: '逐行', priority: 2 },
+    { keys: 't', label: '目录', priority: 3 },
+    { keys: 's', label: '换源', priority: 3 },
+    { keys: 'a', label: '书架', priority: 3 },
+    ...common,
+  ], columns)
+  if (page === 'sources') return layoutFooter([
+    ...(sourceSearchState === 'running' || sourceSearchState === 'cancelling' ? [{ keys: 'Esc', label: '取消搜索', priority: 0 }] : [{ keys: 'Enter', label: '换源', priority: 0 }, { keys: 'm', label: '搜索更多', priority: 1 }]),
+    { keys: 'j/k ↑/↓', label: '移动', priority: 2 },
+    { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 3 },
+    { keys: 'Home/End', label: '首尾', priority: 4 },
+    ...common,
+  ], columns)
+  if (page === 'mapping') return layoutFooter([
+    { keys: 'Enter', label: '确认切换', priority: 0 },
+    { keys: 'Esc', label: '取消', priority: 0 },
+    { keys: 'j/k ↑/↓', label: '滚动', priority: 1 },
+    { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 2 },
+    { keys: 'Home/End', label: '首尾', priority: 3 },
+    ...common.slice(1),
+  ], columns)
+  return layoutFooter([{ keys: 'j/k ↑/↓', label: '滚动', priority: 0 }, { keys: '←/→ PgUp/PgDn', label: '翻页', priority: 1 }, { keys: 'Home/End', label: '首尾', priority: 2 }, ...common], columns)
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error) }

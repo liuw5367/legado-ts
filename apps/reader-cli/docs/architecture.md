@@ -32,7 +32,9 @@ ReaderStorage <----------- ReaderApplication
 
 每个 `SourceEntry` 使用 `bookSourceUrl` 作为 sourceId，使用 `sourceDefinitionFingerprint` 区分定义版本。冲突来源不进入默认搜索队列。每个来源会话共享自己的 `NodeCookieStore` 和 `NodeNetworkHost`，但每次搜索、详情、目录或正文调用都新建 `SourceRequestHost`/`SourceRuleHost`，避免并发操作覆盖 `key/book/chapter` 绑定。同一 sourceId 由 `KeyedConcurrencyHost` 串行执行。
 
-UI 将 Ink 页面分为三类纯渲染结构：列表视口（首页、搜索结果、目录、已知书源）、文本视口（详情、配置、帮助、诊断）和正文视口（按终端宽度换行）。`viewport.ts` 统一处理选中项、页翻和边界；`action-menu.ts` 固定四项跨页面动作及禁用原因。搜索和换源搜索通过 `SearchUpdateListener` 将已返回候选逐次推送到 UI，`AbortController` 只改变任务状态，不直接销毁当前页面。
+UI 将 Ink 页面分为三类纯渲染结构：列表视口（首页、搜索结果、目录、已知书源）、文本视口（详情、配置、帮助、诊断）和正文视口（按终端宽度换行）。`viewport.ts` 统一处理选中项、逐项移动、左右键/PageUp/PageDown 页翻和边界；`ui-actions.ts` 以同一动作声明生成最多两行页脚，避免提示与输入分叉；`action-menu.ts` 固定四项动作及禁用原因，但 `o` 只由首页、搜索结果和详情页接入。搜索和换源搜索通过 `SearchUpdateListener` 将已返回候选逐次推送到 UI，`AbortController` 只改变任务状态，不直接销毁当前页面。
+
+用户可见通知带页面所有权，路由切换会清除旧页面的瞬时消息；持久化时间仍为 UTC ISO，展示层使用 `time-format.ts` 固定转换到 `Asia/Shanghai` 的 `YYYY-MM-DD HH:mm:ss`。正文由 `content-format.ts` 先将 text/html 转换为语义块，再交给 `content-layout.ts` 换行，因此阅读锚点基于段落和段内偏移，不依赖某次终端宽度的显示行号。
 
 ## 操作契约
 

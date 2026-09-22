@@ -10,12 +10,12 @@
   <text x="44" y="116" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">./sources · 6/6 个可用 · 就绪</text>
   <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
   <text x="44" y="180" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">[1] 书架   [2] 最近阅读   [3] 搜索记录</text>
-  <text x="44" y="220" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 三体 · 刘慈欣 [书架]</text>
-  <text x="44" y="248" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  当前章节：第一章 · 上次阅读：2026-09-22 09:14</text>
-  <text x="44" y="280" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  百年孤独 · 加西亚·马尔克斯 [书架]</text>
-  <text x="44" y="308" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  当前章节：尚未开始阅读 · 上次阅读：—</text>
-  <text x="44" y="340" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  长安的荔枝 · 马伯庸 [未加入]</text>
-  <text x="44" y="368" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  当前章节：第十二章 · 上次阅读：2026-09-18 18:32</text>
+<text x="44" y="220" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 1. 三体 · 刘慈欣 [书架]</text>
+<text x="44" y="248" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  当前章节：第一章 · 上次阅读：2026-09-22 09:14:00</text>
+<text x="44" y="280" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  2. 百年孤独 · 加西亚·马尔克斯 [书架]</text>
+<text x="44" y="308" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  当前章节：尚未开始阅读 · 上次阅读：—</text>
+<text x="44" y="340" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  3. 长安的荔枝 · 马伯庸 [未加入]</text>
+<text x="44" y="368" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  当前章节：第十二章 · 上次阅读：2026-09-18 18:32:00</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 打开  [o] 操作  [j/k] 移动  [Esc] 返回</text>
+<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 打开  [o] 操作  [j/k ↑/↓] 移动  [←/→] 翻页  [Esc] 返回</text>
 </svg>

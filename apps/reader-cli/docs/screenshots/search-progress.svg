@@ -11,8 +11,8 @@
   <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
   <text x="44" y="180" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">搜索结果 · 三体</text>
   <text x="44" y="216" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">搜索进度 2/6 个书源 · 当前：本地精选、轻小说源 · 已发现 12 本 · 总耗时 840ms</text>
-  <text x="44" y="254" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 三体 · 刘慈欣 · 本地精选 · +1 个书源 · 完全匹配 · 耗时 240ms</text>
-  <text x="44" y="286" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  三体全集 · 刘慈欣 · 通用书源 · 包含关键词 · 耗时 410ms</text>
+  <text x="44" y="254" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 1. 三体 · 刘慈欣 · 本地精选 · +1 个书源 · 完全匹配 · 耗时 240ms</text>
+  <text x="44" y="286" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  2. 三体全集 · 刘慈欣 · 通用书源 · 包含关键词 · 耗时 410ms</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [o] 操作  [j/k] 移动</text>
+  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [o] 操作  [j/k ↑/↓] 移动  [←/→] 翻页</text>
 </svg>

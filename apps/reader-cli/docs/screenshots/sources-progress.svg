@@ -11,8 +11,8 @@
   <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
   <text x="44" y="182" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">已知书源 · 本地记录</text>
   <text x="44" y="216" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">搜索进度 1/4 个书源 · 当前：网络书库 · 已发现 2 本 · 已匹配 1 个 · 未匹配 1 个</text>
-  <text x="44" y="250" fill="#72e6a8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">+ 网络书库 · 三体 · 刘慈欣 · 搜索耗时 530ms · 最新章节：第三部 · 更新时间：2026-09-22</text>
-  <text x="44" y="282" fill="#72e6a8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">+ 阅读空间 · 三体 · 刘慈欣 · 搜索耗时 810ms · 最新章节：第三部 · 更新时间：2026-09-21</text>
+  <text x="44" y="250" fill="#72e6a8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">+ 1. 网络书库 · 三体 · 刘慈欣 · 搜索耗时 530ms · 最新章节：第三部 · 更新时间：2026-09-22 10:12:23</text>
+  <text x="44" y="282" fill="#72e6a8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">+ 2. 阅读空间 · 三体 · 刘慈欣 · 搜索耗时 810ms · 最新章节：第三部 · 更新时间：2026-09-21 18:20:00</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [j/k] 滚动已匹配书源</text>
+  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [j/k ↑/↓] 移动  [←/→] 翻页</text>
 </svg>

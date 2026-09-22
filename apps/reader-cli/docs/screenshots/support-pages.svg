@@ -14,9 +14,9 @@
   <text x="46" y="290" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  帮助</text>
   <text x="46" y="318" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">./sources · 6/6 个可用 · 就绪</text>
   <text x="46" y="349" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17" font-weight="700">帮助</text>
-  <text x="46" y="377" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">Ctrl+K 搜索书籍，j/k 移动，Enter 确认，Esc 返回，d 查看诊断。</text>
-  <text x="46" y="405" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">阅读页：空格/PageDown 翻页，b/PageUp 回退，[ ] 切章，t 目录，s 书源，a 书架。</text>
-  <text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">已知书源页：Enter 使用已记录书源，m 手动搜索更多书源。</text>
+<text x="46" y="377" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">Ctrl+K 搜索书籍，j/k 或上下键移动，左右键/PageUp/PageDown 翻页。</text>
+  <text x="46" y="405" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">阅读页：空格/左右键翻页，j/k 逐行，b 回退，[ ] 切章，t 目录，s 书源，a 书架。</text>
+<text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">书架、搜索结果和详情页可按 o；目录、正文、书源和映射页不显示操作菜单。</text>
   <rect x="24" y="460" width="912" height="212" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
   <text x="46" y="494" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  诊断</text>
   <text x="46" y="522" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">./sources · 5/6 个可用 · 就绪</text>
