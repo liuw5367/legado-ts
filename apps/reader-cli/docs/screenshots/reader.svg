@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
+  <title id="title">命令行阅读器正文阅读预览</title>
+  <desc id="desc">阅读页面按终端宽度显示当前章节正文，并提供章节、书源和书架快捷键。</desc>
+  <rect width="960" height="520" fill="#0f141a"/>
+  <rect x="18" y="16" width="924" height="488" rx="10" fill="#111923" stroke="#334155" stroke-width="2"/>
+  <rect x="18" y="16" width="924" height="36" rx="10" fill="#1a2531"/>
+  <circle cx="42" cy="34" r="6" fill="#ff6b6b"/><circle cx="62" cy="34" r="6" fill="#ffd166"/><circle cx="82" cy="34" r="6" fill="#8bd450"/>
+  <text x="108" y="40" fill="#cbd5e1" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">legado-reader — terminal</text>
+  <text x="44" y="88" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="20" font-weight="700">Legado Reader  ·  阅读</text>
+  <text x="44" y="116" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">./sources · 6/6 个可用 · 就绪 · 第 3/12 章</text>
+  <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
+  <text x="44" y="180" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">三体 · 红岸基地</text>
+  <text x="44" y="216" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">红岸基地坐落在群山之间，天线指向看不见的深空。</text>
+  <text x="44" y="246" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">夜色覆盖了发射场，设备上的指示灯依次亮起。</text>
+  <text x="44" y="276" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">叶文洁站在控制台前，等待一个可能永远不会到来的回答。</text>
+  <text x="44" y="306" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">她再次检查了信号参数，然后按下发送键。</text>
+  <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
+  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[ ] 上下章  [t] 目录  [s] 书源  [a] 书架  [d] 诊断  [?] 帮助  [q] 退出</text>
+</svg>

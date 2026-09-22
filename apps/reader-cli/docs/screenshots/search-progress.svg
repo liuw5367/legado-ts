@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
+  <title id="title">命令行阅读器搜索进度预览</title>
+  <desc id="desc">搜索页面显示已完成书源、当前书源、候选数量和 Esc 取消提示。</desc>
+  <rect width="960" height="520" fill="#0f141a"/>
+  <rect x="18" y="16" width="924" height="488" rx="10" fill="#111923" stroke="#334155" stroke-width="2"/>
+  <rect x="18" y="16" width="924" height="36" rx="10" fill="#1a2531"/>
+  <circle cx="42" cy="34" r="6" fill="#ff6b6b"/><circle cx="62" cy="34" r="6" fill="#ffd166"/><circle cx="82" cy="34" r="6" fill="#8bd450"/>
+  <text x="108" y="40" fill="#cbd5e1" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">legado-reader — terminal</text>
+  <text x="44" y="88" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="20" font-weight="700">Legado Reader  ·  搜索</text>
+  <text x="44" y="116" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">./sources · 6/6 个可用 · 处理中</text>
+  <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
+  <text x="44" y="180" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">搜索书籍</text>
+  <text x="44" y="214" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">书名  三体█</text>
+  <text x="44" y="254" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">搜索进度 2/6 个书源 · 当前：本地精选、轻小说源 · 已发现 12 本</text>
+  <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
+  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">处理中 · Esc 取消</text>
+</svg>

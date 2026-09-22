@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
+  <title id="title">命令行阅读器首页预览</title>
+  <desc id="desc">Legado Reader 首页，包含书架、最近阅读和搜索记录。</desc>
+  <rect width="960" height="520" fill="#0f141a"/>
+  <rect x="18" y="16" width="924" height="488" rx="10" fill="#111923" stroke="#334155" stroke-width="2"/>
+  <rect x="18" y="16" width="924" height="36" rx="10" fill="#1a2531"/>
+  <circle cx="42" cy="34" r="6" fill="#ff6b6b"/><circle cx="62" cy="34" r="6" fill="#ffd166"/><circle cx="82" cy="34" r="6" fill="#8bd450"/>
+  <text x="108" y="40" fill="#cbd5e1" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">legado-reader — terminal</text>
+  <text x="44" y="88" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="20" font-weight="700">Legado Reader  ·  首页</text>
+  <text x="44" y="116" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">./sources · 6/6 个可用 · 就绪</text>
+  <text x="44" y="143" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
+  <text x="44" y="180" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">[1] 书架   [2] 最近阅读   [3] 搜索记录</text>
+  <text x="44" y="220" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 三体 [书架] 2026-09-22 09:14</text>
+  <text x="44" y="250" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  百年孤独 [书架] 2026-09-20 21:06</text>
+  <text x="44" y="280" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  长安的荔枝 [未加入] 2026-09-18 18:32</text>
+  <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
+  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 确认  [Esc] 返回  [d] 诊断  [?] 帮助  [q] 退出</text>
+</svg>

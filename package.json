@@ -6,8 +6,8 @@
   "packageManager": "pnpm@11.27.0",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json && tsc -p packages/source-node/tsconfig.build.json",
-    "test": "node --test packages/source-core/tests/*.test.ts packages/source-node/tests/*.test.ts",
+    "build": "tsc -p tsconfig.build.json && pnpm --filter @legado/source-node build && pnpm --filter @legado/reader-cli build",
+    "test": "node --test packages/source-core/tests/*.test.ts packages/source-node/tests/*.test.ts apps/reader-cli/tests/*.test.ts",
     "test:source": "node --test packages/source-core/tests/source-fixtures.test.ts packages/source-core/tests/source-conformance.test.ts packages/source-node/tests/source-rule-host.test.ts packages/source-node/tests/source-request-host.test.ts packages/source-node/tests/source-host-flow.test.ts packages/source-node/tests/source-file-smoke.test.ts packages/source-node/tests/source-file-flow.test.ts",
     "test:source:flow": "node --test packages/source-node/tests/source-file-flow.test.ts",
     "test:source:compat:static": "pnpm run build && node packages/source-node/src/source-compatibility-cli.ts --mode static",
