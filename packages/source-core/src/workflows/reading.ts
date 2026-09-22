@@ -122,7 +122,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     diagnostics.push({ code: 'invalid-config', stage, message: '缺少正文规则', retryable: false })
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  const contentType = input.contentType ?? (input.source.contentType === 'html' ? 'html' : 'text')
+  const contentType = input.contentType ?? (input.source.contentType === 'html' || ruleReturnsHtml(contentRule) ? 'html' : 'text')
   const maxPages = input.maxPages ?? sourceNumber(input.source, 'contentMaxPages') ?? 32
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const maxOutputBytes = input.maxOutputBytes ?? 4 * 1024 * 1024
@@ -292,6 +292,12 @@ function normalizeChapterListRule(value: string): string {
   if (rule.startsWith('-')) rule = rule.slice(1)
   if (rule.startsWith('+')) rule = rule.slice(1)
   return rule
+}
+
+/** Legado 的 `@html`/`@all` 输出标记本身就是正文类型声明，JS 规则中的 getString 调用也会保留该标记。 */
+function ruleReturnsHtml(rule: string): boolean {
+  // 输出标记后不能紧跟名称字符，避免把自定义 token（如 `@html5`）误判为 HTML。
+  return /@(?:html|all)(?![A-Za-z0-9_-])/iu.test(rule)
 }
 
 function deduplicateChapters(chapters: Chapter[], diagnostics: WorkflowDiagnostic[], stage: WorkflowStage): Chapter[] {

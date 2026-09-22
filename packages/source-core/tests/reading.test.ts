@@ -164,6 +164,16 @@ test('正文工作流拼接多页、净化 HTML、解析图片资源并支持缓
   assert.equal(calls.length, requestCount)
 })
 
+test('正文规则返回 HTML 时未声明 contentType 也进入 HTML 排版流程', async () => {
+  const implicitHtmlSource = { ...source, ruleContent: { content: 'content@html', nextPage: 'content-next' } } as NormalizedSource
+  delete (implicitHtmlSource as Record<string, unknown>).contentType
+  const chapter: ChapterIdentity = { sourceId: implicitHtmlSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+  const result = await loadChapterContent(readingPorts([]), { source: implicitHtmlSource, chapter })
+  assert.equal(result.value?.contentType, 'html')
+  assert.equal(result.value?.cleaned.includes('<script>'), false)
+  assert.deepEqual(result.value?.resources, [{ kind: 'image', url: 'https://source.test/img/a.png' }, { kind: 'image', url: 'https://img.test/a.png' }])
+})
+
 test('正文已有内容后下一页失败返回 partial；空正文返回 empty', async () => {
   const calls: string[] = []
   const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
