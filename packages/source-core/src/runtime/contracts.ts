@@ -122,6 +122,79 @@ export interface CharsetCodec {
   decode(bytes: Uint8Array, charset: string): string
 }
 
+export interface EncodingHost extends CharsetCodec {
+  /** 将文本或 bytes 编码为 Base64。 */
+  base64Encode(input: string | Uint8Array): string
+  /** 将 Base64 解码为 bytes；非法输入必须失败。 */
+  base64Decode(value: string): Uint8Array
+  /** 将 bytes 编码为小写十六进制。 */
+  hexEncode(input: Uint8Array): string
+  /** 将偶数长度十六进制解码为 bytes。 */
+  hexDecode(value: string): Uint8Array
+  /** 按 JavaScript/Android 书源约定编码 URI。 */
+  encodeUri(value: string): string
+  /** 解码 URI；非法转义必须失败。 */
+  decodeUri(value: string): string
+}
+
+export type DigestAlgorithm = 'md5' | 'sha1' | 'sha256' | 'sha512'
+
+export interface SymmetricCrypto {
+  /** 解密 bytes，保留原始二进制边界。 */
+  decrypt(input: Uint8Array): Uint8Array
+  /** 加密 bytes，保留原始二进制边界。 */
+  encrypt(input: Uint8Array): Uint8Array
+  /** 解密后按指定字符集转为文字。 */
+  decryptText(input: Uint8Array, charset?: string): string
+  /** 文字按指定字符集编码后加密。 */
+  encryptText(input: string, charset?: string): Uint8Array
+}
+
+export interface CryptoHost {
+  /** 计算摘要十六进制结果。 */
+  digestHex(input: string | Uint8Array, algorithm?: DigestAlgorithm): string
+  /** 计算摘要 Base64 结果。 */
+  digestBase64(input: string | Uint8Array, algorithm?: DigestAlgorithm): string
+  /** 计算 HMAC 十六进制结果。 */
+  hmacHex(input: string | Uint8Array, key: string | Uint8Array, algorithm?: DigestAlgorithm): string
+  /** 创建带明确 transformation、key 和 iv 的对称加密对象。 */
+  createSymmetricCrypto(transformation: string, key: Uint8Array, iv?: Uint8Array): SymmetricCrypto
+}
+
+export type ArchiveFormat = 'gzip' | 'zip' | '7z' | 'rar'
+
+export interface ArchiveLimits {
+  /** 最多返回的非目录条目数。 */
+  maxEntries: number
+  /** 单个展开条目的最大字节数。 */
+  maxEntryBytes: number
+  /** 全部展开条目的最大字节数。 */
+  maxTotalBytes: number
+  /** 解压后大小与压缩大小允许的最大比例。 */
+  maxCompressionRatio: number
+}
+
+export interface ArchiveEntry {
+  /** 归一化后的相对路径。 */
+  path: string
+  /** 条目内容。 */
+  data: Uint8Array
+}
+
+export interface ArchiveHost {
+  /** 受预算解包；不支持或不安全的格式必须明确失败。 */
+  extract(input: Uint8Array, format: ArchiveFormat, limits?: Partial<ArchiveLimits>): Promise<ArchiveEntry[]>
+}
+
+export interface ConcurrencyHost {
+  /** 按 key 排队执行；任务必须使用传入 signal 响应取消。 */
+  run<T>(key: string, task: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T>
+  /** 取消某个 key 的排队和运行任务。 */
+  cancel(key: string): void
+  /** 取消并清理所有 key 的任务。 */
+  clear(): void
+}
+
 export interface ParserNode {
   /** 文档内稳定节点身份。 */
   readonly id: string
