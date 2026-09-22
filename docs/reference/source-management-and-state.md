@@ -21,6 +21,8 @@
 
 `bookSourceUrl` 是兼容层的 `sourceId`。它按原字符串比较，不自动做尾斜杠、大小写、查询参数或域名规范化。（目标设计）不同用户可以拥有相同 `sourceId`，不能使用全局 URL 作为数据库唯一键；Android `BookSource` 的主键即 `bookSourceUrl`，单用户、无 `userId` 维度。
 
+导入候选另外生成加载态 `sourceUuid`，只用于本次加载实例的跟踪，不写回书源原文，也不替代持久化 `sourceId`。候选同时提供忽略显示名称和管理字段后的 `sourceFingerprint`；只有功能规则和请求定义一致时才可以归为同一份书源定义，不能因为显示名称相同而合并。
+
 版本名称以[运行时统一契约](runtime-contracts.md)为准：`sourceRevision` 是持久化源版本，`baseRevision` 是修改时读取的旧版本，`checkRevision` 是检测任务版本，`writeVersion` 是正文/资源写入代次。`lastUpdateTime` 是源文件元数据，不能替代任何一种版本。该句是目标契约：Android 静默更新实际以 `lastUpdateTime` 比较后整行 REPLACE（`RuleUpdate.kt` L56-61），与"不能替代任何版本"存在张力。
 
 ## 2. 书源生命周期

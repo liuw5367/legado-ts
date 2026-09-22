@@ -87,6 +87,8 @@ export interface WorkflowRulePort {
 export interface WorkflowPorts {
   network: NetworkHost
   rules: WorkflowRulePort
+  /** 可选的书源请求适配器；缺省时使用核心的普通 HTTP 请求计划。 */
+  request?: (input: WorkflowRequest) => Promise<NetworkResponse>
   decodeResponse?: (response: NetworkResponse, source: NormalizedSource) => string
 }
 
@@ -94,6 +96,14 @@ export interface WorkflowOptions {
   signal?: AbortSignal
   budget?: Partial<RequestBudget>
   maxItems?: number
+}
+
+export interface WorkflowRequest {
+  /** 原始书源请求地址；宿主可继续解析 URL 后的 JSON options 或 JS。 */
+  source: NormalizedSource
+  url: string
+  stage: WorkflowStage
+  options: WorkflowOptions
 }
 
 export interface DiscoveryInput extends WorkflowOptions {

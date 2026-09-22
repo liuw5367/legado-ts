@@ -12,7 +12,6 @@ import type {
   RuleSequence,
   RuleSpan,
 } from './types.ts'
-import type { JsonObject, JsonValue } from '../model/types.ts'
 
 const capabilityByMode: Record<RuleMode, RuleCapability[]> = {
   Default: ['text', 'variables', 'parser:html'],
@@ -71,8 +70,115 @@ function modeOf(body: string, allInOne: boolean): { mode: RuleMode; body: string
   if (allInOne && body.startsWith(':')) return { mode: 'Regex', body: body.slice(1) }
   if (body.startsWith('$.') || body.startsWith('$[')) return { mode: 'Json', body }
   if (body.startsWith('/')) return { mode: 'XPath', body }
-  if (body.startsWith('<js>') && body.endsWith('</js>')) return { mode: 'Js', body: body.slice(4, -5) }
+  if (body.startsWith('<js>')) {
+    const end = body.indexOf('</js>', '<js>'.length)
+    return { mode: 'Js', body: end < 0 ? body.slice('<js>'.length) : body.slice('<js>'.length, end) }
+  }
   return { mode: 'Default', body }
+}
+
+function isOpaqueScriptRule(input: string): boolean {
+  const trimmed = input.trim()
+  return /^@(?:js|webjs):/i.test(trimmed) || trimmed.startsWith('<js>') || /<js>|@js:/i.test(trimmed)
+}
+
+function decodeSingleQuoted(input: string): string {
+  let result = ''
+  let escaped = false
+  for (const current of input) {
+    if (!escaped) {
+      if (current === '\\') escaped = true
+      else result += current
+      continue
+    }
+    escaped = false
+    if (current === 'n') result += '\n'
+    else if (current === 'r') result += '\r'
+    else if (current === 't') result += '\t'
+    else result += current
+  }
+  return result
+}
+
+function readQuoted(input: string, start: number): { value: string; next: number } | undefined {
+  const quote = input[start]
+  if (quote !== '"' && quote !== "'") return undefined
+  let escaped = false
+  let value = ''
+  for (let index = start + 1; index < input.length; index += 1) {
+    const current = input[index]!
+    if (escaped) {
+      value += `\\${current}`
+      escaped = false
+    } else if (current === '\\') escaped = true
+    else if (current === quote) {
+      return { value: quote === '"' ? JSON.parse(`"${value}"`) as string : decodeSingleQuoted(value), next: index + 1 }
+    } else value += current
+  }
+  return undefined
+}
+
+function readUnquoted(input: string, start: number): { value: string; next: number } | undefined {
+  let square = 0
+  let round = 0
+  let curly = 0
+  let quote: '"' | "'" | '`' | null = null
+  let escaped = false
+  for (let index = start; index < input.length; index += 1) {
+    const current = input[index]!
+    if (quote !== null) {
+      if (escaped) escaped = false
+      else if (current === '\\') escaped = true
+      else if (current === quote) quote = null
+      continue
+    }
+    if (current === '"' || current === "'" || current === '`') quote = current
+    else if (current === '[') square += 1
+    else if (current === ']') square = Math.max(0, square - 1)
+    else if (current === '(') round += 1
+    else if (current === ')') round = Math.max(0, round - 1)
+    else if (current === '{') curly += 1
+    else if (current === '}') curly = Math.max(0, curly - 1)
+    else if (current === ',' && square === 0 && round === 0 && curly === 0) {
+      const value = input.slice(start, index).trim()
+      return value.length === 0 ? undefined : { value, next: index }
+    }
+  }
+  const value = input.slice(start).trim()
+  return value.length === 0 ? undefined : { value, next: input.length }
+}
+
+/** Parse the relaxed object syntax used by Android's @put rules. */
+function parsePutObject(input: string): Record<string, string> | undefined {
+  const result: Record<string, string> = {}
+  let index = 0
+  while (index < input.length) {
+    while (/\s|,/.test(input[index] ?? '')) index += 1
+    if (index >= input.length) return result
+    const quotedKey = readQuoted(input, index)
+    let key: string
+    if (quotedKey !== undefined) {
+      key = quotedKey.value
+      index = quotedKey.next
+    } else {
+      const match = /^[A-Za-z_$][\w$-]*/.exec(input.slice(index))
+      if (match === null) return undefined
+      key = match[0]
+      index += key.length
+    }
+    while (/\s/.test(input[index] ?? '')) index += 1
+    if (input[index] !== ':') return undefined
+    index += 1
+    while (/\s/.test(input[index] ?? '')) index += 1
+    const quotedValue = readQuoted(input, index)
+    const value = quotedValue ?? readUnquoted(input, index)
+    if (value === undefined) return undefined
+    result[key] = value.value
+    index = value.next
+    while (/\s/.test(input[index] ?? '')) index += 1
+    if (index < input.length && input[index] !== ',') return undefined
+  }
+  return result
 }
 
 function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions): RuleCompileResult {
@@ -91,23 +197,21 @@ function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions)
       diagnostics.push({ code: 'invalid-put', message: '@put 对象不平衡', span: trimmed.span, canContinue: false })
       return { diagnostics }
     }
-    try {
-      const parsed = JSON.parse(body.slice(objectStart, objectEnd)) as JsonValue
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('not object')
-      for (const [name, value] of Object.entries(parsed as JsonObject)) {
-        if (typeof value !== 'string') throw new Error('rule must be string')
-        const nested = compileInternal(value, { start: 0, end: value.length }, options)
-        diagnostics.push(...nested.diagnostics)
-        if (nested.rule !== undefined) puts.push({ name, rule: nested.rule })
-      }
-    } catch {
+    const parsed = parsePutObject(body.slice(objectStart + 1, objectEnd - 1))
+    if (parsed === undefined) {
       diagnostics.push({ code: 'invalid-put', message: '@put 必须是键到规则字符串的 JSON 对象', span: trimmed.span, canContinue: false })
       return { diagnostics }
+    }
+    for (const [name, value] of Object.entries(parsed)) {
+      const nested = compileInternal(value, { start: 0, end: value.length }, options)
+      diagnostics.push(...nested.diagnostics)
+      if (nested.rule !== undefined) puts.push({ name, rule: nested.rule })
     }
     body = body.slice(objectEnd).trimStart()
   }
 
-  const replacementParts = splitReplacement(body)
+  const opaque = isOpaqueScriptRule(trimmed.text) || ((options.allInOne ?? true) && trimmed.text.startsWith(':'))
+  const replacementParts = opaque ? { parts: [body] } : splitReplacement(body)
   if (replacementParts.diagnostic !== undefined) return { diagnostics: [...diagnostics, replacementParts.diagnostic] }
   if (replacementParts.parts.length > 4) {
     diagnostics.push({ code: 'unbalanced-rule', message: '替换表达式最多包含规则、匹配、替换和首项标记四段', span: trimmed.span, canContinue: false })
@@ -131,7 +235,9 @@ function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions)
 
 function compileInternal(input: string, span: RuleSpan, options: RuleCompileOptions): RuleCompileResult {
   const trimmed = trimPart(input, span.start, span.end)
-  const precedence: Array<'||' | '%%' | '&&'> = ['||', '%%', '&&']
+  const leadingRegex = (options.allInOne ?? true) && trimmed.text.startsWith(':')
+  if (isOpaqueScriptRule(trimmed.text) || (leadingRegex && !trimmed.text.includes('%%'))) return compileAtom(trimmed.text, trimmed.span, options)
+  const precedence: Array<'||' | '%%' | '&&'> = leadingRegex ? ['%%'] : ['||', '%%', '&&']
   for (const operator of precedence) {
     const split = splitTopLevel(trimmed.text, operator)
     if (split.diagnostic !== undefined) return { diagnostics: [{ ...split.diagnostic, span: { start: trimmed.span.start + split.diagnostic.span!.start, end: trimmed.span.start + split.diagnostic.span!.end } }] }

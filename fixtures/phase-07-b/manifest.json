@@ -4,7 +4,7 @@
   "fixtures": [
     { "path": "collection/13655_c5880332228edeffa2ce977a525a6b21.json", "candidates": 230, "statuses": { "ready": 230 }, "diagnostics": {} },
     { "path": "collection/14328_c803e1b071690d18ce7acb5184727058.json", "candidates": 84, "statuses": { "ready": 84 }, "diagnostics": {} },
-    { "path": "single/1790039793-起点.json", "candidates": 1, "statuses": { "invalid": 1 }, "diagnostics": { "rule-invalid": 1 } },
+    { "path": "single/1790039793-起点.json", "candidates": 1, "statuses": { "ready": 1 }, "diagnostics": {} },
     { "path": "single/1790040141-豆瓣.json", "candidates": 1, "statuses": { "ready": 1 }, "diagnostics": {} }
   ]
 }

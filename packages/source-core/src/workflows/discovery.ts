@@ -12,7 +12,7 @@ export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Pro
   const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 0
   const url = sourceString(input.source, 'searchUrl')
   const encodedKeyword = encodeKeyword(input.keyword)
-  const expanded = url === undefined ? undefined : template(url, { keyword: encodedKeyword, key: encodedKeyword, page: String(page), pageIndex: String(page) })
+  const expanded = url === undefined ? undefined : template(url, { keyword: encodedKeyword, key: encodedKeyword, page: String(page), pageIndex: String(page), 'source.bookSourceUrl': input.source.bookSourceUrl })
   return listWorkflow(ports, 'search', input.source, expanded, ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, { keyword: input.keyword })
 }
 
@@ -24,7 +24,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     diagnostics.push({ code: 'invalid-config', stage, message: '缺少列表请求地址或 bookList 规则', retryable: false })
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  const expanded = template(url, { page: String(pageCursor.index), pageIndex: String(pageCursor.index), ...replacements })
+  const expanded = template(url, { page: String(pageCursor.index), pageIndex: String(pageCursor.index), 'source.bookSourceUrl': source.bookSourceUrl, ...replacements })
   const content = await requestPage(ports, source, expanded, stage, options, diagnostics, trace)
   if (content === undefined) return { status: diagnostics.some((item) => item.code === 'cancelled') ? 'cancelled' : 'failed', value: null, diagnostics, trace }
   const list = await evaluateField(ports, source, stage, 'bookList', listRule, content, undefined, trace, options.signal)

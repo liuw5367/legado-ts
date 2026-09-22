@@ -48,8 +48,74 @@ export function ruleString(source: NormalizedSource, group: string, field: strin
   return undefined
 }
 
+function numericTemplateExpression(input: string, replacements: Readonly<Record<string, string>>): number | undefined {
+  let index = 0
+  const skip = (): void => { while (/\s/.test(input[index] ?? '')) index += 1 }
+  const primary = (): number | undefined => {
+    skip()
+    const sign = input[index] === '+' || input[index] === '-' ? input[index++] : undefined
+    skip()
+    let result: number | undefined
+    if (input[index] === '(') {
+      index += 1
+      result = expression()
+      skip()
+      if (input[index] !== ')') return undefined
+      index += 1
+    } else {
+      const number = /^\d+(?:\.\d+)?/.exec(input.slice(index))
+      if (number !== null) {
+        index += number[0].length
+        result = Number(number[0])
+      } else {
+        const name = /^[A-Za-z][A-Za-z0-9_]*/.exec(input.slice(index))
+        if (name === null || replacements[name[0]] === undefined || !/^\d+(?:\.\d+)?$/.test(replacements[name[0]]!)) return undefined
+        index += name[0].length
+        result = Number(replacements[name[0]])
+      }
+    }
+    if (result === undefined) return undefined
+    return sign === '-' ? -result : result
+  }
+  const product = (): number | undefined => {
+    let result = primary()
+    while (result !== undefined) {
+      skip()
+      const operator = input[index]
+      if (operator !== '*' && operator !== '/' && operator !== '%') break
+      index += 1
+      const right = primary()
+      if (right === undefined) return undefined
+      result = operator === '*' ? result * right : operator === '/' ? result / right : result % right
+    }
+    return result
+  }
+  function expression(): number | undefined {
+    let result = product()
+    while (result !== undefined) {
+      skip()
+      const operator = input[index]
+      if (operator !== '+' && operator !== '-') break
+      index += 1
+      const right = product()
+      if (right === undefined) return undefined
+      result = operator === '+' ? result + right : result - right
+    }
+    return result
+  }
+  const result = expression()
+  skip()
+  return result !== undefined && index === input.length && Number.isFinite(result) ? result : undefined
+}
+
 export function template(value: string, replacements: Readonly<Record<string, string>>): string {
-  return value.replace(/\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g, (_match, key: string) => replacements[key] ?? '')
+  return value.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (match, expression: string) => {
+    const key = expression.trim()
+    if (Object.prototype.hasOwnProperty.call(replacements, key)) return replacements[key] ?? ''
+    const numeric = numericTemplateExpression(key, replacements)
+    if (numeric !== undefined) return String(numeric)
+    return /^[A-Za-z][A-Za-z0-9_]*$/.test(key) ? '' : match
+  })
 }
 
 export function encodeKeyword(value: string): string {
@@ -95,14 +161,19 @@ export async function requestPage(ports: WorkflowPorts, source: NormalizedSource
     return undefined
   }
   const headers = sourceHeaders(source)
-  const result = createRequestPlan({ url, baseUrl: source.bookSourceUrl, ...(headers === undefined ? {} : { headers }), budget: requestBudget(options) })
-  if (result.plan === undefined) {
-    diagnostics.push({ code: 'invalid-config', stage, message: result.error?.message ?? '请求计划无效', retryable: false })
-    return undefined
-  }
   trace.push({ stage, event: 'request', target: stage })
   try {
-    const response = await ports.network.request(result.plan)
+    let response: Parameters<NonNullable<WorkflowPorts['decodeResponse']>>[0]
+    if (ports.request !== undefined) {
+      response = await ports.request({ source, url, stage, options })
+    } else {
+      const result = createRequestPlan({ url, baseUrl: source.bookSourceUrl, ...(headers === undefined ? {} : { headers }), budget: requestBudget(options) })
+      if (result.plan === undefined) {
+        diagnostics.push({ code: 'invalid-config', stage, message: result.error?.message ?? '请求计划无效', retryable: false })
+        return undefined
+      }
+      response = await ports.network.request(result.plan)
+    }
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined

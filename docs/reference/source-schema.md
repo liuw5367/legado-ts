@@ -8,7 +8,7 @@
 
 ## 1. 书源原始与规范化模型
 
-外部 JSON 的规则字段允许是规则对象，也允许是序列化后的 JSON 字符串。导入层先保留原始字段，再生成规范化对象。未知字段默认保留，是否交给运行时执行由能力检查决定，不能在导入时静默删除。
+外部 JSON 的规则字段允许是规则对象，也允许是序列化后的 JSON 字符串；Android 也会用空数组表示未配置的可选规则组。导入层先保留原始字段，再生成规范化对象。未知字段默认保留，是否交给运行时执行由能力检查决定，不能在导入时静默删除。
 
 ```ts
 type RuleObject<T> = T | string | null
@@ -98,7 +98,7 @@ export type NormalizedSource = Omit<
   BookSource,
   'ruleExplore' | 'ruleSearch' | 'ruleBookInfo' | 'ruleToc' | 'ruleContent' | 'ruleReview'
 > & {
-  /** 规范化后只允许对象或 null；原始字符串形态由 RawSource/codec 单独保留。 */
+  /** 规范化后保留对象、空数组或 null；原始字符串形态由 RawSource/codec 单独保留。 */
   ruleExplore?: ExploreRule | null
   ruleSearch?: SearchRule | null
   ruleBookInfo?: BookInfoRule | null
@@ -119,7 +119,7 @@ export type NormalizedSource = Omit<
 | 本地文件、URI、远程文本 | 先读取并记录来源，再按文本内容识别 JSON/JS | 读取失败是输入级错误；取消必须清理 URI、请求和临时文件 |
 | JavaScript 源文本 | 提取 URL、名称和配置绑定，保留 `mainJs` 原文 | URL 或 JS 源名称缺失时不生成可保存候选 |
 
-每个 `ImportCandidate` 至少包含 `rawText`、输入 `kind`、脱敏 `location`、解析后的 `source`、`unknownFields`、诊断、可写状态和局部匹配状态。解析过程不因为表单没有控件而删除未知字段，也不把 `null`、空字符串、缺失字段和空数组悄悄改成同一个值。
+每个 `ImportCandidate` 至少包含 `rawText`、输入 `kind`、脱敏 `location`、解析后的 `source`、加载态 `sourceUuid`、规则定义 `sourceFingerprint`、`unknownFields`、诊断、可写状态和局部匹配状态。解析过程不因为表单没有控件而删除未知字段，也不把 `null`、空字符串、缺失字段和空数组悄悄改成同一个值。
 
 规则字段按以下顺序解析：对象直接复制并校验；字符串先尝试严格 JSON，失败时按兼容规则记录诊断并决定是否尝试宽松解析；`null` 和空字符串按字段默认值处理；数组成员逐项校验。解析失败的可选字段进入诊断并保持原始字段，必需字段失败才使候选不可写。
 

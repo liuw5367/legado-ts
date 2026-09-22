@@ -37,7 +37,7 @@ function capabilityFallback(capability: keyof typeof capabilityMarkers): string 
 function bridgeWrapper(name: string, hostName: string, capability: keyof typeof capabilityMarkers): string {
   if (name === 'getVar') return `const getVar = typeof ${hostName} === 'function' ? (name) => __legadoDecode(JSON.parse(${hostName}(String(name)))) : ${capabilityFallback(capability)}`
   if (name === 'setVar') return `const setVar = typeof ${hostName} === 'function' ? (name, value) => ${hostName}(String(name), __legadoEncode(value)) : ${capabilityFallback(capability)}`
-  if (name === 'request') return `const request = typeof ${hostName} === 'function' ? (value) => __legadoDecode(JSON.parse(${hostName}(__legadoEncode(value)))) : ${capabilityFallback(capability)}`
+  if (name === 'request') return `const request = typeof ${hostName} === 'function' ? (...args) => __legadoDecode(JSON.parse(${hostName}(__legadoEncode(args.length === 1 ? args[0] : { url: String(args[0]), method: args[1] === undefined ? 'GET' : args[1], body: args[2] })))) : ${capabilityFallback(capability)}`
   return `const evaluateRule = typeof ${hostName} === 'function' ? (rule) => __legadoDecode(JSON.parse(${hostName}(String(rule)))) : ${capabilityFallback(capability)}`
 }
 

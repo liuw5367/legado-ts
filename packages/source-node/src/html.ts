@@ -28,10 +28,10 @@ class HtmlDocumentView implements HtmlDocument {
 
   public read(node: ParserNode, output: 'text' | 'textNodes' | 'ownText' | 'html' | 'all'): string {
     const value = this.node(node)
-    if (output === 'all') return render(value, { xmlMode: this.xmlMode })
+    if (output === 'all') return render(value, { xmlMode: this.xmlMode, encodeEntities: false })
     if (output === 'html') {
       // 书源的 html 输出不应把脚本和样式当作正文；保留实体由 serializer 处理。
-      return getInnerHTML(value, { xmlMode: this.xmlMode }).replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+      return getInnerHTML(value, { xmlMode: this.xmlMode, encodeEntities: false }).replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
     }
     if (output === 'text') return textContent(value)
     const children = isDocument(value) || isTag(value) ? getChildren(value) : []

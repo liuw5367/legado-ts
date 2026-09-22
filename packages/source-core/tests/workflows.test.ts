@@ -70,6 +70,14 @@ test('搜索工作流编码关键词并区分空关键词', async () => {
   assert.equal(calls.length, 1)
 })
 
+test('搜索 URL 模板支持书源地址和安全页码算术表达式', async () => {
+  const calls: string[] = []
+  const templated = { ...source, searchPageStart: 1, searchUrl: '/search?start={{(page-1)*10}}&source={{source.bookSourceUrl}}&q={{key}}' } as unknown as NormalizedSource
+  const result = await searchBooks(ports(calls), { source: templated, keyword: '中文' })
+  assert.equal(result.status, 'success')
+  assert.equal(calls[0], 'https://source.test/search?start=0&source=https://source.test&q=%E4%B8%AD%E6%96%87')
+})
+
 test('详情工作流只覆盖有值字段，记录明确空值和字段失败', async () => {
   const calls: string[] = []
   const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'A', rawFields: { name: 'A', bookUrl: '/book/a' }, traceRef: 'discover:0' }

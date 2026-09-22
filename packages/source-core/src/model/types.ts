@@ -113,6 +113,10 @@ export interface ImportReplacementResult {
 export interface ImportCandidate {
   /** 本次导入内稳定的候选 ID，不作为持久化 sourceId。 */
   id: string
+  /** 本次加载实例的 UUID；不写回书源原文，也不替代兼容层 sourceId。 */
+  sourceUuid: string
+  /** 忽略展示/管理字段后的规则与请求定义指纹，用于判定同一份书源定义。 */
+  sourceFingerprint?: string
   /** 原始输入来源。 */
   origin: ImportOrigin
   /** 候选对应的输入文本或数组成员文本。 */
@@ -220,6 +224,8 @@ export interface ImportOptions {
   replacements?: readonly ImportReplacementRule[]
   /** 用原始 sourceId 查找本地版本。 */
   localSnapshots?: ReadonlyMap<string, SourceSnapshot>
+  /** 测试或上层会话可注入 UUID 生成器；默认使用运行时 UUID。 */
+  sourceUuidFactory?: () => string
 }
 
 export interface ExportOptions {

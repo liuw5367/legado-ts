@@ -66,6 +66,20 @@ test('解析器和脚本模式只报告能力缺失，不静默降级为文本',
   assert.equal(result.diagnostics[0]?.code, 'capability-unavailable')
 })
 
+test('兼容书源中的替换正则、插值和宽松 @put 语法', () => {
+  for (const rule of [
+    '.note@text##.*文案：　|\\(所属栏目：.*',
+    '{{@@.book@text##更新：|T.*}}',
+    ':正文卷[\\s\\S]*?/dl&&href ="([^"]+)">([^<]+)',
+    '@put:{id:$.id}\nhttps://fixture.invalid/book/@get:{id}.html',
+    '<js>const value = /[\\s\\S]*/; value</js>',
+  ]) {
+    const result = compileRule(rule)
+    assert.deepEqual(result.diagnostics, [], rule)
+    assert.ok(result.rule, rule)
+  }
+})
+
 test('非法规则、取消和预算耗尽均有可判别结果', () => {
   assert.equal(compileRule('tag.a[0').diagnostics[0]?.code, 'unbalanced-rule')
   const controller = new AbortController()

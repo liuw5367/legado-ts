@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { exportSource, importSources } from '../src/public/index.ts'
+import { exportSource, importSources, sameSourceDefinition } from '../src/public/index.ts'
 
 const source = {
   bookSourceUrl: 'https://example.test/books',
@@ -15,6 +15,17 @@ test('导入对象保留未知字段并接受缺省名称', async () => {
   assert.equal(candidates[0]?.status, 'ready')
   assert.equal(candidates[0]?.source?.bookSourceName, '')
   assert.deepEqual(candidates[0]?.unknownFields, { customField: { value: 1 } })
+})
+
+test('加载候选分配 UUID，重名源按规则定义而不是名称判重', async () => {
+  const renamed = await importSources(JSON.stringify({ ...source, bookSourceName: 'Other name' }))
+  const changed = await importSources(JSON.stringify({ ...source, ruleSearch: { bookList: '.different' } }))
+  const sameNameDifferentRules = await importSources(JSON.stringify([source, { ...source, ruleSearch: { bookList: '.different' } }]))
+  assert.match(renamed[0]!.sourceUuid, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+  assert.notEqual(renamed[0]!.sourceUuid, changed[0]!.sourceUuid)
+  assert.equal(sameNameDifferentRules.length, 2)
+  assert.ok(sameSourceDefinition(renamed[0]!.source!, (await importSources(JSON.stringify({ ...source, bookSourceName: 'Third name' })))[0]!.source!))
+  assert.notEqual(renamed[0]!.sourceFingerprint, changed[0]!.sourceFingerprint)
 })
 
 test('数组成员逐项产生候选，非法成员不阻断合法成员', async () => {

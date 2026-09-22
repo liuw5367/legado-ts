@@ -1,5 +1,6 @@
 import { extractStaticJavaScript } from './static-javascript.ts'
 import { normalizeSource } from './normalize.ts'
+import { createSourceUuid, sourceDefinitionFingerprint } from './identity.ts'
 import { diagnostic, primaryError, safeLocation } from '../diagnostics/diagnostics.ts'
 import type {
   ImportCandidate,
@@ -45,8 +46,8 @@ function candidateError(candidate: Omit<ImportCandidate, 'error'>): ImportCandid
   return { ...candidate, error: { code: first.code, message: first.message, canRetry: first.retryable } }
 }
 
-function invalidCandidate(raw: RawSource, diagnostics: ImportCandidate['diagnostics'], id: string, replacements: ImportCandidate['replacements'] = []): ImportCandidate {
-  return candidateError({ id, origin: raw.origin, rawText: raw.rawText, raw, unknownFields: raw.unknownFields, replacements, diagnostics, writable: false, status: 'invalid' })
+function invalidCandidate(raw: RawSource, diagnostics: ImportCandidate['diagnostics'], id: string, replacements: ImportCandidate['replacements'] = [], sourceUuid = createSourceUuid()): ImportCandidate {
+  return candidateError({ id, sourceUuid, origin: raw.origin, rawText: raw.rawText, raw, unknownFields: raw.unknownFields, replacements, diagnostics, writable: false, status: 'invalid' })
 }
 
 function makeRaw(rawText: string, kind: RawSource['kind'], value: JsonValue, location?: string): RawSource {
@@ -116,6 +117,7 @@ function matchLocal(source: SourceSnapshot | undefined, candidate: ImportCandida
 }
 
 function parseValue(value: JsonValue, rawText: string, kind: RawSource['kind'], id: string, options: ImportOptions, requireName = false): ImportCandidate {
+  const sourceUuid = createSourceUuid(options.sourceUuidFactory)
   const raw = makeRaw(rawText, kind, value)
   const original = normalizeSource(value, raw, requireName)
   const originalSource = original.source
@@ -134,8 +136,8 @@ function parseValue(value: JsonValue, rawText: string, kind: RawSource['kind'], 
   const diagnostics = [...normalized.diagnostics, ...replacementDiagnostics]
   const withRaw = { ...normalized.raw, parsed: value }
   const candidate: ImportCandidate = source === undefined
-    ? invalidCandidate(withRaw, diagnostics, id, replacements.results)
-    : candidateError({ id, origin: withRaw.origin, rawText, raw: withRaw, source, unknownFields: normalized.unknownFields, replacements: replacements.results, diagnostics, writable: !diagnostics.some((item) => item.severity === 'error'), status: diagnostics.some((item) => item.severity === 'error') ? 'invalid' : 'ready' })
+    ? invalidCandidate(withRaw, diagnostics, id, replacements.results, sourceUuid)
+    : candidateError({ id, sourceUuid, sourceFingerprint: sourceDefinitionFingerprint(source), origin: withRaw.origin, rawText, raw: withRaw, source, unknownFields: normalized.unknownFields, replacements: replacements.results, diagnostics, writable: !diagnostics.some((item) => item.severity === 'error'), status: diagnostics.some((item) => item.severity === 'error') ? 'invalid' : 'ready' })
   return matchLocal(options.localSnapshots?.get(source?.bookSourceUrl ?? ''), candidate)
 }
 
@@ -147,7 +149,10 @@ function parseJavaScript(text: string, id: string, options: ImportOptions, dynam
     return invalidCandidate(raw, diagnostics, id)
   }
   const candidate = parseValue(extracted.config, text, 'javascript', id, options, true)
-  if (candidate.source !== undefined) candidate.source.mainJs = text
+  if (candidate.source !== undefined) {
+    candidate.source.mainJs = text
+    candidate.sourceFingerprint = sourceDefinitionFingerprint(candidate.source)
+  }
   candidate.raw.parsed = extracted.config
   return candidate
 }

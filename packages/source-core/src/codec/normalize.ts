@@ -60,7 +60,11 @@ function clone(value: JsonValue): JsonValue {
 
 function parseRule(value: JsonValue, path: string, diagnostics: ImportDiagnostic[]): JsonValue {
   if (value === null || value === '') return null
-  if (isObject(value)) return clone(value)
+  // Android exports an empty rule group as `[]` (most commonly an unused
+  // explore group).  It is a valid, intentionally incomplete configuration,
+  // not a malformed source.  Keep the shape so the runtime can treat the
+  // missing individual rules as unsupported/empty at the workflow boundary.
+  if (isObject(value) || Array.isArray(value)) return clone(value)
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value) as JsonValue

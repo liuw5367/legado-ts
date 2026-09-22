@@ -26,9 +26,14 @@ export function scanTopLevel(input: string): ScanResult {
   let interpolation = 0
   let quote: '"' | "'" | '`' | null = null
   let escaped = false
+  let replacement = false
   for (let index = 0; index < input.length; index += 1) {
     const current = input[index]
     const next = input[index + 1]
+    // Replacement patterns are regular-expression text, not rule syntax.
+    // Once the first `##` separator is reached, parentheses, brackets, braces
+    // and rule operators must not affect the structural scan.
+    if (replacement) continue
     if (quote !== null) {
       if (escaped) escaped = false
       else if (current === '\\') escaped = true
@@ -37,6 +42,15 @@ export function scanTopLevel(input: string): ScanResult {
     }
     if (current === '"' || current === "'" || current === '`') {
       quote = current
+      continue
+    }
+    if (current === '\\') {
+      index += 1
+      continue
+    }
+    if (current === '#' && next === '#' && interpolation === 0 && square === 0 && round === 0 && curly === 0) {
+      replacement = true
+      index += 1
       continue
     }
     if (current === '{' && next === '{') {
@@ -100,9 +114,24 @@ export function splitReplacement(input: string): { parts: string[]; diagnostic?:
   let square = 0
   let round = 0
   let curly = 0
+  let replacement = false
   for (let index = 0; index < input.length - 1; index += 1) {
     const current = input[index]
     const next = input[index + 1]
+    if (replacement) {
+      if (quote !== null) {
+        if (escaped) escaped = false
+        else if (current === '\\') escaped = true
+        else if (current === quote) quote = null
+      } else if (current === '"' || current === "'" || current === '`') {
+        quote = current
+      } else if (current === '#' && next === '#') {
+        parts.push(input.slice(start, index))
+        start = index + 2
+        index += 1
+      }
+      continue
+    }
     if (quote !== null) {
       if (escaped) escaped = false
       else if (current === '\\') escaped = true
@@ -122,6 +151,7 @@ export function splitReplacement(input: string): { parts: string[]; diagnostic?:
     if (current === '#' && next === '#' && square === 0 && round === 0 && curly === 0) {
       parts.push(input.slice(start, index))
       start = index + 2
+      replacement = true
       index += 1
     }
   }

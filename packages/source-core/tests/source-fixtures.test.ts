@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { importSources } from '../src/public/index.ts'
+import { compileRule, importSources } from '../src/public/index.ts'
 import type { JsonValue } from '../src/public/index.ts'
 
 const sourceRoot = new URL('../../../fixtures/source/', import.meta.url)
@@ -13,6 +13,8 @@ interface FixtureSpec {
   statuses: Record<string, number>
   diagnostics: Record<string, number>
 }
+
+const ruleGroups = ['ruleExplore', 'ruleSearch', 'ruleBookInfo', 'ruleToc', 'ruleContent', 'ruleReview'] as const
 
 async function fixtureSpecs(): Promise<{ totalCandidates: number; byPath: Map<string, FixtureSpec> }> {
   const text = await readFile(new URL('../../../fixtures/phase-07-b/manifest.json', import.meta.url), 'utf8')
@@ -95,6 +97,31 @@ test('07-B a collection member follows the same single-source entry', async () =
   assert.equal(collection[0]?.status, single[0]?.status)
   assert.deepEqual(collection[0]?.source, single[0]?.source)
   assert.deepEqual(collection[0]?.diagnostics, single[0]?.diagnostics)
+})
+
+test('07-B every real source is structurally parseable even when optional workflows are incomplete', async () => {
+  const files = await fixtureFiles()
+  let ruleCount = 0
+  for (const file of files) {
+    const candidates = await importSources(await readFile(file.path, 'utf8'))
+    assert.ok(candidates.every((candidate) => candidate.status === 'ready'), `${file.relative}: every source must be importable`)
+    for (const candidate of candidates) {
+      const source = candidate.source
+      assert.ok(source, `${file.relative}: source missing after import`)
+      for (const group of ruleGroups) {
+        const value: JsonValue | undefined = source[group]
+        if (value === null || typeof value !== 'object' || Array.isArray(value)) continue
+        for (const [field, rule] of Object.entries(value)) {
+          if (typeof rule !== 'string' || rule.length === 0) continue
+          ruleCount += 1
+          const compiled = compileRule(rule)
+          assert.deepEqual(compiled.diagnostics, [], `${file.relative}:${source.bookSourceName}:${group}.${field}`)
+          assert.ok(compiled.rule, `${file.relative}:${source.bookSourceName}:${group}.${field}`)
+        }
+      }
+    }
+  }
+  assert.ok(ruleCount > 0)
 })
 
 test('07-B fixture import keeps candidate, byte and cancellation limits isolated', async () => {

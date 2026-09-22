@@ -1,4 +1,5 @@
 export { importSources } from '../codec/import.ts'
+export { createSourceUuid, sameSourceDefinition, sourceDefinitionFingerprint } from '../codec/identity.ts'
 export { exportSource } from '../codec/export.ts'
 export { refreshSubscription } from '../subscription/refresh.ts'
 export { diagnostic, primaryError, safeLocation } from '../diagnostics/diagnostics.ts'
