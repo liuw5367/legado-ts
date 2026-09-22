@@ -166,6 +166,7 @@ export function sha256(value: string): string {
 
 /** 搜索历史的去重键只代表搜索框名称，不代表某本书的永久身份。 */
 export function normalizeSearchName(value: string): string {
+  // Search history treats repeated whitespace as the same visible name.
   return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('zh-Hans')
 }
 

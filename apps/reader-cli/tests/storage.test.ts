@@ -12,7 +12,7 @@ async function temporaryStorage(): Promise<{ storage: ReaderStorage; root: strin
   return { storage, root }
 }
 
-test('默认缓存目录位于用户配置目录', () => {
+test('默认数据和缓存目录位于用户配置目录', () => {
   const home = '/tmp/reader-cli-test-home'
   for (const platform of ['darwin', 'linux', 'win32'] as const) {
     const paths = defaultStoragePaths(platform, { HOME: home, LOCALAPPDATA: '/tmp/local-app-data', XDG_STATE_HOME: '/tmp/state', XDG_CACHE_HOME: '/tmp/cache' })
