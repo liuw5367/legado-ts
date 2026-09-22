@@ -15,5 +15,5 @@
 <text x="44" y="282" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  2. 三体全集 · 刘慈欣 · 通用书源 · 包含关键词 · 耗时 410ms</text>
 <text x="44" y="314" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  3. 三体：黑暗森林 · 作者未知 · 网络书库 · 其他 · 耗时 1.2s</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 详情  [t] 目录  [o] 操作  [j/k ↑/↓] 移动  [←/→] 翻页</text>
+<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 详情  [t] 目录  [o] 操作  [Esc] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
 </svg>

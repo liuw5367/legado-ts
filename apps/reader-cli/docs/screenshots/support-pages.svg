@@ -9,19 +9,19 @@
   <text x="46" y="145" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17" font-weight="700">需要配置书源</text>
   <text x="46" y="173" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">使用 legado-reader --source &lt;文件、目录或 HTTP(S) JSON 地址&gt;</text>
   <text x="46" y="201" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">或设置 LEGADO_READER_SOURCE 后重新启动。</text>
-  <text x="46" y="226" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[Enter] 确认  [Esc] 返回  [d] 诊断  [?] 帮助  [q] 退出</text>
+  <text x="46" y="226" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[Esc] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
   <rect x="24" y="256" width="912" height="188" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
   <text x="46" y="290" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  帮助</text>
   <text x="46" y="318" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">./sources · 6/6 个可用 · 就绪</text>
   <text x="46" y="349" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17" font-weight="700">帮助</text>
-<text x="46" y="377" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">Ctrl+K 搜索书籍，j/k 或上下键移动，左右键/PageUp/PageDown 翻页。</text>
-  <text x="46" y="405" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">阅读页：空格/左右键翻页，j/k 逐行，b 回退，[ ] 切章，t 目录，s 书源，a 书架。</text>
-<text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">书架、搜索结果和详情页可按 o；目录、正文、书源和映射页不显示操作菜单。</text>
+<text x="46" y="377" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">列表：j/k、上下键移动；左右键/PageUp/PageDown 翻页；Home/End 首尾。</text>
+  <text x="46" y="405" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">正文：空格/左右键翻页，j/k 逐行，b 回退，[ ] 切章，r 刷新正文。</text>
+<text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">操作弹窗：j/k 或上下键选择，Enter 执行，Esc 关闭；底部快捷键只显示一行。</text>
   <rect x="24" y="460" width="912" height="212" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
   <text x="46" y="494" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  诊断</text>
   <text x="46" y="522" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">./sources · 5/6 个可用 · 就绪</text>
   <text x="46" y="553" fill="#f5f7fa" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17" font-weight="700">诊断</text>
   <text x="46" y="581" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[!] 旧版书源：定义 fingerprint 已变化，需要重新搜索</text>
   <text x="46" y="609" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[!] 网络书库：最近一次搜索返回空结果</text>
-  <text x="46" y="646" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[Enter] 确认  [Esc] 返回  [d] 诊断  [?] 帮助  [q] 退出</text>
+  <text x="46" y="646" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[Esc] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
 </svg>

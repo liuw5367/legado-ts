@@ -28,11 +28,14 @@ class FakeSession implements ReaderSourceSession {
   private readonly candidates: BookCandidate[]
   private readonly delayMs: number
   private readonly failDetail: boolean
+  private readonly contentValue: ChapterContent | undefined
+  public readonly contentRefreshes: boolean[] = []
 
-  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false) {
+  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent) {
     this.candidates = candidates
     this.delayMs = delayMs
     this.failDetail = failDetail
+    this.contentValue = contentValue
   }
 
   public attachCache(): void {}
@@ -53,8 +56,10 @@ class FakeSession implements ReaderSourceSession {
     return result<WorkflowPage<Chapter>>('failed', null)
   }
 
-  public async content(_chapter: Chapter, _book: BookMetadata): Promise<RuntimeResult<ChapterContent>> {
-    return result<ChapterContent>('failed', null)
+  public async content(chapter: Chapter, _book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean }): Promise<RuntimeResult<ChapterContent>> {
+    this.contentRefreshes.push(options?.refresh === true)
+    if (this.contentValue === undefined) return result<ChapterContent>('failed', null)
+    return result('success', { ...this.contentValue, chapter })
   }
 }
 
@@ -214,6 +219,29 @@ test('详情请求失败时不会提交孤儿书籍和书源记录', async () =>
     const selected = { candidate: { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/book/failure', name: '失败书', rawFields: {}, traceRef: 'selected' }, source: sourceEntry, searchId: 'search-1', arrivalIndex: 0 }
     await assert.rejects(() => application.openSearchResult(selected), /详情请求失败/)
     assert.deepEqual(await storage.listBooks(), [])
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('刷新正文会把刷新选项传到当前书源并重新请求正文', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-refresh-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/refresh'), 0)
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const bookUrl = 'https://source.test/refresh/book'
+  const edition = editionKey(sourceEntry.source.bookSourceUrl, bookUrl)
+  const chapter: Chapter = { sourceId: sourceEntry.source.bookSourceUrl, bookUrl, chapterUrl: `${bookUrl}/c1`, index: 0, title: '第一章', rawFields: {}, traceRef: 'fixture' }
+  const session = new FakeSession([], 0, false, { chapter, contentType: 'text', raw: '正文', cleaned: '正文', pages: ['正文'], resources: [] })
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => session })
+  try {
+    await storage.upsertBook({ bookId, name: '刷新书', activeEditionKey: edition, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: edition, sourceId: sourceEntry.source.bookSourceUrl, sourceFingerprint: sourceEntry.fingerprint, bookUrl, name: '刷新书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    await application.loadContent(bookId, chapter, edition, undefined, { refresh: true })
+    await application.loadContent(bookId, chapter, edition)
+    assert.deepEqual(session.contentRefreshes, [true, false])
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

@@ -17,5 +17,5 @@
   <text x="44" y="340" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">书架       已加入 · 当前章节：第一章</text>
   <text x="44" y="380" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">简介       三体文明向地球发出信号，人类社会开始面对漫长的未来。</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 开始/继续阅读  [t] 目录  [s] 换源  [a] 书架  [o] 操作  [j/k ↑/↓] 滚动</text>
+  <text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 开始/继续阅读  [t] 目录  [s] 换源  [a] 书架  [o] 操作  [Esc] 返回</text>
 </svg>

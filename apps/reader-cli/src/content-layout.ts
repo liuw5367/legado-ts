@@ -1,8 +1,12 @@
 import wrapAnsi from 'wrap-ansi'
+import { serializeContentBlock } from './content-format.ts'
+import type { ContentBlockKind, FormattedContent } from './content-format.ts'
 
 export interface ContentLayout {
   paragraphs: string[]
   lines: string[]
+  /** One semantic kind per rendered line; blank paragraph separators are undefined. */
+  lineKinds?: Array<ContentBlockKind | undefined>
 }
 
 /** Remove terminal control sequences before untrusted source text reaches Ink. */
@@ -24,6 +28,30 @@ export function layoutContent(value: string, width: number): ContentLayout {
   }
   if (lines.at(-1) === '') lines.pop()
   return { paragraphs, lines }
+}
+
+/** Layout structured chapter blocks without losing block identity or preformatted whitespace. */
+export function layoutFormattedContent(content: FormattedContent, width: number): ContentLayout {
+  const safeWidth = Math.max(8, width)
+  const blocks = content.blocks.map((block) => {
+    const serialized = sanitizeTerminalText(serializeContentBlock(block))
+    return { kind: block.kind, text: block.kind === 'preformatted' ? serialized : serialized.trim() }
+  }).filter((block) => block.kind === 'separator' || block.text.length > 0)
+  const paragraphs = blocks.map((block) => block.text)
+  const lines: string[] = []
+  const lineKinds: Array<ContentBlockKind | undefined> = []
+  for (const block of blocks) {
+    const wrapped = wrapAnsi(block.text, safeWidth, { hard: true, trim: false, wordWrap: false }).split('\n')
+    lines.push(...wrapped)
+    lineKinds.push(...wrapped.map(() => block.kind))
+    lines.push('')
+    lineKinds.push(undefined)
+  }
+  if (lines.at(-1) === '') {
+    lines.pop()
+    lineKinds.pop()
+  }
+  return { paragraphs, lines, lineKinds }
 }
 
 export function paragraphOffsetAtLine(layout: ContentLayout, line: number, width = 80): { paragraphIndex: number; offset: number } {

@@ -14,5 +14,5 @@
   <text x="44" y="254" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 1. 三体 · 刘慈欣 · 本地精选 · +1 个书源 · 完全匹配 · 耗时 240ms</text>
   <text x="44" y="286" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  2. 三体全集 · 刘慈欣 · 通用书源 · 包含关键词 · 耗时 410ms</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [o] 操作  [j/k ↑/↓] 移动  [←/→] 翻页</text>
+  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [o] 操作  [?] 帮助  [d] 诊断  [q] 退出</text>
 </svg>

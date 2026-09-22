@@ -4,7 +4,8 @@ export interface ActionMenuContext {
   hasBook: boolean
   hasSources: boolean
   hasToc: boolean
-  page: 'home' | 'results' | 'detail' | 'toc' | 'reader' | 'sources' | 'mapping'
+  /** 允许打开操作菜单的页面；目录、正文和书源页不再直接显示操作入口。 */
+  page: 'home' | 'results' | 'detail'
   busy: boolean
 }
 

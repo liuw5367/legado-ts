@@ -134,11 +134,11 @@ function fromPlainText(value: string): FormattedContent {
 }
 
 function toFormattedContent(blocks: ContentBlock[]): FormattedContent {
-  const text = blocks.map((block) => serializeBlock(block)).join('\n\n')
+  const text = blocks.map((block) => serializeContentBlock(block)).join('\n\n')
   return { blocks, text }
 }
 
-function serializeBlock(block: ContentBlock): string {
+export function serializeContentBlock(block: ContentBlock): string {
   if (block.kind === 'heading') return `${'#'.repeat(Math.max(1, Math.min(6, block.level ?? 1)))} ${block.text}`
   if (block.kind === 'quote') return block.text.split('\n').map((line) => `│ ${line.trim()}`).join('\n')
   if (block.kind === 'preformatted') return block.text

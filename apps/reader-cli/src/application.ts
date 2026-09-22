@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks, sourceDefinitionFingerprint } from '@legado/source-core'
-import type { BookCandidate, BookMetadata, Chapter, ChapterContent, NormalizedSource, WorkflowPorts, WorkflowStatus } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentCache, NormalizedSource, WorkflowPorts, WorkflowStatus } from '@legado/source-core'
 import { KeyedConcurrencyHost, NodeCookieStore, NodeNetworkHost, SourceRequestHost, SourceRuleHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
 import { usableSources } from './source-catalog.ts'
@@ -94,7 +94,7 @@ export interface ReaderSourceSession {
   search(keyword: string, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof searchBooks>>>
   detail(candidate: BookCandidate, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadBookDetails>>>
   toc(book: BookMetadata, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadTableOfContents>>>
-  content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadChapterContent>>>
+  content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<Awaited<ReturnType<typeof loadChapterContent>>>
   attachCache(storage: ReaderStorage): void
 }
 
@@ -132,10 +132,11 @@ class SourceSession implements ReaderSourceSession {
     return loadTableOfContents({ ...operation.ports, cache: this.cache }, { source: this.source, book, ...(signal === undefined ? {} : { signal }), maxPages: 32 })
   }
 
-  public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
+  public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
     const operation = this.createOperation()
     operation.rules.setBindings({ key: book.name ?? '', book, chapter })
-    return loadChapterContent({ ...operation.ports, cache: this.cache }, { source: this.source, chapter, ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
+    const cache: ContentCache = options?.refresh === true ? { get: async () => undefined, set: (key, value, cacheSignal) => this.cache.set(key, value, cacheSignal) } : this.cache
+    return loadChapterContent({ ...operation.ports, cache }, { source: this.source, chapter, ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
   }
 
   public readonly cache = {
@@ -448,11 +449,11 @@ export class ReaderApplication {
     return { chapters: result.value.items, revision, source, edition }
   }
 
-  public loadContent(bookId: string, chapter: Chapter, editionId?: string, signal?: AbortSignal): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
-    return this.trackOperation(signal, (operationSignal) => this.loadContentInternal(bookId, chapter, editionId, operationSignal))
+  public loadContent(bookId: string, chapter: Chapter, editionId?: string, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
+    return this.trackOperation(signal, (operationSignal) => this.loadContentInternal(bookId, chapter, editionId, operationSignal, options))
   }
 
-  private async loadContentInternal(bookId: string, chapter: Chapter, editionId: string | undefined, signal: AbortSignal): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
+  private async loadContentInternal(bookId: string, chapter: Chapter, editionId: string | undefined, signal: AbortSignal, options?: { refresh?: boolean }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
     throwIfAborted(signal)
     const book = await this.storage.getBook(bookId)
     if (book === undefined) throw new Error('书籍记录不存在')
@@ -462,7 +463,7 @@ export class ReaderApplication {
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
     const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
-    const result = await session.content(chapter, metadata, signal)
+    const result = await session.content(chapter, metadata, signal, options)
     throwIfAborted(signal)
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '正文加载失败')
     return { content: result.value, source, edition }
