@@ -369,6 +369,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       target = { kind: 'book', bookId: book.book.bookId }
       hasSources = book.sources.length > 0 || sources.length > 0
     } else if (page === 'home') {
+      if (homeArea === 2) return
       const item = homeItemsForArea(home, homeArea)[selected]
       if (item !== undefined) {
         target = { kind: 'book', bookId: item.book.bookId }
@@ -506,6 +507,9 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         setSourceSearchState(result.cancelled ? 'cancelled' : 'complete')
         const added = items.filter((item) => !before.has(item.editionKey)).length
         setMessage(result.cancelled ? `搜索已取消，保留 ${added} 个已匹配书源` : `已搜索 ${result.sources.length} 个书源，新增 ${added} 个严格匹配书源`)
+        void refreshHome().catch((refreshError: unknown) => {
+          if (mountedRef.current && isCurrent(operation)) setMessage(errorMessage(refreshError))
+        })
       }).catch((error: unknown) => {
         if (isCurrent(operation) && !isAbortError(error)) { setSourceSearchState('error'); setMessage(errorMessage(error)) }
       }).finally(() => finishOperation(operation))
@@ -627,7 +631,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       <Text>{'─'.repeat(Math.max(8, Math.min(columns, 120)))}</Text>
       {visiblePage}
       <Text>{'─'.repeat(Math.max(8, Math.min(columns, 120)))}</Text>
-      <Text dimColor>{footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined)}</Text>
+      <Text dimColor>{footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea)}</Text>
     </Box>
   )
 }
@@ -862,10 +866,10 @@ function normalizeChapterTitle(value: string): string { return display(value).no
 function pageLabel(page: Page): string { return ({ config: '配置', home: '首页', search: '搜索', results: '搜索结果', detail: '详情', toc: '目录', reader: '阅读', sources: '已知书源', mapping: '章节映射', help: '帮助', diagnostics: '诊断' } as Record<Page, string>)[page] }
 function previousPage(page: Page): Page { return page === 'config' ? 'config' : page === 'home' ? 'home' : page === 'search' || page === 'results' ? 'home' : page === 'detail' ? 'results' : page === 'toc' ? 'detail' : page === 'reader' ? 'toc' : page === 'sources' ? 'detail' : page === 'mapping' ? 'sources' : 'home' }
 function sourceState(value: KnownSourceView['state']): string { return value === 'available' ? '可用' : value === 'stale' ? '需要重新搜索' : value === 'removed' ? '书源已移除' : '定义冲突' }
-function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean): string {
+function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number): string {
   if (menuOpen) return '[Enter] 执行  [j/k] 选择  [Esc] 关闭'
   if (columns < 48) return busy ? '处理中 · Esc 取消' : 'Esc 返回 · ? 帮助 · d 诊断 · q 退出'
-  if (page === 'home') return '[Enter] 打开  [o] 操作  [j/k] 移动  [Esc] 返回'
+  if (page === 'home') return homeArea === 2 ? '[Enter] 重复搜索  [j/k] 移动  [Esc] 返回' : '[Enter] 打开  [o] 操作  [j/k] 移动  [Esc] 返回'
   if (page === 'search') return '[Enter] 搜索  [Esc] 返回'
   if (page === 'results') return searchState === 'running' || searchState === 'cancelling' ? '[Esc] 取消搜索  [o] 操作  [j/k] 移动' : '[Enter] 详情  [t] 目录  [o] 操作  [Esc] 返回'
   if (page === 'sources' && (sourceSearchState === 'running' || sourceSearchState === 'cancelling')) return '[Esc] 取消搜索  [j/k] 滚动已匹配书源'
