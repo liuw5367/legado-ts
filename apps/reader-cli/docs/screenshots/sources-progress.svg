@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
   <title id="title">命令行阅读器手动扩展书源搜索预览</title>
-  <desc id="desc">已知书源页面在手动搜索更多书源时显示进度和 Esc 取消提示。</desc>
+  <desc id="desc">已知书源页面在手动搜索更多书源时显示进度和 ⎋ 取消提示。</desc>
   <rect width="960" height="520" fill="#0f141a"/>
   <rect x="18" y="16" width="924" height="488" rx="10" fill="#111923" stroke="#334155" stroke-width="2"/>
   <rect x="18" y="16" width="924" height="36" rx="10" fill="#1a2531"/>
@@ -13,5 +13,5 @@
   <text x="44" y="198" fill="#72e6a8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">+ 2. [可用] 阅读空间 · 三体 · 刘慈欣</text>
   <text x="44" y="224" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">     最新章节：第三部 · 更新时间：2026-09-21 18:20:00 · 搜索耗时：810ms</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [?] 帮助</text>
+  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[⎋] 取消搜索  [?] 帮助</text>
 </svg>

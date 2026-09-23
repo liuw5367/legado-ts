@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
   <title id="title">命令行阅读器增量搜索结果预览</title>
-  <desc id="desc">搜索结果页面在搜索未完成时显示已返回候选、来源进度和 Esc 取消提示。</desc>
+  <desc id="desc">搜索结果页面在搜索未完成时显示已返回候选、来源进度和 ⎋ 取消提示。</desc>
   <rect width="960" height="520" fill="#0f141a"/>
   <rect x="18" y="16" width="924" height="488" rx="10" fill="#111923" stroke="#334155" stroke-width="2"/>
   <rect x="18" y="16" width="924" height="36" rx="10" fill="#1a2531"/>
@@ -11,5 +11,5 @@
   <text x="44" y="140" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">&gt; 1. 三体 · 刘慈欣 · 本地精选 · +1 个书源 · 完全匹配</text>
   <text x="44" y="172" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  2. 三体全集 · 刘慈欣 · 通用书源 · 包含关键词</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Esc] 取消搜索  [o] 操作  [?] 帮助</text>
+  <text x="44" y="489" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[⎋] 取消搜索  [o] 操作  [?] 帮助</text>
 </svg>

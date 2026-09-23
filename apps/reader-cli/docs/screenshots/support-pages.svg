@@ -8,18 +8,18 @@
   <text x="914" y="86" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">0/0 来源可用</text>
   <text x="46" y="140" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">使用 legado-reader --source &lt;文件、目录或 HTTP(S) JSON 地址&gt;</text>
   <text x="46" y="168" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">或设置 LEGADO_READER_SOURCE 后重新启动。</text>
-  <text x="46" y="226" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[Esc] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
+  <text x="46" y="226" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[⎋] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
   <rect x="24" y="256" width="912" height="188" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
   <text x="46" y="290" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  帮助 · 阅读</text>
-  <text x="914" y="290" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">Esc 返回</text>
+  <text x="914" y="290" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">⎋ 返回</text>
 <text x="46" y="350" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">↑/↓ 或 j/k 翻页，←/→ 或 h/l 切换章节</text>
   <text x="46" y="378" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">PgUp/PgDn 或空格翻页，t 目录，s 书源</text>
-  <text x="46" y="406" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">a 书架，r 刷新正文</text>
-  <text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">Esc 返回 · Ctrl+K 搜书 · q 退出 · ? 关闭帮助</text>
+  <text x="46" y="406" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">a 书架，r 刷新</text>
+  <text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">⎋ 返回 · Ctrl+K 搜书 · q 退出 · ? 关闭帮助</text>
   <rect x="24" y="460" width="912" height="212" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
   <text x="46" y="494" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  诊断</text>
   <text x="914" y="494" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">2 条信息</text>
   <text x="46" y="553" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[!] 旧版书源：定义 fingerprint 已变化，需要重新搜索</text>
   <text x="46" y="581" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[!] 网络书库：最近一次搜索返回空结果</text>
-  <text x="46" y="646" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[Esc] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
+  <text x="46" y="646" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[⎋] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
 </svg>

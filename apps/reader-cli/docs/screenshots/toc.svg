@@ -14,5 +14,5 @@
   <text x="44" y="230" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  4. 三体、三体</text>
   <text x="44" y="260" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">  5. 台球</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 阅读  [/] 筛章节  [r] 刷新  [s] 倒序  [?] 帮助  [Esc] 返回</text>
+<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[↵] 阅读  [/] 筛章节  [r] 刷新  [s] 倒序  [?] 帮助  [⎋] 返回</text>
 </svg>

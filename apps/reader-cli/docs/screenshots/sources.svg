@@ -15,5 +15,5 @@
 <text x="44" y="256" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">  3. [需要重新搜索] 旧版书源</text>
 <text x="44" y="282" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">     最新章节：未知 · 更新时间：未知 · 搜索耗时：680ms</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 切换  [t] 目录  [m] 更多  [Esc] 返回</text>
+<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[↵] 切换  [t] 目录  [m] 更多  [⎋] 返回</text>
 </svg>

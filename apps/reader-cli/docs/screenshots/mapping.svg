@@ -12,7 +12,7 @@
   <text x="44" y="170" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">目标源  通用书源</text>
   <text x="44" y="200" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">当前章节  红岸基地</text>
   <text x="44" y="230" fill="#8bd450" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="18">目标章节  红岸基地（映射成功）</text>
-  <text x="44" y="270" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">Enter 确认，Esc 取消</text>
+  <text x="44" y="270" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">↵ 确认，⎋ 取消</text>
   <text x="44" y="463" fill="#526274" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17">────────────────────────────────────────────────────────────</text>
-<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[Enter] 确认切换  [Esc] 取消  [?] 帮助</text>
+<text x="44" y="489" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[↵] 确认切换  [⎋] 取消  [?] 帮助</text>
 </svg>

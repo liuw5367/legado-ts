@@ -27,5 +27,5 @@ export const cliHelp = `legado-reader：命令行阅读器
   legado-reader --source <文件、目录或 HTTP(S) JSON 地址>
   LEGADO_READER_SOURCE=<来源> legado-reader
 
-按键：Ctrl+K 搜书，j/k 或上下键移动，左右键/PageUp/PageDown 翻页，Enter 打开，Esc 返回，? 帮助，q 退出。
+按键：Ctrl+K 搜书，j/k 或上下键移动，左右键/PageUp/PageDown 翻页，↵ 打开，⎋ 返回，? 帮助，q 退出。
 `

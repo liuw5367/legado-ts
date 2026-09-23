@@ -96,7 +96,7 @@ export function pageHeader(page: Page, state: RenderState): { left: string; righ
 export function renderPage(page: Page, state: RenderState): React.ReactElement {
   if (page === 'config') return renderConfig(state.catalog, state.pageScroll, state.bodyHeight)
   if (page === 'home') return renderHome(state.home, state.history, state.homeArea, state.selected, state.listStart, state.bodyHeight)
-  if (page === 'search') return <Text dimColor>在底部输入书名，按 Enter 搜索。</Text>
+  if (page === 'search') return <Text dimColor>在底部输入书名，按 ↵ 搜索。</Text>
   if (page === 'results') return renderResults(state.search, state.selected, state.listStart, state.bodyHeight, state.searchState)
   if (page === 'detail') return renderDetail(state.book, state.pageScroll, state.bodyHeight, state.columns)
   if (page === 'toc') return renderToc(state.toc, state.tocSelected, state.tocQuery, state.listStart, state.bodyHeight)

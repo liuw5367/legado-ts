@@ -91,7 +91,7 @@ test('阅读页把方向键映射到等效字母快捷键，详情动作使用�
   assert.equal(readerNavigation('l', {}), 'next-chapter')
   assert.equal(readerNavigation('', { rightArrow: true }), 'next-chapter')
   const detailFooter = footer('detail', false, 100, 'idle', 'idle', false, 0)
-  assert.match(detailFooter, /\[Enter\] 阅读/u)
+  assert.match(detailFooter, /\[↵\] 阅读/u)
   assert.match(detailFooter, /\[a\] 书架/u)
   assert.doesNotMatch(detailFooter, /开始|继续阅读|加入\/移出/u)
 })

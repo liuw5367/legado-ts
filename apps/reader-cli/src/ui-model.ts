@@ -45,18 +45,18 @@ export function refreshOnHomeEntry(page: Page, refresh: () => Promise<void>, isC
 
 export function helpLines(page: Page, homeArea: number): string[] {
   const current: Partial<Record<Page, string[]>> = {
-    home: ['↑/↓ 或 j/k 选择，Enter 打开', '1/2/3 切换书架、最近阅读、搜索记录', ...(homeArea === 2 ? [] : ['o 打开书籍操作'])],
-    search: ['输入书名，Enter 搜索', '退格删除，Esc 返回'],
-    results: ['↑/↓ 或 j/k 选择，Enter 详情', 't 打开目录，o 书籍操作', '搜索中按 Esc 取消'],
-    detail: ['Enter 阅读，t 目录', 's 书源，a 书架'],
-    toc: ['↑/↓ 或 j/k 选择，Enter 阅读', '/ 搜索，r 刷新', 's 切换正序/倒序，Home/End 首尾'],
+    home: ['↑/↓ 或 j/k 选择，↵ 打开', '1/2/3 切换书架、最近阅读、搜索记录', ...(homeArea === 2 ? [] : ['o 打开书籍操作'])],
+    search: ['输入书名，↵ 搜索', '退格删除，⎋ 返回'],
+    results: ['↑/↓ 或 j/k 选择，↵ 详情', 't 打开目录，o 书籍操作', '搜索中按 ⎋ 取消'],
+    detail: ['↵ 阅读，t 目录', 's 书源，a 书架'],
+    toc: ['↑/↓ 或 j/k 选择，↵ 阅读', '/ 搜索，r 刷新', 's 切换正序/倒序，Home/End 首尾'],
     reader: ['↑/↓ 或 j/k 翻页，←/→ 或 h/l 切换章节', 'PgUp/PgDn 或空格翻页，i 书籍信息，t 目录，s 书源，a 书架，r 刷新'],
-    sources: ['↑/↓ 或 j/k 选择书源', 't 查看目录，Enter 切换，m 搜索更多'],
-    mapping: ['Enter 确认切换，Esc 取消'],
+    sources: ['↑/↓ 或 j/k 选择书源', 't 查看目录，↵ 切换，m 搜索更多'],
+    mapping: ['↵ 确认切换，⎋ 取消'],
     config: ['查看当前来源配置与诊断', 'd 打开诊断，q 退出'],
-    diagnostics: ['↑/↓ 或 j/k 滚动查看，Esc 返回'],
+    diagnostics: ['↑/↓ 或 j/k 滚动查看，⎋ 返回'],
   }
-  return [...(current[page] ?? []), 'Esc 返回 · Ctrl+K 搜书', 'q 退出 · ? 关闭帮助']
+  return [...(current[page] ?? []), '⎋ 返回 · Ctrl+K 搜书', 'q 退出 · ? 关闭帮助']
 }
 
 export function filterChapterIndices(chapters: readonly { title: string }[], query: string): number[] {
@@ -223,64 +223,64 @@ export function activeEditionKey(book: OpenBookResult | undefined): string | und
 
 export function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number, tocSearchActive = false, tocHasQuery = false, tocReversed = false): string {
   if (menuOpen) return layoutFooter([
-    { keys: 'Enter', label: '执行', priority: 0 },
-    { keys: 'Esc', label: '关闭', priority: -1 },
+    { keys: '↵', label: '执行', priority: 0 },
+    { keys: '⎋', label: '关闭', priority: -1 },
   ], columns)
   const common: FooterAction[] = [
-    { keys: 'Esc', label: '返回', priority: -1 },
+    { keys: '⎋', label: '返回', priority: -1 },
     { keys: '?', label: '帮助', priority: 8 },
     { keys: 'd', label: '诊断', priority: 9 },
     { keys: 'q', label: '退出', priority: 10 },
   ]
   if (page === 'home') return layoutFooter([
-    { keys: 'Enter', label: homeArea === 2 ? '重复搜索' : '打开', priority: 0 },
+    { keys: '↵', label: homeArea === 2 ? '重复搜索' : '阅读', priority: 0 },
     ...(homeArea === 2 ? [] : [{ keys: 'o', label: '操作', priority: 1 }]),
     ...common.slice(1),
   ], columns)
   if (page === 'search') return layoutFooter([
-    { keys: 'Enter', label: '搜索', priority: 0 },
-    { keys: 'Esc', label: '返回', priority: -1 },
+    { keys: '↵', label: '搜索', priority: 0 },
+    { keys: '⎋', label: '返回', priority: -1 },
   ], columns)
   if (page === 'results') return layoutFooter([
-    ...(searchState === 'running' || searchState === 'cancelling' ? [{ keys: 'Esc', label: '取消搜索', priority: -1 }] : [{ keys: 'Enter', label: '详情', priority: 0 }, { keys: 't', label: '目录', priority: 1 }]),
+    ...(searchState === 'running' || searchState === 'cancelling' ? [{ keys: '⎋', label: '取消搜索', priority: -1 }] : [{ keys: '↵', label: '详情', priority: 0 }, { keys: 't', label: '目录', priority: 1 }]),
     { keys: 'o', label: '操作', priority: 2 },
     ...(searchState === 'running' || searchState === 'cancelling' ? common.slice(1) : common),
   ], columns)
   if (page === 'sources') {
     const searching = sourceSearchState === 'running' || sourceSearchState === 'cancelling'
     return layoutFooter([
-      ...(searching ? [{ keys: 'Esc', label: '取消搜索', priority: -1 }] : [{ keys: 'Enter', label: '切换', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'm', label: '搜索更多', priority: 2 }]),
+      ...(searching ? [{ keys: '⎋', label: '取消搜索', priority: -1 }] : [{ keys: '↵', label: '切换', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'm', label: '搜索更多', priority: 2 }]),
       ...(searching ? common.slice(1) : common),
     ], columns)
   }
-  if (busy) return layoutFooter([{ keys: 'Esc', label: '取消处理中', priority: -1 }, ...common.slice(1)], columns)
+  if (busy) return layoutFooter([{ keys: '⎋', label: '取消处理中', priority: -1 }, ...common.slice(1)], columns)
   if (page === 'detail') return layoutFooter([
-    { keys: 'Enter', label: '阅读', priority: 0 },
+    { keys: '↵', label: '阅读', priority: 0 },
     { keys: 't', label: '目录', priority: 1 },
     { keys: 's', label: '换源', priority: 1 },
     { keys: 'a', label: '书架', priority: 1 },
     ...common,
   ], columns)
   if (page === 'toc') return layoutFooter(tocSearchActive
-    ? [{ keys: 'Enter', label: '完成', priority: 0 }, { keys: 'Esc', label: '清除', priority: -1 }]
+    ? [{ keys: '↵', label: '完成', priority: 0 }, { keys: '⎋', label: '清除', priority: -1 }]
     : [
-      { keys: 'Enter', label: '阅读', priority: 0 },
+      { keys: '↵', label: '阅读', priority: 0 },
       { keys: '/', label: '搜索', priority: 1 },
       { keys: 'r', label: '刷新', priority: 2 },
       { keys: 's', label: tocReversed ? '正序' : '倒序', priority: 3 },
-      ...(tocHasQuery ? [{ keys: 'Esc', label: '清除筛选', priority: -1 }] : common),
+      ...(tocHasQuery ? [{ keys: '⎋', label: '清除筛选', priority: -1 }] : common),
     ], columns)
   if (page === 'reader') return layoutFooter([
     { keys: 'i', label: '信息', priority: 1 },
     { keys: 't', label: '目录', priority: 1 },
     { keys: 's', label: '换源', priority: 1 },
     { keys: 'a', label: '书架', priority: 1 },
-    { keys: 'r', label: '刷新正文', priority: 1 },
+    { keys: 'r', label: '刷新', priority: 1 },
     ...common,
   ], columns)
   if (page === 'mapping') return layoutFooter([
-    { keys: 'Enter', label: '确认切换', priority: 0 },
-    { keys: 'Esc', label: '取消', priority: -1 },
+    { keys: '↵', label: '确认切换', priority: 0 },
+    { keys: '⎋', label: '取消', priority: -1 },
     ...common.slice(1),
   ], columns)
   return layoutFooter(common, columns)
