@@ -1,5 +1,6 @@
 import { createRequestPlan } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, NormalizedSource, WorkflowRequest, WorkflowStage } from '@legado/source-core'
+import chardet from 'chardet'
 import { NodeCharsetCodec } from './charset.ts'
 import { NodeCookieStore } from './cookies.ts'
 import type { CookieStore } from './types.ts'
@@ -109,11 +110,39 @@ function mergeHeaders(...values: Array<Readonly<Record<string, string>> | undefi
 }
 
 function responseCharset(response: NetworkResponse): string | undefined {
-  const value = response.headers['x-legado-response-charset'] ?? response.headers['content-type']
-  const textValue = Array.isArray(value) ? value[0] : value
-  if (typeof textValue !== 'string') return undefined
-  const match = /charset\s*=\s*["']?([^;"'\s]+)/i.exec(textValue)
+  const explicit = headerValue(response.headers['x-legado-response-charset'])
+  if (explicit !== undefined) return explicit.trim()
+  const contentType = headerValue(response.headers['content-type'])
+  if (contentType === undefined) return undefined
+  const match = /charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType)
   return match?.[1]
+}
+
+function headerValue(value: string | readonly string[] | undefined): string | undefined {
+  return typeof value === 'string' ? value : value?.[0]
+}
+
+function bomCharset(bytes: Uint8Array): string | undefined {
+  if (bytes.length >= 4 && bytes[0] === 0x00 && bytes[1] === 0x00 && bytes[2] === 0xfe && bytes[3] === 0xff) return 'utf-32be'
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xfe && bytes[2] === 0x00 && bytes[3] === 0x00) return 'utf-32le'
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return 'utf-8'
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be'
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le'
+  return undefined
+}
+
+function htmlMetaCharset(bytes: Uint8Array): string | undefined {
+  const sample = Buffer.from(bytes.subarray(0, 8192)).toString('latin1')
+  const xml = /<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)/i.exec(sample)
+  if (xml?.[1] !== undefined) return xml[1]
+  for (const tag of sample.matchAll(/<meta\b[^>]*>/gi)) {
+    const direct = /\bcharset\s*=\s*["']?([^\s"'/>;]+)/i.exec(tag[0])
+    if (direct?.[1] !== undefined) return direct[1]
+    const content = /\bcontent\s*=\s*["']([^"']*)["']/i.exec(tag[0])?.[1]
+    const nested = content === undefined ? undefined : /charset\s*=\s*([^\s;]+)/i.exec(content)?.[1]
+    if (nested !== undefined) return nested.replace(/["']+$/g, '')
+  }
+  return undefined
 }
 
 export class SourceRequestHost {
@@ -224,8 +253,26 @@ export class SourceRequestHost {
   }
 
   private decode(response: NetworkResponse): string {
-    const charset = responseCharset(response)
-    return charset === undefined ? new TextDecoder().decode(response.bytes) : this.encoding.decode(response.bytes, charset)
+    const candidates = [
+      responseCharset(response),
+      bomCharset(response.bytes),
+      htmlMetaCharset(response.bytes),
+      chardet.detect(response.bytes) ?? undefined,
+      'utf-8',
+    ]
+    const attempted = new Set<string>()
+    for (const charset of candidates) {
+      const normalized = charset?.trim()
+      if (normalized === undefined || normalized.length === 0 || attempted.has(normalized.toLowerCase())) continue
+      attempted.add(normalized.toLowerCase())
+      try {
+        return this.encoding.decode(response.bytes, normalized)
+      } catch {
+        // Continue through the remaining metadata and the UTF-8 fallback when a
+        // site advertises a charset that iconv-lite does not support.
+      }
+    }
+    return new TextDecoder().decode(response.bytes)
   }
 }
 

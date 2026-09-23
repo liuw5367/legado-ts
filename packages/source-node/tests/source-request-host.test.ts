@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { NetworkHost, NetworkResponse, NormalizedSource } from '../../source-core/src/public/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
+import { NodeCharsetCodec } from '../src/charset.ts'
 import { SourceRequestHost } from '../src/source-request-host.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
 
@@ -41,6 +42,25 @@ test('书源请求宿主兼容 fixture 中常见的单引号 options 写法', as
 test('书源请求宿主不会把 WebView 请求静默降级到普通 HTTP', async () => {
   const host = new SourceRequestHost({ network: { request: async (plan) => response(plan.url) } })
   await assert.rejects(() => host.request({ source, url: '/search,{"webView":true}', stage: 'search', options: {} }), /WebView/)
+})
+
+test('响应解码按显式 charset、HTTP header、BOM、HTML meta、自动检测和 UTF-8 依次回退', () => {
+  const host = new SourceRequestHost({ network: { request: async (plan) => response(plan.url) } })
+  const gbk = new Uint8Array([0xd6, 0xd0, 0xce, 0xc4]) // “中文” in GBK.
+  const make = (bytes: Uint8Array, headers: NetworkResponse['headers'] = {}): NetworkResponse => ({ ...response('https://fixture.invalid/'), headers, bytes })
+
+  assert.equal(host.decodeResponse(make(gbk, { 'content-type': 'text/html; charset=gbk' })), '中文')
+  assert.equal(host.decodeResponse(make(gbk, { 'content-type': 'text/html; charset=utf-8', 'x-legado-response-charset': 'gbk' })), '中文')
+  const metaPrefix = new TextEncoder().encode('<meta charset="gbk">')
+  const metaBytes = new Uint8Array([...metaPrefix, ...gbk])
+  assert.equal(host.decodeResponse(make(metaBytes, { 'content-type': 'text/html' })), '<meta charset="gbk">中文')
+  assert.equal(host.decodeResponse(make(metaBytes, { 'content-type': 'text/html; charset=gbk' })), '<meta charset="gbk">中文')
+
+  const detectorText = '第一章，故事开始了。主人公走进书房，看到一本古老的书，封面上写着神秘的文字。'
+  const detectorBytes = new NodeCharsetCodec().encode(detectorText, 'gbk')
+  assert.equal(host.decodeResponse(make(detectorBytes)), detectorText)
+  assert.equal(host.decodeResponse(make(new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('第一章')]))), '第一章')
+  assert.equal(host.decodeResponse(make(new TextEncoder().encode('第一章'))), '第一章')
 })
 
 test('cookie-remove 按地址删除，不波及其他书源的 Cookie', async () => {

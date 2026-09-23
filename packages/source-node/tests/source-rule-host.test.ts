@@ -55,6 +55,17 @@ test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', asy
   assert.deepEqual(xpath.value, ['第一章'])
 })
 
+test('XPath 列表保留节点上下文以便后续读取标题和 href', async () => {
+  const host = new SourceRuleHost()
+  const list = await evaluateNodes(host, '@xpath://li', '<ul><li href=/c/1><a>第一章</a></li><li href=/c/2><a>第二章</a></li></ul>')
+  assert.equal(list.status, 'success')
+  assert.ok(Array.isArray(list.value))
+  const first = (list.value as unknown[])[0]
+  assert.ok(first)
+  assert.deepEqual((await evaluate(host, '@xpath:.//a/text()', first)).value, ['第一章'])
+  assert.deepEqual((await evaluate(host, '@xpath:./@href', first)).value, ['/c/1'])
+})
+
 test('规则宿主的 JavaScript 可以使用书源 bridge 的编码能力', async () => {
   const host = new SourceRuleHost()
   const result = await evaluate(host, '@js:java.base64Encode(result)', '我本无意成仙')

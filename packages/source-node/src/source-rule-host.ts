@@ -373,7 +373,7 @@ export class SourceRuleHost implements WorkflowRulePort {
     else if (template && (rule.mode === 'Default' || rule.mode === 'Json' || rule.mode === 'XPath')) value = interpolated
     else if (rule.mode === 'Default') value = await this.evaluateDefault(rule.body, state, content)
     else if (rule.mode === 'Json') value = this.evaluateJson(rule.body, content)
-    else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content)
+    else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content, state.request.expect)
     else if (rule.mode === 'Regex') value = this.evaluateRegex(rule.body, content)
     else if (rule.mode === 'Js') {
       const result = await this.runJavaScript(interpolated, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
@@ -448,10 +448,16 @@ export class SourceRuleHost implements WorkflowRulePort {
     return isDefiniteJsonPath(expression) && Array.isArray(value) && value.length === 1 && Array.isArray(value[0]) ? value[0] : value
   }
 
-  private evaluateXPath(expression: string, content: unknown): unknown {
-    const document = this.xpath.parse(textValue(content))
-    const value = this.xpath.evaluate(document, expression)
-    if (Array.isArray(value) && value.every((item) => this.isParserNode(item))) return value.map((item) => document.read(item as ParserNode, 'text'))
+  private evaluateXPath(expression: string, content: unknown, expect: WorkflowRuleRequest['expect']): unknown {
+    const stored = isNodeRef(content) ? this.nodes.get(content.id) : undefined
+    const document = stored === undefined ? this.xpath.parse(textValue(content)) : stored.document
+    const context = stored === undefined ? document : document.child(stored.node)
+    const value = this.xpath.evaluate(context, expression)
+    if (Array.isArray(value) && value.every((item) => this.isParserNode(item))) {
+      return expect === 'nodes'
+        ? value.map((item) => this.remember(context, item as ParserNode))
+        : value.map((item) => context.read(item as ParserNode, 'text'))
+    }
     return value
   }
 

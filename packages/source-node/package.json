@@ -14,6 +14,7 @@
   "dependencies": {
     "@legado/source-core": "workspace:*",
     "@xmldom/xmldom": "catalog:",
+    "chardet": "catalog:",
     "css-select": "catalog:",
     "dom-serializer": "catalog:",
     "domhandler": "catalog:",

@@ -1,5 +1,7 @@
 import { DOMParser } from '@xmldom/xmldom'
 import fontoxpath from 'fontoxpath'
+import { parseDocument } from 'htmlparser2'
+import { render } from 'dom-serializer'
 import type { HtmlDocument, ParserNode, RuleValue, XPathParser } from '@legado/source-core'
 
 const { evaluateXPath, ReturnType } = fontoxpath
@@ -77,7 +79,13 @@ class XmlDocumentView implements HtmlDocument {
 
 export class XPathParserAdapter implements XPathParser {
   public parse(input: string): XmlDocumentView {
-    return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(input, 'text/xml') as unknown as XmlNode)
+    // Android's XPath parser uses Jsoup for HTML and XML only for an XML declaration.
+    // Repair ordinary HTML first so unclosed tags, void elements, and unquoted
+    // attributes do not make an otherwise useful XPath document disappear.
+    const source = /^\s*<\?xml\b/i.test(input)
+      ? input
+      : render(parseDocument(input), { xmlMode: true, encodeEntities: true })
+    return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(source, 'text/xml') as unknown as XmlNode)
   }
 
   public evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null {

@@ -32,6 +32,15 @@ test('XPath adapter 返回 XML 节点结果', () => {
   assert.equal(document.read(first, 'all'), '<item id="a">A</item>')
 })
 
+test('XPath adapter 先修复常见 HTML，再返回可继续查询的节点', () => {
+  const parser = new XPathParserAdapter()
+  const document = parser.parse('<ul><li class=chapter href=/c/1><a>第一章</a><img src=x><li class=chapter href=/c/2>第二章</ul>')
+  const result = parser.evaluate(document, '//li[@class="chapter"]') as ParserNode[]
+  assert.equal(result.length, 2)
+  assert.equal(document.attr(result[0]!, 'href'), '/c/1')
+  assert.equal(document.read(result[0]!, 'text'), '第一章')
+})
+
 test('Cookie、字符集 adapter 保持会话和字节语义', async () => {
   const cookies = new NodeCookieStore()
   await cookies.set('https://example.test/path', 'sid=abc; Path=/')
