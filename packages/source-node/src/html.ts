@@ -35,7 +35,7 @@ class HtmlDocumentView implements HtmlDocument {
     }
     if (output === 'text') return textContent(value)
     const children = isDocument(value) || isTag(value) ? getChildren(value) : []
-    if (output === 'textNodes') return children.filter(isText).map((child) => getText(child)).filter(Boolean).join('\n')
+    if (output === 'textNodes') return children.filter(isText).map((child) => trimAndroidWhitespace(getText(child))).filter(Boolean).join('\n')
     return children.filter(isText).map((child) => getText(child)).filter(Boolean).join('')
   }
 
@@ -67,6 +67,11 @@ class HtmlDocumentView implements HtmlDocument {
     if (isText(node)) return 'text'
     return 'element'
   }
+}
+
+function trimAndroidWhitespace(value: string): string {
+  // Android String.trim() removes code units <= U+0020 from both ends.
+  return value.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '')
 }
 
 export class HtmlParserAdapter implements HtmlParser {

@@ -13,6 +13,17 @@ test('HTML adapter 保留节点身份并支持 CSS、属性、文本和子文档
   assert.equal(document.read(nodes[0]!, 'html'), 'A<span>B</span>')
 })
 
+test('HTML/XPath textNodes 去除每个文本节点首尾 ASCII 控制空白并忽略空白节点', () => {
+  const html = new HtmlParserAdapter().parse('<div>  A \n <span>nested</span> \t B \r\n</div>')
+  const htmlNode = html.select('div')[0]!
+  assert.equal(html.read(htmlNode, 'textNodes'), 'A\nB')
+
+  const xpath = new XPathParserAdapter()
+  const xml = xpath.parse('<root><item>  A \n <span>nested</span> \t B \r\n</item></root>')
+  const xmlNode = xpath.evaluate(xml, '//item') as ParserNode[]
+  assert.equal(xml.read(xmlNode[0]!, 'textNodes'), 'A\nB')
+})
+
 test('JSONPath adapter 保留列表和空选择', () => {
   const parser = new JsonPathParserAdapter()
   assert.deepEqual(parser.evaluate({ books: [{ name: 'A' }, { name: 'B' }] }, '$.books[*].name'), ['A', 'B'])

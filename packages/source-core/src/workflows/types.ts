@@ -38,6 +38,10 @@ export interface BookCandidate extends BookIdentity {
   lastChapter?: string
   /** 书源搜索或详情规则返回的更新时间文本；来源未提供时保持缺失。 */
   updateTime?: string
+  /** JavaScript 源搜索函数可直接返回目录地址。 */
+  tocUrl?: string
+  /** JavaScript 源通过 SearchBook.variable 传递的变量 JSON。 */
+  variable?: string
   rawFields: JsonObject
   traceRef: string
 }
@@ -106,8 +110,41 @@ export interface WorkflowRuleOutput {
   message?: string
 }
 
+export type WorkflowJavaScriptStage = 'mainJs' | 'book' | 'chapter' | 'search' | 'content'
+
+export type SourceFunctionName = 'search' | 'explore' | 'getBookInfo' | 'getChapters' | 'getContent'
+
+export interface WorkflowJavaScriptRequest {
+  source: NormalizedSource
+  code: string
+  stage: WorkflowJavaScriptStage
+  content?: unknown
+  bindings?: Readonly<Record<string, unknown>>
+  /** Return mutated bindings together with the script result when a hook mutates Java-side DTOs. */
+  captureMutations?: readonly string[]
+  signal?: AbortSignal
+}
+
+export interface SourceFunctionRequest {
+  source: NormalizedSource
+  name: SourceFunctionName
+  args: readonly unknown[]
+  /** 标准函数参数名，用来同时暴露与 Android 相同的全局绑定。 */
+  bindings?: Readonly<Record<string, unknown>>
+  stage: WorkflowJavaScriptStage
+  signal?: AbortSignal
+}
+
+export interface SourceFunctionOutput extends WorkflowRuleOutput {
+  exists: boolean
+}
+
 export interface WorkflowRulePort {
   evaluate(request: WorkflowRuleRequest): Promise<WorkflowRuleOutput>
+  /** JavaScript 源函数执行能力；未实现的宿主应把 mainJs 报告为 capability-missing。 */
+  executeSourceFunction?(request: SourceFunctionRequest): Promise<SourceFunctionOutput>
+  /** 精确脚本钩子，如 loginCheckJs、preUpdateJs 和 formatJs。 */
+  executeWorkflowJavaScript?(request: WorkflowJavaScriptRequest): Promise<WorkflowRuleOutput>
 }
 
 export interface WorkflowPorts {
@@ -149,6 +186,8 @@ export interface DetailInput extends WorkflowOptions {
   source: NormalizedSource
   candidates: readonly BookCandidate[]
   cursor?: PageCursor
+  /** Android 允许刷新时控制 getBookInfo 是否可覆盖名称和作者。 */
+  canReName?: boolean
 }
 
 export interface ChapterIdentity {
@@ -181,6 +220,9 @@ export interface TocInput extends WorkflowOptions {
   cursor?: PageCursor
   maxPages?: number
   maxBytes?: number
+  /** 对齐 Android getChapterList(runPerJs)：默认不执行 preUpdateJs。 */
+  runPerJs?: boolean
+  isFromBookInfo?: boolean
 }
 
 export interface ContentResource {
@@ -201,7 +243,9 @@ export interface ChapterContent {
 
 export interface ContentInput extends WorkflowOptions {
   source: NormalizedSource
-  chapter: ChapterIdentity
+  chapter: ChapterIdentity & { title?: string; rawFields?: JsonObject }
+  /** JS 源 getContent 需要完整 Book；旧调用方缺省时运行时提供最小书对象。 */
+  book?: BookMetadata
   /** 章节链接指向详情页时，可复用详情请求的响应正文。 */
   tocHtml?: string
   /** 下一章地址；命中正文下一页规则时停止抓取，避免把下一章并入本章。 */

@@ -1,8 +1,8 @@
 import type { JsonObject, JsonValue, NormalizedSource } from '../model/types.ts'
 import { createRequestPlan } from '../runtime/request-plan.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
-import type { RequestBudget, RequestPlanInput } from '../runtime/contracts.ts'
-import type { WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { NetworkResponse, RequestBudget, RequestPlanInput } from '../runtime/contracts.ts'
+import type { SourceFunctionName, WorkflowDiagnostic, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export const listFields = [
   ['bookName', 'name'],
@@ -443,15 +443,91 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
+    if (response === undefined) throw new Error('书源请求没有响应')
+    const checked = await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics)
+    if (checked === undefined) return undefined
+    response = checked
     return { content: responseText(response, source, ports), url: response.url }
   } catch (error) {
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
+    const loginCheckJs = sourceString(source, 'loginCheckJs')
+    if (loginCheckJs !== undefined && !isWebViewError(error)) {
+      const errorText = error instanceof Error ? error.message : '书源请求失败'
+      let errorUrl = url
+      try {
+        const reference = splitSourceRequestUrl(url).url
+        errorUrl = resolveSourceRequestUrl(reference, source.bookSourceUrl, undefined, ports.network.encodeCharset?.bind(ports.network))
+      } catch {
+        // 保留原地址供 hook 检查，之后仍返回原请求失败诊断。
+      }
+      const errorResponse: NetworkResponse = { url: errorUrl, status: 500, headers: {}, bytes: new TextEncoder().encode(errorText), redirected: false }
+      const recovered = await applyLoginCheck(ports, source, stage, errorResponse, options.signal, diagnostics)
+      if (recovered !== undefined && recovered.status !== 500) return { content: responseText(recovered, source, ports), url: recovered.url }
+      if (recovered === undefined) return undefined
+    }
     diagnostics.push({ code: isWebViewError(error) ? 'capability-missing' : 'request-failed', stage, message: isWebViewError(error) ? '书源请求需要 WebView，当前 Node 宿主不支持' : '书源请求失败', retryable: !isWebViewError(error) })
     return undefined
   }
+}
+
+async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, response: NetworkResponse, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[]): Promise<NetworkResponse | undefined> {
+  const code = sourceString(source, 'loginCheckJs')
+  if (code === undefined) return response
+  if (ports.rules.executeWorkflowJavaScript === undefined) {
+    diagnostics.push({ code: 'capability-missing', stage, field: 'loginCheckJs', message: 'loginCheckJs 需要 JavaScript 脚本宿主', retryable: false })
+    return undefined
+  }
+  const responseBody = responseText(response, source, ports)
+  const responseBinding = { url: response.url, status: response.status, code: response.status, message: '', body: responseBody, headers: response.headers }
+  let output: WorkflowRuleOutput
+  try {
+    output = await ports.rules.executeWorkflowJavaScript({
+      source,
+      code,
+      stage: stage === 'search' ? 'search' : stage === 'detail' ? 'book' : 'search',
+      content: responseBinding,
+      bindings: { __strResponse: responseBinding },
+      ...(signal === undefined ? {} : { signal }),
+    })
+  } catch {
+    output = { status: 'failed', value: null, message: 'loginCheckJs 执行失败' }
+  }
+  if (signal?.aborted === true || output.status === 'cancelled') {
+    diagnostics.push({ code: 'cancelled', stage, field: 'loginCheckJs', message: 'loginCheckJs 已取消', retryable: false })
+    return undefined
+  }
+  if (output.status === 'capability-missing') {
+    diagnostics.push({ code: 'capability-missing', stage, field: 'loginCheckJs', message: output.message ?? 'loginCheckJs 依赖宿主能力', retryable: false })
+    return undefined
+  }
+  if (output.status !== 'success' || typeof output.value !== 'object' || output.value === null || Array.isArray(output.value)) {
+    diagnostics.push({ code: 'rule-failed', stage, field: 'loginCheckJs', message: output.message ?? 'loginCheckJs 必须返回响应对象', retryable: false })
+    return undefined
+  }
+  const value = output.value as Record<string, unknown>
+  const body = firstString(value.body, value.__body)
+  const responseUrl = firstString(value.url, value.__url) ?? response.url
+  const status = firstNumber(value.status, value.code, value.__code) ?? response.status
+  const headersValue = value.headers ?? value.__headers
+  const headers = typeof headersValue === 'object' && headersValue !== null && !Array.isArray(headersValue)
+    ? Object.fromEntries(Object.entries(headersValue).flatMap(([key, item]) => typeof item === 'string' ? [[key, item]] : []))
+    : response.headers
+  if (body === undefined) {
+    diagnostics.push({ code: 'rule-failed', stage, field: 'loginCheckJs', message: 'loginCheckJs 返回的响应缺少正文', retryable: false })
+    return undefined
+  }
+  return { ...response, url: responseUrl, status, headers: { ...headers, 'x-legado-response-charset': 'utf-8' }, bytes: new TextEncoder().encode(body) }
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === 'string')
+}
+
+function firstNumber(...values: unknown[]): number | undefined {
+  return values.find((value): value is number => typeof value === 'number' && Number.isInteger(value))
 }
 
 export async function requestPage(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<string | undefined> {
@@ -473,6 +549,46 @@ export async function evaluateField(ports: WorkflowPorts, source: NormalizedSour
   if (typeof output.value === 'string' && output.value.length === 0) return { state: 'empty', value: output.value }
   if (Array.isArray(output.value) && output.value.length === 0) return { state: 'empty', value: output.value }
   return { state: 'value', value: output.value }
+}
+
+export type ScriptExecutionState = 'value' | 'empty' | 'missing-function' | 'failed' | 'cancelled' | 'capability-missing'
+
+export interface ScriptExecutionResult {
+  state: ScriptExecutionState
+  value?: unknown
+  message?: string
+}
+
+export async function executeSourceFunction(ports: WorkflowPorts, source: NormalizedSource, name: SourceFunctionName, args: readonly unknown[], bindings: Readonly<Record<string, unknown>>, stage: WorkflowStage, jsStage: WorkflowJavaScriptStage, trace: WorkflowTraceEntry[], signal?: AbortSignal): Promise<ScriptExecutionResult> {
+  trace.push({ stage, event: 'rule', target: name })
+  if (ports.rules.executeSourceFunction === undefined) return { state: 'capability-missing', message: 'JavaScript 源函数宿主不可用' }
+  try {
+    const output = await ports.rules.executeSourceFunction({ source, name, args, bindings, stage: jsStage, ...(signal === undefined ? {} : { signal }) })
+    if (signal?.aborted === true || output.status === 'cancelled') return { state: 'cancelled', ...(output.message === undefined ? {} : { message: output.message }) }
+    if (output.status === 'capability-missing') return { state: 'capability-missing', ...(output.message === undefined ? {} : { message: output.message }) }
+    if (output.status === 'failed') return { state: 'failed', message: output.message ?? `${name} 执行失败` }
+    if (!output.exists) return { state: 'missing-function' }
+    return output.value === null || output.value === undefined || output.status === 'empty'
+      ? { state: 'empty', value: output.value }
+      : { state: 'value', value: output.value }
+  } catch {
+    return { state: 'failed', message: `${name} 执行失败` }
+  }
+}
+
+export async function executeWorkflowJavaScript(ports: WorkflowPorts, source: NormalizedSource, code: string, stage: WorkflowStage, jsStage: WorkflowJavaScriptStage, trace: WorkflowTraceEntry[], options: { content?: unknown; bindings?: Readonly<Record<string, unknown>>; captureMutations?: readonly string[]; signal?: AbortSignal }): Promise<ScriptExecutionResult> {
+  trace.push({ stage, event: 'rule', target: 'javascript' })
+  if (ports.rules.executeWorkflowJavaScript === undefined) return { state: 'capability-missing', message: 'JavaScript 脚本宿主不可用' }
+  try {
+  const output = await ports.rules.executeWorkflowJavaScript({ source, code, stage: jsStage, ...(options.content === undefined ? {} : { content: options.content }), ...(options.bindings === undefined ? {} : { bindings: options.bindings }), ...(options.captureMutations === undefined ? {} : { captureMutations: options.captureMutations }), ...(options.signal === undefined ? {} : { signal: options.signal }) })
+    if (options.signal?.aborted === true || output.status === 'cancelled') return { state: 'cancelled', ...(output.message === undefined ? {} : { message: output.message }) }
+    if (output.status === 'capability-missing') return { state: 'capability-missing', ...(output.message === undefined ? {} : { message: output.message }) }
+    if (output.status === 'failed') return { state: 'failed', message: output.message ?? 'JavaScript 脚本执行失败' }
+    if (output.status === 'empty' || output.value === null || output.value === undefined) return { state: 'empty', value: output.value }
+    return { state: 'value', value: output.value }
+  } catch {
+    return { state: 'failed', message: 'JavaScript 脚本执行失败' }
+  }
 }
 
 export function pageResult<T>(cursor: { index: number }, items: T[], nextCursor?: { index: number; token?: string }): WorkflowPage<T> {

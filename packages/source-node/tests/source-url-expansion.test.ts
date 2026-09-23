@@ -58,8 +58,8 @@ test('搜索 URL 的 {{...}} 按内联 JS 求值，不把字面量拼进地址',
   assert.equal(calls.length, 1)
   assert.equal(calls[0]?.url, 'https://www.22biqu.com/ss/')
   assert.equal(calls[0]?.method, 'POST')
-  // 关键词按原值进入 POST body，不再被预编码。
-  assert.equal(calls[0]?.body, 'searchkey=我本无意成仙')
+  // Android AnalyzeUrl 会先把表单字段按 UTF-8 URL 编码，再发送表单请求体。
+  assert.equal(new TextDecoder().decode(calls[0]?.body as Uint8Array), 'searchkey=%E6%88%91%E6%9C%AC%E6%97%A0%E6%84%8F%E6%88%90%E4%BB%99')
   // {{cookie.removeCookie(...)}} 在 Android 返回 Unit，展开为空串而不是 "true"。
   assert.equal(await cookies.get('https://www.22biqu.com/ss/'), undefined)
 })

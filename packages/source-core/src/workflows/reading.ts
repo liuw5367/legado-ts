@@ -3,14 +3,26 @@ import { compileRule } from '../rules/compiler.ts'
 import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { CompiledRule } from '../rules/types.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
-import { evaluateField, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
-import type { Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import { evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import type { BookMetadata, Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function loadTableOfContents(ports: ReadingPorts, input: TocInput): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   const stage: WorkflowStage = 'detail'
   const cursor = input.cursor ?? { index: 0 }
+  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptTableOfContents(ports, input, diagnostics, trace)
+  let book = input.book
+  const preUpdateJs = ruleString(input.source, 'ruleToc', 'preUpdateJs')
+  if (input.runPerJs === true && preUpdateJs !== undefined) {
+    const preUpdate = await executeWorkflowJavaScript(ports, input.source, `${preUpdateJs}\n;book`, stage, 'book', trace, { bindings: { book: { ...book }, isFromBookInfo: input.isFromBookInfo === true }, ...(input.signal === undefined ? {} : { signal: input.signal }) })
+    if (preUpdate.state === 'cancelled' || input.signal?.aborted === true) return cancelled('目录预处理脚本已取消', diagnostics, trace)
+    if (preUpdate.state === 'capability-missing' || preUpdate.state === 'failed') {
+      diagnostics.push({ code: preUpdate.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: 'preUpdateJs', message: preUpdate.message ?? '目录预处理脚本失败', retryable: false })
+      return { status: preUpdate.state === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
+    }
+    if (typeof preUpdate.value === 'object' && preUpdate.value !== null && !Array.isArray(preUpdate.value)) book = mergeBookScriptValues(book, preUpdate.value as Record<string, unknown>)
+  }
   const listRule = ruleString(input.source, 'ruleToc', 'chapterList')
   if (listRule === undefined) {
     diagnostics.push({ code: 'invalid-config', stage, message: '缺少 chapterList 规则', retryable: false })
@@ -21,8 +33,8 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const visited = new Set<string>()
   const chapters: Chapter[] = []
   const reverseByRule = listRule.startsWith('-')
-  const resolvedBookUrl = resolveUrl(input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
-  const rawTocUrl = input.book.tocUrl?.trim() ? input.book.tocUrl : input.book.bookUrl
+  const resolvedBookUrl = resolveUrl(book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  const rawTocUrl = book.tocUrl?.trim() ? book.tocUrl : book.bookUrl
   const rawBookUrl = resolveUrl(rawTocUrl, resolvedBookUrl) ?? resolvedBookUrl
   // 目录地址同样允许 `{{...}}` 内联表达式（Android 对每个 AnalyzeUrl 都做同样的展开）。
   const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
@@ -50,8 +62,8 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     }
     visited.add(normalizedUrl)
     // 明确刷新时详情阶段暂存的目录响应也可能过期，必须重新请求第一页。
-    const page = pageIndex === 0 && input.refresh !== true && input.book.tocHtml !== undefined && normalizedUrl === bookBaseUrl
-      ? { body: input.book.tocHtml, url: normalizedUrl }
+    const page = pageIndex === 0 && input.refresh !== true && book.tocHtml !== undefined && normalizedUrl === bookBaseUrl
+      ? { body: book.tocHtml, url: normalizedUrl }
       : await cachedPage(ports, input.source, normalizedUrl, 'toc', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, undefined, input.refresh === true)
     if (page === undefined) break
     const body = page.body
@@ -99,7 +111,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       }
       const chapter: Chapter = {
         sourceId: input.source.bookSourceUrl,
-        bookUrl: input.book.bookUrl,
+        bookUrl: book.bookUrl,
         chapterUrl,
         index: chapterIndex,
         title: fields.title,
@@ -139,8 +151,13 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   if (pendingPages.length > 0 && visited.size >= maxPages) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
   if (!reverseByRule) chapters.reverse()
   const uniqueChapters = deduplicateChapters(chapters, diagnostics, stage)
-  if (input.book.readConfig?.reverseToc !== true) uniqueChapters.reverse()
+  if (book.readConfig?.reverseToc !== true) uniqueChapters.reverse()
   uniqueChapters.forEach((chapter, index) => { chapter.index = index })
+  const formatJs = ruleString(input.source, 'ruleToc', 'formatJs')
+  if (formatJs !== undefined) {
+    await formatChapterTitles(ports, input.source, uniqueChapters, formatJs, book, input, diagnostics, trace)
+    if (input.signal?.aborted === true || diagnostics.some((item) => item.code === 'cancelled')) return { status: 'cancelled', value: null, diagnostics, trace }
+  }
   if (uniqueChapters.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '目录为空', retryable: false })
   const value: WorkflowPage<Chapter> = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}) }
   const status = uniqueChapters.length === 0 && diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed') ? 'failed' : statusFromDiagnostics(diagnostics, uniqueChapters.length)
@@ -148,15 +165,81 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   return { status, value: status === 'cancelled' ? null : value, diagnostics, trace }
 }
 
+async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
+  const cursor = input.cursor ?? { index: 0 }
+  const book = { ...input.book.rawFields, ...input.book, origin: input.book.sourceId, originName: input.source.bookSourceName, type: sourceNumber(input.source, 'bookSourceType') ?? 0 }
+  const result = await executeSourceFunction(ports, input.source, 'getChapters', [book], { book }, 'detail', 'chapter', trace, input.signal)
+  if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 目录工作流已取消', diagnostics, trace)
+  if (result.state === 'capability-missing') {
+    diagnostics.push({ code: 'capability-missing', stage: 'detail', field: 'getChapters', message: result.message ?? 'JavaScript 源函数宿主不可用', retryable: false })
+    return { status: 'capability-missing', value: null, diagnostics, trace }
+  }
+  if (result.state === 'missing-function' || result.state === 'failed') {
+    diagnostics.push({ code: result.state === 'missing-function' ? 'invalid-config' : 'rule-failed', stage: 'detail', field: 'getChapters', message: result.message ?? 'JS 书源缺少 getChapters 函数', retryable: false })
+    return { status: 'failed', value: null, diagnostics, trace }
+  }
+  let rows: unknown = result.value
+  if (rows === null || rows === undefined || typeof rows === 'string' && rows.trim().length === 0) rows = []
+  else if (typeof rows === 'string') {
+    try { rows = JSON.parse(rows) as unknown } catch { /* Android 同样要求 JSONArray。 */ }
+  }
+  if (!Array.isArray(rows)) {
+    diagnostics.push({ code: 'rule-failed', stage: 'detail', field: 'getChapters', message: 'JS 书源 getChapters 必须返回数组', retryable: false })
+    return { status: 'failed', value: null, diagnostics, trace }
+  }
+  const tocBaseUrl = resolveUrl(input.book.tocUrl?.trim() ? input.book.tocUrl : input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  const chapters: Chapter[] = []
+  for (const [itemIndex, row] of rows.entries()) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) continue
+    const record = row as Record<string, unknown>
+    const title = javascriptPrimitiveText(record.title)?.trim() ?? ''
+    const rawUrl = javascriptPrimitiveText(record.url ?? record.chapterUrl)?.trim() ?? ''
+    if (title.length === 0 || rawUrl.length === 0) {
+      diagnostics.push({ code: 'item-skipped', stage: 'detail', itemIndex, message: 'JS 目录项缺少 title 或 url', retryable: false })
+      continue
+    }
+    const isVolume = booleanValue(record.isVolume)
+    const chapterUrl = isVolume && rawUrl === title ? rawUrl : resolveUrl(rawUrl, tocBaseUrl)
+    if (chapterUrl === undefined) {
+      diagnostics.push({ code: 'item-skipped', stage: 'detail', itemIndex, message: 'JS 目录项 URL 无效', retryable: false })
+      continue
+    }
+    const chapter: Chapter = {
+      sourceId: input.source.bookSourceUrl,
+      bookUrl: input.book.bookUrl,
+      chapterUrl,
+      index: chapters.length,
+      title,
+      rawFields: jsonValue(record) as JsonObject,
+      traceRef: `toc:${chapters.length}`,
+      isVolume,
+      isVip: booleanValue(record.isVip),
+      isPay: booleanValue(record.isPay),
+    }
+    const volume = typeof record.volume === 'string' ? record.volume : undefined
+    if (volume !== undefined && volume.length > 0) chapter.volume = volume
+    const updateTime = typeof record.updateTime === 'string' ? record.updateTime : typeof record.tag === 'string' ? record.tag : undefined
+    if (updateTime !== undefined && updateTime.length > 0) chapter.updateTime = updateTime
+    chapters.push(chapter)
+  }
+  chapters.forEach((chapter, index) => { chapter.index = index })
+  if (chapters.length === 0) diagnostics.push({ code: 'empty-page', stage: 'detail', message: 'JS 目录为空', retryable: false })
+  const value: WorkflowPage<Chapter> = { items: chapters, cursor }
+  return { status: statusFromDiagnostics(diagnostics, chapters.length), value, diagnostics, trace }
+}
+
 export async function loadChapterContent(ports: ReadingPorts, input: ContentInput): Promise<RuntimeResult<ChapterContent>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   const stage: WorkflowStage = 'detail'
-  if (input.chapter.isVolume === true) {
+  const chapterTitle = input.chapter.title ?? ''
+  const isVolumePlaceholder = input.chapter.isVolume === true && chapterTitle.length > 0 && input.chapter.chapterUrl.startsWith(chapterTitle)
+  if (isVolumePlaceholder) {
     if (input.signal?.aborted === true) return cancelled('正文工作流已取消', diagnostics, trace)
     diagnostics.push({ code: 'empty-page', stage, message: '卷节点没有正文', retryable: false })
     return { status: 'empty', value: { chapter: input.chapter, contentType: 'text', raw: '', cleaned: '', pages: [], resources: [] }, diagnostics, trace }
   }
+  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptChapterContent(ports, input, diagnostics, trace)
   const contentRule = ruleString(input.source, 'ruleContent', 'content') ?? sourceString(input.source, 'ruleContent')
   if (contentRule === undefined) {
     const url = input.chapter.chapterUrl
@@ -336,6 +419,100 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   return { status, value, diagnostics, trace }
 }
 
+async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<ChapterContent>> {
+  const book: BookMetadata = input.book ?? {
+    sourceId: input.chapter.sourceId,
+    bookUrl: input.chapter.bookUrl,
+    name: '',
+    rawFields: {},
+    traceRef: 'content:book',
+    emptyFields: [],
+    fieldErrors: {},
+    tocUrl: input.chapter.bookUrl,
+  }
+  const chapterData = input.chapter as ContentInput['chapter'] & { rawFields?: JsonObject }
+  const chapter = {
+    ...(chapterData.rawFields ?? {}),
+    ...input.chapter,
+    url: input.chapter.chapterUrl,
+    baseUrl: book.tocUrl ?? input.chapter.bookUrl,
+    index: input.chapter.index,
+    title: input.chapter.title ?? '',
+  }
+  const bookValue = { ...book.rawFields, ...book, origin: book.sourceId, originName: input.source.bookSourceName, type: sourceNumber(input.source, 'bookSourceType') ?? 0 }
+  const result = await executeSourceFunction(ports, input.source, 'getContent', [chapter, bookValue, input.nextChapterUrl ?? null], { chapter, book: bookValue, nextChapterUrl: input.nextChapterUrl ?? null }, 'detail', 'content', trace, input.signal)
+  if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 正文工作流已取消', diagnostics, trace)
+  if (result.state === 'capability-missing') {
+    diagnostics.push({ code: 'capability-missing', stage: 'detail', field: 'getContent', message: result.message ?? 'JavaScript 源函数宿主不可用', retryable: false })
+    return { status: 'capability-missing', value: null, diagnostics, trace }
+  }
+  if (result.state === 'missing-function' || result.state === 'failed') {
+    diagnostics.push({ code: result.state === 'missing-function' ? 'invalid-config' : 'rule-failed', stage: 'detail', field: 'getContent', message: result.message ?? 'JS 书源缺少 getContent 函数', retryable: false })
+    return { status: 'failed', value: null, diagnostics, trace }
+  }
+  let raw = ''
+  if (result.value !== null && result.value !== undefined) {
+    if (typeof result.value === 'string') raw = result.value
+    else {
+      try { raw = JSON.stringify(result.value) ?? textValue(result.value) } catch { raw = textValue(result.value) }
+    }
+  }
+  if (raw.trim().length === 0) {
+    diagnostics.push({ code: 'empty-page', stage: 'detail', field: 'getContent', message: '正文为空', retryable: false })
+    if (input.chapter.isVolume === true) return { status: 'empty', value: { chapter: input.chapter, contentType: 'text', raw, cleaned: '', pages: [], resources: [] }, diagnostics, trace }
+    return { status: 'failed', value: null, diagnostics, trace }
+  }
+  return { status: 'success', value: { chapter: input.chapter, contentType: 'text', raw, cleaned: raw, pages: [raw], resources: [] }, diagnostics, trace }
+}
+
+async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSource, chapters: Chapter[], code: string, book: BookMetadata, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<void> {
+  for (const [chapterIndex, chapter] of chapters.entries()) {
+    const script = await executeWorkflowJavaScript(ports, source, code, 'detail', 'chapter', trace, {
+      bindings: { gInt: 0, index: chapterIndex + 1, chapter: { ...chapter, url: chapter.chapterUrl, baseUrl: book.tocUrl ?? book.bookUrl }, title: chapter.title },
+      captureMutations: ['chapter'],
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
+    })
+    if (script.state === 'cancelled' || input.signal?.aborted === true) {
+      diagnostics.push({ code: 'cancelled', stage: 'detail', field: 'formatJs', itemIndex: chapterIndex, message: '目录标题格式化已取消', retryable: false })
+      return
+    }
+    if (script.state === 'capability-missing') {
+      diagnostics.push({ code: 'capability-missing', stage: 'detail', field: 'formatJs', itemIndex: chapterIndex, message: script.message ?? '目录标题格式化脚本宿主不可用', retryable: false })
+      return
+    }
+    if (script.state === 'failed') {
+      diagnostics.push({ code: 'item-skipped', stage: 'detail', field: 'formatJs', itemIndex: chapterIndex, message: script.message ?? '目录标题格式化失败', retryable: false })
+      continue
+    }
+    if (script.state === 'value') {
+      const captured = typeof script.value === 'object' && script.value !== null && !Array.isArray(script.value)
+        ? script.value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: Record<string, unknown> }
+        : undefined
+      if (captured !== undefined && Object.hasOwn(captured, '__legadoWorkflowBindings')) {
+        const outputValue = captured.__legadoWorkflowValue
+        const mutatedChapter = captured.__legadoWorkflowBindings?.chapter
+        const mutatedTitle = typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter)
+          ? (mutatedChapter as Record<string, unknown>).title
+          : undefined
+        if (outputValue !== null && outputValue !== undefined) chapter.title = textValue(outputValue)
+        else if (javascriptPrimitiveText(mutatedTitle) !== undefined) chapter.title = javascriptPrimitiveText(mutatedTitle)!
+      } else chapter.title = textValue(script.value)
+    }
+  }
+}
+
+function mergeBookScriptValues(book: BookMetadata, values: Record<string, unknown>): BookMetadata {
+  const merged: BookMetadata = { ...book }
+  for (const key of ['name', 'author', 'intro', 'kind', 'wordCount', 'lastChapter', 'updateTime', 'coverUrl', 'tocUrl'] as const) {
+    const value = values[key]
+    if (typeof value === 'string') merged[key] = value
+  }
+  if (typeof values.latestChapterTitle === 'string') merged.lastChapter = values.latestChapterTitle
+  if (merged.coverUrl !== undefined) merged.coverUrl = resolveUrl(merged.coverUrl, book.bookUrl) ?? merged.coverUrl
+  if (merged.tocUrl !== undefined) merged.tocUrl = resolveUrl(merged.tocUrl, book.bookUrl) ?? merged.tocUrl
+  return merged
+}
+
 async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }, refresh = false): Promise<{ body: string; url: string } | undefined> {
   const cacheKey = `${source.bookSourceUrl}\u0000${scope}\u0000${url}`
   const responseUrlKey = `${cacheKey}\u0000response-url`
@@ -479,6 +656,10 @@ function booleanValue(value: unknown): boolean {
   if (typeof value === 'number') return Number.isFinite(value) && value !== 0
   const text = textValue(value).trim().toLocaleLowerCase('zh-Hans')
   return text.length > 0 && text !== 'null' && !['false', 'no', 'not', '0', '0.0'].includes(text)
+}
+
+function javascriptPrimitiveText(value: unknown): string | undefined {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
 }
 
 /** Android BookChapter.equals 只比较 url：同地址不同标题也折叠，保留反转后最先出现的条目。 */

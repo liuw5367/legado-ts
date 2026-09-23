@@ -13,6 +13,10 @@ import type {
   WorkflowRulePort,
   WorkflowRuleRequest,
   WorkflowRuleOutput,
+  WorkflowJavaScriptRequest,
+  SourceFunctionName,
+  SourceFunctionOutput,
+  SourceFunctionRequest,
 } from '@legado/source-core'
 import { NodeCryptoHost } from './crypto.ts'
 import { NodeEncodingHost } from './encoding.ts'
@@ -227,10 +231,20 @@ function trailingExpression(code: string): { body: string; expression?: string }
   }
   const last = input.slice(start).trim()
   if (last.length === 0 || last === '}' || last.startsWith('//')) return { body: input }
-  if (/^[A-Za-z_$][\w$]*(?:(?:\.[A-Za-z_$][\w$]*)|(?:\[[^\n]+\]))*(?:\([^;\n]*\))?$/.test(last) || last.startsWith('`') || last.startsWith('"') || last.startsWith("'")) {
+  const assignable = /^[A-Za-z_$][\w$]*(?:(?:\.[A-Za-z_$][\w$]*)|(?:\[[^\n]+\]))*\s*=(?!=)[\s\S]+$/u.test(last)
+  if (/^[A-Za-z_$][\w$]*(?:(?:\.[A-Za-z_$][\w$]*)|(?:\[[^\n]+\]))*(?:\([^;\n]*\))?$/.test(last) || assignable || last.startsWith('`') || last.startsWith('"') || last.startsWith("'")) {
     return { body: input.slice(0, start).trim(), expression: last }
   }
   return { body: input }
+}
+
+function captureWorkflowMutations(code: string, names: readonly string[]): string {
+  const identifiers = names.filter((name) => /^[A-Za-z_$][\w$]*$/u.test(name))
+  if (identifiers.length === 0) return code
+  const trailing = trailingExpression(code)
+  const result = trailing.expression === undefined ? 'null' : `(${trailing.expression})`
+  const bindings = identifiers.map((name) => `${JSON.stringify(name)}: ${name}`).join(', ')
+  return `${trailing.body}\n;__legadoWorkflowCapture = { __legadoWorkflowValue: ${result}, __legadoWorkflowBindings: { ${bindings} } }`
 }
 
 export class SourceRuleHost implements WorkflowRulePort {
@@ -271,6 +285,40 @@ export class SourceRuleHost implements WorkflowRulePort {
 
   public async executeJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown = '', signal?: AbortSignal): Promise<WorkflowRuleOutput> {
     return this.runJavaScript(code, stage, source, content, signal)
+  }
+
+  public async executeWorkflowJavaScript(request: WorkflowJavaScriptRequest): Promise<WorkflowRuleOutput> {
+    const code = request.captureMutations === undefined ? request.code : captureWorkflowMutations(request.code, request.captureMutations)
+    return this.runJavaScript(code, request.stage, request.source, request.content ?? '', request.signal, { ...(request.content === undefined ? {} : { content: request.content }), ...(request.bindings === undefined ? {} : { bindings: request.bindings }) })
+  }
+
+  public async executeSourceFunction(request: SourceFunctionRequest): Promise<SourceFunctionOutput> {
+    const names: Record<SourceFunctionName, readonly string[]> = {
+      search: ['key', 'page'],
+      explore: ['url', 'page'],
+      getBookInfo: ['book'],
+      getChapters: ['book'],
+      getContent: ['chapter', 'book', 'nextChapterUrl'],
+    }
+    const parameters = names[request.name]
+    const bindings = {
+      ...(request.bindings ?? {}),
+      ...Object.fromEntries(parameters.map((name, index) => [name, request.args[index]])),
+    }
+    const call = `${request.name}(${parameters.join(', ')})`
+    const code = [
+      request.source.mainJs ?? '',
+      `if (typeof ${request.name} !== 'function') return { __legadoSourceFunctionExists: false };`,
+      `return { __legadoSourceFunctionExists: true, value: ${call} };`,
+    ].join('\n')
+    const output = await this.runJavaScript(code, request.stage, request.source, '', request.signal, { bindings })
+    if (output.status !== 'success') return { ...output, exists: false }
+    if (typeof output.value !== 'object' || output.value === null || !('__legadoSourceFunctionExists' in output.value)) {
+      return { status: 'failed', value: null, exists: false, message: 'JavaScript 源函数返回值无法识别' }
+    }
+    const result = output.value as { __legadoSourceFunctionExists: unknown; value?: unknown }
+    if (result.__legadoSourceFunctionExists !== true) return { status: 'empty', value: null, exists: false }
+    return { status: result.value === null || result.value === undefined ? 'empty' : 'success', value: result.value ?? null, exists: true }
   }
 
   public async evaluate(request: WorkflowRuleRequest): Promise<WorkflowRuleOutput> {
@@ -524,7 +572,7 @@ export class SourceRuleHost implements WorkflowRulePort {
     return first === null ? '' : first[0].replace(compiled.regex, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: Pick<WorkflowRuleRequest, 'baseUrl' | 'redirectUrl' | 'content' | 'bindings'>): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>> }): Promise<WorkflowRuleOutput> {
     const bindings = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
@@ -532,20 +580,31 @@ export class SourceRuleHost implements WorkflowRulePort {
       src: context?.content ?? content,
       sourceKey: source.bookSourceUrl,
       sourceName: source.bookSourceName,
+      sourceData: source,
       baseUrl: context?.baseUrl ?? source.bookSourceUrl,
       redirectUrl: context?.redirectUrl ?? context?.baseUrl ?? source.bookSourceUrl,
     }
     const prelude = [
       'globalThis.result = bindings.result;',
+      'if (bindings.__strResponse != null) { const responseValue = bindings.__strResponse; globalThis.result = { ...responseValue, __body: responseValue.body, __code: responseValue.status ?? responseValue.code, __url: responseValue.url, __message: responseValue.message, __headers: responseValue.headers }; Object.defineProperties(globalThis.result, { body: { value: () => globalThis.result.__body }, code: { value: () => globalThis.result.__code }, url: { value: () => globalThis.result.__url }, message: { value: () => globalThis.result.__message }, headers: { value: () => globalThis.result.__headers }, isSuccessful: { value: () => globalThis.result.__code >= 200 && globalThis.result.__code < 300 } }); }',
       'globalThis.src = bindings.src;',
       'globalThis.key = bindings.key;',
       'globalThis.page = bindings.page;',
+      'globalThis.url = bindings.url;',
+      'globalThis.nextChapterUrl = bindings.nextChapterUrl;',
+      'globalThis.chapters = bindings.chapters;',
+      'globalThis.index = bindings.index;',
+      'globalThis.title = bindings.title;',
+      'globalThis.gInt = bindings.gInt;',
+      'globalThis.isFromBookInfo = bindings.isFromBookInfo;',
       'globalThis.baseUrl = bindings.baseUrl;',
       'globalThis.redirectUrl = bindings.redirectUrl;',
-      'globalThis.source = { getKey: () => bindings.sourceKey, key: bindings.sourceKey, getVariable: (name) => name === undefined ? getVar("__source__") : getVar(String(name)), setVariable: (name, value) => value === undefined ? setVar("__source__", name) : setVar(String(name), value) };',
+      'const sourceValue = bindings.sourceData ?? {};',
+      'globalThis.source = { ...sourceValue, key: bindings.sourceKey }; Object.defineProperties(globalThis.source, { getKey: { value: () => bindings.sourceKey }, getVariable: { value: (name) => name === undefined ? getVar("__source__") : getVar(String(name)) }, setVariable: { value: (name, value) => value === undefined ? setVar("__source__", name) : setVar(String(name), value) } });',
+      'globalThis.sourceApi = sourceValue;',
       'const bookValue = bindings.book ?? {};',
-      'globalThis.book = { ...bookValue, getVariable: (name) => name === undefined ? getVar("__book__") : getVar(String(name)), setVariable: (name, value) => value === undefined ? setVar("__book__", name) : setVar(String(name), value), putVariable: (name, value) => setVar(String(name), value) };',
-      'globalThis.chapter = bindings.chapter ?? {};',
+      'globalThis.book = { ...bookValue }; Object.defineProperties(globalThis.book, { getVariable: { value: (name) => name === undefined ? getVar("__book__") : getVar(String(name)) }, setVariable: { value: (name, value) => value === undefined ? setVar("__book__", name) : setVar(String(name), value) }, putVariable: { value: (name, value) => setVar(String(name), value) } });',
+      'globalThis.chapter = { ...(bindings.chapter ?? {}) };',
       'const getVariable = (name) => getVar(String(name));',
       'const putVariable = (name, value) => setVar(String(name), value);',
       // Android CookieStore 的 set/remove 返回 Unit，`{{cookie.removeCookie(...)}}` 必须展开为空串而不是 "true"。
@@ -553,8 +612,15 @@ export class SourceRuleHost implements WorkflowRulePort {
       // 正文常常是 JSON 文本，`java.getString("$.x")` 必须能在这上面取路径（Android 会先解析内容）。
       'const legadoPathValue = (value, path) => { if (typeof value === "string") { try { value = JSON.parse(value); } catch (error) { value = undefined; } } const parts = String(path).replace(/^\\$\\.?\\.?/, "").match(/[A-Za-z_$][\\w$-]*|\\[\\d+\\]|\\[\\*\\]/g) ?? []; let current = value; for (const part of parts) { if (part === "[*]") current = Array.isArray(current) ? current : []; else if (Array.isArray(current)) current = current.map((item) => item == null ? undefined : item[part.startsWith("[") ? Number(part.slice(1, -1)) : part]); else current = current == null ? undefined : current[part]; } return current; };',
       'const legadoGetString = (name) => { const key = String(name); const value = key.startsWith("$") ? legadoPathValue(result, key) : result != null && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, key) ? result[key] : getVar(key); return Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\\n") : String(value ?? ""); };',
-      'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? request({ kind: "network", url: String(value), method: "GET", options }) : getVar(String(value)), put: (name, value) => { setVar(String(name), value); return value; }, getString: (name) => legadoGetString(name), getStringList: (name) => legadoGetString(name).split("\\n").filter(Boolean), getWebViewUA: () => "Mozilla/5.0", base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (value) => String(value), randomUUID: () => "", getAppVariant: () => "", androidId: () => "", deviceID: () => "" };',
+      'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? request({ kind: "network", url: String(value), method: "GET", options }) : Object.prototype.hasOwnProperty.call(bindings, String(value)) ? bindings[String(value)] : getVar(String(value)), put: (name, value) => { setVar(String(name), value); return value; }, getString: (name) => { const key = String(name); return Object.prototype.hasOwnProperty.call(bindings, key) ? String(bindings[key] ?? "") : legadoGetString(name); }, getStringList: (name) => legadoGetString(name).split("\\n").filter(Boolean), getWebViewUA: () => "Mozilla/5.0", base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (value) => String(value), randomUUID: () => "", getAppVariant: () => "", androidId: () => "", deviceID: () => "" };',
       'const getToken = () => request({ kind: "token" });',
+      'globalThis.Packages = globalThis.Packages ?? {};',
+      'globalThis.Packages.io = globalThis.Packages.io ?? {};',
+      'globalThis.Packages.io.legado = globalThis.Packages.io.legado ?? {};',
+      'globalThis.Packages.io.legado.app = globalThis.Packages.io.legado.app ?? {};',
+      'globalThis.Packages.io.legado.app.help = globalThis.Packages.io.legado.app.help ?? {};',
+      'globalThis.Packages.io.legado.app.help.http = globalThis.Packages.io.legado.app.help.http ?? {};',
+      'globalThis.Packages.io.legado.app.help.http.StrResponse = (url, body) => ({ url: String(url), status: 200, code: 200, headers: {}, body: String(body ?? "") });',
       'const checkEnv = () => "default";',
       'const isVs = () => false;',
     ].join('\n')

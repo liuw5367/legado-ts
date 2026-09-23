@@ -408,6 +408,36 @@ test('目录保留卷、VIP、购买状态和更新时间，并按书籍 reverse
   assert.equal(contentRequests, 0)
 })
 
+test('卷节点只有标题占位 URL 才跳过正文请求', async () => {
+  const calls: string[] = []
+  const result = await loadChapterContent({
+    network: { request: async (plan) => { calls.push(plan.url); return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('response'), redirected: false } } },
+    rules: { evaluate: async ({ field }) => field === 'nextPage' ? ({ status: 'empty', value: null }) : ({ status: 'success', value: '卷正文' }) },
+  }, {
+    source,
+    chapter: { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: '/volume-content', index: 0, title: '卷一', isVolume: true },
+  })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.cleaned, '卷正文')
+  assert.deepEqual(calls, ['https://source.test/volume-content'])
+})
+
+test('JS 源实际 URL 的卷节点允许返回空正文', async () => {
+  const jsSource = { ...source, mainJs: 'function getContent(chapter, book, nextChapterUrl) { return ""; }' } as NormalizedSource
+  const result = await loadChapterContent({
+    network: { request: async () => { throw new Error('JS 正文不发 HTTP 请求') } },
+    rules: {
+      evaluate: async () => ({ status: 'empty', value: null }),
+      executeSourceFunction: async () => ({ status: 'empty', value: '', exists: true }),
+    },
+  }, {
+    source: jsSource,
+    chapter: { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/volume-content', index: 0, title: '卷一', isVolume: true },
+  })
+  assert.equal(result.status, 'empty')
+  assert.equal(result.value?.cleaned, '')
+})
+
 test('目录标题为空时跳过节点及其 VIP/购买规则', async () => {
   const calls: string[] = []
   let emptyTitleFlagCalls = 0

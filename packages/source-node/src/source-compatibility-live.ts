@@ -201,7 +201,7 @@ async function runSource(item: SourceFixtureCandidate, staticSource: StaticCompa
   session.ruleHost.setBindings({ key: options.keyword, book, chapter })
   // 跑批同样带上下一章地址，正文分页护栏才会被真正触发（与 CLI 的阅读流程一致）。
   const nextChapter = toc.value?.items[1]?.chapterUrl
-  const content = await loadChapterContent(session.ports, { source, chapter, ...(nextChapter === undefined ? {} : { nextChapterUrl: nextChapter }), maxPages: options.maxContentPages, maxBytes: options.maxResponseBytes, maxOutputBytes: options.maxResponseBytes, ...workflowOptions })
+  const content = await loadChapterContent(session.ports, { source, book, chapter, ...(nextChapter === undefined ? {} : { nextChapterUrl: nextChapter }), maxPages: options.maxContentPages, maxBytes: options.maxResponseBytes, maxOutputBytes: options.maxResponseBytes, ...workflowOptions })
   stages.content = stageRecord(content, content.value === null ? 0 : content.value === undefined ? 0 : 1, session.requests.count - beforeContent)
   return { ...base, status: rootStatus(stages, true), stages, requestCount: session.requests.count }
 }

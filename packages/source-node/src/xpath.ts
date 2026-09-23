@@ -43,7 +43,7 @@ class XmlDocumentView implements HtmlDocument {
     const value = this.node(node)
     if (output === 'text') return value.textContent ?? value.nodeValue ?? ''
     const children = childNodes(value)
-    if (output === 'textNodes') return children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').filter(Boolean).join('\n')
+    if (output === 'textNodes') return children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => trimAndroidWhitespace(child.nodeValue ?? '')).filter(Boolean).join('\n')
     if (output === 'ownText') return children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').filter(Boolean).join('')
     if (output === 'html') return children.map((child) => child.toString?.() ?? '').join('')
     return value.toString?.() ?? ''
@@ -75,6 +75,11 @@ class XmlDocumentView implements HtmlDocument {
     if (value === undefined) throw new Error('node reference does not belong to this XML document')
     return value
   }
+}
+
+function trimAndroidWhitespace(value: string): string {
+  // Android String.trim() removes code units <= U+0020 from both ends.
+  return value.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '')
 }
 
 export class XPathParserAdapter implements XPathParser {
