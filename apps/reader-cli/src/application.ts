@@ -338,11 +338,11 @@ export class ReaderApplication {
     return { chapters: result.value.items, revision, source, edition }
   }
 
-  public loadContent(bookId: string, chapter: Chapter, editionId?: string, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
+  public loadContent(bookId: string, chapter: Chapter, editionId?: string, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
     return this.trackOperation(signal, (operationSignal) => this.loadContentInternal(bookId, chapter, editionId, operationSignal, options))
   }
 
-  private async loadContentInternal(bookId: string, chapter: Chapter, editionId: string | undefined, signal: AbortSignal, options?: { refresh?: boolean }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
+  private async loadContentInternal(bookId: string, chapter: Chapter, editionId: string | undefined, signal: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
     throwIfAborted(signal)
     const book = await this.storage.getBook(bookId)
     if (book === undefined) throw new Error('书籍记录不存在')

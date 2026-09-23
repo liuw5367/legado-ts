@@ -9,6 +9,8 @@ export const listFields = [
   ['bookUrl', 'bookUrl'],
   ['bookCoverUrl', 'coverUrl'],
   ['bookIntro', 'intro'],
+  ['bookKind', 'kind'],
+  ['bookWordCount', 'wordCount'],
   ['bookLastChapter', 'lastChapter'],
   ['bookUpdateTime', 'updateTime'],
 ] as const
@@ -19,6 +21,8 @@ export const detailFields = [
   ['intro', 'intro'],
   ['coverUrl', 'coverUrl'],
   ['tocUrl', 'tocUrl'],
+  ['kind', 'kind'],
+  ['wordCount', 'wordCount'],
   ['lastChapter', 'lastChapter'],
   ['updateTime', 'updateTime'],
 ] as const
@@ -46,6 +50,8 @@ export function ruleString(source: NormalizedSource, group: string, field: strin
     bookAuthor: ['bookAuthor', 'author'],
     bookCoverUrl: ['bookCoverUrl', 'coverUrl'],
     bookIntro: ['bookIntro', 'intro'],
+    bookKind: ['bookKind', 'kind'],
+    bookWordCount: ['bookWordCount', 'wordCount'],
     bookLastChapter: ['bookLastChapter', 'lastChapter'],
     bookUpdateTime: ['bookUpdateTime', 'updateTime'],
   }
@@ -114,18 +120,69 @@ function numericTemplateExpression(input: string, replacements: Readonly<Record<
   return result !== undefined && index === input.length && Number.isFinite(result) ? result : undefined
 }
 
-export function template(value: string, replacements: Readonly<Record<string, string>>): string {
-  return value.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (match, expression: string) => {
-    const key = expression.trim()
-    if (Object.prototype.hasOwnProperty.call(replacements, key)) return replacements[key] ?? ''
-    const numeric = numericTemplateExpression(key, replacements)
-    if (numeric !== undefined) return String(numeric)
-    return /^[A-Za-z][A-Za-z0-9_]*$/.test(key) ? '' : match
-  })
+export interface UrlExpansionError {
+  /** 展开失败的稳定分类：规则执行失败或宿主缺少 JavaScript 能力。 */
+  code: 'rule-failed' | 'capability-missing'
+  message: string
 }
 
-export function encodeKeyword(value: string): string {
-  return encodeURIComponent(value)
+/**
+ * 展开书源 URL 中的 `{{...}}`。Android 把每个片段当内联 JS 求值（AnalyzeUrl.replaceKeyPageJs），
+ * 结果为 null/undefined 时该片段展开为空串，例如 `{{cookie.removeCookie(source.getKey())}}`。
+ * 已知替换项（`key`/`keyword`/`page`/`pageIndex`/`source.bookSourceUrl`）和纯页码算术走快速路径，
+ * 其余表达式交给规则宿主的 JS 能力；没有 JS 能力时返回可诊断错误，不把字面量拼进 URL。
+ */
+export async function expandUrl(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, url: string, replacements: Readonly<Record<string, string>>, bindings: Readonly<Record<string, unknown>>, signal?: AbortSignal): Promise<{ url?: string; error?: UrlExpansionError }> {
+  if (!url.includes('{{')) return { url }
+  const matches = [...url.matchAll(/\{\{([\s\S]*?)\}\}/g)]
+  let result = url
+  for (const match of matches.reverse()) {
+    const value = await expandExpression(ports, source, stage, match[1]!.trim(), replacements, bindings, signal)
+    if (value.error !== undefined) return { error: value.error }
+    result = `${result.slice(0, match.index!)}${value.text ?? ''}${result.slice(match.index! + match[0]!.length)}`
+  }
+  return { url: result }
+}
+
+async function expandExpression(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, expression: string, replacements: Readonly<Record<string, string>>, bindings: Readonly<Record<string, unknown>>, signal: AbortSignal | undefined): Promise<{ text?: string; error?: UrlExpansionError }> {
+  if (Object.prototype.hasOwnProperty.call(replacements, expression)) return { text: replacements[expression] ?? '' }
+  const numeric = numericTemplateExpression(expression, replacements)
+  if (numeric !== undefined) return { text: String(numeric) }
+  let output: WorkflowRuleOutput
+  try {
+    output = await ports.rules.evaluate({ source, stage, field: 'url', rule: `@js:${expression}`, content: '', bindings, ...(signal === undefined ? {} : { signal }) })
+  } catch {
+    output = { status: 'failed', value: null, message: '规则宿主失败' }
+  }
+  if (output.status === 'capability-missing') return { error: { code: 'capability-missing', message: '书源 URL 表达式需要 JavaScript 能力' } }
+  if (output.status === 'failed' || output.status === 'cancelled') return { error: { code: 'rule-failed', message: output.message ?? '书源 URL 表达式求值失败' } }
+  return { text: output.status === 'success' ? textValue(output.value) : '' }
+}
+
+/**
+ * Android `BookHelp.formatBookName`：去掉「 作者 xxx」「 xxx 著」尾巴再剪空白，
+ * 只清洗运行时拿到的书名，不改写规则原文。
+ */
+export function formatBookName(value: string): string {
+  return value.replace(/\s+作\s*者.*|\s+\S+\s+著/u, '').trim()
+}
+
+/** Android `BookHelp.formatBookAuthor`：去掉「作者[:：]」前缀和「 著」尾巴再剪空白。 */
+export function formatBookAuthor(value: string): string {
+  return value.replace(/^\s*作\s*者[:：\s]+|\s+著/u, '').trim()
+}
+
+/**
+ * Android `StringUtils.wordCountFormat(String)`：纯数字时按 万字 归一化，
+ * 超过一万保留一位小数，非数字原样返回。
+ */
+export function formatWordCount(value: string | undefined): string {
+  if (value === undefined) return ''
+  if (!/^-?[0-9]+$/u.test(value)) return value
+  const words = Number(value)
+  if (!(words > 0)) return ''
+  if (words > 10000) return `${(words / 10000).toFixed(1).replace(/\.0$/u, '')}万字`
+  return `${words}字`
 }
 
 export function textValue(value: unknown): string {
@@ -166,7 +223,7 @@ export interface WorkflowPageResponse {
   url: string
 }
 
-export async function requestPageResponse(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<WorkflowPageResponse | undefined> {
+export async function requestPageResponse(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }): Promise<WorkflowPageResponse | undefined> {
   if (options.signal?.aborted === true) {
     diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
     return undefined
@@ -176,7 +233,7 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
   try {
     let response: Parameters<NonNullable<WorkflowPorts['decodeResponse']>>[0]
     if (ports.request !== undefined) {
-      response = await ports.request({ source, url, stage, options })
+      response = await ports.request({ source, url, stage, options, ...(execution === undefined ? {} : { execution }) })
     } else {
       const result = createRequestPlan({ url, baseUrl: source.bookSourceUrl, ...(headers === undefined ? {} : { headers }), budget: requestBudget(options) })
       if (result.plan === undefined) {
@@ -204,7 +261,7 @@ export async function requestPage(ports: WorkflowPorts, source: NormalizedSource
   return (await requestPageResponse(ports, source, url, stage, options, diagnostics, trace))?.content
 }
 
-export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined, context?: { baseUrl?: string; redirectUrl?: string }): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
+export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined, context?: { baseUrl?: string; redirectUrl?: string; expect?: 'text' | 'nodes' }): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
   trace.push({ stage, event: 'rule', target: field, ...(itemIndex === undefined ? {} : { itemIndex }) })
   let output: WorkflowRuleOutput
   try {

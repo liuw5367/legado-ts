@@ -9,10 +9,15 @@ async function evaluate(host: SourceRuleHost, rule: string, content: unknown, st
   return host.evaluate({ source, stage, field: 'fixture', rule, content })
 }
 
+/** 列表规则要求节点结果，必须显式声明 expect。 */
+async function evaluateNodes(host: SourceRuleHost, rule: string, content: unknown) {
+  return host.evaluate({ source, stage: 'search', field: 'bookList', rule, content, expect: 'nodes' })
+}
+
 test('规则宿主支持 HTML 列表节点继续提取文本和属性', async () => {
   const host = new SourceRuleHost()
   const html = '<section><ul><li class="book" href="/book/1"><h2 class="title">我本无意成仙</h2><span class="author">作者</span></li></ul></section>'
-  const list = await evaluate(host, 'section@.book', html)
+  const list = await evaluateNodes(host, 'section@.book', html)
   assert.equal(list.status, 'success')
   assert.ok(Array.isArray(list.value))
   const item = (list.value as unknown[])[0]
@@ -102,4 +107,29 @@ test('规则宿主兼容 java.ajax 的对象请求形式', async () => {
   assert.equal(result.status, 'success')
   assert.equal(result.value, 'ok')
   assert.deepEqual(calls, [{ kind: 'network', url: 'https://fixture.invalid/api', method: 'POST', body: 'q=1' }])
+})
+
+test('字符串规则的末段按属性名取值，不再返回内部节点引用', async () => {
+  const host = new SourceRuleHost()
+  const html = '<div class="cover"><img src="a.jpg" data-original="big.jpg"></div><select><option value="/toc/2">下一页</option></select>'
+  assert.deepEqual((await evaluate(host, '.cover@img@data-original', html)).value, ['big.jpg'])
+  assert.deepEqual((await evaluate(host, 'option@value', html)).value, ['/toc/2'])
+  assert.deepEqual((await evaluate(host, 'img@src', html)).value, ['a.jpg'])
+  // 整条规则没有输出标记时按属性名处理：页面没有该属性就是空，不能把元素本身当成结果。
+  assert.equal((await evaluate(host, '.cover', html)).status, 'empty')
+  assert.equal((await evaluate(host, '.cover@img@alt', html)).status, 'empty')
+})
+
+test('JSON 响应下无模式前缀的规则按 JSON 求值（Android isJSON 语义）', async () => {
+  const host = new SourceRuleHost()
+  const body = JSON.stringify({ data: { books: [{ name: '甲', url: '/a' }] }, userInfo: { username: '作者' } })
+  const books = await evaluate(host, 'data.books', body)
+  assert.equal(books.status, 'success')
+  assert.deepEqual(books.value, [{ name: '甲', url: '/a' }])
+  assert.deepEqual((await evaluate(host, 'userInfo.username', body)).value, ['作者'])
+  // JSON 列表项自身也是 JSON 内容。
+  assert.deepEqual((await evaluate(host, 'name', { name: '乙' })).value, ['乙'])
+  // HTML 内容不受影响，仍按 CSS/属性名解析。
+  assert.equal((await evaluate(host, 'data.books', '<data class="books">x</data>')).status, 'empty')
+  assert.deepEqual((await evaluate(host, 'div@text', '<div>正文</div>')).value, ['正文'])
 })

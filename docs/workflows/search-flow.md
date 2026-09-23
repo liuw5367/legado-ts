@@ -21,7 +21,7 @@
 8. 同书源内按 `SearchBook.bookUrl` 去重；
 9. 列表为空且没有 `bookUrlPattern` 时，回退为详情页解析。
 
-TypeScript 工作流展开 `searchUrl` 时同时接受 Android 常见的 `{{key}}` 和运行时别名 `{{keyword}}`，两者都使用同一份 UTF-8 URL 编码关键词。列表字段读取兼容 Android 的 `name`、`author`、`coverUrl`、`intro` 与内部历史别名 `bookName`、`bookAuthor`、`bookCoverUrl`、`bookIntro`。
+工作流展开 `searchUrl` 时按 Android `AnalyzeUrl.replaceKeyPageJs` 的语义处理 `{{...}}`：已知替换项（`{{key}}`、运行时别名 `{{keyword}}`、`{{page}}`、`{{pageIndex}}`、`{{source.bookSourceUrl}}`）注入原值，非 ASCII 字符由请求层按 URL 规范编码；纯页码算术（如 `{{(page-1)*10}}`）直接求值；其余片段按内联 JavaScript 交给规则宿主求值，结果为 null/undefined 时展开为空串（例如清 Cookie 惯用法 `{{cookie.removeCookie(source.getKey())}}`）。宿主没有 JavaScript 能力或求值失败时，本次请求以 `capability-missing`/`rule-failed` 诊断失败，不把 `{{...}}` 字面量拼进地址。首页页码与 Android `SearchModel` 一致从 1 开始，`searchPageStart`/`explorePageStart` 只是可选覆盖项。列表字段读取兼容 Android 的 `name`、`author`、`coverUrl`、`intro`、`kind`、`wordCount` 与内部历史别名 `bookName`、`bookAuthor`、`bookCoverUrl`、`bookIntro`、`bookKind`、`bookWordCount`。
 
 发现列表复用 `BookList` 的字段解析，但它还有独立的分类入口、选定 URL、`infoMap` 和取消边界。详见 [发现流程与分类规则](explore-flow.md)。
 

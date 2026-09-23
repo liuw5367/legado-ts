@@ -64,6 +64,8 @@ export type CompiledRule = RuleAtom | RuleSequence
 export interface RuleCompileOptions {
   /** 是否允许首字符 `:` 进入全规则 Regex 模式。 */
   allInOne?: boolean
+  /** 没有显式模式前缀时的默认模式；内容为 JSON 时传 `Json` 对齐 Android isJSON。 */
+  defaultMode?: 'Default' | 'Json'
 }
 
 export type RuleDiagnosticCode =

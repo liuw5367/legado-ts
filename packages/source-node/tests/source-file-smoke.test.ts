@@ -98,8 +98,9 @@ test('07-B 真实 JSON 书源通过本地响应进入搜索工作流', async () 
 
   const result = await searchBooks(ports, { source, keyword: '本地测试' })
   assert.equal(result.status, 'success')
-  assert.deepEqual(result.value?.items.map((item) => ({ name: item.name, author: item.author, bookUrl: item.bookUrl })), [{ name: '本地测试书', author: '本地作者', bookUrl: '/novel/local-book?isSearch=1' }])
-  assert.deepEqual(calls, ['http://api.lemiyigou.com/search?page=0&keyword=%E6%9C%AC%E5%9C%B0%E6%B5%8B%E8%AF%95'])
+  // 详情地址按响应地址转绝对（Android isUrl 语义），首页页码与 Android SearchModel 一致为 1。
+  assert.deepEqual(result.value?.items.map((item) => ({ name: item.name, author: item.author, bookUrl: item.bookUrl })), [{ name: '本地测试书', author: '本地作者', bookUrl: 'http://api.lemiyigou.com/novel/local-book?isSearch=1' }])
+  assert.deepEqual(calls, ['http://api.lemiyigou.com/search?page=1&keyword=%E6%9C%AC%E5%9C%B0%E6%B5%8B%E8%AF%95'])
 })
 
 test('07-B 真实 HTML 书源规则使用本地响应选择正文节点', async () => {

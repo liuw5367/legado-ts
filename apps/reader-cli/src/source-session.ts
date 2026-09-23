@@ -39,12 +39,13 @@ export class SourceSession implements ReaderSourceSession {
     return loadTableOfContents({ ...operation.ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), maxPages: 32 })
   }
 
-  public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
+  public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
     const operation = this.createOperation()
     operation.rules.setBindings({ key: book.name ?? '', book, chapter })
     const cache: ContentCache = options?.refresh === true ? { get: async () => undefined, set: (key, value, cacheSignal) => this.cache.set(key, value, cacheSignal) } : this.cache
     const tocHtml = this.tocPage?.bookUrl === book.bookUrl && chapter.chapterUrl === book.bookUrl ? this.tocPage.html : undefined
-    return loadChapterContent({ ...operation.ports, cache }, { source: this.source, chapter, ...(tocHtml === undefined ? {} : { tocHtml }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
+    const nextChapterUrl = options?.nextChapterUrl
+    return loadChapterContent({ ...operation.ports, cache }, { source: this.source, chapter, ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
   }
 
   public readonly cache = {
@@ -61,7 +62,7 @@ export class SourceSession implements ReaderSourceSession {
 
   private createOperation(): { rules: SourceRuleHost; ports: WorkflowPorts } {
     const request = new SourceRequestHost({ network: this.network, cookieStore: this.cookieStore })
-    const rules = new SourceRuleHost({ request: (input, signal) => request.requestFromBridge(input, signal) })
+    const rules = new SourceRuleHost({ request: (input, signal, source) => request.requestFromBridge(input, signal, source) })
     request.attachRuleHost(rules)
     return {
       rules,

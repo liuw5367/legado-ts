@@ -1,61 +1,105 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
-import { detailFields, encodeKeyword, evaluateField, jsonValue, listFields, pageResult, requestPage, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, template } from './helpers.ts'
+import { detailFields, evaluateField, expandUrl, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
-  const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 0 }
-  return listWorkflow(ports, 'discover', input.source, sourceString(input.source, 'exploreUrl'), ruleString(input.source, 'ruleExplore', 'bookList'), ruleString(input.source, 'ruleExplore', 'nextPage'), cursor, input, {})
+  const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 1 }
+  return listWorkflow(ports, 'discover', input.source, sourceString(input.source, 'exploreUrl'), ruleString(input.source, 'ruleExplore', 'bookList'), ruleString(input.source, 'ruleExplore', 'nextPage'), cursor, input)
 }
 
 export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
-  if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 0 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
-  const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 0
-  const url = sourceString(input.source, 'searchUrl')
-  const encodedKeyword = encodeKeyword(input.keyword)
-  const expanded = url === undefined ? undefined : template(url, { keyword: encodedKeyword, key: encodedKeyword, page: String(page), pageIndex: String(page), 'source.bookSourceUrl': input.source.bookSourceUrl })
-  return listWorkflow(ports, 'search', input.source, expanded, ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, { keyword: input.keyword })
+  if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 1 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
+  const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 1
+  return listWorkflow(ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword)
 }
 
-async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', source: NormalizedSource, url: string | undefined, listRule: string | undefined, nextRule: string | undefined, cursor: DiscoveryInput['cursor'], options: DiscoveryInput | SearchInput, replacements: Readonly<Record<string, string>>): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+/** Android BookList：列表规则以 `-` 开头表示解析后反转，`+` 只剥离前缀。 */
+function normalizeListRule(value: string): { rule: string; reverse: boolean } {
+  if (value.startsWith('-')) return { rule: value.slice(1), reverse: true }
+  if (value.startsWith('+')) return { rule: value.slice(1), reverse: false }
+  return { rule: value, reverse: false }
+}
+
+/** Android `String.matches`：整个响应地址匹配 bookUrlPattern；非法正则按不匹配处理。 */
+function matchesBookUrlPattern(pattern: string, url: string): boolean {
+  try {
+    return new RegExp(`^(?:${pattern})$`).test(url)
+  } catch {
+    return false
+  }
+}
+
+async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', source: NormalizedSource, url: string | undefined, listRule: string | undefined, nextRule: string | undefined, cursor: { index: number; token?: string } | undefined, options: DiscoveryInput | SearchInput, keyword?: string): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
-  const pageCursor = cursor ?? { index: 0 }
+  const pageCursor = cursor ?? { index: 1 }
   if (url === undefined || listRule === undefined) {
     diagnostics.push({ code: 'invalid-config', stage, message: '缺少列表请求地址或 bookList 规则', retryable: false })
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  const expanded = template(url, { page: String(pageCursor.index), pageIndex: String(pageCursor.index), 'source.bookSourceUrl': source.bookSourceUrl, ...replacements })
-  const content = await requestPage(ports, source, expanded, stage, options, diagnostics, trace)
-  if (content === undefined) return { status: diagnostics.some((item) => item.code === 'cancelled') ? 'cancelled' : 'failed', value: null, diagnostics, trace }
-  const list = await evaluateField(ports, source, stage, 'bookList', listRule, content, undefined, trace, options.signal)
-  if (list.state === 'cancelled') {
-    diagnostics.push({ code: 'cancelled', stage, field: 'bookList', message: '工作流已取消', retryable: false })
-    return { status: 'cancelled', value: null, diagnostics, trace }
+  const keywordReplacements = keyword === undefined ? {} : { key: keyword, keyword }
+  const expanded = await expandUrl(
+    ports,
+    source,
+    stage,
+    url,
+    { page: String(pageCursor.index), pageIndex: String(pageCursor.index), 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
+    { page: pageCursor.index, pageIndex: pageCursor.index, 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
+    options.signal,
+  )
+  if (expanded.url === undefined) {
+    const code = expanded.error?.code ?? 'rule-failed'
+    diagnostics.push({ code, stage, field: 'url', message: expanded.error?.message ?? '书源 URL 展开失败', retryable: false })
+    return { status: code === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
   }
-  if (list.state === 'capability-missing') {
-    diagnostics.push({ code: 'capability-missing', stage, field: 'bookList', message: list.message ?? '列表规则能力不可用', retryable: false })
-    return { status: 'capability-missing', value: null, diagnostics, trace }
-  }
-  if (list.state !== 'value') {
-    diagnostics.push({ code: 'empty-page', stage, field: 'bookList', message: '列表规则没有返回候选', retryable: false })
-    return { status: 'empty', value: { items: [], cursor: pageCursor }, diagnostics, trace }
-  }
-  const rawItems = Array.isArray(list.value) ? list.value : [list.value]
-  const candidates: BookCandidate[] = []
-  const identities = new Set<string>()
+  const page = await requestPageResponse(ports, source, expanded.url, stage, options, diagnostics, trace)
+  if (page === undefined) return { status: diagnostics.some((item) => item.code === 'cancelled') ? 'cancelled' : 'failed', value: null, diagnostics, trace }
+  const content = page.content
   const maxItems = options.maxItems ?? 100
+  const pattern = stage === 'search' ? sourceString(source, 'bookUrlPattern') : undefined
+  const candidates: BookCandidate[] = []
+  // searchUrl 命中 bookUrlPattern 时整页按详情页解析（Android BookList 在列表解析前返回）。
+  const detailPage = pattern !== undefined && matchesBookUrlPattern(pattern, page.url)
+  let rawItems: unknown[] = []
+  let reverse = false
+  if (!detailPage) {
+    const normalized = normalizeListRule(listRule)
+    reverse = normalized.reverse
+    const list = await evaluateField(ports, source, stage, 'bookList', normalized.rule, content, undefined, trace, options.signal, { expect: 'nodes' })
+    if (list.state === 'cancelled') {
+      diagnostics.push({ code: 'cancelled', stage, field: 'bookList', message: '工作流已取消', retryable: false })
+      return { status: 'cancelled', value: null, diagnostics, trace }
+    }
+    if (list.state === 'capability-missing') {
+      diagnostics.push({ code: 'capability-missing', stage, field: 'bookList', message: list.message ?? '列表规则能力不可用', retryable: false })
+      return { status: 'capability-missing', value: null, diagnostics, trace }
+    }
+    if (list.state === 'failed') {
+      diagnostics.push({ code: 'rule-failed', stage, field: 'bookList', message: list.message ?? '列表规则失败', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
+    rawItems = list.state === 'value' ? (Array.isArray(list.value) ? list.value : [list.value]) : []
+  }
+  const identities = new Set<string>()
   for (let itemIndex = 0; itemIndex < rawItems.length && candidates.length < maxItems; itemIndex += 1) {
-    const rawItem = rawItems[itemIndex]
-    const fields = await extractFields(ports, source, stage, rawItem, listFields, itemIndex, options.signal, diagnostics, trace)
+    const fields = await extractFields(ports, source, stage, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace)
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
-    const bookUrl = fields.bookUrl
-    if (bookUrl === undefined || bookUrl.length === 0) {
+    // 相对详情地址按响应地址转绝对；空地址回退响应地址（Android isUrl 语义）。
+    const bookUrl = resolveCandidateUrl(fields.bookUrl, page.url)
+    if (bookUrl === undefined) {
       diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '候选缺少书源内详情 URL', retryable: false })
       continue
     }
+    const name = formatBookName(fields.name ?? '')
+    if (name.length === 0) {
+      diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '候选缺少书名', retryable: false })
+      continue
+    }
+    const author = formatBookAuthor(fields.author ?? '')
+    // Android SearchBook.equals 只比较 bookUrl：同地址候选折叠为一条。
     const identityKey = `${source.bookSourceUrl}\u0000${bookUrl}`
     if (identities.has(identityKey)) {
       diagnostics.push({ code: 'duplicate-item', stage, itemIndex, message: '重复候选已折叠', retryable: false })
@@ -63,24 +107,36 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     }
     identities.add(identityKey)
     trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex })
-    const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
-    if (fields.name !== undefined) candidate.name = fields.name
-    if (fields.author !== undefined) candidate.author = fields.author
+    const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
+    if (author.length > 0) candidate.author = author
     if (fields.intro !== undefined) candidate.intro = fields.intro
-    if (fields.coverUrl !== undefined) candidate.coverUrl = fields.coverUrl
+    if (fields.coverUrl !== undefined) candidate.coverUrl = resolveCandidateUrl(fields.coverUrl, page.url) ?? fields.coverUrl
+    if (fields.kind !== undefined) candidate.kind = fields.kind
+    if (fields.wordCount !== undefined) candidate.wordCount = formatWordCount(fields.wordCount)
     if (fields.lastChapter !== undefined) candidate.lastChapter = fields.lastChapter
     if (fields.updateTime !== undefined) candidate.updateTime = fields.updateTime
     candidates.push(candidate)
   }
+  if (candidates.length === 0 && (detailPage || (rawItems.length === 0 && pattern === undefined))) {
+    // 列表为空（或命中 bookUrlPattern）时，书源把整个响应当作详情页。
+    const fallback = await detailPageCandidate(ports, source, page, options, diagnostics, trace)
+    if (fallback !== undefined) {
+      trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex: 0 })
+      candidates.push(fallback)
+    }
+  }
+  if (reverse) candidates.reverse()
   if (candidates.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '列表没有可用候选', retryable: false })
+  // Android 按页码递增继续翻页；这里只要本页有候选就给出下一页游标，是否继续由调用方决定。
   let nextCursor: { index: number; token?: string } | undefined
+  if (candidates.length > 0) nextCursor = { index: pageCursor.index + 1 }
   if (nextRule !== undefined) {
     const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal)
     if (next.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'nextPage', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
-    if (next.state === 'value') nextCursor = { index: pageCursor.index + 1, token: text(next.value) }
+    if (next.state === 'value') nextCursor = { index: pageCursor.index + 1, token: textValue(next.value) }
   }
   const value = pageResult(pageCursor, candidates, nextCursor)
   return { status: statusFromDiagnostics(diagnostics, candidates.length), value, diagnostics, trace }
@@ -92,6 +148,8 @@ interface ExtractedFields {
   bookUrl?: string
   coverUrl?: string
   intro?: string
+  kind?: string
+  wordCount?: string
   lastChapter?: string
   updateTime?: string
   rawFields: JsonObject
@@ -107,18 +165,100 @@ async function extractFields(ports: WorkflowPorts, source: NormalizedSource, sta
     if (result.state === 'failed') diagnostics.push({ code: 'item-skipped', stage, field: ruleField, itemIndex, message: result.message ?? '字段规则失败', retryable: false })
     if (result.state === 'capability-missing') diagnostics.push({ code: 'capability-missing', stage, field: ruleField, itemIndex, message: result.message ?? '字段规则能力不可用', retryable: false })
     if (result.state === 'value') {
-      const value = text(result.value)
+      const value = fieldText(result.value, outputField)
       extracted.rawFields[outputField] = jsonValue(result.value)
       if (outputField === 'name') extracted.name = value
       if (outputField === 'author') extracted.author = value
       if (outputField === 'bookUrl') extracted.bookUrl = value
       if (outputField === 'coverUrl') extracted.coverUrl = value
       if (outputField === 'intro') extracted.intro = value
+      if (outputField === 'kind') extracted.kind = value
+      if (outputField === 'wordCount') extracted.wordCount = value
       if (outputField === 'lastChapter') extracted.lastChapter = value
       if (outputField === 'updateTime') extracted.updateTime = value
     }
   }
   return extracted
+}
+
+/** 分类规则在 Android 里取列表并按逗号连接，其余字段按文本拼接。 */
+function fieldText(value: unknown, outputField: string): string {
+  if (outputField === 'kind' && Array.isArray(value)) return value.map(textValue).filter((item) => item.length > 0).join(',')
+  return textValue(value)
+}
+
+function resolveCandidateUrl(value: string | undefined, baseUrl: string): string | undefined {
+  if (value === undefined || value.length === 0) return baseUrl
+  // 旧版本可能把目录响应正文误存进 URL，不能把 HTML 编码成可请求地址。
+  if (value.trimStart().startsWith('<')) return undefined
+  try {
+    return new URL(value, baseUrl).toString()
+  } catch {
+    return undefined
+  }
+}
+
+/** 把整个响应当作详情页解析：Android 在 bookUrlPattern 命中或列表为空时使用该分支。 */
+async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, page: { content: string; url: string }, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<BookCandidate | undefined> {
+  const extraction = await extractDetailFields(ports, source, 0, page.content, { baseUrl: page.url, redirectUrl: page.url }, options.signal, trace, diagnostics)
+  if (extraction.cancelled) return undefined
+  const name = formatBookName(extraction.values.name ?? '')
+  if (name.length === 0) {
+    diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex: 0, message: '详情页没有解析出书名', retryable: false })
+    return undefined
+  }
+  const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: page.url, name, rawFields: extraction.raw, traceRef: 'detail-page:0' }
+  const author = formatBookAuthor(extraction.values.author ?? '')
+  if (author.length > 0) candidate.author = author
+  if (extraction.values.intro !== undefined) candidate.intro = extraction.values.intro
+  if (extraction.values.coverUrl !== undefined) candidate.coverUrl = resolveCandidateUrl(extraction.values.coverUrl, page.url) ?? extraction.values.coverUrl
+  if (extraction.values.kind !== undefined) candidate.kind = extraction.values.kind
+  if (extraction.values.wordCount !== undefined) candidate.wordCount = formatWordCount(extraction.values.wordCount)
+  if (extraction.values.lastChapter !== undefined) candidate.lastChapter = extraction.values.lastChapter
+  if (extraction.values.updateTime !== undefined) candidate.updateTime = extraction.values.updateTime
+  return candidate
+}
+
+interface DetailExtraction {
+  /** 规则返回的字段文本，按 Android 输出字段名索引。 */
+  values: Record<string, string>
+  /** 规则明确返回空字符串的字段。 */
+  empty: string[]
+  /** 规则失败的字段及脱敏原因。 */
+  errors: Record<string, string>
+  /** 字段的原始 JSON 值。 */
+  raw: JsonObject
+  cancelled: boolean
+}
+
+async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSource, itemIndex: number, content: unknown, context: { baseUrl: string; redirectUrl: string }, signal: AbortSignal | undefined, trace: WorkflowTraceEntry[], diagnostics: WorkflowDiagnostic[]): Promise<DetailExtraction> {
+  const result: DetailExtraction = { values: {}, empty: [], errors: {}, raw: {}, cancelled: false }
+  for (const [ruleField, outputField] of detailFields) {
+    const rule = ruleString(source, 'ruleBookInfo', ruleField)
+    if (rule === undefined) continue
+    // Android 将空 tocUrl 规则视为“使用详情页”，而不是“返回整页内容”。
+    if (ruleField === 'tocUrl' && rule.length === 0) continue
+    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, context)
+    if (field.state === 'cancelled') {
+      result.cancelled = true
+      return result
+    }
+    if (field.state === 'empty') {
+      result.empty.push(outputField)
+      continue
+    }
+    if (field.state === 'failed' || field.state === 'capability-missing') {
+      result.errors[outputField] = field.message ?? '详情字段失败'
+      diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: ruleField, itemIndex, message: field.message ?? '详情字段失败', retryable: false })
+      continue
+    }
+    if (field.state !== 'value') continue
+    const value = fieldText(field.value, outputField)
+    result.raw[outputField] = jsonValue(field.value)
+    result.values[outputField] = outputField === 'wordCount' ? formatWordCount(value) : value
+    trace.push({ stage: 'detail', event: 'field', target: outputField, itemIndex })
+  }
+  return result
 }
 
 export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput): Promise<RuntimeResult<WorkflowPage<BookMetadata>>> {
@@ -131,6 +271,7 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
   }
   const items: BookMetadata[] = []
   const maxItems = input.maxItems ?? input.candidates.length
+  const initRule = ruleString(input.source, 'ruleBookInfo', 'init')
   for (let itemIndex = cursor.index; itemIndex < input.candidates.length && items.length < maxItems; itemIndex += 1) {
     if (input.signal?.aborted === true) {
       diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情工作流已取消', retryable: false })
@@ -141,40 +282,43 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex, message: '详情候选缺少 URL', retryable: false })
       continue
     }
-    const page = await requestPageResponse(ports, input.source, candidate.bookUrl, 'detail', input, diagnostics, trace)
-    if (page === undefined) continue
-    const content = page.content
-    const metadata: BookMetadata = { ...candidate, rawFields: { ...candidate.rawFields }, emptyFields: [], fieldErrors: {} }
-    for (const [ruleField, outputField] of detailFields) {
-      const rule = ruleString(input.source, 'ruleBookInfo', ruleField)
-      if (rule === undefined) continue
-      // Android 将空 tocUrl 规则视为“使用详情页”，而不是“返回整页内容”。
-      if (ruleField === 'tocUrl' && rule.length === 0) continue
-      const result = await evaluateField(ports, input.source, 'detail', ruleField, rule, content, itemIndex, trace, input.signal, { baseUrl: page.url, redirectUrl: page.url })
-      if (result.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
-      if (result.state === 'empty') {
-        metadata.emptyFields.push(outputField)
-        continue
-      }
-      if (result.state === 'failed' || result.state === 'capability-missing') {
-        metadata.fieldErrors = { ...metadata.fieldErrors, [outputField]: result.message ?? '详情字段失败' }
-        diagnostics.push({ code: result.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: ruleField, itemIndex, message: result.message ?? '详情字段失败', retryable: false })
-        continue
-      }
-      const value = text(result.value)
-      metadata.rawFields[outputField] = jsonValue(result.value)
-      if (outputField === 'name') metadata.name = value
-      if (outputField === 'author') metadata.author = value
-      if (outputField === 'intro') metadata.intro = value
-      if (outputField === 'coverUrl') metadata.coverUrl = value
-      if (outputField === 'tocUrl') metadata.tocUrl = value
-      if (outputField === 'lastChapter') metadata.lastChapter = value
-      if (outputField === 'updateTime') metadata.updateTime = value
-      trace.push({ stage: 'detail', event: 'field', target: outputField, itemIndex })
+    const expandedUrl = await expandUrl(ports, input.source, 'detail', candidate.bookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+    if (expandedUrl.url === undefined) {
+      diagnostics.push({ code: expandedUrl.error?.code ?? 'rule-failed', stage: 'detail', field: 'bookUrl', itemIndex, message: expandedUrl.error?.message ?? '详情 URL 展开失败', retryable: false })
+      continue
     }
-    const tocUrl = resolveUrl(metadata.tocUrl, page.url) ?? page.url
+    const page = await requestPageResponse(ports, input.source, expandedUrl.url, 'detail', input, diagnostics, trace)
+    if (page === undefined) continue
+    const context = { baseUrl: page.url, redirectUrl: page.url }
+    // Android BookInfo：init 规则先执行，其结果成为后续详情字段的内容基准。
+    let content: unknown = page.content
+    if (initRule !== undefined) {
+      const init = await evaluateField(ports, input.source, 'detail', 'init', initRule, content, itemIndex, trace, input.signal, { ...context, expect: 'nodes' })
+      if (init.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
+      if (init.state === 'value') content = singleNodeValue(init.value)
+      else if (init.state === 'failed' || init.state === 'capability-missing') diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: init.message ?? '详情初始化规则失败', retryable: false })
+    }
+    const extraction = await extractDetailFields(ports, input.source, itemIndex, content, context, input.signal, trace, diagnostics)
+    if (extraction.cancelled) return { status: 'cancelled', value: null, diagnostics, trace }
+    const name = formatBookName(extraction.values.name ?? '')
+    const author = formatBookAuthor(extraction.values.author ?? '')
+    const metadata: BookMetadata = {
+      ...candidate,
+      rawFields: { ...candidate.rawFields, ...extraction.raw },
+      emptyFields: extraction.empty,
+      fieldErrors: extraction.errors,
+    }
+    if (name.length > 0) metadata.name = name
+    if (author.length > 0) metadata.author = author
+    if (extraction.values.intro !== undefined) metadata.intro = extraction.values.intro
+    if (extraction.values.coverUrl !== undefined) metadata.coverUrl = extraction.values.coverUrl
+    if (extraction.values.kind !== undefined) metadata.kind = extraction.values.kind
+    if (extraction.values.wordCount !== undefined) metadata.wordCount = extraction.values.wordCount
+    if (extraction.values.lastChapter !== undefined) metadata.lastChapter = extraction.values.lastChapter
+    if (extraction.values.updateTime !== undefined) metadata.updateTime = extraction.values.updateTime
+    const tocUrl = resolveCandidateUrl(extraction.values.tocUrl, page.url) ?? page.url
     metadata.tocUrl = tocUrl
-    if (tocUrl === page.url) metadata.tocHtml = content
+    if (tocUrl === page.url) metadata.tocHtml = page.content
     items.push(metadata)
   }
   const endIndex = Math.min(input.candidates.length, cursor.index + maxItems)
@@ -183,19 +327,10 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
   return { status: statusFromDiagnostics(diagnostics, items.length), value, diagnostics, trace }
 }
 
-function resolveUrl(value: string | undefined, baseUrl: string): string | undefined {
-  if (value === undefined || value.length === 0) return undefined
-  // 旧版本可能把目录响应正文误存进 tocUrl，不能把 HTML 编码成可请求地址。
-  if (value.trimStart().startsWith('<')) return undefined
-  try {
-    return new URL(value, baseUrl).toString()
-  } catch {
-    return undefined
-  }
-}
-
-function text(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return Array.isArray(value) ? value.map(text).filter(Boolean).join('\n') : String(value)
+/**
+ * init 规则可能返回节点列表（Android 会把 Elements 重新序列化后作为内容）。
+ * 核心没有多根节点视图，取首个节点作为后续规则的内容基准。
+ */
+function singleNodeValue(value: unknown): unknown {
+  return Array.isArray(value) && value.length > 0 ? value[0] : value
 }

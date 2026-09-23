@@ -42,28 +42,34 @@ function ports(calls: string[]): WorkflowPorts {
 test('发现工作流保留书源内身份、页码起点、去重和 partial 诊断', async () => {
   const calls: string[] = []
   const result = await discoverBooks(ports(calls), { source })
-  assert.equal(result.status, 'partial')
-  assert.equal(result.value?.cursor.index, 1)
-  assert.equal(result.value?.nextCursor?.token, 'next-token')
-  assert.equal(result.value?.items.length, 1)
-  assert.deepEqual(result.value?.items[0], {
+  const items = result.value?.items ?? []
+  // 两条候选：同地址的第二条按 Android SearchBook.equals（只比 bookUrl）折叠；
+  // 缺少地址规则的候选按 isUrl 语义回退为响应地址，不再被丢弃。
+  assert.equal(items.length, 2)
+  assert.deepEqual(items[0], {
     sourceId: 'https://source.test',
-    bookUrl: '/book/a',
+    bookUrl: 'https://source.test/book/a',
     name: 'A',
     author: 'Author',
     rawFields: { name: 'A', bookUrl: '/book/a', author: 'Author' },
     traceRef: 'discover:0',
   })
+  assert.equal(items[1]?.name, 'No URL')
+  assert.equal(items[1]?.bookUrl, 'https://source.test/explore?page=1')
+  assert.equal(result.value?.cursor.index, 1)
+  assert.equal(result.value?.nextCursor?.token, 'next-token')
+  assert.equal(result.status, 'success')
   assert.equal(calls[0], 'https://source.test/explore?page=1')
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing'))
+  assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing'))
 })
 
-test('搜索工作流编码关键词并区分空关键词', async () => {
+test('搜索工作流按 Android 首页页码展开关键词并区分空关键词', async () => {
   const calls: string[] = []
   const result = await searchBooks(ports(calls), { source, keyword: '中文 test' })
   assert.equal(result.status, 'success')
-  assert.equal(calls[0], 'https://source.test/search?q=%E4%B8%AD%E6%96%87%20test&page=0')
+  // {{keyword}} 注入原值，非 ASCII 由请求层编码；首页页码与 Android SearchModel 一致从 1 开始。
+  assert.equal(calls[0], 'https://source.test/search?q=%E4%B8%AD%E6%96%87%20test&page=1')
 
   const empty = await searchBooks(ports(calls), { source, keyword: '' })
   assert.equal(empty.status, 'empty')
@@ -180,4 +186,100 @@ test('列表字段规则执行期间取消会返回 cancelled', async () => {
   const result = await discoverBooks(workflowPorts, { source, signal: controller.signal })
   assert.equal(result.status, 'cancelled')
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'cancelled'))
+})
+
+test('列表规则 - 前缀反转、+ 前缀只剥离（Android BookList 语义）', async () => {
+  const reversedSource = { ...source, ruleExplore: { bookList: '-list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', nextPage: 'next' } } as unknown as NormalizedSource
+  const reversed = await discoverBooks(ports([]), { source: reversedSource })
+  assert.deepEqual(reversed.value?.items.map((item) => item.name), ['No URL', 'A'])
+
+  const strippedSource = { ...source, ruleExplore: { bookList: '+list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', nextPage: 'next' } } as unknown as NormalizedSource
+  const stripped = await discoverBooks(ports([]), { source: strippedSource })
+  assert.deepEqual(stripped.value?.items.map((item) => item.name), ['A', 'No URL'])
+  assert.equal(stripped.status, 'success')
+})
+
+test('搜索响应命中 bookUrlPattern 时整页按详情页解析', async () => {
+  const evaluated: string[] = []
+  const base = ports([])
+  base.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      return ports([]).rules.evaluate(request)
+    },
+  }
+  const patterned = { ...source, searchUrl: '/book/one', bookUrlPattern: 'https://source\\.test/book/.*' } as unknown as NormalizedSource
+  const result = await searchBooks(base, { source: patterned, keyword: 'A' })
+  // 详情解析里 detail-intro 规则失败，按字段级诊断返回 partial。
+  assert.equal(result.status, 'partial')
+  assert.equal(result.value?.items.length, 1)
+  assert.equal(result.value?.items[0]?.name, 'A detail')
+  assert.equal(result.value?.items[0]?.bookUrl, 'https://source.test/book/one')
+  assert.ok(!evaluated.includes('list'))
+})
+
+test('列表为空且没有 bookUrlPattern 时回退详情页解析', async () => {
+  const fallbackSource = { ...source, searchUrl: '/book/empty' } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      if (request.field === 'bookList') return { status: 'empty', value: null }
+      return ports([]).rules.evaluate(request)
+    },
+  }
+  const result = await searchBooks(workflowPorts, { source: fallbackSource, keyword: 'A' })
+  assert.equal(result.status, 'partial')
+  assert.equal(result.value?.items[0]?.name, 'A detail')
+  assert.equal(result.value?.items[0]?.bookUrl, 'https://source.test/book/empty')
+
+  // bookUrlPattern 存在但不匹配时不再回退。
+  const patterned = { ...fallbackSource, bookUrlPattern: 'https://other\\.test/.*' } as unknown as NormalizedSource
+  const noFallback = await searchBooks(workflowPorts, { source: patterned, keyword: 'A' })
+  assert.equal(noFallback.status, 'empty')
+  assert.equal(noFallback.value?.items.length, 0)
+})
+
+test('搜索字段解析分类、字数并清洗书名作者', async () => {
+  const richSource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', bookKind: 'kind', bookWordCount: 'words' },
+  } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      if (request.rule === 'list') return { status: 'success', value: [{ name: '我本无意成仙 作者：张三', url: '/book/a', author: ' 张三 著', kind: ['玄幻', '仙侠'], words: '1234567' }] }
+      if (request.rule === 'name') return { status: 'success', value: (request.content as { name: string }).name }
+      if (request.rule === 'url') return { status: 'success', value: (request.content as { url: string }).url }
+      if (request.rule === 'author') return { status: 'success', value: (request.content as { author: string }).author }
+      if (request.rule === 'kind') return { status: 'success', value: (request.content as { kind: string[] }).kind }
+      if (request.rule === 'words') return { status: 'success', value: (request.content as { words: string }).words }
+      return { status: 'empty', value: null }
+    },
+  }
+  const result = await searchBooks(workflowPorts, { source: richSource, keyword: 'A' })
+  const candidate = result.value?.items[0]
+  assert.equal(candidate?.name, '我本无意成仙')
+  assert.equal(candidate?.author, '张三')
+  assert.equal(candidate?.kind, '玄幻,仙侠')
+  assert.equal(candidate?.wordCount, '123.5万字')
+})
+
+test('详情 init 规则先执行并把结果作为后续字段的内容基准', async () => {
+  const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'A', rawFields: {}, traceRef: 'discover:0' }
+  const seen: Array<{ rule: string; content: unknown }> = []
+  const initSource = { ...source, ruleBookInfo: { init: 'detail-init', name: 'detail-name', author: 'detail-author' } } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      seen.push({ rule: request.rule, content: request.content })
+      if (request.rule === 'detail-init') return { status: 'success', value: { name: '子对象书名' } }
+      if (request.rule === 'detail-name') return { status: 'success', value: (request.content as { name: string }).name }
+      return { status: 'empty', value: null }
+    },
+  }
+  const result = await loadBookDetails(workflowPorts, { source: initSource, candidates: [candidate] })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items[0]?.name, '子对象书名')
+  const nameCall = seen.find((item) => item.rule === 'detail-name')
+  assert.deepEqual(nameCall?.content, { name: '子对象书名' })
 })

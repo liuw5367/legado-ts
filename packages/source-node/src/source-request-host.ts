@@ -140,16 +140,21 @@ export class SourceRequestHost {
   public async request(input: WorkflowRequest): Promise<NetworkResponse> {
     this.setSource(input.source)
     const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal)
-    return this.requestRaw(input.source, resolved, {}, input.options.signal, input.options.budget)
+    const overrides: SourceRequestOptions = {
+      ...(input.execution?.webJs === undefined ? {} : { webJs: input.execution.webJs }),
+      ...(input.execution?.sourceRegex === undefined ? {} : { sourceRegex: input.execution.sourceRegex }),
+    }
+    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget)
   }
 
-  public async requestFromBridge(input: SourceRuleBridgeRequest, signal: AbortSignal): Promise<unknown> {
-    const source = this.source
-    if (source === undefined) throw new Error('书源请求缺少当前 source')
+  /** `source` 由规则宿主注入：URL 展开等 JS 求值发生在首次请求之前。 */
+  public async requestFromBridge(input: SourceRuleBridgeRequest, signal: AbortSignal, source?: NormalizedSource): Promise<unknown> {
+    const current = source ?? this.source
+    if (current === undefined) throw new Error('书源请求缺少当前 source')
     const url = text(input.url)
-    if (input.kind === 'cookie-get') return await this.cookieStore.get(new URL(url, source.bookSourceUrl).toString())
+    if (input.kind === 'cookie-get') return await this.cookieStore.get(new URL(url, current.bookSourceUrl).toString())
     if (input.kind === 'cookie-set') {
-      await this.cookieStore.set(new URL(url, source.bookSourceUrl).toString(), text(input.value))
+      await this.cookieStore.set(new URL(url, current.bookSourceUrl).toString(), text(input.value))
       return true
     }
     if (input.kind === 'cookie-remove') {
@@ -165,7 +170,7 @@ export class SourceRequestHost {
       ...(input.body === undefined ? {} : { body: input.body }),
       ...(input.headers === undefined ? {} : { headers: input.headers }),
     }
-    const response = await this.requestRaw(source, url, overrides, signal)
+    const response = await this.requestRaw(current, url, overrides, signal)
     return this.decode(response)
   }
 

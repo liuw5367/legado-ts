@@ -31,7 +31,7 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
     },
   }
   let requestHost: SourceRequestHost
-  const ruleHost = new SourceRuleHost({ request: (input, signal) => requestHost.requestFromBridge(input, signal) })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, source) => requestHost.requestFromBridge(input, signal, source) })
   requestHost = new SourceRequestHost({ network, cookieStore: new NodeCookieStore() })
   requestHost.attachRuleHost(ruleHost)
   const ports: WorkflowPorts = {
@@ -47,7 +47,8 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
   const candidate = search.value?.items[0]
   assert.ok(candidate)
   assert.equal(candidate.name, '我本无意成仙')
-  assert.equal(candidate.bookUrl, '/book/local')
+  // 相对详情地址按响应地址转绝对（Android isUrl 语义）。
+  assert.equal(candidate.bookUrl, 'https://www.bbqqgg.com/book/local')
 
   ruleHost.setBindings({ key: '我本无意成仙', book: candidate })
   const details = await loadBookDetails(ports, { source, candidates: [candidate] })

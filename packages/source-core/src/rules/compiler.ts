@@ -59,7 +59,7 @@ function findBalancedEnd(input: string, start: number): number | undefined {
   return undefined
 }
 
-function modeOf(body: string, allInOne: boolean): { mode: RuleMode; body: string } {
+function modeOf(body: string, allInOne: boolean, defaultMode: 'Default' | 'Json' = 'Default'): { mode: RuleMode; body: string } {
   if (body.startsWith('@@')) return { mode: 'Default', body: body.slice(2) }
   const prefix = /^@(css|xpath|json|js|webjs):/i.exec(body)
   if (prefix !== null) {
@@ -74,7 +74,7 @@ function modeOf(body: string, allInOne: boolean): { mode: RuleMode; body: string
     const end = body.indexOf('</js>', '<js>'.length)
     return { mode: 'Js', body: end < 0 ? body.slice('<js>'.length) : body.slice('<js>'.length, end) }
   }
-  return { mode: 'Default', body }
+  return { mode: defaultMode, body }
 }
 
 function isOpaqueScriptRule(input: string): boolean {
@@ -217,7 +217,7 @@ function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions)
     diagnostics.push({ code: 'unbalanced-rule', message: '替换表达式最多包含规则、匹配、替换和首项标记四段', span: trimmed.span, canContinue: false })
     return { diagnostics }
   }
-  const mode = modeOf(replacementParts.parts[0] ?? '', options.allInOne ?? true)
+  const mode = modeOf(replacementParts.parts[0] ?? '', options.allInOne ?? true, options.defaultMode)
   const replacement: RuleReplacement | undefined = replacementParts.parts.length >= 2
     ? { pattern: replacementParts.parts[1]!, replacement: replacementParts.parts[2] ?? '', firstMatchOnly: replacementParts.parts.length === 4 }
     : undefined

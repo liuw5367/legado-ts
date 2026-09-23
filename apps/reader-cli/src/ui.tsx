@@ -468,7 +468,9 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const operation = beginOperation('task')
     setMessage(refresh ? '正在刷新当前章节…' : `正在加载第 ${index + 1} 章…`)
     try {
-      const result = await application.loadContent(currentBook.book.bookId, chapter, currentToc.edition.editionKey, operation.controller.signal, { refresh })
+      // 下一章地址用于正文分页护栏：命中时停止抓取，避免把下一章正文并入本章。
+      const nextChapter = currentToc.chapters[index + 1]
+      const result = await application.loadContent(currentBook.book.bookId, chapter, currentToc.edition.editionKey, operation.controller.signal, { refresh, ...(nextChapter === undefined ? {} : { nextChapterUrl: nextChapter.chapterUrl }) })
       if (!isCurrent(operation)) return
       const width = Math.max(8, columns)
       const formatted = formatChapterContent(result.content.cleaned, result.content.contentType)

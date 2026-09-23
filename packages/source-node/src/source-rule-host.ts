@@ -42,7 +42,8 @@ export interface SourceRuleBridgeRequest {
 }
 
 export interface SourceRuleHostOptions {
-  request?: (input: SourceRuleBridgeRequest, signal: AbortSignal) => Promise<unknown>
+  /** bridge 处理器；第三个参数是本次求值的书源，URL 展开等求值发生在首次请求之前。 */
+  request?: (input: SourceRuleBridgeRequest, signal: AbortSignal, source?: NormalizedSource) => Promise<unknown>
   encoding?: NodeEncodingHost
   crypto?: NodeCryptoHost
   font?: NodeFontHost
@@ -113,16 +114,38 @@ function isNodeRef(value: unknown): value is NodeRef {
   return typeof value === 'object' && value !== null && (value as { __legadoNode?: unknown }).__legadoNode === 'source-rule-node' && typeof (value as { id?: unknown }).id === 'string'
 }
 
-function lastOutput(body: string): { selector: string; output: 'text' | 'textNodes' | 'ownText' | 'html' | 'all' | 'attr' | undefined; attribute?: string } {
-  const match = /@([a-zA-Z][a-zA-Z0-9_-]*)$/.exec(body)
-  if (match === null) return { selector: body, output: undefined }
-  const token = match[1]!.toLowerCase()
-  if (token === 'text' || token === 'textnodes' || token === 'owntext' || token === 'html' || token === 'all') {
-    const output = token === 'textnodes' ? 'textNodes' : token === 'owntext' ? 'ownText' : token as 'text' | 'html' | 'all'
-    return { selector: body.slice(0, match.index), output }
-  }
-  if (token === 'href' || token === 'src' || token === 'data-src' || token === 'content') return { selector: body.slice(0, match.index), output: 'attr', attribute: match[1]! }
-  return { selector: body, output: undefined }
+type DefaultOutput = 'text' | 'textNodes' | 'ownText' | 'html' | 'all'
+
+interface DefaultPlan {
+  /** `@` 之前的元素选择器链；没有选择器时为空串。 */
+  selector: string
+  /** 已知输出标记；与 `attribute` 互斥。 */
+  output?: DefaultOutput
+  /** 末段不是输出标记时，按 Android 语义作为属性名。 */
+  attribute?: string
+}
+
+/**
+ * 解析 Default 规则：Android 把 `@` 分割后的最后一段一律当作输出标记，只识别
+ * text/textNodes/ownText/html/all，其余（含 href、value、data-original）都是属性名；
+ * 整条规则没有 `@` 时整段就是属性名。字段规则据此取值，不能把节点本身当成结果。
+ */
+function lastOutput(body: string): DefaultPlan {
+  const separator = body.lastIndexOf('@')
+  if (separator < 0) return { selector: '', attribute: body.trim() }
+  const token = body.slice(separator + 1).trim()
+  if (token.length === 0) return { selector: body, output: 'text' }
+  const lower = token.toLowerCase()
+  const output: DefaultOutput | undefined = lower === 'text' ? 'text' : lower === 'textnodes' ? 'textNodes' : lower === 'owntext' ? 'ownText' : lower === 'html' ? 'html' : lower === 'all' ? 'all' : undefined
+  return output === undefined ? { selector: body.slice(0, separator), attribute: token } : { selector: body.slice(0, separator), output }
+}
+
+/** Android AnalyzeRule.isJSON：对象/数组，或 trim 后由 `{}`、`[]` 包裹的字符串。 */
+function jsonContent(value: unknown): boolean {
+  if (value === null || value === undefined || isNodeRef(value)) return false
+  if (typeof value !== 'string') return typeof value === 'object'
+  const text = value.trim()
+  return (text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))
 }
 
 function normalizeSelector(selector: string): string {
@@ -213,6 +236,8 @@ export class SourceRuleHost implements WorkflowRulePort {
   private readonly maxSteps: number
   private readonly nodes = new Map<string, StoredNode>()
   private bindings: Readonly<Record<string, unknown>> = {}
+  /** 最近一次 JS 求值所用的书源；bridge 调用需要它来定位当前会话。 */
+  private currentSource?: NormalizedSource
   private nextNodeId = 0
 
   public constructor(options: SourceRuleHostOptions = {}) {
@@ -276,7 +301,7 @@ export class SourceRuleHost implements WorkflowRulePort {
         return output.value
       }
     }
-    const compiled = compileRule(rule)
+    const compiled = compileRule(rule, { defaultMode: jsonContent(content) ? 'Json' : 'Default' })
     if (compiled.rule === undefined) throw new SourceRuleError('failed', compiled.diagnostics[0]?.message ?? '规则编译失败')
     return this.evaluateNode(compiled.rule, state, content)
   }
@@ -349,13 +374,15 @@ export class SourceRuleHost implements WorkflowRulePort {
       if (attribute !== undefined) return attribute
     }
     if (expanded.startsWith('literal:')) return expanded.slice('literal:'.length)
-    const parsed = lastOutput(expanded)
-    const selectorParts = splitSelectorChain(parsed.selector).map(normalizeSelector)
+    // 列表规则整条是选择器链；字段规则的末段是输出标记或属性名。
+    const plan: DefaultPlan = state.request.expect === 'nodes' ? { selector: expanded } : lastOutput(expanded)
+    const selectorParts = splitSelectorChain(plan.selector).map(normalizeSelector)
     if (selectorParts.length === 0) {
-      if (stored === undefined) return textValue(content)
-      if (parsed.output === 'attr') return stored.document.attr(stored.node, parsed.attribute ?? '') ?? ''
-      if (parsed.output === undefined) return this.remember(stored.document, stored.node)
-      return stored.document.read(stored.node, parsed.output === 'textNodes' ? 'textNodes' : parsed.output === 'ownText' ? 'ownText' : parsed.output === 'html' ? 'html' : parsed.output === 'all' ? 'all' : 'text')
+      // 没有选择器时按当前内容取值；属性名查询不落到整页文本上（Android 查的是根元素属性）。
+      if (stored === undefined) return plan.attribute === undefined ? textValue(content) : ''
+      if (plan.attribute !== undefined) return stored.document.attr(stored.node, plan.attribute) ?? ''
+      if (plan.output === undefined) return this.remember(stored.document, stored.node)
+      return stored.document.read(stored.node, plan.output)
     }
     let current: Array<{ document: HtmlDocument; node?: ParserNode }> = stored === undefined
       ? [{ document: this.html.parse(textValue(content)) }]
@@ -372,16 +399,24 @@ export class SourceRuleHost implements WorkflowRulePort {
       current = next
     }
     const selected = current.filter((item): item is SelectedNode => item.node !== undefined)
-    const output = parsed.output
-    if (output === undefined) return selected.map((item) => this.remember(item.document, item.node))
-    if (output === 'attr') return selected.map((item) => item.document.attr(item.node, parsed.attribute ?? '') ?? '')
-    const textOutput = output as 'text' | 'textNodes' | 'ownText' | 'html' | 'all'
-    return selected.map((item) => item.document.read(item.node, textOutput))
+    if (plan.attribute !== undefined) {
+      // Android 跳过空属性并去重，避免空值参与拼接。
+      const values: string[] = []
+      for (const item of selected) {
+        const value = item.document.attr(item.node, plan.attribute) ?? ''
+        if (value.length > 0 && !values.includes(value)) values.push(value)
+      }
+      return values
+    }
+    if (plan.output === undefined) return selected.map((item) => this.remember(item.document, item.node))
+    return selected.map((item) => item.document.read(item.node, plan.output!)).filter((value) => value.length > 0)
   }
 
   private evaluateJson(expression: string, content: unknown): unknown {
     const value = this.json.evaluate(jsonInput(content), expression)
-    return value
+    // Android 的确定路径直接返回数组本身，jsonpath-plus 的 wrap 会再包一层；
+    // 不拆开会让 `data.books` 这类列表规则只拿到一个「数组项」。
+    return Array.isArray(value) && value.length === 1 && Array.isArray(value[0]) ? value[0] : value
   }
 
   private evaluateXPath(expression: string, content: unknown): unknown {
@@ -416,9 +451,11 @@ export class SourceRuleHost implements WorkflowRulePort {
     return first === null ? '' : first[0].replace(new RegExp(rule.replacement.pattern, 'g'), rule.replacement.replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: Pick<WorkflowRuleRequest, 'baseUrl' | 'redirectUrl' | 'content'>): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: Pick<WorkflowRuleRequest, 'baseUrl' | 'redirectUrl' | 'content' | 'bindings'>): Promise<WorkflowRuleOutput> {
+    this.currentSource = source
     const bindings = {
       ...this.bindings,
+      ...(context?.bindings ?? {}),
       result: content,
       src: context?.content ?? content,
       sourceKey: source.bookSourceUrl,
@@ -439,7 +476,8 @@ export class SourceRuleHost implements WorkflowRulePort {
       'globalThis.chapter = bindings.chapter ?? {};',
       'const getVariable = (name) => getVar(String(name));',
       'const putVariable = (name, value) => setVar(String(name), value);',
-      'const cookie = { getCookie: (url) => request({ kind: "cookie-get", url: String(url) }), setCookie: (url, value) => request({ kind: "cookie-set", url: String(url), value: String(value) }), removeCookie: (url) => request({ kind: "cookie-remove", url: String(url) }) };',
+      // Android CookieStore 的 set/remove 返回 Unit，`{{cookie.removeCookie(...)}}` 必须展开为空串而不是 "true"。
+      'const cookie = { getCookie: (url) => request({ kind: "cookie-get", url: String(url) }), setCookie: (url, value) => { request({ kind: "cookie-set", url: String(url), value: String(value) }); }, removeCookie: (url) => { request({ kind: "cookie-remove", url: String(url) }); } };',
       'const legadoPathValue = (value, path) => { const parts = String(path).replace(/^\\$\\.?\\.?/, "").match(/[A-Za-z_$][\\w$-]*|\\[\\d+\\]|\\[\\*\\]/g) ?? []; let current = value; for (const part of parts) { if (part === "[*]") current = Array.isArray(current) ? current : []; else if (Array.isArray(current)) current = current.map((item) => item == null ? undefined : item[part.startsWith("[") ? Number(part.slice(1, -1)) : part]); else current = current == null ? undefined : current[part]; } return current; };',
       'const legadoGetString = (name) => { const key = String(name); const value = key.startsWith("$") ? legadoPathValue(result, key) : result != null && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, key) ? result[key] : getVar(key); return Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\\n") : String(value ?? ""); };',
       'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? request({ kind: "network", url: String(value), method: "GET", options }) : getVar(String(value)), put: (name, value) => { setVar(String(name), value); return value; }, getString: (name) => legadoGetString(name), getStringList: (name) => legadoGetString(name).split("\\n").filter(Boolean), getWebViewUA: () => "Mozilla/5.0", base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (value) => String(value), randomUUID: () => "", getAppVariant: () => "", androidId: () => "", deviceID: () => "" };',
@@ -482,7 +520,7 @@ export class SourceRuleHost implements WorkflowRulePort {
       return this.font.replaceFont(textValue(request.text), error, correct, request.filter === true)
     }
     if (this.requestBridge === undefined) throw new Error('书源网络或宿主 bridge 不可用')
-    return this.requestBridge(request, signal)
+    return this.requestBridge(request, signal, this.currentSource)
   }
 
   private remember(document: HtmlDocument, node: ParserNode): NodeRef {

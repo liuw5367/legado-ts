@@ -1,7 +1,7 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
 import { compileRule } from '../rules/compiler.ts'
 import type { CompiledRule } from '../rules/types.ts'
-import { evaluateField, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import { evaluateField, expandUrl, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function loadTableOfContents(ports: ReadingPorts, input: TocInput): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
@@ -20,9 +20,16 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const chapters: Chapter[] = []
   const pageBodies = new Set<string>()
   const reverseByRule = listRule.startsWith('-')
-  const bookBaseUrl = resolveUrl(input.book.tocUrl ?? input.book.bookUrl, input.source.bookSourceUrl)
+  const rawBookUrl = resolveUrl(input.book.tocUrl ?? input.book.bookUrl, input.source.bookSourceUrl)
     ?? resolveUrl(input.book.bookUrl, input.source.bookSourceUrl)
     ?? input.source.bookSourceUrl
+  // 目录地址同样允许 `{{...}}` 内联表达式（Android 对每个 AnalyzeUrl 都做同样的展开）。
+  const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+  if (expandedBookUrl.url === undefined) {
+    diagnostics.push({ code: expandedBookUrl.error?.code ?? 'rule-failed', stage, field: 'tocUrl', message: expandedBookUrl.error?.message ?? '目录地址展开失败', retryable: false })
+    return { status: 'failed', value: null, diagnostics, trace }
+  }
+  const bookBaseUrl = expandedBookUrl.url
   const pendingPages = [{ url: bookBaseUrl, followNext: true }]
   let totalBytes = 0
   let volume: string | undefined
@@ -59,7 +66,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     visited.add(responseUrl)
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
-    const list = await evaluateField(ports, input.source, stage, 'chapterList', listRuleBody, body, pageIndex, trace, input.signal, context)
+    const list = await evaluateField(ports, input.source, stage, 'chapterList', listRuleBody, body, pageIndex, trace, input.signal, { ...context, expect: 'nodes' })
     if (list.state === 'cancelled') return cancelled('目录规则执行已取消', diagnostics, trace)
     if (list.state === 'capability-missing') {
       diagnostics.push({ code: 'capability-missing', stage, field: 'chapterList', message: list.message ?? '目录规则能力不可用', retryable: false })
@@ -115,9 +122,11 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
     for (const value of nextValues) {
-      const nextUrl = resolveUrl(value, responseUrl)
+      const resolved = resolveUrl(value, responseUrl)
+      const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+      const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
-        diagnostics.push({ code: 'item-skipped', stage, field: 'nextTocUrl', message: '目录下一页 URL 无效', retryable: false })
+        diagnostics.push({ code: expandedNext?.error?.code ?? 'item-skipped', stage, field: 'nextTocUrl', message: expandedNext?.error?.message ?? '目录下一页 URL 无效', retryable: false })
         continue
       }
       if (!visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: nextValues.length === 1 })
@@ -149,6 +158,14 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     return { status: 'success', value: { chapter: input.chapter, contentType: 'text', raw: url, cleaned: url, pages: [url], resources: [] }, diagnostics, trace }
   }
   const contentType = input.contentType ?? (input.source.contentType === 'html' || ruleReturnsHtml(contentRule) ? 'html' : 'text')
+  const titleRule = ruleString(input.source, 'ruleContent', 'title')
+  const replaceRule = ruleString(input.source, 'ruleContent', 'replaceRegex')
+  const contentWebJs = ruleString(input.source, 'ruleContent', 'webJs')
+  const contentSourceRegex = ruleString(input.source, 'ruleContent', 'sourceRegex')
+  // Android 在正文请求上单独传递 contentRule.webJs/sourceRegex，其他阶段不传。
+  const execution = contentWebJs === undefined && contentSourceRegex === undefined
+    ? undefined
+    : { ...(contentWebJs === undefined ? {} : { webJs: contentWebJs }), ...(contentSourceRegex === undefined ? {} : { sourceRegex: contentSourceRegex }) }
   const maxPages = input.maxPages ?? sourceNumber(input.source, 'contentMaxPages') ?? 32
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const maxOutputBytes = input.maxOutputBytes ?? 4 * 1024 * 1024
@@ -158,12 +175,22 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const cleanedPages: string[] = []
   const resources: ContentResource[] = []
   const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
-  const firstPageUrl = resolveUrl(input.chapter.chapterUrl, bookUrl) ?? input.chapter.chapterUrl
+  const rawFirstPageUrl = resolveUrl(input.chapter.chapterUrl, bookUrl) ?? input.chapter.chapterUrl
+  const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+  if (expandedFirstPage.url === undefined) {
+    diagnostics.push({ code: expandedFirstPage.error?.code ?? 'rule-failed', stage, field: 'chapterUrl', message: expandedFirstPage.error?.message ?? '章节地址展开失败', retryable: false })
+    return { status: 'failed', value: null, diagnostics, trace }
+  }
+  const firstPageUrl = expandedFirstPage.url
   const pendingPages = [{ url: firstPageUrl, followNext: true }]
   const contentBaseUrl = resolveUrl(firstPageUrl, bookUrl) ?? bookUrl
   let lastResponseUrl = contentBaseUrl
   let totalBytes = 0
   let stoppedByLimit = false
+  // 命中下一章时终止分页（Android BookContent 的 nextChapterUrl 护栏）。
+  let reachedNextChapter = false
+  // Android 用第一页响应求值 ruleContent.title。
+  let firstPage: { body: string; url: string; context: { baseUrl: string; redirectUrl: string } } | undefined
   for (let pageIndex = 0; pageIndex < maxPages && pendingPages.length > 0; pageIndex += 1) {
     if (input.signal?.aborted === true) return cancelled('正文工作流已取消', diagnostics, trace)
     const pendingPage = pendingPages.shift()!
@@ -181,12 +208,15 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     visited.add(normalizedUrl)
     const page = pageIndex === 0 && input.tocHtml !== undefined && normalizedUrl === bookUrl
       ? { body: input.tocHtml, url: normalizedUrl }
-      : await cachedPage(ports, input.source, normalizedUrl, 'content', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
+      : await cachedPage(ports, input.source, normalizedUrl, 'content', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, execution)
     if (page === undefined) break
     const body = page.body
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     lastResponseUrl = responseUrl
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
+    if (pageIndex === 0) firstPage = { body, url: responseUrl, context }
+    // 正文下一页命中下一章时停止分页，避免把下一章并进本章（Android BookContent.kt:79-84）。
+    const nextChapterAbsolute = input.nextChapterUrl === undefined ? undefined : resolveUrl(input.nextChapterUrl, responseUrl)
     totalBytes += new TextEncoder().encode(body).byteLength
     if (totalBytes > maxBytes) {
       diagnostics.push({ code: 'item-skipped', stage, message: '正文累计响应超过字节预算', retryable: false })
@@ -226,11 +256,18 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
     for (const value of nextValues) {
-      const nextUrl = resolveUrl(value, responseUrl)
+      const resolvedNext = resolveUrl(value, responseUrl)
+      const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+      const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
-        diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页 URL 无效', retryable: false })
+        diagnostics.push({ code: expandedNext?.error?.code ?? 'item-skipped', stage, field: nextField, message: expandedNext?.error?.message ?? '正文下一页 URL 无效', retryable: false })
         stoppedByLimit = true
         continue
+      }
+      if (nextChapterAbsolute !== undefined && nextUrl === nextChapterAbsolute) {
+        reachedNextChapter = true
+        pendingPages.length = 0
+        break
       }
       if (visited.has(nextUrl)) {
         diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页形成循环', retryable: false })
@@ -239,16 +276,35 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     }
   }
   if (pendingPages.length > 0) stoppedByLimit = true
+  if (reachedNextChapter) trace.push({ stage, event: 'field', target: 'nextChapterUrl' })
   const raw = pages.join(contentType === 'html' ? '\n' : '\n\n')
-  const cleanedSource = cleanedPages.join(contentType === 'html' ? '\n' : '\n\n')
-  let replaced = raw
+  const joined = cleanedPages.join(contentType === 'html' ? '\n' : '\n\n')
+  // Android 先逐行 trim，再把源级 replaceRegex 当规则对正文求值（可含 ##匹配##替换 或 @js:）。
+  let sourceReplaced = joined
+  if (replaceRule !== undefined) {
+    const trimmed = joined.split('\n').map((line) => line.trim()).join('\n')
+    const field = await evaluateField(ports, input.source, stage, 'replaceRegex', replaceRule, trimmed, undefined, trace, input.signal, firstPage?.context)
+    if (field.state === 'cancelled') return cancelled('正文替换规则执行已取消', diagnostics, trace)
+    if (field.state === 'value' || field.state === 'empty') sourceReplaced = textValue(field.value)
+    else {
+      diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage, field: 'replaceRegex', message: field.message ?? '正文替换规则失败', retryable: false })
+      stoppedByLimit = true
+    }
+  }
+  let replaced = sourceReplaced
   try {
-    replaced = applyReplacements(cleanedSource, input.replacements ?? [])
+    replaced = applyReplacements(sourceReplaced, input.replacements ?? [])
   } catch {
     diagnostics.push({ code: 'item-skipped', stage, message: '正文替换规则无效', retryable: false })
     stoppedByLimit = true
   }
   const cleaned = cleanContent(replaced, contentType, lastResponseUrl)
+  let title: string | undefined
+  if (titleRule !== undefined && firstPage !== undefined) {
+    const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, firstPage.context)
+    if (field.state === 'cancelled') return cancelled('章节标题规则执行已取消', diagnostics, trace)
+    if (field.state === 'value') title = titleText(textValue(field.value))
+  }
   const outputBytes = new TextEncoder().encode(cleaned).byteLength
   if (outputBytes > maxOutputBytes) {
     diagnostics.push({ code: 'item-skipped', stage, message: '正文清洗结果超过输出预算', retryable: false })
@@ -259,12 +315,12 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const failed = diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'capability-missing')
     return { status: failed ? 'failed' : 'empty', value: failed ? null : { chapter: input.chapter, contentType, raw, cleaned, pages, resources: [] }, diagnostics, trace }
   }
-  const value: ChapterContent = { chapter: input.chapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources) }
+  const value: ChapterContent = { chapter: input.chapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(title === undefined ? {} : { title }) }
   const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'item-skipped') ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
 }
 
-async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<{ body: string; url: string } | undefined> {
+async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }): Promise<{ body: string; url: string } | undefined> {
   const cacheKey = `${source.bookSourceUrl}\u0000${scope}\u0000${url}`
   const responseUrlKey = `${cacheKey}\u0000response-url`
   if (ports.cache !== undefined) {
@@ -283,7 +339,7 @@ async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: st
       // 缓存失败不得改变无缓存读取语义。
     }
   }
-  const value = await requestPageResponse(ports, source, url, stage, options, diagnostics, trace)
+  const value = await requestPageResponse(ports, source, url, stage, options, diagnostics, trace, execution)
   if (value !== undefined && ports.cache !== undefined) {
     try {
       await ports.cache.set(cacheKey, value.content, options.signal)
@@ -408,6 +464,7 @@ function booleanValue(value: unknown): boolean {
   return text.length > 0 && text !== 'null' && !['false', 'no', 'not', '0', '0.0'].includes(text)
 }
 
+/** Android BookChapter.equals 只比较 url：同地址不同标题也折叠，保留反转后最先出现的条目。 */
 function deduplicateChapters(chapters: Chapter[], diagnostics: WorkflowDiagnostic[], stage: WorkflowStage): Chapter[] {
   const seen = new Set<string>()
   return chapters.filter((chapter) => {
@@ -456,6 +513,16 @@ function resolveUrl(value: string, baseUrl: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/**
+ * Android `AppPattern.imgRegex`：标题里带图片时取图片地址前的文本作为标题；
+ * 只有图片没有文本时保留目录标题（这里返回 undefined，由调用方沿用目录标题）。
+ */
+function titleText(value: string): string | undefined {
+  const match = /(.*)((?:data|https?):[\s\S]+)$/u.exec(value)
+  const title = match === null ? value : (match[1] ?? '')
+  return title.length > 0 ? title : undefined
 }
 
 function uniqueResources(resources: readonly ContentResource[]): ContentResource[] {

@@ -29,6 +29,10 @@ export interface BookCandidate extends BookIdentity {
   author?: string
   intro?: string
   coverUrl?: string
+  /** 书源搜索或详情规则返回的分类；来源未提供时保持缺失。 */
+  kind?: string
+  /** 书源搜索或详情规则返回的字数文本；来源未提供时保持缺失。 */
+  wordCount?: string
   /** 书源搜索或详情规则返回的最新章节标题；来源未提供时保持缺失。 */
   lastChapter?: string
   /** 书源搜索或详情规则返回的更新时间文本；来源未提供时保持缺失。 */
@@ -89,6 +93,10 @@ export interface WorkflowRuleRequest {
   redirectUrl?: string
   itemIndex?: number
   signal?: AbortSignal
+  /** 期望的返回形态：列表规则取 `nodes`（元素节点），字段规则保持 `text`。 */
+  expect?: 'text' | 'nodes'
+  /** 本次求值附加的 JS 绑定，例如 URL 展开需要的 `key`、`page`。 */
+  bindings?: Readonly<Record<string, unknown>>
 }
 
 export interface WorkflowRuleOutput {
@@ -121,6 +129,8 @@ export interface WorkflowRequest {
   url: string
   stage: WorkflowStage
   options: WorkflowOptions
+  /** 书源声明的执行提示；正文请求会携带 `webJs`/`sourceRegex`。 */
+  execution?: { webJs?: string; sourceRegex?: string }
 }
 
 export interface DiscoveryInput extends WorkflowOptions {
@@ -182,6 +192,8 @@ export interface ChapterContent {
   cleaned: string
   pages: string[]
   resources: ContentResource[]
+  /** 书源 `ruleContent.title` 从正文提取的章节标题；未配置或提取为空时缺失。 */
+  title?: string
 }
 
 export interface ContentInput extends WorkflowOptions {
@@ -189,6 +201,8 @@ export interface ContentInput extends WorkflowOptions {
   chapter: ChapterIdentity
   /** 章节链接指向详情页时，可复用详情请求的响应正文。 */
   tocHtml?: string
+  /** 下一章地址；命中正文下一页规则时停止抓取，避免把下一章并入本章。 */
+  nextChapterUrl?: string
   contentType?: 'text' | 'html'
   replacements?: readonly ContentReplacement[]
   maxPages?: number

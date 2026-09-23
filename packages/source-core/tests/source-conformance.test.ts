@@ -78,7 +78,7 @@ test('07-A public entry runs one source through discover/search/detail/toc/conte
 
   const searched = await searchBooks(ports, { source, keyword: '中文' })
   assert.equal(searched.status, 'success')
-  assert.equal(calls[1], 'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87&page=0')
+  assert.equal(calls[1], 'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87&page=1')
 
   const details = await loadBookDetails(ports, { source, candidates: discovered.value?.items ?? [] })
   assert.equal(details.status, 'success')
@@ -97,7 +97,7 @@ test('07-A public entry runs one source through discover/search/detail/toc/conte
   assert.equal(content.value?.cleaned, '正文内容')
   assert.deepEqual(calls, [
     'https://fixture.invalid/explore?page=1',
-    'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87&page=0',
+    'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87&page=1',
     'https://fixture.invalid/book/one',
     'https://fixture.invalid/chapter/one',
   ])

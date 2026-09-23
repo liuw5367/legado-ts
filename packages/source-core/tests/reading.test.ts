@@ -34,7 +34,7 @@ function readingPorts(calls: string[], failing: string | undefined = undefined):
     rules: {
       evaluate: async ({ field, content }) => {
         if (field === 'chapterList') {
-          return { status: 'success', value: content === 'toc-1' ? [{ title: 'Same title', url: '/c1', volume: 'Volume 1' }, { title: 'Same title', url: '/c2' }] : [{ title: 'Third', url: '/c3' }, { title: 'Duplicate', url: '/c1' }] }
+          return { status: 'success', value: content === 'toc-1' ? [{ title: 'Same title', url: '/c1', volume: 'Volume 1' }, { title: 'Same title', url: '/c2' }] : [{ title: 'Third', url: '/c3' }, { title: 'Same title', url: '/c1', volume: 'Volume 1' }] }
         }
         if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
         if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
@@ -62,9 +62,33 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
   assert.deepEqual(result.value?.items.map((chapter) => [chapter.title, chapter.chapterUrl]), [
     ['Same title', 'https://source.test/c2'],
     ['Third', 'https://source.test/c3'],
-    ['Duplicate', 'https://source.test/c1'],
+    ['Same title', 'https://source.test/c1'],
   ])
   assert.equal(calls.length, 2)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
+})
+
+test('目录按 URL 折叠同地址不同标题的章节（Android BookChapter.equals 只比较 url）', async () => {
+  const calls: string[] = []
+  const result = await loadTableOfContents({
+    network: {
+      request: async (plan) => {
+        calls.push(plan.url)
+        return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: false }
+      },
+    },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'chapterList') return { status: 'success', value: [{ title: '分享章', url: '/same' }, { title: '正式章', url: '/same' }] }
+        if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+        if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+        return { status: 'empty', value: null }
+      },
+    },
+  }, { source, book })
+  assert.equal(result.status, 'success')
+  // 同地址只保留反转后最先出现的条目（= 原收集顺序中最后出现的同 URL 章节）。
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['正式章'])
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
 
@@ -438,4 +462,99 @@ test('正文下一页循环时停止并保留已读取内容', async () => {
   assert.equal(result.value?.cleaned, '<p>Loop</p>')
   assert.equal(calls.length, 1)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes('循环')))
+})
+
+test('正文分页命中 nextChapterUrl 时停止解析，不并入下一章', async () => {
+  const calls: string[] = []
+  const ports: ReadingPorts = {
+    network: {
+      request: async (plan) => {
+        calls.push(plan.url)
+        return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(plan.url.endsWith('/c1') ? 'page-1' : 'page-2'), redirected: false }
+      },
+    },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'content') return { status: 'success', value: content === 'page-1' ? '第一章正文' : '第二章正文' }
+        if (field === 'nextContentUrl') return content === 'page-1' ? { status: 'success', value: '/c2' } : { status: 'empty', value: null }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const nextSource = { ...source, ruleContent: { content: 'content', nextContentUrl: 'next-content' }, contentType: 'text' } as unknown as NormalizedSource
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }
+  const result = await loadChapterContent(ports, { source: nextSource, chapter, nextChapterUrl: 'https://source.test/c2' })
+  assert.equal(result.value?.cleaned, '第一章正文')
+  assert.deepEqual(calls, ['https://source.test/c1'])
+  assert.equal(result.status, 'success')
+})
+
+test('正文应用源级 replaceRegex：逐行 trim 后按规则求值', async () => {
+  const seen: string[] = []
+  const replaceSource = { ...source, ruleContent: { content: 'content', replaceRegex: '##广告##' }, contentType: 'text' } as unknown as NormalizedSource
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'content') return { status: 'success', value: '  广告  \n正文' }
+        if (field === 'replaceRegex') {
+          seen.push(String(content))
+          return { status: 'success', value: String(content).replace('广告', '') }
+        }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const result = await loadChapterContent(ports, { source: replaceSource, chapter })
+  assert.deepEqual(seen, ['广告\n正文'])
+  assert.equal(result.value?.cleaned, '正文')
+})
+
+test('正文 title 规则提取章节标题并处理标题里的图片', async () => {
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }
+  const titleSource = { ...source, ruleContent: { content: 'content', title: 'content-title' }, contentType: 'html' } as unknown as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field, rule }) => {
+        if (field === 'content') return { status: 'success', value: '<p>正文</p>' }
+        if (rule === 'content-title') return { status: 'success', value: '第一章 初见<img src="data:image/png;base64,AAAA">' }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const result = await loadChapterContent(ports, { source: titleSource, chapter })
+  // Android AppPattern.imgRegex 把「data:/http 到结尾」当作图片地址，标题保留它之前的部分。
+  assert.equal(result.value?.title, '第一章 初见<img src="')
+  assert.equal(result.value?.cleaned, '<p>正文</p>')
+
+  const plainPorts: ReadingPorts = {
+    ...ports,
+    rules: {
+      evaluate: async ({ field, rule }) => {
+        if (field === 'content') return { status: 'success', value: '<p>正文</p>' }
+        if (rule === 'content-title') return { status: 'success', value: '第二章 开始' }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const plain = await loadChapterContent(plainPorts, { source: titleSource, chapter })
+  assert.equal(plain.value?.title, '第二章 开始')
+})
+
+test('正文请求携带 ruleContent 的 webJs 与 sourceRegex 执行提示', async () => {
+  const seen: Array<{ webJs?: string; sourceRegex?: string } | undefined> = []
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }
+  const hintSource = { ...source, ruleContent: { content: 'content', webJs: 'web-js', sourceRegex: 'source-regex' } } as unknown as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: '<p>正文</p>' } : { status: 'empty', value: null } },
+    request: async (input) => {
+      seen.push(input.execution)
+      return { url: input.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }
+    },
+  }
+  await loadChapterContent(ports, { source: hintSource, chapter })
+  assert.deepEqual(seen, [{ webJs: 'web-js', sourceRegex: 'source-regex' }])
 })
