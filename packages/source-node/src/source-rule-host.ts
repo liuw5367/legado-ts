@@ -43,8 +43,8 @@ export interface SourceRuleBridgeRequest {
 }
 
 export interface SourceRuleHostOptions {
-  /** bridge 处理器；第三个参数是本次求值的书源，URL 展开等求值发生在首次请求之前。 */
-  request?: (input: SourceRuleBridgeRequest, signal: AbortSignal, source?: NormalizedSource) => Promise<unknown>
+  /** bridge 处理器；第三个参数是本次求值的书源（宿主总是显式传入），URL 展开等求值发生在首次请求之前。 */
+  request?: (input: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource) => Promise<unknown>
   encoding?: NodeEncodingHost
   crypto?: NodeCryptoHost
   font?: NodeFontHost
@@ -300,9 +300,12 @@ export class SourceRuleHost implements WorkflowRulePort {
     const jsIndex = rule.indexOf('@js:')
     if (jsIndex > 0) {
       const selectorRule = rule.slice(0, jsIndex).trim()
-      const code = rule.slice(jsIndex + '@js:'.length).trim()
-      if (selectorRule.length > 0 && code.length > 0) {
+      const rawCode = rule.slice(jsIndex + '@js:'.length).trim()
+      if (selectorRule.length > 0 && rawCode.length > 0) {
         const selected = await this.evaluateText(selectorRule, state, content)
+        // Android 先对整条规则插值再执行 JS，所以代码里的 {{}} 用**进入这条规则时的内容**求值
+        // （语料里 `$.response.xxx@js: ... '{{$.response.xxx}}' ...` 就是靠这一点）。
+        const code = await this.expandTemplate(rawCode, state, content)
         const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, selected, state.request.signal, state.request)
         if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
         return output.value
@@ -361,8 +364,12 @@ export class SourceRuleHost implements WorkflowRulePort {
     // Android AnalyzeRule：规则体含 `{{}}`/`@get:{}` 时切到 Regex 模式，结果是插值后的文本本身，
     // 不再按 Default/Json/XPath 解析（AnalyzeRule.kt:702-713）；Js 模式例外，它先插值再执行。
     // 插值后为空时 Android 的 `if (rule.isNotEmpty())` 不成立，result 保持分析前的整页内容。
-    // 空规则串（例如只剩 `@put:{...}`）在 Android 里连模式分支都不进，直接沿用上一份内容。
-    if (interpolated.length === 0 && rule.mode !== 'Js') value = await this.evaluateDefault('', state, content)
+    // 空规则串在 Android 里分三种：列表规则（getStringList）沿用上一份内容；字段规则（getString）
+    // 只有「带 ## 替换」时才沿用内容并继续做替换（AnalyzeRule.kt:345 的 `rule.isNotBlank() || replaceRegex.isEmpty()`），
+    // 其余情况字段值就是空串。
+    if (interpolated.length === 0 && rule.mode !== 'Js') value = rule.replacement !== undefined || state.request.expect === 'nodes'
+      ? this.contentValue(content)
+      : await this.evaluateDefault('', state, content)
     else if (template && (rule.mode === 'Default' || rule.mode === 'Json' || rule.mode === 'XPath')) value = interpolated
     else if (rule.mode === 'Default') value = await this.evaluateDefault(rule.body, state, content)
     else if (rule.mode === 'Json') value = this.evaluateJson(rule.body, content)
@@ -379,9 +386,15 @@ export class SourceRuleHost implements WorkflowRulePort {
   private async evaluateDefault(body: string, state: EvaluationState, content: unknown): Promise<unknown> {
     const expanded = await this.interpolate(body, state, content)
     const stored = isNodeRef(content) ? this.nodes.get(content.id) : undefined
-    if (expanded === '' || expanded === 'text' || expanded === 'ownText' || expanded === 'html') {
+    if (expanded === '') {
+      // Android 两条路径对空规则的处理不同：列表规则走 getStringList，`if (rule.isNotEmpty())` 不成立时
+      // 沿用上一份内容；字段规则走 getString，最终落到 AnalyzeByJSoup.getString("")，结果是空。
+      if (state.request.expect !== 'nodes') return stored === undefined ? '' : stored.document.read(stored.node, 'text')
+      return stored === undefined ? textValue(content) : this.remember(stored.document, stored.node)
+    }
+    if (expanded === 'text' || expanded === 'ownText' || expanded === 'html') {
       if (stored === undefined) return textValue(content)
-      return stored.document.read(stored.node, expanded === '' ? 'text' : expanded as 'text' | 'ownText' | 'html')
+      return stored.document.read(stored.node, expanded)
     }
     // Legado 的节点字段规则允许直接写属性名，不要求 @ 前缀。
     if (stored !== undefined && /^[\w:-]+$/u.test(expanded)) {
@@ -444,7 +457,7 @@ export class SourceRuleHost implements WorkflowRulePort {
 
   private evaluateRegex(expression: string, content: unknown): unknown {
     const text = textValue(content)
-    const compiled = compileSourcePattern(expression, { flags: 'g', complexity: 'reject-large-input', inputLength: text.length })
+    const compiled = compileSourcePattern(expression, { flags: 'g' })
     if ('error' in compiled) throw new SourceRuleError('failed', `${compiled.error.message}：${expression.slice(0, 40)}`)
     return [...text.matchAll(compiled.regex)].map((match) => [match[0] ?? '', ...match.slice(1).map((item) => item ?? '')])
   }
@@ -452,6 +465,12 @@ export class SourceRuleHost implements WorkflowRulePort {
   /** 只在文本真的含模板时才插值，普通规则不额外扫描。 */
   private async expandTemplate(input: string, state: EvaluationState, content: unknown): Promise<string> {
     return input.includes('{{') || input.includes('@get:') ? await this.interpolate(input, state, content) : input
+  }
+
+  /** Android「规则为空则不改写上一个 result」：拿到的是进入本条规则时的内容。 */
+  private contentValue(content: unknown): unknown {
+    const stored = isNodeRef(content) ? this.nodes.get(content.id) : undefined
+    return stored === undefined ? textValue(content) : this.remember(stored.document, stored.node)
   }
 
   private async interpolate(input: string, state: EvaluationState, content: unknown): Promise<string> {
@@ -492,7 +511,7 @@ export class SourceRuleHost implements WorkflowRulePort {
     const replacement = await this.expandTemplate(rule.replacement.replacement, state, content)
     const text = textValue(value)
     // 源可控正则过长度上限或（对超长输入）命中嵌套量词时明确失败，不让病态配置拖垮求值。
-    const compiled = compileSourcePattern(patternText, { flags: 'g', complexity: 'reject-large-input', inputLength: text.length })
+    const compiled = compileSourcePattern(patternText, { flags: 'g' })
     if ('error' in compiled) throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
     if (!rule.replacement.firstMatchOnly) return text.replace(compiled.regex, replacement)
     const first = compiled.regex.exec(text)

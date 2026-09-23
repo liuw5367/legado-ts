@@ -121,7 +121,6 @@ export class SourceRequestHost {
   private readonly cookieStore: CookieStore
   private readonly encoding: NodeCharsetCodec
   private ruleHost?: SourceRuleHost
-  private source?: NormalizedSource
 
   public constructor(options: SourceRequestHostOptions) {
     this.network = options.network
@@ -133,13 +132,9 @@ export class SourceRequestHost {
     this.ruleHost = ruleHost
   }
 
-  public setSource(source: NormalizedSource): void {
-    this.source = source
-  }
-
   public async request(input: WorkflowRequest): Promise<NetworkResponse> {
-    this.setSource(input.source)
-    const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal)
+    // 书源随这次调用显式传递：宿主上没有「当前书源」字段，同一宿主并发不同书源不会串源。
+    const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source)
     const overrides: SourceRequestOptions = {
       ...(input.execution?.webJs === undefined ? {} : { webJs: input.execution.webJs }),
       ...(input.execution?.sourceRegex === undefined ? {} : { sourceRegex: input.execution.sourceRegex }),
@@ -147,10 +142,9 @@ export class SourceRequestHost {
     return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget)
   }
 
-  /** `source` 由规则宿主注入：URL 展开等 JS 求值发生在首次请求之前。 */
-  public async requestFromBridge(input: SourceRuleBridgeRequest, signal: AbortSignal, source?: NormalizedSource): Promise<unknown> {
-    const current = source ?? this.source
-    if (current === undefined) throw new Error('书源请求缺少当前 source')
+  /** `source` 由规则宿主按本次求值注入：URL 展开等 JS 求值发生在首次请求之前。 */
+  public async requestFromBridge(input: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource): Promise<unknown> {
+    const current = source
     const url = text(input.url)
     if (input.kind === 'cookie-get') return await this.cookieStore.get(new URL(url, current.bookSourceUrl).toString())
     if (input.kind === 'cookie-set') {
@@ -179,12 +173,12 @@ export class SourceRequestHost {
     return this.decode(response)
   }
 
-  private async resolveExpression(input: string, stage: WorkflowStage, signal: AbortSignal | undefined): Promise<string> {
+  private async resolveExpression(input: string, stage: WorkflowStage, signal: AbortSignal | undefined, source: NormalizedSource): Promise<string> {
     const trimmed = input.trim()
     const script = trimmed.startsWith('<js>') ? extractBlock(trimmed, '<js>', '</js>') : trimmed.toLowerCase().startsWith('@js:') ? { code: trimmed.slice(4).trim(), tail: '' } : undefined
     if (script === undefined) return input
-    if (this.ruleHost === undefined || this.source === undefined) throw new Error('动态书源 URL 需要 JavaScript 宿主')
-    const result = await this.ruleHost.executeJavaScript(script.code, stage === 'search' ? 'search' : 'book', this.source, '', signal)
+    if (this.ruleHost === undefined) throw new Error('动态书源 URL 需要 JavaScript 宿主')
+    const result = await this.ruleHost.executeJavaScript(script.code, stage === 'search' ? 'search' : 'book', source, '', signal)
     if (result.status !== 'success') throw new Error(result.message ?? '动态书源 URL 执行失败')
     return script.tail.length > 0 ? script.tail : text(result.value)
   }

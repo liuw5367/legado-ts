@@ -1,3 +1,4 @@
+import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import { extractStaticJavaScript } from './static-javascript.ts'
 import { normalizeSource } from './normalize.ts'
 import { createSourceUuid, sourceDefinitionFingerprint } from './identity.ts'
@@ -76,8 +77,9 @@ function applyReplacements(rawText: string, rules: ImportOptions['replacements']
       continue
     }
     try {
-      const replacement = new RegExp(rule.search, rule.all === false ? '' : 'g')
-      const next = text.replace(replacement, rule.replacement)
+      const compiled = compileSourcePattern(rule.search, { flags: rule.all === false ? '' : 'g' })
+      if ('error' in compiled) throw new Error(compiled.error.message)
+      const next = text.replace(compiled.regex, rule.replacement)
       results.push({ ruleId: rule.ruleId, applied: next !== text })
       text = next
     } catch {

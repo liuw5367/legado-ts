@@ -133,14 +133,27 @@ test('规则主体含 {{}} 或 @get: 时返回插值文本（Android AnalyzeRule
   assert.equal((await evaluate(host, '{{@@.item@text}}号', '<div class="item">第一章</div>')).value, '第一章号')
 })
 
-test('插值为空时保留上一份内容（Android 的空规则语义）', async () => {
+test('选择器 + @js: 代码里的 {{}} 先插值再执行', async () => {
+  const host = new SourceRuleHost()
+  const body = JSON.stringify({ response: { blogsetting: { blogId: 123 } } })
+  // 语料写法：`$.response.blogsetting.blogId\n@js: ... '{{$.response.blogsetting.blogId}}' ...`
+  const result = await evaluate(host, "$.response.blogsetting.blogId\n@js:return \"id=\" + '{{$.response.blogsetting.blogId}}'", body)
+  assert.equal(result.value, 'id=123')
+})
+
+test('空规则在字段规则里是空，在列表规则里沿用上一份内容（getString vs getStringList）', async () => {
   const host = new SourceRuleHost()
   const body = JSON.stringify({ name: '甲' })
-  // 字段缺失 → 插值为空 → Android 的 rule 变空串，result 仍是分析前的整页内容。
-  assert.equal((await evaluate(host, '{{$.missing}}', body)).value, body)
-  assert.equal((await evaluate(host, '{{$.missing}}', '<div>正文</div>')).value, '<div>正文</div>')
-  // 只剩 @put 的空规则串同样不进模式分支（语料里 lastChapter/kind 这类字段会这么写）。
-  assert.equal((await evaluate(host, '@put:{"savebid":"$.id"}', body)).value, body)
+  // 字段规则走 Android getString：插值为空 → AnalyzeByJSoup.getString("") → 空。
+  assert.equal((await evaluate(host, '{{$.missing}}', body)).status, 'empty')
+  assert.equal((await evaluate(host, '{{$.missing}}', '<div>正文</div>')).status, 'empty')
+  assert.equal((await evaluate(host, '@put:{"savebid":"$.id"}', body)).status, 'empty')
+  // 带 ## 替换的空规则是例外：Android 保留内容再应用替换（语料里 replaceRegex 常写成 `##模式`）。
+  assert.equal((await evaluate(host, '##正文##', '<div>正文</div>')).value, '<div></div>')
+  // 列表规则走 getStringList：`if (rule.isNotEmpty())` 不成立，result 保持整页内容。
+  const list = await host.evaluate({ source, stage: 'detail', field: 'chapterList', rule: '@put:{"savebid":"$.id"}', content: '<div>目录</div>', expect: 'nodes' })
+  assert.notEqual(list.status, 'empty')
+  assert.ok(String(list.value).includes('目录'))
 })
 
 test('JS 规则体里的 {{}} 先插值再执行', async () => {
@@ -156,16 +169,19 @@ test('## 替换段里的 {{}} 参与插值', async () => {
   assert.equal((await evaluate(host, '.intro@text##^《.*?是由{{author}}写的。##已清洗', html)).value, '已清洗')
 })
 
-test('源可控正则命中守卫时明确失败，短输入的合法写法不受影响', async () => {
+test('源可控正则按形态守卫：未锚定的嵌套量词一律拒绝，语料写法放行', async () => {
   const host = new SourceRuleHost()
-  // 语料里有 4 条 `##` 匹配串合法使用嵌套量词（如 `(\n.*)+`），短输入必须照常替换。
+  // 语料里有 4 条 `##` 匹配串合法使用「有字面量锚定」的嵌套量词（如 `(\n.*)+`），任何输入规模都放行。
   const short = await evaluate(host, 'p@text##(\\n.*)+##', '<p>a\nb\nc</p>')
   assert.equal(short.status, 'success')
   assert.equal(short.value, 'a')
-
   const large = await evaluate(host, 'p@text##(\\n.*)+##', `<p>${'a\n'.repeat(40000)}</p>`)
-  assert.equal(large.status, 'failed')
-  assert.match(String(large.message), /嵌套量词/)
+  assert.notEqual(large.status, 'failed')
+
+  // 未锚定的嵌套量词是灾难回溯形态，短输入上就拒绝，不用等输入变大。
+  const catastrophic = await evaluate(host, 'p@text##(a+)+$##', '<p>aaaa</p>')
+  assert.equal(catastrophic.status, 'failed')
+  assert.match(String(catastrophic.message), /嵌套量词/)
 
   const oversized = await evaluate(host, `p@text##${'x'.repeat(3000)}##`, '<p>x</p>')
   assert.equal(oversized.status, 'failed')

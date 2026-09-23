@@ -65,35 +65,40 @@
       "sourceName": "多多书院（优）",
       "group": "ruleBookInfo",
       "field": "intro",
-      "code": "unbalanced-rule"
+      "code": "unbalanced-rule",
+      "ruleHash": "bcb5bcf953a9ae8d"
     },
     {
       "path": "collection/3847_8e81e459895047cbe12f0d9597fec8e7.json",
       "sourceName": "哔哩哔哩（优+++）",
       "group": "ruleSearch",
       "field": "kind",
-      "code": "unbalanced-rule"
+      "code": "unbalanced-rule",
+      "ruleHash": "45d3a81cf697637e"
     },
     {
       "path": "collection/3847_8e81e459895047cbe12f0d9597fec8e7.json",
       "sourceName": "乐乎文章（优）",
       "group": "ruleExplore",
       "field": "intro",
-      "code": "unbalanced-rule"
+      "code": "unbalanced-rule",
+      "ruleHash": "c86c24b3c12dd444"
     },
     {
       "path": "collection/894_c7603ec2f11bcee43737bfc648c3af33.json",
       "sourceName": "💰LOFTER",
       "group": "ruleExplore",
       "field": "intro",
-      "code": "unbalanced-rule"
+      "code": "unbalanced-rule",
+      "ruleHash": "7495814b967b57b2"
     },
     {
       "path": "collection/894_c7603ec2f11bcee43737bfc648c3af33.json",
       "sourceName": "💰LOFTER",
       "group": "ruleSearch",
       "field": "intro",
-      "code": "unbalanced-rule"
+      "code": "unbalanced-rule",
+      "ruleHash": "1c9f8a4c563e94bf"
     }
   ]
 }

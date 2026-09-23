@@ -20,28 +20,52 @@ export interface SourcePatternError {
 export interface SourcePatternOptions {
   /** 传给 RegExp 的标志；默认无标志，调用方按匹配语义显式传入。 */
   flags?: string
-  /** 复杂度守卫：`reject` 一律拒绝；`reject-large-input` 只在输入超过阈值时拒绝。 */
-  complexity?: 'reject' | 'reject-large-input'
-  /** 本次匹配的输入规模（字符数）；`reject-large-input` 需要它。 */
-  inputLength?: number
 }
 
 /** 长度上限：语料最长 981，取 2048 留一倍余量。 */
 const maxSourcePatternLength = 2048
-/** 超过这个输入规模才把嵌套量词当成风险；真实章节正文远小于它。 */
-const complexityGuardInputLength = 64 * 1024
 /**
- * 教科书式灾难回溯形态：`(a+)+`、`([a-z]*)*`、`(ab+){2,}`。
- * 组体只允许「简单原子序列 + 单个无界量词」，所以 `(?:[a-zA-Z0-9-]+\.)+` 这类带分隔符的合法写法不受影响。
+ * 教科书式灾难回溯形态：`(a+)+`、`([a-z]*)*`、`(.*)*`。
+ * 组体只允许「简单原子序列 + 单个无界量词」；带 `|` 的分组、带分隔符的写法（`(?:[a-z]+\.)+`）都不在此列。
  */
-const nestedQuantifier = /\(((?:\\.|\[[^\]]*\]|[^\\[\]()|])+[*+])\)\s*[*+{]/
+const nestedQuantifierPattern = /\(((?:\\.|\[[^\]]*\]|[^\\[\]()|])+[*+?])\)\s*[*+{]/g
+/** 分组修饰前缀（`(?:`、`(?=`、`(?!`、`(?<name>`）不是原子，判定前先剥掉。 */
+const groupModifierPrefix = /^\?(?:[:=!]|<[A-Za-z_$][\w$]*>)?/
+/**
+ * 组体里是否含「没被量词修饰的原子」：`(\n.*)+`、`(ab+)+` 每轮重复都被该字面量锚定，
+ * 回溯不会指数级放大，放行；全是量化原子的 `(a+)+` / `(.*)*` / `([a-z]+)+` 一律拒绝（与输入规模无关）。
+ * 必须按原子逐个扫描，不能用正则去搜——搜索会落进字符类内部（`[a-z]` 里那个 `a`）。
+ */
+function hasAnchoredAtom(body: string): boolean {
+  let index = 0
+  while (index < body.length) {
+    const current = body[index]!
+    if ('*+?'.includes(current)) return true
+    let end = index + 1
+    if (current === '\\') end = index + 2
+    else if (current === '[') {
+      const close = body.indexOf(']', index + 1)
+      end = close < 0 ? body.length : close + 1
+    }
+    const quantifier = body[end]
+    if (quantifier === undefined || !'*+?{'.includes(quantifier)) return true
+    end += body[end + 1] === '?' ? 2 : 1
+    index = end
+  }
+  return false
+}
+
+function hasUnanchoredNesting(pattern: string): boolean {
+  for (const match of pattern.matchAll(nestedQuantifierPattern)) {
+    const body = match[1]!.replace(groupModifierPrefix, '')
+    if (!hasAnchoredAtom(body)) return true
+  }
+  return false
+}
 
 export function compileSourcePattern(pattern: string, options: SourcePatternOptions = {}): { regex: RegExp } | { error: SourcePatternError } {
   if (pattern.length > maxSourcePatternLength) return { error: { code: 'pattern-too-long', message: `书源正则超过长度上限（${maxSourcePatternLength} 字符）` } }
-  if (nestedQuantifier.test(pattern)) {
-    if ((options.complexity ?? 'reject') === 'reject') return { error: { code: 'pattern-complexity', message: '书源正则存在嵌套量词，可能造成灾难性回溯' } }
-    if ((options.inputLength ?? 0) > complexityGuardInputLength) return { error: { code: 'pattern-complexity', message: '书源正则存在嵌套量词，输入超过 64 KiB 时拒绝执行' } }
-  }
+  if (hasUnanchoredNesting(pattern)) return { error: { code: 'pattern-complexity', message: '书源正则存在未锚定的嵌套量词，可能造成灾难性回溯' } }
   try {
     return { regex: new RegExp(pattern, options.flags ?? '') }
   } catch {

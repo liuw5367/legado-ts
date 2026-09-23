@@ -282,7 +282,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     }
   }
   // 请求被取消时不能把半截正文当成成功或空结果交付，状态必须与目录流程一致。
-  if (diagnostics.some((item) => item.code === 'cancelled')) return cancelled('正文工作流已取消', diagnostics, trace)
+  // 诊断已经在请求层压过一条，这里只改状态，不再重复报告。
+  if (diagnostics.some((item) => item.code === 'cancelled')) return { status: 'cancelled', value: null, diagnostics, trace }
   if (pendingPages.length > 0) stoppedByLimit = true
   if (reachedNextChapter) trace.push({ stage, event: 'field', target: 'nextChapterUrl' })
   const raw = pages.join(contentType === 'html' ? '\n' : '\n\n')
@@ -499,7 +500,7 @@ function applyReplacements(value: string, replacements: readonly { pattern: stri
   const errors: string[] = []
   let result = value
   for (const item of replacements) {
-    const compiled = compileSourcePattern(item.pattern, { flags: item.all === false ? '' : 'g', inputLength: value.length })
+    const compiled = compileSourcePattern(item.pattern, { flags: item.all === false ? '' : 'g' })
     if ('error' in compiled) {
       errors.push(`${compiled.error.message}：${item.pattern.slice(0, 40)}`)
       continue

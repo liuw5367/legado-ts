@@ -1,3 +1,4 @@
+import { compileSourcePattern } from './pattern-guard.ts'
 import { snapshotVariables, variableChanges } from './variables.ts'
 import type {
   CompiledRule,
@@ -80,12 +81,9 @@ function interpolate(input: string, state: EvaluationState): string {
 function applyReplacement(value: RuleValue, atom: RuleAtom): RuleValue {
   if (atom.replacement === undefined) return value
   const text = textValue(value)
-  let pattern: RegExp
-  try {
-    pattern = new RegExp(atom.replacement.pattern, 'g')
-  } catch {
-    throw new EvaluationStop(diagnostic('invalid-regex', '规则结果替换表达式无法编译'))
-  }
+  const compiled = compileSourcePattern(atom.replacement.pattern, { flags: 'g' })
+  if ('error' in compiled) throw new EvaluationStop(diagnostic('invalid-regex', compiled.error.message))
+  const pattern = compiled.regex
   if (!atom.replacement.firstMatchOnly) return text.replace(pattern, atom.replacement.replacement)
   const first = pattern.exec(text)
   if (first === null) return ''
@@ -93,7 +91,9 @@ function applyReplacement(value: RuleValue, atom: RuleAtom): RuleValue {
 }
 
 function evaluateRegex(body: string, input: unknown): RuleValue {
-  const regex = new RegExp(body, 'g')
+  const compiled = compileSourcePattern(body, { flags: 'g' })
+  if ('error' in compiled) throw new EvaluationStop(diagnostic('invalid-regex', compiled.error.message))
+  const regex = compiled.regex
   const text = textValue(input)
   const matches: string[][] = []
   for (const match of text.matchAll(regex)) matches.push([match[0] ?? '', ...match.slice(1).map((item) => item ?? '')])

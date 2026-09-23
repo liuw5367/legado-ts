@@ -346,7 +346,9 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
   const endIndex = Math.min(input.candidates.length, cursor.index + maxItems)
   const value: WorkflowPage<BookMetadata> = { items, cursor, ...(endIndex < input.candidates.length ? { nextCursor: { index: endIndex } } : {}) }
   if (items.length === 0) diagnostics.push({ code: 'empty-page', stage: 'detail', message: '没有可补全的详情', retryable: false })
-  return { status: statusFromDiagnostics(diagnostics, items.length), value, diagnostics, trace }
+  const status = statusFromDiagnostics(diagnostics, items.length)
+  // 取消的调用不拿半份详情（与目录、正文流程一致）。
+  return { status, value: status === 'cancelled' ? null : value, diagnostics, trace }
 }
 
 /**

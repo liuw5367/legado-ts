@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -22,9 +23,15 @@ interface BrokenRuleSpec {
   group: string
   field: string
   code: string
+  ruleHash: string
 }
 
-async function fixtureSpecs(): Promise<{ totalCandidates: number; byPath: Map<string, FixtureSpec>; brokenRules: Map<string, string> }> {
+/** 与 fixtures/phase-07-b/regenerate.mjs 保持一致：白名单条目绑定规则原文。 */
+function ruleFingerprint(rule: string): string {
+  return createHash('sha256').update(rule).digest('hex').slice(0, 16)
+}
+
+async function fixtureSpecs(): Promise<{ totalCandidates: number; byPath: Map<string, FixtureSpec>; brokenRules: Map<string, BrokenRuleSpec> }> {
   const text = await readFile(new URL('../../../fixtures/phase-07-b/manifest.json', import.meta.url), 'utf8')
   const manifest = JSON.parse(text) as { version: number; totalCandidates: number; fixtures: FixtureSpec[]; knownBrokenRules: BrokenRuleSpec[] }
   assert.equal(manifest.version, 2)
@@ -32,7 +39,7 @@ async function fixtureSpecs(): Promise<{ totalCandidates: number; byPath: Map<st
     totalCandidates: manifest.totalCandidates,
     byPath: new Map(manifest.fixtures.map((fixture) => [fixture.path, fixture])),
     // 真实语料里已知的坏规则白名单：只有它们允许编译失败，新出现的失败仍会让测试红。
-    brokenRules: new Map(manifest.knownBrokenRules.map((entry) => [`${entry.path}\u0000${entry.sourceName}\u0000${entry.group}.${entry.field}`, entry.code])),
+    brokenRules: new Map(manifest.knownBrokenRules.map((entry) => [`${entry.path}\u0000${entry.sourceName}\u0000${entry.group}.${entry.field}`, entry])),
   }
 }
 
@@ -115,6 +122,7 @@ test('07-B a collection member follows the same single-source entry', async () =
 test('07-B every real source is structurally parseable even when optional workflows are incomplete', async () => {
   const specification = await fixtureSpecs()
   const files = await fixtureFiles()
+  const usedBroken = new Set<string>()
   let ruleCount = 0
   for (const file of files) {
     const candidates = await importSources(await readFile(file.path, 'utf8'))
@@ -136,14 +144,18 @@ test('07-B every real source is structurally parseable even when optional workfl
             assert.ok(compiled.rule, key)
             continue
           }
-          // 已登记的真实坏规则：诊断必须与 manifest 一致，且这条规则确实编译不出来。
-          assert.deepEqual(compiled.diagnostics.map((item) => item.code), [known], key)
+          // 已登记的真实坏规则：诊断与指纹都必须与 manifest 一致，且这条规则确实编译不出来。
+          usedBroken.add(`${file.relative}\u0000${source.bookSourceName}\u0000${group}.${field}`)
+          assert.deepEqual(compiled.diagnostics.map((item) => item.code), [known.code], key)
           assert.equal(compiled.rule, undefined, key)
+          assert.equal(ruleFingerprint(rule), known.ruleHash, `${key} 的坏规则白名单已过期，请重新生成 manifest`)
         }
       }
     }
   }
   assert.ok(ruleCount > 0)
+  // 白名单不能有残留：语料里已经修好或删掉的条目必须一并清理。
+  assert.deepEqual([...specification.brokenRules.keys()].filter((key) => !usedBroken.has(key)), [])
 })
 
 test('07-B fixture import keeps candidate, byte and cancellation limits isolated', async () => {
