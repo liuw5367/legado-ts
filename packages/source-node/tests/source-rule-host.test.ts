@@ -120,6 +120,32 @@ test('字符串规则的末段按属性名取值，不再返回内部节点引�
   assert.equal((await evaluate(host, '.cover@img@alt', html)).status, 'empty')
 })
 
+test('规则主体含 {{}} 或 @get: 时返回插值文本（Android AnalyzeRule 的 Regex 分支）', async () => {
+  const host = new SourceRuleHost()
+  const json = JSON.stringify({ id: 42, x: '正文', category: '玄幻' })
+  // 地址规则：Android 把 `{{}}` 求值后直接返回文本，不再当选择器。
+  assert.equal((await evaluate(host, 'https://book.zri.moe/api/book/{{$.id}}', json)).value, 'https://book.zri.moe/api/book/42')
+  assert.equal((await evaluate(host, '<p>{{$.x}}</p>', json)).value, '<p>正文</p>')
+  // 表达式不是规则形态时按内联 JS 求值（makeUpRule 的 evalJS 分支）。
+  assert.equal((await evaluate(host, '标签：{{java.getString("$.category")}}', json)).value, '标签：玄幻')
+  assert.equal((await evaluate(host, '{{$.category}}·{{$.x}}', json)).value, '玄幻·正文')
+  // `@@` 开头的表达式是规则形态，按规则对当前内容求值。
+  assert.equal((await evaluate(host, '{{@@.item@text}}号', '<div class="item">第一章</div>')).value, '第一章号')
+})
+
+test('JS 规则体里的 {{}} 先插值再执行', async () => {
+  const host = new SourceRuleHost()
+  const json = JSON.stringify({ book_id: 99 })
+  assert.equal((await evaluate(host, '@js:"https://api.test/book/{{$.book_id}}.txt"', json)).value, 'https://api.test/book/99.txt')
+})
+
+test('## 替换段里的 {{}} 参与插值', async () => {
+  const host = new SourceRuleHost()
+  host.setVariable('author', '张三')
+  const html = '<div class="intro">《书名》是由张三写的。</div>'
+  assert.equal((await evaluate(host, '.intro@text##^《.*?是由{{author}}写的。##已清洗', html)).value, '已清洗')
+})
+
 test('JSON 解包只作用于确定路径，通配路径保持 Android 的嵌套结构', async () => {
   const host = new SourceRuleHost()
   const body = JSON.stringify({ single: [[1, 2]], data: { books: [{ name: '甲' }, { name: '乙' }] } })

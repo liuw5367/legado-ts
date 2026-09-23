@@ -141,7 +141,8 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   if (uniqueChapters.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '目录为空', retryable: false })
   const value: WorkflowPage<Chapter> = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}) }
   const status = uniqueChapters.length === 0 && diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed') ? 'failed' : statusFromDiagnostics(diagnostics, uniqueChapters.length)
-  return { status, value, diagnostics, trace }
+  // 取消的调用不能拿到半份目录。
+  return { status, value: status === 'cancelled' ? null : value, diagnostics, trace }
 }
 
 export async function loadChapterContent(ports: ReadingPorts, input: ContentInput): Promise<RuntimeResult<ChapterContent>> {
@@ -279,6 +280,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       } else if (!pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: nextValues.length === 1 })
     }
   }
+  // 请求被取消时不能把半截正文当成成功或空结果交付，状态必须与目录流程一致。
+  if (diagnostics.some((item) => item.code === 'cancelled')) return cancelled('正文工作流已取消', diagnostics, trace)
   if (pendingPages.length > 0) stoppedByLimit = true
   if (reachedNextChapter) trace.push({ stage, event: 'field', target: 'nextChapterUrl' })
   const raw = pages.join(contentType === 'html' ? '\n' : '\n\n')

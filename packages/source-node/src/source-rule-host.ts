@@ -291,7 +291,7 @@ export class SourceRuleHost implements WorkflowRulePort {
     this.check(state)
     const script = sourceScript(rule)
     if (script !== undefined) {
-      const output = await this.runJavaScript(script.code, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
+      const output = await this.runJavaScript(await this.expandTemplate(script.code, state, content), this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
       if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
       return script.tail === undefined ? output.value : this.evaluateText(script.tail, state, output.value)
     }
@@ -357,17 +357,23 @@ export class SourceRuleHost implements WorkflowRulePort {
 
   private async evaluateAtom(rule: RuleAtom, state: EvaluationState, content: unknown): Promise<unknown> {
     for (const put of rule.puts) this.variables.set(put.name, textValue(await this.evaluateNode(put.rule, state, content)))
+    const template = rule.body.includes('{{') || rule.body.includes('@get:')
+    const interpolated = template ? await this.interpolate(rule.body, state, content) : rule.body
     let value: unknown
-    if (rule.mode === 'Default') value = await this.evaluateDefault(rule.body, state, content)
+    // Android AnalyzeRule：规则体含 `{{}}`/`@get:{}` 时切到 Regex 模式，结果是插值后的文本本身，
+    // 不再按 Default/Json/XPath 解析（AnalyzeRule.kt:702-713）；Js 模式例外，它先插值再执行。
+    // 插值后为空时 Android 保留上一个 result（分析前的整页内容），所以这里退回原有模式分支。
+    if (template && interpolated.length > 0 && (rule.mode === 'Default' || rule.mode === 'Json' || rule.mode === 'XPath')) value = interpolated
+    else if (rule.mode === 'Default') value = await this.evaluateDefault(rule.body, state, content)
     else if (rule.mode === 'Json') value = this.evaluateJson(rule.body, content)
     else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content)
     else if (rule.mode === 'Regex') value = this.evaluateRegex(rule.body, content)
     else if (rule.mode === 'Js') {
-      const result = await this.runJavaScript(rule.body, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
+      const result = await this.runJavaScript(interpolated, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
       if (result.status !== 'success') throw new SourceRuleError(result.status === 'capability-missing' ? 'capability-missing' : result.status === 'cancelled' ? 'cancelled' : 'failed', result.message ?? 'JavaScript 规则执行失败')
       value = result.value
     } else throw new SourceRuleError('capability-missing', 'WebView 规则需要浏览器宿主')
-    return this.applyReplacement(value, rule)
+    return this.applyReplacement(value, rule, state, content)
   }
 
   private async evaluateDefault(body: string, state: EvaluationState, content: unknown): Promise<unknown> {
@@ -441,24 +447,52 @@ export class SourceRuleHost implements WorkflowRulePort {
     return [...textValue(content).matchAll(regex)].map((match) => [match[0] ?? '', ...match.slice(1).map((item) => item ?? '')])
   }
 
+  /** 只在文本真的含模板时才插值，普通规则不额外扫描。 */
+  private async expandTemplate(input: string, state: EvaluationState, content: unknown): Promise<string> {
+    return input.includes('{{') || input.includes('@get:') ? await this.interpolate(input, state, content) : input
+  }
+
   private async interpolate(input: string, state: EvaluationState, content: unknown): Promise<string> {
     let result = input.replace(/@get:\{([^{}]+)\}/g, (_match, name: string) => this.variables.get(name) ?? '')
     const matches = [...result.matchAll(/\{\{([\s\S]*?)\}\}/g)]
     for (const match of matches.reverse()) {
       const expression = match[1]!.trim()
-      const value = expression.startsWith('$.') || expression.startsWith('$[') ? await this.evaluateText(expression, state, content) : this.variables.get(expression) ?? ''
+      const value = await this.interpolateValue(expression, state, content)
       result = `${result.slice(0, match.index!)}${textValue(value)}${result.slice(match.index! + match[0].length)}`
     }
     return result
   }
 
-  private applyReplacement(value: unknown, rule: RuleAtom): unknown {
+  /**
+   * Android `AnalyzeRule.makeUpRule`：表达式是规则形态（`@`/`$.`/`$[`/`//`）时按规则求值，
+   * 否则当内联 JS 求值；两者失败都展开为空串（Android 的 evalJS 返回 null 就不插入内容）。
+   */
+  private async interpolateValue(expression: string, state: EvaluationState, content: unknown): Promise<unknown> {
+    if (expression.startsWith('@') || expression.startsWith('$.') || expression.startsWith('$[') || expression.startsWith('//')) {
+      try {
+        return await this.evaluateText(expression, state, content)
+      } catch (error) {
+        if (error instanceof SourceRuleError && error.status === 'cancelled') throw error
+        return undefined
+      }
+    }
+    const variable = this.variables.get(expression)
+    if (variable !== undefined) return variable
+    const output = await this.runJavaScript(expression, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
+    if (output.status === 'cancelled') throw new SourceRuleError('cancelled', output.message ?? '模板表达式求值已取消')
+    return output.status === 'success' ? output.value : undefined
+  }
+
+  private async applyReplacement(value: unknown, rule: RuleAtom, state: EvaluationState, content: unknown): Promise<unknown> {
     if (rule.replacement === undefined) return value
-    const pattern = new RegExp(rule.replacement.pattern, 'g')
+    // Android 先对整条规则插值再按 `##` 切分，所以匹配串和替换串里的 {{}} 同样生效。
+    const patternText = await this.expandTemplate(rule.replacement.pattern, state, content)
+    const replacement = await this.expandTemplate(rule.replacement.replacement, state, content)
+    const pattern = new RegExp(patternText, 'g')
     const text = textValue(value)
-    if (!rule.replacement.firstMatchOnly) return text.replace(pattern, rule.replacement.replacement)
+    if (!rule.replacement.firstMatchOnly) return text.replace(pattern, replacement)
     const first = pattern.exec(text)
-    return first === null ? '' : first[0].replace(new RegExp(rule.replacement.pattern, 'g'), rule.replacement.replacement)
+    return first === null ? '' : first[0].replace(new RegExp(patternText, 'g'), replacement)
   }
 
   private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: Pick<WorkflowRuleRequest, 'baseUrl' | 'redirectUrl' | 'content' | 'bindings'>): Promise<WorkflowRuleOutput> {
@@ -488,7 +522,8 @@ export class SourceRuleHost implements WorkflowRulePort {
       'const putVariable = (name, value) => setVar(String(name), value);',
       // Android CookieStore 的 set/remove 返回 Unit，`{{cookie.removeCookie(...)}}` 必须展开为空串而不是 "true"。
       'const cookie = { getCookie: (url) => request({ kind: "cookie-get", url: String(url) }), setCookie: (url, value) => { request({ kind: "cookie-set", url: String(url), value: String(value) }); }, removeCookie: (url) => { request({ kind: "cookie-remove", url: String(url) }); } };',
-      'const legadoPathValue = (value, path) => { const parts = String(path).replace(/^\\$\\.?\\.?/, "").match(/[A-Za-z_$][\\w$-]*|\\[\\d+\\]|\\[\\*\\]/g) ?? []; let current = value; for (const part of parts) { if (part === "[*]") current = Array.isArray(current) ? current : []; else if (Array.isArray(current)) current = current.map((item) => item == null ? undefined : item[part.startsWith("[") ? Number(part.slice(1, -1)) : part]); else current = current == null ? undefined : current[part]; } return current; };',
+      // 正文常常是 JSON 文本，`java.getString("$.x")` 必须能在这上面取路径（Android 会先解析内容）。
+      'const legadoPathValue = (value, path) => { if (typeof value === "string") { try { value = JSON.parse(value); } catch (error) { value = undefined; } } const parts = String(path).replace(/^\\$\\.?\\.?/, "").match(/[A-Za-z_$][\\w$-]*|\\[\\d+\\]|\\[\\*\\]/g) ?? []; let current = value; for (const part of parts) { if (part === "[*]") current = Array.isArray(current) ? current : []; else if (Array.isArray(current)) current = current.map((item) => item == null ? undefined : item[part.startsWith("[") ? Number(part.slice(1, -1)) : part]); else current = current == null ? undefined : current[part]; } return current; };',
       'const legadoGetString = (name) => { const key = String(name); const value = key.startsWith("$") ? legadoPathValue(result, key) : result != null && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, key) ? result[key] : getVar(key); return Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\\n") : String(value ?? ""); };',
       'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? request({ kind: "network", url: String(value), method: "GET", options }) : getVar(String(value)), put: (name, value) => { setVar(String(name), value); return value; }, getString: (name) => legadoGetString(name), getStringList: (name) => legadoGetString(name).split("\\n").filter(Boolean), getWebViewUA: () => "Mozilla/5.0", base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (value) => String(value), randomUUID: () => "", getAppVariant: () => "", androidId: () => "", deviceID: () => "" };',
       'const getToken = () => request({ kind: "token" });',

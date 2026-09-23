@@ -559,6 +559,45 @@ test('正文请求携带 ruleContent 的 webJs 与 sourceRegex 执行提示', as
   assert.deepEqual(seen, [{ webJs: 'web-js', sourceRegex: 'source-regex' }])
 })
 
+test('正文请求被取消时返回 cancelled，不把半截正文当成成功', async () => {
+  const controller = new AbortController()
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }
+  const ports: ReadingPorts = {
+    network: {
+      request: async () => {
+        controller.abort()
+        throw new Error('aborted')
+      },
+    },
+    rules: { evaluate: async () => ({ status: 'success', value: '正文' }) },
+  }
+  const cancelled = await loadChapterContent(ports, { source, chapter, signal: controller.signal })
+  assert.equal(cancelled.status, 'cancelled')
+  assert.equal(cancelled.value, null)
+
+  // 首页成功后第二页被取消，同样不能以 success 交付。
+  let attempts = 0
+  const second = await loadChapterContent({
+    network: {
+      request: async (plan) => {
+        attempts += 1
+        if (attempts > 1) {
+          controller.abort()
+          throw new Error('aborted')
+        }
+        return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('第一页'), redirected: false }
+      },
+    },
+    rules: {
+      evaluate: async ({ field, content }) => field === 'content'
+        ? { status: 'success', value: String(content) }
+        : { status: 'success', value: 'https://source.test/c1?page=2' },
+    },
+  }, { source, chapter, signal: controller.signal })
+  assert.equal(second.status, 'cancelled')
+  assert.equal(second.value, null)
+})
+
 test('正文分页只有首页携带 sourceRegex，后续页只带 webJs（BookContent.kt:92）', async () => {
   const seen: Array<{ url: string; execution?: { webJs?: string; sourceRegex?: string } }> = []
   const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }

@@ -50,6 +50,7 @@ interface OperationBudget {
 | 超大响应、压缩炸弹、归档路径越界 | 流式字节计数、解压后计数、归档项数及路径验证 | 终止并释放流，不返回部分成功文件 |
 | 脚本/正则 CPU 耗尽 | 可终止执行环境和总预算；主事件循环同步正则不能靠 Promise 超时中断 | timeout 或 budget-exceeded |
 | 返回 HTML 中的脚本及私有地址 | 核心保留规则兼容文本；应用呈现层执行 HTML 清理与资源地址策略 | 不直接把书源 HTML 注入页面 |
+| 页面内容触发的 URL 表达式外连 | 书源配置地址与页面产出地址（目录/下一页链接）里的 `{{...}}` 一律按 Android `AnalyzeUrl.replaceKeyPageJs` 求值 | 与 Android 一致地执行；已登记的设计取舍（见下节）；求值失败时该请求以诊断失败结束，不发出未展开的字面量地址 |
 | 日志泄露 | 输出前脱敏头、查询参数、body、脚本绑定与异常 | trace 只返回受控摘要 |
 
 宿主必须显式提供 `deadlineMs`（绝对毫秒截止时间）、`maxRequests`、`maxPages`、`maxResponseBytes`、`maxTotalBytes`、`maxScriptMemoryBytes`、`maxScriptTimeMs`。这些是目标策略字段，没有虚构的现有默认值；缺失或非正有限值时拒绝创建联网执行上下文。适配器配置须短于平台限制，并在部署报告中给出数值。脚本跳过源限流不能跳过这些总预算。
@@ -58,7 +59,11 @@ interface OperationBudget {
 
 ## 不可信书源与数据边界
 
-书源 JSON、规则文本、`mainJs`、`bodyJs`、订阅响应和远端 HTML 都是不可信输入。它们只能访问当前 operation 显式注入的 `RuntimeHost` 能力，不能读取 Node 进程、环境变量、其他用户的 Cookie/变量/缓存、真实文件路径或数据库 client。应用返回浏览器前还必须对正文 HTML、资源地址和调试信息执行呈现层清理。
+书源 JSON、规则文本、`mainJs`、`bodyJs`、订阅响应和远端 HTML 都是不可信输入。规则文本里的 `{{...}}` 与 `@get:{}` 按 Android `AnalyzeRule.makeUpRule` 处理：表达式是规则形态（`@`、`$.`、`$[`、`//`）时按规则求值，否则作为内联 JS 求值，正文含 `{{...}}` 的规则直接返回插值后的文本。`book`/`chapter` 等绑定由调用方通过 `setBindings` 注入（CLI 会传入书籍与章节对象），规则只能读这些绑定，读不到 Node 进程、环境变量或其他会话状态。
+
+它们只能访问当前 operation 显式注入的 `RuntimeHost` 能力，不能读取 Node 进程、环境变量、其他用户的 Cookie/变量/缓存、真实文件路径或数据库 client。应用返回浏览器前还必须对正文 HTML、资源地址和调试信息执行呈现层清理。
+
+**页面内容可触发带书源凭据的外连（已登记的取舍）。** 与 Android 相同，页面产出的地址（目录链接、下一页链接）里的 `{{...}}` 会和书源配置地址一样被求值：被篡改的页面可以用一个链接触发宿主执行表达式，并让该次外连带上书源声明的 `header`/Cookie。选择保留该行为是因为来源分档会与 Android 产生解析差异；要收敛只能在书源信任模型层决定（例如只对受信书源开放页面触发的外连），不能在解析层单方面禁用。回归用例固定了"会执行"与"失败时不发出未展开地址"两条行为。
 
 威胁处理至少覆盖：源 URL 和每次重定向的 SSRF/DNS rebinding、代理/DNS 绕过、脚本和正则资源耗尽、压缩/归档炸弹、跨用户缓存键碰撞、Cookie/Authorization 泄露、HTML 注入、日志和导出泄露。`policy-denied`、`budget-exceeded`、`capability-missing` 与规则解析失败必须区分。
 

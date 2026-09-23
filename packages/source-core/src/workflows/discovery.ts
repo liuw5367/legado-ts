@@ -20,7 +20,11 @@ function normalizeListRule(value: string): { rule: string; reverse: boolean } {
   return { rule: value, reverse: false }
 }
 
-/** 地址模板是否引用页码变量；没有引用时下一页地址与当前页相同，游标不产生新请求。 */
+/**
+ * 地址模板是否引用页码变量；没有引用时下一页地址与当前页相同，游标不产生新请求。
+ * 只覆盖 `{{page}}`/`{{pageIndex}}`：Android 的 `<n,m>` 式子 URL 语法尚未实现（见 plans 非范围），
+ * 语料里仅晋江系 1 个源使用，这类源不产生游标。
+ */
 function pageTemplateVaries(url: string): boolean {
   for (const match of url.matchAll(/\{\{([\s\S]*?)\}\}/g)) if (/\b(?:page|pageIndex)\b/u.test(match[1]!)) return true
   return false
@@ -127,7 +131,8 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     // 列表为空（或命中 bookUrlPattern）时，书源把整个响应当作详情页。
     const fallback = await detailPageCandidate(ports, source, page, options, diagnostics, trace)
     if (fallback.cancelled) {
-      diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
+      // 回退分支内部的字段诊断都属于 detail，这里保持一致。
+      diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情页回退已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
     if (fallback.candidate !== undefined) {
