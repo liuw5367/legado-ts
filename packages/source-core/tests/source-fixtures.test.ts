@@ -16,11 +16,24 @@ interface FixtureSpec {
 
 const ruleGroups = ['ruleExplore', 'ruleSearch', 'ruleBookInfo', 'ruleToc', 'ruleContent', 'ruleReview'] as const
 
-async function fixtureSpecs(): Promise<{ totalCandidates: number; byPath: Map<string, FixtureSpec> }> {
+interface BrokenRuleSpec {
+  path: string
+  sourceName: string
+  group: string
+  field: string
+  code: string
+}
+
+async function fixtureSpecs(): Promise<{ totalCandidates: number; byPath: Map<string, FixtureSpec>; brokenRules: Map<string, string> }> {
   const text = await readFile(new URL('../../../fixtures/phase-07-b/manifest.json', import.meta.url), 'utf8')
-  const manifest = JSON.parse(text) as { version: number; totalCandidates: number; fixtures: FixtureSpec[] }
-  assert.equal(manifest.version, 1)
-  return { totalCandidates: manifest.totalCandidates, byPath: new Map(manifest.fixtures.map((fixture) => [fixture.path, fixture])) }
+  const manifest = JSON.parse(text) as { version: number; totalCandidates: number; fixtures: FixtureSpec[]; knownBrokenRules: BrokenRuleSpec[] }
+  assert.equal(manifest.version, 2)
+  return {
+    totalCandidates: manifest.totalCandidates,
+    byPath: new Map(manifest.fixtures.map((fixture) => [fixture.path, fixture])),
+    // 真实语料里已知的坏规则白名单：只有它们允许编译失败，新出现的失败仍会让测试红。
+    brokenRules: new Map(manifest.knownBrokenRules.map((entry) => [`${entry.path}\u0000${entry.sourceName}\u0000${entry.group}.${entry.field}`, entry.code])),
+  }
 }
 
 async function fixtureFiles(): Promise<Array<{ relative: string; path: string }>> {
@@ -100,6 +113,7 @@ test('07-B a collection member follows the same single-source entry', async () =
 })
 
 test('07-B every real source is structurally parseable even when optional workflows are incomplete', async () => {
+  const specification = await fixtureSpecs()
   const files = await fixtureFiles()
   let ruleCount = 0
   for (const file of files) {
@@ -114,9 +128,17 @@ test('07-B every real source is structurally parseable even when optional workfl
         for (const [field, rule] of Object.entries(value)) {
           if (typeof rule !== 'string' || rule.length === 0) continue
           ruleCount += 1
+          const key: string = `${file.relative}:${source.bookSourceName}:${group}.${field}`
           const compiled = compileRule(rule)
-          assert.deepEqual(compiled.diagnostics, [], `${file.relative}:${source.bookSourceName}:${group}.${field}`)
-          assert.ok(compiled.rule, `${file.relative}:${source.bookSourceName}:${group}.${field}`)
+          const known = specification.brokenRules.get(`${file.relative}\u0000${source.bookSourceName}\u0000${group}.${field}`)
+          if (known === undefined) {
+            assert.deepEqual(compiled.diagnostics, [], key)
+            assert.ok(compiled.rule, key)
+            continue
+          }
+          // 已登记的真实坏规则：诊断必须与 manifest 一致，且这条规则确实编译不出来。
+          assert.deepEqual(compiled.diagnostics.map((item) => item.code), [known], key)
+          assert.equal(compiled.rule, undefined, key)
         }
       }
     }

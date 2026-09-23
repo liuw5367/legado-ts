@@ -459,9 +459,12 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }
   }
 
-  const loadChapter = async (index: number, bookOverride?: OpenBookResult, tocOverride?: TocResult, refresh = false): Promise<void> => {
-    const currentBook = bookOverride ?? book
-    const currentToc = tocOverride ?? toc
+  const loadChapter = async (index: number, options: { book?: OpenBookResult; toc?: TocResult; refresh?: boolean } = {}): Promise<void> => {
+    // 命名选项：`refresh` 只能显式传入。位置参数曾让 returnToReader 落到 refresh 上，
+    // 于是「更新并返回阅读页」变成了绕过缓存刷新 + 跳过保存阅读位置。
+    const currentBook = options.book ?? book
+    const currentToc = options.toc ?? toc
+    const refresh = options.refresh === true
     if (currentBook === undefined || currentToc === undefined) return
     const chapter = currentToc.chapters[index]
     if (chapter === undefined) return
@@ -615,7 +618,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (action === 'read') {
       const saved = opened.reading?.positions[loadedToc.edition.editionKey]
       const resumeIndex = saved === undefined ? 0 : Math.max(0, loadedToc.chapters.findIndex((item) => item.chapterUrl === saved.chapterUrl))
-      await loadChapter(resumeIndex, opened, loadedToc)
+      await loadChapter(resumeIndex, { book: opened, toc: loadedToc })
     }
   }
 
@@ -667,7 +670,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       && previousFrame.editionKey === loaded.edition.editionKey
       && previousChapterIndex >= 0
     const resumeIndex = returnToReader ? previousChapterIndex : savedIndex < 0 ? 0 : savedIndex
-    await loadChapter(resumeIndex, currentBook, loaded, returnToReader)
+    await loadChapter(resumeIndex, { book: currentBook, toc: loaded })
   }
 
   const toggleShelf = (): void => {
@@ -779,7 +782,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const navigation = readerNavigation(input, key)
     if (input === ' ' || key.pageDown || navigation === 'next-page') setReaderLine((value) => clampContentLine(value + height, currentLines.length, height))
     if (key.pageUp || navigation === 'previous-page') setReaderLine((value) => clampContentLine(value - height, currentLines.length, height))
-    if (input === 'r' && !busy) void loadChapter(chapterIndex, undefined, undefined, true)
+    if (input === 'r' && !busy) void loadChapter(chapterIndex, { refresh: true })
     if (input === 'i' && !busy) setPage('detail')
     if (navigation === 'previous-chapter' && chapterIndex > 0 && !busy) void loadChapter(chapterIndex - 1)
     if (navigation === 'next-chapter' && toc !== undefined && chapterIndex < toc.chapters.length - 1 && !busy) void loadChapter(chapterIndex + 1)

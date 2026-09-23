@@ -6,6 +6,8 @@
 
 测试读取 `fixtures/source/collection` 和 `fixtures/source/single`，但不得把真实网站请求作为默认测试步骤。当前 corpus 的文件数量、候选数量和诊断统计必须由测试动态核对并写入脱敏 manifest，不把源文件内容复制到测试代码。
 
+manifest 是语料快照（`version: 2`）：`fixtures[]` 记录每个文件的候选数、状态数与诊断数，`knownBrokenRules[]` 记录**语料自带的坏规则**。语料里确实存在写法损坏的真实规则（例如 `//div[@id='intro]/p/text()` 少了闭引号、`{{$.officialDescr},}` 多一个花括号、`{{'...=1"}'}}` 把双引号嵌在插值里），这些规则在 Android 同样解析不出可用的结果，因此**不修改语料**（fixture 必须保持真实），也不放宽编译器，而是显式登记：只有登记过的规则允许编译失败，新出现的失败仍会让测试变红。语料更新后用 `node fixtures/phase-07-b/regenerate.mjs` 重生 `manifest.json`（脚本幂等，输出 file/candidates/statuses/diagnostics/knownBrokenRules），再跑 `node --test packages/source-core/tests/source-fixtures.test.ts` 核对，并确认新增的坏规则确实是源本身的写法问题而不是解析器回归。
+
 ## 验收内容
 
 - 受控 file reader、文本输入和已解析 JSON 输入均可运行；

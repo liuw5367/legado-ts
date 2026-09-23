@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer, formatDuration, helpLines, homeAreaLabel, navigationIndex, navigationPage, normalizeChapterTitle, popNavigationFrame, previousPage, pushNavigationFrame, readerNavigation, refreshOnHomeEntry, searchHeaderStatus } from '../src/ui-model.ts'
 import { layoutContextLine, terminalWidth } from '../src/ui-actions.ts'
+import type { NavigationFrame } from '../src/ui-model.ts'
 
 test('UI model keeps list navigation inside valid bounds', () => {
   assert.equal(navigationIndex(0, 0, 'j', { downArrow: true }, 4), 0)
@@ -56,8 +57,10 @@ test('目录标题按 NFKC 和大小写不敏感匹配，导航栈按最近进�
   const stack = pushNavigationFrame(pushNavigationFrame([home], search), results)
   assert.equal(popNavigationFrame(stack).at(-1)?.page, 'search')
   assert.equal(popNavigationFrame(popNavigationFrame(stack)).at(-1)?.page, 'home')
-  const detail = { ...home, page: 'detail' as const, bookId: 'book', editionKey: 'old', toc: 'old-toc' }
-  const sources = { ...detail, page: 'sources' as const }
+  // 阅读页帧比 NavigationFrame 多带 toc；显式写 `| undefined` 才能在 exactOptionalPropertyTypes 下清空它。
+  type RefreshableFrame = NavigationFrame & { bookId: string; editionKey: string; toc?: string | undefined }
+  const detail: RefreshableFrame = { ...home, page: 'detail' as const, bookId: 'book', editionKey: 'old', toc: 'old-toc' }
+  const sources: RefreshableFrame = { ...detail, page: 'sources' as const }
   const refreshedDetail = popNavigationFrame([detail, sources], (frame) => ({ ...frame, editionKey: 'new', toc: undefined }))
   assert.equal(refreshedDetail.at(-1)?.page, 'detail')
   assert.equal(refreshedDetail.at(-1)?.editionKey, 'new')

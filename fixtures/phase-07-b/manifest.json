@@ -1,10 +1,99 @@
 {
-  "version": 1,
-  "totalCandidates": 316,
+  "version": 2,
+  "totalCandidates": 943,
   "fixtures": [
-    { "path": "collection/13655_c5880332228edeffa2ce977a525a6b21.json", "candidates": 230, "statuses": { "ready": 230 }, "diagnostics": {} },
-    { "path": "collection/14328_c803e1b071690d18ce7acb5184727058.json", "candidates": 84, "statuses": { "ready": 84 }, "diagnostics": {} },
-    { "path": "single/1790039793-起点.json", "candidates": 1, "statuses": { "ready": 1 }, "diagnostics": {} },
-    { "path": "single/1790040141-豆瓣.json", "candidates": 1, "statuses": { "ready": 1 }, "diagnostics": {} }
+    {
+      "path": "collection/13655_c5880332228edeffa2ce977a525a6b21.json",
+      "candidates": 222,
+      "statuses": {
+        "ready": 222
+      },
+      "diagnostics": {}
+    },
+    {
+      "path": "collection/14328_c803e1b071690d18ce7acb5184727058.json",
+      "candidates": 82,
+      "statuses": {
+        "ready": 82
+      },
+      "diagnostics": {}
+    },
+    {
+      "path": "collection/3847_8e81e459895047cbe12f0d9597fec8e7.json",
+      "candidates": 329,
+      "statuses": {
+        "ready": 329
+      },
+      "diagnostics": {}
+    },
+    {
+      "path": "collection/894_c7603ec2f11bcee43737bfc648c3af33.json",
+      "candidates": 286,
+      "statuses": {
+        "ready": 286
+      },
+      "diagnostics": {}
+    },
+    {
+      "path": "collection/shuyuan.json",
+      "candidates": 22,
+      "statuses": {
+        "ready": 22
+      },
+      "diagnostics": {}
+    },
+    {
+      "path": "single/1790039793-起点.json",
+      "candidates": 1,
+      "statuses": {
+        "ready": 1
+      },
+      "diagnostics": {}
+    },
+    {
+      "path": "single/1790040141-豆瓣.json",
+      "candidates": 1,
+      "statuses": {
+        "ready": 1
+      },
+      "diagnostics": {}
+    }
+  ],
+  "knownBrokenRules": [
+    {
+      "path": "collection/3847_8e81e459895047cbe12f0d9597fec8e7.json",
+      "sourceName": "多多书院（优）",
+      "group": "ruleBookInfo",
+      "field": "intro",
+      "code": "unbalanced-rule"
+    },
+    {
+      "path": "collection/3847_8e81e459895047cbe12f0d9597fec8e7.json",
+      "sourceName": "哔哩哔哩（优+++）",
+      "group": "ruleSearch",
+      "field": "kind",
+      "code": "unbalanced-rule"
+    },
+    {
+      "path": "collection/3847_8e81e459895047cbe12f0d9597fec8e7.json",
+      "sourceName": "乐乎文章（优）",
+      "group": "ruleExplore",
+      "field": "intro",
+      "code": "unbalanced-rule"
+    },
+    {
+      "path": "collection/894_c7603ec2f11bcee43737bfc648c3af33.json",
+      "sourceName": "💰LOFTER",
+      "group": "ruleExplore",
+      "field": "intro",
+      "code": "unbalanced-rule"
+    },
+    {
+      "path": "collection/894_c7603ec2f11bcee43737bfc648c3af33.json",
+      "sourceName": "💰LOFTER",
+      "group": "ruleSearch",
+      "field": "intro",
+      "code": "unbalanced-rule"
+    }
   ]
 }
