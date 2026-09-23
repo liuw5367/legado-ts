@@ -43,7 +43,8 @@ export class SourceSession implements ReaderSourceSession {
     const operation = this.createOperation()
     operation.rules.setBindings({ key: book.name ?? '', book, chapter })
     const cache: ContentCache = options?.refresh === true ? { get: async () => undefined, set: (key, value, cacheSignal) => this.cache.set(key, value, cacheSignal) } : this.cache
-    return loadChapterContent({ ...operation.ports, cache }, { source: this.source, chapter, ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
+    const tocHtml = this.tocPage?.bookUrl === book.bookUrl && chapter.chapterUrl === book.bookUrl ? this.tocPage.html : undefined
+    return loadChapterContent({ ...operation.ports, cache }, { source: this.source, chapter, ...(tocHtml === undefined ? {} : { tocHtml }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
   }
 
   public readonly cache = {

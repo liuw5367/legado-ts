@@ -68,20 +68,29 @@ test('已知书源页面读取本地候选，不触发搜索', async () => {
   const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
   await storage.initialize()
   const sourceEntry = entry(source())
-  const catalog: SourceCatalogResult = { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }
+  const previousSourceEntry = entry(source('https://source.test/previous', '原书源'), 1)
+  const catalog: SourceCatalogResult = { entries: [sourceEntry, previousSourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }
   const application = new ReaderApplication({ catalog, storage })
   const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
   const edition = editionKey(sourceEntry.source.bookSourceUrl, 'https://source.test/book/1')
+  const previousEdition = editionKey(previousSourceEntry.source.bookSourceUrl, 'https://source.test/previous/book/1')
   try {
-    await storage.upsertBook({ bookId, name: '测试书', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
-    await storage.mergeKnownSources(bookId, [{ editionKey: edition, sourceId: sourceEntry.source.bookSourceUrl, sourceFingerprint: sourceEntry.fingerprint, bookUrl: 'https://source.test/book/1', name: '测试书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    await storage.upsertBook({ bookId, name: '旧书名', activeEditionKey: previousEdition, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [
+      { editionKey: previousEdition, sourceId: previousSourceEntry.source.bookSourceUrl, sourceFingerprint: previousSourceEntry.fingerprint, bookUrl: 'https://source.test/previous/book/1', name: '旧书名', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'title-only' },
+      { editionKey: edition, sourceId: sourceEntry.source.bookSourceUrl, sourceFingerprint: sourceEntry.fingerprint, bookUrl: 'https://source.test/book/1', name: '测试书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' },
+    ])
     const sources = await application.knownSources(bookId)
-    assert.equal(sources.length, 1)
-    assert.equal(sources[0]?.state, 'available')
+    assert.equal(sources.length, 2)
+    assert.ok(sources.every((item) => item.state === 'available'))
     await storage.saveReadingPosition({ bookId, position: { editionKey: edition, sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/book/1', chapterUrl: 'https://source.test/book/1/c1', index: 0, title: '第一章', paragraphIndex: 2, offset: 3, lastReadAt: '2026-01-02T00:00:00.000Z' } })
     const opened = await application.openStoredBook(bookId)
     assert.equal(opened.reading?.positions[edition]?.chapterUrl, 'https://source.test/book/1/c1')
+    assert.equal(opened.reading?.activeEditionKey, edition)
     assert.equal(typeof opened.reading?.lastOpenedAt, 'string')
+    assert.equal(opened.book.activeEditionKey, edition)
+    assert.equal(opened.book.name, '测试书')
+    assert.equal(opened.source.source.bookSourceUrl, sourceEntry.source.bookSourceUrl)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

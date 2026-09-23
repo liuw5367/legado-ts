@@ -9,6 +9,8 @@ export interface ContentBlock {
   text: string
   level?: number
   orderedIndex?: number
+  /** 源文本明确包含段落空行时，保留一个空白显示行。 */
+  blankAfter?: boolean
 }
 
 export interface FormattedContent {
@@ -129,7 +131,7 @@ export function formatChapterContent(value: string, contentType: 'text' | 'html'
 }
 
 function fromPlainText(value: string): FormattedContent {
-  const blocks = value.replace(/\r\n?/gu, '\n').split(/\n{2,}/gu).map((text) => text.trim()).filter(Boolean).map((text) => ({ kind: 'paragraph' as const, text }))
+  const blocks = value.replace(/\r\n?/gu, '\n').split(/\n{2,}/gu).map((text) => text.trim()).filter(Boolean).map((text) => ({ kind: 'paragraph' as const, text, blankAfter: true }))
   return toFormattedContent(blocks)
 }
 
@@ -144,6 +146,16 @@ export function serializeContentBlock(block: ContentBlock): string {
   if (block.kind === 'preformatted') return block.text
   if (block.kind === 'separator') return block.text
   return block.text
+}
+
+/** Count semantic body code points, excluding layout-only rows and rendered list markers. */
+export function countChapterCharacters(content: FormattedContent): number {
+  return content.blocks.reduce((count, block) => {
+    if (block.kind === 'separator' || block.kind === 'image-placeholder') return count
+    // List markers are added by the formatter for display and are not part of the source text.
+    const text = block.kind === 'list-item' ? block.text.replace(/^\s*(?:\d+\.\s|•\s)/u, '') : block.text
+    return count + [...text].filter((character) => !/\s/u.test(character)).length
+  }, 0)
 }
 
 function isBlockTag(tag: string): boolean {

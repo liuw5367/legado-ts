@@ -343,6 +343,11 @@ export class SourceRuleHost implements WorkflowRulePort {
       if (stored === undefined) return textValue(content)
       return stored.document.read(stored.node, expanded === '' ? 'text' : expanded as 'text' | 'ownText' | 'html')
     }
+    // Legado 的节点字段规则允许直接写属性名，不要求 @ 前缀。
+    if (stored !== undefined && /^[\w:-]+$/u.test(expanded)) {
+      const attribute = stored.document.attr(stored.node, expanded)
+      if (attribute !== undefined) return attribute
+    }
     if (expanded.startsWith('literal:')) return expanded.slice('literal:'.length)
     const parsed = lastOutput(expanded)
     const selectorParts = splitSelectorChain(parsed.selector).map(normalizeSelector)

@@ -1,34 +1,40 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink'
 import type { SourceCatalogResult } from './source-catalog.ts'
 import { ReaderApplication } from './application.ts'
 import type { OpenBookResult, SearchOperationResult, SearchProgress, SearchResultGroup, TocResult } from './application.ts'
-import type { HomeBookView, KnownSourceView } from './storage.ts'
+import type { HomeBookView, KnownSourceView, ReadingPosition } from './storage.ts'
 import { layoutContent, layoutFormattedContent, lineAtParagraphOffset, paragraphOffsetAtLine, sanitizeTerminalText } from './content-layout.ts'
-import { formatChapterContent } from './content-format.ts'
-import type { ContentBlockKind, FormattedContent } from './content-format.ts'
+import { countChapterCharacters, formatChapterContent } from './content-format.ts'
+import type { FormattedContent } from './content-format.ts'
 import { actionMenuItems } from './action-menu.ts'
 import type { ReaderAction } from './action-menu.ts'
-import { keepIndexVisible } from './viewport.ts'
-import { renderActionMenu, renderPage, type RenderState } from './ui-pages.tsx'
+import { clampContentLine, keepIndexVisible, terminalLayout } from './viewport.ts'
+import { layoutCommandLine, layoutContextLine, tailTerminalText, terminalWidth } from './ui-actions.ts'
+import { pageHeader, renderActionMenu, renderPage, type RenderState } from './ui-pages.tsx'
 import { useUiOperation } from './use-ui-operation.ts'
 import {
-  HELP_LINES,
   activeEditionKey,
+  chapterIndexForSelection,
   detailLineCount,
   display,
   errorMessage,
   footer,
+  filterChapterIndices,
   homeItemsForArea,
   isAbortError,
+  helpLines,
   navigationIndex,
   navigationPage,
   normalizeChapterTitle,
-  pageLabel,
-  previousPage,
+  popNavigationFrame,
+  pushNavigationFrame,
+  readerNavigation,
+  refreshOnHomeEntry,
   restoreGroupSelection,
   selectedGroupIndex,
   type InputKey,
+  type NavigationFrame,
   type MenuTarget,
   type MenuState,
   type Page,
@@ -43,10 +49,56 @@ export interface ReaderUiProps {
 
 export { homeItemsForArea } from './ui-model.ts'
 
+interface NavigationSnapshot extends NavigationFrame {
+  tocSelected: number
+  tocQuery: string
+  tocSearchActive: boolean
+  tocSearchOrigin: number
+  chapterIndex: number
+  book?: OpenBookResult
+  toc?: TocResult
+  content?: string
+  formattedContent?: FormattedContent
+  sources: KnownSourceView[]
+  sourceSearch?: SearchOperationResult
+  sourceSearchState: SearchUiState
+  sourceSearchStart: number
+  sourceSearchSelected: number
+  mappingTarget?: KnownSourceView
+  mappingToc?: TocResult
+  mappingIndex: number
+}
+
+function PageShell({ columns, rows, bodyHeight, separator, supported, header, command, content, menu }: {
+  columns: number
+  rows: number
+  bodyHeight: number
+  separator: boolean
+  supported: boolean
+  header: { left: string; right: string }
+  command: { left: string; right: string }
+  content: React.ReactElement
+  menu: React.ReactElement | undefined
+}): React.ReactElement {
+  if (!supported) return <Box width={columns} height={rows}><Text color="yellow">终端至少需要 40 列 × 12 行，当前 {columns} × {rows}</Text></Box>
+  return <Box position="relative" flexDirection="column" width={columns} height={rows} overflow="hidden">
+    <Text color="cyan">{layoutContextLine(display(header.left), display(header.right), columns)}</Text>
+    <Box height={bodyHeight} overflow="hidden" flexDirection="column">{content}</Box>
+    {separator ? <Text dimColor>{'─'.repeat(Math.max(1, columns))}</Text> : null}
+    <CommandBar columns={columns} left={command.left} right={command.right} />
+    {menu}
+  </Box>
+}
+
+function CommandBar({ columns, left, right }: { columns: number; left: string; right: string }): React.ReactElement {
+  return <Text dimColor>{layoutCommandLine(display(left), display(right), columns)}</Text>
+}
+
 export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactElement {
   const { exit } = useApp()
   const { columns, rows } = useWindowSize()
-  const [page, setPageState] = useState<Page>(catalog.entries.length === 0 ? 'config' : 'home')
+  const initialPage: Page = catalog.entries.length === 0 ? 'config' : 'home'
+  const [page, setPageState] = useState<Page>(initialPage)
   const [home, setHome] = useState<HomeBookView[]>([])
   const [history, setHistory] = useState<Awaited<ReturnType<ReaderApplication['searchHistory']>>>([])
   const [homeArea, setHomeArea] = useState(0)
@@ -58,6 +110,10 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [selected, setSelected] = useState(0)
   const [listStart, setListStart] = useState(0)
   const [pageScroll, setPageScroll] = useState(0)
+  const [tocSelected, setTocSelected] = useState(0)
+  const [tocQuery, setTocQuery] = useState('')
+  const [tocSearchActive, setTocSearchActive] = useState(false)
+  const [tocSearchOrigin, setTocSearchOrigin] = useState(0)
   const [book, setBook] = useState<OpenBookResult>()
   const [toc, setToc] = useState<TocResult>()
   const [chapterIndex, setChapterIndex] = useState(0)
@@ -74,9 +130,49 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [message, setMessageState] = useState('')
   const [messageOwner, setMessageOwner] = useState<Page>(catalog.entries.length === 0 ? 'config' : 'home')
   const [searchProgress, setSearchProgress] = useState<SearchProgress>()
+  const [searchElapsedMs, setSearchElapsedMs] = useState(0)
+  const [searchClockStartedAt, setSearchClockStartedAt] = useState<number>()
   const [menu, setMenu] = useState<MenuState>()
   const selectedGroupKeyRef = useRef<string | undefined>(undefined)
+  const homeRefreshRequestRef = useRef(0)
+  const searchStartedAtRef = useRef<number | undefined>(undefined)
   const pageRef = useRef(page)
+  const sourceCommitRef = useRef<string | undefined>(undefined)
+  const navigationRef = useRef<NavigationSnapshot[]>([{ page: initialPage, selected: 0, listStart: 0, pageScroll: 0, homeArea: 0, query: '', readerLine: 0, tocSelected: 0, tocQuery: '', tocSearchActive: false, tocSearchOrigin: 0, chapterIndex: 0, sources: [], sourceSearchState: 'idle', sourceSearchStart: 0, sourceSearchSelected: 0, mappingIndex: 0 }])
+  const resizeAnchorRef = useRef({ width: Math.max(8, columns), height: terminalLayout(columns, rows).bodyHeight, readerLine })
+  const skipPositionSaveRef = useRef(false)
+
+  const captureNavigationFrame = (framePage: Page): NavigationSnapshot => {
+    const editionKey = toc?.edition.editionKey ?? activeEditionKey(book)
+    return {
+    page: framePage,
+    selected,
+    listStart,
+    pageScroll,
+    homeArea,
+    query,
+    readerLine,
+    tocSelected,
+    tocQuery,
+    tocSearchActive,
+    tocSearchOrigin,
+    chapterIndex,
+    ...(book === undefined ? {} : { book }),
+    ...(toc === undefined ? {} : { toc }),
+    ...(content === undefined ? {} : { content }),
+    ...(formattedContent === undefined ? {} : { formattedContent }),
+    sources,
+    ...(sourceSearch === undefined ? {} : { sourceSearch }),
+    sourceSearchState,
+    sourceSearchStart,
+    sourceSearchSelected,
+    ...(mappingTarget === undefined ? {} : { mappingTarget }),
+    ...(mappingToc === undefined ? {} : { mappingToc }),
+    mappingIndex,
+    ...(book === undefined ? {} : { bookId: book.book.bookId }),
+    ...(editionKey === undefined ? {} : { editionKey }),
+    }
+  }
 
   const setMessage = (text: string): void => {
     setMessageState(text)
@@ -84,10 +180,65 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   }
 
   const setPage = (next: Page): void => {
+    if (next === pageRef.current) return
+    const current = captureNavigationFrame(pageRef.current)
+    const stack = [...navigationRef.current]
+    stack[stack.length - 1] = current
+    const nextFrame: NavigationSnapshot = { ...current, page: next, selected: 0, listStart: 0, pageScroll: 0, ...(next === 'search' ? {} : { query }) }
+    navigationRef.current = pushNavigationFrame(stack, nextFrame) as NavigationSnapshot[]
     pageRef.current = next
     setMessageState('')
     setMessageOwner(next)
     setPageState(next)
+    setSelected(0)
+    setListStart(0)
+    setPageScroll(0)
+  }
+
+  const goBack = (updatedBook?: OpenBookResult, updatedSources?: KnownSourceView[]): void => {
+    if (navigationRef.current.length <= 1) return
+    navigationRef.current = popNavigationFrame(navigationRef.current, (frame) => {
+      if (updatedBook === undefined) return frame
+      const editionKey = activeEditionKey(updatedBook)
+      const previous = { ...frame, book: updatedBook, sources: updatedSources ?? frame.sources, ...(editionKey === undefined ? {} : { editionKey }) }
+      if (editionKey === undefined) delete previous.editionKey
+      delete previous.toc
+      delete previous.content
+      delete previous.formattedContent
+      return previous
+    })
+    const previous = navigationRef.current.at(-1)!
+    pageRef.current = previous.page
+    setPageState(previous.page)
+    setSelected(previous.selected)
+    setListStart(previous.listStart)
+    setPageScroll(previous.pageScroll)
+    setHomeArea(previous.homeArea)
+    setQuery(previous.query)
+    setReaderLine(previous.readerLine)
+    setTocSelected(previous.tocSelected)
+    setTocQuery(previous.tocQuery)
+    setTocSearchActive(previous.tocSearchActive)
+    setTocSearchOrigin(previous.tocSearchOrigin)
+    setChapterIndex(previous.chapterIndex)
+    setBook(previous.book)
+    setToc(previous.toc)
+    setContent(previous.content)
+    setFormattedContent(previous.formattedContent)
+    const keepLiveSourceSearch = previous.sourceSearchState === 'running' || previous.sourceSearchState === 'cancelling'
+    if (!keepLiveSourceSearch) {
+      setSources(previous.sources)
+      setSourceSearch(previous.sourceSearch)
+      setSourceSearchState(previous.sourceSearchState)
+    }
+    setSourceSearchStart(previous.sourceSearchStart)
+    setSourceSearchSelected(previous.sourceSearchSelected)
+    setMappingTarget(previous.mappingTarget)
+    setMappingToc(previous.mappingToc)
+    setMappingIndex(previous.mappingIndex)
+    setMenu(undefined)
+    setMessageState('')
+    setMessageOwner(previous.page)
   }
 
   const { operationRef, mountedRef, beginOperation, isCurrent, finishOperation, cancelOperation, cancelActiveSearch } = useUiOperation({
@@ -98,44 +249,119 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setMessage,
   })
 
-  const bodyHeight = Math.max(4, rows - 7)
+  const terminal = terminalLayout(columns, rows)
+  const bodyHeight = terminal.bodyHeight
+
+  const startSearchClock = (): void => {
+    const startedAt = Date.now()
+    searchStartedAtRef.current = startedAt
+    setSearchClockStartedAt(startedAt)
+    setSearchElapsedMs(0)
+  }
+
+  const stopSearchClock = (elapsedMs?: number): void => {
+    const startedAt = searchStartedAtRef.current
+    searchStartedAtRef.current = undefined
+    setSearchClockStartedAt(undefined)
+    if (elapsedMs !== undefined) setSearchElapsedMs(elapsedMs)
+    else if (startedAt !== undefined) setSearchElapsedMs(Date.now() - startedAt)
+  }
+
+  useEffect(() => {
+    const startedAt = searchClockStartedAt
+    if (!busy || startedAt === undefined) return
+    const updateElapsed = (): void => {
+      if (searchStartedAtRef.current !== startedAt) return
+      const elapsedMs = Date.now() - startedAt
+      setSearchElapsedMs(elapsedMs)
+      setSearchProgress((progress) => progress === undefined ? progress : { ...progress, elapsedMs })
+    }
+    updateElapsed()
+    const timer = setInterval(updateElapsed, 250)
+    return () => clearInterval(timer)
+  }, [busy, searchClockStartedAt])
+
+  const currentLayout = useMemo(() => content === undefined ? layoutContent('', Math.max(8, columns)) : formattedContent === undefined ? layoutContent(sanitizeTerminalText(content), Math.max(8, columns)) : layoutFormattedContent(formattedContent, Math.max(8, columns)), [columns, content, formattedContent])
+  const currentLines = currentLayout.lines
+  const visibleReaderLine = clampContentLine(readerLine, currentLines.length, bodyHeight)
 
   useEffect(() => {
     pageRef.current = page
-    setSelected(0)
-    setListStart(0)
-    setPageScroll(0)
     setMenu(undefined)
   }, [page])
 
-  const refreshHome = async (): Promise<void> => {
+  useEffect(() => {
+    const committedEdition = sourceCommitRef.current
+    if (page !== 'reader' || book === undefined || toc === undefined || committedEdition !== toc.edition.editionKey) return
+    const current = captureNavigationFrame('reader')
+    navigationRef.current = navigationRef.current.map((frame) => {
+      if (frame.bookId !== book.book.bookId) return frame
+      const refreshed = { ...frame, book, sources }
+      if (frame.page === 'reader' && frame.editionKey !== committedEdition) {
+        return { ...current, selected: frame.selected, listStart: frame.listStart, pageScroll: frame.pageScroll, homeArea: frame.homeArea, query: frame.query }
+      }
+      return refreshed
+    })
+    sourceCommitRef.current = undefined
+  }, [book, page, sources, toc])
+
+  const refreshHome = async (isCurrent: () => boolean = () => true): Promise<void> => {
+    const request = ++homeRefreshRequestRef.current
     const [books, searches] = await Promise.all([application.home(), application.searchHistory()])
+    if (request !== homeRefreshRequestRef.current || !isCurrent()) return
     setHome(books)
     setHistory(searches)
   }
 
   useEffect(() => {
-    void refreshHome().catch((error: unknown) => setMessage(errorMessage(error)))
-  }, [])
+    let active = true
+    if (page === 'home') {
+      setMessageState('正在更新首页…')
+      setMessageOwner('home')
+    }
+    void refreshOnHomeEntry(page, () => refreshHome(() => active), () => active).then(() => {
+      if (active) setMessageState((current) => current === '正在更新首页…' ? '' : current)
+    }).catch((error: unknown) => {
+      if (!active) return
+      setMessageState(errorMessage(error))
+      setMessageOwner(page)
+    })
+    return () => { active = false }
+  }, [application, page])
+
+  useEffect(() => {
+    const width = Math.max(8, columns)
+    const previous = resizeAnchorRef.current
+    const resized = previous.width !== width || previous.height !== bodyHeight
+    if (page === 'reader' && resized && content !== undefined) {
+      const previousLayout = formattedContent === undefined ? layoutContent(sanitizeTerminalText(content), previous.width) : layoutFormattedContent(formattedContent, previous.width)
+      const anchor = paragraphOffsetAtLine(previousLayout, previous.readerLine, previous.width)
+      const nextLine = lineAtParagraphOffset(currentLayout, anchor.paragraphIndex, anchor.offset, width)
+      skipPositionSaveRef.current = true
+      setReaderLine(clampContentLine(nextLine, currentLayout.lines.length, bodyHeight))
+    }
+    resizeAnchorRef.current = { width, height: bodyHeight, readerLine: visibleReaderLine }
+  }, [bodyHeight, columns, content, currentLayout, formattedContent, page, visibleReaderLine])
 
   useEffect(() => {
     if (page !== 'reader' || book === undefined || toc === undefined || content === undefined) return
+    if (skipPositionSaveRef.current) { skipPositionSaveRef.current = false; return }
     const chapter = toc.chapters[chapterIndex]
     if (chapter === undefined) return
-    const width = Math.max(8, columns - 4)
-    const layout = formattedContent === undefined ? layoutContent(sanitizeTerminalText(content), width) : layoutFormattedContent(formattedContent, width)
-    const anchor = paragraphOffsetAtLine(layout, readerLine, width)
+    const width = Math.max(8, columns)
+    const anchor = paragraphOffsetAtLine(currentLayout, visibleReaderLine, width)
     const timer = setTimeout(() => {
       void application.saveReadingPosition(book.book.bookId, chapter, toc.edition, anchor.paragraphIndex, anchor.offset, toc.revision).catch((error: unknown) => {
         if (mountedRef.current && pageRef.current === 'reader') setMessage(errorMessage(error))
       })
     }, 500)
     return () => clearTimeout(timer)
-  }, [application, book, chapterIndex, columns, content, formattedContent, page, readerLine, toc])
+  }, [application, book, chapterIndex, columns, content, currentLayout, formattedContent, page, visibleReaderLine, toc])
 
   const submitSearch = async (): Promise<void> => {
     if (query.trim().length === 0) { setMessage('请输入书名'); return }
     const operation = beginOperation('search')
+    startSearchClock()
     setSearch(undefined)
     setSearchState('running')
     selectedGroupKeyRef.current = undefined
@@ -156,6 +382,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     try {
       const result = await request
       if (!isCurrent(operation)) return
+      stopSearchClock(result.elapsedMs)
       setSearch(result)
       setSearchState(result.cancelled ? 'cancelled' : 'complete')
       setSelected((current) => restoreGroupSelection(result.groups, current, selectedGroupKeyRef.current))
@@ -165,15 +392,17 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       })
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) {
+        stopSearchClock()
         setSearchState('error')
         setMessage(errorMessage(error))
       }
     } finally {
+      if (isCurrent(operation)) stopSearchClock()
       finishOperation(operation)
     }
   }
 
-  const openSearchGroup = async (group: SearchResultGroup): Promise<OpenBookResult | undefined> => {
+  const openSearchGroup = async (group: SearchResultGroup, navigate = true): Promise<OpenBookResult | undefined> => {
     const operation = beginOperation('task')
     setMessage('正在加载书籍详情…')
     try {
@@ -181,7 +410,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       if (!isCurrent(operation)) return undefined
       setBook(opened)
       setToc(undefined)
-      setPage('detail')
+      if (navigate) setPage('detail')
       setMessage(opened.metadata === undefined ? '详情没有返回完整字段' : '详情已加载')
       await refreshHome()
       return opened
@@ -193,12 +422,12 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }
   }
 
-  const openSelected = async (): Promise<OpenBookResult | undefined> => {
+  const openSelected = async (navigate = true): Promise<OpenBookResult | undefined> => {
     const group = search?.groups[selected]
     if (group === undefined) return undefined
     if (operationRef.current?.kind === 'search') await cancelActiveSearch()
     if (operationRef.current !== undefined) return undefined
-    return openSearchGroup(group)
+    return openSearchGroup(group, navigate)
   }
 
   const loadToc = async (edition?: string, bookOverride?: OpenBookResult): Promise<TocResult | undefined> => {
@@ -215,6 +444,10 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       const saved = currentBook.reading?.positions[result.edition.editionKey]
       const resumeIndex = saved === undefined ? -1 : result.chapters.findIndex((item) => item.chapterUrl === saved.chapterUrl)
       setChapterIndex(resumeIndex >= 0 ? resumeIndex : 0)
+      setTocSelected(resumeIndex >= 0 ? resumeIndex : 0)
+      setTocQuery('')
+      setTocSearchActive(false)
+      setListStart(0)
       setPage('toc')
       setMessage(`${result.chapters.length} 章${resumeIndex >= 0 ? ' · 已定位到上次阅读章节' : ''}`)
       return result
@@ -237,18 +470,45 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     try {
       const result = await application.loadContent(currentBook.book.bookId, chapter, currentToc.edition.editionKey, operation.controller.signal, { refresh })
       if (!isCurrent(operation)) return
-      const width = Math.max(8, columns - 4)
+      const width = Math.max(8, columns)
       const formatted = formatChapterContent(result.content.cleaned, result.content.contentType)
       const layout = layoutFormattedContent(formatted, width)
       const saved = currentBook.reading?.positions[currentToc.edition.editionKey]
-      const resumeLine = refresh ? Math.min(readerLine, Math.max(0, layout.lines.length - 1)) : saved?.chapterUrl === chapter.chapterUrl ? lineAtParagraphOffset(layout, saved.paragraphIndex, saved.offset, width) : 0
-      setBook(currentBook)
+      const sameSavedChapter = saved?.chapterUrl === chapter.chapterUrl
+      const resumeLine = refresh ? clampContentLine(readerLine, layout.lines.length, bodyHeight) : sameSavedChapter ? lineAtParagraphOffset(layout, saved.paragraphIndex, saved.offset, width) : 0
+      let openedBook = currentBook
+      let partialCommit = false
+      if (!refresh) {
+        await application.saveReadingPosition(currentBook.book.bookId, chapter, result.edition, sameSavedChapter ? saved.paragraphIndex : 0, sameSavedChapter ? saved.offset : 0, currentToc.revision)
+        try {
+          openedBook = await application.openStoredBook(currentBook.book.bookId)
+          if (result.edition.editionKey !== activeEditionKey(openedBook)) {
+            try { openedBook = await application.switchSource(currentBook.book.bookId, result.edition.editionKey, operation.controller.signal) }
+            catch { partialCommit = true }
+          }
+        } catch (error) {
+          partialCommit = true
+          const timestamp = new Date().toISOString()
+          const position: ReadingPosition = { editionKey: result.edition.editionKey, sourceId: chapter.sourceId, bookUrl: chapter.bookUrl, chapterUrl: chapter.chapterUrl, index: chapter.index, title: chapter.title, tocRevision: currentToc.revision, paragraphIndex: sameSavedChapter ? saved?.paragraphIndex ?? 0 : 0, offset: sameSavedChapter ? saved?.offset ?? 0 : 0, lastReadAt: timestamp }
+          const reading = currentBook.reading ?? { bookId: currentBook.book.bookId, positions: {}, updatedAt: timestamp }
+          openedBook = { ...currentBook, book: { ...currentBook.book, activeEditionKey: result.edition.editionKey }, source: result.source, reading: { ...reading, positions: { ...reading.positions, [result.edition.editionKey]: position }, activeEditionKey: result.edition.editionKey, lastReadAt: timestamp, updatedAt: timestamp } }
+        }
+      }
+      setBook(openedBook)
+      if (result.edition.editionKey !== activeEditionKey(currentBook)) {
+        try { setSources(await application.knownSources(currentBook.book.bookId)) }
+        catch { partialCommit = true }
+      }
       setChapterIndex(index)
       setContent(formatted.text)
       setFormattedContent(formatted)
       setReaderLine(resumeLine)
+      setTocSelected(index)
+      setTocQuery('')
+      setTocSearchActive(false)
+      if (result.edition.editionKey !== activeEditionKey(currentBook)) sourceCommitRef.current = result.edition.editionKey
       setPage('reader')
-      setMessage(`${refresh ? '正文已刷新' : result.content.contentType === 'html' ? '正文已加载，已按段落排版' : '正文已加载'}${resumeLine > 0 && !refresh ? ' · 已恢复上次位置' : ''}`)
+      setMessage(partialCommit ? '阅读位置已保存，书籍信息待同步' : formatted.text.length === 0 ? '章节内容为空 · 阅读位置已保存' : `${refresh ? '正文已刷新' : '正文已加载'}${resumeLine > 0 && !refresh ? ' · 已恢复上次位置' : ''}`)
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
     } finally {
@@ -278,7 +538,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }
   }
 
-  const resolveMenuBook = async (target: MenuTarget): Promise<OpenBookResult | undefined> => {
+  const resolveMenuBook = async (target: MenuTarget, navigate = true): Promise<OpenBookResult | undefined> => {
     if (target.kind === 'book') {
       if (book?.book.bookId === target.bookId) return book
       const operation = beginOperation('task')
@@ -298,7 +558,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (operationRef.current !== undefined) return undefined
     const group = search?.groups.find((item) => item.key === target.groupKey)
     if (group === undefined) return undefined
-    return openSearchGroup(group)
+    return openSearchGroup(group, navigate)
   }
 
   const runMenuAction = async (action: ReaderAction): Promise<void> => {
@@ -310,7 +570,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       return
     }
     setMenu(undefined)
-    const opened = await resolveMenuBook(state.target)
+    const opened = await resolveMenuBook(state.target, action === 'detail')
     if (opened === undefined) return
     if (action === 'detail') {
       setBook(opened)
@@ -367,7 +627,8 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const loaded = await loadToc()
     if (loaded === undefined) return
     const saved = book.reading?.positions[loaded.edition.editionKey]
-    const resumeIndex = saved === undefined ? 0 : Math.max(0, loaded.chapters.findIndex((item) => item.chapterUrl === saved.chapterUrl))
+    const savedIndex = saved === undefined ? -1 : loaded.chapters.findIndex((item) => item.chapterUrl === saved.chapterUrl)
+    const resumeIndex = savedIndex < 0 ? 0 : savedIndex
     await loadChapter(resumeIndex, book, loaded)
   }
 
@@ -426,7 +687,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (key.return && !busy && searchState !== 'running' && searchState !== 'cancelling') void openSelected()
     if (input === 't' && !busy && searchState !== 'running' && searchState !== 'cancelling') {
       void (async () => {
-        const opened = await openSelected()
+        const opened = await openSelected(false)
         if (opened !== undefined) await loadToc(undefined, opened)
       })()
     }
@@ -440,25 +701,49 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   }
 
   const handleTocInput = (input: string, key: InputKey): void => {
-    const total = toc?.chapters.length ?? 0
-    const visible = Math.max(1, bodyHeight - 1)
-    const next = navigationIndex(chapterIndex, total, input, key, visible)
-    if (next !== chapterIndex) {
-      setChapterIndex(next)
-      setListStart((start) => keepIndexVisible(next, total, visible, start).start)
+    const matches = filterChapterIndices(toc?.chapters ?? [], tocQuery)
+    const visible = Math.max(1, bodyHeight)
+    const next = navigationIndex(tocSelected, matches.length, input, key, visible)
+    if (next !== tocSelected) {
+      setTocSelected(next)
+      setListStart((start) => keepIndexVisible(next, matches.length, visible, start).start)
     }
-    if (key.return && !busy) void loadChapter(chapterIndex)
+    if (key.return && !busy) {
+      const chapter = matches[tocSelected]
+      if (chapter !== undefined) void loadChapter(chapter)
+      else setMessage('没有匹配的章节')
+    }
+  }
+
+  const updateTocSearch = (nextQuery: string): void => {
+    const chapters = toc?.chapters ?? []
+    const previousMatches = filterChapterIndices(chapters, tocQuery)
+    const selectedChapter = previousMatches[tocSelected] ?? tocSearchOrigin
+    const matches = filterChapterIndices(chapters, nextQuery)
+    const keptIndex = matches.indexOf(selectedChapter)
+    const nextSelected = keptIndex >= 0 ? keptIndex : 0
+    setTocQuery(nextQuery)
+    setTocSelected(nextSelected)
+    setListStart((start) => keepIndexVisible(nextSelected, matches.length, Math.max(1, bodyHeight), start).start)
+  }
+
+  const clearTocSearch = (): void => {
+    const chapters = toc?.chapters ?? []
+    const restored = Math.max(0, Math.min(Math.max(0, chapters.length - 1), tocSearchOrigin))
+    setTocQuery('')
+    setTocSearchActive(false)
+    setTocSelected(restored)
+    setListStart(keepIndexVisible(restored, chapters.length, Math.max(1, bodyHeight), 0).start)
   }
 
   const handleReaderInput = (input: string, key: InputKey): void => {
-    const height = Math.max(4, rows - 8)
-    if (input === 'j' || key.downArrow) setReaderLine((value) => value + 1)
-    if (input === 'k' || key.upArrow) setReaderLine((value) => Math.max(0, value - 1))
-    if (input === ' ' || key.pageDown || key.rightArrow) setReaderLine((value) => value + height - 2)
-    if (input === 'b' || key.pageUp || key.leftArrow) setReaderLine((value) => Math.max(0, value - height + 2))
+    const height = Math.max(1, bodyHeight)
+    const navigation = readerNavigation(input, key)
+    if (input === ' ' || key.pageDown || navigation === 'next-page') setReaderLine((value) => clampContentLine(value + height, currentLines.length, height))
+    if (key.pageUp || navigation === 'previous-page') setReaderLine((value) => clampContentLine(value - height, currentLines.length, height))
     if (input === 'r' && !busy) void loadChapter(chapterIndex, undefined, undefined, true)
-    if (input === '[' && chapterIndex > 0 && !busy) void loadChapter(chapterIndex - 1)
-    if (input === ']' && toc !== undefined && chapterIndex < toc.chapters.length - 1 && !busy) void loadChapter(chapterIndex + 1)
+    if (navigation === 'previous-chapter' && chapterIndex > 0 && !busy) void loadChapter(chapterIndex - 1)
+    if (navigation === 'next-chapter' && toc !== undefined && chapterIndex < toc.chapters.length - 1 && !busy) void loadChapter(chapterIndex + 1)
     if (input === 't' && !busy) setPage('toc')
     if (input === 's' && !busy) void showSources()
     if (input === 'a' && !busy) toggleShelf()
@@ -467,6 +752,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const handleSourcesInput = (input: string, key: InputKey): void => {
     if (input === 'm' && book !== undefined && !busy) {
       const operation = beginOperation('source-search')
+      startSearchClock()
       const before = new Set(sources.map((item) => item.editionKey))
       setSourceSearch(undefined)
       setSourceSearchState('running')
@@ -481,6 +767,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       operation.promise = request
       void request.then(async (result) => {
         if (!isCurrent(operation)) return
+        stopSearchClock(result.elapsedMs)
         const items = await application.knownSources(book.book.bookId)
         if (!isCurrent(operation)) return
         setSources(items)
@@ -493,6 +780,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         })
       }).catch((error: unknown) => {
         if (!isCurrent(operation)) return
+        stopSearchClock()
         if (isAbortError(error)) {
           setSourceSearchState('cancelled')
           setMessage('搜索已取消，保留已有书源')
@@ -500,7 +788,10 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
           setSourceSearchState('error')
           setMessage(errorMessage(error))
         }
-      }).finally(() => finishOperation(operation))
+      }).finally(() => {
+        if (isCurrent(operation)) stopSearchClock()
+        finishOperation(operation)
+      })
       return
     }
     if (sourceSearchState === 'running' || sourceSearchState === 'cancelling') {
@@ -518,6 +809,12 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const visible = Math.max(1, Math.floor((bodyHeight - (sourceSearch === undefined ? 1 : 2)) / 2))
     const next = navigationIndex(selected, total, input, key, visible)
     if (next !== selected) { setSelected(next); setListStart((start) => keepIndexVisible(next, total, visible, start).start) }
+    if (input === 't' && !busy) {
+      const target = sourceItems[selected]
+      if (target?.state === 'available') void loadToc(target.editionKey)
+      else setMessage(target === undefined ? '没有选中的书源' : '此书源不可用，无法读取目录')
+      return
+    }
     if (key.return && !busy) {
       const target = sourceItems[selected]
       if (target?.state === 'available' && book !== undefined) {
@@ -544,9 +841,22 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         } else {
           const operation = beginOperation('task')
           setMessage('正在切换书源…')
-          void application.switchSource(book.book.bookId, target.editionKey, operation.controller.signal).then((opened) => {
+          void application.switchSource(book.book.bookId, target.editionKey, operation.controller.signal).then(async (opened) => {
             if (!isCurrent(operation)) return
-            setBook(opened); setMessage('书源已切换，目录需要重新加载'); setToc(undefined); setPage('detail')
+            let updatedSources = sources
+            try { updatedSources = await application.knownSources(book.book.bookId) }
+            catch { /* The active book can still be shown; a later visit will reload source status. */ }
+            if (!isCurrent(operation)) return
+            if (navigationRef.current.at(-2)?.page === 'detail') {
+              goBack(opened, updatedSources)
+              setMessage('书源已切换')
+            } else {
+              setBook(opened)
+              setSources(updatedSources)
+              setMessage('书源已切换，目录需要重新加载')
+              setToc(undefined)
+              setPage('detail')
+            }
           }).catch((error: unknown) => {
             if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
           }).finally(() => finishOperation(operation))
@@ -562,7 +872,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       void application.switchSource(book.book.bookId, mappingTarget.editionKey, operation.controller.signal).then((opened) => {
         if (!isCurrent(operation)) return
         setBook(opened)
-        if (mappingToc !== undefined) { setToc(mappingToc); setChapterIndex(mappingIndex); setPage('toc') } else { setToc(undefined); setPage('detail') }
+        if (mappingToc !== undefined) { setToc(mappingToc); setChapterIndex(mappingIndex); setTocSelected(mappingIndex); setTocQuery(''); setTocSearchActive(false); setPage('toc') } else { setToc(undefined); setPage('detail') }
         setMessage('书源已切换，请从目标目录继续阅读')
       }).catch((error: unknown) => {
         if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
@@ -581,7 +891,8 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   }
 
   const handlePageScroll = (input: string, key: InputKey): void => {
-    const lines = page === 'help' ? HELP_LINES.length : page === 'detail' ? detailLineCount(book, columns, message) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.diagnostics.length + 2 : 6
+    const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
+    const lines = page === 'help' ? helpLines(helpPage, homeArea).length : page === 'detail' ? detailLineCount(book, columns) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.diagnostics.length + 2 : 6
     const next = navigationPage(pageScroll, lines, input, key, bodyHeight)
     if (next !== pageScroll) setPageScroll(next)
   }
@@ -589,24 +900,41 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   useInput((input, key) => {
     if (handleMenuInput(input, key)) return
     if (page === 'search') {
-      if (key.escape) { setPage('home'); setMessage(''); return }
+      if (key.escape) { goBack(); return }
       if (key.return) { void submitSearch(); return }
-      if (key.backspace || key.delete) { setQuery((value) => value.slice(0, -1)); return }
+      if (key.backspace || key.delete) { setQuery((value) => Array.from(value).slice(0, -1).join('')); return }
       if (!key.ctrl && !key.meta && input.length > 0) setQuery((value) => value + input)
+      return
+    }
+    if (page === 'toc' && tocSearchActive) {
+      if (key.escape) { clearTocSearch(); return }
+      if (key.return) { setTocSearchActive(false); return }
+      if (key.backspace || key.delete) { updateTocSearch(Array.from(tocQuery).slice(0, -1).join('')); return }
+      if (!key.ctrl && !key.meta && input.length > 0) updateTocSearch(tocQuery + input)
       return
     }
     if (key.ctrl && input === 'c') { cancelOperation('正在退出…'); exit(); return }
     if (input === 'q') { cancelOperation('正在退出…'); exit(); return }
-    if (input === '?' ) { cancelOperation(); setPage('help'); return }
-    if (input === 'd') { cancelOperation(); setPage('diagnostics'); return }
-    if (key.ctrl && input === 'k') { cancelOperation(); setPage('search'); setMessage(''); return }
+    if (input === '?' ) { if (page === 'help') goBack(); else setPage('help'); return }
+    if (input === 'd') { if (page !== 'diagnostics') setPage('diagnostics'); return }
+    if (key.ctrl && input === 'k') { setPage('search'); setMessage(''); return }
     if (key.escape) {
+      if (page === 'toc' && tocQuery.length > 0) { clearTocSearch(); return }
       if (busy && (operationRef.current?.kind === 'search' || operationRef.current?.kind === 'source-search')) { cancelActiveSearch(); return }
-      cancelOperation()
-      setPage(previousPage(page))
+      if (busy) { cancelOperation(); return }
+      goBack()
       return
     }
-    if (input === 'o' && ['home', 'results', 'detail'].includes(page)) { openMenu(); return }
+    if (input === 'o' && ['home', 'results'].includes(page)) { openMenu(); return }
+    if (page === 'toc' && input === '/') {
+      const selectedChapter = chapterIndexForSelection(toc?.chapters ?? [], tocQuery, tocSelected, chapterIndex)
+      setTocSearchOrigin(selectedChapter)
+      setTocQuery('')
+      setTocSearchActive(true)
+      setTocSelected(selectedChapter)
+      setListStart((start) => keepIndexVisible(selectedChapter, toc?.chapters.length ?? 0, Math.max(1, bodyHeight), start).start)
+      return
+    }
     if (page === 'home') handleHomeInput(input, key)
     else if (page === 'results') handleResultsInput(input, key)
     else if (page === 'detail') { handleDetailInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
@@ -617,20 +945,18 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     else if (page === 'help' || page === 'diagnostics' || page === 'config') handlePageScroll(input, key)
   })
 
-  const currentLayout = content === undefined ? { lines: [], lineKinds: [] as Array<ContentBlockKind | undefined> } : formattedContent === undefined ? layoutContent(sanitizeTerminalText(content), Math.max(8, columns - 4)) : layoutFormattedContent(formattedContent, Math.max(8, columns - 4))
-  const currentLines = currentLayout.lines
   const visibleMessage = messageOwner === page ? message : ''
-  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, query, search, searchState, searchProgress, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine, rows, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage }
+  const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
+  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator }
   const visiblePage = renderPage(page, state)
-  return (
-    <Box position="relative" flexDirection="column" width={columns} height={rows}>
-      <Text color="cyan" bold>Legado Reader  ·  {pageLabel(page)}</Text>
-      <Text dimColor>{display(catalog.sourceLocation || '未配置书源')} · {catalog.entries.filter((entry) => entry.state === 'available').length}/{catalog.entries.length} 个可用 · {busy ? '处理中' : '就绪'}</Text>
-      <Text>{'─'.repeat(Math.max(8, Math.min(columns, 120)))}</Text>
-      {visiblePage}
-      {menu === undefined ? null : renderActionMenu(menu, columns, rows)}
-      <Text>{'─'.repeat(Math.max(8, Math.min(columns, 120)))}</Text>
-      <Text dimColor>{footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea)}</Text>
-    </Box>
-  )
+  const commandActions = footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0)
+  const inputMode = page === 'search' || page === 'toc' && tocSearchActive
+  const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : ''
+  const inputValue = page === 'search' ? query : tocQuery
+  const inputWidth = Math.max(0, columns - terminalWidth(commandActions) - 1 - terminalWidth(inputLabel) - 1)
+  const commandInput = inputMode ? `${inputLabel}${tailTerminalText(inputValue, inputWidth)}█` : ''
+  const pageContext = pageHeader(page, state)
+  const preservePageStats = page === 'reader' || page === 'toc' || page === 'results'
+  const header = { ...pageContext, right: preservePageStats ? pageContext.right : visibleMessage || (busy ? '处理中' : pageContext.right) }
+  return <PageShell columns={columns} rows={rows} bodyHeight={bodyHeight} separator={terminal.separator} supported={terminal.supported} header={header} command={{ left: commandInput, right: commandActions }} content={visiblePage} menu={menu === undefined ? undefined : renderActionMenu(menu, columns, rows)} />
 }

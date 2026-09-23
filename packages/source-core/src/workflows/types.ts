@@ -37,10 +37,17 @@ export interface BookCandidate extends BookIdentity {
   traceRef: string
 }
 
+export interface BookReadConfig {
+  /** 刷新和持久化目录时使用的顺序开关。 */
+  reverseToc?: boolean
+}
+
 export interface BookMetadata extends BookCandidate {
   tocUrl?: string
   /** 详情页同时是目录页时保留的临时响应；不应持久化。 */
   tocHtml?: string
+  /** 由上层书籍状态提供的阅读配置；书源流程只读取目录顺序开关。 */
+  readConfig?: BookReadConfig
   /** 详情规则明确返回空字符串的字段。 */
   emptyFields: string[]
   /** 详情规则执行失败的字段及脱敏原因。 */
@@ -139,6 +146,14 @@ export interface ChapterIdentity {
   chapterUrl: string
   index: number
   volume?: string
+  /** 是否为卷节点；卷节点不应请求正文。 */
+  isVolume?: boolean
+  /** 是否为 VIP 章节。 */
+  isVip?: boolean
+  /** 是否已购买。 */
+  isPay?: boolean
+  /** 书源提供的章节更新时间或附加标签。 */
+  updateTime?: string
 }
 
 export interface Chapter extends ChapterIdentity {
@@ -172,6 +187,8 @@ export interface ChapterContent {
 export interface ContentInput extends WorkflowOptions {
   source: NormalizedSource
   chapter: ChapterIdentity
+  /** 章节链接指向详情页时，可复用详情请求的响应正文。 */
+  tocHtml?: string
   contentType?: 'text' | 'html'
   replacements?: readonly ContentReplacement[]
   maxPages?: number

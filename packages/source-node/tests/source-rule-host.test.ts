@@ -25,6 +25,9 @@ test('规则宿主支持 HTML 列表节点继续提取文本和属性', async ()
   const dataUrl = await evaluate(host, '@href', item)
   assert.equal(dataUrl.status, 'success')
   assert.equal(dataUrl.value, '/book/1')
+  const bareUrl = await evaluate(host, 'href', item)
+  assert.equal(bareUrl.status, 'success')
+  assert.equal(bareUrl.value, '/book/1')
 })
 
 test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', async () => {

@@ -268,12 +268,27 @@ export class ReaderApplication {
   public openStoredBook(bookId: string, signal?: AbortSignal): Promise<OpenBookResult> {
     return this.trackOperation(signal, async (operationSignal) => {
       throwIfAborted(operationSignal)
-      const book = await this.storage.getBook(bookId)
+      let book = await this.storage.getBook(bookId)
       if (book === undefined) throw new Error('书籍记录不存在')
+      const savedBookActiveEditionKey = book.activeEditionKey
       const known = await this.storage.listKnownSources(bookId)
       const storedReading = await this.storage.getReadingRecord(bookId)
-      const edition = known.find((item) => item.editionKey === storedReading?.activeEditionKey) ?? known.find((item) => item.editionKey === book.activeEditionKey) ?? known[0]
+      const edition = known.find((item) => item.editionKey === storedReading?.activeEditionKey) ?? known.find((item) => item.editionKey === savedBookActiveEditionKey) ?? known[0]
       if (edition === undefined) throw new Error('书籍没有已知书源')
+      if (storedReading?.activeEditionKey === edition.editionKey && book.activeEditionKey !== edition.editionKey) {
+        book = {
+          ...book,
+          ...(edition.name === undefined ? {} : { name: edition.name }),
+          ...(edition.author === undefined ? {} : { author: edition.author }),
+          ...(edition.intro === undefined ? {} : { intro: edition.intro }),
+          ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }),
+          ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }),
+          activeEditionKey: edition.editionKey,
+          metadataEditionKey: edition.editionKey,
+          updatedAt: new Date().toISOString(),
+        }
+        await this.storage.upsertBook(book)
+      }
       const source = this.requireSource(edition)
       await this.storage.markReadingOpened(bookId)
       const reading = await this.storage.getReadingRecord(bookId)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatChapterContent } from '../src/content-format.ts'
+import { countChapterCharacters, formatChapterContent } from '../src/content-format.ts'
 
 test('HTML 正文保留块级段落语义并隐藏脚本样式', () => {
   const result = formatChapterContent('<p>第一段&nbsp;内容</p><div>第二段<br>换行</div><script>恶意脚本</script><style>隐藏</style>', 'html')
@@ -33,4 +33,10 @@ test('容器中的混合文本和嵌套列表不会吞掉块级内容', () => {
   assert.match(result.text, /• 外层/)
   assert.match(result.text, /  • 内层/)
   assert.match(result.text, /结尾/)
+})
+
+test('章节字符数只统计语义正文，不计展示标记、分隔线和图片占位', () => {
+  const result = formatChapterContent('<h2>标题</h2><blockquote> 引用 </blockquote><ol><li>正文 1</li></ol><hr><img alt="封面">', 'html')
+  assert.equal(countChapterCharacters(result), [...'标题引用正文1'].length)
+  assert.equal(countChapterCharacters(formatChapterContent('甲 😀 乙\n\n空 白', 'text')), 5)
 })

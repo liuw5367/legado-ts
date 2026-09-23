@@ -9,17 +9,64 @@ export type Page = 'config' | 'home' | 'search' | 'results' | 'detail' | 'toc' |
 export type SearchUiState = 'idle' | 'running' | 'cancelling' | 'complete' | 'cancelled' | 'error'
 export type OperationKind = 'search' | 'source-search' | 'task'
 
-export const HELP_LINES = [
-  '帮助',
-  '全局：Ctrl+K 搜索书籍；Enter 确认，Esc 返回/取消，? 打开帮助，d 查看诊断，q 退出。',
-  '列表：j/k、↑/↓ 移动；←/→、PageUp/PageDown 翻页；Home/End 跳到首尾。',
-  '文本视口：j/k、↑/↓ 逐行滚动；←/→、PageUp/PageDown 翻页；Home/End 跳到首尾。',
-  '正文：空格或 →/PageDown 下一页；b 或 ←/PageUp 上一页；[ ] 切换章节；t 目录；s 书源；a 书架；r 刷新正文。',
-  '首页：1/2/3 切换书架、最近阅读、搜索记录；Enter 打开，o 打开操作菜单。',
-  '搜索结果：Enter 详情，t 目录，o 操作；详情：Enter 阅读，t 目录，s 换源，a 书架，o 操作。',
-  '章节目录：Enter 阅读；已知书源：Enter 换源，m 搜索更多；搜索中 Esc 只取消搜索。',
-  '操作弹窗：j/k 或 ↑/↓ 选择，Enter 执行，Esc 关闭；弹窗会覆盖在当前页面中央。',
-]
+export interface NavigationFrame {
+  page: Page
+  selected: number
+  listStart: number
+  pageScroll: number
+  homeArea: number
+  query: string
+  readerLine: number
+  tocSelected?: number
+  tocQuery?: string
+  tocSearchActive?: boolean
+  bookId?: string
+  editionKey?: string
+}
+
+export function pushNavigationFrame(stack: readonly NavigationFrame[], frame: NavigationFrame): NavigationFrame[] {
+  if (stack.at(-1)?.page === frame.page && stack.at(-1)?.bookId === frame.bookId && stack.at(-1)?.editionKey === frame.editionKey) {
+    return [...stack.slice(0, -1), frame]
+  }
+  return [...stack, frame]
+}
+
+export function popNavigationFrame<T extends NavigationFrame>(stack: readonly T[], updatePrevious?: (frame: T) => T): T[] {
+  if (stack.length <= 1) return [...stack]
+  const next = stack.slice(0, -1)
+  if (updatePrevious !== undefined) next[next.length - 1] = updatePrevious(next.at(-1)!)
+  return next
+}
+
+export function refreshOnHomeEntry(page: Page, refresh: () => Promise<void>, isCurrent: () => boolean): Promise<void> {
+  if (page !== 'home' || !isCurrent()) return Promise.resolve()
+  return refresh()
+}
+
+export function helpLines(page: Page, homeArea: number): string[] {
+  const current: Partial<Record<Page, string[]>> = {
+    home: ['↑/↓ 或 j/k 选择，Enter 打开', '1/2/3 切换书架、最近阅读、搜索记录', ...(homeArea === 2 ? [] : ['o 打开书籍操作'])],
+    search: ['输入书名，Enter 搜索', '退格删除，Esc 返回'],
+    results: ['↑/↓ 或 j/k 选择，Enter 详情', 't 打开目录，o 书籍操作', '搜索中按 Esc 取消'],
+    detail: ['Enter 阅读，t 目录', 's 书源，a 书架'],
+    toc: ['↑/↓ 或 j/k 选择，Enter 阅读', '/ 按章节名筛选，Home/End 首尾'],
+    reader: ['↑/↓ 或 j/k 翻页，←/→ 或 h/l 切换章节', 'PgUp/PgDn 或空格翻页，t 目录，s 书源，a 书架，r 刷新'],
+    sources: ['↑/↓ 或 j/k 选择书源', 't 查看目录，Enter 切换/继续，m 搜索更多'],
+    mapping: ['Enter 确认切换，Esc 取消'],
+    config: ['查看当前来源配置与诊断', 'd 打开诊断，q 退出'],
+    diagnostics: ['↑/↓ 或 j/k 滚动查看，Esc 返回'],
+  }
+  return [...(current[page] ?? []), 'Esc 返回 · Ctrl+K 搜书', 'q 退出 · ? 关闭帮助']
+}
+
+export function filterChapterIndices(chapters: readonly { title: string }[], query: string): number[] {
+  const normalizedQuery = query.normalize('NFKC').toLowerCase()
+  return chapters.flatMap((chapter, index) => chapter.title.normalize('NFKC').toLowerCase().includes(normalizedQuery) ? [index] : [])
+}
+
+export function chapterIndexForSelection(chapters: readonly { title: string }[], query: string, selected: number, fallback = 0): number {
+  return filterChapterIndices(chapters, query)[selected] ?? fallback
+}
 
 export interface UiOperation {
   id: number
@@ -81,6 +128,16 @@ export function navigationPage(scroll: number, total: number, input: string, key
   return scroll
 }
 
+export type ReaderNavigationAction = 'previous-page' | 'next-page' | 'previous-chapter' | 'next-chapter'
+
+export function readerNavigation(input: string, key: InputKey): ReaderNavigationAction | undefined {
+  if (key.downArrow || input === 'j') return 'next-page'
+  if (key.upArrow || input === 'k') return 'previous-page'
+  if (key.leftArrow || input === 'h') return 'previous-chapter'
+  if (key.rightArrow || input === 'l') return 'next-chapter'
+  return undefined
+}
+
 export function selectedGroupIndex(search: SearchOperationResult, selected: number): number {
   return Math.max(0, Math.min(Math.max(0, search.groups.length - 1), selected))
 }
@@ -99,10 +156,9 @@ export function activeReadingChapter(book: OpenBookResult | undefined): string {
   return edition === undefined ? '尚未开始阅读' : book.reading.positions[edition]?.title ?? '尚未开始阅读'
 }
 
-export function detailLineCount(book: OpenBookResult | undefined, width: number, message: string): number {
-  if (book === undefined) return 1 + (message.length > 0 ? 1 : 0)
-  const introLines = layoutContent(book.book.intro ?? '书源未返回简介', Math.max(8, width - 10)).lines.length
-  return 9 + introLines + (message.length > 0 ? 1 : 0)
+export function detailLineCount(book: OpenBookResult | undefined, width: number): number {
+  const introLines = layoutContent(book?.book.intro ?? '书源未返回简介', Math.max(8, width - 10)).lines.length
+  return 7 + introLines
 }
 
 export function formatDuration(milliseconds: number): string {
@@ -119,6 +175,23 @@ export function formatProgress(progress: SearchProgress): string {
   return `搜索进度 ${progress.completed}/${progress.total} 个书源 · 当前：${active} · 已发现 ${progress.candidates} 本 · 总耗时 ${formatDuration(progress.elapsedMs)}`
 }
 
+export function searchHeaderStatus(state: SearchUiState, progress: SearchProgress | undefined, elapsedMs: number, resultCount: number, message: string): string {
+  const duration = formatDuration(elapsedMs)
+  if (state === 'running' || state === 'cancelling') {
+    return progress === undefined ? `搜索中 · ${duration}` : `${progress.completed}/${progress.total}源 · ${duration} · ${progress.candidates}本`
+  }
+  if (state === 'error') return message.length === 0 ? `搜索失败 · ${duration}` : `失败 · ${duration} · ${message}`
+  if (state === 'cancelled') {
+    const summary = `${resultCount}本 · ${duration} · 已取消`
+    return message.length > 0 && message !== '搜索已取消，已保留已返回结果' ? `${message} · ${summary}` : summary
+  }
+  if (state === 'complete') {
+    const summary = `${resultCount}本 · ${duration}`
+    return message.length > 0 && message !== `找到 ${resultCount} 本书` ? `${message} · ${summary}` : summary
+  }
+  return message
+}
+
 export function searchMatchLabel(rank: SearchResultGroup['rank']): string {
   return rank === 'exact' ? '完全匹配' : rank === 'contains' ? '包含关键词' : '其他'
 }
@@ -130,6 +203,10 @@ export function normalizeChapterTitle(value: string): string {
 
 export function pageLabel(page: Page): string {
   return ({ config: '配置', home: '首页', search: '搜索', results: '搜索结果', detail: '详情', toc: '目录', reader: '阅读', sources: '已知书源', mapping: '章节映射', help: '帮助', diagnostics: '诊断' } as Record<Page, string>)[page]
+}
+
+export function homeAreaLabel(homeArea: number): string {
+  return (['书架', '最近阅读', '搜索记录'] as const)[homeArea] ?? '书架'
 }
 
 export function previousPage(page: Page): Page {
@@ -144,7 +221,7 @@ export function activeEditionKey(book: OpenBookResult | undefined): string | und
   return book?.reading?.activeEditionKey ?? book?.book.activeEditionKey
 }
 
-export function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number): string {
+export function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number, tocSearchActive = false, tocHasQuery = false): string {
   if (menuOpen) return layoutFooter([
     { keys: 'Enter', label: '执行', priority: 0 },
     { keys: 'Esc', label: '关闭', priority: -1 },
@@ -172,25 +249,22 @@ export function footer(page: Page, busy: boolean, columns: number, searchState: 
   if (page === 'sources') {
     const searching = sourceSearchState === 'running' || sourceSearchState === 'cancelling'
     return layoutFooter([
-      ...(searching ? [{ keys: 'Esc', label: '取消搜索', priority: -1 }] : [{ keys: 'Enter', label: '换源', priority: 0 }, { keys: 'm', label: '搜索更多', priority: 1 }]),
+      ...(searching ? [{ keys: 'Esc', label: '取消搜索', priority: -1 }] : [{ keys: 'Enter', label: '切换/继续', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'm', label: '搜索更多', priority: 2 }]),
       ...(searching ? common.slice(1) : common),
     ], columns)
   }
   if (busy) return layoutFooter([{ keys: 'Esc', label: '取消处理中', priority: -1 }, ...common.slice(1)], columns)
   if (page === 'detail') return layoutFooter([
-    { keys: 'Enter', label: '开始/继续阅读', priority: 0 },
+    { keys: 'Enter', label: '阅读', priority: 0 },
     { keys: 't', label: '目录', priority: 1 },
     { keys: 's', label: '换源', priority: 1 },
-    { keys: 'a', label: '加入/移出书架', priority: 1 },
-    { keys: 'o', label: '操作', priority: 2 },
+    { keys: 'a', label: '书架', priority: 1 },
     ...common,
   ], columns)
-  if (page === 'toc') return layoutFooter([
-    { keys: 'Enter', label: '阅读', priority: 0 },
-    ...common,
-  ], columns)
+  if (page === 'toc') return layoutFooter(tocSearchActive
+    ? [{ keys: 'Enter', label: '完成', priority: 0 }, { keys: 'Esc', label: '清除', priority: -1 }]
+    : [{ keys: 'Enter', label: '阅读', priority: 0 }, { keys: '/', label: '筛章节', priority: 1 }, ...(tocHasQuery ? [{ keys: 'Esc', label: '清除筛选', priority: -1 }] : common)], columns)
   if (page === 'reader') return layoutFooter([
-    { keys: '[ ]', label: '上下章', priority: 0 },
     { keys: 't', label: '目录', priority: 1 },
     { keys: 's', label: '换源', priority: 1 },
     { keys: 'a', label: '书架', priority: 1 },
