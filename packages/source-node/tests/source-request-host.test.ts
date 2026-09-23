@@ -20,23 +20,89 @@ test('书源请求宿主解析 URL 后 JSON options 并保留 POST/body/header',
   const plans: Array<{ method: string; url: string; body?: string; headers: Readonly<Record<string, string>> }> = []
   const network: NetworkHost = {
     request: async (plan) => {
-      plans.push({ method: plan.method, url: plan.url, ...(typeof plan.body === 'string' ? { body: plan.body } : {}), headers: plan.headers })
+      plans.push({
+        method: plan.method,
+        url: plan.url,
+        ...(plan.body === undefined ? {} : { body: typeof plan.body === 'string' ? plan.body : new TextDecoder().decode(plan.body) }),
+        headers: plan.headers,
+      })
       return response(plan.url)
     },
   }
   const host = new SourceRequestHost({ network, cookieStore: new NodeCookieStore() })
   const result = await host.request({ source, url: '/search,{"method":"POST","body":"q=fixture","headers":{"X-Rule":"yes"},"charset":"utf-8"}', stage: 'search', options: {} })
   assert.equal(new TextDecoder().decode(result.bytes), 'ok')
-  assert.deepEqual(plans, [{ method: 'POST', url: 'https://fixture.invalid/search', body: 'q=fixture', headers: { 'X-Fixture': 'yes', 'X-Rule': 'yes' } }])
+  assert.deepEqual(plans, [{ method: 'POST', url: 'https://fixture.invalid/search', body: 'q=fixture', headers: { 'X-Fixture': 'yes', 'X-Rule': 'yes', 'Content-Type': 'application/x-www-form-urlencoded' } }])
+})
+
+test('请求宿主保留普通逗号，并按 charset 编码查询参数和 POST 表单', async () => {
+  const plans: Array<{ url: string; method: string; body?: Uint8Array | string; headers: Readonly<Record<string, string>>; requestCharset?: string; followRedirects: boolean; timeoutMs: number }> = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    plans.push({ url: plan.url, method: plan.method, ...(plan.body === undefined ? {} : { body: plan.body }), headers: plan.headers, ...(plan.requestCharset === undefined ? {} : { requestCharset: plan.requestCharset }), followRedirects: plan.followRedirects, timeoutMs: plan.budget.timeoutMs })
+    return response(plan.url)
+  } } })
+  await host.request({ source, url: '/search?tag=a,b&q=中文,{"method":"GET","charset":"gbk","followRedirects":false,"timeout":3210}', stage: 'search', options: {} })
+  assert.equal(plans[0]?.url, 'https://fixture.invalid/search?tag=a,b&q=%D6%D0%CE%C4')
+  assert.equal(plans[0]?.method, 'GET')
+  assert.equal(plans[0]?.requestCharset, 'gbk')
+  assert.equal(plans[0]?.followRedirects, false)
+  assert.equal(plans[0]?.timeoutMs, 3210)
+
+  await host.request({ source, url: '/post,{"method":"POST","body":"word=中文&space=a b","charset":"gbk"}', stage: 'search', options: {} })
+  const form = plans[1]?.body
+  assert.ok(form instanceof Uint8Array)
+  assert.equal(new NodeCharsetCodec().decode(form, 'ascii'), 'word=%D6%D0%CE%C4&space=a+b')
+  assert.equal(plans[1]?.headers['Content-Type'], 'application/x-www-form-urlencoded')
 })
 
 test('书源请求宿主兼容 fixture 中常见的单引号 options 写法', async () => {
   let method = ''
   let body: string | undefined
-  const host = new SourceRequestHost({ network: { request: async (plan) => { method = plan.method; body = typeof plan.body === 'string' ? plan.body : undefined; return response(plan.url) } } })
+  const host = new SourceRequestHost({ network: { request: async (plan) => { method = plan.method; body = plan.body === undefined ? undefined : typeof plan.body === 'string' ? plan.body : new TextDecoder().decode(plan.body); return response(plan.url) } } })
   await host.request({ source, url: "/search,{'method':'POST','body':'q=it\\'s-ok'}", stage: 'search', options: {} })
   assert.equal(method, 'POST')
-  assert.equal(body, "q=it's-ok")
+  assert.equal(body, 'q=it%27s-ok')
+})
+
+test('URL 的嵌入式 JavaScript 在任意位置执行并支持 @result', async () => {
+  const urls: string[] = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => { urls.push(plan.url); return response(plan.url) } } })
+  host.attachRuleHost(new SourceRuleHost())
+  await host.request({ source, url: 'https://fixture.invalid/search?q=<js>return result + java.encodeURI("中文")</js>', stage: 'search', options: {} })
+  assert.equal(urls[0], 'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87')
+  await host.request({ source, url: 'https://fixture.invalid/search?prefix=<js>result</js>@result', stage: 'search', options: {} })
+  assert.equal(urls[1], 'https://fixture.invalid/search?prefix=')
+})
+
+test('URL 请求选项执行 js/bodyJs、重试和十六进制响应类型', async () => {
+  const urls: string[] = []
+  let requests = 0
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    urls.push(plan.url)
+    requests += 1
+    if (requests === 1) throw new Error('temporary network error')
+    return { ...response(plan.url), bytes: new TextEncoder().encode('hello') }
+  } } })
+  host.attachRuleHost(new SourceRuleHost())
+  const body = await host.request({
+    source,
+    url: '/body,{"method":"GET","js":"return result + \'?signed=1\'","bodyJs":"return result.toUpperCase()","retry":1}',
+    stage: 'search',
+    options: {},
+  })
+  assert.deepEqual(urls, ['https://fixture.invalid/body?signed=1', 'https://fixture.invalid/body?signed=1'])
+  assert.equal(host.decodeResponse(body), 'HELLO')
+
+  const hexHost = new SourceRequestHost({ network: { request: async (plan) => ({ ...response(plan.url), bytes: new Uint8Array([0, 255]) }) } })
+  const binary = await hexHost.request({ source, url: '/binary,{"type":"hex"}', stage: 'search', options: {} })
+  assert.equal(host.decodeResponse(binary), '00ff')
+})
+
+test('非 WebView 请求选项把 dnsIp 传入 RequestPlan', async () => {
+  let dnsIp: string | undefined
+  const host = new SourceRequestHost({ network: { request: async (plan) => { dnsIp = plan.execution.dnsIp; return response(plan.url) } } })
+  await host.request({ source, url: '/search,{"resolveIp":"203.0.113.8"}', stage: 'search', options: {} })
+  assert.equal(dnsIp, '203.0.113.8')
 })
 
 test('书源请求宿主不会把 WebView 请求静默降级到普通 HTTP', async () => {

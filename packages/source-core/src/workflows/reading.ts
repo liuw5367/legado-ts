@@ -326,8 +326,9 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   }
   if (cleaned.length === 0) {
     diagnostics.push({ code: 'empty-page', stage, message: '正文为空', retryable: false })
-    const failed = diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'capability-missing')
-    return { status: failed ? 'failed' : 'empty', value: failed ? null : { chapter: input.chapter, contentType, raw, cleaned, pages, resources: [] }, diagnostics, trace }
+    const capabilityMissing = diagnostics.some((item) => item.code === 'capability-missing')
+    const failed = diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed')
+    return { status: capabilityMissing ? 'capability-missing' : failed ? 'failed' : 'empty', value: capabilityMissing || failed ? null : { chapter: input.chapter, contentType, raw, cleaned, pages, resources: [] }, diagnostics, trace }
   }
   const value: ChapterContent = { chapter: input.chapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(title === undefined ? {} : { title }) }
   const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'item-skipped') ? 'partial' : 'success'

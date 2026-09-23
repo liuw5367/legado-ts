@@ -24,7 +24,8 @@
     "iconv-lite": "catalog:",
     "jsonpath-plus": "catalog:",
     "quickjs-emscripten": "0.32.0",
-    "tough-cookie": "catalog:"
+    "tough-cookie": "catalog:",
+    "undici": "catalog:"
   },
   "files": [
     "dist"

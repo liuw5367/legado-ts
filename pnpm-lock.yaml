@@ -55,6 +55,9 @@ catalogs:
     typescript:
       specifier: 6.0.2
       version: 6.0.2
+    undici:
+      specifier: 7.29.0
+      version: 7.29.0
     wrap-ansi:
       specifier: 10.0.1
       version: 10.0.1
@@ -141,6 +144,9 @@ importers:
       tough-cookie:
         specifier: 'catalog:'
         version: 6.0.2
+      undici:
+        specifier: 'catalog:'
+        version: 7.29.0
 
 packages:
 
@@ -419,6 +425,10 @@ packages:
 
   undici-types@7.8.0:
     resolution: {integrity: sha512-9UJ2xGDvQ43tYyVMpuHlsgApydB8ZKfVYTsLDhXkFL/6gfkp+U8xTGdh8pMJv1SpZna0zxG1DwsKZsreLbXBxw==}
+
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+    engines: {node: '>=20.18.1'}
 
   whynot@5.0.0:
     resolution: {integrity: sha512-cGGfDPYYqoHoMWqXVc3G+N74u1FhFhrBa+pOO906b9ktRc/JFUdwroTkfPqjKzyoCLVcKr6yy6bYIcWT7jTg2A==}
@@ -714,6 +724,8 @@ snapshots:
   typescript@6.0.2: {}
 
   undici-types@7.8.0: {}
+
+  undici@7.29.0: {}
 
   whynot@5.0.0: {}
 

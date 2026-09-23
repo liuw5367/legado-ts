@@ -1,6 +1,7 @@
 import type { JsonObject, JsonValue, NormalizedSource } from '../model/types.ts'
 import { createRequestPlan } from '../runtime/request-plan.ts'
-import type { RequestBudget } from '../runtime/contracts.ts'
+import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
+import type { RequestBudget, RequestPlanInput } from '../runtime/contracts.ts'
 import type { WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export const listFields = [
@@ -151,16 +152,57 @@ export function expansionDiagnostic(error: UrlExpansionError | undefined, stage:
  * 其余表达式交给规则宿主的 JS 能力；没有 JS 能力时返回可诊断错误，不把字面量拼进 URL。
  */
 export async function expandUrl(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, url: string, replacements: Readonly<Record<string, string>>, bindings: Readonly<Record<string, unknown>>, signal?: AbortSignal): Promise<{ url?: string; error?: UrlExpansionError }> {
-  if (!url.includes('{{')) return { url }
-  const matches = [...url.matchAll(/\{\{([\s\S]*?)\}\}/g)]
+  const scripted = await expandEmbeddedUrlScripts(ports, source, stage, url, bindings, signal)
+  if (scripted.error !== undefined) return { error: scripted.error }
+  const matches = [...scripted.url!.matchAll(/\{\{([\s\S]*?)\}\}/g)]
   // 每个表达式都可能触发一次 JS 求值，数量不设上限就等于取消预算；超限在任何求值前失败。
   if (matches.length > maxUrlExpressions) return { error: { code: 'invalid-config', message: `书源 URL 内联表达式数量超过上限（${maxUrlExpressions}）` } }
-  let result = url
+  let result = scripted.url!
   for (const match of matches.reverse()) {
     const value = await expandExpression(ports, source, stage, match[1]!.trim(), replacements, bindings, signal)
     if (value.error !== undefined) return { error: value.error }
     result = `${result.slice(0, match.index!)}${value.text ?? ''}${result.slice(match.index! + match[0]!.length)}`
   }
+  const page = Math.max(1, Number(replacements.page ?? replacements.pageIndex ?? 1) || 1)
+  result = result.replace(/<([^<>]*)>/g, (_match, values: string) => {
+    const pages = values.split(',')
+    return (pages[Math.min(page - 1, pages.length - 1)] ?? '').replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, '')
+  })
+  return { url: result }
+}
+
+async function expandEmbeddedUrlScripts(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, input: string, bindings: Readonly<Record<string, unknown>>, signal: AbortSignal | undefined): Promise<{ url?: string; error?: UrlExpansionError }> {
+  const matches = [...input.matchAll(/<js>([\s\S]*?)<\/js>/gi)]
+  if (matches.length === 0) return { url: input }
+  let result = input
+  let end = 0
+  for (const match of matches) {
+    const start = match.index!
+    const literal = input.slice(end, start).trim()
+    if (literal.length > 0) result = literal.split('@result').join(result)
+    let output: WorkflowRuleOutput
+    try {
+      output = await ports.rules.evaluate({
+        source,
+        stage,
+        field: 'url',
+        rule: `@js:${match[1] ?? ''}`,
+        content: result,
+        bindings,
+        ...(signal === undefined ? {} : { signal }),
+      })
+    } catch {
+      if (signal?.aborted === true) return { error: { code: 'cancelled', message: '书源 URL 脚本已取消' } }
+      return { error: { code: 'rule-failed', message: '书源 URL 脚本执行失败' } }
+    }
+    if (output.status === 'cancelled' || signal?.aborted === true) return { error: { code: 'cancelled', message: '书源 URL 脚本已取消' } }
+    if (output.status === 'capability-missing') return { error: { code: 'capability-missing', message: output.message ?? '书源 URL 脚本需要 JavaScript 能力' } }
+    if (output.status === 'failed') return { error: { code: 'rule-failed', message: output.message ?? '书源 URL 脚本执行失败' } }
+    result = output.status === 'success' ? textValue(output.value) : ''
+    end = start + match[0]!.length
+  }
+  const tail = input.slice(end).trim()
+  if (tail.length > 0) result = tail.split('@result').join(result)
   return { url: result }
 }
 
@@ -270,6 +312,21 @@ export function responseText(response: Parameters<NonNullable<WorkflowPorts['dec
   return new TextDecoder().decode(response.bytes)
 }
 
+function requestOptionNumber(value: unknown, minimum = 0): number | undefined {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value.trim()) : NaN
+  return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : undefined
+}
+
+function requestOptionBoolean(value: unknown): boolean | undefined {
+  if (value === true || value === 1 || value === '1' || (typeof value === 'string' && value.trim().toLowerCase() === 'true')) return true
+  if (value === false || value === 0 || value === '0' || (typeof value === 'string' && value.trim().toLowerCase() === 'false')) return false
+  return undefined
+}
+
+function isWebViewError(value: unknown): boolean {
+  return value instanceof Error && /webview/i.test(value.message)
+}
+
 export interface WorkflowPageResponse {
   content: string
   url: string
@@ -283,28 +340,116 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
   const headers = sourceHeaders(source)
   trace.push({ stage, event: 'request', target: stage })
   try {
-    let response: Parameters<NonNullable<WorkflowPorts['decodeResponse']>>[0]
+    let response: Parameters<NonNullable<WorkflowPorts['decodeResponse']>>[0] | undefined
     if (ports.request !== undefined) {
       response = await ports.request({ source, url, stage, options, ...(execution === undefined ? {} : { execution }) })
     } else {
-      const result = createRequestPlan({ url, baseUrl: source.bookSourceUrl, ...(headers === undefined ? {} : { headers }), budget: requestBudget(options) })
+      const parsed = splitSourceRequestUrl(url)
+      const requestOptions = parsed.options ?? {}
+      const method = typeof requestOptions.method === 'string' ? requestOptions.method : undefined
+      const requestBody = requestOptions.body === undefined ? undefined : typeof requestOptions.body === 'string' || requestOptions.body instanceof Uint8Array ? requestOptions.body : JSON.stringify(requestOptions.body)
+      const optionHeaders = typeof requestOptions.headers === 'object' && requestOptions.headers !== null && !Array.isArray(requestOptions.headers)
+        ? Object.fromEntries(Object.entries(requestOptions.headers).flatMap(([key, value]) => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? [[key, String(value)]] : []))
+        : undefined
+      const requestHeaders: Record<string, string> = { ...(headers ?? {}) }
+      for (const [key, value] of Object.entries(optionHeaders ?? {})) {
+        const previousKey = Object.keys(requestHeaders).find((current) => current.toLowerCase() === key.toLowerCase())
+        if (previousKey !== undefined) delete requestHeaders[previousKey]
+        requestHeaders[key] = value
+      }
+      const requestCharset = typeof requestOptions.charset === 'string' && requestOptions.charset.toLowerCase() !== 'escape' ? requestOptions.charset : undefined
+      const queryCharset = typeof requestOptions.charset === 'string' ? requestOptions.charset : undefined
+      const timeoutMs = requestOptionNumber(requestOptions.timeout, 1)
+      const followRedirects = requestOptionBoolean(requestOptions.followRedirects)
+      const webJs = typeof requestOptions.webJs === 'string' ? requestOptions.webJs : execution?.webJs
+      const sourceRegex = typeof requestOptions.sourceRegex === 'string' ? requestOptions.sourceRegex : execution?.sourceRegex
+      const webView = requestOptionBoolean(requestOptions.webView) === true || (webJs?.trim().length ?? 0) > 0
+      const bodyIsStructured = typeof requestBody === 'string' && (/^\s*[\[{]/u.test(requestBody) || /^\s*<(?=\?xml\b|[A-Za-z])/iu.test(requestBody))
+      const hasContentType = Object.keys(requestHeaders).some((key) => key.toLowerCase() === 'content-type')
+      const isPost = method?.toUpperCase() === 'POST'
+      if (isPost && !bodyIsStructured && !hasContentType) requestHeaders['Content-Type'] = 'application/x-www-form-urlencoded'
+      else if (isPost && bodyIsStructured && !hasContentType) requestHeaders['Content-Type'] = 'application/json; charset=utf-8'
+      const bodyForPlan = isPost ? bodyIsStructured && typeof requestBody === 'string' ? new TextEncoder().encode(requestBody) : requestBody ?? '' : undefined
+      const responseType: RequestPlanInput['responseType'] = typeof requestOptions.type === 'string' && requestOptions.type.length > 0 ? 'bytes' : 'text'
+      const serverId = requestOptionNumber(requestOptions.serverID)
+      const webViewDelayTimeMs = requestOptionNumber(requestOptions.webViewDelayTime)
+      const retry = Math.min(requestOptionNumber(requestOptions.retry) ?? 0, 10)
+      const planInput = {
+        url: parsed.url,
+        baseUrl: source.bookSourceUrl,
+        ...(method === undefined ? {} : { method }),
+        ...(bodyForPlan === undefined ? {} : { body: bodyForPlan }),
+        ...(Object.keys(requestHeaders).length === 0 ? {} : { headers: requestHeaders }),
+        ...(requestCharset === undefined ? {} : { requestCharset, responseCharset: requestCharset }),
+        ...(followRedirects === undefined ? {} : { followRedirects }),
+        responseType,
+        execution: {
+          useWebView: webView,
+          ...(webJs === undefined ? {} : { webJs }),
+          ...(sourceRegex === undefined ? {} : { sourceRegex }),
+          ...(typeof (requestOptions.dnsIp ?? requestOptions.resolveIp) === 'string' ? { dnsIp: String(requestOptions.dnsIp ?? requestOptions.resolveIp) } : {}),
+          ...(serverId === undefined ? {} : { serverId }),
+          ...(webViewDelayTimeMs === undefined ? {} : { webViewDelayTimeMs }),
+        },
+        budget: { ...requestBudget(options), ...(timeoutMs === undefined ? {} : { timeoutMs }) },
+      } satisfies RequestPlanInput
+      const createPlan = (rawUrl: string) => createRequestPlan({
+        ...planInput,
+        url: resolveSourceRequestUrl(rawUrl, source.bookSourceUrl, queryCharset, ports.network.encodeCharset?.bind(ports.network)),
+      })
+      let result = createPlan(parsed.url)
       if (result.plan === undefined) {
-        diagnostics.push({ code: 'invalid-config', stage, message: result.error?.message ?? '请求计划无效', retryable: false })
+        diagnostics.push({ code: result.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', stage, message: result.error?.message ?? '请求计划无效', retryable: false })
         return undefined
       }
-      response = await ports.network.request(result.plan)
+      if (typeof requestOptions.js === 'string' && requestOptions.js.trim().length > 0) {
+        const output = await ports.rules.evaluate({ source, stage, field: 'url', rule: `@js:${requestOptions.js}`, content: result.plan.url, baseUrl: result.plan.url, redirectUrl: result.plan.url, ...(options.signal === undefined ? {} : { signal: options.signal }) })
+        if (output.status !== 'success') {
+          diagnostics.push({ code: output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'rule-failed', stage, field: 'url', message: output.message ?? '书源 URL 脚本执行失败', retryable: false })
+          return undefined
+        }
+        result = createPlan(textValue(output.value))
+        if (result.plan === undefined) {
+          diagnostics.push({ code: 'invalid-config', stage, field: 'url', message: result.error?.message ?? '书源 URL 脚本生成了无效地址', retryable: false })
+          return undefined
+        }
+      }
+      let lastError: unknown
+      for (let attempt = 0; attempt <= retry; attempt += 1) {
+        try {
+          response = await ports.network.request(result.plan)
+          break
+        } catch (error) {
+          lastError = error
+          if (attempt === retry) throw error
+        }
+      }
+      if (response === undefined) throw lastError instanceof Error ? lastError : new Error('书源请求失败')
+      if (requestCharset !== undefined) response = { ...response, headers: { ...response.headers, 'x-legado-response-charset': requestCharset } }
+      if (typeof requestOptions.type === 'string' && requestOptions.type.length > 0) {
+        const hex = [...response.bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+        response = { ...response, bytes: new TextEncoder().encode(hex), headers: { ...response.headers, 'x-legado-response-charset': 'utf-8' } }
+      } else if (typeof requestOptions.bodyJs === 'string' && requestOptions.bodyJs.trim().length > 0) {
+        const content = responseText(response, source, ports)
+        const output = await ports.rules.evaluate({ source, stage, field: 'body', rule: `@js:${requestOptions.bodyJs}`, content, baseUrl: response.url, redirectUrl: response.url, ...(options.signal === undefined ? {} : { signal: options.signal }) })
+        if (output.status !== 'success') {
+          diagnostics.push({ code: output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'rule-failed', stage, field: 'bodyJs', message: output.message ?? '响应 bodyJs 执行失败', retryable: false })
+          return undefined
+        }
+        response = { ...response, bytes: new TextEncoder().encode(textValue(output.value)), headers: { ...response.headers, 'x-legado-response-charset': 'utf-8' } }
+      }
     }
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
     return { content: responseText(response, source, ports), url: response.url }
-  } catch {
+  } catch (error) {
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
-    diagnostics.push({ code: 'request-failed', stage, message: '书源请求失败', retryable: true })
+    diagnostics.push({ code: isWebViewError(error) ? 'capability-missing' : 'request-failed', stage, message: isWebViewError(error) ? '书源请求需要 WebView，当前 Node 宿主不支持' : '书源请求失败', retryable: !isWebViewError(error) })
     return undefined
   }
 }

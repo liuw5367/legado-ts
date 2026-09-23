@@ -25,5 +25,6 @@ catalog:
   jsonpath-plus: 10.4.0
   react: 19.3.0
   tough-cookie: 6.0.2
+  undici: 7.29.0
   typescript: 6.0.2
   wrap-ansi: 10.0.1

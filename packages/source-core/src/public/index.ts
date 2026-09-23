@@ -9,6 +9,8 @@ export type { SourcePatternError, SourcePatternErrorCode, SourcePatternOptions }
 export { evaluateRule } from '../rules/evaluator.ts'
 export { MemoryVariableView, snapshotVariables, variableChanges } from '../rules/variables.ts'
 export { createRequestPlan } from '../runtime/request-plan.ts'
+export { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
+export type { ParsedSourceRequestUrl } from '../runtime/request-url.ts'
 export type * from '../model/types.ts'
 export type * from '../rules/types.ts'
 export type * from '../runtime/contracts.ts'

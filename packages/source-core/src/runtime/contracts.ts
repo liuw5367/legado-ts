@@ -113,6 +113,8 @@ export interface NetworkResponse {
 export interface NetworkHost {
   /** 物化并执行核心生成的请求计划。 */
   request(plan: RequestPlan): Promise<NetworkResponse>
+  /** 将 URL 查询中的文字按书源声明编码；缺省时核心仅能提供 UTF-8。 */
+  encodeCharset?(value: string, charset: string): Uint8Array
 }
 
 export interface CharsetCodec {

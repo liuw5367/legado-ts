@@ -1,4 +1,4 @@
-import { createRequestPlan } from '@legado/source-core'
+import { createRequestPlan, splitSourceRequestUrl } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, NormalizedSource, WorkflowRequest, WorkflowStage } from '@legado/source-core'
 import chardet from 'chardet'
 import { NodeCharsetCodec } from './charset.ts'
@@ -14,6 +14,16 @@ interface SourceRequestOptions {
   webView?: boolean
   webJs?: string
   sourceRegex?: string
+  js?: string
+  bodyJs?: string
+  type?: string
+  retry?: number | string
+  timeout?: number | string
+  followRedirects?: boolean | number | string
+  dnsIp?: string
+  resolveIp?: string
+  serverID?: number | string
+  webViewDelayTime?: number | string
   [key: string]: unknown
 }
 
@@ -80,33 +90,109 @@ function relaxedJson(input: string): string {
   return result
 }
 
-function splitOptions(input: string): { url: string; options?: SourceRequestOptions } {
-  let quote: string | undefined
-  let depth = 0
-  for (let index = 0; index < input.length; index += 1) {
-    const current = input[index]
-    if (quote !== undefined) {
-      if (current === '\\') index += 1
-      else if (current === quote) quote = undefined
-      continue
-    }
-    if (current === '"' || current === "'" || current === '`') { quote = current; continue }
-    if (current === '{' || current === '[') depth += 1
-    else if (current === '}' || current === ']') depth = Math.max(0, depth - 1)
-    else if (current === ',' && depth === 0) {
-      const url = input.slice(0, index).trim()
-      const parsed = parseJson(input.slice(index + 1).trim())
-      const options = object(parsed)
-      return options === undefined ? { url } : { url, options: options as SourceRequestOptions }
-    }
-  }
-  return { url: input.trim() }
-}
-
 function mergeHeaders(...values: Array<Readonly<Record<string, string>> | undefined>): Readonly<Record<string, string>> | undefined {
   const result: Record<string, string> = {}
-  for (const value of values) if (value !== undefined) for (const [key, item] of Object.entries(value)) result[key] = item
+  for (const value of values) if (value !== undefined) for (const [key, item] of Object.entries(value)) {
+    const existing = Object.keys(result).find((candidate) => candidate.toLowerCase() === key.toLowerCase())
+    result[existing ?? key] = item
+  }
   return Object.keys(result).length === 0 ? undefined : result
+}
+
+function getHeader(headers: Readonly<Record<string, string>> | undefined, name: string): string | undefined {
+  if (headers === undefined) return undefined
+  const value = Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1]
+  return value
+}
+
+function optionBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value
+  if (value === 1 || value === '1' || (typeof value === 'string' && value.trim().toLowerCase() === 'true')) return true
+  if (value === 0 || value === '0' || (typeof value === 'string' && value.trim().toLowerCase() === 'false')) return false
+  return undefined
+}
+
+function optionInteger(value: unknown, minimum = 0): number | undefined {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value.trim()) : NaN
+  return Number.isSafeInteger(number) && number >= minimum ? number : undefined
+}
+
+function isValidEncoded(input: string, allowed: (character: string) => boolean): boolean {
+  for (let index = 0; index < input.length; index += 1) {
+    const current = input[index]!
+    if (current === '%' && /^[\da-f]{2}$/i.test(input.slice(index + 1, index + 3))) {
+      index += 2
+      continue
+    }
+    if (!allowed(current)) return false
+  }
+  return true
+}
+
+const querySafeCharacters = new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!$&()*+,-./:;=?@[\\]^_`{|}~')
+const querySafe = (value: string): boolean => querySafeCharacters.has(value)
+const formSafe = (value: string): boolean => /^[A-Za-z0-9*._-]$/.test(value)
+
+function encodedCharacter(value: string, codec: NodeCharsetCodec, charset: string | undefined, form: boolean): string {
+  if (form && value === ' ') return '+'
+  if (form ? formSafe(value) : querySafe(value)) return value
+  if (charset?.toLowerCase() === 'escape') {
+    return [...value].map((character) => {
+      const code = character.codePointAt(0)!
+      if (code <= 0xff) return `%${code.toString(16).padStart(2, '0').toUpperCase()}`
+      const units = character.length === 2 ? [character.charCodeAt(0), character.charCodeAt(1)] : [code]
+      return units.map((unit) => `%u${unit.toString(16).padStart(4, '0').toUpperCase()}`).join('')
+    }).join('')
+  }
+  const bytes = codec.encode(value, charset ?? 'utf-8')
+  return [...bytes].map((byte) => `%${byte.toString(16).padStart(2, '0').toUpperCase()}`).join('')
+}
+
+function encodeQuery(value: string, codec: NodeCharsetCodec, charset?: string): string {
+  if (isValidEncoded(value, querySafe)) return value
+  return [...value].map((character) => encodedCharacter(character, codec, charset, false)).join('')
+}
+
+function encodeFormPart(value: string, codec: NodeCharsetCodec, charset?: string): string {
+  if (charset === undefined && isValidEncoded(value, formSafe)) return value
+  return [...value].map((character) => encodedCharacter(character, codec, charset, true)).join('')
+}
+
+function encodeForm(value: string, codec: NodeCharsetCodec, charset?: string): string {
+  return value.split('&').map((field) => {
+    const equals = field.indexOf('=')
+    if (equals < 0) return encodeFormPart(field, codec, charset)
+    return `${encodeFormPart(field.slice(0, equals), codec, charset)}=${encodeFormPart(field.slice(equals + 1), codec, charset)}`
+  }).join('&')
+}
+
+function absoluteUrlWithEncodedQuery(input: string, baseUrl: string, codec: NodeCharsetCodec, charset?: string): string {
+  const fragmentStart = input.indexOf('#')
+  const fragment = fragmentStart < 0 ? '' : input.slice(fragmentStart)
+  const address = fragmentStart < 0 ? input : input.slice(0, fragmentStart)
+  const queryStart = address.indexOf('?')
+  if (queryStart < 0) return new URL(input, baseUrl).toString()
+  const absolute = new URL(address.slice(0, queryStart), baseUrl)
+  absolute.search = encodeQuery(address.slice(queryStart + 1), codec, charset)
+  if (fragment.length > 0) absolute.hash = fragment.slice(1)
+  return absolute.toString()
+}
+
+function contentTypeCharset(contentType: string | undefined): string | undefined {
+  return contentType === undefined ? undefined : /charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType)?.[1]
+}
+
+function isJsonBody(value: string): boolean {
+  const trimmed = value.trim()
+  return (trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))
+}
+
+function isXmlBody(value: string): boolean {
+  return /^\s*(?:<\?xml\b|<[A-Za-z][\w:.-]*(?:\s[^>]*|\s*\/?)>)/i.test(value)
+}
+
+function hex(bytes: Uint8Array): string {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 function responseCharset(response: NetworkResponse): string | undefined {
@@ -168,7 +254,7 @@ export class SourceRequestHost {
       ...(input.execution?.webJs === undefined ? {} : { webJs: input.execution.webJs }),
       ...(input.execution?.sourceRegex === undefined ? {} : { sourceRegex: input.execution.sourceRegex }),
     }
-    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget)
+    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget, input.stage)
   }
 
   /** `source` 由规则宿主按本次求值注入：URL 展开等 JS 求值发生在首次请求之前。 */
@@ -194,7 +280,7 @@ export class SourceRequestHost {
       ...(input.body === undefined ? {} : { body: input.body }),
       ...(input.headers === undefined ? {} : { headers: input.headers }),
     }
-    const response = await this.requestRaw(current, url, overrides, signal)
+    const response = await this.requestRaw(current, url, overrides, signal, undefined, 'search')
     return this.decode(response)
   }
 
@@ -204,36 +290,119 @@ export class SourceRequestHost {
 
   private async resolveExpression(input: string, stage: WorkflowStage, signal: AbortSignal | undefined, source: NormalizedSource): Promise<string> {
     const trimmed = input.trim()
-    const script = trimmed.startsWith('<js>') ? extractBlock(trimmed, '<js>', '</js>') : trimmed.toLowerCase().startsWith('@js:') ? { code: trimmed.slice(4).trim(), tail: '' } : undefined
-    if (script === undefined) return input
-    if (this.ruleHost === undefined) throw new Error('动态书源 URL 需要 JavaScript 宿主')
-    const result = await this.ruleHost.executeJavaScript(script.code, stage === 'search' ? 'search' : 'book', source, '', signal)
-    if (result.status !== 'success') throw new Error(result.message ?? '动态书源 URL 执行失败')
-    return script.tail.length > 0 ? script.tail : text(result.value)
+    const blocks = [...trimmed.matchAll(/<js>([\s\S]*?)<\/js>/gi)]
+    if (blocks.length > 0) {
+      let result = trimmed
+      let end = 0
+      for (const block of blocks) {
+        const literal = trimmed.slice(end, block.index!).trim()
+        if (literal.length > 0) result = literal.split('@result').join(result)
+        result = await this.evaluateUrlScript(block[1] ?? '', result, stage, source, signal)
+        end = block.index! + block[0]!.length
+      }
+      const tail = trimmed.slice(end).trim()
+      return tail.length > 0 ? tail.split('@result').join(result) : result
+    }
+    if (!trimmed.toLowerCase().startsWith('@js:')) return input
+    return this.evaluateUrlScript(trimmed.slice(4).trim(), '', stage, source, signal)
   }
 
-  private async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget']): Promise<NetworkResponse> {
-    const split = splitOptions(rawUrl)
-    const options = { ...split.options, ...overrides }
-    if (options.webView === true) throw new Error('书源请求需要 WebView')
-    const headers = mergeHeaders(await this.sourceHeaders(source), headerObject(options.headers))
-    const body = options.body === undefined || typeof options.body === 'string' || options.body instanceof Uint8Array ? options.body : JSON.stringify(options.body)
-    const request = createRequestPlan({
-      url: split.url,
+  private async evaluateUrlScript(code: string, result: string, stage: WorkflowStage, source: NormalizedSource, signal?: AbortSignal): Promise<string> {
+    if (this.ruleHost === undefined) throw new Error('动态书源 URL 需要 JavaScript 宿主')
+    const scriptStage = stage === 'detail' ? 'book' : 'search'
+    const output = await this.ruleHost.executeJavaScript(code, scriptStage, source, result, signal)
+    if (output.status !== 'success') throw new Error(output.message ?? '动态书源 URL 执行失败')
+    return text(output.value)
+  }
+
+  private async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search'): Promise<NetworkResponse> {
+    const split = splitSourceRequestUrl(rawUrl)
+    const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
+    if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) throw new Error('书源请求需要 WebView')
+    const method = (options.method ?? 'GET').toUpperCase()
+    const sourceHeaders = await this.sourceHeaders(source)
+    let headers = mergeHeaders(sourceHeaders, headerObject(options.headers))
+    const charset = typeof options.charset === 'string' && options.charset.trim().length > 0 ? options.charset.trim() : undefined
+    const requestCharset = charset?.toLowerCase() === 'escape' ? undefined : charset
+    const bodyValue = options.body === undefined || typeof options.body === 'string' || options.body instanceof Uint8Array ? options.body : JSON.stringify(options.body)
+    let body: string | Uint8Array | undefined
+
+    if (method === 'POST') {
+      const contentType = getHeader(headers, 'content-type')
+      if (typeof bodyValue === 'string' && (bodyValue.trim() === '' || (!isJsonBody(bodyValue) && !isXmlBody(bodyValue) && contentType === undefined))) {
+        const encoded = encodeForm(bodyValue, this.encoding, charset)
+        body = this.encoding.encode(encoded, requestCharset ?? 'utf-8')
+        if (contentType === undefined) headers = mergeHeaders(headers, { 'Content-Type': 'application/x-www-form-urlencoded' })
+      } else if (bodyValue === undefined) {
+        body = new Uint8Array()
+        if (contentType === undefined) headers = mergeHeaders(headers, { 'Content-Type': 'application/x-www-form-urlencoded' })
+      } else if (bodyValue instanceof Uint8Array) body = bodyValue
+      else {
+        const bodyCharset = contentTypeCharset(contentType) ?? 'utf-8'
+        body = this.encoding.encode(bodyValue, bodyCharset)
+        if (contentType === undefined) headers = mergeHeaders(headers, { 'Content-Type': 'application/json; charset=utf-8' })
+      }
+    }
+
+    const timeoutMs = optionInteger(options.timeout, 1)
+    const followRedirects = optionBoolean(options.followRedirects)
+    const retry = Math.min(optionInteger(options.retry) ?? 0, 10)
+    const serverId = optionInteger(options.serverID, 0)
+    const webViewDelayTimeMs = optionInteger(options.webViewDelayTime, 0)
+    const makePlan = (url: string) => createRequestPlan({
+      url,
       baseUrl: source.bookSourceUrl,
-      ...(options.method === undefined ? {} : { method: options.method }),
+      method,
       ...(body === undefined ? {} : { body }),
       ...(headers === undefined ? {} : { headers }),
-      ...(typeof options.charset === 'string' ? { requestCharset: options.charset, responseCharset: options.charset } : {}),
-      // webJs 只能在 WebView 里执行：带上 useWebView 让请求计划显式失败，而不是静默走普通 HTTP。
-      ...(typeof options.webJs === 'string' || typeof options.sourceRegex === 'string' ? { execution: { ...(typeof options.webJs === 'string' ? { webJs: options.webJs, useWebView: true } : {}), ...(typeof options.sourceRegex === 'string' ? { sourceRegex: options.sourceRegex } : {}) } } : {}),
-      budget: { ...(budget ?? {}), ...(signal === undefined ? {} : { signal }) },
+      ...(requestCharset === undefined ? {} : { requestCharset, responseCharset: requestCharset }),
+      ...(followRedirects === undefined ? {} : { followRedirects }),
+      responseType: typeof options.type === 'string' && options.type.length > 0 ? 'bytes' : 'text',
+      execution: {
+        useWebView: false,
+        ...(typeof options.sourceRegex === 'string' ? { sourceRegex: options.sourceRegex } : {}),
+        ...(typeof (options.dnsIp ?? options.resolveIp) === 'string' ? { dnsIp: String(options.dnsIp ?? options.resolveIp) } : {}),
+        ...(serverId === undefined ? {} : { serverId }),
+        ...(webViewDelayTimeMs === undefined ? {} : { webViewDelayTimeMs }),
+      },
+      budget: { ...(budget ?? {}), ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(signal === undefined ? {} : { signal }) },
     })
+    const initialUrl = absoluteUrlWithEncodedQuery(split.url, source.bookSourceUrl, this.encoding, charset)
+    let request = makePlan(initialUrl)
     if (request.plan === undefined) throw new Error(request.error?.message ?? '书源请求计划无效')
-    const response = await this.network.request(request.plan)
+
+    if (typeof options.js === 'string' && options.js.trim().length > 0) {
+      const rewritten = await this.evaluateUrlScript(options.js, request.plan.url, stage, source, signal)
+      const rewrittenUrl = absoluteUrlWithEncodedQuery(rewritten, source.bookSourceUrl, this.encoding, charset)
+      request = makePlan(rewrittenUrl)
+      if (request.plan === undefined) throw new Error(request.error?.message ?? '书源 URL 脚本生成了无效地址')
+    }
+
+    let response: NetworkResponse | undefined
+    let lastError: unknown
+    for (let attempt = 0; attempt <= retry; attempt += 1) {
+      if (signal?.aborted === true) throw new DOMException('The operation was aborted', 'AbortError')
+      try {
+        response = await this.network.request(request.plan)
+        break
+      } catch (error) {
+        lastError = error
+        if (attempt === retry) throw error
+      }
+    }
+    if (response === undefined) throw lastError instanceof Error ? lastError : new Error('书源请求失败')
     if (response.status >= 400) throw new Error(`书源请求返回 HTTP ${response.status}`)
-    if (typeof options.charset !== 'string') return response
-    return { ...response, headers: { ...response.headers, 'x-legado-response-charset': options.charset } }
+
+    let result: NetworkResponse = response
+    if (requestCharset !== undefined) result = { ...result, headers: { ...result.headers, 'x-legado-response-charset': requestCharset } }
+    if (typeof options.type === 'string' && options.type.length > 0) {
+      result = { ...result, bytes: new TextEncoder().encode(hex(result.bytes)), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
+    } else if (typeof options.bodyJs === 'string' && options.bodyJs.trim().length > 0) {
+      const decoded = this.decode(result)
+      const transformed = await this.evaluateUrlScript(options.bodyJs, decoded, stage, source, signal)
+      result = { ...result, bytes: new TextEncoder().encode(transformed), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
+    }
+    return result
   }
 
   private async sourceHeaders(source: NormalizedSource): Promise<Readonly<Record<string, string>> | undefined> {
@@ -274,10 +443,4 @@ export class SourceRequestHost {
     }
     return new TextDecoder().decode(response.bytes)
   }
-}
-
-function extractBlock(input: string, open: string, close: string): { code: string; tail: string } {
-  const end = input.indexOf(close, open.length)
-  if (end < 0) return { code: input.slice(open.length), tail: '' }
-  return { code: input.slice(open.length, end), tail: input.slice(end + close.length).trim() }
 }

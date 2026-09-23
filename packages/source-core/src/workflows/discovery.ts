@@ -62,7 +62,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     return { status: expansionStatus(expanded.error), value: null, diagnostics, trace }
   }
   const page = await requestPageResponse(ports, source, expanded.url, stage, options, diagnostics, trace)
-  if (page === undefined) return { status: diagnostics.some((item) => item.code === 'cancelled') ? 'cancelled' : 'failed', value: null, diagnostics, trace }
+  if (page === undefined) return { status: statusFromDiagnostics(diagnostics, 0), value: null, diagnostics, trace }
   const content = page.content
   const maxItems = options.maxItems ?? 100
   const pattern = sourceString(source, 'bookUrlPattern')

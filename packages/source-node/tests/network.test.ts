@@ -29,6 +29,12 @@ async function startServer(redirectTarget?: string): Promise<{ baseUrl: string; 
       response.end('0123456789')
       return
     }
+    if (request.url === '/echo-body') {
+      const chunks: Buffer[] = []
+      request.on('data', (chunk: Buffer) => chunks.push(chunk))
+      request.on('end', () => response.end(Buffer.concat(chunks).toString('hex')))
+      return
+    }
     response.end('payload')
   })
   await new Promise<void>((resolve, reject) => {
@@ -63,10 +69,31 @@ test('Node 网络宿主处理受控 HTTP、重定向、Cookie 和响应字节预
     assert.equal(redirected.url, `${server.baseUrl}/payload`)
     assert.equal(new TextDecoder().decode(redirected.bytes), 'payload')
 
+    const noRedirectPlan = createRequestPlan({ url: `${server.baseUrl}/redirect`, followRedirects: false, budget: { maxRedirects: 1, maxTotalBytes: 1024 } })
+    assert.ok(noRedirectPlan.plan)
+    const notFollowed = await host.request(noRedirectPlan.plan)
+    assert.equal(notFollowed.status, 302)
+    const pinned = createRequestPlan({ url: `http://fixture.invalid:${new URL(server.baseUrl).port}/payload`, execution: { dnsIp: '127.0.0.1' } })
+    const pinnedPlan = pinned.plan
+    assert.ok(pinnedPlan)
+    await assert.rejects(() => new NodeNetworkHost().request(pinnedPlan), /private network request is not allowed/)
+    const pinnedResponse = await host.request(pinnedPlan)
+    assert.equal(new TextDecoder().decode(pinnedResponse.bytes), 'payload')
+
+    const bodyPlan = createRequestPlan({ url: `${server.baseUrl}/echo-body`, method: 'POST', body: '中文', requestCharset: 'gbk', headers: { 'content-type': 'text/plain' } })
+    assert.ok(bodyPlan.plan)
+    const bodyResponse = await host.request(bodyPlan.plan)
+    assert.equal(new TextDecoder().decode(bodyResponse.bytes), 'd6d0cec4')
+
     await assert.rejects(() => host.request(plan(`${server.baseUrl}/large`, { maxResponseBytes: 4 })), /response exceeds byte budget/)
   } finally {
     await server.close()
   }
+})
+
+test('Node 网络宿主可按指定字符集编码核心查询参数', () => {
+  const host = new NodeNetworkHost()
+  assert.deepEqual([...host.encodeCharset('中文', 'gbk')], [0xd6, 0xd0, 0xce, 0xc4])
 })
 
 test('Node 网络宿主默认拒绝环回地址', async () => {
