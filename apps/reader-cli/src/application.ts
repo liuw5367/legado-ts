@@ -317,11 +317,11 @@ export class ReaderApplication {
     })
   }
 
-  public loadToc(bookId: string, requestedEdition?: string, signal?: AbortSignal): Promise<TocResult> {
-    return this.trackOperation(signal, (operationSignal) => this.loadTocInternal(bookId, requestedEdition, operationSignal))
+  public loadToc(bookId: string, requestedEdition?: string, signal?: AbortSignal, options: { refresh?: boolean } = {}): Promise<TocResult> {
+    return this.trackOperation(signal, (operationSignal) => this.loadTocInternal(bookId, requestedEdition, operationSignal, options))
   }
 
-  private async loadTocInternal(bookId: string, requestedEdition: string | undefined, signal: AbortSignal): Promise<TocResult> {
+  private async loadTocInternal(bookId: string, requestedEdition: string | undefined, signal: AbortSignal, options: { refresh?: boolean }): Promise<TocResult> {
     throwIfAborted(signal)
     const book = await this.storage.getBook(bookId)
     if (book === undefined) throw new Error('书籍记录不存在')
@@ -331,7 +331,7 @@ export class ReaderApplication {
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
     const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
-    const result = await session.toc(metadata, signal)
+    const result = await session.toc(metadata, signal, options)
     throwIfAborted(signal)
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '目录加载失败')
     const revision = sha256(JSON.stringify(result.value.items.map((item) => ({ url: item.chapterUrl, title: item.title }))))

@@ -31,12 +31,13 @@ export class SourceSession implements ReaderSourceSession {
     return result
   }
 
-  public async toc(book: BookMetadata, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof loadTableOfContents>>> {
+  public async toc(book: BookMetadata, signal?: AbortSignal, options: { refresh?: boolean } = {}): Promise<Awaited<ReturnType<typeof loadTableOfContents>>> {
     const operation = this.createOperation()
     operation.rules.setBindings({ key: book.name ?? '', book })
-    const cachedPage = this.tocPage?.bookUrl === book.bookUrl ? this.tocPage : undefined
+    if (options.refresh === true) this.tocPage = undefined
+    const cachedPage = options.refresh !== true && this.tocPage?.bookUrl === book.bookUrl ? this.tocPage : undefined
     const inputBook = cachedPage !== undefined && cachedPage.url === book.tocUrl ? { ...book, tocHtml: cachedPage.html } : book
-    return loadTableOfContents({ ...operation.ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), maxPages: 32 })
+    return loadTableOfContents({ ...operation.ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), ...(options.refresh === true ? { refresh: true } : {}), maxPages: 32 })
   }
 
   public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {

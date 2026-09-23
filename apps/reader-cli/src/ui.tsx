@@ -50,6 +50,7 @@ export interface ReaderUiProps {
 export { homeItemsForArea } from './ui-model.ts'
 
 interface NavigationSnapshot extends NavigationFrame {
+  tocReversed: boolean
   tocSelected: number
   tocQuery: string
   tocSearchActive: boolean
@@ -67,6 +68,11 @@ interface NavigationSnapshot extends NavigationFrame {
   mappingTarget?: KnownSourceView
   mappingToc?: TocResult
   mappingIndex: number
+}
+
+/** 展示层排序只变更章节数组的显示顺序，保留工作流索引、修订和章节身份。 */
+function orderedToc(toc: TocResult, reversed: boolean): TocResult {
+  return reversed ? { ...toc, chapters: [...toc.chapters].reverse() } : toc
 }
 
 function PageShell({ columns, rows, bodyHeight, separator, supported, header, command, content, menu }: {
@@ -114,6 +120,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [tocQuery, setTocQuery] = useState('')
   const [tocSearchActive, setTocSearchActive] = useState(false)
   const [tocSearchOrigin, setTocSearchOrigin] = useState(0)
+  const [tocReversed, setTocReversed] = useState(false)
   const [book, setBook] = useState<OpenBookResult>()
   const [toc, setToc] = useState<TocResult>()
   const [chapterIndex, setChapterIndex] = useState(0)
@@ -138,7 +145,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const searchStartedAtRef = useRef<number | undefined>(undefined)
   const pageRef = useRef(page)
   const sourceCommitRef = useRef<string | undefined>(undefined)
-  const navigationRef = useRef<NavigationSnapshot[]>([{ page: initialPage, selected: 0, listStart: 0, pageScroll: 0, homeArea: 0, query: '', readerLine: 0, tocSelected: 0, tocQuery: '', tocSearchActive: false, tocSearchOrigin: 0, chapterIndex: 0, sources: [], sourceSearchState: 'idle', sourceSearchStart: 0, sourceSearchSelected: 0, mappingIndex: 0 }])
+  const navigationRef = useRef<NavigationSnapshot[]>([{ page: initialPage, selected: 0, listStart: 0, pageScroll: 0, homeArea: 0, query: '', readerLine: 0, tocReversed: false, tocSelected: 0, tocQuery: '', tocSearchActive: false, tocSearchOrigin: 0, chapterIndex: 0, sources: [], sourceSearchState: 'idle', sourceSearchStart: 0, sourceSearchSelected: 0, mappingIndex: 0 }])
   const resizeAnchorRef = useRef({ width: Math.max(8, columns), height: terminalLayout(columns, rows).bodyHeight, readerLine })
   const skipPositionSaveRef = useRef(false)
 
@@ -152,6 +159,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     homeArea,
     query,
     readerLine,
+    tocReversed,
     tocSelected,
     tocQuery,
     tocSearchActive,
@@ -216,6 +224,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setHomeArea(previous.homeArea)
     setQuery(previous.query)
     setReaderLine(previous.readerLine)
+    setTocReversed(previous.tocReversed)
     setTocSelected(previous.tocSelected)
     setTocQuery(previous.tocQuery)
     setTocSearchActive(previous.tocSearchActive)
@@ -430,26 +439,53 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     return openSearchGroup(group, navigate)
   }
 
-  const loadToc = async (edition?: string, bookOverride?: OpenBookResult, navigate = true): Promise<TocResult | undefined> => {
+  const loadToc = async (edition?: string, bookOverride?: OpenBookResult, navigate = true, options: { refresh?: boolean; preserveSelection?: boolean } = {}): Promise<TocResult | undefined> => {
     const currentBook = bookOverride ?? book
     if (currentBook === undefined) return undefined
+    const previousToc = toc
+    const previousMatches = filterChapterIndices(previousToc?.chapters ?? [], tocQuery)
+    const previousSelectedIndex = previousMatches[tocSelected]
+    const previousSelectedUrl = previousToc === undefined || previousSelectedIndex === undefined ? undefined : previousToc.chapters[previousSelectedIndex]?.chapterUrl
+    const previousReadingUrl = previousToc?.chapters[chapterIndex]?.chapterUrl
+    const previousSearchOriginUrl = previousToc?.chapters[tocSearchOrigin]?.chapterUrl
+    const previousQuery = tocQuery
+    const previousSearchActive = tocSearchActive
     const operation = beginOperation('task')
-    setMessage('正在加载目录…')
+    setMessage(options.refresh === true ? '正在刷新目录…' : '正在加载目录…')
     try {
       const requestedEdition = edition ?? currentBook.reading?.activeEditionKey ?? currentBook.book.activeEditionKey
-      const result = await application.loadToc(currentBook.book.bookId, requestedEdition, operation.controller.signal)
+      const loaded = await application.loadToc(currentBook.book.bookId, requestedEdition, operation.controller.signal, options.refresh === true ? { refresh: true } : {})
       if (!isCurrent(operation)) return undefined
+      const result = orderedToc(loaded, tocReversed)
       setBook(currentBook)
       setToc(result)
       const saved = currentBook.reading?.positions[result.edition.editionKey]
-      const resumeIndex = saved === undefined ? -1 : result.chapters.findIndex((item) => item.chapterUrl === saved.chapterUrl)
+      const savedIndex = saved === undefined ? -1 : result.chapters.findIndex((item) => item.chapterUrl === saved.chapterUrl)
+      // 请求完成后以下标定位会受新增、删除和排序影响，因此按章节 URL 恢复阅读章和焦点。
+      const previousReadingIndex = options.preserveSelection === true && previousReadingUrl !== undefined
+        ? result.chapters.findIndex((item) => item.chapterUrl === previousReadingUrl)
+        : -1
+      const resumeIndex = previousReadingIndex >= 0 ? previousReadingIndex : savedIndex
       setChapterIndex(resumeIndex >= 0 ? resumeIndex : 0)
-      setTocSelected(resumeIndex >= 0 ? resumeIndex : 0)
-      setTocQuery('')
-      setTocSearchActive(false)
-      if (navigate) setListStart(0)
+      if (options.preserveSelection === true) {
+        const matches = filterChapterIndices(result.chapters, previousQuery)
+        const selectedMatch = previousSelectedUrl === undefined ? -1 : matches.findIndex((index) => result.chapters[index]?.chapterUrl === previousSelectedUrl)
+        const resumeMatch = matches.indexOf(resumeIndex >= 0 ? resumeIndex : 0)
+        const nextSelected = selectedMatch >= 0 ? selectedMatch : resumeMatch >= 0 ? resumeMatch : 0
+        const searchOrigin = previousSearchOriginUrl === undefined ? -1 : result.chapters.findIndex((item) => item.chapterUrl === previousSearchOriginUrl)
+        setTocSelected(nextSelected)
+        setTocQuery(previousQuery)
+        setTocSearchActive(previousSearchActive)
+        setTocSearchOrigin(searchOrigin >= 0 ? searchOrigin : (matches[nextSelected] ?? 0))
+        setListStart(keepIndexVisible(nextSelected, matches.length, Math.max(1, bodyHeight), 0).start)
+      } else {
+        setTocSelected(resumeIndex >= 0 ? resumeIndex : 0)
+        setTocQuery('')
+        setTocSearchActive(false)
+        if (navigate) setListStart(0)
+      }
       if (navigate) setPage('toc')
-      setMessage(`${result.chapters.length} 章${resumeIndex >= 0 ? ' · 已定位到上次阅读章节' : ''}`)
+      setMessage(`${result.chapters.length} 章${options.refresh === true ? ' · 目录已刷新' : resumeIndex >= 0 ? ' · 已定位到上次阅读章节' : ''}`)
       return result
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
@@ -742,6 +778,14 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   }
 
   const handleTocInput = (input: string, key: InputKey): void => {
+    if (input === 'r' && !busy && toc !== undefined) {
+      void loadToc(toc.edition.editionKey, book, false, { refresh: true, preserveSelection: true })
+      return
+    }
+    if (input === 's' && !busy) {
+      toggleTocOrder()
+      return
+    }
     const matches = filterChapterIndices(toc?.chapters ?? [], tocQuery)
     const visible = Math.max(1, bodyHeight)
     const next = navigationIndex(tocSelected, matches.length, input, key, visible)
@@ -775,6 +819,27 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setTocSearchActive(false)
     setTocSelected(restored)
     setListStart(keepIndexVisible(restored, chapters.length, Math.max(1, bodyHeight), 0).start)
+  }
+
+  const toggleTocOrder = (): void => {
+    if (toc === undefined || busy) return
+    const selectedIndex = filterChapterIndices(toc.chapters, tocQuery)[tocSelected]
+    const selectedUrl = selectedIndex === undefined ? undefined : toc.chapters[selectedIndex]?.chapterUrl
+    const readingUrl = toc.chapters[chapterIndex]?.chapterUrl
+    const searchOriginUrl = toc.chapters[tocSearchOrigin]?.chapterUrl
+    const chapters = [...toc.chapters].reverse()
+    const matches = filterChapterIndices(chapters, tocQuery)
+    const nextSelected = selectedUrl === undefined ? -1 : matches.findIndex((index) => chapters[index]?.chapterUrl === selectedUrl)
+    const nextReading = readingUrl === undefined ? -1 : chapters.findIndex((chapter) => chapter.chapterUrl === readingUrl)
+    const nextSearchOrigin = searchOriginUrl === undefined ? -1 : chapters.findIndex((chapter) => chapter.chapterUrl === searchOriginUrl)
+    const selected = nextSelected >= 0 ? nextSelected : 0
+    setToc({ ...toc, chapters })
+    setTocReversed(!tocReversed)
+    setTocSelected(selected)
+    setChapterIndex(nextReading >= 0 ? nextReading : 0)
+    setTocSearchOrigin(nextSearchOrigin >= 0 ? nextSearchOrigin : (matches[selected] ?? 0))
+    setListStart(keepIndexVisible(selected, matches.length, Math.max(1, bodyHeight), 0).start)
+    setMessage(`已切换为${tocReversed ? '正序' : '倒序'}`)
   }
 
   const handleReaderInput = (input: string, key: InputKey): void => {
@@ -869,12 +934,13 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
           setMessage('正在加载目标书源目录以计算章节映射…')
           void application.loadToc(book.book.bookId, target.editionKey, operation.controller.signal).then((targetToc) => {
             if (!isCurrent(operation)) return
+            const orderedTargetToc = orderedToc(targetToc, tocReversed)
             const current = toc.chapters[chapterIndex]!
             const normalized = normalizeChapterTitle(current.title)
-            const targetIndex = targetToc.chapters.findIndex((item) => normalizeChapterTitle(item.title) === normalized)
+            const targetIndex = orderedTargetToc.chapters.findIndex((item) => normalizeChapterTitle(item.title) === normalized)
             setMappingTarget(target)
-            setMappingToc(targetToc)
-            setMappingIndex(targetIndex >= 0 ? targetIndex : Math.min(chapterIndex, Math.max(0, targetToc.chapters.length - 1)))
+            setMappingToc(orderedTargetToc)
+            setMappingIndex(targetIndex >= 0 ? targetIndex : Math.min(chapterIndex, Math.max(0, orderedTargetToc.chapters.length - 1)))
             setPage('mapping')
             setMessage(targetIndex < 0 ? '未找到同名章节，将使用目录范围内的索引回退，请确认' : '已按章节标题找到目标章节，请确认')
           }).catch((error: unknown) => {
@@ -989,9 +1055,9 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const visibleMessage = messageOwner === page ? message : ''
   const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
-  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator }
+  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator }
   const visiblePage = renderPage(page, state)
-  const commandActions = footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0)
+  const commandActions = footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0, tocReversed)
   const inputMode = page === 'search' || page === 'toc' && tocSearchActive
   const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : ''
   const inputValue = page === 'search' ? query : tocQuery

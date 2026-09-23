@@ -49,7 +49,7 @@ export function helpLines(page: Page, homeArea: number): string[] {
     search: ['输入书名，Enter 搜索', '退格删除，Esc 返回'],
     results: ['↑/↓ 或 j/k 选择，Enter 详情', 't 打开目录，o 书籍操作', '搜索中按 Esc 取消'],
     detail: ['Enter 阅读，t 目录', 's 书源，a 书架'],
-    toc: ['↑/↓ 或 j/k 选择，Enter 阅读', '/ 按章节名筛选，Home/End 首尾'],
+    toc: ['↑/↓ 或 j/k 选择，Enter 阅读', '/ 搜索，r 刷新', 's 切换正序/倒序，Home/End 首尾'],
     reader: ['↑/↓ 或 j/k 翻页，←/→ 或 h/l 切换章节', 'PgUp/PgDn 或空格翻页，i 书籍信息，t 目录，s 书源，a 书架，r 刷新'],
     sources: ['↑/↓ 或 j/k 选择书源', 't 查看目录，Enter 切换，m 搜索更多'],
     mapping: ['Enter 确认切换，Esc 取消'],
@@ -221,7 +221,7 @@ export function activeEditionKey(book: OpenBookResult | undefined): string | und
   return book?.reading?.activeEditionKey ?? book?.book.activeEditionKey
 }
 
-export function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number, tocSearchActive = false, tocHasQuery = false): string {
+export function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number, tocSearchActive = false, tocHasQuery = false, tocReversed = false): string {
   if (menuOpen) return layoutFooter([
     { keys: 'Enter', label: '执行', priority: 0 },
     { keys: 'Esc', label: '关闭', priority: -1 },
@@ -263,7 +263,13 @@ export function footer(page: Page, busy: boolean, columns: number, searchState: 
   ], columns)
   if (page === 'toc') return layoutFooter(tocSearchActive
     ? [{ keys: 'Enter', label: '完成', priority: 0 }, { keys: 'Esc', label: '清除', priority: -1 }]
-    : [{ keys: 'Enter', label: '阅读', priority: 0 }, { keys: '/', label: '筛章节', priority: 1 }, ...(tocHasQuery ? [{ keys: 'Esc', label: '清除筛选', priority: -1 }] : common)], columns)
+    : [
+      { keys: 'Enter', label: '阅读', priority: 0 },
+      { keys: '/', label: '搜索', priority: 1 },
+      { keys: 'r', label: '刷新', priority: 2 },
+      { keys: 's', label: tocReversed ? '正序' : '倒序', priority: 3 },
+      ...(tocHasQuery ? [{ keys: 'Esc', label: '清除筛选', priority: -1 }] : common),
+    ], columns)
   if (page === 'reader') return layoutFooter([
     { keys: 'i', label: '信息', priority: 1 },
     { keys: 't', label: '目录', priority: 1 },

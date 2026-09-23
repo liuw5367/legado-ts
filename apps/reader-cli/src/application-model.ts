@@ -93,7 +93,7 @@ export interface ReaderApplicationOptions {
 export interface ReaderSourceSession {
   search(keyword: string, signal?: AbortSignal): Promise<SearchWorkflowResult>
   detail(candidate: BookCandidate, signal?: AbortSignal): Promise<DetailWorkflowResult>
-  toc(book: BookMetadata, signal?: AbortSignal): Promise<TocWorkflowResult>
+  toc(book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean }): Promise<TocWorkflowResult>
   /** `nextChapterUrl` 触发正文分页护栏：命中时停止抓取，避免把下一章并入本章。 */
   content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<ContentWorkflowResult>
   attachCache(storage: ReaderStorage): void

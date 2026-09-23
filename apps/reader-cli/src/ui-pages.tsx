@@ -39,6 +39,7 @@ export interface RenderState {
   bodyHeight: number
   tocSelected: number
   tocQuery: string
+  tocReversed: boolean
   query: string
   search: SearchOperationResult | undefined
   searchState: SearchUiState
@@ -77,7 +78,7 @@ export function pageHeader(page: Page, state: RenderState): { left: string; righ
   if (right.length === 0 && page === 'toc') {
     const matches = filterChapterIndices(state.toc?.chapters ?? [], state.tocQuery)
     const sourceMode = state.toc?.edition.editionKey === activeEditionKey(state.book) ? '当前' : '预览'
-    right = `${sourceMode} · ${state.toc?.source.source.bookSourceName ?? ''} · ${matches.length} 项${state.tocQuery.length > 0 ? ` · ${state.tocQuery}` : ''}`
+    right = `${sourceMode} · ${state.tocReversed ? '倒序' : '正序'} · ${state.toc?.source.source.bookSourceName ?? ''} · ${matches.length} 项${state.tocQuery.length > 0 ? ` · ${state.tocQuery}` : ''}`
   }
   if (right.length === 0 && page === 'reader') {
     const pageCount = pagePosition(state.readerLine, state.contentLines.length, state.bodyHeight)
@@ -190,9 +191,9 @@ function renderSources(items: KnownSourceView[], book: OpenBookResult | undefine
     const current = item.editionKey === activeEditionKey(book)
     const status = current ? '[当前]' : item.state === 'available' ? '[可用]' : `[${sourceState(item.state)}]`
     const badges = status
-    return <Box key={item.editionKey} flexDirection="column"><Text wrap="truncate-end" color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{index + 1}. {badges} {display(item.sourceName ?? item.name ?? item.sourceId)}</Text><Text wrap="truncate-end" dimColor>     最新章节：{display(item.lastChapter ?? '未知')} · 更新时间：{formatSourceTime(item.updateTime)} · 搜索耗时：{item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)}</Text></Box>
+    return <Box key={item.editionKey} flexDirection="column"><Text wrap="truncate-end" color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{index + 1}. {badges} {display(item.sourceName ?? item.name ?? item.sourceId)}</Text><Text wrap="truncate-end" dimColor>     最新章节：{chapterTitle(item.lastChapter)} · 更新时间：{formatSourceTime(item.updateTime)} · 搜索耗时：{item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)}</Text></Box>
   })
-  const matchedRows = sourceSearch?.results.map((item, index) => <Box key={`${item.candidate.sourceId}:${item.candidate.bookUrl}`} flexDirection="column"><Text wrap="truncate-end" color={index === sourceSearchSelected ? 'yellow' : 'green'}>{index === sourceSearchSelected ? '> ' : '+ '}{index + 1}. [可用] {display(item.source.source.bookSourceName)} · {display(item.candidate.name ?? '未知')} · {display(item.candidate.author ?? '未知')}</Text><Text wrap="truncate-end" dimColor>     最新章节：{display(item.candidate.lastChapter ?? '未知')} · 更新时间：{formatSourceTime(item.candidate.updateTime)} · 搜索耗时：{item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)}</Text></Box>) ?? []
+  const matchedRows = sourceSearch?.results.map((item, index) => <Box key={`${item.candidate.sourceId}:${item.candidate.bookUrl}`} flexDirection="column"><Text wrap="truncate-end" color={index === sourceSearchSelected ? 'yellow' : 'green'}>{index === sourceSearchSelected ? '> ' : '+ '}{index + 1}. [可用] {display(item.source.source.bookSourceName)} · {display(item.candidate.name ?? '未知')} · {display(item.candidate.author ?? '未知')}</Text><Text wrap="truncate-end" dimColor>     最新章节：{chapterTitle(item.candidate.lastChapter)} · 更新时间：{formatSourceTime(item.candidate.updateTime)} · 搜索耗时：{item.searchDurationMs === undefined ? '未知' : formatDuration(item.searchDurationMs)}</Text></Box>) ?? []
   const matched = sourceSearch?.results.length ?? 0
   const unmatched = progress === undefined ? 0 : Math.max(0, progress.candidates - matched)
   const searchLines = sourceSearch === undefined ? [] : [searching ? `${progress === undefined ? '搜索更多书源…' : formatProgress(progress)} · 已匹配 ${matched} 个 · 未匹配 ${unmatched} 个` : `已匹配 ${matched} 个候选 · 总耗时 ${formatDuration(sourceSearch.elapsedMs)}`]
@@ -200,6 +201,13 @@ function renderSources(items: KnownSourceView[], book: OpenBookResult | undefine
   const visibleMatchedRows = matchedRows.slice(matchedRange.start, matchedRange.end)
   const visibleBody = searching ? [] : body
   return <Box flexDirection="column">{searchLines.map((item) => <Text key={item} color="cyan">{item}</Text>)}{searching ? visibleMatchedRows : null}{visibleBody.length === 0 && visibleMatchedRows.length === 0 ? <Text>{sourceSearch === undefined ? '尚未搜索到书源。' : '没有书名和作者都完整匹配的候选。'}</Text> : visibleBody}</Box>
+}
+
+const chapterTitleSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+function chapterTitle(value: string | undefined): string {
+  const title = display(value ?? '未知')
+  return Array.from(chapterTitleSegmenter.segment(title), (item) => item.segment).slice(0, 20).join('')
 }
 
 function renderMapping(toc: TocResult | undefined, index: number, targetToc: TocResult | undefined, targetIndex: number, target: KnownSourceView | undefined, scroll: number, height: number): React.ReactElement {

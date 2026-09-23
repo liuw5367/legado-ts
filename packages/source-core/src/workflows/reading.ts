@@ -49,9 +49,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       break
     }
     visited.add(normalizedUrl)
-    const page = pageIndex === 0 && input.book.tocHtml !== undefined && normalizedUrl === bookBaseUrl
+    // 明确刷新时详情阶段暂存的目录响应也可能过期，必须重新请求第一页。
+    const page = pageIndex === 0 && input.refresh !== true && input.book.tocHtml !== undefined && normalizedUrl === bookBaseUrl
       ? { body: input.book.tocHtml, url: normalizedUrl }
-      : await cachedPage(ports, input.source, normalizedUrl, 'toc', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
+      : await cachedPage(ports, input.source, normalizedUrl, 'toc', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, undefined, input.refresh === true)
     if (page === undefined) break
     const body = page.body
     totalBytes += new TextEncoder().encode(body).byteLength
@@ -333,10 +334,10 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   return { status, value, diagnostics, trace }
 }
 
-async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }): Promise<{ body: string; url: string } | undefined> {
+async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }, refresh = false): Promise<{ body: string; url: string } | undefined> {
   const cacheKey = `${source.bookSourceUrl}\u0000${scope}\u0000${url}`
   const responseUrlKey = `${cacheKey}\u0000response-url`
-  if (ports.cache !== undefined) {
+  if (ports.cache !== undefined && !refresh) {
     try {
       const cached = await ports.cache.get(cacheKey, options.signal)
       if (cached !== undefined) {
@@ -367,7 +368,7 @@ async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: st
 function pageOptions(options: WorkflowOptions, maxBytes: number, usedBytes: number): WorkflowOptions {
   const remaining = Math.max(0, maxBytes - usedBytes)
   const budget = { ...options.budget, maxTotalBytes: Math.min(options.budget?.maxTotalBytes ?? remaining, remaining) }
-  return { ...options, budget }
+  return { ...(options.signal === undefined ? {} : { signal: options.signal }), ...(options.maxItems === undefined ? {} : { maxItems: options.maxItems }), budget }
 }
 
 interface ChapterFields {

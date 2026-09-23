@@ -176,6 +176,8 @@ export interface Chapter extends ChapterIdentity {
 export interface TocInput extends WorkflowOptions {
   source: NormalizedSource
   book: BookMetadata
+  /** 显式刷新时跳过目录响应缓存，并在成功请求后更新缓存。 */
+  refresh?: boolean
   cursor?: PageCursor
   maxPages?: number
   maxBytes?: number
