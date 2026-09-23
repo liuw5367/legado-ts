@@ -257,35 +257,6 @@
     "weight": 0
   },
   {
-    "bookSourceComment": "自己打开精准搜索",
-    "bookSourceGroup": "20260520",
-    "bookSourceName": "asmrEgg",
-    "bookSourceType": 1,
-    "bookSourceUrl": "https://a.asmregg.top/",
-    "customOrder": 5,
-    "enabled": true,
-    "enabledCookieJar": true,
-    "enabledExplore": true,
-    "lastUpdateTime": 1772312391639,
-    "respondTime": 7638,
-    "ruleBookInfo": {},
-    "ruleContent": {},
-    "ruleSearch": {
-      "author": "tag.title@text",
-      "bookList": "tag.channel@tag.item",
-      "bookUrl": "tag.link@text",
-      "intro": "tag.description@text",
-      "name": "tag.title@text"
-    },
-    "ruleToc": {
-      "chapterList": "@js:\nconst match = result.match(/audios\\s*=\\s*(\\[[^\\]]*\\])/);\nconst audiosArray = JSON.parse(match[1]);\n[audiosArray][0];",
-      "chapterName": "name",
-      "chapterUrl": "url"
-    },
-    "searchUrl": "index.xml",
-    "weight": 0
-  },
-  {
     "bookSourceComment": "",
     "bookSourceGroup": "20260520",
     "bookSourceName": "笔趣阁",
@@ -3087,44 +3058,6 @@
   {
     "bookSourceComment": "",
     "bookSourceGroup": "20260520",
-    "bookSourceName": "喜马拉雅",
-    "bookSourceType": 1,
-    "bookSourceUrl": "http://search.ximalaya.com#guaner",
-    "customOrder": 63,
-    "enabled": true,
-    "enabledCookieJar": true,
-    "enabledExplore": true,
-    "lastUpdateTime": 1735056142925,
-    "respondTime": 2314,
-    "ruleBookInfo": {
-      "tocUrl": "http://mobile.ximalaya.com/fmobile-album/album/track/ts-1576706285548?ac=4G&albumId=@get:{book}&device=android&isAsc=true&isQueryInvitationBrand=true&isVideoAsc=true&pageSize=200&source=3&supportWebp=true&pageId=1"
-    },
-    "ruleContent": {
-      "content": "",
-      "imageStyle": "0"
-    },
-    "ruleExplore": {},
-    "ruleSearch": {
-      "author": "nickname",
-      "bookList": "$.response.docs",
-      "bookUrl": "http://mobile.ximalaya.com/fmobile-album/album/track/ts-1576706285548?ac=4G&albumId={$.id}&device=android&isAsc=true&isQueryInvitationBrand=true&isVideoAsc=true&pageSize=200&source=3&supportWebp=true&pageId=1",
-      "coverUrl": "cover_path",
-      "intro": "$..intro",
-      "kind": "category_title",
-      "name": "title@put:{book:id}"
-    },
-    "ruleToc": {
-      "chapterList": "$.data.list",
-      "chapterName": "title",
-      "chapterUrl": "playPathAacv224",
-      "nextTocUrl": "<js>\nvar a = 'http://mobile.ximalaya.com/fmobile-album/album/track/ts-1576706285548?ac=4G&albumId=@get:{book}&device=android&isAsc=true&isQueryInvitationBrand=true&isVideoAsc=true&pageSize=200&source=3&supportWebp=true&pageId=';\nvar r = [];\nfor(var i=1;i<40;i++){\n    r.push(a + parseInt(i*1));\n}\nr\n</js>"
-    },
-    "searchUrl": "http://search.ximalaya.com/speed/album/v1/list?condition=relation&core=album&device=android&fq=categoryId:3&kw={{key}}&page={{page}}&rows=20&spellchecker=true",
-    "weight": 0
-  },
-  {
-    "bookSourceComment": "",
-    "bookSourceGroup": "20260520",
     "bookSourceName": "笔趣阁#50",
     "bookSourceType": 0,
     "bookSourceUrl": "https://www.biquge7.xyz#",
@@ -5363,41 +5296,6 @@
     "weight": 0
   },
   {
-    "bookSourceComment": "注：小说可下载到本地，若想下载到本地看，把左上角的类型“文本”改为“文件”。",
-    "bookSourceGroup": "20260520",
-    "bookSourceName": "📔 请看小说网",
-    "bookSourceType": 3,
-    "bookSourceUrl": "https://www.qinkan.net",
-    "customOrder": 111,
-    "enabled": true,
-    "enabledCookieJar": true,
-    "enabledExplore": true,
-    "lastUpdateTime": 1769596776793,
-    "respondTime": 1877,
-    "ruleBookInfo": {
-      "author": "text.书籍作者@text##书籍作者：",
-      "coverUrl": "class.detail_pic@img@src",
-      "downloadUrls": "class.downButton@href",
-      "intro": "class.showinfo@textNodes",
-      "name": "class.detail_right@text",
-      "wordCount": "text.文件大小@text"
-    },
-    "ruleContent": {},
-    "ruleExplore": {},
-    "ruleSearch": {
-      "author": "class.s@text##作者：|大小.*",
-      "bookList": "tag.li",
-      "bookUrl": "tag.a@href",
-      "checkKeyWord": "斗破苍穹",
-      "coverUrl": "tag.img@src",
-      "intro": "class.u@text",
-      "name": "a@text##《|》"
-    },
-    "ruleToc": {},
-    "searchUrl": "/e/search/index.php,{\n  \"body\": \"show=title&classid=0&keyboard={{key}}&Submit22=搜索\",\n  \"charset\": \"GB2312\",\n  \"method\": \"POST\"\n}",
-    "weight": 0
-  },
-  {
     "bookSourceComment": "",
     "bookSourceGroup": "20260520",
     "bookSourceName": "🌐 香书小说",
@@ -5960,48 +5858,6 @@
       "nextTocUrl": "text.下一@href"
     },
     "searchUrl": "https://m.cuoceng.com/book/so/{{key}}.html",
-    "weight": 0
-  },
-  {
-    "bookSourceComment": "导入txt小说",
-    "bookSourceGroup": "20260520",
-    "bookSourceName": "八零电子（导）",
-    "bookSourceType": 3,
-    "bookSourceUrl": "https://m.txt80.cc/",
-    "bookUrlPattern": "https://m.txt80.cc/.*html",
-    "customOrder": 124,
-    "enabled": true,
-    "enabledCookieJar": false,
-    "enabledExplore": true,
-    "exploreUrl": "[{\"title\":\"首页\",\"url\":\"/\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"书库\",\"url\":\"/all/\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"排行\",\"url\":\"/hot/\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"推荐\",\"url\":\"/recommendall/\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"最新\",\"url\":\"/new/\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"都市小说\",\"url\":\"/dushi/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"女生言情\",\"url\":\"/yanqing/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"玄幻奇幻\",\"url\":\"/xuanhuan/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"武侠仙侠\",\"url\":\"/wuxia/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"网游竞技\",\"url\":\"/wangyou/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"军事历史\",\"url\":\"/junshi/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"科幻灵异\",\"url\":\"/kehuan/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"耽美同人\",\"url\":\"/danmei/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"文学名著\",\"url\":\"/wenxue/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},{\"title\":\"其他小说\",\"url\":\"/qita/<,index_{{page}}.html>\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}}]",
-    "lastUpdateTime": 1759588685577,
-    "respondTime": 2847,
-    "ruleBookInfo": {
-      "author": ".mt10.1@a@text",
-      "coverUrl": "img@src",
-      "downloadUrls": "text.下载地址@href<js>\njava.ajax(\"https://m.txt80.cc\"+result[0])\n</js>text.下载地址@href",
-      "init": "class.module mt10",
-      "intro": ".con@text##简介：",
-      "kind": ".gray.1:3@text\n##分类：|进度：",
-      "lastChapter": ".gray.4@text##更新：",
-      "name": "h1@text",
-      "wordCount": ".gray.2@text##大小："
-    },
-    "ruleContent": {},
-    "ruleExplore": {},
-    "ruleSearch": {
-      "author": "p.1@text",
-      "bookList": ".imgtextlist@li",
-      "bookUrl": "a@href",
-      "checkKeyWord": "剑来",
-      "coverUrl": "img@src",
-      "intro": "class.intro@text##简介：",
-      "kind": "class.red@text||p.2@text\n##更新：|\\[|\\]",
-      "name": "p.0@text\n##《|》|\\[.*\\]",
-      "wordCount": "p.3@text##大小："
-    },
-    "ruleToc": {},
-    "searchUrl": "/e/search/index.php,{\n  \"body\": \"show=title,softsay,softwriter&keyboard={{key}}&tbname=download&tempid=1&Submit22=搜索\",\n  \"method\": \"post\"\n}",
     "weight": 0
   },
   {
@@ -7278,40 +7134,6 @@
       "updateTime": "t"
     },
     "searchUrl": "https://m.qidian.com/soushu/{{key}}.html?pageNum={{page}}",
-    "weight": 0
-  },
-  {
-    "bookSourceComment": "",
-    "bookSourceGroup": "20260520",
-    "bookSourceName": "❤️名著阅读",
-    "bookSourceType": 2,
-    "bookSourceUrl": "https://api.diandu.com",
-    "customOrder": 156,
-    "enabled": true,
-    "enabledCookieJar": true,
-    "enabledExplore": true,
-    "exploreUrl": "[{\"title\":\"📚全部书籍\",\"url\":\"https://api.520diandu.com/api/read/allReadBooks?uid=&key=&page={{page}}&cv=134&from=web\",\"style\":{\"layout_flexBasisPercent\":1,\"layout_flexGrow\":1}}]",
-    "lastUpdateTime": 1769593578298,
-    "respondTime": 2258,
-    "ruleBookInfo": {},
-    "ruleContent": {
-      "content": "@get:{img}@js:headers={\"headers\":{\"Referer\":baseUrl}};\nresult.split(\"\\n\").map(x=>'<img src=\\\"'+x+','+JSON.stringify(headers)+'\\\">').join(\"\\n\")"
-    },
-    "ruleExplore": {},
-    "ruleSearch": {
-      "bookList": "$..books[*]",
-      "bookUrl": "https://api.520diandu.com/api/read/readAllPages?uid=&key=&cv=134&from=web&bid={{$.id}}",
-      "checkKeyWord": "封神",
-      "coverUrl": "$.famous",
-      "intro": "$.title",
-      "name": "$.book_name"
-    },
-    "ruleToc": {
-      "chapterList": "$.data",
-      "chapterName": "$.page",
-      "chapterUrl": "$.pic@put:{img:pic}"
-    },
-    "searchUrl": "https://api.520diandu.com/api/read/allReadBooks?uid=&key=&name={{key}}&page={{page}}&cv=134&from=app",
     "weight": 0
   },
   {
@@ -8627,44 +8449,6 @@
     "weight": 0
   },
   {
-    "bookSourceComment": "By：Tom",
-    "bookSourceGroup": "20260520",
-    "bookSourceName": "丁斐",
-    "bookSourceType": 2,
-    "bookSourceUrl": "http://comic.mh.com",
-    "customOrder": 185,
-    "enabled": true,
-    "enabledCookieJar": true,
-    "enabledExplore": true,
-    "exploreUrl": "@js:\nlet model = (title,url,num)=>{\n    return {title:title,url:url,style:{layout_flexGroup:1,layout_flexBasisPercent:num}}\n}\n\nlet ajax = java.ajax(\"http://comic.321mh.com/v1/comic/getcomicsortandroid?platformname=android&productname=mht\")\nlet url=\"https://getconfig-globalapi.yyhao.com/app_api/v5/getsortlist/?page={{page}}&orderby=date&search_type=&comic_sort=tihuan&search_key=&platformname=android&productname=mht\"\n\n丁斐=JSON.parse(ajax).data.map(i=>{\n\tt=url.replace(\"tihuan\",i.urlid)\n\treturn  model(i.name,t,0.15)\n\t})\n\t\n\nJSON.stringify(丁斐)",
-    "lastUpdateTime": 1724930118233,
-    "respondTime": 1748,
-    "ruleBookInfo": {
-      "intro": "$..comic_desc##^##<br>"
-    },
-    "ruleContent": {
-      "content": "@js:\nres=baseUrl.match(/mycha=(.*)/)\ncha=JSON.parse(res[1])\n\nhost=\"https://mhpic.manhualang.com\"\nlist=[]\n\nlen=cha.end_num\nimg=cha.chapter_image.high\nfor(var i=0;i<len;i++){\n\t  list.push(img.replace(\"$$\",i+1))\n}\n\n\nlist.map(x=>'<img src=\"'+host+x+'\">').join(\"\\n\")"
-    },
-    "ruleExplore": {},
-    "ruleSearch": {
-      "author": "$.comic_author",
-      "bookList": "$.data[*]",
-      "bookUrl": "http://comic.321mh.com/app_api/v5/getcomicinfo_body/?comic_id={{$.comic_id}}&from_page=search&platformname=android&productname=mht",
-      "coverUrl": "http://image.yqmh.com/mh/{{$.comic_id}}.jpg",
-      "kind": "$.comic_type##[a-z]+|\\|",
-      "lastChapter": "$.last_chapter_name",
-      "name": "$.comic_name"
-    },
-    "ruleToc": {
-      "chapterList": "-$..comic_chapter[*]",
-      "chapterName": "$.chapter_name",
-      "chapterUrl": "$[?(@.chapter_name==\"{{chapter.title}}\")]\n@js:\n\ncha=java.getElement(result)[0]\nbaseUrl+'&mycha='+JSON.stringify(cha)\n",
-      "updateTime": "$..create_date\n@js:\"🕗 \"+java.timeFormat(result*1000)"
-    },
-    "searchUrl": "https://getconfig-globalapi.yyhao.com/app_api/v5/getsortlist/?page={{page}}&orderby=click&search_key={{key}}&young_mode=0&platformname=android&productname=mht",
-    "weight": 0
-  },
-  {
     "bookSourceComment": "速读谷",
     "bookSourceGroup": "20260520",
     "bookSourceName": "速读谷",
@@ -8835,43 +8619,6 @@
       "chapterUrl": "@js:\nc=java.get(\"c\")\nurl=\"http://api.huaya.cc/Handler/NovelTitles_Head.ashx,\"+`{\n\t\"method\":\"POST\",\n\t\"body\":\"img_type=mix&img_val=393&novelId={{$.novelid}}&platform=android&screenHeight=2356&screenWidth=1080&SectionNum={{$.sectionnum}}&sign={{java.md5Encode(\"img_type=mix&img_val=393&novelId=\"+java.getString(\"$.novelid\")+\"&platform=android&screenHeight=2356&screenWidth=1080&SectionNum=\"+java.getString(\"$.sectionnum\")+\"&type=get_new&ver=1.8.6&37cb0e19d1c146d78bfff2994ad366eb\")}}&type=get_new&ver=1.8.6\"\n\t}`\nif (c==1) {\n    book.type = 8\n} else {\n    book.type = 64}\nurl;"
     },
     "searchUrl": "@js:\nc=0\nif (key.match(/@小说/)) {\n  c = 1\n  key = key.split(\"@\")[0]\n}\n\njava.put(\"c\",c)\n\nresult=\"http://api.huaya.cc/Handler/Novels_Head.ashx,\"+`{\"body\":\"code=${c}&size=99999&index=1&type=list&key=${key}\",\"method\":\"POST\"}`",
-    "weight": 0
-  },
-  {
-    "bookSourceComment": "更新：\n使用说明，  PPT的查找",
-    "bookSourceGroup": "20260520",
-    "bookSourceName": "优品文档",
-    "bookSourceType": 3,
-    "bookSourceUrl": "https://www.ypppt.com",
-    "customOrder": 190,
-    "enabled": true,
-    "enabledCookieJar": false,
-    "enabledExplore": true,
-    "exploreUrl": "说明：点击阅读即可下载资源  无预览::\n资源保存位置：其他设置-书籍保存位置::\n简约模板::  https://www.ypppt.com/moban/jianyue/list-{{page+ 1}}.html\n商务模板::  https://www.ypppt.com/moban/shangwu/list-{{page+1}}.html\n自我介绍::  https://www.ypppt.com/moban/jieshao/list-{{page+1}}.html\n开题报告::   https://www.ypppt.com/moban/kaiti/list-{{page+1}}.html  \n职业规划::   https://www.ypppt.com/moban/zhiye/list-{{page+1}}.html  \n精美模板::  https://www.ypppt.com/moban/jingmei/list-{{page+1}}.html\n公司介绍::   https://www.ypppt.com/moban/gongsi/list-{{page+1}}.html\n个人简历::   https://www.ypppt.com/moban/jianli/list-{{page+1}}.html\n培训课件::   https://www.ypppt.com/moban/peixun/list-{{page+1}}.html\n优秀作品::   https://www.ypppt.com/moban/zuopin/list-{{page+1}}.html\n总结汇报::  https://www.ypppt.com/moban/zongjie/list-{{page+1}}.html\n述职报告::   https://www.ypppt.com/moban/shuzhi/list-{{page+1}}.html\n论文答辩::   https://www.ypppt.com/moban/lunwen/list-{{page+1}}.html\n中  国  风::   https://www.ypppt.com/moban/zhongguo/list-{{page+1}}.html",
-    "lastUpdateTime": 1769596698941,
-    "respondTime": 2300,
-    "ruleBookInfo": {
-      "downloadUrls": "@js:\nvar url = java.getString(\"class.down-button@href\")\nvar a = java.ajax(\"https://www.ypppt.com\" + url)\nurl = String(a).match(/href\\=\\\"(.*?)\\\"\\>下载地址1/)\nurl[1]",
-      "intro": "@js:\nvar lis = {\n  比例:(String(src).match(/比例：.*?\\n/)),\n  页数:(String(src).match(/页数：.*?\\n/)),\n  格式:(String(src).match(/格式：.*?\\n/)),\n  大小:(String(src).match(/大小：.*?\\n/)),\n  日期:(String(src).match(/日期：.*?\\n/)),\n  效果:(String(src).match(/效果：.*?\\n/))\n}\n\"    \" + lis['比例'] + lis['页数'] + lis['格式'] + lis['大小'] + lis['日期'] + lis['效果']",
-      "tocUrl": "class.down-button@href"
-    },
-    "ruleContent": {
-      "content": "html"
-    },
-    "ruleExplore": {},
-    "ruleSearch": {
-      "bookList": "class.posts clear@li",
-      "bookUrl": "a.1@href",
-      "checkKeyWord": "旅行",
-      "coverUrl": "a.0@img@src",
-      "kind": "div@span.0@a@text",
-      "name": "a.1@text"
-    },
-    "ruleToc": {
-      "chapterList": "class.down clear@li",
-      "chapterName": "a@text##2##1"
-    },
-    "searchUrl": "https://www.ypppt.com/p/search.php?kwtype=1&q={{key}}",
     "weight": 0
   },
   {
@@ -9839,43 +9586,6 @@
       "chapterUrl": "href"
     },
     "searchUrl": "/s/1.html?keyword={{key}}&page={{page}}",
-    "weight": 0
-  },
-  {
-    "bookSourceGroup": "20260520",
-    "bookSourceName": "丁斐🅰",
-    "bookSourceType": 2,
-    "bookSourceUrl": "http://comic.321mh.com",
-    "customOrder": 211,
-    "enabled": true,
-    "enabledCookieJar": true,
-    "enabledExplore": true,
-    "exploreUrl": "@js:\nlet model = (title,url,num)=>{\n    return {title:title,url:url,style:{layout_flexGroup:1,layout_flexBasisPercent:num}}\n}\n\nlet ajax = java.ajax(\"http://comic.321mh.com/v1/comic/getcomicsortandroid?platformname=android&productname=mht\")\nlet url=\"https://getconfig-globalapi.yyhao.com/app_api/v5/getsortlist/?page={{page}}&orderby=date&search_type=&comic_sort=tihuan&search_key=&platformname=android&productname=mht\"\n\n丁斐=JSON.parse(ajax).data.map(i=>{\n\tt=url.replace(\"tihuan\",i.urlid)\n\treturn  model(i.name,t,0.15)\n\t})\n\t\n\nJSON.stringify(丁斐)",
-    "lastUpdateTime": 1751054660440,
-    "respondTime": 3023,
-    "ruleBookInfo": {
-      "intro": "$..comic_desc##^##<br>"
-    },
-    "ruleContent": {
-      "content": "@js:\nres=baseUrl.match(/mycha=(.*)/)\ncha=JSON.parse(res[1])\n\nhost=\"https://mhpic.manhualang.com\"\nlist=[]\n\nlen=cha.end_num\nimg=cha.chapter_image.high\nfor(var i=0;i<len;i++){\n\t  list.push(img.replace(\"$$\",i+1))\n}\n\n\nlist.map(x=>'<img src=\"'+host+x+'\">').join(\"\\n\")"
-    },
-    "ruleExplore": {},
-    "ruleSearch": {
-      "author": "$.comic_author",
-      "bookList": "$.data[*]",
-      "bookUrl": "http://comic.321mh.com/app_api/v5/getcomicinfo_body/?comic_id={{$.comic_id}}&from_page=search&platformname=android&productname=mht",
-      "coverUrl": "http://image.yqmh.com/mh/{{$.comic_id}}.jpg",
-      "kind": "$.comic_type##[a-z]+|\\|",
-      "lastChapter": "$.last_chapter_name",
-      "name": "$.comic_name"
-    },
-    "ruleToc": {
-      "chapterList": "-$..comic_chapter[*]",
-      "chapterName": "$.chapter_name",
-      "chapterUrl": "$[?(@.chapter_name==\"{{chapter.title}}\")]\n@js:\n\ncha=java.getElement(result)[0]\nbaseUrl+'&mycha='+JSON.stringify(cha)\n",
-      "updateTime": "$..create_date\n@js:\"🕗 \"+java.timeFormat(result*1000)"
-    },
-    "searchUrl": "https://getconfig-globalapi.yyhao.com/app_api/v5/getsortlist/?page={{page}}&orderby=click&search_key={{key}}&young_mode=0&platformname=android&productname=mht",
     "weight": 0
   },
   {
