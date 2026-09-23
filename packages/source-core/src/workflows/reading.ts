@@ -312,6 +312,10 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, firstPage.context)
     if (field.state === 'cancelled') return cancelled('章节标题规则执行已取消', diagnostics, trace)
     if (field.state === 'value') title = titleText(textValue(field.value))
+    else if (field.state === 'failed' || field.state === 'capability-missing') {
+      // 标题是可选字段：失败只报告，不阻断正文，调用方沿用目录标题。
+      diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage, field: 'title', message: field.message ?? '章节标题规则失败', retryable: false })
+    }
   }
   const outputBytes = new TextEncoder().encode(cleaned).byteLength
   if (outputBytes > maxOutputBytes) {

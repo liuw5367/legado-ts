@@ -598,6 +598,23 @@ test('正文请求被取消时返回 cancelled，不把半截正文当成成功'
   assert.equal(second.value, null)
 })
 
+test('章节标题规则失败时给出诊断并沿用目录标题', async () => {
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }
+  const titleSource = { ...source, ruleContent: { content: 'content', title: 'content-title' } } as unknown as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field }) => field === 'content'
+        ? { status: 'success', value: '正文' }
+        : { status: 'failed', value: null, message: '标题规则解析失败' },
+    },
+  }
+  const result = await loadChapterContent(ports, { source: titleSource, chapter })
+  assert.equal(result.value?.cleaned, '正文')
+  assert.equal(result.value?.title, undefined)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'item-skipped' && diagnostic.field === 'title'))
+})
+
 test('正文分页只有首页携带 sourceRegex，后续页只带 webJs（BookContent.kt:92）', async () => {
   const seen: Array<{ url: string; execution?: { webJs?: string; sourceRegex?: string } }> = []
   const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }

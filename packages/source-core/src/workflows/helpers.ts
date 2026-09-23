@@ -189,29 +189,52 @@ async function expandExpression(ports: WorkflowPorts, source: NormalizedSource, 
 }
 
 /**
- * Android `BookHelp.formatBookName`：去掉「 作者 xxx」「 xxx 著」尾巴再剪空白，
+ * Java 的 `\s` 只匹配 ASCII 空白，JS 的 `\s` 还包含 U+3000 等 Unicode 空白。
+ * 用这两个字符类固定 Android 行为：「我本无意成仙　作者：张三」（全角空格）不会被清洗掉。
+ */
+const javaSpaceClass = '[\\u0009-\\u000d\\u0020]'
+const javaNonSpaceClass = '[^\\u0009-\\u000d\\u0020]'
+const nameTailPattern = new RegExp(`${javaSpaceClass}+作${javaSpaceClass}*者[\\s\\S]*|${javaSpaceClass}+${javaNonSpaceClass}+${javaSpaceClass}+著`, 'u')
+const authorPrefixPattern = new RegExp(`^${javaSpaceClass}*作${javaSpaceClass}*者[:：\\u0009-\\u000d\\u0020]+|${javaSpaceClass}+著`, 'u')
+
+/** Java `String.trim`：只去掉 <= U+0020 的字符，不碰 U+3000 全角空格。 */
+function trimAsciiSpace(value: string): string {
+  return value.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, '')
+}
+
+/**
+ * Android `BookHelp.formatBookName`：去掉「 作者 xxx」「 xxx 著」尾巴再按 Java trim 剪空白，
  * 只清洗运行时拿到的书名，不改写规则原文。
  */
 export function formatBookName(value: string): string {
-  return value.replace(/\s+作\s*者.*|\s+\S+\s+著/u, '').trim()
+  return trimAsciiSpace(value.replace(nameTailPattern, ''))
 }
 
 /** Android `BookHelp.formatBookAuthor`：去掉「作者[:：]」前缀和「 著」尾巴再剪空白。 */
 export function formatBookAuthor(value: string): string {
-  return value.replace(/^\s*作\s*者[:：\s]+|\s+著/u, '').trim()
+  return trimAsciiSpace(value.replace(authorPrefixPattern, ''))
 }
 
 /**
- * Android `StringUtils.wordCountFormat(String)`：纯数字时按 万字 归一化，
- * 超过一万保留一位小数，非数字原样返回。
+ * Android `StringUtils.wordCountFormat`：纯数字时按 万字 归一化。
+ * 超过一万走 `DecimalFormat("#.#")`——HALF_EVEN 舍入到一位小数并在整数时省略小数位，
+ * 且 Android 先转 Float 再除 10000，这里用 `Math.fround` 复现同样的精度损失。
  */
 export function formatWordCount(value: string | undefined): string {
   if (value === undefined) return ''
   if (!/^-?[0-9]+$/u.test(value)) return value
   const words = Number(value)
   if (!(words > 0)) return ''
-  if (words > 10000) return `${(words / 10000).toFixed(1).replace(/\.0$/u, '')}万字`
+  if (words > 10000) return `${formatDecimalOne(Math.fround(words) / 10000)}万字`
   return `${words}字`
+}
+
+/** Java `DecimalFormat("#.#")` 的 HALF_EVEN 舍入到一位小数；整数不带小数点。 */
+function formatDecimalOne(value: number): string {
+  const scaled = value * 10
+  const floor = Math.floor(scaled)
+  const rounded = Math.abs(scaled - floor - 0.5) < 1e-9 ? (floor % 2 === 0 ? floor : floor + 1) : Math.round(scaled)
+  return (rounded / 10).toFixed(1).replace(/\.0$/u, '')
 }
 
 export function textValue(value: unknown): string {

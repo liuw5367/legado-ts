@@ -136,7 +136,7 @@ export interface RuleVariableView {
 | `all` | 选中节点的完整外部 HTML |
 | 其他字符串 | 作为属性名读取，空属性丢弃；URL 列表还会去重 |
 
-`@CSS:` 的最后一个 `@` 分隔选择器与输出属性。用于 `getString/getStringList` 时应写成 `@CSS:div.book@text`、`@CSS:a@href` 等完整形式；纯 `@CSS:div.book` 是元素列表选择，不应当当作字符串字段示例。非 CSS 链则逐级选择节点。解析不能通过删除原 DOM 节点实现排除，因为同一文档会被多个字段重复读取；当前测试要求排除索引后原 DOM 仍可读取。
+整条规则按 `@` 切分：**最后一段一律是输出标记或属性名**（`text`、`textNodes`、`ownText`、`html`、`all`，其他字符串按属性名读取），前面的每一段才是逐级选择的选择器链；没有 `@` 时整条规则都是属性名（Android `AnalyzeByJSoup.getResultLast`）。`@CSS:` 只是显式声明这段选择器走 CSS，等价于 Default 模式。用于 `getString/getStringList` 时应写成 `@CSS:div.book@text`、`@CSS:a@href` 等完整形式；纯 `@CSS:div.book` 在字符串字段里会被当成属性名（取不到就是空），元素列表选择应使用列表规则。解析不能通过删除原 DOM 节点实现排除，因为同一文档会被多个字段重复读取；当前测试要求排除索引后原 DOM 仍可读取。
 
 ### 索引、范围和排除
 

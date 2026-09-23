@@ -376,6 +376,22 @@ test('列表为空且没有 bookUrlPattern 时回退详情页解析', async () =
   assert.equal(noFallback.value?.items.length, 0)
 })
 
+test('候选缺少书名时按身份缺失丢弃并给出正例诊断', async () => {
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      if (request.field === 'bookList') return { status: 'success', value: [{ name: '有书名', url: '/book/a' }, { name: '   ', url: '/book/b' }] }
+      if (request.field === 'bookName') return { status: 'success', value: (request.content as { name: string }).name }
+      if (request.field === 'bookUrl') return { status: 'success', value: (request.content as { url: string }).url }
+      return { status: 'empty', value: null }
+    },
+  }
+  const result = await discoverBooks(workflowPorts, { source })
+  // 正例：书名清洗后为空的那条被丢弃并报告身份缺失，另一条保留。
+  assert.deepEqual(result.value?.items.map((item) => item.name), ['有书名'])
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing' && diagnostic.message.includes('书名')))
+})
+
 test('搜索字段解析分类、字数并清洗书名作者', async () => {
   const richSource = {
     ...source,
@@ -399,6 +415,40 @@ test('搜索字段解析分类、字数并清洗书名作者', async () => {
   assert.equal(candidate?.author, '张三')
   assert.equal(candidate?.kind, '玄幻,仙侠')
   assert.equal(candidate?.wordCount, '123.5万字')
+})
+
+test('书名作者清洗用 Java 的 ASCII 空白，字数按 HALF_EVEN 舍入', async () => {
+  const edgeSource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', bookWordCount: 'words' },
+  } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      const item = request.content as { name?: string; url?: string; author?: string; words?: string }
+      if (request.field === 'bookList') {
+        return {
+          status: 'success',
+          value: [
+            // 全角空格（U+3000）：Java `\s` 不匹配，Android 不会清洗掉「作者」尾巴。
+            { name: '我本无意成仙　作者：张三', url: '/book/full', words: '10500' },
+            { name: '我本无意成仙 作者：张三', url: '/book/half', words: '10501' },
+          ],
+        }
+      }
+      if (request.field === 'bookName') return { status: 'success', value: item.name }
+      if (request.field === 'bookUrl') return { status: 'success', value: item.url }
+      if (request.field === 'bookWordCount') return { status: 'success', value: item.words }
+      return { status: 'empty', value: null }
+    },
+  }
+  const result = await searchBooks(workflowPorts, { source: edgeSource, keyword: 'A' })
+  const items = result.value?.items ?? []
+  assert.equal(items[0]?.name, '我本无意成仙　作者：张三')
+  assert.equal(items[0]?.wordCount, '1万字')
+  assert.equal(items[1]?.name, '我本无意成仙')
+  // 10501 → 1.0501 → HALF_EVEN 到一位小数 → 1.1
+  assert.equal(items[1]?.wordCount, '1.1万字')
 })
 
 test('详情 init 规则先执行并把结果作为后续字段的内容基准', async () => {
