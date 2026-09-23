@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { discoverBooks, loadBookDetails, searchBooks } from '../src/public/index.ts'
+import { discoverBooks, loadBookDetails, loadTableOfContents, searchBooks } from '../src/public/index.ts'
 import type { BookCandidate, NormalizedSource, WorkflowPorts } from '../src/public/index.ts'
 
 const source = {
@@ -265,6 +265,106 @@ test('没有页码占位符的列表地址不产生下一页游标', async () =>
   const pageDriven = await discoverBooks(ports([]), { source: templated })
   assert.equal(pageDriven.value?.nextCursor?.index, 2)
   assert.equal(pageDriven.value?.nextCursor?.token, undefined)
+})
+
+test('探索书源缺少 bookList 时回退整套搜索规则并且不隐式截断列表', async () => {
+  const rows = Array.from({ length: 125 }, (_, index) => ({ name: `Book ${index}`, url: `/book/${index}` }))
+  const fallbackSource = {
+    ...source,
+    exploreUrl: '/explore',
+    ruleExplore: { bookList: '' },
+    ruleSearch: { bookList: 'search-list', name: 'search-name', bookUrl: 'search-url' },
+  } as unknown as NormalizedSource
+  const requestedRules: string[] = []
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      requestedRules.push(request.rule)
+      if (request.rule === 'search-list') return { status: 'success', value: rows }
+      if (request.rule === 'search-name') return { status: 'success', value: (request.content as { name: string }).name }
+      if (request.rule === 'search-url') return { status: 'success', value: (request.content as { url: string }).url }
+      return { status: 'empty', value: null }
+    },
+  }
+  const result = await discoverBooks(workflowPorts, { source: fallbackSource })
+  assert.equal(result.value?.items.length, 125)
+  assert.ok(requestedRules.includes('search-name'))
+  assert.ok(requestedRules.includes('search-url'))
+})
+
+test('详情页相对 TOC URL 保留页码表达式和 charset 选项直到发出请求', async () => {
+  const calls: string[] = []
+  const sourceWithRules = {
+    ...source,
+    ruleBookInfo: { name: 'detail-name', author: 'detail-author', tocUrl: 'detail-toc' },
+    ruleToc: { chapterList: 'chapter-list', chapterName: 'chapter-name', chapterUrl: 'chapter-url' },
+  } as unknown as NormalizedSource
+  const workflowPorts: WorkflowPorts = {
+    network: {
+      encodeCharset: (value, charset) => {
+        assert.equal(charset, 'gbk')
+        const bytes: number[] = []
+        for (const character of value) {
+          if (character === '中') bytes.push(0xd6, 0xd0)
+          else if (character === '文') bytes.push(0xce, 0xc4)
+          else bytes.push(...new TextEncoder().encode(character))
+        }
+        return new Uint8Array(bytes)
+      },
+      request: async (plan) => {
+        calls.push(plan.url)
+        return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('page'), redirected: false }
+      },
+    },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'name') return { status: 'success', value: 'Book' }
+        if (field === 'author') return { status: 'empty', value: '' }
+        if (field === 'tocUrl') return { status: 'success', value: '../catalog/<1,2>?q=中文,{"charset":"gbk"}' }
+        if (field === 'chapterList') return { status: 'success', value: [{ title: 'Chapter', url: '/chapter' }] }
+        if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+        if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const details = await loadBookDetails(workflowPorts, {
+    source: sourceWithRules,
+    candidates: [{ sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/detail', name: 'Candidate', rawFields: {}, traceRef: 'test' }],
+  })
+  const metadata = details.value?.items[0]
+  assert.equal(metadata?.tocUrl, 'https://source.test/catalog/<1,2>?q=中文,{"charset":"gbk"}')
+  assert.ok(metadata)
+  const toc = await loadTableOfContents(workflowPorts, { source: sourceWithRules, book: metadata })
+  assert.equal(toc.status, 'success')
+  assert.equal(calls[1], 'https://source.test/catalog/1?q=%D6%D0%CE%C4')
+})
+
+test('页码数组只提供实际存在的下一页游标', async () => {
+  const calls: string[] = []
+  const templated = { ...source, exploreUrl: '/explore?page=<1,2>', ruleExplore: { bookList: 'list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author' } } as unknown as NormalizedSource
+  const first = await discoverBooks(ports(calls), { source: templated })
+  assert.equal(calls[0], 'https://source.test/explore?page=1')
+  assert.equal(first.value?.nextCursor?.index, 2)
+  const second = await discoverBooks(ports(calls), { source: templated, cursor: { index: 2 } })
+  assert.equal(calls[1], 'https://source.test/explore?page=2')
+  assert.equal(second.value?.nextCursor, undefined)
+})
+
+test('列表规则的非列表响应不会作为单个结果项解析', async () => {
+  const evaluated: string[] = []
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      if (request.field === 'bookList') return { status: 'success', value: { name: '误当列表项', url: '/book/wrong' } }
+      return ports([]).rules.evaluate(request)
+    },
+  }
+  const result = await discoverBooks(workflowPorts, { source: { ...source, bookUrlPattern: 'https://never.test/.*' } as NormalizedSource })
+  assert.equal(result.value?.items.length, 0)
+  assert.ok(!evaluated.includes('name'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes('必须返回列表')))
 })
 
 test('URL 内联表达式数量超过上限时以配置诊断失败，且不求值', async () => {

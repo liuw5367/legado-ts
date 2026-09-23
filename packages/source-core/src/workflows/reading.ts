@@ -2,6 +2,7 @@ import type { JsonObject, NormalizedSource } from '../model/types.ts'
 import { compileRule } from '../rules/compiler.ts'
 import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { CompiledRule } from '../rules/types.ts'
+import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { evaluateField, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
@@ -19,11 +20,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const visited = new Set<string>()
   const chapters: Chapter[] = []
-  const pageBodies = new Set<string>()
   const reverseByRule = listRule.startsWith('-')
-  const rawBookUrl = resolveUrl(input.book.tocUrl ?? input.book.bookUrl, input.source.bookSourceUrl)
-    ?? resolveUrl(input.book.bookUrl, input.source.bookSourceUrl)
-    ?? input.source.bookSourceUrl
+  const resolvedBookUrl = resolveUrl(input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  const rawTocUrl = input.book.tocUrl?.trim() ? input.book.tocUrl : input.book.bookUrl
+  const rawBookUrl = resolveUrl(rawTocUrl, resolvedBookUrl) ?? resolvedBookUrl
   // 目录地址同样允许 `{{...}}` 内联表达式（Android 对每个 AnalyzeUrl 都做同样的展开）。
   const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
   if (expandedBookUrl.url === undefined) {
@@ -60,11 +60,6 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       diagnostics.push({ code: 'item-skipped', stage, message: '目录累计响应超过字节预算', retryable: false })
       break
     }
-    if (pageBodies.has(body)) {
-      diagnostics.push({ code: 'item-skipped', stage, message: '目录重复页面已停止', retryable: false })
-      break
-    }
-    pageBodies.add(body)
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     visited.add(responseUrl)
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
@@ -78,7 +73,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       diagnostics.push({ code: 'rule-failed', stage, field: 'chapterList', message: list.message ?? '目录规则失败', retryable: false })
       break
     }
-    const rawItems = Array.isArray(list.value) ? list.value : list.state === 'value' ? [list.value] : []
+    const rawItems = list.state === 'value' && Array.isArray(list.value) ? list.value.filter((item) => item !== null && item !== undefined) : []
+    if (list.state === 'value' && !Array.isArray(list.value)) {
+      diagnostics.push({ code: 'item-skipped', stage, field: 'chapterList', message: 'chapterList 规则必须返回列表', retryable: false })
+    }
     for (const [itemIndex, rawItem] of rawItems.entries()) {
       const fields = await chapterFields(ports, input.source, rawItem, pageIndex * 100000 + itemIndex, input.signal, diagnostics, trace, volume, context)
       if (input.signal !== undefined && input.signal.aborted) return cancelled('目录工作流已取消', diagnostics, trace)
@@ -123,6 +121,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (next.state === 'cancelled') return cancelled('目录下一页规则已取消', diagnostics, trace)
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
+    const resolvedNextUrls = new Set<string>()
     for (const value of nextValues) {
       const resolved = resolveUrl(value, responseUrl)
       const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
@@ -132,8 +131,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
         diagnostics.push({ code: expandedNext?.error?.code ?? 'item-skipped', stage, field: 'nextTocUrl', message: expandedNext?.error?.message ?? '目录下一页 URL 无效', retryable: false })
         continue
       }
-      if (!visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: nextValues.length === 1 })
+      resolvedNextUrls.add(nextUrl)
     }
+    const followNext = resolvedNextUrls.size === 1
+    for (const nextUrl of resolvedNextUrls) if (!visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext })
   }
   if (pendingPages.length > 0 && visited.size >= maxPages) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
   if (!reverseByRule) chapters.reverse()
@@ -176,7 +177,6 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const maxOutputBytes = input.maxOutputBytes ?? 4 * 1024 * 1024
   const visited = new Set<string>()
-  const seenPages = new Set<string>()
   const pages: string[] = []
   const cleanedPages: string[] = []
   const resources: ContentResource[] = []
@@ -195,6 +195,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   let stoppedByLimit = false
   // 命中下一章时终止分页（Android BookContent 的 nextChapterUrl 护栏）。
   let reachedNextChapter = false
+  let nextChapterAbsolute: string | undefined
   // Android 用第一页响应求值 ruleContent.title。
   let firstPage: { body: string; url: string; context: { baseUrl: string; redirectUrl: string } } | undefined
   for (let pageIndex = 0; pageIndex < maxPages && pendingPages.length > 0; pageIndex += 1) {
@@ -221,8 +222,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     lastResponseUrl = responseUrl
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
     if (pageIndex === 0) firstPage = { body, url: responseUrl, context }
-    // 正文下一页命中下一章时停止分页，避免把下一章并进本章（Android BookContent.kt:79-84）。
-    const nextChapterAbsolute = input.nextChapterUrl === undefined ? undefined : resolveUrl(input.nextChapterUrl, responseUrl)
+    // Android BookContent 固定用第一页的最终响应地址解析下一章地址。
+    if (pageIndex === 0 && input.nextChapterUrl !== undefined) nextChapterAbsolute = resolveUrl(input.nextChapterUrl, responseUrl)
     totalBytes += new TextEncoder().encode(body).byteLength
     if (totalBytes > maxBytes) {
       diagnostics.push({ code: 'item-skipped', stage, message: '正文累计响应超过字节预算', retryable: false })
@@ -240,13 +241,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       break
     }
     const contentPage = result.state === 'value' ? textValue(result.value) : ''
-    if (contentPage.length > 0 && seenPages.has(contentPage)) {
-      diagnostics.push({ code: 'item-skipped', stage, message: '正文重复页面已停止', retryable: false })
-      stoppedByLimit = true
-      break
-    }
     if (contentPage.length > 0) {
-      seenPages.add(contentPage)
       pages.push(contentPage)
       const cleanedPage = cleanContent(contentPage, contentType, responseUrl)
       cleanedPages.push(cleanedPage)
@@ -261,6 +256,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (next.state === 'cancelled') return cancelled('正文下一页规则已取消', diagnostics, trace)
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
+    const resolvedNextUrls = new Set<string>()
     for (const value of nextValues) {
       const resolvedNext = resolveUrl(value, responseUrl)
       const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
@@ -271,15 +267,20 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
         stoppedByLimit = true
         continue
       }
-      if (nextChapterAbsolute !== undefined && nextUrl === nextChapterAbsolute) {
-        reachedNextChapter = true
-        pendingPages.length = 0
-        break
-      }
+      resolvedNextUrls.add(nextUrl)
+    }
+    const uniqueNextUrls = [...resolvedNextUrls]
+    if (uniqueNextUrls.length === 1 && nextChapterAbsolute !== undefined && uniqueNextUrls[0] === nextChapterAbsolute) {
+      reachedNextChapter = true
+      pendingPages.length = 0
+      break
+    }
+    const followNext = uniqueNextUrls.length === 1
+    for (const nextUrl of uniqueNextUrls) {
       if (visited.has(nextUrl)) {
         diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页形成循环', retryable: false })
         stoppedByLimit = true
-      } else if (!pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: nextValues.length === 1 })
+      } else if (!pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext })
     }
   }
   // 请求被取消时不能把半截正文当成成功或空结果交付，状态必须与目录流程一致。
@@ -434,7 +435,8 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
 }
 
 function listValues(value: unknown): string[] {
-  return (Array.isArray(value) ? value : [value]).map(textValue).filter((item) => item.length > 0)
+  const values = Array.isArray(value) ? value.flatMap((item) => textValue(item).split('\n')) : typeof value === 'string' ? value.split('\n') : []
+  return values.map((item) => item.trim()).filter((item) => item.length > 0)
 }
 
 function normalizeChapterListRule(value: string): string {
@@ -533,9 +535,9 @@ function resolveResource(value: string, baseUrl: string): string {
 }
 
 function resolveUrl(value: string, baseUrl: string): string | undefined {
-  if (value.trimStart().startsWith('<')) return undefined
+  if (value.trimStart().startsWith('<') && !/^<(?:js>|\d+(?:,\d+)*>)/i.test(value.trimStart())) return undefined
   try {
-    return new URL(value, baseUrl).toString()
+    return resolveSourceRequestReference(value, baseUrl)
   } catch {
     return undefined
   }

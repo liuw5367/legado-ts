@@ -125,3 +125,29 @@ export function resolveSourceRequestUrl(
   if (fragment.length > 0) absolute.hash = fragment.slice(1)
   return absolute.toString()
 }
+
+/** Resolve a source-owned URL without encoding its query before request options are read. */
+export function resolveSourceRequestReference(input: string, baseUrl: string): string {
+  const parsed = splitSourceRequestUrl(input)
+  const base = splitSourceRequestUrl(baseUrl).url
+  const protectedSegments: string[] = []
+  const protectedUrl = parsed.url.replace(/<js>[\s\S]*?<\/js>|<[^<>]*>/gi, (segment) => {
+    const index = protectedSegments.push(segment) - 1
+    return `legadoreservedurlsegment${index}x`
+  })
+  const fragmentStart = protectedUrl.indexOf('#')
+  const fragment = fragmentStart < 0 ? '' : protectedUrl.slice(fragmentStart)
+  const address = fragmentStart < 0 ? protectedUrl : protectedUrl.slice(0, fragmentStart)
+  const queryStart = address.indexOf('?')
+  let resolved: string
+  if (queryStart < 0) {
+    resolved = new URL(parsed.url, base).toString()
+  } else {
+    const absolute = new URL(address.slice(0, queryStart), base)
+    absolute.search = ''
+    absolute.hash = ''
+    resolved = `${absolute.toString()}?${address.slice(queryStart + 1)}${fragment}`
+  }
+  resolved = resolved.replace(/legadoreservedurlsegment(\d+)x/g, (_match, index: string) => protectedSegments[Number(index)] ?? _match)
+  return parsed.options === undefined ? resolved : `${resolved},${JSON.stringify(parsed.options)}`
+}

@@ -112,6 +112,37 @@ test('目录复用详情页内容并按最终响应地址解析相对章节', as
   assert.deepEqual(contexts[0], { baseUrl: 'https://redirect.test/book/a', redirectUrl: 'https://redirect.test/book/a' })
 })
 
+test('相对或空目录地址按 Android 的书籍 URL 基准解析', async () => {
+  const calls: string[] = []
+  const ports = readingPorts(calls)
+  await loadTableOfContents(ports, { source, book: { ...book, tocUrl: 'catalog/toc' } })
+  assert.equal(calls[0], 'https://source.test/book/catalog/toc')
+  calls.length = 0
+  await loadTableOfContents(ports, { source, book: { ...book, tocUrl: '   ' } })
+  assert.equal(calls[0], book.bookUrl)
+})
+
+test('目录分页按 URL 而非响应正文去重，并拆分换行地址列表', async () => {
+  const calls: string[] = []
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('same toc body'), redirected: false }
+    } },
+    rules: { evaluate: async (request) => {
+      const page = request.baseUrl?.endsWith('/toc1') === true ? '1' : request.baseUrl?.endsWith('/toc2') === true ? '2' : '3'
+      if (request.field === 'chapterList') return { status: 'success', value: [{ title: `Chapter ${page}`, url: `/chapter/${page}` }] }
+      if (request.field === 'chapterName') return { status: 'success', value: (request.content as { title: string }).title }
+      if (request.field === 'chapterUrl') return { status: 'success', value: (request.content as { url: string }).url }
+      if (request.field === 'nextTocUrl' && page === '1') return { status: 'success', value: '/toc2\n/toc3' }
+      return { status: 'empty', value: null }
+    } },
+  }
+  const result = await loadTableOfContents(ports, { source, book: { ...book, tocUrl: 'https://source.test/toc1' } })
+  assert.deepEqual(calls, ['https://source.test/toc1', 'https://source.test/toc2', 'https://source.test/toc3'])
+  assert.equal(result.value?.items.length, 3)
+})
+
 test('普通章节缺少 URL 时使用目录基准地址', async () => {
   const result = await loadTableOfContents({
     network: {
@@ -487,6 +518,43 @@ test('正文分页命中 nextChapterUrl 时停止解析，不并入下一章', a
   assert.equal(result.value?.cleaned, '第一章正文')
   assert.deepEqual(calls, ['https://source.test/c1'])
   assert.equal(result.status, 'success')
+})
+
+test('正文分页拆分换行 URL 列表并保留内容相同的不同页面', async () => {
+  const calls: string[] = []
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+  const multiPageSource = { ...source, contentType: 'text', ruleContent: { content: 'content', nextContentUrl: 'next-content' } } as unknown as NormalizedSource
+  const result = await loadChapterContent({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('same response'), redirected: false }
+    } },
+    rules: { evaluate: async (request) => {
+      if (request.field === 'content') return { status: 'success', value: 'same page text' }
+      if (request.field === 'nextContentUrl' && request.baseUrl?.endsWith('/c1')) return { status: 'success', value: '/c2\n/c3' }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: multiPageSource, chapter })
+  assert.deepEqual(calls, ['https://source.test/c1', 'https://source.test/c2', 'https://source.test/c3'])
+  assert.equal(result.value?.pages.length, 3)
+  assert.equal(result.value?.cleaned, 'same page text\n\nsame page text\n\nsame page text')
+})
+
+test('正文相对下一章地址固定按第一页最终响应地址解析', async () => {
+  const calls: string[] = []
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+  const nextSource = { ...source, contentType: 'text', ruleContent: { content: 'content', nextContentUrl: 'next-content' } } as unknown as NormalizedSource
+  const result = await loadChapterContent({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      return { url: 'https://cdn.test/read/c1', status: 200, headers: {}, bytes: new TextEncoder().encode('page one'), redirected: true }
+    } },
+    rules: { evaluate: async ({ field }) => field === 'content'
+      ? { status: 'success', value: 'first chapter' }
+      : { status: 'success', value: 'nextchapter' } },
+  }, { source: nextSource, chapter, nextChapterUrl: 'nextchapter' })
+  assert.deepEqual(calls, ['https://source.test/c1'])
+  assert.equal(result.value?.cleaned, 'first chapter')
 })
 
 test('正文应用源级 replaceRegex：逐行 trim 后按规则求值', async () => {

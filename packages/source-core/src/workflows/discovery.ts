@@ -1,18 +1,32 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
 import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { SourcePatternError } from '../rules/pattern-guard.ts'
+import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { detailFields, evaluateField, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 1 }
-  return listWorkflow(ports, 'discover', input.source, sourceString(input.source, 'exploreUrl'), ruleString(input.source, 'ruleExplore', 'bookList'), ruleString(input.source, 'ruleExplore', 'nextPage'), cursor, input)
+  const exploreListRule = ruleString(input.source, 'ruleExplore', 'bookList')
+  const ruleGroup = exploreListRule?.trim() ? 'ruleExplore' : 'ruleSearch'
+  return listWorkflow(
+    ports,
+    'discover',
+    input.source,
+    sourceString(input.source, 'exploreUrl'),
+    exploreListRule?.trim() ? exploreListRule : ruleString(input.source, 'ruleSearch', 'bookList'),
+    ruleString(input.source, ruleGroup, 'nextPage'),
+    cursor,
+    input,
+    undefined,
+    ruleGroup,
+  )
 }
 
 export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 1 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
   const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 1
-  return listWorkflow(ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword)
+  return listWorkflow(ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword, 'ruleSearch')
 }
 
 /** Android BookList：列表规则以 `-` 开头表示解析后反转，`+` 只剥离前缀。 */
@@ -24,11 +38,17 @@ function normalizeListRule(value: string): { rule: string; reverse: boolean } {
 
 /**
  * 地址模板是否引用页码变量；没有引用时下一页地址与当前页相同，游标不产生新请求。
- * 只覆盖 `{{page}}`/`{{pageIndex}}`：Android 的 `<n,m>` 式子 URL 语法尚未实现（见 plans 非范围），
- * 语料里仅晋江系 1 个源使用，这类源不产生游标。
+ * 覆盖 `{{page}}`/`{{pageIndex}}` 和 Android `<n,m>` 页面数组语法。
  */
-function pageTemplateVaries(url: string): boolean {
+function pageTemplateHasNext(url: string, page: number): boolean {
   for (const match of url.matchAll(/\{\{([\s\S]*?)\}\}/g)) if (/\b(?:page|pageIndex)\b/u.test(match[1]!)) return true
+  for (const match of url.matchAll(/<([^<>]*)>/g)) {
+    const values = match[1]!.split(',').map((value) => value.trim())
+    if (values.length < 2) continue
+    const current = values[Math.min(page - 1, values.length - 1)] ?? ''
+    const next = values[Math.min(page, values.length - 1)] ?? ''
+    if (current !== next) return true
+  }
   return false
 }
 
@@ -39,7 +59,7 @@ function matchesBookUrlPattern(pattern: string, url: string): { matched: boolean
   return { matched: compiled.regex.test(url) }
 }
 
-async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', source: NormalizedSource, url: string | undefined, listRule: string | undefined, nextRule: string | undefined, cursor: { index: number; token?: string } | undefined, options: DiscoveryInput | SearchInput, keyword?: string): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', source: NormalizedSource, url: string | undefined, listRule: string | undefined, nextRule: string | undefined, cursor: { index: number; token?: string } | undefined, options: DiscoveryInput | SearchInput, keyword: string | undefined, ruleGroup: 'ruleExplore' | 'ruleSearch'): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   const pageCursor = cursor ?? { index: 1 }
@@ -64,7 +84,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   const page = await requestPageResponse(ports, source, expanded.url, stage, options, diagnostics, trace)
   if (page === undefined) return { status: statusFromDiagnostics(diagnostics, 0), value: null, diagnostics, trace }
   const content = page.content
-  const maxItems = options.maxItems ?? 100
+  const maxItems = options.maxItems
   const pattern = sourceString(source, 'bookUrlPattern')
   const candidates: BookCandidate[] = []
   // searchUrl 命中 bookUrlPattern 时整页按详情页解析；Android 的这个分支只在搜索里判断，
@@ -90,11 +110,14 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       diagnostics.push({ code: 'rule-failed', stage, field: 'bookList', message: list.message ?? '列表规则失败', retryable: false })
       return { status: 'failed', value: null, diagnostics, trace }
     }
-    rawItems = list.state === 'value' ? (Array.isArray(list.value) ? list.value : [list.value]) : []
+    rawItems = list.state === 'value' && Array.isArray(list.value) ? list.value.filter((item) => item !== null && item !== undefined) : []
+    if (list.state === 'value' && !Array.isArray(list.value)) {
+      diagnostics.push({ code: 'item-skipped', stage, field: 'bookList', message: 'bookList 规则必须返回列表', retryable: false })
+    }
   }
   const identities = new Set<string>()
-  for (let itemIndex = 0; itemIndex < rawItems.length && candidates.length < maxItems; itemIndex += 1) {
-    const fields = await extractFields(ports, source, stage, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace)
+  for (let itemIndex = 0; itemIndex < rawItems.length && (maxItems === undefined || candidates.length < maxItems); itemIndex += 1) {
+    const fields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace)
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -146,7 +169,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   if (candidates.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '列表没有可用候选', retryable: false })
   // Android 由调用方递增页码继续翻页；只有地址模板引用页码时下一页才是不同的请求。
   let nextCursor: { index: number; token?: string } | undefined
-  if (candidates.length > 0 && pageTemplateVaries(url)) nextCursor = { index: pageCursor.index + 1 }
+  if (candidates.length > 0 && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
   if (nextRule !== undefined) {
     const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal)
     if (next.state === 'cancelled') {
@@ -172,10 +195,10 @@ interface ExtractedFields {
   rawFields: JsonObject
 }
 
-async function extractFields(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, content: unknown, fields: readonly (readonly [string, string])[], itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<ExtractedFields> {
+async function extractFields(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, ruleGroup: 'ruleExplore' | 'ruleSearch', content: unknown, fields: readonly (readonly [string, string])[], itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<ExtractedFields> {
   const extracted: ExtractedFields = { rawFields: {} }
   for (const [ruleField, outputField] of fields) {
-    const rule = ruleString(source, stage === 'search' ? 'ruleSearch' : 'ruleExplore', ruleField)
+    const rule = ruleString(source, ruleGroup, ruleField)
     if (rule === undefined) continue
     const result = await evaluateField(ports, source, stage, ruleField, rule, content, itemIndex, trace, signal)
     if (result.state === 'cancelled') break
@@ -207,9 +230,9 @@ function fieldText(value: unknown, outputField: string): string {
 function resolveCandidateUrl(value: string | undefined, baseUrl: string): string | undefined {
   if (value === undefined || value.length === 0) return baseUrl
   // 旧版本可能把目录响应正文误存进 URL，不能把 HTML 编码成可请求地址。
-  if (value.trimStart().startsWith('<')) return undefined
+  if (value.trimStart().startsWith('<') && !/^<(?:js>|\d+(?:,\d+)*>)/i.test(value.trimStart())) return undefined
   try {
-    return new URL(value, baseUrl).toString()
+    return resolveSourceRequestReference(value, baseUrl)
   } catch {
     return undefined
   }
