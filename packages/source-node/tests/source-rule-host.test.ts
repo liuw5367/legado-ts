@@ -133,6 +133,16 @@ test('规则主体含 {{}} 或 @get: 时返回插值文本（Android AnalyzeRule
   assert.equal((await evaluate(host, '{{@@.item@text}}号', '<div class="item">第一章</div>')).value, '第一章号')
 })
 
+test('插值为空时保留上一份内容（Android 的空规则语义）', async () => {
+  const host = new SourceRuleHost()
+  const body = JSON.stringify({ name: '甲' })
+  // 字段缺失 → 插值为空 → Android 的 rule 变空串，result 仍是分析前的整页内容。
+  assert.equal((await evaluate(host, '{{$.missing}}', body)).value, body)
+  assert.equal((await evaluate(host, '{{$.missing}}', '<div>正文</div>')).value, '<div>正文</div>')
+  // 只剩 @put 的空规则串同样不进模式分支（语料里 lastChapter/kind 这类字段会这么写）。
+  assert.equal((await evaluate(host, '@put:{"savebid":"$.id"}', body)).value, body)
+})
+
 test('JS 规则体里的 {{}} 先插值再执行', async () => {
   const host = new SourceRuleHost()
   const json = JSON.stringify({ book_id: 99 })

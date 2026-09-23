@@ -360,8 +360,10 @@ export class SourceRuleHost implements WorkflowRulePort {
     let value: unknown
     // Android AnalyzeRule：规则体含 `{{}}`/`@get:{}` 时切到 Regex 模式，结果是插值后的文本本身，
     // 不再按 Default/Json/XPath 解析（AnalyzeRule.kt:702-713）；Js 模式例外，它先插值再执行。
-    // 插值后为空时 Android 保留上一个 result（分析前的整页内容），所以这里退回原有模式分支。
-    if (template && interpolated.length > 0 && (rule.mode === 'Default' || rule.mode === 'Json' || rule.mode === 'XPath')) value = interpolated
+    // 插值后为空时 Android 的 `if (rule.isNotEmpty())` 不成立，result 保持分析前的整页内容。
+    // 空规则串（例如只剩 `@put:{...}`）在 Android 里连模式分支都不进，直接沿用上一份内容。
+    if (interpolated.length === 0 && rule.mode !== 'Js') value = await this.evaluateDefault('', state, content)
+    else if (template && (rule.mode === 'Default' || rule.mode === 'Json' || rule.mode === 'XPath')) value = interpolated
     else if (rule.mode === 'Default') value = await this.evaluateDefault(rule.body, state, content)
     else if (rule.mode === 'Json') value = this.evaluateJson(rule.body, content)
     else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content)
