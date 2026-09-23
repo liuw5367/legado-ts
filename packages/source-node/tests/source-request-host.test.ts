@@ -41,3 +41,14 @@ test('书源请求宿主不会把 WebView 请求静默降级到普通 HTTP', asy
   const host = new SourceRequestHost({ network: { request: async (plan) => response(plan.url) } })
   await assert.rejects(() => host.request({ source, url: '/search,{"webView":true}', stage: 'search', options: {} }), /WebView/)
 })
+
+test('正文 webJs 提示在没有 WebView 宿主时显式失败', async () => {
+  const host = new SourceRequestHost({ network: { request: async (plan) => response(plan.url) } })
+  await assert.rejects(
+    () => host.request({ source, url: '/book/1/content', stage: 'detail', options: {}, execution: { webJs: 'window.legado=1' } }),
+    /WebView/,
+  )
+  // 只有 sourceRegex 时不要求 WebView。
+  const ok = await host.request({ source, url: '/book/1/content', stage: 'detail', options: {}, execution: { sourceRegex: 'id="content"' } })
+  assert.equal(new TextDecoder().decode(ok.bytes), 'ok')
+})

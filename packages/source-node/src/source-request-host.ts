@@ -201,7 +201,8 @@ export class SourceRequestHost {
       ...(body === undefined ? {} : { body }),
       ...(headers === undefined ? {} : { headers }),
       ...(typeof options.charset === 'string' ? { requestCharset: options.charset, responseCharset: options.charset } : {}),
-      ...(typeof options.webJs === 'string' || typeof options.sourceRegex === 'string' ? { execution: { ...(typeof options.webJs === 'string' ? { webJs: options.webJs } : {}), ...(typeof options.sourceRegex === 'string' ? { sourceRegex: options.sourceRegex } : {}) } } : {}),
+      // webJs 只能在 WebView 里执行：带上 useWebView 让请求计划显式失败，而不是静默走普通 HTTP。
+      ...(typeof options.webJs === 'string' || typeof options.sourceRegex === 'string' ? { execution: { ...(typeof options.webJs === 'string' ? { webJs: options.webJs, useWebView: true } : {}), ...(typeof options.sourceRegex === 'string' ? { sourceRegex: options.sourceRegex } : {}) } } : {}),
       budget: { ...(budget ?? {}), ...(signal === undefined ? {} : { signal }) },
     })
     if (request.plan === undefined) throw new Error(request.error?.message ?? '书源请求计划无效')

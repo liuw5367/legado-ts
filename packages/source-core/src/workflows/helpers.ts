@@ -121,10 +121,17 @@ function numericTemplateExpression(input: string, replacements: Readonly<Record<
 }
 
 export interface UrlExpansionError {
-  /** 展开失败的稳定分类：规则执行失败、宿主缺少 JavaScript 能力或被取消。 */
-  code: 'rule-failed' | 'capability-missing' | 'cancelled'
+  /** 展开失败的稳定分类：规则执行失败、宿主缺少 JavaScript 能力、配置越界或被取消。 */
+  code: 'rule-failed' | 'capability-missing' | 'invalid-config' | 'cancelled'
   message: string
 }
+
+/**
+ * 单个 URL 允许的内联表达式数量上限。语料实测：1871 条 URL 规则中需要求值的表达式
+ * 最多 1048 个（起点系 exploreUrl 的分类 JSON），p99.9 为 360；上限取 2048 留一倍余量，
+ * 只拒绝病态输入，不误伤真实书源。
+ */
+const maxUrlExpressions = 2048
 
 /** URL 展开失败对应的阶段状态；取消必须保持 cancelled，不能折叠成 failed。 */
 export function expansionStatus(error: UrlExpansionError | undefined): 'failed' | 'cancelled' | 'capability-missing' {
@@ -146,6 +153,8 @@ export function expansionDiagnostic(error: UrlExpansionError | undefined, stage:
 export async function expandUrl(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, url: string, replacements: Readonly<Record<string, string>>, bindings: Readonly<Record<string, unknown>>, signal?: AbortSignal): Promise<{ url?: string; error?: UrlExpansionError }> {
   if (!url.includes('{{')) return { url }
   const matches = [...url.matchAll(/\{\{([\s\S]*?)\}\}/g)]
+  // 每个表达式都可能触发一次 JS 求值，数量不设上限就等于取消预算；超限在任何求值前失败。
+  if (matches.length > maxUrlExpressions) return { error: { code: 'invalid-config', message: `书源 URL 内联表达式数量超过上限（${maxUrlExpressions}）` } }
   let result = url
   for (const match of matches.reverse()) {
     const value = await expandExpression(ports, source, stage, match[1]!.trim(), replacements, bindings, signal)
@@ -157,7 +166,13 @@ export async function expandUrl(ports: WorkflowPorts, source: NormalizedSource, 
 
 async function expandExpression(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, expression: string, replacements: Readonly<Record<string, string>>, bindings: Readonly<Record<string, unknown>>, signal: AbortSignal | undefined): Promise<{ text?: string; error?: UrlExpansionError }> {
   if (Object.prototype.hasOwnProperty.call(replacements, expression)) return { text: replacements[expression] ?? '' }
-  const numeric = numericTemplateExpression(expression, replacements)
+  let numeric: number | undefined
+  try {
+    numeric = numericTemplateExpression(expression, replacements)
+  } catch {
+    // 病态嵌套（数千层括号）会打爆递归栈；栈溢出只让它落回 JS 求值，不能逃出 RuntimeResult 契约。
+    numeric = undefined
+  }
   if (numeric !== undefined) return { text: String(numeric) }
   let output: WorkflowRuleOutput
   try {

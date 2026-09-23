@@ -267,6 +267,37 @@ test('没有页码占位符的列表地址不产生下一页游标', async () =>
   assert.equal(pageDriven.value?.nextCursor?.token, undefined)
 })
 
+test('URL 内联表达式数量超过上限时以配置诊断失败，且不求值', async () => {
+  const calls: string[] = []
+  let evaluations = 0
+  const workflowPorts = ports(calls)
+  workflowPorts.rules = { evaluate: async () => { evaluations += 1; return { status: 'empty', value: null } } }
+  const overLimit = Array.from({ length: 2049 }, (_, index) => `{{x${index}}}`).join('')
+  const templated = { ...source, searchUrl: `/search?q=${overLimit}` } as unknown as NormalizedSource
+  const result = await searchBooks(workflowPorts, { source: templated, keyword: 'A' })
+  assert.equal(result.status, 'failed')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-config'))
+  assert.equal(evaluations, 0)
+  assert.equal(calls.length, 0)
+
+  // 真实语料里数百个页码算术表达式仍走快速路径，不触发上限、不进 JS。
+  const numeric = Array.from({ length: 400 }, (_, index) => `{{page*${index + 1}}}`).join('&p=')
+  const manyNumeric = { ...source, searchUrl: `/search?q={{keyword}}&p=${numeric}` } as unknown as NormalizedSource
+  const expanded = await searchBooks(ports(calls), { source: manyNumeric, keyword: 'A' })
+  assert.equal(expanded.status, 'success')
+  assert.ok(calls[0]?.includes('p=1&p=2&p=3'))
+})
+
+test('深嵌套数值表达式不再抛出逃逸异常', async () => {
+  const deep = `${'('.repeat(5000)}page${')'.repeat(5000)}`
+  const templated = { ...source, searchUrl: `/search?q={{${deep}}}` } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = { evaluate: async () => ({ status: 'failed', value: null, message: '表达式无法求值' }) }
+  const result = await searchBooks(workflowPorts, { source: templated, keyword: 'A' })
+  assert.equal(result.status, 'failed')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed'))
+})
+
 test('列表规则 - 前缀反转、+ 前缀只剥离（Android BookList 语义）', async () => {
   const reversedSource = { ...source, ruleExplore: { bookList: '-list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', nextPage: 'next' } } as unknown as NormalizedSource
   const reversed = await discoverBooks(ports([]), { source: reversedSource })

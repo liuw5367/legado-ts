@@ -558,3 +558,29 @@ test('正文请求携带 ruleContent 的 webJs 与 sourceRegex 执行提示', as
   await loadChapterContent(ports, { source: hintSource, chapter })
   assert.deepEqual(seen, [{ webJs: 'web-js', sourceRegex: 'source-regex' }])
 })
+
+test('正文分页只有首页携带 sourceRegex，后续页只带 webJs（BookContent.kt:92）', async () => {
+  const seen: Array<{ url: string; execution?: { webJs?: string; sourceRegex?: string } }> = []
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', chapterUrl: 'https://source.test/c1', index: 0 }
+  const hintSource = { ...source, ruleContent: { content: 'content', nextPage: 'content-next', webJs: 'web-js', sourceRegex: 'source-regex' } } as unknown as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'content') return { status: 'success', value: `第${content === 'body-2' ? '二' : '一'}页` }
+        if (field === 'nextPage') return { status: 'success', value: content === 'body-1' ? '/c1?page=2' : null }
+        return { status: 'empty', value: null }
+      },
+    },
+    request: async (input) => {
+      seen.push({ url: input.url, ...(input.execution === undefined ? {} : { execution: input.execution }) })
+      return { url: input.url, status: 200, headers: {}, bytes: new TextEncoder().encode(input.url.includes('page=2') ? 'body-2' : 'body-1'), redirected: false }
+    },
+  }
+  const result = await loadChapterContent(ports, { source: hintSource, chapter })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(seen.map((item) => item.execution), [
+    { webJs: 'web-js', sourceRegex: 'source-regex' },
+    { webJs: 'web-js' },
+  ])
+})

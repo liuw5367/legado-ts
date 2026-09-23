@@ -163,10 +163,12 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const replaceRule = ruleString(input.source, 'ruleContent', 'replaceRegex')
   const contentWebJs = ruleString(input.source, 'ruleContent', 'webJs')
   const contentSourceRegex = ruleString(input.source, 'ruleContent', 'sourceRegex')
-  // Android 在正文请求上单独传递 contentRule.webJs/sourceRegex，其他阶段不传。
-  const execution = contentWebJs === undefined && contentSourceRegex === undefined
+  // Android 在正文请求上单独传递 contentRule.webJs/sourceRegex，其他阶段不传；
+  // 分页请求只带 webJs（BookContent.kt:92 的 getStrResponseAwait(jsStr = webJs)）。
+  const firstPageExecution = contentWebJs === undefined && contentSourceRegex === undefined
     ? undefined
     : { ...(contentWebJs === undefined ? {} : { webJs: contentWebJs }), ...(contentSourceRegex === undefined ? {} : { sourceRegex: contentSourceRegex }) }
+  const pagedExecution = contentWebJs === undefined ? undefined : { webJs: contentWebJs }
   const maxPages = input.maxPages ?? sourceNumber(input.source, 'contentMaxPages') ?? 32
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const maxOutputBytes = input.maxOutputBytes ?? 4 * 1024 * 1024
@@ -209,7 +211,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     visited.add(normalizedUrl)
     const page = pageIndex === 0 && input.tocHtml !== undefined && normalizedUrl === bookUrl
       ? { body: input.tocHtml, url: normalizedUrl }
-      : await cachedPage(ports, input.source, normalizedUrl, 'content', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, execution)
+      : await cachedPage(ports, input.source, normalizedUrl, 'content', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, pageIndex === 0 ? firstPageExecution : pagedExecution)
     if (page === undefined) break
     const body = page.body
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
