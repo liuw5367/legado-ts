@@ -3,6 +3,7 @@ import test from 'node:test'
 import type { NetworkHost, NetworkResponse, NormalizedSource } from '../../source-core/src/public/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
 import { SourceRequestHost } from '../src/source-request-host.ts'
+import { SourceRuleHost } from '../src/source-rule-host.ts'
 
 const source = {
   bookSourceUrl: 'https://fixture.invalid',
@@ -40,6 +41,33 @@ test('书源请求宿主兼容 fixture 中常见的单引号 options 写法', as
 test('书源请求宿主不会把 WebView 请求静默降级到普通 HTTP', async () => {
   const host = new SourceRequestHost({ network: { request: async (plan) => response(plan.url) } })
   await assert.rejects(() => host.request({ source, url: '/search,{"webView":true}', stage: 'search', options: {} }), /WebView/)
+})
+
+test('cookie-remove 按地址删除，不波及其他书源的 Cookie', async () => {
+  const cookies = new NodeCookieStore()
+  await cookies.set('https://a.test/', 'sid=a')
+  await cookies.set('https://b.test/', 'sid=b')
+  const host = new SourceRequestHost({ network: { request: async (plan) => response(plan.url) }, cookieStore: cookies })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, source) => host.requestFromBridge(input, signal, source) })
+  host.attachRuleHost(ruleHost)
+  const other = { bookSourceUrl: 'https://a.test', bookSourceName: 'a' } as unknown as NormalizedSource
+  const result = await ruleHost.evaluate({ source: other, stage: 'search', field: 'fixture', rule: '@js:cookie.removeCookie(source.getKey())', content: '' })
+  assert.notEqual(result.status, 'failed')
+  assert.notEqual(result.status, 'capability-missing')
+  assert.equal(await cookies.get('https://a.test/'), undefined)
+  assert.equal(await cookies.get('https://b.test/'), 'sid=b')
+})
+
+test('桥接请求随求值携带书源，共享宿主跨源并发不串源', async () => {
+  const seen: Array<string | undefined> = []
+  const host = new SourceRuleHost({ request: async (_input, _signal, source) => { seen.push(source?.bookSourceUrl); return 'ok' } })
+  const first = { bookSourceUrl: 'https://a.test', bookSourceName: 'a' } as unknown as NormalizedSource
+  const second = { bookSourceUrl: 'https://b.test', bookSourceName: 'b' } as unknown as NormalizedSource
+  await Promise.all([
+    host.evaluate({ source: first, stage: 'search', field: 'fixture', rule: '@js:java.ajax("https://a.test/1")', content: '' }),
+    host.evaluate({ source: second, stage: 'search', field: 'fixture', rule: '@js:java.ajax("https://b.test/1")', content: '' }),
+  ])
+  assert.deepEqual(seen.sort(), ['https://a.test', 'https://b.test'])
 })
 
 test('正文 webJs 提示在没有 WebView 宿主时显式失败', async () => {

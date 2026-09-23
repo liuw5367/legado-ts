@@ -56,7 +56,9 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
     this.bridge = bridge
   }
 
-  public async execute(input: JavaScriptExecutionInput): Promise<JavaScriptExecutionResult> {
+  public async execute(input: JavaScriptExecutionInput, overrides: JavaScriptBridge = {}): Promise<JavaScriptExecutionResult> {
+    // 单次执行可以覆盖 bridge：宿主据此把「当前书源」绑到这一趟求值上，而不是共享可变字段。
+    const bridge: JavaScriptBridge = { ...this.bridge, ...overrides }
     const budget = { ...defaultBudget, ...input.budget }
     const diagnostics: JavaScriptExecutionResult['diagnostics'] = []
     const trace: JavaScriptTraceEntry[] = []
@@ -67,7 +69,7 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       diagnostics.push({ code: 'budget-exceeded', message: 'JavaScript 预算必须是正的运行时限制和非负整数', stage: input.stage })
       return { status: 'budget-exceeded', value: null, diagnostics, variableChanges: [], trace }
     }
-    const variableCapability = input.variables !== undefined || this.bridge.getVariable !== undefined || this.bridge.setVariable !== undefined
+    const variableCapability = input.variables !== undefined || bridge.getVariable !== undefined || bridge.setVariable !== undefined
     if (input.variables !== undefined) {
       for (const [name, value] of Object.entries(input.variables)) {
         variableValues.set(name, value)
@@ -136,8 +138,8 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
           const name = context!.getString(args[0]!)
           const value = await callBridge('getVariable', async () => {
             if (variableValues.has(name)) return variableValues.get(name)
-            if (this.bridge.getVariable === undefined) return undefined
-            return this.bridge.getVariable(name, signal)
+            if (bridge.getVariable === undefined) return undefined
+            return bridge.getVariable(name, signal)
           })
           return context!.newString(encodeJavaScriptValue(value))
         })
@@ -145,23 +147,23 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
           const name = context!.getString(args[0]!)
           const value = decodeJavaScriptValue(context!.getString(args[1]!))
           await callBridge('setVariable', async () => {
-            if (this.bridge.setVariable !== undefined) await this.bridge.setVariable(name, value, signal)
+            if (bridge.setVariable !== undefined) await bridge.setVariable(name, value, signal)
           })
           variableValues.set(name, value)
           return context!.undefined
         })
       }
-      if (this.bridge.request !== undefined) {
+      if (bridge.request !== undefined) {
         installAsync('__legadoRequest', async (...args) => {
           const requestInput = decodeJavaScriptValue(context!.getString(args[0]!))
-          const response = await callBridge('request', () => this.bridge.request!(requestInput, signal))
+          const response = await callBridge('request', () => bridge.request!(requestInput, signal))
           return context!.newString(encodeJavaScriptValue(response))
         })
       }
-      if (this.bridge.evaluateRule !== undefined) {
+      if (bridge.evaluateRule !== undefined) {
         installAsync('__legadoEvaluateRule', async (...args) => {
           const rule = context!.getString(args[0]!)
-          const value = await callBridge('evaluateRule', () => this.bridge.evaluateRule!(rule, signal))
+          const value = await callBridge('evaluateRule', () => bridge.evaluateRule!(rule, signal))
           return context!.newString(encodeJavaScriptValue(value))
         })
       }

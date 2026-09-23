@@ -1,5 +1,6 @@
 import {
   compileRule,
+  compileSourcePattern,
   MemoryVariableView,
 } from '@legado/source-core'
 import type {
@@ -245,8 +246,6 @@ export class SourceRuleHost implements WorkflowRulePort {
   private readonly maxSteps: number
   private readonly nodes = new Map<string, StoredNode>()
   private bindings: Readonly<Record<string, unknown>> = {}
-  /** 最近一次 JS 求值所用的书源；bridge 调用需要它来定位当前会话。 */
-  private currentSource?: NormalizedSource
   private nextNodeId = 0
 
   public constructor(options: SourceRuleHostOptions = {}) {
@@ -257,7 +256,6 @@ export class SourceRuleHost implements WorkflowRulePort {
     this.requestBridge = options.request
     this.maxSteps = options.maxSteps ?? 10000
     this.javascript = new QuickJSJavaScriptHost({
-      request: (input, signal) => this.handleBridge(input, signal),
       getVariable: async (name) => this.variables.get(name),
       setVariable: async (name, value) => this.variables.set(name, value === null ? null : textValue(value)),
     })
@@ -443,8 +441,10 @@ export class SourceRuleHost implements WorkflowRulePort {
   }
 
   private evaluateRegex(expression: string, content: unknown): unknown {
-    const regex = new RegExp(expression, 'g')
-    return [...textValue(content).matchAll(regex)].map((match) => [match[0] ?? '', ...match.slice(1).map((item) => item ?? '')])
+    const text = textValue(content)
+    const compiled = compileSourcePattern(expression, { flags: 'g', complexity: 'reject-large-input', inputLength: text.length })
+    if ('error' in compiled) throw new SourceRuleError('failed', `${compiled.error.message}：${expression.slice(0, 40)}`)
+    return [...text.matchAll(compiled.regex)].map((match) => [match[0] ?? '', ...match.slice(1).map((item) => item ?? '')])
   }
 
   /** 只在文本真的含模板时才插值，普通规则不额外扫描。 */
@@ -488,15 +488,16 @@ export class SourceRuleHost implements WorkflowRulePort {
     // Android 先对整条规则插值再按 `##` 切分，所以匹配串和替换串里的 {{}} 同样生效。
     const patternText = await this.expandTemplate(rule.replacement.pattern, state, content)
     const replacement = await this.expandTemplate(rule.replacement.replacement, state, content)
-    const pattern = new RegExp(patternText, 'g')
     const text = textValue(value)
-    if (!rule.replacement.firstMatchOnly) return text.replace(pattern, replacement)
-    const first = pattern.exec(text)
-    return first === null ? '' : first[0].replace(new RegExp(patternText, 'g'), replacement)
+    // 源可控正则过长度上限或（对超长输入）命中嵌套量词时明确失败，不让病态配置拖垮求值。
+    const compiled = compileSourcePattern(patternText, { flags: 'g', complexity: 'reject-large-input', inputLength: text.length })
+    if ('error' in compiled) throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
+    if (!rule.replacement.firstMatchOnly) return text.replace(compiled.regex, replacement)
+    const first = compiled.regex.exec(text)
+    return first === null ? '' : first[0].replace(compiled.regex, replacement)
   }
 
   private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: Pick<WorkflowRuleRequest, 'baseUrl' | 'redirectUrl' | 'content' | 'bindings'>): Promise<WorkflowRuleOutput> {
-    this.currentSource = source
     const bindings = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
@@ -538,7 +539,8 @@ export class SourceRuleHost implements WorkflowRulePort {
     const trailing = trailingExpression(sourceCode)
     const executable = `${prelude}\n${trailing.body}\n${trailing.expression === undefined ? '' : `return (${trailing.expression});`}`
     const input = { code: executable, stage, bindings, variables: this.variables.snapshot(), ...(signal === undefined ? {} : { signal }) }
-    const output = await this.javascript.execute(input)
+    // 书源随这趟求值传入 bridge：共享宿主不再有「当前书源」字段，跨源并发不会串源。
+    const output = await this.javascript.execute(input, { request: (payload, runSignal) => this.handleBridge(payload, runSignal, source) })
     return {
       status: output.status === 'budget-exceeded' ? 'failed' : output.status,
       value: output.value,
@@ -546,7 +548,7 @@ export class SourceRuleHost implements WorkflowRulePort {
     }
   }
 
-  private async handleBridge(input: unknown, signal: AbortSignal): Promise<unknown> {
+  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'base64-encode') return this.encoding.base64Encode(textValue(request.value))
@@ -565,7 +567,7 @@ export class SourceRuleHost implements WorkflowRulePort {
       return this.font.replaceFont(textValue(request.text), error, correct, request.filter === true)
     }
     if (this.requestBridge === undefined) throw new Error('书源网络或宿主 bridge 不可用')
-    return this.requestBridge(request, signal, this.currentSource)
+    return this.requestBridge(request, signal, source)
   }
 
   private remember(document: HtmlDocument, node: ParserNode): NodeRef {

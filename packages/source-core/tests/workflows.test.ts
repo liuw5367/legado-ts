@@ -298,6 +298,33 @@ test('深嵌套数值表达式不再抛出逃逸异常', async () => {
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed'))
 })
 
+test('病态或超长 bookUrlPattern 被守卫拒绝并给出诊断', async () => {
+  const evaluated: string[] = []
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      return ports([]).rules.evaluate(request)
+    },
+  }
+  const started = Date.now()
+  const pathological = { ...source, searchUrl: '/book/one', bookUrlPattern: '(a+)+$' } as unknown as NormalizedSource
+  const result = await searchBooks(workflowPorts, { source: pathological, keyword: 'A' })
+  // 命中守卫按「不匹配」处理，仍走列表解析；旧版在这里会做指数级回溯。
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-config' && diagnostic.field === 'bookUrlPattern'))
+  assert.ok(evaluated.includes('list'))
+  assert.ok(Date.now() - started < 1000)
+
+  const oversized = { ...source, searchUrl: '/book/one', bookUrlPattern: 'x'.repeat(3000) } as unknown as NormalizedSource
+  const long = await searchBooks(workflowPorts, { source: oversized, keyword: 'A' })
+  assert.ok(long.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-config' && diagnostic.message.includes('长度上限')))
+
+  // 正常 pattern 不受影响：命中时仍整页按详情页解析。
+  const normal = { ...source, searchUrl: '/book/one', bookUrlPattern: 'https://source\\.test/book/.*' } as unknown as NormalizedSource
+  const matched = await searchBooks(workflowPorts, { source: normal, keyword: 'A' })
+  assert.equal(matched.value?.items[0]?.name, 'A detail')
+})
+
 test('列表规则 - 前缀反转、+ 前缀只剥离（Android BookList 语义）', async () => {
   const reversedSource = { ...source, ruleExplore: { bookList: '-list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', nextPage: 'next' } } as unknown as NormalizedSource
   const reversed = await discoverBooks(ports([]), { source: reversedSource })

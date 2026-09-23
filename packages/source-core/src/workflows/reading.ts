@@ -1,5 +1,6 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
 import { compileRule } from '../rules/compiler.ts'
+import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { CompiledRule } from '../rules/types.ts'
 import { evaluateField, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowStage, WorkflowTraceEntry } from './types.ts'
@@ -299,10 +300,10 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     }
   }
   let replaced = sourceReplaced
-  try {
-    replaced = applyReplacements(sourceReplaced, input.replacements ?? [])
-  } catch {
-    diagnostics.push({ code: 'item-skipped', stage, message: '正文替换规则无效', retryable: false })
+  const replacements = applyReplacements(sourceReplaced, input.replacements ?? [])
+  replaced = replacements.text
+  for (const message of replacements.errors) {
+    diagnostics.push({ code: 'invalid-config', stage, field: 'replacements', message, retryable: false })
     stoppedByLimit = true
   }
   const cleaned = cleanContent(replaced, contentType, lastResponseUrl)
@@ -489,8 +490,19 @@ function cleanContent(value: string, contentType: 'text' | 'html', baseUrl: stri
   return value.replace(/<!--[\s\S]*?-->/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '').replace(/\s+(src|data-src)=(['"])(.*?)\2/gi, (_match, name: string, quote: string, url: string) => ` ${name}=${quote}${resolveResource(url, baseUrl)}${quote}`).trim()
 }
 
-function applyReplacements(value: string, replacements: readonly { pattern: string; replacement: string; all?: boolean }[]): string {
-  return replacements.reduce((result, item) => result.replace(new RegExp(item.pattern, item.all === false ? '' : 'g'), item.replacement), value)
+/** 逐条应用调用方给的正文替换；越界或非法的正则只跳过该条并回报，不能拖垮整篇正文。 */
+function applyReplacements(value: string, replacements: readonly { pattern: string; replacement: string; all?: boolean }[]): { text: string; errors: string[] } {
+  const errors: string[] = []
+  let result = value
+  for (const item of replacements) {
+    const compiled = compileSourcePattern(item.pattern, { flags: item.all === false ? '' : 'g', inputLength: value.length })
+    if ('error' in compiled) {
+      errors.push(`${compiled.error.message}：${item.pattern.slice(0, 40)}`)
+      continue
+    }
+    result = result.replace(compiled.regex, item.replacement)
+  }
+  return { text: result, errors }
 }
 
 function extractResources(value: string, contentType: 'text' | 'html', baseUrl: string): ContentResource[] {

@@ -158,6 +158,20 @@ export interface EffectRecord {
 
 映射示例：宿主启用 `blockSourceNavigation` 且在 `SuppressSourceNavigation` 上下文阻止 `openUrl`/`openVideoPlayer` 时，适配器应把该拒绝报告为 `policy-denied`，不能伪装成网络错误或能力缺失。
 
+## 规则端口与分页游标
+
+规则端口（`WorkflowRulePort.evaluate`）的请求里有两个决定结果形态的字段：
+
+- `expect`：`text`（默认，字段规则取文本）或 `nodes`（列表规则取元素节点）。列表规则必须显式声明 `nodes`，
+  否则末段会被当成输出标记或属性名处理（Android `AnalyzeByJSoup.getResultLast` 语义：末段一律是输出标记或属性名）；
+- `bindings`：本次求值注入的 JS 绑定（URL 展开需要的 `key`、`page` 等）。绑定随请求传递，
+  不需要宿主保存"当前书源/当前绑定"这类可变状态。
+
+`WorkflowPage.nextCursor` 只在下一页地址真的会变时出现：地址模板引用了 `{{page}}`/`{{pageIndex}}`，
+或 `nextPage` 规则命中并给出值。没有页码占位符的地址再给游标只会重复请求同一地址。
+`ChapterContent.title` 由 `ruleContent.title` 从**首页响应**提取（Android `AppPattern.imgRegex`：标题里带图片时取图片地址前的文本），
+未配置或提取为空时该字段缺失，调用方沿用目录标题。
+
 ## 契约边界
 
 ```text

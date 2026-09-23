@@ -146,6 +146,22 @@ test('## 替换段里的 {{}} 参与插值', async () => {
   assert.equal((await evaluate(host, '.intro@text##^《.*?是由{{author}}写的。##已清洗', html)).value, '已清洗')
 })
 
+test('源可控正则命中守卫时明确失败，短输入的合法写法不受影响', async () => {
+  const host = new SourceRuleHost()
+  // 语料里有 4 条 `##` 匹配串合法使用嵌套量词（如 `(\n.*)+`），短输入必须照常替换。
+  const short = await evaluate(host, 'p@text##(\\n.*)+##', '<p>a\nb\nc</p>')
+  assert.equal(short.status, 'success')
+  assert.equal(short.value, 'a')
+
+  const large = await evaluate(host, 'p@text##(\\n.*)+##', `<p>${'a\n'.repeat(40000)}</p>`)
+  assert.equal(large.status, 'failed')
+  assert.match(String(large.message), /嵌套量词/)
+
+  const oversized = await evaluate(host, `p@text##${'x'.repeat(3000)}##`, '<p>x</p>')
+  assert.equal(oversized.status, 'failed')
+  assert.match(String(oversized.message), /长度上限/)
+})
+
 test('JSON 解包只作用于确定路径，通配路径保持 Android 的嵌套结构', async () => {
   const host = new SourceRuleHost()
   const body = JSON.stringify({ single: [[1, 2]], data: { books: [{ name: '甲' }, { name: '乙' }] } })

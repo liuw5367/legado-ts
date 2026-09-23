@@ -158,7 +158,8 @@ export class SourceRequestHost {
       return true
     }
     if (input.kind === 'cookie-remove') {
-      await this.cookieStore.clear()
+      // Android 按 URL 删除；清空整个 jar 会让同一会话里的其他书源丢凭据。
+      await this.cookieStore.remove(new URL(url, current.bookSourceUrl).toString())
       return true
     }
     if (input.kind === 'token') throw new Error('书源 token bridge 不可用')

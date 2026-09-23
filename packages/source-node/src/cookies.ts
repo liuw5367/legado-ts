@@ -17,6 +17,14 @@ export class NodeCookieStore implements CookieStore {
     for (const value of Array.isArray(setCookie) ? setCookie : [setCookie]) await this.jar.setCookie(value, url)
   }
 
+  /** Android `CookieStore.removeCookie(url)`：只删除该地址范围内可见的 Cookie。 */
+  public async remove(url: string): Promise<void> {
+    for (const cookie of await this.jar.getCookies(url)) {
+      if (cookie.domain === null) continue
+      await this.jar.store.removeCookie(cookie.domain, cookie.path ?? '/', cookie.key)
+    }
+  }
+
   public async clear(): Promise<void> {
     await this.jar.removeAllCookies()
   }

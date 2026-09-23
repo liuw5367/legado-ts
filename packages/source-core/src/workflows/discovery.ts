@@ -1,4 +1,6 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
+import { compileSourcePattern } from '../rules/pattern-guard.ts'
+import type { SourcePatternError } from '../rules/pattern-guard.ts'
 import { detailFields, evaluateField, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
@@ -30,13 +32,11 @@ function pageTemplateVaries(url: string): boolean {
   return false
 }
 
-/** Android `String.matches`：整个响应地址匹配 bookUrlPattern；非法正则按不匹配处理。 */
-function matchesBookUrlPattern(pattern: string, url: string): boolean {
-  try {
-    return new RegExp(`^(?:${pattern})$`).test(url)
-  } catch {
-    return false
-  }
+/** Android `String.matches`：整个响应地址匹配 bookUrlPattern；非法或越界的正则按不匹配处理，并给出诊断。 */
+function matchesBookUrlPattern(pattern: string, url: string): { matched: boolean; error?: SourcePatternError } {
+  const compiled = compileSourcePattern(`^(?:${pattern})$`)
+  if ('error' in compiled) return { matched: false, error: compiled.error }
+  return { matched: compiled.regex.test(url) }
 }
 
 async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', source: NormalizedSource, url: string | undefined, listRule: string | undefined, nextRule: string | undefined, cursor: { index: number; token?: string } | undefined, options: DiscoveryInput | SearchInput, keyword?: string): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
@@ -69,7 +69,9 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   const candidates: BookCandidate[] = []
   // searchUrl 命中 bookUrlPattern 时整页按详情页解析；Android 的这个分支只在搜索里判断，
   // 但「已配置 pattern 就不做空列表回退」对搜索和发现都生效（BookList.kt:64,100）。
-  const detailPage = stage === 'search' && pattern !== undefined && matchesBookUrlPattern(pattern, page.url)
+  const patternMatch = pattern === undefined ? undefined : matchesBookUrlPattern(pattern, page.url)
+  if (patternMatch?.error !== undefined) diagnostics.push({ code: 'invalid-config', stage, field: 'bookUrlPattern', message: patternMatch.error.message, retryable: false })
+  const detailPage = stage === 'search' && patternMatch?.matched === true
   let rawItems: unknown[] = []
   let reverse = false
   if (!detailPage) {
