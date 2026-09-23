@@ -68,7 +68,8 @@ export interface RenderState {
 export function pageHeader(page: Page, state: RenderState): { left: string; right: string } {
   const bookName = state.book?.book.name ?? ''
   const chapterName = state.toc?.chapters[state.chapterIndex]?.title ?? ''
-  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? `阅读 · ${chapterName} · ${bookName}` : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : '配置'
+  const readerTitle = `${bookName} · ${chapterName} · ${state.chapterIndex + 1}/${state.toc?.chapters.length ?? 0} 章`
+  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : '配置'
   const left = page === 'reader' || page === 'toc' || page === 'home' || page === 'results' ? pageName : `Legado Reader · ${pageName}`
   let right = ''
   if (page === 'home') right = `${state.catalog.entries.filter((entry) => entry.state === 'available').length}/${state.catalog.entries.length} 个书源可用`
@@ -80,7 +81,7 @@ export function pageHeader(page: Page, state: RenderState): { left: string; righ
   }
   if (right.length === 0 && page === 'reader') {
     const pageCount = pagePosition(state.readerLine, state.contentLines.length, state.bodyHeight)
-    right = `第 ${pageCount.current}/${pageCount.total} 页 · ${state.chapterCharacters.toLocaleString('zh-CN')} 字`
+    right = `${pageCount.current}/${pageCount.total} 页 · ${state.chapterCharacters.toLocaleString('zh-CN')} 字`
   }
   if (right.length === 0 && page === 'sources') right = `${state.sources.length} 个来源`
   if (page !== 'results') {

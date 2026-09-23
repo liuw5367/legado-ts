@@ -50,8 +50,8 @@ export function helpLines(page: Page, homeArea: number): string[] {
     results: ['↑/↓ 或 j/k 选择，Enter 详情', 't 打开目录，o 书籍操作', '搜索中按 Esc 取消'],
     detail: ['Enter 阅读，t 目录', 's 书源，a 书架'],
     toc: ['↑/↓ 或 j/k 选择，Enter 阅读', '/ 按章节名筛选，Home/End 首尾'],
-    reader: ['↑/↓ 或 j/k 翻页，←/→ 或 h/l 切换章节', 'PgUp/PgDn 或空格翻页，t 目录，s 书源，a 书架，r 刷新'],
-    sources: ['↑/↓ 或 j/k 选择书源', 't 查看目录，Enter 切换/继续，m 搜索更多'],
+    reader: ['↑/↓ 或 j/k 翻页，←/→ 或 h/l 切换章节', 'PgUp/PgDn 或空格翻页，i 书籍信息，t 目录，s 书源，a 书架，r 刷新'],
+    sources: ['↑/↓ 或 j/k 选择书源', 't 查看目录，Enter 切换，m 搜索更多'],
     mapping: ['Enter 确认切换，Esc 取消'],
     config: ['查看当前来源配置与诊断', 'd 打开诊断，q 退出'],
     diagnostics: ['↑/↓ 或 j/k 滚动查看，Esc 返回'],
@@ -249,7 +249,7 @@ export function footer(page: Page, busy: boolean, columns: number, searchState: 
   if (page === 'sources') {
     const searching = sourceSearchState === 'running' || sourceSearchState === 'cancelling'
     return layoutFooter([
-      ...(searching ? [{ keys: 'Esc', label: '取消搜索', priority: -1 }] : [{ keys: 'Enter', label: '切换/继续', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'm', label: '搜索更多', priority: 2 }]),
+      ...(searching ? [{ keys: 'Esc', label: '取消搜索', priority: -1 }] : [{ keys: 'Enter', label: '切换', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'm', label: '搜索更多', priority: 2 }]),
       ...(searching ? common.slice(1) : common),
     ], columns)
   }
@@ -265,6 +265,7 @@ export function footer(page: Page, busy: boolean, columns: number, searchState: 
     ? [{ keys: 'Enter', label: '完成', priority: 0 }, { keys: 'Esc', label: '清除', priority: -1 }]
     : [{ keys: 'Enter', label: '阅读', priority: 0 }, { keys: '/', label: '筛章节', priority: 1 }, ...(tocHasQuery ? [{ keys: 'Esc', label: '清除筛选', priority: -1 }] : common)], columns)
   if (page === 'reader') return layoutFooter([
+    { keys: 'i', label: '信息', priority: 1 },
     { keys: 't', label: '目录', priority: 1 },
     { keys: 's', label: '换源', priority: 1 },
     { keys: 'a', label: '书架', priority: 1 },

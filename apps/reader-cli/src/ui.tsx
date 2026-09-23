@@ -430,7 +430,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     return openSearchGroup(group, navigate)
   }
 
-  const loadToc = async (edition?: string, bookOverride?: OpenBookResult): Promise<TocResult | undefined> => {
+  const loadToc = async (edition?: string, bookOverride?: OpenBookResult, navigate = true): Promise<TocResult | undefined> => {
     const currentBook = bookOverride ?? book
     if (currentBook === undefined) return undefined
     const operation = beginOperation('task')
@@ -447,8 +447,8 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setTocSelected(resumeIndex >= 0 ? resumeIndex : 0)
       setTocQuery('')
       setTocSearchActive(false)
-      setListStart(0)
-      setPage('toc')
+      if (navigate) setListStart(0)
+      if (navigate) setPage('toc')
       setMessage(`${result.chapters.length} 章${resumeIndex >= 0 ? ' · 已定位到上次阅读章节' : ''}`)
       return result
     } catch (error) {
@@ -496,11 +496,37 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
           openedBook = { ...currentBook, book: { ...currentBook.book, activeEditionKey: result.edition.editionKey }, source: result.source, reading: { ...reading, positions: { ...reading.positions, [result.edition.editionKey]: position }, activeEditionKey: result.edition.editionKey, lastReadAt: timestamp, updatedAt: timestamp } }
         }
       }
-      setBook(openedBook)
       if (result.edition.editionKey !== activeEditionKey(currentBook)) {
         try { setSources(await application.knownSources(currentBook.book.bookId)) }
         catch { partialCommit = true }
       }
+      const previousFrame = navigationRef.current.at(-2)
+      const returnToReader = pageRef.current === 'detail'
+        && previousFrame?.page === 'reader'
+        && previousFrame.bookId === currentBook.book.bookId
+        && previousFrame.editionKey === result.edition.editionKey
+      if (returnToReader) {
+        goBack()
+        const restored = navigationRef.current.at(-1)
+        if (restored !== undefined) {
+          navigationRef.current[navigationRef.current.length - 1] = {
+            ...restored,
+            book: openedBook,
+            toc: currentToc,
+            content: formatted.text,
+            formattedContent: formatted,
+            chapterIndex: index,
+            readerLine: resumeLine,
+            tocSelected: index,
+            tocQuery: '',
+            tocSearchActive: false,
+            bookId: openedBook.book.bookId,
+            editionKey: result.edition.editionKey,
+          }
+        }
+      }
+      setBook(openedBook)
+      setToc(currentToc)
       setChapterIndex(index)
       setContent(formatted.text)
       setFormattedContent(formatted)
@@ -509,7 +535,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setTocQuery('')
       setTocSearchActive(false)
       if (result.edition.editionKey !== activeEditionKey(currentBook)) sourceCommitRef.current = result.edition.editionKey
-      setPage('reader')
+      if (!returnToReader) setPage('reader')
       setMessage(partialCommit ? '阅读位置已保存，书籍信息待同步' : formatted.text.length === 0 ? '章节内容为空 · 阅读位置已保存' : `${refresh ? '正文已刷新' : '正文已加载'}${resumeLine > 0 && !refresh ? ' · 已恢复上次位置' : ''}`)
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
@@ -624,14 +650,24 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setMenu({ target, items, index: 0 })
   }
 
-  const startReading = async (): Promise<void> => {
-    if (book === undefined) return
-    const loaded = await loadToc()
+  const startReading = async (bookOverride?: OpenBookResult): Promise<void> => {
+    const currentBook = bookOverride ?? book
+    if (currentBook === undefined) return
+    const previousFrame = pageRef.current === 'detail' ? navigationRef.current.at(-2) : undefined
+    const loaded = await loadToc(undefined, currentBook, false)
     if (loaded === undefined) return
-    const saved = book.reading?.positions[loaded.edition.editionKey]
+    const saved = currentBook.reading?.positions[loaded.edition.editionKey]
     const savedIndex = saved === undefined ? -1 : loaded.chapters.findIndex((item) => item.chapterUrl === saved.chapterUrl)
-    const resumeIndex = savedIndex < 0 ? 0 : savedIndex
-    await loadChapter(resumeIndex, book, loaded)
+    const previousChapterUrl = previousFrame?.page === 'reader' && previousFrame.bookId === currentBook.book.bookId
+      ? previousFrame.toc?.chapters[previousFrame.chapterIndex]?.chapterUrl
+      : undefined
+    const previousChapterIndex = previousChapterUrl === undefined ? -1 : loaded.chapters.findIndex((item) => item.chapterUrl === previousChapterUrl)
+    const returnToReader = previousFrame?.page === 'reader'
+      && previousFrame.bookId === currentBook.book.bookId
+      && previousFrame.editionKey === loaded.edition.editionKey
+      && previousChapterIndex >= 0
+    const resumeIndex = returnToReader ? previousChapterIndex : savedIndex < 0 ? 0 : savedIndex
+    await loadChapter(resumeIndex, currentBook, loaded, returnToReader)
   }
 
   const toggleShelf = (): void => {
@@ -668,7 +704,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
           setMessage('正在打开阅读记录…')
           void application.openStoredBook(item.book.bookId, operation.controller.signal).then((opened) => {
             if (!isCurrent(operation)) return
-            setBook(opened); setToc(undefined); setPage('detail')
+            void startReading(opened)
           }).catch((error: unknown) => {
             if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
           }).finally(() => finishOperation(operation))
@@ -744,6 +780,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (input === ' ' || key.pageDown || navigation === 'next-page') setReaderLine((value) => clampContentLine(value + height, currentLines.length, height))
     if (key.pageUp || navigation === 'previous-page') setReaderLine((value) => clampContentLine(value - height, currentLines.length, height))
     if (input === 'r' && !busy) void loadChapter(chapterIndex, undefined, undefined, true)
+    if (input === 'i' && !busy) setPage('detail')
     if (navigation === 'previous-chapter' && chapterIndex > 0 && !busy) void loadChapter(chapterIndex - 1)
     if (navigation === 'next-chapter' && toc !== undefined && chapterIndex < toc.chapters.length - 1 && !busy) void loadChapter(chapterIndex + 1)
     if (input === 't' && !busy) setPage('toc')
