@@ -1,7 +1,7 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
 import { compileRule } from '../rules/compiler.ts'
 import type { CompiledRule } from '../rules/types.ts'
-import { evaluateField, expandUrl, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import { evaluateField, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function loadTableOfContents(ports: ReadingPorts, input: TocInput): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
@@ -26,8 +26,8 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   // 目录地址同样允许 `{{...}}` 内联表达式（Android 对每个 AnalyzeUrl 都做同样的展开）。
   const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
   if (expandedBookUrl.url === undefined) {
-    diagnostics.push({ code: expandedBookUrl.error?.code ?? 'rule-failed', stage, field: 'tocUrl', message: expandedBookUrl.error?.message ?? '目录地址展开失败', retryable: false })
-    return { status: 'failed', value: null, diagnostics, trace }
+    diagnostics.push(expansionDiagnostic(expandedBookUrl.error, stage, 'tocUrl', '目录地址展开失败'))
+    return { status: expansionStatus(expandedBookUrl.error), value: null, diagnostics, trace }
   }
   const bookBaseUrl = expandedBookUrl.url
   const pendingPages = [{ url: bookBaseUrl, followNext: true }]
@@ -126,6 +126,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
       const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
+        if (expandedNext?.error?.code === 'cancelled') return cancelled('目录下一页地址展开已取消', diagnostics, trace)
         diagnostics.push({ code: expandedNext?.error?.code ?? 'item-skipped', stage, field: 'nextTocUrl', message: expandedNext?.error?.message ?? '目录下一页 URL 无效', retryable: false })
         continue
       }
@@ -178,8 +179,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const rawFirstPageUrl = resolveUrl(input.chapter.chapterUrl, bookUrl) ?? input.chapter.chapterUrl
   const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
   if (expandedFirstPage.url === undefined) {
-    diagnostics.push({ code: expandedFirstPage.error?.code ?? 'rule-failed', stage, field: 'chapterUrl', message: expandedFirstPage.error?.message ?? '章节地址展开失败', retryable: false })
-    return { status: 'failed', value: null, diagnostics, trace }
+    diagnostics.push(expansionDiagnostic(expandedFirstPage.error, stage, 'chapterUrl', '章节地址展开失败'))
+    return { status: expansionStatus(expandedFirstPage.error), value: null, diagnostics, trace }
   }
   const firstPageUrl = expandedFirstPage.url
   const pendingPages = [{ url: firstPageUrl, followNext: true }]
@@ -260,6 +261,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
       const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
+        if (expandedNext?.error?.code === 'cancelled') return cancelled('正文下一页地址展开已取消', diagnostics, trace)
         diagnostics.push({ code: expandedNext?.error?.code ?? 'item-skipped', stage, field: nextField, message: expandedNext?.error?.message ?? '正文下一页 URL 无效', retryable: false })
         stoppedByLimit = true
         continue

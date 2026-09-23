@@ -1,5 +1,5 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
-import { detailFields, evaluateField, expandUrl, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import { detailFields, evaluateField, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
@@ -18,6 +18,12 @@ function normalizeListRule(value: string): { rule: string; reverse: boolean } {
   if (value.startsWith('-')) return { rule: value.slice(1), reverse: true }
   if (value.startsWith('+')) return { rule: value.slice(1), reverse: false }
   return { rule: value, reverse: false }
+}
+
+/** 地址模板是否引用页码变量；没有引用时下一页地址与当前页相同，游标不产生新请求。 */
+function pageTemplateVaries(url: string): boolean {
+  for (const match of url.matchAll(/\{\{([\s\S]*?)\}\}/g)) if (/\b(?:page|pageIndex)\b/u.test(match[1]!)) return true
+  return false
 }
 
 /** Android `String.matches`：整个响应地址匹配 bookUrlPattern；非法正则按不匹配处理。 */
@@ -48,18 +54,18 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     options.signal,
   )
   if (expanded.url === undefined) {
-    const code = expanded.error?.code ?? 'rule-failed'
-    diagnostics.push({ code, stage, field: 'url', message: expanded.error?.message ?? '书源 URL 展开失败', retryable: false })
-    return { status: code === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
+    diagnostics.push(expansionDiagnostic(expanded.error, stage, 'url', '书源 URL 展开失败'))
+    return { status: expansionStatus(expanded.error), value: null, diagnostics, trace }
   }
   const page = await requestPageResponse(ports, source, expanded.url, stage, options, diagnostics, trace)
   if (page === undefined) return { status: diagnostics.some((item) => item.code === 'cancelled') ? 'cancelled' : 'failed', value: null, diagnostics, trace }
   const content = page.content
   const maxItems = options.maxItems ?? 100
-  const pattern = stage === 'search' ? sourceString(source, 'bookUrlPattern') : undefined
+  const pattern = sourceString(source, 'bookUrlPattern')
   const candidates: BookCandidate[] = []
-  // searchUrl 命中 bookUrlPattern 时整页按详情页解析（Android BookList 在列表解析前返回）。
-  const detailPage = pattern !== undefined && matchesBookUrlPattern(pattern, page.url)
+  // searchUrl 命中 bookUrlPattern 时整页按详情页解析；Android 的这个分支只在搜索里判断，
+  // 但「已配置 pattern 就不做空列表回退」对搜索和发现都生效（BookList.kt:64,100）。
+  const detailPage = stage === 'search' && pattern !== undefined && matchesBookUrlPattern(pattern, page.url)
   let rawItems: unknown[] = []
   let reverse = false
   if (!detailPage) {
@@ -120,16 +126,20 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   if (candidates.length === 0 && (detailPage || (rawItems.length === 0 && pattern === undefined))) {
     // 列表为空（或命中 bookUrlPattern）时，书源把整个响应当作详情页。
     const fallback = await detailPageCandidate(ports, source, page, options, diagnostics, trace)
-    if (fallback !== undefined) {
+    if (fallback.cancelled) {
+      diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
+      return { status: 'cancelled', value: null, diagnostics, trace }
+    }
+    if (fallback.candidate !== undefined) {
       trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex: 0 })
-      candidates.push(fallback)
+      candidates.push(fallback.candidate)
     }
   }
   if (reverse) candidates.reverse()
   if (candidates.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '列表没有可用候选', retryable: false })
-  // Android 按页码递增继续翻页；这里只要本页有候选就给出下一页游标，是否继续由调用方决定。
+  // Android 由调用方递增页码继续翻页；只有地址模板引用页码时下一页才是不同的请求。
   let nextCursor: { index: number; token?: string } | undefined
-  if (candidates.length > 0) nextCursor = { index: pageCursor.index + 1 }
+  if (candidates.length > 0 && pageTemplateVaries(url)) nextCursor = { index: pageCursor.index + 1 }
   if (nextRule !== undefined) {
     const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal)
     if (next.state === 'cancelled') {
@@ -199,13 +209,14 @@ function resolveCandidateUrl(value: string | undefined, baseUrl: string): string
 }
 
 /** 把整个响应当作详情页解析：Android 在 bookUrlPattern 命中或列表为空时使用该分支。 */
-async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, page: { content: string; url: string }, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<BookCandidate | undefined> {
+async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, page: { content: string; url: string }, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<{ candidate?: BookCandidate; cancelled: boolean }> {
   const extraction = await extractDetailFields(ports, source, 0, page.content, { baseUrl: page.url, redirectUrl: page.url }, options.signal, trace, diagnostics)
-  if (extraction.cancelled) return undefined
+  // 取消必须向上传播；回退失败和取消在调用方是两种不同的结果。
+  if (extraction.cancelled) return { cancelled: true }
   const name = formatBookName(extraction.values.name ?? '')
   if (name.length === 0) {
     diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex: 0, message: '详情页没有解析出书名', retryable: false })
-    return undefined
+    return { cancelled: false }
   }
   const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: page.url, name, rawFields: extraction.raw, traceRef: 'detail-page:0' }
   const author = formatBookAuthor(extraction.values.author ?? '')
@@ -216,7 +227,7 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
   if (extraction.values.wordCount !== undefined) candidate.wordCount = formatWordCount(extraction.values.wordCount)
   if (extraction.values.lastChapter !== undefined) candidate.lastChapter = extraction.values.lastChapter
   if (extraction.values.updateTime !== undefined) candidate.updateTime = extraction.values.updateTime
-  return candidate
+  return { candidate, cancelled: false }
 }
 
 interface DetailExtraction {
@@ -284,6 +295,10 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
     }
     const expandedUrl = await expandUrl(ports, input.source, 'detail', candidate.bookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
     if (expandedUrl.url === undefined) {
+      if (expandedUrl.error?.code === 'cancelled') {
+        diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情 URL 展开已取消', retryable: false })
+        return { status: 'cancelled', value: null, diagnostics, trace }
+      }
       diagnostics.push({ code: expandedUrl.error?.code ?? 'rule-failed', stage: 'detail', field: 'bookUrl', itemIndex, message: expandedUrl.error?.message ?? '详情 URL 展开失败', retryable: false })
       continue
     }

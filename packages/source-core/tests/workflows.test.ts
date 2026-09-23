@@ -188,6 +188,85 @@ test('列表字段规则执行期间取消会返回 cancelled', async () => {
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'cancelled'))
 })
 
+test('URL 表达式求值被取消时保持 cancelled，不折叠成 failed', async () => {
+  const calls: string[] = []
+  const controller = new AbortController()
+  const workflowPorts = ports(calls)
+  workflowPorts.rules = {
+    evaluate: async () => {
+      controller.abort()
+      return { status: 'cancelled', value: null, message: '规则已取消' }
+    },
+  }
+  const templated = { ...source, searchUrl: '/search?q={{java.ajax("x")}}' } as unknown as NormalizedSource
+  const result = await searchBooks(workflowPorts, { source: templated, keyword: 'A', signal: controller.signal })
+  assert.equal(result.status, 'cancelled')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'cancelled'))
+  assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed'))
+  assert.equal(calls.length, 0)
+})
+
+test('详情页回退解析被取消时保持 cancelled，不折叠成 empty', async () => {
+  const controller = new AbortController()
+  const fallbackSource = { ...source, searchUrl: '/book/empty' } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      if (request.field === 'bookList') return { status: 'empty', value: null }
+      if (request.field === 'name') {
+        controller.abort()
+        return { status: 'cancelled', value: null }
+      }
+      return { status: 'empty', value: null }
+    },
+  }
+  const result = await searchBooks(workflowPorts, { source: fallbackSource, keyword: 'A', signal: controller.signal })
+  assert.equal(result.status, 'cancelled')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'cancelled'))
+})
+
+test('explore 空列表在已配置 bookUrlPattern 时不再回退详情页', async () => {
+  const evaluated: string[] = []
+  const patterned = { ...source, bookUrlPattern: 'https://other\\.test/.*' } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      if (request.field === 'bookList') return { status: 'empty', value: null }
+      return ports([]).rules.evaluate(request)
+    },
+  }
+  const result = await discoverBooks(workflowPorts, { source: patterned })
+  assert.equal(result.status, 'empty')
+  assert.equal(result.value?.items.length, 0)
+  assert.ok(!evaluated.includes('detail-name'))
+})
+
+test('没有页码占位符的列表地址不产生下一页游标', async () => {
+  const fixedSource = {
+    ...source,
+    exploreUrl: '/explore',
+    ruleExplore: { bookList: 'list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author' },
+  } as unknown as NormalizedSource
+  const fixed = await discoverBooks(ports([]), { source: fixedSource })
+  assert.equal(fixed.value?.nextCursor, undefined)
+
+  // nextPage 规则命中时游标由规则决定，与地址模板无关。
+  const withNextPage = {
+    ...fixedSource,
+    ruleExplore: { bookList: 'list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', nextPage: 'next' },
+  } as unknown as NormalizedSource
+  const ruleDriven = await discoverBooks(ports([]), { source: withNextPage })
+  assert.equal(ruleDriven.value?.nextCursor?.index, 2)
+  assert.equal(ruleDriven.value?.nextCursor?.token, 'next-token')
+
+  // 地址模板引用页码时按页递增。
+  const templated = { ...fixedSource, exploreUrl: '/explore?page={{page}}' } as unknown as NormalizedSource
+  const pageDriven = await discoverBooks(ports([]), { source: templated })
+  assert.equal(pageDriven.value?.nextCursor?.index, 2)
+  assert.equal(pageDriven.value?.nextCursor?.token, undefined)
+})
+
 test('列表规则 - 前缀反转、+ 前缀只剥离（Android BookList 语义）', async () => {
   const reversedSource = { ...source, ruleExplore: { bookList: '-list', bookName: 'name', bookUrl: 'url', bookAuthor: 'author', nextPage: 'next' } } as unknown as NormalizedSource
   const reversed = await discoverBooks(ports([]), { source: reversedSource })

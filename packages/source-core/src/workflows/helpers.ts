@@ -121,9 +121,20 @@ function numericTemplateExpression(input: string, replacements: Readonly<Record<
 }
 
 export interface UrlExpansionError {
-  /** 展开失败的稳定分类：规则执行失败或宿主缺少 JavaScript 能力。 */
-  code: 'rule-failed' | 'capability-missing'
+  /** 展开失败的稳定分类：规则执行失败、宿主缺少 JavaScript 能力或被取消。 */
+  code: 'rule-failed' | 'capability-missing' | 'cancelled'
   message: string
+}
+
+/** URL 展开失败对应的阶段状态；取消必须保持 cancelled，不能折叠成 failed。 */
+export function expansionStatus(error: UrlExpansionError | undefined): 'failed' | 'cancelled' | 'capability-missing' {
+  if (error?.code === 'cancelled') return 'cancelled'
+  return error?.code === 'capability-missing' ? 'capability-missing' : 'failed'
+}
+
+/** URL 展开失败的诊断；诊断码与失败分类一致。 */
+export function expansionDiagnostic(error: UrlExpansionError | undefined, stage: WorkflowStage, field: string, message: string): WorkflowDiagnostic {
+  return { code: error?.code ?? 'rule-failed', stage, field, message: error?.message ?? message, retryable: false }
 }
 
 /**
@@ -152,10 +163,13 @@ async function expandExpression(ports: WorkflowPorts, source: NormalizedSource, 
   try {
     output = await ports.rules.evaluate({ source, stage, field: 'url', rule: `@js:${expression}`, content: '', bindings, ...(signal === undefined ? {} : { signal }) })
   } catch {
+    // 求值期间取消时异常只是取消的副作用，不能当成规则失败。
+    if (signal?.aborted === true) return { error: { code: 'cancelled', message: '书源 URL 表达式求值已取消' } }
     output = { status: 'failed', value: null, message: '规则宿主失败' }
   }
+  if (output.status === 'cancelled' || signal?.aborted === true) return { error: { code: 'cancelled', message: '书源 URL 表达式求值已取消' } }
   if (output.status === 'capability-missing') return { error: { code: 'capability-missing', message: '书源 URL 表达式需要 JavaScript 能力' } }
-  if (output.status === 'failed' || output.status === 'cancelled') return { error: { code: 'rule-failed', message: output.message ?? '书源 URL 表达式求值失败' } }
+  if (output.status === 'failed') return { error: { code: 'rule-failed', message: output.message ?? '书源 URL 表达式求值失败' } }
   return { text: output.status === 'success' ? textValue(output.value) : '' }
 }
 

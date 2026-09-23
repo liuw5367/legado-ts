@@ -14,6 +14,7 @@ export interface PageCursor {
 export interface WorkflowPage<T> {
   items: T[]
   cursor: PageCursor
+  /** 下一页游标；只在地址模板引用页码或 nextPage 规则命中时出现（没有页码占位符时下一页还是同一地址）。 */
   nextCursor?: PageCursor
 }
 

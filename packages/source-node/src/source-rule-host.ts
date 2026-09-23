@@ -148,6 +148,15 @@ function jsonContent(value: unknown): boolean {
   return (text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))
 }
 
+/**
+ * jsonpath-plus 只对「确定路径」额外包一层数组；含通配、递归、过滤、切片、联合或脚本的路径，
+ * 返回值本身就是 Android `JsonPath.read` 的元素列表（如 `$.single[*]` 在 `[[1,2]]` 上返回 `[[1,2]]`）。
+ */
+function isDefiniteJsonPath(expression: string): boolean {
+  const unquoted = expression.replace(/'[^']*'|"[^"]*"/gu, '')
+  return !/[*?()]|\.\.|,|:/u.test(unquoted)
+}
+
 function normalizeSelector(selector: string): string {
   if (selector.startsWith('class.')) return `.${selector.slice('class.'.length)}`
   if (selector.startsWith('tag.')) return selector.slice('tag.'.length)
@@ -416,7 +425,8 @@ export class SourceRuleHost implements WorkflowRulePort {
     const value = this.json.evaluate(jsonInput(content), expression)
     // Android 的确定路径直接返回数组本身，jsonpath-plus 的 wrap 会再包一层；
     // 不拆开会让 `data.books` 这类列表规则只拿到一个「数组项」。
-    return Array.isArray(value) && value.length === 1 && Array.isArray(value[0]) ? value[0] : value
+    // 通配/递归/过滤路径的结果本身就是「元素列表」，数组元素是条目而不是外层包装，不能拆。
+    return isDefiniteJsonPath(expression) && Array.isArray(value) && value.length === 1 && Array.isArray(value[0]) ? value[0] : value
   }
 
   private evaluateXPath(expression: string, content: unknown): unknown {

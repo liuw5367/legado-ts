@@ -120,6 +120,15 @@ test('字符串规则的末段按属性名取值，不再返回内部节点引�
   assert.equal((await evaluate(host, '.cover@img@alt', html)).status, 'empty')
 })
 
+test('JSON 解包只作用于确定路径，通配路径保持 Android 的嵌套结构', async () => {
+  const host = new SourceRuleHost()
+  const body = JSON.stringify({ single: [[1, 2]], data: { books: [{ name: '甲' }, { name: '乙' }] } })
+  // 确定路径指向数组：Android 的 JsonPath.read 直接返回数组本身，解包后条目数不变。
+  assert.deepEqual((await evaluate(host, '$.data.books', body)).value, [{ name: '甲' }, { name: '乙' }])
+  // 通配路径的结果是「元素列表」，数组元素就是条目本身，不能再拆成 2 项。
+  assert.deepEqual((await evaluate(host, '$.single[*]', body)).value, [[1, 2]])
+})
+
 test('JSON 响应下无模式前缀的规则按 JSON 求值（Android isJSON 语义）', async () => {
   const host = new SourceRuleHost()
   const body = JSON.stringify({ data: { books: [{ name: '甲', url: '/a' }] }, userInfo: { username: '作者' } })
