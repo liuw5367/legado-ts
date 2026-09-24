@@ -73,5 +73,6 @@ export interface JavaScriptExecutionResult {
 }
 
 export interface JavaScriptHost {
-  execute(input: JavaScriptExecutionInput): Promise<JavaScriptExecutionResult>
+  /** 每次执行可覆写 bridge，避免并发书源共享可变上下文。 */
+  execute(input: JavaScriptExecutionInput, bridge?: JavaScriptBridge): Promise<JavaScriptExecutionResult>
 }

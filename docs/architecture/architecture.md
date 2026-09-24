@@ -25,13 +25,13 @@
 
 ```text
 apps/reader-cli          应用层：UI、书架、本地 JSON 存储、多源循环
-  -> @legado/source-node SourceRuleHost / SourceRequestHost（网络、解析器、QuickJS、字体等）
-  -> @legado/source-core 编解码、规则编译求值、请求计划、五条工作流
+  -> @legado/source-node 平台能力适配与宿主组合
+  -> @legado/source-core 规则解释、请求语义、候选归并和单源工作流
 ```
 
-- **source-core**：零运行时依赖；通过 `WorkflowPorts` / `ReadingPorts` 接收宿主能力；公开入口见 [package 使用指南](../implementation/package-usage.md)。
-- **source-node**：实现 `NetworkHost`、解析器、`QuickJSJavaScriptHost`、Cookie/字符集/加密/归档/字体/并发端口，并提供兼容性 CLI。
-- **reader-cli**：应用交互与持久化；不重新解释规则字段。
+- **source-core**：不依赖 Node 平台；`SourceRuleRuntime` 解释书源规则，`SourceRequestRuntime` 解释书源请求选项，搜索聚合函数处理跨源候选。通过 `WorkflowPorts` / `ReadingPorts` 接收宿主能力；公开入口见 [package 使用指南](../implementation/package-usage.md)。
+- **source-node**：实现网络、HTML/JSONPath/XPath 解析器、QuickJS、Cookie、字符集、加密、归档、字体和并发能力；`SourceRuleHost` / `SourceRequestHost` 组合这些能力并委托给核心，也提供兼容性 CLI。
+- **reader-cli**：负责来源选择与读取、跨源调度、并发、进度和取消、搜索历史、持久化及终端交互；调用核心归并候选，但不重新解释书源规则或归并条件。
 
 仓库中**没有** `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` 这些应用服务端口；书源保存与检测的 Repository 设计见 [归档](../archive/source-management-and-state.md)。reader-cli 使用自有 `json-store` / `cache-store`。
 
@@ -42,9 +42,13 @@ apps/reader-cli          应用层：UI、书架、本地 JSON 存储、多源�
 - schema 解析和导入分类；
 - 发现分类解释、选定分类后的列表流程；
 - 规则文本词法拆分、模式选择和规则链执行；
-- 结果归一化、替换、变量作用域和 URL 解析；
+- HTML/CSS、JSONPath、XPath、Regex、模板、替换及书源 JavaScript 的规则语义；
+- 来源请求选项、请求体和查询编码、重试、bodyJs、响应归一化；
+- 结果归一化、变量作用域、跨源候选归并和匹配排序；
 - 搜索/详情/目录/正文流程状态机；
 - 并发、超时、取消的抽象约定。
+
+多源 fan-out、每源会话、并发限制、进度与终止生命周期属于应用层；source-core 的搜索聚合函数只处理候选身份、分组及稳定排序，不依赖 CLI 的 `SourceEntry` 或页面模型。
 
 ### 宿主端口（当前实现）
 
@@ -52,9 +56,9 @@ apps/reader-cli          应用层：UI、书架、本地 JSON 存储、多源�
 
 - `NetworkHost`：请求、响应、重定向和响应字节（实现 `NodeNetworkHost`）；
 - `HtmlParser` / `XPathParser` / `JsonPathParser`（实现 `HtmlParserAdapter` 等）；
-- 字符集、编码、Cookie、加密、归档、字体、并发端口；
-- `WorkflowRulePort` 与 JS 桥接；脚本经 `QuickJSJavaScriptHost` 执行；
-- 组合宿主：`SourceRuleHost`、`SourceRequestHost`。
+- `JavaScriptHost` 与 QuickJS 执行器；
+- 字符集、编码、Cookie、加密、归档、字体及并发能力；
+- 组合门面：`SourceRuleHost`、`SourceRequestHost`；书源语义由 source-core 实现。
 
 `java` / `sourceApi` 等脚本绑定由宿主按 capability 注入，保持 Android 同步外观。
 
@@ -104,7 +108,7 @@ loadChapterContent(ports: ReadingPorts, input: ContentInput): Promise<RuntimeRes
 ```text
 上层输入 DTO
   -> 书源分流
-  -> URL 展开与请求计划（createRequestPlan）
+  -> source-core 解释请求选项、展开 URL 并生成请求计划
   -> NetworkHost 执行请求
   -> 规则端口求值（compileRule / evaluateRule 等价路径）
   -> 领域对象归一化

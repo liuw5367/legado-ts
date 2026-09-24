@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { replaceFont } from '@legado/source-core'
 import type { FontHost, FontMapping, FontQueryOptions } from '@legado/source-core'
 import { NodeEncodingHost } from './encoding.ts'
 
@@ -317,18 +318,7 @@ export class NodeFontHost implements FontHost {
   }
 
   public replaceFont(text: string, error: FontMapping | null, correct: FontMapping | null, filter = false): string {
-    if (error === null || correct === null) return text
-    const result: string[] = []
-    for (const character of text) {
-      const unicode = character.codePointAt(0)!
-      if (error.isBlankUnicode(unicode)) { result.push(character); continue }
-      let glyph = error.glyphByUnicode(unicode)
-      if (error.glyphIdByUnicode(unicode) === 0) glyph = undefined
-      if (filter && glyph === undefined) continue
-      const replacement = correct.unicodeByGlyph(glyph)
-      result.push(replacement === 0 ? character : String.fromCodePoint(replacement))
-    }
-    return result.join('')
+    return replaceFont(text, error, correct, filter)
   }
 
   private checkOptions(input: Uint8Array, options: FontQueryOptions): void {

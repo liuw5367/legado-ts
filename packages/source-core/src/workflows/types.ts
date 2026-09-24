@@ -119,6 +119,10 @@ export interface WorkflowJavaScriptRequest {
   code: string
   stage: WorkflowJavaScriptStage
   content?: unknown
+  /** 当前脚本访问请求上下文时使用的基准 URL；缺省为书源 URL。 */
+  baseUrl?: string
+  /** 当前脚本访问请求上下文时使用的最终响应 URL；缺省为 baseUrl。 */
+  redirectUrl?: string
   bindings?: Readonly<Record<string, unknown>>
   /** Return mutated bindings together with the script result when a hook mutates Java-side DTOs. */
   captureMutations?: readonly string[]

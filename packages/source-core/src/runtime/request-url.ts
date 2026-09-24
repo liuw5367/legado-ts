@@ -76,7 +76,7 @@ const querySafeCharacters = new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ
 function isSafeQuery(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const current = value[index]!
-    if (current === '%' && /^[\\da-f]{2}$/i.test(value.slice(index + 1, index + 3))) {
+    if (current === '%' && /^[\da-f]{2}$/i.test(value.slice(index + 1, index + 3))) {
       index += 2
       continue
     }

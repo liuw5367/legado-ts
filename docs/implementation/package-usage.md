@@ -16,10 +16,15 @@
 | `compileRule` / `inspectRuleCapabilities` | 规则文本与模式提示 | 编译结果、诊断与能力集合 | package |
 | `compileSourcePattern` | 来源模式字符串 | 模式或 `SourcePatternError` | package |
 | `evaluateRule` | 已编译规则、脱敏输入与 `RuleContext` | `RuleEvaluationResult`；仅在提供宿主能力时执行 JS | package |
+| `SourceRuleRuntime` | `SourceRuleRuntimeOptions` 中的解析器、JS、编码、加密、字体和 bridge 能力 | 实现 `WorkflowRulePort` 的书源规则运行时 | package |
 | `createRequestPlan` | `RequestPlanInput` | `RequestPlanResult`（`plan` 或稳定错误码） | package |
+| `SourceRequestRuntime` | `WorkflowRequest`、`NetworkHost`、字符集与可选规则能力 | 解析书源请求选项并返回 `NetworkResponse`；请求失败时 reject | package |
 | `resolveSourceRequestUrl` / `resolveSourceRequestReference` / `splitSourceRequestUrl` | URL 规则相关输入 | 展开后的 URL 或结构化错误 | package |
+| `replaceFont` | 文本与错误/正确字体映射 | 按 glyph 轮廓替换文字 | package |
 | `discoverBooks(ports, input)` | `WorkflowPorts`、`DiscoveryInput`（source、cursor、budget、signal） | `RuntimeResult<WorkflowPage<BookCandidate>>` | package |
 | `searchBooks(ports, input)` | `WorkflowPorts`、`SearchInput`（source、keyword、cursor） | 同上 | package |
+| `groupSearchCandidates` | 关键词与带 `BookCandidate`、`arrivalIndex` 的候选 | 按书名/作者身份归并并稳定排序的分组 | package |
+| `searchMatchRank` / `isBookTitleMatch` / `isAuthorMatch` | 搜索词或候选字段 | 核心匹配等级与规范化比较结果 | package |
 | `loadBookDetails(ports, input)` | `WorkflowPorts`、`DetailInput`（candidates、canReName） | `RuntimeResult<WorkflowPage<BookMetadata>>` | package |
 | `loadTableOfContents(ports, input)` | `ReadingPorts`、`TocInput`（book、refresh、maxPages） | `RuntimeResult<WorkflowPage<Chapter>>` | package |
 | `loadChapterContent(ports, input)` | `ReadingPorts`、`ContentInput`（chapter、tocHtml、nextChapterUrl、replacements） | `RuntimeResult<ChapterContent>` | package |
@@ -27,7 +32,7 @@
 | `snapshotVariables` / `variableChanges` / `MemoryVariableView` | 变量视图 | 快照与变更集合 | package |
 | `diagnostic` / `primaryError` / `safeLocation` | 诊断或错误 | 稳定诊断与脱敏位置 | package |
 
-多源合并、进度事件、书源检测（`checkSources`）、批量正文（`getContentBatch`）与段评结构化读取的公开入口**尚未实现**；应用侧多源循环见 `apps/reader-cli` 的 application 层，检测与批量能力见 [能力清单](../standard/capability-inventory.md) 与 [已知差异](../divergence/known-divergences.md)。
+多源 fan-out、并发调度、进度事件、书源检测（`checkSources`）、批量正文（`getContentBatch`）与段评结构化读取的公开入口**尚未实现**。纯候选归并与匹配排序已由 `groupSearchCandidates` 等核心函数提供；应用仍负责多源循环、页面来源信息及搜索生命周期。CLI 当前分组规则说明见[搜索流程](../flows/search-flow.md#typescript-当前聚合行为)。检测与批量能力见[能力清单](../standard/capability-inventory.md)与[已知差异](../divergence/known-divergences.md)。
 
 ## 结果形状
 
@@ -55,17 +60,17 @@ export interface RuntimeResult<T> {
 
 流程入口的第一个参数是端口对象，不是可选依赖注入容器：
 
-- `WorkflowPorts`：`network: NetworkHost`、`rules: WorkflowRulePort`、可选 `request` / `decodeResponse`。
+- `WorkflowPorts`：`network: NetworkHost`、`rules: WorkflowRulePort`、可选请求适配器 `request` / 响应解码器 `decodeResponse`。默认请求与 Node 请求适配都使用 `SourceRequestRuntime` 的请求语义。
 - `ReadingPorts`：在 `WorkflowPorts` 上增加可选 `ContentCache`。
 
-Node 实现由 `@legado/source-node` 提供组合宿主：`SourceRuleHost`、`SourceRequestHost`，以及 `NodeNetworkHost`、`HtmlParserAdapter`、`JsonPathParserAdapter`、`XPathParserAdapter`、`QuickJSJavaScriptHost`、`NodeCookieStore`、`NodeCharsetCodec` 等。端口语义见 [宿主接口](runtime-host-interfaces.md)。
+Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委托给 `SourceRuleRuntime`，`SourceRequestHost` 委托给 `SourceRequestRuntime`；Node 包提供 `NodeNetworkHost`、HTML/JSONPath/XPath 解析器、`QuickJSJavaScriptHost`、`NodeCookieStore`、`NodeCharsetCodec` 等平台能力。端口语义见[宿主接口](runtime-host-interfaces.md)。
 
 ## 创建运行时与单次调用
 
 ```text
 应用读取书源快照与用户输入
   -> 按 enabled、分组或用户选择确定范围
-  -> 构造 SourceRuleHost / SourceRequestHost（或等价 WorkflowPorts）与 AbortSignal
+  -> 组合 Node 平台能力并构造 SourceRuleHost / SourceRequestHost（或等价 WorkflowPorts）与 AbortSignal
   -> 调用 discoverBooks / searchBooks / loadBookDetails / loadTableOfContents / loadChapterContent
   -> 处理 RuntimeResult 的 status、value、diagnostics、trace
   -> 应用自行提交书架、阅读进度等数据

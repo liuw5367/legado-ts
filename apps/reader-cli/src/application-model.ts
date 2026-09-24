@@ -1,4 +1,4 @@
-import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, WorkflowStatus } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, SearchMatchRank, WorkflowStatus } from '@legado/source-core'
 import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
 import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition } from './storage.ts'
 
@@ -26,7 +26,7 @@ export interface SourceSearchResult {
   message?: string
 }
 
-export type SearchMatchRank = 'exact' | 'contains' | 'other'
+export type { SearchMatchRank } from '@legado/source-core'
 
 export interface SearchResultGroup {
   key: string
