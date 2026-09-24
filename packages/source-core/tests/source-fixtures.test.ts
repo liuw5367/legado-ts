@@ -26,13 +26,13 @@ interface BrokenRuleSpec {
   ruleHash: string
 }
 
-/** 与 fixtures/phase-07-b/regenerate.mjs 保持一致：白名单条目绑定规则原文。 */
+/** 与 fixtures/corpus/regenerate.mjs 保持一致：白名单条目绑定规则原文。 */
 function ruleFingerprint(rule: string): string {
   return createHash('sha256').update(rule).digest('hex').slice(0, 16)
 }
 
 async function fixtureSpecs(): Promise<{ totalCandidates: number; byPath: Map<string, FixtureSpec>; brokenRules: Map<string, BrokenRuleSpec> }> {
-  const text = await readFile(new URL('../../../fixtures/phase-07-b/manifest.json', import.meta.url), 'utf8')
+  const text = await readFile(new URL('../../../fixtures/corpus/manifest.json', import.meta.url), 'utf8')
   const manifest = JSON.parse(text) as { version: number; totalCandidates: number; fixtures: FixtureSpec[]; knownBrokenRules: BrokenRuleSpec[] }
   assert.equal(manifest.version, 2)
   return {

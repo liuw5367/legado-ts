@@ -5,7 +5,7 @@ import { discoverBooks, importSources, loadBookDetails, loadChapterContent, load
 import type { NormalizedSource, RequestPlan, WorkflowPorts } from '../src/index.ts'
 
 test('07-A fixture manifest keeps source conformance cases executable', async () => {
-  const text = await readFile(new URL('../../../fixtures/phase-07-a/manifest.json', import.meta.url), 'utf8')
+  const text = await readFile(new URL('../../../fixtures/conformance/manifest.json', import.meta.url), 'utf8')
   const manifest = JSON.parse(text) as { version: number; fixtures: Array<Record<string, unknown>> }
   assert.equal(manifest.version, 1)
   assert.ok(manifest.fixtures.length >= 1)

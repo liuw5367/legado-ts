@@ -1,5 +1,5 @@
-// 按当前 fixtures/source 语料重生 07-B manifest（测试用的快照）。
-// 用法：node fixtures/phase-07-b/regenerate.mjs
+// 按当前 fixtures/source 语料重生 corpus manifest（测试用的快照）。
+// 用法：node fixtures/corpus/regenerate.mjs
 // 重新生成后请确认 knownBrokenRules 的新增项确实是源本身的写法问题，而不是解析器回归。
 import { createHash } from 'node:crypto'
 import { readFile, readdir, writeFile } from 'node:fs/promises'

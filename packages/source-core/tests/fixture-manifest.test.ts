@@ -4,7 +4,7 @@ import test from 'node:test'
 import type { JsonValue } from '../src/index.ts'
 
 test('phase-a fixture manifest has evidence and execution fields', async () => {
-  const text = await readFile(new URL('../../../fixtures/phase-a/manifest.json', import.meta.url), 'utf8')
+  const text = await readFile(new URL('../../../fixtures/import/manifest.json', import.meta.url), 'utf8')
   const manifest = JSON.parse(text) as { version: number; fixtures: JsonValue[] }
   assert.equal(manifest.version, 1)
   assert.ok(manifest.fixtures.length >= 1)
