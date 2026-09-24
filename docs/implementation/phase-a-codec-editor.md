@@ -1,6 +1,8 @@
 # 阶段 A：模型、导入与编辑基础
 
-先建立不依赖网络、DOM 或应用数据库的书源数据层。它负责识别输入、保留原文、规范化字段、产生诊断和可写入候选。宿主可以提供远程读取与 URI 读取，但是否保存候选始终由调用方决定。行为依据是 [书源模型](../reference/source-schema.md)、[导入协议](../workflows/import-protocol.md) 和 [编辑器规划](../guides/source-editor.md)。
+**状态：** 已完成（2026-09-24 按代码与测试核对）。
+
+先建立不依赖网络、DOM 或应用数据库的书源数据层。它负责识别输入、保留原文、规范化字段、产生诊断和可写入候选。宿主可以提供远程读取与 URI 读取，但是否保存候选始终由调用方决定。行为依据是 [书源模型](../standard/source-schema.md)、[导入协议](../flows/import-protocol.md) 和 [编辑器规划](../archive/source-editor.md)。
 
 ## 阶段输入与输出
 
@@ -56,7 +58,7 @@ interface ImportCandidate {
 4. 对 `BookSource`、`ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent`、`ruleReview` 做字段级校验。规则字段的对象与 JSON 字符串形态均被接受，未知字段和历史值保留。为每个字段记录默认值、空值含义、执行能力和导入导出策略。
 5. 以原始 bookSourceUrl 生成候选身份，不进行网络地址规范化；与本地快照比较 new/update/same/conflict，由应用确认后事务保存。
 6. 导出验证未知字段和规则形态；JS 原文保持完整，动态配置抽取在 [阶段 B](phase-b-rules-request.md) 完成。
-7. 实现 [订阅差异](../workflows/source-subscriptions.md) 的纯比较入口：base/remote/local 三方比较、用户字段保护与 sourceRevision 冲突；下载使用读取端口，定时器和持久化仍属于应用。
+7. 实现 [订阅差异](../flows/source-subscriptions.md) 的纯比较入口：base/remote/local 三方比较、用户字段保护与 sourceRevision 冲突；下载使用读取端口，定时器和持久化仍属于应用。
 
 ## 编辑器如何复用这一层
 

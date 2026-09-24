@@ -23,7 +23,7 @@
 - `app/src/test/java/io/legado/app/api/ReviewWebApiContractTest.kt`：结构化段评 HTTP 入口、旧式页面桥接、nonce、CSP/sandbox 和脚本执行边界；
 - `modules/web/tests/sourceEditor.test.js`：现有 Web 编辑器的响应式布局、脚本模板、状态恢复、保存和访问令牌行为。
 
-当前没有与这些 Kotlin 规则结果直接对照的 TypeScript runtime 测试；需要新增独立 fixture 和 golden 输出。
+TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-conformance.test.ts`、`source-fixtures.test.ts` 等）与 `packages/source-node/tests/`（宿主与组合流），入口见根 `package.json` 的 `test` / `test:source`。与上列 Kotlin 结果逐项对照的 Android golden 仍不完整（07-A 中部分 `android: not-run`），需要继续补 fixture 与 golden 输出。
 
 外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板。例如，`rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
 
@@ -195,8 +195,8 @@ goldens/android/
 goldens/typescript/
 packages/source-core/tests/
 packages/source-node/tests/
-packages/source-next/tests/
-packages/source-editor/tests/
+packages/source-next/tests/    # 目标包，尚未存在
+packages/source-editor/tests/  # 目标包，尚未存在
 ```
 
 每个测试至少断言四类结果：
@@ -210,7 +210,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 
 真实测试命令随 runtime 提交。书源解析运行时的兼容测试拆分为两个任务：`07-A` 负责 schema、规则、请求、解析器、QuickJS、工作流和宿主能力的无公网 conformance；`07-B` 负责读取 `fixtures/source` 下的真实书源文件，并验证集合导入与单个导入的一致性。任务 11 保留跨模块集成、存储、编辑器和发布门禁，不再把书源文件回归测试混在其中。兼容案例须有 Android 证据、golden、TS 断言及相关清理断言；Web 新设计只要求对应设计证据与目标断言，不强迫虚构 Android golden。纯值转换无资源时标注清理不适用。未执行的案例一律 execution=not-run。
 
-覆盖审计按以下关系执行：`reference/source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`reference/rule-language.md` 和 `reference/url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`reference/capability-inventory.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
+覆盖审计按以下关系执行：`standard/source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`standard/rule-language.md` 和 `standard/url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`standard/capability-inventory.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
 
 ## 必须覆盖的规则样本
 
@@ -367,7 +367,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | RESOURCE-003/kind-collision | 同一章节同时产生 text、image、audio 和 file 资源 | ContentIdentity.resourceKind 使四类资源使用不同 resourceKey；不能互相覆盖 |
 | SECURITY-003/cross-user-state | u1 的 Cookie、变量、任务和资源 key 被 u2 请求复用 | u2 不可读取或写入 u1 状态；不存在性不能通过错误差异泄露 |
 
-SUB-001 至 019 在 [订阅文档](../workflows/source-subscriptions.md#验收)，DEP-001 至 007 在 [部署文档](../operations/runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。
+SUB-001 至 019 在 [订阅文档](../flows/source-subscriptions.md#验收)，DEP-001 至 007 在 [部署文档](../operations/runtime-security-and-deployment.md#实际部署验收) 定义，不复制另一份期望。
 
 ## 覆盖完成的判定
 

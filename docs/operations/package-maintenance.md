@@ -2,9 +2,9 @@
 
 ## 事实来源
 
-Android 行为基线来自 `LegadoTeam/legado` 的本地提交 `32a87b253e7cc28273c3850de86242caac83f1fd`。核对日期 2026-09-16；当日工作区已有旧 docs 迁移与 .gitignore 等差异，文档不把这些差异视为已提交的上游行为。实现前须确认对应源码是否有本地补丁。
+Android 行为基线来自 `LegadoTeam/legado` 的提交 `62003ce732a7e30602754d28996da7f98b9ea296`。核对日期 2026-09-24；该提交已在远端可达（`https://github.com/LegadoTeam/legado/commit/62003ce732a7e30602754d28996da7f98b9ea296`）。实现前仍须确认工作区是否有相对该基线的本地补丁。
 
-源码引用采用“仓库 + 提交 + 相对路径 + 符号/测试名”，行号只辅助定位。例如 [BookSourceImport.kt](https://github.com/LegadoTeam/legado/blob/32a87b253e7cc28273c3850de86242caac83f1fd/app/src/main/java/io/legado/app/ui/association/BookSourceImport.kt) 的 parseBookSourceJson。该提交当前仅存在于父仓库本地分支 `codex/docs-source-runtime`，尚未推送远端。若该提交未发布或远端不可达，以保留该 Git 对象的源码快照核验，不假设链接可公开访问。
+源码引用采用“仓库 + 提交 + 相对路径 + 符号/测试名”，行号只辅助定位。例如 [BookSourceImport.kt](https://github.com/LegadoTeam/legado/blob/62003ce732a7e30602754d28996da7f98b9ea296/app/src/main/java/io/legado/app/ui/association/BookSourceImport.kt) 的 parseBookSourceJson。日常浏览可改用 `blob/master/<相对路径>`；若某引用的提交未推送，以保留该 Git 对象的源码快照核验，不假设链接可公开访问。
 
 子仓库应可独立使用：不能要求工程师从 `../app` 自动寻找事实源；交付 fixture 时记录其来源快照与生成方式。示例文件目前位于父仓库 examples，不是子仓库已附带的测试资产。
 
@@ -14,7 +14,7 @@ Android 行为基线来自 `LegadoTeam/legado` 的本地提交 `32a87b253e7cc282
 - 公开输入输出或错误码不兼容变化需要迁移说明；修正规则结果也必须列出受影响语法、旧输出、新输出和回归案例。
 - 构建应验证公开导出、类型声明、服务端入口及浏览器静态入口；浏览器入口不能间接打包 Node 宿主或秘密配置。
 - 发布前从安装后的产物调用公开 API，核验版本、包含文件、fixture 支持范围和许可证；仓库源码单测通过不能替代包产物检查。
-- 实施期才增加真实构建与测试命令。目前 package.json 的 test 为失败占位，无发布产物，不能在文档声称 pnpm test 已通过。
+- 根 `package.json` 已提供真实命令：`typecheck`、`build`、`test`、`test:source`、`test:source:flow`、`test:source:compat:static`、`test:source:compat:live`。文档只声称实际执行过的命令结果；`test:source:compat:live` 不进入默认 `pnpm test`。
 
 ## 上游变更与回归
 

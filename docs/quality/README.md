@@ -5,4 +5,4 @@
 - [兼容性矩阵](compatibility-matrix.md)：能力、目标状态、Android 证据和 TypeScript 完成度。
 - [一致性测试基线](conformance-tests.md)：fixture、用例、断言、验证层级和完成门槛。
 
-测试用例应覆盖成功、空结果、错误、边界、取消、并发、缓存、提交和清理。新增能力先登记到 [能力清单](../reference/capability-inventory.md)，再在本目录定义证据和验收状态。
+测试用例应覆盖成功、空结果、错误、边界、取消、并发、缓存、提交和清理。新增能力先登记到 [能力清单](../standard/capability-inventory.md)，再在本目录定义证据和验收状态。

@@ -1,6 +1,6 @@
 # 运行边界与部署验收
 
-本章定义 Web 宿主目标策略，核对日期为 2026-09-16。安全拒绝必须返回 policy-denied 及具体能力，不把与 Android 的策略差异伪装成规则解析失败。
+本章定义 Web 宿主目标策略，核对日期为 2026-09-24。QuickJS 执行、`compileSourcePattern` 形态守卫等已在 `@legado/source-core` / `@legado/source-node` 落地；部署清单与平台能力仍为目标设计。安全拒绝必须返回 policy-denied 及具体能力，不把与 Android 的策略差异伪装成规则解析失败。
 
 ## 运行环境选择
 
@@ -61,7 +61,7 @@ interface OperationBudget {
 
 书源 JSON、规则文本、`mainJs`、`bodyJs`、订阅响应和远端 HTML 都是不可信输入。规则文本里的 `{{...}}` 与 `@get:{}` 按 Android `AnalyzeRule.makeUpRule` 处理：表达式是规则形态（`@`、`$.`、`$[`、`//`）时按规则求值，否则作为内联 JS 求值，正文含 `{{...}}` 的规则直接返回插值后的文本。`book`/`chapter` 等绑定由调用方通过 `setBindings` 注入（CLI 会传入书籍与章节对象），规则只能读这些绑定，读不到 Node 进程、环境变量或其他会话状态。
 
-它们只能访问当前 operation 显式注入的 `RuntimeHost` 能力，不能读取 Node 进程、环境变量、其他用户的 Cookie/变量/缓存、真实文件路径或数据库 client。应用返回浏览器前还必须对正文 HTML、资源地址和调试信息执行呈现层清理。
+它们只能访问当前 operation 端口显式注入的宿主能力（目标名 `RuntimeHost`；当前实现为 `WorkflowPorts` / `SourceRuleHost` / `SourceRequestHost`），不能读取 Node 进程、环境变量、其他用户的 Cookie/变量/缓存、真实文件路径或数据库 client。应用返回浏览器前还必须对正文 HTML、资源地址和调试信息执行呈现层清理。
 
 **页面内容可触发带书源凭据的外连（已登记的取舍）。** 与 Android 相同，页面产出的地址（目录链接、下一页链接）里的 `{{...}}` 会和书源配置地址一样被求值：被篡改的页面可以用一个链接触发宿主执行表达式，并让该次外连带上书源声明的 `header`/Cookie。选择保留该行为是因为来源分档会与 Android 产生解析差异；要收敛只能在书源信任模型层决定（例如只对受信书源开放页面触发的外连），不能在解析层单方面禁用。回归用例固定了"会执行"与"失败时不发出未展开地址"两条行为。
 

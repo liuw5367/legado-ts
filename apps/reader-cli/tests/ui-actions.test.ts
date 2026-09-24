@@ -39,7 +39,7 @@ test('页脚按终端显示宽度计算中文标签，不产生隐式换行', ()
     { keys: '↵', label: '阅读', priority: 0 },
     { keys: '⎋', label: '返回', priority: 0 },
   ], 22)
-  assert.equal(line, '[↵] 阅读')
+  assert.equal(line, '[↵] 阅读  [⎋] 返回')
   assert.equal(line.includes('\n'), false)
 })
 

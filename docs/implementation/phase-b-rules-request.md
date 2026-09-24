@@ -1,17 +1,19 @@
 # 阶段 B：规则引擎与请求计划
 
-规则引擎是书源 package 的解释层，应用和编辑器只通过公开入口使用它。先实现可重复的规则求值与请求描述，再接入真实网络。精确语义以 [规则语言](../reference/rule-language.md)、[URL 与请求规则](../reference/url-request-rules.md) 和 [宿主接口](../reference/runtime-host-interfaces.md) 为准；本章说明实现依赖和验证顺序。
+**状态：** 已完成（2026-09-24 按代码与测试核对）。
+
+规则引擎是书源 package 的解释层，应用和编辑器只通过公开入口使用它。先实现可重复的规则求值与请求描述，再接入真实网络。精确语义以 [规则语言](../standard/rule-language.md)、[URL 与请求规则](../standard/url-request-rules.md) 和 [宿主接口](runtime-host-interfaces.md) 为准；本章说明实现依赖和验证顺序。
 
 ## 阶段输入、输出与失败边界
 
-规则入口接收 `source snapshot + requestId + operationId + RuleContext + budget + AbortSignal + RuntimeHost`，输出 `OperationResult<T>`。结果必须包含 `status`、可选值、诊断、effects、changes 和 cleanup；合法空列表使用 `empty`，脚本/宿主能力缺失使用 `capability-missing`，取消和版本变化分别使用 `cancelled`/`stale`。`RuntimeDiagnostic.canContinue` 只决定当前字段能否继续，不能把取消、预算耗尽或资源清理失败降级为普通字段警告。
+规则入口的**目标契约**接收 `source snapshot + requestId + operationId + RuleContext + budget + AbortSignal + RuntimeHost`，输出 `OperationResult<T>`。结果必须包含 `status`、可选值、诊断、effects、changes 和 cleanup；合法空列表使用 `empty`，脚本/宿主能力缺失使用 `capability-missing`，取消和版本变化分别使用 `cancelled`/`stale`。**当前实现**对应 `compileRule` / `evaluateRule` / `createRequestPlan`，返回 `RuleCompileResult` / `RuleEvaluationResult` / `RequestPlanResult` 或流程层 `RuntimeResult`（无 `RuntimeHost` / `OperationResult` 导出，见 [已知差异](../divergence/known-divergences.md)）。`RuntimeDiagnostic.canContinue` 只决定当前字段能否继续，不能把取消、预算耗尽或资源清理失败降级为普通字段警告。
 
 规则中间表示至少记录 mode、原文、位置、输入类型和下一步输入；请求中间表示至少记录绝对 URL、method、headers、body、charset、重定向策略、responseType、超时、最大请求数和 signal。HTTP 响应保留最终 URL、状态码、响应头和 bytes；重定向、空 body、超时、取消、字节上限和 bodyJs 失败必须分别有稳定诊断。
 
 ## 规则求值的实现顺序
 
 1. 建立统一 `RuleContext`：当前书源、书籍、章节、原始响应、基准 URL、`RuleVariableView`、脚本绑定和取消信号。每次公开调用创建新上下文；字段规则在同一流程中按原实现约定共享必要变量。
-2. 按[规则语言](../reference/rule-language.md)的兼容边界实现扫描器，区分 RuleAnalyzer 的规则平衡和代码平衡。不得全局保护原实现未保护的引号，不改 JS/WebJS 两次扫描顺序。诊断与求值共享位置记录，但额外诊断不改变执行语义。
+2. 按[规则语言](../standard/rule-language.md)的兼容边界实现扫描器，区分 RuleAnalyzer 的规则平衡和代码平衡。不得全局保护原实现未保护的引号，不改 JS/WebJS 两次扫描顺序。诊断与求值共享位置记录，但额外诊断不改变执行语义。
 3. 对每段规则识别默认/Jsoup、CSS、XPath、JSONPath、Regex 和 JS 模式，输出带原始文本与位置的中间表示。模式选择与求值分开，编辑器诊断和运行时共享同一个扫描结果。
 4. 通过解析器端口执行 DOM、XPath 和 JSONPath。核心层解释旧式选择器、节点链、索引、范围、排除、终端文本/属性读取和 `getString`/`getStringList`/`getElements` 的归一化。端口返回节点、对象、列表与标量时保留类型，直到输出 API 确定目标类型。
 5. 加入 Regex、捕获组、替换、`@put`、`@get`、`{{}}` 与规则内 JS。明确求值顺序、变量写入范围、空字符串与空列表、单字段失败和取消。没有 JS 宿主时返回能力错误，静态规则仍可求值。
@@ -21,7 +23,7 @@
 
 ## URL 与请求计划
 
-URL 层分为请求计划与宿主执行；没有脚本及状态读取的静态展开才是纯函数。依 [URL 与请求规则](../reference/url-request-rules.md) 执行 JS、插值、页码、选项、地址、Header/Cookie 及编码，返回 HttpRequest。宿主返回 bytes，核心通过字符集端口解码后执行 bodyJs/XML 处理。
+URL 层分为请求计划与宿主执行；没有脚本及状态读取的静态展开才是纯函数。依 [URL 与请求规则](../standard/url-request-rules.md) 执行 JS、插值、页码、选项、地址、Header/Cookie 及编码，返回 HttpRequest。宿主返回 bytes，核心通过字符集端口解码后执行 bodyJs/XML 处理。
 
 ```text
 书源 URL 规则 + page/key/context
