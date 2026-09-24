@@ -333,6 +333,15 @@ export class SourceRequestRuntime {
     let headers = mergeHeaders(sourceHeaders, headerObject(options.headers))
     const charset = typeof options.charset === 'string' && options.charset.trim().length > 0 ? options.charset.trim() : undefined
     const requestCharset = charset?.toLowerCase() === 'escape' ? undefined : charset
+    // 非 UTF-8 编码必须由 CharsetCodec 真正支持；helpers 默认路径缺 encodeCharset 时会在此失败，
+    // 不得用 TextEncoder 冒充后静默发错字节。
+    if (requestCharset !== undefined && requestCharset.toLowerCase().replaceAll('-', '') !== 'utf8') {
+      try {
+        this.encoding.encode('测', requestCharset)
+      } catch {
+        throw new SourceRequestError('capability-missing', `当前网络宿主不支持 ${requestCharset} 编码`, 'url')
+      }
+    }
     const bodyValue = options.body === undefined || typeof options.body === 'string' || options.body instanceof Uint8Array ? options.body : JSON.stringify(options.body)
     let body: string | Uint8Array | undefined
 
@@ -378,7 +387,9 @@ export class SourceRequestRuntime {
       },
       budget: { ...(budget ?? {}), ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(signal === undefined ? {} : { signal }) },
     })
-    const initialUrl = resolveSourceRequestUrl(split.url, source.bookSourceUrl, charset, (value, requestedCharset) => this.encoding.encode(value, requestedCharset))
+    // 查询编码走 CharsetCodec：Node 提供完整字符集，helpers 默认路径仅在宿主声明 encodeCharset 时可编非 UTF-8。
+    const queryEncoder = (value: string, requestedCharset: string) => this.encoding.encode(value, requestedCharset)
+    const initialUrl = resolveSourceRequestUrl(split.url, source.bookSourceUrl, charset, queryEncoder)
     let request = makePlan(initialUrl)
     if (request.plan === undefined) {
       throw new SourceRequestError(request.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', request.error?.message ?? '书源请求计划无效')
@@ -387,7 +398,7 @@ export class SourceRequestRuntime {
     if (typeof options.js === 'string' && options.js.trim().length > 0) {
       const planUrl = request.plan.url
       const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: planUrl, redirectUrl: planUrl })
-      const rewrittenUrl = resolveSourceRequestUrl(rewritten, source.bookSourceUrl, charset, (value, requestedCharset) => this.encoding.encode(value, requestedCharset))
+      const rewrittenUrl = resolveSourceRequestUrl(rewritten, source.bookSourceUrl, charset, queryEncoder)
       request = makePlan(rewrittenUrl)
       if (request.plan === undefined) {
         throw new SourceRequestError(request.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', request.error?.message ?? '书源 URL 脚本生成了无效地址', 'url')
@@ -407,7 +418,6 @@ export class SourceRequestRuntime {
       }
     }
     if (response === undefined) throw lastError instanceof Error ? lastError : new Error('书源请求失败')
-    if (response.status >= 400) throw new Error(`书源请求返回 HTTP ${response.status}`)
 
     let result: NetworkResponse = response
     if (requestCharset !== undefined) result = { ...result, headers: { ...result.headers, 'x-legado-response-charset': requestCharset } }

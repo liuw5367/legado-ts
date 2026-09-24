@@ -167,3 +167,65 @@ test('动态 header 经 evaluate 回退执行且非法 JSON 报 invalid-config',
   assert.equal(diagnostic.field, 'header')
   assert.equal(diagnostic.retryable, false)
 })
+
+test('loginCheckJs 看到真实 401，恢复后继续解析', async () => {
+  const source = await importFixture({ loginCheckJs: 'login-check' })
+  const seen: Array<{ status: number; body: string; header: string | undefined }> = []
+  const ports = probePorts({
+    network: () => ({
+      url: 'https://fixture.invalid/search?q=x',
+      status: 401,
+      headers: { 'x-probe': 'yes' },
+      bytes: new TextEncoder().encode('login-page'),
+      redirected: false,
+    }),
+    executeWorkflowJavaScript: async (request) => {
+      if (request.code !== 'login-check') return { status: 'failed', value: null, message: 'unexpected script' }
+      const content = request.content as { status: number; body: string; headers: Record<string, string> }
+      seen.push({ status: content.status, body: content.body, header: content.headers['x-probe'] ?? undefined })
+      return { status: 'success', value: { status: 200, body: 'recovered-ok', headers: { 'content-type': 'text/plain; charset=utf-8' } } }
+    },
+  })
+  const result = await searchBooks(ports, { source, keyword: 'x' })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(seen, [{ status: 401, body: 'login-page', header: 'yes' }])
+  assert.equal(ports.listContent, 'recovered-ok')
+})
+
+test('loginCheckJs 未恢复时 4xx 不可重试、5xx 可重试', async () => {
+  for (const [status, retryable] of [[403, false], [503, true]] as const) {
+    const source = await importFixture({ loginCheckJs: 'login-check' })
+    const ports = probePorts({
+      network: () => ({
+        url: 'https://fixture.invalid/search?q=x',
+        status,
+        headers: {},
+        bytes: new TextEncoder().encode('error-page'),
+        redirected: false,
+      }),
+      executeWorkflowJavaScript: async (request) => {
+        if (request.code !== 'login-check') return { status: 'failed', value: null, message: 'unexpected script' }
+        const content = request.content as { status: number }
+        assert.equal(content.status, status, 'loginCheckJs 应看到真实状态码')
+        return { status: 'success', value: { status, body: 'still-error', headers: {} } }
+      },
+    })
+    const result = await searchBooks(ports, { source, keyword: 'x' })
+    const diagnostic = result.diagnostics.find((item) => item.code === 'request-failed')
+    assert.ok(diagnostic, `HTTP ${status} 应产生 request-failed`)
+    assert.equal(diagnostic.retryable, retryable)
+    assert.match(diagnostic.message, new RegExp(String(status)))
+  }
+})
+
+test('缺少 encodeCharset 时非 UTF-8 查询明确失败且不发请求', async () => {
+  const source = await importFixture({ searchUrl: '/search?q={{keyword}},{"charset":"gbk"}' })
+  const ports = probePorts()
+  assert.equal(ports.network.encodeCharset, undefined)
+  const result = await searchBooks(ports, { source, keyword: '中文' })
+  assert.equal(ports.calls, 0)
+  const diagnostic = result.diagnostics.find((item) => item.code === 'capability-missing' || item.code === 'invalid-config' || item.code === 'request-failed')
+  assert.ok(diagnostic, '应产生能力或配置诊断')
+  assert.equal(diagnostic.retryable, false)
+  assert.ok(!ports.plans.some((plan) => plan.url.includes('%E4%B8%AD%E6%96%87')), '不得静默按 UTF-8 编码查询')
+})

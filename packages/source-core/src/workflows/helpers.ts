@@ -332,8 +332,15 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
     let response: NetworkResponse
     if (ports.request !== undefined) response = await ports.request(requestInput)
     else {
+      // 只有网络宿主声明的字符集能力才可委托；非 UTF-8 缺能力时明确失败，不用 UTF-8 冒充。
+      const encodeCharset = ports.network.encodeCharset?.bind(ports.network)
       const encoding: CharsetCodec = {
-        encode: (value, charset) => ports.network.encodeCharset?.(value, charset) ?? new TextEncoder().encode(value),
+        encode: (value, charset) => {
+          if (encodeCharset !== undefined) return encodeCharset(value, charset)
+          const normalized = charset.toLowerCase().replaceAll('-', '')
+          if (normalized !== '' && normalized !== 'utf8') throw new Error(`当前网络宿主不支持 ${charset} 编码`)
+          return new TextEncoder().encode(value)
+        },
         decode: (bytes, charset) => new TextDecoder(charset).decode(bytes),
       }
       const runtime = new SourceRequestRuntime({
@@ -353,6 +360,11 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
     const checked = await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics)
     if (checked === undefined) return undefined
     response = checked
+    // 真实 4xx/5xx 已先经过 loginCheckJs；未恢复时按状态报告，5xx 可重试、4xx 不可重试。
+    if (response.status >= 400) {
+      diagnostics.push({ code: 'request-failed', stage, message: `书源请求返回 HTTP ${response.status}`, retryable: response.status >= 500 })
+      return undefined
+    }
     return { content: responseText(response, source, ports), url: response.url }
   } catch (error) {
     if (options.signal !== undefined && options.signal.aborted) {
