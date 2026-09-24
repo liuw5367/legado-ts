@@ -166,3 +166,99 @@ test('正文 webJs 提示在没有 WebView 宿主时显式失败', async () => {
   const ok = await host.request({ source, url: '/book/1/content', stage: 'detail', options: {}, execution: { sourceRegex: 'id="content"' } })
   assert.equal(new TextDecoder().decode(ok.bytes), 'ok')
 })
+
+test('动态 header 经 bridge 子请求不重算自身，嵌套深度受限', async () => {
+  const calls: string[] = []
+  const host = new SourceRequestHost({
+    network: {
+      request: async (plan) => {
+        calls.push(plan.url)
+        return response(plan.url)
+      },
+    },
+  })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, requestSource) => host.requestFromBridge(input, signal, requestSource) })
+  host.attachRuleHost(ruleHost)
+
+  const dynamicHeader = {
+    bookSourceUrl: 'https://fixture.invalid',
+    bookSourceName: 'fixture',
+    header: '@js:java.ajax("https://fixture.invalid/child"); return {"X-Token":"t"}',
+  } as unknown as NormalizedSource
+  const parent = await host.request({ source: dynamicHeader, url: '/parent', stage: 'search', options: {} })
+  assert.equal(new TextDecoder().decode(parent.bytes), 'ok')
+  // 子请求 + 父请求各一次；nested 跳过动态 header，不会自递归。
+  assert.deepEqual(calls.sort(), ['https://fixture.invalid/child', 'https://fixture.invalid/parent'])
+  assert.equal(parent.headers['content-type'], 'text/plain; charset=utf-8')
+
+  // 静态 header 在子请求上仍会合并。
+  calls.length = 0
+  const staticHeader = {
+    bookSourceUrl: 'https://fixture.invalid',
+    bookSourceName: 'fixture',
+    header: JSON.stringify({ 'X-Static': 'yes' }),
+  } as unknown as NormalizedSource
+  const host2 = new SourceRequestHost({
+    network: {
+      request: async (plan) => {
+        calls.push(JSON.stringify(plan.headers))
+        return response(plan.url)
+      },
+    },
+  })
+  const ruleHost2 = new SourceRuleHost({ request: (input, signal, requestSource) => host2.requestFromBridge(input, signal, requestSource) })
+  host2.attachRuleHost(ruleHost2)
+  await host2.request({ source: staticHeader, url: '/parent2', stage: 'search', options: {} })
+  // 父请求含静态头；若曾发出子请求则深度/嵌套语义异常（此处无脚本，应只有 1 次网络调用）。
+  assert.equal(calls.length, 1)
+  assert.match(calls[0] ?? '', /X-Static/)
+})
+
+test('bridge 网络子请求超过深度上限时拒绝', async () => {
+  const calls: string[] = []
+  const host = new SourceRequestHost({
+    network: {
+      request: async (plan) => {
+        calls.push(plan.url)
+        return response(plan.url)
+      },
+    },
+  })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, requestSource) => host.requestFromBridge(input, signal, requestSource) })
+  host.attachRuleHost(ruleHost)
+
+  // 用 js 选项沿 URL 链反复 java.ajax，制造 bridge 再入。
+  let target = 'https://fixture.invalid/leaf'
+  for (let level = 0; level < 8; level += 1) {
+    const js = `java.ajax(${JSON.stringify(target)})`
+    target = `https://fixture.invalid/n${level},${JSON.stringify({ js })}`
+  }
+  const deepSource = { bookSourceUrl: 'https://fixture.invalid', bookSourceName: 'fixture' } as unknown as NormalizedSource
+  await assert.rejects(() => host.request({ source: deepSource, url: target, stage: 'search', options: {} }))
+  // js 链在发起 HTTP 前就会触达深度上限；即使命中网络，次数也有界。
+  assert.ok(calls.length <= 4, `calls=${calls.length}`)
+})
+
+test('外层 AbortSignal 转发到动态 header 脚本', async () => {
+  let seen: AbortSignal | undefined
+  const host = new SourceRequestHost({ network: { request: async (plan) => response(plan.url) } })
+  host.attachRuleHost({
+    evaluate: async () => ({ status: 'empty', value: null }),
+    executeWorkflowJavaScript: async (request) => {
+      if (request.code.includes('X-Probe')) {
+        seen = request.signal
+        return { status: 'success', value: { 'X-Probe': '1' } }
+      }
+      return { status: 'failed', value: null, message: 'unexpected' }
+    },
+  })
+  const controller = new AbortController()
+  const headerSource = {
+    bookSourceUrl: 'https://fixture.invalid',
+    bookSourceName: 'fixture',
+    header: '@js:return {"X-Probe":"1"}',
+  } as unknown as NormalizedSource
+  await host.request({ source: headerSource, url: '/signal', stage: 'search', options: { signal: controller.signal } })
+  assert.ok(seen, 'header 脚本应收到 signal')
+  assert.equal(seen?.aborted, false)
+})

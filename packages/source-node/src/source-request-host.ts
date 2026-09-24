@@ -1,4 +1,4 @@
-import { SourceRequestRuntime } from '@legado/source-core'
+import { SourceRequestError, SourceRequestRuntime } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, NormalizedSource, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
 import chardet from 'chardet'
 import { NodeCharsetCodec } from './charset.ts'
@@ -12,6 +12,9 @@ export interface SourceRequestHostOptions {
   cookieStore?: CookieStore
   encoding?: NodeCharsetCodec
 }
+
+/** bridge 网络子请求允许的最大再入层数；超出后拒绝，防止脚本经 bridge 无限嵌套。 */
+const maxBridgeDepth = 3
 
 function text(value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -61,6 +64,8 @@ export class SourceRequestHost {
   private readonly cookieStore: CookieStore
   private readonly encoding: NodeCharsetCodec
   private readonly runtime: SourceRequestRuntime
+  /** 当前在途 bridge 网络子请求深度；实例级计数足以拦住单宿主上的失控递归。 */
+  private bridgeDepth = 0
 
   public constructor(options: SourceRequestHostOptions) {
     this.cookieStore = options.cookieStore ?? new NodeCookieStore()
@@ -95,6 +100,9 @@ export class SourceRequestHost {
     }
     if (input.kind === 'token') throw new Error('书源 token bridge 不可用')
     if (input.kind !== 'network') throw new Error(`未知书源 bridge: ${input.kind}`)
+    if (this.bridgeDepth >= maxBridgeDepth) {
+      throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
+    }
     const options = object(input.options) as SourceRequestOptions | undefined
     const overrides: SourceRequestOptions = {
       ...(options ?? {}),
@@ -102,8 +110,14 @@ export class SourceRequestHost {
       ...(input.body === undefined ? {} : { body: input.body }),
       ...(input.headers === undefined ? {} : { headers: input.headers }),
     }
-    const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, 'search')
-    return this.decode(response)
+    this.bridgeDepth += 1
+    try {
+      // nested：子请求跳过动态 source header，只保留静态头，切断 header 脚本自递归。
+      const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, 'search', true)
+      return this.decode(response)
+    } finally {
+      this.bridgeDepth -= 1
+    }
   }
 
   public decodeResponse(response: NetworkResponse): string {

@@ -320,12 +320,12 @@ export class SourceRequestRuntime {
     return text(value)
   }
 
-  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search'): Promise<NetworkResponse> {
+  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false): Promise<NetworkResponse> {
     const split = splitSourceRequestUrl(rawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) throw new Error('书源请求需要 WebView')
     const method = (options.method ?? 'GET').toUpperCase()
-    const sourceHeaders = await this.sourceHeaders(source, signal)
+    const sourceHeaders = await this.sourceHeaders(source, signal, nested)
     let headers = mergeHeaders(sourceHeaders, headerObject(options.headers))
     const charset = typeof options.charset === 'string' && options.charset.trim().length > 0 ? options.charset.trim() : undefined
     const requestCharset = charset?.toLowerCase() === 'escape' ? undefined : charset
@@ -431,12 +431,14 @@ export class SourceRequestRuntime {
     return result
   }
 
-  private async sourceHeaders(source: NormalizedSource, signal?: AbortSignal): Promise<Readonly<Record<string, string>> | undefined> {
+  private async sourceHeaders(source: NormalizedSource, signal?: AbortSignal, nested = false): Promise<Readonly<Record<string, string>> | undefined> {
     const header = source.header
     if (header === undefined || header === null) return undefined
     if (typeof header === 'object' && !Array.isArray(header)) return headerObject(header)
     if (typeof header !== 'string') return undefined
     if (header.trim().toLowerCase().startsWith('@js:')) {
+      // bridge 子请求不再执行动态 header，避免 header→java.ajax→同一 header 的异步递归；静态头仍合并。
+      if (nested) return undefined
       // 头脚本不携带请求 URL 上下文，stage 固定为 search，与基线 Node 门面一致。
       const value = await this.runSourceScript(header.trim().slice(4), 'search', source, '', signal, {
         evaluateField: 'header',
