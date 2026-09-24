@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { NormalizedSource, WorkflowPorts } from '../src/public/index.ts'
+import type { NormalizedSource, WorkflowPorts } from '../src/index.ts'
 import { expandUrl } from '../src/workflows/helpers.ts'
 
 const source = { bookSourceUrl: 'https://fixture.invalid' } as NormalizedSource

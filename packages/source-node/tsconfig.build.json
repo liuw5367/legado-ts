@@ -8,7 +8,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "paths": {
-      "@legado/source-core": ["packages/source-core/dist/public/index.d.ts"]
+      "@legado/source-core": ["packages/source-core/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts"]

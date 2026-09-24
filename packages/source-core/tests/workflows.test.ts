@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { discoverBooks, loadBookDetails, loadTableOfContents, searchBooks } from '../src/public/index.ts'
-import type { BookCandidate, NormalizedSource, WorkflowPorts } from '../src/public/index.ts'
+import { discoverBooks, loadBookDetails, loadTableOfContents, searchBooks } from '../src/index.ts'
+import type { BookCandidate, NormalizedSource, WorkflowPorts } from '../src/index.ts'
 
 const source = {
   bookSourceUrl: 'https://source.test',

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compileRule, evaluateRule, inspectRuleCapabilities, MemoryVariableView } from '../src/public/index.ts'
-import type { CompiledRule, NormalizedSource, RuleContext } from '../src/public/index.ts'
+import { compileRule, evaluateRule, inspectRuleCapabilities, MemoryVariableView } from '../src/index.ts'
+import type { CompiledRule, NormalizedSource, RuleContext } from '../src/index.ts'
 
 const source = { bookSourceUrl: 'https://example.test', bookSourceName: 'Example' } as NormalizedSource
 

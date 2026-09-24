@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/public/index.ts'
-import type { NetworkHost, NetworkResponse, WorkflowPorts } from '../../source-core/src/public/index.ts'
+import { importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/index.ts'
+import type { NetworkHost, NetworkResponse, WorkflowPorts } from '../../source-core/src/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
 import { SourceRequestHost } from '../src/source-request-host.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
@@ -83,7 +83,7 @@ test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章
       'function getChapters(book) { return [{ title: "第一章", url: "./chapter/1", isVip: true }]; }',
       'function getContent(chapter, book, nextChapterUrl) { return chapter.title + ":" + book.name + ":" + nextChapterUrl; }',
     ].join('\n'),
-  } as unknown as import('../../source-core/src/public/index.ts').NormalizedSource
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const requests: string[] = []
   let requestHost: SourceRequestHost
   const ruleHost = new SourceRuleHost({ request: (input, signal, requestSource) => requestHost.requestFromBridge(input, signal, requestSource) })
@@ -124,7 +124,7 @@ test('loginCheckJs 收到可调用的 StrResponse 并用返回正文继续解析
     searchUrl: '/search',
     loginCheckJs: 'Packages.io.legado.app.help.http.StrResponse(result.url(), result.body().replace("旧书名", "新书名"))',
     ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
-  } as unknown as import('../../source-core/src/public/index.ts').NormalizedSource
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const network: NetworkHost = { request: async (plan) => response(plan.url, '{"books":[{"name":"旧书名","url":"/book"}]}') }
   const ports: WorkflowPorts = { network, rules: new SourceRuleHost() }
   const result = await searchBooks(ports, { source, keyword: '书' })
@@ -136,7 +136,7 @@ test('loginCheckJs 收到可调用的 StrResponse 并用返回正文继续解析
     bookSourceUrl: 'https://login-recover.test',
     searchUrl: '/offline-search',
     loginCheckJs: 'Packages.io.legado.app.help.http.StrResponse(result.url(), JSON.stringify({ books: [{ name: "恢复书", url: "/book" }] }))',
-  } as unknown as import('../../source-core/src/public/index.ts').NormalizedSource
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const offlinePorts: WorkflowPorts = {
     network: { request: async () => { throw new Error('temporary network error') } },
     rules: new SourceRuleHost(),
@@ -157,7 +157,7 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
       preUpdateJs: 'book.tocUrl = "/updated-toc"',
       formatJs: 'if (index === 1) { chapter.title = title + "✓"; }',
     },
-  } as unknown as import('../../source-core/src/public/index.ts').NormalizedSource
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const requested: string[] = []
   const network: NetworkHost = { request: async (plan) => { requested.push(plan.url); return response(plan.url, '<a href="/chapter/1">第一章</a>') } }
   const ports: WorkflowPorts = { network, rules: new SourceRuleHost() }
@@ -182,7 +182,7 @@ test('JavaScript 书源空返回与 Android 一样作为空列表处理', async 
     bookSourceUrl: 'https://empty-js-source.test',
     bookSourceName: 'Empty JS Source',
     mainJs: 'function search(key, page) { return; } function getChapters(book) { return null; }',
-  } as unknown as import('../../source-core/src/public/index.ts').NormalizedSource
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
   const search = await searchBooks(ports, { source, keyword: '书' })
   assert.equal(search.status, 'empty')
@@ -200,7 +200,7 @@ test('getBookInfo 空字符串沿用搜索阶段字段', async () => {
     bookSourceUrl: 'https://empty-info.test',
     bookSourceName: 'Empty Info',
     mainJs: 'function getBookInfo(book) { return ""; }',
-  } as unknown as import('../../source-core/src/public/index.ts').NormalizedSource
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const candidate = {
     sourceId: source.bookSourceUrl,
     bookUrl: 'https://empty-info.test/book',

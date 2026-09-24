@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { NormalizedSource, WorkflowRuleRequest } from '../../source-core/src/public/index.ts'
+import type { NormalizedSource, WorkflowRuleRequest } from '../../source-core/src/index.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
 
 const source = { bookSourceUrl: 'https://fixture.invalid', bookSourceName: 'fixture' } as NormalizedSource

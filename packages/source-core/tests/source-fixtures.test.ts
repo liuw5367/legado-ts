@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { compileRule, importSources } from '../src/public/index.ts'
-import type { JsonValue } from '../src/public/index.ts'
+import { compileRule, importSources } from '../src/index.ts'
+import type { JsonValue } from '../src/index.ts'
 
 const sourceRoot = new URL('../../../fixtures/source/', import.meta.url)
 

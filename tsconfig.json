@@ -19,7 +19,7 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@legado/source-core": ["packages/source-core/src/public/index.ts"]
+      "@legado/source-core": ["packages/source-core/src/index.ts"]
     }
   },
   "include": ["packages/**/*.ts", "packages/**/*.json", "apps/**/*.ts", "apps/**/*.tsx", "tests/**/*.ts"],

@@ -65,7 +65,7 @@
 
 ## 事实来源规则
 
-字段和默认值以 [书源数据模型](standard/source-schema.md) 为准；字段所有权以 [字段所有权与合并规则](standard/source-field-ownership.md) 为准；实体边界以 [书源相关实体边界](standard/artifact-model.md) 为准；规则语义以 [规则语言](standard/rule-language.md) 为准；请求行为以 [URL 与请求规则](standard/url-request-rules.md) 为准；身份、版本和提交以 [状态与副作用](standard/state-and-effects.md) 为准；当前代码入口以 [package 使用指南](implementation/package-usage.md) 与 `packages/source-core/src/public/index.ts` 为准。流程和实现文档引用这些事实，不另建同名定义。
+字段和默认值以 [书源数据模型](standard/source-schema.md) 为准；字段所有权以 [字段所有权与合并规则](standard/source-field-ownership.md) 为准；实体边界以 [书源相关实体边界](standard/artifact-model.md) 为准；规则语义以 [规则语言](standard/rule-language.md) 为准；请求行为以 [URL 与请求规则](standard/url-request-rules.md) 为准；身份、版本和提交以 [状态与副作用](standard/state-and-effects.md) 为准；当前代码入口以 [package 使用指南](implementation/package-usage.md) 与 `packages/source-core/src/index.ts` 为准。流程和实现文档引用这些事实，不另建同名定义。
 
 Android 上游仓库为 [LegadoTeam/legado](https://github.com/LegadoTeam/legado)，文档对应基线提交 `62003ce732a7e30602754d28996da7f98b9ea296`。相对路径可拼接为 `https://github.com/LegadoTeam/legado/blob/62003ce732a7e30602754d28996da7f98b9ea296/<相对路径>`；日常浏览也可用 `blob/master/<相对路径>`。取证策略与基线维护见 [package 维护与迁移证据](operations/package-maintenance.md)。当前 Android 主要事实源是 `app/src/main/java/io/legado/app/model/analyzeRule/`、`app/src/main/java/io/legado/app/model/webBook/`、`app/src/main/java/io/legado/app/data/entities/` 和相关测试。`modules/web/` 是管理界面，不能替代运行时规则引擎。
 

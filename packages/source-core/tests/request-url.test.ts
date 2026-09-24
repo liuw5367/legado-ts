@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { resolveSourceRequestReference, resolveSourceRequestUrl, splitSourceRequestUrl } from '../src/public/index.ts'
+import { resolveSourceRequestReference, resolveSourceRequestUrl, splitSourceRequestUrl } from '../src/index.ts'
 
 test('URL 选项后缀只在逗号后跟 JSON 对象时拆分', () => {
   assert.deepEqual(splitSourceRequestUrl('https://fixture.invalid/search?tag=a,b'), { url: 'https://fixture.invalid/search?tag=a,b' })

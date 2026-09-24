@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { NetworkHost, NetworkResponse, NormalizedSource } from '../../source-core/src/public/index.ts'
+import type { NetworkHost, NetworkResponse, NormalizedSource } from '../../source-core/src/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
 import { NodeCharsetCodec } from '../src/charset.ts'
 import { SourceRequestHost } from '../src/source-request-host.ts'

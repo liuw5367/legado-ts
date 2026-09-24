@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createRequestPlan } from '../src/public/index.ts'
+import { createRequestPlan } from '../src/index.ts'
 
 test('请求计划解析相对地址、方法和请求体预算', () => {
   const result = createRequestPlan({

@@ -10,7 +10,7 @@
     "jsx": "react-jsx",
     "types": ["node", "react"],
     "paths": {
-      "@legado/source-core": ["../../packages/source-core/dist/public/index.d.ts"],
+      "@legado/source-core": ["../../packages/source-core/dist/index.d.ts"],
       "@legado/source-node": ["../../packages/source-node/dist/index.d.ts"]
     }
   },

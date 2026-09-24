@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { exportSource, importSources, sameSourceDefinition } from '../src/public/index.ts'
+import { exportSource, importSources, sameSourceDefinition } from '../src/index.ts'
 
 const source = {
   bookSourceUrl: 'https://example.test/books',

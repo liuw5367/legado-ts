@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { discoverBooks, importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../src/public/index.ts'
-import type { NormalizedSource, RequestPlan, WorkflowPorts } from '../src/public/index.ts'
+import { discoverBooks, importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../src/index.ts'
+import type { NormalizedSource, RequestPlan, WorkflowPorts } from '../src/index.ts'
 
 test('07-A fixture manifest keeps source conformance cases executable', async () => {
   const text = await readFile(new URL('../../../fixtures/phase-07-a/manifest.json', import.meta.url), 'utf8')

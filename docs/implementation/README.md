@@ -1,6 +1,6 @@
 # 当前实现
 
-本目录记录 TypeScript 仓库中已经存在的书源运行时入口、宿主契约与阶段验证记录。公开 API 以 `packages/source-core/src/public/index.ts` 为准；与 [书源规则标准](../standard/README.md) 的不一致登记在 [已知差异](../divergence/known-divergences.md)。
+本目录记录 TypeScript 仓库中已经存在的书源运行时入口、宿主契约与阶段验证记录。公开 API 以 `packages/source-core/src/index.ts` 为准；与 [书源规则标准](../standard/README.md) 的不一致登记在 [已知差异](../divergence/known-divergences.md)。
 
 ## 入口与契约
 

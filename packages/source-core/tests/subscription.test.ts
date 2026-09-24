@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { refreshSubscription } from '../src/public/index.ts'
-import type { NormalizedSource } from '../src/public/index.ts'
+import { refreshSubscription } from '../src/index.ts'
+import type { NormalizedSource } from '../src/index.ts'
 
 function make(url: string, extra: Record<string, unknown> = {}): NormalizedSource {
   return { bookSourceUrl: url, bookSourceName: url, ...extra } as NormalizedSource

@@ -4,8 +4,8 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/public/index.d.ts",
-      "import": "./dist/public/index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "files": ["dist"],

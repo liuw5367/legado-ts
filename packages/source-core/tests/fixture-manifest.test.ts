@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import type { JsonValue } from '../src/public/index.ts'
+import type { JsonValue } from '../src/index.ts'
 
 test('phase-a fixture manifest has evidence and execution fields', async () => {
   const text = await readFile(new URL('../../../fixtures/phase-a/manifest.json', import.meta.url), 'utf8')

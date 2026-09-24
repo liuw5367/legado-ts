@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { importSources, searchBooks } from '../../source-core/src/public/index.ts'
-import type { JsonValue, NormalizedSource, ParserNode, WorkflowRuleOutput, WorkflowPorts } from '../../source-core/src/public/index.ts'
+import { importSources, searchBooks } from '../../source-core/src/index.ts'
+import type { JsonValue, NormalizedSource, ParserNode, WorkflowRuleOutput, WorkflowPorts } from '../../source-core/src/index.ts'
 import { HtmlParserAdapter, JsonPathParserAdapter, QuickJSJavaScriptHost, XPathParserAdapter } from '../src/index.ts'
 
 const sourceFile = new URL('../../../fixtures/source/collection/14328_c803e1b071690d18ce7acb5184727058.json', import.meta.url)

@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { compileRule, importSources } from '../../packages/source-core/src/public/index.ts'
+import { compileRule, importSources } from '../../packages/source-core/src/index.ts'
 
 const sourceRoot = new URL('../source/', import.meta.url)
 const manifestPath = fileURLToPath(new URL('./manifest.json', import.meta.url))

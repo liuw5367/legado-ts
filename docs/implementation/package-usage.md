@@ -1,6 +1,6 @@
 # package 使用指南
 
-本章描述 `@legado/source-core` 与 `@legado/source-node` 当前已实现的公开入口与调用方式。API 名称以 `packages/source-core/src/public/index.ts` 为准；与 [书源规则标准](../standard/source-schema.md) 或历史目标设计的差异见 [已知差异](../divergence/known-divergences.md)。
+本章描述 `@legado/source-core` 与 `@legado/source-node` 当前已实现的公开入口与调用方式。API 名称以 `packages/source-core/src/index.ts` 为准；与 [书源规则标准](../standard/source-schema.md) 或历史目标设计的差异见 [已知差异](../divergence/known-divergences.md)。
 
 应用组织书源和提交数据，package 解释规则并编排流程。已实现的命令行阅读器位于 `apps/reader-cli`，它在应用层调用本章工作流，提供搜索、详情、目录、正文、书架和阅读状态；安装与键位见 [`apps/reader-cli/README.md`](../../apps/reader-cli/README.md)。
 
