@@ -81,6 +81,8 @@ export interface HtmlParser {
 }
 
 export interface XPathParser {
+  /** 解析 XPath 规则使用的文档；宿主决定 HTML 修复和 XML 模式。 */
+  parse(input: string): HtmlDocument
   /** 返回 XPath 选中的节点、对象、列表或字符串。 */
   evaluate(document: HtmlDocument, expression: string): unknown
 }
@@ -91,7 +93,7 @@ export interface JsonPathParser {
 }
 ```
 
-解析器端口只表达平台能力，规则模式、链条、索引、组合符号、替换和 URL 归一化仍由核心规则引擎控制。`HtmlDocument` 必须支持规则文档所需的元素选择、链式节点、属性、`text`、`textNodes`、`ownText`、`html`、`all` 和非破坏性索引过滤。`XPathParser` 和 `JsonPathParser` 要让核心层区分节点、对象、列表、字符串及空结果，不能把所有结果提前转成字符串。
+解析器端口只表达平台能力，规则模式、链条、索引、组合符号、替换和 URL 归一化仍由核心规则引擎控制。`HtmlDocument` 必须支持规则文档所需的元素选择、链式节点、属性、`text`、`textNodes`、`ownText`、`html`、`all` 和非破坏性索引过滤。`XPathParser` 和 `JsonPathParser` 要让核心层区分节点、对象、列表、字符串及空结果，不能把所有结果提前转成字符串。`XPathParser.parse` 是必需方法：核心规则运行时对文本内容先 `parse` 再 `evaluate`，只实现 `evaluate` 的适配器不满足该类型。
 
 解析器适配器不变量：parse 返回的节点 ID 在 select/child 中稳定，child 不删除节点；空选择、空字符串、空列表、null、undefined 可区分。核心选择 HTML/XML 模式并补表格容器。CSS/XPath/JSONPath 语法错误分别可识别，合法无匹配是空结果。核心在兼容 JSONPath 入口捕获特定 parser error 转为空值，不能吞取消或预算错误。
 
