@@ -108,10 +108,28 @@ test('07-B raw text, parsed value and controlled file reader have identical sour
   assert.deepEqual(readerCalls, files.map((file) => file.path))
 })
 
+async function largestCollectionFile(): Promise<{ relative: string; path: string }> {
+  const files = (await fixtureFiles()).filter((file) => file.relative.startsWith('collection/'))
+  assert.ok(files.length > 0, '语料中至少需要一个 collection 文件')
+  let best = files[0]!
+  let bestCount = -1
+  for (const file of files) {
+    const members = JSON.parse(await readFile(file.path, 'utf8')) as unknown
+    const count = Array.isArray(members) ? members.length : 1
+    if (count > bestCount) {
+      best = file
+      bestCount = count
+    }
+  }
+  assert.ok(bestCount >= 4, '需要至少含 4 个成员的集合文件以覆盖导入限额')
+  return best
+}
+
 test('07-B a collection member follows the same single-source entry', async () => {
-  const collectionPath = fileURLToPath(new URL('collection/13655_c5880332228edeffa2ce977a525a6b21.json', sourceRoot))
+  const collectionPath = (await largestCollectionFile()).path
   const collectionText = await readFile(collectionPath, 'utf8')
   const members = JSON.parse(collectionText) as JsonValue[]
+  assert.ok(Array.isArray(members) && members.length > 0)
   const collection = await importSources(collectionText)
   const single = await importSources(JSON.stringify(members[0]))
   assert.equal(collection[0]?.status, single[0]?.status)
@@ -159,7 +177,7 @@ test('07-B every real source is structurally parseable even when optional workfl
 })
 
 test('07-B fixture import keeps candidate, byte and cancellation limits isolated', async () => {
-  const file = fileURLToPath(new URL('collection/13655_c5880332228edeffa2ce977a525a6b21.json', sourceRoot))
+  const file = (await largestCollectionFile()).path
   const text = await readFile(file, 'utf8')
   const limited = await importSources(text, { limits: { maxCandidates: 3 } })
   assert.equal(limited.length, 3)

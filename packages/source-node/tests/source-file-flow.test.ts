@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/index.ts'
+import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/index.ts'
 import type { NormalizedSource, WorkflowPorts } from '../../source-core/src/index.ts'
-
-const sourceFile = new URL('../../../fixtures/source/collection/14328_c803e1b071690d18ce7acb5184727058.json', import.meta.url)
+import { loadFixtureSources } from './helpers/corpus.ts'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -45,9 +43,17 @@ function supportsFlow(source: NormalizedSource): boolean {
   return requiredRules.every(([group, field]) => hasRule(source, group, field))
 }
 
-async function fixtureSources(): Promise<NormalizedSource[]> {
-  const imported = await importSources(await readFile(sourceFile, 'utf8'))
-  return imported.flatMap((candidate) => candidate.source === undefined ? [] : [candidate.source])
+function isMockCompatible(source: NormalizedSource): boolean {
+  if (!supportsFlow(source)) return false
+  const searchUrl = source.searchUrl
+  if (typeof searchUrl !== 'string') return false
+  if (searchUrl.includes('<js>') || searchUrl.toLowerCase().includes('@js:')) return false
+  if (searchUrl.includes('${') || searchUrl.includes('java.') || searchUrl.includes('run;')) return false
+  const bookList = record(source['ruleSearch'])['bookList']
+  if (typeof bookList === 'string' && (bookList.includes('<js>') || bookList.toLowerCase().includes('@js:'))) return false
+  const chapterList = record(source['ruleToc'])['chapterList']
+  if (typeof chapterList === 'string' && chapterList.includes('<js>')) return false
+  return true
 }
 
 function flowPorts(calls: string[], rulesSeen: string[]): WorkflowPorts {
@@ -90,10 +96,12 @@ function flowPorts(calls: string[], rulesSeen: string[]): WorkflowPorts {
 }
 
 test('07-B 真实书源文件可贯通解析、搜索、切换、详情、目录和正文', async () => {
-  const sources = await fixtureSources()
-  const sourceA = sources.find((source) => source.bookSourceName === '猫眼看书' && supportsFlow(source))
-  const sourceB = sources.find((source) => source.bookSourceName === '笔趣阁成人版' && supportsFlow(source))
-  if (sourceA === undefined || sourceB === undefined) throw new Error('真实书源 corpus 中至少需要两个可运行完整流程的书源')
+  const sources = await loadFixtureSources()
+  const flowable = sources.filter((source) => isMockCompatible(source))
+  assert.ok(flowable.length >= 2, '真实书源语料中至少需要两个可运行完整流程的书源')
+  const sourceA = flowable[0]!
+  const sourceB = flowable[1]!
+  assert.notEqual(sourceA.bookSourceUrl, sourceB.bookSourceUrl)
 
   const calls: string[] = []
   const rulesSeen: string[] = []
@@ -115,7 +123,7 @@ test('07-B 真实书源文件可贯通解析、搜索、切换、详情、目录
   assert.equal(details.status, 'success')
   const book = details.value?.items[0]
   assert.ok(book)
-  assert.equal(book.tocUrl, 'https://www.bbqqgg.com/books/local-book/toc')
+  assert.equal(book.tocUrl, new URL('/books/local-book/toc', sourceB.bookSourceUrl).href)
 
   const toc = await loadTableOfContents(ports, { source: sourceB, book })
   assert.equal(toc.status, 'success')

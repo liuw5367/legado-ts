@@ -1,16 +1,21 @@
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { compileRule, importSources, inspectRuleCapabilities } from '@legado/source-core'
 import type { ImportCandidate, NormalizedSource, RuleCapability } from '@legado/source-core'
 
-export const sourceFixtureFiles = [
-  'fixtures/source/collection/13655_c5880332228edeffa2ce977a525a6b21.json',
-  'fixtures/source/collection/14328_c803e1b071690d18ce7acb5184727058.json',
-  'fixtures/source/single/1790039793-起点.json',
-  'fixtures/source/single/1790040141-豆瓣.json',
-] as const
-
 const ruleGroups = ['ruleExplore', 'ruleSearch', 'ruleBookInfo', 'ruleToc', 'ruleContent', 'ruleReview'] as const
+
+/** 列出 fixtures/source 下全部语料文件（相对仓库根），不写死文件名。 */
+export async function listSourceFixtureFiles(root = new URL('../../../', import.meta.url)): Promise<string[]> {
+  const files: string[] = []
+  for (const group of ['collection', 'single'] as const) {
+    const directory = new URL(`fixtures/source/${group}/`, root)
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.json')) files.push(`fixtures/source/${group}/${entry.name}`)
+    }
+  }
+  return files.sort()
+}
 
 export interface SourceFixtureCandidate {
   readonly file: string
@@ -125,7 +130,7 @@ function flagsOf(source: NormalizedSource): string[] {
 
 export async function loadSourceFixtureCandidates(root = new URL('../../../', import.meta.url)): Promise<SourceFixtureCandidate[]> {
   const result: SourceFixtureCandidate[] = []
-  for (const file of sourceFixtureFiles) {
+  for (const file of await listSourceFixtureFiles(root)) {
     const input = await readFile(new URL(file, root), 'utf8')
     const candidates = await importSources(input)
     for (const [index, candidate] of candidates.entries()) result.push({ file, index, candidate })
