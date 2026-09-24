@@ -347,7 +347,6 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
         network: ports.network,
         rules: ports.rules,
         encoding,
-        encodeFormBody: false,
         decodeResponse: (value) => responseText(value, source, ports),
       })
       response = await runtime.request(requestInput)

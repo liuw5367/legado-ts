@@ -49,8 +49,6 @@ export interface SourceRequestRuntimeOptions {
   network: NetworkHost
   encoding: CharsetCodec
   decodeResponse?: (response: NetworkResponse) => string
-  /** 默认 NetworkHost 路径保留原始表单字符串，由宿主处理字符串请求体。 */
-  encodeFormBody?: boolean
   rules?: WorkflowRulePort
 }
 
@@ -227,14 +225,12 @@ export class SourceRequestRuntime {
   private readonly network: NetworkHost
   private readonly encoding: CharsetCodec
   private readonly decodeOverride?: SourceRequestRuntimeOptions['decodeResponse']
-  private readonly encodeFormBody: boolean
   private ruleHost: WorkflowRulePort | undefined
 
   public constructor(options: SourceRequestRuntimeOptions) {
     this.network = options.network
     this.encoding = options.encoding
     this.decodeOverride = options.decodeResponse
-    this.encodeFormBody = options.encodeFormBody ?? true
     this.ruleHost = options.rules
   }
 
@@ -348,10 +344,9 @@ export class SourceRequestRuntime {
     if (method === 'POST') {
       const contentType = getHeader(headers, 'content-type')
       if (typeof bodyValue === 'string' && (bodyValue.trim() === '' || (!isJsonBody(bodyValue) && !isXmlBody(bodyValue) && contentType === undefined))) {
-        if (this.encodeFormBody) {
-          const encoded = encodeForm(bodyValue, this.encoding, charset)
-          body = this.encoding.encode(encoded, requestCharset ?? 'utf-8')
-        } else body = bodyValue
+        // 表单 body 统一由核心编码为字节，保证 WorkflowPorts 默认路径与 Node 门面一致。
+        const encoded = encodeForm(bodyValue, this.encoding, charset)
+        body = this.encoding.encode(encoded, requestCharset ?? 'utf-8')
         if (contentType === undefined) headers = mergeHeaders(headers, { 'Content-Type': 'application/x-www-form-urlencoded' })
       } else if (bodyValue === undefined) {
         body = new Uint8Array()

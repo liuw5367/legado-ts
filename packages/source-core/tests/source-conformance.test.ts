@@ -90,7 +90,9 @@ test('仅提供 NetworkHost 时仍解析 Android URL 选项并保留请求语义
   assert.ok(plan)
   assert.equal(plan.url, 'https://fixture.invalid/search?tag=a,b&q=%D6%D0%CE%C4')
   assert.equal(plan.method, 'POST')
-  assert.equal(plan.body, 'q=fixture')
+  // 表单 body 由核心统一编码为字节，与 Node 门面一致。
+  assert.ok(plan.body instanceof Uint8Array)
+  assert.equal(new TextDecoder().decode(plan.body), 'q=fixture')
   assert.equal(plan.headers['X-Rule'], 'yes')
   assert.equal(plan.headers['Content-Type'], 'application/x-www-form-urlencoded')
   assert.equal(plan.requestCharset, 'gbk')

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { importSources, searchBooks } from '../src/index.ts'
+import { importSources, searchBooks, SourceRequestRuntime } from '../src/index.ts'
 import type { NetworkResponse, NormalizedSource, RequestPlan, WorkflowPorts, WorkflowRuleRequest } from '../src/index.ts'
 
 const baseDefinition = {
@@ -228,4 +228,31 @@ test('缺少 encodeCharset 时非 UTF-8 查询明确失败且不发请求', asyn
   assert.ok(diagnostic, '应产生能力或配置诊断')
   assert.equal(diagnostic.retryable, false)
   assert.ok(!ports.plans.some((plan) => plan.url.includes('%E4%B8%AD%E6%96%87')), '不得静默按 UTF-8 编码查询')
+})
+
+test('默认工作流与运行时直调对同一 POST 表单产生相同字节', async () => {
+  const definitionSearch = '/search?q={{keyword}},{"method":"POST","body":"q=a b"}'
+  const viaWorkflow = await importFixture({ searchUrl: definitionSearch })
+  const workflowPorts = probePorts()
+  const result = await searchBooks(workflowPorts, { source: viaWorkflow, keyword: 'x' })
+  assert.equal(result.status, 'success')
+  const workflowBody = workflowPorts.plans[0]?.body
+  assert.ok(workflowBody instanceof Uint8Array)
+  assert.equal(new TextDecoder().decode(workflowBody), 'q=a+b')
+
+  const runtimePorts = probePorts()
+  const runtime = new SourceRequestRuntime({
+    network: runtimePorts.network,
+    encoding: {
+      encode: (value, charset) => {
+        assert.equal(charset, 'utf-8')
+        return new TextEncoder().encode(value)
+      },
+      decode: (bytes, charset) => new TextDecoder(charset).decode(bytes),
+    },
+  })
+  await runtime.request({ source: viaWorkflow, url: definitionSearch.replace('/search?q={{keyword}},', '/search,'), stage: 'search', options: {} })
+  const runtimeBody = runtimePorts.plans[0]?.body
+  assert.ok(runtimeBody instanceof Uint8Array)
+  assert.deepEqual([...(runtimeBody as Uint8Array)], [...(workflowBody as Uint8Array)])
 })
