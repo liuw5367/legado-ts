@@ -24,6 +24,7 @@
 | 导入、编辑或刷新书源 | [导入流程](flows/import-protocol.md) → [订阅流程](flows/source-subscriptions.md) |
 | 审查兼容性和发布 | [能力清单](standard/capability-inventory.md) → [测试基线](quality/conformance-tests.md) → [兼容矩阵](quality/compatibility-matrix.md) → [维护文档](operations/package-maintenance.md) |
 | 查阅未实现的历史设计 | [归档](archive/README.md) |
+| 查阅外部社区教程 | [外部参考资料](reference/README.md) |
 
 ## 文档分类
 
@@ -37,8 +38,9 @@
 | `quality` | 有哪些证据、怎样测试、何时算完成 | [质量与验证](quality/README.md) |
 | `operations` | 怎样处理安全、部署、发布、版本和回退 | [运维与维护](operations/README.md) |
 | `archive` | 哪些目标尚未实现或已被现状取代 | [归档](archive/README.md) |
+| `reference` | 外部第三方教程与说明写了什么 | [外部参考资料](reference/README.md) |
 
-分类按读者要解决的问题确定。主题交叉时只保留一个事实来源：规则语义属于 `standard`，搜索如何调用规则属于 `flows`，当前代码入口属于 `implementation`，不一致处登记在 `divergence`。分类 README 只做导航和边界说明，不复制长篇契约。
+分类按读者要解决的问题确定。主题交叉时只保留一个事实来源：规则语义属于 `standard`，搜索如何调用规则属于 `flows`，当前代码入口属于 `implementation`，不一致处登记在 `divergence`，外部教程镜像属于 `reference` 且不定义本仓契约。分类 README 只做导航和边界说明，不复制长篇契约。
 
 ## 正文完整性规则
 
@@ -73,4 +75,4 @@ Android 上游仓库为 [LegadoTeam/legado](https://github.com/LegadoTeam/legado
 
 ## 新增文档规则
 
-新增文档时先判断它主要回答哪个问题，再放入唯一的主分类：稳定规则与字段语义放 `standard`，完整处理顺序放 `flows`，当前代码契约与阶段记录放 `implementation`，标准与实现的不一致放 `divergence`，证据放 `quality`，运行维护放 `operations`，架构协作放 `architecture`。未实现目标或已被现状取代的历史文档放 `archive`，不要写入 `standard` 或 `implementation`。新增教程、ADR 或运行手册时保留其文档类型，并从总 README 或分类 README 增加入口；不要为了凑编号把不同类型的内容放在一起。
+新增文档时先判断它主要回答哪个问题，再放入唯一的主分类：稳定规则与字段语义放 `standard`，完整处理顺序放 `flows`，当前代码契约与阶段记录放 `implementation`，标准与实现的不一致放 `divergence`，证据放 `quality`，运行维护放 `operations`，架构协作放 `architecture`，外部第三方教程与说明放 `reference`。未实现目标或已被现状取代的历史文档放 `archive`，不要写入 `standard` 或 `implementation`。新增教程、ADR 或运行手册时保留其文档类型，并从总 README 或分类 README 增加入口；不要为了凑编号把不同类型的内容放在一起。
