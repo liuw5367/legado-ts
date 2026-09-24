@@ -1,5 +1,5 @@
 import type { JsonObject, JsonValue, NormalizedSource } from '../model/types.ts'
-import { SourceRequestRuntime } from './source-request.ts'
+import { SourceRequestError, SourceRequestRuntime } from './source-request.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
 import type { SourceFunctionName, WorkflowDiagnostic, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
@@ -357,6 +357,17 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
   } catch (error) {
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
+      return undefined
+    }
+    // 结构化请求错误是确定性失败：直接映射诊断，不伪装成 500 也不标记可重试。
+    if (error instanceof SourceRequestError) {
+      diagnostics.push({
+        code: error.code,
+        stage,
+        ...(error.field === undefined ? {} : { field: error.field }),
+        message: error.message,
+        retryable: false,
+      })
       return undefined
     }
     const loginCheckJs = sourceString(source, 'loginCheckJs')

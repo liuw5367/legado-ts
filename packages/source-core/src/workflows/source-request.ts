@@ -2,7 +2,27 @@ import { createRequestPlan } from '../runtime/request-plan.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkHost, NetworkResponse } from '../runtime/contracts.ts'
 import type { NormalizedSource } from '../model/types.ts'
-import type { WorkflowRequest, WorkflowRulePort, WorkflowStage } from './types.ts'
+import type { WorkflowRequest, WorkflowRuleOutput, WorkflowRulePort, WorkflowStage } from './types.ts'
+
+/** 请求边界内的结构化失败分类；与 WorkflowDiagnostic.code 对齐，避免压成可重试网络错误。 */
+export type SourceRequestErrorCode = 'invalid-config' | 'capability-missing' | 'cancelled' | 'rule-failed'
+
+/**
+ * 请求运行时抛出的结构化错误。helpers 在 catch 中映射为不可重试诊断，
+ * 不走合成 500 的 loginCheck 回退。
+ */
+export class SourceRequestError extends Error {
+  public readonly code: SourceRequestErrorCode
+  /** 关联的规则字段（url/bodyJs/header 等）；计划级错误可省略。 */
+  public readonly field?: string
+
+  public constructor(code: SourceRequestErrorCode, message: string, field?: string) {
+    super(message)
+    this.name = 'SourceRequestError'
+    this.code = code
+    if (field !== undefined) this.field = field
+  }
+}
 
 export interface SourceRequestOptions {
   method?: string
@@ -256,13 +276,52 @@ export class SourceRequestRuntime {
     return this.evaluateUrlScript(trimmed.slice(4).trim(), '', stage, source, signal)
   }
 
-  private async evaluateUrlScript(code: string, result: string, stage: WorkflowStage, source: NormalizedSource, signal?: AbortSignal): Promise<string> {
-    if (this.ruleHost === undefined) throw new Error('动态书源 URL 需要 JavaScript 宿主')
-    const scriptStage = stage === 'detail' ? 'book' : 'search'
-    if (this.ruleHost.executeWorkflowJavaScript === undefined) throw new Error('动态书源 URL 需要 JavaScript 宿主')
-    const output = await this.ruleHost.executeWorkflowJavaScript({ source, code, stage: scriptStage, content: result, baseUrl: source.bookSourceUrl, redirectUrl: source.bookSourceUrl, ...(signal === undefined ? {} : { signal }) })
-    if (output.status !== 'success') throw new Error(output.message ?? '动态书源 URL 执行失败')
-    return text(output.value)
+  /** 脚本执行上下文：evaluate 字段名与诊断字段名在 bodyJs 上按基线分别为 body/bodyJs。 */
+  private async runSourceScript(
+    code: string,
+    stage: WorkflowStage,
+    source: NormalizedSource,
+    content: string,
+    signal: AbortSignal | undefined,
+    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content' },
+  ): Promise<unknown> {
+    if (this.ruleHost === undefined) throw new SourceRequestError('capability-missing', '脚本执行需要 JavaScript 宿主', context.field)
+    const scriptStage = context.scriptStage ?? (stage === 'detail' ? 'book' : 'search')
+    const baseUrl = context.baseUrl ?? source.bookSourceUrl
+    const redirectUrl = context.redirectUrl ?? baseUrl
+    let output: WorkflowRuleOutput
+    try {
+      // 可选钩子优先；只实现必需 evaluate 的宿主用 @js: 规则回退，保持与基线默认路径一致。
+      if (this.ruleHost.executeWorkflowJavaScript !== undefined) {
+        output = await this.ruleHost.executeWorkflowJavaScript({ source, code, stage: scriptStage, content, baseUrl, redirectUrl, ...(signal === undefined ? {} : { signal }) })
+      } else {
+        output = await this.ruleHost.evaluate({ source, stage, field: context.evaluateField, rule: `@js:${code}`, content, baseUrl, redirectUrl, ...(signal === undefined ? {} : { signal }) })
+      }
+    } catch (error) {
+      if (signal?.aborted === true) throw new SourceRequestError('cancelled', '脚本执行已取消', context.field)
+      throw new SourceRequestError('rule-failed', error instanceof Error ? error.message : '脚本执行失败', context.field)
+    }
+    if (signal?.aborted === true || output.status === 'cancelled') throw new SourceRequestError('cancelled', output.message ?? '脚本执行已取消', context.field)
+    if (output.status === 'capability-missing') throw new SourceRequestError('capability-missing', output.message ?? '脚本需要 JavaScript 能力', context.field)
+    if (output.status !== 'success') throw new SourceRequestError('rule-failed', output.message ?? '脚本执行失败', context.field)
+    return output.value
+  }
+
+  private async evaluateUrlScript(
+    code: string,
+    result: string,
+    stage: WorkflowStage,
+    source: NormalizedSource,
+    signal?: AbortSignal,
+    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string },
+  ): Promise<string> {
+    const value = await this.runSourceScript(code, stage, source, result, signal, {
+      evaluateField: context?.evaluateField ?? 'url',
+      field: context?.field ?? 'url',
+      ...(context?.baseUrl === undefined ? {} : { baseUrl: context.baseUrl }),
+      ...(context?.redirectUrl === undefined ? {} : { redirectUrl: context.redirectUrl }),
+    })
+    return text(value)
   }
 
   public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search'): Promise<NetworkResponse> {
@@ -270,7 +329,7 @@ export class SourceRequestRuntime {
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) throw new Error('书源请求需要 WebView')
     const method = (options.method ?? 'GET').toUpperCase()
-    const sourceHeaders = await this.sourceHeaders(source)
+    const sourceHeaders = await this.sourceHeaders(source, signal)
     let headers = mergeHeaders(sourceHeaders, headerObject(options.headers))
     const charset = typeof options.charset === 'string' && options.charset.trim().length > 0 ? options.charset.trim() : undefined
     const requestCharset = charset?.toLowerCase() === 'escape' ? undefined : charset
@@ -321,13 +380,18 @@ export class SourceRequestRuntime {
     })
     const initialUrl = resolveSourceRequestUrl(split.url, source.bookSourceUrl, charset, (value, requestedCharset) => this.encoding.encode(value, requestedCharset))
     let request = makePlan(initialUrl)
-    if (request.plan === undefined) throw new Error(request.error?.message ?? '书源请求计划无效')
+    if (request.plan === undefined) {
+      throw new SourceRequestError(request.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', request.error?.message ?? '书源请求计划无效')
+    }
 
     if (typeof options.js === 'string' && options.js.trim().length > 0) {
-      const rewritten = await this.evaluateUrlScript(options.js, request.plan.url, stage, source, signal)
+      const planUrl = request.plan.url
+      const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: planUrl, redirectUrl: planUrl })
       const rewrittenUrl = resolveSourceRequestUrl(rewritten, source.bookSourceUrl, charset, (value, requestedCharset) => this.encoding.encode(value, requestedCharset))
       request = makePlan(rewrittenUrl)
-      if (request.plan === undefined) throw new Error(request.error?.message ?? '书源 URL 脚本生成了无效地址')
+      if (request.plan === undefined) {
+        throw new SourceRequestError(request.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', request.error?.message ?? '书源 URL 脚本生成了无效地址', 'url')
+      }
     }
 
     let response: NetworkResponse | undefined
@@ -351,26 +415,35 @@ export class SourceRequestRuntime {
       result = { ...result, bytes: new TextEncoder().encode(hex(result.bytes)), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
     } else if (typeof options.bodyJs === 'string' && options.bodyJs.trim().length > 0) {
       const decoded = this.decode(result)
-      const transformed = await this.evaluateUrlScript(options.bodyJs, decoded, stage, source, signal)
+      const transformed = await this.evaluateUrlScript(options.bodyJs, decoded, stage, source, signal, {
+        evaluateField: 'body',
+        field: 'bodyJs',
+        baseUrl: result.url,
+        redirectUrl: result.url,
+      })
       result = { ...result, bytes: new TextEncoder().encode(transformed), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
     }
     return result
   }
 
-  private async sourceHeaders(source: NormalizedSource): Promise<Readonly<Record<string, string>> | undefined> {
+  private async sourceHeaders(source: NormalizedSource, signal?: AbortSignal): Promise<Readonly<Record<string, string>> | undefined> {
     const header = source.header
     if (header === undefined || header === null) return undefined
     if (typeof header === 'object' && !Array.isArray(header)) return headerObject(header)
     if (typeof header !== 'string') return undefined
     if (header.trim().toLowerCase().startsWith('@js:')) {
-      if (this.ruleHost === undefined) throw new Error('动态 header 需要 JavaScript 宿主')
-      if (this.ruleHost.executeWorkflowJavaScript === undefined) throw new Error('动态 header 需要 JavaScript 宿主')
-      const result = await this.ruleHost.executeWorkflowJavaScript({ source, code: header.trim().slice(4), stage: 'search', content: '' })
-      if (result.status !== 'success') throw new Error(result.message ?? '动态 header 执行失败')
-      return headerObject(result.value)
+      // 头脚本不携带请求 URL 上下文，stage 固定为 search，与基线 Node 门面一致。
+      const value = await this.runSourceScript(header.trim().slice(4), 'search', source, '', signal, {
+        evaluateField: 'header',
+        field: 'header',
+        scriptStage: 'search',
+      })
+      const dynamic = headerObject(value)
+      if (dynamic === undefined) throw new SourceRequestError('invalid-config', '动态 header 脚本必须返回 JSON 对象', 'header')
+      return dynamic
     }
     const result = headerObject(header)
-    if (result === undefined) throw new Error('书源 header 不是有效 JSON 对象')
+    if (result === undefined) throw new SourceRequestError('invalid-config', '书源 header 不是有效 JSON 对象', 'header')
     return result
   }
 
