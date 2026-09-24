@@ -95,7 +95,7 @@ function flowPorts(calls: string[], rulesSeen: string[]): WorkflowPorts {
   }
 }
 
-test('07-B 真实书源文件可贯通解析、搜索、切换、详情、目录和正文', async () => {
+test('真实书源文件可贯通解析、搜索、切换、详情、目录和正文', async () => {
   const sources = await loadFixtureSources()
   const flowable = sources.filter((source) => isMockCompatible(source))
   assert.ok(flowable.length >= 2, '真实书源语料中至少需要两个可运行完整流程的书源')

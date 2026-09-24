@@ -15,7 +15,7 @@ function result(name: string, author: string | undefined, arrivalIndex: number, 
   }
 }
 
-test('search result grouping keeps exact matches first and does not merge missing authors', () => {
+test('搜索结果分组精确匹配优先，缺失作者不合并', () => {
   const sameBook = result('三体', '刘慈欣', 1)
   const sameBookFromAnotherSource = result(' 三体！', '刘慈欣', 2, 'source-b')
   const missingAuthor = result('三体', undefined, 3, 'source-c')
@@ -27,7 +27,7 @@ test('search result grouping keeps exact matches first and does not merge missin
   assert.equal(groups[1]?.candidate.bookUrl, missingAuthor.candidate.bookUrl)
 })
 
-test('strict source matching requires both non-empty normalized title and author', () => {
+test('严格换源匹配要求规范化后的书名和作者都非空', () => {
   assert.equal(isBookTitleMatch(' 三体！', '三体'), true)
   assert.equal(isBookTitleMatch('', '三体'), false)
   assert.equal(isAuthorMatch(' 刘慈欣 ', '刘慈欣'), true)

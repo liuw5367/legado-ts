@@ -4,7 +4,7 @@ import test from 'node:test'
 import { cacheEntryPath, cachePath, normalizeCacheRelativePath } from '../src/cache-store.ts'
 import { sha256 } from '../src/storage-model.ts'
 
-test('cache paths accept only validated SHA-256 entries', () => {
+test('缓存路径仅接受合法的 SHA-256 条目', () => {
   const key = sha256('cache-key')
   const valid = `${key}.json`
   assert.equal(normalizeCacheRelativePath(`content/${valid}`), `content/${valid}`)

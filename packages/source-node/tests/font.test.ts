@@ -102,7 +102,7 @@ function makeFont(codePoint: number, format: 4 | 6 = 6): Uint8Array {
   return result
 }
 
-test('font host maps glyph outlines and replaces obfuscated Unicode', () => {
+test('字体宿主映射字形轮廓并替换混淆 Unicode', () => {
   const host = new NodeFontHost()
   const errorBytes = makeFont(0xe001)
   const correctBytes = makeFont(0x4e00)
@@ -120,7 +120,7 @@ test('font host maps glyph outlines and replaces obfuscated Unicode', () => {
   assert.notEqual(host.queryTTF(errorBytes, { useCache: false }), error)
 })
 
-test('font host enforces input budget, cancellation and invalid font errors', () => {
+test('字体宿主强制输入预算、取消与非法字体错误', () => {
   const host = new NodeFontHost()
   const bytes = makeFont(0xe001)
   assert.throws(() => host.queryTTF(bytes, { maxBytes: bytes.byteLength - 1 }), /byte budget/)

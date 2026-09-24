@@ -4,7 +4,7 @@ import test from 'node:test'
 import { discoverBooks, importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../src/index.ts'
 import type { NormalizedSource, RequestPlan, WorkflowPorts } from '../src/index.ts'
 
-test('07-A fixture manifest keeps source conformance cases executable', async () => {
+test('书源兼容清单保证用例可执行', async () => {
   const text = await readFile(new URL('../../../fixtures/conformance/manifest.json', import.meta.url), 'utf8')
   const manifest = JSON.parse(text) as { version: number; fixtures: Array<Record<string, unknown>> }
   assert.equal(manifest.version, 1)
@@ -125,7 +125,7 @@ test('正文规则携带 webJs 时 NetworkHost 直连路径不会降级请求', 
   assert.ok(result.diagnostics.some((item) => item.code === 'capability-missing'))
 })
 
-test('07-A public entry runs one source through discover/search/detail/toc/content', async () => {
+test('公开入口串联发现、搜索、详情、目录和正文', async () => {
   const imported = await importSources(JSON.stringify(sourceDefinition))
   assert.equal(imported.length, 1)
   assert.equal(imported[0]?.status, 'ready')
@@ -165,7 +165,7 @@ test('07-A public entry runs one source through discover/search/detail/toc/conte
   ])
 })
 
-test('07-A already-aborted source workflow is cancelled before network', async () => {
+test('已中止的工作流在网络请求前结束', async () => {
   const imported = await importSources(JSON.stringify(sourceDefinition))
   const source = imported[0]?.source as NormalizedSource
   const calls: string[] = []

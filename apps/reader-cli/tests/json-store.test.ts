@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { JsonStore } from '../src/json-store.ts'
 
-test('JsonStore writes and reads the versioned envelope', async () => {
+test('JsonStore 读写带版本号的信封', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-json-'))
   try {
     const store = new JsonStore(() => new Date('2026-01-01T00:00:00.000Z'))
@@ -17,7 +17,7 @@ test('JsonStore writes and reads the versioned envelope', async () => {
   }
 })
 
-test('JsonStore backs up corrupt files before restoring a fallback', async () => {
+test('JsonStore 先备份损坏文件再恢复回退', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-json-'))
   try {
     const store = new JsonStore(() => new Date('2026-01-01T00:00:00.000Z'))

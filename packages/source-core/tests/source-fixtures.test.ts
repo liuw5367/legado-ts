@@ -67,14 +67,14 @@ function diagnostics(candidates: Awaited<ReturnType<typeof importSources>>): Rec
   return counts(candidates.flatMap((candidate) => candidate.diagnostics.map((item) => item.code)))
 }
 
-test('07-B discovers the complete source fixture corpus', async () => {
+test('发现完整的真实书源语料', async () => {
   const specification = await fixtureSpecs()
   const files = await fixtureFiles()
   assert.deepEqual(files.map((file) => file.relative), [...specification.byPath.keys()].sort())
   assert.equal(files.reduce((total, file) => total + (specification.byPath.get(file.relative)?.candidates ?? 0), 0), specification.totalCandidates)
 })
 
-test('07-B raw text, parsed value and controlled file reader have identical source results', async () => {
+test('原始文本、解析值与受控文件读取器导入结果一致', async () => {
   const specification = await fixtureSpecs()
   const files = await fixtureFiles()
   const readerCalls: string[] = []
@@ -125,7 +125,7 @@ async function largestCollectionFile(): Promise<{ relative: string; path: string
   return best
 }
 
-test('07-B a collection member follows the same single-source entry', async () => {
+test('集合成员与单个导入路径一致', async () => {
   const collectionPath = (await largestCollectionFile()).path
   const collectionText = await readFile(collectionPath, 'utf8')
   const members = JSON.parse(collectionText) as JsonValue[]
@@ -137,7 +137,7 @@ test('07-B a collection member follows the same single-source entry', async () =
   assert.deepEqual(collection[0]?.diagnostics, single[0]?.diagnostics)
 })
 
-test('07-B every real source is structurally parseable even when optional workflows are incomplete', async () => {
+test('真实书源即使可选流程不完整也能结构解析', async () => {
   const specification = await fixtureSpecs()
   const files = await fixtureFiles()
   const usedBroken = new Set<string>()
@@ -176,7 +176,7 @@ test('07-B every real source is structurally parseable even when optional workfl
   assert.deepEqual([...specification.brokenRules.keys()].filter((key) => !usedBroken.has(key)), [])
 })
 
-test('07-B fixture import keeps candidate, byte and cancellation limits isolated', async () => {
+test('导入限额隔离候选数、字节数与取消', async () => {
   const file = (await largestCollectionFile()).path
   const text = await readFile(file, 'utf8')
   const limited = await importSources(text, { limits: { maxCandidates: 3 } })

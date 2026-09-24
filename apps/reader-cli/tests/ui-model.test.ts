@@ -4,7 +4,7 @@ import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer
 import { layoutContextLine, terminalWidth } from '../src/ui-actions.ts'
 import type { NavigationFrame } from '../src/ui-model.ts'
 
-test('UI model keeps list navigation inside valid bounds', () => {
+test('界面模型保持列表导航在有效范围内', () => {
   assert.equal(navigationIndex(0, 0, 'j', { downArrow: true }, 4), 0)
   assert.equal(navigationIndex(1, 5, 'j', {}, 3), 2)
   assert.equal(navigationIndex(4, 5, 'j', {}, 3), 4)
@@ -12,7 +12,7 @@ test('UI model keeps list navigation inside valid bounds', () => {
   assert.equal(navigationPage(19, 20, '', { pageDown: true }, 5), 15)
 })
 
-test('UI model formats stable display values and page return paths', () => {
+test('界面模型格式化稳定的显示值与返回路径', () => {
   assert.equal(formatDuration(999), '999ms')
   assert.equal(formatDuration(1000), '1.0s')
   assert.equal(formatDuration(-1), '未知')

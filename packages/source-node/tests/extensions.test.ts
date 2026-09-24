@@ -28,7 +28,7 @@ function crc32(input: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0
 }
 
-test('Node encoding host preserves charset, binary and URL boundaries', () => {
+test('Node 编码宿主保持字符集、二进制与 URL 边界', () => {
   const host = new NodeEncodingHost()
   const bytes = host.encode('中文', 'utf-8')
   assert.equal(host.decode(bytes, 'utf-8'), '中文')
@@ -40,7 +40,7 @@ test('Node encoding host preserves charset, binary and URL boundaries', () => {
   assert.throws(() => host.hexDecode('0'), /hexadecimal/)
 })
 
-test('Node crypto host supports digest, HMAC and AES text round trip', () => {
+test('Node 加密宿主支持摘要、HMAC 与 AES 文本往返', () => {
   const host = new NodeCryptoHost()
   assert.equal(host.digestHex('abc', 'md5'), '900150983cd24fb0d6963f7d28e17f72')
   assert.equal(host.hmacHex('abc', 'key', 'sha256'), '9c196e32dc0175f86f4b1cb89289d6619de6bee699e4c378e68309ed97a1a6ab')
@@ -49,7 +49,7 @@ test('Node crypto host supports digest, HMAC and AES text round trip', () => {
   assert.equal(crypto.decryptText(encrypted), '中文')
 })
 
-test('Node archive host limits gzip and zip output', async () => {
+test('Node 压缩宿主限制 gzip 与 zip 输出', async () => {
   const host = new NodeArchiveHost()
   const gzip = await host.extract(Uint8Array.from(gzipSync(Buffer.from('hello'))), 'gzip')
   assert.deepEqual(gzip[0]?.data, new TextEncoder().encode('hello'))
@@ -65,7 +65,7 @@ test('Node archive host limits gzip and zip output', async () => {
   await assert.rejects(host.extract(Uint8Array.from(gzipSync(Buffer.from('a'.repeat(1000)))), 'gzip', { maxCompressionRatio: 10 }), /compression ratio/)
 })
 
-test('keyed concurrency preserves per-key order and cancels queued work', async () => {
+test('按 key 并发保持同 key 顺序并取消排队任务', async () => {
   const host = new KeyedConcurrencyHost({ maxConcurrent: 2, maxConcurrentPerKey: 1 })
   const events: string[] = []
   const first = host.run('source', async () => { events.push('first:start'); await new Promise((resolve) => setTimeout(resolve, 5)); events.push('first:end'); return 1 })

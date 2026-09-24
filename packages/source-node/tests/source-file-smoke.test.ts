@@ -66,7 +66,7 @@ function isPlainBookUrlRule(rule: string | undefined): rule is string {
   return rule !== undefined && (rule.startsWith('$.') || rule.startsWith('/')) && !rule.includes('@js') && !rule.includes('<js>') && !rule.includes('##')
 }
 
-test('07-B 真实 JSON 书源通过本地响应进入搜索工作流', async () => {
+test('真实 JSON 书源通过本地响应进入搜索工作流', async () => {
   const candidates = await fixtureCandidates()
   const source = sourceWhere(
     candidates,
@@ -129,7 +129,7 @@ test('07-B 真实 JSON 书源通过本地响应进入搜索工作流', async () 
   assert.ok(calls[0]!.length > 0)
 })
 
-test('07-B 真实 HTML 书源规则使用本地响应选择正文节点', async () => {
+test('真实 HTML 书源规则使用本地响应选择正文节点', async () => {
   const candidates = await fixtureCandidates()
   const source = sourceWhere(
     candidates,
@@ -153,7 +153,7 @@ test('07-B 真实 HTML 书源规则使用本地响应选择正文节点', async 
   assert.equal(document.read(nodes[0]!, 'text'), '本地正文')
 })
 
-test('07-B 真实 XPath 书源规则使用本地 XML 响应', async () => {
+test('真实 XPath 书源规则使用本地 XML 响应', async () => {
   const candidates = await fixtureCandidates()
   const source = sourceWhere(
     candidates,
@@ -181,7 +181,7 @@ test('07-B 真实 XPath 书源规则使用本地 XML 响应', async () => {
   assert.equal(document.read(node, 'text'), '本地 XPath 正文')
 })
 
-test('07-B 真实 JS 规则在 QuickJS 中使用本地输入执行', async () => {
+test('真实 JS 规则在 QuickJS 中使用本地输入执行', async () => {
   const candidates = await fixtureCandidates()
   const source = sourceWhere(
     candidates,
