@@ -261,6 +261,20 @@ test('空目录规则回退详情响应地址并保留同页内容', async () =>
   assert.equal(evaluated.includes(''), false)
 })
 
+test('没有详情字段规则时仍按 Android 默认把详情页作为目录页', async () => {
+  const calls: string[] = []
+  const noDetailRules = { ...source, ruleBookInfo: {} } as unknown as NormalizedSource
+  const result = await loadBookDetails(ports(calls), {
+    source: noDetailRules,
+    candidates: [{ sourceId: source.bookSourceUrl, bookUrl: '/book/no-rules', name: '无规则', rawFields: {}, traceRef: 'no-rules' }],
+  })
+
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items[0]?.tocUrl, 'https://source.test/book/no-rules')
+  assert.equal(result.value?.items[0]?.tocHtml, 'https://source.test/book/no-rules')
+  assert.deepEqual(calls, ['https://source.test/book/no-rules'])
+})
+
 test('目录地址规则误返回 HTML 时回退详情响应地址', async () => {
   const calls: string[] = []
   const workflowPorts = ports(calls)

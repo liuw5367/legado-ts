@@ -1,5 +1,6 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
 import type { ConcurrencyHost, NetworkHost, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
+import type { JavaScriptBudget } from '../runtime/javascript.ts'
 
 export type WorkflowStatus = 'success' | 'partial' | 'empty' | 'failed' | 'cancelled' | 'capability-missing'
 export type WorkflowStage = 'discover' | 'search' | 'detail'
@@ -131,6 +132,10 @@ export interface WorkflowJavaScriptRequest {
   /** Carry explicitly serializable guest globals between related script executions. */
   captureGlobals?: boolean
   globalState?: Readonly<Record<string, unknown>>
+  /** Actions exposed to synchronous source helpers through the asyncified JavaScript bridge. */
+  workflowActions?: Readonly<Record<string, (signal: AbortSignal, input: unknown) => Promise<unknown>>>
+  /** JavaScript execution limits for this hook; separate from HTTP request budgets. */
+  javascriptBudget?: Partial<JavaScriptBudget>
   signal?: AbortSignal
 }
 

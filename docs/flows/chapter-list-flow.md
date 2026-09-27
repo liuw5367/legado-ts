@@ -6,6 +6,12 @@
 
 调用方可要求先执行 `ruleToc.preUpdateJs`。该脚本用于动态更新目录链接；从详情页进入时会避免重复加载详情页。
 
+声明式源以 `runPerJs=true` 执行该脚本时，Android 的同步助手 `refreshTocUrl()` 会重新获取书籍详情；`isFromBookInfo=true` 时跳过这次请求。`reGetBook()` 按当前书名和作者精确搜索，更新书籍 URL 与搜索变量，再以 `canReName=false` 重新获取详情。助手返回后，脚本可立即读取更新后的 `book` 字段。助手失败会让目录预处理失败，取消会取消整个目录操作，不能悄悄沿用旧目录。
+
+搜索期间由规则写入的 `RuleData` 变量会随候选带回；精准重搜得到的新变量会覆盖同名旧变量并保留其他旧变量。TS 还将预更新脚本及其等待中的助手限制在 30 秒内；Android 助手的超时上限是 30 分钟，因此较慢的详情请求可能在 TS 提前取消。
+
+详情规则可以不配置书名、作者或简介。Android 仍会处理目录地址；目录地址规则缺失、为空或未返回有效值时，使用详情响应 URL，并把该响应正文作为 `tocHtml`。
+
 ## 单页解析
 
 1. 创建 `AnalyzeRule(book, source)`，设置 body、baseUrl、redirectUrl；

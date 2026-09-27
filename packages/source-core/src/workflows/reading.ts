@@ -3,6 +3,7 @@ import { compileRule } from '../rules/compiler.ts'
 import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { CompiledRule } from '../rules/types.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
+import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { BookMetadata, Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
@@ -18,7 +19,42 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   let book = input.book
   const preUpdateJs = ruleString(input.source, 'ruleToc', 'preUpdateJs')
   if (input.runPerJs === true && preUpdateJs !== undefined) {
-    const preUpdate = await executeWorkflowJavaScript(ports, input.source, `${preUpdateJs}\n;book`, stage, 'book', trace, { bindings: { book: { ...book }, fromBookInfo: input.isFromBookInfo === true, isFromBookInfo: input.isFromBookInfo === true }, captureMutations: ['book'], ...(input.signal === undefined ? {} : { signal: input.signal }) })
+    const actionOptions = (signal: AbortSignal) => ({ signal, ...(input.budget === undefined ? {} : { budget: input.budget }) })
+    const updateDetails = async (candidate: BookMetadata, signal: AbortSignal): Promise<BookMetadata> => {
+      const result = await loadBookDetails(ports, { source: input.source, candidates: [candidate], canReName: false, ...actionOptions(signal) })
+      trace.push(...result.trace)
+      diagnostics.push(...result.diagnostics)
+      const updated = result.value?.items[0]
+      if (updated === undefined) throw workflowActionError(result.status, '获取书籍详情失败')
+      book = updated
+      return updated
+    }
+    const absorbScriptBook = (value: unknown): void => {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) return
+      book = mergeBookScriptValues(book, value as Record<string, unknown>)
+    }
+    const workflowActions = {
+      refreshTocUrl: async (signal: AbortSignal, scriptBook: unknown): Promise<unknown> => {
+        absorbScriptBook(scriptBook)
+        if (input.isFromBookInfo === true) return book
+        return updateDetails(book, signal)
+      },
+      reGetBook: async (signal: AbortSignal, scriptBook: unknown): Promise<unknown> => {
+        absorbScriptBook(scriptBook)
+        const searched = await searchBooks(ports, { source: input.source, keyword: book.name ?? '', ...actionOptions(signal) })
+        trace.push(...searched.trace)
+        diagnostics.push(...searched.diagnostics)
+        const exact = searched.value?.items.find((candidate) => candidate.name === book.name && (candidate.author ?? '') === (book.author ?? ''))
+        if (exact === undefined) throw workflowActionError(searched.status, `没有搜索到 ${book.name ?? ''}(${book.author ?? ''})`)
+        const candidate: BookMetadata = {
+          ...book,
+          bookUrl: exact.bookUrl,
+          ...(exact.variable === undefined ? {} : { variable: mergeVariableJson(book.variable, exact.variable) }),
+        }
+        return updateDetails(candidate, signal)
+      },
+    }
+    const preUpdate = await executeWorkflowJavaScript(ports, input.source, `${preUpdateJs}\n;book`, stage, 'book', trace, { bindings: { book: { ...book }, fromBookInfo: input.isFromBookInfo === true, isFromBookInfo: input.isFromBookInfo === true }, captureMutations: ['book'], workflowActions, javascriptBudget: { timeoutMs: 30_000 }, ...(input.signal === undefined ? {} : { signal: input.signal }) })
     if (preUpdate.state === 'cancelled' || input.signal?.aborted === true) return cancelled('目录预处理脚本已取消', diagnostics, trace)
     if (preUpdate.state === 'capability-missing' || preUpdate.state === 'failed') {
       diagnostics.push({ code: preUpdate.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: 'preUpdateJs', message: preUpdate.message ?? '目录预处理脚本失败', retryable: false })
@@ -633,14 +669,36 @@ function serializableFormatGlobals(value: Record<string, unknown>): Record<strin
 
 function mergeBookScriptValues(book: BookMetadata, values: Record<string, unknown>): BookMetadata {
   const merged: BookMetadata = { ...book }
-  for (const key of ['name', 'author', 'intro', 'kind', 'wordCount', 'lastChapter', 'updateTime', 'coverUrl', 'tocUrl', 'variable'] as const) {
+  for (const key of ['bookUrl', 'name', 'author', 'intro', 'kind', 'wordCount', 'lastChapter', 'updateTime', 'coverUrl', 'tocUrl', 'tocHtml', 'variable'] as const) {
     const value = values[key]
     if (typeof value === 'string') merged[key] = value
   }
   if (typeof values.latestChapterTitle === 'string') merged.lastChapter = values.latestChapterTitle
-  if (merged.coverUrl !== undefined) merged.coverUrl = resolveUrl(merged.coverUrl, book.bookUrl) ?? merged.coverUrl
-  if (merged.tocUrl !== undefined) merged.tocUrl = resolveUrl(merged.tocUrl, book.bookUrl) ?? merged.tocUrl
+  const bookBaseUrl = resolveUrl(merged.bookUrl, book.bookUrl) ?? book.bookUrl
+  merged.bookUrl = bookBaseUrl
+  if (merged.coverUrl !== undefined) merged.coverUrl = resolveUrl(merged.coverUrl, bookBaseUrl) ?? merged.coverUrl
+  if (merged.tocUrl !== undefined) merged.tocUrl = resolveUrl(merged.tocUrl, bookBaseUrl) ?? merged.tocUrl
   return merged
+}
+
+function mergeVariableJson(current: string | undefined, incoming: string): string {
+  const values: Record<string, unknown> = {}
+  for (const candidate of [current, incoming]) {
+    if (candidate === undefined) continue
+    try {
+      const parsed: unknown = JSON.parse(candidate)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) Object.assign(values, parsed)
+    } catch {
+      // Android 的 variableMap 只复制可解析的变量项；坏旧值不阻断 reGetBook。
+    }
+  }
+  return JSON.stringify(values)
+}
+
+function workflowActionError(status: RuntimeResult<unknown>['status'], message: string): Error {
+  if (status === 'cancelled') return new Error('__LEGADO_CANCELLED__')
+  if (status === 'capability-missing') return new Error('__LEGADO_CAPABILITY__runtime preUpdate workflow action unavailable')
+  return new Error(message)
 }
 
 interface TocPageParseResult {

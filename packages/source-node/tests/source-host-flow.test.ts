@@ -237,32 +237,225 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
   assert.equal(requested[1], 'https://format.test/from-info')
 })
 
-test('preUpdateJs 中未实现的刷新助手明确返回 capability-missing', async () => {
-  for (const helper of ['refreshTocUrl', 'reGetBook']) {
-    const source = {
-      bookSourceUrl: `https://${helper}.test`,
-      bookSourceName: helper,
-      ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href', preUpdateJs: `${helper}()` },
-    } as unknown as NormalizedSource
-    let requests = 0
-    const ports: WorkflowPorts = {
-      network: { request: async (plan) => { requests += 1; return response(plan.url, '<a href="/c">章</a>') } },
-      rules: new SourceRuleHost(),
-    }
-    const book = {
-      sourceId: source.bookSourceUrl,
-      bookUrl: `${source.bookSourceUrl}/book`,
-      name: '书',
-      rawFields: {},
-      traceRef: helper,
-      emptyFields: [],
-      fieldErrors: {},
-    }
-    const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
-    assert.equal(result.status, 'capability-missing')
-    assert.equal(result.diagnostics[0]?.field, 'preUpdateJs')
-    assert.equal(requests, 0)
+test('preUpdateJs 的 refreshTocUrl 更新详情并让脚本和后续 TOC 使用新地址', async () => {
+  const source = {
+    bookSourceUrl: 'https://refresh-toc.test',
+    bookSourceName: 'Refresh TOC',
+    ruleBookInfo: { tocUrl: '$.toc' },
+    ruleToc: {
+      chapterList: 'a',
+      chapterName: 'text',
+      chapterUrl: 'href',
+      preUpdateJs: 'book.bookUrl = "/new-book"; refreshTocUrl(); book.tocUrl += "?script=read-updated"',
+    },
+  } as unknown as NormalizedSource
+  const requested: string[] = []
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => {
+      requested.push(plan.url)
+      if (plan.url.endsWith('/new-book')) return response(plan.url, '{"toc":"/new-toc"}')
+      if (plan.url === 'https://refresh-toc.test/new-toc?script=read-updated') return response(plan.url, '<a href="/chapter">新目录</a>')
+      throw new Error(`unexpected request ${plan.url}`)
+    } },
+    rules: new SourceRuleHost(),
   }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://refresh-toc.test/book',
+    tocUrl: 'https://refresh-toc.test/old-toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'refresh-toc',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+
+  const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.deepEqual(requested, [
+    'https://refresh-toc.test/new-book',
+    'https://refresh-toc.test/new-toc?script=read-updated',
+  ])
+  assert.equal(result.value?.items[0]?.title, '新目录')
+})
+
+test('preUpdateJs 的 reGetBook 精确匹配书名作者并让脚本读取更新后的书籍', async () => {
+  const source = {
+    bookSourceUrl: 'https://reget-book.test',
+    bookSourceName: 'Reget Book',
+    searchUrl: '/search?name={{key}}',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name<js>putVariable("shared", "new"); putVariable("added", "yes"); result</js>', author: '$.author', bookUrl: '$.url' },
+    ruleBookInfo: { tocUrl: '$.toc' },
+    ruleToc: {
+      chapterList: 'a',
+      chapterName: 'text',
+      chapterUrl: 'href',
+      preUpdateJs: 'reGetBook(); const variables = JSON.parse(book.variable); book.tocUrl = book.bookUrl.endsWith("/new-book") && variables.kept === "value" && variables.shared === "new" && variables.added === "yes" ? "/script-sees/new-book" : "/missing"',
+    },
+  } as unknown as NormalizedSource
+  const requested: string[] = []
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => {
+      requested.push(plan.url)
+      if (new URL(plan.url).pathname === '/search') return response(plan.url, JSON.stringify({ books: [
+        { name: '精准书', author: '另一作者', url: '/wrong' },
+        { name: '精准书', author: '作者', url: '/new-book' },
+      ] }))
+      if (plan.url === 'https://reget-book.test/new-book') return response(plan.url, '{"toc":"/new-toc"}')
+      if (plan.url === 'https://reget-book.test/script-sees/new-book') return response(plan.url, '<a href="/chapter">更新后目录</a>')
+      throw new Error(`unexpected request ${plan.url}`)
+    } },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://reget-book.test/old-book',
+    tocUrl: 'https://reget-book.test/old-toc',
+    name: '精准书',
+    author: '作者',
+    variable: '{"kept":"value","shared":"old"}',
+    rawFields: {},
+    traceRef: 'reget-book',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+
+  const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.deepEqual(requested.map((url) => new URL(url).pathname), ['/search', '/new-book', '/script-sees/new-book'])
+  assert.equal(new URL(requested[0]!).searchParams.get('name'), '精准书')
+  assert.equal(result.value?.items[0]?.title, '更新后目录')
+})
+
+test('refreshTocUrl 在详情页调用上下文中按 Android 行为跳过重复详情请求', async () => {
+  const source = {
+    bookSourceUrl: 'https://from-info.test',
+    bookSourceName: 'From Info',
+    ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href', preUpdateJs: 'refreshTocUrl()' },
+  } as unknown as NormalizedSource
+  const requested: string[] = []
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => { requested.push(plan.url); return response(plan.url, '<a href="/chapter">目录</a>') } },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://from-info.test/book',
+    tocUrl: 'https://from-info.test/toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'from-info',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+
+  const result = await loadTableOfContents(ports, { source, book, runPerJs: true, isFromBookInfo: true })
+
+  assert.equal(result.status, 'success')
+  assert.deepEqual(requested, ['https://from-info.test/toc'])
+})
+
+test('reGetBook 未找到书名和作者都匹配的候选时明确失败', async () => {
+  const source = {
+    bookSourceUrl: 'https://reget-miss.test',
+    bookSourceName: 'Reget miss',
+    searchUrl: '/search?name={{key}}',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name', author: '$.author', bookUrl: '$.url' },
+    ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href', preUpdateJs: 'reGetBook()' },
+  } as unknown as NormalizedSource
+  const requested: string[] = []
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => {
+      requested.push(plan.url)
+      return response(plan.url, JSON.stringify({ books: [{ name: '精准书', author: '另一作者', url: '/wrong' }] }))
+    } },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://reget-miss.test/book',
+    name: '精准书',
+    author: '作者',
+    rawFields: {},
+    traceRef: 'reget-miss',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+
+  const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
+
+  assert.equal(result.status, 'failed')
+  assert.equal(result.diagnostics[0]?.field, 'preUpdateJs')
+  assert.equal(requested.length, 1)
+})
+
+test('refreshTocUrl 详情请求失败时不继续解析旧目录', async () => {
+  const source = {
+    bookSourceUrl: 'https://refresh-fail.test',
+    bookSourceName: 'Refresh fail',
+    ruleBookInfo: { tocUrl: '$.toc' },
+    ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href', preUpdateJs: 'refreshTocUrl()' },
+  } as unknown as NormalizedSource
+  const requested: string[] = []
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => {
+      requested.push(plan.url)
+      return { ...response(plan.url, 'server error'), status: 503 }
+    } },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://refresh-fail.test/book',
+    tocUrl: 'https://refresh-fail.test/old-toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'refresh-fail',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+
+  const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
+
+  assert.equal(result.status, 'failed')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'preUpdateJs'))
+  assert.deepEqual(requested, ['https://refresh-fail.test/book'])
+})
+
+test('预更新助手中的嵌套请求取消会取消目录工作流', async () => {
+  const source = {
+    bookSourceUrl: 'https://refresh-cancel.test',
+    bookSourceName: 'Refresh cancel',
+    ruleBookInfo: { tocUrl: '$.toc' },
+    ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href', preUpdateJs: 'refreshTocUrl()' },
+  } as unknown as NormalizedSource
+  const controller = new AbortController()
+  let requests = 0
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => {
+      requests += 1
+      controller.abort()
+      return response(plan.url, '{"toc":"/new-toc"}')
+    } },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://refresh-cancel.test/book',
+    tocUrl: 'https://refresh-cancel.test/old-toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'refresh-cancel',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+
+  const result = await loadTableOfContents(ports, { source, book, runPerJs: true, signal: controller.signal })
+
+  assert.equal(result.status, 'cancelled')
+  assert.equal(requests, 1)
 })
 
 test('formatJs 跨章节保留 gInt 与其他全局状态，并在每次目录操作后重置', async () => {

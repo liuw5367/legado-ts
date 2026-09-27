@@ -30,6 +30,8 @@ import type {
 
 export interface SourceRuleBridgeRequest {
   kind: string
+  action?: unknown
+  input?: unknown
   url?: string
   method?: string
   body?: unknown
@@ -484,6 +486,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       ...(request.bindings === undefined ? {} : { bindings: request.bindings }),
       ...(request.captureGlobals === true ? { captureGlobals: true } : {}),
       ...(request.globalState === undefined ? {} : { globalState: request.globalState }),
+      ...(request.workflowActions === undefined ? {} : { workflowActions: request.workflowActions }),
+      ...(request.javascriptBudget === undefined ? {} : { javascriptBudget: request.javascriptBudget }),
     })
   }
 
@@ -840,7 +844,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>> }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget'] }): Promise<WorkflowRuleOutput> {
     const bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
@@ -868,8 +872,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'globalThis.gInt = bindings.gInt;',
       'globalThis.fromBookInfo = bindings.fromBookInfo ?? bindings.isFromBookInfo;',
       'globalThis.isFromBookInfo = globalThis.fromBookInfo;',
-      'const refreshTocUrl = () => { throw new Error("__LEGADO_CAPABILITY__runtime refreshTocUrl unavailable") };',
-      'const reGetBook = () => { throw new Error("__LEGADO_CAPABILITY__runtime reGetBook unavailable") };',
+      'const runPreUpdateAction = (action) => { const updated = request({ kind: "workflow-action", action, input: globalThis.book }); if (updated && typeof updated === "object") Object.assign(globalThis.book, updated); };',
+      'const refreshTocUrl = () => runPreUpdateAction("refreshTocUrl");',
+      'const reGetBook = () => runPreUpdateAction("reGetBook");',
       'globalThis.baseUrl = bindings.baseUrl;',
       'globalThis.redirectUrl = bindings.redirectUrl;',
       'const sourceValue = bindings.sourceData ?? {};',
@@ -926,6 +931,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         mode: context?.mode ?? 'script',
         stage,
         bindings,
+        ...(context?.javascriptBudget === undefined ? {} : { budget: context.javascriptBudget }),
         ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
         ...(context?.captureGlobals === true ? { captureGlobals: true } : {}),
         ...(signal === undefined ? {} : { signal }),
@@ -939,7 +945,16 @@ export class SourceRuleRuntime implements WorkflowRulePort {
           this.writeVariable(name, value, bindings, scope)
         },
         ...(this.setConcurrentRate === undefined ? {} : { setConcurrentRate: this.setConcurrentRate }),
-        request: (payload, bridgeSignal) => this.handleBridge(payload, bridgeSignal, source),
+        request: (payload, bridgeSignal) => {
+          if (typeof payload === 'object' && payload !== null && (payload as SourceRuleBridgeRequest).kind === 'workflow-action') {
+            const actionRequest = payload as SourceRuleBridgeRequest
+            const name = textValue(actionRequest.action)
+            const action = context?.workflowActions?.[name]
+            if (action === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${name} unavailable`)
+            return action(bridgeSignal, actionRequest.input)
+          }
+          return this.handleBridge(payload, bridgeSignal, source)
+        },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })
       return {

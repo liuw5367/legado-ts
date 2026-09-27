@@ -2,7 +2,7 @@ import type { JsonObject, JsonValue, NormalizedSource } from '../model/types.ts'
 import { SourceRequestError, SourceRequestRuntime } from './source-request.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
-import type { SourceFunctionName, WorkflowDiagnostic, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { SourceFunctionName, WorkflowDiagnostic, WorkflowJavaScriptRequest, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export const listFields = [
   ['bookName', 'name'],
@@ -547,11 +547,11 @@ export async function executeSourceFunction(ports: WorkflowPorts, source: Normal
   }
 }
 
-export async function executeWorkflowJavaScript(ports: WorkflowPorts, source: NormalizedSource, code: string, stage: WorkflowStage, jsStage: WorkflowJavaScriptStage, trace: WorkflowTraceEntry[], options: { content?: unknown; bindings?: Readonly<Record<string, unknown>>; captureMutations?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; signal?: AbortSignal }): Promise<ScriptExecutionResult> {
+export async function executeWorkflowJavaScript(ports: WorkflowPorts, source: NormalizedSource, code: string, stage: WorkflowStage, jsStage: WorkflowJavaScriptStage, trace: WorkflowTraceEntry[], options: { content?: unknown; bindings?: Readonly<Record<string, unknown>>; captureMutations?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; signal?: AbortSignal }): Promise<ScriptExecutionResult> {
   trace.push({ stage, event: 'rule', target: 'javascript' })
   if (ports.rules.executeWorkflowJavaScript === undefined) return { state: 'capability-missing', message: 'JavaScript 脚本宿主不可用' }
   try {
-  const output = await ports.rules.executeWorkflowJavaScript({ source, code, stage: jsStage, ...(options.content === undefined ? {} : { content: options.content }), ...(options.bindings === undefined ? {} : { bindings: options.bindings }), ...(options.captureMutations === undefined ? {} : { captureMutations: options.captureMutations }), ...(options.captureGlobals === undefined ? {} : { captureGlobals: options.captureGlobals }), ...(options.globalState === undefined ? {} : { globalState: options.globalState }), ...(options.signal === undefined ? {} : { signal: options.signal }) })
+  const output = await ports.rules.executeWorkflowJavaScript({ source, code, stage: jsStage, ...(options.content === undefined ? {} : { content: options.content }), ...(options.bindings === undefined ? {} : { bindings: options.bindings }), ...(options.captureMutations === undefined ? {} : { captureMutations: options.captureMutations }), ...(options.captureGlobals === undefined ? {} : { captureGlobals: options.captureGlobals }), ...(options.globalState === undefined ? {} : { globalState: options.globalState }), ...(options.workflowActions === undefined ? {} : { workflowActions: options.workflowActions }), ...(options.javascriptBudget === undefined ? {} : { javascriptBudget: options.javascriptBudget }), ...(options.signal === undefined ? {} : { signal: options.signal }) })
     if (options.signal?.aborted === true || output.status === 'cancelled') return { state: 'cancelled', ...(output.message === undefined ? {} : { message: output.message }) }
     if (output.status === 'capability-missing') return { state: 'capability-missing', ...(output.message === undefined ? {} : { message: output.message }) }
     if (output.status === 'failed') return { state: 'failed', message: output.message ?? 'JavaScript 脚本执行失败' }

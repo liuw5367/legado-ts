@@ -4,7 +4,7 @@ import type { SourcePatternError } from '../rules/pattern-guard.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { detailFields, evaluateField, executeSourceFunction, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { formatDetailIntro, formatIntro } from './html-format.ts'
-import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 1 }
@@ -144,6 +144,7 @@ function matchesBookUrlPattern(pattern: string, url: string): { matched: boolean
 async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', source: NormalizedSource, url: string | undefined, listRule: string | undefined, nextRule: string | undefined, cursor: { index: number; token?: string } | undefined, options: DiscoveryInput | SearchInput, keyword: string | undefined, ruleGroup: 'ruleExplore' | 'ruleSearch'): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
+  const ruleData: { variable?: string } = {}
   const pageCursor = cursor ?? { index: 1 }
   if (url === undefined || listRule === undefined) {
     diagnostics.push({ code: 'invalid-config', stage, message: '缺少列表请求地址或 bookList 规则', retryable: false })
@@ -167,7 +168,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       stage,
       url,
       { page: String(pageCursor.index), pageIndex: String(pageCursor.index), 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
-      { page: pageCursor.index, pageIndex: pageCursor.index, 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
+      { page: pageCursor.index, pageIndex: pageCursor.index, 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements, ruleData },
       options.signal,
     )
     if (expanded.url === undefined) {
@@ -197,7 +198,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   if (!detailPage) {
     const normalized = normalizeListRule(listRule)
     reverse = normalized.reverse
-    const list = await evaluateField(ports, source, stage, 'bookList', normalized.rule, content, undefined, trace, options.signal, { expect: 'nodes' })
+    const list = await evaluateField(ports, source, stage, 'bookList', normalized.rule, content, undefined, trace, options.signal, { expect: 'nodes', bindings: { ruleData } })
     if (list.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'bookList', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -217,7 +218,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   }
   const identities = new Set<string>()
   for (let itemIndex = 0; itemIndex < rawItems.length && (maxItems === undefined || candidates.length < maxItems); itemIndex += 1) {
-    const fields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace)
+    const fields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace, { ruleData })
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -243,6 +244,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     identities.add(identityKey)
     trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex })
     const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
+    if (ruleData.variable !== undefined && ruleData.variable.length > 0) candidate.variable = ruleData.variable
     if (author.length > 0) candidate.author = author
     if (fields.intro !== undefined) candidate.intro = formatIntro(fields.intro)
     if (bookUrl === requestUrl || bookUrl === page.url) candidate.infoPage = { body: content, requestUrl, responseUrl: page.url }
@@ -255,7 +257,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   }
   if (candidates.length === 0 && (detailPage || (rawItems.length === 0 && pattern === undefined))) {
     // 列表为空（或命中 bookUrlPattern）时，书源把整个响应当作详情页。
-    const fallback = await detailPageCandidate(ports, source, stage, page, requestUrl, options, diagnostics, trace)
+    const fallback = await detailPageCandidate(ports, source, stage, page, requestUrl, options, diagnostics, trace, { ruleData })
     if (fallback.cancelled) {
       // 回退分支内部的字段诊断都属于 detail，这里保持一致。
       diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情页回退已取消', retryable: false })
@@ -272,7 +274,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   let nextCursor: { index: number; token?: string } | undefined
   if (candidates.length > 0 && pageCursor.token === undefined && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
   if (nextRule !== undefined) {
-    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal)
+    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { bindings: { ruleData } })
     if (next.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'nextPage', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -305,12 +307,12 @@ interface ExtractedFields {
   rawFields: JsonObject
 }
 
-async function extractFields(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, ruleGroup: 'ruleExplore' | 'ruleSearch', content: unknown, fields: readonly (readonly [string, string])[], itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<ExtractedFields> {
+async function extractFields(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', ruleGroup: 'ruleExplore' | 'ruleSearch', content: unknown, fields: readonly (readonly [string, string])[], itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], bindings?: Readonly<Record<string, unknown>>): Promise<ExtractedFields> {
   const extracted: ExtractedFields = { rawFields: {} }
   for (const [ruleField, outputField] of fields) {
     const rule = ruleString(source, ruleGroup, ruleField)
     if (rule === undefined) continue
-    const result = await evaluateField(ports, source, stage, ruleField, rule, content, itemIndex, trace, signal)
+    const result = await evaluateField(ports, source, stage, ruleField, rule, content, itemIndex, trace, signal, bindings === undefined ? undefined : { bindings })
     if (result.state === 'cancelled') break
     if (result.state === 'failed') diagnostics.push({ code: 'item-skipped', stage, field: ruleField, itemIndex, message: result.message ?? '字段规则失败', retryable: false })
     if (result.state === 'capability-missing') diagnostics.push({ code: 'capability-missing', stage, field: ruleField, itemIndex, message: result.message ?? '字段规则能力不可用', retryable: false })
@@ -349,8 +351,8 @@ function resolveCandidateUrl(value: string | undefined, baseUrl: string): string
 }
 
 /** 把整个响应当作详情页解析：Android 在 bookUrlPattern 命中或列表为空时使用该分支。 */
-async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', page: { content: string; url: string }, requestUrl: string, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<{ candidate?: BookCandidate; cancelled: boolean }> {
-  const extraction = await extractDetailFields(ports, source, 0, page.content, { baseUrl: page.url, redirectUrl: page.url }, options.signal, trace, diagnostics)
+async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', page: { content: string; url: string }, requestUrl: string, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], bindings?: Readonly<Record<string, unknown>>): Promise<{ candidate?: BookCandidate; cancelled: boolean }> {
+  const extraction = await extractDetailFields(ports, source, 0, page.content, { baseUrl: page.url, redirectUrl: page.url }, options.signal, trace, diagnostics, undefined, bindings)
   // 取消必须向上传播；回退失败和取消在调用方是两种不同的结果。
   if (extraction.cancelled) return { cancelled: true }
   const name = formatBookName(extraction.values.name ?? '')
@@ -359,6 +361,8 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
     return { cancelled: false }
   }
   const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: page.url, name, rawFields: extraction.raw, traceRef: 'detail-page:0' }
+  const ruleData = bindings?.ruleData
+  if (typeof ruleData === 'object' && ruleData !== null && typeof (ruleData as { variable?: unknown }).variable === 'string' && (ruleData as { variable: string }).variable.length > 0) candidate.variable = (ruleData as { variable: string }).variable
   if (stage === 'search') candidate.infoPage = { body: page.content, requestUrl, responseUrl: page.url }
   const author = formatBookAuthor(extraction.values.author ?? '')
   if (author.length > 0) candidate.author = author
@@ -383,14 +387,14 @@ interface DetailExtraction {
   cancelled: boolean
 }
 
-async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSource, itemIndex: number, content: unknown, context: { baseUrl: string; redirectUrl: string }, signal: AbortSignal | undefined, trace: WorkflowTraceEntry[], diagnostics: WorkflowDiagnostic[], book?: BookCandidate): Promise<DetailExtraction> {
+async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSource, itemIndex: number, content: unknown, context: { baseUrl: string; redirectUrl: string }, signal: AbortSignal | undefined, trace: WorkflowTraceEntry[], diagnostics: WorkflowDiagnostic[], book?: BookCandidate, extraBindings?: Readonly<Record<string, unknown>>): Promise<DetailExtraction> {
   const result: DetailExtraction = { values: {}, empty: [], errors: {}, raw: {}, cancelled: false }
   for (const [ruleField, outputField] of detailFields) {
     const rule = ruleString(source, 'ruleBookInfo', ruleField)
     if (rule === undefined) continue
     // Android 将空 tocUrl 规则视为“使用详情页”，而不是“返回整页内容”。
     if (ruleField === 'tocUrl' && rule.length === 0) continue
-    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, ...(book === undefined ? {} : { bindings: { book } }) })
+    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, ...(book === undefined && extraBindings === undefined ? {} : { bindings: { ...extraBindings, ...(book === undefined ? {} : { book }) } }) })
     if (field.state === 'cancelled') {
       result.cancelled = true
       return result
@@ -418,10 +422,6 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   const cursor = input.cursor ?? { index: 0 }
-  if (ruleString(input.source, 'ruleBookInfo', 'name') === undefined && ruleString(input.source, 'ruleBookInfo', 'author') === undefined && ruleString(input.source, 'ruleBookInfo', 'intro') === undefined) {
-    diagnostics.push({ code: 'invalid-config', stage: 'detail', message: '缺少详情字段规则', retryable: false })
-    return { status: 'failed', value: null, diagnostics, trace }
-  }
   const items: BookMetadata[] = []
   const maxItems = input.maxItems ?? input.candidates.length
   const initRule = ruleString(input.source, 'ruleBookInfo', 'init')
