@@ -184,6 +184,10 @@ export class NodeNetworkHost implements NetworkHost {
   private readonly cookieStore: CookieStore
   private readonly options: NodeNetworkOptions
 
+  public get defaultUserAgent(): string | undefined {
+    return this.options.defaultUserAgent
+  }
+
   public constructor(options: NodeNetworkOptions = {}) {
     this.options = options
     this.cookieStore = options.cookieStore ?? new NodeCookieStore()

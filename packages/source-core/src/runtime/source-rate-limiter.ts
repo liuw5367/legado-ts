@@ -123,6 +123,7 @@ export function withSourceRateLimit(network: NetworkHost, limiter: SourceRateLim
       if (plan.budget.signal?.aborted === true) throw abortError()
       return network.request(plan)
     },
+    ...(network.defaultUserAgent === undefined ? {} : { defaultUserAgent: network.defaultUserAgent }),
     ...(network.encodeCharset === undefined ? {} : { encodeCharset: network.encodeCharset.bind(network) }),
   }
 }

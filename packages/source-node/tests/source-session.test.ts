@@ -71,6 +71,12 @@ test('Node 书源会话持有深拷贝并冻结的书源定义', () => {
   assert.throws(() => { sessionExtension.label = 'session-change' }, TypeError)
 })
 
+test('Node session preserves networkOptions defaultUserAgent through the source limiter wrapper', async () => {
+  const session = createNodeSourceSession(baseSource, { networkOptions: { defaultUserAgent: 'platform-UA' } })
+  const defaultUserAgent = await session.run(async (ports) => ports.network.defaultUserAgent)
+  assert.equal(defaultUserAgent, 'platform-UA')
+})
+
 test('同一 source session 的 source.putConcurrent 更新普通请求和脚本请求共享的限流窗口', async () => {
   let now = 0
   const waitDurations: number[] = []

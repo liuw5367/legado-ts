@@ -65,6 +65,14 @@ test('putConcurrent updates a live window while invalid updates leave its policy
   assert.deepEqual(waits, [100, 100])
 })
 
+test('source session rate wrapper preserves host User-Agent configuration', () => {
+  const network = withSourceRateLimit({
+    defaultUserAgent: 'platform-UA',
+    request: async () => ({ url: 'https://fixture.invalid', status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }),
+  }, new SourceRateLimiter('0'))
+  assert.equal(network.defaultUserAgent, 'platform-UA')
+})
+
 test('cancelled source-rate wait does not call the platform network', async () => {
   let rejectWait!: (reason: unknown) => void
   const clock: ClockHost = {

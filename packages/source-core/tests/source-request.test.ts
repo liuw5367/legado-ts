@@ -29,7 +29,7 @@ function evaluateOnlyScript(request: WorkflowRuleRequest): { status: 'success' |
   if (!request.rule.startsWith('@js:')) return { status: 'empty', value: null }
   const code = request.rule.slice(4)
   if (code.includes('redirectUrl')) return { status: 'success', value: request.redirectUrl ?? '' }
-  if (code.includes('via=js')) return { status: 'success', value: `${request.baseUrl ?? ''}&via=js` }
+  if (code.includes('via=js')) return { status: 'success', value: `${String(request.content ?? '')}&via=js` }
   if (code.includes('baseUrl')) return { status: 'success', value: request.baseUrl ?? '' }
   if (code.includes('X-Token')) return { status: 'success', value: { 'X-Token': 'abc' } }
   if (code.includes('not-json')) return { status: 'success', value: 'not-json' }
@@ -48,6 +48,7 @@ function probePorts(options?: {
   evaluate?: (request: WorkflowRuleRequest) => ReturnType<NonNullable<WorkflowPorts['rules']['evaluate']>>
   executeWorkflowJavaScript?: WorkflowPorts['rules']['executeWorkflowJavaScript']
   withExecute?: boolean
+  defaultUserAgent?: string
 }): WorkflowPorts & Probe {
   const probe: WorkflowPorts & Probe = {
     plans: [],
@@ -80,6 +81,7 @@ function probePorts(options?: {
         : { executeWorkflowJavaScript: options.executeWorkflowJavaScript }),
     },
   }
+  if (options?.defaultUserAgent !== undefined) probe.network.defaultUserAgent = options.defaultUserAgent
   return probe
 }
 
@@ -89,11 +91,31 @@ test('仅实现 evaluate 的规则宿主可执行请求 js 脚本', async () => 
   const result = await searchBooks(ports, { source, keyword: 'x' })
   const urlRequest = ports.ruleRequests.find((request) => request.field === 'url' && request.rule.startsWith('@js:'))
   assert.ok(urlRequest, '应回退到 evaluate 执行 js')
-  assert.equal(urlRequest.baseUrl, 'https://fixture.invalid/search?q=x')
+  assert.equal(urlRequest.baseUrl, 'https://fixture.invalid')
+  assert.equal(urlRequest.content, 'https://fixture.invalid/search?q=x')
   assert.equal(ports.calls, 1)
-  assert.equal(ports.plans[0]?.url, 'https://fixture.invalid/search?q=x')
+  assert.equal(ports.plans[0]?.url, 'https://fixture.invalid/')
   assert.equal(result.status, 'success')
   assert.ok(!result.diagnostics.some((item) => item.code === 'request-failed' || item.code === 'capability-missing'))
+})
+
+test('SourceRequestRuntime 直调也按 Android 顺序处理任意位置的 @js', async () => {
+  const source = await importFixture()
+  const seen: WorkflowRuleRequest[] = []
+  const ports = probePorts({
+    evaluate: async (request) => {
+      seen.push(request)
+      return { status: 'success', value: `${String(request.content)}&via=js` }
+    },
+  })
+  const runtime = new SourceRequestRuntime({
+    network: ports.network,
+    rules: ports.rules,
+    encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) },
+  })
+  await runtime.request({ source, url: '/search?q=x@js:result', stage: 'search', options: {} })
+  assert.equal(seen[0]?.content, '/search?q=x')
+  assert.equal(ports.plans[0]?.url, 'https://fixture.invalid/search?q=x&via=js')
 })
 
 test('js 收到请求计划地址，bodyJs 收到最终响应地址', async () => {
@@ -111,23 +133,24 @@ test('js 收到请求计划地址，bodyJs 收到最终响应地址', async () =
   const result = await searchBooks(ports, { source, keyword: 'x' })
   assert.equal(result.status, 'success')
   assert.equal(ports.plans[0]?.url, 'https://fixture.invalid/search?q=x&via=js')
+  const urlJs = ports.ruleRequests.find((request) => request.field === 'url' && request.rule.includes('via=js'))
+  assert.ok(urlJs)
+  assert.equal(urlJs.baseUrl, 'https://fixture.invalid')
+  assert.equal(urlJs.content, 'https://fixture.invalid/search?q=x')
   const bodyJs = ports.ruleRequests.find((request) => request.field === 'body' && request.rule.startsWith('@js:'))
   assert.ok(bodyJs, 'bodyJs 应回退到 evaluate')
-  assert.equal(bodyJs.baseUrl, 'https://redirect.invalid/final/search')
+  assert.equal(bodyJs.baseUrl, 'https://fixture.invalid')
   assert.equal(bodyJs.redirectUrl, 'https://redirect.invalid/final/search')
   assert.equal(ports.listContent, 'https://redirect.invalid/final/search')
 })
 
-test('计划错误映射为不可重试的 invalid-config', async () => {
+test('Android 不识别的 URL method 回退为 GET', async () => {
   const source = await importFixture({ searchUrl: '/search,{"method":"DELETE"}' })
   const ports = probePorts()
   const result = await searchBooks(ports, { source, keyword: 'x' })
-  assert.equal(ports.calls, 0)
-  assert.equal(result.status, 'failed')
-  const diagnostic = result.diagnostics.find((item) => item.code === 'invalid-config')
-  assert.ok(diagnostic)
-  assert.equal(diagnostic.retryable, false)
-  assert.ok(!result.diagnostics.some((item) => item.code === 'request-failed'))
+  assert.equal(ports.calls, 1)
+  assert.equal(ports.plans[0]?.method, 'GET')
+  assert.equal(result.status, 'success')
 })
 
 test('脚本 cancelled/capability-missing/failed 映射为对应诊断', async () => {
@@ -151,21 +174,43 @@ test('脚本 cancelled/capability-missing/failed 映射为对应诊断', async (
   }
 })
 
-test('动态 header 经 evaluate 回退执行且非法 JSON 报 invalid-config', async () => {
+test('动态 header 支持 @js 与 js 标签；坏 header 忽略并采用宿主默认 UA', async () => {
   const working = await importFixture({ header: '@js:({ "X-Token": "abc" })' })
   const okPorts = probePorts({ withExecute: false })
   const okResult = await searchBooks(okPorts, { source: working, keyword: 'x' })
   assert.equal(okResult.status, 'success')
   assert.equal(okPorts.plans[0]?.headers['X-Token'], 'abc')
 
+  const tagged = await importFixture({ header: '<js>({ "X-Token": "abc" })</js>' })
+  const taggedPorts = probePorts({ withExecute: false })
+  const taggedResult = await searchBooks(taggedPorts, { source: tagged, keyword: 'x' })
+  assert.equal(taggedResult.status, 'success')
+  assert.equal(taggedPorts.plans[0]?.headers['X-Token'], 'abc')
+
+  const explicit = await importFixture({ header: JSON.stringify({ 'User-Agent': 'source-UA' }) })
+  const explicitPorts = probePorts({ defaultUserAgent: 'host-UA' })
+  const explicitResult = await searchBooks(explicitPorts, { source: explicit, keyword: 'x' })
+  assert.equal(explicitResult.status, 'success')
+  assert.equal(explicitPorts.plans[0]?.headers['User-Agent'], 'source-UA')
+
   const broken = await importFixture({ header: '@js:"not-json"' })
-  const brokenPorts = probePorts({ withExecute: false })
+  const brokenPorts = probePorts({ withExecute: false, defaultUserAgent: 'Android-compatible UA' })
   const brokenResult = await searchBooks(brokenPorts, { source: broken, keyword: 'x' })
-  assert.equal(brokenPorts.calls, 0)
-  const diagnostic = brokenResult.diagnostics.find((item) => item.code === 'invalid-config')
-  assert.ok(diagnostic)
-  assert.equal(diagnostic.field, 'header')
-  assert.equal(diagnostic.retryable, false)
+  assert.equal(brokenPorts.calls, 1)
+  assert.equal(brokenResult.status, 'success')
+  assert.equal(brokenPorts.plans[0]?.headers['User-Agent'], 'Android-compatible UA')
+})
+
+test('缺 XML 声明时先补 Android 声明，再跳过 bodyJs', async () => {
+  const source = await importFixture({ searchUrl: '/search,{"bodyJs":"should-not-run"}' })
+  const ports = probePorts({ network: (plan) => ({
+    ...okResponse(plan.url, '<feed/>'),
+    headers: { 'content-type': 'application/atom+xml; charset=utf-8' },
+  }) })
+  const result = await searchBooks(ports, { source, keyword: 'x' })
+  assert.equal(result.status, 'success')
+  assert.equal(ports.listContent, '<?xml version="1.0"?><feed/>')
+  assert.equal(ports.ruleRequests.some((request) => request.field === 'body'), false)
 })
 
 test('loginCheckJs 看到真实 401，恢复后继续解析', async () => {

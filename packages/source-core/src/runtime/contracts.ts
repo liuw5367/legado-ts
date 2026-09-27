@@ -115,6 +115,8 @@ export interface NetworkResponse {
 export interface NetworkHost {
   /** 物化并执行核心生成的请求计划。 */
   request(plan: RequestPlan): Promise<NetworkResponse>
+  /** 宿主配置的默认 User-Agent；source.header 或 URL options.headers 可覆盖。 */
+  defaultUserAgent?: string | undefined
   /** 将 URL 查询中的文字按书源声明编码；缺省时核心仅能提供 UTF-8。 */
   encodeCharset?(value: string, charset: string): Uint8Array
 }

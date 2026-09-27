@@ -38,3 +38,10 @@ test('URL 页码数组超出已列页数后继续使用最后一项', async () =
   const result = await expandUrl(workflow, source, 'search', '/search?page=<1,2,3>', { page: '5' }, { page: 5 })
   assert.equal(result.url, '/search?page=3')
 })
+
+test('@js 在 {{}} 前执行，result 保留此前 URL 原文', async () => {
+  const { ports: workflow, seen } = ports()
+  const result = await expandUrl(workflow, source, 'search', '/search?q={{keyword}}@js:result', { keyword: '中文' }, { keyword: '中文' })
+  assert.equal(seen[0]?.content, '/search?q={{keyword}}')
+  assert.equal(result.url, '/search?q=中文-script')
+})

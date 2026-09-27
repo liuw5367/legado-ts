@@ -10,6 +10,8 @@ export interface CookieStore {
 }
 
 export interface NodeNetworkOptions {
+  /** Android AppConfig.userAgent 的 Node 侧配置；不设置时保留 HTTP 客户端默认值。 */
+  defaultUserAgent?: string
   /** 显式允许的协议；默认只允许 HTTP/HTTPS。 */
   protocols?: readonly string[]
   /** 是否允许环回、私网和链路本地地址；默认拒绝。 */

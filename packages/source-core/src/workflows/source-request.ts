@@ -191,6 +191,20 @@ function contentTypeCharset(contentType: string | undefined): string | undefined
   return contentType === undefined ? undefined : /charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType)?.[1]
 }
 
+function originBaseUrl(url: string): string {
+  const parsed = new URL(url)
+  return `${parsed.protocol}//${parsed.host}`
+}
+
+function responseContentType(response: NetworkResponse): string | undefined {
+  const value = Object.entries(response.headers).find(([name]) => name.toLowerCase() === 'content-type')?.[1]
+  return headerValue(value)
+}
+
+function isXmlResponse(response: NetworkResponse): boolean {
+  return /^(application|text)\/\w*\+?xml.*$/.test(responseContentType(response) ?? '')
+}
+
 function isJsonBody(value: string): boolean {
   // Android 将首尾分别由对象/数组括号包围的请求体作为结构化文本处理。
   const trimmed = value.trim()
@@ -275,22 +289,21 @@ export class SourceRequestRuntime {
 
   private async resolveExpression(input: string, stage: WorkflowStage, signal: AbortSignal | undefined, source: NormalizedSource): Promise<string> {
     const trimmed = input.trim()
-    // 支持 URL 任意位置的多个 <js>...</js> 块，并将前后文字中的 @result 替换为上一步结果。
-    const blocks = [...trimmed.matchAll(/<js>([\s\S]*?)<\/js>/gi)]
+    // Android 对整条规则匹配 JS_PATTERN：<js> 与任意位置的 @js: 按出现顺序执行。
+    const blocks = [...trimmed.matchAll(/<js>([\s\S]*?)<\/js>|@js:([\s\S]*)/gi)]
     if (blocks.length > 0) {
       let result = trimmed
       let end = 0
       for (const block of blocks) {
         const literal = trimmed.slice(end, block.index!).trim()
         if (literal.length > 0) result = literal.split('@result').join(result)
-        result = await this.evaluateUrlScript(block[1] ?? '', result, stage, source, signal)
+        result = await this.evaluateUrlScript(block[1] ?? block[2] ?? '', result, stage, source, signal)
         end = block.index! + block[0]!.length
       }
       const tail = trimmed.slice(end).trim()
       return tail.length > 0 ? tail.split('@result').join(result) : result
     }
-    if (!trimmed.toLowerCase().startsWith('@js:')) return input
-    return this.evaluateUrlScript(trimmed.slice(4).trim(), '', stage, source, signal)
+    return input
   }
 
   /** 脚本执行上下文：evaluate 字段名与诊断字段名在 bodyJs 上按基线分别为 body/bodyJs。 */
@@ -347,9 +360,14 @@ export class SourceRequestRuntime {
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
       throw new SourceRequestError('capability-missing', '书源请求需要 WebView')
     }
-    const method = (options.method ?? 'GET').toUpperCase()
+    const requestedMethod = typeof options.method === 'string' ? options.method.toUpperCase() : 'GET'
+    // AnalyzeUrl maps every method except POST and HEAD to GET.
+    const method = requestedMethod === 'POST' || requestedMethod === 'HEAD' ? requestedMethod : 'GET'
     const sourceHeaders = await this.sourceHeaders(source, signal, nested)
-    let headers = mergeHeaders(sourceHeaders, headerObject(options.headers))
+    const defaultHeaders = getHeader(sourceHeaders, 'user-agent') === undefined && this.network.defaultUserAgent !== undefined
+      ? { 'User-Agent': this.network.defaultUserAgent }
+      : undefined
+    let headers = mergeHeaders(sourceHeaders, defaultHeaders, headerObject(options.headers))
     const proxy = getHeader(headers, 'proxy')?.trim() || undefined
     headers = withoutHeader(headers, 'proxy')
     const dnsIpValue = options.dnsIp ?? options.resolveIp
@@ -425,9 +443,12 @@ export class SourceRequestRuntime {
       throw new SourceRequestError(request.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', request.error?.message ?? '书源请求计划无效')
     }
 
+    // AnalyzeUrl updates baseUrl to the target origin before applying URL options.
+    // It keeps this same baseUrl for bodyJs, even after an option-js rewrite or redirect.
+    const scriptBaseUrl = originBaseUrl(request.plan.url)
     if (typeof options.js === 'string' && options.js.trim().length > 0) {
       const planUrl = request.plan.url
-      const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: planUrl, redirectUrl: planUrl })
+      const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: scriptBaseUrl, redirectUrl: planUrl })
       const rewrittenUrl = resolveSourceRequestUrl(rewritten, source.bookSourceUrl, charset, queryEncoder)
       request = makePlan(rewrittenUrl)
       if (request.plan === undefined) {
@@ -449,15 +470,20 @@ export class SourceRequestRuntime {
     if (responseCharsetHint !== undefined) result = { ...result, headers: { ...result.headers, 'x-legado-response-charset': responseCharsetHint } }
     if (typeof options.type === 'string' && options.type.length > 0) {
       result = { ...result, bytes: new TextEncoder().encode(hex(result.bytes)), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
-    } else if (typeof options.bodyJs === 'string' && options.bodyJs.trim().length > 0) {
+    } else {
       const decoded = this.decode(result)
-      const transformed = await this.evaluateUrlScript(options.bodyJs, decoded, stage, source, signal, {
-        evaluateField: 'body',
-        field: 'bodyJs',
-        baseUrl: result.url,
-        redirectUrl: result.url,
-      })
-      result = { ...result, bytes: new TextEncoder().encode(transformed), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
+      const isXml = isXmlResponse(result)
+      if (isXml && !decoded.trim().toLowerCase().startsWith('<?xml')) {
+        result = { ...result, bytes: new TextEncoder().encode(`<?xml version="1.0"?>${decoded}`), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
+      } else if (typeof options.bodyJs === 'string' && options.bodyJs.trim().length > 0) {
+        const transformed = await this.evaluateUrlScript(options.bodyJs, decoded, stage, source, signal, {
+          evaluateField: 'body',
+          field: 'bodyJs',
+          baseUrl: scriptBaseUrl,
+          redirectUrl: result.url,
+        })
+        result = { ...result, bytes: new TextEncoder().encode(transformed), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
+      }
     }
     return result
   }
@@ -467,21 +493,28 @@ export class SourceRequestRuntime {
     if (header === undefined || header === null) return undefined
     if (typeof header === 'object' && !Array.isArray(header)) return headerObject(header)
     if (typeof header !== 'string') return undefined
-    if (header.trim().toLowerCase().startsWith('@js:')) {
+    const trimmed = header.trim()
+    const script = /^<js>([\s\S]*?)<\/js>$/i.exec(trimmed)?.[1]
+      ?? (/^@js:([\s\S]*)$/i.exec(trimmed)?.[1])
+    if (script !== undefined) {
       // bridge 子请求不再执行动态 header，避免 header→java.ajax→同一 header 的异步递归；静态头仍合并。
       if (nested) return undefined
       // 头脚本不携带请求 URL 上下文，stage 固定为 search，与基线 Node 门面一致。
-      const value = await this.runSourceScript(header.trim().slice(4), 'search', source, '', signal, {
-        evaluateField: 'header',
-        field: 'header',
-        scriptStage: 'search',
-      })
+      let value: unknown
+      try {
+        value = await this.runSourceScript(script, 'search', source, '', signal, {
+          evaluateField: 'header',
+          field: 'header',
+          scriptStage: 'search',
+        })
+      } catch (error) {
+        if (error instanceof SourceRequestError && error.code === 'rule-failed') return undefined
+        throw error
+      }
       const dynamic = headerObject(value)
-      if (dynamic === undefined) throw new SourceRequestError('invalid-config', '动态 header 脚本必须返回 JSON 对象', 'header')
       return dynamic
     }
     const result = headerObject(header)
-    if (result === undefined) throw new SourceRequestError('invalid-config', '书源 header 不是有效 JSON 对象', 'header')
     return result
   }
 

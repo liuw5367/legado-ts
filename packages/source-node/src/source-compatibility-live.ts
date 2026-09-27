@@ -116,6 +116,7 @@ function sourceSession(): SourceSession {
   const networkHost = new NodeNetworkHost({ cookieStore })
   const requests = { count: 0 }
   const network: NetworkHost = {
+    ...(networkHost.defaultUserAgent === undefined ? {} : { defaultUserAgent: networkHost.defaultUserAgent }),
     request: async (plan) => {
       requests.count += 1
       return networkHost.request(plan)

@@ -172,7 +172,8 @@ export async function expandUrl(ports: WorkflowPorts, source: NormalizedSource, 
 }
 
 async function expandEmbeddedUrlScripts(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, input: string, bindings: Readonly<Record<string, unknown>>, signal: AbortSignal | undefined): Promise<{ url?: string; error?: UrlExpansionError }> {
-  const matches = [...input.matchAll(/<js>([\s\S]*?)<\/js>/gi)]
+  // Match the same URL script forms and source order as Android JS_PATTERN.
+  const matches = [...input.matchAll(/<js>([\s\S]*?)<\/js>|@js:([\s\S]*)/gi)]
   if (matches.length === 0) return { url: input }
   let result = input
   let end = 0
@@ -180,13 +181,14 @@ async function expandEmbeddedUrlScripts(ports: WorkflowPorts, source: Normalized
     const start = match.index!
     const literal = input.slice(end, start).trim()
     if (literal.length > 0) result = literal.split('@result').join(result)
+    const code = match[1] ?? match[2] ?? ''
     let output: WorkflowRuleOutput
     try {
       output = await ports.rules.evaluate({
         source,
         stage,
         field: 'url',
-        rule: `@js:${match[1] ?? ''}`,
+        rule: `@js:${code}`,
         content: result,
         bindings,
         ...(signal === undefined ? {} : { signal }),
