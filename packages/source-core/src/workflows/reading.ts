@@ -142,6 +142,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (nextRule === undefined) continue
     const next = await evaluateField(ports, input.source, stage, 'nextTocUrl', nextRule, body, pageIndex, trace, input.signal, { ...context, bindings: { book } })
     if (next.state === 'cancelled') return cancelled('目录下一页规则已取消', diagnostics, trace)
+    if (next.state === 'failed' || next.state === 'capability-missing') {
+      diagnostics.push({ code: next.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: 'nextTocUrl', message: next.message ?? (next.state === 'capability-missing' ? '目录下一页规则能力不可用' : '目录下一页规则失败'), retryable: false })
+      break
+    }
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
     const resolvedNextUrls = new Set<string>()
@@ -407,6 +411,11 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (nextRule === undefined) continue
     const next = await evaluateField(ports, input.source, stage, nextField, nextRule, body, pageIndex, trace, input.signal, { ...context, bindings: ruleBindings })
     if (next.state === 'cancelled') return cancelled('正文下一页规则已取消', diagnostics, trace)
+    if (next.state === 'failed' || next.state === 'capability-missing') {
+      diagnostics.push({ code: next.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: nextField, message: next.message ?? (next.state === 'capability-missing' ? '正文下一页规则能力不可用' : '正文下一页规则失败'), retryable: false })
+      stoppedByLimit = true
+      break
+    }
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
     const resolvedNextUrls = new Set<string>()

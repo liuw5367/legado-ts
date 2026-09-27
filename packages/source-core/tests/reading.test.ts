@@ -69,6 +69,31 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
 
+test('目录下一页规则失败或缺少宿主能力时保留诊断并停止分页', async () => {
+  for (const state of ['failed', 'capability-missing'] as const) {
+    const outputStatus: 'failed' | 'capability-missing' = state
+    const calls: string[] = []
+    const result = await loadTableOfContents({
+      network: { request: async (plan) => {
+        calls.push(plan.url)
+        return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: false }
+      } },
+      rules: { evaluate: async ({ field, content }) => {
+        if (field === 'chapterList') return { status: 'success', value: [{ title: '第一章', url: '/chapter/1' }] }
+        if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+        if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+        if (field === 'nextTocUrl') return { status: outputStatus, value: null, message: 'next toc unavailable' }
+        return { status: 'empty', value: null }
+      } },
+    }, { source, book })
+    assert.equal(result.status, 'partial', state)
+    assert.equal(result.value?.items.length, 1, state)
+    assert.equal(calls.length, 1, state)
+    const expectedCode = state === 'failed' ? 'rule-failed' : 'capability-missing'
+    assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'nextTocUrl' && diagnostic.code === expectedCode), state)
+  }
+})
+
 test('目录更新时间按 Android 投影 tag 与字数，卷占位使用页内原始索引', async () => {
   const sourceWithInfo = {
     ...source,
@@ -965,6 +990,31 @@ test('正文分页命中 nextChapterUrl 时停止解析，不并入下一章', a
   assert.equal(result.value?.cleaned, '第一章正文')
   assert.deepEqual(calls, ['https://source.test/c1'])
   assert.equal(result.status, 'success')
+})
+
+test('正文下一页规则失败或缺少宿主能力时保留已解析内容和诊断', async () => {
+  for (const state of ['failed', 'capability-missing'] as const) {
+    const outputStatus: 'failed' | 'capability-missing' = state
+    const calls: string[] = []
+    const nextSource = { ...source, contentType: 'text', ruleContent: { content: 'content', nextContentUrl: 'next-content' } } as unknown as NormalizedSource
+    const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+    const result = await loadChapterContent({
+      network: { request: async (plan) => {
+        calls.push(plan.url)
+        return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('page-1'), redirected: false }
+      } },
+      rules: { evaluate: async ({ field }) => {
+        if (field === 'content') return { status: 'success', value: '第一章正文' }
+        if (field === 'nextContentUrl') return { status: outputStatus, value: null, message: 'next content unavailable' }
+        return { status: 'empty', value: null }
+      } },
+    }, { source: nextSource, chapter })
+    assert.equal(result.status, 'partial', state)
+    assert.equal(result.value?.cleaned, '第一章正文', state)
+    assert.deepEqual(calls, ['https://source.test/c1'], state)
+    const expectedCode = state === 'failed' ? 'rule-failed' : 'capability-missing'
+    assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'nextContentUrl' && diagnostic.code === expectedCode), state)
+  }
 })
 
 test('正文分页拆分换行 URL 列表并保留内容相同的不同页面', async () => {
