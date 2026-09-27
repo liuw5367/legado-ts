@@ -97,6 +97,79 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
   assert.equal(calls.length, 4)
 })
 
+test('真实 JSONPath 过滤书源的目录规则经过离线响应执行', async () => {
+  const sources = await loadFixtureSources()
+  const source = sources.find((item) => ruleOf(item, 'ruleToc', 'chapterList')?.includes('data.catalog[?(@.grade > 1)]'))
+  assert.ok(source, '语料中未找到 JSONPath grade 过滤目录规则')
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'http://m.yuedu.163.com/book/fixture',
+    tocUrl: 'http://m.yuedu.163.com/search/book/data.json?source_uuid=fixture',
+    name: '本地过滤测试书',
+    rawFields: {},
+    emptyFields: [],
+    fieldErrors: {},
+    traceRef: 'book:json-filter',
+  }
+  const ports: WorkflowPorts = {
+    network: {
+      request: async (plan) => ({
+        url: plan.url,
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+        bytes: new TextEncoder().encode(JSON.stringify({ data: { catalog: [
+          { grade: 2, uuid: 'one', title: '第一章', needPay: false },
+          { grade: 1, uuid: 'volume', title: '第一卷', needPay: false },
+          { grade: 3, uuid: 'two', title: '第二章', needPay: true },
+        ] } })),
+        redirected: false,
+      }),
+    },
+    rules: new SourceRuleHost(),
+  }
+  const result = await loadTableOfContents(ports, { source, book })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value?.items.map((item) => item.title), ['第一章', '第二章'])
+  assert.deepEqual(result.value?.items.map((item) => item.chapterUrl), [
+    'http://m.yuedu.163.com/reader/book/content.json?source_uuid=fixture&content_uuid=one',
+    'http://m.yuedu.163.com/reader/book/content.json?source_uuid=fixture&content_uuid=two',
+  ])
+})
+
+test('真实 JavaScript 目录规则通过 java.getElements 解析离线 HTML', async () => {
+  const sources = await loadFixtureSources()
+  const source = sources.find((item) => {
+    const chapterList = ruleOf(item, 'ruleToc', 'chapterList') ?? ''
+    return chapterList.includes('#list-chapterAll@dd')
+      && ruleOf(item, 'ruleToc', 'chapterName') === 'text'
+      && ruleOf(item, 'ruleToc', 'chapterUrl') === 'href'
+  })
+  assert.ok(source, '语料中未找到 java.getElements 目录规则')
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://www.biquge.casa/123/',
+    tocUrl: 'https://www.biquge.casa/123/',
+    name: '本地节点测试书',
+    rawFields: {},
+    emptyFields: [],
+    fieldErrors: {},
+    traceRef: 'book:js-elements',
+  }
+  const ports: WorkflowPorts = {
+    network: {
+      request: async (plan) => response(plan.url, '<div id="list-chapterAll"><dd><a href="chapter/one">第一章</a></dd><dd><a href="chapter/two">第二章</a></dd></div>'),
+    },
+    rules: new SourceRuleHost(),
+  }
+  const result = await loadTableOfContents(ports, { source, book })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value?.items.map((item) => item.title), ['第一章', '第二章'])
+  assert.deepEqual(result.value?.items.map((item) => item.chapterUrl), [
+    'https://www.biquge.casa/123/chapter/one',
+    'https://www.biquge.casa/123/chapter/two',
+  ])
+})
+
 test('详情 init 保留多节点内容供后续字段规则继续解析', async () => {
   const source = {
     bookSourceUrl: 'https://multi-init.test',
