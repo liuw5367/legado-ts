@@ -457,7 +457,7 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       ? { content: candidate.infoPage!.body, url: candidate.infoPage!.responseUrl }
       : await requestPageResponse(ports, input.source, expandedUrl.url, 'detail', input, diagnostics, trace)
     if (page === undefined) continue
-    const context = { baseUrl: page.url, redirectUrl: page.url }
+    const context = { baseUrl: candidate.bookUrl, redirectUrl: page.url }
     // Android BookInfo：init 规则先执行，其结果成为后续详情字段的内容基准。
     let content: unknown = page.content
     if (initRule !== undefined) {
