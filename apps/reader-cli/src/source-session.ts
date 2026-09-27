@@ -27,11 +27,11 @@ export class SourceSession implements ReaderSourceSession {
     })
   }
 
-  public async toc(book: BookMetadata, signal?: AbortSignal, options: { refresh?: boolean; runPerJs?: boolean; isFromBookInfo?: boolean } = {}): Promise<Awaited<ReturnType<typeof loadTableOfContents>>> {
+  public async toc(book: BookMetadata, signal?: AbortSignal, options: { refresh?: boolean; runPerJs?: boolean; isFromBookInfo?: boolean; tocCountWords?: boolean } = {}): Promise<Awaited<ReturnType<typeof loadTableOfContents>>> {
     if (options.refresh === true) this.tocPage = undefined
     const cachedPage = options.refresh !== true && this.tocPage?.bookUrl === book.bookUrl ? this.tocPage : undefined
     const inputBook = cachedPage !== undefined && cachedPage.url === book.tocUrl ? { ...book, tocHtml: cachedPage.html } : book
-    return this.core.run((ports) => loadTableOfContents({ ...ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.runPerJs === true ? { runPerJs: true } : {}), ...(options.isFromBookInfo === true ? { isFromBookInfo: true } : {}), maxPages: 32 }))
+    return this.core.run((ports) => loadTableOfContents({ ...ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.runPerJs === true ? { runPerJs: true } : {}), ...(options.isFromBookInfo === true ? { isFromBookInfo: true } : {}), ...(options.tocCountWords === undefined ? {} : { tocCountWords: options.tocCountWords }), maxPages: 32 }))
   }
 
   public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {

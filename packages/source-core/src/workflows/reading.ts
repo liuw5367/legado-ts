@@ -15,7 +15,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   let book = input.book
   const preUpdateJs = ruleString(input.source, 'ruleToc', 'preUpdateJs')
   if (input.runPerJs === true && preUpdateJs !== undefined) {
-    const preUpdate = await executeWorkflowJavaScript(ports, input.source, `${preUpdateJs}\n;book`, stage, 'book', trace, { bindings: { book: { ...book }, isFromBookInfo: input.isFromBookInfo === true }, captureMutations: ['book'], ...(input.signal === undefined ? {} : { signal: input.signal }) })
+    const preUpdate = await executeWorkflowJavaScript(ports, input.source, `${preUpdateJs}\n;book`, stage, 'book', trace, { bindings: { book: { ...book }, fromBookInfo: input.isFromBookInfo === true, isFromBookInfo: input.isFromBookInfo === true }, captureMutations: ['book'], ...(input.signal === undefined ? {} : { signal: input.signal }) })
     if (preUpdate.state === 'cancelled' || input.signal?.aborted === true) return cancelled('目录预处理脚本已取消', diagnostics, trace)
     if (preUpdate.state === 'capability-missing' || preUpdate.state === 'failed') {
       diagnostics.push({ code: preUpdate.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: 'preUpdateJs', message: preUpdate.message ?? '目录预处理脚本失败', retryable: false })
@@ -115,7 +115,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       const chapterIndex = chapters.length
       const isVolume = fields.isVolume === true
       const chapterUrl = isVolume && (fields.url === undefined || fields.url.length === 0 || fields.url === fields.title)
-        ? `${fields.title}${chapterIndex}`
+        ? `${fields.title}${itemIndex}`
         : fields.url === undefined || fields.url.length === 0
           ? normalizedUrl
           : resolveUrl(fields.url, responseUrl)
@@ -136,6 +136,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
         isVip: fields.isVip ?? false,
         isPay: fields.isPay ?? false,
         ...(fields.updateTime === undefined ? {} : { updateTime: fields.updateTime }),
+        ...chapterInfoProjection(fields.updateTime, isVolume, input.tocCountWords !== false),
       }
       if (volume !== undefined) chapter.volume = volume
       chapters.push(chapter)
@@ -497,10 +498,19 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
 }
 
 async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSource, chapters: Chapter[], code: string, book: BookMetadata, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<void> {
+  const globalState: Record<string, unknown> = {}
   for (const [chapterIndex, chapter] of chapters.entries()) {
     const script = await executeWorkflowJavaScript(ports, source, code, 'detail', 'chapter', trace, {
-      bindings: { gInt: 0, index: chapterIndex + 1, chapter: { ...chapter, url: chapter.chapterUrl, baseUrl: book.tocUrl ?? book.bookUrl }, title: chapter.title },
+      bindings: {
+        ...globalState,
+        gInt: Object.hasOwn(globalState, 'gInt') ? globalState.gInt : 0,
+        index: chapterIndex + 1,
+        chapter: { ...chapter, url: chapter.chapterUrl, baseUrl: book.tocUrl ?? book.bookUrl },
+        title: chapter.title,
+      },
       captureMutations: ['chapter'],
+      captureGlobals: true,
+      globalState,
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     })
     if (script.state === 'cancelled' || input.signal?.aborted === true) {
@@ -519,6 +529,10 @@ async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSourc
       const captured = typeof script.value === 'object' && script.value !== null && !Array.isArray(script.value)
         ? script.value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: Record<string, unknown> }
         : undefined
+      if (captured !== undefined && typeof (captured as Record<string, unknown>).__legadoWorkflowGlobals === 'object' && (captured as Record<string, unknown>).__legadoWorkflowGlobals !== null) {
+        for (const name of Object.keys(globalState)) delete globalState[name]
+        Object.assign(globalState, serializableFormatGlobals((captured as Record<string, unknown>).__legadoWorkflowGlobals as Record<string, unknown>))
+      }
       if (captured !== undefined && Object.hasOwn(captured, '__legadoWorkflowBindings')) {
         const outputValue = captured.__legadoWorkflowValue
         const mutatedChapter = captured.__legadoWorkflowBindings?.chapter
@@ -534,6 +548,18 @@ async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSourc
       } else chapter.title = textValue(script.value)
     }
   }
+}
+
+const formatRuntimeGlobalNames = new Set([
+  'result', 'src', 'key', 'page', 'url', 'nextChapterUrl', 'chapters', 'index', 'title', 'fromBookInfo', 'isFromBookInfo',
+  'baseUrl', 'redirectUrl', 'sourceKey', 'sourceName', 'sourceData', 'source', 'sourceApi', 'book', 'chapter', 'java',
+  'cache', 'Packages', 'bindings', 'cookie', 'getVariable', 'putVariable', 'checkEnv', 'isVs', 'globalThis',
+  '__legadoDecode', '__legadoEncode', '__legadoGetVariable', '__legadoSetVariable', '__legadoRequest', '__legadoEvaluateRule',
+  '__legadoWorkflowGlobalState',
+])
+
+function serializableFormatGlobals(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([name]) => !formatRuntimeGlobalNames.has(name)))
 }
 
 function mergeBookScriptValues(book: BookMetadata, values: Record<string, unknown>): BookMetadata {
@@ -595,6 +621,17 @@ interface ChapterFields {
   isPay?: boolean
   updateTime?: string
   rawFields: JsonObject
+}
+
+const tocWordCountPattern = /(?:^|字数[：:、]?|[\u0009-\u000d\u0020]+)([0-9万千百.]{1,6}字)/u
+
+function chapterInfoProjection(updateTime: string | undefined, isVolume: boolean, countWords: boolean): { tag?: string; wordCount?: string } {
+  if (updateTime === undefined) return {}
+  if (isVolume || !countWords) return { tag: updateTime }
+  const match = tocWordCountPattern.exec(updateTime)
+  return match === null
+    ? { tag: updateTime }
+    : { tag: updateTime.replace(match[0], ''), wordCount: match[1]!.trim() }
 }
 
 async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }, book: BookMetadata): Promise<ChapterFields> {

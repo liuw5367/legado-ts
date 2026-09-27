@@ -128,6 +128,9 @@ export interface WorkflowJavaScriptRequest {
   bindings?: Readonly<Record<string, unknown>>
   /** Return mutated bindings together with the script result when a hook mutates Java-side DTOs. */
   captureMutations?: readonly string[]
+  /** Carry explicitly serializable guest globals between related script executions. */
+  captureGlobals?: boolean
+  globalState?: Readonly<Record<string, unknown>>
   signal?: AbortSignal
 }
 
@@ -212,6 +215,10 @@ export interface ChapterIdentity {
   isPay?: boolean
   /** 书源提供的章节更新时间或附加标签。 */
   updateTime?: string
+  /** Android BookChapter.tag 对 updateTime 的目录投影。 */
+  tag?: string
+  /** 当 tocCountWords 开启且 updateTime 可识别时提取的字数。 */
+  wordCount?: string
 }
 
 export interface Chapter extends ChapterIdentity {
@@ -233,6 +240,8 @@ export interface TocInput extends WorkflowOptions {
   /** 对齐 Android getChapterList(runPerJs)：默认不执行 preUpdateJs。 */
   runPerJs?: boolean
   isFromBookInfo?: boolean
+  /** Android AppConfig.tocCountWords；缺省按目录更新时间中的字数提取。 */
+  tocCountWords?: boolean
 }
 
 export interface ContentResource {

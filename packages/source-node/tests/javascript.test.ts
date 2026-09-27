@@ -46,6 +46,30 @@ test('QuickJS 脚本模式返回 JavaScript 完成值并可捕获修改后的 DT
   assert.equal(functionBody.value, 42)
 })
 
+test('QuickJS 可序列化地捕获脚本全局变量供后续执行恢复', async () => {
+  const host = new QuickJSJavaScriptHost()
+  const first = await host.execute({
+    code: 'globalThis.gInt = bindings.gInt; gInt = gInt + 1; seen = 1; gInt',
+    stage: 'chapter',
+    mode: 'script',
+    bindings: { gInt: 0 },
+    captureGlobals: true,
+  })
+  assert.equal(first.status, 'success')
+  const state = (first.value as { __legadoWorkflowGlobals: Record<string, unknown> }).__legadoWorkflowGlobals
+  assert.equal(state.gInt, 1)
+  assert.equal(state.seen, 1)
+
+  const second = await host.execute({
+    code: 'globalThis.gInt = bindings.gInt; globalThis.seen = bindings.seen; gInt = gInt + 1; seen = seen + 1; [gInt, seen]',
+    stage: 'chapter',
+    mode: 'script',
+    bindings: state,
+    captureGlobals: true,
+  })
+  assert.deepEqual((second.value as { __legadoWorkflowValue: unknown }).__legadoWorkflowValue, [2, 2])
+})
+
 test('QuickJS 变量 bridge 返回可观察 delta，并支持一次异步宿主调用', async () => {
   const calls: unknown[] = []
   const host = new QuickJSJavaScriptHost({

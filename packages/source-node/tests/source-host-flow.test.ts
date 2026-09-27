@@ -212,7 +212,7 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
       chapterList: 'a',
       chapterName: 'text',
       chapterUrl: 'href',
-      preUpdateJs: 'book.tocUrl = "/updated-toc"',
+      preUpdateJs: 'book.tocUrl = fromBookInfo ? "/from-info" : "/updated-toc"',
       formatJs: 'if (index === 1) { chapter.title = title + "✓"; }',
     },
   } as unknown as import('../../source-core/src/index.ts').NormalizedSource
@@ -233,6 +233,72 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
   assert.equal(result.status, 'success')
   assert.equal(requested[0], 'https://format.test/updated-toc')
   assert.equal(result.value?.items[0]?.title, '第一章✓')
+  await loadTableOfContents(ports, { source, book, runPerJs: true, isFromBookInfo: true })
+  assert.equal(requested[1], 'https://format.test/from-info')
+})
+
+test('preUpdateJs 中未实现的刷新助手明确返回 capability-missing', async () => {
+  for (const helper of ['refreshTocUrl', 'reGetBook']) {
+    const source = {
+      bookSourceUrl: `https://${helper}.test`,
+      bookSourceName: helper,
+      ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href', preUpdateJs: `${helper}()` },
+    } as unknown as NormalizedSource
+    let requests = 0
+    const ports: WorkflowPorts = {
+      network: { request: async (plan) => { requests += 1; return response(plan.url, '<a href="/c">章</a>') } },
+      rules: new SourceRuleHost(),
+    }
+    const book = {
+      sourceId: source.bookSourceUrl,
+      bookUrl: `${source.bookSourceUrl}/book`,
+      name: '书',
+      rawFields: {},
+      traceRef: helper,
+      emptyFields: [],
+      fieldErrors: {},
+    }
+    const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
+    assert.equal(result.status, 'capability-missing')
+    assert.equal(result.diagnostics[0]?.field, 'preUpdateJs')
+    assert.equal(requests, 0)
+  }
+})
+
+test('formatJs 跨章节保留 gInt 与其他全局状态，并在每次目录操作后重置', async () => {
+  const source = {
+    bookSourceUrl: 'https://format-state.test',
+    bookSourceName: 'Format State',
+    ruleToc: {
+      chapterList: 'a',
+      chapterName: 'text',
+      chapterUrl: 'href',
+      formatJs: 'gInt = gInt + 1; state = (typeof state === "undefined" ? { count: 0 } : state); state.count += 1; title = title + ":" + gInt + ":" + state.count;',
+    },
+  } as unknown as NormalizedSource
+  const body = '<a href="/chapter/1">第一章</a><a href="/chapter/2">第二章</a>'
+  const network: NetworkHost = { request: async (plan) => response(plan.url, body) }
+  const ruleHost = new SourceRuleHost()
+  const ports: WorkflowPorts = { network, rules: ruleHost }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://format-state.test/book',
+    tocUrl: 'https://format-state.test/toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'book:format-state',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+  const run = () => loadTableOfContents(ports, { source, book })
+  const expected = ['第一章:1:1', '第二章:2:2']
+  const first = await run()
+  assert.deepEqual(first.value?.items.map((chapter) => chapter.title), expected)
+  const second = await run()
+  assert.deepEqual(second.value?.items.map((chapter) => chapter.title), expected)
+  const [parallelOne, parallelTwo] = await Promise.all([run(), run()])
+  assert.deepEqual(parallelOne.value?.items.map((chapter) => chapter.title), expected)
+  assert.deepEqual(parallelTwo.value?.items.map((chapter) => chapter.title), expected)
 })
 
 test('JavaScript 书源空返回与 Android 一样作为空列表处理', async () => {

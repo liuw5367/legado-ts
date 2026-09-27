@@ -40,6 +40,8 @@ export interface JavaScriptExecutionInput {
   mode?: JavaScriptExecutionMode
   /** 脚本求值后从 globalThis 读取的 DTO 绑定。仅脚本模式支持。 */
   captureBindings?: readonly string[]
+  /** Captures serializable script globals so a workflow can carry them into a later execution. */
+  captureGlobals?: boolean
   /** 只读输入对象；执行器应深冻结其 guest 副本。 */
   bindings?: Readonly<Record<string, unknown>>
   /** 本次执行开始时的变量快照。 */

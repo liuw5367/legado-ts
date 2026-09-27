@@ -68,6 +68,52 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
 
+test('目录更新时间按 Android 投影 tag 与字数，卷占位使用页内原始索引', async () => {
+  const sourceWithInfo = {
+    ...source,
+    ruleToc: { chapterList: 'chapters', chapterName: 'name', chapterUrl: 'url', isVolume: 'volume', updateTime: 'info', nextTocUrl: 'next' },
+  } as unknown as NormalizedSource
+  const firstPage = [
+    { title: '第一章', url: '/c1', info: '字数：1234字 新更' },
+    { title: '', url: '', info: '' },
+    { title: '卷二', url: '', volume: true, info: '字数：99字 卷注' },
+  ]
+  const secondPage = [
+    { title: '卷三', url: '', volume: true, info: '字数：77字 卷注' },
+    { title: '第二章', url: '/c2', info: '更新 88字' },
+  ]
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(plan.url.endsWith('/toc2') ? 'toc-2' : 'toc-1'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'chapterList') return { status: 'success', value: content === 'toc-2' ? secondPage : firstPage }
+        const row = content as typeof firstPage[number] | typeof secondPage[number]
+        if (field === 'chapterName') return { status: 'success', value: row.title }
+        if (field === 'chapterUrl') return { status: 'success', value: row.url }
+        if (field === 'isVolume') return { status: 'success', value: row.volume ?? false }
+        if (field === 'updateTime') return { status: 'success', value: row.info }
+        if (field === 'nextTocUrl') return content === 'toc-1' ? { status: 'success', value: '/toc2' } : { status: 'empty', value: null }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const pageBook = { ...book, tocUrl: 'https://source.test/toc' }
+  const defaultResult = await loadTableOfContents(ports, { source: sourceWithInfo, book: pageBook })
+  assert.deepEqual(defaultResult.value?.items.map((chapter) => [chapter.title, chapter.chapterUrl, chapter.updateTime, chapter.tag, chapter.wordCount]), [
+    ['第一章', 'https://source.test/c1', '字数：1234字 新更', ' 新更', '1234字'],
+    ['卷二', '卷二2', '字数：99字 卷注', '字数：99字 卷注', undefined],
+    ['卷三', '卷三0', '字数：77字 卷注', '字数：77字 卷注', undefined],
+    ['第二章', 'https://source.test/c2', '更新 88字', '更新', '88字'],
+  ])
+  const disabled = await loadTableOfContents(ports, { source: sourceWithInfo, book: pageBook, tocCountWords: false })
+  assert.deepEqual(disabled.value?.items.map((chapter) => [chapter.tag, chapter.wordCount]), [
+    ['字数：1234字 新更', undefined],
+    ['字数：99字 卷注', undefined],
+    ['字数：77字 卷注', undefined],
+    ['更新 88字', undefined],
+  ])
+})
+
 test('目录按 URL 折叠同地址不同标题的章节（Android BookChapter.equals 只比较 url）', async () => {
   const calls: string[] = []
   const result = await loadTableOfContents({

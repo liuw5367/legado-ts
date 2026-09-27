@@ -182,7 +182,7 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
 
       const bindings = JSON.stringify(bindingsJson)
       const script = input.mode === 'script'
-        ? `const __legadoScriptValue = eval(${JSON.stringify(input.code)});\nconst __legadoCaptureNames = ${JSON.stringify(input.captureBindings ?? [])};\nconst __legadoCaptured = {};\nfor (const __legadoName of __legadoCaptureNames) __legadoCaptured[__legadoName] = globalThis[__legadoName];\n__legadoEncode(__legadoCaptureNames.length === 0 ? __legadoScriptValue : { __legadoWorkflowValue: __legadoScriptValue, __legadoWorkflowBindings: __legadoCaptured })`
+        ? `const __legadoScriptValue = eval(${JSON.stringify(input.code)});\nconst __legadoCaptureNames = ${JSON.stringify(input.captureBindings ?? [])};\nconst __legadoCaptured = {};\nfor (const __legadoName of __legadoCaptureNames) __legadoCaptured[__legadoName] = globalThis[__legadoName];\nconst __legadoCapturedGlobals = {};\nif (${input.captureGlobals === true}) { for (const __legadoName of Object.keys(globalThis)) { try { const __legadoValue = globalThis[__legadoName]; __legadoEncode(__legadoValue); __legadoCapturedGlobals[__legadoName] = __legadoValue; } catch {} } }\nconst __legadoWrapped = (__legadoCaptureNames.length === 0 && !${input.captureGlobals === true}) ? __legadoScriptValue : { __legadoWorkflowValue: __legadoScriptValue, ...(__legadoCaptureNames.length === 0 ? {} : { __legadoWorkflowBindings: __legadoCaptured }), ...(!${input.captureGlobals === true} ? {} : { __legadoWorkflowGlobals: __legadoCapturedGlobals }) };\n__legadoEncode(__legadoWrapped)`
         : `__legadoEncode((() => {\n${input.code}\n})())`
       const source = [
         guestCodecSource,

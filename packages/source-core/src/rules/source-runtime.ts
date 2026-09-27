@@ -478,6 +478,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       ...(request.baseUrl === undefined ? {} : { baseUrl: request.baseUrl }),
       ...(request.redirectUrl === undefined ? {} : { redirectUrl: request.redirectUrl }),
       ...(request.bindings === undefined ? {} : { bindings: request.bindings }),
+      ...(request.captureGlobals === true ? { captureGlobals: true } : {}),
+      ...(request.globalState === undefined ? {} : { globalState: request.globalState }),
     })
   }
 
@@ -834,10 +836,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[] }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>> }): Promise<WorkflowRuleOutput> {
     const bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
+      ...(context?.globalState === undefined ? {} : { __legadoWorkflowGlobalState: context.globalState }),
       result: content,
       src: context?.content ?? content,
       sourceKey: source.bookSourceUrl,
@@ -848,6 +851,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     const prelude = [
       'globalThis.result = bindings.result;',
+      'for (const [name, value] of Object.entries(bindings.__legadoWorkflowGlobalState ?? {})) { try { Object.defineProperty(globalThis, name, { value: __legadoDecode(JSON.parse(__legadoEncode(value))), writable: true, enumerable: true, configurable: true }); } catch {} }',
       'if (bindings.__strResponse != null) { const responseValue = bindings.__strResponse; globalThis.result = { ...responseValue, __body: responseValue.body, __code: responseValue.status ?? responseValue.code, __url: responseValue.url, __message: responseValue.message, __headers: responseValue.headers }; Object.defineProperties(globalThis.result, { body: { value: () => globalThis.result.__body }, code: { value: () => globalThis.result.__code }, url: { value: () => globalThis.result.__url }, message: { value: () => globalThis.result.__message }, headers: { value: () => globalThis.result.__headers }, isSuccessful: { value: () => globalThis.result.__code >= 200 && globalThis.result.__code < 300 } }); }',
       'globalThis.src = bindings.src;',
       'globalThis.key = bindings.key;',
@@ -860,6 +864,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'globalThis.gInt = bindings.gInt;',
       'globalThis.fromBookInfo = bindings.fromBookInfo ?? bindings.isFromBookInfo;',
       'globalThis.isFromBookInfo = globalThis.fromBookInfo;',
+      'const refreshTocUrl = () => { throw new Error("__LEGADO_CAPABILITY__runtime refreshTocUrl unavailable") };',
+      'const reGetBook = () => { throw new Error("__LEGADO_CAPABILITY__runtime reGetBook unavailable") };',
       'globalThis.baseUrl = bindings.baseUrl;',
       'globalThis.redirectUrl = bindings.redirectUrl;',
       'const sourceValue = bindings.sourceData ?? {};',
@@ -917,6 +923,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         stage,
         bindings,
         ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
+        ...(context?.captureGlobals === true ? { captureGlobals: true } : {}),
         ...(signal === undefined ? {} : { signal }),
       }, {
         getVariable: async (name, _bridgeSignal, scope) => {
