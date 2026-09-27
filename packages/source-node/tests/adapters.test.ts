@@ -31,6 +31,30 @@ test('JSONPath adapter 保留列表和空选择', () => {
   assert.deepEqual(parser.evaluate({ books: [] }, '$.books[*].name'), [])
 })
 
+test('JSONPath adapter 支持书源常用的安全条件筛选', () => {
+  const parser = new JsonPathParserAdapter()
+  const value = {
+    books: [
+      { name: '免费', vip: false, score: 4 },
+      { name: '会员', vip: true, score: 5 },
+      { name: '低分', vip: false, score: 2 },
+    ],
+  }
+
+  assert.deepEqual(
+    parser.evaluate(value, '$.books[?(@.vip == false && @.score >= 3)].name'),
+    ['免费'],
+  )
+})
+
+test('JSONPath adapter 不执行条件表达式中的原生构造器', () => {
+  const parser = new JsonPathParserAdapter()
+
+  assert.throws(
+    () => parser.evaluate({ books: [{ name: 'A' }] }, '$.books[?(@.constructor.constructor("return process")())]'),
+  )
+})
+
 test('XPath adapter 返回 XML 节点结果', () => {
   const parser = new XPathParserAdapter()
   const document = parser.parse('<root><item id="a">A</item><item id="b">B</item></root>')
