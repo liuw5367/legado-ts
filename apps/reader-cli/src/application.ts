@@ -56,7 +56,7 @@ export class ReaderApplication {
     this.maxConcurrentSources = options.maxConcurrentSources ?? 4
     this.concurrency = new KeyedConcurrencyHost({ maxConcurrent: this.maxConcurrentSources, maxConcurrentPerKey: 1 })
     for (const entry of usableSources(this.catalog)) {
-      const session = options.sessionFactory?.(entry.source) ?? new SourceSession(entry.source)
+      const session = options.sessionFactory?.(entry.source) ?? new SourceSession(entry.source, this.concurrency)
       session.attachCache(this.storage)
       this.sessions.set(entry.id, session)
     }

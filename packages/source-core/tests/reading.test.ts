@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadChapterContent, loadTableOfContents } from '../src/index.ts'
+import { KeyedConcurrencyHost, loadChapterContent, loadTableOfContents } from '../src/index.ts'
 import { formatChapterBody, unescapeHtml4 } from '../src/workflows/html-format.ts'
 import type { BookMetadata, ChapterIdentity, NormalizedSource, ReadingPorts } from '../src/index.ts'
 
@@ -188,6 +188,126 @@ test('目录分页按 URL 而非响应正文去重，并拆分换行地址列表
   const result = await loadTableOfContents(ports, { source, book: { ...book, tocUrl: 'https://source.test/toc1' } })
   assert.deepEqual(calls, ['https://source.test/toc1', 'https://source.test/toc2', 'https://source.test/toc3'])
   assert.equal(result.value?.items.length, 3)
+})
+
+test('目录多 URL 分支按输入顺序解析、受应用并发额度限制且不递归分支 next URL', async () => {
+  const calls: string[] = []
+  const nextRuleBodies: string[] = []
+  let activeBranches = 0
+  let maxActiveBranches = 0
+  const concurrency = new KeyedConcurrencyHost({ maxConcurrent: 2, maxConcurrentPerKey: 1 })
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      if (plan.url.endsWith('/toc1')) return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('root'), redirected: false }
+      activeBranches += 1
+      maxActiveBranches = Math.max(maxActiveBranches, activeBranches)
+      const delay = plan.url.endsWith('/tocA') ? 20 : plan.url.endsWith('/tocB') ? 1 : 5
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      activeBranches -= 1
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(plan.url.endsWith('/tocA') ? 'page-A' : plan.url.endsWith('/tocB') ? 'page-B' : 'page-D'), redirected: false }
+    } },
+    concurrency,
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') {
+        if (content === 'root') return { status: 'success', value: [] }
+        const title = content === 'page-A' ? 'A' : content === 'page-B' ? 'B' : 'D'
+        return { status: 'success', value: [{ title, url: `/chapter/${title}` }] }
+      }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl') {
+        nextRuleBodies.push(String(content))
+        if (content === 'root') return { status: 'success', value: ['/tocA', '/tocB', '/tocD'] }
+        if (content === 'page-A') return { status: 'success', value: '/tocC' }
+      }
+      return { status: 'empty', value: null }
+    } },
+  }, { source, book: { ...book, tocUrl: 'https://source.test/toc1' } })
+  assert.deepEqual(calls, ['https://source.test/toc1', 'https://source.test/tocA', 'https://source.test/tocB', 'https://source.test/tocD'])
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['A', 'B', 'D'])
+  assert.deepEqual(nextRuleBodies, ['root'])
+  assert.equal(maxActiveBranches, 2)
+  await concurrency.drain()
+})
+
+test('目录多 URL 分支把首页计入 maxPages 预算', async () => {
+  const calls: string[] = []
+  const pageLimitedSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(plan.url.endsWith('/toc') ? 'root' : 'branch'), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: content === 'branch' ? [{ title: 'Only branch', url: '/c1' }] : [] }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl') return { status: 'success', value: ['/branchA', '/branchB'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: pageLimitedSource, book: { ...book, tocUrl: 'https://source.test/toc' }, maxPages: 2 })
+  assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/branchA'])
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['Only branch'])
+  assert.ok(result.diagnostics.some((item) => item.message.includes('页数超过限制')))
+})
+
+test('目录并发分支均分剩余累计响应字节预算', async () => {
+  const budgets: number[] = []
+  const pageLimitedSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      budgets.push(plan.budget.maxTotalBytes)
+      const body = plan.url.endsWith('/toc') ? 'root' : plan.url.endsWith('/branchA') ? 'one' : 'two'
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: content === 'root' ? [] : [{ title: String(content), url: `/chapter/${content}` }] }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl') return { status: 'success', value: ['/branchA', '/branchB'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: pageLimitedSource, book: { ...book, tocUrl: 'https://source.test/toc' }, maxBytes: 10 })
+  assert.deepEqual(budgets, [10, 3, 3])
+  assert.equal(budgets.slice(1).reduce((sum, budget) => sum + budget, 0), 6)
+  assert.equal(result.value?.items.length, 2)
+})
+
+test('目录并发分页失败时取消兄弟任务并等待其清理完成', async () => {
+  const concurrency = new KeyedConcurrencyHost({ maxConcurrent: 2, maxConcurrentPerKey: 1 })
+  const calls: string[] = []
+  let siblingSettled = false
+  const result = await loadTableOfContents({
+    concurrency,
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      if (plan.url.endsWith('/toc')) return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('root'), redirected: false }
+      if (plan.url.endsWith('/branchA')) {
+        const signal = plan.budget.signal!
+        try {
+          await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true }))
+        } finally {
+          siblingSettled = true
+        }
+        throw new DOMException('aborted', 'AbortError')
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      throw new Error('controlled branch failure')
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: content === 'root' ? [{ title: 'First', url: '/first' }] : [] }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl') return { status: 'success', value: ['/branchA', '/branchB'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source, book: { ...book, tocUrl: 'https://source.test/toc' } })
+  assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/branchA', 'https://source.test/branchB'])
+  assert.equal(siblingSettled, true)
+  assert.ok(result.diagnostics.some((item) => item.code === 'request-failed'))
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['First'])
+  await concurrency.drain()
 })
 
 test('普通章节缺少 URL 时使用目录基准地址', async () => {
@@ -391,6 +511,101 @@ test('正文分页规则一次返回多个链接时按顺序读取全部页面',
   }, { source: multiPageSource, chapter })
   assert.deepEqual(calls, ['https://source.test/chapter/1', 'https://source.test/chapter/2', 'https://source.test/chapter/3'])
   assert.equal(result.value?.pages.length, 3)
+})
+
+test('正文多 URL 分支按输入顺序受限并发，分支不递归且不携带首页 webJs/sourceRegex', async () => {
+  const requests: Array<{ url: string; execution?: { webJs?: string; sourceRegex?: string } }> = []
+  const nextRuleBodies: string[] = []
+  let activeBranches = 0
+  let maxActiveBranches = 0
+  const concurrency = new KeyedConcurrencyHost({ maxConcurrent: 2, maxConcurrentPerKey: 1 })
+  const multiSource = { ...source, contentType: 'text', ruleContent: { content: 'content', nextContentUrl: 'next', webJs: 'page script', sourceRegex: 'resource pattern' } } as NormalizedSource
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+  const result = await loadChapterContent({
+    concurrency,
+    network: { request: async () => { throw new Error('complete request adapter should be used') } },
+    request: async ({ url, execution }) => {
+      requests.push({ url, ...(execution === undefined ? {} : { execution }) })
+      const isBranch = url !== chapter.chapterUrl
+      if (isBranch) {
+        activeBranches += 1
+        maxActiveBranches = Math.max(maxActiveBranches, activeBranches)
+        await new Promise((resolve) => setTimeout(resolve, url.endsWith('/pageA') ? 20 : 1))
+        activeBranches -= 1
+      }
+      const body = url === chapter.chapterUrl ? 'first' : url.endsWith('/pageA') ? 'A' : 'B'
+      return { url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'content') return { status: 'success', value: content }
+      if (field === 'nextContentUrl') {
+        nextRuleBodies.push(String(content))
+        return content === 'first' ? { status: 'success', value: ['/pageA', '/pageB'] } : { status: 'success', value: '/nested' }
+      }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: multiSource, chapter })
+  assert.deepEqual(requests.map((request) => request.url), [chapter.chapterUrl, 'https://source.test/pageA', 'https://source.test/pageB'])
+  assert.deepEqual(requests[0]?.execution, { webJs: 'page script', sourceRegex: 'resource pattern' })
+  assert.deepEqual(requests.slice(1).map((request) => request.execution), [undefined, undefined])
+  assert.deepEqual(nextRuleBodies, ['first'])
+  assert.deepEqual(result.value?.pages, ['first', 'A', 'B'])
+  assert.equal(maxActiveBranches, 2)
+  await concurrency.drain()
+})
+
+test('正文多 URL 分支把首页计入 maxPages 预算', async () => {
+  const calls: string[] = []
+  const multiSource = { ...source, contentType: 'text', ruleContent: { content: 'content', nextContentUrl: 'next' } } as NormalizedSource
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+  const result = await loadChapterContent({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(plan.url.endsWith('/c1') ? 'first' : 'A'), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'content') return { status: 'success', value: content }
+      if (field === 'nextContentUrl') return { status: 'success', value: ['/pageA', '/pageB'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: multiSource, chapter, maxPages: 2 })
+  assert.deepEqual(calls, [chapter.chapterUrl, 'https://source.test/pageA'])
+  assert.deepEqual(result.value?.pages, ['first', 'A'])
+  assert.ok(result.diagnostics.some((item) => item.message.includes('页数超过限制')))
+})
+
+test('取消目录并发分页后等待所有活动网络请求清理', async () => {
+  const concurrency = new KeyedConcurrencyHost({ maxConcurrent: 2, maxConcurrentPerKey: 1 })
+  const controller = new AbortController()
+  let branchesStarted = 0
+  let settledBranches = 0
+  let resolveStarted!: () => void
+  const started = new Promise<void>((resolve) => { resolveStarted = resolve })
+  const reading = loadTableOfContents({
+    concurrency,
+    network: { request: async (plan) => {
+      if (plan.url.endsWith('/toc')) return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('root'), redirected: false }
+      branchesStarted += 1
+      if (branchesStarted === 2) resolveStarted()
+      try {
+        await new Promise<void>((_resolve, reject) => plan.budget.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true }))
+      } finally {
+        settledBranches += 1
+      }
+      throw new DOMException('aborted', 'AbortError')
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: content === 'root' ? [] : [] }
+      if (field === 'nextTocUrl') return { status: 'success', value: ['/branchA', '/branchB'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source, book: { ...book, tocUrl: 'https://source.test/toc' }, signal: controller.signal })
+  await started
+  controller.abort()
+  const result = await reading
+  assert.equal(result.status, 'cancelled')
+  assert.equal(settledBranches, 2)
+  await concurrency.drain()
 })
 
 test('正文规则收到最终响应地址并按该地址归一化资源', async () => {

@@ -1,5 +1,5 @@
 import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks, sourceDefinitionFingerprint } from '@legado/source-core'
-import type { BookCandidate, BookMetadata, Chapter, ContentCache, NormalizedSource, SourceSession as CoreSourceSession } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ConcurrencyHost, ContentCache, NormalizedSource, SourceSession as CoreSourceSession } from '@legado/source-core'
 import { createNodeSourceSession } from '@legado/source-node'
 import type { ReaderSourceSession } from './application-model.ts'
 import { ReaderStorage } from './storage.ts'
@@ -8,8 +8,8 @@ export class SourceSession implements ReaderSourceSession {
   private readonly source: NormalizedSource
   private readonly core: CoreSourceSession
 
-  public constructor(source: NormalizedSource) {
-    this.core = createNodeSourceSession(source)
+  public constructor(source: NormalizedSource, concurrency?: ConcurrencyHost) {
+    this.core = createNodeSourceSession(source, concurrency === undefined ? {} : { concurrency })
     this.source = this.core.source
   }
 

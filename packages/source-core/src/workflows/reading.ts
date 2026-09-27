@@ -7,6 +7,8 @@ import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { BookMetadata, Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
+let paginationBatchSequence = 0
+
 export async function loadTableOfContents(ports: ReadingPorts, input: TocInput): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
@@ -59,6 +61,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   }
   const bookBaseUrl = expandedBookUrl.url
   const pendingPages = [{ url: bookBaseUrl, followNext: true }]
+  let pagesFetched = 0
   let totalBytes = 0
   let volume: string | undefined
   const listRuleBody = normalizeChapterListRule(listRule)
@@ -76,6 +79,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       break
     }
     visited.add(normalizedUrl)
+    pagesFetched += 1
     // 明确刷新时详情阶段暂存的目录响应也可能过期，必须重新请求第一页。
     const page = pageIndex === 0 && input.refresh !== true && book.tocHtml !== undefined && normalizedUrl === bookBaseUrl
       ? { body: book.tocHtml, url: normalizedUrl }
@@ -90,59 +94,13 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     visited.add(responseUrl)
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
-    const list = await evaluateField(ports, input.source, stage, 'chapterList', listRuleBody, body, pageIndex, trace, input.signal, { ...context, expect: 'nodes', bindings: { book: input.book } })
-    if (list.state === 'cancelled') return cancelled('目录规则执行已取消', diagnostics, trace)
-    if (list.state === 'capability-missing') {
-      diagnostics.push({ code: 'capability-missing', stage, field: 'chapterList', message: list.message ?? '目录规则能力不可用', retryable: false })
-      break
-    }
-    if (list.state === 'failed') {
-      diagnostics.push({ code: 'rule-failed', stage, field: 'chapterList', message: list.message ?? '目录规则失败', retryable: false })
-      break
-    }
-    const rawItems = list.state === 'value' && Array.isArray(list.value) ? list.value.filter((item) => item !== null && item !== undefined) : []
-    if (list.state === 'value' && !Array.isArray(list.value)) {
-      diagnostics.push({ code: 'item-skipped', stage, field: 'chapterList', message: 'chapterList 规则必须返回列表', retryable: false })
-    }
-    for (const [itemIndex, rawItem] of rawItems.entries()) {
-      const fields = await chapterFields(ports, input.source, rawItem, pageIndex * 100000 + itemIndex, input.signal, diagnostics, trace, volume, context, input.book)
-      if (input.signal !== undefined && input.signal.aborted) return cancelled('目录工作流已取消', diagnostics, trace)
-      if (fields.isVolume === true && fields.title !== undefined && fields.title.length > 0) volume = fields.title
-      else if (fields.volume !== undefined && fields.volume.length > 0) volume = fields.volume
-      if (fields.title === undefined || fields.title.length === 0) {
-        diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '章节缺少标题', retryable: false })
-        continue
-      }
-      const chapterIndex = chapters.length
-      const isVolume = fields.isVolume === true
-      const chapterUrl = isVolume && (fields.url === undefined || fields.url.length === 0 || fields.url === fields.title)
-        ? `${fields.title}${itemIndex}`
-        : fields.url === undefined || fields.url.length === 0
-          ? normalizedUrl
-          : resolveUrl(fields.url, responseUrl)
-      if (chapterUrl === undefined) {
-        diagnostics.push({ code: 'item-skipped', stage, itemIndex, message: '章节 URL 无效', retryable: false })
-        continue
-      }
-      const chapter: Chapter = {
-        sourceId: input.source.bookSourceUrl,
-        bookUrl: book.bookUrl,
-        chapterUrl,
-        index: chapterIndex,
-        title: fields.title,
-        ...(fields.variable === undefined ? {} : { variable: fields.variable }),
-        rawFields: fields.rawFields,
-        traceRef: `toc:${chapterIndex}`,
-        isVolume,
-        isVip: fields.isVip ?? false,
-        isPay: fields.isPay ?? false,
-        ...(fields.updateTime === undefined ? {} : { updateTime: fields.updateTime }),
-        ...chapterInfoProjection(fields.updateTime, isVolume, input.tocCountWords !== false),
-      }
-      if (volume !== undefined) chapter.volume = volume
-      chapters.push(chapter)
-      trace.push({ stage, event: 'candidate', target: `chapter:${chapter.index}`, itemIndex })
-    }
+    const parsed = await parseTocPage(ports, input, book, body, pageIndex, normalizedUrl, responseUrl, volume, listRuleBody, input.signal)
+    diagnostics.push(...parsed.diagnostics)
+    appendTocChapters(chapters, parsed.chapters, parsed.trace)
+    trace.push(...parsed.trace)
+    volume = parsed.volume
+    if (parsed.cancelled || isSignalAborted(input.signal)) return cancelled('目录规则执行已取消', diagnostics, trace)
+    if (parsed.fatal) break
     if (!pendingPage.followNext) continue
     const nextRule = ruleString(input.source, 'ruleToc', 'nextTocUrl')
     if (nextRule === undefined) continue
@@ -163,7 +121,46 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       resolvedNextUrls.add(nextUrl)
     }
     const followNext = resolvedNextUrls.size === 1
-    for (const nextUrl of resolvedNextUrls) if (!visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext })
+    const unseenNextUrls = [...resolvedNextUrls].filter((nextUrl) => !visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl))
+    if (followNext) {
+      for (const nextUrl of unseenNextUrls) pendingPages.push({ url: nextUrl, followNext: true })
+      continue
+    }
+    if (resolvedNextUrls.size <= 1) continue
+    const availablePages = Math.max(0, maxPages - pagesFetched)
+    const branchUrls = unseenNextUrls.slice(0, availablePages)
+    if (branchUrls.length < unseenNextUrls.length) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
+    if (branchUrls.length > 0) {
+      for (const branchUrl of branchUrls) visited.add(branchUrl)
+      const batch = await fetchPageBatch(ports, input.source, branchUrls, 'toc', stage, pageOptions(input, maxBytes, totalBytes))
+      if (isSignalAborted(input.signal)) {
+        appendBatchDiagnostics(batch, diagnostics, trace, true)
+        return cancelled('目录工作流已取消', diagnostics, trace)
+      }
+      appendBatchDiagnostics(batch, diagnostics, trace)
+      pagesFetched += branchUrls.length
+      for (const [branchIndex, outcome] of batch.outcomes.entries()) {
+        if (outcome.page === undefined) {
+          diagnostics.push({ code: 'item-skipped', stage, message: '目录并发分页已中止', retryable: false })
+          break
+        }
+        const branchBytes = new TextEncoder().encode(outcome.page.body).byteLength
+        totalBytes += branchBytes
+        if (totalBytes > maxBytes) {
+          diagnostics.push({ code: 'item-skipped', stage, message: '目录累计响应超过字节预算', retryable: false })
+          break
+        }
+        const branchUrl = resolveUrl(outcome.page.url, branchUrls[branchIndex]!) ?? branchUrls[branchIndex]!
+        visited.add(branchUrl)
+        const parsedBranch = await parseTocPage(ports, input, book, outcome.page.body, pageIndex + branchIndex + 1, branchUrls[branchIndex]!, branchUrl, undefined, listRuleBody, input.signal)
+        diagnostics.push(...parsedBranch.diagnostics)
+        appendTocChapters(chapters, parsedBranch.chapters, parsedBranch.trace)
+        trace.push(...parsedBranch.trace)
+        if (parsedBranch.cancelled || isSignalAborted(input.signal)) return cancelled('目录规则执行已取消', diagnostics, trace)
+        if (parsedBranch.fatal) break
+      }
+    }
+    break
   }
   if (pendingPages.length > 0 && visited.size >= maxPages) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
   if (!reverseByRule) chapters.reverse()
@@ -390,12 +387,76 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       pendingPages.length = 0
       break
     }
-    const followNext = uniqueNextUrls.length === 1
-    for (const nextUrl of uniqueNextUrls) {
+    if (uniqueNextUrls.length === 1) {
+      const nextUrl = uniqueNextUrls[0]!
       if (visited.has(nextUrl)) {
         diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页形成循环', retryable: false })
         stoppedByLimit = true
-      } else if (!pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext })
+      } else if (!pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: true })
+      continue
+    }
+    if (uniqueNextUrls.length > 1) {
+      const branchUrls = uniqueNextUrls.filter((nextUrl) => {
+        if (visited.has(nextUrl)) {
+          diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页形成循环', retryable: false })
+          stoppedByLimit = true
+          return false
+        }
+        return true
+      })
+      const availablePages = Math.max(0, maxPages - pageIndex - 1)
+      const scheduledUrls = branchUrls.slice(0, availablePages)
+      if (scheduledUrls.length < branchUrls.length) {
+        diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文页数超过限制', retryable: false })
+        stoppedByLimit = true
+      }
+      for (const branchUrl of scheduledUrls) visited.add(branchUrl)
+      if (scheduledUrls.length > 0) {
+        // Android 多 URL 分支调用 getStrResponseAwait() 时不传 webJs/sourceRegex。
+        const batch = await fetchPageBatch(ports, input.source, scheduledUrls, 'content', stage, pageOptions(input, maxBytes, totalBytes))
+        if (isSignalAborted(input.signal)) {
+          appendBatchDiagnostics(batch, diagnostics, trace, true)
+          return cancelled('正文工作流已取消', diagnostics, trace)
+        }
+        appendBatchDiagnostics(batch, diagnostics, trace)
+        for (const [branchIndex, outcome] of batch.outcomes.entries()) {
+          if (outcome.page === undefined) {
+            stoppedByLimit = true
+            break
+          }
+          const branchBytes = new TextEncoder().encode(outcome.page.body).byteLength
+          totalBytes += branchBytes
+          if (totalBytes > maxBytes) {
+            diagnostics.push({ code: 'item-skipped', stage, message: '正文累计响应超过字节预算', retryable: false })
+            stoppedByLimit = true
+            break
+          }
+          const branchUrl = scheduledUrls[branchIndex]!
+          const branchResponseUrl = resolveUrl(outcome.page.url, branchUrl) ?? branchUrl
+          const branchResult = await evaluateField(ports, input.source, stage, 'content', contentRule, outcome.page.body, pageIndex + branchIndex + 1, trace, input.signal, { baseUrl: branchUrl, redirectUrl: branchResponseUrl, bindings: ruleBindings })
+          if (branchResult.state === 'cancelled') return cancelled('正文规则执行已取消', diagnostics, trace)
+          if (branchResult.state === 'capability-missing') {
+            diagnostics.push({ code: 'capability-missing', stage, field: 'content', message: branchResult.message ?? '正文规则能力不可用', retryable: false })
+            stoppedByLimit = true
+            break
+          }
+          if (branchResult.state === 'failed') {
+            diagnostics.push({ code: 'rule-failed', stage, field: 'content', message: branchResult.message ?? '正文规则失败', retryable: false })
+            stoppedByLimit = true
+            break
+          }
+          const branchContent = branchResult.state === 'value' ? textValue(branchResult.value) : ''
+          if (branchContent.length > 0) {
+            pages.push(branchContent)
+            const formattedBranch = skipTextFormatting
+              ? { content: branchContent, imageUrls: [] }
+              : formatChapterBody(branchContent, branchResponseUrl, input.adaptSpecialStyle === undefined ? {} : { adaptSpecialStyle: input.adaptSpecialStyle })
+            cleanedPages.push(formattedBranch.content)
+            resources.push(...formattedBranch.imageUrls.map((url) => ({ kind: 'image' as const, url })))
+          }
+        }
+      }
+      break
     }
   }
   // 请求被取消时不能把半截正文当成成功或空结果交付，状态必须与目录流程一致。
@@ -580,6 +641,173 @@ function mergeBookScriptValues(book: BookMetadata, values: Record<string, unknow
   if (merged.coverUrl !== undefined) merged.coverUrl = resolveUrl(merged.coverUrl, book.bookUrl) ?? merged.coverUrl
   if (merged.tocUrl !== undefined) merged.tocUrl = resolveUrl(merged.tocUrl, book.bookUrl) ?? merged.tocUrl
   return merged
+}
+
+interface TocPageParseResult {
+  chapters: Chapter[]
+  diagnostics: WorkflowDiagnostic[]
+  trace: WorkflowTraceEntry[]
+  volume?: string
+  fatal: boolean
+  cancelled: boolean
+}
+
+async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMetadata, body: string, pageIndex: number, normalizedUrl: string, responseUrl: string, inheritedVolume: string | undefined, listRuleBody: string, signal?: AbortSignal): Promise<TocPageParseResult> {
+  const diagnostics: WorkflowDiagnostic[] = []
+  const trace: WorkflowTraceEntry[] = []
+  let volume = inheritedVolume
+  const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
+  const list = await evaluateField(ports, input.source, 'detail', 'chapterList', listRuleBody, body, pageIndex, trace, signal, { ...context, expect: 'nodes', bindings: { book: input.book } })
+  if (list.state === 'cancelled') return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
+  if (list.state === 'capability-missing' || list.state === 'failed') {
+    diagnostics.push({ code: list.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: 'chapterList', message: list.message ?? (list.state === 'capability-missing' ? '目录规则能力不可用' : '目录规则失败'), retryable: false })
+    return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: true, cancelled: false }
+  }
+  const rawItems = list.state === 'value' && Array.isArray(list.value) ? list.value.filter((item) => item !== null && item !== undefined) : []
+  if (list.state === 'value' && !Array.isArray(list.value)) diagnostics.push({ code: 'item-skipped', stage: 'detail', field: 'chapterList', message: 'chapterList 规则必须返回列表', retryable: false })
+
+  const chapters: Chapter[] = []
+  for (const [itemIndex, rawItem] of rawItems.entries()) {
+    const diagnosticIndex = pageIndex * 100000 + itemIndex
+    const fields = await chapterFields(ports, input.source, rawItem, diagnosticIndex, signal, diagnostics, trace, volume, context, input.book)
+    if (signal?.aborted === true) return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
+    if (fields.isVolume === true && fields.title !== undefined && fields.title.length > 0) volume = fields.title
+    else if (fields.volume !== undefined && fields.volume.length > 0) volume = fields.volume
+    if (fields.title === undefined || fields.title.length === 0) {
+      diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex: diagnosticIndex, message: '章节缺少标题', retryable: false })
+      continue
+    }
+    const chapterIndex = chapters.length
+    const isVolume = fields.isVolume === true
+    const chapterUrl = isVolume && (fields.url === undefined || fields.url.length === 0 || fields.url === fields.title)
+      ? `${fields.title}${itemIndex}`
+      : fields.url === undefined || fields.url.length === 0
+        ? normalizedUrl
+        : resolveUrl(fields.url, responseUrl)
+    if (chapterUrl === undefined) {
+      diagnostics.push({ code: 'item-skipped', stage: 'detail', itemIndex: diagnosticIndex, message: '章节 URL 无效', retryable: false })
+      continue
+    }
+    const chapter: Chapter = {
+      sourceId: input.source.bookSourceUrl,
+      bookUrl: book.bookUrl,
+      chapterUrl,
+      index: chapterIndex,
+      title: fields.title,
+      ...(fields.variable === undefined ? {} : { variable: fields.variable }),
+      rawFields: fields.rawFields,
+      traceRef: `toc:${chapterIndex}`,
+      isVolume,
+      isVip: fields.isVip ?? false,
+      isPay: fields.isPay ?? false,
+      ...(fields.updateTime === undefined ? {} : { updateTime: fields.updateTime }),
+      ...chapterInfoProjection(fields.updateTime, isVolume, input.tocCountWords !== false),
+    }
+    if (volume !== undefined) chapter.volume = volume
+    chapters.push(chapter)
+    trace.push({ stage: 'detail', event: 'candidate', target: `chapter:${chapterIndex}`, itemIndex: diagnosticIndex })
+  }
+  return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: false }
+}
+
+function appendTocChapters(target: Chapter[], pageChapters: Chapter[], pageTrace: WorkflowTraceEntry[]): void {
+  const offset = target.length
+  for (const [index, chapter] of pageChapters.entries()) {
+    chapter.index = offset + index
+    chapter.traceRef = `toc:${chapter.index}`
+    target.push(chapter)
+  }
+  for (const entry of pageTrace) {
+    if (entry.event !== 'candidate') continue
+    const localIndex = /^chapter:(\d+)$/u.exec(entry.target)?.[1]
+    if (localIndex !== undefined) entry.target = `chapter:${offset + Number(localIndex)}`
+  }
+}
+
+interface PageBatchOutcome {
+  page?: { body: string; url: string }
+  diagnostics: WorkflowDiagnostic[]
+  trace: WorkflowTraceEntry[]
+  error?: unknown
+}
+
+interface PageBatchResult {
+  outcomes: PageBatchOutcome[]
+  failed: boolean
+}
+
+async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, urls: readonly string[], scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, execution?: { webJs?: string; sourceRegex?: string }, refresh = false): Promise<PageBatchResult> {
+  const batchController = new AbortController()
+  const onAbort = (): void => batchController.abort()
+  options.signal?.addEventListener('abort', onAbort, { once: true })
+  if (options.signal?.aborted === true) batchController.abort()
+  const batchId = ++paginationBatchSequence
+  let failed = false
+  const keys = urls.map((_url, index) => `source-pages:${batchId}:${index}`)
+  const tasks = urls.map((url, index) => {
+    const run = async (signal: AbortSignal): Promise<PageBatchOutcome> => {
+      const diagnostics: WorkflowDiagnostic[] = []
+      const trace: WorkflowTraceEntry[] = []
+      try {
+        const branchOptions = batchPageOptions(options, index, urls.length)
+        const page = await cachedPage(ports, source, url, scope, stage, { ...branchOptions, signal }, diagnostics, trace, execution, refresh)
+        const fatal = page === undefined && !signal.aborted && diagnostics.some((item) => item.code !== 'cancelled')
+        if (fatal) {
+          failed = true
+          batchController.abort()
+        }
+        return { ...(page === undefined ? {} : { page }), diagnostics, trace }
+      } catch (error) {
+        if (!signal.aborted) {
+          failed = true
+          batchController.abort()
+        }
+        return { diagnostics, trace, error }
+      }
+    }
+    return ports.concurrency === undefined
+      ? run(batchController.signal)
+      : ports.concurrency.run(keys[index]!, run, batchController.signal)
+  })
+  const settled = await Promise.allSettled(tasks)
+  if (ports.concurrency !== undefined) await Promise.all(keys.map((key) => ports.concurrency!.drain(key)))
+  options.signal?.removeEventListener('abort', onAbort)
+  const outcomes = settled.map((result): PageBatchOutcome => result.status === 'fulfilled'
+    ? result.value
+    : { diagnostics: [], trace: [], error: result.reason })
+  if (!options.signal?.aborted && outcomes.some((outcome) => outcome.page === undefined && outcome.error !== undefined && !isAbortError(outcome.error))) failed = true
+  return { outcomes, failed }
+}
+
+function batchPageOptions(options: WorkflowOptions, index: number, count: number): WorkflowOptions {
+  const totalBytes = options.budget?.maxTotalBytes
+  if (totalBytes === undefined || !Number.isFinite(totalBytes) || totalBytes < 0 || count < 1) return options
+  // 每个并行请求都独立执行 RequestBudget；均分剩余额度才能保证各分支预算之和不超过工作流总额。
+  const wholeBytes = Math.floor(totalBytes)
+  const sharedBytes = Math.floor(wholeBytes / count)
+  const remainder = wholeBytes % count
+  return {
+    ...options,
+    budget: {
+      ...options.budget,
+      maxTotalBytes: sharedBytes + (index < remainder ? 1 : 0),
+    },
+  }
+}
+
+function appendBatchDiagnostics(batch: PageBatchResult, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], includeCancelled = false): void {
+  for (const outcome of batch.outcomes) {
+    trace.push(...outcome.trace)
+    diagnostics.push(...(batch.failed && !includeCancelled ? outcome.diagnostics.filter((item) => item.code !== 'cancelled') : outcome.diagnostics))
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error && (error as { name: unknown }).name === 'AbortError'
+}
+
+function isSignalAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true
 }
 
 async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }, refresh = false): Promise<{ body: string; url: string } | undefined> {
