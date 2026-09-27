@@ -57,7 +57,7 @@ test('发现工作流保留书源内身份、页码起点、去重和 partial �
   assert.equal(items[1]?.name, 'No URL')
   assert.equal(items[1]?.bookUrl, 'https://source.test/explore?page=1')
   assert.equal(result.value?.cursor.index, 1)
-  assert.equal(result.value?.nextCursor?.token, 'next-token')
+  assert.equal(result.value?.nextCursor?.token, 'https://source.test/next-token')
   assert.equal(result.status, 'success')
   assert.equal(calls[0], 'https://source.test/explore?page=1')
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
@@ -114,11 +114,123 @@ test('详情工作流只覆盖有值字段，记录明确空值和字段失败',
   const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'A', rawFields: { name: 'A', bookUrl: '/book/a' }, traceRef: 'discover:0' }
   const result = await loadBookDetails(ports(calls), { source, candidates: [candidate] })
   assert.equal(result.status, 'partial')
-  assert.equal(result.value?.items[0]?.name, 'A detail')
+  // Android only permits replacing an existing name when both canReName inputs allow it.
+  assert.equal(result.value?.items[0]?.name, 'A')
   assert.deepEqual(result.value?.items[0]?.emptyFields, ['author'])
   assert.equal(result.value?.items[0]?.fieldErrors.intro, 'detail parser failed')
   assert.equal(result.value?.items[0]?.tocUrl, 'https://source.test/toc/a')
   assert.equal(calls[0], 'https://source.test/book/a')
+})
+
+test('搜索优先使用 Android 标准规则名，并将同响应详情交给详情流程复用', async () => {
+  const calls: string[] = []
+  const currentSource = {
+    ...source,
+    searchUrl: '/search',
+    ruleSearch: {
+      bookList: 'list', name: 'standard-name', bookName: 'legacy-name',
+      author: 'standard-author', bookAuthor: 'legacy-author', bookUrl: 'same-page',
+      intro: 'search-intro', bookIntro: 'legacy-intro',
+    },
+    ruleBookInfo: { name: 'detail-name', author: 'detail-author', canReName: 'true' },
+  } as unknown as NormalizedSource
+  const base = ports(calls)
+  base.rules = {
+    evaluate: async (request) => {
+      if (request.rule === 'list') return { status: 'success', value: [{}] }
+      if (request.rule === 'standard-name') return { status: 'success', value: '标准书名' }
+      if (request.rule === 'legacy-name') return { status: 'success', value: '旧书名' }
+      if (request.rule === 'standard-author') return { status: 'success', value: '标准作者' }
+      if (request.rule === 'legacy-author') return { status: 'success', value: '旧作者' }
+      if (request.rule === 'same-page') return { status: 'success', value: '/search' }
+      if (request.rule === 'search-intro') return { status: 'success', value: '<p>简介&nbsp;&nbsp;第一段</p><!--x--><p>第二段</p>' }
+      if (request.rule === 'detail-name') return { status: 'success', value: '详情书名' }
+      if (request.rule === 'detail-author') return { status: 'success', value: '详情作者' }
+      return { status: 'success', value: [] }
+    },
+  }
+  const searched = await searchBooks(base, { source: currentSource, keyword: '书' })
+  const candidate = searched.value!.items[0]!
+  assert.equal(candidate.name, '标准书名')
+  assert.equal(candidate.author, '标准作者')
+  assert.equal(candidate.intro, '简介 第一段\n第二段')
+  assert.equal(candidate.infoPage?.body, 'https://source.test/search')
+  assert.equal(candidate.infoPage?.requestUrl, 'https://source.test/search')
+  const detailed = await loadBookDetails(base, { source: currentSource, candidates: [candidate] })
+  assert.equal(detailed.value?.items[0]?.name, '详情书名')
+  assert.equal(detailed.value?.items[0]?.author, '详情作者')
+  assert.equal('infoPage' in detailed.value!.items[0]!, false)
+  assert.equal(calls.length, 1)
+})
+
+test('声明式详情遵守 canReName 参数、规则非空与已有身份值', async () => {
+  const candidate = (name: string, author: string): BookCandidate => ({
+    sourceId: source.bookSourceUrl, bookUrl: '/book/a', name, author,
+    rawFields: {}, traceRef: 'test',
+  })
+  const cases = [
+    { canReName: true, ruleValue: 'yes', oldName: '旧书名', expected: '详情书名' },
+    { canReName: false, ruleValue: 'yes', oldName: '旧书名', expected: '旧书名' },
+    { canReName: true, ruleValue: '', oldName: '旧书名', expected: '旧书名' },
+    { canReName: false, ruleValue: '', oldName: '旧书名', expected: '旧书名' },
+    { canReName: true, ruleValue: undefined, oldName: '', expected: '详情书名' },
+  ] as const
+  for (const item of cases) {
+    const calls: string[] = []
+    const currentSource = {
+      ...source,
+      ruleBookInfo: { name: 'detail-name', author: 'detail-author', canReName: item.ruleValue },
+    } as unknown as NormalizedSource
+    const base = ports(calls)
+    const fallback = base.rules.evaluate.bind(base.rules)
+    base.rules = {
+      evaluate: async (request) => {
+        if (request.rule === 'detail-name') return { status: 'success', value: '详情书名' }
+        if (request.rule === 'detail-author') return { status: 'success', value: '详情作者' }
+        return fallback(request)
+      },
+    }
+    const result = await loadBookDetails(base, {
+      source: currentSource,
+      candidates: [candidate(item.oldName, item.oldName === '' ? '' : '旧作者')],
+      canReName: item.canReName,
+    })
+    assert.equal(result.value?.items[0]?.name, item.expected)
+    assert.equal(result.value?.items[0]?.author, item.expected === '详情书名' ? '详情作者' : '旧作者')
+  }
+})
+
+test('详情 init 失败时不把未初始化页面解析成成功详情', async () => {
+  const calls: string[] = []
+  const initSource = {
+    ...source,
+    ruleBookInfo: { init: 'broken-init', name: 'detail-name' },
+  } as unknown as NormalizedSource
+  const base = ports(calls)
+  base.rules = {
+    evaluate: async ({ rule }) => rule === 'broken-init'
+      ? { status: 'failed', value: null, message: 'selector failure' }
+      : { status: 'success', value: 'should not be used' },
+  }
+  const result = await loadBookDetails(base, {
+    source: initSource,
+    candidates: [{ sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'Old', rawFields: {}, traceRef: 'test' }],
+  })
+  assert.equal(result.value?.items.length, 0)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'init'))
+})
+
+test('nextPage 游标作为 URL 被下一次搜索实际消费', async () => {
+  const calls: string[] = []
+  const nextSource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookUrl: 'url', nextPage: 'next' },
+  } as unknown as NormalizedSource
+  const first = await searchBooks(ports(calls), { source: nextSource, keyword: '书' })
+  assert.equal(first.value?.nextCursor?.token, 'https://source.test/next-token')
+  const second = await searchBooks(ports(calls), { source: nextSource, keyword: '书', cursor: first.value!.nextCursor })
+  assert.equal(second.value?.cursor.index, 2)
+  assert.equal(calls[1], 'https://source.test/next-token')
 })
 
 test('空目录规则回退详情响应地址并保留同页内容', async () => {
@@ -258,7 +370,7 @@ test('没有页码占位符的列表地址不产生下一页游标', async () =>
   } as unknown as NormalizedSource
   const ruleDriven = await discoverBooks(ports([]), { source: withNextPage })
   assert.equal(ruleDriven.value?.nextCursor?.index, 2)
-  assert.equal(ruleDriven.value?.nextCursor?.token, 'next-token')
+  assert.equal(ruleDriven.value?.nextCursor?.token, 'https://source.test/next-token')
 
   // 地址模板引用页码时按页递增。
   const templated = { ...fixedSource, exploreUrl: '/explore?page={{page}}' } as unknown as NormalizedSource
@@ -554,7 +666,7 @@ test('书名作者清洗用 Java 的 ASCII 空白，字数按 HALF_EVEN 舍入',
 test('详情 init 规则先执行并把结果作为后续字段的内容基准', async () => {
   const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'A', rawFields: {}, traceRef: 'discover:0' }
   const seen: Array<{ rule: string; content: unknown }> = []
-  const initSource = { ...source, ruleBookInfo: { init: 'detail-init', name: 'detail-name', author: 'detail-author' } } as unknown as NormalizedSource
+  const initSource = { ...source, ruleBookInfo: { init: 'detail-init', name: 'detail-name', author: 'detail-author', canReName: 'true' } } as unknown as NormalizedSource
   const workflowPorts = ports([])
   workflowPorts.rules = {
     evaluate: async (request) => {

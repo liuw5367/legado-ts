@@ -42,6 +42,8 @@ export interface BookCandidate extends BookIdentity {
   tocUrl?: string
   /** JavaScript 源通过 SearchBook.variable 传递的变量 JSON。 */
   variable?: string
+  /** SearchBook.infoHtml 的运行期对应物；详情完成后必须丢弃，不属于持久化字段。 */
+  infoPage?: { body: string; requestUrl: string; responseUrl: string }
   rawFields: JsonObject
   traceRef: string
 }
@@ -51,7 +53,7 @@ export interface BookReadConfig {
   reverseToc?: boolean
 }
 
-export interface BookMetadata extends BookCandidate {
+export interface BookMetadata extends Omit<BookCandidate, 'infoPage'> {
   tocUrl?: string
   /** 详情页同时是目录页时保留的临时响应；不应持久化。 */
   tocHtml?: string

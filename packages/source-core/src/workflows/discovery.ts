@@ -3,6 +3,7 @@ import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { SourcePatternError } from '../rules/pattern-guard.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { detailFields, evaluateField, executeSourceFunction, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import { formatDetailIntro, formatIntro } from './html-format.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
@@ -149,20 +150,38 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     return { status: 'failed', value: null, diagnostics, trace }
   }
   const keywordReplacements = keyword === undefined ? {} : { key: keyword, keyword }
-  const expanded = await expandUrl(
-    ports,
-    source,
-    stage,
-    url,
-    { page: String(pageCursor.index), pageIndex: String(pageCursor.index), 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
-    { page: pageCursor.index, pageIndex: pageCursor.index, 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
-    options.signal,
-  )
-  if (expanded.url === undefined) {
-    diagnostics.push(expansionDiagnostic(expanded.error, stage, 'url', '书源 URL 展开失败'))
-    return { status: expansionStatus(expanded.error), value: null, diagnostics, trace }
+  let requestUrl: string
+  if (pageCursor.token !== undefined) {
+    try {
+      const token = pageCursor.token.trim()
+      if (token.length === 0) throw new Error('nextPage token 不能为空')
+      requestUrl = resolveSourceRequestReference(token, source.bookSourceUrl)
+    } catch {
+      diagnostics.push({ code: 'invalid-config', stage, field: 'nextPage', message: '下一页游标不是有效 URL', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
+  } else {
+    const expanded = await expandUrl(
+      ports,
+      source,
+      stage,
+      url,
+      { page: String(pageCursor.index), pageIndex: String(pageCursor.index), 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
+      { page: pageCursor.index, pageIndex: pageCursor.index, 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
+      options.signal,
+    )
+    if (expanded.url === undefined) {
+      diagnostics.push(expansionDiagnostic(expanded.error, stage, 'url', '书源 URL 展开失败'))
+      return { status: expansionStatus(expanded.error), value: null, diagnostics, trace }
+    }
+    try {
+      requestUrl = resolveSourceRequestReference(expanded.url, source.bookSourceUrl)
+    } catch {
+      diagnostics.push({ code: 'invalid-config', stage, field: 'url', message: '书源列表 URL 无效', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
   }
-  const page = await requestPageResponse(ports, source, expanded.url, stage, options, diagnostics, trace)
+  const page = await requestPageResponse(ports, source, requestUrl, stage, options, diagnostics, trace)
   if (page === undefined) return { status: statusFromDiagnostics(diagnostics, 0), value: null, diagnostics, trace }
   const content = page.content
   const maxItems = options.maxItems
@@ -225,7 +244,8 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex })
     const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
     if (author.length > 0) candidate.author = author
-    if (fields.intro !== undefined) candidate.intro = fields.intro
+    if (fields.intro !== undefined) candidate.intro = formatIntro(fields.intro)
+    if (bookUrl === requestUrl || bookUrl === page.url) candidate.infoPage = { body: content, requestUrl, responseUrl: page.url }
     if (fields.coverUrl !== undefined) candidate.coverUrl = resolveCandidateUrl(fields.coverUrl, page.url) ?? fields.coverUrl
     if (fields.kind !== undefined) candidate.kind = fields.kind
     if (fields.wordCount !== undefined) candidate.wordCount = formatWordCount(fields.wordCount)
@@ -235,7 +255,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   }
   if (candidates.length === 0 && (detailPage || (rawItems.length === 0 && pattern === undefined))) {
     // 列表为空（或命中 bookUrlPattern）时，书源把整个响应当作详情页。
-    const fallback = await detailPageCandidate(ports, source, page, options, diagnostics, trace)
+    const fallback = await detailPageCandidate(ports, source, stage, page, requestUrl, options, diagnostics, trace)
     if (fallback.cancelled) {
       // 回退分支内部的字段诊断都属于 detail，这里保持一致。
       diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情页回退已取消', retryable: false })
@@ -250,14 +270,23 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   if (candidates.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '列表没有可用候选', retryable: false })
   // Android 由调用方递增页码继续翻页；只有地址模板引用页码时下一页才是不同的请求。
   let nextCursor: { index: number; token?: string } | undefined
-  if (candidates.length > 0 && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
+  if (candidates.length > 0 && pageCursor.token === undefined && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
   if (nextRule !== undefined) {
     const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal)
     if (next.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'nextPage', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
-    if (next.state === 'value') nextCursor = { index: pageCursor.index + 1, token: textValue(next.value) }
+    if (next.state === 'value') {
+      const tokenText = textValue(next.value).trim()
+      if (tokenText.length > 0) {
+        try {
+          nextCursor = { index: pageCursor.index + 1, token: resolveSourceRequestReference(tokenText, page.url) }
+        } catch {
+          diagnostics.push({ code: 'item-skipped', stage, field: 'nextPage', message: 'nextPage 返回了无效的下一页 URL', retryable: false })
+        }
+      }
+    }
   }
   const value = pageResult(pageCursor, candidates, nextCursor)
   return { status: statusFromDiagnostics(diagnostics, candidates.length), value, diagnostics, trace }
@@ -320,7 +349,7 @@ function resolveCandidateUrl(value: string | undefined, baseUrl: string): string
 }
 
 /** 把整个响应当作详情页解析：Android 在 bookUrlPattern 命中或列表为空时使用该分支。 */
-async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, page: { content: string; url: string }, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<{ candidate?: BookCandidate; cancelled: boolean }> {
+async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', page: { content: string; url: string }, requestUrl: string, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<{ candidate?: BookCandidate; cancelled: boolean }> {
   const extraction = await extractDetailFields(ports, source, 0, page.content, { baseUrl: page.url, redirectUrl: page.url }, options.signal, trace, diagnostics)
   // 取消必须向上传播；回退失败和取消在调用方是两种不同的结果。
   if (extraction.cancelled) return { cancelled: true }
@@ -330,9 +359,10 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
     return { cancelled: false }
   }
   const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: page.url, name, rawFields: extraction.raw, traceRef: 'detail-page:0' }
+  if (stage === 'search') candidate.infoPage = { body: page.content, requestUrl, responseUrl: page.url }
   const author = formatBookAuthor(extraction.values.author ?? '')
   if (author.length > 0) candidate.author = author
-  if (extraction.values.intro !== undefined) candidate.intro = extraction.values.intro
+  if (extraction.values.intro !== undefined) candidate.intro = formatDetailIntro(extraction.values.intro)
   if (extraction.values.coverUrl !== undefined) candidate.coverUrl = resolveCandidateUrl(extraction.values.coverUrl, page.url) ?? extraction.values.coverUrl
   if (extraction.values.kind !== undefined) candidate.kind = extraction.values.kind
   if (extraction.values.wordCount !== undefined) candidate.wordCount = formatWordCount(extraction.values.wordCount)
@@ -414,7 +444,12 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       diagnostics.push({ code: expandedUrl.error?.code ?? 'rule-failed', stage: 'detail', field: 'bookUrl', itemIndex, message: expandedUrl.error?.message ?? '详情 URL 展开失败', retryable: false })
       continue
     }
-    const page = await requestPageResponse(ports, input.source, expandedUrl.url, 'detail', input, diagnostics, trace)
+    const canReuseInfoPage = candidate.infoPage !== undefined
+      && (candidate.bookUrl === candidate.infoPage.requestUrl || candidate.bookUrl === candidate.infoPage.responseUrl)
+      && (expandedUrl.url === candidate.infoPage.requestUrl || expandedUrl.url === candidate.infoPage.responseUrl)
+    const page = canReuseInfoPage
+      ? { content: candidate.infoPage!.body, url: candidate.infoPage!.responseUrl }
+      : await requestPageResponse(ports, input.source, expandedUrl.url, 'detail', input, diagnostics, trace)
     if (page === undefined) continue
     const context = { baseUrl: page.url, redirectUrl: page.url }
     // Android BookInfo：init 规则先执行，其结果成为后续详情字段的内容基准。
@@ -423,21 +458,29 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       const init = await evaluateField(ports, input.source, 'detail', 'init', initRule, content, itemIndex, trace, input.signal, { ...context, expect: 'nodes', bindings: { book: candidate } })
       if (init.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
       if (init.state === 'value') content = singleNodeValue(init.value)
-      else if (init.state === 'failed' || init.state === 'capability-missing') diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: init.message ?? '详情初始化规则失败', retryable: false })
+      else if (init.state === 'failed' || init.state === 'capability-missing') {
+        diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: init.message ?? '详情初始化规则失败', retryable: false })
+        continue
+      }
     }
     const extraction = await extractDetailFields(ports, input.source, itemIndex, content, context, input.signal, trace, diagnostics, candidate)
     if (extraction.cancelled) return { status: 'cancelled', value: null, diagnostics, trace }
     const name = formatBookName(extraction.values.name ?? '')
     const author = formatBookAuthor(extraction.values.author ?? '')
+    const { infoPage: _infoPage, ...metadataCandidate } = candidate
     const metadata: BookMetadata = {
-      ...candidate,
+      ...metadataCandidate,
       rawFields: { ...candidate.rawFields, ...extraction.raw },
       emptyFields: extraction.empty,
       fieldErrors: extraction.errors,
     }
-    if (name.length > 0) metadata.name = name
-    if (author.length > 0) metadata.author = author
-    if (extraction.values.intro !== undefined) metadata.intro = extraction.values.intro
+    const canReName = input.canReName !== false && (ruleString(input.source, 'ruleBookInfo', 'canReName')?.trim().length ?? 0) > 0
+    if (name.length > 0 && (canReName || !metadata.name)) metadata.name = name
+    if (author.length > 0 && (canReName || !metadata.author)) metadata.author = author
+    if (extraction.values.intro !== undefined) {
+      const intro = formatDetailIntro(extraction.values.intro)
+      if (intro.length > 0) metadata.intro = intro
+    }
     if (extraction.values.coverUrl !== undefined) metadata.coverUrl = resolveCandidateUrl(extraction.values.coverUrl, page.url) ?? extraction.values.coverUrl
     if (extraction.values.kind !== undefined) metadata.kind = extraction.values.kind
     if (extraction.values.wordCount !== undefined) metadata.wordCount = extraction.values.wordCount
@@ -491,8 +534,9 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
       values = undefined
     }
     const record = values as Record<string, unknown> | undefined
+    const { infoPage: _infoPage, ...metadataCandidate } = candidate
     const metadata: BookMetadata = {
-      ...candidate,
+      ...metadataCandidate,
       rawFields: { ...candidate.rawFields, ...(record === undefined ? {} : jsonValue(record) as JsonObject) },
       emptyFields: [],
       fieldErrors: {},

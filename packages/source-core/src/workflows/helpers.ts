@@ -47,14 +47,14 @@ export function ruleString(source: NormalizedSource, group: string, field: strin
   if (rules === undefined) return undefined
   // Android 的列表规则字段名是 name/author/coverUrl/intro；工作流内部保留 book* 名称，读取时兼容两种写法。
   const aliases: Readonly<Record<string, readonly string[]>> = {
-    bookName: ['bookName', 'name'],
-    bookAuthor: ['bookAuthor', 'author'],
-    bookCoverUrl: ['bookCoverUrl', 'coverUrl'],
-    bookIntro: ['bookIntro', 'intro'],
-    bookKind: ['bookKind', 'kind'],
-    bookWordCount: ['bookWordCount', 'wordCount'],
-    bookLastChapter: ['bookLastChapter', 'lastChapter'],
-    bookUpdateTime: ['bookUpdateTime', 'updateTime'],
+    bookName: ['name', 'bookName'],
+    bookAuthor: ['author', 'bookAuthor'],
+    bookCoverUrl: ['coverUrl', 'bookCoverUrl'],
+    bookIntro: ['intro', 'bookIntro'],
+    bookKind: ['kind', 'bookKind'],
+    bookWordCount: ['wordCount', 'bookWordCount'],
+    bookLastChapter: ['lastChapter', 'bookLastChapter'],
+    bookUpdateTime: ['updateTime', 'bookUpdateTime'],
   }
   const keys = aliases[field] ?? [field]
   for (const key of keys) if (typeof rules[key] === 'string') return rules[key] as string
