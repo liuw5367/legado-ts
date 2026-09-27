@@ -97,6 +97,24 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
   assert.equal(calls.length, 4)
 })
 
+test('声明式音频正文通过 Node 规则宿主提取 subContent 并写回歌词变量', async () => {
+  const source = {
+    bookSourceUrl: 'https://audio-sub.test',
+    bookSourceName: 'Audio SubContent',
+    bookSourceType: 1,
+    ruleContent: { content: '@css:.content@text', subContent: '@css:.lyrics@text' },
+  } as unknown as NormalizedSource
+  const network: NetworkHost = { request: async (plan) => response(plan.url, '<main><div class="content">audio stream</div><pre class="lyrics">line one\nline two</pre></main>') }
+  const ports: WorkflowPorts = { network, rules: new SourceRuleHost() }
+  const chapter = { sourceId: source.bookSourceUrl, bookUrl: 'https://audio-sub.test/book', chapterUrl: 'https://audio-sub.test/chapter/1', index: 0, variable: '{"existing":"kept"}' }
+  const result = await loadChapterContent(ports, { source, chapter })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.raw, 'audio stream')
+  assert.deepEqual(result.value?.auxiliary, { kind: 'lyrics', content: 'line one\nline two' })
+  assert.equal(chapter.variable, '{"existing":"kept"}')
+  assert.deepEqual(JSON.parse(result.value?.chapter.variable ?? '{}'), { existing: 'kept', lyric: 'line one\nline two' })
+})
+
 test('AllInOne 正则目录行的 $1/$2/$3 可按捕获上下文提取章节字段', async () => {
   const source = {
     bookSourceUrl: 'https://all-in-one.test',

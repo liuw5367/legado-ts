@@ -456,6 +456,122 @@ test('text contentType 不会跳过 Android 正文格式化；音视频链接保
   }
 })
 
+test('正文 subContent 对在线文本原样追加且先于全文替换', async () => {
+  const calls: string[] = []
+  let replacementInput = ''
+  const textSource = { ...source, bookSourceType: 0, ruleContent: { content: 'content', subContent: 'sub', replaceRegex: 'replace' } } as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => { calls.push(plan.url); return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('chapter-body'), redirected: false } } },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'content') return { status: 'success', value: 'Main' }
+        if (field === 'subContent') return { status: 'success', value: '  https://aux.test/inline  ' }
+        if (field === 'replaceRegex') {
+          replacementInput = String(content)
+          return { status: 'success', value: `replaced:${content}` }
+        }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const chapter: ChapterIdentity = { sourceId: textSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0 }
+  const result = await loadChapterContent(ports, { source: textSource, chapter })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.raw, 'Main\n  https://aux.test/inline  ')
+  assert.deepEqual(result.value?.pages, ['Main', '  https://aux.test/inline  '])
+  assert.equal(replacementInput, 'Main\nhttps://aux.test/inline')
+  assert.equal(result.value?.cleaned, 'replaced:Main\nhttps://aux.test/inline')
+  assert.deepEqual(calls, ['https://source.test/chapter/1'])
+})
+
+test('音频副内容请求歌词并合并章节变量；视频内联弹幕 trim 后保存', async () => {
+  const calls: string[] = []
+  const audioSource = { ...source, bookSourceType: 1, ruleContent: { content: 'content', subContent: 'sub' } } as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      const body = plan.url.endsWith('/chapter/1') ? 'chapter-body' : 'lyrics from response'
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    } },
+    rules: { evaluate: async ({ field }) => field === 'content'
+      ? { status: 'success', value: 'Audio URL' }
+      : field === 'subContent'
+        ? { status: 'success', value: '  HtTpS://source.test/lyrics  ' }
+        : { status: 'empty', value: null } },
+  }
+  const chapter = Object.freeze({ sourceId: audioSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0, variable: '{"keep":"yes"}' })
+  const audio = await loadChapterContent(ports, { source: audioSource, chapter })
+  assert.equal(audio.status, 'success')
+  assert.equal(audio.value?.raw, 'Audio URL')
+  assert.deepEqual(audio.value?.auxiliary, { kind: 'lyrics', content: 'lyrics from response' })
+  assert.equal(chapter.variable, '{"keep":"yes"}')
+  assert.deepEqual(JSON.parse(audio.value?.chapter.variable ?? '{}'), { keep: 'yes', lyric: 'lyrics from response' })
+  assert.deepEqual(calls, ['https://source.test/chapter/1', 'https://source.test/lyrics'])
+
+  const videoSource = { ...source, bookSourceType: 4, ruleContent: { content: 'content', subContent: 'sub' } } as NormalizedSource
+  const videoChapter = { ...chapter, variable: '{"keep":"yes"}' }
+  const video = await loadChapterContent({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('chapter-body'), redirected: false }) },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: 'Video URL' } : field === 'subContent' ? { status: 'success', value: '  inline danmaku \n' } : { status: 'empty', value: null } },
+  }, { source: videoSource, chapter: videoChapter })
+  assert.deepEqual(video.value?.auxiliary, { kind: 'danmaku', content: 'inline danmaku' })
+  assert.deepEqual(JSON.parse(video.value?.chapter.variable ?? '{}'), { keep: 'yes', danmaku: 'inline danmaku' })
+})
+
+test('非在线文本非音视频类型不追加 subContent；歌词请求失败保留主正文并可诊断', async () => {
+  const imageSource = { ...source, bookSourceType: 2, ruleContent: { content: 'content', subContent: 'sub' } } as NormalizedSource
+  const imageChapter = { sourceId: imageSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0, variable: '{"keep":"yes"}' }
+  const image = await loadChapterContent({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('chapter-body'), redirected: false }) },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: 'Image resource' } : field === 'subContent' ? { status: 'success', value: 'ignored inline data' } : { status: 'empty', value: null } },
+  }, { source: imageSource, chapter: imageChapter })
+  assert.equal(image.value?.raw, 'Image resource')
+  assert.equal(image.value?.auxiliary, undefined)
+  assert.equal(imageChapter.variable, '{"keep":"yes"}')
+
+  const audioSource = { ...source, bookSourceType: 1, ruleContent: { content: 'content', subContent: 'sub' } } as NormalizedSource
+  const failingPorts: ReadingPorts = {
+    network: { request: async (plan) => {
+      if (plan.url.endsWith('/lyrics')) throw new Error('lyrics unavailable')
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('chapter-body'), redirected: false }
+    } },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: 'Main content' } : field === 'subContent' ? { status: 'success', value: 'https://source.test/lyrics' } : { status: 'empty', value: null } },
+  }
+  const audioChapter = { sourceId: audioSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0, variable: '{"keep":"yes"}' }
+  const failedLyrics = await loadChapterContent(failingPorts, { source: audioSource, chapter: audioChapter })
+  assert.equal(failedLyrics.status, 'partial')
+  assert.equal(failedLyrics.value?.raw, 'Main content')
+  assert.equal(failedLyrics.value?.auxiliary, undefined)
+  assert.equal(failedLyrics.value?.chapter.variable, '{"keep":"yes"}')
+  assert.ok(failedLyrics.diagnostics.some((item) => item.code === 'request-failed' && item.field === 'subContent'))
+
+  const failedRule = await loadChapterContent({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('chapter-body'), redirected: false }) },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: 'Main content' } : field === 'subContent' ? { status: 'failed', value: null, message: 'bad subContent rule' } : { status: 'empty', value: null } },
+  }, { source: audioSource, chapter: { sourceId: audioSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0 } })
+  assert.equal(failedRule.status, 'failed')
+  assert.equal(failedRule.value, null)
+  assert.ok(failedRule.diagnostics.some((item) => item.code === 'rule-failed' && item.field === 'subContent'))
+})
+
+test('subContent HTTP 请求期间取消会取消整个正文工作流', async () => {
+  const controller = new AbortController()
+  const audioSource = { ...source, bookSourceType: 1, ruleContent: { content: 'content', subContent: 'sub' } } as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => {
+      if (plan.url.endsWith('/lyrics')) {
+        controller.abort()
+        throw new Error('request aborted')
+      }
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('chapter-body'), redirected: false }
+    } },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: 'Main content' } : field === 'subContent' ? { status: 'success', value: 'https://source.test/lyrics' } : { status: 'empty', value: null } },
+  }
+  const result = await loadChapterContent(ports, { source: audioSource, chapter: { sourceId: audioSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0 }, signal: controller.signal })
+  assert.equal(result.status, 'cancelled')
+  assert.equal(result.value, null)
+})
+
 test('正文规则返回 HTML 时未声明 contentType 也进入 HTML 排版流程', async () => {
   const implicitHtmlSource = { ...source, ruleContent: { content: 'content@html', nextPage: 'content-next' } } as NormalizedSource
   delete (implicitHtmlSource as Record<string, unknown>).contentType

@@ -17,7 +17,7 @@
 
 ## 未实现的能力
 
-- `ruleContent.subContent`、`imageDecode`、`payAction` 和 `contentBatch` 尚未实现；
+- `ruleContent.subContent` 已在声明式正文工作流实现；`imageDecode`、`payAction` 和 `contentBatch` 尚未实现；
 - Android `ajaxAll(..., true)` 等限流 bypass 重载和完整 Java/设备桥接没有对应的 Node 能力。
 
 ## 2. URL 选项

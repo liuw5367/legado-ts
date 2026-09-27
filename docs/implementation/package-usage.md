@@ -32,6 +32,8 @@
 | `snapshotVariables` / `variableChanges` / `MemoryVariableView` | 变量视图 | 快照与变更集合 | package |
 | `diagnostic` / `primaryError` / `safeLocation` | 诊断或错误 | 稳定诊断与脱敏位置 | package |
 
+声明式 `ruleContent.subContent` 会把在线文本副文并入 `ChapterContent.pages/raw/cleaned`；音频歌词或视频弹幕通过 `ChapterContent.auxiliary` 返回，并在返回的 `ChapterContent.chapter.variable` 中更新 `lyric` 或 `danmaku`。辅助字段是章节变量的便捷投影，持久化以返回章节变量为准。声明式正文工作流不修改调用方传入的章节对象；source-core 不直接持久化章节，应用适配器负责保存这些字段。JS 源 `getContent` 沿用其函数返回，不额外运行声明式副文规则。
+
 多源 fan-out、并发调度、进度事件、书源检测（`checkSources`）、批量正文（`getContentBatch`）与段评结构化读取的公开入口**尚未实现**。纯候选归并与匹配排序已由 `groupSearchCandidates` 等核心函数提供；应用仍负责多源循环、页面来源信息及搜索生命周期。CLI 当前分组规则说明见[搜索流程](../flows/search-flow.md#typescript-当前聚合行为)。检测与批量能力见[能力清单](../standard/capability-inventory.md)与[已知差异](../divergence/known-divergences.md)。
 
 ## 结果形状

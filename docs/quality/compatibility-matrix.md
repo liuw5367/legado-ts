@@ -50,7 +50,7 @@
 | `preUpdateJs` 的 `refreshTocUrl()` / `reGetBook()` 与无详情字段规则回退 | 目标必须兼容 | `AnalyzeRule.kt`、`BookInfo.kt`、`WebBook.kt` | `source-core` 通过受限 workflow action 实现详情刷新、书名作者精确重搜、RuleData 变量回写及 book 回写；Node 集成用例已执行，Android golden 尚未执行；TS 助手预算 30 秒，Android 上限 30 分钟 |
 | 目录和正文分页、循环保护 | 目标必须兼容 | `BookChapterList`、`WebBook` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | 声明式正文内置格式、HTML4 解码、特殊样式保护和图片 URL 归一化 | 目标必须兼容 | `BookContent.kt`、`HtmlFormatter.kt`、`AppConfig.adaptSpecialStyle` | source-core 已实现格式化、图片资源和标题 `imgUrl` 投影；Android golden 尚未执行|
-| `ruleContent.subContent` 在线文本追加、歌词和弹幕 | 声明存在时必须兼容 | `BookContent.kt` 的 `subContent` 分支 | 未实现 runtime；source-core 暂无副内容结果通道，请勿视为正文兼容|
+| `ruleContent.subContent` 在线文本追加、歌词和弹幕 | 声明存在时必须兼容 | `BookContent.kt` 的 `subContent` 分支 | source-core 按首次正文响应上下文提取；在线文本原文追加，音视频结果写入章节变量并通过 `ChapterContent.auxiliary` 返回；Node 集成用例已执行，Android golden 尚未执行；TS 取消语义差异见 D11|
 | 搜索精准匹配中的书名、作者和分类 | 目标必须兼容 | `SearchModel` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | 目录 `-` 前缀和 `reverseToc` 组合 | 目标必须兼容 | `BookChapterList` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | `canReName` 调用权限与非空配置判断 | 目标必须兼容 | `BookInfo` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
@@ -65,7 +65,7 @@
 | 付费动作与购买后刷新 | 低优先待实现 | `ContentRule.payAction`、`ReadBookActivity.payAction` | 未实现 runtime，待交互规格 |
 | 段评写入、投票和删除 | 低优先待核实（写入流程为目标设计） | `ReviewRule` 有字段；已核对的 `ReviewController` 入口主要是读取 | 写入流程为 Web 目标设计（见 conformance-tests ACTION-002），不宣称 Android 等价 |
 | 书源事件和自定义按钮 | 目标宿主能力 | `SourceCallBack`、`BookSource.eventListener/customButton` | 未实现 runtime，待事件协议规格 |
-| 音频、图片、视频和文件结果 | 目标必须兼容 | `BookSource.bookSourceType`、`Book`、`BookChapter`、相关调用点 | 音视频声明式正文已跳过文本格式化；歌词/弹幕、副内容、图片专用流程和文件下载尚未实现 |
+| 音频、图片、视频和文件结果 | 目标必须兼容 | `BookSource.bookSourceType`、`Book`、`BookChapter`、相关调用点 | 音视频声明式正文跳过文本格式化，`subContent` 歌词/弹幕已写入章节变量并返回辅助结果；图片专用流程和文件下载尚未实现 |
 | 编辑器预览与诊断 | 目标设计 | `modules/web` 配置和测试 | 仅规划，未实现独立编辑器 |
 
 ## Android 证据索引

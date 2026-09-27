@@ -322,7 +322,11 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     fieldErrors: {},
     tocUrl: input.chapter.bookUrl,
   }
-  const ruleBindings = { book: variableBook, chapter: input.chapter }
+  const resultChapter = {
+    ...input.chapter,
+    ...(input.chapter.rawFields === undefined ? {} : { rawFields: { ...input.chapter.rawFields } }),
+  }
+  const ruleBindings = { book: variableBook, chapter: resultChapter }
   const visited = new Set<string>()
   const pages: string[] = []
   const cleanedPages: string[] = []
@@ -499,6 +503,58 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   // 诊断已经在请求层压过一条，这里只改状态，不再重复报告。
   if (diagnostics.some((item) => item.code === 'cancelled')) return { status: 'cancelled', value: null, diagnostics, trace }
   if (pendingPages.length > 0) stoppedByLimit = true
+  let auxiliary: ChapterContent['auxiliary']
+  const subContentRule = ruleString(input.source, 'ruleContent', 'subContent')
+  if (subContentRule !== undefined && firstPage !== undefined) {
+    const field = await evaluateField(ports, input.source, stage, 'subContent', subContentRule, firstPage.body, undefined, trace, input.signal, { ...firstPage.context, bindings: ruleBindings })
+    if (field.state === 'cancelled' || input.signal?.aborted === true) return cancelled('正文副内容规则已取消', diagnostics, trace)
+    if (field.state === 'failed') {
+      diagnostics.push({ code: 'rule-failed', stage, field: 'subContent', message: field.message ?? '正文副内容规则失败', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
+    if (field.state === 'capability-missing') {
+      diagnostics.push({ code: 'capability-missing', stage, field: 'subContent', message: field.message ?? '正文副内容规则宿主能力不可用', retryable: false })
+      return { status: 'capability-missing', value: null, diagnostics, trace }
+    }
+    const rawSubContent = field.state === 'value' ? textValue(field.value) : ''
+    const bookType = resolvedBookType(input.book, input.source)
+    if (isOnlineTextBook(bookType, input.book)) {
+      // Android 对在线文本源不 trim、不请求副文，即便文本看起来像 URL。
+      pages.push(rawSubContent)
+      cleanedPages.push(rawSubContent)
+    } else {
+      let subContent = rawSubContent.trim()
+      let storeAuxiliary = true
+      if (/^http/i.test(subContent)) {
+        const beforeRequest = diagnostics.length
+        const response = await requestPageResponse(ports, input.source, subContent, stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
+        const requestDiagnostics = diagnostics.slice(beforeRequest)
+        for (const diagnostic of requestDiagnostics) if (diagnostic.field === undefined) diagnostic.field = 'subContent'
+        if (isSignalAborted(input.signal) || requestDiagnostics.some((item) => item.code === 'cancelled')) {
+          return cancelled('正文副内容请求已取消', diagnostics, trace)
+        }
+        if (response === undefined) {
+          storeAuxiliary = false
+        } else {
+          const responseBytes = new TextEncoder().encode(response.content).byteLength
+          totalBytes += responseBytes
+          if (totalBytes > maxBytes) {
+            diagnostics.push({ code: 'item-skipped', stage, field: 'subContent', message: '正文累计响应超过字节预算', retryable: false })
+            storeAuxiliary = false
+          } else {
+            subContent = response.content
+          }
+        }
+      }
+      if (storeAuxiliary && isAudioBook(bookType)) {
+        updateChapterVariable(resultChapter, 'lyric', subContent)
+        auxiliary = { kind: 'lyrics', content: subContent }
+      } else if (storeAuxiliary && isVideoBook(bookType)) {
+        updateChapterVariable(resultChapter, 'danmaku', subContent)
+        auxiliary = { kind: 'danmaku', content: subContent }
+      }
+    }
+  }
   if (reachedNextChapter) trace.push({ stage, event: 'field', target: 'nextChapterUrl' })
   const raw = pages.join('\n')
   const joined = cleanedPages.join('\n')
@@ -529,7 +585,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, { ...firstPage.context, bindings: ruleBindings })
     if (field.state === 'cancelled') return cancelled('章节标题规则执行已取消', diagnostics, trace)
     if (field.state === 'value') {
-      const projection = chapterTitleProjection(textValue(field.value), input.chapter.title)
+      const projection = chapterTitleProjection(textValue(field.value), resultChapter.title)
       title = projection.title
       imgUrl = projection.imgUrl
     }
@@ -547,9 +603,9 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     diagnostics.push({ code: 'empty-page', stage, message: '正文为空', retryable: false })
     const capabilityMissing = diagnostics.some((item) => item.code === 'capability-missing')
     const failed = diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed')
-    return { status: capabilityMissing ? 'capability-missing' : failed ? 'failed' : 'empty', value: capabilityMissing || failed ? null : { chapter: input.chapter, contentType, raw, cleaned, pages, resources: [], ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
+    return { status: capabilityMissing ? 'capability-missing' : failed ? 'failed' : 'empty', value: capabilityMissing || failed ? null : { chapter: resultChapter, contentType, raw, cleaned, pages, resources: [], ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
   }
-  const value: ChapterContent = { chapter: input.chapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
+  const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
   const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'item-skipped') ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
 }
@@ -985,6 +1041,67 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
 function listValues(value: unknown): string[] {
   const values = Array.isArray(value) ? value.flatMap((item) => textValue(item).split('\n')) : typeof value === 'string' ? value.split('\n') : []
   return values.map((item) => item.trim()).filter((item) => item.length > 0)
+}
+
+const BOOK_TYPE_VIDEO = 4
+const BOOK_TYPE_TEXT = 8
+const BOOK_TYPE_AUDIO = 32
+const BOOK_TYPE_IMAGE = 64
+const BOOK_TYPE_WEB_FILE = 128
+const BOOK_TYPE_LOCAL = 256
+
+function resolvedBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
+  const explicitType = book?.type
+  if (typeof explicitType === 'number' && Number.isInteger(explicitType) && explicitType >= 0) return explicitType
+  switch (sourceNumber(source, 'bookSourceType')) {
+    case 0: return BOOK_TYPE_TEXT
+    case 1: return BOOK_TYPE_AUDIO
+    case 2: return BOOK_TYPE_IMAGE
+    case 3: return BOOK_TYPE_TEXT | BOOK_TYPE_WEB_FILE
+    case 4: return BOOK_TYPE_VIDEO
+    default: return 0
+  }
+}
+
+function isLocalBook(type: number, book: BookMetadata | undefined): boolean {
+  if (type !== 0) return (type & BOOK_TYPE_LOCAL) !== 0
+  const origin = book?.rawFields.origin
+  const sourceId = book?.sourceId ?? ''
+  const actualOrigin = typeof origin === 'string' ? origin : sourceId
+  return actualOrigin === 'loc_book' || actualOrigin.startsWith('webDav::')
+}
+
+function isOnlineTextBook(type: number, book: BookMetadata | undefined): boolean {
+  return (type & BOOK_TYPE_TEXT) !== 0 && !isLocalBook(type, book)
+}
+
+function isAudioBook(type: number): boolean {
+  return (type & BOOK_TYPE_AUDIO) !== 0
+}
+
+function isVideoBook(type: number): boolean {
+  return (type & BOOK_TYPE_VIDEO) !== 0
+}
+
+function updateChapterVariable(chapter: ContentInput['chapter'], key: string, value: string | null): void {
+  const variables: Record<string, string> = {}
+  if (chapter.variable !== undefined) {
+    try {
+      const parsed: unknown = JSON.parse(chapter.variable)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        for (const [name, entry] of Object.entries(parsed)) {
+          if (typeof entry === 'string') variables[name] = entry
+          else if (typeof entry === 'number' && Number.isFinite(entry)) variables[name] = String(entry)
+          else if (typeof entry === 'boolean') variables[name] = String(entry)
+        }
+      }
+    } catch {
+      // Android treats malformed BookChapter.variable JSON as an empty map.
+    }
+  }
+  if (value === null) delete variables[key]
+  else variables[key] = value
+  chapter.variable = JSON.stringify(variables)
 }
 
 function normalizeChapterListRule(value: string): string {

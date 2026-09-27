@@ -297,7 +297,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | FLOW-009/next-chapter | 当前 /c1，下一章 /c2，nextContentUrl=/c2 | 不请求 /c2，不把下一章拼入正文 |
 | FLOW-009/cache-gate | `needSave=false`、缓存 token.version=0、version>0 各运行一次 | Android-compatible 路径前两种不读缓存并执行规则，version>0 命中才直接返回；检测/预览不被旧正文短路 |
 | FLOW-010/input-order | 正文分页 [u1,u2]，u2 先返回 B、u1 后返回 A | 拼接顺序 A 后 B，不能按到达顺序 |
-| FLOW-010/sub-content | 在线文本副文为 `https://x/sub`；音频副文为 URL；普通离线文本副文为原文 | 在线文本不发额外请求且追加 URL 原文；音频请求后保存歌词；提取异常传播，处理异常只记录诊断 |
+| FLOW-010/sub-content | 在线文本副文为 `https://x/sub`；音频副文为 URL；视频副文为内联文本；另测请求失败与取消 | 在线文本不发额外请求且原文追加后参与 replaceRegex；音频请求后保存歌词，视频 trim 后保存弹幕；请求失败保留主正文并返回诊断，提取异常使正文失败，TS 取消终止流程（与 Android 的 runCatching 有差异，见 D11） |
 | FLOW-010/cache-record | 缓存记录缺少 `finalUrl` 或章节附加数据 | 按未命中重新获取；命中记录同时恢复 content、finalUrl、章节更新和歌词/弹幕 |
 | FLOW-010/request-hints | 首页配置 `webJs` 与 `sourceRegex`，串行/并发分页各有下一页 | 首页同时传递两项；Android 后续页只传 `webJs`，JS 源按函数自身行为处理，不能假设所有分页都做资源嗅探 |
 | FLOW-012/partial-save | 批量 3 章，第 1 章回存成功后脚本抛错 | 第 1 章保留 committed，2/3 为剩余，兜底不重复保存 1 |

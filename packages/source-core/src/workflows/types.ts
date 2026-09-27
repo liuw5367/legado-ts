@@ -55,6 +55,8 @@ export interface BookReadConfig {
 }
 
 export interface BookMetadata extends Omit<BookCandidate, 'infoPage'> {
+  /** Android BookType 位标记；与 NormalizedSource.bookSourceType 枚举不同。 */
+  type?: number
   tocUrl?: string
   /** 详情页同时是目录页时保留的临时响应；不应持久化。 */
   tocHtml?: string
@@ -260,12 +262,14 @@ export interface ContentResource {
 }
 
 export interface ChapterContent {
-  chapter: ChapterIdentity
+  chapter: ChapterIdentity & { variable?: string }
   contentType: 'text' | 'html'
   raw: string
   cleaned: string
   pages: string[]
   resources: ContentResource[]
+  /** 音频歌词或视频弹幕；与 chapter.variable 的 lyric/danmaku 值同步，chapter.variable 是章节持久化字段。 */
+  auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
   /** 书源 `ruleContent.title` 从正文提取的章节标题；未配置或提取为空时缺失。 */
   title?: string
   /** Android BookChapter.imgUrl；由 `ruleContent.title` 中的 data/http URL 提取。 */
