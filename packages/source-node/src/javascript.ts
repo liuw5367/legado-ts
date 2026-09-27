@@ -16,6 +16,7 @@ const capabilityMarkers = {
   variables: '__LEGADO_CAPABILITY__variables',
   network: '__LEGADO_CAPABILITY__network',
   rule: '__LEGADO_CAPABILITY__rule',
+  runtime: '__LEGADO_CAPABILITY__runtime',
 } as const
 
 function messageOf(error: unknown): string {
@@ -35,10 +36,14 @@ function capabilityFallback(capability: keyof typeof capabilityMarkers): string 
 }
 
 function bridgeWrapper(name: string, hostName: string, capability: keyof typeof capabilityMarkers): string {
-  if (name === 'getVar') return `const getVar = typeof ${hostName} === 'function' ? (name) => __legadoDecode(JSON.parse(${hostName}(String(name)))) : ${capabilityFallback(capability)}`
-  if (name === 'setVar') return `const setVar = typeof ${hostName} === 'function' ? (name, value) => ${hostName}(String(name), __legadoEncode(value)) : ${capabilityFallback(capability)}`
+  if (name === 'getVar') return `const getVar = typeof ${hostName} === 'function' ? (name, scope) => __legadoDecode(JSON.parse(${hostName}(String(name), scope === undefined ? '' : String(scope)))) : ${capabilityFallback(capability)}`
+  if (name === 'setVar') return `const setVar = typeof ${hostName} === 'function' ? (name, value, scope) => ${hostName}(String(name), __legadoEncode(value), scope === undefined ? '' : String(scope)) : ${capabilityFallback(capability)}`
   if (name === 'request') return `const request = typeof ${hostName} === 'function' ? (...args) => __legadoDecode(JSON.parse(${hostName}(__legadoEncode(args.length === 1 ? args[0] : { url: String(args[0]), method: args[1] === undefined ? 'GET' : args[1], body: args[2] })))) : ${capabilityFallback(capability)}`
-  return `const evaluateRule = typeof ${hostName} === 'function' ? (rule) => __legadoDecode(JSON.parse(${hostName}(String(rule)))) : ${capabilityFallback(capability)}`
+  return `const evaluateRule = typeof ${hostName} === 'function' ? (rule, options) => __legadoDecode(JSON.parse(${hostName}(String(rule), __legadoEncode(options ?? {})))) : ${capabilityFallback(capability)}`
+}
+
+function variableKey(name: string, scope?: string): string {
+  return scope === undefined ? name : `${scope}\u0000${name}`
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
@@ -80,7 +85,8 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
     let bindingsJson: string
     try {
       bindingsJson = encodeJavaScriptValue(input.bindings ?? {})
-      if (new TextEncoder().encode(input.code).byteLength + new TextEncoder().encode(bindingsJson).byteLength > budget.maxInputBytes) {
+      const captureBindingsJson = JSON.stringify(input.captureBindings ?? [])
+      if (new TextEncoder().encode(input.code).byteLength + new TextEncoder().encode(bindingsJson).byteLength + new TextEncoder().encode(captureBindingsJson).byteLength > budget.maxInputBytes) {
         diagnostics.push({ code: 'budget-exceeded', message: 'JavaScript 输入超过字节预算', stage: input.stage })
         return { status: 'budget-exceeded', value: null, diagnostics, variableChanges: [], trace }
       }
@@ -136,20 +142,25 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       if (variableCapability) {
         installAsync('__legadoGetVariable', async (...args) => {
           const name = context!.getString(args[0]!)
+          const scopeText = args[1] === undefined ? '' : context!.getString(args[1]!)
+          const scope = scopeText.length === 0 ? undefined : scopeText
+          const key = variableKey(name, scope)
           const value = await callBridge('getVariable', async () => {
-            if (variableValues.has(name)) return variableValues.get(name)
+            if (variableValues.has(key)) return variableValues.get(key)
             if (bridge.getVariable === undefined) return undefined
-            return bridge.getVariable(name, signal)
+            return bridge.getVariable(name, signal, scope as Parameters<NonNullable<JavaScriptBridge['getVariable']>>[2])
           })
           return context!.newString(encodeJavaScriptValue(value))
         })
         installAsync('__legadoSetVariable', async (...args) => {
           const name = context!.getString(args[0]!)
           const value = decodeJavaScriptValue(context!.getString(args[1]!))
+          const scopeText = args[2] === undefined ? '' : context!.getString(args[2]!)
+          const scope = scopeText.length === 0 ? undefined : scopeText
           await callBridge('setVariable', async () => {
-            if (bridge.setVariable !== undefined) await bridge.setVariable(name, value, signal)
+            if (bridge.setVariable !== undefined) await bridge.setVariable(name, value, signal, scope as Parameters<NonNullable<JavaScriptBridge['setVariable']>>[3])
           })
-          variableValues.set(name, value)
+          variableValues.set(variableKey(name, scope), value)
           return context!.undefined
         })
       }
@@ -163,19 +174,23 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       if (bridge.evaluateRule !== undefined) {
         installAsync('__legadoEvaluateRule', async (...args) => {
           const rule = context!.getString(args[0]!)
-          const value = await callBridge('evaluateRule', () => bridge.evaluateRule!(rule, signal))
+          const options = args[1] === undefined ? {} : decodeJavaScriptValue(context!.getString(args[1]!)) as { expect?: 'text' | 'nodes'; content?: unknown }
+          const value = await callBridge('evaluateRule', () => bridge.evaluateRule!(rule, signal, options))
           return context!.newString(encodeJavaScriptValue(value))
         })
       }
 
       const bindings = JSON.stringify(bindingsJson)
+      const script = input.mode === 'script'
+        ? `const __legadoScriptValue = eval(${JSON.stringify(input.code)});\nconst __legadoCaptureNames = ${JSON.stringify(input.captureBindings ?? [])};\nconst __legadoCaptured = {};\nfor (const __legadoName of __legadoCaptureNames) __legadoCaptured[__legadoName] = globalThis[__legadoName];\n__legadoEncode(__legadoCaptureNames.length === 0 ? __legadoScriptValue : { __legadoWorkflowValue: __legadoScriptValue, __legadoWorkflowBindings: __legadoCaptured })`
+        : `__legadoEncode((() => {\n${input.code}\n})())`
       const source = [
         guestCodecSource,
         `const bindings = __legadoFreeze(__legadoDecode(JSON.parse(${bindings})))`,
         `${bridgeWrapper('getVar', '__legadoGetVariable', 'variables')}\n${bridgeWrapper('setVar', '__legadoSetVariable', 'variables')}`,
         `${bridgeWrapper('request', '__legadoRequest', 'network')}`,
         `${bridgeWrapper('evaluateRule', '__legadoEvaluateRule', 'rule')}`,
-        `__legadoEncode((() => {\n${input.code}\n})())`,
+        script,
       ].join('\n')
       const result = await context.evalCodeAsync(source, input.filename ?? `${input.stage}.js`)
       const valueHandle = context.unwrapResult(result)
@@ -226,9 +241,12 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
 
 function changes(before: Map<string, unknown>, after: Map<string, unknown>): JavaScriptVariableChange[] {
   const result: JavaScriptVariableChange[] = []
-  for (const [name, value] of after) {
-    const previous = before.get(name)
-    if (!before.has(name) || !sameValue(previous, value)) result.push({ name, ...(before.has(name) ? { before: previous } : {}), after: value })
+  for (const [key, value] of after) {
+    const separator = key.indexOf('\u0000')
+    const name = separator < 0 ? key : key.slice(separator + 1)
+    const scope = separator < 0 ? undefined : key.slice(0, separator) as JavaScriptVariableChange['scope']
+    const previous = before.get(key)
+    if (!before.has(key) || !sameValue(previous, value)) result.push({ name, ...(scope === undefined ? {} : { scope }), ...(before.has(key) ? { before: previous } : {}), after: value })
   }
   return result
 }

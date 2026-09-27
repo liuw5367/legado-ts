@@ -165,6 +165,18 @@ export interface CryptoHost {
   createSymmetricCrypto(transformation: string, key: Uint8Array, iv?: Uint8Array): SymmetricCrypto
 }
 
+/** JavaScript 书源使用的会话缓存；saveTime 单位为秒，0 表示不过期。 */
+export interface SourceScriptCache {
+  get(key: string, signal?: AbortSignal): string | undefined | Promise<string | undefined>
+  put(key: string, value: string, saveTime?: number, signal?: AbortSignal): void | Promise<void>
+  delete(key: string, signal?: AbortSignal): void | Promise<void>
+  getFromMemory(key: string): string | undefined | Promise<string | undefined>
+  putMemory(key: string, value: string, signal?: AbortSignal): void | Promise<void>
+  deleteMemory(key: string, signal?: AbortSignal): void | Promise<void>
+  getFile(key: string): string | undefined | Promise<string | undefined>
+  putFile(key: string, value: string, saveTime?: number, signal?: AbortSignal): void | Promise<void>
+}
+
 export type ArchiveFormat = 'gzip' | 'zip' | '7z' | 'rar'
 
 export interface ArchiveLimits {

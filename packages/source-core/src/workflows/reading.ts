@@ -15,13 +15,27 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   let book = input.book
   const preUpdateJs = ruleString(input.source, 'ruleToc', 'preUpdateJs')
   if (input.runPerJs === true && preUpdateJs !== undefined) {
-    const preUpdate = await executeWorkflowJavaScript(ports, input.source, `${preUpdateJs}\n;book`, stage, 'book', trace, { bindings: { book: { ...book }, isFromBookInfo: input.isFromBookInfo === true }, ...(input.signal === undefined ? {} : { signal: input.signal }) })
+    const preUpdate = await executeWorkflowJavaScript(ports, input.source, `${preUpdateJs}\n;book`, stage, 'book', trace, { bindings: { book: { ...book }, isFromBookInfo: input.isFromBookInfo === true }, captureMutations: ['book'], ...(input.signal === undefined ? {} : { signal: input.signal }) })
     if (preUpdate.state === 'cancelled' || input.signal?.aborted === true) return cancelled('目录预处理脚本已取消', diagnostics, trace)
     if (preUpdate.state === 'capability-missing' || preUpdate.state === 'failed') {
       diagnostics.push({ code: preUpdate.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: 'preUpdateJs', message: preUpdate.message ?? '目录预处理脚本失败', retryable: false })
       return { status: preUpdate.state === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
     }
-    if (typeof preUpdate.value === 'object' && preUpdate.value !== null && !Array.isArray(preUpdate.value)) book = mergeBookScriptValues(book, preUpdate.value as Record<string, unknown>)
+    if (typeof preUpdate.value === 'object' && preUpdate.value !== null && !Array.isArray(preUpdate.value)) {
+      const result = preUpdate.value as Record<string, unknown>
+      const hasCapture = Object.hasOwn(result, '__legadoWorkflowBindings')
+      const returnedBook = hasCapture ? result.__legadoWorkflowValue : result
+      const capturedBook = hasCapture && typeof result.__legadoWorkflowBindings === 'object' && result.__legadoWorkflowBindings !== null
+        ? (result.__legadoWorkflowBindings as Record<string, unknown>).book
+        : undefined
+      if (typeof returnedBook === 'object' && returnedBook !== null && !Array.isArray(returnedBook)) {
+        const values = { ...(returnedBook as Record<string, unknown>) }
+        if (typeof capturedBook === 'object' && capturedBook !== null && typeof (capturedBook as Record<string, unknown>).variable === 'string') {
+          values.variable = (capturedBook as Record<string, unknown>).variable
+        }
+        book = mergeBookScriptValues(book, values)
+      }
+    }
   }
   const listRule = ruleString(input.source, 'ruleToc', 'chapterList')
   if (listRule === undefined) {
@@ -37,7 +51,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const rawTocUrl = book.tocUrl?.trim() ? book.tocUrl : book.bookUrl
   const rawBookUrl = resolveUrl(rawTocUrl, resolvedBookUrl) ?? resolvedBookUrl
   // 目录地址同样允许 `{{...}}` 内联表达式（Android 对每个 AnalyzeUrl 都做同样的展开）。
-  const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+  const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book: input.book }, input.signal)
   if (expandedBookUrl.url === undefined) {
     diagnostics.push(expansionDiagnostic(expandedBookUrl.error, stage, 'tocUrl', '目录地址展开失败'))
     return { status: expansionStatus(expandedBookUrl.error), value: null, diagnostics, trace }
@@ -75,7 +89,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     visited.add(responseUrl)
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
-    const list = await evaluateField(ports, input.source, stage, 'chapterList', listRuleBody, body, pageIndex, trace, input.signal, { ...context, expect: 'nodes' })
+    const list = await evaluateField(ports, input.source, stage, 'chapterList', listRuleBody, body, pageIndex, trace, input.signal, { ...context, expect: 'nodes', bindings: { book: input.book } })
     if (list.state === 'cancelled') return cancelled('目录规则执行已取消', diagnostics, trace)
     if (list.state === 'capability-missing') {
       diagnostics.push({ code: 'capability-missing', stage, field: 'chapterList', message: list.message ?? '目录规则能力不可用', retryable: false })
@@ -90,7 +104,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       diagnostics.push({ code: 'item-skipped', stage, field: 'chapterList', message: 'chapterList 规则必须返回列表', retryable: false })
     }
     for (const [itemIndex, rawItem] of rawItems.entries()) {
-      const fields = await chapterFields(ports, input.source, rawItem, pageIndex * 100000 + itemIndex, input.signal, diagnostics, trace, volume, context)
+      const fields = await chapterFields(ports, input.source, rawItem, pageIndex * 100000 + itemIndex, input.signal, diagnostics, trace, volume, context, input.book)
       if (input.signal !== undefined && input.signal.aborted) return cancelled('目录工作流已取消', diagnostics, trace)
       if (fields.isVolume === true && fields.title !== undefined && fields.title.length > 0) volume = fields.title
       else if (fields.volume !== undefined && fields.volume.length > 0) volume = fields.volume
@@ -115,6 +129,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
         chapterUrl,
         index: chapterIndex,
         title: fields.title,
+        ...(fields.variable === undefined ? {} : { variable: fields.variable }),
         rawFields: fields.rawFields,
         traceRef: `toc:${chapterIndex}`,
         isVolume,
@@ -129,14 +144,14 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (!pendingPage.followNext) continue
     const nextRule = ruleString(input.source, 'ruleToc', 'nextTocUrl')
     if (nextRule === undefined) continue
-    const next = await evaluateField(ports, input.source, stage, 'nextTocUrl', nextRule, body, pageIndex, trace, input.signal, context)
+    const next = await evaluateField(ports, input.source, stage, 'nextTocUrl', nextRule, body, pageIndex, trace, input.signal, { ...context, bindings: { book: input.book } })
     if (next.state === 'cancelled') return cancelled('目录下一页规则已取消', diagnostics, trace)
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
     const resolvedNextUrls = new Set<string>()
     for (const value of nextValues) {
       const resolved = resolveUrl(value, responseUrl)
-      const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+      const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book: input.book }, input.signal)
       const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
         if (expandedNext?.error?.code === 'cancelled') return cancelled('目录下一页地址展开已取消', diagnostics, trace)
@@ -169,6 +184,7 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
   const cursor = input.cursor ?? { index: 0 }
   const book = { ...input.book.rawFields, ...input.book, origin: input.book.sourceId, originName: input.source.bookSourceName, type: sourceNumber(input.source, 'bookSourceType') ?? 0 }
   const result = await executeSourceFunction(ports, input.source, 'getChapters', [book], { book }, 'detail', 'chapter', trace, input.signal)
+  if (typeof book.variable === 'string') input.book.variable = book.variable
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 目录工作流已取消', diagnostics, trace)
   if (result.state === 'capability-missing') {
     diagnostics.push({ code: 'capability-missing', stage: 'detail', field: 'getChapters', message: result.message ?? 'JavaScript 源函数宿主不可用', retryable: false })
@@ -216,6 +232,8 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
       isVip: booleanValue(record.isVip),
       isPay: booleanValue(record.isPay),
     }
+    if (typeof record.variable === 'string') chapter.variable = record.variable
+    else if (typeof record.variable === 'object' && record.variable !== null && !Array.isArray(record.variable)) chapter.variable = JSON.stringify(record.variable)
     const volume = typeof record.volume === 'string' ? record.volume : undefined
     if (volume !== undefined && volume.length > 0) chapter.volume = volume
     const updateTime = typeof record.updateTime === 'string' ? record.updateTime : typeof record.tag === 'string' ? record.tag : undefined
@@ -259,13 +277,24 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const maxPages = input.maxPages ?? sourceNumber(input.source, 'contentMaxPages') ?? 32
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const maxOutputBytes = input.maxOutputBytes ?? 4 * 1024 * 1024
+  const variableBook: BookMetadata = input.book ?? {
+    sourceId: input.chapter.sourceId,
+    bookUrl: input.chapter.bookUrl,
+    name: '',
+    rawFields: {},
+    traceRef: 'content:book',
+    emptyFields: [],
+    fieldErrors: {},
+    tocUrl: input.chapter.bookUrl,
+  }
+  const ruleBindings = { book: variableBook, chapter: input.chapter }
   const visited = new Set<string>()
   const pages: string[] = []
   const cleanedPages: string[] = []
   const resources: ContentResource[] = []
   const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
   const rawFirstPageUrl = resolveUrl(input.chapter.chapterUrl, bookUrl) ?? input.chapter.chapterUrl
-  const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+  const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, ...ruleBindings }, input.signal)
   if (expandedFirstPage.url === undefined) {
     diagnostics.push(expansionDiagnostic(expandedFirstPage.error, stage, 'chapterUrl', '章节地址展开失败'))
     return { status: expansionStatus(expandedFirstPage.error), value: null, diagnostics, trace }
@@ -313,7 +342,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       stoppedByLimit = true
       break
     }
-    const result = await evaluateField(ports, input.source, stage, 'content', contentRule, body, pageIndex, trace, input.signal, context)
+    const result = await evaluateField(ports, input.source, stage, 'content', contentRule, body, pageIndex, trace, input.signal, { ...context, bindings: ruleBindings })
     if (result.state === 'cancelled') return cancelled('正文规则执行已取消', diagnostics, trace)
     if (result.state === 'capability-missing') {
       diagnostics.push({ code: 'capability-missing', stage, field: 'content', message: result.message ?? '正文规则能力不可用', retryable: false })
@@ -335,14 +364,14 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const nextRule = nextContentRule ?? ruleString(input.source, 'ruleContent', 'nextPage')
     const nextField = nextContentRule !== undefined ? 'nextContentUrl' : 'nextPage'
     if (nextRule === undefined) continue
-    const next = await evaluateField(ports, input.source, stage, nextField, nextRule, body, pageIndex, trace, input.signal, context)
+    const next = await evaluateField(ports, input.source, stage, nextField, nextRule, body, pageIndex, trace, input.signal, { ...context, bindings: ruleBindings })
     if (next.state === 'cancelled') return cancelled('正文下一页规则已取消', diagnostics, trace)
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
     const resolvedNextUrls = new Set<string>()
     for (const value of nextValues) {
       const resolvedNext = resolveUrl(value, responseUrl)
-      const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+      const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, ...ruleBindings }, input.signal)
       const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
         if (expandedNext?.error?.code === 'cancelled') return cancelled('正文下一页地址展开已取消', diagnostics, trace)
@@ -377,7 +406,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   let sourceReplaced = joined
   if (replaceRule !== undefined) {
     const trimmed = joined.split('\n').map((line) => line.trim()).join('\n')
-    const field = await evaluateField(ports, input.source, stage, 'replaceRegex', replaceRule, trimmed, undefined, trace, input.signal, firstPage?.context)
+    const field = await evaluateField(ports, input.source, stage, 'replaceRegex', replaceRule, trimmed, undefined, trace, input.signal, firstPage?.context === undefined ? { bindings: ruleBindings } : { ...firstPage.context, bindings: ruleBindings })
     if (field.state === 'cancelled') return cancelled('正文替换规则执行已取消', diagnostics, trace)
     if (field.state === 'value' || field.state === 'empty') sourceReplaced = textValue(field.value)
     else {
@@ -395,7 +424,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const cleaned = cleanContent(replaced, contentType, lastResponseUrl)
   let title: string | undefined
   if (titleRule !== undefined && firstPage !== undefined) {
-    const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, firstPage.context)
+    const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, { ...firstPage.context, bindings: ruleBindings })
     if (field.state === 'cancelled') return cancelled('章节标题规则执行已取消', diagnostics, trace)
     if (field.state === 'value') title = titleText(textValue(field.value))
     else if (field.state === 'failed' || field.state === 'capability-missing') {
@@ -441,6 +470,8 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
   }
   const bookValue = { ...book.rawFields, ...book, origin: book.sourceId, originName: input.source.bookSourceName, type: sourceNumber(input.source, 'bookSourceType') ?? 0 }
   const result = await executeSourceFunction(ports, input.source, 'getContent', [chapter, bookValue, input.nextChapterUrl ?? null], { chapter, book: bookValue, nextChapterUrl: input.nextChapterUrl ?? null }, 'detail', 'content', trace, input.signal)
+  if (input.book !== undefined && typeof bookValue.variable === 'string') input.book.variable = bookValue.variable
+  if (typeof chapter.variable === 'string') input.chapter.variable = chapter.variable
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 正文工作流已取消', diagnostics, trace)
   if (result.state === 'capability-missing') {
     diagnostics.push({ code: 'capability-missing', stage: 'detail', field: 'getContent', message: result.message ?? 'JavaScript 源函数宿主不可用', retryable: false })
@@ -494,8 +525,12 @@ async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSourc
         const mutatedTitle = typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter)
           ? (mutatedChapter as Record<string, unknown>).title
           : undefined
+        const mutatedVariable = typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter)
+          ? (mutatedChapter as Record<string, unknown>).variable
+          : undefined
         if (outputValue !== null && outputValue !== undefined) chapter.title = textValue(outputValue)
         else if (javascriptPrimitiveText(mutatedTitle) !== undefined) chapter.title = javascriptPrimitiveText(mutatedTitle)!
+        if (typeof mutatedVariable === 'string') chapter.variable = mutatedVariable
       } else chapter.title = textValue(script.value)
     }
   }
@@ -503,7 +538,7 @@ async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSourc
 
 function mergeBookScriptValues(book: BookMetadata, values: Record<string, unknown>): BookMetadata {
   const merged: BookMetadata = { ...book }
-  for (const key of ['name', 'author', 'intro', 'kind', 'wordCount', 'lastChapter', 'updateTime', 'coverUrl', 'tocUrl'] as const) {
+  for (const key of ['name', 'author', 'intro', 'kind', 'wordCount', 'lastChapter', 'updateTime', 'coverUrl', 'tocUrl', 'variable'] as const) {
     const value = values[key]
     if (typeof value === 'string') merged[key] = value
   }
@@ -553,6 +588,7 @@ function pageOptions(options: WorkflowOptions, maxBytes: number, usedBytes: numb
 interface ChapterFields {
   title?: string
   url?: string
+  variable?: string
   volume?: string
   isVolume?: boolean
   isVip?: boolean
@@ -561,8 +597,9 @@ interface ChapterFields {
   rawFields: JsonObject
 }
 
-async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }): Promise<ChapterFields> {
+async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }, book: BookMetadata): Promise<ChapterFields> {
   const result: ChapterFields = { rawFields: {} }
+  const chapter: Record<string, unknown> = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: '', index: itemIndex, title: '', rawFields: result.rawFields }
   for (const ruleField of ['chapterName', 'chapterUrl', 'chapterVolume', 'updateTime', 'isVolume', 'isVip', 'isPay'] as const) {
     const outputField = ruleField === 'chapterName'
       ? 'title'
@@ -573,7 +610,7 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
           : ruleField
     const rule = ruleString(source, 'ruleToc', ruleField)
     if (rule === undefined) continue
-    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, context)
+    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, bindings: { book, chapter } })
     if (field.state === 'cancelled') return result
     if (field.state === 'failed' || field.state === 'capability-missing') {
       diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: ruleField, itemIndex, message: field.message ?? '章节字段失败', retryable: false })
@@ -604,9 +641,12 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
       else if (outputField === 'url') result.url = value
       else if (outputField === 'volume') result.volume = value
       else if (outputField === 'updateTime') result.updateTime = value
+      if (outputField === 'title') chapter.title = value
+      else if (outputField === 'url') chapter.chapterUrl = value
     }
     if (ruleField === 'chapterName' && (field.state !== 'value' || result.title === undefined || result.title.length === 0)) return result
   }
+  if (typeof chapter.variable === 'string') result.variable = chapter.variable
   if (result.volume === undefined && inheritedVolume !== undefined) result.volume = inheritedVolume
   return result
 }

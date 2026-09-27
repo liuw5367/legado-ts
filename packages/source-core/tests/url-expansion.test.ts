@@ -25,12 +25,12 @@ test('URL 展开支持 Android 的页码数组、嵌入脚本与 @result', async
     workflow,
     source,
     'search',
-    '/page/<1,2,3><js>return result</js>@result?q={{keyword}}',
+    '/page/<1,2,3><js>result</js>@result?q={{keyword}}',
     { page: '2', keyword: '中文' },
     { page: 2, keyword: '中文' },
   )
   assert.equal(result.url, '/page/2-script?q=中文')
-  assert.deepEqual(seen, [{ rule: '@js:return result', content: '/page/<1,2,3>' }])
+  assert.deepEqual(seen, [{ rule: '@js:result', content: '/page/<1,2,3>' }])
 })
 
 test('URL 页码数组超出已列页数后继续使用最后一项', async () => {

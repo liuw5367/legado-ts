@@ -1,6 +1,8 @@
 import { compileRule } from './compiler.ts'
 import { compileSourcePattern } from './pattern-guard.ts'
 import { MemoryVariableView } from './variables.ts'
+import { sourceDefinitionFingerprint } from '../codec/identity.ts'
+import { MemorySourceScriptCache } from '../runtime/source-session.ts'
 import { replaceFont } from '../runtime/font.ts'
 import type {
   CryptoHost,
@@ -10,9 +12,10 @@ import type {
   HtmlParser,
   JsonPathParser,
   ParserNode,
+  SourceScriptCache,
   XPathParser,
 } from '../runtime/contracts.ts'
-import type { JavaScriptHost } from '../runtime/javascript.ts'
+import type { JavaScriptHost, JavaScriptVariableScope } from '../runtime/javascript.ts'
 import type { NormalizedSource } from '../model/types.ts'
 import type { CompiledRule, RuleAtom, RuleSequence } from './types.ts'
 import type {
@@ -33,6 +36,7 @@ export interface SourceRuleBridgeRequest {
   options?: unknown
   headers?: Readonly<Record<string, string>>
   value?: unknown
+  saveTime?: unknown
   text?: unknown
   errorBase64?: unknown
   correctBase64?: unknown
@@ -40,6 +44,10 @@ export interface SourceRuleBridgeRequest {
   key?: unknown
   iv?: unknown
   transformation?: unknown
+  time?: unknown
+  format?: unknown
+  offsetMs?: unknown
+  capability?: string
   expression?: unknown
   name?: string
   scope?: string
@@ -48,6 +56,13 @@ export interface SourceRuleBridgeRequest {
 export interface SourceRuleRuntimeOptions {
   /** bridge 处理器；第三个参数是本次求值的书源（宿主总是显式传入），URL 展开等求值发生在首次请求之前。 */
   request?: (input: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource) => Promise<unknown>
+  /** 书源 JS 的 CacheManager 端口，默认是仅当前会话可见的内存缓存。 */
+  cache?: SourceScriptCache
+  /** 平台对齐 Android JavaScriptInterface 的时间格式。 */
+  timeFormat?: (time: number) => string
+  timeFormatUTC?: (time: number, format: string, offsetMs: number) => string | null
+  /** 由宿主提供密码学随机 UUID。 */
+  randomUUID?: () => string
   encoding: EncodingHost
   crypto: CryptoHost
   font: FontHost
@@ -63,8 +78,9 @@ interface EvaluationState {
   readonly request: WorkflowRuleRequest
   readonly source: NormalizedSource
   readonly content: unknown
-  steps: number
-  depth: number
+  readonly bindings: Readonly<Record<string, unknown>>
+  readonly budget: { steps: number; depth: number }
+  readonly expect: WorkflowRuleRequest['expect']
 }
 
 interface NodeRef {
@@ -107,6 +123,10 @@ function nonEmpty(value: unknown): boolean {
   if (typeof value === 'string') return value.length > 0
   if (Array.isArray(value)) return value.length > 0
   return true
+}
+
+function isVariableScope(value: unknown): value is JavaScriptVariableScope {
+  return value === 'chapter' || value === 'book' || value === 'rule-data' || value === 'source'
 }
 
 function jsonInput(value: unknown): unknown {
@@ -290,43 +310,49 @@ function splitSourceRuleSegments(rule: string): SourceRuleSegment[] | undefined 
   return segments
 }
 
-function trailingExpression(code: string): { body: string; expression?: string } {
-  const input = code.trim().replace(/;$/, '').trim()
-  let start = 0
-  let quote: string | undefined
-  let escaped = false
-  let depth = 0
-  for (let index = 0; index < input.length; index += 1) {
-    const current = input[index]!
-    if (quote !== undefined) {
-      if (escaped) escaped = false
-      else if (current === '\\') escaped = true
-      else if (current === quote) quote = undefined
-      continue
+type RuleEntity = Record<string, unknown>
+
+function entityVariables(entity: unknown): Record<string, string> {
+  if (typeof entity !== 'object' || entity === null) return {}
+  const record = entity as RuleEntity
+  const value = record.variable ?? (typeof record.rawFields === 'object' && record.rawFields !== null ? (record.rawFields as RuleEntity).variable : undefined)
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+      }
+    } catch {
+      return {}
     }
-    if (current === '"' || current === "'" || current === '`') quote = current
-    else if (current === '(' || current === '[' || current === '{') depth += 1
-    else if (current === ')' || current === ']' || current === '}') depth = Math.max(0, depth - 1)
-    else if (current === ';' && depth === 0) start = index + 1
   }
-  const last = input.slice(start).trim()
-  if (last.length === 0 || last === '}' || last.startsWith('//')) return { body: input }
-  // 下面只识别安全的简单赋值和调用表达式，不尝试解析完整 JavaScript。
-  const assignable = /^[A-Za-z_$][\w$]*(?:(?:\.[A-Za-z_$][\w$]*)|(?:\[[^\n]+\]))*\s*=(?!=)[\s\S]+$/u.test(last)
-  if (/^[A-Za-z_$][\w$]*(?:(?:\.[A-Za-z_$][\w$]*)|(?:\[[^\n]+\]))*(?:\([^;\n]*\))?$/.test(last) || assignable || last.startsWith('`') || last.startsWith('"') || last.startsWith("'")) {
-    return { body: input.slice(0, start).trim(), expression: last }
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
   }
-  return { body: input }
+  return {}
 }
 
-function captureWorkflowMutations(code: string, names: readonly string[]): string {
-  // 只把合法 JavaScript 标识符加入脚本返回对象，避免注入不完整属性表达式。
-  const identifiers = names.filter((name) => /^[A-Za-z_$][\w$]*$/u.test(name))
-  if (identifiers.length === 0) return code
-  const trailing = trailingExpression(code)
-  const result = trailing.expression === undefined ? 'null' : `(${trailing.expression})`
-  const bindings = identifiers.map((name) => `${JSON.stringify(name)}: ${name}`).join(', ')
-  return `${trailing.body}\n;__legadoWorkflowCapture = { __legadoWorkflowValue: ${result}, __legadoWorkflowBindings: { ${bindings} } }`
+function entityValue(entity: unknown, name: string): string | undefined {
+  return entityVariables(entity)[name]
+}
+
+function mergeCapturedEntityVariables(value: unknown, names: readonly string[] | undefined, bindings: Readonly<Record<string, unknown>>, initialVariables: Readonly<Record<string, string | undefined>>): unknown {
+  if (names === undefined || typeof value !== 'object' || value === null || Array.isArray(value)) return value
+  const wrapper = value as RuleEntity
+  const captured = wrapper.__legadoWorkflowBindings
+  if (typeof captured !== 'object' || captured === null || Array.isArray(captured)) return value
+  const result: RuleEntity = { ...wrapper, __legadoWorkflowBindings: { ...(captured as RuleEntity) } }
+  const capturedBindings = result.__legadoWorkflowBindings as RuleEntity
+  for (const name of names) {
+    const current = bindings[name]
+    const returned = capturedBindings[name]
+    if (typeof current !== 'object' || current === null || typeof returned !== 'object' || returned === null || Array.isArray(returned)) continue
+    const currentVariable = (current as RuleEntity).variable
+    if (typeof currentVariable === 'string' && currentVariable !== initialVariables[name]) {
+      capturedBindings[name] = { ...(returned as RuleEntity), variable: currentVariable }
+    }
+  }
+  return result
 }
 
 export class SourceRuleRuntime implements WorkflowRulePort {
@@ -339,6 +365,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly crypto: CryptoHost
   private readonly font: FontHost
   private readonly requestBridge?: SourceRuleRuntimeOptions['request']
+  private readonly cache: SourceScriptCache
+  private readonly timeFormat?: SourceRuleRuntimeOptions['timeFormat']
+  private readonly timeFormatUTC?: SourceRuleRuntimeOptions['timeFormatUTC']
+  private readonly randomUUID?: SourceRuleRuntimeOptions['randomUUID']
   private readonly maxSteps: number
   private readonly nodes = new Map<string, StoredNode>()
   private readonly captureRows = new WeakMap<object, string>()
@@ -346,7 +376,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private nextNodeId = 0
 
   public constructor(options: SourceRuleRuntimeOptions) {
-    this.variables = new MemoryVariableView({ availableScopes: ['chapter', 'book', 'rule-data', 'source'], initial: { source: options.initialVariables ?? {} } })
+    this.variables = new MemoryVariableView({ availableScopes: ['source'], initial: { source: options.initialVariables ?? {} } })
     this.encoding = options.encoding
     this.crypto = options.crypto
     this.font = options.font
@@ -355,6 +385,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     this.xpath = options.xpath
     this.javascript = options.javascript
     this.requestBridge = options.request
+    this.cache = options.cache ?? new MemorySourceScriptCache()
+    this.timeFormat = options.timeFormat
+    this.timeFormatUTC = options.timeFormatUTC
+    this.randomUUID = options.randomUUID
     this.maxSteps = options.maxSteps ?? 10000
   }
 
@@ -363,7 +397,73 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   public setVariable(name: string, value: string | null): void {
-    this.variables.set(name, value)
+    this.variables.set(name, value, 'source')
+  }
+
+  public snapshotVariables(scope: 'source'): Readonly<Record<string, string>> {
+    return this.variables.snapshot(scope)
+  }
+
+  private readVariable(name: string, bindings: Readonly<Record<string, unknown>>, scope?: JavaScriptVariableScope): string | undefined {
+    if (scope === 'source') {
+      const value = this.variables.get(name, 'source')
+      return name === '__source__' ? value ?? '' : value
+    }
+    if (scope !== undefined) return entityValue(this.entityForScope(bindings, scope), name)
+    if (name === 'bookName' && this.entityForScope(bindings, 'book') !== undefined) {
+      const bookName = (this.entityForScope(bindings, 'book') as RuleEntity).name
+      return bookName === null || bookName === undefined ? '' : textValue(bookName)
+    }
+    if (name === 'title' && this.entityForScope(bindings, 'chapter') !== undefined) {
+      const title = (this.entityForScope(bindings, 'chapter') as RuleEntity).title
+      return title === null || title === undefined ? '' : textValue(title)
+    }
+    for (const current of ['chapter', 'book', 'rule-data', 'source'] as const) {
+      const value = this.readVariable(name, bindings, current)
+      if (value !== undefined && value.length > 0) return value
+    }
+    return undefined
+  }
+
+  private writeVariable(name: string, value: unknown, bindings: Readonly<Record<string, unknown>>, scope?: JavaScriptVariableScope): void {
+    const target = scope ?? (this.entityForScope(bindings, 'chapter') !== undefined ? 'chapter' : this.entityForScope(bindings, 'book') !== undefined ? 'book' : this.entityForScope(bindings, 'rule-data') !== undefined ? 'rule-data' : 'source')
+    const next = value === null || value === undefined ? null : textValue(value)
+    if (target === 'source') {
+      this.variables.set(name, next, 'source')
+      return
+    }
+    const entity = this.entityForScope(bindings, target)
+    if (entity === undefined) return
+    const values = entityVariables(entity)
+    if (next === null) delete values[name]
+    else Object.defineProperty(values, name, { value: next, enumerable: true, configurable: true, writable: true })
+    entity.variable = JSON.stringify(values)
+  }
+
+  private entityForScope(bindings: Readonly<Record<string, unknown>>, scope: JavaScriptVariableScope): RuleEntity | undefined {
+    const value = scope === 'rule-data' ? bindings.ruleData ?? bindings.rule_data : bindings[scope]
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RuleEntity : undefined
+  }
+
+  private async nestedRule(rule: string, state: EvaluationState, content: unknown, expect: WorkflowRuleRequest['expect'], signal: AbortSignal): Promise<unknown> {
+    const nestedState: EvaluationState = {
+      ...state,
+      request: { ...state.request, signal },
+      budget: state.budget,
+    }
+    this.check(nestedState)
+    state.budget.depth += 1
+    if (state.budget.depth > 64) {
+      state.budget.depth -= 1
+      throw new SourceRuleError('failed', '规则嵌套超过限制')
+    }
+    try {
+      const nestedExpect = expect ?? 'text'
+      const request: WorkflowRuleRequest = { ...nestedState.request, rule, content, expect: nestedExpect, bindings: state.bindings }
+      return await this.evaluateText(rule, { ...nestedState, request, content, expect: nestedExpect }, content)
+    } finally {
+      state.budget.depth -= 1
+    }
   }
 
   public async executeJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown = '', signal?: AbortSignal): Promise<WorkflowRuleOutput> {
@@ -371,8 +471,14 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   public async executeWorkflowJavaScript(request: WorkflowJavaScriptRequest): Promise<WorkflowRuleOutput> {
-    const code = request.captureMutations === undefined ? request.code : captureWorkflowMutations(request.code, request.captureMutations)
-    return this.runJavaScript(code, request.stage, request.source, request.content ?? '', request.signal, { ...(request.content === undefined ? {} : { content: request.content }), ...(request.baseUrl === undefined ? {} : { baseUrl: request.baseUrl }), ...(request.redirectUrl === undefined ? {} : { redirectUrl: request.redirectUrl }), ...(request.bindings === undefined ? {} : { bindings: request.bindings }) })
+    return this.runJavaScript(request.code, request.stage, request.source, request.content ?? '', request.signal, {
+      mode: 'script',
+      ...(request.captureMutations === undefined ? {} : { captureBindings: request.captureMutations }),
+      ...(request.content === undefined ? {} : { content: request.content }),
+      ...(request.baseUrl === undefined ? {} : { baseUrl: request.baseUrl }),
+      ...(request.redirectUrl === undefined ? {} : { redirectUrl: request.redirectUrl }),
+      ...(request.bindings === undefined ? {} : { bindings: request.bindings }),
+    })
   }
 
   public async executeSourceFunction(request: SourceFunctionRequest): Promise<SourceFunctionOutput> {
@@ -384,29 +490,46 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       getContent: ['chapter', 'book', 'nextChapterUrl'],
     }
     const parameters = names[request.name]
-    const bindings = {
+    const bindings: Readonly<Record<string, unknown>> = {
       ...(request.bindings ?? {}),
       ...Object.fromEntries(parameters.map((name, index) => [name, request.args[index]])),
     }
     const call = `${request.name}(${parameters.join(', ')})`
     const code = [
       request.source.mainJs ?? '',
-      `if (typeof ${request.name} !== 'function') return { __legadoSourceFunctionExists: false };`,
-      `return { __legadoSourceFunctionExists: true, value: ${call} };`,
+      `typeof ${request.name} === 'function' ? { __legadoSourceFunctionExists: true, value: ${call} } : { __legadoSourceFunctionExists: false }`,
     ].join('\n')
-    const output = await this.runJavaScript(code, request.stage, request.source, '', request.signal, { bindings })
+    const captureBindings = parameters.filter((name) => Object.hasOwn(bindings, name))
+    const output = await this.runJavaScript(code, request.stage, request.source, '', request.signal, { bindings, mode: 'script', captureBindings })
     if (output.status !== 'success') return { ...output, exists: false }
-    if (typeof output.value !== 'object' || output.value === null || !('__legadoSourceFunctionExists' in output.value)) {
+    let value = output.value
+    if (captureBindings.length > 0) {
+      const captured = value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: unknown } | null
+      if (typeof captured !== 'object' || captured === null || !('__legadoWorkflowBindings' in captured) || typeof captured.__legadoWorkflowBindings !== 'object' || captured.__legadoWorkflowBindings === null) {
+        return { status: 'failed', value: null, exists: false, message: 'JavaScript 源函数返回值无法识别' }
+      }
+      for (const name of captureBindings) {
+        const target = bindings[name]
+        const changed = (captured.__legadoWorkflowBindings as RuleEntity)[name]
+        if (typeof target !== 'object' || target === null || Array.isArray(target) || typeof changed !== 'object' || changed === null || Array.isArray(changed)) continue
+        for (const [key, value] of Object.entries(changed)) {
+          Object.defineProperty(target, key, { value, enumerable: true, configurable: true, writable: true })
+        }
+      }
+      value = captured.__legadoWorkflowValue
+    }
+    if (typeof value !== 'object' || value === null || !('__legadoSourceFunctionExists' in value)) {
       return { status: 'failed', value: null, exists: false, message: 'JavaScript 源函数返回值无法识别' }
     }
-    const result = output.value as { __legadoSourceFunctionExists: unknown; value?: unknown }
+    const result = value as { __legadoSourceFunctionExists: unknown; value?: unknown }
     if (result.__legadoSourceFunctionExists !== true) return { status: 'empty', value: null, exists: false }
     return { status: result.value === null || result.value === undefined ? 'empty' : 'success', value: result.value ?? null, exists: true }
   }
 
   public async evaluate(request: WorkflowRuleRequest): Promise<WorkflowRuleOutput> {
     if (request.signal?.aborted === true) return { status: 'cancelled', value: null, message: '规则求值已取消' }
-    const state: EvaluationState = { request, source: request.source, content: request.content, steps: 0, depth: 0 }
+    const bindings = { ...this.bindings, ...(request.bindings ?? {}) }
+    const state: EvaluationState = { request: { ...request, bindings }, source: request.source, content: request.content, bindings, budget: { steps: 0, depth: 0 }, expect: request.expect }
     try {
       const value = await this.evaluateText(request.rule, state, request.content)
       return nonEmpty(value) ? { status: 'success', value } : { status: 'empty', value: null }
@@ -435,7 +558,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         // JS templates are expanded against the content that entered the full rule,
         // while `result` itself is the output of the preceding segment.
         const code = await this.expandTemplate(segment.text, state, content)
-        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, result, state.request.signal, state.request)
+        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, result, state.request.signal, { ...state.request, bindings: state.bindings, ruleState: state, mode: 'script' })
         if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
         result = output.value
       }
@@ -462,7 +585,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const compiled = compileRule(rule, { defaultMode: 'Default', allInOne: false })
     if (compiled.rule === undefined) throw new SourceRuleError('failed', compiled.diagnostics[0]?.message ?? '规则编译失败')
     if (compiled.rule.kind !== 'atom') return this.interpolate(rule, state, content)
-    for (const put of compiled.rule.puts) this.variables.set(put.name, textValue(await this.evaluateNode(put.rule, state, content)))
+    for (const put of compiled.rule.puts) this.writeVariable(put.name, textValue(await this.evaluateNode(put.rule, state, content)), state.bindings)
     const text = await this.interpolate(compiled.rule.body, state, content)
     return this.applyReplacement(text, compiled.rule, state, content)
   }
@@ -475,13 +598,16 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private async evaluateNode(rule: CompiledRule, state: EvaluationState, content: unknown): Promise<unknown> {
     this.check(state)
-    state.depth += 1
-    if (state.depth > 64) throw new SourceRuleError('failed', '规则嵌套超过限制')
+    state.budget.depth += 1
+    if (state.budget.depth > 64) {
+      state.budget.depth -= 1
+      throw new SourceRuleError('failed', '规则嵌套超过限制')
+    }
     try {
       if (rule.kind === 'atom') return this.evaluateAtom(rule, state, content)
       return this.evaluateSequence(rule, state, content)
     } finally {
-      state.depth -= 1
+      state.budget.depth -= 1
     }
   }
 
@@ -515,7 +641,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   private async evaluateAtom(rule: RuleAtom, state: EvaluationState, content: unknown): Promise<unknown> {
-    for (const put of rule.puts) this.variables.set(put.name, textValue(await this.evaluateNode(put.rule, state, content)))
+    for (const put of rule.puts) this.writeVariable(put.name, textValue(await this.evaluateNode(put.rule, state, content)), state.bindings)
     const template = rule.body.includes('{{') || rule.body.includes('@get:')
     const interpolated = template ? await this.interpolate(rule.body, state, content) : rule.body
     let value: unknown
@@ -525,16 +651,16 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     // 空规则串在 Android 里分三种：列表规则（getStringList）沿用上一份内容；字段规则（getString）
     // 只有「带 ## 替换」时才沿用内容并继续做替换（AnalyzeRule.kt:345 的 `rule.isNotBlank() || replaceRegex.isEmpty()`），
     // 其余情况字段值就是空串。
-    if (interpolated.length === 0 && rule.mode !== 'Js') value = rule.replacement !== undefined || state.request.expect === 'nodes'
+    if (interpolated.length === 0 && rule.mode !== 'Js') value = rule.replacement !== undefined || state.expect === 'nodes'
       ? this.contentValue(content)
       : await this.evaluateDefault('', state, content)
     else if (template && (rule.mode === 'Default' || rule.mode === 'Json' || rule.mode === 'XPath')) value = interpolated
     else if (rule.mode === 'Default') value = await this.evaluateDefault(rule.body, state, content)
     else if (rule.mode === 'Json') value = await this.evaluateJson(rule.body, state, content)
-    else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content, state.request.expect)
+    else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content, state.expect)
     else if (rule.mode === 'Regex') value = this.evaluateRegex(rule.body, content, state.source.bookSourceUrl)
     else if (rule.mode === 'Js') {
-      const result = await this.runJavaScript(interpolated, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
+      const result = await this.runJavaScript(interpolated, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, { ...state.request, bindings: state.bindings, ruleState: state, mode: 'script' })
       if (result.status !== 'success') throw new SourceRuleError(result.status === 'capability-missing' ? 'capability-missing' : result.status === 'cancelled' ? 'cancelled' : 'failed', result.message ?? 'JavaScript 规则执行失败')
       value = result.value
     } else throw new SourceRuleError('capability-missing', 'WebView 规则需要浏览器宿主')
@@ -547,7 +673,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (expanded === '') {
       // Android 两条路径对空规则的处理不同：列表规则走 getStringList，`if (rule.isNotEmpty())` 不成立时
       // 沿用上一份内容；字段规则走 getString，最终落到 AnalyzeByJSoup.getString("")，结果是空。
-      if (state.request.expect !== 'nodes') return stored === undefined ? '' : stored.document.read(stored.node, 'text')
+      if (state.expect !== 'nodes') return stored === undefined ? '' : stored.document.read(stored.node, 'text')
       return stored === undefined ? textValue(content) : this.remember(stored.document, stored.node)
     }
     if (expanded === 'text' || expanded === 'ownText' || expanded === 'html') {
@@ -562,7 +688,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     if (expanded.startsWith('literal:')) return expanded.slice('literal:'.length)
     // 列表规则整条是选择器链；字段规则的末段是输出标记或属性名。
-    const plan: DefaultPlan = state.request.expect === 'nodes' ? { selector: expanded } : lastOutput(expanded)
+    const plan: DefaultPlan = state.expect === 'nodes' ? { selector: expanded } : lastOutput(expanded)
     const selectorParts = splitSelectorChain(plan.selector).map(normalizeSelector)
     if (selectorParts.length === 0) {
       // 没有选择器时按当前内容取值；属性名查询不落到整页文本上（Android 查的是根元素属性）。
@@ -657,7 +783,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private async interpolate(input: string, state: EvaluationState, content: unknown): Promise<string> {
     // 变量占位和双花括号求值遵循 Legado 插值语法；按倒序替换避免偏移量变化。
-    let result = input.replace(/@get:\{([^{}]+)\}/g, (_match, name: string) => this.variables.get(name) ?? '')
+    let result = input.replace(/@get:\{([^{}]+)\}/g, (_match, name: string) => this.readVariable(name, state.bindings) ?? '')
     const matches = [...result.matchAll(/\{\{([\s\S]*?)\}\}/g)]
     for (const match of matches.reverse()) {
       const expression = match[1]!.trim()
@@ -680,9 +806,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         return undefined
       }
     }
-    const variable = this.variables.get(expression)
+    const variable = this.readVariable(expression, state.bindings)
     if (variable !== undefined) return variable
-    const output = await this.runJavaScript(expression, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
+    const output = await this.runJavaScript(expression, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, { ...state.request, bindings: state.bindings, ruleState: state, mode: 'script' })
     if (output.status === 'cancelled') throw new SourceRuleError('cancelled', output.message ?? '模板表达式求值已取消')
     return output.status === 'success' ? output.value : undefined
   }
@@ -708,8 +834,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>> }): Promise<WorkflowRuleOutput> {
-    const bindings = {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[] }): Promise<WorkflowRuleOutput> {
+    const bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
       result: content,
@@ -732,15 +858,16 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'globalThis.index = bindings.index;',
       'globalThis.title = bindings.title;',
       'globalThis.gInt = bindings.gInt;',
-      'globalThis.isFromBookInfo = bindings.isFromBookInfo;',
+      'globalThis.fromBookInfo = bindings.fromBookInfo ?? bindings.isFromBookInfo;',
+      'globalThis.isFromBookInfo = globalThis.fromBookInfo;',
       'globalThis.baseUrl = bindings.baseUrl;',
       'globalThis.redirectUrl = bindings.redirectUrl;',
       'const sourceValue = bindings.sourceData ?? {};',
-      'globalThis.source = { ...sourceValue, key: bindings.sourceKey }; Object.defineProperties(globalThis.source, { getKey: { value: () => bindings.sourceKey }, getVariable: { value: (name) => name === undefined ? getVar("__source__") : getVar(String(name)) }, setVariable: { value: (name, value) => value === undefined ? setVar("__source__", name) : setVar(String(name), value) } });',
+      'globalThis.source = { ...sourceValue, key: bindings.sourceKey }; Object.defineProperties(globalThis.source, { getKey: { value: () => bindings.sourceKey }, get: { value: (name) => getVar(String(name), "source") ?? "" }, put: { value: (name, value) => { setVar(String(name), value, "source"); return value; } }, getVariable: { value: () => getVar("__source__", "source") ?? "" }, setVariable: { value: (value) => setVar("__source__", value, "source") }, putVariable: { value: (value) => setVar("__source__", value, "source") } });',
       'globalThis.sourceApi = sourceValue;',
       'const bookValue = bindings.book ?? {};',
-      'globalThis.book = { ...bookValue }; Object.defineProperties(globalThis.book, { getVariable: { value: (name) => name === undefined ? getVar("__book__") : getVar(String(name)) }, setVariable: { value: (name, value) => value === undefined ? setVar("__book__", name) : setVar(String(name), value) }, putVariable: { value: (name, value) => setVar(String(name), value) } });',
-      'globalThis.chapter = { ...(bindings.chapter ?? {}) };',
+      'globalThis.book = { ...bookValue }; Object.defineProperties(globalThis.book, { getVariable: { value: (name) => getVar(String(name), "book") ?? "" }, putVariable: { value: (name, value) => { setVar(String(name), value, "book"); return true; } } });',
+      'globalThis.chapter = { ...(bindings.chapter ?? {}) }; Object.defineProperties(globalThis.chapter, { getVariable: { value: (name) => getVar(String(name), "chapter") ?? "" }, putVariable: { value: (name, value) => { setVar(String(name), value, "chapter"); return true; } } });',
       'const getVariable = (name) => getVar(String(name));',
       'const putVariable = (name, value) => setVar(String(name), value);',
       // Android CookieStore 的 set/remove 返回 Unit，`{{cookie.removeCookie(...)}}` 必须展开为空串而不是 "true"。
@@ -748,7 +875,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       // 正文常常是 JSON 文本，`java.getString("$.x")` 必须能在这上面取路径（Android 会先解析内容）。
       'const legadoPathValue = (value, path) => { if (typeof value === "string") { try { value = JSON.parse(value); } catch (error) { value = undefined; } } const parts = String(path).replace(/^\\$\\.?\\.?/, "").match(/[A-Za-z_$][\\w$-]*|\\[\\d+\\]|\\[\\*\\]/g) ?? []; let current = value; for (const part of parts) { if (part === "[*]") current = Array.isArray(current) ? current : []; else if (Array.isArray(current)) current = current.map((item) => item == null ? undefined : item[part.startsWith("[") ? Number(part.slice(1, -1)) : part]); else current = current == null ? undefined : current[part]; } return current; };',
       'const legadoGetString = (name) => { const key = String(name); const value = key.startsWith("$") ? legadoPathValue(result, key) : result != null && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, key) ? result[key] : getVar(key); return Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\\n") : String(value ?? ""); };',
-      'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? request({ kind: "network", url: String(value), method: "GET", options }) : Object.prototype.hasOwnProperty.call(bindings, String(value)) ? bindings[String(value)] : getVar(String(value)), put: (name, value) => { setVar(String(name), value); return value; }, getString: (name) => { const key = String(name); return Object.prototype.hasOwnProperty.call(bindings, key) ? String(bindings[key] ?? "") : legadoGetString(name); }, getStringList: (name) => legadoGetString(name).split("\\n").filter(Boolean), getWebViewUA: () => "Mozilla/5.0", base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (value) => String(value), randomUUID: () => "", getAppVariant: () => "", androidId: () => "", deviceID: () => "" };',
+      'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? request({ kind: "network", url: String(value), method: "GET", options }) : Object.prototype.hasOwnProperty.call(bindings, String(value)) ? bindings[String(value)] : getVar(String(value)), put: (name, value) => { setVar(String(name), value); return value; }, getString: (name) => { const key = String(name); return Object.prototype.hasOwnProperty.call(bindings, key) ? String(bindings[key] ?? "") : legadoGetString(name); }, getStringList: (name) => legadoGetString(name).split("\\n").filter(Boolean), getWebViewUA: () => request({ kind: "runtime-capability", capability: "getWebViewUA" }), base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (value) => String(value), randomUUID: () => "", getAppVariant: () => "", androidId: () => "", deviceID: () => "" };',
+      'const legadoString = (value) => Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\\n") : String(value ?? "");',
+      'const legadoCookie = (url, key) => { const cookieText = String(request({ kind: "cookie-get", url: String(url) }) ?? ""); if (key === undefined || key === null) return cookieText; for (const part of cookieText.split(";")) { const index = part.indexOf("="); if (index >= 0 && part.slice(0, index).trim() === String(key)) return part.slice(index + 1).trim(); } return ""; };',
+      'java.getString = (rule) => legadoString(evaluateRule(String(rule), { expect: "text", content: result }));',
+      'java.getStringList = (rule) => { const value = evaluateRule(String(rule), { expect: "text", content: result }); return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : String(value ?? "").split("\\n").filter(Boolean); };',
+      'java.getCookie = (url, key) => legadoCookie(url, key);',
+      'java.timeFormat = (time) => request({ kind: "time-format", time: Number(time) });',
+      'java.timeFormatUTC = (time, format, offsetMs) => request({ kind: "time-format-utc", time: Number(time), format: String(format), offsetMs: Number(offsetMs) });',
+      'java.randomUUID = () => request({ kind: "random-uuid" });',
+      'java.getAppVariant = () => request({ kind: "runtime-capability", capability: "getAppVariant" });',
+      'java.androidId = () => request({ kind: "runtime-capability", capability: "androidId" });',
+      'java.deviceID = () => request({ kind: "runtime-capability", capability: "deviceID" });',
+      'globalThis.cache = { get: (key) => request({ kind: "cache-get", key: String(key) }), put: (key, value, saveTime) => request({ kind: "cache-put", key: String(key), value: String(value), saveTime: Number(saveTime ?? 0) }), delete: (key) => request({ kind: "cache-delete", key: String(key) }), getFromMemory: (key) => request({ kind: "cache-memory-get", key: String(key) }), putMemory: (key, value) => request({ kind: "cache-memory-put", key: String(key), value: String(value) }), deleteMemory: (key) => request({ kind: "cache-memory-delete", key: String(key) }), getFile: (key) => request({ kind: "cache-file-get", key: String(key) }), putFile: (key, value, saveTime) => request({ kind: "cache-file-put", key: String(key), value: String(value), saveTime: Number(saveTime ?? 0) }) };',
       'const getToken = () => request({ kind: "token" });',
       'globalThis.Packages = globalThis.Packages ?? {};',
       'globalThis.Packages.io = globalThis.Packages.io ?? {};',
@@ -760,24 +899,102 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'const checkEnv = () => "default";',
       'const isVs = () => false;',
     ].join('\n')
-    // Legado 把 `result` 作为输入绑定，但部分书源仍用 `var result = ...` 覆盖它。
-    // 将旧式声明改为赋值，同时让绑定保持全局，避免其他脚本的 `let/const page` 与前置代码冲突。
-    // 把书源常见的旧式 `var result` 声明改成对全局绑定的赋值。
-    const sourceCode = code.replace(/\bvar\s+result\b/g, 'result')
-    const trailing = trailingExpression(sourceCode)
-    const executable = `${prelude}\n${trailing.body}\n${trailing.expression === undefined ? '' : `return (${trailing.expression});`}`
-    const input = { code: executable, stage, bindings, variables: this.variables.snapshot(), ...(signal === undefined ? {} : { signal }) }
-    // 书源随这趟求值传入 bridge：共享宿主不再有「当前书源」字段，跨源并发不会串源。
-    const output = await this.javascript.execute(input, {
-      getVariable: async (name) => this.variables.get(name),
-      setVariable: async (name, value) => this.variables.set(name, value === null ? null : textValue(value)),
-      request: (payload, runSignal) => this.handleBridge(payload, runSignal, source),
-    })
-    return {
-      status: output.status === 'budget-exceeded' ? 'failed' : output.status,
-      value: output.value,
-      ...(output.diagnostics[0] === undefined ? {} : { message: output.diagnostics[0].message }),
+    const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
+    const runSignal = signal ?? new AbortController().signal
+    try {
+      const libraries = await this.loadSourceLibraries(source, runSignal)
+      const executable = `${prelude}\n${libraries.join('\n')}\n${code}`
+      const initialCaptureVariables: Record<string, string | undefined> = {}
+      for (const name of context?.captureBindings ?? []) {
+        const entity = bindings[name]
+        initialCaptureVariables[name] = typeof entity === 'object' && entity !== null && typeof (entity as RuleEntity).variable === 'string'
+          ? (entity as RuleEntity).variable as string
+          : undefined
+      }
+      const output = await this.javascript.execute({
+        code: executable,
+        mode: context?.mode ?? 'script',
+        stage,
+        bindings,
+        ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
+        ...(signal === undefined ? {} : { signal }),
+      }, {
+        getVariable: async (name, _bridgeSignal, scope) => {
+          if (scope !== undefined && !isVariableScope(scope)) throw new Error('书源变量作用域无效')
+          return this.readVariable(name, bindings, scope)
+        },
+        setVariable: async (name, value, _bridgeSignal, scope) => {
+          if (scope !== undefined && !isVariableScope(scope)) throw new Error('书源变量作用域无效')
+          this.writeVariable(name, value, bindings, scope)
+        },
+        request: (payload, bridgeSignal) => this.handleBridge(payload, bridgeSignal, source),
+        evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
+      })
+      return {
+        status: output.status === 'budget-exceeded' ? 'failed' : output.status,
+        value: mergeCapturedEntityVariables(output.value, context?.captureBindings, bindings, initialCaptureVariables),
+        ...(output.diagnostics[0] === undefined ? {} : { message: output.diagnostics[0].message }),
+      }
+    } catch (error) {
+      if (error instanceof SourceRuleError) return { status: error.status, value: null, message: error.message }
+      if (signal?.aborted === true) return { status: 'cancelled', value: null, message: 'JavaScript 宿主准备已取消' }
+      return { status: 'failed', value: null, message: error instanceof Error ? error.message : 'JavaScript 宿主准备失败' }
     }
+  }
+
+  private createJavaScriptRuleState(source: NormalizedSource, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', content: unknown, bindings: Readonly<Record<string, unknown>>, signal?: AbortSignal): EvaluationState {
+    const workflowStage: WorkflowRuleRequest['stage'] = stage === 'search' || stage === 'mainJs' ? 'search' : 'detail'
+    const request: WorkflowRuleRequest = {
+      source,
+      stage: workflowStage,
+      field: 'javascript',
+      rule: '',
+      content,
+      expect: 'text',
+      bindings,
+      ...(signal === undefined ? {} : { signal }),
+    }
+    return { request, source, content, bindings, budget: { steps: 0, depth: 0 }, expect: 'text' }
+  }
+
+  private async loadSourceLibraries(source: NormalizedSource, signal: AbortSignal): Promise<string[]> {
+    const value = source.jsLib
+    if (typeof value !== 'string' || value.trim().length === 0) return []
+    let remoteUrls: string[] | undefined
+    try {
+      const parsed: unknown = JSON.parse(value)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        remoteUrls = Object.values(parsed).map((item) => {
+          if (item === null || item === undefined) return ''
+          return typeof item === 'object' ? JSON.stringify(item) ?? '' : String(item)
+        })
+      }
+    } catch {
+      return [value]
+    }
+    if (remoteUrls === undefined) return [value]
+    const scripts: string[] = []
+    const fingerprint = sourceDefinitionFingerprint(source)
+    for (const remoteUrl of remoteUrls) {
+      let url: URL
+      try {
+        url = new URL(remoteUrl)
+      } catch {
+        continue
+      }
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+      const cacheKey = `jsLib:${fingerprint}:${url.toString()}`
+      let script = await this.cache.get(cacheKey, signal)
+      if (script === undefined) {
+        if (this.requestBridge === undefined) throw new SourceRuleError('capability-missing', '加载 jsLib 需要网络宿主')
+        const response = await this.requestBridge({ kind: 'network', url: url.toString() }, signal, source)
+        if (typeof response !== 'string') throw new SourceRuleError('failed', 'jsLib 网络响应不是文本')
+        script = response
+        await this.cache.put(cacheKey, script, 0, signal)
+      }
+      scripts.push(script)
+    }
+    return scripts
   }
 
   private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource): Promise<unknown> {
@@ -798,7 +1015,28 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const correct = this.font.queryBase64TTF(textValue(request.correctBase64), { signal })
       return replaceFont(textValue(request.text), error, correct, request.filter === true)
     }
-    if (this.requestBridge === undefined) throw new Error('书源网络或宿主 bridge 不可用')
+    if (request.kind === 'cache-get') return this.cache.get(textValue(request.key), signal)
+    if (request.kind === 'cache-put') return this.cache.put(textValue(request.key), textValue(request.value), Number(request.saveTime) || 0, signal)
+    if (request.kind === 'cache-delete') return this.cache.delete(textValue(request.key), signal)
+    if (request.kind === 'cache-memory-get') return this.cache.getFromMemory(textValue(request.key))
+    if (request.kind === 'cache-memory-put') return this.cache.putMemory(textValue(request.key), textValue(request.value), signal)
+    if (request.kind === 'cache-memory-delete') return this.cache.deleteMemory(textValue(request.key), signal)
+    if (request.kind === 'cache-file-get') return this.cache.getFile(textValue(request.key))
+    if (request.kind === 'cache-file-put') return this.cache.putFile(textValue(request.key), textValue(request.value), Number(request.saveTime) || 0, signal)
+    if (request.kind === 'time-format') {
+      if (this.timeFormat === undefined) throw new Error('__LEGADO_CAPABILITY__runtime timeFormat unavailable')
+      return this.timeFormat(Number(request.time))
+    }
+    if (request.kind === 'time-format-utc') {
+      if (this.timeFormatUTC === undefined) throw new Error('__LEGADO_CAPABILITY__runtime timeFormatUTC unavailable')
+      return this.timeFormatUTC(Number(request.time), textValue(request.format), Number(request.offsetMs))
+    }
+    if (request.kind === 'random-uuid') {
+      if (this.randomUUID === undefined) throw new Error('__LEGADO_CAPABILITY__runtime randomUUID unavailable')
+      return this.randomUUID()
+    }
+    if (request.kind === 'runtime-capability') throw new Error(`__LEGADO_CAPABILITY__runtime ${textValue(request.capability)} unavailable`)
+    if (this.requestBridge === undefined) throw new Error('__LEGADO_CAPABILITY__network 书源网络或宿主 bridge 不可用')
     return this.requestBridge(request, signal, source)
   }
 
@@ -822,7 +1060,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private check(state: EvaluationState): void {
     if (state.request.signal?.aborted === true) throw new SourceRuleError('cancelled', '规则求值已取消')
-    state.steps += 1
-    if (state.steps > this.maxSteps) throw new SourceRuleError('failed', '规则求值步数超过限制')
+    state.budget.steps += 1
+    if (state.budget.steps > this.maxSteps) throw new SourceRuleError('failed', '规则求值步数超过限制')
   }
 }

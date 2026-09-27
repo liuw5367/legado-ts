@@ -29,18 +29,21 @@ class FakeSession implements ReaderSourceSession {
   private readonly delayMs: number
   private readonly failDetail: boolean
   private readonly contentValue: ChapterContent | undefined
+  private readonly onSearch: (() => void) | undefined
   public readonly contentRefreshes: boolean[] = []
 
-  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent) {
+  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void) {
     this.candidates = candidates
     this.delayMs = delayMs
     this.failDetail = failDetail
     this.contentValue = contentValue
+    this.onSearch = onSearch
   }
 
   public attachCache(): void {}
 
   public async search(_keyword: string, signal?: AbortSignal): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+    this.onSearch?.()
     if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
     if (this.delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, this.delayMs))
     if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
@@ -319,12 +322,13 @@ test('取消换源搜索仍保留已经返回的严格匹配书源', async () =>
   const second = entry(source('https://source.test/two', '第二个书源'), 1)
   const third = entry(source('https://source.test/three', '第三个书源'), 2)
   const catalog: SourceCatalogResult = { entries: [first, second, third], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }
+  const controller = new AbortController()
   const application = new ReaderApplication({
     catalog,
     storage,
     maxConcurrentSources: 1,
     sessionFactory: (value) => value.bookSourceUrl.includes('/three')
-      ? new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '其他书', author: '其他作者', rawFields: {}, traceRef: 'slow' }], 80)
+      ? new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '其他书', author: '其他作者', rawFields: {}, traceRef: 'slow' }], 80, false, undefined, () => controller.abort())
       : new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '测试书', author: '作者', rawFields: {}, traceRef: 'match' }]),
   })
   const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
@@ -332,9 +336,7 @@ test('取消换源搜索仍保留已经返回的严格匹配书源', async () =>
   try {
     await storage.upsertBook({ bookId, name: '测试书', author: '作者', activeEditionKey: editionKey(first.source.bookSourceUrl, firstUrl), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
     await storage.mergeKnownSources(bookId, [{ editionKey: editionKey(first.source.bookSourceUrl, firstUrl), sourceId: first.source.bookSourceUrl, sourceFingerprint: first.fingerprint, bookUrl: firstUrl, name: '测试书', author: '作者', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
-    const controller = new AbortController()
     const pending = application.searchMoreSources(bookId, controller.signal)
-    setTimeout(() => controller.abort(), 10)
     const result = await pending
     assert.equal(result.cancelled, true)
     assert.equal(result.results.length, 1)

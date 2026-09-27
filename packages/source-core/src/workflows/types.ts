@@ -145,6 +145,8 @@ export interface SourceFunctionOutput extends WorkflowRuleOutput {
 
 export interface WorkflowRulePort {
   evaluate(request: WorkflowRuleRequest): Promise<WorkflowRuleOutput>
+  /** 会话层读取本次操作产生的持久变量，用于提交 source 作用域。 */
+  snapshotVariables?(scope: 'source'): Readonly<Record<string, string>>
   /** JavaScript 源函数执行能力；未实现的宿主应把 mainJs 报告为 capability-missing。 */
   executeSourceFunction?(request: SourceFunctionRequest): Promise<SourceFunctionOutput>
   /** 精确脚本钩子，如 loginCheckJs、preUpdateJs 和 formatJs。 */
@@ -212,6 +214,8 @@ export interface ChapterIdentity {
 
 export interface Chapter extends ChapterIdentity {
   title: string
+  /** JSON 字符串形式的书源章节变量，与 Android BookChapter.variable 对齐。 */
+  variable?: string
   rawFields: JsonObject
   traceRef: string
 }
@@ -247,7 +251,7 @@ export interface ChapterContent {
 
 export interface ContentInput extends WorkflowOptions {
   source: NormalizedSource
-  chapter: ChapterIdentity & { title?: string; rawFields?: JsonObject }
+  chapter: ChapterIdentity & { title?: string; variable?: string; rawFields?: JsonObject }
   /** JS 源 getContent 需要完整 Book；旧调用方缺省时运行时提供最小书对象。 */
   book?: BookMetadata
   /** 章节链接指向详情页时，可复用详情请求的响应正文。 */

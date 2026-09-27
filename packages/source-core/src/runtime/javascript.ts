@@ -1,5 +1,8 @@
 export type JavaScriptStage = 'mainJs' | 'book' | 'chapter' | 'search' | 'content'
 
+export type JavaScriptExecutionMode = 'script' | 'function-body'
+export type JavaScriptVariableScope = 'chapter' | 'book' | 'rule-data' | 'source'
+
 export interface JavaScriptBudget {
   /** 单次 JS 求值的硬超时，单位为毫秒。 */
   timeoutMs: number
@@ -17,13 +20,13 @@ export interface JavaScriptBudget {
 
 export interface JavaScriptBridge {
   /** 读取一个宿主变量；未提供时 JS 中不暴露变量 bridge。 */
-  getVariable?: (name: string, signal: AbortSignal) => unknown | Promise<unknown>
+  getVariable?: (name: string, signal: AbortSignal, scope?: JavaScriptVariableScope) => unknown | Promise<unknown>
   /** 写入一个宿主变量；未提供时 JS 中不暴露变量 bridge。 */
-  setVariable?: (name: string, value: unknown, signal: AbortSignal) => void | Promise<void>
+  setVariable?: (name: string, value: unknown, signal: AbortSignal, scope?: JavaScriptVariableScope) => void | Promise<void>
   /** 执行一条已由宿主进一步校验的请求计划。 */
   request?: (input: unknown, signal: AbortSignal) => unknown | Promise<unknown>
   /** 在当前书源上下文中执行一条声明式规则。 */
-  evaluateRule?: (rule: string, signal: AbortSignal) => unknown | Promise<unknown>
+  evaluateRule?: (rule: string, signal: AbortSignal, options?: { expect?: 'text' | 'nodes'; content?: unknown }) => unknown | Promise<unknown>
 }
 
 export interface JavaScriptExecutionInput {
@@ -33,6 +36,10 @@ export interface JavaScriptExecutionInput {
   stage: JavaScriptStage
   /** 诊断和堆栈使用的逻辑文件名。 */
   filename?: string
+  /** 规则脚本使用 script completion；源码函数和旧的直接宿主调用可用函数体模式。 */
+  mode?: JavaScriptExecutionMode
+  /** 脚本求值后从 globalThis 读取的 DTO 绑定。仅脚本模式支持。 */
+  captureBindings?: readonly string[]
   /** 只读输入对象；执行器应深冻结其 guest 副本。 */
   bindings?: Readonly<Record<string, unknown>>
   /** 本次执行开始时的变量快照。 */
@@ -49,11 +56,12 @@ export interface JavaScriptDiagnostic {
   code: JavaScriptDiagnosticCode
   message: string
   stage: JavaScriptStage
-  capability?: 'variables' | 'network' | 'rule'
+  capability?: 'variables' | 'network' | 'rule' | 'runtime'
 }
 
 export interface JavaScriptVariableChange {
   name: string
+  scope?: JavaScriptVariableScope
   before?: unknown
   after?: unknown
 }

@@ -68,7 +68,7 @@ test('URL 的嵌入式 JavaScript 在任意位置执行并支持 @result', async
   const urls: string[] = []
   const host = new SourceRequestHost({ network: { request: async (plan) => { urls.push(plan.url); return response(plan.url) } } })
   host.attachRuleHost(new SourceRuleHost())
-  await host.request({ source, url: 'https://fixture.invalid/search?q=<js>return result + java.encodeURI("中文")</js>', stage: 'search', options: {} })
+  await host.request({ source, url: 'https://fixture.invalid/search?q=<js>result + java.encodeURI("中文")</js>', stage: 'search', options: {} })
   assert.equal(urls[0], 'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87')
   await host.request({ source, url: 'https://fixture.invalid/search?prefix=<js>result</js>@result', stage: 'search', options: {} })
   assert.equal(urls[1], 'https://fixture.invalid/search?prefix=')
@@ -86,7 +86,7 @@ test('URL 请求选项执行 js/bodyJs、重试和十六进制响应类型', asy
   host.attachRuleHost(new SourceRuleHost())
   const body = await host.request({
     source,
-    url: '/body,{"method":"GET","js":"return result + \'?signed=1\'","bodyJs":"return result.toUpperCase()","retry":2}',
+    url: '/body,{"method":"GET","js":"result + \'?signed=1\'","bodyJs":"result.toUpperCase()","retry":2}',
     stage: 'search',
     options: {},
   })
@@ -212,7 +212,7 @@ test('动态 header 经 bridge 子请求不重算自身，嵌套深度受限', a
   const dynamicHeader = {
     bookSourceUrl: 'https://fixture.invalid',
     bookSourceName: 'fixture',
-    header: '@js:java.ajax("https://fixture.invalid/child"); return {"X-Token":"t"}',
+    header: '@js:java.ajax("https://fixture.invalid/child"); ({"X-Token":"t"})',
   } as unknown as NormalizedSource
   const parent = await host.request({ source: dynamicHeader, url: '/parent', stage: 'search', options: {} })
   assert.equal(new TextDecoder().decode(parent.bytes), 'ok')
@@ -293,7 +293,7 @@ test('外层 AbortSignal 转发到动态 header 脚本', async () => {
   const headerSource = {
     bookSourceUrl: 'https://fixture.invalid',
     bookSourceName: 'fixture',
-    header: '@js:return {"X-Probe":"1"}',
+    header: '@js:({"X-Probe":"1"})',
   } as unknown as NormalizedSource
   await host.request({ source: headerSource, url: '/signal', stage: 'search', options: { signal: controller.signal } })
   assert.ok(seen, 'header 脚本应收到 signal')

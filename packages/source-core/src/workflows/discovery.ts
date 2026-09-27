@@ -353,14 +353,14 @@ interface DetailExtraction {
   cancelled: boolean
 }
 
-async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSource, itemIndex: number, content: unknown, context: { baseUrl: string; redirectUrl: string }, signal: AbortSignal | undefined, trace: WorkflowTraceEntry[], diagnostics: WorkflowDiagnostic[]): Promise<DetailExtraction> {
+async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSource, itemIndex: number, content: unknown, context: { baseUrl: string; redirectUrl: string }, signal: AbortSignal | undefined, trace: WorkflowTraceEntry[], diagnostics: WorkflowDiagnostic[], book?: BookCandidate): Promise<DetailExtraction> {
   const result: DetailExtraction = { values: {}, empty: [], errors: {}, raw: {}, cancelled: false }
   for (const [ruleField, outputField] of detailFields) {
     const rule = ruleString(source, 'ruleBookInfo', ruleField)
     if (rule === undefined) continue
     // Android 将空 tocUrl 规则视为“使用详情页”，而不是“返回整页内容”。
     if (ruleField === 'tocUrl' && rule.length === 0) continue
-    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, context)
+    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, ...(book === undefined ? {} : { bindings: { book } }) })
     if (field.state === 'cancelled') {
       result.cancelled = true
       return result
@@ -405,7 +405,7 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex, message: '详情候选缺少 URL', retryable: false })
       continue
     }
-    const expandedUrl = await expandUrl(ports, input.source, 'detail', candidate.bookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl }, input.signal)
+    const expandedUrl = await expandUrl(ports, input.source, 'detail', candidate.bookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book: candidate }, input.signal)
     if (expandedUrl.url === undefined) {
       if (expandedUrl.error?.code === 'cancelled') {
         diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情 URL 展开已取消', retryable: false })
@@ -420,12 +420,12 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
     // Android BookInfo：init 规则先执行，其结果成为后续详情字段的内容基准。
     let content: unknown = page.content
     if (initRule !== undefined) {
-      const init = await evaluateField(ports, input.source, 'detail', 'init', initRule, content, itemIndex, trace, input.signal, { ...context, expect: 'nodes' })
+      const init = await evaluateField(ports, input.source, 'detail', 'init', initRule, content, itemIndex, trace, input.signal, { ...context, expect: 'nodes', bindings: { book: candidate } })
       if (init.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
       if (init.state === 'value') content = singleNodeValue(init.value)
       else if (init.state === 'failed' || init.state === 'capability-missing') diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: init.message ?? '详情初始化规则失败', retryable: false })
     }
-    const extraction = await extractDetailFields(ports, input.source, itemIndex, content, context, input.signal, trace, diagnostics)
+    const extraction = await extractDetailFields(ports, input.source, itemIndex, content, context, input.signal, trace, diagnostics, candidate)
     if (extraction.cancelled) return { status: 'cancelled', value: null, diagnostics, trace }
     const name = formatBookName(extraction.values.name ?? '')
     const author = formatBookAuthor(extraction.values.author ?? '')
@@ -498,6 +498,7 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
       fieldErrors: {},
       tocUrl: candidate.tocUrl ?? candidate.bookUrl,
     }
+    if (typeof book.variable === 'string') metadata.variable = book.variable
     const canReName = input.canReName !== false
     const name = primitiveText(record?.name)
     const author = primitiveText(record?.author)

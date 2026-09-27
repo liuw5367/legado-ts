@@ -11,7 +11,8 @@ export class MemoryVariableView implements RuleVariableView {
     for (const scope of readOrder) this.values.set(scope, new Map(Object.entries(options.initial?.[scope] ?? {})))
   }
 
-  public get(name: string): string | undefined {
+  public get(name: string, scope?: VariableScope): string | undefined {
+    if (scope !== undefined) return this.values.get(scope)!.get(name)
     const local = this.values.get('local')!
     if (local.has(name)) return local.get(name)
     for (const scope of readOrder.slice(1)) {

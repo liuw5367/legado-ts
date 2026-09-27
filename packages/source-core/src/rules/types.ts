@@ -100,7 +100,7 @@ export type VariableScope = 'local' | 'chapter' | 'book' | 'rule-data' | 'source
 
 export interface RuleVariableView {
   /** 按 local、chapter、book、rule-data、source 顺序读取变量。 */
-  get(name: string): string | undefined
+  get(name: string, scope?: VariableScope): string | undefined
   /** 写入指定作用域；省略作用域时写入当前可用的最具体持久层。 */
   set(name: string, value: string | null, scope?: VariableScope): void
   /** 只删除指定作用域中的变量。 */

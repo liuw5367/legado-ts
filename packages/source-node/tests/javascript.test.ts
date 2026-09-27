@@ -21,6 +21,31 @@ test('QuickJS 执行器隔离全局并支持绑定、BigInt 和循环值编码',
   assert.equal(second.value, 'undefined')
 })
 
+test('QuickJS 脚本模式返回 JavaScript 完成值并可捕获修改后的 DTO 绑定', async () => {
+  const host = new QuickJSJavaScriptHost()
+  const numeric = await host.execute({ code: '1 + 2', stage: 'book', mode: 'script' })
+  assert.equal(numeric.status, 'success')
+  assert.equal(numeric.value, 3)
+
+  const comparison = await host.execute({ code: '3 > 2', stage: 'book', mode: 'script' })
+  assert.equal(comparison.value, true)
+
+  const assignment = await host.execute({
+    code: 'var answer = 40; answer + 2',
+    stage: 'book',
+    mode: 'script',
+    captureBindings: ['answer'],
+  })
+  assert.deepEqual(assignment.value, {
+    __legadoWorkflowValue: 42,
+    __legadoWorkflowBindings: { answer: 40 },
+  })
+
+  // 未显式选择脚本模式时仍保留既有函数体 API。
+  const functionBody = await host.execute({ code: 'return 40 + 2', stage: 'book' })
+  assert.equal(functionBody.value, 42)
+})
+
 test('QuickJS 变量 bridge 返回可观察 delta，并支持一次异步宿主调用', async () => {
   const calls: unknown[] = []
   const host = new QuickJSJavaScriptHost({

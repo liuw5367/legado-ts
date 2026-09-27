@@ -30,7 +30,7 @@ function evaluateOnlyScript(request: WorkflowRuleRequest): { status: 'success' |
   const code = request.rule.slice(4)
   if (code.includes('redirectUrl')) return { status: 'success', value: request.redirectUrl ?? '' }
   if (code.includes('via=js')) return { status: 'success', value: `${request.baseUrl ?? ''}&via=js` }
-  if (code.includes('return baseUrl')) return { status: 'success', value: request.baseUrl ?? '' }
+  if (code.includes('baseUrl')) return { status: 'success', value: request.baseUrl ?? '' }
   if (code.includes('X-Token')) return { status: 'success', value: { 'X-Token': 'abc' } }
   if (code.includes('not-json')) return { status: 'success', value: 'not-json' }
   return { status: 'success', value: request.baseUrl ?? '' }
@@ -84,7 +84,7 @@ function probePorts(options?: {
 }
 
 test('仅实现 evaluate 的规则宿主可执行请求 js 脚本', async () => {
-  const source = await importFixture({ searchUrl: '/search?q={{keyword}},{"js":"return baseUrl"}' })
+  const source = await importFixture({ searchUrl: '/search?q={{keyword}},{"js":"baseUrl"}' })
   const ports = probePorts({ withExecute: false })
   const result = await searchBooks(ports, { source, keyword: 'x' })
   const urlRequest = ports.ruleRequests.find((request) => request.field === 'url' && request.rule.startsWith('@js:'))
@@ -98,7 +98,7 @@ test('仅实现 evaluate 的规则宿主可执行请求 js 脚本', async () => 
 
 test('js 收到请求计划地址，bodyJs 收到最终响应地址', async () => {
   const source = await importFixture({
-    searchUrl: '/search?q={{keyword}},{"js":"return baseUrl + \\"&via=js\\"","bodyJs":"return redirectUrl"}',
+    searchUrl: '/search?q={{keyword}},{"js":"baseUrl + \\"&via=js\\"","bodyJs":"redirectUrl"}',
   })
   const ports = probePorts({
     withExecute: false,
@@ -133,7 +133,7 @@ test('计划错误映射为不可重试的 invalid-config', async () => {
 test('脚本 cancelled/capability-missing/failed 映射为对应诊断', async () => {
   const statuses = ['cancelled', 'capability-missing', 'failed'] as const
   for (const status of statuses) {
-    const source = await importFixture({ searchUrl: '/search,{"js":"return 1"}' })
+    const source = await importFixture({ searchUrl: '/search,{"js":"1"}' })
     const ports = probePorts({
       executeWorkflowJavaScript: async () => ({
         status: status === 'failed' ? 'failed' : status,
@@ -152,13 +152,13 @@ test('脚本 cancelled/capability-missing/failed 映射为对应诊断', async (
 })
 
 test('动态 header 经 evaluate 回退执行且非法 JSON 报 invalid-config', async () => {
-  const working = await importFixture({ header: '@js:return { "X-Token": "abc" }' })
+  const working = await importFixture({ header: '@js:({ "X-Token": "abc" })' })
   const okPorts = probePorts({ withExecute: false })
   const okResult = await searchBooks(okPorts, { source: working, keyword: 'x' })
   assert.equal(okResult.status, 'success')
   assert.equal(okPorts.plans[0]?.headers['X-Token'], 'abc')
 
-  const broken = await importFixture({ header: '@js:return "not-json"' })
+  const broken = await importFixture({ header: '@js:"not-json"' })
   const brokenPorts = probePorts({ withExecute: false })
   const brokenResult = await searchBooks(brokenPorts, { source: broken, keyword: 'x' })
   assert.equal(brokenPorts.calls, 0)
