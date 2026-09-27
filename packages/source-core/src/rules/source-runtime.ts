@@ -211,6 +211,7 @@ function lastOutput(body: string): DefaultPlan {
 /** Android AnalyzeRule.isJSON：对象/数组，或 trim 后由 `{}`、`[]` 包裹的字符串。 */
 function jsonContent(value: unknown): boolean {
   if (value === null || value === undefined || isNodeRef(value)) return false
+  if (Array.isArray(value)) return !value.some(isNodeRef)
   if (typeof value !== 'string') return typeof value === 'object'
   const text = value.trim()
   return (text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))
@@ -730,37 +731,50 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private async evaluateDefault(body: string, state: EvaluationState, content: unknown): Promise<unknown> {
     const expanded = await this.interpolate(body, state, content)
-    const stored = isNodeRef(content) ? this.nodes.get(content.id) : undefined
+    const storedNodes = this.storedNodes(content)
     if (expanded === '') {
       // Android 两条路径对空规则的处理不同：列表规则走 getStringList，`if (rule.isNotEmpty())` 不成立时
       // 沿用上一份内容；字段规则走 getString，最终落到 AnalyzeByJSoup.getString("")，结果是空。
-      if (state.expect !== 'nodes') return stored === undefined ? '' : stored.document.read(stored.node, 'text')
-      return stored === undefined ? textValue(content) : this.remember(stored.document, stored.node)
+      if (state.expect !== 'nodes') {
+        if (storedNodes.length === 0) return ''
+        const values = storedNodes.map((stored) => stored.document.read(stored.node, 'text'))
+        return values.length === 1 ? values[0] : values
+      }
+      if (storedNodes.length === 0) return textValue(content)
+      const refs = storedNodes.map((stored) => this.remember(stored.document, stored.node))
+      return refs.length === 1 ? refs[0] : refs
     }
     if (expanded === 'text' || expanded === 'ownText' || expanded === 'html') {
-      if (stored === undefined) return textValue(content)
-      return stored.document.read(stored.node, expanded)
+      if (storedNodes.length === 0) return textValue(content)
+      const values = storedNodes.map((stored) => stored.document.read(stored.node, expanded))
+      return values.length === 1 ? values[0] : values
     }
     // Legado 的节点字段规则允许直接写属性名，不要求 @ 前缀。
     // 节点字段规则的直接属性写法只接受 HTML 属性名中的单词、冒号和连字符。
-    if (stored !== undefined && /^[\w:-]+$/u.test(expanded)) {
-      const attribute = stored.document.attr(stored.node, expanded)
-      if (attribute !== undefined) return attribute
+    if (storedNodes.length > 0 && /^[\w:-]+$/u.test(expanded)) {
+      const values = storedNodes.map((stored) => stored.document.attr(stored.node, expanded)).filter((value): value is string => value !== undefined)
+      if (values.length > 0) return values.length === 1 ? values[0] : values
     }
     if (expanded.startsWith('literal:')) return expanded.slice('literal:'.length)
     // 列表规则整条是选择器链；字段规则的末段是输出标记或属性名。
     const plan: DefaultPlan = state.expect === 'nodes' ? { selector: expanded } : lastOutput(expanded)
     const selectorParts = splitSelectorChain(plan.selector).map(normalizeSelector)
+    let current: Array<{ document: HtmlDocument; node?: ParserNode }> = storedNodes.length === 0
+      ? [{ document: this.html.parse(textValue(content)) }]
+      : storedNodes
     if (selectorParts.length === 0) {
       // 没有选择器时按当前内容取值；属性名查询不落到整页文本上（Android 查的是根元素属性）。
-      if (stored === undefined) return plan.attribute === undefined ? textValue(content) : ''
-      if (plan.attribute !== undefined) return stored.document.attr(stored.node, plan.attribute) ?? ''
-      if (plan.output === undefined) return this.remember(stored.document, stored.node)
-      return stored.document.read(stored.node, plan.output)
+      if (plan.attribute !== undefined) {
+        const values = current.filter((item): item is SelectedNode => item.node !== undefined).map((item) => item.document.attr(item.node, plan.attribute!)).filter((value): value is string => value !== undefined)
+        return values.length === 1 ? values[0] ?? '' : values
+      }
+      if (plan.output === undefined) {
+        const refs = current.filter((item): item is SelectedNode => item.node !== undefined).map((item) => this.remember(item.document, item.node))
+        return refs.length === 1 ? refs[0] : refs
+      }
+      const values = current.filter((item): item is SelectedNode => item.node !== undefined).map((item) => item.document.read(item.node, plan.output!))
+      return values.length === 1 ? values[0] : values
     }
-    let current: Array<{ document: HtmlDocument; node?: ParserNode }> = stored === undefined
-      ? [{ document: this.html.parse(textValue(content)) }]
-      : [{ document: stored.document, node: stored.node }]
     for (const selector of selectorParts) {
       const next: SelectedNode[] = []
       for (const root of current) {
@@ -810,18 +824,30 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   private evaluateXPath(expression: string, content: unknown, expect: WorkflowRuleRequest['expect']): unknown {
-    const stored = isNodeRef(content) ? this.nodes.get(content.id) : undefined
-    const context = stored === undefined
-      ? this.xpath.parse(textValue(content))
-      : this.xpath.context?.(stored.document, stored.node) ?? this.xpath.parse(stored.document.read(stored.node, 'all'))
-    const scopedContext = stored === undefined || this.xpath.context !== undefined
-      ? context
-      : context.children()[0] === undefined ? context : context.child(context.children()[0]!)
-    const value = this.xpath.evaluate(scopedContext, expression)
+    const storedNodes = this.storedNodes(content)
+    if (storedNodes.length === 0) {
+      const document = this.xpath.parse(textValue(content))
+      return this.evaluateXPathContext(document, expression, expect)
+    }
+    const values: unknown[] = []
+    for (const stored of storedNodes) {
+      const context = this.xpath.context?.(stored.document, stored.node) ?? this.xpath.parse(stored.document.read(stored.node, 'all'))
+      const scopedContext = this.xpath.context !== undefined
+        ? context
+        : context.children()[0] === undefined ? context : context.child(context.children()[0]!)
+      const value = this.evaluateXPathContext(scopedContext, expression, expect)
+      if (Array.isArray(value)) values.push(...value)
+      else if (nonEmpty(value)) values.push(value)
+    }
+    return values
+  }
+
+  private evaluateXPathContext(context: HtmlDocument, expression: string, expect: WorkflowRuleRequest['expect']): unknown {
+    const value = this.xpath.evaluate(context, expression)
     if (Array.isArray(value) && value.every((item) => this.isParserNode(item))) {
       return expect === 'nodes'
-        ? value.map((item) => this.remember(scopedContext, item as ParserNode))
-        : value.map((item) => scopedContext.read(item as ParserNode, 'text'))
+        ? value.map((item) => this.remember(context, item as ParserNode))
+        : value.map((item) => context.read(item as ParserNode, 'text'))
     }
     return value
   }
@@ -844,8 +870,15 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   /** Android「规则为空则不改写上一个 result」：拿到的是进入本条规则时的内容。 */
   private contentValue(content: unknown): unknown {
-    const stored = isNodeRef(content) ? this.nodes.get(content.id) : undefined
-    return stored === undefined ? textValue(content) : this.remember(stored.document, stored.node)
+    const storedNodes = this.storedNodes(content)
+    if (storedNodes.length === 0) return textValue(content)
+    const refs = storedNodes.map((stored) => this.remember(stored.document, stored.node))
+    return refs.length === 1 ? refs[0] : refs
+  }
+
+  private storedNodes(content: unknown): StoredNode[] {
+    const refs = isNodeRef(content) ? [content] : Array.isArray(content) ? content.filter(isNodeRef) : []
+    return refs.map((ref) => this.nodes.get(ref.id)).filter((stored): stored is StoredNode => stored !== undefined)
   }
 
   private async interpolate(input: string, state: EvaluationState, content: unknown): Promise<string> {

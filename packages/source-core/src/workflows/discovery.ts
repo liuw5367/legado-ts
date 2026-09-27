@@ -463,7 +463,7 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
     if (initRule !== undefined) {
       const init = await evaluateField(ports, input.source, 'detail', 'init', initRule, content, itemIndex, trace, input.signal, { ...context, expect: 'nodes', bindings: { book: candidate } })
       if (init.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
-      if (init.state === 'value') content = singleNodeValue(init.value)
+      if (init.state === 'value') content = init.value
       else if (init.state === 'failed' || init.state === 'capability-missing') {
         diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: init.message ?? '详情初始化规则失败', retryable: false })
         continue
@@ -584,12 +584,4 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
 
 function primitiveText(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
-}
-
-/**
- * init 规则可能返回节点列表（Android 会把 Elements 重新序列化后作为内容）。
- * 核心没有多根节点视图，取首个节点作为后续规则的内容基准。
- */
-function singleNodeValue(value: unknown): unknown {
-  return Array.isArray(value) && value.length > 0 ? value[0] : value
 }

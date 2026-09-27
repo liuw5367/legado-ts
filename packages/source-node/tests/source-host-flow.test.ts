@@ -97,6 +97,30 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
   assert.equal(calls.length, 4)
 })
 
+test('详情 init 保留多节点内容供后续字段规则继续解析', async () => {
+  const source = {
+    bookSourceUrl: 'https://multi-init.test',
+    bookSourceName: 'Multi Init',
+    ruleBookInfo: { init: '.part', name: '.title@text', author: '.author@text', canReName: 'true' },
+  } as unknown as NormalizedSource
+  const network: NetworkHost = {
+    request: async (plan) => response(plan.url, '<main><section class="part"><h1 class="title"></h1></section><section class="part"><h1 class="title">目标书</h1><span class="author">作者</span></section></main>'),
+  }
+  const ports: WorkflowPorts = { network, rules: new SourceRuleHost() }
+  const candidate = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://multi-init.test/book/1',
+    name: '候选书名',
+    rawFields: {},
+    traceRef: 'search:0',
+  }
+
+  const result = await loadBookDetails(ports, { source, candidates: [candidate] })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items[0]?.name, '目标书')
+  assert.equal(result.value?.items[0]?.author, '作者')
+})
+
 test('声明式音频正文通过 Node 规则宿主提取 subContent 并写回歌词变量', async () => {
   const source = {
     bookSourceUrl: 'https://audio-sub.test',
