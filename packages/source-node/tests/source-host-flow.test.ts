@@ -311,6 +311,44 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
   assert.equal(requested[1], 'https://format.test/from-info')
 })
 
+test('目录规则读取 preUpdateJs 更新后的 book 对象', async () => {
+  const source = {
+    bookSourceUrl: 'https://binding-book.test',
+    bookSourceName: 'Binding Book',
+    ruleToc: {
+      chapterList: 'a',
+      chapterName: '@js:book.bookUrl',
+      chapterUrl: 'href',
+      preUpdateJs: 'book.bookUrl = "/new-book"; book.tocUrl = "/new-toc"',
+    },
+  } as unknown as NormalizedSource
+  const requested: string[] = []
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => {
+      requested.push(plan.url)
+      return response(plan.url, '<a href="/chapter">章节</a>')
+    } },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://binding-book.test/old-book',
+    tocUrl: 'https://binding-book.test/old-toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'binding-book',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+
+  const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.deepEqual(requested, ['https://binding-book.test/new-toc'])
+  assert.equal(result.value?.items[0]?.title, 'https://binding-book.test/new-book')
+  assert.equal(result.value?.items[0]?.bookUrl, 'https://binding-book.test/new-book')
+})
+
 test('preUpdateJs 的 refreshTocUrl 更新详情并让脚本和后续 TOC 使用新地址', async () => {
   const source = {
     bookSourceUrl: 'https://refresh-toc.test',

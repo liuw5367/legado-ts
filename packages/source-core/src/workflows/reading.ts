@@ -90,7 +90,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const rawTocUrl = book.tocUrl?.trim() ? book.tocUrl : book.bookUrl
   const rawBookUrl = resolveUrl(rawTocUrl, resolvedBookUrl) ?? resolvedBookUrl
   // 目录地址同样允许 `{{...}}` 内联表达式（Android 对每个 AnalyzeUrl 都做同样的展开）。
-  const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book: input.book }, input.signal)
+  const expandedBookUrl = await expandUrl(ports, input.source, stage, rawBookUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book }, input.signal)
   if (expandedBookUrl.url === undefined) {
     diagnostics.push(expansionDiagnostic(expandedBookUrl.error, stage, 'tocUrl', '目录地址展开失败'))
     return { status: expansionStatus(expandedBookUrl.error), value: null, diagnostics, trace }
@@ -140,14 +140,14 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (!pendingPage.followNext) continue
     const nextRule = ruleString(input.source, 'ruleToc', 'nextTocUrl')
     if (nextRule === undefined) continue
-    const next = await evaluateField(ports, input.source, stage, 'nextTocUrl', nextRule, body, pageIndex, trace, input.signal, { ...context, bindings: { book: input.book } })
+    const next = await evaluateField(ports, input.source, stage, 'nextTocUrl', nextRule, body, pageIndex, trace, input.signal, { ...context, bindings: { book } })
     if (next.state === 'cancelled') return cancelled('目录下一页规则已取消', diagnostics, trace)
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
     const resolvedNextUrls = new Set<string>()
     for (const value of nextValues) {
       const resolved = resolveUrl(value, responseUrl)
-      const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book: input.book }, input.signal)
+      const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book }, input.signal)
       const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
         if (expandedNext?.error?.code === 'cancelled') return cancelled('目录下一页地址展开已取消', diagnostics, trace)
@@ -1073,7 +1073,7 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
   const trace: WorkflowTraceEntry[] = []
   let volume = inheritedVolume
   const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
-  const list = await evaluateField(ports, input.source, 'detail', 'chapterList', listRuleBody, body, pageIndex, trace, signal, { ...context, expect: 'nodes', bindings: { book: input.book } })
+  const list = await evaluateField(ports, input.source, 'detail', 'chapterList', listRuleBody, body, pageIndex, trace, signal, { ...context, expect: 'nodes', bindings: { book } })
   if (list.state === 'cancelled') return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
   if (list.state === 'capability-missing' || list.state === 'failed') {
     diagnostics.push({ code: list.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: 'chapterList', message: list.message ?? (list.state === 'capability-missing' ? '目录规则能力不可用' : '目录规则失败'), retryable: false })
@@ -1085,7 +1085,7 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
   const chapters: Chapter[] = []
   for (const [itemIndex, rawItem] of rawItems.entries()) {
     const diagnosticIndex = pageIndex * 100000 + itemIndex
-    const fields = await chapterFields(ports, input.source, rawItem, diagnosticIndex, signal, diagnostics, trace, volume, context, input.book)
+    const fields = await chapterFields(ports, input.source, rawItem, diagnosticIndex, signal, diagnostics, trace, volume, context, book)
     if (signal?.aborted === true) return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
     if (fields.isVolume === true && fields.title !== undefined && fields.title.length > 0) volume = fields.title
     else if (fields.volume !== undefined && fields.volume.length > 0) volume = fields.volume
