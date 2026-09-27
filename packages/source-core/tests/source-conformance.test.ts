@@ -28,7 +28,7 @@ const sourceDefinition = {
   explorePageStart: 1,
   ruleExplore: { bookList: 'bookList', bookName: 'bookName', bookAuthor: 'bookAuthor', bookUrl: 'bookUrl' },
   ruleSearch: { bookList: 'bookList', bookName: 'bookName', bookAuthor: 'bookAuthor', bookUrl: 'bookUrl' },
-  ruleBookInfo: { name: 'detailName', author: 'detailAuthor', tocUrl: 'detailToc' },
+  ruleBookInfo: { name: 'detailName', author: 'detailAuthor', tocUrl: 'detailToc', canReName: 'allow-rewrite' },
   ruleToc: { chapterList: 'chapterList', chapterName: 'chapterName', chapterUrl: 'chapterUrl' },
   ruleContent: { content: 'content' },
 }
@@ -144,7 +144,7 @@ test('公开入口串联发现、搜索、详情、目录和正文', async () =>
   assert.equal(searched.status, 'success')
   assert.equal(calls[1], 'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87&page=1')
 
-  const details = await loadBookDetails(ports, { source, candidates: discovered.value?.items ?? [] })
+  const details = await loadBookDetails(ports, { source, candidates: discovered.value?.items ?? [], canReName: true })
   assert.equal(details.status, 'success')
   assert.equal(details.value?.items[0]?.name, 'Fixture detail')
   const book = details.value?.items[0]
