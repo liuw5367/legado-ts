@@ -274,6 +274,19 @@ test('书源 JS 可读取 Cookie、时间与 UUID，设备标识能力缺失时�
   assert.equal(missingWebView.status, 'capability-missing')
 })
 
+test('Android 状态、词库和交互 bridge 缺失时报告明确能力码', async () => {
+  for (const rule of [
+    '@js:java.t2s("繁體")',
+    '@js:java.s2t("简体")',
+    '@js:java.webView(null, "https://fixture.invalid", null)',
+    '@js:source.putLoginHeader("{}")',
+  ]) {
+    const result = await evaluate(new SourceRuleHost(), rule, '')
+    assert.equal(result.status, 'capability-missing', rule)
+    assert.match(result.message ?? '', /不可用|unavailable/u)
+  }
+})
+
 test('Node 时间格式桥接遵循 Java 毫秒字段与 UTC 偏移格式', async () => {
   const host = new SourceRuleHost()
   const result = await evaluate(host, `@js:JSON.stringify([
