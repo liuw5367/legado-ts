@@ -1,5 +1,6 @@
 import type { NormalizedSource } from '../model/types.ts'
-import type { SourceScriptCache } from './contracts.ts'
+import type { ClockHost, NetworkHost, SourceScriptCache } from './contracts.ts'
+import { SourceRateLimiter, systemClockHost, withSourceRateLimit } from './source-rate-limiter.ts'
 import type { WorkflowPorts } from '../workflows/types.ts'
 
 export interface SourceSessionOperationContext {
@@ -9,12 +10,20 @@ export interface SourceSessionOperationContext {
   initialVariables: Readonly<Record<string, string>>
   /** 本会话内隔离的脚本缓存；平台可替换为持久实现。 */
   cache: SourceScriptCache
+  /** 已叠加本会话书源限流的网络宿主。 */
+  network?: NetworkHost
+  /** 更新 Android `source.putConcurrent` 对应的会话限流配置。 */
+  updateConcurrentRate: (value: string) => void
 }
 
 export interface SourceSessionOptions {
   source: NormalizedSource
   /** 每项操作创建新的规则/请求上下文，但共享调用方提供的网络等平台能力。 */
   createPorts: (context: SourceSessionOperationContext) => WorkflowPorts
+  /** 原始平台网络能力；core 在会话边界添加同源限流。 */
+  network?: NetworkHost
+  /** 注入的时间能力；缺省使用标准 wall clock。 */
+  clock?: ClockHost
   initialVariables?: Readonly<Record<string, string>>
   cache?: SourceScriptCache
 }
@@ -98,12 +107,14 @@ export function createSourceSession(options: SourceSessionOptions): SourceSessio
   freezeRecursively(source)
   const sourceVariables = new Map(Object.entries(options.initialVariables ?? {}))
   const cache = options.cache ?? new MemorySourceScriptCache()
+  const rateLimiter = new SourceRateLimiter(source.concurrentRate, options.clock ?? systemClockHost)
+  const network = options.network === undefined ? undefined : withSourceRateLimit(options.network, rateLimiter)
 
   return {
     source,
     async run<T>(operation: (ports: WorkflowPorts) => Promise<T>): Promise<T> {
       const before = new Map(sourceVariables)
-      const ports = options.createPorts({ source, initialVariables: Object.fromEntries(before), cache })
+      const ports = options.createPorts({ source, initialVariables: Object.fromEntries(before), cache, ...(network === undefined ? {} : { network }), updateConcurrentRate: (value) => rateLimiter.update(value) })
       try {
         return await operation(ports)
       } finally {

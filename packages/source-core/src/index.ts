@@ -12,6 +12,8 @@ export type { SourceRuleBridgeRequest, SourceRuleRuntimeOptions } from './rules/
 export { MemoryVariableView, snapshotVariables, variableChanges } from './rules/variables.ts'
 export { createRequestPlan } from './runtime/request-plan.ts'
 export { resolveSourceRequestReference, resolveSourceRequestUrl, splitSourceRequestUrl } from './runtime/request-url.ts'
+export { KeyedConcurrencyHost } from './runtime/concurrency.ts'
+export { SourceRateLimiter, systemClockHost, withSourceRateLimit } from './runtime/source-rate-limiter.ts'
 export { replaceFont } from './runtime/font.ts'
 export { createSourceSession, MemorySourceScriptCache } from './runtime/source-session.ts'
 export type { SourceSession, SourceSessionOptions, SourceSessionOperationContext } from './runtime/source-session.ts'

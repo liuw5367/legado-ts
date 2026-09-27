@@ -56,6 +56,8 @@ export interface SourceRuleBridgeRequest {
 export interface SourceRuleRuntimeOptions {
   /** bridge 处理器；第三个参数是本次求值的书源（宿主总是显式传入），URL 展开等求值发生在首次请求之前。 */
   request?: (input: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource) => Promise<unknown>
+  /** Android `source.putConcurrent` 的会话级限流配置写端。 */
+  setConcurrentRate?: (value: string) => void
   /** 书源 JS 的 CacheManager 端口，默认是仅当前会话可见的内存缓存。 */
   cache?: SourceScriptCache
   /** 平台对齐 Android JavaScriptInterface 的时间格式。 */
@@ -365,6 +367,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly crypto: CryptoHost
   private readonly font: FontHost
   private readonly requestBridge?: SourceRuleRuntimeOptions['request']
+  private readonly setConcurrentRate?: SourceRuleRuntimeOptions['setConcurrentRate']
   private readonly cache: SourceScriptCache
   private readonly timeFormat?: SourceRuleRuntimeOptions['timeFormat']
   private readonly timeFormatUTC?: SourceRuleRuntimeOptions['timeFormatUTC']
@@ -385,6 +388,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     this.xpath = options.xpath
     this.javascript = options.javascript
     this.requestBridge = options.request
+    this.setConcurrentRate = options.setConcurrentRate
     this.cache = options.cache ?? new MemorySourceScriptCache()
     this.timeFormat = options.timeFormat
     this.timeFormatUTC = options.timeFormatUTC
@@ -869,7 +873,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'globalThis.baseUrl = bindings.baseUrl;',
       'globalThis.redirectUrl = bindings.redirectUrl;',
       'const sourceValue = bindings.sourceData ?? {};',
-      'globalThis.source = { ...sourceValue, key: bindings.sourceKey }; Object.defineProperties(globalThis.source, { getKey: { value: () => bindings.sourceKey }, get: { value: (name) => getVar(String(name), "source") ?? "" }, put: { value: (name, value) => { setVar(String(name), value, "source"); return value; } }, getVariable: { value: () => getVar("__source__", "source") ?? "" }, setVariable: { value: (value) => setVar("__source__", value, "source") }, putVariable: { value: (value) => setVar("__source__", value, "source") } });',
+      'globalThis.source = { ...sourceValue, key: bindings.sourceKey }; Object.defineProperties(globalThis.source, { getKey: { value: () => bindings.sourceKey }, get: { value: (name) => getVar(String(name), "source") ?? "" }, put: { value: (name, value) => { setVar(String(name), value, "source"); return value; } }, getVariable: { value: () => getVar("__source__", "source") ?? "" }, setVariable: { value: (value) => setVar("__source__", value, "source") }, putVariable: { value: (value) => setVar("__source__", value, "source") }, putConcurrent: { value: (value) => { if (typeof __legadoSetConcurrentRate !== "function") throw new Error("__LEGADO_CAPABILITY__runtime source.putConcurrent unavailable"); return __legadoSetConcurrentRate(String(value)); } } });',
       'globalThis.sourceApi = sourceValue;',
       'const bookValue = bindings.book ?? {};',
       'globalThis.book = { ...bookValue }; Object.defineProperties(globalThis.book, { getVariable: { value: (name) => getVar(String(name), "book") ?? "" }, putVariable: { value: (name, value) => { setVar(String(name), value, "book"); return true; } } });',
@@ -934,6 +938,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
           if (scope !== undefined && !isVariableScope(scope)) throw new Error('书源变量作用域无效')
           this.writeVariable(name, value, bindings, scope)
         },
+        ...(this.setConcurrentRate === undefined ? {} : { setConcurrentRate: this.setConcurrentRate }),
         request: (payload, bridgeSignal) => this.handleBridge(payload, bridgeSignal, source),
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })

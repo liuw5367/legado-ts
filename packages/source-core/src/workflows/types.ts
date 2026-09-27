@@ -1,5 +1,5 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
-import type { NetworkHost, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
+import type { ConcurrencyHost, NetworkHost, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
 
 export type WorkflowStatus = 'success' | 'partial' | 'empty' | 'failed' | 'cancelled' | 'capability-missing'
 export type WorkflowStage = 'discover' | 'search' | 'detail'
@@ -161,9 +161,14 @@ export interface WorkflowRulePort {
 export interface WorkflowPorts {
   network: NetworkHost
   rules: WorkflowRulePort
-  /** 可选的书源请求适配器；缺省时使用核心的普通 HTTP 请求计划。 */
+  /**
+   * 可选的完整书源请求适配器，覆盖 URL/options、JS、Cookie、编码、重试、预算和响应语义。
+   * 它不只是原始 HTTP transport；使用者负责遵守书源限流。缺省时核心经 network 执行这些语义。
+   */
   request?: (input: WorkflowRequest) => Promise<NetworkResponse>
   decodeResponse?: (response: NetworkResponse, source: NormalizedSource) => string
+  /** 应用提供的调度容量；独立于 source.concurrentRate 的时间窗口限制。 */
+  concurrency?: ConcurrencyHost
 }
 
 export interface WorkflowOptions {

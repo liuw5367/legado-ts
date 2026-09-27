@@ -119,6 +119,21 @@ export interface NetworkHost {
   encodeCharset?(value: string, charset: string): Uint8Array
 }
 
+/** `now` and `wait` share a time base; `wait` resolves after the duration or rejects on abort. */
+export interface ClockHost {
+  now(): number
+  wait(milliseconds: number, signal?: AbortSignal): Promise<void>
+}
+
+/** Application-owned concurrency capacity. Core workflows may schedule bounded work through it. */
+export interface ConcurrencyHost {
+  run<T>(key: string, task: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T>
+  cancel(key: string): void
+  clear(): void
+  /** Resolve after currently queued and running work for the selected key(s) has settled. */
+  drain(key?: string): Promise<void>
+}
+
 export interface CharsetCodec {
   /** 将文本编码为指定字符集。 */
   encode(text: string, charset: string): Uint8Array
@@ -200,15 +215,6 @@ export interface ArchiveEntry {
 export interface ArchiveHost {
   /** 受预算解包；不支持或不安全的格式必须明确失败。 */
   extract(input: Uint8Array, format: ArchiveFormat, limits?: Partial<ArchiveLimits>): Promise<ArchiveEntry[]>
-}
-
-export interface ConcurrencyHost {
-  /** 按 key 排队执行；任务必须使用传入 signal 响应取消。 */
-  run<T>(key: string, task: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T>
-  /** 取消某个 key 的排队和运行任务。 */
-  cancel(key: string): void
-  /** 取消并清理所有 key 的任务。 */
-  clear(): void
 }
 
 export interface FontMapping {

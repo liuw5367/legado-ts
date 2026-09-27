@@ -88,6 +88,7 @@ export class SourceRuleHost implements WorkflowRulePort {
       xpath: new XPathParserAdapter(),
       javascript: new QuickJSJavaScriptHost(),
       ...(options.request === undefined ? {} : { request: options.request }),
+      ...(options.setConcurrentRate === undefined ? {} : { setConcurrentRate: options.setConcurrentRate }),
       ...(options.initialVariables === undefined ? {} : { initialVariables: options.initialVariables }),
       ...(options.cache === undefined ? {} : { cache: options.cache }),
       timeFormat: options.timeFormat ?? ((time) => formatJavaDate(time, 'yyyy/MM/dd HH:mm') ?? ''),

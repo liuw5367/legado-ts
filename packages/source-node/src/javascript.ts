@@ -139,6 +139,13 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
         const handle = context!.newAsyncifiedFunction(name, callback)
         handle.consume((value) => context!.setProp(context!.global, name, value))
       }
+      if (bridge.setConcurrentRate !== undefined) {
+        const handle = context.newFunction('__legadoSetConcurrentRate', (value) => {
+          bridge.setConcurrentRate!(context!.getString(value))
+          return context!.undefined
+        })
+        handle.consume((value) => context!.setProp(context!.global, '__legadoSetConcurrentRate', value))
+      }
       if (variableCapability) {
         installAsync('__legadoGetVariable', async (...args) => {
           const name = context!.getString(args[0]!)

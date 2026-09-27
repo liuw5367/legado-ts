@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { NetworkHost, NormalizedSource, WorkflowRuleOutput } from '@legado/source-core'
+import type { ClockHost, NetworkHost, NormalizedSource, WorkflowRuleOutput } from '@legado/source-core'
 import { createNodeSourceSession } from '../src/index.ts'
 
 const baseSource = {
@@ -69,4 +69,52 @@ test('Node 书源会话持有深拷贝并冻结的书源定义', () => {
   inputExtension.label = 'external-change'
   assert.equal(sessionExtension.label, 'initial')
   assert.throws(() => { sessionExtension.label = 'session-change' }, TypeError)
+})
+
+test('同一 source session 的 source.putConcurrent 更新普通请求和脚本请求共享的限流窗口', async () => {
+  let now = 0
+  const waitDurations: number[] = []
+  const times: number[] = []
+  const clock: ClockHost = {
+    now: () => now,
+    wait: async (milliseconds, signal) => {
+      if (signal?.aborted === true) throw new DOMException('aborted', 'AbortError')
+      waitDurations.push(milliseconds)
+      now += milliseconds
+    },
+  }
+  const network: NetworkHost = {
+    request: async (plan) => {
+      times.push(now)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('ok'), redirected: false }
+    },
+  }
+  const session = createNodeSourceSession({ ...baseSource, jsLib: '', concurrentRate: '0' } as NormalizedSource, { network, clock })
+  const updated = await session.run((ports) => ports.rules.evaluate({
+    source: session.source,
+    stage: 'search',
+    field: 'concurrentRate',
+    rule: '@js:source.putConcurrent("1/100"); "updated"',
+    content: '',
+  }))
+  assert.equal(updated.status, 'success')
+
+  const request = async (): Promise<void> => {
+    await session.run((ports) => {
+      if (ports.request === undefined) throw new Error('request adapter missing')
+      return ports.request({ source: session.source, url: 'https://fixture.invalid/page', stage: 'search', options: {} })
+    })
+  }
+  await request()
+  const bridge = await session.run((ports) => ports.rules.evaluate({
+    source: session.source,
+    stage: 'search',
+    field: 'bridgeRequest',
+    rule: '@js:java.ajax("https://fixture.invalid/bridge")',
+    content: '',
+  }))
+  assert.equal(bridge.status, 'success')
+  assert.equal(bridge.value, 'ok')
+  assert.deepEqual(times, [0, 100])
+  assert.deepEqual(waitDurations, [100])
 })

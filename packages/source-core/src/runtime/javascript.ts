@@ -23,6 +23,8 @@ export interface JavaScriptBridge {
   getVariable?: (name: string, signal: AbortSignal, scope?: JavaScriptVariableScope) => unknown | Promise<unknown>
   /** 写入一个宿主变量；未提供时 JS 中不暴露变量 bridge。 */
   setVariable?: (name: string, value: unknown, signal: AbortSignal, scope?: JavaScriptVariableScope) => void | Promise<void>
+  /** 兼容 Android `source.putConcurrent`；此设置在同一次脚本中同步生效。 */
+  setConcurrentRate?: (value: string) => void
   /** 执行一条已由宿主进一步校验的请求计划。 */
   request?: (input: unknown, signal: AbortSignal) => unknown | Promise<unknown>
   /** 在当前书源上下文中执行一条声明式规则。 */

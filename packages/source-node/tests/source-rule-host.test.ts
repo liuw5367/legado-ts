@@ -35,6 +35,11 @@ test('规则宿主支持 HTML 列表节点继续提取文本和属性', async ()
   assert.equal(bareUrl.value, '/book/1')
 })
 
+test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力', async () => {
+  const output = await evaluate(new SourceRuleHost(), '@js:source.putConcurrent("1/100")', '')
+  assert.equal(output.status, 'capability-missing')
+})
+
 test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', async () => {
   const host = new SourceRuleHost()
   const json = { data: [{ name: '我本无意成仙', path: '/book/1' }] }

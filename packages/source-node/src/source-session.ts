@@ -1,5 +1,5 @@
 import { createSourceSession } from '@legado/source-core'
-import type { NetworkHost, NormalizedSource, SourceScriptCache, SourceSession } from '@legado/source-core'
+import type { ClockHost, ConcurrencyHost, NetworkHost, NormalizedSource, SourceScriptCache, SourceSession } from '@legado/source-core'
 import { NodeCookieStore } from './cookies.ts'
 import { NodeCharsetCodec } from './charset.ts'
 import type { CookieStore, NodeNetworkOptions } from './types.ts'
@@ -14,6 +14,8 @@ export interface NodeSourceSessionOptions {
   encoding?: NodeCharsetCodec
   cache?: SourceScriptCache
   initialVariables?: Readonly<Record<string, string>>
+  clock?: ClockHost
+  concurrency?: ConcurrencyHost
 }
 
 /** Node 装配网络、Cookie、字符集和 QuickJS；书源操作生命周期由 core session 管理。 */
@@ -25,19 +27,23 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
     source,
     ...(options.initialVariables === undefined ? {} : { initialVariables: options.initialVariables }),
     ...(options.cache === undefined ? {} : { cache: options.cache }),
-    createPorts: ({ initialVariables, cache }) => {
-      const request = new SourceRequestHost({ network, cookieStore, encoding })
+    ...(options.clock === undefined ? {} : { clock: options.clock }),
+    network,
+    createPorts: ({ initialVariables, cache, network: limitedNetwork, updateConcurrentRate }) => {
+      const request = new SourceRequestHost({ network: limitedNetwork ?? network, cookieStore, encoding })
       const rules = new SourceRuleHost({
         request: (input, signal, currentSource) => request.requestFromBridge(input, signal, currentSource),
+        setConcurrentRate: updateConcurrentRate,
         initialVariables,
         cache,
       })
       request.attachRuleHost(rules)
       return {
-        network,
+        network: limitedNetwork ?? network,
         rules,
         request: (input) => request.request(input),
         decodeResponse: (response) => request.decodeResponse(response),
+        ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
       }
     },
   })
