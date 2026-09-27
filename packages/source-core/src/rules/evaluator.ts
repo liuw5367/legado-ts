@@ -78,20 +78,22 @@ function interpolate(input: string, state: EvaluationState): string {
   return result
 }
 
-function applyReplacement(value: RuleValue, atom: RuleAtom): RuleValue {
+function applyReplacement(value: RuleValue, atom: RuleAtom, state: EvaluationState): RuleValue {
   if (atom.replacement === undefined) return value
   const text = textValue(value)
-  const compiled = compileSourcePattern(atom.replacement.pattern, { flags: 'g' })
+  const patternText = interpolate(atom.replacement.pattern, state)
+  const replacement = interpolate(atom.replacement.replacement, state)
+  const compiled = compileSourcePattern(patternText, { flags: 'g' })
   if ('error' in compiled) {
     if (compiled.error.code !== 'invalid-pattern') throw new EvaluationStop(diagnostic('invalid-regex', compiled.error.message))
-    return atom.replacement.firstMatchOnly ? atom.replacement.replacement : text.split(atom.replacement.pattern).join(atom.replacement.replacement)
+    return atom.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
   }
   const pattern = compiled.regex
-  if (!atom.replacement.firstMatchOnly) return text.replace(pattern, atom.replacement.replacement)
+  if (!atom.replacement.firstMatchOnly) return text.replace(pattern, replacement)
   const first = pattern.exec(text)
   if (first === null) return ''
   const firstPattern = new RegExp(pattern.source, pattern.flags.replace(/g/u, ''))
-  return first[0].replace(firstPattern, atom.replacement.replacement)
+  return first[0].replace(firstPattern, replacement)
 }
 
 function evaluateRegex(body: string, input: unknown): RuleValue {
@@ -123,7 +125,7 @@ function evaluateAtom(atom: RuleAtom, state: EvaluationState, depth: number): Ru
   } else {
     throw new EvaluationStop(diagnostic('capability-unavailable', `${atom.mode} 规则需要对应宿主能力`))
   }
-  const replaced = applyReplacement(value, atom)
+  const replaced = applyReplacement(value, atom, state)
   checkOutput(state, replaced)
   return replaced
 }

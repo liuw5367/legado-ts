@@ -69,6 +69,13 @@ test('替换表达式支持全量和首匹配片段语义', () => {
   assert.equal(evaluateRule(compiled(`literal:x##${'a'.repeat(2050)}##y`), context('')).status, 'failed')
 })
 
+test('纯求值器也会插值替换表达式中的变量', () => {
+  const variables = new MemoryVariableView({ initial: { chapter: { pattern: 'token', replacement: '替换' } } })
+  const result = evaluateRule(compiled('literal:token-token##{{pattern}}##{{replacement}}'), context('', variables))
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, '替换-替换')
+})
+
 test('解析器和脚本模式只报告能力缺失，不静默降级为文本', () => {
   const rule = compiled('@CSS:div.book')
   assert.deepEqual(inspectRuleCapabilities(rule), ['text', 'variables', 'parser:html'])
