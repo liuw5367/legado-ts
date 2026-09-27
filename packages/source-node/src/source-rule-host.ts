@@ -4,6 +4,7 @@ import {
 import type {
   SourceRuleRuntimeOptions,
   WorkflowJavaScriptRequest,
+  WorkflowImageDecodeRequest,
   WorkflowRuleOutput,
   WorkflowRulePort,
   WorkflowRuleRequest,
@@ -116,6 +117,10 @@ export class SourceRuleHost implements WorkflowRulePort {
 
   public executeWorkflowJavaScript(request: WorkflowJavaScriptRequest): Promise<WorkflowRuleOutput> {
     return this.runtime.executeWorkflowJavaScript(request)
+  }
+
+  public executeImageDecodeScript(request: WorkflowImageDecodeRequest): Promise<WorkflowRuleOutput> {
+    return this.runtime.executeImageDecodeScript(request)
   }
 
   public executeSourceFunction(request: SourceFunctionRequest): Promise<SourceFunctionOutput> {

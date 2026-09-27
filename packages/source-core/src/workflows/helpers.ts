@@ -2,7 +2,7 @@ import type { JsonObject, JsonValue, NormalizedSource } from '../model/types.ts'
 import { SourceRequestError, SourceRequestRuntime } from './source-request.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
-import type { SourceFunctionName, WorkflowDiagnostic, WorkflowJavaScriptRequest, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { SourceFunctionName, WorkflowDiagnostic, WorkflowImageDecodeRequest, WorkflowJavaScriptRequest, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 export const listFields = [
   ['bookName', 'name'],
@@ -559,6 +559,21 @@ export async function executeWorkflowJavaScript(ports: WorkflowPorts, source: No
     return { state: 'value', value: output.value }
   } catch {
     return { state: 'failed', message: 'JavaScript 脚本执行失败' }
+  }
+}
+
+export async function executeImageDecodeScript(ports: WorkflowPorts, request: WorkflowImageDecodeRequest, stage: WorkflowStage, trace: WorkflowTraceEntry[]): Promise<ScriptExecutionResult> {
+  trace.push({ stage, event: 'rule', target: 'imageDecode' })
+  if (ports.rules.executeImageDecodeScript === undefined) return { state: 'capability-missing', message: '图片解密脚本宿主不可用' }
+  try {
+    const output = await ports.rules.executeImageDecodeScript(request)
+    if (request.signal?.aborted === true || output.status === 'cancelled') return { state: 'cancelled', ...(output.message === undefined ? {} : { message: output.message }) }
+    if (output.status === 'capability-missing') return { state: 'capability-missing', ...(output.message === undefined ? {} : { message: output.message }) }
+    if (output.status === 'failed') return { state: 'failed', message: output.message ?? '图片解密脚本执行失败' }
+    if (output.status === 'empty' || output.value === null || output.value === undefined) return { state: 'empty', value: output.value }
+    return { state: 'value', value: output.value }
+  } catch {
+    return { state: 'failed', message: '图片解密脚本执行失败' }
   }
 }
 

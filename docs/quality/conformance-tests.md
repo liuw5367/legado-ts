@@ -334,6 +334,10 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | STATE-006/toc-revision | r1 第 0 章=A，r2 第 0 章=B，r1 正文迟到 | 不能保存为 B 正文 |
 | STATE-007/callback | 第一个进度订阅器抛错，第二个正常 | 第二个仍收到事件，核心结果不变 |
 | MEDIA-002/decode-fail | bytes=[1,2]，图片解密脚本抛错 | 无损坏输出缓存，返回解码错误 |
+| MEDIA-002/no-rule | 封面/正文解密规则分别为空，bytes=[0,128,255] | 直接返回相同 bytes，不执行 JS，不发起下载 |
+| MEDIA-002/input-shape | `isCover=true/false`，分别调用封面和正文规则 | 封面默认提供常用 InputStream 读取接口，正文提供 Uint8Array；返回值只能是 Uint8Array |
+| MEDIA-002/boundary-bytes | QuickJS 输入和输出包含 0、1、127、128、254、255 | Uint8Array 字节值原样往返，不受 signed-byte 或文本编码影响 |
+| MEDIA-002/cancel | JS 执行期间 signal 取消 | 返回 cancelled，不返回输入密文作为成功结果 |
 | ACTION-001/no-confirm | payAction 存在，confirmed=false | 不执行脚本、不请求购买、不清正文 |
 | ACTION-003/late-event | 页面操作已失效后返回 open-url | 应用不执行旧页面导航 |
 | EXT-001/tick | 新命名空间连续 tick 两次 | 返回 0、1；另一源第一次为 0 |

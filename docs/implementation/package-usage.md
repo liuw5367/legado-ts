@@ -28,11 +28,14 @@
 | `loadBookDetails(ports, input)` | `WorkflowPorts`、`DetailInput`（candidates、canReName） | `RuntimeResult<WorkflowPage<BookMetadata>>` | package |
 | `loadTableOfContents(ports, input)` | `ReadingPorts`、`TocInput`（book、refresh、maxPages） | `RuntimeResult<WorkflowPage<Chapter>>` | package |
 | `loadChapterContent(ports, input)` | `ReadingPorts`、`ContentInput`（chapter、tocHtml、nextChapterUrl、replacements） | `RuntimeResult<ChapterContent>` | package |
+| `decodeImage(ports, input)` | `WorkflowPorts`、`ImageDecodeInput`（source、src、bytes、isCover、book、resultInputKind、javascriptBudget、signal） | `RuntimeResult<Uint8Array>`；失败时不返回原密文 | package |
 | `refreshSubscription` | 订阅 revision/baseline、本地快照 | [订阅流程](../flows/source-subscriptions.md)定义的 diff 与提交计划；不调度、不保存 | package |
 | `snapshotVariables` / `variableChanges` / `MemoryVariableView` | 变量视图 | 快照与变更集合 | package |
 | `diagnostic` / `primaryError` / `safeLocation` | 诊断或错误 | 稳定诊断与脱敏位置 | package |
 
 声明式 `ruleContent.subContent` 会把在线文本副文并入 `ChapterContent.pages/raw/cleaned`；音频歌词或视频弹幕通过 `ChapterContent.auxiliary` 返回，并在返回的 `ChapterContent.chapter.variable` 中更新 `lyric` 或 `danmaku`。辅助字段是章节变量的便捷投影，持久化以返回章节变量为准。声明式正文工作流不修改调用方传入的章节对象；source-core 不直接持久化章节，应用适配器负责保存这些字段。JS 源 `getContent` 沿用其函数返回，不额外运行声明式副文规则。
+
+`decodeImage` 只解释图片解密规则，不下载或缓存图片。`isCover` 选择 `coverDecodeJs`，否则选择 `ruleContent.imageDecode`；规则缺省时原样返回输入 bytes。正文图片脚本把 `result` 作为 `Uint8Array` 接收；封面默认按 Android 图片加载路径把 `result` 暴露为常用 `InputStream` 兼容对象，也可用 `resultInputKind: 'bytes'` 显式选择字节数组形式。规则必须返回 `Uint8Array`，执行失败、宿主能力缺失和取消都可从 `RuntimeResult.status` 区分。`javascriptBudget` 可按调用方策略覆盖宿主默认输入、输出、内存和时限；实际网络下载、文件/图片缓存和失败后的缓存策略由调用方负责。
 
 多源 fan-out、并发调度、进度事件、书源检测（`checkSources`）、批量正文（`getContentBatch`）与段评结构化读取的公开入口**尚未实现**。纯候选归并与匹配排序已由 `groupSearchCandidates` 等核心函数提供；应用仍负责多源循环、页面来源信息及搜索生命周期。CLI 当前分组规则说明见[搜索流程](../flows/search-flow.md#typescript-当前聚合行为)。检测与批量能力见[能力清单](../standard/capability-inventory.md)与[已知差异](../divergence/known-divergences.md)。
 

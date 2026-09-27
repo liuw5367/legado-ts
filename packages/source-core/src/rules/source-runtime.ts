@@ -23,6 +23,7 @@ import type {
   WorkflowRuleRequest,
   WorkflowRuleOutput,
   WorkflowJavaScriptRequest,
+  WorkflowImageDecodeRequest,
   SourceFunctionName,
   SourceFunctionOutput,
   SourceFunctionRequest,
@@ -91,6 +92,40 @@ interface NodeRef {
   readonly __legadoNode: string
   readonly id: string
 }
+
+const inputStreamResultPrelude = String.raw`if (bindings.__legadoResultInputKind === "input-stream" && globalThis.result instanceof Uint8Array) {
+  const __bytes = globalThis.result
+  let __cursor = 0
+  let __mark = 0
+  globalThis.result = {
+    read: function(target, offset, length) {
+      if (arguments.length === 0) return __cursor < __bytes.length ? __bytes[__cursor++] : -1
+      const __start = offset === undefined ? 0 : Number(offset)
+      const __count = length === undefined ? target.length - __start : Number(length)
+      if ((!ArrayBuffer.isView(target) && !Array.isArray(target)) || !Number.isInteger(__start) || !Number.isInteger(__count) || __start < 0 || __count < 0 || __start + __count > target.length) throw new RangeError("invalid InputStream read range")
+      if (__count === 0) return 0
+      const __available = Math.min(__count, __bytes.length - __cursor)
+      if (__available <= 0) return -1
+      for (let __index = 0; __index < __available; __index++) target[__start + __index] = __bytes[__cursor + __index]
+      __cursor += __available
+      return __available
+    },
+    readAllBytes: function() {
+      const __remaining = __bytes.slice(__cursor)
+      __cursor = __bytes.length
+      return __remaining
+    },
+    available: function() { return __bytes.length - __cursor },
+    skip: function(count) {
+      const __count = Math.max(0, Math.min(__bytes.length - __cursor, Math.trunc(Number(count) || 0)))
+      __cursor += __count
+      return __count
+    },
+    mark: function() { __mark = __cursor },
+    reset: function() { __cursor = __mark },
+    markSupported: function() { return true },
+  }
+}`
 
 interface StoredNode {
   readonly document: HtmlDocument
@@ -491,6 +526,16 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     })
   }
 
+  public async executeImageDecodeScript(request: WorkflowImageDecodeRequest): Promise<WorkflowRuleOutput> {
+    return this.runJavaScript(request.code, 'content', request.source, request.bytes, request.signal, {
+      mode: 'script',
+      content: request.src,
+      bindings: { book: request.book },
+      resultInputKind: request.resultInputKind,
+      ...(request.javascriptBudget === undefined ? {} : { javascriptBudget: request.javascriptBudget }),
+    })
+  }
+
   public async executeSourceFunction(request: SourceFunctionRequest): Promise<SourceFunctionOutput> {
     const names: Record<SourceFunctionName, readonly string[]> = {
       search: ['key', 'page'],
@@ -844,11 +889,12 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget'] }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind'] }): Promise<WorkflowRuleOutput> {
     const bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
       ...(context?.globalState === undefined ? {} : { __legadoWorkflowGlobalState: context.globalState }),
+      ...(context?.resultInputKind === undefined ? {} : { __legadoResultInputKind: context.resultInputKind }),
       result: content,
       src: context?.content ?? content,
       sourceKey: source.bookSourceUrl,
@@ -859,6 +905,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     const prelude = [
       'globalThis.result = bindings.result;',
+      inputStreamResultPrelude,
       'for (const [name, value] of Object.entries(bindings.__legadoWorkflowGlobalState ?? {})) { try { Object.defineProperty(globalThis, name, { value: __legadoDecode(JSON.parse(__legadoEncode(value))), writable: true, enumerable: true, configurable: true }); } catch {} }',
       'if (bindings.__strResponse != null) { const responseValue = bindings.__strResponse; globalThis.result = { ...responseValue, __body: responseValue.body, __code: responseValue.status ?? responseValue.code, __url: responseValue.url, __message: responseValue.message, __headers: responseValue.headers }; Object.defineProperties(globalThis.result, { body: { value: () => globalThis.result.__body }, code: { value: () => globalThis.result.__code }, url: { value: () => globalThis.result.__url }, message: { value: () => globalThis.result.__message }, headers: { value: () => globalThis.result.__headers }, isSuccessful: { value: () => globalThis.result.__code >= 200 && globalThis.result.__code < 300 } }); }',
       'globalThis.src = bindings.src;',

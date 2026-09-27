@@ -54,6 +54,23 @@ function sameValue(left: unknown, right: unknown): boolean {
   }
 }
 
+function hasBinaryPayloadOverBudget(value: unknown, maxInputBytes: number, seen = new Set<object>(), total = { bytes: 0 }): boolean {
+  if (value instanceof Uint8Array) {
+    total.bytes += value.byteLength
+    return total.bytes > maxInputBytes
+  }
+  if (value instanceof ArrayBuffer) {
+    total.bytes += value.byteLength
+    return total.bytes > maxInputBytes
+  }
+  if (typeof value !== 'object' || value === null || seen.has(value)) return false
+  seen.add(value)
+  for (const key of Object.keys(value)) {
+    if (hasBinaryPayloadOverBudget((value as Record<string, unknown>)[key], maxInputBytes, seen, total)) return true
+  }
+  return false
+}
+
 export class QuickJSJavaScriptHost implements JavaScriptHost {
   private readonly bridge: JavaScriptBridge
 
@@ -84,6 +101,10 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
 
     let bindingsJson: string
     try {
+      if (hasBinaryPayloadOverBudget(input.bindings ?? {}, budget.maxInputBytes)) {
+        diagnostics.push({ code: 'budget-exceeded', message: 'JavaScript 二进制输入超过字节预算', stage: input.stage })
+        return { status: 'budget-exceeded', value: null, diagnostics, variableChanges: [], trace }
+      }
       bindingsJson = encodeJavaScriptValue(input.bindings ?? {})
       const captureBindingsJson = JSON.stringify(input.captureBindings ?? [])
       if (new TextEncoder().encode(input.code).byteLength + new TextEncoder().encode(bindingsJson).byteLength + new TextEncoder().encode(captureBindingsJson).byteLength > budget.maxInputBytes) {

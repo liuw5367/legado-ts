@@ -6,7 +6,9 @@
 
 `ImageUtils.decode` 根据 `isCover` 选择 `BookSource.coverDecodeJs` 或 `ContentRule.imageDecode`。规则为空时原样返回输入 bytes 或输入流；规则非空时执行脚本，绑定 `book`、`result` 和 `src`，要求结果是字节数组。Android 在脚本失败时记录错误并返回 `null`。`ImageUtils.skipDecode` 在解密规则为空时返回 true，图片加载器用它跳过脚本开销。它会影响封面与正文图片的实际显示，不能只在 schema 中保留脚本文本。
 
-目标流程为：书源结果提供图片 URL，宿主按该 URL 获取 bytes，package 选择解密脚本并通过受限 JS runtime 执行，返回解密 bytes 或明确的解密失败。图片缓存键应包含书源身份、URL、解密规则版本和会话边界；未启用解密时避免无意义的脚本开销。Node、Edge、Next.js 适配器各自验证二进制请求、字节传递、取消与内存限制。
+source-core 已导出 `decodeImage(ports, input)`：它按 `isCover` 选择规则，规则缺省时原样返回 bytes；配置规则时绑定 `book` 和 `src`，并要求脚本返回 `Uint8Array`。Android 的封面加载调用 InputStream 重载，正文图片调用 ByteArray 重载；TypeScript 默认给封面脚本提供常用 `read`、`available`、`skip`、`mark`、`reset` 流式兼容对象，正文脚本收到 `Uint8Array`。调用方可通过 `resultInputKind` 覆盖这一输入形态。脚本失败、宿主能力缺失和取消均返回明确状态，不会把密文 bytes 伪装成已解密结果。
+
+图片 URL 的下载、缓存键、缓存写入和失败后的缓存策略仍属于宿主或应用。宿主按 URL 获取 bytes 后调用 `decodeImage`，仅在成功时采用解密结果；缓存键应包含书源身份、URL、解密规则版本和会话边界。未启用解密时核心跳过 JS 调用。Node 集成测试覆盖 QuickJS bytes 往返、封面流式输入、边界字节、错误和取消；Android golden 尚未执行。
 
 ## 文件、音频、图片和视频类型
 

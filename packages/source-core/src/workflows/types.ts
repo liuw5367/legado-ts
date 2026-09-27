@@ -141,6 +141,18 @@ export interface WorkflowJavaScriptRequest {
   signal?: AbortSignal
 }
 
+/** Image-only script bridge: it can present Android's cover InputStream shape without burdening generic JS hooks. */
+export interface WorkflowImageDecodeRequest {
+  source: NormalizedSource
+  code: string
+  bytes: Uint8Array
+  src: string
+  book: Readonly<Record<string, unknown>> | null
+  resultInputKind: 'bytes' | 'input-stream'
+  javascriptBudget?: Partial<JavaScriptBudget>
+  signal?: AbortSignal
+}
+
 export interface SourceFunctionRequest {
   source: NormalizedSource
   name: SourceFunctionName
@@ -163,6 +175,8 @@ export interface WorkflowRulePort {
   executeSourceFunction?(request: SourceFunctionRequest): Promise<SourceFunctionOutput>
   /** 精确脚本钩子，如 loginCheckJs、preUpdateJs 和 formatJs。 */
   executeWorkflowJavaScript?(request: WorkflowJavaScriptRequest): Promise<WorkflowRuleOutput>
+  /** Execute the image decoder with its binary/stream-specific `result` binding. */
+  executeImageDecodeScript?(request: WorkflowImageDecodeRequest): Promise<WorkflowRuleOutput>
 }
 
 export interface WorkflowPorts {
@@ -292,6 +306,20 @@ export interface ContentInput extends WorkflowOptions {
   maxPages?: number
   maxBytes?: number
   maxOutputBytes?: number
+}
+
+/** 输入已由图片宿主取得；source-core 只执行书源解密脚本，不发起图片下载。 */
+export interface ImageDecodeInput {
+  source: NormalizedSource
+  src: string
+  bytes: Uint8Array
+  isCover: boolean
+  book?: BookMetadata
+  /** Android's cover fetch path passes an InputStream; callers using its byte-array overload may select `bytes`. */
+  resultInputKind?: 'bytes' | 'input-stream'
+  /** Optional override for the JavaScript host's input, output, memory and time limits. */
+  javascriptBudget?: Partial<JavaScriptBudget>
+  signal?: AbortSignal
 }
 
 export interface ContentReplacement {

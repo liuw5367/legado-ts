@@ -14,7 +14,7 @@
 | 详情与目录 | 字段覆盖、文件下载地址、目录刷新、分页、卷、VIP 和顺序 | [详情](../flows/book-info-flow.md)、[目录](../flows/chapter-list-flow.md) | 优先；文件类源需专门结果契约 |
 | 正文与批量 | 正文分页、清洗、替换、缓存、批量、元数据保存 | [正文](../flows/content-flow.md) | 优先；音频、视频、图片和文件资源不能只按文本正文测试 |
 | JavaScript 书源 | 配置抽取、函数调用、返回值、同步兼容 API、变量和脚本 scope | [JS](javascript-source.md)、[宿主](../implementation/runtime-host-interfaces.md) | 优先；核对 `JsExtensions` 中未列出的实际书源依赖 |
-| 图片与封面解密 | `coverDecodeJs`、`imageDecode` 的字节输入、脚本输出与缓存 | [模型](source-schema.md) | 后续规格；需核对 `ImageUtils` 及图片请求链 |
+| 图片与封面解密 | `coverDecodeJs`、`imageDecode` 的字节/流输入、脚本输出与缓存 | [模型](source-schema.md) | `ImageUtils` 调用链已核对；`decodeImage` 已实现解密工作流，下载与缓存仍由宿主提供；Android golden 待跑 |
 | 付费与受限章节 | VIP/购买标识、`payAction`、授权状态、执行后刷新 | [目录](../flows/chapter-list-flow.md)、[模型](source-schema.md) | 后续规格；需核对用户触发、凭据和失败恢复 |
 | 段评读取与交互 | 结构化摘要、详情、回复，旧式段评页面桥接，以及点赞、发送和删除规则 | [段评流程](../flows/review-flow.md)、[JS](javascript-source.md)、[模型](source-schema.md) | 结构化读取和旧式页面桥接均有 Android 入口；写入目前只有字段证据，先核实执行入口 |
 | 登录与认证 | 静态 Header/Cookie、`loginCheckJs`、登录表单、验证码和动态登录 | [请求](url-request-rules.md)、[JS](javascript-source.md) | 静态能力优先；交互登录低优先级，保留完整目标 |

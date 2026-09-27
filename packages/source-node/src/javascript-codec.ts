@@ -117,6 +117,8 @@ export const guestCodecSource = String.raw`(() => {
   }
   const freeze = (value, seen = new Set()) => {
     if (value === null || (typeof value !== 'object' && typeof value !== 'function') || seen.has(value)) return value
+    // 媒体 bytes 已由 tagged codec 复制到 JS realm；带元素的 TypedArray 不能 Object.freeze。
+    if (value instanceof Uint8Array) return value
     seen.add(value)
     for (const key of Object.keys(value)) freeze(value[key], seen)
     return Object.freeze(value)

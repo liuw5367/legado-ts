@@ -110,3 +110,16 @@ test('QuickJS 取消后返回可判别状态', async () => {
   const result = await new QuickJSJavaScriptHost().execute({ code: 'return 1', stage: 'book', signal: controller.signal })
   assert.equal(result.status, 'cancelled')
 })
+
+test('QuickJS 在 tagged 编码前拒绝超过输入预算的二进制绑定', async () => {
+  const host = new QuickJSJavaScriptHost()
+  const result = await host.execute({
+    code: 'result',
+    stage: 'content',
+    bindings: { result: new Uint8Array(2 * 1024 * 1024) },
+    budget: { maxInputBytes: 1024 },
+  })
+
+  assert.equal(result.status, 'budget-exceeded')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'budget-exceeded'))
+})

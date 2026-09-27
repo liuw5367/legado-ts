@@ -5,8 +5,8 @@ import type { CompiledRule } from '../rules/types.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
-import { evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
-import type { BookMetadata, Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import { evaluateField, executeImageDecodeScript, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import type { BookMetadata, Chapter, ChapterContent, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 let paginationBatchSequence = 0
 
@@ -610,6 +610,54 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   return { status, value, diagnostics, trace }
 }
 
+/** 对齐 Android ImageUtils.decode；图片 bytes 的下载和缓存由调用方负责。 */
+export async function decodeImage(ports: WorkflowPorts, input: ImageDecodeInput): Promise<RuntimeResult<Uint8Array>> {
+  const trace: WorkflowTraceEntry[] = []
+  const diagnostics: WorkflowDiagnostic[] = []
+  const stage = 'detail' as const
+  const field = input.isCover ? 'coverDecodeJs' : 'imageDecode'
+  const rule = input.isCover
+    ? sourceString(input.source, 'coverDecodeJs')
+    : ruleString(input.source, 'ruleContent', 'imageDecode')
+
+  if (input.signal?.aborted === true) {
+    diagnostics.push({ code: 'cancelled', stage, field, message: '图片解密已取消', retryable: false })
+    return { status: 'cancelled', value: null, diagnostics, trace }
+  }
+  if (rule === undefined || rule.trim().length === 0) return { status: 'success', value: input.bytes, diagnostics, trace }
+
+  const book = input.book === undefined ? null : {
+    ...input.book.rawFields,
+    ...input.book,
+    origin: input.book.sourceId,
+    originName: input.source.bookSourceName,
+    type: androidBookType(input.book, input.source),
+  }
+  const script = await executeImageDecodeScript(ports, {
+    source: input.source,
+    code: rule,
+    bytes: input.bytes,
+    src: input.src,
+    book,
+    resultInputKind: input.resultInputKind ?? (input.isCover ? 'input-stream' : 'bytes'),
+    ...(input.javascriptBudget === undefined ? {} : { javascriptBudget: input.javascriptBudget }),
+    ...(input.signal === undefined ? {} : { signal: input.signal }),
+  }, stage, trace)
+  if (script.state === 'cancelled' || isSignalAborted(input.signal)) {
+    diagnostics.push({ code: 'cancelled', stage, field, message: '图片解密已取消', retryable: false })
+    return { status: 'cancelled', value: null, diagnostics, trace }
+  }
+  if (script.state === 'capability-missing') {
+    diagnostics.push({ code: 'capability-missing', stage, field, message: script.message ?? 'JavaScript 脚本宿主不可用', retryable: false })
+    return { status: 'capability-missing', value: null, diagnostics, trace }
+  }
+  if (script.state !== 'value' || !(script.value instanceof Uint8Array)) {
+    diagnostics.push({ code: 'rule-failed', stage, field, message: script.state === 'failed' ? script.message ?? '图片解密脚本执行失败' : '图片解密脚本必须返回 Uint8Array', retryable: false })
+    return { status: 'failed', value: null, diagnostics, trace }
+  }
+  return { status: 'success', value: script.value, diagnostics, trace }
+}
+
 async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<ChapterContent>> {
   const book: BookMetadata = input.book ?? {
     sourceId: input.chapter.sourceId,
@@ -1051,6 +1099,10 @@ const BOOK_TYPE_WEB_FILE = 128
 const BOOK_TYPE_LOCAL = 256
 
 function resolvedBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
+  return androidBookType(book, source)
+}
+
+function androidBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
   const explicitType = book?.type
   if (typeof explicitType === 'number' && Number.isInteger(explicitType) && explicitType >= 0) return explicitType
   switch (sourceNumber(source, 'bookSourceType')) {
