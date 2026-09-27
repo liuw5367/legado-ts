@@ -128,6 +128,50 @@ test('java.getString 和 java.getStringList 通过完整规则内核读取当前
   assert.deepEqual(htmlList.value, ['第一章', '第二章'])
 })
 
+test('java.getElements 提供 Android 书源使用的节点链式 API', async () => {
+  const host = new SourceRuleHost()
+  const html = '<ul><li class="item"><a href="/one">第一章</a></li><li class="item"><a href="/two">第二章</a></li></ul>'
+  const result = await evaluate(host, '@js:var items = java.getElements(".item"); items[0].select("a").attr("href") + "|" + items[0].text() + "|" + items.toArray().length', html)
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, '/one|第一章|2')
+
+  const collection = await evaluate(host, '@js:var items = java.getElement(".item"); items.length + "|" + items.select("a").attr("href")', html)
+  assert.equal(collection.status, 'success')
+  assert.equal(collection.value, '2|/one')
+
+  const replaced = await evaluate(host, "@js:java.setContent('<div class=\"other\">新内容</div>'); java.getElement('.other').text()", html)
+  assert.equal(replaced.status, 'success')
+  assert.equal(replaced.value, '新内容')
+})
+
+test('java.ajaxAll 返回可调用 body、code 和 url 的响应对象', async () => {
+  const calls: unknown[] = []
+  const host = new SourceRuleHost({ request: async (input) => {
+    calls.push(input)
+    if (input.kind === 'network-all') return input.urls?.map((url) => ({ body: `body:${String(url)}`, code: 204, headers: { Location: String(url) }, url: String(url) })) ?? []
+    return `body:${String(input.url)}`
+  } })
+  const result = await evaluate(host, '@js:java.ajaxAll(["https://a.test", "https://b.test"]).map((item) => item.body() + ":" + item.code() + ":" + item.header("Location")).join("|")', '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, 'body:https://a.test:204:https://a.test|body:https://b.test:204:https://b.test')
+  assert.deepEqual(calls, [{ kind: 'network-all', urls: ['https://a.test', 'https://b.test'], skipRateLimit: false }])
+})
+
+test('java.get 和 java.connect 返回 Android 风格的响应对象', async () => {
+  const calls: unknown[] = []
+  const host = new SourceRuleHost({ request: async (input) => {
+    calls.push(input)
+    return { body: 'redirect-body', status: 302, headers: { Location: 'https://b.test/' }, url: 'https://b.test/' }
+  } })
+  const result = await evaluate(host, '@js:var response = java.get("https://a.test", {}); var connected = java.connect("https://a.test"); [response.statusCode(), response.body(), response.header("location"), response.url(), response.isSuccessful(), connected.raw().request().url()].join("|")', '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, '302|redirect-body|https://b.test/|https://b.test/|false|https://b.test/')
+  assert.deepEqual(calls, [
+    { kind: 'network-response', url: 'https://a.test', method: 'GET', options: {} },
+    { kind: 'network-response', url: 'https://a.test', method: 'GET', options: undefined },
+  ])
+})
+
 test('嵌套 java.getString 与外层规则共用规则步数预算', async () => {
   const host = new SourceRuleHost({ maxSteps: 9 })
   const content = JSON.stringify({ name: '书名' })

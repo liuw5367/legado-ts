@@ -16,6 +16,24 @@ export interface SourceRequestHostOptions {
 
 /** bridge 网络子请求允许的最大再入层数；超出后拒绝，防止脚本经 bridge 无限嵌套。 */
 const maxBridgeDepth = 3
+const maxAjaxAllConcurrency = 8
+
+async function mapConcurrent<T, R>(values: readonly T[], limit: number, signal: AbortSignal, task: (value: T) => Promise<R>): Promise<R[]> {
+  const result = new Array<R>(values.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (true) {
+      if (signal.aborted) throw new DOMException('The operation was aborted', 'AbortError')
+      const index = next
+      next += 1
+      if (index >= values.length) return
+      result[index] = await task(values[index]!)
+    }
+  }
+  const workers = Math.min(limit, values.length)
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  return result
+}
 
 function text(value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -100,12 +118,19 @@ export class SourceRequestHost {
       return true
     }
     if (input.kind === 'token') throw new Error('书源 token bridge 不可用')
-    if (input.kind !== 'network') throw new Error(`未知书源 bridge: ${input.kind}`)
+    if (input.kind !== 'network' && input.kind !== 'network-all' && input.kind !== 'network-response') throw new Error(`未知书源 bridge: ${input.kind}`)
     const depth = this.bridgeDepth.getStore() ?? 0
     if (depth >= maxBridgeDepth) {
       throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
     }
     const options = object(input.options) as SourceRequestOptions | undefined
+    if (input.kind === 'network-all') {
+      const urls = Array.isArray(input.urls) ? input.urls.map((value) => text(value)).filter((value) => value.length > 0) : []
+      return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url) => {
+        const response = await this.runtime.requestRaw(source, url, options ?? {}, signal, undefined, 'search', true)
+        return this.responseObject(response)
+      }))
+    }
     const overrides: SourceRequestOptions = {
       ...(options ?? {}),
       ...(input.method === undefined ? {} : { method: input.method }),
@@ -115,7 +140,7 @@ export class SourceRequestHost {
     return this.bridgeDepth.run(depth + 1, async () => {
       // nested：子请求跳过动态 source header，只保留静态头，切断 header 脚本自递归。
       const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, 'search', true)
-      return this.decode(response)
+      return input.kind === 'network-response' ? this.responseObject(response) : this.decode(response)
     })
   }
 
@@ -140,5 +165,16 @@ export class SourceRequestHost {
       }
     }
     return new TextDecoder().decode(bytes)
+  }
+
+  private responseObject(response: NetworkResponse): Readonly<Record<string, unknown>> {
+    return {
+      body: this.decode(response),
+      status: response.status,
+      code: response.status,
+      headers: response.headers,
+      url: response.url,
+      redirected: response.redirected,
+    }
   }
 }

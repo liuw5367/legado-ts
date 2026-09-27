@@ -162,6 +162,25 @@ test('桥接请求随求值携带书源，共享宿主跨源并发不串源', as
   assert.deepEqual(seen.sort(), ['https://a.test', 'https://b.test'])
 })
 
+test('bridge 的 ajaxAll 和 response 请求复用完整网络响应并保持顺序', async () => {
+  const started: string[] = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    started.push(plan.url)
+    const delay = plan.url.endsWith('/one') ? 10 : 1
+    await new Promise((resolve) => setTimeout(resolve, delay))
+    return { ...response(plan.url), status: plan.url.endsWith('/two') ? 204 : 200, headers: { Location: plan.url }, bytes: new TextEncoder().encode(`body:${plan.url}`) }
+  } } })
+  const signal = new AbortController().signal
+  const all = await host.requestFromBridge({ kind: 'network-all', urls: ['https://fixture.invalid/one', 'https://fixture.invalid/two'] }, signal, source)
+  assert.deepEqual(all, [
+    { body: 'body:https://fixture.invalid/one', status: 200, code: 200, headers: { Location: 'https://fixture.invalid/one' }, url: 'https://fixture.invalid/one', redirected: false },
+    { body: 'body:https://fixture.invalid/two', status: 204, code: 204, headers: { Location: 'https://fixture.invalid/two' }, url: 'https://fixture.invalid/two', redirected: false },
+  ])
+  const single = await host.requestFromBridge({ kind: 'network-response', url: 'https://fixture.invalid/one', options: {} }, signal, source)
+  assert.deepEqual(single, { body: 'body:https://fixture.invalid/one', status: 200, code: 200, headers: { Location: 'https://fixture.invalid/one' }, url: 'https://fixture.invalid/one', redirected: false })
+  assert.deepEqual(started, ['https://fixture.invalid/one', 'https://fixture.invalid/two', 'https://fixture.invalid/one'])
+})
+
 test('四个并发 bridge 根请求分别计算深度，不会互相触发嵌套限制', async () => {
   const calls: string[] = []
   const requestHost = new SourceRequestHost({ network: { request: async (plan) => {
