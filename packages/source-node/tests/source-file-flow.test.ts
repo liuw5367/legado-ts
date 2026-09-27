@@ -56,6 +56,9 @@ function isMockCompatible(source: NormalizedSource): boolean {
   return true
 }
 
+// These ports deliberately return deterministic values. The test exercises
+// source-file selection and workflow hand-off; rule-engine compatibility is
+// covered by the source-host and conformance tests.
 function flowPorts(calls: string[], rulesSeen: string[]): WorkflowPorts {
   return {
     network: {
@@ -95,7 +98,7 @@ function flowPorts(calls: string[], rulesSeen: string[]): WorkflowPorts {
   }
 }
 
-test('真实书源文件可贯通解析、搜索、切换、详情、目录和正文', async () => {
+test('真实书源文件可驱动多源切换与工作流交接', async () => {
   const sources = await loadFixtureSources()
   const flowable = sources.filter((source) => isMockCompatible(source))
   assert.ok(flowable.length >= 2, '真实书源语料中至少需要两个可运行完整流程的书源')
