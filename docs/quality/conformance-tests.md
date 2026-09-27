@@ -124,7 +124,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `FLOW-009` | 正文 | 缓存命中/失效、下一章保护、单页/多页、空正文和资源类型 |
 | `FLOW-010` | 正文 | subContent、replaceRegex、标题图片、歌词/弹幕、响应 URL 和清理 |
 | `FLOW-011` | 正文 | save token、旧请求覆盖保护、保存失败、取消、章节元数据和保存事件 |
-| `FLOW-012` | 批量 | contentBatch/getContentBatch、章节对象识别、重复 URL 歧义、锁、漏存兜底 |
+| `FLOW-012` | 批量 | contentBatch/getContentBatch、章节对象识别、重复 URL 歧义、串行回存、漏存兜底；source-core 与 QuickJS Node 定向测试已覆盖，Android golden 未执行 |
 | `JS-001` | JS | 每次调用 scope、绑定对象、共享 scope 显式开关、toJSON/getter/循环引用 |
 | `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播和 `skipRateLimit` 绕过语义 |
 | `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |

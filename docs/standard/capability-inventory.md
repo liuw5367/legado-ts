@@ -12,7 +12,7 @@
 | URL 与请求 | 参数、页码、Body、Header、Cookie、重试、重定向、代理和 DNS | [URL](url-request-rules.md) | 优先；代理与 DNS 由宿主实现并验证 |
 | 搜索与发现 | 多源搜索、精准搜索、分类入口、筛选状态、发现列表 | [搜索](../flows/search-flow.md)、[发现](../flows/explore-flow.md) | 优先；`exploreScreen` 和分类交互需要继续核对 |
 | 详情与目录 | 字段覆盖、文件下载地址、目录刷新、分页、卷、VIP 和顺序 | [详情](../flows/book-info-flow.md)、[目录](../flows/chapter-list-flow.md) | 优先；文件类源需专门结果契约 |
-| 正文与批量 | 正文分页、清洗、替换、缓存、批量、元数据保存 | [正文](../flows/content-flow.md) | 优先；音频、视频、图片和文件资源不能只按文本正文测试 |
+| 正文与批量 | 正文分页、清洗、替换、缓存、批量、元数据保存 | [正文](../flows/content-flow.md) | `loadChapterContent` 与 `loadChapterContentBatch` 已实现；持久化/token 由宿主提供；Android golden 待执行 |
 | JavaScript 书源 | 配置抽取、函数调用、返回值、同步兼容 API、变量和脚本 scope | [JS](javascript-source.md)、[宿主](../implementation/runtime-host-interfaces.md) | 优先；核对 `JsExtensions` 中未列出的实际书源依赖 |
 | 图片与封面解密 | `coverDecodeJs`、`imageDecode` 的字节/流输入、脚本输出与缓存 | [模型](source-schema.md) | `ImageUtils` 调用链已核对；`decodeImage` 已实现解密工作流，下载与缓存仍由宿主提供；Android golden 待跑 |
 | 付费与受限章节 | VIP/购买标识、`payAction`、授权状态、执行后刷新 | [目录](../flows/chapter-list-flow.md)、[模型](source-schema.md) | 后续规格；需核对用户触发、凭据和失败恢复 |
@@ -54,7 +54,7 @@
 | CAP-RULE | 04 的模式、链、变量、替换及转换 | SCH、VAR | `compileRule`/`evaluateRule` 已实现；golden 对照未全量运行 |
 | CAP-REQUEST | 05 请求/响应/Cookie/DNS/代理 | URL | `createRequestPlan` 已实现；部分选项待对照 |
 | CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP | `searchBooks`/`discoverBooks` 已实现；exploreScreen 仅保留 |
-| CAP-INFO / CAP-TOC / CAP-CONTENT | 07 至 09 | FLOW-004 至 012 | `loadBookDetails`/`loadTableOfContents`/`loadChapterContent` 已实现；需跑 Android 对照 |
+| CAP-INFO / CAP-TOC / CAP-CONTENT | 07 至 09 | FLOW-004 至 012 | `loadBookDetails`/`loadTableOfContents`/`loadChapterContent`/`loadChapterContentBatch` 已实现；Node 批量测试通过，需跑 Android 对照 |
 | CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008 至 010 | QuickJS 宿主已接入规则内 JS；Rhino 逐返回值对照与引擎互操作未全量验收 |
 | CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取有入口，段评写入仅字段证据 |
 | CAP-REVIEW | 段评流程的声明式摘要/详情/回复、JS 函数及旧式网页桥接 | JS-004、REVIEW-001、[段评流程](../flows/review-flow.md) | 结构化读取和旧式桥接规格已补；TypeScript 与宿主尚未实现，写入保持待核实 |

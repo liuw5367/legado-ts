@@ -1,6 +1,6 @@
 # 阶段 D：批量、媒体与交互扩展
 
-**状态：** 部分完成（字体、加密、归档、并发宿主已实现；段评、付费、事件、批量正文等未完成，2026-09-24 核对）。
+**状态：** 部分完成（字体、加密、归档、并发宿主已实现；`getContentBatch` / `contentBatch` 已于 2026-09-27 接入 source-core；段评、付费和事件仍未实现）。
 
 本阶段按 [能力清单](../standard/capability-inventory.md) 逐项增加功能，每项完成后都能独立进入兼容矩阵。核心层定义执行语义与调用协议，宿主实现脚本、浏览器、文件和用户交互能力。低优先级只影响实施时间；建议舍弃某项能力时，先提交可核对的理由和兼容损失供用户审核。
 
@@ -44,12 +44,12 @@ interface ExtendedResult<T> {
 
 ## 基础 JS 前置与批量扩展
 
-下列第 1 至 3 项由 B/C 设计和验证，runtime 已建立基础能力后复用并回归验证；第 4 项批量（`getContentBatch`）为本阶段新增，**尚未实现**。基础脚本能力不能等到 D 才提供。
+下列第 1 至 3 项由 B/C 设计和验证，runtime 已建立基础能力后复用并回归验证；第 4 项批量（`getContentBatch`）已由 `loadChapterContentBatch` 实现，Node 定向用例通过，Android golden 待执行。基础脚本能力不能等到 D 才提供。
 
 1. 在隔离的 `JavaScriptRuntime` 中执行导入脚本，抽取 `config` 或兼容旧版 `source`，验证必需函数与成对函数。完整 `mainJs` 原文继续由 codec 保留；导入失败返回脚本、配置或函数阶段的错误，不覆盖已保存书源。
 2. 以一次函数调用为单位创建 scope，绑定 `java`、`source/sourceApi`、`cookie`、`cache`、当前书籍、章节及请求变量。脚本的网络、Cookie、缓存和文件操作只能通过经过授权的宿主 API；每次调用设置超时、取消、资源限额和可追踪日志。
 3. 先执行 `search`、`explore`、`getBookInfo`、`getChapters`、`getContent`，再通过同一 marshaller 归一化数组、对象、字符串、`toJSON`、getter 与空值。不能直接把脚本返回对象写入应用的 `Book` 或目录存储。
-4. 增加 `getContentBatch`、`java.cacheContent` 和保存 token；未回存章节按正文规格兜底。批量 scope 关闭后拒绝迟到写入，回调乱序不能改变章节身份。
+4. 增加 `getContentBatch`、`contentBatch` 与上下文限定的 `java.cacheContent`；source-core 按 index/唯一 URL 识别、应用 `replaceRegex`、限制每批最多 50 章，并对缺失章节调用单章流程。保存 token 与持久化原子性由宿主回调闭包负责；Node 脚本 action 串行提交，其他上下文没有缓存 action。
 
 JS 源的公开入口与声明式源在目标设计中共用 `searchOne`、`explore`、`getBookInfo`、`getChapterList`、`getContent`（历史名；当前导出为 `searchBooks` / `discoverBooks` / `loadBookDetails` / `loadTableOfContents` / `loadChapterContent`，见 [包使用](package-usage.md)）。分流只发生在 package 内；应用不根据 `mainJs` 自行调用脚本。先完成 `IMP-008` 至 `IMP-010`、`JS-001` 至 `JS-003`、`FLOW-012`，然后把对应能力标记为已验证。
 

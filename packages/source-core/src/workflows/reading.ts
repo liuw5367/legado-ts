@@ -6,7 +6,7 @@ import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeImageDecodeScript, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
-import type { BookMetadata, Chapter, ChapterContent, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 let paginationBatchSequence = 0
 
@@ -608,6 +608,260 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
   const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'item-skipped') ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
+}
+
+/** 对齐 Android contentBatch/getContentBatch；下载与持久化由 host 的 request/cache 适配器提供。 */
+export async function loadChapterContentBatch(ports: ReadingPorts, input: ContentBatchInput): Promise<RuntimeResult<ChapterContentBatchResult>> {
+  const diagnostics: WorkflowDiagnostic[] = []
+  const trace: WorkflowTraceEntry[] = []
+  const stage: WorkflowStage = 'detail'
+  const chapters = input.chapters.filter((chapter) => chapter.isVolume !== true)
+  const items = new Map<number, ChapterContentBatchItem>(chapters.map((chapter) => [chapter.index, { chapter, saved: false, via: 'none' }]))
+  const resultValue = (batchCount: number): ChapterContentBatchResult => ({ items: chapters.map((chapter) => items.get(chapter.index)!), batchCount })
+  const cancelledResult = (batchCount: number, message: string): RuntimeResult<ChapterContentBatchResult> => {
+    diagnostics.push({ code: 'cancelled', stage, field: 'contentBatch', message, retryable: false })
+    return { status: 'cancelled', value: resultValue(batchCount), diagnostics, trace }
+  }
+
+  if (input.signal?.aborted === true) return cancelledResult(0, '批量正文工作流已取消')
+  const indexes = new Set<number>()
+  for (const chapter of chapters) {
+    if (chapter.sourceId !== input.source.bookSourceUrl || chapter.sourceId !== input.book.sourceId || chapter.bookUrl !== input.book.bookUrl) {
+      diagnostics.push({ code: 'invalid-input', stage, field: 'chapters', itemIndex: chapter.index, message: '批量章节必须属于当前书源和书籍', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
+    if (!Number.isInteger(chapter.index) || chapter.index < 0 || indexes.has(chapter.index)) {
+      diagnostics.push({ code: 'invalid-input', stage, field: 'chapters', itemIndex: chapter.index, message: '批量正文章节 index 必须是唯一的非负整数', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
+    indexes.add(chapter.index)
+  }
+  if (chapters.length === 0) return { status: 'success', value: resultValue(0), diagnostics, trace }
+
+  const mainJs = sourceString(input.source, 'mainJs')
+  const isJavaScriptSource = mainJs !== undefined && mainJs.trim().length > 0
+  const contentBatchRule = ruleString(input.source, 'ruleContent', 'contentBatch')
+  const ruleContent = typeof input.source.ruleContent === 'object' && input.source.ruleContent !== null && !Array.isArray(input.source.ruleContent)
+    ? input.source.ruleContent as Record<string, unknown>
+    : undefined
+  const declaredBatchSize = input.source.maxBatchSize ?? ruleContent?.maxBatchSize
+  const contentBatchRuleReplace = ruleString(input.source, 'ruleContent', 'replaceRegex')
+  let batchSize: number | undefined
+  const validDeclaredBatchSize = typeof declaredBatchSize === 'number' && Number.isInteger(declaredBatchSize) && declaredBatchSize > 1
+  if (validDeclaredBatchSize) {
+    batchSize = Math.min(declaredBatchSize, 50)
+  } else if (declaredBatchSize !== undefined && declaredBatchSize !== null &&
+    (isJavaScriptSource || typeof declaredBatchSize !== 'number' || !Number.isInteger(declaredBatchSize) || declaredBatchSize < 0)) {
+    diagnostics.push({ code: 'invalid-config', stage, field: 'maxBatchSize', message: 'maxBatchSize 必须是大于 1 的整数；运行时上限为 50', retryable: false })
+  }
+  const supportsBatch = batchSize !== undefined && (isJavaScriptSource || contentBatchRule !== undefined)
+  if (!isJavaScriptSource && contentBatchRule !== undefined && batchSize === undefined && !diagnostics.some((item) => item.field === 'maxBatchSize')) {
+    diagnostics.push({ code: 'invalid-config', stage, field: 'maxBatchSize', message: 'contentBatch 需要配置大于 1 的 maxBatchSize', retryable: false })
+  }
+  if (supportsBatch && input.cacheContent === undefined) {
+    diagnostics.push({ code: 'capability-missing', stage, field: 'cacheContent', message: '批量规则需要宿主缓存适配器，已改用单章正文流程', retryable: false })
+  }
+
+  const { chapters: _chapters, cacheContent, ...contentOptions } = input
+  const bookBaseUrl = input.book.tocUrl?.trim() ? input.book.tocUrl : input.book.bookUrl
+  const bookValue = {
+    ...input.book.rawFields,
+    ...input.book,
+    origin: input.book.sourceId,
+    originName: input.source.bookSourceName,
+    type: androidBookType(input.book, input.source),
+  }
+  let batchCount = 0
+  const fallbackSuppressed = new Set<number>()
+
+  const fallbackChapter = async (chapter: Chapter): Promise<void> => {
+    if (input.signal?.aborted === true) return
+    const item = items.get(chapter.index)!
+    if (item.saved || fallbackSuppressed.has(chapter.index)) return
+    item.via = 'single'
+    const single = await loadChapterContent(ports, { ...contentOptions, chapter })
+    diagnostics.push(...single.diagnostics)
+    trace.push(...single.trace)
+    if (single.status === 'cancelled' || isSignalAborted(input.signal)) return
+    const value = single.value
+    if (value === null || value.cleaned.trim().length === 0) return
+    if (new TextEncoder().encode(value.cleaned).byteLength > (input.maxOutputBytes ?? 4 * 1024 * 1024)) return
+    if (cacheContent === undefined) {
+      item.content = value.cleaned
+      return
+    }
+    try {
+      const saved = await cacheContent(chapter, value.cleaned, input.signal)
+      if (saved) {
+        item.saved = true
+        item.content = value.cleaned
+      }
+      else {
+        if (!item.saved) delete item.content
+        fallbackSuppressed.add(chapter.index)
+        diagnostics.push({ code: 'cache-failed', stage, field: 'cacheContent', itemIndex: chapter.index, message: '宿主缓存拒绝写入；为避免覆盖更新后的正文，跳过兜底重试', retryable: false })
+      }
+    } catch (error) {
+      if (!item.saved) delete item.content
+      diagnostics.push({ code: 'cache-failed', stage, field: 'cacheContent', itemIndex: chapter.index, message: error instanceof Error ? error.message : '宿主缓存写入失败', retryable: false })
+    }
+  }
+
+  const groups: Chapter[][] = []
+  const groupSize = supportsBatch ? batchSize! : 1
+  for (let offset = 0; offset < chapters.length; offset += groupSize) groups.push(chapters.slice(offset, offset + groupSize))
+
+  for (const group of groups) {
+    if (isSignalAborted(input.signal)) return cancelledResult(batchCount, '批量正文工作流已取消')
+    if (supportsBatch && cacheContent !== undefined && group.length > 1) {
+      const chapterValues = group.map((chapter) => ({
+        ...(chapter.rawFields ?? {}),
+        ...chapter,
+        url: chapter.chapterUrl,
+        baseUrl: typeof chapter.rawFields?.baseUrl === 'string' && chapter.rawFields.baseUrl.length > 0 ? chapter.rawFields.baseUrl : bookBaseUrl,
+        index: chapter.index,
+        title: chapter.title,
+      }))
+      const groupByIndex = new Map(group.map((chapter) => [chapter.index, chapter]))
+      const chapterUrlIndexes = new Map<string, Set<number>>()
+      const addChapterUrl = (url: string | undefined, index: number): void => {
+        if (url === undefined || url.trim().length === 0) return
+        const indexes = chapterUrlIndexes.get(url) ?? new Set<number>()
+        indexes.add(index)
+        chapterUrlIndexes.set(url, indexes)
+      }
+      const batchBaseUrl = input.book.tocUrl?.trim() ? input.book.tocUrl : input.source.bookSourceUrl
+      for (const chapter of group) {
+        addChapterUrl(chapter.chapterUrl, chapter.index)
+        const chapterBaseUrl = typeof chapter.rawFields?.baseUrl === 'string' && chapter.rawFields.baseUrl.length > 0
+          ? chapter.rawFields.baseUrl
+          : bookBaseUrl
+        const absolute = chapter.isVolume === true && chapter.title.length > 0 && chapter.chapterUrl.startsWith(chapter.title)
+          ? chapterBaseUrl
+          : safeResolveReference(chapter.chapterUrl, chapterBaseUrl)
+        addChapterUrl(absolute, chapter.index)
+        addChapterUrl(safeResolveReference(chapter.chapterUrl, batchBaseUrl), chapter.index)
+      }
+      let groupOpen = true
+      let saveQueue: Promise<void> = Promise.resolve()
+      const cacheAction = async (actionSignal: AbortSignal, actionInput: unknown): Promise<boolean> => {
+        const operation = saveQueue.then(async () => {
+          if (!groupOpen) return false
+          if (actionSignal.aborted || isSignalAborted(input.signal)) throw new Error('__LEGADO_CANCELLED__')
+          if (typeof actionInput !== 'object' || actionInput === null || Array.isArray(actionInput)) throw new Error('java.cacheContent 参数无效')
+          const record = actionInput as Record<string, unknown>
+          if (typeof record.content !== 'string') throw new Error('java.cacheContent 正文必须是字符串')
+          const identifier = record.chapter
+          let chapter: Chapter | undefined
+          if (typeof identifier === 'object' && identifier !== null && !Array.isArray(identifier)) {
+            const index = (identifier as Record<string, unknown>).index
+            if (typeof index === 'number' && Number.isInteger(index)) chapter = groupByIndex.get(index)
+          } else if (typeof identifier === 'string') {
+            const trimmedUrl = identifier.trim()
+            const matched = new Set(chapterUrlIndexes.get(trimmedUrl) ?? [])
+            const normalized = safeResolveReference(trimmedUrl, batchBaseUrl)
+            for (const index of chapterUrlIndexes.get(normalized ?? '') ?? []) matched.add(index)
+            if (matched.size === 1) chapter = groupByIndex.get([...matched][0]!)
+          }
+          if (chapter === undefined) throw new Error(`java.cacheContent 未唯一匹配到本批次章节；重复 URL 请传带 index 的章节对象: ${String(identifier)}`)
+
+          let content = record.content
+          if (contentBatchRuleReplace !== undefined) {
+            const trimmed = content.split('\n').map((line) => line.trim()).join('\n')
+            const replaced = await evaluateField(ports, input.source, stage, 'replaceRegex', contentBatchRuleReplace, trimmed, chapter.index, trace, input.signal, {
+              baseUrl: safeResolveReference(chapter.chapterUrl, typeof chapter.rawFields?.baseUrl === 'string' ? chapter.rawFields.baseUrl : bookBaseUrl) ?? bookBaseUrl,
+              bindings: { book: bookValue, chapter: chapterValues[group.findIndex((item) => item.index === chapter.index)] },
+            })
+            if (replaced.state === 'cancelled' || actionSignal.aborted || isSignalAborted(input.signal)) throw new Error('__LEGADO_CANCELLED__')
+            if (replaced.state === 'failed' || replaced.state === 'capability-missing') {
+              diagnostics.push({ code: replaced.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: 'replaceRegex', itemIndex: chapter.index, message: replaced.message ?? '批量正文替换规则执行失败', retryable: false })
+              throw new Error(replaced.message ?? '批量正文替换规则执行失败')
+            }
+            content = textValue(replaced.value)
+            if (isOnlineTextBook(androidBookType(input.book, input.source), input.book)) {
+              content = content.split('\n').map((line) => `　　${line}`).join('\n')
+            }
+          }
+          if (new TextEncoder().encode(content).byteLength > (input.maxOutputBytes ?? 4 * 1024 * 1024)) {
+            diagnostics.push({ code: 'item-skipped', stage, field: 'cacheContent', itemIndex: chapter.index, message: '批量正文超过输出字节预算', retryable: false })
+            return false
+          }
+          if (content.trim().length === 0) return false
+          const item = items.get(chapter.index)!
+          item.via = 'batch'
+          try {
+            const saved = await cacheContent(chapter, content, actionSignal)
+            if (saved) {
+              item.saved = true
+              item.content = content
+            }
+            else {
+              if (!item.saved) delete item.content
+              fallbackSuppressed.add(chapter.index)
+              diagnostics.push({ code: 'cache-failed', stage, field: 'cacheContent', itemIndex: chapter.index, message: '宿主缓存拒绝写入；为避免覆盖更新后的正文，跳过兜底重试', retryable: false })
+            }
+            return saved
+          } catch (error) {
+            if (!item.saved) delete item.content
+            fallbackSuppressed.add(chapter.index)
+            diagnostics.push({ code: 'cache-failed', stage, field: 'cacheContent', itemIndex: chapter.index, message: error instanceof Error ? error.message : '宿主缓存写入失败', retryable: false })
+            throw error
+          }
+        })
+        saveQueue = operation.then(() => undefined, () => undefined)
+        return operation
+      }
+      const workflowActions = { cacheContent: cacheAction }
+      let batchState: 'value' | 'empty' | 'missing-function' | 'failed' | 'cancelled' | 'capability-missing' = 'value'
+      let batchMessage: string | undefined
+      const split = isJavaScriptSource ? undefined : splitBatchJavaScript(contentBatchRule!)
+      if (split?.error !== undefined) {
+        diagnostics.push({ code: 'invalid-config', stage, field: 'contentBatch', message: split.error, retryable: false })
+        batchState = 'failed'
+        batchMessage = split.error
+      } else {
+        batchCount += 1
+        if (isJavaScriptSource) {
+          const batch = await executeSourceFunction(ports, input.source, 'getContentBatch', [chapterValues, bookValue], { chapters: chapterValues, book: bookValue, result: chapterValues }, 'detail', 'content', trace, input.signal, workflowActions)
+          batchState = batch.state
+          batchMessage = batch.message
+        } else {
+          for (const code of split!.scripts) {
+            const batch = await executeWorkflowJavaScript(ports, input.source, code, stage, 'content', trace, {
+              content: chapterValues,
+              baseUrl: batchBaseUrl,
+              bindings: { chapters: chapterValues, book: bookValue },
+              workflowActions,
+              ...(input.signal === undefined ? {} : { signal: input.signal }),
+            })
+            batchState = batch.state
+            batchMessage = batch.message
+            if (batchState === 'failed' || batchState === 'cancelled' || batchState === 'capability-missing') break
+          }
+        }
+      }
+      await saveQueue
+      groupOpen = false
+      if (batchState === 'cancelled' || isSignalAborted(input.signal)) return cancelledResult(batchCount, batchMessage ?? '批量正文脚本已取消')
+      if (batchState === 'failed' || batchState === 'capability-missing' || batchState === 'missing-function') {
+        const code = batchState === 'capability-missing' ? 'capability-missing' : batchState === 'missing-function' ? 'invalid-config' : 'rule-failed'
+        diagnostics.push({ code, stage, field: isJavaScriptSource ? 'getContentBatch' : 'contentBatch', ...(group[0] === undefined ? {} : { itemIndex: group[0].index }), message: batchMessage ?? (batchState === 'missing-function' ? 'JS 书源缺少 getContentBatch 函数' : '批量正文规则执行失败'), retryable: false })
+      }
+    }
+
+    for (const chapter of group) {
+      if (isSignalAborted(input.signal)) return cancelledResult(batchCount, '批量正文工作流已取消')
+      await fallbackChapter(chapter)
+      if (isSignalAborted(input.signal)) return cancelledResult(batchCount, '单章兜底流程已取消')
+    }
+  }
+
+  const result = resultValue(batchCount)
+  const unresolved = result.items.some((item) => !item.saved && item.content === undefined)
+  const cacheRejected = diagnostics.some((item) => item.code === 'cache-failed')
+  const hasOutput = result.items.some((item) => item.saved || item.content !== undefined)
+  const status = unresolved || cacheRejected ? hasOutput ? 'partial' : 'failed' : 'success'
+  return { status, value: result, diagnostics, trace }
 }
 
 /** 对齐 Android ImageUtils.decode；图片 bytes 的下载和缓存由调用方负责。 */
@@ -1228,6 +1482,32 @@ function applyReplacements(value: string, replacements: readonly { pattern: stri
     result = result.replace(compiled.regex, item.replacement)
   }
   return { text: result, errors }
+}
+
+function safeResolveReference(value: string, baseUrl: string): string | undefined {
+  try {
+    return resolveSourceRequestReference(value, baseUrl)
+  } catch {
+    return undefined
+  }
+}
+
+function splitBatchJavaScript(rule: string): { scripts: string[]; error?: string } {
+  const trimmed = rule.trim()
+  if (!/^<js>|^@js:/i.test(trimmed)) return { scripts: [trimmed] }
+  const matcher = /<js>([\s\S]*?)<\/js>|@js:([\s\S]*)/ig
+  const scripts: string[] = []
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = matcher.exec(trimmed)) !== null) {
+    if (trimmed.slice(cursor, match.index).trim().length > 0) return { scripts: [], error: 'contentBatch 只能包含 JavaScript 规则片段' }
+    const code = (match[1] ?? match[2] ?? '').trim()
+    if (code.length > 0) scripts.push(code)
+    cursor = matcher.lastIndex
+    if (match[2] !== undefined) break
+  }
+  if (scripts.length === 0 || trimmed.slice(cursor).trim().length > 0) return { scripts: [], error: 'contentBatch JavaScript 包装不完整或包含非 JavaScript 片段' }
+  return { scripts }
 }
 
 function resolveUrl(value: string, baseUrl: string): string | undefined {

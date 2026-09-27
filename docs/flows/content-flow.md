@@ -128,11 +128,12 @@ export interface ContentResult {
 
 ### 批量正文
 
-需要保存时，正文和章节元数据一起写入宿主缓存；并发写入必须使用版本 token，避免旧请求覆盖新正文。这是 TypeScript Host 的目标约束，不代表当前文档已经有 TypeScript runtime 实现。批量正文：
+批量工作流由 `loadChapterContentBatch` 编排；调用方先按阅读/缓存状态挑出需要请求的非卷章节，保存仍通过宿主回调执行。应用可在回调闭包中使用章节版本 token，避免旧请求覆盖新正文；source-core 不访问文件系统或数据库。批量正文：
 
-- 常规源执行 `contentBatch`，脚本通过 `java.cacheContent(url, content)` 回存；
-- JS 源执行 `getContentBatch(chapters, book)`，同样通过缓存接口回存；
-- 当前批次未回存的章节返回给上层，按普通单章流程兜底；
-- 批量数量必须大于 1，常规源需有 `contentBatch`，JS 源需有 `config.maxBatchSize` 和 `getContentBatch`，上限为 50。
+- 常规源执行 `ruleContent.contentBatch`，JS 源执行 `getContentBatch(chapters, book)`；两者都通过 `java.cacheContent(chapter, content)` 回调宿主。常规源全局 `baseUrl` 使用目录 URL、缺省时回退书源 URL；JS 源沿用 Android 的书源 URL 默认值。
+- `maxBatchSize` 大于 1 时启用批量，每次最多 50 章；较大的输入由核心按顺序切批，单章尾项直接走单章流程。
+- 对象按本批唯一的 `index` 识别，数字下标不接受；URL 仅在本批唯一时接受，重复 URL 必须传章节对象。
+- 核心先应用 `replaceRegex`，再调用缓存适配器。回调接受写入后该章标记完成；未回存、函数缺失或脚本失败的章节走普通 `loadChapterContent` 兜底，先前成功项保留。
+- 缓存适配器返回 `false` 时按版本冲突或拒绝写入处理，该章不会再执行单章兜底，以免覆盖较新的正文。未提供缓存适配器时跳过批量脚本，返回单章解析结果供应用处理，不产生持久化。
 
-批量上下文必须按 `BookChapter.index` 识别章节。URL 字符串只有在本批次唯一命中时才能回存；多个章节共用 URL 时，脚本必须传章节对象，否则返回明确的章节歧义错误。回存操作需要在锁或等价的原子边界内完成“识别、替换、版本校验、保存、标记已保存”，并支持脚本乱序回调。批量脚本结束后，未标记已保存的章节进入普通单章兜底；批量脚本抛错时，已成功保存的章节可以保留，但剩余章节必须明确返回，不能整批伪装成功。
+Node 的 `java.cacheContent` 在批量调用期间通过有序宿主 action 串行提交；其他上下文调用会得到能力缺失错误。平台适配器负责 token 校验和持久化原子性，并且应将 `false` 保留给过期或拒绝写入的情况。若写入抛错，核心记录 `cache-failed` 并保守跳过该章兜底；其他缺失章节仍可继续回退。Android 对照执行仍未完成，因此目前只能称为 TypeScript 实现及 Node 测试通过。

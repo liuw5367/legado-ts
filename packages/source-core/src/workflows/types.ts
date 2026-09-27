@@ -69,7 +69,7 @@ export interface BookMetadata extends Omit<BookCandidate, 'infoPage'> {
 }
 
 export interface WorkflowDiagnostic {
-  code: 'invalid-config' | 'invalid-input' | 'request-failed' | 'rule-failed' | 'capability-missing' | 'identity-missing' | 'item-skipped' | 'duplicate-item' | 'cancelled' | 'empty-page'
+  code: 'invalid-config' | 'invalid-input' | 'request-failed' | 'rule-failed' | 'cache-failed' | 'capability-missing' | 'identity-missing' | 'item-skipped' | 'duplicate-item' | 'cancelled' | 'empty-page'
   stage: WorkflowStage
   message: string
   field?: string
@@ -117,7 +117,9 @@ export interface WorkflowRuleOutput {
 
 export type WorkflowJavaScriptStage = 'mainJs' | 'book' | 'chapter' | 'search' | 'content'
 
-export type SourceFunctionName = 'search' | 'explore' | 'getBookInfo' | 'getChapters' | 'getContent'
+export type SourceFunctionName = 'search' | 'explore' | 'getBookInfo' | 'getChapters' | 'getContent' | 'getContentBatch'
+
+export type WorkflowAction = (signal: AbortSignal, input: unknown) => Promise<unknown>
 
 export interface WorkflowJavaScriptRequest {
   source: NormalizedSource
@@ -135,7 +137,7 @@ export interface WorkflowJavaScriptRequest {
   captureGlobals?: boolean
   globalState?: Readonly<Record<string, unknown>>
   /** Actions exposed to synchronous source helpers through the asyncified JavaScript bridge. */
-  workflowActions?: Readonly<Record<string, (signal: AbortSignal, input: unknown) => Promise<unknown>>>
+  workflowActions?: Readonly<Record<string, WorkflowAction>>
   /** JavaScript execution limits for this hook; separate from HTTP request budgets. */
   javascriptBudget?: Partial<JavaScriptBudget>
   signal?: AbortSignal
@@ -159,6 +161,8 @@ export interface SourceFunctionRequest {
   args: readonly unknown[]
   /** 标准函数参数名，用来同时暴露与 Android 相同的全局绑定。 */
   bindings?: Readonly<Record<string, unknown>>
+  /** Actions exposed only during this source-function call, such as batch cacheContent. */
+  workflowActions?: Readonly<Record<string, WorkflowAction>>
   stage: WorkflowJavaScriptStage
   signal?: AbortSignal
 }
@@ -306,6 +310,32 @@ export interface ContentInput extends WorkflowOptions {
   maxPages?: number
   maxBytes?: number
   maxOutputBytes?: number
+}
+
+export interface ChapterContentBatchItem {
+  chapter: Chapter
+  /** Final text accepted by the host, or returned to the caller when no cache adapter is supplied. */
+  content?: string
+  /** True only when the host cache callback accepted the write. */
+  saved: boolean
+  via: 'batch' | 'single' | 'none'
+}
+
+export interface ChapterContentBatchResult {
+  /** Results retain the caller's chapter order, including chapters not saved after cancellation. */
+  items: ChapterContentBatchItem[]
+  /** Number of source batch script invocations; singleton fallback does not count. */
+  batchCount: number
+}
+
+export type ChapterContentCache = (chapter: Chapter, content: string, signal?: AbortSignal) => boolean | Promise<boolean>
+
+/** The source-core batches and parses; hosts decide how to persist accepted chapter text. */
+export interface ContentBatchInput extends Omit<ContentInput, 'book' | 'chapter' | 'tocHtml'> {
+  book: BookMetadata
+  chapters: readonly Chapter[]
+  /** Optional persistence adapter. Without it, batch scripts are skipped and single parsing results are returned. */
+  cacheContent?: ChapterContentCache
 }
 
 /** 输入已由图片宿主取得；source-core 只执行书源解密脚本，不发起图片下载。 */

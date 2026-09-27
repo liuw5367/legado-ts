@@ -27,5 +27,5 @@ export { groupSearchCandidates, isAuthorMatch, isBookTitleMatch, normalizeSearch
 export type { SearchAggregationGroup, SearchAggregationItem, SearchMatchRank } from './workflows/search-aggregation.ts'
 export { SourceRequestError, SourceRequestRuntime } from './workflows/source-request.ts'
 export type { SourceRequestErrorCode, SourceRequestOptions, SourceRequestRuntimeOptions } from './workflows/source-request.ts'
-export { loadTableOfContents, loadChapterContent, decodeImage } from './workflows/reading.ts'
+export { loadTableOfContents, loadChapterContent, loadChapterContentBatch, decodeImage } from './workflows/reading.ts'
 export type * from './workflows/types.ts'
