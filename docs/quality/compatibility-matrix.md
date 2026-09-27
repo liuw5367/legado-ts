@@ -25,7 +25,9 @@
 
 只有 `spec=defined`、`implementation=implemented` 且相关 fixture 的 `execution=pass`，才能在发布说明中称为“已验证兼容”。`target status` 仍用于表达产品承诺，但不替代上述字段。
 
-当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、import/conformance manifest 和真实书源离线回放均已实际执行；Android 同输入 golden 尚未运行。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
+当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、import/conformance manifest 和真实书源离线回放均已实际执行。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
+
+2026-09-28 Android 执行证据：外层仓库 commit `32a87b253e7cc28273c3850de86242caac83f1fd`，Android Studio JBR 21，临时 SDK `platforms;android-36` / `build-tools;36.0.0`；`./gradlew :app:testDebugUnitTest` 共 1,948/1,948 通过（399 个测试类）。书源专项的规则 DOM、JS source、目录回写、批量正文和搜索分页测试共 48/48 通过。该证据只更新 Android `test-run` 状态；没有把未执行的跨端 fixture/golden 改为 `pass`。
 
 | 能力 | 目标状态 | Android 证据 | TypeScript 当前状态 |
 | --- | --- | --- | --- |

@@ -23,7 +23,7 @@
 - `app/src/test/java/io/legado/app/api/ReviewWebApiContractTest.kt`：结构化段评 HTTP 入口、旧式页面桥接、nonce、CSP/sandbox 和脚本执行边界；
 - `modules/web/tests/sourceEditor.test.js`：现有 Web 编辑器的响应式布局、脚本模板、状态恢复、保存和访问令牌行为。
 
-TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-conformance.test.ts`、`source-fixtures.test.ts` 等）与 `packages/source-node/tests/`（宿主与组合流），入口见根 `package.json` 的 `test` / `test:source`。与上列 Kotlin 结果逐项对照的 Android golden 仍不完整（07-A 中部分 `android: not-run`），需要继续补 fixture 与 golden 输出。
+TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-conformance.test.ts`、`source-fixtures.test.ts` 等）与 `packages/source-node/tests/`（宿主与组合流），入口见根 `package.json` 的 `test` / `test:source`。与上列 Kotlin 结果逐项对照的 Android golden 仍不完整（07-A 中部分 `android: not-run`），需要继续补 fixture 与 golden 输出。2026-09-28 已在 Android 当前快照实际运行完整 app JVM 单测集，作为独立的 Android test-run 证据。
 
 2026-09-28 的可执行证据如下：
 
@@ -31,7 +31,8 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `source-host-flow.test.ts` 使用真实书源规则和离线响应覆盖 JSON/CSS/XPath/JavaScript/HTML；另从大型 collection 按结构索引回放 JSONPath 条件过滤和 `java.getElements` 书源。不会把完整 collection 输出到日志。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
-- core、source-node、reader-cli 构建与类型检查通过；分层专项 93/93 通过。完整套件 364 项在沙箱中有 3 项因环回监听权限失败，授权本机监听后 `network.test.ts` 6/6 通过。以上是 `ts-executed` 证据，不能替代 Android golden；Android 同输入执行仍为 `not-run`。
+- core、source-node、reader-cli 构建与类型检查通过；分层专项 93/93 通过。完整套件 364 项在沙箱中有 3 项因环回监听权限失败，授权本机监听后 `network.test.ts` 6/6 通过。以上是 `ts-executed` 证据，不能替代 Android golden。
+- Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 使用 Android Studio JBR 21 与临时 SDK `platforms;android-36` 实际运行：完整 `:app:testDebugUnitTest` 共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。
 
 外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板。例如，`rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
 
