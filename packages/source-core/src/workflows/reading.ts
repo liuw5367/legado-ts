@@ -3,6 +3,7 @@ import { compileRule } from '../rules/compiler.ts'
 import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { CompiledRule } from '../rules/types.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
+import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import type { BookMetadata, Chapter, ChapterContent, ContentInput, ContentResource, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
@@ -293,6 +294,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const pages: string[] = []
   const cleanedPages: string[] = []
   const resources: ContentResource[] = []
+  const mediaType = sourceNumber(input.source, 'bookSourceType') ?? 0
+  const skipTextFormatting = mediaType === 1 || mediaType === 4
   const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
   const rawFirstPageUrl = resolveUrl(input.chapter.chapterUrl, bookUrl) ?? input.chapter.chapterUrl
   const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, ...ruleBindings }, input.signal)
@@ -302,8 +305,6 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   }
   const firstPageUrl = expandedFirstPage.url
   const pendingPages = [{ url: firstPageUrl, followNext: true }]
-  const contentBaseUrl = resolveUrl(firstPageUrl, bookUrl) ?? bookUrl
-  let lastResponseUrl = contentBaseUrl
   let totalBytes = 0
   let stoppedByLimit = false
   // 命中下一章时终止分页（Android BookContent 的 nextChapterUrl 护栏）。
@@ -332,7 +333,6 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (page === undefined) break
     const body = page.body
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
-    lastResponseUrl = responseUrl
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
     if (pageIndex === 0) firstPage = { body, url: responseUrl, context }
     // Android BookContent 固定用第一页的最终响应地址解析下一章地址。
@@ -356,9 +356,11 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const contentPage = result.state === 'value' ? textValue(result.value) : ''
     if (contentPage.length > 0) {
       pages.push(contentPage)
-      const cleanedPage = cleanContent(contentPage, contentType, responseUrl)
-      cleanedPages.push(cleanedPage)
-      resources.push(...extractResources(cleanedPage, contentType, responseUrl))
+      const formattedPage = skipTextFormatting
+        ? { content: contentPage, imageUrls: [] }
+        : formatChapterBody(contentPage, responseUrl, input.adaptSpecialStyle === undefined ? {} : { adaptSpecialStyle: input.adaptSpecialStyle })
+      cleanedPages.push(formattedPage.content)
+      resources.push(...formattedPage.imageUrls.map((url) => ({ kind: 'image' as const, url })))
     }
     if (!pendingPage.followNext) continue
     const nextContentRule = ruleString(input.source, 'ruleContent', 'nextContentUrl')
@@ -401,8 +403,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   if (diagnostics.some((item) => item.code === 'cancelled')) return { status: 'cancelled', value: null, diagnostics, trace }
   if (pendingPages.length > 0) stoppedByLimit = true
   if (reachedNextChapter) trace.push({ stage, event: 'field', target: 'nextChapterUrl' })
-  const raw = pages.join(contentType === 'html' ? '\n' : '\n\n')
-  const joined = cleanedPages.join(contentType === 'html' ? '\n' : '\n\n')
+  const raw = pages.join('\n')
+  const joined = cleanedPages.join('\n')
   // Android 先逐行 trim，再把源级 replaceRegex 当规则对正文求值（可含 ##匹配##替换 或 @js:）。
   let sourceReplaced = joined
   if (replaceRule !== undefined) {
@@ -422,12 +424,18 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     diagnostics.push({ code: 'invalid-config', stage, field: 'replacements', message, retryable: false })
     stoppedByLimit = true
   }
-  const cleaned = cleanContent(replaced, contentType, lastResponseUrl)
+  // Android 不会在 replaceRegex 和调用方替换规则之后再次格式化正文。
+  const cleaned = replaced
   let title: string | undefined
+  let imgUrl: string | undefined
   if (titleRule !== undefined && firstPage !== undefined) {
     const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, { ...firstPage.context, bindings: ruleBindings })
     if (field.state === 'cancelled') return cancelled('章节标题规则执行已取消', diagnostics, trace)
-    if (field.state === 'value') title = titleText(textValue(field.value))
+    if (field.state === 'value') {
+      const projection = chapterTitleProjection(textValue(field.value), input.chapter.title)
+      title = projection.title
+      imgUrl = projection.imgUrl
+    }
     else if (field.state === 'failed' || field.state === 'capability-missing') {
       // 标题是可选字段：失败只报告，不阻断正文，调用方沿用目录标题。
       diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage, field: 'title', message: field.message ?? '章节标题规则失败', retryable: false })
@@ -442,9 +450,9 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     diagnostics.push({ code: 'empty-page', stage, message: '正文为空', retryable: false })
     const capabilityMissing = diagnostics.some((item) => item.code === 'capability-missing')
     const failed = diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed')
-    return { status: capabilityMissing ? 'capability-missing' : failed ? 'failed' : 'empty', value: capabilityMissing || failed ? null : { chapter: input.chapter, contentType, raw, cleaned, pages, resources: [] }, diagnostics, trace }
+    return { status: capabilityMissing ? 'capability-missing' : failed ? 'failed' : 'empty', value: capabilityMissing || failed ? null : { chapter: input.chapter, contentType, raw, cleaned, pages, resources: [], ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
   }
-  const value: ChapterContent = { chapter: input.chapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(title === undefined ? {} : { title }) }
+  const value: ChapterContent = { chapter: input.chapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
   const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'item-skipped') ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
 }
@@ -752,11 +760,6 @@ function deduplicateChapters(chapters: Chapter[], diagnostics: WorkflowDiagnosti
   })
 }
 
-function cleanContent(value: string, contentType: 'text' | 'html', baseUrl: string): string {
-  if (contentType === 'text') return value.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
-  return value.replace(/<!--[\s\S]*?-->/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '').replace(/\s+(src|data-src)=(['"])(.*?)\2/gi, (_match, name: string, quote: string, url: string) => ` ${name}=${quote}${resolveResource(url, baseUrl)}${quote}`).trim()
-}
-
 /** 逐条应用调用方给的正文替换；越界或非法的正则只跳过该条并回报，不能拖垮整篇正文。 */
 function applyReplacements(value: string, replacements: readonly { pattern: string; replacement: string; all?: boolean }[]): { text: string; errors: string[] } {
   const errors: string[] = []
@@ -772,26 +775,6 @@ function applyReplacements(value: string, replacements: readonly { pattern: stri
   return { text: result, errors }
 }
 
-function extractResources(value: string, contentType: 'text' | 'html', baseUrl: string): ContentResource[] {
-  if (contentType !== 'html') return []
-  const result: ContentResource[] = []
-  for (const match of value.matchAll(/<(?:img|image)\b[^>]*(?:src|data-src)=(['"])(.*?)\1/gi)) {
-    const url = resolveResource(match[2] ?? '', baseUrl)
-    if (url.length > 0) result.push({ kind: 'image', url })
-  }
-  return result
-}
-
-function resolveResource(value: string, baseUrl: string): string {
-  if (value.length === 0) return ''
-  if (value.startsWith('data:')) return value
-  try {
-    return new URL(value, baseUrl).toString()
-  } catch {
-    return value
-  }
-}
-
 function resolveUrl(value: string, baseUrl: string): string | undefined {
   if (value.trimStart().startsWith('<') && !/^<(?:js>|\d+(?:,\d+)*>)/i.test(value.trimStart())) return undefined
   try {
@@ -801,14 +784,13 @@ function resolveUrl(value: string, baseUrl: string): string | undefined {
   }
 }
 
-/**
- * Android `AppPattern.imgRegex`：标题里带图片时取图片地址前的文本作为标题；
- * 只有图片没有文本时保留目录标题（这里返回 undefined，由调用方沿用目录标题）。
- */
-function titleText(value: string): string | undefined {
+/** Android `AppPattern.imgRegex` projects a title and its trailing image URL. */
+function chapterTitleProjection(value: string, fallbackTitle: string | undefined): { title?: string; imgUrl?: string } {
   const match = /(.*)((?:data|https?):[\s\S]+)$/u.exec(value)
-  const title = match === null ? value : (match[1] ?? '')
-  return title.length > 0 ? title : undefined
+  if (match === null) return value.trim().length > 0 ? { title: value } : {}
+  const title = match[1] !== undefined && match[1].length > 0 ? match[1] : fallbackTitle
+  const imgUrl = match[2]
+  return { ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
 }
 
 function uniqueResources(resources: readonly ContentResource[]): ContentResource[] {

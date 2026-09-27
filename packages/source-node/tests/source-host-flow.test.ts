@@ -93,7 +93,7 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
   const content = await loadChapterContent(ports, { source, book, chapter, maxPages: 3 })
   assert.equal(content.status, 'success')
   assert.equal(content.value?.contentType, 'html')
-  assert.equal(content.value?.cleaned, '<p>正文内容：规则宿主流程通过。</p>')
+  assert.equal(content.value?.cleaned, '　　正文内容：规则宿主流程通过。')
   assert.equal(calls.length, 4)
 })
 

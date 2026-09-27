@@ -258,6 +258,8 @@ export interface ChapterContent {
   resources: ContentResource[]
   /** 书源 `ruleContent.title` 从正文提取的章节标题；未配置或提取为空时缺失。 */
   title?: string
+  /** Android BookChapter.imgUrl；由 `ruleContent.title` 中的 data/http URL 提取。 */
+  imgUrl?: string
 }
 
 export interface ContentInput extends WorkflowOptions {
@@ -270,6 +272,8 @@ export interface ContentInput extends WorkflowOptions {
   /** 下一章地址；命中正文下一页规则时停止抓取，避免把下一章并入本章。 */
   nextChapterUrl?: string
   contentType?: 'text' | 'html'
+  /** Android AppConfig.adaptSpecialStyle；缺省启用，关闭时不保护 `<usehtml>` 区块。 */
+  adaptSpecialStyle?: boolean
   replacements?: readonly ContentReplacement[]
   maxPages?: number
   maxBytes?: number

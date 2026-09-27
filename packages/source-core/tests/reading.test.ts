@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadChapterContent, loadTableOfContents } from '../src/index.ts'
+import { formatChapterBody, unescapeHtml4 } from '../src/workflows/html-format.ts'
 import type { BookMetadata, ChapterIdentity, NormalizedSource, ReadingPorts } from '../src/index.ts'
 
 const source = {
@@ -296,6 +297,45 @@ test('正文工作流拼接多页、净化 HTML、解析图片资源并支持缓
   assert.equal(calls.length, requestCount)
 })
 
+test('正文格式按 Android 顺序处理块标签、HTML4 实体、usehtml 与图片请求选项', () => {
+  const raw = '<usehtml><p>原样&nbsp;&amp;</p></usehtml><p>A&nbsp;&amp;B</p><div>C<br>D</div><!--hide--><img data-original="../cover.png"><img src=\'pic.png, {"headers":{"X-Test":"yes"}}\'>'
+  const formatted = formatChapterBody(raw, 'https://cdn.test/chapters/one/index.html')
+  assert.deepEqual(formatted, {
+    content: '<usehtml><p>原样&nbsp;&amp;</p></usehtml>\n　　A &B\n　　C\n　　D\n　　<img src="https://cdn.test/chapters/cover.png"><img src="https://cdn.test/chapters/one/pic.png,{"headers":{"X-Test":"yes"}}">',
+    imageUrls: ['https://cdn.test/chapters/cover.png', 'https://cdn.test/chapters/one/pic.png,{"headers":{"X-Test":"yes"}}'],
+  })
+  assert.deepEqual(formatChapterBody('<usehtml><p>raw&nbsp;&amp;</p></usehtml>', 'https://source.test/ch/1', { adaptSpecialStyle: false }), {
+    content: '　　raw &',
+    imageUrls: [],
+  })
+  assert.equal(unescapeHtml4('&Alpha; &#169; &#x1F600; &apos; &unknown;'), 'Α © 😀 &apos; &unknown;')
+  assert.deepEqual(formatChapterBody('<img src="HTTPS://Images.test/cover path.png">', 'https://source.test/ch/1'), {
+    content: '<img src="HTTPS://Images.test/cover path.png">',
+    imageUrls: ['HTTPS://Images.test/cover path.png'],
+  })
+})
+
+test('text contentType 不会跳过 Android 正文格式化；音视频链接保持原文', async () => {
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+  const textSource = { ...source, contentType: 'text', ruleContent: { content: 'content' } } as NormalizedSource
+  const ports: ReadingPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: '<p>Body &copy;</p><img data-src="../img.png">' } : { status: 'empty', value: null } },
+  }
+  const text = await loadChapterContent(ports, { source: textSource, chapter })
+  assert.equal(text.value?.contentType, 'text')
+  assert.equal(text.value?.raw, '<p>Body &copy;</p><img data-src="../img.png">')
+  assert.equal(text.value?.cleaned, '　　Body ©\n　　<img src="https://source.test/img.png">')
+  assert.deepEqual(text.value?.resources, [{ kind: 'image', url: 'https://source.test/img.png' }])
+
+  for (const bookSourceType of [1, 4]) {
+    const mediaSource = { ...textSource, bookSourceType, contentType: 'html' } as NormalizedSource
+    const media = await loadChapterContent(ports, { source: mediaSource, chapter })
+    assert.equal(media.value?.cleaned, '<p>Body &copy;</p><img data-src="../img.png">')
+    assert.deepEqual(media.value?.resources, [])
+  }
+})
+
 test('正文规则返回 HTML 时未声明 contentType 也进入 HTML 排版流程', async () => {
   const implicitHtmlSource = { ...source, ruleContent: { content: 'content@html', nextPage: 'content-next' } } as NormalizedSource
   delete (implicitHtmlSource as Record<string, unknown>).contentType
@@ -391,7 +431,7 @@ test('literal 规则中的 @html 不会误判正文类型', async () => {
     },
   }, { source: literalSource, chapter })
   assert.equal(result.value?.contentType, 'text')
-  assert.equal(result.value?.cleaned, '<script>keep()</script>@html')
+  assert.equal(result.value?.cleaned, 'keep()@html')
 })
 
 test('目录保留卷、VIP、购买状态和更新时间，并按书籍 reverseToc 排序', async () => {
@@ -566,7 +606,7 @@ test('正文下一页循环时停止并保留已读取内容', async () => {
     },
   }, { source, chapter })
   assert.equal(result.status, 'partial')
-  assert.equal(result.value?.cleaned, '<p>Loop</p>')
+  assert.equal(result.value?.cleaned, '　　Loop')
   assert.equal(calls.length, 1)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes('循环')))
 })
@@ -613,7 +653,7 @@ test('正文分页拆分换行 URL 列表并保留内容相同的不同页面', 
   }, { source: multiPageSource, chapter })
   assert.deepEqual(calls, ['https://source.test/c1', 'https://source.test/c2', 'https://source.test/c3'])
   assert.equal(result.value?.pages.length, 3)
-  assert.equal(result.value?.cleaned, 'same page text\n\nsame page text\n\nsame page text')
+  assert.equal(result.value?.cleaned, 'same page text\nsame page text\nsame page text')
 })
 
 test('正文相对下一章地址固定按第一页最终响应地址解析', async () => {
@@ -652,7 +692,7 @@ test('正文应用源级 replaceRegex：逐行 trim 后按规则求值', async (
   }
   const result = await loadChapterContent(ports, { source: replaceSource, chapter })
   assert.deepEqual(seen, ['广告\n正文'])
-  assert.equal(result.value?.cleaned, '正文')
+  assert.equal(result.value?.cleaned, '\n正文')
 })
 
 test('正文 title 规则提取章节标题并处理标题里的图片', async () => {
@@ -671,7 +711,8 @@ test('正文 title 规则提取章节标题并处理标题里的图片', async (
   const result = await loadChapterContent(ports, { source: titleSource, chapter })
   // Android AppPattern.imgRegex 把「data:/http 到结尾」当作图片地址，标题保留它之前的部分。
   assert.equal(result.value?.title, '第一章 初见<img src="')
-  assert.equal(result.value?.cleaned, '<p>正文</p>')
+  assert.equal(result.value?.imgUrl, 'data:image/png;base64,AAAA">')
+  assert.equal(result.value?.cleaned, '　　正文')
 
   const plainPorts: ReadingPorts = {
     ...ports,
@@ -685,6 +726,20 @@ test('正文 title 规则提取章节标题并处理标题里的图片', async (
   }
   const plain = await loadChapterContent(plainPorts, { source: titleSource, chapter })
   assert.equal(plain.value?.title, '第二章 开始')
+
+  const imageOnlyPorts: ReadingPorts = {
+    ...ports,
+    rules: {
+      evaluate: async ({ field, rule }) => {
+        if (field === 'content') return { status: 'success', value: '<p>正文</p>' }
+        if (rule === 'content-title') return { status: 'success', value: 'data:image/png;base64,AAAA' }
+        return { status: 'empty', value: null }
+      },
+    },
+  }
+  const imageOnly = await loadChapterContent(imageOnlyPorts, { source: titleSource, chapter: { ...chapter, title: '目录标题' } })
+  assert.equal(imageOnly.value?.title, '目录标题')
+  assert.equal(imageOnly.value?.imgUrl, 'data:image/png;base64,AAAA')
 })
 
 test('正文请求携带 ruleContent 的 webJs 与 sourceRegex 执行提示', async () => {

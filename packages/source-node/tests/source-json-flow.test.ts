@@ -47,5 +47,5 @@ test('JSON 接口书源的无前缀键路径规则贯通搜索与正文', async 
     contentType: 'html',
   })
   assert.equal(content.status, 'success')
-  assert.equal(content.value?.cleaned, '<p>JSON 正文</p>')
+  assert.equal(content.value?.cleaned, '　　JSON 正文')
 })

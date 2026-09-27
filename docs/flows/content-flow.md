@@ -13,8 +13,8 @@ Android 的 `WebBook.getContentAwait` 只有在 `needSave=true` 且缓存 token 
 2. 非卷节点的 `contentRule.content` 为空时直接返回章节 URL，这是当前兼容回退，不是错误；
 3. 创建 `AnalyzeRule`，设置 body、章节、下一章 URL、baseUrl 和 redirectUrl；
 4. 获取正文规则字符串，关闭默认 HTML unescape；
-5. 文本书在 `adaptSpecialStyle` 开启时对 `<usehtml>...</usehtml>` 做占位保护；随后调用 `HtmlFormatter.formatKeepImg`，再做 HTML unescape，最后还原占位内容；
-6. 音频和视频书把结果当资源 URL，不执行文本 HTML 格式化；
+5. 对普通声明式书源正文（包括规则从 HTML、JSON 或 `@js` 求出的文本），在 `adaptSpecialStyle` 开启时先保护 `<usehtml>...</usehtml>`，再调用 `HtmlFormatter.formatKeepImg`、做 HTML4 unescape，最后还原占位内容；每页先处理，之后才合并分页和执行源级替换；
+6. 音频和视频书把结果当资源 URL，不执行文本 HTML 格式化；`contentType` 是结果的呈现形态，不是是否执行内置正文格式化的开关；
 7. `nextContentUrl` 获取当前章节的分页 URL。
 
 正文分页只有一个 URL 时串行跟随；多个 URL 时并发解析后合并。分页循环会记录已访问 URL，并且当下一页等于下一章 URL 时停止，防止把下一章内容并入当前章。
@@ -25,6 +25,12 @@ Android 的 `WebBook.getContentAwait` 只有在 `needSave=true` 且缓存 token 
 - `replaceRegex` 在所有正文分页合并后执行；正文行会先 trim 再替换，在线文本替换后为每行增加缩进；
 - `title` 在正文提取后执行，非空时覆盖章节标题；标题里包含图片 URL 时拆出 `imgUrl`，保留标题前缀或回退原章节标题；
 - 非卷章节正文最终为空抛出 `ContentEmptyException`；卷章节允许空正文。
+
+## 当前 source-core 的兼容边界
+
+声明式正文已按上述次序格式化，`ContentInput.adaptSpecialStyle` 默认启用并允许调用方关闭；正文资源元数据从归一化后的图片 URL 生成，标题结果单独返回 `title` 和 `imgUrl`。JS 书源 `mainJs.getContent` 保持 Android 的原始返回路径，不经过声明式正文格式化。
+
+`ruleContent.subContent` 目前尚未实现。在线文本副文追加、音频歌词和视频弹幕都需要同一正文上下文中的请求/取消和结果更新协议；详见[兼容性矩阵](../quality/compatibility-matrix.md)中的未实现条目。
 
 ## 请求选项
 
