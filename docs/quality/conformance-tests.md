@@ -30,7 +30,8 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `fixture-manifest.test.ts` 实际读取并执行 import manifest 的 6 条记录；`source-conformance.test.ts` 实际执行 conformance manifest 的 5 条记录，并校验每条记录都有断言映射。
 - `source-host-flow.test.ts` 使用真实书源规则和离线响应覆盖 JSON/CSS/XPath/JavaScript/HTML；另从大型 collection 按结构索引回放 JSONPath 条件过滤和 `java.getElements` 书源。不会把完整 collection 输出到日志。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
-- core、source-node、reader-cli 构建与类型检查通过；分层专项 91/91 通过。完整套件 359 项在沙箱中有 3 项因环回监听权限失败，授权本机监听后 `network.test.ts` 6/6 通过。以上是 `ts-executed` 证据，不能替代 Android golden；Android 同输入执行仍为 `not-run`。
+- `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
+- core、source-node、reader-cli 构建与类型检查通过；分层专项 93/93 通过。完整套件 364 项在沙箱中有 3 项因环回监听权限失败，授权本机监听后 `network.test.ts` 6/6 通过。以上是 `ts-executed` 证据，不能替代 Android golden；Android 同输入执行仍为 `not-run`。
 
 外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板。例如，`rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
 
@@ -133,7 +134,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `FLOW-011` | 正文 | save token、旧请求覆盖保护、保存失败、取消、章节元数据和保存事件 |
 | `FLOW-012` | 批量 | contentBatch/getContentBatch、章节对象识别、重复 URL 歧义、串行回存、漏存兜底；source-core 与 QuickJS Node 定向测试已覆盖，Android golden 未执行 |
 | `JS-001` | JS | 每次调用 scope、绑定对象、共享 scope 显式开关、toJSON/getter/循环引用 |
-| `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播和 `skipRateLimit` 绕过语义；Node `ajaxAll(..., true)` 已有 bridge/limiter 回归，`ajaxTestAll` 仍待独立宿主能力 |
+| `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播和 `skipRateLimit` 绕过语义；Node `ajaxAll(..., true)` 与 `ajaxTestAll(..., timeout, true)` 已有 bridge/limiter 回归，Android golden 仍待执行 |
 | `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |
 | `JS-004` | 段评 | 声明式/JS 摘要索引、详情游标、回复分页展平、内容协议、函数配对/缺失终态和媒体基准地址 |
 | `REVIEW-001` | 旧式段评 | `getDP/getZP` 页面打开、nonce 会话、CSP/sandbox 桥接、脚本上限、书源变更和图片重写 |
