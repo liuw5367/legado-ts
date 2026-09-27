@@ -249,6 +249,35 @@ test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章
   assert.deepEqual(requests, [])
 })
 
+test('声明式正文规则可以读取 nextChapterUrl 绑定', async () => {
+  const source = {
+    bookSourceUrl: 'https://next-binding.test',
+    bookSourceName: 'Next Binding',
+    ruleContent: { content: '@js:nextChapterUrl' },
+    contentType: 'text',
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => response(plan.url, '正文页面') },
+    rules: new SourceRuleHost(),
+  }
+  const chapter = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://next-binding.test/book',
+    chapterUrl: 'https://next-binding.test/chapter/1',
+    index: 0,
+    title: '第一章',
+  }
+
+  const result = await loadChapterContent(ports, {
+    source,
+    chapter,
+    nextChapterUrl: 'https://next-binding.test/chapter/2',
+  })
+
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.cleaned, 'https://next-binding.test/chapter/2')
+})
+
 test('loginCheckJs 收到可调用的 StrResponse 并用返回正文继续解析', async () => {
   const source = {
     bookSourceUrl: 'https://login-check.test',

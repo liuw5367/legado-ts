@@ -326,7 +326,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     ...input.chapter,
     ...(input.chapter.rawFields === undefined ? {} : { rawFields: { ...input.chapter.rawFields } }),
   }
-  const ruleBindings = { book: variableBook, chapter: resultChapter }
+  // AnalyzeRule.setNextChapterUrl 在 Android 中会把该值暴露给每个声明式正文规则。
+  const ruleBindings = { book: variableBook, chapter: resultChapter, nextChapterUrl: input.nextChapterUrl ?? null }
   const visited = new Set<string>()
   const pages: string[] = []
   const cleanedPages: string[] = []
