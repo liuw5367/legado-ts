@@ -177,42 +177,117 @@ function splitSelectorChain(selector: string): string[] {
   return selector.split('@').map((item) => item.trim()).filter(Boolean)
 }
 
-function selectWithPosition(document: HtmlDocument, selector: string): ParserNode[] {
-  // 仅解释 Legado 选择器末尾的索引或半开区间后缀，剩余部分交给 CSS parser。
-  const slice = /^(.*)\.(-?\d+):(-?\d+)(?::(-?\d+))?$/.exec(selector)
-  const index = /^(.*)\.(-?\d+)$/.exec(selector)
-  const base = slice?.[1] ?? index?.[1] ?? selector
-  const nodes = document.select(base.length === 0 ? '*' : base)
-  if (slice !== null) {
-    const start = Number(slice[2])
-    const end = Number(slice[3])
-    const step = slice[4] === undefined ? 1 : Number(slice[4])
-    if (step === 0) return []
-    const from = start < 0 ? Math.max(0, nodes.length + start) : Math.min(nodes.length, start)
-    const to = end < 0 ? Math.max(0, nodes.length + end) : Math.min(nodes.length, end)
-    const result: ParserNode[] = []
-    if (step > 0) for (let position = from; position < to; position += step) result.push(nodes[position]!)
-    else for (let position = Math.min(nodes.length - 1, from); position > to; position += step) result.push(nodes[position]!)
-    return result
-  }
-  if (index !== null) {
-    const position = Number(index[2])
-    const normalized = position < 0 ? nodes.length + position : position
-    return normalized >= 0 && normalized < nodes.length ? [nodes[normalized]!] : []
-  }
-  return nodes
+interface PositionSelection {
+  base: string
+  tokens: Array<number | { start?: number; end?: number; step: number }>
+  excluded: boolean
 }
 
-function sourceScript(rule: string): { code: string; tail?: string } | undefined {
-  const trimmed = rule.trim()
-  if (trimmed.startsWith('<js>')) {
-    const end = trimmed.indexOf('</js>')
-    if (end < 0) return { code: trimmed.slice('<js>'.length) }
-    const tail = trimmed.slice(end + '</js>'.length).trim()
-    return { code: trimmed.slice('<js>'.length, end), ...(tail.length > 0 ? { tail } : {}) }
+function parseBracketSelection(selector: string): PositionSelection | undefined {
+  const open = selector.lastIndexOf('[')
+  if (open < 0 || !selector.endsWith(']')) return undefined
+  let body = selector.slice(open + 1, -1).trim()
+  const excluded = body.startsWith('!')
+  if (excluded) body = body.slice(1).trim()
+  if (body.length === 0) return undefined
+  const tokens: PositionSelection['tokens'] = []
+  for (const part of body.split(',')) {
+    const item = part.trim()
+    if (/^-?\d+$/u.test(item)) {
+      tokens.push(Number(item))
+      continue
+    }
+    const range = /^(-?\d+)?\s*:\s*(-?\d+)?\s*(?::\s*(-?\d+))?$/u.exec(item)
+    if (range === null) return undefined
+    tokens.push({
+      ...(range[1] === undefined ? {} : { start: Number(range[1]) }),
+      ...(range[2] === undefined ? {} : { end: Number(range[2]) }),
+      step: range[3] === undefined ? 1 : Number(range[3]),
+    })
   }
-  if (trimmed.toLowerCase().startsWith('@js:')) return { code: trimmed.slice(4).trim() }
-  return undefined
+  return { base: selector.slice(0, open), tokens, excluded }
+}
+
+function parseLegacySelection(selector: string): PositionSelection | undefined {
+  const match = /^(.*?)([.!])(-?\d+(?::-?\d+)*)$/u.exec(selector)
+  if (match === null) return undefined
+  return {
+    base: match[1]!,
+    tokens: match[3]!.split(':').map(Number),
+    excluded: match[2] === '!',
+  }
+}
+
+function positionedIndexes(selection: PositionSelection, length: number): number[] {
+  const indexes: number[] = []
+  const add = (index: number): void => {
+    const normalized = index < 0 ? length + index : index
+    if (normalized >= 0 && normalized < length && !indexes.includes(normalized)) indexes.push(normalized)
+  }
+  for (const token of selection.tokens) {
+    if (typeof token === 'number') {
+      add(token)
+      continue
+    }
+    let start = token.start ?? 0
+    let end = token.end ?? length - 1
+    if (start < 0) start += length
+    if (end < 0) end += length
+    if (length === 0 || ((start < 0 && end < 0) || (start >= length && end >= length))) continue
+    start = Math.max(0, Math.min(length - 1, start))
+    end = Math.max(0, Math.min(length - 1, end))
+    if (start === end || token.step >= length) {
+      add(start)
+      continue
+    }
+    const step = token.step > 0 ? token.step : -token.step < length ? token.step + length : 1
+    const stride = Math.max(1, step)
+    if (end >= start) for (let index = start; index <= end; index += stride) add(index)
+    else for (let index = start; index >= end; index -= stride) add(index)
+  }
+  return indexes
+}
+
+function applyPositionSelection(nodes: ParserNode[], selection: PositionSelection | undefined): ParserNode[] {
+  if (selection === undefined) return nodes
+  const indexes = positionedIndexes(selection, nodes.length)
+  if (selection.excluded) {
+    const excluded = new Set(indexes)
+    return nodes.filter((_node, index) => !excluded.has(index))
+  }
+  return indexes.map((index) => nodes[index]!)
+}
+
+function selectWithPosition(document: HtmlDocument, selector: string): ParserNode[] {
+  // Android distinguishes legacy discrete indices (tag.a.0:3) from bracket ranges (tag.a[0:3]).
+  const selection = parseBracketSelection(selector) ?? parseLegacySelection(selector)
+  const base = selection?.base ?? selector
+  const nodes = base.length === 0 || base === 'children' ? document.children() : document.select(base)
+  return applyPositionSelection(nodes, selection)
+}
+
+interface SourceRuleSegment {
+  kind: 'rule' | 'javascript'
+  text: string
+}
+
+function splitSourceRuleSegments(rule: string): SourceRuleSegment[] | undefined {
+  const matcher = /<js>([\s\S]*?)<\/js>|@js:([\s\S]*)/ig
+  const segments: SourceRuleSegment[] = []
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = matcher.exec(rule)) !== null) {
+    const before = rule.slice(cursor, match.index).trim()
+    if (before.length > 0) segments.push({ kind: 'rule', text: before })
+    const code = (match[1] ?? match[2] ?? '').trim()
+    segments.push({ kind: 'javascript', text: code })
+    cursor = matcher.lastIndex
+    if (match[2] !== undefined) return segments
+  }
+  if (segments.length === 0) return undefined
+  const tail = rule.slice(cursor).trim()
+  if (tail.length > 0) segments.push({ kind: 'rule', text: tail })
+  return segments
 }
 
 function trailingExpression(code: string): { body: string; expression?: string } {
@@ -266,6 +341,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly requestBridge?: SourceRuleRuntimeOptions['request']
   private readonly maxSteps: number
   private readonly nodes = new Map<string, StoredNode>()
+  private readonly captureRows = new WeakMap<object, string>()
   private bindings: Readonly<Record<string, unknown>> = {}
   private nextNodeId = 0
 
@@ -342,28 +418,56 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private async evaluateText(rule: string, state: EvaluationState, content: unknown): Promise<unknown> {
     this.check(state)
-    const script = sourceScript(rule)
-    if (script !== undefined) {
-      const output = await this.runJavaScript(await this.expandTemplate(script.code, state, content), this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
-      if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
-      return script.tail === undefined ? output.value : this.evaluateText(script.tail, state, output.value)
-    }
-    // Legado 常见规则会在选择器后接 JavaScript 转换，例如 `$.path@js:...` 或 `tag.a@href@js:...`。
-    // 编译器保留这段语法原文，因此在编译选择器前由核心运行时拆分。
-    const jsIndex = rule.indexOf('@js:')
-    if (jsIndex > 0) {
-      const selectorRule = rule.slice(0, jsIndex).trim()
-      const rawCode = rule.slice(jsIndex + '@js:'.length).trim()
-      if (selectorRule.length > 0 && rawCode.length > 0) {
-        const selected = await this.evaluateText(selectorRule, state, content)
-        // Android 先对整条规则插值再执行 JS，所以代码里的 {{}} 用**进入这条规则时的内容**求值
-        // （语料里 `$.response.xxx@js: ... '{{$.response.xxx}}' ...` 就是靠这一点）。
-        const code = await this.expandTemplate(rawCode, state, content)
-        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, selected, state.request.signal, state.request)
+    const segments = splitSourceRuleSegments(rule)
+    if (segments !== undefined) {
+      let result = content
+      for (const [index, segment] of segments.entries()) {
+        if (index > 0) this.check(state)
+        if (segment.kind === 'rule') {
+          const captureExpansion = this.expandCaptureReferences(segment.text, result, state.source.bookSourceUrl)
+          result = captureExpansion.changed
+            ? await this.evaluateCaptureText(captureExpansion.text, state, result)
+            : await this.evaluatePlainText(segment.text, state, result)
+          continue
+        }
+        // `<js></js>` is also used as a separator; an empty body leaves the current result intact.
+        if (segment.text.length === 0) continue
+        // JS templates are expanded against the content that entered the full rule,
+        // while `result` itself is the output of the preceding segment.
+        const code = await this.expandTemplate(segment.text, state, content)
+        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, result, state.request.signal, state.request)
         if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
-        return output.value
+        result = output.value
       }
+      return result
     }
+    const captureExpansion = this.expandCaptureReferences(rule, content, state.source.bookSourceUrl)
+    const ruleText = captureExpansion.changed ? captureExpansion.text : rule
+    if (captureExpansion.changed) return this.evaluateCaptureText(ruleText, state, content)
+    return this.evaluatePlainText(ruleText, state, content)
+  }
+
+  private expandCaptureReferences(rule: string, content: unknown, sourceId: string): { text: string; changed: boolean } {
+    if (!Array.isArray(content) || this.captureRows.get(content) !== sourceId) return { text: rule, changed: false }
+    let changed = false
+    const text = rule.replace(/\$([1-9]\d?)/gu, (_match, captureIndex: string) => {
+      changed = true
+      return textValue(content[Number(captureIndex)])
+    })
+    return { text, changed }
+  }
+
+  private async evaluateCaptureText(rule: string, state: EvaluationState, content: unknown): Promise<unknown> {
+    if (!rule.includes('##') && !/@put:/i.test(rule)) return this.interpolate(rule, state, content)
+    const compiled = compileRule(rule, { defaultMode: 'Default', allInOne: false })
+    if (compiled.rule === undefined) throw new SourceRuleError('failed', compiled.diagnostics[0]?.message ?? '规则编译失败')
+    if (compiled.rule.kind !== 'atom') return this.interpolate(rule, state, content)
+    for (const put of compiled.rule.puts) this.variables.set(put.name, textValue(await this.evaluateNode(put.rule, state, content)))
+    const text = await this.interpolate(compiled.rule.body, state, content)
+    return this.applyReplacement(text, compiled.rule, state, content)
+  }
+
+  private async evaluatePlainText(rule: string, state: EvaluationState, content: unknown): Promise<unknown> {
     const compiled = compileRule(rule, { defaultMode: jsonContent(content) ? 'Json' : 'Default' })
     if (compiled.rule === undefined) throw new SourceRuleError('failed', compiled.diagnostics[0]?.message ?? '规则编译失败')
     return this.evaluateNode(compiled.rule, state, content)
@@ -398,9 +502,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     if (rule.operator === '%%') {
       const values = await Promise.all(rule.children.map(async (child) => this.toList(await this.evaluateNode(child, state, content))))
+      const nonEmptyValues = values.filter((value) => nonEmpty(value))
       const result: unknown[] = []
-      const length = values[0]?.length ?? 0
-      for (let index = 0; index < length; index += 1) for (const value of values) if (index < value.length && nonEmpty(value[index])) result.push(value[index])
+      const length = nonEmptyValues[0]?.length ?? 0
+      for (let index = 0; index < length; index += 1) for (const value of nonEmptyValues) if (index < value.length && nonEmpty(value[index])) result.push(value[index])
       return result
     }
     const values = (await Promise.all(rule.children.map((child) => this.evaluateNode(child, state, content)))).filter(nonEmpty)
@@ -425,9 +530,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       : await this.evaluateDefault('', state, content)
     else if (template && (rule.mode === 'Default' || rule.mode === 'Json' || rule.mode === 'XPath')) value = interpolated
     else if (rule.mode === 'Default') value = await this.evaluateDefault(rule.body, state, content)
-    else if (rule.mode === 'Json') value = this.evaluateJson(rule.body, content)
+    else if (rule.mode === 'Json') value = await this.evaluateJson(rule.body, state, content)
     else if (rule.mode === 'XPath') value = this.evaluateXPath(rule.body, content, state.request.expect)
-    else if (rule.mode === 'Regex') value = this.evaluateRegex(rule.body, content)
+    else if (rule.mode === 'Regex') value = this.evaluateRegex(rule.body, content, state.source.bookSourceUrl)
     else if (rule.mode === 'Js') {
       const result = await this.runJavaScript(interpolated, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, state.request)
       if (result.status !== 'success') throw new SourceRuleError(result.status === 'capability-missing' ? 'capability-missing' : result.status === 'cancelled' ? 'cancelled' : 'failed', result.message ?? 'JavaScript 规则执行失败')
@@ -473,9 +578,12 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const next: SelectedNode[] = []
       for (const root of current) {
         const view = root.node === undefined ? root.document : root.document.child(root.node)
-        if (selector.startsWith('text.')) {
-          const expected = selector.slice('text.'.length)
-          for (const node of view.select('*')) if (view.read(node, 'text').includes(expected)) next.push({ document: view, node })
+        const textSelection = parseBracketSelection(selector) ?? parseLegacySelection(selector)
+        const textSelector = textSelection?.base ?? selector
+        if (textSelector.startsWith('text.')) {
+          const expected = textSelector.slice('text.'.length)
+          const matching = view.select('*').filter((node) => view.read(node, 'text').includes(expected))
+          for (const node of applyPositionSelection(matching, textSelection)) next.push({ document: view, node })
         } else for (const node of selectWithPosition(view, selector)) next.push({ document: view, node })
       }
       current = next
@@ -494,7 +602,17 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return selected.map((item) => item.document.read(item.node, plan.output!)).filter((value) => value.length > 0)
   }
 
-  private evaluateJson(expression: string, content: unknown): unknown {
+  private async evaluateJson(expression: string, state: EvaluationState, content: unknown): Promise<unknown> {
+    const inlineRules = [...expression.matchAll(/\{(\$\.[^{}]+)\}/gu)]
+    if (inlineRules.length > 0) {
+      let expanded = expression
+      for (const match of inlineRules.reverse()) {
+        const value = await this.evaluateText(match[1]!, state, content)
+        const start = match.index!
+        expanded = `${expanded.slice(0, start)}${textValue(value)}${expanded.slice(start + match[0].length)}`
+      }
+      return expanded
+    }
     const value = this.json.evaluate(jsonInput(content), expression)
     // Android 的确定路径直接返回数组本身，jsonpath-plus 的 wrap 会再包一层；
     // 不拆开会让 `data.books` 这类列表规则只拿到一个「数组项」。
@@ -515,11 +633,15 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return value
   }
 
-  private evaluateRegex(expression: string, content: unknown): unknown {
+  private evaluateRegex(expression: string, content: unknown, sourceId: string): unknown {
     const text = textValue(content)
     const compiled = compileSourcePattern(expression, { flags: 'g' })
     if ('error' in compiled) throw new SourceRuleError('failed', `${compiled.error.message}：${expression.slice(0, 40)}`)
-    return [...text.matchAll(compiled.regex)].map((match) => [match[0] ?? '', ...match.slice(1).map((item) => item ?? '')])
+    return [...text.matchAll(compiled.regex)].map((match) => {
+      const row = [match[0] ?? '', ...match.slice(1).map((item) => item ?? '')]
+      this.captureRows.set(row, sourceId)
+      return row
+    })
   }
 
   /** 只在文本真的含模板时才插值，普通规则不额外扫描。 */
@@ -573,10 +695,17 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const text = textValue(value)
     // 源可控正则过长度上限或（对超长输入）命中嵌套量词时明确失败，不让病态配置拖垮求值。
     const compiled = compileSourcePattern(patternText, { flags: 'g' })
-    if ('error' in compiled) throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
+    if ('error' in compiled) {
+      if (compiled.error.code === 'invalid-pattern') {
+        return rule.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
+      }
+      throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
+    }
     if (!rule.replacement.firstMatchOnly) return text.replace(compiled.regex, replacement)
     const first = compiled.regex.exec(text)
-    return first === null ? '' : first[0].replace(compiled.regex, replacement)
+    if (first === null) return ''
+    const firstPattern = new RegExp(compiled.regex.source, compiled.regex.flags.replace(/g/u, ''))
+    return first[0].replace(firstPattern, replacement)
   }
 
   private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>> }): Promise<WorkflowRuleOutput> {

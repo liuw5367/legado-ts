@@ -46,16 +46,27 @@ test('变量优先级、@put、@get 和模板插值可观察', () => {
   assert.deepEqual(result.variableChanges, [{ scope: 'chapter', name: 'saved', after: 'value' }])
 })
 
+test('@put 可在规则中段提取，并按出现顺序更新变量', () => {
+  const result = evaluateRule(compiled('@get:{saved}@put:{saved:"literal:first"}@put:{saved:"literal:last"}'), context('unused'))
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, 'last')
+})
+
 test('&&、||、%% 维持空结果和交错顺序', () => {
   assert.equal(evaluateRule(compiled('literal:a&&literal:b'), context('x')).value, 'a\nb')
   assert.equal(evaluateRule(compiled('literal:&&literal:b'), context('x')).value, 'b')
   assert.equal(evaluateRule(compiled('literal:a||literal:b'), context('x')).value, 'a')
   assert.deepEqual(evaluateRule(compiled(':a|b%%:1|2'), context('a 1 b 2')).value, [['a'], ['1'], ['b'], ['2']])
+  assert.deepEqual(evaluateRule(compiled(':missing%%:a'), context('a')).value, [['a']])
 })
 
 test('替换表达式支持全量和首匹配片段语义', () => {
   assert.equal(evaluateRule(compiled('literal:a-b-a##a##x'), context('')).value, 'x-b-x')
   assert.equal(evaluateRule(compiled('literal:pre-a-post##a##x##first'), context('')).value, 'x')
+  assert.equal(evaluateRule(compiled('literal:a**b##a**##x'), context('')).value, 'xb')
+  assert.equal(evaluateRule(compiled('literal:pre-a**mid-post##a**##x##first'), context('')).value, 'x')
+  assert.equal(evaluateRule(compiled('literal:aaaa##(a+)+$##x'), context('')).status, 'failed')
+  assert.equal(evaluateRule(compiled(`literal:x##${'a'.repeat(2050)}##y`), context('')).status, 'failed')
 })
 
 test('解析器和脚本模式只报告能力缺失，不静默降级为文本', () => {
@@ -64,6 +75,10 @@ test('解析器和脚本模式只报告能力缺失，不静默降级为文本',
   const result = evaluateRule(rule, context('<div class="book">x</div>'))
   assert.equal(result.status, 'capability-missing')
   assert.equal(result.diagnostics[0]?.code, 'capability-unavailable')
+  const mixed = compileRule('tag.a@text<js>result</js>')
+  assert.deepEqual(mixed.diagnostics, [])
+  assert.ok(mixed.rule?.capabilities.includes('parser:html'))
+  assert.ok(mixed.rule?.capabilities.includes('javascript'))
 })
 
 test('兼容书源中的替换正则、插值和宽松 @put 语法', () => {

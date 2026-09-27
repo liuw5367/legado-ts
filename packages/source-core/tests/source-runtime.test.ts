@@ -18,6 +18,7 @@ test('source-core 规则运行时通过注入的 parser 执行 Default 属性规
   const node = { id: 'anchor-1', kind: 'element' } satisfies ParserNode
   const document: HtmlDocument = {
     select: (selector) => selector === 'a' ? [node] : [],
+    children: () => [node],
     attr: (_selected, name) => name === 'href' ? '/book/1' : undefined,
     read: () => '',
     child: () => document,

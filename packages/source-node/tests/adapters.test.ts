@@ -10,6 +10,7 @@ test('HTML adapter 保留节点身份并支持 CSS、属性、文本和子文档
   assert.equal(document.attr(nodes[0]!, 'href'), '/a')
   assert.equal(document.read(nodes[0]!, 'text'), 'AB')
   assert.equal(document.child(nodes[0]!).select('span').length, 1)
+  assert.equal(document.child(nodes[0]!).children().length, 1)
   assert.equal(document.read(nodes[0]!, 'html'), 'A<span>B</span>')
 })
 
@@ -41,6 +42,7 @@ test('XPath adapter 返回 XML 节点结果', () => {
   assert.equal(document.read(first, 'text'), 'A')
   assert.equal(document.read(first, 'ownText'), 'A')
   assert.equal(document.read(first, 'all'), '<item id="a">A</item>')
+  assert.equal(document.children().length, 1)
 })
 
 test('XPath adapter 先修复常见 HTML，再返回可继续查询的节点', () => {

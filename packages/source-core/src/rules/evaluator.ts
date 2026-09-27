@@ -82,12 +82,16 @@ function applyReplacement(value: RuleValue, atom: RuleAtom): RuleValue {
   if (atom.replacement === undefined) return value
   const text = textValue(value)
   const compiled = compileSourcePattern(atom.replacement.pattern, { flags: 'g' })
-  if ('error' in compiled) throw new EvaluationStop(diagnostic('invalid-regex', compiled.error.message))
+  if ('error' in compiled) {
+    if (compiled.error.code !== 'invalid-pattern') throw new EvaluationStop(diagnostic('invalid-regex', compiled.error.message))
+    return atom.replacement.firstMatchOnly ? atom.replacement.replacement : text.split(atom.replacement.pattern).join(atom.replacement.replacement)
+  }
   const pattern = compiled.regex
   if (!atom.replacement.firstMatchOnly) return text.replace(pattern, atom.replacement.replacement)
   const first = pattern.exec(text)
   if (first === null) return ''
-  return first[0].replace(new RegExp(atom.replacement.pattern, 'g'), atom.replacement.replacement)
+  const firstPattern = new RegExp(pattern.source, pattern.flags.replace(/g/u, ''))
+  return first[0].replace(firstPattern, atom.replacement.replacement)
 }
 
 function evaluateRegex(body: string, input: unknown): RuleValue {
@@ -139,7 +143,7 @@ function evaluateSequence(sequence: RuleSequence, state: EvaluationState, depth:
     return null
   }
   if (sequence.operator === '%%') {
-    const values = sequence.children.map((child) => listValue(evaluateNode(child, state, depth + 1)))
+    const values = sequence.children.map((child) => evaluateNode(child, state, depth + 1)).filter((value) => nonEmpty(value)).map(listValue)
     const result: RuleValue[] = []
     const primaryLength = values[0]?.length ?? 0
     for (let index = 0; index < primaryLength; index += 1) {

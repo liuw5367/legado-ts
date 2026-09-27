@@ -27,8 +27,11 @@ function uniqueCapabilities(nodes: readonly CompiledRule[]): RuleCapability[] {
 }
 
 function capabilitiesFor(mode: RuleMode, body: string): RuleCapability[] {
-  if (mode === 'Default' && (body === '' || body === 'text' || body === 'ownText' || body === 'html' || body.startsWith('literal:') || body.includes('@get:') || body.includes('{{'))) return ['text', 'variables']
-  return capabilityByMode[mode]
+  const capabilities = mode === 'Default' && (body === '' || body === 'text' || body === 'ownText' || body === 'html' || body.startsWith('literal:') || body.includes('@get:') || body.includes('{{'))
+    ? ['text', 'variables'] satisfies RuleCapability[]
+    : [...capabilityByMode[mode]]
+  if (/(?:<js>|@js:)/i.test(body) && !capabilities.includes('javascript')) capabilities.push('javascript')
+  return capabilities
 }
 
 function trimPart(text: string, start: number, end: number): { text: string; span: RuleSpan } {
@@ -70,16 +73,18 @@ function modeOf(body: string, allInOne: boolean, defaultMode: 'Default' | 'Json'
   if (allInOne && body.startsWith(':')) return { mode: 'Regex', body: body.slice(1) }
   if (body.startsWith('$.') || body.startsWith('$[')) return { mode: 'Json', body }
   if (body.startsWith('/')) return { mode: 'XPath', body }
-  if (body.startsWith('<js>')) {
-    const end = body.indexOf('</js>', '<js>'.length)
-    return { mode: 'Js', body: end < 0 ? body.slice('<js>'.length) : body.slice('<js>'.length, end) }
+  if (/^<js>/i.test(body)) {
+    const end = body.toLowerCase().indexOf('</js>', '<js>'.length)
+    if (end >= 0 && body.slice(end + '</js>'.length).trim().length === 0) {
+      return { mode: 'Js', body: body.slice('<js>'.length, end) }
+    }
   }
   return { mode: defaultMode, body }
 }
 
 function isOpaqueScriptRule(input: string): boolean {
   const trimmed = input.trim()
-  return /^@(?:js|webjs):/i.test(trimmed) || trimmed.startsWith('<js>') || /<js>|@js:/i.test(trimmed)
+  return /^@(?:js|webjs):/i.test(trimmed) || /<js>|@js:/i.test(trimmed)
 }
 
 function decodeSingleQuoted(input: string): string {
@@ -181,34 +186,53 @@ function parsePutObject(input: string): Record<string, string> | undefined {
   return result
 }
 
-function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions): RuleCompileResult {
-  const diagnostics: RuleDiagnostic[] = []
-  const trimmed = trimPart(input, span.start, span.end)
-  let body = trimmed.text
+function extractPutRules(input: string, options: RuleCompileOptions): { body: string; puts: RulePut[]; diagnostics: RuleDiagnostic[] } {
+  const pattern = /@put:/ig
   const puts: RulePut[] = []
-  while (body.toLowerCase().startsWith('@put:')) {
-    const objectStart = body.indexOf('{', 5)
-    if (objectStart < 0) {
-      diagnostics.push({ code: 'invalid-put', message: '@put 缺少 JSON 对象', span: trimmed.span, canContinue: false })
-      return { diagnostics }
+  const diagnostics: RuleDiagnostic[] = []
+  let body = ''
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(input)) !== null) {
+    while (/\s/u.test(input[pattern.lastIndex] ?? '')) pattern.lastIndex += 1
+    if (input[pattern.lastIndex] !== '{') {
+      diagnostics.push({ code: 'invalid-put', message: '@put 缺少 JSON 对象', span: { start: match.index, end: pattern.lastIndex }, canContinue: false })
+      return { body: input, puts, diagnostics }
     }
-    const objectEnd = findBalancedEnd(body, objectStart)
+    body += input.slice(cursor, match.index)
+    const objectStartAfterSpace = pattern.lastIndex
+    const objectEnd = findBalancedEnd(input, objectStartAfterSpace)
     if (objectEnd === undefined) {
-      diagnostics.push({ code: 'invalid-put', message: '@put 对象不平衡', span: trimmed.span, canContinue: false })
-      return { diagnostics }
+      diagnostics.push({ code: 'invalid-put', message: '@put 对象不平衡', span: { start: match.index, end: input.length }, canContinue: false })
+      return { body: input, puts, diagnostics }
     }
-    const parsed = parsePutObject(body.slice(objectStart + 1, objectEnd - 1))
+    const parsed = parsePutObject(input.slice(objectStartAfterSpace + 1, objectEnd - 1))
     if (parsed === undefined) {
-      diagnostics.push({ code: 'invalid-put', message: '@put 必须是键到规则字符串的 JSON 对象', span: trimmed.span, canContinue: false })
-      return { diagnostics }
+      diagnostics.push({ code: 'invalid-put', message: '@put 必须是键到规则字符串的 JSON 对象', span: { start: match.index, end: objectEnd }, canContinue: false })
+      return { body: input, puts, diagnostics }
     }
     for (const [name, value] of Object.entries(parsed)) {
       const nested = compileInternal(value, { start: 0, end: value.length }, options)
       diagnostics.push(...nested.diagnostics)
       if (nested.rule !== undefined) puts.push({ name, rule: nested.rule })
     }
-    body = body.slice(objectEnd).trimStart()
+    cursor = objectEnd
+    pattern.lastIndex = objectEnd
   }
+  body += input.slice(cursor)
+  return { body, puts, diagnostics }
+}
+
+function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions): RuleCompileResult {
+  const diagnostics: RuleDiagnostic[] = []
+  const trimmed = trimPart(input, span.start, span.end)
+  const extracted = isOpaqueScriptRule(trimmed.text)
+    ? { body: trimmed.text, puts: [] as RulePut[], diagnostics: [] as RuleDiagnostic[] }
+    : extractPutRules(trimmed.text, options)
+  const body = extracted.body
+  const puts = extracted.puts
+  diagnostics.push(...extracted.diagnostics)
+  if (diagnostics.some((item) => !item.canContinue)) return { diagnostics }
 
   const opaque = isOpaqueScriptRule(trimmed.text) || ((options.allInOne ?? true) && trimmed.text.startsWith(':'))
   const replacementParts = opaque ? { parts: [body] } : splitReplacement(body)
@@ -228,7 +252,9 @@ function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions)
       diagnostics.push({ code: 'invalid-regex', message: 'Regex 规则无法编译', span: trimmed.span, canContinue: false })
     }
   }
-  const atom: RuleAtom = { kind: 'atom', source: input, span: trimmed.span, mode: mode.mode, body: mode.body, capabilities: capabilitiesFor(mode.mode, mode.body), puts }
+  const capabilities = capabilitiesFor(mode.mode, mode.body)
+  if (isOpaqueScriptRule(trimmed.text) && !capabilities.includes('javascript')) capabilities.push('javascript')
+  const atom: RuleAtom = { kind: 'atom', source: input, span: trimmed.span, mode: mode.mode, body: mode.body, capabilities, puts }
   if (replacement !== undefined) atom.replacement = replacement
   return diagnostics.length === 0 ? { rule: atom, diagnostics } : { diagnostics }
 }

@@ -97,6 +97,40 @@ test('真实 HTML 书源规则可使用统一宿主贯通搜索、详情、目�
   assert.equal(calls.length, 4)
 })
 
+test('AllInOne 正则目录行的 $1/$2/$3 可按捕获上下文提取章节字段', async () => {
+  const source = {
+    bookSourceUrl: 'https://all-in-one.test',
+    bookSourceName: 'All In One',
+    ruleToc: {
+      chapterList: ':href="(/chapter/[^"]*)"[^>]*>([^<]*)</a>([^<]*)',
+      chapterName: '$2',
+      chapterUrl: '$1',
+      updateTime: '$3',
+    },
+  } as unknown as NormalizedSource
+  const network: NetworkHost = {
+    request: async (plan) => response(plan.url, '<a href="/chapter/1">第一章</a>·最新'),
+  }
+  const ports: WorkflowPorts = { network, rules: new SourceRuleHost() }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://all-in-one.test/book/1',
+    tocUrl: 'https://all-in-one.test/book/1/toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'book:all-in-one',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+  const toc = await loadTableOfContents(ports, { source, book })
+  assert.equal(toc.status, 'success')
+  const chapter = toc.value?.items[0]
+  assert.ok(chapter)
+  assert.equal(chapter.title, '第一章')
+  assert.equal(chapter.chapterUrl, 'https://all-in-one.test/chapter/1')
+  assert.equal(chapter.updateTime, '·最新')
+})
+
 test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章节正文', async () => {
   const source = {
     bookSourceUrl: 'https://js-source.test',

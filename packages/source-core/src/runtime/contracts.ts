@@ -238,6 +238,8 @@ export interface ParserNode {
 export interface HtmlDocument {
   /** 选择元素，不改变文档和已有节点。 */
   select(selector: string): ParserNode[]
+  /** 返回当前根节点的直接元素子节点，供 Legado 的 children 与裸索引规则使用。 */
+  children(): ParserNode[]
   /** 读取节点属性。 */
   attr(node: ParserNode, name: string): string | undefined
   /** 读取节点文本、直接文本或 HTML。 */

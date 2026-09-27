@@ -30,6 +30,10 @@ class XmlDocumentView implements HtmlDocument {
     return []
   }
 
+  public children(): ParserNode[] {
+    return childNodes(this.root).filter((node) => node.nodeType === 1).map((node) => this.wrap(node))
+  }
+
   public attr(node: ParserNode, name: string): string | undefined {
     const value = this.node(node)
     for (let index = 0; index < (value.attributes?.length ?? 0); index += 1) {

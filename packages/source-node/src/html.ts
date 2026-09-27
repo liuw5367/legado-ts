@@ -21,6 +21,10 @@ class HtmlDocumentView implements HtmlDocument {
     return selectAll(selector, this.root).map((node) => this.wrap(node))
   }
 
+  public children(): ParserNode[] {
+    return getChildren(this.root).filter(isTag).map((node) => this.wrap(node))
+  }
+
   public attr(node: ParserNode, name: string): string | undefined {
     const value = this.node(node)
     return isTag(value) ? getAttributeValue(value, name) : undefined

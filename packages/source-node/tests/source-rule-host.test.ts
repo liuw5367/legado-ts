@@ -111,6 +111,54 @@ test('规则宿主兼容真实书源中的 var result 和 Java 变量读取写�
   assert.equal(page.value, '2')
 })
 
+test('规则宿主支持任意位置 @put、JSON 内嵌规则与非空分支 %%', async () => {
+  const host = new SourceRuleHost()
+  assert.equal((await evaluate(host, '@get:{saved}@put:{saved:"literal:done"}', 'unused')).value, 'done')
+
+  const json = { book: { name: '书名' } }
+  assert.equal((await evaluate(host, '@Json:book-{$.book.name}-suffix', json)).value, 'book-书名-suffix')
+  assert.equal((await evaluate(host, '@Json:book-{$.missing}-suffix', json)).value, 'book--suffix')
+  assert.deepEqual((await evaluate(host, '$.missing%%$.books[*].name', { books: [{ name: '甲' }, { name: '乙' }] })).value, ['甲', '乙'])
+})
+
+test('Default 位置选择器匹配 Android 离散索引、闭区间、排除和直接 children', async () => {
+  const host = new SourceRuleHost()
+  const html = '<div class="parent"><a data-i="0">A0</a><a data-i="1">A1</a><a data-i="2">A2</a><a data-i="3">A3</a><section><b>nested</b></section></div>'
+  assert.deepEqual((await evaluate(host, 'tag.a.0:3@text', html)).value, ['A0', 'A3'])
+  assert.deepEqual((await evaluate(host, 'tag.a[0:3]@text', html)).value, ['A0', 'A1', 'A2', 'A3'])
+  assert.deepEqual((await evaluate(host, 'tag.a[:]@text', html)).value, ['A0', 'A1', 'A2', 'A3'])
+  assert.deepEqual((await evaluate(host, 'tag.a[1:]@text', html)).value, ['A1', 'A2', 'A3'])
+  assert.deepEqual((await evaluate(host, 'tag.a[data-i="0"]@text', html)).value, ['A0'])
+  assert.deepEqual((await evaluate(host, 'tag.a[3:0]@text', html)).value, ['A3', 'A2', 'A1', 'A0'])
+  assert.deepEqual((await evaluate(host, 'tag.a[-1]@text', html)).value, ['A3'])
+  assert.deepEqual((await evaluate(host, 'tag.a[0:3:2]@text', html)).value, ['A0', 'A2'])
+  assert.deepEqual((await evaluate(host, 'tag.a[!1,3]@text', html)).value, ['A0', 'A2'])
+  assert.deepEqual((await evaluate(host, 'tag.a!0:3@text', html)).value, ['A1', 'A2'])
+
+  const children = await evaluateNodes(host, 'div.parent@children', html)
+  assert.equal(children.status, 'success')
+  assert.equal((children.value as unknown[]).length, 5)
+  const firstChild = await evaluateNodes(host, 'div.parent@children.0', html)
+  assert.equal(firstChild.status, 'success')
+  assert.equal((firstChild.value as unknown[]).length, 1)
+})
+
+test('规则分段可在选择器前后运行任意位置、大小写不敏感的 JS', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, 'div.item@text<JS>result[0].toUpperCase()</JS><js></js>@JS:result = result + "!"', '<div class="item">one</div>')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, 'ONE!')
+})
+
+test('替换正则仅在语法无效时退回字面替换，安全限制继续失败', async () => {
+  const host = new SourceRuleHost()
+  assert.equal((await evaluate(host, 'literal:a**b##a**##x', '')).value, 'xb')
+  assert.equal((await evaluate(host, 'literal:pre-a**mid-post##a**##x##first', '')).value, 'x')
+  const oversized = await evaluate(host, `literal:x##${'a'.repeat(2050)}##y`, '')
+  assert.equal(oversized.status, 'failed')
+  assert.match(oversized.message ?? '', /长度上限/u)
+})
+
 test('规则宿主兼容 java.ajax 的对象请求形式', async () => {
   const calls: unknown[] = []
   const host = new SourceRuleHost({ request: async (input) => { calls.push(input); return 'ok' } })
