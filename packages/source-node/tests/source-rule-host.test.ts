@@ -172,6 +172,23 @@ test('java.get 和 java.connect 返回 Android 风格的响应对象', async () 
   ])
 })
 
+test('java.post、java.head 和 ajaxTestAll 保留 Android 请求形态', async () => {
+  const calls: unknown[] = []
+  const host = new SourceRuleHost({ request: async (input) => {
+    calls.push(input)
+    if (input.kind === 'network-all') return input.urls?.map((url) => ({ body: `body:${String(url)}`, status: 200, url: String(url), headers: {} })) ?? []
+    return { body: input.method === 'HEAD' ? '' : String(input.body ?? 'post-body'), status: input.method === 'HEAD' ? 204 : 201, url: String(input.url), headers: input.headers ?? {} }
+  } })
+  const result = await evaluate(host, '@js:var post = java.post("https://a.test/post", "q=1", {"X-Test":"yes"}, 123); var head = java.head("https://a.test/head", {"X-Test":"yes"}); var all = java.ajaxTestAll(["https://a.test/one", "https://a.test/two"], 456, true); [post.code(), post.body(), head.code(), all.map((item) => item.url()).join(",")].join("|")', '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, '201|q=1|204|https://a.test/one,https://a.test/two')
+  assert.deepEqual(calls, [
+    { kind: 'network-response', url: 'https://a.test/post', method: 'POST', body: 'q=1', headers: { 'X-Test': 'yes' }, options: { timeout: 123 } },
+    { kind: 'network-response', url: 'https://a.test/head', method: 'HEAD', headers: { 'X-Test': 'yes' }, options: undefined },
+    { kind: 'network-all', urls: ['https://a.test/one', 'https://a.test/two'], skipRateLimit: true, options: { timeout: 456 } },
+  ])
+})
+
 test('嵌套 java.getString 与外层规则共用规则步数预算', async () => {
   const host = new SourceRuleHost({ maxSteps: 9 })
   const content = JSON.stringify({ name: '书名' })
