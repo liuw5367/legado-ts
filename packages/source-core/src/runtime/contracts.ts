@@ -276,6 +276,8 @@ export interface HtmlParser {
 export interface XPathParser {
   /** 解析 XPath 规则使用的文档；宿主决定 HTML 修复和 XML 模式。 */
   parse(input: string): HtmlDocument
+  /** 在已有解析节点上建立上下文；缺少时核心会退回序列化片段。 */
+  context?(document: HtmlDocument, node: ParserNode): HtmlDocument
   /** 返回节点、标量或列表；adapter 不把所有结果提前转为文本。 */
   evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null
 }

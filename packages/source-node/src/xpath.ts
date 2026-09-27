@@ -1,4 +1,5 @@
 import { DOMParser } from '@xmldom/xmldom'
+import { selectAll } from 'css-select'
 import fontoxpath from 'fontoxpath'
 import { parseDocument } from 'htmlparser2'
 import { render } from 'dom-serializer'
@@ -11,9 +12,23 @@ type XmlNode = {
   nodeName?: string
   nodeValue?: string | null
   textContent?: string | null
+  parentNode?: XmlNode | null
   childNodes?: { length: number; item(index: number): XmlNode | null }
   attributes?: { length: number; item(index: number): { name: string; value: string } | null }
   toString?: () => string
+}
+
+const cssAdapter = {
+  isTag: (node: XmlNode): node is XmlNode => node.nodeType === 1,
+  getAttributeValue: (element: XmlNode, name: string) => attributeValue(element, name),
+  getChildren: (node: XmlNode) => childNodes(node),
+  getName: (element: XmlNode) => element.nodeName ?? '',
+  getParent: (node: XmlNode) => node.parentNode ?? null,
+  getSiblings: (node: XmlNode) => node.parentNode === null || node.parentNode === undefined ? [node] : childNodes(node.parentNode),
+  getText: (node: XmlNode) => node.textContent ?? node.nodeValue ?? '',
+  hasAttrib: (element: XmlNode, name: string) => attributeValue(element, name) !== undefined,
+  removeSubsets: (nodes: XmlNode[]) => nodes.filter((node, index) => !nodes.some((other, otherIndex) => index !== otherIndex && isAncestor(other, node))),
+  equals: (left: XmlNode, right: XmlNode) => left === right,
 }
 
 class XmlDocumentView implements HtmlDocument {
@@ -26,8 +41,8 @@ class XmlDocumentView implements HtmlDocument {
     this.root = root
   }
 
-  public select(_selector: string): ParserNode[] {
-    return []
+  public select(selector: string): ParserNode[] {
+    return selectAll<XmlNode, XmlNode>(selector, this.root, { adapter: cssAdapter }).map((node) => this.wrap(node))
   }
 
   public children(): ParserNode[] {
@@ -104,6 +119,13 @@ export class XPathParserAdapter implements XPathParser {
     if (result.length === 1) return normalizeXPathValue(result[0])
     return result.map(normalizeXPathValue)
   }
+
+  public context(document: HtmlDocument, node: ParserNode): HtmlDocument {
+    if (document instanceof XmlDocumentView) return document.child(node)
+    const fragment = this.parse(document.read(node, 'all'))
+    const root = fragment.children()[0]
+    return root === undefined ? fragment : fragment.child(root)
+  }
 }
 
 function isXmlNode(value: unknown): value is XmlNode {
@@ -124,4 +146,21 @@ function childNodes(value: XmlNode): XmlNode[] {
     if (child !== null && child !== undefined) children.push(child)
   }
   return children
+}
+
+function attributeValue(node: XmlNode, name: string): string | undefined {
+  for (let index = 0; index < (node.attributes?.length ?? 0); index += 1) {
+    const attribute = node.attributes?.item(index)
+    if (attribute?.name.toLowerCase() === name.toLowerCase()) return attribute.value
+  }
+  return undefined
+}
+
+function isAncestor(ancestor: XmlNode, node: XmlNode): boolean {
+  let current = node.parentNode
+  while (current !== null && current !== undefined) {
+    if (current === ancestor) return true
+    current = current.parentNode
+  }
+  return false
 }

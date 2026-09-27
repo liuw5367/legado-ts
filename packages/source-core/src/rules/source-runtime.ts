@@ -806,13 +806,17 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private evaluateXPath(expression: string, content: unknown, expect: WorkflowRuleRequest['expect']): unknown {
     const stored = isNodeRef(content) ? this.nodes.get(content.id) : undefined
-    const document = stored === undefined ? this.xpath.parse(textValue(content)) : stored.document
-    const context = stored === undefined ? document : document.child(stored.node)
-    const value = this.xpath.evaluate(context, expression)
+    const context = stored === undefined
+      ? this.xpath.parse(textValue(content))
+      : this.xpath.context?.(stored.document, stored.node) ?? this.xpath.parse(stored.document.read(stored.node, 'all'))
+    const scopedContext = stored === undefined || this.xpath.context !== undefined
+      ? context
+      : context.children()[0] === undefined ? context : context.child(context.children()[0]!)
+    const value = this.xpath.evaluate(scopedContext, expression)
     if (Array.isArray(value) && value.every((item) => this.isParserNode(item))) {
       return expect === 'nodes'
-        ? value.map((item) => this.remember(context, item as ParserNode))
-        : value.map((item) => context.read(item as ParserNode, 'text'))
+        ? value.map((item) => this.remember(scopedContext, item as ParserNode))
+        : value.map((item) => scopedContext.read(item as ParserNode, 'text'))
     }
     return value
   }
