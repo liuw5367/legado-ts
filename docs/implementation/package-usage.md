@@ -65,6 +65,8 @@ export interface RuntimeResult<T> {
 
 Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委托给 `SourceRuleRuntime`，`SourceRequestHost` 委托给 `SourceRequestRuntime`；Node 包提供 `NodeNetworkHost`、HTML/JSONPath/XPath 解析器、`QuickJSJavaScriptHost`、`NodeCookieStore`、`NodeCharsetCodec` 等平台能力。端口语义见[宿主接口](runtime-host-interfaces.md)。
 
+宿主可通过 `NetworkHost.defaultUserAgent` 提供平台默认 User-Agent；Node `createNodeSourceSession` 的 `networkOptions.defaultUserAgent` 会将其带入请求计划。核心只在 source header 没有 User-Agent 时采用该值，URL options 中的显式 Header 仍可覆盖它。未配置时保留 HTTP 客户端自身默认值。
+
 宿主适配迁移注意：`XPathParser` 要求同时实现 `parse(input)` 与 `evaluate(document, expression)`。只实现 `evaluate` 的旧适配器需补上文档解析，否则不满足 `source-core` 导出的类型；`parse` 返回的文档可直接交给 `evaluate`。
 
 ## 创建运行时与单次调用

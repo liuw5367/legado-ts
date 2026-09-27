@@ -4,9 +4,9 @@
 
 当前 `AnalyzeUrl.initUrl` 的顺序是：
 
-1. 执行 URL 中的 `<js>...</js>` 或 `@js:` 片段；片段之间的普通文本通过 `@result` 串接；
+1. 按原文顺序执行 URL 中的 `<js>...</js>` 或 `@js:` 片段；规则求值状态以整条 URL 初始化，每个脚本前若有普通文本则先更新 `result`，并可用 `@result` 引用上一步状态；
 2. 展开所有 `{{js}}`，结果为空时使用空字符串；整数数字按无小数位文本输出；
-3. 展开页码占位符 `<...>`：第 1 页使用第一个逗号项，超出配置项数量后使用最后一个；**本仓尚未实现**（见下方「未实现的能力」），语料里只有晋江系 1 个源使用；
+3. 展开页码占位符 `<...>`：第 1 页使用第一个逗号项，超出配置项数量后使用最后一个；
 4. 用“逗号后紧跟 `{`”识别 URL 选项 JSON，首个逗号前是基础 URL；
 5. 以 `baseUrl` 解析相对 URL，并用解析后的 URL 更新请求基准；
 6. 应用请求选项和选项中的 `js`；
@@ -17,9 +17,8 @@
 
 ## 未实现的能力
 
-- `<1,2,3>` 式子 URL 页码语法（上表第 3 步）没有实现：地址模板引用页码只认 `{{page}}`/`{{pageIndex}}`，
-  这类源不会产生下一页游标，也不会按项递增页码；
-- 目录/正文的多 URL 并发抓取、`formatJs`、`subContent`、`imageDecode`、`payAction`、`contentBatch` 同样不在当前范围。
+- `ruleContent.subContent`、`imageDecode`、`payAction` 和 `contentBatch` 尚未实现；
+- Android `ajaxAll(..., true)` 等限流 bypass 重载和完整 Java/设备桥接没有对应的 Node 能力。
 
 ## 2. URL 选项
 
@@ -50,19 +49,23 @@ https://example.com/search,{
 | `timeout` | 有效正整数毫秒；无效值忽略 |
 | `followRedirects` | 支持布尔、`0/1`、`false/true` 字符串；其他值忽略 |
 | `dnsIp` | 当前目标域名使用的 IPv4/IPv6 字面量列表；`resolveIp` 是旧别名 |
-| `js` | URL 选项解析后执行，结果写回 URL |
+| `js` | URL 选项解析后执行，结果写回 URL；脚本的 `baseUrl` 是请求源站 origin，`result` 是选项处理前的绝对 URL |
 | `serverID` | 服务端路由/节点提示；实际由 WebDAV 远端存储消费，作为 WebDAV 服务器配置 ID（`WebDav.fromPath` 解析 URL 中的 `serverID` 选择授权配置，缺失时直接失败） |
 | `webViewDelayTime` | WebView 加载后的非负等待毫秒数 |
 
-宽松 JSON 仅用于历史兼容，并应记录警告。严格 JSON 优先。
+Android 先尝试严格 JSON，再尝试 Gson 宽松解析；只有宽松解析成功时记录格式警告。TypeScript 当前只在严格 JSON 失败后兼容常见单引号字符串，不会为此发出运行时警告。
 
-`proxy` 不是 `UrlOption` 的独立字段。当前 Android 路径从已合并的请求头中读取特殊的 `proxy` 值并移出普通 Header；TypeScript Host 应把这条兼容行为单独记录，不能把它误当成普通远端请求头。`headers` 的键名要原样保留，因为当前 `Content-Type` 判断存在大小写敏感路径。
+Android 在解析初始 URL 后把 `baseUrl` 更新为源站 origin，再执行 URL 选项 `js`；之后的 `bodyJs` 沿用这个 origin，即使选项脚本改写 URL 或 HTTP 发生重定向。TypeScript 仍提供 `redirectUrl` 绑定作为宿主扩展，但它不是 Android `AnalyzeUrl.evalJS` 的通用绑定。
+
+`proxy` 不是 `UrlOption` 的独立字段。Android 从已合并的请求头中读取特殊的 `proxy` 值并移出普通 Header；TypeScript `SourceRequestRuntime` 也会将它转为 `execution.proxy`，Node 当前不支持代理时明确报告能力缺失，不得把它作为普通远端请求头发送。`headers` 的键名要原样保留，因为当前 `Content-Type` 判断存在大小写敏感路径。
 
 ### `concurrentRate`
 
 `BookSource.concurrentRate` 是书源级共享限流配置，不是单请求重试配置。空值、缺失值和 `"0"` 表示不额外限流；`"accessLimit/interval"` 要求两部分都是正数，分别表示时间窗口内允许的访问次数和窗口毫秒数；单个正整数按 `1/interval` 解释，不能当作并发数。更新已有记录时，非法配置保留原值并沿用当前限流记录；首次请求遇到非法非空值时，Android 会按兼容路径创建 fallback 记录，迁移实现必须记录诊断并用 fixture 固定该行为，不能把两条路径混为一个规则。
 
 同一书源的普通请求共享按 `source.getKey()` 建立的记录。第一次请求立即通过；窗口内达到次数后，后续请求挂起到 `nextTime`，窗口重置时把时间设为当前时刻并重新计数。更新配置时只更新该书源的速率和共享记录，不为每个 URL 创建独立计数器；取消等待必须释放挂起请求。`ajaxAll(urls, true)` 和 `ajaxTestAll(urls, timeout, true)` 是 Android 明确的 bypass 路径，跳过书源限流但仍受宿主线程/并发上限约束；普通 `ajax`、`connect` 和未传 bypass 的批量请求仍走共享记录。书源编辑、导入覆盖或删除后必须清理该 source key 的记录。
+
+TypeScript `SourceRateLimiter` 已覆盖普通请求固定窗口、取消等待和 `putConcurrent` 有效更新。首次遇到非法非空配置的 Android fallback、带 bypass 标记的 Java 批量请求及源编辑/删除时的 key 清理仍未等价实现，见[已知差异](../divergence/known-divergences.md)。
 
 ## 3. 参数编码
 
@@ -83,7 +86,7 @@ POST：
 
 ## 4. 响应和执行路径
 
-普通 HTTP 请求可以在响应后执行 `bodyJs`，脚本结果成为新的 body。XML 响应若 Content-Type 表明 XML 但 body 缺 XML 声明，当前实现会补声明，确保后续 XML/XPath 解析可用。
+普通 HTTP 请求可以在响应后执行 `bodyJs`，脚本结果成为新的 body。若 Content-Type 符合 Android 的 XML 类型规则且 body 缺 XML 声明，先补 `<?xml version="1.0"?>`；这个分支优先于 `bodyJs`，所以该次响应不会执行 `bodyJs`。XML 已有声明时仍可执行 `bodyJs`。`type` 字节响应跳过文本后处理。
 
 WebView 请求使用 `webJs` 或调用方传入的 JS，并可以传入 `sourceRegex` 做资源嗅探。普通 HTTP 的 timeout、重定向和 DNS 选项不能假定继续控制 WebView 内部导航；这属于宿主能力差异。
 
@@ -105,7 +108,7 @@ raw rule URL
   -> rate limit
   -> HTTP/WebView attempt
   -> decode text or preserve bytes
-  -> bodyJs or XML normalization
+  -> XML declaration normalization when needed; otherwise bodyJs
   -> response
 ```
 
@@ -115,11 +118,15 @@ raw rule URL
 
 请求状态包括 `created`、`expanded`、`queued`、`attempting`、`redirecting`、`decoded`、`post-processed`、`completed`、`failed` 和 `cancelled`。只有 `completed` 的响应可以进入规则解析；网络错误、非法选项、解码错误和能力缺失必须带稳定错误阶段返回，不能以空 body 伪装成功。
 
-## 5. Cookie、登录头和重定向
+## 5. Cookie、登录凭据和重定向
 
 请求前把 CookieStore 中对应域的 Cookie 与 URL 选项中的 `Cookie` 合并，临时 URL 选项优先；启用 CookieJar 时保存响应中的 Set-Cookie。当前 Cookie 域按解析后的目标 URL 计算，封面 CDN 不应错误使用书源站点 Cookie。导入层归一化 `enabledCookieJar` 时，JSON/对象省略值使用 Kotlin 构造默认值 `true`；显式 `null` 和数据库旧行缺失值按 `enabledCookieJar == true` 判断为关闭，只有显式 `true` 才保存响应 Cookie。
 
-登录头默认只发往书源同站二级域名；需要跨域时由 URL 选项显式提供。注意，当前保护逻辑依据初始 URL 判断，URL 中的 `@js` 如果把地址改写到跨域目标，不能假设登录头一定会被重新拦截。TypeScript 迁移应将这一点作为兼容事实和安全告警分别记录。静态 Header、Cookie、Token 和 `loginCheckJs` 优先实现；复杂登录 UI 作为低优先级宿主能力保留在完整移植清单。
+Android 会把单独保存的登录凭据头按书源同站二级域名附加；初始 URL 是唯一检查点，`@js` 改写到跨域目标后不会再次拦截。普通 `source.header` 是书源请求头配置，并不等同于已保存的登录凭据头。当前 TypeScript 包没有独立的登录凭据存储与同站注入能力，因此不能宣称提供相同的自动登录头隔离；集成方应把凭据放在受控宿主策略中，不能把所有 `source.header` 一概当作登录凭据剥离。
+
+Android `BaseSource.getHeaderMap()` 会在 source header 未提供 User-Agent 时填入 `AppConfig.userAgent`。TypeScript 核心通过 `NetworkHost.defaultUserAgent` 接受平台配置；Node 可在 `NodeNetworkOptions.defaultUserAgent` 中提供它。未配置时保留 HTTP 客户端自身默认值，不能据此宣称与 Android 全局设置相同。无效 source header 在 Android 会记录日志、忽略该值并继续请求；TypeScript 也忽略无效 JSON 或脚本返回值，随后应用宿主默认 User-Agent（若已配置）。宿主缺少执行动态 Header 所需的 JS 能力时仍返回 `capability-missing`。
+
+TypeScript 的 JS bridge 子请求会跳过动态 `source.header`，只保留静态 source header，避免 Header 脚本再次调用 `java.ajax` 时形成递归。该保护属于 TS 当前限制；不要据此声称与 Android 嵌套请求的 Header 重入行为相同。
 
 `followRedirects=false` 时，普通请求返回 3xx，不进入 WebView；开启时使用最终 URL 作为 redirectUrl。书源流程使用最终 URL 解析相对资源，同时保留初始 URL 用于去重和分页循环判断。
 
@@ -135,7 +142,7 @@ raw rule URL
 
 ## 响应字节与宿主策略
 
-HttpClient 返回解压后的 bytes、响应头、状态及最终 URL；核心通过字符集端口解码，然后执行 bodyJs/XML 处理。不能先由 fetch.text() 固定 UTF-8 再尝试恢复原字节。请求参数 charset 和响应 charset 是两个用途，不默认等同。正文 bytes 分支继续保留原 Android 十六进制规则输入，媒体二进制输出通过独立 DTO 表达。
+HttpClient 返回解压后的 bytes、响应头、状态及最终 URL；核心通过字符集端口解码，然后按 Android 顺序执行 XML 声明补齐或 `bodyJs`。不能先由 fetch.text() 固定 UTF-8 再尝试恢复原字节。请求参数 charset 和响应 charset 是两个用途，不默认等同。正文 bytes 分支继续保留原 Android 十六进制规则输入，媒体二进制输出通过独立 DTO 表达。
 
 缺失/无效 timeout 在 URL 兼容层按原行为忽略，宿主最终仍必须有正的截止时间；这与“进入 HttpClient 的有效 timeout 必须合法”不冲突。重试次数服从源配置与宿主策略共同约束，POST 或上游写入不能因网络错误自动重复；被拒绝的重试报告 policy-denied 诊断，不伪称原客户端同等行为。跨域凭据和 SSRF 的策略差异见 [部署边界](../operations/runtime-security-and-deployment.md)。
 
