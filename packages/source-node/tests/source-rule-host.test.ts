@@ -137,6 +137,29 @@ test('规则宿主支持 Android 的章节数字和字节编码重载', async ()
   ])
 })
 
+test('规则宿主支持 Android 的字节数组与 HMAC 摘要重载', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, `@js:JSON.stringify([
+    Array.from(java.base64DecodeToByteArray(java.base64Encode('测试'))),
+    Array.from(java.hexDecodeToByteArray('e6b58b')),
+    java.hexDecodeToString('e6b58b'),
+    java.hexEncodeToString('测试'),
+    java.digestBase64Str('data', 'SHA-256'),
+    java.HMacHex('data', 'HmacSHA256', 'key'),
+    java.HMacBase64('data', 'HmacSHA256', 'key')
+  ])`, '')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), [
+    [230, 181, 139, 232, 175, 149],
+    [230, 181, 139],
+    '测',
+    'e6b58be8af95',
+    'Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc=',
+    '5031fe3d989c6d1537a013fa6e739da23463fdaec3b70137d828e36ace221bd0',
+    'UDH+PZicbRU3oBP6bnOdojRj/a7DtwE32Cjjas4iG9A=',
+  ])
+})
+
 test('java.getString 和 java.getStringList 通过完整规则内核读取当前内容', async () => {
   const host = new SourceRuleHost()
   const json = JSON.stringify({ book: { name: '书名' }, chapters: [{ name: '第一章' }, { name: '第二章' }] })
