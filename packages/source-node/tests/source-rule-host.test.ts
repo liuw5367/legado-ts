@@ -111,6 +111,32 @@ test('规则宿主的 JavaScript 可以使用书源 bridge 的编码能力', asy
   assert.equal(result.value, '5oiR5pys5peg5oSP5oiQ5LuZ')
 })
 
+test('规则宿主支持 Android 的章节数字和字节编码重载', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, `@js:
+    var utf8 = java.strToBytes('测试')
+    var gbk = java.strToBytes('测试', 'GBK')
+    JSON.stringify([
+      java.toNumChapter('第十一章：开端'),
+      java.toNumChapter('第１２章'),
+      java.toNumChapter('没有章节号'),
+      java.toNumChapter(null),
+      Array.from(utf8),
+      java.bytesToStr(utf8),
+      java.bytesToStr(gbk, 'GBK')
+    ])`, '')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), [
+    '第11章：开端',
+    '第12章',
+    '没有章节号',
+    null,
+    [230, 181, 139, 232, 175, 149],
+    '测试',
+    '测试',
+  ])
+})
+
 test('java.getString 和 java.getStringList 通过完整规则内核读取当前内容', async () => {
   const host = new SourceRuleHost()
   const json = JSON.stringify({ book: { name: '书名' }, chapters: [{ name: '第一章' }, { name: '第二章' }] })

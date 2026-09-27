@@ -41,6 +41,7 @@ export interface SourceRuleBridgeRequest {
   skipRateLimit?: boolean
   headers?: Readonly<Record<string, string>>
   value?: unknown
+  charset?: unknown
   saveTime?: unknown
   text?: unknown
   errorBase64?: unknown
@@ -157,6 +158,78 @@ function textValue(value: unknown): string {
   } catch {
     return ''
   }
+}
+
+function byteValue(value: unknown): Uint8Array {
+  if (value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isInteger(item) && item >= 0 && item <= 255)) return Uint8Array.from(value)
+  throw new Error('书源 bytes bridge 需要 ByteArray')
+}
+
+const chineseDigitValues: Readonly<Record<string, number>> = {
+  零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9,
+  壹: 1, 贰: 2, 叁: 3, 肆: 4, 伍: 5, 陆: 6, 柒: 7, 捌: 8, 玖: 9,
+  十: 10, 拾: 10, 百: 100, 佰: 100, 千: 1000, 仟: 1000, 万: 10000, 亿: 100000000,
+}
+
+function fullToHalf(value: string): string {
+  return Array.from(value, (character) => {
+    const code = character.codePointAt(0) ?? 0
+    if (code === 0x3000) return ' '
+    return code >= 0xff01 && code <= 0xff3e ? String.fromCodePoint(code - 0xfee0) : character
+  }).join('')
+}
+
+/** Android JsExtensions.toNumChapter：把“第十一章”中的中文序号转换为阿拉伯数字。 */
+function toNumChapter(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  const text = String(value)
+  const match = /第(.+?)章/u.exec(text)
+  if (match === null) return text
+  const numberText = fullToHalf(match[1] ?? '').replace(/\s+/gu, '')
+  let number = -1
+  if (/^[+-]?\d+$/u.test(numberText)) {
+    const parsed = Number(numberText)
+    if (Number.isSafeInteger(parsed) && parsed >= -2147483648 && parsed <= 2147483647) number = parsed
+  } else {
+    let result = 0
+    let temporary = 0
+    let billion = 0
+    try {
+      for (let index = 0; index < numberText.length; index++) {
+        const current = numberText[index]
+        if (current === undefined) throw new Error('unknown Chinese number')
+        const digit = chineseDigitValues[current]
+        if (digit === undefined) throw new Error('unknown Chinese number')
+        if (digit === 100000000) {
+          result += temporary
+          result *= digit
+          billion = billion * 100000000 + result
+          result = 0
+          temporary = 0
+        } else if (digit === 10000) {
+          result += temporary
+          result *= digit
+          temporary = 0
+        } else if (digit >= 10) {
+          if (temporary === 0) temporary = 1
+          result += digit * temporary
+          temporary = 0
+        } else {
+          const previousCharacter = index > 0 ? numberText[index - 1] : undefined
+          const previous = previousCharacter === undefined ? undefined : chineseDigitValues[previousCharacter]
+          temporary = index >= 2 && index === numberText.length - 1 && previous !== undefined && previous > 10
+            ? digit * previous / 10
+            : temporary * 10 + digit
+        }
+      }
+      number = result + temporary + billion
+    } catch {
+      number = -1
+    }
+  }
+  return text.slice(0, match.index + 1) + String(number) + text.slice(match.index + match[0].length - 1)
 }
 
 function nonEmpty(value: unknown): boolean {
@@ -982,7 +1055,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       // Android CookieStore 的 set/remove 返回 Unit，`{{cookie.removeCookie(...)}}` 必须展开为空串而不是 "true"。
       'const cookie = { getCookie: (url) => request({ kind: "cookie-get", url: String(url) }), setCookie: (url, value) => { request({ kind: "cookie-set", url: String(url), value: String(value) }); }, removeCookie: (url) => { request({ kind: "cookie-remove", url: String(url) }); } };',
       'let legadoContent = result; const legadoValueText = (value) => Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\\n") : String(value ?? ""); const legadoNodeRead = (node, rule) => legadoValueText(evaluateRule(String(rule), { expect: "text", content: node })); const legadoNode = (node) => { if (node == null || typeof node !== "object" || node.__legadoNode !== "source-rule-node") return node; const value = { ...node }; Object.defineProperties(value, { attr: { value: (name) => legadoNodeRead(node, String(name)) }, text: { value: () => legadoNodeRead(node, "@text") }, ownText: { value: () => legadoNodeRead(node, "@ownText") }, html: { value: () => legadoNodeRead(node, "@html") }, select: { value: (rule) => legadoElements(evaluateRule(String(rule), { expect: "nodes", content: node })) }, toString: { value: () => legadoNodeRead(node, "@text") } }); return value; }; const legadoElements = (values) => { const list = (Array.isArray(values) ? values : values == null ? [] : [values]).map(legadoNode); Object.defineProperties(list, { toArray: { value: () => list.slice() }, attr: { value: (name) => list.length === 0 || typeof list[0].attr !== "function" ? "" : list[0].attr(name) }, text: { value: () => list.map((item) => typeof item.text === "function" ? item.text() : String(item ?? "")).filter(Boolean).join(" ") }, ownText: { value: () => list.map((item) => typeof item.ownText === "function" ? item.ownText() : String(item ?? "")).filter(Boolean).join(" ") }, html: { value: () => list.map((item) => typeof item.html === "function" ? item.html() : String(item ?? "")).join("\\n") }, select: { value: (rule) => { const selected = []; for (const item of list) { if (item != null && typeof item.select === "function") { const nested = item.select(rule); if (Array.isArray(nested)) selected.push(...nested); } } return legadoElements(selected); } } }); return list; }; const legadoResponse = (url, raw) => { const record = raw != null && typeof raw === "object" && !Array.isArray(raw) ? raw : {}; const body = typeof raw === "string" ? raw : String(record.body ?? raw ?? ""); const status = Number(record.status ?? record.code ?? 200); const target = String(record.url ?? url); const headers = record.headers ?? {}; const header = (name) => { const wanted = String(name).toLowerCase(); for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === wanted) return Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""); return ""; }; const request = { url: () => target }; const rawResponse = { request: () => request, url: () => target, code: () => status, message: () => String(record.message ?? "") }; return { body: () => body, code: () => status, statusCode: () => status, message: () => String(record.message ?? ""), headers: () => headers, header, url: () => target, isSuccessful: () => status >= 200 && status < 300, raw: () => rawResponse, toString: () => body }; };',
-      'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "GET", options })) : Object.prototype.hasOwnProperty.call(bindings, String(value)) ? bindings[String(value)] : getVar(String(value)), connect: (value, options) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "GET", options })), put: (name, value) => { setVar(name, value); return value; }, cacheContent: (chapter, content) => request({ kind: "workflow-action", action: "cacheContent", input: { chapter, content } }), setContent: (content, baseUrl) => { legadoContent = content; if (baseUrl !== undefined && baseUrl !== null) { globalThis.baseUrl = String(baseUrl); globalThis.redirectUrl = String(baseUrl); } return java; }, getElement: (rule) => { const value = evaluateRule(String(rule), { expect: "nodes", content: legadoContent }); return Array.isArray(value) ? legadoElements(value) : legadoNode(value); }, getElements: (rule) => legadoElements(evaluateRule(String(rule), { expect: "nodes", content: legadoContent })), getString: (rule, content, isUrl) => legadoValueText(evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content })), getStringList: (rule, content, isUrl) => { const value = evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content }); return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : String(value ?? "").split("\\n").filter(Boolean); }, getWebViewUA: () => request({ kind: "runtime-capability", capability: "getWebViewUA" }), base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (time, format, offsetMs) => request({ kind: "time-format-utc", time: Number(time), format: String(format), offsetMs: Number(offsetMs) }), randomUUID: () => request({ kind: "random-uuid" }), getAppVariant: () => request({ kind: "runtime-capability", capability: "getAppVariant" }), androidId: () => request({ kind: "runtime-capability", capability: "androidId" }), deviceID: () => request({ kind: "runtime-capability", capability: "deviceID" }) };',
+      'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "GET", options })) : Object.prototype.hasOwnProperty.call(bindings, String(value)) ? bindings[String(value)] : getVar(String(value)), connect: (value, options) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "GET", options })), put: (name, value) => { setVar(name, value); return value; }, cacheContent: (chapter, content) => request({ kind: "workflow-action", action: "cacheContent", input: { chapter, content } }), setContent: (content, baseUrl) => { legadoContent = content; if (baseUrl !== undefined && baseUrl !== null) { globalThis.baseUrl = String(baseUrl); globalThis.redirectUrl = String(baseUrl); } return java; }, getElement: (rule) => { const value = evaluateRule(String(rule), { expect: "nodes", content: legadoContent }); return Array.isArray(value) ? legadoElements(value) : legadoNode(value); }, getElements: (rule) => legadoElements(evaluateRule(String(rule), { expect: "nodes", content: legadoContent })), getString: (rule, content, isUrl) => legadoValueText(evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content })), getStringList: (rule, content, isUrl) => { const value = evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content }); return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : String(value ?? "").split("\\n").filter(Boolean); }, getWebViewUA: () => request({ kind: "runtime-capability", capability: "getWebViewUA" }), base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), strToBytes: (value, charset) => request({ kind: "encode-bytes", value: String(value), charset: charset === undefined ? "UTF-8" : String(charset) }), bytesToStr: (value, charset) => request({ kind: "decode-bytes", value, charset: charset === undefined ? "UTF-8" : String(charset) }), toNumChapter: (value) => value == null ? null : request({ kind: "to-num-chapter", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, transformation: algorithm }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (time, format, offsetMs) => request({ kind: "time-format-utc", time: Number(time), format: String(format), offsetMs: Number(offsetMs) }), randomUUID: () => request({ kind: "random-uuid" }), getAppVariant: () => request({ kind: "runtime-capability", capability: "getAppVariant" }), androidId: () => request({ kind: "runtime-capability", capability: "androidId" }), deviceID: () => request({ kind: "runtime-capability", capability: "deviceID" }) };',
       'Object.assign(java, { post: (value, body, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers, options: timeout === undefined ? undefined : { timeout: Number(timeout) } })), head: (value, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers, options: timeout === undefined ? undefined : { timeout: Number(timeout) } })), ajaxTestAll: (values, timeout, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true, options: timeout === undefined ? undefined : { timeout: Number(timeout) } }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponse(urls[index] ?? "", raw)); } });',
       'java.ajaxAll = (values, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponse(urls[index] ?? "", raw)); };',
       'const legadoCookie = (url, key) => { const cookieText = String(request({ kind: "cookie-get", url: String(url) }) ?? ""); if (key === undefined || key === null) return cookieText; for (const part of cookieText.split(";")) { const index = part.indexOf("="); if (index >= 0 && part.slice(0, index).trim() === String(key)) return part.slice(index + 1).trim(); } return ""; };',
@@ -1119,6 +1192,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'base64-encode') return this.encoding.base64Encode(textValue(request.value))
+    if (request.kind === 'encode-bytes') return this.encoding.encode(textValue(request.value), textValue(request.charset) || 'UTF-8')
+    if (request.kind === 'decode-bytes') return this.encoding.decode(byteValue(request.value), textValue(request.charset) || 'UTF-8')
+    if (request.kind === 'to-num-chapter') return toNumChapter(request.value)
     if (request.kind === 'base64-decode-text') return new TextDecoder().decode(this.encoding.base64Decode(textValue(request.value)))
     if (request.kind === 'hex-decode-text') return new TextDecoder().decode(this.encoding.hexDecode(textValue(request.value)))
     if (request.kind === 'md5') return this.crypto.digestHex(textValue(request.value), 'md5')
