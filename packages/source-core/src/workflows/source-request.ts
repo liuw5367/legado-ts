@@ -354,7 +354,7 @@ export class SourceRequestRuntime {
     return text(value)
   }
 
-  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false): Promise<NetworkResponse> {
+  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false): Promise<NetworkResponse> {
     const split = splitSourceRequestUrl(rawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
@@ -432,6 +432,7 @@ export class SourceRequestRuntime {
         cookieJar,
         ...(serverId === undefined ? {} : { serverId }),
         ...(webViewDelayTimeMs === undefined ? {} : { webViewDelayTimeMs }),
+        ...(skipRateLimit ? { skipRateLimit: true } : {}),
       },
       budget: { ...(budget ?? {}), ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(signal === undefined ? {} : { signal }) },
     })

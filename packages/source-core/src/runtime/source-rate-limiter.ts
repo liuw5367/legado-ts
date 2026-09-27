@@ -119,8 +119,12 @@ export class SourceRateLimiter {
 export function withSourceRateLimit(network: NetworkHost, limiter: SourceRateLimiter): NetworkHost {
   return {
     request: async (plan: RequestPlan) => {
-      await limiter.acquire(plan.budget.signal)
-      if (plan.budget.signal?.aborted === true) throw abortError()
+      if (plan.execution.skipRateLimit !== true) {
+        await limiter.acquire(plan.budget.signal)
+        if (plan.budget.signal?.aborted === true) throw abortError()
+      } else if (plan.budget.signal?.aborted === true) {
+        throw abortError()
+      }
       return network.request(plan)
     },
     ...(network.defaultUserAgent === undefined ? {} : { defaultUserAgent: network.defaultUserAgent }),

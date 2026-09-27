@@ -38,6 +38,8 @@ export interface RequestExecutionHints {
   cookieJar?: boolean
   /** Android 兼容服务节点提示。 */
   serverId?: number
+  /** Android `ajaxAll(urls, true)` 的受控限流旁路提示。 */
+  skipRateLimit?: boolean
   /** WebView 加载后的等待时间。 */
   webViewDelayTimeMs?: number
 }

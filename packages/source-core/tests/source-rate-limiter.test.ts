@@ -97,3 +97,31 @@ test('cancelled source-rate wait does not call the platform network', async () =
   await assert.rejects(pending, { name: 'AbortError' })
   assert.equal(requests, 0)
 })
+
+test('skipRateLimit bypasses the source window but still honors cancellation', async () => {
+  const { clock } = fakeClock()
+  const limiter = new SourceRateLimiter('1/1000', clock)
+  let calls = 0
+  const network = withSourceRateLimit({
+    request: async (plan) => {
+      calls += 1
+      return { url: plan.url, status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }
+    },
+  }, limiter)
+  const plan = (skipRateLimit: boolean, signal?: AbortSignal) => ({
+    url: 'https://fixture.invalid',
+    method: 'GET' as const,
+    headers: {},
+    followRedirects: true,
+    responseType: 'text' as const,
+    execution: { useWebView: false, ...(skipRateLimit ? { skipRateLimit: true } : {}) },
+    budget: { timeoutMs: 1000, maxRequests: 10, maxPages: 10, maxResponseBytes: 100, maxTotalBytes: 100, maxRequestBodyBytes: 100, maxRedirects: 2, ...(signal === undefined ? {} : { signal }) },
+  })
+  await network.request(plan(false))
+  await network.request(plan(true))
+  assert.equal(calls, 2)
+  const controller = new AbortController()
+  controller.abort()
+  await assert.rejects(() => network.request(plan(true, controller.signal)), /aborted/i)
+  assert.equal(calls, 2)
+})
