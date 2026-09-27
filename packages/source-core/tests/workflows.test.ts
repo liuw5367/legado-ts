@@ -105,6 +105,40 @@ test('URL 字段从多值规则中取第一条地址', async () => {
   assert.equal(detailed.value?.items[0]?.tocUrl, 'https://source.test/toc/one')
 })
 
+test('搜索和详情字段按 Android 的副作用顺序执行', async () => {
+  const calls: string[] = []
+  const orderedSource = {
+    ...source,
+    ruleSearch: {
+      bookList: 'list', name: 'name', author: 'author', kind: 'kind', wordCount: 'words',
+      lastChapter: 'last', intro: 'intro', coverUrl: 'cover', bookUrl: 'url', updateTime: 'updated',
+    },
+    ruleBookInfo: {
+      name: 'detail-name', author: 'detail-author', kind: 'detail-kind', wordCount: 'detail-words',
+      lastChapter: 'detail-last', intro: 'detail-intro', coverUrl: 'detail-cover', tocUrl: 'detail-toc', updateTime: 'detail-updated',
+    },
+  } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      if (request.rule === 'list') return { status: 'success', value: [{ name: '书', url: '/book/one' }] }
+      calls.push(request.rule)
+      if (request.rule === 'url') return { status: 'success', value: '/book/one' }
+      if (request.rule === 'detail-toc') return { status: 'success', value: '/toc/one' }
+      return { status: 'success', value: request.rule }
+    },
+  }
+
+  const searched = await searchBooks(workflowPorts, { source: orderedSource, keyword: '书' })
+  assert.equal(searched.status, 'success')
+  assert.deepEqual(calls, ['name', 'author', 'kind', 'words', 'last', 'intro', 'cover', 'url', 'updated'])
+
+  calls.length = 0
+  const detailed = await loadBookDetails(workflowPorts, { source: orderedSource, candidates: [searched.value!.items[0]!] })
+  assert.equal(detailed.status, 'success')
+  assert.deepEqual(calls, ['detail-name', 'detail-author', 'detail-kind', 'detail-words', 'detail-last', 'detail-intro', 'detail-cover', 'detail-toc', 'detail-updated'])
+})
+
 test('搜索和详情工作流保留最新章节与更新时间字段', async () => {
   const calls: string[] = []
   const latestSource = {

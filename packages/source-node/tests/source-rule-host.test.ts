@@ -339,6 +339,7 @@ test('规则宿主兼容真实书源中的 var result 和 Java 变量读取写�
 test('规则宿主支持任意位置 @put、JSON 内嵌规则与非空分支 %%', async () => {
   const host = new SourceRuleHost()
   assert.equal((await evaluate(host, '@get:{saved}@put:{saved:"literal:done"}', 'unused')).value, 'done')
+  assert.equal((await evaluate(host, '@put:{saved:"literal:done"}literal:first&&@get:{saved}', 'unused')).value, 'first\ndone')
 
   const json = { book: { name: '书名' } }
   assert.equal((await evaluate(host, '@Json:book-{$.book.name}-suffix', json)).value, 'book-书名-suffix')

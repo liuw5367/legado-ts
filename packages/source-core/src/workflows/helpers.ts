@@ -7,24 +7,24 @@ import type { SourceFunctionName, SourceFunctionRequest, WorkflowDiagnostic, Wor
 export const listFields = [
   ['bookName', 'name'],
   ['bookAuthor', 'author'],
-  ['bookUrl', 'bookUrl'],
-  ['bookCoverUrl', 'coverUrl'],
-  ['bookIntro', 'intro'],
   ['bookKind', 'kind'],
   ['bookWordCount', 'wordCount'],
   ['bookLastChapter', 'lastChapter'],
+  ['bookIntro', 'intro'],
+  ['bookCoverUrl', 'coverUrl'],
+  ['bookUrl', 'bookUrl'],
   ['bookUpdateTime', 'updateTime'],
 ] as const
 
 export const detailFields = [
   ['name', 'name'],
   ['author', 'author'],
-  ['intro', 'intro'],
-  ['coverUrl', 'coverUrl'],
-  ['tocUrl', 'tocUrl'],
   ['kind', 'kind'],
   ['wordCount', 'wordCount'],
   ['lastChapter', 'lastChapter'],
+  ['intro', 'intro'],
+  ['coverUrl', 'coverUrl'],
+  ['tocUrl', 'tocUrl'],
   ['updateTime', 'updateTime'],
 ] as const
 

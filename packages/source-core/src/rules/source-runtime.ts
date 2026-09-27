@@ -683,14 +683,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return null
     }
     if (rule.operator === '%%') {
-      const values = await Promise.all(rule.children.map(async (child) => this.toList(await this.evaluateNode(child, state, content))))
+      const values: unknown[][] = []
+      for (const child of rule.children) values.push(this.toList(await this.evaluateNode(child, state, content)))
       const nonEmptyValues = values.filter((value) => nonEmpty(value))
       const result: unknown[] = []
       const length = nonEmptyValues[0]?.length ?? 0
       for (let index = 0; index < length; index += 1) for (const value of nonEmptyValues) if (index < value.length && nonEmpty(value[index])) result.push(value[index])
       return result
     }
-    const values = (await Promise.all(rule.children.map((child) => this.evaluateNode(child, state, content)))).filter(nonEmpty)
+    const values: unknown[] = []
+    for (const child of rule.children) {
+      const value = await this.evaluateNode(child, state, content)
+      if (nonEmpty(value)) values.push(value)
+    }
     if (values.length === 0) return null
     if (values.some(Array.isArray)) return values.flatMap((value) => this.toList(value))
     return values.map(textValue).join('\n')
