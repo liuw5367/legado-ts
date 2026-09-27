@@ -361,6 +361,7 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
   const extraction = await extractDetailFields(ports, source, 0, page.content, { baseUrl: page.url, redirectUrl: page.url }, options.signal, trace, diagnostics, undefined, bindings)
   // 取消必须向上传播；回退失败和取消在调用方是两种不同的结果。
   if (extraction.cancelled) return { cancelled: true }
+  if (extraction.fatal !== undefined) return { cancelled: false }
   const name = formatBookName(extraction.values.name ?? '')
   if (name.length === 0) {
     diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex: 0, message: '详情页没有解析出书名', retryable: false })
@@ -390,6 +391,8 @@ interface DetailExtraction {
   errors: Record<string, string>
   /** 字段的原始 JSON 值。 */
   raw: JsonObject
+  /** Android 对书名、作者和目录链接字段失败时会终止当前详情项。 */
+  fatal?: { field: string; message: string }
   cancelled: boolean
 }
 
@@ -410,8 +413,12 @@ async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSourc
       continue
     }
     if (field.state === 'failed' || field.state === 'capability-missing') {
-      result.errors[outputField] = field.message ?? '详情字段失败'
-      diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: ruleField, itemIndex, message: field.message ?? '详情字段失败', retryable: false })
+      const message = field.message ?? '详情字段失败'
+      result.errors[outputField] = message
+      diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: ruleField, itemIndex, message, retryable: false })
+      if (ruleField === 'name' || ruleField === 'author' || ruleField === 'tocUrl') {
+        result.fatal = { field: ruleField, message }
+      }
       continue
     }
     if (field.state !== 'value') continue
@@ -471,6 +478,7 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
     }
     const extraction = await extractDetailFields(ports, input.source, itemIndex, content, context, input.signal, trace, diagnostics, candidate)
     if (extraction.cancelled) return { status: 'cancelled', value: null, diagnostics, trace }
+    if (extraction.fatal !== undefined) continue
     const name = formatBookName(extraction.values.name ?? '')
     const author = formatBookAuthor(extraction.values.author ?? '')
     const { infoPage: _infoPage, ...metadataCandidate } = candidate

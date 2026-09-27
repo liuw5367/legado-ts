@@ -283,6 +283,27 @@ test('详情 init 失败时不把未初始化页面解析成成功详情', async
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'init'))
 })
 
+test('详情书名、作者或目录字段失败时跳过当前书籍', async () => {
+  for (const field of ['name', 'author', 'tocUrl'] as const) {
+    const currentSource = {
+      ...source,
+      ruleBookInfo: { [field]: `broken-${field}` },
+    } as unknown as NormalizedSource
+    const base = ports([])
+    base.rules = {
+      evaluate: async ({ rule }) => rule === `broken-${field}`
+        ? { status: 'failed', value: null, message: `${field} selector failure` }
+        : { status: 'empty', value: null },
+    }
+    const result = await loadBookDetails(base, {
+      source: currentSource,
+      candidates: [{ sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'Old', author: 'Old author', rawFields: {}, traceRef: 'test' }],
+    })
+    assert.equal(result.value?.items.length, 0, field)
+    assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === field), field)
+  }
+})
+
 test('nextPage 游标作为 URL 被下一次搜索实际消费', async () => {
   const calls: string[] = []
   const nextSource = {
