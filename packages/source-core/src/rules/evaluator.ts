@@ -134,7 +134,10 @@ function evaluateSequence(sequence: RuleSequence, state: EvaluationState, depth:
     for (const child of sequence.children) {
       try {
         const value = evaluateNode(child, state, depth + 1)
-        if (nonEmpty(value)) return value
+        if (nonEmpty(value)) {
+          checkOutput(state, value)
+          return value
+        }
       } catch (error) {
         if (error instanceof EvaluationStop && error.reason.canContinue) state.diagnostics.push(error.reason)
         else throw error
@@ -149,12 +152,19 @@ function evaluateSequence(sequence: RuleSequence, state: EvaluationState, depth:
     for (let index = 0; index < primaryLength; index += 1) {
       for (const value of values) if (index < value.length && nonEmpty(value[index] ?? null)) result.push(value[index]!)
     }
+    checkOutput(state, result)
     return result
   }
   const values = sequence.children.map((child) => evaluateNode(child, state, depth + 1)).filter((value) => nonEmpty(value))
   if (values.length === 0) return null
-  if (values.some((value) => Array.isArray(value))) return values.flatMap((value) => listValue(value))
-  return values.map((value) => textValue(value)).join('\n')
+  if (values.some((value) => Array.isArray(value))) {
+    const result = values.flatMap((value) => listValue(value))
+    checkOutput(state, result)
+    return result
+  }
+  const result = values.map((value) => textValue(value)).join('\n')
+  checkOutput(state, result)
+  return result
 }
 
 function evaluateNode(rule: CompiledRule, state: EvaluationState, depth: number): RuleValue {
@@ -166,6 +176,7 @@ export function evaluateRule(rule: CompiledRule, context: RuleContext, budget: P
   const state: EvaluationState = { steps: 0, budget: { ...defaultBudget, ...budget }, diagnostics: [], context }
   try {
     const value = evaluateNode(rule, state, 0)
+    checkOutput(state, value)
     const after = snapshotVariables(context.variables)
     return { status: nonEmpty(value) ? 'success' : 'empty', value: value ?? null, diagnostics: state.diagnostics, variableChanges: variableChanges(before, after) }
   } catch (error) {

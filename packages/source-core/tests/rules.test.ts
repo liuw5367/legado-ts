@@ -104,3 +104,14 @@ test('非法规则、取消和预算耗尽均有可判别结果', () => {
   const limited = evaluateRule(compiled('literal:x&&literal:y'), context('x'), { maxSteps: 1 })
   assert.equal(limited.status, 'budget-exceeded')
 })
+
+test('组合规则的最终输出也遵守 UTF-8 字节预算', () => {
+  assert.equal(evaluateRule(compiled('literal:abc'), context(''), { maxOutputBytes: 3 }).status, 'success')
+  assert.equal(evaluateRule(compiled('literal:中文'), context(''), { maxOutputBytes: 5 }).status, 'budget-exceeded')
+
+  const chunk = 'x'.repeat(200_000)
+  const joined = evaluateRule(compiled(`literal:${chunk}&&literal:${chunk}`), context(''), { maxOutputBytes: 300_000 })
+  assert.equal(joined.status, 'budget-exceeded')
+  const interleaved = evaluateRule(compiled(`literal:${chunk}%%literal:${chunk}`), context(''), { maxOutputBytes: 300_000 })
+  assert.equal(interleaved.status, 'budget-exceeded')
+})
