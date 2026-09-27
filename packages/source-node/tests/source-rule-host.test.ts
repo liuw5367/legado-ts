@@ -35,6 +35,19 @@ test('规则宿主支持 HTML 列表节点继续提取文本和属性', async ()
   assert.equal(bareUrl.value, '/book/1')
 })
 
+test('HTML 规则的 text 选择器只匹配元素自身文本，html 返回外层元素', async () => {
+  const host = new SourceRuleHost()
+  const html = '<div class="outer">needle<span>nested</span><p><b>needle descendant</b></p><script>bad()</script></div>'
+
+  const byOwnText = await evaluate(host, 'div@text.needle@all', html)
+  assert.equal(byOwnText.status, 'success')
+  assert.deepEqual(byOwnText.value, ['<b>needle descendant</b>'])
+
+  const withHtml = await evaluate(host, 'div@html', html)
+  assert.equal(withHtml.status, 'success')
+  assert.deepEqual(withHtml.value, ['<div class="outer">needle<span>nested</span><p><b>needle descendant</b></p></div>'])
+})
+
 test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力', async () => {
   const output = await evaluate(new SourceRuleHost(), '@js:source.putConcurrent("1/100")', '')
   assert.equal(output.status, 'capability-missing')

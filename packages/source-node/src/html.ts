@@ -1,6 +1,6 @@
 import { parseDocument } from 'htmlparser2'
 import { isDocument, isText, isTag, type AnyNode } from 'domhandler'
-import { getAttributeValue, getChildren, getInnerHTML, getText, textContent } from 'domutils'
+import { getAttributeValue, getChildren, getText, textContent } from 'domutils'
 import { selectAll } from 'css-select'
 import { render } from 'dom-serializer'
 import type { HtmlDocument, HtmlParser, ParserNode } from '@legado/source-core'
@@ -34,8 +34,11 @@ class HtmlDocumentView implements HtmlDocument {
     const value = this.node(node)
     if (output === 'all') return render(value, { xmlMode: this.xmlMode, encodeEntities: false })
     if (output === 'html') {
-      // 书源的 html 输出不应把脚本和样式当作正文；保留实体由 serializer 处理。
-      return getInnerHTML(value, { xmlMode: this.xmlMode, encodeEntities: false }).replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+      // Android's Jsoup branch returns outerHtml for `html`, after removing
+      // script/style descendants from the selected elements.
+      const copy = value.cloneNode(true)
+      removeScriptAndStyle(copy)
+      return render(copy, { xmlMode: this.xmlMode, encodeEntities: false })
     }
     if (output === 'text') return textContent(value)
     const children = isDocument(value) || isTag(value) ? getChildren(value) : []
@@ -76,6 +79,15 @@ class HtmlDocumentView implements HtmlDocument {
 function trimAndroidWhitespace(value: string): string {
   // Android String.trim() removes code units <= U+0020 from both ends.
   return value.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '')
+}
+
+function removeScriptAndStyle(node: AnyNode): void {
+  if (!isDocument(node) && !isTag(node)) return
+  node.children = node.children.filter((child) => {
+    if (isTag(child) && (child.name === 'script' || child.name === 'style')) return false
+    removeScriptAndStyle(child)
+    return true
+  })
 }
 
 export class HtmlParserAdapter implements HtmlParser {

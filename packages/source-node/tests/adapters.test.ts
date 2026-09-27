@@ -11,7 +11,15 @@ test('HTML adapter 保留节点身份并支持 CSS、属性、文本和子文档
   assert.equal(document.read(nodes[0]!, 'text'), 'AB')
   assert.equal(document.child(nodes[0]!).select('span').length, 1)
   assert.equal(document.child(nodes[0]!).children().length, 1)
-  assert.equal(document.read(nodes[0]!, 'html'), 'A<span>B</span>')
+  assert.equal(document.read(nodes[0]!, 'html'), '<a href="/a">A<span>B</span></a>')
+})
+
+test('HTML adapter 的 html 输出保留当前元素并移除脚本和样式', () => {
+  const document = new HtmlParserAdapter().parse('<div class="book"><a>A</a><script>bad()</script><style>.bad{}</style></div>')
+  const node = document.select('div.book')[0]!
+
+  assert.equal(document.read(node, 'html'), '<div class="book"><a>A</a></div>')
+  assert.equal(document.read(node, 'all'), '<div class="book"><a>A</a><script>bad()</script><style>.bad{}</style></div>')
 })
 
 test('HTML/XPath textNodes 去除每个文本节点首尾 ASCII 控制空白并忽略空白节点', () => {

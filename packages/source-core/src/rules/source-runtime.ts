@@ -764,7 +764,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         const textSelector = textSelection?.base ?? selector
         if (textSelector.startsWith('text.')) {
           const expected = textSelector.slice('text.'.length)
-          const matching = view.select('*').filter((node) => view.read(node, 'text').includes(expected))
+          // Jsoup's getElementsContainingOwnText only inspects each element's
+          // direct text nodes; descendant text must not make an ancestor match.
+          const matching = view.select('*').filter((node) => view.read(node, 'ownText').includes(expected))
           for (const node of applyPositionSelection(matching, textSelection)) next.push({ document: view, node })
         } else for (const node of selectWithPosition(view, selector)) next.push({ document: view, node })
       }
