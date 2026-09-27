@@ -4,22 +4,6 @@ import test from 'node:test'
 import { discoverBooks, importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../src/index.ts'
 import type { NormalizedSource, RequestPlan, WorkflowPorts } from '../src/index.ts'
 
-test('书源兼容清单保证用例可执行', async () => {
-  const text = await readFile(new URL('../../../fixtures/conformance/manifest.json', import.meta.url), 'utf8')
-  const manifest = JSON.parse(text) as { version: number; fixtures: Array<Record<string, unknown>> }
-  assert.equal(manifest.version, 1)
-  assert.ok(manifest.fixtures.length >= 1)
-  const ids = new Set<string>()
-  for (const fixture of manifest.fixtures) {
-    assert.equal(typeof fixture.id, 'string')
-    assert.equal(ids.has(fixture.id as string), false)
-    ids.add(fixture.id as string)
-    assert.equal(fixture.android, 'not-run')
-    assert.equal(fixture.typescript, 'source-conformance.test.ts')
-    assert.equal(fixture.sensitive, 'none')
-  }
-})
-
 const sourceDefinition = {
   bookSourceUrl: 'https://fixture.invalid',
   bookSourceName: 'Source conformance',
@@ -63,6 +47,86 @@ function conformancePorts(calls: string[], plans?: RequestPlan[]): WorkflowPorts
     },
   }
 }
+
+test('书源兼容清单逐项执行并覆盖对应断言', async () => {
+  const text = await readFile(new URL('../../../fixtures/conformance/manifest.json', import.meta.url), 'utf8')
+  const manifest = JSON.parse(text) as { version: number; fixtures: Array<Record<string, unknown>> }
+  assert.equal(manifest.version, 1)
+  const assertions = new Set([
+    'IMP-001/source-object',
+    'SCH-006/public-rule-entry',
+    'URL-001/workflow-request',
+    'FLOW-API-001/source-to-content',
+    'FLOW-CANCEL-001/source-abort',
+  ])
+  const seen = new Set<string>()
+  for (const fixture of manifest.fixtures) {
+    const id = fixture.id
+    assert.equal(typeof id, 'string')
+    assert.equal(seen.has(id as string), false, `重复 conformance id: ${String(id)}`)
+    seen.add(id as string)
+    assert.equal(typeof fixture.source, 'string')
+    assert.equal(typeof fixture.input, 'string')
+    assert.equal(typeof fixture.expected, 'string')
+    assert.equal(typeof fixture.sensitive, 'string')
+    assert.equal(typeof fixture.android, 'string')
+    assert.equal(typeof fixture.typescript, 'string')
+    assert.ok(assertions.has(id as string), `conformance 条目没有执行断言: ${String(id)}`)
+
+    const imported = await importSources(JSON.stringify(sourceDefinition))
+    const source = imported[0]?.source
+    assert.ok(source)
+    if (id === 'IMP-001/source-object') {
+      assert.equal(imported.length, 1, fixture.expected as string)
+      assert.equal(imported[0]?.status, 'ready', fixture.expected as string)
+    } else if (id === 'SCH-006/public-rule-entry') {
+      const result = await searchBooks(conformancePorts([]), { source, keyword: '中文' })
+      assert.equal(result.status, 'success', fixture.expected as string)
+      assert.equal(result.value?.items[0]?.name, 'Fixture book', fixture.expected as string)
+    } else if (id === 'URL-001/workflow-request') {
+      const definition = {
+        ...sourceDefinition,
+        searchUrl: '/search?tag=a,b&q={{keyword}},{"method":"POST","body":"q=fixture","headers":{"X-Rule":"yes"},"charset":"gbk","followRedirects":false,"timeout":1234}',
+      }
+      const candidate = (await importSources(JSON.stringify(definition)))[0]?.source
+      assert.ok(candidate)
+      const plans: RequestPlan[] = []
+      const ports = conformancePorts([], plans)
+      ports.network.encodeCharset = (value) => new TextEncoder().encode(value)
+      const result = await searchBooks(ports, { source: candidate, keyword: '中文' })
+      assert.equal(result.status, 'success', fixture.expected as string)
+      assert.equal(plans[0]?.method, 'POST', fixture.expected as string)
+      assert.equal(plans[0]?.url, 'https://fixture.invalid/search?tag=a,b&q=%E4%B8%AD%E6%96%87', fixture.expected as string)
+    } else if (id === 'FLOW-API-001/source-to-content') {
+      const calls: string[] = []
+      const ports = conformancePorts(calls)
+      const discovered = await discoverBooks(ports, { source })
+      const searched = await searchBooks(ports, { source, keyword: '中文' })
+      const details = await loadBookDetails(ports, { source, candidates: discovered.value?.items ?? [], canReName: true })
+      const book = details.value?.items[0]
+      assert.ok(book)
+      const toc = await loadTableOfContents(ports, { source, book })
+      const chapter = toc.value?.items[0]
+      assert.ok(chapter)
+      const content = await loadChapterContent(ports, { source, chapter })
+      assert.equal(discovered.status, 'success', fixture.expected as string)
+      assert.equal(searched.status, 'success', fixture.expected as string)
+      assert.equal(details.status, 'success', fixture.expected as string)
+      assert.equal(toc.status, 'success', fixture.expected as string)
+      assert.equal(content.status, 'success', fixture.expected as string)
+      assert.equal(content.value?.cleaned, '正文内容', fixture.expected as string)
+      assert.ok(calls.length >= 4, fixture.expected as string)
+    } else if (id === 'FLOW-CANCEL-001/source-abort') {
+      const controller = new AbortController()
+      controller.abort()
+      const calls: string[] = []
+      const result = await discoverBooks(conformancePorts(calls), { source, signal: controller.signal })
+      assert.equal(result.status, 'cancelled', fixture.expected as string)
+      assert.equal(calls.length, 0, fixture.expected as string)
+    }
+  }
+  assert.deepEqual([...seen].sort(), [...assertions].sort())
+})
 
 test('仅提供 NetworkHost 时仍解析 Android URL 选项并保留请求语义', async () => {
   const definition = {
