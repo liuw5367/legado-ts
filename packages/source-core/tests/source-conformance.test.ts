@@ -96,7 +96,7 @@ test('仅提供 NetworkHost 时仍解析 Android URL 选项并保留请求语义
   assert.equal(plan.headers['X-Rule'], 'yes')
   assert.equal(plan.headers['Content-Type'], 'application/x-www-form-urlencoded')
   assert.equal(plan.requestCharset, 'gbk')
-  assert.equal(plan.responseCharset, 'gbk')
+  assert.equal(plan.responseCharset, undefined)
   assert.equal(plan.followRedirects, false)
   assert.equal(plan.budget.timeoutMs, 1234)
 })

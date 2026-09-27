@@ -80,18 +80,23 @@ test('URL 请求选项执行 js/bodyJs、重试和十六进制响应类型', asy
   const host = new SourceRequestHost({ network: { request: async (plan) => {
     urls.push(plan.url)
     requests += 1
-    if (requests === 1) throw new Error('temporary network error')
+    if (requests < 3) return { ...response(plan.url), status: 503 }
     return { ...response(plan.url), bytes: new TextEncoder().encode('hello') }
   } } })
   host.attachRuleHost(new SourceRuleHost())
   const body = await host.request({
     source,
-    url: '/body,{"method":"GET","js":"return result + \'?signed=1\'","bodyJs":"return result.toUpperCase()","retry":1}',
+    url: '/body,{"method":"GET","js":"return result + \'?signed=1\'","bodyJs":"return result.toUpperCase()","retry":2}',
     stage: 'search',
     options: {},
   })
-  assert.deepEqual(urls, ['https://fixture.invalid/body?signed=1', 'https://fixture.invalid/body?signed=1'])
+  assert.deepEqual(urls, ['https://fixture.invalid/body?signed=1', 'https://fixture.invalid/body?signed=1', 'https://fixture.invalid/body?signed=1'])
   assert.equal(host.decodeResponse(body), 'HELLO')
+
+  let transportCalls = 0
+  const transportHost = new SourceRequestHost({ network: { request: async () => { transportCalls += 1; throw new Error('temporary network error') } } })
+  await assert.rejects(() => transportHost.request({ source, url: '/transport,{"retry":2}', stage: 'search', options: {} }), /temporary network error/)
+  assert.equal(transportCalls, 1, 'option retry 不重试传输异常')
 
   const hexHost = new SourceRequestHost({ network: { request: async (plan) => ({ ...response(plan.url), bytes: new Uint8Array([0, 255]) }) } })
   const binary = await hexHost.request({ source, url: '/binary,{"type":"hex"}', stage: 'search', options: {} })
@@ -116,6 +121,7 @@ test('响应解码按显式 charset、HTTP header、BOM、HTML meta、自动检�
   const make = (bytes: Uint8Array, headers: NetworkResponse['headers'] = {}): NetworkResponse => ({ ...response('https://fixture.invalid/'), headers, bytes })
 
   assert.equal(host.decodeResponse(make(gbk, { 'content-type': 'text/html; charset=gbk' })), '中文')
+  assert.equal(host.decodeResponse(make(new Uint8Array([0xef, 0xbb, 0xbf, ...gbk]), { 'content-type': 'text/html; charset=gbk' })), '中文')
   assert.equal(host.decodeResponse(make(gbk, { 'content-type': 'text/html; charset=utf-8', 'x-legado-response-charset': 'gbk' })), '中文')
   const metaPrefix = new TextEncoder().encode('<meta charset="gbk">')
   const metaBytes = new Uint8Array([...metaPrefix, ...gbk])
@@ -154,6 +160,29 @@ test('桥接请求随求值携带书源，共享宿主跨源并发不串源', as
     host.evaluate({ source: second, stage: 'search', field: 'fixture', rule: '@js:java.ajax("https://b.test/1")', content: '' }),
   ])
   assert.deepEqual(seen.sort(), ['https://a.test', 'https://b.test'])
+})
+
+test('四个并发 bridge 根请求分别计算深度，不会互相触发嵌套限制', async () => {
+  const calls: string[] = []
+  const requestHost = new SourceRequestHost({ network: { request: async (plan) => {
+    calls.push(plan.url)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    return response(plan.url)
+  } } })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, requestSource) => requestHost.requestFromBridge(input, signal, requestSource) })
+  requestHost.attachRuleHost(ruleHost)
+  const rootSource = { bookSourceUrl: 'https://fixture.invalid', bookSourceName: 'fixture' } as unknown as NormalizedSource
+
+  const results = await Promise.all(Array.from({ length: 4 }, (_, index) => ruleHost.evaluate({
+    source: rootSource,
+    stage: 'search',
+    field: 'parallel-bridge',
+    rule: `@js:java.ajax("https://fixture.invalid/parallel/${index}")`,
+    content: '',
+  })))
+
+  assert.ok(results.every((result) => result.status === 'success'))
+  assert.equal(calls.length, 4)
 })
 
 test('正文 webJs 提示在没有 WebView 宿主时显式失败', async () => {
@@ -237,6 +266,14 @@ test('bridge 网络子请求超过深度上限时拒绝', async () => {
   await assert.rejects(() => host.request({ source: deepSource, url: target, stage: 'search', options: {} }))
   // js 链在发起 HTTP 前就会触达深度上限；即使命中网络，次数也有界。
   assert.ok(calls.length <= 4, `calls=${calls.length}`)
+  const afterFailure = await ruleHost.evaluate({
+    source: deepSource,
+    stage: 'search',
+    field: 'after-failure',
+    rule: '@js:java.ajax("https://fixture.invalid/after-failure")',
+    content: '',
+  })
+  assert.equal(afterFailure.status, 'success', '失败的递归调用不应污染后续 bridge 根请求')
 })
 
 test('外层 AbortSignal 转发到动态 header 脚本', async () => {

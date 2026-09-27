@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { SourceRequestError, SourceRequestRuntime } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, NormalizedSource, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
 import chardet from 'chardet'
@@ -64,8 +65,8 @@ export class SourceRequestHost {
   private readonly cookieStore: CookieStore
   private readonly encoding: NodeCharsetCodec
   private readonly runtime: SourceRequestRuntime
-  /** 当前在途 bridge 网络子请求深度；实例级计数足以拦住单宿主上的失控递归。 */
-  private bridgeDepth = 0
+  /** 每条异步调用链独立计数，避免并发 bridge 根请求互相增加深度。 */
+  private readonly bridgeDepth = new AsyncLocalStorage<number>()
 
   public constructor(options: SourceRequestHostOptions) {
     this.cookieStore = options.cookieStore ?? new NodeCookieStore()
@@ -100,7 +101,8 @@ export class SourceRequestHost {
     }
     if (input.kind === 'token') throw new Error('书源 token bridge 不可用')
     if (input.kind !== 'network') throw new Error(`未知书源 bridge: ${input.kind}`)
-    if (this.bridgeDepth >= maxBridgeDepth) {
+    const depth = this.bridgeDepth.getStore() ?? 0
+    if (depth >= maxBridgeDepth) {
       throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
     }
     const options = object(input.options) as SourceRequestOptions | undefined
@@ -110,14 +112,11 @@ export class SourceRequestHost {
       ...(input.body === undefined ? {} : { body: input.body }),
       ...(input.headers === undefined ? {} : { headers: input.headers }),
     }
-    this.bridgeDepth += 1
-    try {
+    return this.bridgeDepth.run(depth + 1, async () => {
       // nested：子请求跳过动态 source header，只保留静态头，切断 header 脚本自递归。
       const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, 'search', true)
       return this.decode(response)
-    } finally {
-      this.bridgeDepth -= 1
-    }
+    })
   }
 
   public decodeResponse(response: NetworkResponse): string {
@@ -125,18 +124,21 @@ export class SourceRequestHost {
   }
 
   private decode(response: NetworkResponse): string {
-    const candidates = [responseCharset(response), bomCharset(response.bytes), htmlMetaCharset(response.bytes), chardet.detect(response.bytes) ?? undefined, 'utf-8']
+    const bom = bomCharset(response.bytes)
+    // Android strips UTF-8 BOM before applying a Content-Type charset.
+    const bytes = bom === 'utf-8' ? response.bytes.subarray(3) : response.bytes
+    const candidates = [responseCharset(response), bom, htmlMetaCharset(bytes), chardet.detect(bytes) ?? undefined, 'utf-8']
     const attempted = new Set<string>()
     for (const charset of candidates) {
       const normalized = charset?.trim()
       if (normalized === undefined || normalized.length === 0 || attempted.has(normalized.toLowerCase())) continue
       attempted.add(normalized.toLowerCase())
       try {
-        return this.encoding.decode(response.bytes, normalized)
+        return this.encoding.decode(bytes, normalized)
       } catch {
         // 站点声明的字符集无法解码时，继续尝试元数据和 UTF-8 回退。
       }
     }
-    return new TextDecoder().decode(response.bytes)
+    return new TextDecoder().decode(bytes)
   }
 }

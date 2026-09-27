@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import test from 'node:test'
-import { createRequestPlan } from '@legado/source-core'
-import { NodeNetworkHost } from '../src/index.ts'
+import { createRequestPlan, SourceRequestError } from '@legado/source-core'
+import { NodeCookieStore, NodeNetworkHost } from '../src/index.ts'
 
 async function startServer(redirectTarget?: string): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const server = createServer((request, response) => {
@@ -101,6 +101,39 @@ test('Node 网络宿主默认拒绝环回地址', async () => {
   await assert.rejects(() => host.request(plan('http://127.0.0.1:1')), /private network request is not allowed/)
   await assert.rejects(() => host.request(plan('http://[::1]:1')), /private network request is not allowed/)
   await assert.rejects(() => host.request(plan('http://[::ffff:7f00:1]:1')), /private network request is not allowed/)
+})
+
+test('Node 不支持代理时明确报 capability-missing，不会直连', async () => {
+  const result = createRequestPlan({ url: 'https://example.invalid/', execution: { proxy: 'http://user:secret@proxy.invalid:8080' } })
+  assert.ok(result.plan)
+  await assert.rejects(
+    () => new NodeNetworkHost().request(result.plan!),
+    (error: unknown) => error instanceof SourceRequestError && error.code === 'capability-missing',
+  )
+})
+
+test('CookieJar 关闭时不保存响应 Cookie，已有 Cookie 仍发送并与显式值按名称合并', async () => {
+  const server = await startServer()
+  const cookies = new NodeCookieStore()
+  try {
+    await cookies.set(server.baseUrl, ['sid=stored; Path=/', 'keep=1; Path=/'])
+    const host = new NodeNetworkHost({ allowPrivateNetworks: true, cookieStore: cookies })
+    const explicitPlan = createRequestPlan({
+      url: `${server.baseUrl}/echo-cookie`,
+      headers: { Cookie: 'sid=explicit; added=2' },
+      execution: { cookieJar: false },
+    })
+    assert.ok(explicitPlan.plan)
+    const echoed = await host.request(explicitPlan.plan)
+    assert.equal(new TextDecoder().decode(echoed.bytes), 'sid=explicit; keep=1; added=2')
+
+    const setCookiePlan = createRequestPlan({ url: `${server.baseUrl}/set-cookie`, execution: { cookieJar: false } })
+    assert.ok(setCookiePlan.plan)
+    await host.request(setCookiePlan.plan)
+    assert.equal(await cookies.get(server.baseUrl), 'sid=stored; keep=1')
+  } finally {
+    await server.close()
+  }
 })
 
 test('Node 网络宿主跨源重定向不转发认证头', async () => {

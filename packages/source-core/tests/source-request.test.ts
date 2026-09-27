@@ -256,3 +256,105 @@ test('默认工作流与运行时直调对同一 POST 表单产生相同字节',
   assert.ok(runtimeBody instanceof Uint8Array)
   assert.deepEqual([...(runtimeBody as Uint8Array)], [...(workflowBody as Uint8Array)])
 })
+
+test('source.header 的 proxy 进入 execution 提示且不会作为普通请求头发送', async () => {
+  const source = await importFixture({ header: JSON.stringify({ proxy: 'http://user:secret@proxy.invalid:8080', 'X-Probe': 'yes' }) })
+  const ports = probePorts()
+  const result = await searchBooks(ports, { source, keyword: 'x' })
+  assert.equal(result.status, 'success')
+  assert.equal(ports.plans[0]?.execution.proxy, 'http://user:secret@proxy.invalid:8080')
+  assert.equal(ports.plans[0]?.headers.proxy, undefined)
+  assert.equal(ports.plans[0]?.headers['X-Probe'], 'yes')
+})
+
+test('proxy 与 dnsIp 冲突时在网络请求前报配置错误', async () => {
+  const source = await importFixture({
+    header: JSON.stringify({ proxy: 'http://proxy.invalid:8080' }),
+    searchUrl: '/search?q={{keyword}},{"dnsIp":"203.0.113.8"}',
+  })
+  const ports = probePorts()
+  const result = await searchBooks(ports, { source, keyword: 'x' })
+  assert.equal(ports.calls, 0)
+  assert.ok(result.diagnostics.some((item) => item.code === 'invalid-config' && item.field === 'header'))
+})
+
+test('请求 charset 不覆盖响应 charset，CookieJar 默认开启且可显式关闭', async () => {
+  const source = await importFixture()
+  assert.equal(source.enabledCookieJar, true)
+  const plans: RequestPlan[] = []
+  const network = {
+    request: async (plan: RequestPlan): Promise<NetworkResponse> => {
+      plans.push(plan)
+      return okResponse(plan.url, 'response 中文')
+    },
+  }
+  const encoding = {
+    encode: (value: string) => new TextEncoder().encode(value),
+    decode: (bytes: Uint8Array, charset: string) => new TextDecoder(charset).decode(bytes),
+  }
+  const runtime = new SourceRequestRuntime({ network, encoding })
+  const response = await runtime.requestRaw(source, '/search,{"charset":"gbk"}')
+  assert.equal(plans[0]?.requestCharset, 'gbk')
+  assert.equal(plans[0]?.responseCharset, undefined)
+  assert.equal(response.headers['x-legado-response-charset'], undefined)
+  assert.equal(runtime.decodeResponse(response), 'response 中文')
+  const gbkBytes = new Uint8Array([0xd6, 0xd0, 0xce, 0xc4])
+  const bomGbk: NetworkResponse = {
+    url: 'https://fixture.invalid/',
+    status: 200,
+    headers: { 'content-type': 'text/html; charset=gbk' },
+    bytes: new Uint8Array([0xef, 0xbb, 0xbf, ...gbkBytes]),
+    redirected: false,
+  }
+  assert.equal(runtime.decodeResponse(bomGbk), '中文')
+  const metaPrefix = new TextEncoder().encode('<meta charset="gbk">')
+  assert.equal(runtime.decodeResponse({ ...bomGbk, headers: { 'content-type': 'text/html' }, bytes: new Uint8Array([...metaPrefix, ...gbkBytes]) }), '<meta charset="gbk">中文')
+  assert.equal(plans[0]?.execution.cookieJar, true)
+
+  const disabled = await importFixture({ enabledCookieJar: false })
+  await runtime.requestRaw(disabled, '/search')
+  assert.equal(plans[1]?.execution.cookieJar, false)
+  const nullDisabled = await importFixture({ enabledCookieJar: null })
+  await runtime.requestRaw(nullDisabled, '/search')
+  assert.equal(plans[2]?.execution.cookieJar, false)
+  await runtime.requestRaw(source, '/search,{"charset":"gbk","responseCharset":"windows-1252"}')
+  assert.equal(plans[3]?.requestCharset, 'gbk')
+  assert.equal(plans[3]?.responseCharset, 'windows-1252')
+
+  const workflowSource = await importFixture({ searchUrl: '/search?q={{keyword}},{"charset":"gbk"}' })
+  const workflowPorts = probePorts({ network: (plan) => ({
+    ...okResponse(plan.url),
+    headers: { 'content-type': 'text/plain; charset=gbk' },
+    bytes: new Uint8Array([0xef, 0xbb, 0xbf, 0xd6, 0xd0, 0xce, 0xc4]),
+  }) })
+  workflowPorts.network.encodeCharset = (value) => new TextEncoder().encode(value)
+  const result = await searchBooks(workflowPorts, { source: workflowSource, keyword: 'x' })
+  assert.equal(result.status, 'success')
+  assert.equal(workflowPorts.listContent, '中文', '响应 Content-Type 优先于 URL 请求 charset')
+})
+
+test('HTTP 非 2xx/3xx 响应按 option retry 重试，传输异常不重试', async () => {
+  const source = await importFixture()
+  for (const status of [404, 503]) {
+    const ports = probePorts({ network: (plan) => ({ ...okResponse(plan.url), status }) })
+    const runtime = new SourceRequestRuntime({ network: ports.network, encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) } })
+    const response = await runtime.requestRaw(source, '/search,{"retry":2}')
+    assert.equal(response.status, status)
+    assert.equal(ports.calls, 3, `HTTP ${status} 应执行 1 次初始请求和 2 次重试`)
+  }
+  for (const status of [200, 302]) {
+    const ports = probePorts({ network: (plan) => ({ ...okResponse(plan.url), status }) })
+    const runtime = new SourceRequestRuntime({ network: ports.network, encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) } })
+    const response = await runtime.requestRaw(source, status === 302 ? '/search,{"retry":2,"followRedirects":false}' : '/search,{"retry":2}')
+    assert.equal(response.status, status)
+    assert.equal(ports.calls, 1, `HTTP ${status} 不应重试`)
+  }
+
+  let calls = 0
+  const runtime = new SourceRequestRuntime({
+    network: { request: async () => { calls += 1; throw new Error('transport failure') } },
+    encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) },
+  })
+  await assert.rejects(() => runtime.requestRaw(source, '/search,{"retry":2}'), /transport failure/)
+  assert.equal(calls, 1)
+})

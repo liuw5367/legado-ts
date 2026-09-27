@@ -34,6 +34,8 @@ export interface RequestExecutionHints {
   dnsIp?: string
   /** 代理提示，由 Node 宿主显式策略决定是否接受。 */
   proxy?: string
+  /** 是否启用响应 Cookie 的自动保存；默认 true。已有 CookieStore 与显式 Cookie 仍可使用。 */
+  cookieJar?: boolean
   /** Android 兼容服务节点提示。 */
   serverId?: number
   /** WebView 加载后的等待时间。 */

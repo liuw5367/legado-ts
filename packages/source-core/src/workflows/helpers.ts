@@ -309,7 +309,48 @@ export function requestBudget(options: WorkflowOptions): Partial<RequestBudget> 
 
 export function responseText(response: Parameters<NonNullable<WorkflowPorts['decodeResponse']>>[0], source: NormalizedSource, ports: WorkflowPorts): string {
   if (ports.decodeResponse !== undefined) return ports.decodeResponse(response, source)
-  return new TextDecoder().decode(response.bytes)
+  const header = (name: string): string | undefined => {
+    const value = Object.entries(response.headers).find(([key]) => key.toLowerCase() === name)?.[1]
+    return typeof value === 'string' ? value : value?.[0]
+  }
+  const explicit = header('x-legado-response-charset')?.trim()
+  const contentType = header('content-type')
+  const declared = /charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType ?? '')?.[1]
+  const originalBytes = response.bytes
+  const bom = originalBytes.length >= 3 && originalBytes[0] === 0xef && originalBytes[1] === 0xbb && originalBytes[2] === 0xbf
+    ? 'utf-8'
+    : originalBytes.length >= 2 && originalBytes[0] === 0xfe && originalBytes[1] === 0xff
+      ? 'utf-16be'
+      : originalBytes.length >= 2 && originalBytes[0] === 0xff && originalBytes[1] === 0xfe
+        ? 'utf-16le'
+        : undefined
+  // Android 去掉 UTF-8 BOM 后才依 Content-Type 解码；否则 GBK 响应会把 BOM 当成正文。
+  const bytes = bom === 'utf-8' ? originalBytes.subarray(3) : originalBytes
+  const sample = String.fromCharCode(...bytes.subarray(0, 8192))
+  const xml = /<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)/i.exec(sample)?.[1]
+  let meta = xml
+  if (meta === undefined) {
+    for (const tag of sample.matchAll(/<meta\b[^>]*>/gi)) {
+      const direct = /\bcharset\s*=\s*["']?([^\s"'/>;]+)/i.exec(tag[0])?.[1]
+      if (direct !== undefined) { meta = direct; break }
+      const content = /\bcontent\s*=\s*["']([^"']*)["']/i.exec(tag[0])?.[1]
+      const nested = content === undefined ? undefined : /charset\s*=\s*([^\s;]+)/i.exec(content)?.[1]
+      if (nested !== undefined) { meta = nested.replace(/["']+$/g, ''); break }
+    }
+  }
+  const candidates = [explicit, declared, bom, meta, 'utf-8']
+  const attempted = new Set<string>()
+  for (const charset of candidates) {
+    const normalized = charset?.trim()
+    if (normalized === undefined || normalized.length === 0 || attempted.has(normalized.toLowerCase())) continue
+    attempted.add(normalized.toLowerCase())
+    try {
+      return new TextDecoder(normalized).decode(bytes)
+    } catch {
+      // 不支持的响应 charset 继续尝试 BOM、文档声明和 UTF-8。
+    }
+  }
+  return new TextDecoder().decode(bytes)
 }
 
 function isWebViewError(value: unknown): boolean {

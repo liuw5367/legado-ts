@@ -2,6 +2,7 @@ import { lookup } from 'node:dns/promises'
 import type { LookupAddress, LookupOptions } from 'node:dns'
 import { isIP } from 'node:net'
 import type { ConnectionOptions } from 'node:tls'
+import { SourceRequestError } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, RequestPlan } from '@legado/source-core'
 import iconv from 'iconv-lite'
 import { Agent } from 'undici'
@@ -133,6 +134,23 @@ function responseHeaders(response: Response): Record<string, string | string[]> 
   return headers
 }
 
+/** 书源显式 Cookie 覆盖同名持久 Cookie，其余 Cookie 保留，匹配 Android setCookie 的合并顺序。 */
+function mergeCookieHeaders(stored: string | undefined, explicit: string | undefined): string | undefined {
+  const values = new Map<string, string>()
+  for (const header of [stored, explicit]) {
+    if (header === undefined) continue
+    for (const part of header.split(';')) {
+      const cookie = part.trim()
+      if (cookie.length === 0) continue
+      const separator = cookie.indexOf('=')
+      if (separator < 1) continue
+      const name = cookie.slice(0, separator).trim()
+      if (name.length > 0) values.set(name, cookie.slice(separator + 1).trim())
+    }
+  }
+  return values.size === 0 ? undefined : [...values].map(([name, value]) => `${name}=${value}`).join('; ')
+}
+
 function timeoutSignal(plan: RequestPlan): AbortSignal {
   const deadlineRemaining = plan.budget.deadlineMs === undefined ? undefined : plan.budget.deadlineMs - Date.now()
   const timeoutMs = deadlineRemaining === undefined ? plan.budget.timeoutMs : Math.min(plan.budget.timeoutMs, Math.max(0, deadlineRemaining))
@@ -176,6 +194,9 @@ export class NodeNetworkHost implements NetworkHost {
   }
 
   public async request(plan: RequestPlan): Promise<NetworkResponse> {
+    if (plan.execution.proxy !== undefined && plan.execution.proxy.trim().length > 0) {
+      throw new SourceRequestError('capability-missing', 'Node 网络宿主不支持书源代理')
+    }
     const configuredDns = typeof plan.execution.dnsIp === 'string' && plan.execution.dnsIp.trim().length > 0 ? parseDnsIpAddresses(plan.execution.dnsIp) : undefined
     let currentUrl = await assertSafeUrl(plan.url, this.options, configuredDns)
     const dispatcher = configuredDns === undefined ? undefined : new Agent({ connect: { lookup: scopedDnsLookup(currentUrl.hostname, configuredDns) } })
@@ -197,7 +218,8 @@ export class NodeNetworkHost implements NetworkHost {
         headers.delete('cookie')
       }
       const cookie = await this.cookieStore.get(currentUrl.toString())
-      if (cookie !== undefined && !headers.has('cookie')) headers.set('cookie', cookie)
+      const mergedCookie = mergeCookieHeaders(cookie, headers.get('cookie') ?? undefined)
+      if (mergedCookie !== undefined) headers.set('cookie', mergedCookie)
       const contentType = [...headers.entries()].find(([key]) => key.toLowerCase() === 'content-type')?.[1]
       const body = currentBody === undefined
         ? undefined
@@ -213,7 +235,7 @@ export class NodeNetworkHost implements NetworkHost {
       const response = await fetch(currentUrl, init)
       const headersRecord = responseHeaders(response)
       const setCookie = headersRecord['set-cookie']
-      if (setCookie !== undefined) await this.cookieStore.set(currentUrl.toString(), setCookie)
+      if (setCookie !== undefined && plan.execution.cookieJar !== false) await this.cookieStore.set(currentUrl.toString(), setCookie)
       const location = response.headers.get('location')
       if (plan.followRedirects && location !== null && response.status >= 300 && response.status < 400) {
         const redirectBytes = await readBody(response, Math.min(plan.budget.maxResponseBytes, plan.budget.maxTotalBytes - totalBytes), signal)

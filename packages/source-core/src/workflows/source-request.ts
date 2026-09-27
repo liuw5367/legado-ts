@@ -29,6 +29,7 @@ export interface SourceRequestOptions {
   body?: unknown
   headers?: Readonly<Record<string, string>>
   charset?: string
+  responseCharset?: string
   webView?: boolean
   webJs?: string
   sourceRegex?: string
@@ -125,6 +126,12 @@ function getHeader(headers: Readonly<Record<string, string>> | undefined, name: 
   return value
 }
 
+function withoutHeader(headers: Readonly<Record<string, string>> | undefined, name: string): Readonly<Record<string, string>> | undefined {
+  if (headers === undefined) return undefined
+  const result = Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== name.toLowerCase()))
+  return Object.keys(result).length === 0 ? undefined : result
+}
+
 function optionBoolean(value: unknown): boolean | undefined {
   if (typeof value === 'boolean') return value
   if (value === 1 || value === '1' || (typeof value === 'string' && value.trim().toLowerCase() === 'true')) return true
@@ -218,6 +225,20 @@ function bomCharset(bytes: Uint8Array): string | undefined {
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return 'utf-8'
   if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be'
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le'
+  return undefined
+}
+
+function htmlMetaCharset(bytes: Uint8Array): string | undefined {
+  const sample = String.fromCharCode(...bytes.subarray(0, 8192))
+  const xml = /<\?xml\b[^>]*\bencoding\s*=\s*["']([^"']+)/i.exec(sample)
+  if (xml?.[1] !== undefined) return xml[1]
+  for (const tag of sample.matchAll(/<meta\b[^>]*>/gi)) {
+    const direct = /\bcharset\s*=\s*["']?([^\s"'/>;]+)/i.exec(tag[0])
+    if (direct?.[1] !== undefined) return direct[1]
+    const content = /\bcontent\s*=\s*["']([^"']*)["']/i.exec(tag[0])?.[1]
+    const nested = content === undefined ? undefined : /charset\s*=\s*([^\s;]+)/i.exec(content)?.[1]
+    if (nested !== undefined) return nested.replace(/["']+$/g, '')
+  }
   return undefined
 }
 
@@ -323,12 +344,23 @@ export class SourceRequestRuntime {
   public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false): Promise<NetworkResponse> {
     const split = splitSourceRequestUrl(rawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
-    if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) throw new Error('书源请求需要 WebView')
+    if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
+      throw new SourceRequestError('capability-missing', '书源请求需要 WebView')
+    }
     const method = (options.method ?? 'GET').toUpperCase()
     const sourceHeaders = await this.sourceHeaders(source, signal, nested)
     let headers = mergeHeaders(sourceHeaders, headerObject(options.headers))
+    const proxy = getHeader(headers, 'proxy')?.trim() || undefined
+    headers = withoutHeader(headers, 'proxy')
+    const dnsIpValue = options.dnsIp ?? options.resolveIp
+    const dnsIp = dnsIpValue === undefined || dnsIpValue === null ? undefined : String(dnsIpValue).trim() || undefined
+    if (proxy !== undefined && dnsIp !== undefined) {
+      throw new SourceRequestError('invalid-config', 'dnsIp cannot be used together with a proxy', 'header')
+    }
     const charset = typeof options.charset === 'string' && options.charset.trim().length > 0 ? options.charset.trim() : undefined
     const requestCharset = charset?.toLowerCase() === 'escape' ? undefined : charset
+    const responseCharsetHint = typeof options.responseCharset === 'string' && options.responseCharset.trim().length > 0 ? options.responseCharset.trim() : undefined
+    const cookieJar = optionBoolean(source.enabledCookieJar) ?? source.enabledCookieJar !== null
     // 非 UTF-8 编码必须由 CharsetCodec 真正支持；helpers 默认路径缺 encodeCharset 时会在此失败，
     // 不得用 TextEncoder 冒充后静默发错字节。
     if (requestCharset !== undefined && requestCharset.toLowerCase().replaceAll('-', '') !== 'utf8') {
@@ -370,13 +402,16 @@ export class SourceRequestRuntime {
       method,
       ...(body === undefined ? {} : { body }),
       ...(headers === undefined ? {} : { headers }),
-      ...(requestCharset === undefined ? {} : { requestCharset, responseCharset: requestCharset }),
+      ...(requestCharset === undefined ? {} : { requestCharset }),
+      ...(responseCharsetHint === undefined ? {} : { responseCharset: responseCharsetHint }),
       ...(followRedirects === undefined ? {} : { followRedirects }),
       responseType: typeof options.type === 'string' && options.type.length > 0 ? 'bytes' : 'text',
       execution: {
         useWebView: false,
         ...(typeof options.sourceRegex === 'string' ? { sourceRegex: options.sourceRegex } : {}),
-        ...(typeof (options.dnsIp ?? options.resolveIp) === 'string' ? { dnsIp: String(options.dnsIp ?? options.resolveIp) } : {}),
+        ...(dnsIp === undefined ? {} : { dnsIp }),
+        ...(proxy === undefined ? {} : { proxy }),
+        cookieJar,
         ...(serverId === undefined ? {} : { serverId }),
         ...(webViewDelayTimeMs === undefined ? {} : { webViewDelayTimeMs }),
       },
@@ -401,21 +436,17 @@ export class SourceRequestRuntime {
     }
 
     let response: NetworkResponse | undefined
-    let lastError: unknown
     for (let attempt = 0; attempt <= retry; attempt += 1) {
       if (signal?.aborted === true) throw new DOMException('The operation was aborted', 'AbortError')
-      try {
-        response = await this.network.request(request.plan)
-        break
-      } catch (error) {
-        lastError = error
-        if (attempt === retry) throw error
-      }
+      response = await this.network.request(request.plan)
+      const successful = response.status >= 200 && response.status < 300
+      const redirect = response.status >= 300 && response.status < 400
+      if (successful || redirect || attempt === retry) break
     }
-    if (response === undefined) throw lastError instanceof Error ? lastError : new Error('书源请求失败')
+    if (response === undefined) throw new Error('书源请求失败')
 
     let result: NetworkResponse = response
-    if (requestCharset !== undefined) result = { ...result, headers: { ...result.headers, 'x-legado-response-charset': requestCharset } }
+    if (responseCharsetHint !== undefined) result = { ...result, headers: { ...result.headers, 'x-legado-response-charset': responseCharsetHint } }
     if (typeof options.type === 'string' && options.type.length > 0) {
       result = { ...result, bytes: new TextEncoder().encode(hex(result.bytes)), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
     } else if (typeof options.bodyJs === 'string' && options.bodyJs.trim().length > 0) {
@@ -456,9 +487,13 @@ export class SourceRequestRuntime {
 
   private decode(response: NetworkResponse): string {
     if (this.decodeOverride !== undefined) return this.decodeOverride(response)
+    const bom = bomCharset(response.bytes)
+    // Android StrResponse removes UTF-8 BOM before checking Content-Type or HTML metadata.
+    const bytes = bom === 'utf-8' ? response.bytes.subarray(3) : response.bytes
     const candidates = [
       responseCharset(response),
-      bomCharset(response.bytes),
+      bom,
+      htmlMetaCharset(bytes),
       'utf-8',
     ]
     const attempted = new Set<string>()
@@ -467,11 +502,11 @@ export class SourceRequestRuntime {
       if (normalized === undefined || normalized.length === 0 || attempted.has(normalized.toLowerCase())) continue
       attempted.add(normalized.toLowerCase())
       try {
-        return this.encoding.decode(response.bytes, normalized)
+        return this.encoding.decode(bytes, normalized)
       } catch {
         // 站点声明的字符集无法解码时，继续尝试剩余元数据和 UTF-8 回退。
       }
     }
-    return new TextDecoder().decode(response.bytes)
+    return new TextDecoder().decode(bytes)
   }
 }

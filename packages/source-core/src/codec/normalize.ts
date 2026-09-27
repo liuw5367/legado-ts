@@ -41,6 +41,7 @@ const defaults: Record<string, JsonValue> = {
   customOrder: 0,
   enabled: true,
   enabledExplore: true,
+  enabledCookieJar: true,
   lastUpdateTime: 0,
   respondTime: 180000,
   weight: 0,
