@@ -335,6 +335,12 @@ async function extractFields(ports: WorkflowPorts, source: NormalizedSource, sta
 
 /** 分类规则在 Android 里取列表并按逗号连接，其余字段按文本拼接。 */
 function fieldText(value: unknown, outputField: string): string {
+  // AnalyzeRule's isUrl path calls getString0: multiple matching links are
+  // represented by the first value, while ordinary fields keep their list.
+  if (outputField === 'bookUrl' || outputField === 'coverUrl' || outputField === 'tocUrl') {
+    if (Array.isArray(value)) return textValue(value[0])
+    return textValue(value)
+  }
   if (outputField === 'kind' && Array.isArray(value)) return value.map(textValue).filter((item) => item.length > 0).join(',')
   return textValue(value)
 }
