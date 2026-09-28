@@ -201,6 +201,51 @@ test('动态 header 支持 @js 与 js 标签；坏 header 忽略并采用宿主�
   assert.equal(brokenPorts.plans[0]?.headers['User-Agent'], 'Android-compatible UA')
 })
 
+test('独立登录凭据头只按初始 URL 同站注入，并由 URL options 覆盖', async () => {
+  const source = await importFixture({ header: JSON.stringify({ 'X-Source': 'yes' }) })
+  const plans: RequestPlan[] = []
+  const providerCalls: string[] = []
+  const network = {
+    isLoginHeaderSite: (sourceUrl: string, initialUrl: string) => {
+      const sourceHost = new URL(sourceUrl).hostname
+      const targetHost = new URL(initialUrl, sourceUrl).hostname
+      return targetHost === sourceHost || targetHost.endsWith(`.${sourceHost}`)
+    },
+    getLoginHeaders: (sourceId: string) => {
+      providerCalls.push(sourceId)
+      return { Authorization: 'Bearer login', 'X-Login': 'yes' }
+    },
+    request: async (plan: RequestPlan): Promise<NetworkResponse> => {
+      plans.push(plan)
+      return okResponse(plan.url)
+    },
+  }
+  const encoding = { encode: (value: string) => new TextEncoder().encode(value), decode: (bytes: Uint8Array) => new TextDecoder().decode(bytes) }
+  const runtime = new SourceRequestRuntime({ network, encoding })
+
+  await runtime.requestRaw(source, '/same')
+  assert.equal(plans[0]?.headers.Authorization, 'Bearer login')
+  assert.equal(plans[0]?.headers['X-Source'], 'yes')
+  await runtime.requestRaw(source, 'https://cdn.fixture.invalid/same-site-subdomain')
+  assert.equal(plans[1]?.headers.Authorization, 'Bearer login')
+  assert.equal(plans[1]?.headers['X-Source'], 'yes')
+  await runtime.requestRaw(source, 'https://cdn.invalid/cross')
+  assert.equal(plans[2]?.headers.Authorization, undefined)
+  await runtime.requestRaw(source, '/same', { headers: { Authorization: 'Bearer override' } })
+  assert.equal(plans[3]?.headers.Authorization, 'Bearer override')
+  assert.deepEqual(providerCalls, [source.bookSourceUrl, source.bookSourceUrl, source.bookSourceUrl])
+
+  const rewrittenRuntime = new SourceRequestRuntime({
+    network,
+    encoding,
+    rules: { evaluate: async () => ({ status: 'success', value: 'https://cdn.invalid/rewritten' }) },
+  })
+  await rewrittenRuntime.requestRaw(source, '/same', { js: 'rewrite' })
+  assert.equal(plans[4]?.url, 'https://cdn.invalid/rewritten')
+  assert.equal(plans[4]?.headers.Authorization, 'Bearer login', 'Android 只按 URL options 改写前的初始地址判断登录头')
+  assert.equal(providerCalls.length, 4)
+})
+
 test('缺 XML 声明时先补 Android 声明，再跳过 bodyJs', async () => {
   const source = await importFixture({ searchUrl: '/search,{"bodyJs":"should-not-run"}' })
   const ports = probePorts({ network: (plan) => ({

@@ -119,6 +119,10 @@ export interface NetworkHost {
   request(plan: RequestPlan): Promise<NetworkResponse>
   /** 宿主配置的默认 User-Agent；source.header 或 URL options.headers 可覆盖。 */
   defaultUserAgent?: string | undefined
+  /** 按 source identity 读取独立登录凭据头；core 只会在初始 URL 同站时调用。 */
+  getLoginHeaders?(sourceId: string): Readonly<Record<string, string>> | Promise<Readonly<Record<string, string>> | undefined> | undefined
+  /** 可选的 Public Suffix List 同站判断；省略时 core 仅允许精确主机名。 */
+  isLoginHeaderSite?(sourceUrl: string, initialUrl: string): boolean
   /** 将 URL 查询中的文字按书源声明编码；缺省时核心仅能提供 UTF-8。 */
   encodeCharset?(value: string, charset: string): Uint8Array
 }

@@ -184,6 +184,8 @@ export function withSourceRateLimit(network: NetworkHost, limiter: SourceRateLim
       return network.request(plan)
     },
     ...(network.defaultUserAgent === undefined ? {} : { defaultUserAgent: network.defaultUserAgent }),
+    ...(network.getLoginHeaders === undefined ? {} : { getLoginHeaders: network.getLoginHeaders.bind(network) }),
+    ...(network.isLoginHeaderSite === undefined ? {} : { isLoginHeaderSite: network.isLoginHeaderSite.bind(network) }),
     ...(network.encodeCharset === undefined ? {} : { encodeCharset: network.encodeCharset.bind(network) }),
   }
 }

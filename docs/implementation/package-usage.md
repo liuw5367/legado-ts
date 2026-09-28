@@ -77,6 +77,8 @@ Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委�
 
 `createNodeSourceSession` 返回的 session 还提供 `diagnostics()` 和 `close()`：前者报告首次非法 `concurrentRate` 的兼容 fallback，后者释放窗口等待并阻止该 session 接受新工作流。源定义编辑、覆盖或删除时应先关闭旧 session，再用新快照创建 session。
 
+独立登录凭据不放入 `source.header`。宿主通过 `NetworkHost.getLoginHeaders(sourceId)` 或 Node 的 `networkOptions.loginHeaderProvider` 提供；core 默认只允许精确主机名，具备 Public Suffix List 的宿主应实现 `NetworkHost.isLoginHeaderSite`，Node 已提供该判断。凭据只按初始请求 URL 注入，URL options Header 可以覆盖；凭据存储、登录流程和删除清理由应用/SecretStore 负责。
+
 宿主适配迁移注意：`XPathParser` 要求同时实现 `parse(input)` 与 `evaluate(document, expression)`。只实现 `evaluate` 的旧适配器需补上文档解析，否则不满足 `source-core` 导出的类型；`parse` 返回的文档可直接交给 `evaluate`。
 
 ## 创建运行时与单次调用

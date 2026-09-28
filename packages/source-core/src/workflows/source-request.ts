@@ -197,6 +197,22 @@ function originBaseUrl(url: string): string {
   return `${parsed.protocol}//${parsed.host}`
 }
 
+function loginHost(value: string, baseUrl: string): string | undefined {
+  try {
+    const host = new URL(value, baseUrl).hostname.toLowerCase().replace(/\.$/u, '')
+    return host.length === 0 ? undefined : host
+  } catch {
+    return undefined
+  }
+}
+
+/** 默认只允许精确主机名；具备 Public Suffix List 的宿主可通过 NetworkHost 覆盖。 */
+function isLoginHeaderSite(sourceUrl: string, initialUrl: string): boolean {
+  const sourceHost = loginHost(sourceUrl, sourceUrl)
+  const targetHost = loginHost(initialUrl, sourceUrl)
+  return sourceHost !== undefined && targetHost !== undefined && sourceHost === targetHost
+}
+
 function responseContentType(response: NetworkResponse): string | undefined {
   const value = Object.entries(response.headers).find(([name]) => name.toLowerCase() === 'content-type')?.[1]
   return headerValue(value)
@@ -284,7 +300,7 @@ export class SourceRequestRuntime {
       ...(input.execution?.webJs === undefined ? {} : { webJs: input.execution.webJs }),
       ...(input.execution?.sourceRegex === undefined ? {} : { sourceRegex: input.execution.sourceRegex }),
     }
-    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget, input.stage)
+    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget, input.stage, false, false, 'primary', input.url)
   }
 
   public decodeResponse(response: NetworkResponse): string {
@@ -358,7 +374,7 @@ export class SourceRequestRuntime {
     return text(value)
   }
 
-  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary'): Promise<NetworkResponse> {
+  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary', loginHeaderUrl = rawUrl): Promise<NetworkResponse> {
     const split = splitSourceRequestUrl(rawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
@@ -371,7 +387,11 @@ export class SourceRequestRuntime {
     const defaultHeaders = getHeader(sourceHeaders, 'user-agent') === undefined && this.network.defaultUserAgent !== undefined
       ? { 'User-Agent': this.network.defaultUserAgent }
       : undefined
-    let headers = mergeHeaders(sourceHeaders, defaultHeaders, headerObject(options.headers))
+    const sameLoginSite = this.network.isLoginHeaderSite?.(source.bookSourceUrl, loginHeaderUrl) ?? isLoginHeaderSite(source.bookSourceUrl, loginHeaderUrl)
+    const loginHeaders = this.network.getLoginHeaders !== undefined && sameLoginSite
+      ? await this.network.getLoginHeaders(source.bookSourceUrl)
+      : undefined
+    let headers = mergeHeaders(sourceHeaders, defaultHeaders, loginHeaders, headerObject(options.headers))
     const proxy = getHeader(headers, 'proxy')?.trim() || undefined
     headers = withoutHeader(headers, 'proxy')
     const dnsIpValue = options.dnsIp ?? options.resolveIp

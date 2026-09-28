@@ -12,6 +12,8 @@ export interface CookieStore {
 export interface NodeNetworkOptions {
   /** Android AppConfig.userAgent 的 Node 侧显式覆盖；不设置时使用当前 Android 基线 UA。 */
   defaultUserAgent?: string
+  /** 从应用/SecretStore 读取独立登录凭据头；NodeNetworkHost 按 Public Suffix List 判断是否注入。 */
+  loginHeaderProvider?: (sourceId: string) => Readonly<Record<string, string>> | Promise<Readonly<Record<string, string>> | undefined> | undefined
   /** 显式允许的协议；默认只允许 HTTP/HTTPS。 */
   protocols?: readonly string[]
   /** 是否允许环回、私网和链路本地地址；默认拒绝。 */

@@ -122,7 +122,7 @@ raw rule URL
 
 请求前把 CookieStore 中对应域的 Cookie 与 URL 选项中的 `Cookie` 合并，临时 URL 选项优先；启用 CookieJar 时保存响应中的 Set-Cookie。当前 Cookie 域按解析后的目标 URL 计算，封面 CDN 不应错误使用书源站点 Cookie。导入层归一化 `enabledCookieJar` 时，JSON/对象省略值使用 Kotlin 构造默认值 `true`；显式 `null` 和数据库旧行缺失值按 `enabledCookieJar == true` 判断为关闭，只有显式 `true` 才保存响应 Cookie。
 
-Android 会把单独保存的登录凭据头按书源同站二级域名附加；初始 URL 是唯一检查点，`@js` 改写到跨域目标后不会再次拦截。普通 `source.header` 是书源请求头配置，并不等同于已保存的登录凭据头。当前 TypeScript 包没有独立的登录凭据存储与同站注入能力，因此不能宣称提供相同的自动登录头隔离；集成方应把凭据放在受控宿主策略中，不能把所有 `source.header` 一概当作登录凭据剥离。
+Android 会把单独保存的登录凭据头按书源同站二级域名附加；初始 URL 是唯一检查点，`@js` 改写到跨域目标后不会再次拦截。普通 `source.header` 是书源请求头配置，并不等同于已保存的登录凭据头。TypeScript 通过 `NetworkHost.getLoginHeaders(sourceId)` 接受宿主凭据读取能力，core 默认只允许精确主机名；具备 Public Suffix List 的宿主可实现 `NetworkHost.isLoginHeaderSite`，Node `NodeNetworkHost` 已使用现有 PSL 能力。URL options 中的显式 Header 最后覆盖登录头；Node 可用 `NodeNetworkOptions.loginHeaderProvider` 接入应用/SecretStore。凭据保存、登录 UI 和删除清理仍由应用宿主负责，不能把所有 `source.header` 一概当作登录凭据剥离。
 
 Android `BaseSource.getHeaderMap()` 会在 source header 未提供 User-Agent 时填入 `AppConfig.userAgent`。TypeScript 核心通过 `NetworkHost.defaultUserAgent` 接受平台配置；Node `NodeNetworkHost` 未显式配置时使用当前 Android 基线 User-Agent（`Chrome/153.0.0.0`），`NodeNetworkOptions.defaultUserAgent` 可显式覆盖它。无效 source header 在 Android 会记录日志、忽略该值并继续请求；TypeScript 也忽略无效 JSON 或脚本返回值，随后应用宿主默认 User-Agent。宿主缺少执行动态 Header 所需的 JS 能力时仍返回 `capability-missing`。
 

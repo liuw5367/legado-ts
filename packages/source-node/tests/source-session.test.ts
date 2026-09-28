@@ -83,6 +83,13 @@ test('Node session uses the Android baseline User-Agent when no override is supp
   assert.equal(defaultUserAgent, DEFAULT_ANDROID_USER_AGENT)
 })
 
+test('Node session preserves the independent login-header provider through the limiter wrapper', async () => {
+  const session = createNodeSourceSession(baseSource, { networkOptions: { loginHeaderProvider: (sourceId) => ({ Authorization: `Bearer ${sourceId}` }) } })
+  const loginHeaders = await session.run(async (ports) => ports.network.getLoginHeaders?.(baseSource.bookSourceUrl))
+  assert.deepEqual(loginHeaders, { Authorization: `Bearer ${baseSource.bookSourceUrl}` })
+  assert.equal(await session.run(async (ports) => ports.network.isLoginHeaderSite?.(baseSource.bookSourceUrl, 'https://cdn.fixture.invalid/page')), false)
+})
+
 test('Node session reports invalid initial concurrentRate and closes its limiter lifecycle', async () => {
   const session = createNodeSourceSession({ ...baseSource, concurrentRate: 'broken' } as NormalizedSource)
   assert.equal(session.diagnostics()[0]?.code, 'invalid-config')

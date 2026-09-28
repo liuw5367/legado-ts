@@ -6,6 +6,7 @@ import { SourceRequestError } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, RequestPlan } from '@legado/source-core'
 import iconv from 'iconv-lite'
 import { Agent } from 'undici'
+import { getPublicSuffix } from 'tough-cookie'
 import { NodeCookieStore } from './cookies.ts'
 import type { CookieStore, NodeNetworkOptions } from './types.ts'
 
@@ -103,6 +104,17 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) throw new DOMException('The operation was aborted', 'AbortError')
 }
 
+function loginSite(value: string, baseUrl: string): string | undefined {
+  try {
+    const host = new URL(value, baseUrl).hostname.toLowerCase().replace(/\.$/u, '')
+    if (host.length === 0) return undefined
+    if (host.includes(':') || /^\d+(?:\.\d+){3}$/u.test(host)) return host
+    try { return getPublicSuffix(host) ?? host } catch { return host }
+  } catch {
+    return undefined
+  }
+}
+
 async function readBody(response: Response, maxBytes: number, signal: AbortSignal | undefined): Promise<Uint8Array> {
   throwIfAborted(signal)
   if (response.body === null) return new Uint8Array()
@@ -193,6 +205,16 @@ export class NodeNetworkHost implements NetworkHost {
 
   public get defaultUserAgent(): string | undefined {
     return this.options.defaultUserAgent ?? DEFAULT_ANDROID_USER_AGENT
+  }
+
+  public getLoginHeaders(sourceId: string): Readonly<Record<string, string>> | Promise<Readonly<Record<string, string>> | undefined> | undefined {
+    return this.options.loginHeaderProvider?.(sourceId)
+  }
+
+  public isLoginHeaderSite(sourceUrl: string, initialUrl: string): boolean {
+    const sourceSite = loginSite(sourceUrl, sourceUrl)
+    const targetSite = loginSite(initialUrl, sourceUrl)
+    return sourceSite !== undefined && targetSite !== undefined && sourceSite === targetSite
   }
 
   public constructor(options: NodeNetworkOptions = {}) {

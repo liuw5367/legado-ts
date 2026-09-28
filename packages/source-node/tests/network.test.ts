@@ -118,6 +118,12 @@ test('Node 网络宿主默认拒绝环回地址', async () => {
   await assert.rejects(() => host.request(plan('http://[::ffff:7f00:1]:1')), /private network request is not allowed/)
 })
 
+test('Node 网络宿主按 Public Suffix List 隔离独立登录凭据头', () => {
+  const host = new NodeNetworkHost()
+  assert.equal(host.isLoginHeaderSite('https://example.com.cn/source', 'https://cdn.example.com.cn/page'), true)
+  assert.equal(host.isLoginHeaderSite('https://example.com.cn/source', 'https://evil.com.cn/page'), false)
+})
+
 test('Node 不支持代理时明确报 capability-missing，不会直连', async () => {
   const result = createRequestPlan({ url: 'https://example.invalid/', execution: { proxy: 'http://user:secret@proxy.invalid:8080' } })
   assert.ok(result.plan)
