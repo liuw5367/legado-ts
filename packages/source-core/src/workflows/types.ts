@@ -1,5 +1,5 @@
 import type { JsonObject, NormalizedSource } from '../model/types.ts'
-import type { ConcurrencyHost, NetworkHost, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
+import type { ConcurrencyHost, NetworkHost, NetworkResponse, RequestBudget, RequestPlan } from '../runtime/contracts.ts'
 import type { JavaScriptBudget } from '../runtime/javascript.ts'
 
 export type WorkflowStatus = 'success' | 'partial' | 'empty' | 'failed' | 'cancelled' | 'capability-missing'
@@ -82,6 +82,34 @@ export interface WorkflowTraceEntry {
   event: 'request' | 'rule' | 'candidate' | 'field'
   target: string
   itemIndex?: number
+}
+
+/** 网络观察只报告真实发出的请求，不改变书源工作流的结果或错误语义。 */
+export interface RequestObservationStart {
+  id: string
+  source: NormalizedSource
+  stage: WorkflowStage
+  attempt: number
+  /** 由 JavaScript bridge 发起的子请求，用于调试面板区分来源。 */
+  kind?: 'primary' | 'bridge'
+  plan: RequestPlan
+  startedAt: number
+}
+
+export interface RequestObservationComplete extends RequestObservationStart {
+  response: NetworkResponse
+  durationMs: number
+}
+
+export interface RequestObservationError extends RequestObservationStart {
+  error: unknown
+  durationMs: number
+}
+
+export interface RequestObserver {
+  onStart?(event: RequestObservationStart): void
+  onComplete?(event: RequestObservationComplete): void
+  onError?(event: RequestObservationError): void
 }
 
 export interface RuntimeResult<T> {
@@ -194,6 +222,8 @@ export interface WorkflowPorts {
   decodeResponse?: (response: NetworkResponse, source: NormalizedSource) => string
   /** 应用提供的调度容量；独立于 source.concurrentRate 的时间窗口限制。 */
   concurrency?: ConcurrencyHost
+  /** Optional request evidence hook; observer failures are isolated from the workflow. */
+  requestObserver?: RequestObserver
 }
 
 export interface WorkflowOptions {

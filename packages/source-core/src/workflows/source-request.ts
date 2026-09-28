@@ -2,7 +2,7 @@ import { createRequestPlan } from '../runtime/request-plan.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkHost, NetworkResponse } from '../runtime/contracts.ts'
 import type { NormalizedSource } from '../model/types.ts'
-import type { WorkflowRequest, WorkflowRuleOutput, WorkflowRulePort, WorkflowStage } from './types.ts'
+import type { RequestObserver, WorkflowRequest, WorkflowRuleOutput, WorkflowRulePort, WorkflowStage } from './types.ts'
 
 /** 请求边界内的结构化失败分类；与 WorkflowDiagnostic.code 对齐，避免压成可重试网络错误。 */
 export type SourceRequestErrorCode = 'invalid-config' | 'capability-missing' | 'cancelled' | 'rule-failed'
@@ -51,6 +51,7 @@ export interface SourceRequestRuntimeOptions {
   encoding: CharsetCodec
   decodeResponse?: (response: NetworkResponse) => string
   rules?: WorkflowRulePort
+  requestObserver?: RequestObserver
 }
 
 function text(value: unknown): string {
@@ -260,12 +261,15 @@ export class SourceRequestRuntime {
   private readonly network: NetworkHost
   private readonly encoding: CharsetCodec
   private readonly decodeOverride?: SourceRequestRuntimeOptions['decodeResponse']
+  private readonly requestObserver: RequestObserver | undefined
   private ruleHost: WorkflowRulePort | undefined
+  private requestSequence = 0
 
   public constructor(options: SourceRequestRuntimeOptions) {
     this.network = options.network
     this.encoding = options.encoding
     this.decodeOverride = options.decodeResponse
+    this.requestObserver = options.requestObserver
     this.ruleHost = options.rules
   }
 
@@ -354,7 +358,7 @@ export class SourceRequestRuntime {
     return text(value)
   }
 
-  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false): Promise<NetworkResponse> {
+  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary'): Promise<NetworkResponse> {
     const split = splitSourceRequestUrl(rawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
@@ -460,7 +464,23 @@ export class SourceRequestRuntime {
     let response: NetworkResponse | undefined
     for (let attempt = 0; attempt <= retry; attempt += 1) {
       if (signal?.aborted === true) throw new DOMException('The operation was aborted', 'AbortError')
-      response = await this.network.request(request.plan)
+      const observation = {
+        id: `${stage}-${++this.requestSequence}`,
+        source,
+        stage,
+        attempt,
+        kind,
+        plan: request.plan,
+        startedAt: Date.now(),
+      }
+      this.notifyStart(observation)
+      try {
+        response = await this.network.request(request.plan)
+        this.notifyComplete({ ...observation, response, durationMs: Date.now() - observation.startedAt })
+      } catch (error) {
+        this.notifyError({ ...observation, error, durationMs: Date.now() - observation.startedAt })
+        throw error
+      }
       const successful = response.status >= 200 && response.status < 300
       const redirect = response.status >= 300 && response.status < 400
       if (successful || redirect || attempt === retry) break
@@ -487,6 +507,18 @@ export class SourceRequestRuntime {
       }
     }
     return result
+  }
+
+  private notifyStart(event: Parameters<NonNullable<RequestObserver['onStart']>>[0]): void {
+    try { this.requestObserver?.onStart?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
+  }
+
+  private notifyComplete(event: Parameters<NonNullable<RequestObserver['onComplete']>>[0]): void {
+    try { this.requestObserver?.onComplete?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
+  }
+
+  private notifyError(event: Parameters<NonNullable<RequestObserver['onError']>>[0]): void {
+    try { this.requestObserver?.onError?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
   }
 
   private async sourceHeaders(source: NormalizedSource, signal?: AbortSignal, nested = false): Promise<Readonly<Record<string, string>> | undefined> {

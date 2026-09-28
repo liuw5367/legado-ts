@@ -5,6 +5,8 @@ import type { ReaderApplication, OpenBookResult, SearchOperationResult, SearchPr
 import type { HomeBookView, KnownSourceView } from './storage.ts'
 import { layoutContent } from './content-layout.ts'
 import type { ContentBlockKind } from './content-format.ts'
+import type { DebugCapture, DebugStage, ProcessRecord, RequestRecord } from './debug-capture.ts'
+import type { DebugRunner } from './debug-runner.ts'
 import { actionMenuLabel } from './action-menu.ts'
 import { formatDisplayTime, formatSourceTime } from './time-format.ts'
 import { orderSourceViews } from './source-order.ts'
@@ -64,13 +66,19 @@ export interface RenderState {
   helpPage: Page
   chapterCharacters: number
   separator: boolean
+  debugRunner?: DebugRunner
+  debugCapture?: DebugCapture
+  debugPanel: 'flow' | 'requests' | 'response' | 'parsed'
+  debugRequestSelected: number
+  debugResultSelected: number
+  debugFilter: string
 }
 
 export function pageHeader(page: Page, state: RenderState): { left: string; right: string } {
   const bookName = state.book?.book.name ?? ''
   const chapterName = state.toc?.chapters[state.chapterIndex]?.title ?? ''
   const readerTitle = `${bookName} · ${chapterName} · ${state.chapterIndex + 1}/${state.toc?.chapters.length ?? 0} 章`
-  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : '配置'
+  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : page === 'debug' ? `书源调试 · ${state.debugRunner?.source.source.bookSourceName ?? state.debugCapture?.sourceName ?? '最近操作'}` : '配置'
   const left = page === 'reader' || page === 'toc' || page === 'home' || page === 'results' ? pageName : `Legado Reader · ${pageName}`
   let right = ''
   if (page === 'home') right = `${state.catalog.entries.filter((entry) => entry.state === 'available').length}/${state.catalog.entries.length} 个书源可用`
@@ -103,8 +111,9 @@ export function renderPage(page: Page, state: RenderState): React.ReactElement {
   if (page === 'reader') return renderReader(state.contentLines, state.contentLineKinds, state.readerLine, state.bodyHeight)
   if (page === 'sources') return renderSources(state.sources, state.book, state.selected, state.listStart, state.sourceSearch, state.sourceSearchState, state.sourceSearchStart, state.sourceSearchSelected, state.bodyHeight, state.searchProgress)
   if (page === 'mapping') return renderMapping(state.toc, state.chapterIndex, state.mappingToc, state.mappingIndex, state.mappingTarget, state.pageScroll, state.bodyHeight)
-  if (page === 'help') return renderHelp(state.helpPage, state.homeArea, state.pageScroll, state.bodyHeight)
-  return renderDiagnostics(state.catalog.diagnostics, state.pageScroll, state.bodyHeight)
+  if (page === 'help') return renderHelp(state.helpPage, state.homeArea, state.columns, state.pageScroll, state.bodyHeight)
+  if (page === 'diagnostics') return renderDiagnostics(state.catalog, state.selected, state.pageScroll, state.bodyHeight)
+  return renderDebug(state.debugRunner, state.debugCapture, state.debugPanel, state.debugRequestSelected, state.debugResultSelected, state.debugFilter, state.pageScroll, state.bodyHeight)
 }
 
 function renderConfig(catalog: SourceCatalogResult, scroll: number, height: number): React.ReactElement {
@@ -215,12 +224,78 @@ function renderMapping(toc: TocResult | undefined, index: number, targetToc: Toc
   return renderLineViewport(lines, scroll, height)
 }
 
-function renderHelp(page: Page, homeArea: number, scroll: number, height: number): React.ReactElement {
-  return renderLineViewport(helpLines(page, homeArea), scroll, height)
+function renderHelp(page: Page, homeArea: number, columns: number, scroll: number, height: number): React.ReactElement {
+  return renderLineViewport(helpLines(page, homeArea, columns), scroll, height)
 }
 
-function renderDiagnostics(items: readonly string[], scroll: number, height: number): React.ReactElement {
-  return renderLineViewport(items.length === 0 ? ['没有诊断信息。'] : items.map((item) => `[!] ${item}`), scroll, height)
+function renderDiagnostics(catalog: SourceCatalogResult, selected: number, scroll: number, height: number): React.ReactElement {
+  const entries = catalog.entries
+  const lines = [
+    `来源 ${entries.filter((item) => item.state === 'available').length} 可用 · ${entries.filter((item) => item.state === 'disabled').length} 禁用 · ${entries.filter((item) => item.state === 'unsupported').length} 不支持 · ${entries.filter((item) => item.state === 'conflict').length} 冲突`,
+    `位置：${catalog.sourceLocation || '未配置'}`,
+    '',
+    '书源列表',
+    ...entries.map((entry, index) => `${index === selected ? '> ' : '  '}${index + 1}. [${entry.state}] ${entry.source.bookSourceName} · ${entry.source.bookSourceUrl}${entry.reason === undefined ? '' : ` · ${entry.reason}`}`),
+    '',
+    '加载诊断',
+    ...(catalog.diagnostics.length === 0 ? ['没有加载诊断。'] : catalog.diagnostics.map((item) => `[!] ${item}`)),
+  ]
+  return renderLineViewport(lines, scroll, height)
+}
+
+function renderDebug(runner: DebugRunner | undefined, capture: DebugCapture | undefined, panel: 'flow' | 'requests' | 'response' | 'parsed', selected: number, resultSelected: number, filter: string, scroll: number, height: number): React.ReactElement {
+  const active = runner?.capture ?? capture
+  if (active === undefined) return renderLineViewport(['没有可查看的调试记录。', '', '可从诊断页按 g 开始书源调试。'], scroll, height)
+  const snapshot = active.snapshot()
+  const stage = runner?.state.stage
+  const header = [`面板：${panelLabel(panel)} · 请求 ${snapshot.requests.length} · 流程 ${snapshot.processes.length}${snapshot.truncated ? ' · 有截断' : ''}`, stage === undefined ? '' : `阶段：${stage} · 关键词：${runner?.state.keyword ?? ''} · 书源：${runner?.source.source.bookSourceName ?? ''}`, filter.length === 0 ? '' : `过滤：${filter}`].filter((line) => line.length > 0)
+  const visibleRequests = filterRequests(snapshot.requests, filter)
+  const body = panel === 'flow' ? processLines(snapshot.processes, filter) : panel === 'requests' ? requestLines(visibleRequests, selected) : panel === 'response' ? responseLines(visibleRequests[selected], filter) : parsedLines(snapshot.stages, runner, resultSelected)
+  return renderLineViewport([...header, '', ...body], scroll, height)
+}
+
+function panelLabel(panel: 'flow' | 'requests' | 'response' | 'parsed'): string {
+  return panel === 'flow' ? '处理流程' : panel === 'requests' ? '请求列表' : panel === 'response' ? '原始响应' : '解析摘要'
+}
+
+function processLines(items: readonly ProcessRecord[], filter: string): string[] {
+  const visible = filter.length === 0 ? items : items.filter((item) => `${item.stage} ${item.kind} ${item.target} ${item.outputSummary ?? ''}`.toLowerCase().includes(filter.toLowerCase()))
+  return visible.length === 0 ? ['没有匹配的处理记录。'] : visible.map((item) => `${String(item.sequence).padStart(3, ' ')} [${item.stage}] ${item.state.padEnd(9, ' ')} ${item.kind.padEnd(15, ' ')} ${display(item.target)}${item.requestId === undefined ? '' : ` · 请求 ${item.requestId}`}${item.inputSummary === undefined ? '' : ` · 输入 ${display(item.inputSummary)}`}${item.outputSummary === undefined ? '' : ` · 输出 ${display(item.outputSummary)}`}`)
+}
+
+function requestLines(items: readonly RequestRecord[], selected: number): string[] {
+  return items.length === 0 ? ['没有匹配的请求。'] : items.map((item, index) => {
+    const source = item.sourceName === undefined ? item.sourceId : item.sourceName
+    const attempt = item.kind === 'bridge' ? ' · bridge' : item.attempt > 0 ? ` · 重试 ${item.attempt}` : ''
+    return `${index === selected ? '> ' : '  '}${String(item.sequence).padStart(3, ' ')} [${item.stage}] ${display(source)} · ${item.status === undefined ? '----' : String(item.status).padStart(3, ' ')} ${String(item.durationMs).padStart(5, ' ')}ms ${item.method} ${display(item.url)}${attempt}${item.truncated ? ' · 截断' : ''}${item.error === undefined ? '' : ` · ${display(item.error)}`}`
+  })
+}
+
+function filterRequests(items: readonly RequestRecord[], filter: string): RequestRecord[] {
+  return filter.length === 0 ? [...items] : items.filter((item) => `${item.sequence} ${item.stage} ${item.sourceId} ${item.sourceName ?? ''} ${item.method} ${item.url} ${item.status ?? ''} ${item.error ?? ''}`.toLowerCase().includes(filter.toLowerCase()))
+}
+
+function responseLines(item: RequestRecord | undefined, filter: string): string[] {
+  if (item === undefined) return ['没有选中的请求。']
+  const body = (item.responseText ?? '（没有可显示的响应正文）').split('\n')
+  const matched = filter.length === 0 ? body : body.filter((line) => line.toLowerCase().includes(filter.toLowerCase()))
+  return [`请求 #${item.sequence}`, `来源   ${display(item.sourceName ?? item.sourceId)}`, `阶段   ${item.stage}`, `方法   ${item.method}`, `地址   ${display(item.finalUrl ?? item.url)}`, `状态   ${item.status === undefined ? item.error ?? '未完成' : `HTTP ${item.status}`}`, `耗时   ${item.durationMs}ms`, `大小   ${item.responseBytes} bytes${item.truncated ? '（已截断）' : ''}`, `重定向 ${item.redirected === true ? '是' : '否'}`, ...headerLines('请求头', item.headers), ...(item.requestBody === undefined ? [] : ['请求体', `  ${display(item.requestBody)}`]), ...headerLines('响应头', item.responseHeaders), ...(filter.length === 0 ? [] : [`匹配 ${matched.length}/${body.length} 行`]), '', ...(matched.length === 0 ? ['没有匹配的响应内容。'] : matched)]
+}
+
+function headerLines(label: string, headers: Readonly<Record<string, string | string[]>> | undefined): string[] {
+  if (headers === undefined || Object.keys(headers).length === 0) return [`${label}   （无）`]
+  return [label, ...Object.entries(headers).map(([key, value]) => `  ${key}: ${Array.isArray(value) ? value.join(', ') : value}`)]
+}
+
+function parsedLines(stages: readonly { stage: DebugStage; status: string; durationMs?: number; summary: Record<string, unknown> }[], runner: DebugRunner | undefined, selected: number): string[] {
+  const lines = stages.flatMap((item) => [`${item.stage.padEnd(9, ' ')} ${item.status}${item.durationMs === undefined ? '' : ` · ${item.durationMs}ms`}`, ...Object.entries(item.summary).map(([key, value]) => `  ${key}: ${Array.isArray(value) ? value.join(', ') : value}`)])
+  const state = runner?.state
+  if (state !== undefined) {
+    if (state.candidates.length > 0) lines.push('', `候选 ${state.candidates.length} 个`, ...state.candidates.slice(0, 20).map((item, index) => `${index === selected ? '> ' : '  '}${index + 1}. ${display(item.name ?? item.bookUrl)} · ${display(item.author ?? '作者未知')}`))
+    if (state.chapters.length > 0) lines.push('', `章节 ${state.chapters.length} 个`, ...state.chapters.slice(0, 20).map((item, index) => `${index === selected ? '> ' : '  '}${index + 1}. ${display(item.title)}`))
+    if (state.content !== undefined) lines.push('', `正文 ${state.content.cleaned.length} 字`)
+  }
+  return lines.length === 0 ? ['暂无解析摘要。'] : lines
 }
 
 function renderLineViewport(lines: readonly string[], scroll: number, height: number): React.ReactElement {

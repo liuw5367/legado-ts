@@ -10,6 +10,7 @@
 - 编排搜索、详情、目录、正文、已知书源和阅读状态。
 - 保存书架、搜索记录、阅读记录、书籍文档和可删除缓存。
 - 驱动 Ink 页面和键盘输入。
+- 在不改变普通请求结果的前提下采集诊断、请求和解析流程证据。
 
 `@legado/source-core` 不读取文件、不管理书架，也不持有 TUI 状态。它只接收一次调用所需的不可变来源和宿主端口。
 
@@ -35,6 +36,8 @@ ReaderStorage <----------- ReaderApplication
 每个 `SourceEntry` 使用 `bookSourceUrl` 作为 sourceId，使用 `sourceDefinitionFingerprint` 区分定义版本。冲突来源不进入默认搜索队列。每个来源会话共享自己的 `NodeCookieStore` 和 `NodeNetworkHost`，但每次搜索、详情、目录或正文调用都新建 `SourceRequestHost`/`SourceRuleHost`；这两个 Node 门面分别组合网络/字符集能力和解析器/QuickJS 等能力，再委托给 source-core 运行时。同一 sourceId 由 `KeyedConcurrencyHost` 串行执行。
 
 UI 使用同文件私有 `PageShell` 和 `CommandBar` 渲染所有页面：单行上下文、按终端高度分配的正文区和固定命令栏；输入、状态和快捷键共用一行命令槽。`viewport.ts` 统一处理终端最小尺寸、正文行数、分页与边界；`source-order.ts` 将当前来源置顶并按搜索耗时稳定升序排列；`ui-actions.ts` 按终端显示宽度省略放不下的低优先级动作并测量 Unicode 字素簇，避免快捷键拆分或光标落在宽字符内部；`action-menu.ts` 固定四项动作及禁用原因，但 `o` 只由首页和搜索结果接入，弹窗使用居中覆盖层保留底层页面。真实导航栈保留页面、焦点、筛选和视口状态，目录筛选单独维护当前阅读章节身份。搜索和换源搜索通过 `SearchUpdateListener` 将已返回候选逐次推送到 UI，`AbortController` 只改变任务状态，不直接销毁当前页面。
+
+诊断和调试沿用同一条书源工作流：`SourceRequestRuntime` 在 `RequestPlan` 交给 `NetworkHost` 前后调用可选 `RequestObserver`，Node 会话按操作透传观察器；CLI 的 `DebugCapture` 负责请求编号、跨书源并发归并、敏感信息脱敏、响应截断和内存上限。`RuntimeResult.trace` 与诊断被转换为 `ProcessRecord`，因此处理流程记录不会复制规则解析逻辑。`DebugRunner` 使用同一 `ReaderSourceSession` 串行运行搜索、详情、目录和正文，普通页面的 `v` 使用轻量捕获，完整调试使用更高上限。`debug-export.ts` 只把脱敏快照写入 Markdown/JSON，并通过固定系统命令且不经过 shell 写入剪贴板。
 
 用户可见通知带页面所有权，路由切换会清除旧页面的瞬时消息；持久化时间仍为 UTC ISO，展示层使用 `time-format.ts` 固定转换到 `Asia/Shanghai` 的 `YYYY-MM-DD HH:mm:ss`。正文由 `content-format.ts` 先将 text/html 转换为语义块，再交给 `content-layout.ts` 换行，因此阅读锚点基于段落和段内偏移，不依赖某次终端宽度的显示行号。
 

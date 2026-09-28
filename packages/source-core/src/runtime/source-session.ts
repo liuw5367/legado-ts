@@ -1,7 +1,7 @@
 import type { NormalizedSource } from '../model/types.ts'
 import type { ClockHost, NetworkHost, SourceScriptCache } from './contracts.ts'
 import { SourceRateLimiter, systemClockHost, withSourceRateLimit } from './source-rate-limiter.ts'
-import type { WorkflowPorts } from '../workflows/types.ts'
+import type { RequestObserver, WorkflowPorts } from '../workflows/types.ts'
 
 export interface SourceSessionOperationContext {
   /** 本会话固定使用的书源定义。 */
@@ -14,6 +14,8 @@ export interface SourceSessionOperationContext {
   network?: NetworkHost
   /** 更新 Android `source.putConcurrent` 对应的会话限流配置。 */
   updateConcurrentRate: (value: string) => void
+  /** 本次操作的可选网络观察器。 */
+  requestObserver?: RequestObserver
 }
 
 export interface SourceSessionOptions {
@@ -31,7 +33,7 @@ export interface SourceSessionOptions {
 export interface SourceSession {
   readonly source: NormalizedSource
   /** 为一项完整工作流创建隔离上下文，并在结束后提交 source 变量差异。 */
-  run<T>(operation: (ports: WorkflowPorts) => Promise<T>): Promise<T>
+  run<T>(operation: (ports: WorkflowPorts) => Promise<T>, options?: { requestObserver?: RequestObserver }): Promise<T>
   snapshotVariables(): Readonly<Record<string, string>>
 }
 
@@ -112,9 +114,9 @@ export function createSourceSession(options: SourceSessionOptions): SourceSessio
 
   return {
     source,
-    async run<T>(operation: (ports: WorkflowPorts) => Promise<T>): Promise<T> {
+    async run<T>(operation: (ports: WorkflowPorts) => Promise<T>, runOptions: { requestObserver?: RequestObserver } = {}): Promise<T> {
       const before = new Map(sourceVariables)
-      const ports = options.createPorts({ source, initialVariables: Object.fromEntries(before), cache, ...(network === undefined ? {} : { network }), updateConcurrentRate: (value) => rateLimiter.update(value) })
+      const ports = options.createPorts({ source, initialVariables: Object.fromEntries(before), cache, ...(network === undefined ? {} : { network }), updateConcurrentRate: (value) => rateLimiter.update(value), ...(runOptions.requestObserver === undefined ? {} : { requestObserver: runOptions.requestObserver }) })
       try {
         return await operation(ports)
       } finally {

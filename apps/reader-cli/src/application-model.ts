@@ -1,6 +1,7 @@
 import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, SearchMatchRank, WorkflowStatus } from '@legado/source-core'
 import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
 import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition } from './storage.ts'
+import type { DebugCapture } from './debug-capture.ts'
 
 type SearchWorkflowResult = Awaited<ReturnType<typeof import('@legado/source-core').searchBooks>>
 type DetailWorkflowResult = Awaited<ReturnType<typeof import('@legado/source-core').loadBookDetails>>
@@ -91,12 +92,13 @@ export interface ReaderApplicationOptions {
 }
 
 export interface ReaderSourceSession {
-  search(keyword: string, signal?: AbortSignal): Promise<SearchWorkflowResult>
-  detail(candidate: BookCandidate, signal?: AbortSignal): Promise<DetailWorkflowResult>
-  toc(book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; runPerJs?: boolean; isFromBookInfo?: boolean; tocCountWords?: boolean }): Promise<TocWorkflowResult>
+  search(keyword: string, signal?: AbortSignal, capture?: DebugCapture): Promise<SearchWorkflowResult>
+  detail(candidate: BookCandidate, signal?: AbortSignal, capture?: DebugCapture): Promise<DetailWorkflowResult>
+  toc(book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; runPerJs?: boolean; isFromBookInfo?: boolean; tocCountWords?: boolean }, capture?: DebugCapture): Promise<TocWorkflowResult>
   /** `nextChapterUrl` 触发正文分页护栏：命中时停止抓取，避免把下一章并入本章。 */
-  content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<ContentWorkflowResult>
+  content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }, capture?: DebugCapture): Promise<ContentWorkflowResult>
   attachCache(storage: ReaderStorage): void
 }
 
 export type { BookCandidate, BookMetadata, Chapter, KnownSource, KnownSourceView, ReadingPosition, SearchHistoryEntry }
+export type { DebugCapture, DebugSessionSnapshot, ProcessRecord, RequestRecord, StageEvidence } from './debug-capture.ts'

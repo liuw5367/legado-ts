@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { SourceRequestError, SourceRequestRuntime } from '@legado/source-core'
-import type { NetworkHost, NetworkResponse, NormalizedSource, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
+import type { NetworkHost, NetworkResponse, NormalizedSource, RequestObserver, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
 import chardet from 'chardet'
 import { NodeCharsetCodec } from './charset.ts'
 import { NodeCookieStore } from './cookies.ts'
@@ -12,6 +12,7 @@ export interface SourceRequestHostOptions {
   network: NetworkHost
   cookieStore?: CookieStore
   encoding?: NodeCharsetCodec
+  requestObserver?: RequestObserver
 }
 
 /** bridge 网络子请求允许的最大再入层数；超出后拒绝，防止脚本经 bridge 无限嵌套。 */
@@ -93,6 +94,7 @@ export class SourceRequestHost {
       network: options.network,
       encoding: this.encoding,
       decodeResponse: (response) => this.decode(response),
+      ...(options.requestObserver === undefined ? {} : { requestObserver: options.requestObserver }),
     })
   }
 
@@ -127,7 +129,7 @@ export class SourceRequestHost {
     if (input.kind === 'network-all') {
       const urls = Array.isArray(input.urls) ? input.urls.map((value) => text(value)).filter((value) => value.length > 0) : []
       return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url) => {
-        const response = await this.runtime.requestRaw(source, url, options ?? {}, signal, undefined, 'search', true, input.skipRateLimit === true)
+        const response = await this.runtime.requestRaw(source, url, options ?? {}, signal, undefined, 'search', true, input.skipRateLimit === true, 'bridge')
         return this.responseObject(response)
       }))
     }
@@ -139,7 +141,7 @@ export class SourceRequestHost {
     }
     return this.bridgeDepth.run(depth + 1, async () => {
       // nested：子请求跳过动态 source header，只保留静态头，切断 header 脚本自递归。
-      const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, 'search', true, input.skipRateLimit === true)
+      const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, 'search', true, input.skipRateLimit === true, 'bridge')
       return input.kind === 'network-response' ? this.responseObject(response) : this.decode(response)
     })
   }

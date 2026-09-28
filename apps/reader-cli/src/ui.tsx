@@ -41,6 +41,9 @@ import {
   type SearchUiState,
 } from './ui-model.ts'
 import { orderSourceViews } from './source-order.ts'
+import type { DebugCapture } from './debug-capture.ts'
+import type { DebugRunner } from './debug-runner.ts'
+import { copyDebugPanel, exportDebugSession, panelText } from './debug-export.ts'
 
 export interface ReaderUiProps {
   application: ReaderApplication
@@ -140,6 +143,16 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [searchElapsedMs, setSearchElapsedMs] = useState(0)
   const [searchClockStartedAt, setSearchClockStartedAt] = useState<number>()
   const [menu, setMenu] = useState<MenuState>()
+  const [debugRunner, setDebugRunner] = useState<DebugRunner>()
+  const [debugCapture, setDebugCapture] = useState<DebugCapture>()
+  const [debugPanel, setDebugPanel] = useState<'flow' | 'requests' | 'response' | 'parsed'>('parsed')
+  const [debugRequestSelected, setDebugRequestSelected] = useState(0)
+  const [debugResultSelected, setDebugResultSelected] = useState(0)
+  const [debugFilter, setDebugFilter] = useState('')
+  const [debugFilterActive, setDebugFilterActive] = useState(false)
+  const [debugKeyword, setDebugKeyword] = useState('')
+  const [debugKeywordActive, setDebugKeywordActive] = useState(false)
+  const [, setDebugTick] = useState(0)
   const selectedGroupKeyRef = useRef<string | undefined>(undefined)
   const homeRefreshRequestRef = useRef(0)
   const searchStartedAtRef = useRef<number | undefined>(undefined)
@@ -274,6 +287,143 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setSearchClockStartedAt(undefined)
     if (elapsedMs !== undefined) setSearchElapsedMs(elapsedMs)
     else if (startedAt !== undefined) setSearchElapsedMs(Date.now() - startedAt)
+  }
+
+  const openEvidence = (context: string): void => {
+    const capture = application.evidenceFor(context)
+    if (capture === undefined || capture.requests.length === 0 && capture.processes.length === 0) {
+      setMessage('本次操作没有可查看的网络记录')
+      return
+    }
+    setDebugRunner(undefined)
+    setDebugCapture(capture)
+    setDebugPanel('requests')
+    setDebugRequestSelected(Math.max(0, capture.requests.length - 1))
+    setDebugFilter('')
+    setDebugFilterActive(false)
+    setPage('debug')
+    setMessage('已打开最近操作记录')
+  }
+
+  const runDebugSearch = (runner: DebugRunner, keywordOverride?: string): void => {
+    const operation = beginOperation('task')
+    setMessage(`正在调试书源“${display(runner.source.source.bookSourceName)}”…`)
+    runner.setKeyword(keywordOverride ?? (debugKeyword || runner.state.keyword))
+    void runner.search(runner.state.keyword, operation.controller.signal).then((result) => {
+      if (!isCurrent(operation)) return
+      setDebugTick((value) => value + 1)
+      setDebugResultSelected(0)
+      setDebugRequestSelected(Math.max(0, runner.capture.requests.length - 1))
+      setDebugPanel('parsed')
+      setMessage(result.status === 'success' || result.status === 'partial' ? `搜索完成，候选 ${result.value?.items.length ?? 0} 个` : `搜索${result.status}`)
+    }).catch((error: unknown) => {
+      if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
+    }).finally(() => finishOperation(operation))
+  }
+
+  const runDebugQuickCheck = (runner: DebugRunner, keywordOverride?: string): void => {
+    const operation = beginOperation('task')
+    setMessage(`正在快速检查书源“${display(runner.source.source.bookSourceName)}”…`)
+    runner.setKeyword(keywordOverride ?? (debugKeyword || runner.state.keyword))
+    const signal = operation.controller.signal
+    void (async () => {
+      const searchResult = await runner.search(runner.state.keyword, signal)
+      if (!isCurrent(operation) || searchResult.value?.items[0] === undefined) return
+      const detailResult = await runner.detail(0, signal)
+      if (!isCurrent(operation) || detailResult.value?.items[0] === undefined) return
+      const tocResult = await runner.toc(signal)
+      if (!isCurrent(operation) || tocResult.value?.items[0] === undefined) return
+      await runner.content(0, signal)
+      if (!isCurrent(operation)) return
+      setDebugTick((tick) => tick + 1)
+      setDebugPanel('parsed')
+      setDebugRequestSelected(Math.max(0, runner.capture.requests.length - 1))
+      const state = runner.state
+      setMessage(`快速检查完成：搜索 ${state.candidates.length} 个候选、目录 ${state.chapters.length} 章、正文 ${state.content?.cleaned.length ?? 0} 字`)
+    })()
+      .catch((error: unknown) => {
+        if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
+      })
+      .finally(() => finishOperation(operation))
+  }
+
+  const openDebugForSource = (sourceId: string, quickCheck = false): void => {
+    const runner = application.createDebugRunner(sourceId)
+    if (runner === undefined) { setMessage('该书源不可用，无法调试'); return }
+    setDebugRunner(runner)
+    setDebugCapture(undefined)
+    setDebugPanel('parsed')
+    setDebugRequestSelected(0)
+    setDebugResultSelected(0)
+    setDebugFilter('')
+    setDebugFilterActive(false)
+    const keyword = runner.state.keyword
+    runner.setKeyword(keyword)
+    setDebugKeyword(keyword)
+    setDebugKeywordActive(false)
+    setPage('debug')
+    if (quickCheck) runDebugQuickCheck(runner, keyword)
+    else runDebugSearch(runner, keyword)
+  }
+
+  const runDebugStage = (task: () => Promise<unknown>, success: string): void => {
+    const runner = debugRunner
+    if (runner === undefined || busy) return
+    const operation = beginOperation('task')
+    setMessage('正在执行调试阶段…')
+    void task().then(() => {
+      if (!isCurrent(operation)) return
+      setDebugTick((value) => value + 1)
+      setDebugRequestSelected(Math.max(0, runner.capture.requests.length - 1))
+      setDebugPanel('parsed')
+      setMessage(success)
+    }).catch((error: unknown) => {
+      if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
+    }).finally(() => finishOperation(operation))
+  }
+
+  const handleDebugInput = (input: string, key: InputKey): void => {
+    const capture = debugRunner?.capture ?? debugCapture
+    if (input === 'l') { setDebugPanel('flow'); return }
+    if (input === 'n') { setDebugPanel('requests'); return }
+    if (input === 'r') { setDebugPanel('response'); return }
+    if (input === 'p') { setDebugPanel('parsed'); return }
+    if (input === 'i' && debugRunner !== undefined && !busy) { setDebugKeyword(debugRunner.state.keyword); setDebugKeywordActive(true); return }
+    if (input === '/' && !busy && debugPanel !== 'parsed') { setDebugFilter(''); setDebugRequestSelected(0); setDebugFilterActive(true); return }
+    if (input === 'y' && capture !== undefined) {
+      const visibleRequests = debugFilter.length === 0 ? [...capture.requests] : capture.requests.filter((item) => `${item.sequence} ${item.stage} ${item.sourceId} ${item.sourceName ?? ''} ${item.method} ${item.url} ${item.status ?? ''} ${item.error ?? ''}`.toLowerCase().includes(debugFilter.toLowerCase()))
+      const selectedRequest = visibleRequests[debugRequestSelected]
+      const selectedRequestIndex = selectedRequest === undefined ? undefined : capture.requests.indexOf(selectedRequest)
+      void copyDebugPanel(panelText(capture, debugPanel, selectedRequestIndex, debugFilter)).then((result) => setMessage(result.message))
+      return
+    }
+    if (input === 'e' && capture !== undefined) {
+      void exportDebugSession(capture).then((result) => setMessage(`已导出：${result.markdownPath}；${result.jsonPath}`)).catch((error: unknown) => setMessage(`导出失败：${errorMessage(error)}`))
+      return
+    }
+    if (capture !== undefined && debugPanel === 'requests') {
+      const records = debugFilter.length === 0 ? [...capture.requests] : capture.requests.filter((item) => `${item.sequence} ${item.stage} ${item.sourceId} ${item.sourceName ?? ''} ${item.method} ${item.url} ${item.status ?? ''} ${item.error ?? ''}`.toLowerCase().includes(debugFilter.toLowerCase()))
+      const next = navigationIndex(debugRequestSelected, records.length, input, key, Math.max(1, bodyHeight - 3))
+      if (next !== debugRequestSelected) { setDebugRequestSelected(next); setDebugPanel('response') }
+      if (key.return || key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') return
+    }
+    if (debugPanel === 'flow' || debugPanel === 'response') {
+      if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key)
+      return
+    }
+    const runner = debugRunner
+    if (runner === undefined) return
+    const stage = runner.state.stage
+    const total = stage === 'search' ? runner.state.candidates.length : stage === 'toc' ? runner.state.chapters.length : 0
+    if (stage === 'search' || stage === 'toc') {
+      const next = navigationIndex(debugResultSelected, total, input, key, Math.max(1, bodyHeight - 3))
+      if (next !== debugResultSelected) setDebugResultSelected(next)
+    }
+    if (key.return && !busy) {
+      if (stage === 'search' && runner.state.candidates.length > 0) runDebugStage(() => runner.detail(debugResultSelected), '书籍信息调试完成')
+      else if (stage === 'book-info') runDebugStage(() => runner.toc(), '目录调试完成')
+      else if (stage === 'toc' && runner.state.chapters.length > 0) runDebugStage(() => runner.content(debugResultSelected), '正文调试完成')
+    }
   }
 
   useEffect(() => {
@@ -989,6 +1139,21 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (input === 't') setPage('toc')
   }
 
+  const debugLineCount = (): number => {
+    const capture = debugRunner?.capture ?? debugCapture
+    if (capture === undefined) return 3
+    const snapshot = capture.snapshot()
+    if (debugPanel === 'flow') return snapshot.processes.length + 4
+    const requestMatches = (item: { sequence: number; stage: string; sourceId: string; sourceName?: string; method: string; url: string; status?: number; error?: string }): boolean => debugFilter.length === 0 || `${item.sequence} ${item.stage} ${item.sourceId} ${item.sourceName ?? ''} ${item.method} ${item.url} ${item.status ?? ''} ${item.error ?? ''}`.toLowerCase().includes(debugFilter.toLowerCase())
+    if (debugPanel === 'requests') return snapshot.requests.filter(requestMatches).length + 4
+    if (debugPanel === 'response') {
+      const requests = snapshot.requests.filter(requestMatches)
+      const body = requests[debugRequestSelected]?.responseText?.split('\n').length ?? 1
+      return body + 20
+    }
+    return snapshot.stages.length * 4 + (debugRunner?.state.candidates.length ?? 0) + (debugRunner?.state.chapters.length ?? 0) + 8
+  }
+
   const handleMenuInput = (input: string, key: InputKey): boolean => {
     if (menu === undefined) return false
     if (key.escape) { setMenu(undefined); return true }
@@ -1000,13 +1165,31 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const handlePageScroll = (input: string, key: InputKey): void => {
     const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
-    const lines = page === 'help' ? helpLines(helpPage, homeArea).length : page === 'detail' ? detailLineCount(book, columns) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.diagnostics.length + 2 : 6
+    const lines = page === 'help' ? helpLines(helpPage, homeArea, columns).length : page === 'detail' ? detailLineCount(book, columns) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.entries.length + catalog.diagnostics.length + 8 : page === 'debug' ? debugLineCount() : 6
     const next = navigationPage(pageScroll, lines, input, key, bodyHeight)
     if (next !== pageScroll) setPageScroll(next)
   }
 
   useInput((input, key) => {
     if (handleMenuInput(input, key)) return
+    if (page === 'debug' && (debugFilterActive || debugKeywordActive)) {
+      if (key.escape) { setDebugFilterActive(false); setDebugKeywordActive(false); return }
+      if (key.return) {
+        if (debugKeywordActive && debugRunner !== undefined && !busy) { setDebugKeywordActive(false); runDebugSearch(debugRunner) }
+        else setDebugFilterActive(false)
+        return
+      }
+      if (key.backspace || key.delete) {
+        if (debugKeywordActive) setDebugKeyword((value) => Array.from(value).slice(0, -1).join(''))
+        else setDebugFilter((value) => Array.from(value).slice(0, -1).join(''))
+        return
+      }
+      if (!key.ctrl && !key.meta && input.length > 0) {
+        if (debugKeywordActive) setDebugKeyword((value) => value + input)
+        else setDebugFilter((value) => value + input)
+        return
+      }
+    }
     if (page === 'search') {
       if (key.escape) { goBack(); return }
       if (key.return) { void submitSearch(); return }
@@ -1043,6 +1226,18 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setListStart((start) => keepIndexVisible(selectedChapter, toc?.chapters.length ?? 0, Math.max(1, bodyHeight), start).start)
       return
     }
+    if (input === 'v' && !busy) {
+      const context = page === 'results' ? 'search' : page === 'detail' ? 'detail' : page === 'sources' ? 'sources' : page === 'toc' ? `toc:${book?.book.bookId ?? ''}:${toc?.edition.editionKey ?? ''}` : page === 'reader' ? `content:${book?.book.bookId ?? ''}:${toc?.edition.editionKey ?? ''}` : ''
+      if (context.length > 0) { openEvidence(context); return }
+    }
+    if (page === 'diagnostics' && input === 'g' && !busy) {
+      const target = catalog.entries[selected]
+      if (target !== undefined) { openDebugForSource(target.id); return }
+    }
+    if (page === 'diagnostics' && input === 'r' && !busy) {
+      const target = catalog.entries[selected]
+      if (target !== undefined) { openDebugForSource(target.id, true); return }
+    }
     if (page === 'home') handleHomeInput(input, key)
     else if (page === 'results') handleResultsInput(input, key)
     else if (page === 'detail') { handleDetailInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
@@ -1050,17 +1245,25 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     else if (page === 'reader') handleReaderInput(input, key)
     else if (page === 'sources') handleSourcesInput(input, key)
     else if (page === 'mapping') { handleMappingInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
-    else if (page === 'help' || page === 'diagnostics' || page === 'config') handlePageScroll(input, key)
+    else if (page === 'debug') handleDebugInput(input, key)
+    else if (page === 'help' || page === 'diagnostics' || page === 'config') {
+      if (page === 'diagnostics') {
+        const next = navigationIndex(selected, catalog.entries.length, input, key, Math.max(1, bodyHeight - 5))
+        if (next !== selected) { setSelected(next); setPageScroll((scroll) => keepIndexVisible(next, catalog.entries.length, Math.max(1, bodyHeight - 5), scroll).start) }
+        if (key.return && catalog.entries[selected] !== undefined) setMessage(`${catalog.entries[selected]!.source.bookSourceName}：按 g 进入调试`)
+      }
+      handlePageScroll(input, key)
+    }
   })
 
   const visibleMessage = messageOwner === page ? message : ''
   const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
-  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator }
+  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator, ...(debugRunner === undefined ? {} : { debugRunner }), ...(debugCapture === undefined ? {} : { debugCapture }), debugPanel, debugRequestSelected, debugResultSelected, debugFilter }
   const visiblePage = renderPage(page, state)
   const commandActions = footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0, tocReversed)
-  const inputMode = page === 'search' || page === 'toc' && tocSearchActive
-  const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : ''
-  const inputValue = page === 'search' ? query : tocQuery
+  const inputMode = page === 'search' || page === 'toc' && tocSearchActive || page === 'debug' && (debugFilterActive || debugKeywordActive)
+  const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : page === 'debug' && debugKeywordActive ? '关键词 › ' : page === 'debug' && debugFilterActive ? '过滤 › ' : ''
+  const inputValue = page === 'search' ? query : page === 'toc' ? tocQuery : debugKeywordActive ? debugKeyword : debugFilter
   const inputWidth = Math.max(0, columns - terminalWidth(commandActions) - 1 - terminalWidth(inputLabel) - 1)
   const commandInput = inputMode ? `${inputLabel}${tailTerminalText(inputValue, inputWidth)}█` : ''
   const pageContext = pageHeader(page, state)

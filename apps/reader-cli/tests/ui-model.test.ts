@@ -69,7 +69,8 @@ test('目录标题按 NFKC 和大小写不敏感匹配，导航栈按最近进�
 
 test('阅读页帮助保留翻页和章节切换键位，底部省略这两项', () => {
   const readerHelp = helpLines('reader', 0).join(' ')
-  assert.match(readerHelp, /↑\/↓ 或 j\/k 翻页，←\/→ 或 h\/l 切换章节/u)
+  assert.match(readerHelp, /↑\/↓\s+j\/k\s+翻页/u)
+  assert.match(readerHelp, /←\/→\s+h\/l\s+切换章节/u)
   assert.doesNotMatch(readerHelp, /逐行|\[ \]/u)
   const readerFooter = footer('reader', false, 100, 'idle', 'idle', false, 0)
   assert.doesNotMatch(readerFooter, /\[j\/k\] 翻页/u)
@@ -79,6 +80,16 @@ test('阅读页帮助保留翻页和章节切换键位，底部省略这两项',
   assert.doesNotMatch(readerFooter, /\[ \]/u)
   assert.doesNotMatch(readerFooter, /上下章/u)
   assert.deepEqual([0, 1, 2].map(homeAreaLabel), ['书架', '最近阅读', '搜索记录'])
+})
+
+test('帮助页使用分组分割线，窄终端仍保留快捷键和完整说明行', () => {
+  const lines = helpLines('debug', 0, 40)
+  assert.ok(lines.some((line) => line.includes('全局导航')))
+  assert.ok(lines.some((line) => line.includes('请求与解析查看')))
+  assert.ok(lines.some((line) => line.includes('复制当前面板')))
+  assert.ok(lines.every((line) => terminalWidth(line) <= 40))
+  assert.doesNotMatch(footer('diagnostics', false, 80, 'idle', 'idle', false, 0), /\[d\]|\[g\]|\[r\]/u)
+  assert.doesNotMatch(footer('debug', false, 80, 'idle', 'idle', false, 0), /\[v\]|\[g\]|\[y\]|\[e\]/u)
 })
 
 test('阅读页把方向键映射到等效字母快捷键，详情动作使用精简名称', () => {

@@ -29,8 +29,8 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
     ...(options.cache === undefined ? {} : { cache: options.cache }),
     ...(options.clock === undefined ? {} : { clock: options.clock }),
     network,
-    createPorts: ({ initialVariables, cache, network: limitedNetwork, updateConcurrentRate }) => {
-      const request = new SourceRequestHost({ network: limitedNetwork ?? network, cookieStore, encoding })
+    createPorts: ({ initialVariables, cache, network: limitedNetwork, updateConcurrentRate, requestObserver }) => {
+      const request = new SourceRequestHost({ network: limitedNetwork ?? network, cookieStore, encoding, ...(requestObserver === undefined ? {} : { requestObserver }) })
       const rules = new SourceRuleHost({
         request: (input, signal, currentSource) => request.requestFromBridge(input, signal, currentSource),
         setConcurrentRate: updateConcurrentRate,
@@ -43,6 +43,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
         rules,
         request: (input) => request.request(input),
         decodeResponse: (response) => request.decodeResponse(response),
+        ...(requestObserver === undefined ? {} : { requestObserver }),
         ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
       }
     },

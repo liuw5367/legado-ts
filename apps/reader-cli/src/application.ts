@@ -18,6 +18,8 @@ import type {
 } from './application-model.ts'
 import { SourceSession } from './source-session.ts'
 import { filterSearchSnapshot, groupSearchResults, isAuthorMatch, isBookTitleMatch, normalizeAuthor } from './search-results.ts'
+import { DebugCapture } from './debug-capture.ts'
+import { DebugRunner } from './debug-runner.ts'
 
 export type {
   OpenBookResult,
@@ -34,6 +36,8 @@ export type {
   TocResult,
 } from './application-model.ts'
 export { groupSearchResults, searchMatchRank, searchMatchRankLabel } from './search-results.ts'
+export { DebugCapture } from './debug-capture.ts'
+export { DebugRunner } from './debug-runner.ts'
 
 interface TrackedOperation {
   controller: AbortController
@@ -47,6 +51,7 @@ export class ReaderApplication {
   private readonly concurrency: KeyedConcurrencyHost
   private readonly maxConcurrentSources: number
   private readonly activeOperations = new Set<TrackedOperation>()
+  private readonly evidence = new Map<string, DebugCapture>()
   private closed = false
   private closePromise?: Promise<void>
 
@@ -91,6 +96,21 @@ export class ReaderApplication {
     return this.catalog.sourceLocation
   }
 
+  public get sourceCatalog(): SourceCatalogResult {
+    return this.catalog
+  }
+
+  public evidenceFor(context: string): DebugCapture | undefined {
+    return this.evidence.get(context)
+  }
+
+  public createDebugRunner(sourceId: string): DebugRunner | undefined {
+    const entry = this.catalog.entries.find((item) => item.id === sourceId || item.source.bookSourceUrl === sourceId)
+    if (entry === undefined || entry.state !== 'available') return undefined
+    const session = this.sessions.get(entry.id)
+    return session === undefined ? undefined : new DebugRunner(entry, session)
+  }
+
   public async home(): Promise<Awaited<ReturnType<ReaderStorage['homeViews']>>> {
     return this.storage.homeViews()
   }
@@ -109,6 +129,7 @@ export class ReaderApplication {
     const startedAt = new Date().toISOString()
     const startedClock = Date.now()
     const entries = usableSources(this.catalog).filter((entry) => sourceIds === undefined || sourceIds.includes(entry.id) || sourceIds.includes(entry.source.bookSourceUrl))
+    const capture = new DebugCapture({ sourceId: 'multi', sourceName: '搜索', mode: 'light' })
     const results: SourceSearchResult[] = []
     const activeSources = new Map<string, number>()
     let completed = 0
@@ -170,7 +191,7 @@ export class ReaderApplication {
           const response = await this.concurrency.run(source.id, (innerSignal) => {
             // 并发宿主可能先排队；耗时从真正进入书源会话开始计算，不包含队列等待。
             sourceStartedClock = Date.now()
-            return session.search(trimmed, innerSignal)
+            return session.search(trimmed, innerSignal, capture)
           }, signal)
           const found = response.value?.items ?? []
           const durationMs = Date.now() - sourceStartedClock
@@ -215,6 +236,7 @@ export class ReaderApplication {
     const completedAt = new Date().toISOString()
     const operation: SearchOperationResult = { ...snapshot(cancelled, completedAt), searchId: history.id, completedAt }
     emitUpdate(cancelled)
+    this.rememberEvidence('search', capture)
     return operation
   }
 
@@ -236,7 +258,8 @@ export class ReaderApplication {
       : { ...existing, activeEditionKey: selectedEdition, updatedAt: timestamp }
     const session = this.sessions.get(selected.source.id)
     if (session === undefined) throw new Error('所选书源当前不可用')
-    const details = await session.detail(selected.candidate, signal)
+    const capture = new DebugCapture({ sourceId: selected.source.id, sourceName: selected.source.source.bookSourceName, mode: 'light' })
+    const details = await session.detail(selected.candidate, signal, capture).finally(() => this.rememberEvidence('detail', capture))
     throwIfAborted(signal)
     const metadata = details.value?.items[0]
     const book = metadata === undefined ? base : updateBook(base, metadata, selectedEdition, timestamp)
@@ -306,6 +329,8 @@ export class ReaderApplication {
       const sourceIds = usableSources(this.catalog).filter((entry) => !valid.has(entry.source.bookSourceUrl)).map((entry) => entry.id)
       const update = onUpdate === undefined ? undefined : (snapshot: SearchOperationResult): void => onUpdate(filterSearchSnapshot(snapshot, book.name, book.author))
       const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update)
+      const searchEvidence = this.evidence.get('search')
+      if (searchEvidence !== undefined) this.rememberEvidence('sources', searchEvidence)
       // searchInternal 在取消后仍会返回已完成书源的快照；先持久化其中的
       // 严格匹配候选，再把 cancelled 结果交给 UI，避免 ⎋ 丢失已返回书源。
       const matching = result.results.filter((item) => isBookTitleMatch(item.candidate.name, book.name) && isAuthorMatch(item.candidate.author, book.author))
@@ -331,7 +356,11 @@ export class ReaderApplication {
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
     const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
-    const result = await session.toc(metadata, signal, options)
+    const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
+    const result = await session.toc(metadata, signal, options, capture).finally(() => {
+      this.rememberEvidence('toc', capture)
+      this.rememberEvidence(`toc:${bookId}:${edition.editionKey}`, capture)
+    })
     throwIfAborted(signal)
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '目录加载失败')
     const revision = sha256(JSON.stringify(result.value.items.map((item) => ({ url: item.chapterUrl, title: item.title }))))
@@ -352,7 +381,11 @@ export class ReaderApplication {
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
     const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
-    const result = await session.content(chapter, metadata, signal, options)
+    const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
+    const result = await session.content(chapter, metadata, signal, options, capture).finally(() => {
+      this.rememberEvidence('content', capture)
+      this.rememberEvidence(`content:${bookId}:${edition.editionKey}`, capture)
+    })
     throwIfAborted(signal)
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '正文加载失败')
     return { content: result.value, source, edition }
@@ -387,7 +420,11 @@ export class ReaderApplication {
     const source = this.requireSource(target)
     const session = this.requireSession(source)
     const candidate: BookCandidate = { sourceId: target.sourceId, bookUrl: target.bookUrl, ...(target.name === undefined ? {} : { name: target.name }), ...(target.author === undefined ? {} : { author: target.author }), ...(target.intro === undefined ? {} : { intro: target.intro }), ...(target.coverUrl === undefined ? {} : { coverUrl: target.coverUrl }), ...(target.lastChapter === undefined ? {} : { lastChapter: target.lastChapter }), ...(target.updateTime === undefined ? {} : { updateTime: target.updateTime }), rawFields: target.rawFields, traceRef: `stored:${target.editionKey}` }
-    const details = await session.detail(candidate, signal)
+    const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
+    const details = await session.detail(candidate, signal, capture).finally(() => {
+      this.rememberEvidence('sources', capture)
+      this.rememberEvidence('detail', capture)
+    })
     throwIfAborted(signal)
     if (details.value === null) throw new Error(details.diagnostics[0]?.message ?? '目标书源详情加载失败')
     const metadata = details.value?.items[0]
@@ -421,6 +458,17 @@ export class ReaderApplication {
     const source = this.catalog.entries.find((entry) => entry.source.bookSourceUrl === edition.sourceId && entry.fingerprint === edition.sourceFingerprint)
     if (source === undefined) throw new Error('书源定义已变化')
     return source
+  }
+
+  private rememberEvidence(context: string, capture: DebugCapture): void {
+    const separator = context.indexOf(':')
+    if (separator > 0) {
+      const prefix = `${context.slice(0, separator)}:`
+      for (const key of this.evidence.keys()) if (key.startsWith(prefix) && key !== context) this.evidence.delete(key)
+    }
+    this.evidence.delete(context)
+    this.evidence.set(context, capture)
+    while (this.evidence.size > 16) this.evidence.delete(this.evidence.keys().next().value as string)
   }
 
   private requireSession(source: SourceEntry): ReaderSourceSession {
