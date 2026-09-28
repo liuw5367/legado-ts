@@ -89,6 +89,12 @@ export interface StoragePaths {
   cacheRoot: string
 }
 
+export interface ReaderSettings {
+  searchConcurrency: number
+  sourceSearchConcurrency: number
+  sourceCheckConcurrency: number
+}
+
 export interface HomeBookView {
   book: BookDocument
   reading?: ReadingRecord

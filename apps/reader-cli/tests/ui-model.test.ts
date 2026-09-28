@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer, formatDuration, helpLines, homeAreaLabel, navigationIndex, navigationPage, normalizeChapterTitle, popNavigationFrame, previousPage, pushNavigationFrame, readerNavigation, refreshOnHomeEntry, searchHeaderStatus } from '../src/ui-model.ts'
+import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer, footerLayout, formatDuration, helpLines, homeAreaLabel, navigationIndex, navigationPage, normalizeChapterTitle, popNavigationFrame, previousPage, pushNavigationFrame, readerNavigation, refreshOnHomeEntry, searchHeaderStatus } from '../src/ui-model.ts'
 import { layoutContextLine, terminalWidth } from '../src/ui-actions.ts'
 import type { NavigationFrame } from '../src/ui-model.ts'
 
@@ -10,6 +10,10 @@ test('界面模型保持列表导航在有效范围内', () => {
   assert.equal(navigationIndex(4, 5, 'j', {}, 3), 4)
   assert.equal(navigationPage(0, 20, '', { pageDown: true }, 5), 4)
   assert.equal(navigationPage(19, 20, '', { pageDown: true }, 5), 15)
+  assert.equal(navigationIndex(2, 5, 'a', { ctrl: true }, 3), 0)
+  assert.equal(navigationIndex(2, 5, 'e', { ctrl: true }, 3), 4)
+  assert.equal(navigationPage(5, 20, 'a', { ctrl: true }, 5), 0)
+  assert.equal(navigationPage(5, 20, 'e', { ctrl: true }, 5), 15)
 })
 
 test('界面模型格式化稳定的显示值与返回路径', () => {
@@ -80,6 +84,34 @@ test('阅读页帮助保留翻页和章节切换键位，底部省略这两项',
   assert.doesNotMatch(readerFooter, /\[ \]/u)
   assert.doesNotMatch(readerFooter, /上下章/u)
   assert.deepEqual([0, 1, 2].map(homeAreaLabel), ['书架', '最近阅读', '搜索记录'])
+})
+
+test('通用页脚固定在右侧，任务取消保留在左侧且不重复 Esc', () => {
+  const home = footerLayout('home', false, 80, 'idle', 'idle', false, 0)
+  assert.match(home.right, /\[\?\] 帮助/u)
+  assert.match(home.right, /\[q\] 退出/u)
+  assert.doesNotMatch(home.right, /\[⎋\]/u)
+  const searching = footerLayout('results', false, 80, 'running', 'idle', false, 0)
+  assert.match(searching.left, /\[⎋\] 取消搜索/u)
+  assert.doesNotMatch(searching.right, /\[⎋\]/u)
+  assert.match(searching.right, /\[\?\] 帮助/u)
+  const filtering = footerLayout('toc', false, 80, 'idle', 'idle', false, 0, false, true)
+  assert.match(filtering.left, /\[⎋\] 清除筛选/u)
+  assert.doesNotMatch(filtering.right, /\[⎋\]/u)
+  const mapping = footerLayout('mapping', false, 80, 'idle', 'idle', false, 0)
+  assert.match(mapping.left, /\[⎋\] 取消/u)
+  assert.doesNotMatch(mapping.right, /\[⎋\]/u)
+  const menu = footerLayout('home', false, 80, 'idle', 'idle', true, 0)
+  assert.equal(menu.right, '[⎋] 关闭')
+  assert.doesNotMatch(menu.right, /\[\?\]|\[q\]/u)
+  const input = footerLayout('search', false, 80, 'idle', 'idle', false, 0, false, false, false, { textInput: true })
+  assert.doesNotMatch(input.right, /\[\?\]|\[q\]/u)
+  assert.match(input.right, /\[⎋\] 返回/u)
+  const tocInput = footerLayout('toc', false, 80, 'idle', 'idle', false, 0, true, false, false, { textInput: true })
+  assert.equal(tocInput.right, '[⎋] 清除')
+  const editing = footerLayout('settings', false, 80, 'idle', 'idle', false, 0, false, false, false, { settingsEditing: true })
+  assert.equal(editing.left, '[↵] 保存  [⎋] 取消')
+  assert.equal(editing.right, '')
 })
 
 test('帮助页使用分组分割线，窄终端仍保留快捷键和完整说明行', () => {

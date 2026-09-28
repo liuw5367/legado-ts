@@ -4,9 +4,9 @@ import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
 import type { ActionMenuItem } from './action-menu.ts'
 import { sanitizeTerminalText, layoutContent } from './content-layout.ts'
 import { moveIndex, pageIndexForKey } from './viewport.ts'
-import { layoutFooter, terminalWidth, type FooterAction } from './ui-actions.ts'
+import { layoutFooter, terminalWidth, type FooterAction, type FooterLayout } from './ui-actions.ts'
 
-export type Page = 'config' | 'home' | 'search' | 'results' | 'detail' | 'toc' | 'reader' | 'sources' | 'mapping' | 'help' | 'diagnostics' | 'debug' | 'source-manager'
+export type Page = 'config' | 'home' | 'search' | 'results' | 'detail' | 'toc' | 'reader' | 'sources' | 'mapping' | 'help' | 'settings' | 'diagnostics' | 'debug' | 'source-manager'
 export type SearchUiState = 'idle' | 'running' | 'cancelling' | 'complete' | 'cancelled' | 'error'
 export type OperationKind = 'search' | 'source-search' | 'source-check' | 'task'
 
@@ -51,22 +51,23 @@ export interface HelpSection {
 
 export function helpSections(page: Page, homeArea: number): HelpSection[] {
   const current: Partial<Record<Page, HelpSection>> = {
-    home: { title: '当前页面 · 首页', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开或重复搜索' }, { keys: '1/2/3', description: '切换书架、最近阅读、搜索记录' }, { keys: 'm', description: '书源管理' }, ...(homeArea === 2 ? [] : [{ keys: 'o', description: '打开书籍操作' }])] },
+    home: { title: '当前页面 · 首页', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开或重复搜索' }, { keys: '1/2/3', description: '切换书架、最近阅读、搜索记录' }, { keys: 'm', description: '书源管理' }, { keys: 's', description: '打开设置' }, ...(homeArea === 2 ? [] : [{ keys: 'o', description: '打开书籍操作' }])] },
     search: { title: '当前页面 · 搜索', entries: [{ keys: '输入文字', description: '填写书名' }, { keys: '↵', description: '开始搜索' }, { keys: '退格', description: '删除输入' }] },
     results: { title: '当前页面 · 搜索结果', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开书籍详情' }, { keys: 't', description: '直接打开目录' }, { keys: 'o', description: '书籍操作' }, { keys: '⎋', description: '搜索中取消任务' }] },
     detail: { title: '当前页面 · 书籍信息', entries: [{ keys: '↵', description: '开始阅读' }, { keys: 't', description: '打开目录' }, { keys: 's', description: '查看书源' }, { keys: 'a', description: '加入或移出书架' }] },
-    toc: { title: '当前页面 · 目录', entries: [{ keys: '↑/↓  j/k', description: '移动章节' }, { keys: '↵', description: '阅读选中章节' }, { keys: '/', description: '搜索章节' }, { keys: 'r', description: '刷新目录' }, { keys: 's', description: '切换正序/倒序' }, { keys: 'Home/End', description: '跳到开头或结尾' }] },
+    toc: { title: '当前页面 · 目录', entries: [{ keys: '↑/↓  j/k', description: '移动章节' }, { keys: '↵', description: '阅读选中章节' }, { keys: '/', description: '搜索章节' }, { keys: 'r', description: '刷新目录' }, { keys: 's', description: '切换正序/倒序' }, { keys: 'Home/End  Ctrl+A/E', description: '跳到开头或结尾' }] },
     reader: { title: '当前页面 · 阅读', entries: [{ keys: '↑/↓  j/k', description: '翻页' }, { keys: '←/→  h/l', description: '切换章节' }, { keys: 'PgUp/PgDn  空格', description: '整页翻页' }, { keys: 'i', description: '书籍信息' }, { keys: 't', description: '目录' }, { keys: 's', description: '切换书源' }, { keys: 'a', description: '书架' }, { keys: 'r', description: '刷新正文' }] },
     sources: { title: '当前页面 · 书源切换', entries: [{ keys: '↑/↓  j/k', description: '移动书源' }, { keys: '↵', description: '切换书源' }, { keys: 't', description: '查看目录' }, { keys: 'm', description: '搜索更多书源' }] },
     mapping: { title: '当前页面 · 章节映射', entries: [{ keys: '↵', description: '确认切换' }, { keys: '⎋', description: '取消' }] },
-    config: { title: '当前页面 · 配置', entries: [{ keys: 'd', description: '打开诊断' }] },
+    config: { title: '当前页面 · 配置', entries: [{ keys: 'd', description: '打开诊断' }, { keys: 's', description: '打开设置' }] },
+    settings: { title: '当前页面 · 设置', entries: [{ keys: '↑/↓  j/k', description: '选择设置项' }, { keys: '↵', description: '编辑或保存' }, { keys: 'r', description: '恢复默认值' }, { keys: '⎋', description: '返回或取消编辑' }] },
     diagnostics: { title: '当前页面 · 诊断', entries: [{ keys: '↑/↓  j/k', description: '选择书源' }, { keys: '↵', description: '查看书源诊断' }, { keys: 'r', description: '执行快速检查' }] },
     'source-manager': { title: '当前页面 · 书源管理', entries: [{ keys: '↑/↓  j/k', description: '移动书源' }, { keys: '空格', description: '选择当前书源' }, { keys: 'a', description: '全选或清除选择' }, { keys: 'c', description: '检测所选书源' }, { keys: 'x/e', description: '批量禁用/启用' }, { keys: 'f', description: '选择本次失败项' }, { keys: 'p', description: '设置优先级' }, { keys: '⎋', description: '取消检测或返回' }] },
     debug: { title: '当前页面 · 书源调试', entries: [{ keys: 'i', description: '修改搜索关键词' }, { keys: 'l', description: '处理流程' }, { keys: 'n', description: '请求列表' }, { keys: 'r', description: '原始响应' }, { keys: 'p', description: '解析摘要' }] },
   }
   const evidenceEntries = ['results', 'detail', 'sources', 'toc', 'reader'].includes(page) ? [{ keys: 'v', description: '查看当前页面最近请求' }] : page === 'diagnostics' ? [{ keys: 'g', description: '进入书源调试' }] : page === 'debug' ? [{ keys: 'y', description: '复制当前面板' }, { keys: 'e', description: '导出 Markdown 与 JSON' }] : []
   return [
-    { title: '全局导航', entries: [{ keys: '↑/↓  j/k', description: '移动或滚动' }, { keys: 'Home/End', description: '跳到开头或结尾' }, { keys: '↵', description: '确认或打开' }, { keys: '⎋', description: '返回或取消' }, { keys: 'Ctrl+K', description: '搜索书籍' }, { keys: 'q', description: '退出' }, { keys: '?', description: '打开或关闭帮助' }] },
+    { title: '全局导航', entries: [{ keys: '↑/↓  j/k', description: '移动或滚动' }, { keys: 'Home/End  Ctrl+A/E', description: '跳到开头或结尾' }, { keys: '↵', description: '确认或打开' }, { keys: '⎋', description: '返回或取消' }, { keys: 'Ctrl+K', description: '搜索书籍' }, { keys: 'q', description: '退出' }, { keys: '?', description: '打开或关闭帮助' }] },
     ...(current[page] === undefined ? [] : [current[page]!]),
     ...(evidenceEntries.length === 0 ? [] : [{ title: '请求与解析查看', entries: evidenceEntries }]),
   ]
@@ -124,6 +125,8 @@ export interface InputKey {
   delete?: boolean
   ctrl?: boolean
   meta?: boolean
+  shift?: boolean
+  tab?: boolean
 }
 
 export function homeItemsForArea(items: readonly HomeBookView[], area: number): HomeBookView[] {
@@ -137,8 +140,8 @@ export function navigationIndex(index: number, total: number, input: string, key
   if (input === 'k' || key.upArrow) return moveIndex(index, total, -1)
   if (key.pageDown || key.rightArrow) return pageIndexForKey(index, total, visible, 'next')
   if (key.pageUp || key.leftArrow) return pageIndexForKey(index, total, visible, 'previous')
-  if (key.home) return 0
-  if (key.end) return Math.max(0, total - 1)
+  if (key.home || key.ctrl && input === 'a') return 0
+  if (key.end || key.ctrl && input === 'e') return Math.max(0, total - 1)
   return index
 }
 
@@ -147,8 +150,8 @@ export function navigationPage(scroll: number, total: number, input: string, key
   if (input === 'k' || key.upArrow) return Math.max(0, scroll - 1)
   if (key.pageDown || key.rightArrow) return Math.min(Math.max(0, total - visible), scroll + Math.max(1, visible - 1))
   if (key.pageUp || key.leftArrow) return Math.max(0, scroll - Math.max(1, visible - 1))
-  if (key.home) return 0
-  if (key.end) return Math.max(0, total - visible)
+  if (key.home || key.ctrl && input === 'a') return 0
+  if (key.end || key.ctrl && input === 'e') return Math.max(0, total - visible)
   return scroll
 }
 
@@ -225,8 +228,10 @@ export function normalizeChapterTitle(value: string): string {
   return display(value).normalize('NFKC').replace(/[\s\p{P}\p{S}]+/gu, '')
 }
 
+export const HELP_PAGES: readonly Page[] = ['config', 'home', 'search', 'results', 'detail', 'toc', 'reader', 'sources', 'mapping', 'settings', 'diagnostics', 'debug', 'source-manager']
+
 export function pageLabel(page: Page): string {
-  return ({ config: '配置', home: '首页', search: '搜索', results: '搜索结果', detail: '详情', toc: '目录', reader: '阅读', sources: '已知书源', mapping: '章节映射', help: '帮助', diagnostics: '诊断', debug: '书源调试', 'source-manager': '书源管理' } as Record<Page, string>)[page]
+  return ({ config: '配置', home: '首页', search: '搜索', results: '搜索结果', detail: '详情', toc: '目录', reader: '阅读', sources: '已知书源', mapping: '章节映射', help: '帮助', settings: '设置', diagnostics: '诊断', debug: '书源调试', 'source-manager': '书源管理' } as Record<Page, string>)[page]
 }
 
 export function homeAreaLabel(homeArea: number): string {
@@ -234,7 +239,7 @@ export function homeAreaLabel(homeArea: number): string {
 }
 
 export function previousPage(page: Page): Page {
-  return page === 'config' ? 'config' : page === 'home' ? 'home' : page === 'search' ? 'home' : page === 'results' ? 'search' : page === 'detail' ? 'results' : page === 'toc' ? 'detail' : page === 'reader' ? 'toc' : page === 'sources' ? 'detail' : page === 'mapping' ? 'sources' : 'home'
+  return page === 'config' ? 'config' : page === 'home' ? 'home' : page === 'search' ? 'home' : page === 'results' ? 'search' : page === 'detail' ? 'results' : page === 'toc' ? 'detail' : page === 'reader' ? 'toc' : page === 'sources' ? 'detail' : page === 'mapping' ? 'sources' : page === 'settings' ? 'home' : 'home'
 }
 
 export function sourceState(value: KnownSourceView['state']): string {
@@ -245,75 +250,66 @@ export function activeEditionKey(book: OpenBookResult | undefined): string | und
   return book?.reading?.activeEditionKey ?? book?.book.activeEditionKey
 }
 
-export function footer(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number, tocSearchActive = false, tocHasQuery = false, tocReversed = false): string {
-  if (menuOpen) return layoutFooter([
-    { keys: '↵', label: '执行', priority: 0 },
-    { keys: '⎋', label: '关闭', priority: -1 },
-  ], columns)
-  const common: FooterAction[] = [
-    { keys: '⎋', label: '返回', priority: -1 },
-    { keys: '?', label: '帮助', priority: 8 },
-    { keys: 'q', label: '退出', priority: 10 },
+export interface FooterOptions {
+  textInput?: boolean
+  settingsEditing?: boolean
+  settingsResetConfirm?: boolean
+}
+
+export function footerLayout(page: Page, busy: boolean, columns: number, searchState: SearchUiState, sourceSearchState: SearchUiState, menuOpen: boolean, homeArea: number, tocSearchActive = false, tocHasQuery = false, tocReversed = false, options: FooterOptions = {}): FooterLayout {
+  const right: FooterAction[] = [
+    { keys: '?', label: '帮助', priority: 1 },
+    { keys: '⎋', label: '返回', priority: 0 },
+    { keys: 'q', label: '退出', priority: 2 },
   ]
-  if (page === 'home') return layoutFooter([
-    { keys: '↵', label: homeArea === 2 ? '重复搜索' : '阅读', priority: 0 },
-    ...(homeArea === 2 ? [] : [{ keys: 'o', label: '操作', priority: 1 }]),
-    { keys: 'm', label: '书源', priority: 2 },
-    ...common.slice(1),
-  ], columns)
-  if (page === 'search') return layoutFooter([
-    { keys: '↵', label: '搜索', priority: 0 },
-    { keys: '⎋', label: '返回', priority: -1 },
-  ], columns)
-  if (page === 'results') return layoutFooter([
-    ...(searchState === 'running' || searchState === 'cancelling' ? [{ keys: '⎋', label: '取消搜索', priority: -1 }] : [{ keys: '↵', label: '详情', priority: 0 }, { keys: 't', label: '目录', priority: 1 }]),
-    { keys: 'o', label: '操作', priority: 2 },
-    ...(searchState === 'running' || searchState === 'cancelling' ? common.slice(1) : common),
-  ], columns)
-  if (page === 'sources') {
-    const searching = sourceSearchState === 'running' || sourceSearchState === 'cancelling'
-    return layoutFooter([
-      ...(searching ? [{ keys: '⎋', label: '取消搜索', priority: -1 }] : [{ keys: '↵', label: '切换', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'm', label: '搜索更多', priority: 2 }]),
-      ...(searching ? common.slice(1) : common),
-    ], columns)
+  let left: FooterAction[] = []
+  let rightActions = page === 'home' || page === 'config' ? right.filter((item) => item.keys !== '⎋') : right
+  if (menuOpen) {
+    left = [{ keys: '↵', label: '执行', priority: 0 }]
+    rightActions = [{ keys: '⎋', label: '关闭', priority: 0 }]
   }
-  if (page === 'source-manager' && busy) return layoutFooter([{ keys: '⎋', label: '取消检测', priority: -1 }, ...common.slice(1)], columns)
-  if (busy) return layoutFooter([{ keys: '⎋', label: '取消处理中', priority: -1 }, ...common.slice(1)], columns)
-  if (page === 'detail') return layoutFooter([
-    { keys: '↵', label: '阅读', priority: 0 },
-    { keys: 't', label: '目录', priority: 1 },
-    { keys: 's', label: '换源', priority: 1 },
-    { keys: 'a', label: '书架', priority: 1 },
-    ...common,
-  ], columns)
-  if (page === 'toc') return layoutFooter(tocSearchActive
-    ? [{ keys: '↵', label: '完成', priority: 0 }, { keys: '⎋', label: '清除', priority: -1 }]
-    : [
-      { keys: '↵', label: '阅读', priority: 0 },
-      { keys: '/', label: '搜索', priority: 1 },
-      { keys: 'r', label: '刷新', priority: 2 },
-      { keys: 's', label: tocReversed ? '正序' : '倒序', priority: 3 },
-      ...(tocHasQuery ? [{ keys: '⎋', label: '清除筛选', priority: -1 }] : common),
-    ], columns)
-  if (page === 'reader') return layoutFooter([
-    { keys: 'i', label: '信息', priority: 1 },
-    { keys: 't', label: '目录', priority: 1 },
-    { keys: 's', label: '换源', priority: 1 },
-    { keys: 'a', label: '书架', priority: 1 },
-    { keys: 'r', label: '刷新', priority: 1 },
-    ...common,
-  ], columns)
-  if (page === 'mapping') return layoutFooter([
-    { keys: '↵', label: '确认切换', priority: 0 },
-    { keys: '⎋', label: '取消', priority: -1 },
-    ...common.slice(1),
-  ], columns)
-  if (page === 'debug') return layoutFooter([{ keys: '⎋', label: '返回', priority: -1 }, { keys: '?', label: '帮助', priority: 8 }, { keys: 'q', label: '退出', priority: 10 }], columns)
-  if (page === 'source-manager') return layoutFooter([
-    ...(busy ? [{ keys: '⎋', label: '取消检测', priority: -1 }] : [{ keys: '空格', label: '选择', priority: 0 }, { keys: 'c', label: '检测', priority: 1 }, { keys: 'x', label: '禁用', priority: 2 }, { keys: 'e', label: '启用', priority: 3 }, { keys: 'f', label: '失败项', priority: 4 }]),
-    ...common,
-  ], columns)
-  return layoutFooter(common, columns)
+  else if (page === 'home') left = [{ keys: '↵', label: homeArea === 2 ? '重复搜索' : '阅读', priority: 0 }, ...(homeArea === 2 ? [] : [{ keys: 'o', label: '操作', priority: 1 }]), { keys: 'm', label: '书源', priority: 2 }, { keys: 's', label: '设置', priority: 3 }]
+  else if (page === 'settings') left = [{ keys: '↵', label: '编辑', priority: 0 }, { keys: 'r', label: '恢复默认', priority: 1 }]
+  else if (page === 'search') left = [{ keys: '↵', label: '搜索', priority: 0 }]
+  else if (page === 'results') {
+    const searching = searchState === 'running' || searchState === 'cancelling'
+    left = searching ? [{ keys: '⎋', label: '取消搜索', priority: 0 }] : [{ keys: '↵', label: '详情', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'o', label: '操作', priority: 2 }]
+    if (searching) rightActions = right.filter((item) => item.keys !== '⎋')
+  } else if (page === 'sources') {
+    const searching = sourceSearchState === 'running' || sourceSearchState === 'cancelling'
+    left = searching ? [{ keys: '⎋', label: '取消搜索', priority: 0 }] : [{ keys: '↵', label: '切换', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 'm', label: '搜索更多', priority: 2 }]
+    if (searching) rightActions = right.filter((item) => item.keys !== '⎋')
+  } else if (page === 'source-manager' && busy) {
+    left = [{ keys: '⎋', label: '取消检测', priority: 0 }]
+    rightActions = right.filter((item) => item.keys !== '⎋')
+  } else if (busy) {
+    left = [{ keys: '⎋', label: '取消处理中', priority: 0 }]
+    rightActions = right.filter((item) => item.keys !== '⎋')
+  } else if (page === 'detail') left = [{ keys: '↵', label: '阅读', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 's', label: '换源', priority: 1 }, { keys: 'a', label: '书架', priority: 1 }]
+  else if (page === 'toc') left = tocSearchActive ? [{ keys: '↵', label: '完成', priority: 0 }, { keys: '⎋', label: '清除', priority: 1 }] : [{ keys: '↵', label: '阅读', priority: 0 }, { keys: '/', label: '搜索', priority: 1 }, { keys: 'r', label: '刷新', priority: 2 }, { keys: 's', label: tocReversed ? '正序' : '倒序', priority: 3 }, ...(tocHasQuery ? [{ keys: '⎋', label: '清除筛选', priority: 4 }] : [])]
+  else if (page === 'reader') left = [{ keys: 'i', label: '信息', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 's', label: '换源', priority: 1 }, { keys: 'a', label: '书架', priority: 1 }, { keys: 'r', label: '刷新', priority: 1 }]
+  else if (page === 'mapping') left = [{ keys: '↵', label: '确认切换', priority: 0 }, { keys: '⎋', label: '取消', priority: 1 }]
+  else if (page === 'source-manager') left = [{ keys: '空格', label: '选择', priority: 0 }, { keys: 'c', label: '检测', priority: 1 }, { keys: 'x', label: '禁用', priority: 2 }, { keys: 'e', label: '启用', priority: 3 }, { keys: 'f', label: '失败项', priority: 4 }]
+  else if (page === 'config') left = [{ keys: 's', label: '设置', priority: 0 }]
+  if (options.settingsResetConfirm) {
+    left = [{ keys: '↵', label: '确认', priority: 0 }]
+    rightActions = [{ keys: '⎋', label: '取消', priority: 0 }]
+  } else if (options.settingsEditing) {
+    left = [{ keys: '↵', label: '保存', priority: 0 }, { keys: '⎋', label: '取消', priority: 1 }]
+    rightActions = []
+  }
+  if (options.textInput) {
+    rightActions = rightActions.filter((item) => item.keys !== '?' && item.keys !== 'q').map((item) => item.keys === '⎋' ? { ...item, label: page === 'search' ? '返回' : page === 'toc' ? '清除' : '取消' } : item)
+  } else if (left.some((item) => item.keys === '⎋')) rightActions = rightActions.filter((item) => item.keys !== '⎋')
+  const leftText = layoutFooter(left, columns)
+  const availableRight = Math.max(1, columns - terminalWidth(leftText) - (leftText.length > 0 ? 3 : 0))
+  return { left: leftText, right: layoutFooter(rightActions, availableRight) }
+}
+
+/** 兼容纯文本调用方；渲染层使用 footerLayout 以实现左右分栏。 */
+export function footer(...args: Parameters<typeof footerLayout>): string {
+  const value = footerLayout(...args)
+  return [value.left, value.right].filter((item) => item.length > 0).join('   ')
 }
 
 export function sourceManagerEntries(catalog: SourceCatalogResult, filter: string, filterMode: number): SourceEntry[] {

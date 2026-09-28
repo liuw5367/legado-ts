@@ -27,7 +27,7 @@ function abortError(): DOMException {
 export class KeyedConcurrencyHost implements ConcurrencyHost {
   private readonly queues = new Map<string, QueueState>()
   private readonly idleWaiters = new Map<string, Set<() => void>>()
-  private readonly maxConcurrent: number
+  private maxConcurrent: number
   private readonly maxConcurrentPerKey: number
   private running = 0
 
@@ -65,6 +65,13 @@ export class KeyedConcurrencyHost implements ConcurrencyHost {
 
   public clear(): void {
     for (const key of [...this.queues.keys()]) this.cancel(key)
+  }
+
+  /** Adjust global capacity after queued work has settled or for a later operation. */
+  public setMaxConcurrent(maxConcurrent: number): void {
+    if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) throw new Error('concurrency limit is invalid')
+    this.maxConcurrent = maxConcurrent
+    this.pump()
   }
 
   /** Wait for the current queue contents to leave their `finally` blocks. */

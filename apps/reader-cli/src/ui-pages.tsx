@@ -2,13 +2,13 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import type { SourceCatalogResult } from './source-catalog.ts'
 import type { ReaderApplication, OpenBookResult, SearchOperationResult, SearchProgress, TocResult } from './application.ts'
-import type { HomeBookView, KnownSourceView } from './storage.ts'
+import type { HomeBookView, KnownSourceView, ReaderSettings } from './storage.ts'
 import { layoutContent } from './content-layout.ts'
 import type { ContentBlockKind } from './content-format.ts'
 import type { DebugCapture, DebugStage, ProcessRecord, RequestRecord } from './debug-capture.ts'
 import type { DebugRunner } from './debug-runner.ts'
 import type { SourceCheckProgress, SourceCheckResult } from './application-model.ts'
-import { actionMenuLabel } from './action-menu.ts'
+import { READER_SETTING_FIELDS } from './reader-settings.ts'
 import { formatDisplayTime, formatSourceTime } from './time-format.ts'
 import { orderSourceViews } from './source-order.ts'
 import {
@@ -26,10 +26,11 @@ import {
   searchMatchLabel,
   sourceState,
   sourceManagerEntries,
-  type MenuState,
   type Page,
   type SearchUiState,
+  HELP_PAGES,
 } from './ui-model.ts'
+import { clipTerminalText, terminalWidth } from './ui-actions.ts'
 import { pagePosition, viewportFor } from './viewport.ts'
 
 export interface RenderState {
@@ -80,13 +81,19 @@ export interface RenderState {
   sourceManagerFilterMode: number
   sourceCheckProgress?: SourceCheckProgress
   sourceCheckResults: readonly SourceCheckResult[]
+  readerSettings: ReaderSettings
+  settingsSelected: number
+  settingsEditing: boolean
+  settingsValue: string
+  settingsCursor: number
+  settingsResetConfirm: boolean
 }
 
 export function pageHeader(page: Page, state: RenderState): { left: string; right: string } {
   const bookName = state.book?.book.name ?? ''
   const chapterName = state.toc?.chapters[state.chapterIndex]?.title ?? ''
   const readerTitle = `${bookName} · ${chapterName} · ${state.chapterIndex + 1}/${state.toc?.chapters.length ?? 0} 章`
-  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : page === 'debug' ? `书源调试 · ${state.debugRunner?.source.source.bookSourceName ?? state.debugCapture?.sourceName ?? '最近操作'}` : page === 'source-manager' ? '书源管理' : '配置'
+  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'settings' ? '设置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : page === 'debug' ? `书源调试 · ${state.debugRunner?.source.source.bookSourceName ?? state.debugCapture?.sourceName ?? '最近操作'}` : page === 'source-manager' ? '书源管理' : '配置'
   const left = page === 'reader' || page === 'toc' || page === 'home' || page === 'results' ? pageName : `Legado Reader · ${pageName}`
   let right = ''
   if (page === 'home') right = `${state.catalog.entries.filter((entry) => entry.state === 'available').length}/${state.catalog.entries.length} 个书源可用`
@@ -112,6 +119,7 @@ export function pageHeader(page: Page, state: RenderState): { left: string; righ
 
 export function renderPage(page: Page, state: RenderState): React.ReactElement {
   if (page === 'config') return renderConfig(state.catalog, state.pageScroll, state.bodyHeight)
+  if (page === 'settings') return renderSettings(state.readerSettings, state.settingsSelected, state.settingsEditing, state.settingsValue, state.settingsCursor, state.settingsResetConfirm)
   if (page === 'home') return renderHome(state.home, state.history, state.homeArea, state.selected, state.listStart, state.bodyHeight)
   if (page === 'source-manager') return renderSourceManager(state)
   if (page === 'search') return <Text dimColor>在底部输入书名，按 ↵ 搜索。</Text>
@@ -129,6 +137,17 @@ export function renderPage(page: Page, state: RenderState): React.ReactElement {
 function renderConfig(catalog: SourceCatalogResult, scroll: number, height: number): React.ReactElement {
   const lines = ['使用 legado-reader --source <文件、目录或 HTTP(S) JSON 地址>', '或设置 LEGADO_READER_SOURCE 后重新启动。', ...catalog.diagnostics.map((item) => `[!] ${item}`)]
   return renderLineViewport(lines, scroll, height)
+}
+
+function renderSettings(settings: ReaderSettings, selected: number, editing: boolean, value: string, cursor: number, resetConfirm: boolean): React.ReactElement {
+  const rows = READER_SETTING_FIELDS.map((field, index) => {
+    const current = settings[field.key]
+    const position = Math.max(0, Math.min(cursor, value.length))
+    const editingValue = value.slice(0, position) + '█' + value.slice(position)
+    const shown = editing && index === selected ? editingValue : String(current)
+    return <Box key={field.key} flexDirection="column"><Text color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{field.label}：{shown}</Text><Text dimColor>     {field.description}（范围 {1}–{32}）</Text></Box>
+  })
+  return <Box flexDirection="column"><Text bold>应用设置</Text>{rows}<Text dimColor>保存后对下一次批量操作生效，当前操作不会改变。</Text>{resetConfirm ? <Text color="yellow">确认恢复默认值？按 Enter 确认，Esc 取消。</Text> : null}</Box>
 }
 
 function renderHome(items: HomeBookView[], history: Awaited<ReturnType<ReaderApplication['searchHistory']>>, area: number, selected: number, start: number, height: number): React.ReactElement {
@@ -235,7 +254,20 @@ function renderMapping(toc: TocResult | undefined, index: number, targetToc: Toc
 }
 
 function renderHelp(page: Page, homeArea: number, columns: number, scroll: number, height: number): React.ReactElement {
-  return renderLineViewport(helpLines(page, homeArea, columns), scroll, height)
+  const index = Math.max(0, HELP_PAGES.indexOf(page))
+  const tabTokens = HELP_PAGES.map((item, itemIndex) => itemIndex === index ? `[${pageLabel(item)}]` : pageLabel(item))
+  const tabs: string[] = []
+  for (let offset = 0; offset < tabTokens.length; offset += 1) {
+    const itemIndex = (index + offset) % tabTokens.length
+    const token = tabTokens[itemIndex]!
+    const candidate = tabs.length === 0 ? token : `${tabs.join('  ')}  ${token}`
+    if (terminalWidth(candidate) > Math.max(8, columns - 4)) break
+    tabs.push(token)
+  }
+  const hasMore = tabs.length < tabTokens.length
+  const tabLine = `${index > 0 ? '‹ ' : ''}${tabs.join('  ')}${hasMore ? ' ›' : ''}`
+  const lines = helpLines(page, homeArea, columns)
+  return <Box flexDirection="column"><Text bold color="cyan" wrap="truncate-end">{clipTerminalText(tabLine, columns)}</Text><Text dimColor>Tab/Shift+Tab 或 ←/→ 切换页面 · ↑/↓ 滚动 · Ctrl+A/E 首尾</Text>{renderLineViewport(lines, scroll, Math.max(1, height - 2))}</Box>
 }
 
 function renderDiagnostics(catalog: SourceCatalogResult, selected: number, scroll: number, height: number): React.ReactElement {
@@ -332,18 +364,4 @@ function renderLineViewport(lines: readonly string[], scroll: number, height: nu
     const absolute = range.start + index
     return <Text key={`${absolute}-${line}`}>{display(line)}</Text>
   })}</Box>
-}
-
-export function renderActionMenu(menu: MenuState, columns: number, rows: number): React.ReactElement {
-  const maxLabelWidth = Math.max(0, ...menu.items.map((item) => actionMenuLabel(item).length))
-  const width = Math.max(8, Math.min(Math.max(32, maxLabelWidth + 6), Math.max(8, columns - 4)))
-  const contentTop = 1
-  const contentHeight = Math.max(1, rows - contentTop - 2)
-  const height = Math.min(contentHeight, menu.items.length + 3)
-  const top = contentTop + Math.max(0, Math.floor((contentHeight - height) / 2))
-  const left = Math.max(0, Math.floor((columns - width) / 2))
-  return <Box position="absolute" top={top} left={left} width={width} height={height} flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} backgroundColor="black" overflow="hidden">
-    <Text bold color="cyan">操作</Text>
-    {menu.items.map((item, index) => <Text key={item.action} wrap="truncate-end" color={index === menu.index ? 'yellow' : item.enabled ? 'white' : 'gray'}>{index === menu.index ? '> ' : '  '}{display(actionMenuLabel(item))}</Text>)}
-  </Box>
 }

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="700" viewBox="0 0 960 700" role="img" aria-labelledby="title desc">
   <title id="title">命令行阅读器辅助页面预览</title>
-  <desc id="desc">配置、帮助和诊断页面的当前布局预览。</desc>
+  <desc id="desc">配置、帮助 tabs 和诊断页面的当前布局预览。</desc>
   <rect width="960" height="700" fill="#0f141a"/>
   <text x="34" y="34" fill="#cbd5e1" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="17" font-weight="700">辅助页面 · 配置 / 帮助 / 诊断</text>
   <rect x="24" y="52" width="912" height="188" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
@@ -8,14 +8,13 @@
   <text x="914" y="86" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">0/0 来源可用</text>
   <text x="46" y="140" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">使用 legado-reader --source &lt;文件、目录或 HTTP(S) JSON 地址&gt;</text>
   <text x="46" y="168" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">或设置 LEGADO_READER_SOURCE 后重新启动。</text>
-  <text x="46" y="226" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[⎋] 返回  [?] 帮助  [d] 诊断  [q] 退出</text>
+  <text x="46" y="226" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[s] 设置　　　　　　　　　　　　　　　　　　　　　[?] 帮助  [q] 退出</text>
   <rect x="24" y="256" width="912" height="188" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
   <text x="46" y="290" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  帮助 · 阅读</text>
-  <text x="914" y="290" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">⎋ 返回</text>
-<text x="46" y="350" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">↑/↓ 或 j/k 翻页，←/→ 或 h/l 切换章节</text>
-  <text x="46" y="378" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">PgUp/PgDn 或空格翻页，t 目录，s 书源</text>
-  <text x="46" y="406" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">a 书架，r 刷新</text>
-  <text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">⎋ 返回 · Ctrl+K 搜书 · q 退出 · ? 关闭帮助</text>
+  <text x="46" y="322" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16" font-weight="700">[配置]  首页  搜索  结果  详情  目录  阅读  书源  设置  诊断  …</text>
+  <text x="46" y="350" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">↑/↓ 滚动 · Tab/Shift+Tab 或 ←/→ 切换页面</text>
+  <text x="46" y="378" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">Home/End 或 Ctrl+A/Ctrl+E 跳到首尾 · ?/Esc 关闭</text>
+  <text x="46" y="430" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">[?] 帮助  [⎋] 返回  [q] 退出</text>
   <rect x="24" y="460" width="912" height="212" rx="8" fill="#111923" stroke="#334155" stroke-width="2"/>
   <text x="46" y="494" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">Legado Reader  ·  诊断</text>
   <text x="914" y="494" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="15">2 条信息</text>

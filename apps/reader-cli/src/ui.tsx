@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput, useWindowSize } from 'ink'
 import type { SourceCatalogResult } from './source-catalog.ts'
 import { ReaderApplication } from './application.ts'
 import type { OpenBookResult, SearchOperationResult, SearchProgress, SearchResultGroup, TocResult, SourceCheckProgress, SourceCheckResult } from './application.ts'
-import type { HomeBookView, KnownSourceView, ReadingPosition } from './storage.ts'
+import type { HomeBookView, KnownSourceView, ReadingPosition, ReaderSettings } from './storage.ts'
 import { layoutContent, layoutFormattedContent, lineAtParagraphOffset, paragraphOffsetAtLine, sanitizeTerminalText } from './content-layout.ts'
 import { countChapterCharacters, formatChapterContent } from './content-format.ts'
 import type { FormattedContent } from './content-format.ts'
@@ -11,7 +11,8 @@ import { actionMenuItems } from './action-menu.ts'
 import type { ReaderAction } from './action-menu.ts'
 import { clampContentLine, keepIndexVisible, terminalLayout } from './viewport.ts'
 import { layoutCommandLine, layoutContextLine, tailTerminalText, terminalWidth } from './ui-actions.ts'
-import { pageHeader, renderActionMenu, renderPage, type RenderState } from './ui-pages.tsx'
+import { pageHeader, renderPage, type RenderState } from './ui-pages.tsx'
+import { ActionMenuView } from './action-menu-view.tsx'
 import { useUiOperation } from './use-ui-operation.ts'
 import {
   activeEditionKey,
@@ -19,7 +20,7 @@ import {
   detailLineCount,
   display,
   errorMessage,
-  footer,
+  footerLayout,
   filterChapterIndices,
   homeItemsForArea,
   isAbortError,
@@ -35,12 +36,14 @@ import {
   selectedGroupIndex,
   sourceManagerEntries,
   type InputKey,
+  HELP_PAGES,
   type NavigationFrame,
   type MenuTarget,
   type MenuState,
   type Page,
   type SearchUiState,
 } from './ui-model.ts'
+import { READER_SETTING_FIELDS, READER_SETTINGS_DEFAULTS, isReaderSettingValue, type ReaderSettingKey } from './reader-settings.ts'
 import { orderSourceViews } from './source-order.ts'
 import type { DebugCapture } from './debug-capture.ts'
 import type { DebugRunner } from './debug-runner.ts'
@@ -162,6 +165,14 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [sourceManagerOrderActive, setSourceManagerOrderActive] = useState(false)
   const [sourceCheckProgress, setSourceCheckProgress] = useState<SourceCheckProgress>()
   const [sourceCheckResults, setSourceCheckResults] = useState<SourceCheckResult[]>([])
+  const [readerSettings, setReaderSettings] = useState<ReaderSettings>(() => application.readerSettings)
+  const [settingsSelected, setSettingsSelected] = useState(0)
+  const [settingsEditing, setSettingsEditing] = useState(false)
+  const [settingsValue, setSettingsValue] = useState('')
+  const [settingsCursor, setSettingsCursor] = useState(0)
+  const [settingsResetConfirm, setSettingsResetConfirm] = useState(false)
+  const [helpTab, setHelpTab] = useState<Page>('home')
+  const [helpScrolls, setHelpScrolls] = useState<Partial<Record<Page, number>>>({})
   const [, setDebugTick] = useState(0)
   const selectedGroupKeyRef = useRef<string | undefined>(undefined)
   const homeRefreshRequestRef = useRef(0)
@@ -394,6 +405,22 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const handleDebugInput = (input: string, key: InputKey): void => {
     const capture = debugRunner?.capture ?? debugCapture
+    if (key.ctrl && (input === 'a' || input === 'e')) {
+      if (capture !== undefined && debugPanel === 'requests') {
+        const records = debugFilter.length === 0 ? [...capture.requests] : capture.requests.filter((item) => `${item.sequence} ${item.stage} ${item.sourceId} ${item.sourceName ?? ''} ${item.method} ${item.url} ${item.status ?? ''} ${item.error ?? ''}`.toLowerCase().includes(debugFilter.toLowerCase()))
+        const next = navigationIndex(debugRequestSelected, records.length, input, key, Math.max(1, bodyHeight - 3))
+        if (next !== debugRequestSelected) { setDebugRequestSelected(next); setDebugPanel('response') }
+        return
+      }
+      const stage = debugRunner?.state.stage
+      if (debugPanel === 'parsed' && debugRunner !== undefined && (stage === 'search' || stage === 'toc')) {
+        const total = stage === 'search' ? debugRunner.state.candidates.length : debugRunner.state.chapters.length
+        setDebugResultSelected(navigationIndex(debugResultSelected, total, input, key, Math.max(1, bodyHeight - 3)))
+        return
+      }
+      handlePageScroll(input, key)
+      return
+    }
     if (input === 'l') { setDebugPanel('flow'); return }
     if (input === 'n') { setDebugPanel('requests'); return }
     if (input === 'r') { setDebugPanel('response'); return }
@@ -791,7 +818,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const runMenuAction = async (action: ReaderAction): Promise<void> => {
     const state = menu
     if (state === undefined) return
-    const item = state.items[state.index]
+    const item = state.items.find((candidate) => candidate.action === action)
     if (item === undefined || !item.enabled) {
       setMessage(item?.reason ?? '当前动作不可用')
       return
@@ -948,6 +975,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const handleSourceManagerInput = (input: string, key: InputKey): void => {
     if (sourceManagerFilterActive || sourceManagerOrderActive) return
     moveSourceManagerSelection(input, key)
+    if (key.ctrl && (input === 'a' || input === 'e')) return
     if (input === ' ') { toggleSourceManagerSelection(); return }
     if (input === 'a') { selectAllSourceManagerEntries(); return }
     if (input === 'c') { startSourceCheck(); return }
@@ -959,6 +987,112 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       const entry = visibleSourceManagerEntries()[sourceManagerSelected]
       if (entry !== undefined) { setSourceManagerOrderValue(String(entry.customOrder ?? 0)); setSourceManagerOrderActive(true) }
     }
+  }
+
+  const selectedReaderSettingKey = (): ReaderSettingKey => READER_SETTING_FIELDS[Math.max(0, Math.min(READER_SETTING_FIELDS.length - 1, settingsSelected))]!.key
+
+  const beginReaderSettingEdit = (): void => {
+    const key = selectedReaderSettingKey()
+    const value = String(readerSettings[key])
+    setSettingsValue(value)
+    setSettingsCursor(value.length)
+    setSettingsEditing(true)
+    setSettingsResetConfirm(false)
+  }
+
+  const saveReaderSettingValue = (): void => {
+    const key = selectedReaderSettingKey()
+    const value = Number(settingsValue)
+    if (!isReaderSettingValue(value)) {
+      setMessage(`设置值必须是 ${1}–${32} 的整数`)
+      return
+    }
+    const next: ReaderSettings = { ...readerSettings, [key]: value }
+    const operation = beginOperation('task')
+    void application.saveReaderSettings(next).then(() => {
+      if (!isCurrent(operation)) return
+      setReaderSettings(application.readerSettings)
+      setSettingsEditing(false)
+      setMessage('设置已保存，下次批量操作生效')
+    }).catch((error: unknown) => {
+      if (isCurrent(operation)) setMessage(errorMessage(error))
+    }).finally(() => finishOperation(operation))
+  }
+
+  const resetReaderSettings = (): void => {
+    if (!settingsResetConfirm) {
+      setSettingsResetConfirm(true)
+      return
+    }
+    const operation = beginOperation('task')
+    void application.saveReaderSettings(READER_SETTINGS_DEFAULTS).then(() => {
+      if (!isCurrent(operation)) return
+      setReaderSettings(application.readerSettings)
+      setSettingsSelected(0)
+      setSettingsCursor(0)
+      setSettingsResetConfirm(false)
+      setMessage('已恢复默认设置')
+    }).catch((error: unknown) => {
+      if (isCurrent(operation)) setMessage(errorMessage(error))
+    }).finally(() => finishOperation(operation))
+  }
+
+  const handleSettingsInput = (input: string, key: InputKey): void => {
+    if (settingsResetConfirm) {
+      if (key.escape) { setSettingsResetConfirm(false); return }
+      if (key.return) { if (!busy) resetReaderSettings(); return }
+      return
+    }
+    if (settingsEditing) {
+      if (key.escape) { setSettingsEditing(false); return }
+      if (key.return) { if (!busy) saveReaderSettingValue(); return }
+      if (key.leftArrow) { setSettingsCursor((cursor) => Math.max(0, cursor - 1)); return }
+      if (key.rightArrow) { setSettingsCursor((cursor) => Math.min(settingsValue.length, cursor + 1)); return }
+      if (key.home || key.ctrl && input === 'a') { setSettingsCursor(0); return }
+      if (key.end || key.ctrl && input === 'e') { setSettingsCursor(settingsValue.length); return }
+      if (key.backspace) {
+        if (settingsCursor > 0) {
+          const cursor = settingsCursor
+          setSettingsValue((value) => value.slice(0, cursor - 1) + value.slice(cursor))
+          setSettingsCursor(cursor - 1)
+        }
+        return
+      }
+      if (key.delete) {
+        const cursor = settingsCursor
+        if (cursor < settingsValue.length) setSettingsValue((value) => value.slice(0, cursor) + value.slice(cursor + 1))
+        return
+      }
+      if (!key.ctrl && !key.meta && /^\d$/u.test(input)) {
+        const cursor = settingsCursor
+        setSettingsValue((value) => value.slice(0, cursor) + input + value.slice(cursor))
+        setSettingsCursor(cursor + 1)
+      }
+      return
+    }
+    const next = navigationIndex(settingsSelected, READER_SETTING_FIELDS.length, input, key, READER_SETTING_FIELDS.length)
+    if (next !== settingsSelected) setSettingsSelected(next)
+    if (key.return && !busy) beginReaderSettingEdit()
+    if (input === 'r' && !busy) resetReaderSettings()
+  }
+
+  const handleHelpInput = (input: string, key: InputKey): void => {
+    const currentIndex = Math.max(0, HELP_PAGES.indexOf(helpTab))
+    if (key.shift && key.tab) {
+      setHelpTab(HELP_PAGES[(currentIndex - 1 + HELP_PAGES.length) % HELP_PAGES.length]!)
+      return
+    }
+    if (key.tab || input === '\t' || key.rightArrow) {
+      setHelpTab(HELP_PAGES[(currentIndex + 1) % HELP_PAGES.length]!)
+      return
+    }
+    if (key.leftArrow) {
+      setHelpTab(HELP_PAGES[(currentIndex - 1 + HELP_PAGES.length) % HELP_PAGES.length]!)
+      return
+    }
+    const currentScroll = helpScrolls[helpTab] ?? 0
+    const next = navigationPage(currentScroll, helpLines(helpTab, homeArea, columns).length, input, key, Math.max(1, bodyHeight - 2))
+    if (next !== currentScroll) setHelpScrolls((scrolls) => ({ ...scrolls, [helpTab]: next }))
   }
 
   const handleHomeInput = (input: string, key: InputKey): void => {
@@ -1011,7 +1145,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const handleDetailInput = (input: string, key: InputKey): void => {
     if (key.return && !busy) void startReading()
-    if (input === 'a' && !busy) toggleShelf()
+    if (!key.ctrl && !key.meta && input === 'a' && !busy) toggleShelf()
     if (input === 't' && !busy) void loadToc()
     if (input === 's' && !busy) void showSources()
   }
@@ -1084,6 +1218,8 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const handleReaderInput = (input: string, key: InputKey): void => {
     const height = Math.max(1, bodyHeight)
     const navigation = readerNavigation(input, key)
+    if (key.home || key.ctrl && input === 'a') setReaderLine(0)
+    if (key.end || key.ctrl && input === 'e') setReaderLine(clampContentLine(Number.MAX_SAFE_INTEGER, currentLines.length, height))
     if (input === ' ' || key.pageDown || navigation === 'next-page') setReaderLine((value) => clampContentLine(value + height, currentLines.length, height))
     if (key.pageUp || navigation === 'previous-page') setReaderLine((value) => clampContentLine(value - height, currentLines.length, height))
     if (input === 'r' && !busy) void loadChapter(chapterIndex, { refresh: true })
@@ -1092,7 +1228,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (navigation === 'next-chapter' && toc !== undefined && chapterIndex < toc.chapters.length - 1 && !busy) void loadChapter(chapterIndex + 1)
     if (input === 't' && !busy) setPage('toc')
     if (input === 's' && !busy) void showSources()
-    if (input === 'a' && !busy) toggleShelf()
+    if (!key.ctrl && !key.meta && input === 'a' && !busy) toggleShelf()
   }
 
   const handleSourcesInput = (input: string, key: InputKey): void => {
@@ -1248,13 +1384,14 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (key.escape) { setMenu(undefined); return true }
     const next = navigationIndex(menu.index, menu.items.length, input, key, menu.items.length)
     if (next !== menu.index) setMenu((current) => current === undefined ? current : { ...current, index: next })
+    const shortcut = menu.items.find((item) => item.shortcut === input)
+    if (shortcut !== undefined) { setMenu((current) => current === undefined ? current : { ...current, index: menu.items.indexOf(shortcut) }); void runMenuAction(shortcut.action); return true }
     if (key.return) { void runMenuAction(menu.items[menu.index]?.action ?? 'detail'); return true }
     return true
   }
 
   const handlePageScroll = (input: string, key: InputKey): void => {
-    const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
-    const lines = page === 'help' ? helpLines(helpPage, homeArea, columns).length : page === 'detail' ? detailLineCount(book, columns) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.entries.length + catalog.diagnostics.length + 8 : page === 'source-manager' ? sourceManagerEntries(catalog, sourceManagerFilter, sourceManagerFilterMode).length * 2 + 6 : page === 'debug' ? debugLineCount() : 6
+    const lines = page === 'help' ? helpLines(helpTab, homeArea, columns).length : page === 'detail' ? detailLineCount(book, columns) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.entries.length + catalog.diagnostics.length + 8 : page === 'source-manager' ? sourceManagerEntries(catalog, sourceManagerFilter, sourceManagerFilterMode).length * 2 + 6 : page === 'debug' ? debugLineCount() : 6
     const next = navigationPage(pageScroll, lines, input, key, bodyHeight)
     if (next !== pageScroll) setPageScroll(next)
   }
@@ -1319,10 +1456,25 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       return
     }
     if (key.ctrl && input === 'c') { cancelOperation('正在退出…'); exit(); return }
+    if (page === 'settings' && (settingsEditing || settingsResetConfirm)) {
+      handleSettingsInput(input, key)
+      return
+    }
     if (input === 'q') { cancelOperation('正在退出…'); exit(); return }
-    if (input === '?' ) { if (page === 'help') goBack(); else setPage('help'); return }
+    if (input === '?' ) { if (page === 'help') goBack(); else { setHelpTab(page); setPage('help') }; return }
+    if (page === 'settings') {
+      if (key.escape && !settingsEditing && !settingsResetConfirm) { goBack(); return }
+      handleSettingsInput(input, key)
+      return
+    }
+    if (page === 'help') {
+      if (key.escape) { goBack(); return }
+      handleHelpInput(input, key)
+      return
+    }
     if (input === 'd') { if (page !== 'diagnostics') setPage('diagnostics'); return }
     if (input === 'm' && page === 'home' && !busy) { setPage('source-manager'); setMessage(''); return }
+    if (input === 's' && (page === 'home' || page === 'config') && !busy) { setPage('settings'); setMessage(''); return }
     if (key.ctrl && input === 'k') { setPage('search'); setMessage(''); return }
     if (key.escape) {
       if (page === 'toc' && tocQuery.length > 0) { clearTocSearch(); return }
@@ -1356,14 +1508,14 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }
     if (page === 'home') handleHomeInput(input, key)
     else if (page === 'results') handleResultsInput(input, key)
-    else if (page === 'detail') { handleDetailInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
+    else if (page === 'detail') { handleDetailInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || key.ctrl && (input === 'a' || input === 'e') || input === 'j' || input === 'k') handlePageScroll(input, key) }
     else if (page === 'toc') handleTocInput(input, key)
     else if (page === 'reader') handleReaderInput(input, key)
     else if (page === 'sources') handleSourcesInput(input, key)
-    else if (page === 'mapping') { handleMappingInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
+    else if (page === 'mapping') { handleMappingInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || key.ctrl && (input === 'a' || input === 'e') || input === 'j' || input === 'k') handlePageScroll(input, key) }
     else if (page === 'debug') handleDebugInput(input, key)
     else if (page === 'source-manager') handleSourceManagerInput(input, key)
-    else if (page === 'help' || page === 'diagnostics' || page === 'config') {
+    else if (page === 'diagnostics' || page === 'config') {
       if (page === 'diagnostics') {
         const next = navigationIndex(selected, catalog.entries.length, input, key, Math.max(1, bodyHeight - 5))
         if (next !== selected) { setSelected(next); setPageScroll((scroll) => keepIndexVisible(next, catalog.entries.length, Math.max(1, bodyHeight - 5), scroll).start) }
@@ -1374,17 +1526,16 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   })
 
   const visibleMessage = messageOwner === page ? message : ''
-  const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
-  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator, ...(debugRunner === undefined ? {} : { debugRunner }), ...(debugCapture === undefined ? {} : { debugCapture }), debugPanel, debugRequestSelected, debugResultSelected, debugFilter, sourceManagerSelected, sourceManagerSelectedIds, sourceManagerFilter, sourceManagerFilterMode, ...(sourceCheckProgress === undefined ? {} : { sourceCheckProgress }), sourceCheckResults }
+  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll: page === 'help' ? helpScrolls[helpTab] ?? 0 : pageScroll, message: visibleMessage, helpPage: helpTab, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator, readerSettings, settingsSelected, settingsEditing, settingsValue, settingsCursor, settingsResetConfirm, ...(debugRunner === undefined ? {} : { debugRunner }), ...(debugCapture === undefined ? {} : { debugCapture }), debugPanel, debugRequestSelected, debugResultSelected, debugFilter, sourceManagerSelected, sourceManagerSelectedIds, sourceManagerFilter, sourceManagerFilterMode, ...(sourceCheckProgress === undefined ? {} : { sourceCheckProgress }), sourceCheckResults }
   const visiblePage = renderPage(page, state)
-  const commandActions = footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0, tocReversed)
   const inputMode = page === 'search' || page === 'toc' && tocSearchActive || page === 'debug' && (debugFilterActive || debugKeywordActive) || page === 'source-manager' && (sourceManagerFilterActive || sourceManagerOrderActive)
+  const commandActions = footerLayout(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0, tocReversed, { textInput: inputMode, settingsEditing, settingsResetConfirm })
   const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : page === 'debug' && debugKeywordActive ? '关键词 › ' : page === 'debug' && debugFilterActive ? '过滤 › ' : page === 'source-manager' && sourceManagerOrderActive ? '优先级 › ' : page === 'source-manager' && sourceManagerFilterActive ? '筛选 › ' : ''
   const inputValue = page === 'search' ? query : page === 'toc' ? tocQuery : debugKeywordActive ? debugKeyword : debugFilterActive ? debugFilter : sourceManagerOrderActive ? sourceManagerOrderValue : sourceManagerFilter
-  const inputWidth = Math.max(0, columns - terminalWidth(commandActions) - 1 - terminalWidth(inputLabel) - 1)
+  const inputWidth = Math.max(0, columns - terminalWidth(commandActions.right) - 1 - terminalWidth(inputLabel) - 1)
   const commandInput = inputMode ? `${inputLabel}${tailTerminalText(inputValue, inputWidth)}█` : ''
   const pageContext = pageHeader(page, state)
   const preservePageStats = page === 'reader' || page === 'toc' || page === 'results'
   const header = { ...pageContext, right: preservePageStats ? pageContext.right : visibleMessage || (busy ? '处理中' : pageContext.right) }
-  return <PageShell columns={columns} rows={rows} bodyHeight={bodyHeight} separator={terminal.separator} supported={terminal.supported} header={header} command={{ left: commandInput, right: commandActions }} content={visiblePage} menu={menu === undefined ? undefined : renderActionMenu(menu, columns, rows)} />
+  return <PageShell columns={columns} rows={rows} bodyHeight={bodyHeight} separator={terminal.separator} supported={terminal.supported} header={header} command={{ left: inputMode ? commandInput : commandActions.left, right: commandActions.right }} content={visiblePage} menu={menu === undefined ? undefined : <ActionMenuView menu={menu} columns={columns} rows={rows} />} />
 }

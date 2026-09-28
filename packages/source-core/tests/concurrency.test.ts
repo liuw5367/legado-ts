@@ -64,3 +64,30 @@ test('cancel requests abort and drain waits until active task cleanup settles', 
   assert.equal(drained, true)
   await host.drain()
 })
+
+test('setMaxConcurrent releases queued work when capacity increases', async () => {
+  const host = new KeyedConcurrencyHost({ maxConcurrent: 1 })
+  const firstStarted = deferred()
+  const secondStarted = deferred()
+  const releaseFirst = deferred()
+  const releaseSecond = deferred()
+  let active = 0
+  let maxActive = 0
+  const run = (key: string, started: { resolve: () => void }, release: { promise: Promise<void> }): Promise<void> => host.run(key, async () => {
+    active += 1
+    maxActive = Math.max(maxActive, active)
+    started.resolve()
+    await release.promise
+    active -= 1
+  })
+  const first = run('first', firstStarted, releaseFirst)
+  const second = run('second', secondStarted, releaseSecond)
+  await firstStarted.promise
+  host.setMaxConcurrent(2)
+  await secondStarted.promise
+  assert.equal(maxActive, 2)
+  assert.throws(() => host.setMaxConcurrent(0), /invalid/u)
+  releaseFirst.resolve()
+  releaseSecond.resolve()
+  await Promise.all([first, second])
+})

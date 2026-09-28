@@ -1,6 +1,6 @@
 import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, SearchMatchRank, WorkflowStatus } from '@legado/source-core'
 import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
-import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition, SourceCheckRecord } from './storage.ts'
+import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition, SourceCheckRecord, ReaderSettings } from './storage.ts'
 import type { DebugCapture } from './debug-capture.ts'
 
 type SearchWorkflowResult = Awaited<ReturnType<typeof import('@legado/source-core').searchBooks>>
@@ -103,6 +103,7 @@ export interface ReaderApplicationOptions {
   catalog: SourceCatalogResult
   storage: ReaderStorage
   maxConcurrentSources?: number
+  settings?: ReaderSettings
   sessionFactory?: (source: NormalizedSource) => ReaderSourceSession
 }
 

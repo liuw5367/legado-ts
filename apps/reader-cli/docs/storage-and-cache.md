@@ -6,6 +6,7 @@
 ~/.config/reader-cli/
   data-v1/
     manifest.json
+    reader-settings.json
     search-history.json
     reading-history.json
     bookshelf.json
@@ -25,6 +26,8 @@
 ## 持久数据
 
 `search-history.json` 保存最近 100 次搜索的关键词、来源范围、分源摘要、候选数量、开始/完成时间和已打开的 `bookId`，首页展示最近 20 次。读取和写入均使用 NFKC、去首尾空白并合并连续空白后的名称作为键；同名搜索只保留最新完成的一条，首页显示该条完成时间。
+
+`reader-settings.json` 保存搜索、换源搜索和书源检测的批量并发数，默认均为 4，读取和保存时校验为 1–32 的整数。设置页修改成功后只影响下一次批量操作，活动任务继续使用启动时的值；文件损坏或字段非法时按字段回退到默认值。该文件和其他持久 JSON 一样使用 `schemaVersion`、`revision`、`updatedAt` 和 `data` 封装，并进入同一写入队列。
 
 `reading-history.json` 每条记录对应一个 `bookId`，保存各 `editionKey` 的章节 URL、索引、标题、段落索引、字符偏移和 `lastReadAt`。记录同时支持书架内和未加入书架的书，未加入书架的阅读记录最多保留最近 200 本。
 

@@ -3,7 +3,7 @@ import type { BookCandidate, BookMetadata, Chapter, ChapterContent } from '@lega
 import { KeyedConcurrencyHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
 import { editionKey, ReaderStorage } from './storage.ts'
-import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, SearchHistoryEntry } from './storage.ts'
+import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, ReaderSettings, SearchHistoryEntry } from './storage.ts'
 import type {
   OpenBookResult,
   ReaderApplicationOptions,
@@ -24,6 +24,7 @@ import { DebugRunner } from './debug-runner.ts'
 import { orderedSearchSources, nextSearchHealth } from './source-policy.ts'
 import { checkSource } from './source-check.ts'
 import type { SourceCheckConfig } from './storage.ts'
+import { normalizeReaderSettings } from './reader-settings.ts'
 
 export type {
   OpenBookResult,
@@ -55,7 +56,7 @@ export class ReaderApplication {
   private readonly storage: ReaderStorage
   private readonly sessions = new Map<string, ReaderSourceSession>()
   private readonly concurrency: KeyedConcurrencyHost
-  private readonly maxConcurrentSources: number
+  private settings: ReaderSettings
   private readonly activeOperations = new Set<TrackedOperation>()
   private readonly evidence = new Map<string, DebugCapture>()
   private closed = false
@@ -64,8 +65,9 @@ export class ReaderApplication {
   public constructor(options: ReaderApplicationOptions) {
     this.catalog = options.catalog
     this.storage = options.storage
-    this.maxConcurrentSources = options.maxConcurrentSources ?? 4
-    this.concurrency = new KeyedConcurrencyHost({ maxConcurrent: this.maxConcurrentSources, maxConcurrentPerKey: 1 })
+    const fallback = options.maxConcurrentSources ?? 4
+    this.settings = normalizeReaderSettings(options.settings ?? { searchConcurrency: fallback, sourceSearchConcurrency: fallback, sourceCheckConcurrency: fallback })
+    this.concurrency = new KeyedConcurrencyHost({ maxConcurrent: Math.max(this.settings.searchConcurrency, this.settings.sourceSearchConcurrency, this.settings.sourceCheckConcurrency), maxConcurrentPerKey: 1 })
     for (const entry of this.catalog.entries.filter((item) => item.state === 'available' || item.state === 'disabled')) {
       const session = options.sessionFactory?.(entry.source) ?? new SourceSession(entry.source, this.concurrency)
       session.attachCache(this.storage)
@@ -106,6 +108,18 @@ export class ReaderApplication {
     return this.catalog
   }
 
+  public get readerSettings(): ReaderSettings {
+    return { ...this.settings }
+  }
+
+  public async saveReaderSettings(settings: ReaderSettings): Promise<void> {
+    if (this.activeOperations.size > 0) throw new Error('当前仍有操作进行中，完成后才能应用设置')
+    const normalized = normalizeReaderSettings(settings)
+    await this.storage.saveReaderSettings(normalized)
+    this.settings = normalized
+    this.concurrency.setMaxConcurrent(Math.max(this.settings.searchConcurrency, this.settings.sourceSearchConcurrency, this.settings.sourceCheckConcurrency))
+  }
+
   public evidenceFor(context: string): DebugCapture | undefined {
     return this.evidence.get(context)
   }
@@ -129,7 +143,7 @@ export class ReaderApplication {
     return this.trackOperation(signal, (operationSignal) => this.searchInternal(keyword, sourceIds, operationSignal, onProgress, onUpdate))
   }
 
-  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener): Promise<SearchOperationResult> {
+  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, maxConcurrentSources = this.settings.searchConcurrency): Promise<SearchOperationResult> {
     const trimmed = keyword.trim()
     const searchId = randomUUID()
     const startedAt = new Date().toISOString()
@@ -224,7 +238,7 @@ export class ReaderApplication {
         }
       }
     }
-    await Promise.all(Array.from({ length: Math.min(this.maxConcurrentSources, Math.max(1, entries.length)) }, () => worker()))
+    await Promise.all(Array.from({ length: Math.min(maxConcurrentSources, Math.max(1, entries.length)) }, () => worker()))
     const cancelled = signal?.aborted === true
     const sourceSummary: SearchHistoryEntry['summary'] = {
       searched: entries.length,
@@ -334,7 +348,7 @@ export class ReaderApplication {
         progress()
       }
     }
-    await Promise.all(Array.from({ length: Math.min(this.maxConcurrentSources, Math.max(1, entries.length)) }, () => worker()))
+    await Promise.all(Array.from({ length: Math.min(this.settings.sourceCheckConcurrency, Math.max(1, entries.length)) }, () => worker()))
     if (signal.aborted) for (const entry of entries.filter((item) => !results.some((result) => result.sourceId === item.source.bookSourceUrl))) {
       const cancelled: SourceCheckResult = { sourceId: entry.source.bookSourceUrl, sourceName: entry.source.bookSourceName, fingerprint: entry.fingerprint, sessionId: randomUUID(), status: 'cancelled', startedAt: new Date().toISOString(), detail: '校验已取消', failedStages: [], stages: [] }
       results.push(cancelled)
@@ -446,7 +460,7 @@ export class ReaderApplication {
       const valid = new Set(known.filter((item) => this.catalog.entries.some((entry) => entry.source.bookSourceUrl === item.sourceId && entry.fingerprint === item.sourceFingerprint && entry.state === 'available')).map((item) => item.sourceId))
       const sourceIds = orderedSearchSources(this.catalog.entries).filter((entry) => !valid.has(entry.source.bookSourceUrl)).map((entry) => entry.id)
       const update = onUpdate === undefined ? undefined : (snapshot: SearchOperationResult): void => onUpdate(filterSearchSnapshot(snapshot, book.name, book.author))
-      const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update)
+      const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update, this.settings.sourceSearchConcurrency)
       const searchEvidence = this.evidence.get('search')
       if (searchEvidence !== undefined) this.rememberEvidence('sources', searchEvidence)
       // searchInternal 在取消后仍会返回已完成书源的快照；先持久化其中的

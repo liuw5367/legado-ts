@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="title desc">
+  <title id="title">命令行阅读器设置页面预览</title>
+  <desc id="desc">搜索、换源搜索和书源检测并发数设置。</desc>
+  <rect width="960" height="520" fill="#0f141a"/>
+  <rect x="18" y="16" width="924" height="488" rx="10" fill="#111923" stroke="#334155" stroke-width="2"/>
+  <text x="44" y="88" fill="#54d7e8" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="20" font-weight="700">Legado Reader  ·  设置</text>
+  <text x="900" y="88" text-anchor="end" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">默认值 4 · 范围 1–32</text>
+  <text x="44" y="144" fill="#ffd166" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19" font-weight="700">&gt; 搜索并发数：4</text>
+  <text x="78" y="172" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">搜索书源时同时处理的书源数</text>
+  <text x="44" y="224" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19">  换源搜索并发数：4</text>
+  <text x="78" y="252" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">搜索更多书源时同时处理的书源数</text>
+  <text x="44" y="304" fill="#d9e2ec" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="19">  书源检测并发数：4</text>
+  <text x="78" y="332" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">批量检测时同时处理的书源数</text>
+  <text x="44" y="394" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">保存后对下一次批量操作生效，当前操作不会改变。</text>
+  <text x="44" y="463" fill="#8291a4" font-family="SFMono-Regular,Menlo,Consolas,'Noto Sans Mono',monospace" font-size="16">[↵] 编辑  [r] 恢复默认  [?] 帮助  [⎋] 返回  [q] 退出</text>
+</svg>

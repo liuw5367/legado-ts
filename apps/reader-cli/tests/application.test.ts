@@ -30,24 +30,30 @@ class FakeSession implements ReaderSourceSession {
   private readonly failDetail: boolean
   private readonly contentValue: ChapterContent | undefined
   private readonly onSearch: (() => void) | undefined
+  private readonly onSearchFinish: (() => void) | undefined
   public readonly contentRefreshes: boolean[] = []
 
-  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void) {
+  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void) {
     this.candidates = candidates
     this.delayMs = delayMs
     this.failDetail = failDetail
     this.contentValue = contentValue
     this.onSearch = onSearch
+    this.onSearchFinish = onSearchFinish
   }
 
   public attachCache(): void {}
 
   public async search(_keyword: string, signal?: AbortSignal): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
     this.onSearch?.()
-    if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
-    if (this.delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, this.delayMs))
-    if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
-    return result('success', { items: this.candidates, cursor: { index: 0 } })
+    try {
+      if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
+      if (this.delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, this.delayMs))
+      if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
+      return result('success', { items: this.candidates, cursor: { index: 0 } })
+    } finally {
+      this.onSearchFinish?.()
+    }
   }
 
   public async detail(_candidate: BookCandidate): Promise<RuntimeResult<WorkflowPage<BookMetadata>>> {
@@ -155,6 +161,37 @@ test('搜索进度包含书源总数、已完成数和当前书源', async () =>
     assert.ok(progress.some((item) => item.active.includes('第一个书源') || item.active.includes('第二个书源')))
     const opened = await application.openSearchResult(operation.results[0]!, operation.results)
     assert.equal((await storage.listSearchHistory())[0]?.openedBookIds.includes(opened.book.bookId), true)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('搜索并发设置按批次限制 worker，并可持久化更新', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-settings-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const entries = Array.from({ length: 4 }, (_, index) => entry(source(`https://source.test/settings-${index}`, `设置书源 ${index}`), index))
+  let active = 0
+  let maxActive = 0
+  const application = new ReaderApplication({
+    catalog: { entries, diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false },
+    storage,
+    settings: { searchConcurrency: 2, sourceSearchConcurrency: 1, sourceCheckConcurrency: 1 },
+    sessionFactory: (value) => new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '测试书', rawFields: {}, traceRef: 'settings' }], 15, false, undefined, () => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+    }, () => { active -= 1 }),
+  })
+  try {
+    await application.search('测试书')
+    assert.equal(maxActive, 2)
+    await application.saveReaderSettings({ searchConcurrency: 1, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5 })
+    assert.deepEqual(application.readerSettings, { searchConcurrency: 1, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5 })
+    maxActive = 0
+    await application.search('测试书')
+    assert.equal(maxActive, 1)
+    assert.deepEqual(await storage.getReaderSettings(), application.readerSettings)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

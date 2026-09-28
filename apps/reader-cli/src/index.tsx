@@ -29,7 +29,7 @@ export async function main(args: readonly string[] = process.argv.slice(2), envi
   try {
     await storage.initialize()
     const catalog = await loadSourceCatalog(config.source, { storage })
-    const application = new ReaderApplication({ catalog, storage })
+    const application = new ReaderApplication({ catalog, storage, settings: await storage.getReaderSettings() })
     const instance = render(<ReaderUi application={application} catalog={catalog} />, { exitOnCtrlC: false, alternateScreen: true })
     await new Promise<void>((resolve) => instance.waitUntilExit().then(() => resolve()))
     await application.close()

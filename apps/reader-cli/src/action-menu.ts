@@ -11,6 +11,7 @@ export interface ActionMenuContext {
 
 export interface ActionMenuItem {
   action: ReaderAction
+  shortcut: string
   label: string
   enabled: boolean
   reason?: string
@@ -19,13 +20,13 @@ export interface ActionMenuItem {
 /** 所有书籍上下文页面共用的动作顺序和禁用原因。 */
 export function actionMenuItems(context: ActionMenuContext): ActionMenuItem[] {
   return [
-    { action: 'read', label: '继续阅读', enabled: context.hasBook && !context.busy, ...(context.hasBook ? {} : { reason: '当前项没有书籍上下文' }) },
-    { action: 'detail', label: '书籍信息', enabled: context.hasBook && context.page !== 'detail' && !context.busy, ...(context.page === 'detail' ? { reason: '当前已经是书籍详情页' } : context.hasBook ? {} : { reason: '当前项没有书籍上下文' }) },
-    { action: 'toc', label: '章节列表', enabled: context.hasBook && context.hasToc && !context.busy, ...(context.hasToc ? {} : { reason: '当前书源尚未加载目录' }) },
-    { action: 'sources', label: '书源切换', enabled: context.hasBook && context.hasSources && !context.busy, ...(context.hasSources ? {} : { reason: '尚未搜索到可切换书源' }) },
+    { action: 'read', shortcut: '1', label: '继续阅读', enabled: context.hasBook && !context.busy, ...(context.hasBook ? {} : { reason: '当前项没有书籍上下文' }) },
+    { action: 'detail', shortcut: '2', label: '书籍信息', enabled: context.hasBook && context.page !== 'detail' && !context.busy, ...(context.page === 'detail' ? { reason: '当前已经是书籍详情页' } : context.hasBook ? {} : { reason: '当前项没有书籍上下文' }) },
+    { action: 'toc', shortcut: '3', label: '章节列表', enabled: context.hasBook && context.hasToc && !context.busy, ...(context.hasToc ? {} : { reason: '当前书源尚未加载目录' }) },
+    { action: 'sources', shortcut: '4', label: '书源切换', enabled: context.hasBook && context.hasSources && !context.busy, ...(context.hasSources ? {} : { reason: '尚未搜索到可切换书源' }) },
   ]
 }
 
 export function actionMenuLabel(item: ActionMenuItem): string {
-  return item.enabled ? item.label : `${item.label}（${item.reason ?? '暂不可用'}）`
+  return `${item.shortcut} ${item.enabled ? item.label : `${item.label}（${item.reason ?? '暂不可用'}）`}`
 }

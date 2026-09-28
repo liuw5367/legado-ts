@@ -5,22 +5,28 @@ export interface FooterAction {
   priority: number
 }
 
+export interface FooterLayout {
+  left: string
+  right: string
+}
+
 /** Pack complete shortcut tokens into one line; lower-priority actions are omitted when it is full. */
 export function layoutFooter(actions: readonly FooterAction[], columns: number): string {
   const width = Math.max(1, columns)
   const ordered = actions
     .map((action, index) => ({ action, index }))
     .sort((left, right) => left.action.priority - right.action.priority || left.index - right.index)
-  const tokens: string[] = []
+  const selected: Array<{ index: number; token: string }> = []
+  let currentLength = 0
   for (const entry of ordered) {
     const keyToken = /^\[[^\]]*\]$/u.test(entry.action.keys) ? entry.action.keys : `[${entry.action.keys}]`
     const token = `${keyToken} ${entry.action.label}`
-    const currentLength = terminalWidth(tokens.join('  '))
-    const nextLength = tokens.length === 0 ? terminalWidth(token) : currentLength + 2 + terminalWidth(token)
+    const nextLength = selected.length === 0 ? terminalWidth(token) : currentLength + 2 + terminalWidth(token)
     if (nextLength > width) continue
-    tokens.push(token)
+    selected.push({ index: entry.index, token })
+    currentLength = nextLength
   }
-  return tokens.join('  ')
+  return selected.sort((left, right) => left.index - right.index).map((entry) => entry.token).join('  ')
 }
 
 export function layoutContextLine(left: string, right: string, columns: number): string {

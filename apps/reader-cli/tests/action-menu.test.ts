@@ -6,8 +6,9 @@ test('书籍上下文菜单固定四个动作并在详情页禁用当前页面�
   const items = actionMenuItems({ hasBook: true, hasSources: true, hasToc: true, page: 'detail', busy: false })
   assert.deepEqual(items.map((item) => item.action), ['read', 'detail', 'toc', 'sources'])
   assert.equal(items[0]?.label, '继续阅读')
+  assert.deepEqual(items.map((item) => item.shortcut), ['1', '2', '3', '4'])
   assert.equal(items[1]?.enabled, false)
-  assert.match(actionMenuLabel(items[1]!), /当前已经是书籍详情页/)
+  assert.match(actionMenuLabel(items[1]!), /^2 .*当前已经是书籍详情页/u)
 })
 
 test('异步操作期间菜单动作全部不可执行并保留原因', () => {

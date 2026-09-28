@@ -35,7 +35,7 @@ ReaderStorage <----------- ReaderApplication
 
 每个 `SourceEntry` 使用 `bookSourceUrl` 作为 sourceId，使用 `sourceDefinitionFingerprint` 区分定义版本。冲突来源不进入默认搜索队列。每个来源会话共享自己的 `NodeCookieStore` 和 `NodeNetworkHost`，但每次搜索、详情、目录或正文调用都新建 `SourceRequestHost`/`SourceRuleHost`；这两个 Node 门面分别组合网络/字符集能力和解析器/QuickJS 等能力，再委托给 source-core 运行时。同一 sourceId 由 `KeyedConcurrencyHost` 串行执行。
 
-UI 使用同文件私有 `PageShell` 和 `CommandBar` 渲染所有页面：单行上下文、按终端高度分配的正文区和固定命令栏；输入、状态和快捷键共用一行命令槽。`viewport.ts` 统一处理终端最小尺寸、正文行数、分页与边界；`source-order.ts` 将当前来源置顶并按搜索耗时稳定升序排列；`ui-actions.ts` 按终端显示宽度省略放不下的低优先级动作并测量 Unicode 字素簇，避免快捷键拆分或光标落在宽字符内部；`action-menu.ts` 固定四项动作及禁用原因，但 `o` 只由首页和搜索结果接入，弹窗使用居中覆盖层保留底层页面。真实导航栈保留页面、焦点、筛选和视口状态，目录筛选单独维护当前阅读章节身份。搜索和换源搜索通过 `SearchUpdateListener` 将已返回候选逐次推送到 UI，`AbortController` 只改变任务状态，不直接销毁当前页面。
+UI 使用同文件私有 `PageShell` 和 `CommandBar` 渲染所有页面：单行上下文、按终端高度分配的正文区和固定命令栏；输入、状态和快捷键共用一行命令槽。`viewport.ts` 统一处理终端最小尺寸、正文行数、分页与边界，`ui-model.ts` 将 Home/End 与 Ctrl+A/Ctrl+E 映射为首尾跳转；`source-order.ts` 将当前来源置顶并按搜索耗时稳定升序排列；`ui-actions.ts` 按终端显示宽度分栏省略放不下的低优先级动作并测量 Unicode 字素簇，避免快捷键拆分或光标落在宽字符内部；`action-menu.ts` 与 `action-menu-view.tsx` 固定四项动作、数字快捷键及禁用原因，但 `o` 只由首页和搜索结果接入，弹窗使用居中覆盖层保留底层页面。设置由 `reader-settings.ts` 校验并通过 `ReaderStorage` 写入 `reader-settings.json`，`ReaderApplication` 为搜索、换源搜索和书源检测分别创建 worker 上限。真实导航栈保留页面、焦点、筛选和视口状态，目录筛选单独维护当前阅读章节身份。搜索和换源搜索通过 `SearchUpdateListener` 将已返回候选逐次推送到 UI，`AbortController` 只改变任务状态，不直接销毁当前页面。
 
 诊断和调试沿用同一条书源工作流：`SourceRequestRuntime` 在 `RequestPlan` 交给 `NetworkHost` 前后调用可选 `RequestObserver`，Node 会话按操作透传观察器；CLI 的 `DebugCapture` 负责请求编号、跨书源并发归并、敏感信息脱敏、响应截断和内存上限。`RuntimeResult.trace` 与诊断被转换为 `ProcessRecord`，因此处理流程记录不会复制规则解析逻辑。`DebugRunner` 使用同一 `ReaderSourceSession` 串行运行搜索、详情、目录和正文，普通页面的 `v` 使用轻量捕获，完整调试使用更高上限。`debug-export.ts` 只把脱敏快照写入 Markdown/JSON，并通过固定系统命令且不经过 shell 写入剪贴板。
 
@@ -43,7 +43,7 @@ UI 使用同文件私有 `PageShell` 和 `CommandBar` 渲染所有页面：单�
 
 ## 操作契约
 
-1. 搜索创建 search history，按最多四个来源并发执行。每个来源完成后同时推送进度和不可变结果快照；快照包含分源状态、候选、来源耗时、总耗时、source-core 按书名+作者规则聚合的结果组和匹配等级。应用添加 CLI 来源信息并负责快照生命周期；`⎋`/退出会中止工作流并等待所有活动请求释放。
+1. 搜索创建 search history，按设置中的搜索并发数（默认 4）执行；换源搜索和书源检测分别使用各自的设置值。每个来源完成后同时推送进度和不可变结果快照；快照包含分源状态、候选、来源耗时、总耗时、source-core 按书名+作者规则聚合的结果组和匹配等级。应用添加 CLI 来源信息并负责快照生命周期；`⎋`/退出会中止工作流并等待所有活动请求释放。
 2. 打开候选时按 `(sourceId, bookUrl)` 复用已有 `bookId`，否则创建新的逻辑书籍。
 3. 同次搜索的同书名同作者候选写入 `sources.json`，详情成功后补全简介、目录地址、最新章节、更新时间和原始字段；作者缺失时不跨来源强行合并。
 4. 目录和正文通过核心公开工作流执行，命中带来源定义 fingerprint 的 `cache-v1` 命名空间时不访问网络；规则定义变化不会复用旧正文，阅读页刷新会跳过正文缓存读取并在成功后写回。
@@ -52,4 +52,4 @@ UI 使用同文件私有 `PageShell` 和 `CommandBar` 渲染所有页面：单�
 
 ## 资源限制
 
-来源目录最多读取 256 个 `.json`/`.js` 文件，单文件和远程响应最多 4 MiB。单次搜索每个来源最多保留 100 个候选，全局并发为 4。正文清洗输出最多 4 MiB，缓存总量默认 512 MiB。超过限制时返回可展示诊断，不用空结果掩盖失败。
+来源目录最多读取 256 个 `.json`/`.js` 文件，单文件和远程响应最多 4 MiB。单次搜索每个来源最多保留 100 个候选；搜索、换源搜索和书源检测的批量并发默认均为 4，并可在设置页分别调整到 1–32。正文清洗输出最多 4 MiB，缓存总量默认 512 MiB。超过限制时返回可展示诊断，不用空结果掩盖失败。

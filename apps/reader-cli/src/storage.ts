@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { ContentCache } from '@legado/source-core'
 import { CacheStore } from './cache-store.ts'
 import { JsonStore } from './json-store.ts'
+import { normalizeReaderSettings } from './reader-settings.ts'
 import {
   defaultStoragePaths,
   normalizeSearchName,
@@ -13,6 +14,7 @@ import {
   type KnownSource,
   type ReadingPosition,
   type ReadingRecord,
+  type ReaderSettings,
   type SearchHistoryEntry,
   type SourceCheckConfig,
   type SourceCheckRecord,
@@ -31,6 +33,7 @@ export type {
   KnownSourceView,
   ReadingPosition,
   ReadingRecord,
+  ReaderSettings,
   SearchHistoryEntry,
   SourceCheckConfig,
   SourceCheckRecord,
@@ -132,6 +135,15 @@ export class ReaderStorage {
       if (current === undefined || searchHistoryTime(item).localeCompare(searchHistoryTime(current)) > 0) latest.set(key, item)
     }
     return [...latest.values()].sort((left, right) => searchHistoryTime(right).localeCompare(searchHistoryTime(left))).slice(0, limit)
+  }
+
+  public async getReaderSettings(): Promise<ReaderSettings> {
+    const value = await this.jsonStore.readFile<Partial<ReaderSettings>>(join(this.paths.dataRoot, 'reader-settings.json'), {})
+    return normalizeReaderSettings(value)
+  }
+
+  public async saveReaderSettings(settings: ReaderSettings): Promise<void> {
+    await this.withWriteLock(async () => this.jsonStore.writeFile(join(this.paths.dataRoot, 'reader-settings.json'), normalizeReaderSettings(settings)))
   }
 
   public async addSearchHistory(entry: Omit<SearchHistoryEntry, 'id'>): Promise<SearchHistoryEntry> {

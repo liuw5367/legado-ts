@@ -21,6 +21,32 @@ test('默认数据和缓存目录位于用户配置目录', () => {
   }
 })
 
+test('阅读器并发设置使用默认值并通过带 envelope 的文件持久化', async () => {
+  const { storage, root } = await temporaryStorage()
+  try {
+    assert.deepEqual(await storage.getReaderSettings(), { searchConcurrency: 4, sourceSearchConcurrency: 4, sourceCheckConcurrency: 4 })
+    await storage.saveReaderSettings({ searchConcurrency: 1, sourceSearchConcurrency: 32, sourceCheckConcurrency: 8 })
+    assert.deepEqual(await storage.getReaderSettings(), { searchConcurrency: 1, sourceSearchConcurrency: 32, sourceCheckConcurrency: 8 })
+    const persisted = JSON.parse(await readFile(join(root, 'data-v1', 'reader-settings.json'), 'utf8')) as { schemaVersion?: number; data?: Record<string, number> }
+    assert.equal(persisted.schemaVersion, 1)
+    assert.equal(persisted.data?.sourceSearchConcurrency, 32)
+  } finally {
+    await storage.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('非法阅读器并发设置读取时回退为默认值', async () => {
+  const { storage, root } = await temporaryStorage()
+  try {
+    await storage.saveReaderSettings({ searchConcurrency: 0, sourceSearchConcurrency: 99, sourceCheckConcurrency: 1.5 })
+    assert.deepEqual(await storage.getReaderSettings(), { searchConcurrency: 4, sourceSearchConcurrency: 4, sourceCheckConcurrency: 4 })
+  } finally {
+    await storage.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('搜索历史按规范化名称只保留最新记录并显示完成时间', async () => {
   const { storage, root } = await temporaryStorage()
   try {
