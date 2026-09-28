@@ -8,6 +8,8 @@
 
 ## 本目录文档
 
+当前待办见 [后续待办事项](pending-work.md)，记录书源能力、Android 行为整理、跨端验证与 CLI 改进需求，尚未形成实施方案。
+
 | 文档 | 归档原因 |
 | --- | --- |
 | [roadmap.md](roadmap.md) | 实施前总路线；「尚无实现」陈述已被 source-core / source-node / reader-cli 现状取代 |

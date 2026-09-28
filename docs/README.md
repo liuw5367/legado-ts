@@ -24,6 +24,7 @@
 | 导入、编辑或刷新书源 | [导入流程](flows/import-protocol.md) → [订阅流程](flows/source-subscriptions.md) |
 | 审查兼容性和发布 | [能力清单](standard/capability-inventory.md) → [测试基线](quality/conformance-tests.md) → [兼容矩阵](quality/compatibility-matrix.md) → [维护文档](operations/package-maintenance.md) |
 | 查阅未实现的历史设计 | [归档](archive/README.md) |
+| 查看后续待办 | [后续待办事项](archive/pending-work.md) |
 | 查阅外部社区教程 | [外部参考资料](reference/README.md) |
 
 ## 文档分类
