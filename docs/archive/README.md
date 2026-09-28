@@ -8,12 +8,9 @@
 
 ## 本目录文档
 
-当前待办见 [后续待办事项](pending-work.md)，记录书源能力、Android 行为整理、跨端验证与 CLI 改进需求，尚未形成实施方案。
-
 | 文档 | 归档原因 |
 | --- | --- |
 | [roadmap.md](roadmap.md) | 实施前总路线；「尚无实现」陈述已被 source-core / source-node / reader-cli 现状取代 |
-| [migration-guide.md](migration-guide.md) | 实施前迁移阅读顺序；「交付物只是规格」陈述已过时 |
 | [phase-e-integration.md](phase-e-integration.md) | 阶段 E-2 框架接入与部署验证未实施 |
 | [phase-e-storage-and-check.md](phase-e-storage-and-check.md) | 阶段 E-1 Repository、检测与 JobStore 未实施 |
 | [source-management-and-state.md](source-management-and-state.md) | `SourceRepository` 等持久化端口未实现 |
@@ -21,7 +18,6 @@
 | [source-editor.md](source-editor.md) | TypeScript 书源编辑器未实现（原指向 Android `modules/web`） |
 | [node-browser-nextjs.md](node-browser-nextjs.md) | Next.js / SPA / Edge 接入未实现 |
 | [legado-web-api-bridge.md](legado-web-api-bridge.md) | HTTP/WebSocket API 适配层未实现 |
-| [integration.md](integration.md) | 原 `integration/` 分类 README；分类已取消 |
 | [job-and-execution.md](job-and-execution.md) | JobStore、租约与 Serverless worker 未实现 |
 | [storage-and-supabase.md](storage-and-supabase.md) | Supabase 未进入本仓库依赖与部署 |
 

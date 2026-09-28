@@ -19,12 +19,14 @@
 | 任务 | 推荐路线 |
 | --- | --- |
 | 理解整体边界 | [架构](architecture/README.md) → [书源规则标准](standard/README.md) |
-| 实现或修改书源 package | [书源规则标准](standard/README.md) → [处理流程](flows/README.md) → [当前实现](implementation/README.md) → [已知差异](divergence/known-divergences.md) |
+| 实现或修改书源 package | [书源规则标准](standard/README.md) → [处理流程](flows/README.md) → [当前实现](implementation/README.md) → [已知差异](divergence/README.md) |
 | 组织应用调用 | [package 使用指南](implementation/package-usage.md) → [运行边界](operations/runtime-security-and-deployment.md)；应用侧见 [reader-cli](../apps/reader-cli/README.md) |
+| 查看书源运行时状态 | [状态总览](implementation/source-runtime-status.md) |
 | 导入、编辑或刷新书源 | [导入流程](flows/import-protocol.md) → [订阅流程](flows/source-subscriptions.md) |
+| 对照 Android 页面行为 | [Android 功能对照](android/README.md) |
 | 审查兼容性和发布 | [能力清单](standard/capability-inventory.md) → [测试基线](quality/conformance-tests.md) → [兼容矩阵](quality/compatibility-matrix.md) → [维护文档](operations/package-maintenance.md) |
 | 查阅未实现的历史设计 | [归档](archive/README.md) |
-| 查看后续待办 | [后续待办事项](archive/pending-work.md) |
+| 查看后续待办 | [后续待办事项](pending-work.md) |
 | 查阅外部社区教程 | [外部参考资料](reference/README.md) |
 
 ## 文档分类
@@ -32,10 +34,11 @@
 | 分类 | 负责回答的问题 | 入口 |
 | --- | --- | --- |
 | `standard` | 书源规则与 Android 行为标准是什么 | [书源规则标准](standard/README.md) |
+| `android` | Android 应用页面和交互行为是什么 | [Android 功能对照](android/README.md) |
 | `architecture` | 各层怎样划分、当前仓库怎样协作 | [架构](architecture/README.md) |
 | `flows` | 书源处理按什么顺序运行、怎样提交结果 | [处理流程](flows/README.md) |
 | `implementation` | 当前 TypeScript 实现的入口、契约与阶段记录是什么 | [当前实现](implementation/README.md) |
-| `divergence` | 标准与实现之间有哪些已知差异 | [已知差异](divergence/known-divergences.md) |
+| `divergence` | 标准与实现之间有哪些已知差异 | [已知差异](divergence/README.md) |
 | `quality` | 有哪些证据、怎样测试、何时算完成 | [质量与验证](quality/README.md) |
 | `operations` | 怎样处理安全、部署、发布、版本和回退 | [运维与维护](operations/README.md) |
 | `archive` | 哪些目标尚未实现或已被现状取代 | [归档](archive/README.md) |
@@ -64,16 +67,16 @@
 - **实施计划**：实现顺序、依赖和验收门槛，不代表功能已经存在。
 - **验证记录**：测试、部署或发布实际执行后的结果和限制。
 
-状态可以在同一篇文档中并存，阅读时以正文标注和 [质量与验证](quality/README.md) 为准；标准与实现的不一致另见 [已知差异](divergence/known-divergences.md)。
+状态可以在同一篇文档中并存；未实现项、差异项和完成标记以[书源运行时状态总览](implementation/source-runtime-status.md)为准，详细行为、差异原因和测试证据仍分别见对应主题文档。标准与实现的不一致另见 [已知差异](divergence/README.md)。
 
 ## 事实来源规则
 
 字段和默认值以 [书源数据模型](standard/source-schema.md) 为准；字段所有权以 [字段所有权与合并规则](standard/source-field-ownership.md) 为准；实体边界以 [书源相关实体边界](standard/artifact-model.md) 为准；规则语义以 [规则语言](standard/rule-language.md) 为准；请求行为以 [URL 与请求规则](standard/url-request-rules.md) 为准；身份、版本和提交以 [状态与副作用](standard/state-and-effects.md) 为准；当前代码入口以 [package 使用指南](implementation/package-usage.md) 与 `packages/source-core/src/index.ts` 为准。流程和实现文档引用这些事实，不另建同名定义。
 
-Android 上游仓库为 [LegadoTeam/legado](https://github.com/LegadoTeam/legado)，文档对应基线提交 `62003ce732a7e30602754d28996da7f98b9ea296`。相对路径可拼接为 `https://github.com/LegadoTeam/legado/blob/62003ce732a7e30602754d28996da7f98b9ea296/<相对路径>`；日常浏览也可用 `blob/master/<相对路径>`。取证策略与基线维护见 [package 维护与迁移证据](operations/package-maintenance.md)。当前 Android 主要事实源是 `app/src/main/java/io/legado/app/model/analyzeRule/`、`app/src/main/java/io/legado/app/model/webBook/`、`app/src/main/java/io/legado/app/data/entities/` 和相关测试。`modules/web/` 是管理界面，不能替代运行时规则引擎。
+Android 上游仓库为 [LegadoTeam/legado](https://github.com/LegadoTeam/legado)，长期规则和源码引用基线是提交 `62003ce732a7e30602754d28996da7f98b9ea296`。相对路径可拼接为 `https://github.com/LegadoTeam/legado/blob/62003ce732a7e30602754d28996da7f98b9ea296/<相对路径>`；日常浏览也可用 `blob/master/<相对路径>`。2026-09-28 页面行为扫描和 Android 测试使用上级工程提交 `32a87b253e7cc28273c3850de86242caac83f1fd`，两者用途不同，分别见 [Android 功能对照](android/README.md) 和 [兼容性测试矩阵](quality/compatibility-matrix.md)。取证策略与长期基线维护见 [package 维护与迁移证据](operations/package-maintenance.md)。当前 Android 主要事实源是 `app/src/main/java/io/legado/app/model/analyzeRule/`、`app/src/main/java/io/legado/app/model/webBook/`、`app/src/main/java/io/legado/app/data/entities/` 和相关测试。`modules/web/` 是管理界面，不能替代运行时规则引擎。
 
 当前文档已登记主要书源能力和处理流程，且仓库已有 source-core / source-node / reader-cli 实现与自动测试；扩展宿主逐重载、动态登录及部分能力仍有验收阻塞，见 [能力清单](standard/capability-inventory.md#尚不能进入完整实现验收的项目)。不得将“文档覆盖”或“存在实现”解释为“所有能力规格和兼容验证均完成”。
 
 ## 新增文档规则
 
-新增文档时先判断它主要回答哪个问题，再放入唯一的主分类：稳定规则与字段语义放 `standard`，完整处理顺序放 `flows`，当前代码契约与阶段记录放 `implementation`，标准与实现的不一致放 `divergence`，证据放 `quality`，运行维护放 `operations`，架构协作放 `architecture`，外部第三方教程与说明放 `reference`。未实现目标或已被现状取代的历史文档放 `archive`，不要写入 `standard` 或 `implementation`。新增教程、ADR 或运行手册时保留其文档类型，并从总 README 或分类 README 增加入口；不要为了凑编号把不同类型的内容放在一起。
+新增文档时先判断它主要回答哪个问题，再放入唯一的主分类：稳定规则与字段语义放 `standard`，Android 应用页面事实放 `android`，完整处理顺序放 `flows`，当前代码契约与阶段记录放 `implementation`，标准与实现的不一致放 `divergence`，证据放 `quality`，运行维护放 `operations`，架构协作放 `architecture`，外部第三方教程与说明放 `reference`。未实现目标或已被现状取代的历史文档放 `archive`，当前待办放在 `docs/pending-work.md`，不要把它放入历史归档。新增教程、ADR 或运行手册时保留其文档类型，并从总 README 或分类 README 增加入口；不要为了凑编号把不同类型的内容放在一起。

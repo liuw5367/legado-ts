@@ -2,7 +2,7 @@
 
 > 归档（2026-09-24）：本文描述的目标在当前仓库无对应实现，仅作历史设计保留；现行事实见 docs/README.md。
 
-本章是目标设计，不代表已有代码。以下描述 Node 服务、浏览器 SPA、Next.js/React Router 与 Edge 作为候选宿主的接入边界和预期数据流；当前仓库尚未实现 TypeScript runtime，流程与能力描述不代表已有实现。
+本章是截至 2026-09-24 的目标设计快照，不代表已有代码。以下描述 Node 服务、浏览器 SPA、Next.js/React Router 与 Edge 作为候选宿主的接入边界和预期数据流；当时仓库尚未实现 TypeScript runtime，流程与能力描述不代表当时已有实现。当前 runtime 状态见现行实现文档。
 
 | 能力 | Node 服务 | 浏览器 SPA | Next.js SSR | React Router 服务端 | Edge |
 | --- | --- | --- | --- | --- | --- |

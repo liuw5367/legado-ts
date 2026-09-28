@@ -34,6 +34,8 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - core、source-node、reader-cli 构建与类型检查通过；分层专项 93/93 通过。完整套件 364 项在沙箱中有 3 项因环回监听权限失败，授权本机监听后 `network.test.ts` 6/6 通过。以上是 `ts-executed` 证据，不能替代 Android golden。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 使用 Android Studio JBR 21 与临时 SDK `platforms;android-36` 实际运行：完整 `:app:testDebugUnitTest` 共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。
 
+跨端用例状态和完成后的删除线记录统一维护在[书源运行时状态总览](../implementation/source-runtime-status.md)。本节继续维护 fixture 格式、断言和执行门槛；机器清单保留稳定 ID，不删除历史记录。
+
 外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板。例如，`rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
 
 ## Fixture 格式

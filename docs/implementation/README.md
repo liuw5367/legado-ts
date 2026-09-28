@@ -2,6 +2,8 @@
 
 本目录记录 TypeScript 仓库中已经存在的书源运行时入口、宿主契约与阶段验证记录。公开 API 以 `packages/source-core/src/index.ts` 为准；与 [书源规则标准](../standard/README.md) 的不一致登记在 [已知差异](../divergence/known-divergences.md)。
 
+- [书源运行时状态总览](source-runtime-status.md)：未实现能力、已知差异和 Android/TypeScript 一致性验证的唯一状态入口。
+
 ## 入口与契约
 
 - [package 使用指南](package-usage.md)：公开入口、调用方式与结果形状。

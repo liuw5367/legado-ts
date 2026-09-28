@@ -2,7 +2,7 @@
 
 ## 事实来源
 
-Android 行为基线来自 `LegadoTeam/legado` 的提交 `62003ce732a7e30602754d28996da7f98b9ea296`。核对日期 2026-09-24；该提交已在远端可达（`https://github.com/LegadoTeam/legado/commit/62003ce732a7e30602754d28996da7f98b9ea296`）。实现前仍须确认工作区是否有相对该基线的本地补丁。
+长期规则和源码引用基线来自 `LegadoTeam/legado` 的提交 `62003ce732a7e30602754d28996da7f98b9ea296`。核对日期 2026-09-24；该提交已在远端可达（`https://github.com/LegadoTeam/legado/commit/62003ce732a7e30602754d28996da7f98b9ea296`）。2026-09-28 的 Android 页面行为扫描和测试使用上级工程提交 `32a87b253e7cc28273c3850de86242caac83f1fd`，它是当前验证快照，不替代长期规则基线。实现前仍须确认工作区是否有相对长期基线的本地补丁。
 
 源码引用采用“仓库 + 提交 + 相对路径 + 符号/测试名”，行号只辅助定位。例如 [BookSourceImport.kt](https://github.com/LegadoTeam/legado/blob/62003ce732a7e30602754d28996da7f98b9ea296/app/src/main/java/io/legado/app/ui/association/BookSourceImport.kt) 的 parseBookSourceJson。日常浏览可改用 `blob/master/<相对路径>`；若某引用的提交未推送，以保留该 Git 对象的源码快照核验，不假设链接可公开访问。
 
