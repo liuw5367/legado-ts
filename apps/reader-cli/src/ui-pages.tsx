@@ -7,6 +7,7 @@ import { layoutContent } from './content-layout.ts'
 import type { ContentBlockKind } from './content-format.ts'
 import type { DebugCapture, DebugStage, ProcessRecord, RequestRecord } from './debug-capture.ts'
 import type { DebugRunner } from './debug-runner.ts'
+import type { SourceCheckProgress, SourceCheckResult } from './application-model.ts'
 import { actionMenuLabel } from './action-menu.ts'
 import { formatDisplayTime, formatSourceTime } from './time-format.ts'
 import { orderSourceViews } from './source-order.ts'
@@ -24,6 +25,7 @@ import {
   searchHeaderStatus,
   searchMatchLabel,
   sourceState,
+  sourceManagerEntries,
   type MenuState,
   type Page,
   type SearchUiState,
@@ -72,16 +74,23 @@ export interface RenderState {
   debugRequestSelected: number
   debugResultSelected: number
   debugFilter: string
+  sourceManagerSelected: number
+  sourceManagerSelectedIds: readonly string[]
+  sourceManagerFilter: string
+  sourceManagerFilterMode: number
+  sourceCheckProgress?: SourceCheckProgress
+  sourceCheckResults: readonly SourceCheckResult[]
 }
 
 export function pageHeader(page: Page, state: RenderState): { left: string; right: string } {
   const bookName = state.book?.book.name ?? ''
   const chapterName = state.toc?.chapters[state.chapterIndex]?.title ?? ''
   const readerTitle = `${bookName} · ${chapterName} · ${state.chapterIndex + 1}/${state.toc?.chapters.length ?? 0} 章`
-  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : page === 'debug' ? `书源调试 · ${state.debugRunner?.source.source.bookSourceName ?? state.debugCapture?.sourceName ?? '最近操作'}` : '配置'
+  const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : page === 'debug' ? `书源调试 · ${state.debugRunner?.source.source.bookSourceName ?? state.debugCapture?.sourceName ?? '最近操作'}` : page === 'source-manager' ? '书源管理' : '配置'
   const left = page === 'reader' || page === 'toc' || page === 'home' || page === 'results' ? pageName : `Legado Reader · ${pageName}`
   let right = ''
   if (page === 'home') right = `${state.catalog.entries.filter((entry) => entry.state === 'available').length}/${state.catalog.entries.length} 个书源可用`
+  if (page === 'source-manager') right = `${state.sourceManagerSelectedIds.length} 个已选 · ${state.catalog.entries.length} 个书源`
   if (right.length === 0 && page === 'results') right = searchHeaderStatus(state.searchState, state.searchProgress, state.searchElapsedMs, state.search?.groups.length ?? 0, state.message)
   if (right.length === 0 && page === 'toc') {
     const matches = filterChapterIndices(state.toc?.chapters ?? [], state.tocQuery)
@@ -104,6 +113,7 @@ export function pageHeader(page: Page, state: RenderState): { left: string; righ
 export function renderPage(page: Page, state: RenderState): React.ReactElement {
   if (page === 'config') return renderConfig(state.catalog, state.pageScroll, state.bodyHeight)
   if (page === 'home') return renderHome(state.home, state.history, state.homeArea, state.selected, state.listStart, state.bodyHeight)
+  if (page === 'source-manager') return renderSourceManager(state)
   if (page === 'search') return <Text dimColor>在底部输入书名，按 ↵ 搜索。</Text>
   if (page === 'results') return renderResults(state.search, state.selected, state.listStart, state.bodyHeight, state.searchState)
   if (page === 'detail') return renderDetail(state.book, state.pageScroll, state.bodyHeight, state.columns)
@@ -241,6 +251,23 @@ function renderDiagnostics(catalog: SourceCatalogResult, selected: number, scrol
     ...(catalog.diagnostics.length === 0 ? ['没有加载诊断。'] : catalog.diagnostics.map((item) => `[!] ${item}`)),
   ]
   return renderLineViewport(lines, scroll, height)
+}
+
+function renderSourceManager(state: RenderState): React.ReactElement {
+  const entries = sourceManagerEntries(state.catalog, state.sourceManagerFilter, state.sourceManagerFilterMode)
+  const range = viewportFor(state.sourceManagerSelected, entries.length, Math.max(1, state.bodyHeight - 3), state.pageScroll)
+  const rows = entries.slice(range.start, range.end).map((entry, offset) => {
+    const index = range.start + offset
+    const selected = state.sourceManagerSelectedIds.includes(entry.id)
+    const focused = index === state.sourceManagerSelected
+    const status = entry.state === 'available' ? '启用' : entry.state === 'disabled' ? '禁用' : entry.state === 'unsupported' ? '不支持' : '冲突'
+    const check = entry.check === undefined ? '未检测' : entry.check.status === 'passed' ? '通过' : entry.check.status === 'failed' ? `失败:${entry.check.failedStages.join('/') || '请求'}` : entry.check.status === 'cancelled' ? '已取消' : entry.check.status
+    return <Box key={entry.id} flexDirection="column"><Text wrap="truncate-end" color={focused ? 'yellow' : selected ? 'cyan' : 'white'}>{focused ? '> ' : selected ? '* ' : '  '}{index + 1}. [{status}] {display(entry.source.bookSourceName)} · 优先级 {entry.customOrder ?? 0} · {check}</Text><Text wrap="truncate-end" dimColor>    {display(entry.source.bookSourceUrl)} · 连续失败 {entry.searchHealth?.consecutiveFailures ?? 0}</Text></Box>
+  })
+  const failed = state.sourceCheckResults.filter((item) => item.status === 'failed')
+  const summary = state.sourceCheckResults.length === 0 ? [] : ['', `本次检测：${state.sourceCheckResults.filter((item) => item.status === 'passed' || item.status === 'failed').length}/${state.sourceCheckResults.length} 已完成 · 失败 ${failed.length}`, ...failed.map((item) => `失败：${display(item.sourceName)} · ${display(item.detail ?? item.failedStages.join('、'))}`)]
+  const progress = state.sourceCheckProgress === undefined ? [] : [`检测进度：${state.sourceCheckProgress.completed}/${state.sourceCheckProgress.total} · 通过 ${state.sourceCheckProgress.passed} · 失败 ${state.sourceCheckProgress.failed}${state.sourceCheckProgress.currentStage === undefined ? '' : ` · ${state.sourceCheckProgress.currentStage}`}`]
+  return <Box flexDirection="column"><Text bold>书源管理　[空格]选择 [a]全选 [c]检测 [x]禁用 [e]启用 [f]选择本次失败 [p]优先级</Text><Text dimColor>筛选：{state.sourceManagerFilter || '全部'} · 可见 {entries.length} · 已选 {state.sourceManagerSelectedIds.length}{state.sourceCheckProgress === undefined ? '' : ' · 检测中'}</Text>{progress}{rows.length === 0 ? <Text>没有匹配的书源。</Text> : rows}{summary.map((line) => <Text key={line} wrap="truncate-end" color={line.startsWith('失败：') ? 'red' : 'cyan'}>{line}</Text>)}</Box>
 }
 
 function renderDebug(runner: DebugRunner | undefined, capture: DebugCapture | undefined, panel: 'flow' | 'requests' | 'response' | 'parsed', selected: number, resultSelected: number, filter: string, scroll: number, height: number): React.ReactElement {

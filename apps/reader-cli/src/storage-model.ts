@@ -108,6 +108,56 @@ export interface StorageOptions {
   maxCacheBytes?: number
 }
 
+export type SourceCheckStatus = 'running' | 'passed' | 'failed' | 'cancelled' | 'stale' | 'capability-missing'
+
+export interface SourceCheckStageRecord {
+  stage: 'domain' | 'search' | 'discovery' | 'book-info' | 'toc' | 'content'
+  status: 'passed' | 'failed' | 'skipped' | 'unsupported'
+  detail?: string
+  durationMs?: number
+}
+
+export interface SourceCheckRecord {
+  fingerprint: string
+  sessionId: string
+  status: SourceCheckStatus
+  startedAt: string
+  checkedAt?: string
+  durationMs?: number
+  responseTimeMs?: number
+  detail?: string
+  failedStages: string[]
+  stages: SourceCheckStageRecord[]
+}
+
+export interface SourceHealthState {
+  fingerprint: string
+  consecutiveFailures: number
+}
+
+export interface SourceStateRecord {
+  fingerprint: string
+  enabled: boolean
+  enabledExplore: boolean
+  customOrder: number
+  weight: number
+  searchHealth: SourceHealthState
+  check?: SourceCheckRecord
+}
+
+export type SourceStateFile = Record<string, SourceStateRecord>
+
+export interface SourceCheckConfig {
+  timeoutMs: number
+  checkDomain: boolean
+  checkSearch: boolean
+  checkDiscovery: boolean
+  checkInfo: boolean
+  checkCategory: boolean
+  checkContent: boolean
+  keyword: string
+}
+
 export function defaultStoragePaths(_platform = process.platform, environment: NodeJS.ProcessEnv = process.env): StoragePaths {
   const home = environment.HOME ?? homedir()
   const root = join(home, '.config', 'reader-cli')

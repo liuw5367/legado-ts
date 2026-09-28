@@ -1,6 +1,6 @@
 import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, SearchMatchRank, WorkflowStatus } from '@legado/source-core'
 import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
-import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition } from './storage.ts'
+import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition, SourceCheckRecord } from './storage.ts'
 import type { DebugCapture } from './debug-capture.ts'
 
 type SearchWorkflowResult = Awaited<ReturnType<typeof import('@legado/source-core').searchBooks>>
@@ -66,6 +66,21 @@ export interface SearchProgress {
   cancelled: number
 }
 
+export interface SourceCheckProgress {
+  total: number
+  completed: number
+  passed: number
+  failed: number
+  cancelled: number
+  activeSources: string[]
+  currentStage?: string
+}
+
+export interface SourceCheckResult extends SourceCheckRecord {
+  sourceId: string
+  sourceName: string
+}
+
 export type SearchProgressListener = (progress: SearchProgress) => void
 
 export interface OpenBookResult {
@@ -93,6 +108,7 @@ export interface ReaderApplicationOptions {
 
 export interface ReaderSourceSession {
   search(keyword: string, signal?: AbortSignal, capture?: DebugCapture): Promise<SearchWorkflowResult>
+  discover?(signal?: AbortSignal, capture?: DebugCapture): Promise<SearchWorkflowResult>
   detail(candidate: BookCandidate, signal?: AbortSignal, capture?: DebugCapture): Promise<DetailWorkflowResult>
   toc(book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; runPerJs?: boolean; isFromBookInfo?: boolean; tocCountWords?: boolean }, capture?: DebugCapture): Promise<TocWorkflowResult>
   /** `nextChapterUrl` 触发正文分页护栏：命中时停止抓取，避免把下一章并入本章。 */

@@ -10,7 +10,7 @@
 | --- | --- |
 | [`packages/source-core`](../packages/source-core) | 书源导入/导出、规则编译与求值、请求计划、发现/搜索/详情/目录/正文流程；零运行时依赖，宿主能力经端口注入 |
 | [`packages/source-node`](../packages/source-node) | HTTP、Cookie、字符集、解析器、QuickJS、字体、归档、并发与兼容性 CLI 等 Node 宿主实现 |
-| [`apps/reader-cli`](../apps/reader-cli) | `legado-reader` 交互式 CLI：书源加载、搜索、详情、目录、正文、书架与本地阅读状态 |
+| [`apps/reader-cli`](../apps/reader-cli) | `legado-reader` 交互式 CLI：书源加载、搜索、详情、目录、正文、书架、本地阅读状态和书源管理/检测 |
 
 应用自身文档在 [`apps/reader-cli/README.md`](../apps/reader-cli/README.md) 及其 `docs/` 目录，不复制到本库。
 

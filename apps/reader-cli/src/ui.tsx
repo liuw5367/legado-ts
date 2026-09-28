@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink'
 import type { SourceCatalogResult } from './source-catalog.ts'
 import { ReaderApplication } from './application.ts'
-import type { OpenBookResult, SearchOperationResult, SearchProgress, SearchResultGroup, TocResult } from './application.ts'
+import type { OpenBookResult, SearchOperationResult, SearchProgress, SearchResultGroup, TocResult, SourceCheckProgress, SourceCheckResult } from './application.ts'
 import type { HomeBookView, KnownSourceView, ReadingPosition } from './storage.ts'
 import { layoutContent, layoutFormattedContent, lineAtParagraphOffset, paragraphOffsetAtLine, sanitizeTerminalText } from './content-layout.ts'
 import { countChapterCharacters, formatChapterContent } from './content-format.ts'
@@ -33,6 +33,7 @@ import {
   refreshOnHomeEntry,
   restoreGroupSelection,
   selectedGroupIndex,
+  sourceManagerEntries,
   type InputKey,
   type NavigationFrame,
   type MenuTarget,
@@ -152,6 +153,15 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [debugFilterActive, setDebugFilterActive] = useState(false)
   const [debugKeyword, setDebugKeyword] = useState('')
   const [debugKeywordActive, setDebugKeywordActive] = useState(false)
+  const [sourceManagerSelected, setSourceManagerSelected] = useState(0)
+  const [sourceManagerSelectedIds, setSourceManagerSelectedIds] = useState<string[]>([])
+  const [sourceManagerFilter, setSourceManagerFilter] = useState('')
+  const [sourceManagerFilterMode, setSourceManagerFilterMode] = useState(0)
+  const [sourceManagerFilterActive, setSourceManagerFilterActive] = useState(false)
+  const [sourceManagerOrderValue, setSourceManagerOrderValue] = useState('')
+  const [sourceManagerOrderActive, setSourceManagerOrderActive] = useState(false)
+  const [sourceCheckProgress, setSourceCheckProgress] = useState<SourceCheckProgress>()
+  const [sourceCheckResults, setSourceCheckResults] = useState<SourceCheckResult[]>([])
   const [, setDebugTick] = useState(0)
   const selectedGroupKeyRef = useRef<string | undefined>(undefined)
   const homeRefreshRequestRef = useRef(0)
@@ -263,7 +273,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setMessageOwner(previous.page)
   }
 
-  const { operationRef, mountedRef, beginOperation, isCurrent, finishOperation, cancelOperation, cancelActiveSearch } = useUiOperation({
+  const { operationRef, mountedRef, beginOperation, isCurrent, finishOperation, cancelOperation, cancelActiveSearch, cancelActiveSourceCheck } = useUiOperation({
     setBusy,
     setSearchProgress,
     setSearchState,
@@ -872,6 +882,85 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }).finally(() => finishOperation(operation))
   }
 
+  const visibleSourceManagerEntries = (): SourceCatalogResult['entries'] => sourceManagerEntries(catalog, sourceManagerFilter, sourceManagerFilterMode)
+
+  const toggleSourceManagerSelection = (): void => {
+    const entry = visibleSourceManagerEntries()[sourceManagerSelected]
+    if (entry === undefined) return
+    setSourceManagerSelectedIds((current) => current.includes(entry.id) ? current.filter((id) => id !== entry.id) : [...current, entry.id])
+  }
+
+  const selectAllSourceManagerEntries = (): void => {
+    const visible = visibleSourceManagerEntries().map((entry) => entry.id)
+    if (visible.length === 0) return
+    setSourceManagerSelectedIds((current) => visible.every((id) => current.includes(id)) ? current.filter((id) => !visible.includes(id)) : [...new Set([...current, ...visible])])
+  }
+
+  const setSelectedSourcesEnabled = (enabled: boolean): void => {
+    if (busy) return
+    if (sourceManagerSelectedIds.length === 0) { setMessage('请先选择书源'); return }
+    const operation = beginOperation('task')
+    void application.setSourcesEnabled(sourceManagerSelectedIds, enabled).then(() => {
+      if (isCurrent(operation)) setMessage(enabled ? `已启用 ${sourceManagerSelectedIds.length} 个书源` : `已禁用 ${sourceManagerSelectedIds.length} 个书源`)
+    }).catch((error: unknown) => { if (isCurrent(operation)) setMessage(errorMessage(error)) }).finally(() => finishOperation(operation))
+  }
+
+  const startSourceCheck = (): void => {
+    if (busy) return
+    if (sourceManagerSelectedIds.length === 0) { setMessage('请先选择要检测的书源'); return }
+    const ids = [...sourceManagerSelectedIds]
+    const operation = beginOperation('source-check')
+    setSourceCheckProgress({ total: ids.length, completed: 0, passed: 0, failed: 0, cancelled: 0, activeSources: [] })
+    setSourceCheckResults([])
+    setMessage(`正在检测 ${ids.length} 个书源…`)
+    const request = application.checkSources(ids, undefined, operation.controller.signal, (progress) => { if (isCurrent(operation)) setSourceCheckProgress(progress) })
+    operation.promise = request
+    void request.then((results) => {
+      if (!isCurrent(operation)) return
+      setSourceCheckResults(results)
+      const failed = results.filter((item) => item.status === 'failed').length
+      setMessage(failed > 0 ? `检测结束，已发现 ${failed} 个失败书源，可按 f 选择后禁用` : '检测结束，没有确认失败的书源')
+    }).catch((error: unknown) => { if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error)) }).finally(() => {
+      if (isCurrent(operation)) setSourceCheckProgress(undefined)
+      finishOperation(operation)
+    })
+  }
+
+  const selectFailedSourceResults = (): void => {
+    const failedIds = sourceCheckResults.filter((item) => item.status === 'failed').map((item) => item.sourceId)
+    if (failedIds.length === 0) { setMessage('本次没有已确认失败的书源'); return }
+    setSourceManagerSelectedIds(failedIds)
+    setSourceManagerFilterMode(3)
+    setSourceManagerSelected(0)
+    setPageScroll(0)
+    setMessage(`已选择本次失败的 ${failedIds.length} 个书源，按 x 禁用`)
+  }
+
+  const moveSourceManagerSelection = (input: string, key: InputKey): void => {
+    const entries = visibleSourceManagerEntries()
+    const next = navigationIndex(sourceManagerSelected, entries.length, input, key, Math.max(1, bodyHeight - 3))
+    if (next !== sourceManagerSelected) {
+      setSourceManagerSelected(next)
+      setPageScroll((scroll) => keepIndexVisible(next, entries.length, Math.max(1, bodyHeight - 3), scroll).start)
+    }
+  }
+
+  const handleSourceManagerInput = (input: string, key: InputKey): void => {
+    if (sourceManagerFilterActive || sourceManagerOrderActive) return
+    moveSourceManagerSelection(input, key)
+    if (input === ' ') { toggleSourceManagerSelection(); return }
+    if (input === 'a') { selectAllSourceManagerEntries(); return }
+    if (input === 'c') { startSourceCheck(); return }
+    if (input === 'x') { setSelectedSourcesEnabled(false); return }
+    if (input === 'e') { setSelectedSourcesEnabled(true); return }
+    if (input === 'f') { selectFailedSourceResults(); return }
+    if (input === '/' && !busy) { setSourceManagerFilterActive(true); return }
+    if (input === 'p' && !busy) {
+      const entry = visibleSourceManagerEntries()[sourceManagerSelected]
+      if (entry !== undefined) { setSourceManagerOrderValue(String(entry.customOrder ?? 0)); setSourceManagerOrderActive(true) }
+    }
+  }
+
   const handleHomeInput = (input: string, key: InputKey): void => {
     if (input === '1' || input === '2' || input === '3') { setHomeArea(Number(input) - 1); setSelected(0); setListStart(0); return }
     const visible = homeItemsForArea(home, homeArea)
@@ -1165,7 +1254,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const handlePageScroll = (input: string, key: InputKey): void => {
     const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
-    const lines = page === 'help' ? helpLines(helpPage, homeArea, columns).length : page === 'detail' ? detailLineCount(book, columns) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.entries.length + catalog.diagnostics.length + 8 : page === 'debug' ? debugLineCount() : 6
+    const lines = page === 'help' ? helpLines(helpPage, homeArea, columns).length : page === 'detail' ? detailLineCount(book, columns) : page === 'mapping' ? 8 : page === 'config' ? catalog.diagnostics.length + 4 : page === 'diagnostics' ? catalog.entries.length + catalog.diagnostics.length + 8 : page === 'source-manager' ? sourceManagerEntries(catalog, sourceManagerFilter, sourceManagerFilterMode).length * 2 + 6 : page === 'debug' ? debugLineCount() : 6
     const next = navigationPage(pageScroll, lines, input, key, bodyHeight)
     if (next !== pageScroll) setPageScroll(next)
   }
@@ -1190,6 +1279,31 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         return
       }
     }
+    if (page === 'source-manager' && (sourceManagerFilterActive || sourceManagerOrderActive)) {
+      if (key.escape) { setSourceManagerFilterActive(false); setSourceManagerOrderActive(false); return }
+      if (key.return) {
+        if (sourceManagerOrderActive) {
+          const value = Number.parseInt(sourceManagerOrderValue, 10)
+          const entry = visibleSourceManagerEntries()[sourceManagerSelected]
+          if (entry === undefined || !Number.isSafeInteger(value)) setMessage('优先级必须是整数')
+          else {
+            const operation = beginOperation('task')
+            void application.setSourceOrder(entry.id, value).then(() => { if (isCurrent(operation)) setMessage('优先级已保存') }).catch((error: unknown) => { if (isCurrent(operation)) setMessage(errorMessage(error)) }).finally(() => finishOperation(operation))
+          }
+        }
+        setSourceManagerFilterActive(false); setSourceManagerOrderActive(false); return
+      }
+      if (key.backspace || key.delete) {
+        if (sourceManagerOrderActive) setSourceManagerOrderValue((value) => Array.from(value).slice(0, -1).join(''))
+        else setSourceManagerFilter((value) => Array.from(value).slice(0, -1).join(''))
+        return
+      }
+      if (!key.ctrl && !key.meta && input.length > 0) {
+        if (sourceManagerOrderActive && /^[-+\d]$/u.test(input)) setSourceManagerOrderValue((value) => value + input)
+        else if (sourceManagerFilterActive) setSourceManagerFilter((value) => value + input)
+        return
+      }
+    }
     if (page === 'search') {
       if (key.escape) { goBack(); return }
       if (key.return) { void submitSearch(); return }
@@ -1208,10 +1322,12 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (input === 'q') { cancelOperation('正在退出…'); exit(); return }
     if (input === '?' ) { if (page === 'help') goBack(); else setPage('help'); return }
     if (input === 'd') { if (page !== 'diagnostics') setPage('diagnostics'); return }
+    if (input === 'm' && page === 'home' && !busy) { setPage('source-manager'); setMessage(''); return }
     if (key.ctrl && input === 'k') { setPage('search'); setMessage(''); return }
     if (key.escape) {
       if (page === 'toc' && tocQuery.length > 0) { clearTocSearch(); return }
       if (busy && (operationRef.current?.kind === 'search' || operationRef.current?.kind === 'source-search')) { cancelActiveSearch(); return }
+      if (busy && operationRef.current?.kind === 'source-check') { void cancelActiveSourceCheck(); return }
       if (busy) { cancelOperation(); return }
       goBack()
       return
@@ -1246,6 +1362,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     else if (page === 'sources') handleSourcesInput(input, key)
     else if (page === 'mapping') { handleMappingInput(input, key); if (key.downArrow || key.upArrow || key.leftArrow || key.rightArrow || key.pageDown || key.pageUp || key.home || key.end || input === 'j' || input === 'k') handlePageScroll(input, key) }
     else if (page === 'debug') handleDebugInput(input, key)
+    else if (page === 'source-manager') handleSourceManagerInput(input, key)
     else if (page === 'help' || page === 'diagnostics' || page === 'config') {
       if (page === 'diagnostics') {
         const next = navigationIndex(selected, catalog.entries.length, input, key, Math.max(1, bodyHeight - 5))
@@ -1258,12 +1375,12 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const visibleMessage = messageOwner === page ? message : ''
   const helpPage = navigationRef.current.at(-2)?.page ?? 'home'
-  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator, ...(debugRunner === undefined ? {} : { debugRunner }), ...(debugCapture === undefined ? {} : { debugCapture }), debugPanel, debugRequestSelected, debugResultSelected, debugFilter }
+  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll, message: visibleMessage, helpPage, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator, ...(debugRunner === undefined ? {} : { debugRunner }), ...(debugCapture === undefined ? {} : { debugCapture }), debugPanel, debugRequestSelected, debugResultSelected, debugFilter, sourceManagerSelected, sourceManagerSelectedIds, sourceManagerFilter, sourceManagerFilterMode, ...(sourceCheckProgress === undefined ? {} : { sourceCheckProgress }), sourceCheckResults }
   const visiblePage = renderPage(page, state)
   const commandActions = footer(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0, tocReversed)
-  const inputMode = page === 'search' || page === 'toc' && tocSearchActive || page === 'debug' && (debugFilterActive || debugKeywordActive)
-  const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : page === 'debug' && debugKeywordActive ? '关键词 › ' : page === 'debug' && debugFilterActive ? '过滤 › ' : ''
-  const inputValue = page === 'search' ? query : page === 'toc' ? tocQuery : debugKeywordActive ? debugKeyword : debugFilter
+  const inputMode = page === 'search' || page === 'toc' && tocSearchActive || page === 'debug' && (debugFilterActive || debugKeywordActive) || page === 'source-manager' && (sourceManagerFilterActive || sourceManagerOrderActive)
+  const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : page === 'debug' && debugKeywordActive ? '关键词 › ' : page === 'debug' && debugFilterActive ? '过滤 › ' : page === 'source-manager' && sourceManagerOrderActive ? '优先级 › ' : page === 'source-manager' && sourceManagerFilterActive ? '筛选 › ' : ''
+  const inputValue = page === 'search' ? query : page === 'toc' ? tocQuery : debugKeywordActive ? debugKeyword : debugFilterActive ? debugFilter : sourceManagerOrderActive ? sourceManagerOrderValue : sourceManagerFilter
   const inputWidth = Math.max(0, columns - terminalWidth(commandActions) - 1 - terminalWidth(inputLabel) - 1)
   const commandInput = inputMode ? `${inputLabel}${tailTerminalText(inputValue, inputWidth)}█` : ''
   const pageContext = pageHeader(page, state)

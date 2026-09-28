@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent } from '@legado/source-core'
 import { KeyedConcurrencyHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
-import { usableSources } from './source-catalog.ts'
 import { editionKey, ReaderStorage } from './storage.ts'
 import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, SearchHistoryEntry } from './storage.ts'
 import type {
@@ -15,11 +14,16 @@ import type {
   SearchUpdateListener,
   SourceSearchResult,
   TocResult,
+  SourceCheckProgress,
+  SourceCheckResult,
 } from './application-model.ts'
 import { SourceSession } from './source-session.ts'
 import { filterSearchSnapshot, groupSearchResults, isAuthorMatch, isBookTitleMatch, normalizeAuthor } from './search-results.ts'
 import { DebugCapture } from './debug-capture.ts'
 import { DebugRunner } from './debug-runner.ts'
+import { orderedSearchSources, nextSearchHealth } from './source-policy.ts'
+import { checkSource } from './source-check.ts'
+import type { SourceCheckConfig } from './storage.ts'
 
 export type {
   OpenBookResult,
@@ -34,6 +38,8 @@ export type {
   SearchUpdateListener,
   SourceSearchResult,
   TocResult,
+  SourceCheckProgress,
+  SourceCheckResult,
 } from './application-model.ts'
 export { groupSearchResults, searchMatchRank, searchMatchRankLabel } from './search-results.ts'
 export { DebugCapture } from './debug-capture.ts'
@@ -60,7 +66,7 @@ export class ReaderApplication {
     this.storage = options.storage
     this.maxConcurrentSources = options.maxConcurrentSources ?? 4
     this.concurrency = new KeyedConcurrencyHost({ maxConcurrent: this.maxConcurrentSources, maxConcurrentPerKey: 1 })
-    for (const entry of usableSources(this.catalog)) {
+    for (const entry of this.catalog.entries.filter((item) => item.state === 'available' || item.state === 'disabled')) {
       const session = options.sessionFactory?.(entry.source) ?? new SourceSession(entry.source, this.concurrency)
       session.attachCache(this.storage)
       this.sessions.set(entry.id, session)
@@ -106,7 +112,7 @@ export class ReaderApplication {
 
   public createDebugRunner(sourceId: string): DebugRunner | undefined {
     const entry = this.catalog.entries.find((item) => item.id === sourceId || item.source.bookSourceUrl === sourceId)
-    if (entry === undefined || entry.state !== 'available') return undefined
+    if (entry === undefined || !['available', 'disabled'].includes(entry.state)) return undefined
     const session = this.sessions.get(entry.id)
     return session === undefined ? undefined : new DebugRunner(entry, session)
   }
@@ -128,7 +134,7 @@ export class ReaderApplication {
     const searchId = randomUUID()
     const startedAt = new Date().toISOString()
     const startedClock = Date.now()
-    const entries = usableSources(this.catalog).filter((entry) => sourceIds === undefined || sourceIds.includes(entry.id) || sourceIds.includes(entry.source.bookSourceUrl))
+    const entries = orderedSearchSources(this.catalog.entries, sourceIds)
     const capture = new DebugCapture({ sourceId: 'multi', sourceName: '搜索', mode: 'light' })
     const results: SourceSearchResult[] = []
     const activeSources = new Map<string, number>()
@@ -235,9 +241,121 @@ export class ReaderApplication {
     results.sort((left, right) => left.source.source.bookSourceName.localeCompare(right.source.source.bookSourceName, 'zh-Hans'))
     const completedAt = new Date().toISOString()
     const operation: SearchOperationResult = { ...snapshot(cancelled, completedAt), searchId: history.id, completedAt }
+    if (!cancelled) await this.updateSearchHealth(results)
     emitUpdate(cancelled)
     this.rememberEvidence('search', capture)
     return operation
+  }
+
+  public async setSourcesEnabled(sourceIds: readonly string[], enabled: boolean): Promise<void> {
+    const selected = new Set(sourceIds)
+    await this.storage.updateSourceStates((states) => {
+      const next = { ...states }
+      for (const entry of this.catalog.entries) {
+        if (!selected.has(entry.id) && !selected.has(entry.source.bookSourceUrl) || entry.state === 'unsupported' || entry.state === 'conflict') continue
+        const current = next[entry.source.bookSourceUrl] ?? { fingerprint: entry.fingerprint, enabled: entry.source.enabled !== false, enabledExplore: entry.source.enabledExplore !== false, customOrder: entry.customOrder ?? 0, weight: typeof entry.source.weight === 'number' ? entry.source.weight : 0, searchHealth: entry.searchHealth ?? { fingerprint: entry.fingerprint, consecutiveFailures: 0 } }
+        next[entry.source.bookSourceUrl] = { ...current, fingerprint: entry.fingerprint, enabled }
+      }
+      return next
+    })
+    for (const entry of this.catalog.entries) {
+      if (!selected.has(entry.id) && !selected.has(entry.source.bookSourceUrl) || entry.state === 'unsupported' || entry.state === 'conflict') continue
+      entry.source = { ...entry.source, enabled }
+      entry.state = enabled ? 'available' : 'disabled'
+      if (enabled) delete entry.reason
+      else entry.reason = '书源已禁用'
+    }
+  }
+
+  public async setSourceOrder(sourceId: string, customOrder: number): Promise<void> {
+    if (!Number.isSafeInteger(customOrder)) throw new Error('优先级必须是整数')
+    const entry = this.catalog.entries.find((item) => item.id === sourceId || item.source.bookSourceUrl === sourceId)
+    if (entry === undefined) throw new Error('书源不存在')
+    await this.storage.updateSourceStates((states) => {
+      const current = states[entry.source.bookSourceUrl] ?? { fingerprint: entry.fingerprint, enabled: entry.source.enabled !== false, enabledExplore: entry.source.enabledExplore !== false, customOrder: entry.customOrder ?? 0, weight: typeof entry.source.weight === 'number' ? entry.source.weight : 0, searchHealth: entry.searchHealth ?? { fingerprint: entry.fingerprint, consecutiveFailures: 0 } }
+      return { ...states, [entry.source.bookSourceUrl]: { ...current, customOrder } }
+    })
+    entry.customOrder = customOrder
+    entry.source = { ...entry.source, customOrder }
+  }
+
+  public async resetSourceSearchHealth(sourceId: string): Promise<void> {
+    const entry = this.catalog.entries.find((item) => item.id === sourceId || item.source.bookSourceUrl === sourceId)
+    if (entry === undefined) throw new Error('书源不存在')
+    const health = { fingerprint: entry.fingerprint, consecutiveFailures: 0 }
+    await this.storage.updateSourceStates((states) => {
+      const current = states[entry.source.bookSourceUrl]
+      if (current === undefined) return states
+      return { ...states, [entry.source.bookSourceUrl]: { ...current, searchHealth: health } }
+    })
+    entry.searchHealth = health
+  }
+
+  public async getSourceCheckConfig(): Promise<SourceCheckConfig> {
+    return this.storage.getSourceCheckConfig()
+  }
+
+  public saveSourceCheckConfig(config: SourceCheckConfig): Promise<void> {
+    return this.storage.saveSourceCheckConfig(config)
+  }
+
+  public checkSources(sourceIds: readonly string[], keyword?: string, signal?: AbortSignal, onProgress?: (progress: SourceCheckProgress) => void): Promise<SourceCheckResult[]> {
+    return this.trackOperation(signal, (operationSignal) => this.checkSourcesInternal(sourceIds, keyword, operationSignal, onProgress))
+  }
+
+  private async checkSourcesInternal(sourceIds: readonly string[], keyword: string | undefined, signal: AbortSignal, onProgress?: (progress: SourceCheckProgress) => void): Promise<SourceCheckResult[]> {
+    const selected = new Set(sourceIds)
+    const entries = this.catalog.entries.filter((entry) => selected.has(entry.id) || selected.has(entry.source.bookSourceUrl))
+    const config = await this.storage.getSourceCheckConfig()
+    const results: SourceCheckResult[] = []
+    let next = 0
+    let completed = 0
+    const active = new Set<string>()
+    const progress = (currentStage?: string): void => onProgress?.({ total: entries.length, completed, passed: results.filter((item) => item.status === 'passed').length, failed: results.filter((item) => item.status === 'failed').length, cancelled: results.filter((item) => item.status === 'cancelled').length, activeSources: [...active], ...(currentStage === undefined ? {} : { currentStage }) })
+    const worker = async (): Promise<void> => {
+      while (!signal.aborted) {
+        const index = next++
+        const entry = entries[index]
+        if (entry === undefined) return
+        active.add(entry.source.bookSourceName)
+        progress('准备')
+        const result = await checkSource({ entry, session: this.sessions.get(entry.id), config, ...(keyword === undefined ? {} : { keyword }), signal, onStage: (stage) => progress(stage) })
+        active.delete(entry.source.bookSourceName)
+        results.push(result)
+        completed += 1
+        await this.storage.saveSourceCheck(entry.source.bookSourceUrl, result, {
+          enabled: entry.source.enabled !== false,
+          enabledExplore: entry.source.enabledExplore !== false,
+          customOrder: entry.customOrder ?? 0,
+          weight: typeof entry.source.weight === 'number' ? entry.source.weight : 0,
+          searchHealth: entry.searchHealth ?? { fingerprint: entry.fingerprint, consecutiveFailures: 0 },
+        })
+        entry.check = result
+        progress()
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(this.maxConcurrentSources, Math.max(1, entries.length)) }, () => worker()))
+    if (signal.aborted) for (const entry of entries.filter((item) => !results.some((result) => result.sourceId === item.source.bookSourceUrl))) {
+      const cancelled: SourceCheckResult = { sourceId: entry.source.bookSourceUrl, sourceName: entry.source.bookSourceName, fingerprint: entry.fingerprint, sessionId: randomUUID(), status: 'cancelled', startedAt: new Date().toISOString(), detail: '校验已取消', failedStages: [], stages: [] }
+      results.push(cancelled)
+      entry.check = cancelled
+    }
+    return results
+  }
+
+  private async updateSearchHealth(results: readonly SourceSearchResult[]): Promise<void> {
+    await this.storage.updateSourceStates((states) => {
+      const next = { ...states }
+      for (const item of results) {
+        const entry = item.source
+        const outcome = item.status === 'success' || item.status === 'partial' || item.status === 'empty' || item.status === 'failed' || item.status === 'cancelled' || item.status === 'capability-missing' ? item.status : 'failed'
+        const current = next[entry.source.bookSourceUrl]
+        const health = nextSearchHealth(current?.searchHealth ?? entry.searchHealth ?? { fingerprint: entry.fingerprint, consecutiveFailures: 0 }, entry.fingerprint, outcome)
+        next[entry.source.bookSourceUrl] = current === undefined ? { fingerprint: entry.fingerprint, enabled: entry.source.enabled !== false, enabledExplore: entry.source.enabledExplore !== false, customOrder: entry.customOrder ?? 0, weight: typeof entry.source.weight === 'number' ? entry.source.weight : 0, searchHealth: health } : { ...current, fingerprint: entry.fingerprint, searchHealth: health }
+        entry.searchHealth = health
+      }
+      return next
+    })
   }
 
   public openSearchResult(selected: SearchResult, related: readonly SearchResult[] = [], signal?: AbortSignal): Promise<OpenBookResult> {
@@ -326,7 +444,7 @@ export class ReaderApplication {
       if (book === undefined) throw new Error('书籍记录不存在')
       const known = await this.storage.listKnownSources(bookId)
       const valid = new Set(known.filter((item) => this.catalog.entries.some((entry) => entry.source.bookSourceUrl === item.sourceId && entry.fingerprint === item.sourceFingerprint && entry.state === 'available')).map((item) => item.sourceId))
-      const sourceIds = usableSources(this.catalog).filter((entry) => !valid.has(entry.source.bookSourceUrl)).map((entry) => entry.id)
+      const sourceIds = orderedSearchSources(this.catalog.entries).filter((entry) => !valid.has(entry.source.bookSourceUrl)).map((entry) => entry.id)
       const update = onUpdate === undefined ? undefined : (snapshot: SearchOperationResult): void => onUpdate(filterSearchSnapshot(snapshot, book.name, book.author))
       const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update)
       const searchEvidence = this.evidence.get('search')

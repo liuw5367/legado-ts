@@ -164,3 +164,9 @@ Android 服务还会分别统计响应时间、域名错误、搜索/发现错�
 - 单个书源失败不会中断批量任务；单个阶段失败不会产生虚假的下游通过。
 - 新版本书源提交后，旧检测结果不能回写；删除后不能重建状态。
 - 同一编排既能由 Node 运行，也能在受限 Edge 环境中通过 capability 检查明确拒绝不支持的执行器。
+
+## CLI 当前实现
+
+`apps/reader-cli/src/application.ts` 的 `ReaderApplication.checkSources` 接收一份固定的 source ID 选择快照，按应用并发上限执行 `source-check.ts`，每个已完成源通过 `ReaderStorage.saveSourceCheck` 写入 `source-state.json`。单源阶段按 Android 顺序执行：域名后先完成搜索候选的详情、目录、正文，再处理第一个有效发现分类及其候选。`⎋` 取消只中止当前任务；已完成的失败记录仍可由书源管理页的 `f` 动作重新选中，再用 `x` 批量禁用。未开始的源只作为本次会话的 `cancelled` 结果返回，不写入失败状态。
+
+CLI 持久化模型使用小写运行时状态（`passed`、`failed`、`cancelled`、`capability-missing`），与本流程上面的 Android/目标大写状态在应用边界分开。它保留源定义 `fingerprint`，定义变化后不复用旧检测结果；默认检测总超时 180 秒，域名阶段默认关闭，其余搜索、发现、详情、目录和正文阶段默认开启。

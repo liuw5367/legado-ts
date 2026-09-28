@@ -5,6 +5,8 @@ import type { ImportCandidate, ImportReader, NormalizedSource } from '@legado/so
 import { NodeNetworkHost } from '@legado/source-node'
 import { createRequestPlan } from '@legado/source-core'
 import { ReaderStorage } from './storage.ts'
+import { applySourceState, sourceStateDefaults } from './source-policy.ts'
+import type { SourceCheckRecord, SourceHealthState } from './storage-model.ts'
 
 const MAX_FILES = 256
 const MAX_BYTES = 4 * 1024 * 1024
@@ -16,6 +18,9 @@ export interface SourceEntry {
   fingerprint: string
   state: 'available' | 'disabled' | 'unsupported' | 'invalid' | 'conflict'
   reason?: string
+  customOrder?: number
+  searchHealth?: SourceHealthState
+  check?: SourceCheckRecord
 }
 
 export interface SourceCatalogResult {
@@ -67,6 +72,7 @@ export async function loadSourceCatalog(input: string | undefined, options: Sour
     else diagnostics.push(`书源路径不是普通文件或目录：${path}`)
   }
   const entries: SourceEntry[] = []
+  const savedStates = storage === undefined ? {} : await storage.getSourceStates()
   for (const item of texts) {
     const candidates = await importSources({ kind: 'text', text: item.text, origin: { kind: 'file', location: item.location } }, { limits: { maxCandidates: 1000, maxBytes } })
     for (const candidate of candidates) {
@@ -76,12 +82,24 @@ export async function loadSourceCatalog(input: string | undefined, options: Sour
       }
       const source = candidate.source
       const fingerprint = candidate.sourceFingerprint ?? sourceDefinitionFingerprint(source)
-      const state = source.bookSourceType !== 0
+      const saved = savedStates[source.bookSourceUrl]
+      const defaults = sourceStateDefaults(source, fingerprint)
+      const userState = saved === undefined ? defaults : {
+        ...defaults,
+        enabled: saved.enabled,
+        enabledExplore: saved.enabledExplore,
+        customOrder: saved.customOrder,
+        weight: saved.weight,
+        searchHealth: saved.fingerprint === fingerprint ? saved.searchHealth : { fingerprint, consecutiveFailures: 0 },
+        ...(saved.fingerprint === fingerprint && saved.check === undefined ? {} : saved.fingerprint === fingerprint && saved.check !== undefined ? { check: saved.check } : {}),
+      }
+      const effectiveSource = applySourceState(source, userState)
+      const state = effectiveSource.bookSourceType !== 0
         ? 'unsupported'
-        : source.enabled === false
+        : effectiveSource.enabled === false
           ? 'disabled'
           : 'available'
-      entries.push({ id: `${source.bookSourceUrl}\u0000${fingerprint}`, source, candidate, fingerprint, state, ...(state === 'unsupported' ? { reason: '首版只支持文本书源' } : state === 'disabled' ? { reason: '书源已禁用' } : {}) })
+      entries.push({ id: `${effectiveSource.bookSourceUrl}\u0000${fingerprint}`, source: effectiveSource, candidate, fingerprint, state, customOrder: userState.customOrder, searchHealth: userState.searchHealth, ...(userState.check === undefined ? {} : { check: userState.check }), ...(state === 'unsupported' ? { reason: '首版只支持文本书源' } : state === 'disabled' ? { reason: '书源已禁用' } : {}) })
     }
   }
   const unique = [...new Map(entries.map((entry) => [entry.id, entry])).values()]

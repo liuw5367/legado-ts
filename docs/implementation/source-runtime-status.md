@@ -22,7 +22,7 @@
 | OPEN-02 | 书源能力 | 结构化段评读取、旧式段评网页桥接和段评写入 | 部分实现 | [段评流程](../flows/review-flow.md)；`CAP-REVIEW` | 读取、会话安全、分页和写入协议分别完成或明确返回能力缺失 |
 | OPEN-03 | 书源能力 | 付费动作、购买后刷新、书源事件和自定义按钮 | 未实现 | [媒体和交互流程](../flows/adjacent-source-flows.md) | 触发、认证、取消、重复点击和宿主 UI 动作有版本化契约 |
 | OPEN-04 | 宿主能力 | 验证码、复杂登录 UI 和多步骤登录 | 未实现 | [URL 与请求规则](../standard/url-request-rules.md)；WebView 入口 | 登录交互、凭据保存、清理和失败恢复完成应用与宿主验收 |
-| OPEN-05 | 应用入口 | 多源 `searchMany`、书源全流程 `checkSources` | 未实现 | [包使用指南](package-usage.md)；[校验流程](../flows/source-check-flow.md) | 多源调度、进度、取消、部分成功和全流程校验有公开入口与测试 |
+| OPEN-05 | 应用入口 | 多源 `ReaderApplication.search`、书源全流程 `checkSources` | 已实现待验证 | [包使用指南](package-usage.md)；[校验流程](../flows/source-check-flow.md)；`apps/reader-cli/tests/source-check.test.ts` | 继续补齐 Android 同输入 golden，并在跨端验证后记录完成提交 |
 | OPEN-06 | 应用状态 | `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` | 未实现 | [架构边界](../architecture/goals-and-boundaries.md)；[归档设计](../archive/source-management-and-state.md) | 用户归属、版本冲突、凭据隔离、任务恢复和删除副作用有应用层契约 |
 | OPEN-07 | 请求差异 | Android 独立登录凭据头与同站注入 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D5 | Android/TypeScript 使用相同请求和 Cookie fixture，且清理边界明确 |
 | OPEN-08 | 生命周期差异 | `concurrentRate` 非法配置和源生命周期清理 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D7 | 首次非法值、取消、编辑、覆盖、删除和重建源都有测试 |

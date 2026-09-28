@@ -1,13 +1,14 @@
 import type { SearchOperationResult, SearchProgress, SearchResultGroup, OpenBookResult } from './application.ts'
 import type { HomeBookView, KnownSourceView } from './storage.ts'
+import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
 import type { ActionMenuItem } from './action-menu.ts'
 import { sanitizeTerminalText, layoutContent } from './content-layout.ts'
 import { moveIndex, pageIndexForKey } from './viewport.ts'
 import { layoutFooter, terminalWidth, type FooterAction } from './ui-actions.ts'
 
-export type Page = 'config' | 'home' | 'search' | 'results' | 'detail' | 'toc' | 'reader' | 'sources' | 'mapping' | 'help' | 'diagnostics' | 'debug'
+export type Page = 'config' | 'home' | 'search' | 'results' | 'detail' | 'toc' | 'reader' | 'sources' | 'mapping' | 'help' | 'diagnostics' | 'debug' | 'source-manager'
 export type SearchUiState = 'idle' | 'running' | 'cancelling' | 'complete' | 'cancelled' | 'error'
-export type OperationKind = 'search' | 'source-search' | 'task'
+export type OperationKind = 'search' | 'source-search' | 'source-check' | 'task'
 
 export interface NavigationFrame {
   page: Page
@@ -50,7 +51,7 @@ export interface HelpSection {
 
 export function helpSections(page: Page, homeArea: number): HelpSection[] {
   const current: Partial<Record<Page, HelpSection>> = {
-    home: { title: '当前页面 · 首页', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开或重复搜索' }, { keys: '1/2/3', description: '切换书架、最近阅读、搜索记录' }, ...(homeArea === 2 ? [] : [{ keys: 'o', description: '打开书籍操作' }])] },
+    home: { title: '当前页面 · 首页', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开或重复搜索' }, { keys: '1/2/3', description: '切换书架、最近阅读、搜索记录' }, { keys: 'm', description: '书源管理' }, ...(homeArea === 2 ? [] : [{ keys: 'o', description: '打开书籍操作' }])] },
     search: { title: '当前页面 · 搜索', entries: [{ keys: '输入文字', description: '填写书名' }, { keys: '↵', description: '开始搜索' }, { keys: '退格', description: '删除输入' }] },
     results: { title: '当前页面 · 搜索结果', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开书籍详情' }, { keys: 't', description: '直接打开目录' }, { keys: 'o', description: '书籍操作' }, { keys: '⎋', description: '搜索中取消任务' }] },
     detail: { title: '当前页面 · 书籍信息', entries: [{ keys: '↵', description: '开始阅读' }, { keys: 't', description: '打开目录' }, { keys: 's', description: '查看书源' }, { keys: 'a', description: '加入或移出书架' }] },
@@ -60,6 +61,7 @@ export function helpSections(page: Page, homeArea: number): HelpSection[] {
     mapping: { title: '当前页面 · 章节映射', entries: [{ keys: '↵', description: '确认切换' }, { keys: '⎋', description: '取消' }] },
     config: { title: '当前页面 · 配置', entries: [{ keys: 'd', description: '打开诊断' }] },
     diagnostics: { title: '当前页面 · 诊断', entries: [{ keys: '↑/↓  j/k', description: '选择书源' }, { keys: '↵', description: '查看书源诊断' }, { keys: 'r', description: '执行快速检查' }] },
+    'source-manager': { title: '当前页面 · 书源管理', entries: [{ keys: '↑/↓  j/k', description: '移动书源' }, { keys: '空格', description: '选择当前书源' }, { keys: 'a', description: '全选或清除选择' }, { keys: 'c', description: '检测所选书源' }, { keys: 'x/e', description: '批量禁用/启用' }, { keys: 'f', description: '选择本次失败项' }, { keys: 'p', description: '设置优先级' }, { keys: '⎋', description: '取消检测或返回' }] },
     debug: { title: '当前页面 · 书源调试', entries: [{ keys: 'i', description: '修改搜索关键词' }, { keys: 'l', description: '处理流程' }, { keys: 'n', description: '请求列表' }, { keys: 'r', description: '原始响应' }, { keys: 'p', description: '解析摘要' }] },
   }
   const evidenceEntries = ['results', 'detail', 'sources', 'toc', 'reader'].includes(page) ? [{ keys: 'v', description: '查看当前页面最近请求' }] : page === 'diagnostics' ? [{ keys: 'g', description: '进入书源调试' }] : page === 'debug' ? [{ keys: 'y', description: '复制当前面板' }, { keys: 'e', description: '导出 Markdown 与 JSON' }] : []
@@ -224,7 +226,7 @@ export function normalizeChapterTitle(value: string): string {
 }
 
 export function pageLabel(page: Page): string {
-  return ({ config: '配置', home: '首页', search: '搜索', results: '搜索结果', detail: '详情', toc: '目录', reader: '阅读', sources: '已知书源', mapping: '章节映射', help: '帮助', diagnostics: '诊断', debug: '书源调试' } as Record<Page, string>)[page]
+  return ({ config: '配置', home: '首页', search: '搜索', results: '搜索结果', detail: '详情', toc: '目录', reader: '阅读', sources: '已知书源', mapping: '章节映射', help: '帮助', diagnostics: '诊断', debug: '书源调试', 'source-manager': '书源管理' } as Record<Page, string>)[page]
 }
 
 export function homeAreaLabel(homeArea: number): string {
@@ -256,6 +258,7 @@ export function footer(page: Page, busy: boolean, columns: number, searchState: 
   if (page === 'home') return layoutFooter([
     { keys: '↵', label: homeArea === 2 ? '重复搜索' : '阅读', priority: 0 },
     ...(homeArea === 2 ? [] : [{ keys: 'o', label: '操作', priority: 1 }]),
+    { keys: 'm', label: '书源', priority: 2 },
     ...common.slice(1),
   ], columns)
   if (page === 'search') return layoutFooter([
@@ -274,6 +277,7 @@ export function footer(page: Page, busy: boolean, columns: number, searchState: 
       ...(searching ? common.slice(1) : common),
     ], columns)
   }
+  if (page === 'source-manager' && busy) return layoutFooter([{ keys: '⎋', label: '取消检测', priority: -1 }, ...common.slice(1)], columns)
   if (busy) return layoutFooter([{ keys: '⎋', label: '取消处理中', priority: -1 }, ...common.slice(1)], columns)
   if (page === 'detail') return layoutFooter([
     { keys: '↵', label: '阅读', priority: 0 },
@@ -305,7 +309,21 @@ export function footer(page: Page, busy: boolean, columns: number, searchState: 
     ...common.slice(1),
   ], columns)
   if (page === 'debug') return layoutFooter([{ keys: '⎋', label: '返回', priority: -1 }, { keys: '?', label: '帮助', priority: 8 }, { keys: 'q', label: '退出', priority: 10 }], columns)
+  if (page === 'source-manager') return layoutFooter([
+    ...(busy ? [{ keys: '⎋', label: '取消检测', priority: -1 }] : [{ keys: '空格', label: '选择', priority: 0 }, { keys: 'c', label: '检测', priority: 1 }, { keys: 'x', label: '禁用', priority: 2 }, { keys: 'e', label: '启用', priority: 3 }, { keys: 'f', label: '失败项', priority: 4 }]),
+    ...common,
+  ], columns)
   return layoutFooter(common, columns)
+}
+
+export function sourceManagerEntries(catalog: SourceCatalogResult, filter: string, filterMode: number): SourceEntry[] {
+  const query = filter.trim().toLocaleLowerCase('zh-Hans')
+  return catalog.entries.filter((entry) => {
+    const text = `${entry.source.bookSourceName} ${entry.source.bookSourceUrl} ${String(entry.source.bookSourceGroup ?? '')}`.toLocaleLowerCase('zh-Hans')
+    const match = query.length === 0 || text.includes(query)
+    const modeMatch = filterMode === 1 ? entry.state === 'available' : filterMode === 2 ? entry.state === 'disabled' : filterMode === 3 ? entry.check?.status === 'failed' : true
+    return match && modeMatch
+  })
 }
 
 export function errorMessage(error: unknown): string {

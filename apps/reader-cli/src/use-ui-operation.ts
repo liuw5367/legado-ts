@@ -18,6 +18,7 @@ export interface UiOperationController {
   finishOperation: (operation: UiOperation) => void
   cancelOperation: (text?: string) => void
   cancelActiveSearch: () => Promise<void>
+  cancelActiveSourceCheck: () => Promise<void>
 }
 
 export function useUiOperation(callbacks: UiOperationCallbacks): UiOperationController {
@@ -69,5 +70,14 @@ export function useUiOperation(callbacks: UiOperationCallbacks): UiOperationCont
     return operation.promise?.then(() => undefined, () => undefined) ?? Promise.resolve()
   }
 
-  return { operationRef, mountedRef, beginOperation, isCurrent, finishOperation, cancelOperation, cancelActiveSearch }
+  const cancelActiveSourceCheck = (): Promise<void> => {
+    const operation = operationRef.current
+    if (operation?.kind !== 'source-check') return Promise.resolve()
+    operation.controller.abort()
+    callbacks.setBusy(true)
+    callbacks.setMessage('正在取消检测，等待书源请求释放…')
+    return operation.promise?.then(() => undefined, () => undefined) ?? Promise.resolve()
+  }
+
+  return { operationRef, mountedRef, beginOperation, isCurrent, finishOperation, cancelOperation, cancelActiveSearch, cancelActiveSourceCheck }
 }

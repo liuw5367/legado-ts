@@ -1,4 +1,4 @@
-import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks, sourceDefinitionFingerprint } from '@legado/source-core'
+import { discoverBooks, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks, sourceDefinitionFingerprint } from '@legado/source-core'
 import type { BookCandidate, BookMetadata, Chapter, ConcurrencyHost, ContentCache, NormalizedSource, SourceSession as CoreSourceSession } from '@legado/source-core'
 import { createNodeSourceSession } from '@legado/source-node'
 import type { ReaderSourceSession } from './application-model.ts'
@@ -17,6 +17,16 @@ export class SourceSession implements ReaderSourceSession {
   public async search(keyword: string, signal?: AbortSignal, capture?: DebugCapture): Promise<Awaited<ReturnType<typeof searchBooks>>> {
     capture?.beginStage('search')
     const result = await this.core.run((ports) => searchBooks(ports, { source: this.source, keyword, ...(signal === undefined ? {} : { signal }), maxItems: 100 }), capture === undefined ? undefined : { requestObserver: capture })
+    capture?.recordResult('search', result, { candidates: result.value?.items.length ?? 0 })
+    return result
+  }
+
+  public async discover(signal?: AbortSignal, capture?: DebugCapture): Promise<Awaited<ReturnType<typeof discoverBooks>>> {
+    capture?.beginStage('search')
+    const source = resolveDiscoverySource(this.source)
+    const result = source === undefined
+      ? { status: 'failed' as const, value: null, diagnostics: [{ code: 'invalid-config' as const, stage: 'discover' as const, field: 'exploreUrl', message: '发现规则为空', retryable: false }], trace: [] }
+      : await this.core.run((ports) => discoverBooks(ports, { source, ...(signal === undefined ? {} : { signal }), maxItems: 100 }), capture === undefined ? undefined : { requestObserver: capture })
     capture?.recordResult('search', result, { candidates: result.value?.items.length ?? 0 })
     return result
   }
@@ -65,4 +75,27 @@ export class SourceSession implements ReaderSourceSession {
   public attachCache(storage: ReaderStorage): void {
     this.cacheStore = storage.workflowCache(sourceDefinitionFingerprint(this.source))
   }
+}
+
+function resolveDiscoverySource(source: NormalizedSource): NormalizedSource | undefined {
+  const raw = source.exploreUrl
+  if (typeof raw !== 'string' || raw.trim().length === 0) return undefined
+  const text = raw.trim()
+  if (text.startsWith('@js:') || text.toLowerCase().startsWith('<js>')) return source
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (Array.isArray(parsed)) {
+      const first = parsed.find((item) => {
+        if (typeof item !== 'object' || item === null) return false
+        const url = (item as Record<string, unknown>).url
+        return typeof url === 'string' && url.trim().length > 0
+      }) as Record<string, unknown> | undefined
+      return typeof first?.url === 'string' && first.url.trim().length > 0 ? { ...source, exploreUrl: first.url } : undefined
+    }
+  } catch {
+    // Android falls back to the plain text parser for non-JSON exploreUrl values.
+  }
+  const item = text.split(/&&|\r?\n/u).map((value) => value.trim()).find((value) => value.includes('::') && value.split('::').slice(1).join('::').trim().length > 0)
+  const url = item === undefined ? undefined : item.split('::').slice(1).join('::').trim()
+  return url === undefined || url.length === 0 ? undefined : { ...source, exploreUrl: url }
 }

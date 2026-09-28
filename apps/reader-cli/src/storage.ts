@@ -14,6 +14,10 @@ import {
   type ReadingPosition,
   type ReadingRecord,
   type SearchHistoryEntry,
+  type SourceCheckConfig,
+  type SourceCheckRecord,
+  type SourceStateRecord,
+  type SourceStateFile,
   type StorageOptions,
   type StoragePaths,
 } from './storage-model.ts'
@@ -28,6 +32,11 @@ export type {
   ReadingPosition,
   ReadingRecord,
   SearchHistoryEntry,
+  SourceCheckConfig,
+  SourceCheckRecord,
+  SourceCheckStageRecord,
+  SourceStateFile,
+  SourceStateRecord,
   StorageOptions,
   StoragePaths,
 } from './storage-model.ts'
@@ -42,6 +51,16 @@ interface Manifest {
 const MAX_SEARCH_HISTORY = 100
 const MAX_UNSHELVED_READING = 200
 const MAX_CACHE_BYTES = 512 * 1024 * 1024
+const DEFAULT_SOURCE_CHECK_CONFIG: SourceCheckConfig = {
+  timeoutMs: 180_000,
+  checkDomain: false,
+  checkSearch: true,
+  checkDiscovery: true,
+  checkInfo: true,
+  checkCategory: true,
+  checkContent: true,
+  keyword: '我的',
+}
 
 function searchHistoryTime(entry: Pick<SearchHistoryEntry, 'startedAt' | 'completedAt'>): string {
   return entry.completedAt ?? entry.startedAt
@@ -302,6 +321,43 @@ export class ReaderStorage {
     await this.cacheStore.setSourceInput(sourceUrl, value)
   }
 
+  public async getSourceStates(): Promise<SourceStateFile> {
+    return this.jsonStore.readFile<SourceStateFile>(join(this.paths.dataRoot, 'source-state.json'), {})
+  }
+
+  public async saveSourceStates(states: SourceStateFile): Promise<void> {
+    await this.withWriteLock(async () => this.jsonStore.writeFile(join(this.paths.dataRoot, 'source-state.json'), states))
+  }
+
+  public async updateSourceStates(update: (states: SourceStateFile) => SourceStateFile): Promise<SourceStateFile> {
+    return this.withWriteLock(async () => {
+      const path = join(this.paths.dataRoot, 'source-state.json')
+      const next = update(await this.jsonStore.readFile<SourceStateFile>(path, {}))
+      await this.jsonStore.writeFile(path, next)
+      return next
+    })
+  }
+
+  public async getSourceCheckConfig(): Promise<SourceCheckConfig> {
+    const value = await this.jsonStore.readFile<Partial<SourceCheckConfig>>(join(this.paths.dataRoot, 'source-check-config.json'), DEFAULT_SOURCE_CHECK_CONFIG)
+    return normalizeSourceCheckConfig(value)
+  }
+
+  public async saveSourceCheckConfig(config: SourceCheckConfig): Promise<void> {
+    await this.withWriteLock(async () => this.jsonStore.writeFile(join(this.paths.dataRoot, 'source-check-config.json'), normalizeSourceCheckConfig(config)))
+  }
+
+  public async saveSourceCheck(sourceId: string, record: SourceCheckRecord, defaults?: Pick<SourceStateRecord, 'enabled' | 'enabledExplore' | 'customOrder' | 'weight' | 'searchHealth'>): Promise<void> {
+    await this.updateSourceStates((states) => {
+      const current = states[sourceId]
+      if (current === undefined) {
+        return { ...states, [sourceId]: { fingerprint: record.fingerprint, enabled: defaults?.enabled ?? true, enabledExplore: defaults?.enabledExplore ?? true, customOrder: defaults?.customOrder ?? 0, weight: defaults?.weight ?? 0, searchHealth: defaults?.searchHealth ?? { fingerprint: record.fingerprint, consecutiveFailures: 0 }, check: record } }
+      }
+      if (current.fingerprint !== record.fingerprint) return states
+      return { ...states, [sourceId]: { ...current, check: record } }
+    })
+  }
+
   private pruneReading(records: ReadingRecord[], shelfIds: ReadonlySet<string>): ReadingRecord[] {
     const kept = records.filter((item) => shelfIds.has(item.bookId) || item.lastReadAt !== undefined)
     const unshelved = kept.filter((item) => !shelfIds.has(item.bookId)).sort((left, right) => (right.lastReadAt ?? '').localeCompare(left.lastReadAt ?? ''))
@@ -360,4 +416,18 @@ function isUuid(value: string): boolean {
 
 function sourcePriority(source: KnownSource): number {
   return source.matchKind === 'user-confirmed' ? 3 : source.matchKind === 'selected' ? 2 : source.matchKind === 'title-author' ? 1 : 0
+}
+
+function normalizeSourceCheckConfig(value: Partial<SourceCheckConfig>): SourceCheckConfig {
+  const timeoutMs = typeof value.timeoutMs === 'number' && Number.isSafeInteger(value.timeoutMs) && value.timeoutMs > 0 ? value.timeoutMs : DEFAULT_SOURCE_CHECK_CONFIG.timeoutMs
+  return {
+    timeoutMs,
+    checkDomain: value.checkDomain === true,
+    checkSearch: value.checkSearch !== false,
+    checkDiscovery: value.checkDiscovery !== false,
+    checkInfo: value.checkInfo !== false,
+    checkCategory: value.checkCategory !== false && value.checkInfo !== false,
+    checkContent: value.checkContent !== false && value.checkCategory !== false && value.checkInfo !== false,
+    keyword: typeof value.keyword === 'string' && value.keyword.trim().length > 0 ? value.keyword.trim() : DEFAULT_SOURCE_CHECK_CONFIG.keyword,
+  }
 }
