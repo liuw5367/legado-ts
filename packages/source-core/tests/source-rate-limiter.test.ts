@@ -65,6 +65,19 @@ test('putConcurrent updates a live window while invalid updates leave its policy
   assert.deepEqual(waits, [100, 100])
 })
 
+test('invalid initial concurrentRate keeps the Android first-request fallback and exposes a diagnostic', async () => {
+  const { clock, waits } = fakeClock()
+  const limiter = new SourceRateLimiter('broken/interval', clock)
+  assert.deepEqual(limiter.initialDiagnostic, {
+    code: 'invalid-config',
+    field: 'concurrentRate',
+    message: 'concurrentRate 配置无效：broken/interval；已按首次请求放行的兼容回退处理',
+  })
+  await limiter.acquire()
+  await limiter.acquire()
+  assert.deepEqual(waits, [])
+})
+
 test('source session rate wrapper preserves host User-Agent configuration', () => {
   const network = withSourceRateLimit({
     defaultUserAgent: 'platform-UA',
@@ -96,6 +109,22 @@ test('cancelled source-rate wait does not call the platform network', async () =
   rejectWait(new DOMException('aborted', 'AbortError'))
   await assert.rejects(pending, { name: 'AbortError' })
   assert.equal(requests, 0)
+})
+
+test('closing a source-rate limiter aborts pending window waits', async () => {
+  const clock: ClockHost = {
+    now: () => 0,
+    wait: (_milliseconds, signal) => new Promise<void>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
+    }),
+  }
+  const limiter = new SourceRateLimiter('1/100', clock)
+  await limiter.acquire()
+  const pending = limiter.acquire()
+  await Promise.resolve()
+  limiter.close()
+  await assert.rejects(pending, { name: 'AbortError' })
+  await assert.rejects(() => limiter.acquire(), { name: 'AbortError' })
 })
 
 test('skipRateLimit bypasses the source window but still honors cancellation', async () => {

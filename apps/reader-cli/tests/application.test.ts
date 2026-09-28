@@ -32,6 +32,7 @@ class FakeSession implements ReaderSourceSession {
   private readonly onSearch: (() => void) | undefined
   private readonly onSearchFinish: (() => void) | undefined
   public readonly contentRefreshes: boolean[] = []
+  public closed = false
 
   public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void) {
     this.candidates = candidates
@@ -43,6 +44,10 @@ class FakeSession implements ReaderSourceSession {
   }
 
   public attachCache(): void {}
+
+  public close(): void {
+    this.closed = true
+  }
 
   public async search(_keyword: string, signal?: AbortSignal): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
     this.onSearch?.()
@@ -291,6 +296,8 @@ test('刷新正文会把刷新选项传到当前书源并重新请求正文', as
     await application.loadContent(bookId, chapter, edition, undefined, { refresh: true })
     await application.loadContent(bookId, chapter, edition)
     assert.deepEqual(session.contentRefreshes, [true, false])
+    await application.close()
+    assert.equal(session.closed, true)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

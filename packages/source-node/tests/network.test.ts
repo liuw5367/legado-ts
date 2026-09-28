@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import test from 'node:test'
 import { createRequestPlan, SourceRequestError } from '@legado/source-core'
-import { NodeCookieStore, NodeNetworkHost } from '../src/index.ts'
+import { DEFAULT_ANDROID_USER_AGENT, NodeCookieStore, NodeNetworkHost } from '../src/index.ts'
 
 async function startServer(redirectTarget?: string): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const server = createServer((request, response) => {
@@ -23,6 +23,10 @@ async function startServer(redirectTarget?: string): Promise<{ baseUrl: string; 
     }
     if (request.url === '/headers') {
       response.end(request.headers.authorization ?? '')
+      return
+    }
+    if (request.url === '/user-agent') {
+      response.end(request.headers['user-agent'] ?? '')
       return
     }
     if (request.url === '/large') {
@@ -94,6 +98,17 @@ test('Node 网络宿主处理受控 HTTP、重定向、Cookie 和响应字节预
 test('Node 网络宿主可按指定字符集编码核心查询参数', () => {
   const host = new NodeNetworkHost()
   assert.deepEqual([...host.encodeCharset('中文', 'gbk')], [0xd6, 0xd0, 0xce, 0xc4])
+})
+
+test('Node 网络宿主默认注入 Android 基线 User-Agent', async () => {
+  const server = await startServer()
+  try {
+    const host = new NodeNetworkHost({ allowPrivateNetworks: true })
+    const response = await host.request(plan(`${server.baseUrl}/user-agent`))
+    assert.equal(new TextDecoder().decode(response.bytes), DEFAULT_ANDROID_USER_AGENT)
+  } finally {
+    await server.close()
+  }
 })
 
 test('Node 网络宿主默认拒绝环回地址', async () => {

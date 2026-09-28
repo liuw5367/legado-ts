@@ -1,6 +1,7 @@
 import type { NormalizedSource } from '../model/types.ts'
 import type { ClockHost, NetworkHost, SourceScriptCache } from './contracts.ts'
 import { SourceRateLimiter, systemClockHost, withSourceRateLimit } from './source-rate-limiter.ts'
+import type { SourceRateDiagnostic } from './source-rate-limiter.ts'
 import type { RequestObserver, WorkflowPorts } from '../workflows/types.ts'
 
 export interface SourceSessionOperationContext {
@@ -32,9 +33,13 @@ export interface SourceSessionOptions {
 
 export interface SourceSession {
   readonly source: NormalizedSource
+  /** 会话创建时发现的兼容性配置问题；不把运行时工作流失败伪装成配置诊断。 */
+  diagnostics(): readonly SourceRateDiagnostic[]
   /** 为一项完整工作流创建隔离上下文，并在结束后提交 source 变量差异。 */
   run<T>(operation: (ports: WorkflowPorts) => Promise<T>, options?: { requestObserver?: RequestObserver }): Promise<T>
   snapshotVariables(): Readonly<Record<string, string>>
+  /** 释放本会话限流等待；关闭后不再接受新的工作流。 */
+  close(): void
 }
 
 interface CachedValue {
@@ -111,10 +116,14 @@ export function createSourceSession(options: SourceSessionOptions): SourceSessio
   const cache = options.cache ?? new MemorySourceScriptCache()
   const rateLimiter = new SourceRateLimiter(source.concurrentRate, options.clock ?? systemClockHost)
   const network = options.network === undefined ? undefined : withSourceRateLimit(options.network, rateLimiter)
+  let closed = false
+  const diagnostics = rateLimiter.initialDiagnostic === undefined ? [] : [rateLimiter.initialDiagnostic]
 
   return {
     source,
+    diagnostics: () => diagnostics,
     async run<T>(operation: (ports: WorkflowPorts) => Promise<T>, runOptions: { requestObserver?: RequestObserver } = {}): Promise<T> {
+      if (closed) throw new Error('source session is closed')
       const before = new Map(sourceVariables)
       const ports = options.createPorts({ source, initialVariables: Object.fromEntries(before), cache, ...(network === undefined ? {} : { network }), updateConcurrentRate: (value) => rateLimiter.update(value), ...(runOptions.requestObserver === undefined ? {} : { requestObserver: runOptions.requestObserver }) })
       try {
@@ -125,6 +134,11 @@ export function createSourceSession(options: SourceSessionOptions): SourceSessio
       }
     },
     snapshotVariables: () => Object.fromEntries(sourceVariables),
+    close: () => {
+      if (closed) return
+      closed = true
+      rateLimiter.close()
+    },
   }
 }
 

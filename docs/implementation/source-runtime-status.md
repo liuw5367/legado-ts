@@ -25,16 +25,16 @@
 | OPEN-05 | 应用入口 | 多源 `ReaderApplication.search`、书源全流程 `checkSources` | 已实现待验证 | [包使用指南](package-usage.md)；[校验流程](../flows/source-check-flow.md)；`apps/reader-cli/tests/source-check.test.ts` | 继续补齐 Android 同输入 golden，并在跨端验证后记录完成提交 |
 | OPEN-06 | 应用状态 | `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` | 未实现 | [架构边界](../architecture/goals-and-boundaries.md)；[归档设计](../archive/source-management-and-state.md) | 用户归属、版本冲突、凭据隔离、任务恢复和删除副作用有应用层契约 |
 | OPEN-07 | 请求差异 | Android 独立登录凭据头与同站注入 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D5 | Android/TypeScript 使用相同请求和 Cookie fixture，且清理边界明确 |
-| OPEN-08 | 生命周期差异 | `concurrentRate` 非法配置和源生命周期清理 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D7 | 首次非法值、取消、编辑、覆盖、删除和重建源都有测试 |
+| OPEN-08 | 生命周期差异 | `concurrentRate` 非法配置和源生命周期清理 | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts` | Android 同输入 golden；未来源管理入口补编辑、覆盖、删除和重建 session 集成测试 |
 | OPEN-09 | JavaScript bridge | 平台方法和逐重载兼容 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D14；[宿主方法盘点](../standard/capability-inventory.md#宿主方法补充盘点) | 真实书源用到的方法逐重载通过，未支持方法返回明确能力状态 |
 | OPEN-10 | 跨端验证 | 已实现解析和工作流的 Android 同输入 golden | 已实现待验证 | [一致性测试基线](../quality/conformance-tests.md) | 同一脱敏 fixture 在 Android 和 TypeScript 两侧通过稳定输出比较 |
 | D1 | 接口差异 | 搜索与流程入口命名 | 有意保留 | [差异登记](../divergence/known-divergences.md)，D1 | 入口统一，或文档完成迁移并通过包入口测试 |
 | D2 | 接口差异 | 端口与宿主门面命名 | 有意保留 | [差异登记](../divergence/known-divergences.md)，D2 | 宿主门面和结果契约统一，或所有现行入口完成文档迁移 |
-| D3 | 文档差异 | 能力清单中过时的“未实现”表述 | 待整理 | [差异登记](../divergence/known-divergences.md)，D3 | 能力清单、矩阵和实现状态不再使用过时表述 |
+| ~~D3~~ | 文档差异 | ~~能力清单中过时的“未实现”表述~~ | 已完成（2026-09-28，本次提交，pnpm typecheck；pnpm build；pnpm test） | [差异登记](../divergence/known-divergences.md)，D3；兼容矩阵已区分真实未实现能力与已有实现待 golden 项 | 能力清单、矩阵和实现状态不再使用过时表述 |
 | D4 | 能力差异 | 尚未实现的公开能力 | 差异待处理 | [差异登记](../divergence/known-divergences.md)，D4 | 每项缺失能力都有独立状态、宿主边界和可识别错误 |
 | D5 | 请求差异 | Android 独立登录凭据头 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D5 | 登录凭据、Cookie、同站注入和清理完成跨端验证 |
-| D6 | 请求差异 | 默认 User-Agent | 部分实现 | [差异登记](../divergence/known-divergences.md)，D6 | Android 默认值、宿主注入和覆盖优先级有 fixture |
-| D7 | 生命周期差异 | `concurrentRate` 生命周期 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D7 | 非法配置、取消和源生命周期清理完成测试 |
+| D6 | 请求差异 | 默认 User-Agent | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D6；`source-session.test.ts`、`network.test.ts`、`source-request.test.ts` | Android 同输入 golden；Node 默认值与显式覆盖、source/URL Header 优先级已有测试 |
+| D7 | 生命周期差异 | `concurrentRate` 生命周期 | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts`；全量 `pnpm test` 387/387 | Android 同输入 golden；未来源管理入口补编辑、覆盖、删除和重建源测试 |
 | D8 | 安全差异 | HTTP、协议和本地地址限制 | 有意保留 | [差异登记](../divergence/known-divergences.md)，D8 | 安全审查完成并明确兼容边界 |
 | D9 | 请求差异 | bridge 子请求的动态 Header 重入 | 差异待处理 | [差异登记](../divergence/known-divergences.md)，D9 | 重入次数、请求顺序和有界策略有 Android 对照 |
 | D10 | 生命周期差异 | `preUpdateJs` 执行时限 | 差异待处理 | [差异登记](../divergence/known-divergences.md)，D10 | 取消、超时和有界预算完成 Android 对照与取舍记录 |

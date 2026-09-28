@@ -87,6 +87,7 @@ export class ReaderApplication {
     for (const operation of pending) operation.controller.abort()
     this.concurrency.clear()
     this.closePromise = Promise.allSettled(pending.map((operation) => operation.promise)).then(async () => {
+      for (const session of this.sessions.values()) session.close?.()
       await this.storage.close()
     })
     return this.closePromise

@@ -9,6 +9,13 @@ import { Agent } from 'undici'
 import { NodeCookieStore } from './cookies.ts'
 import type { CookieStore, NodeNetworkOptions } from './types.ts'
 
+/**
+ * Android AppConfig.userAgent 的当前默认值。
+ * 来源：legado Android `AppConfig.getPrefUserAgent` + `CronetMainVersion`。
+ * Android 升级 Cronet 主版本时需同步这里，显式 NodeNetworkOptions 仍优先。
+ */
+export const DEFAULT_ANDROID_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
+
 function ipv4Private(value: string): boolean {
   const parts = value.split('.').map(Number)
   if (parts.length !== 4 || parts.some((item) => !Number.isInteger(item))) return false
@@ -185,7 +192,7 @@ export class NodeNetworkHost implements NetworkHost {
   private readonly options: NodeNetworkOptions
 
   public get defaultUserAgent(): string | undefined {
-    return this.options.defaultUserAgent
+    return this.options.defaultUserAgent ?? DEFAULT_ANDROID_USER_AGENT
   }
 
   public constructor(options: NodeNetworkOptions = {}) {
@@ -216,6 +223,7 @@ export class NodeNetworkHost implements NetworkHost {
       if (requestCount >= plan.budget.maxRequests) throw new Error('request count budget exceeded')
       requestCount += 1
       const headers = new Headers(plan.headers)
+      if (headers.get('user-agent') === null && this.defaultUserAgent !== undefined) headers.set('User-Agent', this.defaultUserAgent)
       if (stripSensitiveHeaders) {
         headers.delete('authorization')
         headers.delete('proxy-authorization')

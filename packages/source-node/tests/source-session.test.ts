@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ClockHost, NetworkHost, NormalizedSource, WorkflowRuleOutput } from '@legado/source-core'
-import { createNodeSourceSession } from '../src/index.ts'
+import { DEFAULT_ANDROID_USER_AGENT, createNodeSourceSession } from '../src/index.ts'
 
 const baseSource = {
   bookSourceUrl: 'https://fixture.invalid',
@@ -75,6 +75,20 @@ test('Node session preserves networkOptions defaultUserAgent through the source 
   const session = createNodeSourceSession(baseSource, { networkOptions: { defaultUserAgent: 'platform-UA' } })
   const defaultUserAgent = await session.run(async (ports) => ports.network.defaultUserAgent)
   assert.equal(defaultUserAgent, 'platform-UA')
+})
+
+test('Node session uses the Android baseline User-Agent when no override is supplied', async () => {
+  const session = createNodeSourceSession(baseSource)
+  const defaultUserAgent = await session.run(async (ports) => ports.network.defaultUserAgent)
+  assert.equal(defaultUserAgent, DEFAULT_ANDROID_USER_AGENT)
+})
+
+test('Node session reports invalid initial concurrentRate and closes its limiter lifecycle', async () => {
+  const session = createNodeSourceSession({ ...baseSource, concurrentRate: 'broken' } as NormalizedSource)
+  assert.equal(session.diagnostics()[0]?.code, 'invalid-config')
+  await session.run(async () => undefined)
+  session.close()
+  await assert.rejects(() => session.run(async () => undefined), /source session is closed/)
 })
 
 test('同一 source session 的 source.putConcurrent 更新普通请求和脚本请求共享的限流窗口', async () => {

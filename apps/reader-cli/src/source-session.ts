@@ -75,6 +75,10 @@ export class SourceSession implements ReaderSourceSession {
   public attachCache(storage: ReaderStorage): void {
     this.cacheStore = storage.workflowCache(sourceDefinitionFingerprint(this.source))
   }
+
+  public close(): void {
+    this.core.close()
+  }
 }
 
 function resolveDiscoverySource(source: NormalizedSource): NormalizedSource | undefined {

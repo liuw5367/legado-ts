@@ -65,7 +65,7 @@ Android 在解析初始 URL 后把 `baseUrl` 更新为源站 origin，再执行 
 
 同一书源的普通请求共享按 `source.getKey()` 建立的记录。第一次请求立即通过；窗口内达到次数后，后续请求挂起到 `nextTime`，窗口重置时把时间设为当前时刻并重新计数。更新配置时只更新该书源的速率和共享记录，不为每个 URL 创建独立计数器；取消等待必须释放挂起请求。`ajaxAll(urls, true)` 和 `ajaxTestAll(urls, timeout, true)` 是 Android 明确的 bypass 路径，跳过书源限流但仍受宿主线程/并发上限约束；普通 `ajax`、`connect` 和未传 bypass 的批量请求仍走共享记录。书源编辑、导入覆盖或删除后必须清理该 source key 的记录。
 
-TypeScript `SourceRateLimiter` 已覆盖普通请求固定窗口、取消等待和 `putConcurrent` 有效更新。首次遇到非法非空配置的 Android fallback、带 bypass 标记的 Java 批量请求及源编辑/删除时的 key 清理仍未等价实现，见[已知差异](../divergence/known-divergences.md)。
+TypeScript `SourceRateLimiter` 已覆盖普通请求固定窗口、取消等待、`putConcurrent` 有效更新和 bypass；首次遇到非法非空配置时按 Android 首次请求放行的 fallback 处理，并通过 `SourceSession.diagnostics()` 报告配置问题。`SourceSession.close()` 及 `ReaderApplication.close()` 会释放限流等待；当前应用没有独立源编辑/删除 API，未来源管理层重建 session 时仍必须先关闭旧 session，见[已知差异](../divergence/known-divergences.md)。
 
 ## 3. 参数编码
 
@@ -124,7 +124,7 @@ raw rule URL
 
 Android 会把单独保存的登录凭据头按书源同站二级域名附加；初始 URL 是唯一检查点，`@js` 改写到跨域目标后不会再次拦截。普通 `source.header` 是书源请求头配置，并不等同于已保存的登录凭据头。当前 TypeScript 包没有独立的登录凭据存储与同站注入能力，因此不能宣称提供相同的自动登录头隔离；集成方应把凭据放在受控宿主策略中，不能把所有 `source.header` 一概当作登录凭据剥离。
 
-Android `BaseSource.getHeaderMap()` 会在 source header 未提供 User-Agent 时填入 `AppConfig.userAgent`。TypeScript 核心通过 `NetworkHost.defaultUserAgent` 接受平台配置；Node 可在 `NodeNetworkOptions.defaultUserAgent` 中提供它。未配置时保留 HTTP 客户端自身默认值，不能据此宣称与 Android 全局设置相同。无效 source header 在 Android 会记录日志、忽略该值并继续请求；TypeScript 也忽略无效 JSON 或脚本返回值，随后应用宿主默认 User-Agent（若已配置）。宿主缺少执行动态 Header 所需的 JS 能力时仍返回 `capability-missing`。
+Android `BaseSource.getHeaderMap()` 会在 source header 未提供 User-Agent 时填入 `AppConfig.userAgent`。TypeScript 核心通过 `NetworkHost.defaultUserAgent` 接受平台配置；Node `NodeNetworkHost` 未显式配置时使用当前 Android 基线 User-Agent（`Chrome/153.0.0.0`），`NodeNetworkOptions.defaultUserAgent` 可显式覆盖它。无效 source header 在 Android 会记录日志、忽略该值并继续请求；TypeScript 也忽略无效 JSON 或脚本返回值，随后应用宿主默认 User-Agent。宿主缺少执行动态 Header 所需的 JS 能力时仍返回 `capability-missing`。
 
 TypeScript 的 JS bridge 子请求会跳过动态 `source.header`，只保留静态 source header，避免 Header 脚本再次调用 `java.ajax` 时形成递归。该保护属于 TS 当前限制；不要据此声称与 Android 嵌套请求的 Header 重入行为相同。
 

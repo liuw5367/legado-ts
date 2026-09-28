@@ -115,6 +115,8 @@ export interface ReaderSourceSession {
   /** `nextChapterUrl` 触发正文分页护栏：命中时停止抓取，避免把下一章并入本章。 */
   content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }, capture?: DebugCapture): Promise<ContentWorkflowResult>
   attachCache(storage: ReaderStorage): void
+  /** 应用关闭时释放 source session 内的限流等待。 */
+  close?(): void
 }
 
 export type { BookCandidate, BookMetadata, Chapter, KnownSource, KnownSourceView, ReadingPosition, SearchHistoryEntry }

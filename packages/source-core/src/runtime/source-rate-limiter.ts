@@ -6,6 +6,17 @@ interface RateWindow {
   intervalMs: number
 }
 
+export interface SourceRateDiagnostic {
+  code: 'invalid-config'
+  field: 'concurrentRate'
+  message: string
+}
+
+interface InitialRate {
+  rate?: RateWindow
+  diagnostic?: SourceRateDiagnostic
+}
+
 function abortError(): DOMException {
   return new DOMException('The operation was aborted', 'AbortError')
 }
@@ -40,16 +51,24 @@ function integer(value: string): number | undefined {
   return Number.isSafeInteger(parsed) ? parsed : undefined
 }
 
-function initialRate(value: unknown): RateWindow | undefined {
-  if (typeof value !== 'string' || value.length === 0 || value === '0') return undefined
+function invalidInitialRate(value: string): InitialRate {
+  return {
+    rate: { accessLimit: 1, intervalMs: 0 },
+    diagnostic: { code: 'invalid-config', field: 'concurrentRate', message: `concurrentRate 配置无效：${value}；已按首次请求放行的兼容回退处理` },
+  }
+}
+
+function initialRate(value: unknown): InitialRate {
+  if (typeof value !== 'string' || value.length === 0 || value === '0') return {}
   const slash = value.indexOf('/')
   if (slash > 0) {
-    const accessLimit = integer(value.slice(0, slash)) ?? 1
-    const intervalMs = integer(value.slice(slash + 1)) ?? 0
-    return intervalMs > 0 ? { accessLimit: Math.max(1, accessLimit), intervalMs } : undefined
+    const accessLimit = integer(value.slice(0, slash))
+    const intervalMs = integer(value.slice(slash + 1))
+    if (accessLimit !== undefined && intervalMs !== undefined && accessLimit > 0 && intervalMs > 0) return { rate: { accessLimit, intervalMs } }
+    return invalidInitialRate(value)
   }
   const intervalMs = integer(value)
-  return intervalMs !== undefined && intervalMs > 0 ? { accessLimit: 1, intervalMs } : undefined
+  return intervalMs !== undefined && intervalMs > 0 ? { rate: { accessLimit: 1, intervalMs } } : invalidInitialRate(value)
 }
 
 function updatedRate(value: string): RateWindow | undefined {
@@ -70,11 +89,32 @@ export class SourceRateLimiter {
   private windowStartedAt = 0
   private accesses = 0
   private initialized = false
+  private closed = false
+  private readonly pendingWaits = new Set<AbortController>()
   private readonly clock: ClockHost
+  private readonly diagnostic: SourceRateDiagnostic | undefined
 
   public constructor(concurrentRate: unknown, clock: ClockHost = systemClockHost) {
     this.clock = clock
-    this.rate = initialRate(concurrentRate)
+    const initial = initialRate(concurrentRate)
+    this.rate = initial.rate
+    this.diagnostic = initial.diagnostic
+  }
+
+  public get initialDiagnostic(): SourceRateDiagnostic | undefined {
+    return this.diagnostic
+  }
+
+  /** 释放等待中的窗口定时，并阻止已关闭 session 再发起请求。 */
+  public close(): void {
+    if (this.closed) return
+    this.closed = true
+    for (const controller of this.pendingWaits) controller.abort()
+    this.pendingWaits.clear()
+    this.rate = undefined
+    this.windowStartedAt = 0
+    this.accesses = 0
+    this.initialized = false
   }
 
   /** Mirrors BaseSource.putConcurrent: valid changes retain the existing window and access count. */
@@ -90,8 +130,9 @@ export class SourceRateLimiter {
   }
 
   public async acquire(signal?: AbortSignal): Promise<void> {
-    if (signal?.aborted === true) throw abortError()
+    if (this.closed || signal?.aborted === true) throw abortError()
     while (this.rate !== undefined) {
+      if (this.closed || isAborted(signal)) throw abortError()
       const now = this.clock.now()
       if (!this.initialized) {
         this.windowStartedAt = now
@@ -109,8 +150,23 @@ export class SourceRateLimiter {
         this.accesses += 1
         return
       }
-      await this.clock.wait(nextWindowAt - now, signal)
-      if (isAborted(signal)) throw abortError()
+      await this.wait(nextWindowAt - now, signal)
+      if (this.closed || isAborted(signal)) throw abortError()
+    }
+  }
+
+  private async wait(milliseconds: number, signal: AbortSignal | undefined): Promise<void> {
+    if (this.closed || signal?.aborted === true) throw abortError()
+    const controller = new AbortController()
+    const relay = (): void => controller.abort()
+    this.pendingWaits.add(controller)
+    signal?.addEventListener('abort', relay, { once: true })
+    if (isAborted(signal)) relay()
+    try {
+      await this.clock.wait(milliseconds, controller.signal)
+    } finally {
+      this.pendingWaits.delete(controller)
+      signal?.removeEventListener('abort', relay)
     }
   }
 }
