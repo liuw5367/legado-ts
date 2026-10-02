@@ -117,9 +117,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     visited.add(normalizedUrl)
     pagesFetched += 1
     // 明确刷新时详情阶段暂存的目录响应也可能过期，必须重新请求第一页。
-    const page = pageIndex === 0 && input.refresh !== true && book.tocHtml !== undefined && normalizedUrl === bookBaseUrl
-      ? { body: book.tocHtml, url: normalizedUrl }
-      : await cachedPage(ports, input.source, normalizedUrl, 'toc', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, undefined, input.refresh === true)
+    const canReuseTocHtml = input.refresh !== true && book.tocHtml !== undefined && book.tocHtml.length > 0 && book.tocUrl !== undefined && book.tocUrl === book.bookUrl
+    const page = pageIndex === 0 && canReuseTocHtml && normalizedUrl === bookBaseUrl
+      ? { body: book.tocHtml!, url: normalizedUrl }
+      : await loadPage(ports, input.source, normalizedUrl, stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
     if (page === undefined) break
     const body = page.body
     totalBytes += new TextEncoder().encode(body).byteLength
@@ -129,7 +130,9 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     }
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     visited.add(responseUrl)
-    const parsed = await parseTocPage(ports, input, book, body, pageIndex, normalizedUrl, responseUrl, volume, listRuleBody, pendingPage.followNext, input.signal)
+    // Android 串行跟随下一页时把请求 URL 同时作为 baseUrl/redirectUrl；并行分支仍保留最终响应地址。
+    const ruleResponseUrl = pageIndex > 0 && pendingPage.followNext ? normalizedUrl : responseUrl
+    const parsed = await parseTocPage(ports, input, book, body, pageIndex, normalizedUrl, ruleResponseUrl, volume, listRuleBody, pendingPage.followNext, input.signal)
     diagnostics.push(...parsed.diagnostics)
     appendTocChapters(chapters, parsed.chapters, parsed.trace)
     trace.push(...parsed.trace)
@@ -137,20 +140,20 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (parsed.cancelled || isSignalAborted(input.signal)) return cancelled('目录规则执行已取消', diagnostics, trace)
     if (parsed.fatal) break
     if (parsed.nextUrls === undefined) continue
-    const resolvedNextUrls = new Set(parsed.nextUrls)
-    const followNext = resolvedNextUrls.size === 1
-    const unseenNextUrls = [...resolvedNextUrls].filter((nextUrl) => !visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl))
+    const resolvedNextUrls = parsed.nextUrls
+    const followNext = resolvedNextUrls.length === 1
+    const unseenNextUrls = resolvedNextUrls.filter((nextUrl) => !visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl))
     if (followNext) {
       for (const nextUrl of unseenNextUrls) pendingPages.push({ url: nextUrl, followNext: true })
       continue
     }
-    if (resolvedNextUrls.size <= 1) continue
+    if (resolvedNextUrls.length <= 1) continue
     const availablePages = Math.max(0, maxPages - pagesFetched)
     const branchUrls = unseenNextUrls.slice(0, availablePages)
     if (branchUrls.length < unseenNextUrls.length) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
     if (branchUrls.length > 0) {
       for (const branchUrl of branchUrls) visited.add(branchUrl)
-      const batch = await fetchPageBatch(ports, input.source, branchUrls, 'toc', stage, pageOptions(input, maxBytes, totalBytes))
+      const batch = await fetchPageBatch(ports, input.source, branchUrls, stage, pageOptions(input, maxBytes, totalBytes))
       if (isSignalAborted(input.signal)) {
         appendBatchDiagnostics(batch, diagnostics, trace, true)
         return cancelled('目录工作流已取消', diagnostics, trace)
@@ -384,7 +387,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     visited.add(normalizedUrl)
     const page = pageIndex === 0 && input.tocHtml !== undefined && normalizedUrl === bookUrl
       ? { body: input.tocHtml, url: normalizedUrl }
-      : await cachedPage(ports, input.source, normalizedUrl, 'content', stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, pageIndex === 0 ? firstPageExecution : pagedExecution)
+      : await loadPage(ports, input.source, normalizedUrl, stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, pageIndex === 0 ? firstPageExecution : pagedExecution)
     if (page === undefined) break
     const body = page.body
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
@@ -468,7 +471,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       for (const branchUrl of scheduledUrls) visited.add(branchUrl)
       if (scheduledUrls.length > 0) {
         // Android 多 URL 分支调用 getStrResponseAwait() 时不传 webJs/sourceRegex。
-        const batch = await fetchPageBatch(ports, input.source, scheduledUrls, 'content', stage, pageOptions(input, maxBytes, totalBytes))
+        const batch = await fetchPageBatch(ports, input.source, scheduledUrls, stage, pageOptions(input, maxBytes, totalBytes))
         if (isSignalAborted(input.signal)) {
           appendBatchDiagnostics(batch, diagnostics, trace, true)
           return cancelled('正文工作流已取消', diagnostics, trace)
@@ -1123,7 +1126,7 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
             diagnostics.push({ code: expandedNext?.error?.code === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: 'nextTocUrl', message: expandedNext?.error?.message ?? '目录下一页 URL 无效', retryable: false })
             return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: true, cancelled: false }
           }
-          if (!nextUrls.includes(nextUrl)) nextUrls.push(nextUrl)
+          nextUrls.push(nextUrl)
         }
       }
     }
@@ -1207,7 +1210,7 @@ interface PageBatchResult {
   failed: boolean
 }
 
-async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, urls: readonly string[], scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, execution?: { webJs?: string; sourceRegex?: string }, refresh = false): Promise<PageBatchResult> {
+async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, urls: readonly string[], stage: WorkflowStage, options: WorkflowOptions, execution?: { webJs?: string; sourceRegex?: string }): Promise<PageBatchResult> {
   const batchController = new AbortController()
   const onAbort = (): void => batchController.abort()
   options.signal?.addEventListener('abort', onAbort, { once: true })
@@ -1221,7 +1224,7 @@ async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, ur
       const trace: WorkflowTraceEntry[] = []
       try {
         const branchOptions = batchPageOptions(options, index, urls.length)
-        const page = await cachedPage(ports, source, url, scope, stage, { ...branchOptions, signal }, diagnostics, trace, execution, refresh)
+        const page = await loadPage(ports, source, url, stage, { ...branchOptions, signal }, diagnostics, trace, execution)
         const fatal = page === undefined && !signal.aborted && diagnostics.some((item) => item.code !== 'cancelled')
         if (fatal) {
           failed = true
@@ -1281,34 +1284,8 @@ function isSignalAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true
 }
 
-async function cachedPage(ports: ReadingPorts, source: NormalizedSource, url: string, scope: 'toc' | 'content', stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }, refresh = false): Promise<{ body: string; url: string } | undefined> {
-  const cacheKey = `${source.bookSourceUrl}\u0000${scope}\u0000${url}`
-  const responseUrlKey = `${cacheKey}\u0000response-url`
-  if (ports.cache !== undefined && !refresh) {
-    try {
-      const cached = await ports.cache.get(cacheKey, options.signal)
-      if (cached !== undefined) {
-        let responseUrl = url
-        try {
-          responseUrl = await ports.cache.get(responseUrlKey, options.signal) ?? url
-        } catch {
-          // 旧缓存没有最终响应地址时仍可复用正文。
-        }
-        return { body: cached, url: responseUrl }
-      }
-    } catch {
-      // 缓存失败不得改变无缓存读取语义。
-    }
-  }
+async function loadPage(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }): Promise<{ body: string; url: string } | undefined> {
   const value = await requestPageResponse(ports, source, url, stage, options, diagnostics, trace, execution)
-  if (value !== undefined && ports.cache !== undefined) {
-    try {
-      await ports.cache.set(cacheKey, value.content, options.signal)
-      await ports.cache.set(responseUrlKey, value.url, options.signal)
-    } catch {
-      // 缓存写入失败只影响缓存，不影响本次结果。
-    }
-  }
   return value === undefined ? undefined : { body: value.content, url: value.url }
 }
 
@@ -1515,15 +1492,15 @@ function javascriptPrimitiveText(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
 }
 
-/** Android BookChapter.equals 只比较 url：同地址不同标题也折叠，保留反转后最先出现的条目。 */
+/** Android BookChapter.equals 只比较原始 url：同地址不同标题也折叠，保留反转后最先出现的条目。 */
 function deduplicateChapters(chapters: Chapter[], diagnostics: WorkflowDiagnostic[], stage: WorkflowStage): Chapter[] {
   const seen = new Set<string>()
   return chapters.filter((chapter) => {
-    if (seen.has(chapter.chapterUrl)) {
+    if (seen.has(chapterRuleUrl(chapter))) {
       diagnostics.push({ code: 'duplicate-item', stage, itemIndex: chapter.index, message: '重复章节已折叠', retryable: false })
       return false
     }
-    seen.add(chapter.chapterUrl)
+    seen.add(chapterRuleUrl(chapter))
     return true
   })
 }

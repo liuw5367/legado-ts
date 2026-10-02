@@ -221,11 +221,10 @@ test('目录按 URL 折叠同地址不同标题的章节（Android BookChapter.e
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
 
-test('目录复用详情页内容并按最终响应地址解析相对章节', async () => {
-  const calls: string[] = []
+test('目录仅在原始书籍地址等于目录地址时复用 tocHtml', async () => {
   const contexts: Array<{ baseUrl: string | undefined; redirectUrl: string | undefined }> = []
-  const result = await loadTableOfContents({
-    network: { request: async () => { throw new Error('不应重复请求详情页') } },
+  const reuseResult = await loadTableOfContents({
+    network: { request: async () => { throw new Error('相同详情地址不应重复请求') } },
     rules: {
       evaluate: async (request) => {
         contexts.push({ baseUrl: request.baseUrl, redirectUrl: request.redirectUrl })
@@ -235,10 +234,27 @@ test('目录复用详情页内容并按最终响应地址解析相对章节', as
         return { status: 'empty', value: null }
       },
     },
-  }, { source, book: { ...book, tocUrl: 'https://redirect.test/book/a', tocHtml: '<div>toc</div>' } })
-  assert.equal(calls.length, 0)
-  assert.equal(result.value?.items[0]?.chapterUrl, 'https://redirect.test/book/chapter/1')
-  assert.deepEqual(contexts[0], { baseUrl: 'https://redirect.test/book/a', redirectUrl: 'https://redirect.test/book/a' })
+  }, { source, book: { ...book, tocUrl: book.bookUrl, tocHtml: '<div>toc</div>' } })
+  assert.equal(reuseResult.value?.items[0]?.chapterUrl, 'https://source.test/book/chapter/1')
+  assert.deepEqual(contexts[0], { baseUrl: book.bookUrl, redirectUrl: book.bookUrl })
+
+  let requests = 0
+  const noReuseResult = await loadTableOfContents({
+    network: { request: async () => {
+      requests += 1
+      return { url: 'https://redirect.test/book/a', status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: true }
+    } },
+    rules: {
+      evaluate: async (request) => {
+        if (request.field === 'chapterList') return { status: 'success', value: [{ title: '第一章', url: 'chapter/1' }] }
+        if (request.field === 'chapterName') return { status: 'success', value: (request.content as { title: string }).title }
+        if (request.field === 'chapterUrl') return { status: 'success', value: (request.content as { url: string }).url }
+        return { status: 'empty', value: null }
+      },
+    },
+  }, { source, book: { ...book, tocUrl: 'https://redirect.test/book/a', tocHtml: '<div>stale</div>' } })
+  assert.equal(requests, 1)
+  assert.equal(noReuseResult.value?.items[0]?.chapterUrl, 'https://redirect.test/book/chapter/1')
 })
 
 test('相对或空目录地址按 Android 的书籍 URL 基准解析', async () => {
@@ -270,6 +286,73 @@ test('目录分页按 URL 而非响应正文去重，并拆分换行地址列表
   const result = await loadTableOfContents(ports, { source, book: { ...book, tocUrl: 'https://source.test/toc1' } })
   assert.deepEqual(calls, ['https://source.test/toc1', 'https://source.test/toc2', 'https://source.test/toc3'])
   assert.equal(result.value?.items.length, 3)
+})
+
+test('目录串行下一页沿用请求地址作为 baseUrl 与 redirectUrl', async () => {
+  const calls: string[] = []
+  const contexts: Array<{ body: string; field: string; baseUrl: string | undefined; redirectUrl: string | undefined }> = []
+  const serialSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      if (plan.url.endsWith('/toc')) return { url: 'https://cdn.test/catalog/index.html', status: 200, headers: {}, bytes: new TextEncoder().encode('first'), redirected: true }
+      return { url: 'https://other.test/redirected/next', status: 200, headers: {}, bytes: new TextEncoder().encode('second'), redirected: true }
+    } },
+    rules: { evaluate: async (request) => {
+      contexts.push({ body: String(request.content), field: request.field, baseUrl: request.baseUrl, redirectUrl: request.redirectUrl })
+      if (request.field === 'chapterList') return { status: 'success', value: [{ title: String(request.content), url: `chapter/${String(request.content)}` }] }
+      if (request.field === 'chapterName') return { status: 'success', value: (request.content as { title: string }).title }
+      if (request.field === 'chapterUrl') return { status: 'success', value: (request.content as { url: string }).url }
+      if (request.field === 'nextTocUrl' && request.content === 'first') return { status: 'success', value: '/next' }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: serialSource, book: { ...book, tocUrl: 'https://source.test/toc' } })
+  assert.deepEqual(calls, ['https://source.test/toc', 'https://cdn.test/next'])
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['first', 'second'])
+  const secondPageContexts = contexts.filter((context) => context.body === 'second')
+  assert.ok(secondPageContexts.length > 0)
+  assert.ok(secondPageContexts.every((context) => context.baseUrl === 'https://cdn.test/next' && context.redirectUrl === 'https://cdn.test/next'))
+})
+
+test('目录按章节原始 URL 去重而非按解析后的绝对地址去重', async () => {
+  const sourceWithPages = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      const body = plan.url.endsWith('/index.html') ? 'first' : 'second'
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: [{ title: content === 'first' ? '旧章节' : '新章节', url: 'chapter' }] }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl' && content === 'first') return { status: 'success', value: 'https://source.test/other/page2' }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: sourceWithPages, book: { ...book, tocUrl: 'https://source.test/catalog/index.html' } })
+  assert.deepEqual(result.value?.items.map((chapter) => [chapter.title, chapter.url, chapter.chapterUrl]), [['新章节', 'chapter', 'https://source.test/other/chapter']])
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
+})
+
+test('目录多 URL 分支保留重复输入地址并分别解析', async () => {
+  const calls: string[] = []
+  let branchCount = 0
+  const branchSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      const body = plan.url.endsWith('/toc') ? 'root' : `branch-${++branchCount}`
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: content === 'root' ? [] : [{ title: String(content), url: `/chapter/${content}` }] }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl' && content === 'root') return { status: 'success', value: ['/branch', '/branch'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: branchSource, book: { ...book, tocUrl: 'https://source.test/toc' } })
+  assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/branch', 'https://source.test/branch'])
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['branch-1', 'branch-2'])
 })
 
 test('目录多 URL 分支按输入顺序解析、受应用并发额度限制且不递归分支 next URL', async () => {
@@ -519,7 +602,7 @@ test('已持久化的非法目录地址回退书籍详情地址', async () => {
   assert.equal(calls[0], book.bookUrl)
 })
 
-test('目录缓存保留最终响应地址', async () => {
+test('目录每次请求都保留最终响应地址，不读取原始页面缓存', async () => {
   const values = new Map<string, string>()
   let requests = 0
   const ports: ReadingPorts = {
@@ -547,10 +630,10 @@ test('目录缓存保留最终响应地址', async () => {
   const second = await loadTableOfContents(ports, { source, book })
   assert.equal(first.value?.items[0]?.chapterUrl, 'https://cdn.test/catalog/chapter/1')
   assert.equal(second.value?.items[0]?.chapterUrl, 'https://cdn.test/catalog/chapter/1')
-  assert.equal(requests, 1)
+  assert.equal(requests, 2)
 })
 
-test('正文工作流拼接多页、净化 HTML、解析图片资源并支持缓存', async () => {
+test('正文工作流拼接多页、净化 HTML，并忽略原始页面缓存', async () => {
   const calls: string[] = []
   const values = new Map<string, string>()
   const cache = {
@@ -569,7 +652,7 @@ test('正文工作流拼接多页、净化 HTML、解析图片资源并支持缓
   const requestCount = calls.length
   const second = await loadChapterContent({ ...readingPorts(calls), cache }, { source, chapter })
   assert.equal(second.status, 'success')
-  assert.equal(calls.length, requestCount)
+  assert.equal(calls.length, requestCount * 2)
 })
 
 test('正文格式按 Android 顺序处理块标签、HTML4 实体、usehtml 与图片请求选项', () => {
@@ -952,7 +1035,7 @@ test('目录保留卷、VIP、购买状态和更新时间，并按书籍 reverse
       },
     },
   }
-  const defaultResult = await loadTableOfContents(ports, { source: volumeSource, book: { ...book, tocHtml: 'toc' } })
+  const defaultResult = await loadTableOfContents(ports, { source: volumeSource, book: { ...book, tocUrl: book.bookUrl, tocHtml: 'toc' } })
   assert.equal(defaultResult.status, 'success')
   assert.deepEqual(defaultResult.value?.items.map((item) => item.title), ['卷一', '第一章', '卷二'])
   assert.equal(defaultResult.value?.items[0]?.chapterUrl, '卷一0')
@@ -964,10 +1047,10 @@ test('目录保留卷、VIP、购买状态和更新时间，并按书籍 reverse
   assert.equal(defaultResult.value?.items[1]?.isPay, true)
   assert.notEqual(defaultResult.value?.items[0]?.chapterUrl, defaultResult.value?.items[2]?.chapterUrl)
 
-  const reverseResult = await loadTableOfContents(ports, { source: volumeSource, book: { ...book, tocHtml: 'toc', readConfig: { reverseToc: true } } })
+  const reverseResult = await loadTableOfContents(ports, { source: volumeSource, book: { ...book, tocUrl: book.bookUrl, tocHtml: 'toc', readConfig: { reverseToc: true } } })
   assert.deepEqual(reverseResult.value?.items.map((item) => item.title), ['卷二', '第一章', '卷一'])
 
-  const sourceReverseResult = await loadTableOfContents(ports, { source: { ...volumeSource, reverseToc: true } as NormalizedSource, book: { ...book, tocHtml: 'toc' } })
+  const sourceReverseResult = await loadTableOfContents(ports, { source: { ...volumeSource, reverseToc: true } as NormalizedSource, book: { ...book, tocUrl: book.bookUrl, tocHtml: 'toc' } })
   assert.deepEqual(sourceReverseResult.value?.items.map((item) => item.title), ['卷一', '第一章', '卷二'])
 
   let contentRequests = 0
