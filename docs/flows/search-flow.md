@@ -38,14 +38,13 @@
 
 ## TypeScript 当前聚合行为
 
-`reader-cli` 负责多书源 fan-out、并发、进度和到达顺序；`source-core` 的 `groupSearchCandidates` 执行候选归并和匹配排序，CLI 再把核心分组映射成包含 `SourceEntry` 的页面数据。当前核心行为保持 CLI 原有结果不变：
+`reader-cli` 负责多书源 fan-out、并发、进度和到达顺序；`source-core` 的 `groupSearchCandidates` 执行 Android 四组归并和匹配排序，CLI 再把核心分组映射成包含 `SourceEntry` 的页面数据：
 
-- 书名和作者都非空时，按规范化后的“书名+作者”跨来源归并；若书名或作者缺失，则按 `sourceId+bookUrl` 区分版本。首次到达的候选作为分组代表。
-- 书名先做 NFKC、转小写并移除空白/标点/符号；作者做 NFKC、转小写并移除空白。作者标点会保留。
-- 匹配等级只看书名：`exact`、`contains`、`other`。先按等级排序，同等级按分组中最早候选的 `arrivalIndex` 稳定排序，不按来源数量排序。
-- 普通 CLI 搜索保留 `other` 结果，不应用 Android 的精准搜索过滤；`searchMoreSources` 才会要求规范化后的书名和作者都完整匹配。
-
-Android 的分类命中、作者参与相关性、精准搜索过滤和来源数量排序尚未成为 TypeScript 搜索的当前行为。后续采用这些规则时，应单独调整核心聚合与页面交互；本次职责整理只把现有 CLI 规则迁入 `source-core`。
+- 匹配等级按 Android 顺序为 `exact`、`kind`、`contains`、`other`：书名或作者原始字符串等于关键词为 `exact`，分类包含关键词为 `kind`，书名或作者包含关键词为 `contains`，其余为 `other`。
+- 分组键是同一匹配组中的原始书名和作者；因此相同书名/作者的不同来源合并到一个候选组，首次到达候选作为代表，其他来源保留在 `candidates` 中。
+- 组先按匹配等级，再按来源候选数量降序，最后按最早 `arrivalIndex` 稳定排序。普通 CLI 搜索默认保留 `other`；调用 `groupSearchResults(keyword, results, true)` 或核心 `groupSearchCandidates(..., true)` 时会丢弃 `other`。
+- `normalizeSearchTitle` / `normalizeSearchAuthor` 只供严格换源匹配等身份比较使用：标题做 NFKC、小写并移除空白/标点/符号，作者做 NFKC、小写并移除空白；它们不替代 Android 普通搜索的原始字符串分组。
+- `searchMoreSources` 仍额外要求规范化后的书名和作者都完整匹配，避免把普通搜索的分类/包含结果误当成换源候选。
 
 ## 数据流和生命周期
 
