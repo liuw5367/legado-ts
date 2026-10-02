@@ -65,6 +65,11 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
     ['Third', 'https://source.test/c3'],
     ['Same title', 'https://source.test/c1'],
   ])
+  assert.deepEqual(result.value?.items.map((chapter) => [chapter.url, chapter.baseUrl]), [
+    ['/c2', 'https://source.test/book/a'],
+    ['/c3', 'https://source.test/toc2'],
+    ['/c1', 'https://source.test/toc2'],
+  ])
   assert.equal(calls.length, 2)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
@@ -350,6 +355,8 @@ test('普通章节缺少 URL 时使用目录基准地址', async () => {
     },
   }, { source, book })
   assert.equal(result.value?.items[0]?.chapterUrl, book.bookUrl)
+  assert.equal(result.value?.items[0]?.url, book.bookUrl)
+  assert.equal(result.value?.items[0]?.baseUrl, book.bookUrl)
 })
 
 test('规则成功但正文为空时保留章节并返回可进入的空内容', async () => {

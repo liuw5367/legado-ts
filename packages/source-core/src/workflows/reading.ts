@@ -262,6 +262,8 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
     const chapter: Chapter = {
       sourceId: input.source.bookSourceUrl,
       bookUrl: input.book.bookUrl,
+      url: rawUrl,
+      baseUrl: tocBaseUrl,
       chapterUrl,
       index: chapters.length,
       title,
@@ -978,7 +980,7 @@ async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSourc
         ...globalState,
         gInt: Object.hasOwn(globalState, 'gInt') ? globalState.gInt : 0,
         index: chapterIndex + 1,
-        chapter: { ...chapter, url: chapter.chapterUrl, baseUrl: book.tocUrl ?? book.bookUrl },
+        chapter: { ...chapter, url: chapter.url ?? chapter.chapterUrl, baseUrl: chapter.baseUrl ?? book.tocUrl ?? book.bookUrl },
         title: chapter.title,
       },
       captureMutations: ['chapter'],
@@ -1105,6 +1107,11 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
     }
     const chapterIndex = chapters.length
     const isVolume = fields.isVolume === true
+    const rawChapterUrl = isVolume && (fields.url === undefined || fields.url.length === 0 || fields.url === fields.title)
+      ? `${fields.title}${itemIndex}`
+      : fields.url === undefined || fields.url.length === 0
+        ? normalizedUrl
+        : fields.url
     const chapterUrl = isVolume && (fields.url === undefined || fields.url.length === 0 || fields.url === fields.title)
       ? `${fields.title}${itemIndex}`
       : fields.url === undefined || fields.url.length === 0
@@ -1117,6 +1124,8 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
     const chapter: Chapter = {
       sourceId: input.source.bookSourceUrl,
       bookUrl: book.bookUrl,
+      url: rawChapterUrl,
+      baseUrl: responseUrl,
       chapterUrl,
       index: chapterIndex,
       title: fields.title,
@@ -1298,7 +1307,7 @@ function chapterInfoProjection(updateTime: string | undefined, isVolume: boolean
 
 async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }, book: BookMetadata): Promise<ChapterFields> {
   const result: ChapterFields = { rawFields: {} }
-  const chapter: Record<string, unknown> = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: '', index: itemIndex, title: '', rawFields: result.rawFields }
+  const chapter: Record<string, unknown> = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, url: '', baseUrl: context.redirectUrl, chapterUrl: '', index: itemIndex, title: '', rawFields: result.rawFields }
   for (const ruleField of ['chapterName', 'chapterUrl', 'chapterVolume', 'updateTime', 'isVolume', 'isVip', 'isPay'] as const) {
     const outputField = ruleField === 'chapterName'
       ? 'title'
@@ -1341,7 +1350,7 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
       else if (outputField === 'volume') result.volume = value
       else if (outputField === 'updateTime') result.updateTime = value
       if (outputField === 'title') chapter.title = value
-      else if (outputField === 'url') chapter.chapterUrl = value
+      else if (outputField === 'url') chapter.url = value
     }
     if (ruleField === 'chapterName' && (field.state !== 'value' || result.title === undefined || result.title.length === 0)) return result
   }

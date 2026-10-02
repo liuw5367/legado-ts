@@ -264,6 +264,11 @@ export interface DetailInput extends WorkflowOptions {
 export interface ChapterIdentity {
   sourceId: string
   bookUrl: string
+  /** 书源规则返回的原始章节地址；旧持久数据缺失时回退到 chapterUrl。 */
+  url?: string
+  /** 解析该章节规则时的页面基准地址；旧持久数据缺失时由调用方回退。 */
+  baseUrl?: string
+  /** 由 url + baseUrl 派生的可请求绝对地址。 */
   chapterUrl: string
   index: number
   volume?: string
