@@ -271,12 +271,30 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
   return { status: statusFromDiagnostics(diagnostics, chapters.length), value, diagnostics, trace }
 }
 
+function chapterRuleUrl(chapter: Pick<Chapter, 'url' | 'chapterUrl'>): string {
+  return typeof chapter.url === 'string' && chapter.url.length > 0 ? chapter.url : chapter.chapterUrl
+}
+
+/** 必要正文路径的失败不能降级成 partial；副内容、标题和替换增强均是可选项。 */
+function contentFatalStatus(diagnostics: readonly WorkflowDiagnostic[]): 'failed' | 'capability-missing' | undefined {
+  const fatal = diagnostics.find((item) => {
+    if (item.field === 'subContent' || item.field === 'title' || item.field === 'replaceRegex' || item.field === 'replacements') return false
+    return item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'capability-missing' || item.code === 'invalid-config'
+  })
+  if (fatal === undefined) return undefined
+  return fatal.code === 'capability-missing' ? 'capability-missing' : 'failed'
+}
+
 export async function loadChapterContent(ports: ReadingPorts, input: ContentInput): Promise<RuntimeResult<ChapterContent>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   const stage: WorkflowStage = 'detail'
+  const rawChapterUrl = chapterRuleUrl(input.chapter)
+  const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  const chapterBaseReference = input.chapter.baseUrl?.trim() || input.book?.tocUrl?.trim() || input.chapter.bookUrl
+  const chapterBaseUrl = resolveUrl(chapterBaseReference, bookUrl) ?? bookUrl
   const chapterTitle = input.chapter.title ?? ''
-  const isVolumePlaceholder = input.chapter.isVolume === true && chapterTitle.length > 0 && input.chapter.chapterUrl.startsWith(chapterTitle)
+  const isVolumePlaceholder = input.chapter.isVolume === true && chapterTitle.length > 0 && rawChapterUrl.startsWith(chapterTitle)
   if (isVolumePlaceholder) {
     if (input.signal?.aborted === true) return cancelled('正文工作流已取消', diagnostics, trace)
     diagnostics.push({ code: 'empty-page', stage, message: '卷节点没有正文', retryable: false })
@@ -285,7 +303,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   if (sourceString(input.source, 'mainJs') !== undefined) return javascriptChapterContent(ports, input, diagnostics, trace)
   const contentRule = ruleString(input.source, 'ruleContent', 'content') ?? sourceString(input.source, 'ruleContent')
   if (contentRule === undefined) {
-    const url = input.chapter.chapterUrl
+    const url = rawChapterUrl
     return { status: 'success', value: { chapter: input.chapter, contentType: 'text', raw: url, cleaned: url, pages: [url], resources: [] }, diagnostics, trace }
   }
   const contentType = input.contentType ?? (input.source.contentType === 'html' || ruleReturnsHtml(contentRule) ? 'html' : 'text')
@@ -314,6 +332,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   }
   const resultChapter = {
     ...input.chapter,
+    url: rawChapterUrl,
+    baseUrl: chapterBaseUrl,
     ...(input.chapter.rawFields === undefined ? {} : { rawFields: { ...input.chapter.rawFields } }),
   }
   // AnalyzeRule.setNextChapterUrl 在 Android 中会把该值暴露给每个声明式正文规则。
@@ -324,8 +344,15 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const resources: ContentResource[] = []
   const mediaType = sourceNumber(input.source, 'bookSourceType') ?? 0
   const skipTextFormatting = mediaType === 1 || mediaType === 4
-  const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
-  const rawFirstPageUrl = resolveUrl(input.chapter.chapterUrl, bookUrl) ?? input.chapter.chapterUrl
+  const appendContentPage = (contentPage: string, responseUrl: string): void => {
+    pages.push(contentPage)
+    const formattedPage = skipTextFormatting
+      ? { content: contentPage, imageUrls: [] }
+      : formatChapterBody(contentPage, responseUrl, input.adaptSpecialStyle === undefined ? {} : { adaptSpecialStyle: input.adaptSpecialStyle })
+    cleanedPages.push(formattedPage.content)
+    resources.push(...formattedPage.imageUrls.map((url) => ({ kind: 'image' as const, url })))
+  }
+  const rawFirstPageUrl = resolveUrl(rawChapterUrl, chapterBaseUrl) ?? resolveUrl(rawChapterUrl, bookUrl) ?? rawChapterUrl
   const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, ...ruleBindings }, input.signal)
   if (expandedFirstPage.url === undefined) {
     diagnostics.push(expansionDiagnostic(expandedFirstPage.error, stage, 'chapterUrl', '章节地址展开失败'))
@@ -375,21 +402,14 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (result.state === 'cancelled') return cancelled('正文规则执行已取消', diagnostics, trace)
     if (result.state === 'capability-missing') {
       diagnostics.push({ code: 'capability-missing', stage, field: 'content', message: result.message ?? '正文规则能力不可用', retryable: false })
-      break
+      return { status: 'capability-missing', value: null, diagnostics, trace }
     }
     if (result.state === 'failed') {
       diagnostics.push({ code: 'rule-failed', stage, field: 'content', message: result.message ?? '正文规则失败', retryable: false })
-      break
+      return { status: 'failed', value: null, diagnostics, trace }
     }
     const contentPage = result.state === 'value' ? textValue(result.value) : ''
-    if (contentPage.length > 0) {
-      pages.push(contentPage)
-      const formattedPage = skipTextFormatting
-        ? { content: contentPage, imageUrls: [] }
-        : formatChapterBody(contentPage, responseUrl, input.adaptSpecialStyle === undefined ? {} : { adaptSpecialStyle: input.adaptSpecialStyle })
-      cleanedPages.push(formattedPage.content)
-      resources.push(...formattedPage.imageUrls.map((url) => ({ kind: 'image' as const, url })))
-    }
+    appendContentPage(contentPage, responseUrl)
     if (!pendingPage.followNext) continue
     const nextContentRule = ruleString(input.source, 'ruleContent', 'nextContentUrl')
     const nextRule = nextContentRule ?? ruleString(input.source, 'ruleContent', 'nextPage')
@@ -399,8 +419,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (next.state === 'cancelled') return cancelled('正文下一页规则已取消', diagnostics, trace)
     if (next.state === 'failed' || next.state === 'capability-missing') {
       diagnostics.push({ code: next.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: nextField, message: next.message ?? (next.state === 'capability-missing' ? '正文下一页规则能力不可用' : '正文下一页规则失败'), retryable: false })
-      stoppedByLimit = true
-      break
+      return { status: next.state === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
     }
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
@@ -473,23 +492,14 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
           if (branchResult.state === 'cancelled') return cancelled('正文规则执行已取消', diagnostics, trace)
           if (branchResult.state === 'capability-missing') {
             diagnostics.push({ code: 'capability-missing', stage, field: 'content', message: branchResult.message ?? '正文规则能力不可用', retryable: false })
-            stoppedByLimit = true
-            break
+            return { status: 'capability-missing', value: null, diagnostics, trace }
           }
           if (branchResult.state === 'failed') {
             diagnostics.push({ code: 'rule-failed', stage, field: 'content', message: branchResult.message ?? '正文规则失败', retryable: false })
-            stoppedByLimit = true
-            break
+            return { status: 'failed', value: null, diagnostics, trace }
           }
           const branchContent = branchResult.state === 'value' ? textValue(branchResult.value) : ''
-          if (branchContent.length > 0) {
-            pages.push(branchContent)
-            const formattedBranch = skipTextFormatting
-              ? { content: branchContent, imageUrls: [] }
-              : formatChapterBody(branchContent, branchResponseUrl, input.adaptSpecialStyle === undefined ? {} : { adaptSpecialStyle: input.adaptSpecialStyle })
-            cleanedPages.push(formattedBranch.content)
-            resources.push(...formattedBranch.imageUrls.map((url) => ({ kind: 'image' as const, url })))
-          }
+          appendContentPage(branchContent, branchResponseUrl)
         }
       }
       break
@@ -560,10 +570,14 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const trimmed = joined.split('\n').map((line) => line.trim()).join('\n')
     const field = await evaluateField(ports, input.source, stage, 'replaceRegex', replaceRule, trimmed, undefined, trace, input.signal, firstPage?.context === undefined ? { bindings: ruleBindings } : { ...firstPage.context, bindings: ruleBindings })
     if (field.state === 'cancelled') return cancelled('正文替换规则执行已取消', diagnostics, trace)
-    if (field.state === 'value' || field.state === 'empty') sourceReplaced = textValue(field.value)
+    const replacementSucceeded = field.state === 'value' || field.state === 'empty'
+    if (replacementSucceeded) sourceReplaced = textValue(field.value)
     else {
       diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage, field: 'replaceRegex', message: field.message ?? '正文替换规则失败', retryable: false })
       stoppedByLimit = true
+    }
+    if (replacementSucceeded && isOnlineTextBook(resolvedBookType(input.book, input.source), input.book)) {
+      sourceReplaced = sourceReplaced.split('\n').map((line) => `　　${line}`).join('\n')
     }
   }
   let replaced = sourceReplaced
@@ -595,14 +609,15 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     diagnostics.push({ code: 'item-skipped', stage, message: '正文清洗结果超过输出预算', retryable: false })
     stoppedByLimit = true
   }
+  const fatalStatus = contentFatalStatus(diagnostics)
+  if (fatalStatus !== undefined) return { status: fatalStatus, value: null, diagnostics, trace }
   if (cleaned.length === 0) {
     diagnostics.push({ code: 'empty-page', stage, message: '正文为空', retryable: false })
-    const capabilityMissing = diagnostics.some((item) => item.code === 'capability-missing')
-    const failed = diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed')
-    return { status: capabilityMissing ? 'capability-missing' : failed ? 'failed' : 'empty', value: capabilityMissing || failed ? null : { chapter: resultChapter, contentType, raw, cleaned, pages, resources: [], ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
+    if (resultChapter.isVolume === true) return { status: 'empty', value: { chapter: resultChapter, contentType, raw, cleaned, pages, resources: [], ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
+    return { status: 'failed', value: null, diagnostics, trace }
   }
   const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
-  const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'item-skipped') ? 'partial' : 'success'
+  const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' && item.field === 'subContent') ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
 }
 
@@ -713,8 +728,8 @@ export async function loadChapterContentBatch(ports: ReadingPorts, input: Conten
       const chapterValues = group.map((chapter) => ({
         ...(chapter.rawFields ?? {}),
         ...chapter,
-        url: chapter.chapterUrl,
-        baseUrl: typeof chapter.rawFields?.baseUrl === 'string' && chapter.rawFields.baseUrl.length > 0 ? chapter.rawFields.baseUrl : bookBaseUrl,
+        url: chapterRuleUrl(chapter),
+        baseUrl: chapter.baseUrl?.trim() || (typeof chapter.rawFields?.baseUrl === 'string' && chapter.rawFields.baseUrl.length > 0 ? chapter.rawFields.baseUrl : bookBaseUrl),
         index: chapter.index,
         title: chapter.title,
       }))
@@ -728,15 +743,17 @@ export async function loadChapterContentBatch(ports: ReadingPorts, input: Conten
       }
       const batchBaseUrl = input.book.tocUrl?.trim() ? input.book.tocUrl : input.source.bookSourceUrl
       for (const chapter of group) {
+        const rawChapterUrl = chapterRuleUrl(chapter)
+        addChapterUrl(rawChapterUrl, chapter.index)
         addChapterUrl(chapter.chapterUrl, chapter.index)
-        const chapterBaseUrl = typeof chapter.rawFields?.baseUrl === 'string' && chapter.rawFields.baseUrl.length > 0
+        const chapterBaseUrl = chapter.baseUrl?.trim() || (typeof chapter.rawFields?.baseUrl === 'string' && chapter.rawFields.baseUrl.length > 0
           ? chapter.rawFields.baseUrl
-          : bookBaseUrl
-        const absolute = chapter.isVolume === true && chapter.title.length > 0 && chapter.chapterUrl.startsWith(chapter.title)
+          : bookBaseUrl)
+        const absolute = chapter.isVolume === true && chapter.title.length > 0 && rawChapterUrl.startsWith(chapter.title)
           ? chapterBaseUrl
-          : safeResolveReference(chapter.chapterUrl, chapterBaseUrl)
+          : safeResolveReference(rawChapterUrl, chapterBaseUrl)
         addChapterUrl(absolute, chapter.index)
-        addChapterUrl(safeResolveReference(chapter.chapterUrl, batchBaseUrl), chapter.index)
+        addChapterUrl(safeResolveReference(rawChapterUrl, batchBaseUrl), chapter.index)
       }
       let groupOpen = true
       let saveQueue: Promise<void> = Promise.resolve()
@@ -760,12 +777,14 @@ export async function loadChapterContentBatch(ports: ReadingPorts, input: Conten
             if (matched.size === 1) chapter = groupByIndex.get([...matched][0]!)
           }
           if (chapter === undefined) throw new Error(`java.cacheContent 未唯一匹配到本批次章节；重复 URL 请传带 index 的章节对象: ${String(identifier)}`)
+          const selectedRawChapterUrl = chapterRuleUrl(chapter)
+          const selectedChapterBaseUrl = chapter.baseUrl?.trim() || (typeof chapter.rawFields?.baseUrl === 'string' && chapter.rawFields.baseUrl.length > 0 ? chapter.rawFields.baseUrl : bookBaseUrl)
 
           let content = record.content
           if (contentBatchRuleReplace !== undefined) {
             const trimmed = content.split('\n').map((line) => line.trim()).join('\n')
             const replaced = await evaluateField(ports, input.source, stage, 'replaceRegex', contentBatchRuleReplace, trimmed, chapter.index, trace, input.signal, {
-              baseUrl: safeResolveReference(chapter.chapterUrl, typeof chapter.rawFields?.baseUrl === 'string' ? chapter.rawFields.baseUrl : bookBaseUrl) ?? bookBaseUrl,
+              baseUrl: safeResolveReference(selectedRawChapterUrl, selectedChapterBaseUrl) ?? selectedChapterBaseUrl,
               bindings: { book: bookValue, chapter: chapterValues[group.findIndex((item) => item.index === chapter.index)] },
             })
             if (replaced.state === 'cancelled' || actionSignal.aborted || isSignalAborted(input.signal)) throw new Error('__LEGADO_CANCELLED__')
@@ -920,11 +939,14 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
     tocUrl: input.chapter.bookUrl,
   }
   const chapterData = input.chapter as ContentInput['chapter'] & { rawFields?: JsonObject }
+  const rawChapterUrl = chapterRuleUrl(input.chapter)
+  const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  const chapterBaseReference = input.chapter.baseUrl?.trim() || book.tocUrl?.trim() || input.chapter.bookUrl
   const chapter = {
     ...(chapterData.rawFields ?? {}),
     ...input.chapter,
-    url: input.chapter.chapterUrl,
-    baseUrl: book.tocUrl ?? input.chapter.bookUrl,
+    url: rawChapterUrl,
+    baseUrl: resolveUrl(chapterBaseReference, bookUrl) ?? bookUrl,
     index: input.chapter.index,
     title: input.chapter.title ?? '',
   }
@@ -950,10 +972,10 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
   }
   if (raw.trim().length === 0) {
     diagnostics.push({ code: 'empty-page', stage: 'detail', field: 'getContent', message: '正文为空', retryable: false })
-    if (input.chapter.isVolume === true) return { status: 'empty', value: { chapter: input.chapter, contentType: 'text', raw, cleaned: '', pages: [], resources: [] }, diagnostics, trace }
+    if (input.chapter.isVolume === true) return { status: 'empty', value: { chapter, contentType: 'text', raw, cleaned: '', pages: [], resources: [] }, diagnostics, trace }
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  return { status: 'success', value: { chapter: input.chapter, contentType: 'text', raw, cleaned: raw, pages: [raw], resources: [] }, diagnostics, trace }
+  return { status: 'success', value: { chapter, contentType: 'text', raw, cleaned: raw, pages: [raw], resources: [] }, diagnostics, trace }
 }
 
 async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSource, chapters: Chapter[], code: string, book: BookMetadata, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<void> {

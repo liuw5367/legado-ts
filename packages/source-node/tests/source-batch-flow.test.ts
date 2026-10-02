@@ -129,6 +129,7 @@ test('QuickJS 的 JS 源 getContentBatch 通过 java.cacheContent 回存，缺�
         function getContentBatch(chapters, book) {
           if (book.name !== "Book") throw new Error("book argument missing");
           if (baseUrl !== "https://batch.test/source") throw new Error("JS source baseUrl mismatch");
+          if (chapters[0].url !== "/raw/10" || chapters[0].baseUrl !== "https://batch.test/catalog/page.html") throw new Error("raw chapter URL projection missing");
           java.cacheContent(chapters[0], "batch-" + chapters[0].index);
         }
         function getContent(chapter, book, nextChapterUrl) {
@@ -138,7 +139,7 @@ test('QuickJS 的 JS 源 getContentBatch 通过 java.cacheContent 回存，缺�
       `,
     }),
     book: book(),
-    chapters: [chapter(10), chapter(11)],
+    chapters: [{ ...chapter(10), url: '/raw/10', baseUrl: 'https://batch.test/catalog/page.html' }, chapter(11)],
     cacheContent: async (savedChapter, content) => { writes.push([savedChapter.index, content]); return true },
   })
 

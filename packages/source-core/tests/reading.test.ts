@@ -411,25 +411,96 @@ test('普通章节缺少 URL 时使用目录基准地址', async () => {
   assert.equal(result.value?.items[0]?.baseUrl, book.bookUrl)
 })
 
-test('规则成功但正文为空时保留章节并返回可进入的空内容', async () => {
+test('规则成功但非卷正文为空时返回失败且不交付半份内容', async () => {
   const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/empty', index: 0 }
   const result = await loadChapterContent({
     network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('<html></html>'), redirected: false }) },
     rules: { evaluate: async () => ({ status: 'empty', value: null }) },
   }, { source, chapter })
-  assert.equal(result.status, 'empty')
-  assert.equal(result.value?.chapter.chapterUrl, chapter.chapterUrl)
-  assert.equal(result.value?.cleaned, '')
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
 })
 
 test('缺少正文规则时按 Android 行为显示章节链接', async () => {
-  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0 }
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, url: '/raw/chapter/1', baseUrl: 'https://source.test/catalog/index.html', chapterUrl: 'https://wrong.test/derived', index: 0 }
   const result = await loadChapterContent({
     network: { request: async () => { throw new Error('不应请求正文') } },
     rules: { evaluate: async () => { throw new Error('不应执行正文规则') } },
   }, { source: { ...source, ruleContent: {} } as NormalizedSource, chapter })
   assert.equal(result.status, 'success')
-  assert.equal(result.value?.cleaned, chapter.chapterUrl)
+  assert.equal(result.value?.cleaned, chapter.url)
+})
+
+test('正文请求和规则绑定优先使用章节原始 URL 与 baseUrl', async () => {
+  const calls: string[] = []
+  let binding: { url?: string; baseUrl?: string; chapterUrl?: string } | undefined
+  const chapter: ChapterIdentity = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: book.bookUrl,
+    url: 'chapter/one',
+    baseUrl: 'https://cdn.test/catalog/index.html',
+    chapterUrl: 'https://wrong.test/derived',
+    index: 0,
+  }
+  const result = await loadChapterContent({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }
+    } },
+    rules: { evaluate: async (request) => {
+      binding = request.bindings?.chapter as typeof binding
+      return request.field === 'content' ? { status: 'success', value: '正文' } : { status: 'empty', value: null }
+    } },
+  }, { source: { ...source, ruleContent: { content: 'content' } } as NormalizedSource, chapter })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(calls, ['https://cdn.test/catalog/chapter/one'])
+  assert.deepEqual({ url: binding?.url, baseUrl: binding?.baseUrl, chapterUrl: binding?.chapterUrl }, { url: 'chapter/one', baseUrl: 'https://cdn.test/catalog/index.html', chapterUrl: 'https://wrong.test/derived' })
+  assert.equal(result.value?.chapter.url, 'chapter/one')
+  assert.equal(result.value?.chapter.baseUrl, 'https://cdn.test/catalog/index.html')
+})
+
+test('正文分页的空页保留 pages 位置并参与换行拼接', async () => {
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
+  const pageSource = { ...source, ruleContent: { content: 'content', nextPage: 'next' }, contentType: 'text' } as unknown as NormalizedSource
+  const result = await loadChapterContent({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(plan.url.endsWith('/c1') ? 'page-1' : 'page-2'), redirected: false }) },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'content') return content === 'page-1' ? { status: 'empty', value: null } : { status: 'success', value: '第二页正文' }
+      if (field === 'nextPage' && content === 'page-1') return { status: 'success', value: '/c2' }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: pageSource, chapter })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value?.pages, ['', '第二页正文'])
+  assert.equal(result.value?.raw, '\n第二页正文')
+  assert.equal(result.value?.cleaned, '\n第二页正文')
+})
+
+test('JS 正文绑定使用章节原始 URL 与页面基准地址', async () => {
+  let request: { chapter: { url: string | undefined; baseUrl: string | undefined; chapterUrl: string | undefined } } | undefined
+  const jsSource = { ...source, mainJs: 'function getContent(chapter) { return chapter.url; }' } as NormalizedSource
+  const chapter: ChapterIdentity = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: book.bookUrl,
+    url: '/raw/chapter',
+    baseUrl: 'https://source.test/catalog/page.html',
+    chapterUrl: 'https://wrong.test/derived',
+    index: 0,
+  }
+  const result = await loadChapterContent({
+    network: { request: async () => { throw new Error('JS 正文不应请求网络') } },
+    rules: {
+      evaluate: async () => ({ status: 'empty', value: null }),
+      executeSourceFunction: async (input) => {
+        const boundChapter = input.bindings?.chapter as { url?: string; baseUrl?: string; chapterUrl?: string }
+        request = { chapter: { url: boundChapter.url, baseUrl: boundChapter.baseUrl, chapterUrl: boundChapter.chapterUrl } }
+        return { status: 'success', value: input.args[0] && typeof input.args[0] === 'object' ? (input.args[0] as { url?: string }).url : '', exists: true }
+      },
+    },
+  }, { source: jsSource, chapter })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.cleaned, '/raw/chapter')
+  assert.deepEqual(request, { chapter: { url: '/raw/chapter', baseUrl: 'https://source.test/catalog/page.html', chapterUrl: 'https://wrong.test/derived' } })
 })
 
 test('章节地址等于详情地址时复用详情响应解析正文', async () => {
@@ -564,7 +635,7 @@ test('正文 subContent 对在线文本原样追加且先于全文替换', async
   assert.equal(result.value?.raw, 'Main\n  https://aux.test/inline  ')
   assert.deepEqual(result.value?.pages, ['Main', '  https://aux.test/inline  '])
   assert.equal(replacementInput, 'Main\nhttps://aux.test/inline')
-  assert.equal(result.value?.cleaned, 'replaced:Main\nhttps://aux.test/inline')
+  assert.equal(result.value?.cleaned, '　　replaced:Main\n　　https://aux.test/inline')
   assert.deepEqual(calls, ['https://source.test/chapter/1'])
 })
 
@@ -972,17 +1043,17 @@ test('目录标题为空时跳过节点及其 VIP/购买规则', async () => {
   assert.equal(emptyTitleFlagCalls, 0)
 })
 
-test('正文已有内容后下一页失败返回 partial；空正文返回 empty', async () => {
+test('正文已有内容后下一页失败或正文为空均不交付半份内容', async () => {
   const calls: string[] = []
   const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
-  const partial = await loadChapterContent(readingPorts(calls, 'c1?page=2'), { source, chapter })
-  assert.equal(partial.status, 'partial')
-  assert.ok(partial.value?.cleaned.includes('One'))
-  assert.ok(partial.diagnostics.some((diagnostic) => diagnostic.code === 'request-failed'))
+  const failedPage = await loadChapterContent(readingPorts(calls, 'c1?page=2'), { source, chapter })
+  assert.equal(failedPage.status, 'failed')
+  assert.equal(failedPage.value, null)
+  assert.ok(failedPage.diagnostics.some((diagnostic) => diagnostic.code === 'request-failed'))
 
   const empty = await loadChapterContent(readingPorts([]), { source, chapter: { ...chapter, chapterUrl: 'https://source.test/empty' } })
-  assert.equal(empty.status, 'empty')
-  assert.equal(empty.value?.cleaned, '')
+  assert.equal(empty.status, 'failed')
+  assert.equal(empty.value, null)
 })
 
 test('目录首个请求失败返回 failed 而不是 empty', async () => {
@@ -1051,7 +1122,7 @@ test('正文分页命中 nextChapterUrl 时停止解析，不并入下一章', a
   assert.equal(result.status, 'success')
 })
 
-test('正文下一页规则失败或缺少宿主能力时保留已解析内容和诊断', async () => {
+test('正文下一页规则失败或缺少宿主能力时不交付已解析内容', async () => {
   for (const state of ['failed', 'capability-missing'] as const) {
     const outputStatus: 'failed' | 'capability-missing' = state
     const calls: string[] = []
@@ -1068,8 +1139,8 @@ test('正文下一页规则失败或缺少宿主能力时保留已解析内容�
         return { status: 'empty', value: null }
       } },
     }, { source: nextSource, chapter })
-    assert.equal(result.status, 'partial', state)
-    assert.equal(result.value?.cleaned, '第一章正文', state)
+    assert.equal(result.status, outputStatus, state)
+    assert.equal(result.value, null, state)
     assert.deepEqual(calls, ['https://source.test/c1'], state)
     const expectedCode = state === 'failed' ? 'rule-failed' : 'capability-missing'
     assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'nextContentUrl' && diagnostic.code === expectedCode), state)
@@ -1249,9 +1320,24 @@ test('章节标题规则失败时给出诊断并沿用目录标题', async () =>
     },
   }
   const result = await loadChapterContent(ports, { source: titleSource, chapter })
+  assert.equal(result.status, 'success')
   assert.equal(result.value?.cleaned, '正文')
   assert.equal(result.value?.title, undefined)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'item-skipped' && diagnostic.field === 'title'))
+})
+
+test('调用方非法正文替换只保留诊断，不丢弃已解析正文', async () => {
+  const result = await loadChapterContent({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: '正文' } : { status: 'empty', value: null } },
+  }, {
+    source: { ...source, contentType: 'text', ruleContent: { content: 'content' } } as NormalizedSource,
+    chapter: { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 },
+    replacements: [{ pattern: '(', replacement: '坏' }],
+  })
+  assert.equal(result.status, 'partial')
+  assert.equal(result.value?.cleaned, '正文')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'invalid-config' && diagnostic.field === 'replacements'))
 })
 
 test('正文分页只有首页携带 sourceRegex，后续页只带 webJs（BookContent.kt:92）', async () => {
