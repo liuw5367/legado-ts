@@ -426,7 +426,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     }
     if (next.state !== 'value') continue
     const nextValues = listValues(next.value)
-    const resolvedNextUrls = new Set<string>()
+    const resolvedNextUrls: string[] = []
     for (const value of nextValues) {
       const resolvedNext = resolveUrl(value, responseUrl)
       const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, ...ruleBindings }, input.signal)
@@ -437,24 +437,23 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
         stoppedByLimit = true
         continue
       }
-      resolvedNextUrls.add(nextUrl)
+      resolvedNextUrls.push(nextUrl)
     }
-    const uniqueNextUrls = [...resolvedNextUrls]
-    if (uniqueNextUrls.length === 1 && nextChapterAbsolute !== undefined && uniqueNextUrls[0] === nextChapterAbsolute) {
+    if (resolvedNextUrls.length === 1 && nextChapterAbsolute !== undefined && resolvedNextUrls[0] === nextChapterAbsolute) {
       reachedNextChapter = true
       pendingPages.length = 0
       break
     }
-    if (uniqueNextUrls.length === 1) {
-      const nextUrl = uniqueNextUrls[0]!
+    if (resolvedNextUrls.length === 1) {
+      const nextUrl = resolvedNextUrls[0]!
       if (visited.has(nextUrl)) {
         diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页形成循环', retryable: false })
         stoppedByLimit = true
       } else if (!pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: true })
       continue
     }
-    if (uniqueNextUrls.length > 1) {
-      const branchUrls = uniqueNextUrls.filter((nextUrl) => {
+    if (resolvedNextUrls.length > 1) {
+      const branchUrls = resolvedNextUrls.filter((nextUrl) => {
         if (visited.has(nextUrl)) {
           diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页形成循环', retryable: false })
           stoppedByLimit = true

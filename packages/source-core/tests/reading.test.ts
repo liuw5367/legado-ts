@@ -867,6 +867,25 @@ test('正文分页规则一次返回多个链接时按顺序读取全部页面',
   assert.equal(result.value?.pages.length, 3)
 })
 
+test('正文多 URL 分支保留重复输入地址并分别读取', async () => {
+  const calls: string[] = []
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0 }
+  const multiPageSource = { ...source, contentType: 'text', ruleContent: { content: 'content', nextContentUrl: 'next-content' } } as NormalizedSource
+  const result = await loadChapterContent({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(plan.url.endsWith('/chapter/1') ? 'first' : `branch-${calls.length}`), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'content') return { status: 'success', value: content }
+      if (field === 'nextContentUrl' && content === 'first') return { status: 'success', value: ['/chapter/2', '/chapter/2'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: multiPageSource, chapter })
+  assert.deepEqual(calls, ['https://source.test/chapter/1', 'https://source.test/chapter/2', 'https://source.test/chapter/2'])
+  assert.deepEqual(result.value?.pages, ['first', 'branch-2', 'branch-3'])
+})
+
 test('正文多 URL 分支按输入顺序受限并发，分支不递归且不携带首页 webJs/sourceRegex', async () => {
   const requests: Array<{ url: string; execution?: { webJs?: string; sourceRegex?: string } }> = []
   const nextRuleBodies: string[] = []
