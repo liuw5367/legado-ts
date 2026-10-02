@@ -74,7 +74,7 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
 
-test('目录下一页规则失败或缺少宿主能力时保留诊断并停止分页', async () => {
+test('目录下一页规则失败或缺少宿主能力时终止并丢弃半份目录', async () => {
   for (const state of ['failed', 'capability-missing'] as const) {
     const outputStatus: 'failed' | 'capability-missing' = state
     const calls: string[] = []
@@ -91,12 +91,64 @@ test('目录下一页规则失败或缺少宿主能力时保留诊断并停止�
         return { status: 'empty', value: null }
       } },
     }, { source, book })
-    assert.equal(result.status, 'partial', state)
-    assert.equal(result.value?.items.length, 1, state)
+    assert.equal(result.status, outputStatus, state)
+    assert.equal(result.value, null, state)
     assert.equal(calls.length, 1, state)
     const expectedCode = state === 'failed' ? 'rule-failed' : 'capability-missing'
     assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'nextTocUrl' && diagnostic.code === expectedCode), state)
   }
+})
+
+test('目录先求下一页规则，再解析当前页章节字段', async () => {
+  const calls: string[] = []
+  const orderedSource = {
+    ...source,
+    ruleToc: {
+      chapterList: 'list',
+      nextTocUrl: 'next',
+      chapterName: 'name',
+      chapterUrl: 'url',
+      updateTime: 'time',
+      isVolume: 'volume',
+      chapterVolume: 'volume-name',
+      isVip: 'vip',
+      isPay: 'pay',
+    },
+  } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        calls.push(field)
+        if (field === 'chapterList') return { status: 'success', value: [{ title: '第一章', url: '/chapter/1' }] }
+        if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+        if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+        if (field === 'updateTime') return { status: 'success', value: '2026-01-01' }
+        if (field === 'isVolume' || field === 'isVip' || field === 'isPay') return { status: 'success', value: false }
+        if (field === 'chapterVolume') return { status: 'empty', value: null }
+        return { status: 'empty', value: null }
+      },
+    },
+  }, { source: orderedSource, book })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(calls.slice(0, 9), ['chapterList', 'nextTocUrl', 'chapterName', 'chapterUrl', 'updateTime', 'isVolume', 'chapterVolume', 'isVip', 'isPay'])
+})
+
+test('目录章节字段规则失败时不返回已解析的半份目录', async () => {
+  const failingSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field }) => {
+        if (field === 'chapterList') return { status: 'success', value: [{ title: '第一章', url: '/chapter/1' }] }
+        if (field === 'chapterName') return { status: 'failed', value: null, message: 'chapter name failed' }
+        return { status: 'empty', value: null }
+      },
+    },
+  }, { source: failingSource, book })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed' && diagnostic.field === 'chapterName'))
 })
 
 test('目录更新时间按 Android 投影 tag 与字数，卷占位使用页内原始索引', async () => {
@@ -336,7 +388,7 @@ test('目录并发分页失败时取消兄弟任务并等待其清理完成', as
   assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/branchA', 'https://source.test/branchB'])
   assert.equal(siblingSettled, true)
   assert.ok(result.diagnostics.some((item) => item.code === 'request-failed'))
-  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['First'])
+  assert.equal(result.value, null)
   await concurrency.drain()
 })
 
@@ -936,7 +988,7 @@ test('正文已有内容后下一页失败返回 partial；空正文返回 empty
 test('目录首个请求失败返回 failed 而不是 empty', async () => {
   const result = await loadTableOfContents(readingPorts([], '/book/a'), { source, book })
   assert.equal(result.status, 'failed')
-  assert.equal(result.value?.items.length, 0)
+  assert.equal(result.value, null)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'request-failed'))
 })
 

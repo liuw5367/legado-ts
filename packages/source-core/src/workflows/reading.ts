@@ -129,37 +129,15 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     }
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     visited.add(responseUrl)
-    const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
-    const parsed = await parseTocPage(ports, input, book, body, pageIndex, normalizedUrl, responseUrl, volume, listRuleBody, input.signal)
+    const parsed = await parseTocPage(ports, input, book, body, pageIndex, normalizedUrl, responseUrl, volume, listRuleBody, pendingPage.followNext, input.signal)
     diagnostics.push(...parsed.diagnostics)
     appendTocChapters(chapters, parsed.chapters, parsed.trace)
     trace.push(...parsed.trace)
     volume = parsed.volume
     if (parsed.cancelled || isSignalAborted(input.signal)) return cancelled('目录规则执行已取消', diagnostics, trace)
     if (parsed.fatal) break
-    if (!pendingPage.followNext) continue
-    const nextRule = ruleString(input.source, 'ruleToc', 'nextTocUrl')
-    if (nextRule === undefined) continue
-    const next = await evaluateField(ports, input.source, stage, 'nextTocUrl', nextRule, body, pageIndex, trace, input.signal, { ...context, bindings: { book } })
-    if (next.state === 'cancelled') return cancelled('目录下一页规则已取消', diagnostics, trace)
-    if (next.state === 'failed' || next.state === 'capability-missing') {
-      diagnostics.push({ code: next.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage, field: 'nextTocUrl', message: next.message ?? (next.state === 'capability-missing' ? '目录下一页规则能力不可用' : '目录下一页规则失败'), retryable: false })
-      break
-    }
-    if (next.state !== 'value') continue
-    const nextValues = listValues(next.value)
-    const resolvedNextUrls = new Set<string>()
-    for (const value of nextValues) {
-      const resolved = resolveUrl(value, responseUrl)
-      const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, stage, resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book }, input.signal)
-      const nextUrl = expandedNext?.url
-      if (nextUrl === undefined) {
-        if (expandedNext?.error?.code === 'cancelled') return cancelled('目录下一页地址展开已取消', diagnostics, trace)
-        diagnostics.push({ code: expandedNext?.error?.code ?? 'item-skipped', stage, field: 'nextTocUrl', message: expandedNext?.error?.message ?? '目录下一页 URL 无效', retryable: false })
-        continue
-      }
-      resolvedNextUrls.add(nextUrl)
-    }
+    if (parsed.nextUrls === undefined) continue
+    const resolvedNextUrls = new Set(parsed.nextUrls)
     const followNext = resolvedNextUrls.size === 1
     const unseenNextUrls = [...resolvedNextUrls].filter((nextUrl) => !visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl))
     if (followNext) {
@@ -192,7 +170,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
         }
         const branchUrl = resolveUrl(outcome.page.url, branchUrls[branchIndex]!) ?? branchUrls[branchIndex]!
         visited.add(branchUrl)
-        const parsedBranch = await parseTocPage(ports, input, book, outcome.page.body, pageIndex + branchIndex + 1, branchUrls[branchIndex]!, branchUrl, undefined, listRuleBody, input.signal)
+        const parsedBranch = await parseTocPage(ports, input, book, outcome.page.body, pageIndex + branchIndex + 1, branchUrls[branchIndex]!, branchUrl, undefined, listRuleBody, false, input.signal)
         diagnostics.push(...parsedBranch.diagnostics)
         appendTocChapters(chapters, parsedBranch.chapters, parsedBranch.trace)
         trace.push(...parsedBranch.trace)
@@ -214,7 +192,13 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   }
   if (uniqueChapters.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '目录为空', retryable: false })
   const value: WorkflowPage<Chapter> = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}) }
-  const status = uniqueChapters.length === 0 && diagnostics.some((item) => item.code === 'request-failed' || item.code === 'rule-failed') ? 'failed' : statusFromDiagnostics(diagnostics, uniqueChapters.length)
+  const fatalCode = diagnostics.find((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'capability-missing')?.code
+  if (fatalCode !== undefined) return { status: fatalCode === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
+  if (uniqueChapters.length === 0) {
+    const limited = diagnostics.some((item) => item.message.includes('预算') || item.message.includes('限制'))
+    return { status: limited ? 'partial' : 'failed', value: limited ? value : null, diagnostics, trace }
+  }
+  const status = statusFromDiagnostics(diagnostics, uniqueChapters.length)
   // 取消的调用不能拿到半份目录。
   return { status, value: status === 'cancelled' ? null : value, diagnostics, trace }
 }
@@ -1075,12 +1059,14 @@ interface TocPageParseResult {
   chapters: Chapter[]
   diagnostics: WorkflowDiagnostic[]
   trace: WorkflowTraceEntry[]
+  /** 当前页 nextTocUrl 已按响应地址展开；undefined 表示未配置或不应继续分页。 */
+  nextUrls?: string[]
   volume?: string
   fatal: boolean
   cancelled: boolean
 }
 
-async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMetadata, body: string, pageIndex: number, normalizedUrl: string, responseUrl: string, inheritedVolume: string | undefined, listRuleBody: string, signal?: AbortSignal): Promise<TocPageParseResult> {
+async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMetadata, body: string, pageIndex: number, normalizedUrl: string, responseUrl: string, inheritedVolume: string | undefined, listRuleBody: string, readNextUrl: boolean, signal?: AbortSignal): Promise<TocPageParseResult> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   let volume = inheritedVolume
@@ -1094,11 +1080,39 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
   const rawItems = list.state === 'value' && Array.isArray(list.value) ? list.value.filter((item) => item !== null && item !== undefined) : []
   if (list.state === 'value' && !Array.isArray(list.value)) diagnostics.push({ code: 'item-skipped', stage: 'detail', field: 'chapterList', message: 'chapterList 规则必须返回列表', retryable: false })
 
+  let nextUrls: string[] | undefined
+  if (readNextUrl) {
+    const nextRule = ruleString(input.source, 'ruleToc', 'nextTocUrl')
+    if (nextRule !== undefined) {
+      const next = await evaluateField(ports, input.source, 'detail', 'nextTocUrl', nextRule, body, pageIndex, trace, signal, { ...context, bindings: { book } })
+      if (next.state === 'cancelled') return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
+      if (next.state === 'failed' || next.state === 'capability-missing') {
+        diagnostics.push({ code: next.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: 'nextTocUrl', message: next.message ?? (next.state === 'capability-missing' ? '目录下一页规则能力不可用' : '目录下一页规则失败'), retryable: false })
+        return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: true, cancelled: false }
+      }
+      nextUrls = []
+      if (next.state === 'value') {
+        for (const value of listValues(next.value)) {
+          const resolved = resolveUrl(value, responseUrl)
+          const expandedNext = resolved === undefined ? undefined : await expandUrl(ports, input.source, 'detail', resolved, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, book }, signal)
+          const nextUrl = expandedNext?.url
+          if (nextUrl === undefined) {
+            if (expandedNext?.error?.code === 'cancelled') return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
+            diagnostics.push({ code: expandedNext?.error?.code === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: 'nextTocUrl', message: expandedNext?.error?.message ?? '目录下一页 URL 无效', retryable: false })
+            return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: true, cancelled: false }
+          }
+          if (!nextUrls.includes(nextUrl)) nextUrls.push(nextUrl)
+        }
+      }
+    }
+  }
+
   const chapters: Chapter[] = []
   for (const [itemIndex, rawItem] of rawItems.entries()) {
     const diagnosticIndex = pageIndex * 100000 + itemIndex
     const fields = await chapterFields(ports, input.source, rawItem, diagnosticIndex, signal, diagnostics, trace, volume, context, book)
     if (signal?.aborted === true) return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
+    if (fields.fatal !== undefined) return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: true, cancelled: false }
     if (fields.isVolume === true && fields.title !== undefined && fields.title.length > 0) volume = fields.title
     else if (fields.volume !== undefined && fields.volume.length > 0) volume = fields.volume
     if (fields.title === undefined || fields.title.length === 0) {
@@ -1142,7 +1156,7 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
     chapters.push(chapter)
     trace.push({ stage: 'detail', event: 'candidate', target: `chapter:${chapterIndex}`, itemIndex: diagnosticIndex })
   }
-  return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: false }
+  return { chapters, diagnostics, trace, ...(nextUrls === undefined ? {} : { nextUrls }), ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: false }
 }
 
 function appendTocChapters(target: Chapter[], pageChapters: Chapter[], pageTrace: WorkflowTraceEntry[]): void {
@@ -1292,6 +1306,7 @@ interface ChapterFields {
   isPay?: boolean
   updateTime?: string
   rawFields: JsonObject
+  fatal?: 'failed' | 'capability-missing'
 }
 
 const tocWordCountPattern = /(?:^|字数[：:、]?|[\u0009-\u000d\u0020]+)([0-9万千百.]{1,6}字)/u
@@ -1308,7 +1323,10 @@ function chapterInfoProjection(updateTime: string | undefined, isVolume: boolean
 async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }, book: BookMetadata): Promise<ChapterFields> {
   const result: ChapterFields = { rawFields: {} }
   const chapter: Record<string, unknown> = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, url: '', baseUrl: context.redirectUrl, chapterUrl: '', index: itemIndex, title: '', rawFields: result.rawFields }
-  for (const ruleField of ['chapterName', 'chapterUrl', 'chapterVolume', 'updateTime', 'isVolume', 'isVip', 'isPay'] as const) {
+  // Android 的目录解析顺序是标题、地址、更新时间、卷标，然后才读取 VIP/购买状态。
+  // chapterVolume 是 TS 运行时保留的卷名扩展，放在 Android 的 isVolume 之后，避免改变
+  // 必要字段和付费字段的先后关系。
+  for (const ruleField of ['chapterName', 'chapterUrl', 'updateTime', 'isVolume', 'chapterVolume', 'isVip', 'isPay'] as const) {
     const outputField = ruleField === 'chapterName'
       ? 'title'
       : ruleField === 'chapterUrl'
@@ -1321,9 +1339,9 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
     const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, bindings: { book, chapter } })
     if (field.state === 'cancelled') return result
     if (field.state === 'failed' || field.state === 'capability-missing') {
-      diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: ruleField, itemIndex, message: field.message ?? '章节字段失败', retryable: false })
-      if (ruleField === 'chapterName') return result
-      continue
+      diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: ruleField, itemIndex, message: field.message ?? '章节字段失败', retryable: false })
+      result.fatal = field.state === 'capability-missing' ? 'capability-missing' : 'failed'
+      return result
     }
     if (field.state === 'value' || field.state === 'empty' || field.state === 'missing') {
       if (ruleField === 'isVolume') {
