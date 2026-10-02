@@ -1,6 +1,6 @@
 # TypeScript 宿主接口
 
-本章定义独立库的**目标端口**。核心负责规则与流程，宿主负责网络、解析器、脚本、状态与日志。以下名称作为目标契约维护；状态和副作用的单一事实源为 [身份、状态与副作用](../standard/state-and-effects.md)。接口示意不代表全部已有实现——流程层已落地的 `WorkflowPorts` / `ReadingPorts` 及 Node 侧 `SourceRuleHost` / `SourceRequestHost` 以 [包使用与当前导出](package-usage.md) 为准；目标 `RuntimeHost`、`ContentSaveToken` 等尚未按该名称导出，差异见 [已知差异](../divergence/known-divergences.md)。
+本章定义独立库的**目标端口**。核心负责规则与流程，宿主负责网络、解析器、脚本、状态与日志。以下名称作为目标契约维护；状态和副作用的单一事实源为 [身份、状态与副作用](../standard/state-and-effects.md)。流程层已落地的 `WorkflowPorts` / `ReadingPorts`、`ContentIdentity` / `ContentSaveToken` / `ContentStore` 及 Node 侧 `SourceRuleHost` / `SourceRequestHost` 以 [包使用与当前导出](package-usage.md) 为准；目标 `RuntimeHost` 仍未作为统一门面导出，差异见 [已知差异](../divergence/known-divergences.md)。
 
 ## 请求和响应
 
@@ -152,12 +152,19 @@ export interface CacheWriteOptions {
 }
 
 export interface ContentCacheRecord {
-  /** 归一化后的正文、资源 URL 或文件链接。 */
+  /** 已清洗的正文或资源链接。 */
   content: string
   /** 生成正文时收到的最终响应 URL；缓存命中必须原样返回。 */
   finalUrl: string
-  /** 与正文一起产生的章节更新。 */
-  chapter: BookChapter
+  /** 与正文一起产生的章节更新；TypeScript 实现使用 Chapter。 */
+  chapter: Chapter
+  /** 兼容旧记录的结构化正文字段。 */
+  contentType?: 'text' | 'html'
+  raw?: string
+  pages?: string[]
+  resources?: { kind: 'image'; url: string }[]
+  title?: string
+  imgUrl?: string
   /** 音频歌词或视频弹幕；普通正文没有该字段。 */
   auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
 }
@@ -200,11 +207,11 @@ export interface ContentSaveToken {
 
 export interface ContentStore {
   /** 按稳定资源身份读取缓存，不递增写入代次；旧的不完整记录按未命中处理。 */
-  read(identity: ContentIdentity): Promise<ContentCacheRecord | undefined>
+  read(identity: ContentIdentity, signal?: AbortSignal): Promise<ContentCacheRecord | undefined>
   /** 只在 token 仍为当前版本时写正文、最终 URL、章节元数据和附加资源。 */
-  write(input: ContentWriteInput): Promise<StoreWriteResult>
+  write(input: ContentWriteInput, signal?: AbortSignal): Promise<StoreWriteResult>
   /** 为要求保存的新操作原子预留写入代次；缓存命中时不调用。 */
-  reserve(identity: ContentIdentity, operationId: string): Promise<ContentSaveToken>
+  reserve(identity: ContentIdentity, operationId: string, signal?: AbortSignal): Promise<ContentSaveToken>
 }
 
 export interface ResourceValue {

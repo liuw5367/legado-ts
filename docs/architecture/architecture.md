@@ -29,9 +29,9 @@ apps/reader-cli          应用层：UI、书架、本地 JSON 存储、多源�
   -> @legado/source-core 规则解释、请求语义、候选归并和单源工作流
 ```
 
-- **source-core**：不依赖 Node 平台；`SourceRuleRuntime` 解释书源规则，`SourceRequestRuntime` 解释书源请求选项，搜索聚合函数处理跨源候选。核心还实现单源限流、可复用并发队列、分页策略、批量正文编排和图片解密流程；通过 `WorkflowPorts` / `ReadingPorts` 接收网络、脚本、并发额度与缓存回调等宿主能力；公开入口见 [package 使用指南](../implementation/package-usage.md)。
+- **source-core**：不依赖 Node 平台；`SourceRuleRuntime` 解释书源规则，`SourceRequestRuntime` 解释书源请求选项，搜索聚合函数处理跨源候选。核心还实现单源限流、可复用并发队列、分页策略、批量正文编排、最终正文 cache-first/条件提交编排、目录 reconcile 和图片解密流程；通过 `WorkflowPorts` / `ReadingPorts` 接收网络、脚本、并发额度与 `ContentStore` 等宿主能力；公开入口见 [package 使用指南](../implementation/package-usage.md)。
 - **source-node**：实现网络、HTML/JSONPath/XPath 解析器、QuickJS、Cookie、字符集、加密、归档和字体；`SourceRuleHost` / `SourceRequestHost` 组合这些能力并委托给核心，也提供兼容性 CLI。`concurrency.ts` 仅为兼容旧导入路径转出 source-core 的队列实现。
-- **reader-cli**：负责来源选择与读取、跨源调度、并发额度、进度和取消、搜索历史、持久化及终端交互；调用核心归并候选，但不重新解释书源规则或归并条件。核心消费应用注入的并发额度，并维护书源级限流和单源分页/批量工作流。
+- **reader-cli**：负责来源选择与读取、跨源调度、并发额度、进度和取消、搜索历史、持久化及终端交互；调用核心归并候选，但不重新解释书源规则或归并条件。应用保存目录快照/书籍 patch，并提供按书籍绑定的最终正文 `ContentStore`；核心消费应用注入的并发额度，并维护书源级限流和单源分页/批量工作流。
 
 仓库中**没有** `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` 这些应用服务端口；书源保存与检测的 Repository 设计见 [归档](../archive/source-management-and-state.md)。reader-cli 使用自有 `json-store` / `cache-store`。
 
@@ -46,6 +46,8 @@ apps/reader-cli          应用层：UI、书架、本地 JSON 存储、多源�
 - 来源请求选项、请求体和查询编码、重试、bodyJs、响应归一化；
 - 结果归一化、变量作用域、跨源候选归并和匹配排序；
 - 搜索/详情/目录/正文流程状态机；
+- 目录章节归并、旧章节元数据延续和书籍 patch 的纯函数计算；
+- 最终正文的身份校验、缓存命中、条件 token 提交和提交后重读；
 - 书源级限流、可复用并发队列、并发分页与批量正文调度；
 - 超时、取消与宿主能力的抽象约定。
 

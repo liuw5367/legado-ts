@@ -54,7 +54,7 @@
 | 能力 | 核心入口 | 宿主端口 | 应用服务或适配器责任 | 当前范围 |
 | --- | --- | --- | --- | --- |
 | 声明式规则、JavaScript 规则 | `source-core` 规则求值和流程 | `JavaScriptRuntime`、解析器、`RuntimeHost` | 选择宿主能力并映射诊断 | 核心兼容目标 |
-| 网络、Cookie、缓存、变量 | 请求计划和流程状态机 | `HttpClient`、`CookieStore`、`CacheStore`、变量端口 | 按用户、源和会话隔离持久数据 | 核心端口，宿主实现 |
+| 网络、Cookie、缓存、变量 | 请求计划和流程状态机、`ContentIdentity`/`ContentStore` 编排 | `HttpClient`、`CookieStore`、`CacheStore`、`ContentStore`、变量端口 | 按用户、源、目录 revision 和会话隔离持久数据 | 核心端口，宿主实现 |
 | 图片、音频、视频、文件 | 资源结果与保存令牌 | `ResourceStore`、解密/字节能力 | 资源权限、缓存和下载策略 | 已登记，按宿主验证 |
 | 登录、验证码、动态认证 | 登录规则和认证状态 | `login-ui`、浏览器或授权宿主 | 页面交互、凭据保存和会话恢复 | 静态能力优先，交互能力待验证 |
 | 书源事件、自定义按钮、播放器 | 版本化动作/事件结果 | `interactive-ui`、浏览器和应用回调 | UI 展示、权限和用户确认 | 字段已登记，协议待验证 |

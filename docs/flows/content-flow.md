@@ -2,7 +2,7 @@
 
 ## 入口和缓存
 
-Android 的 `WebBook.getContentAwait` 只有在 `needSave=true` 且缓存 token 的 `version > 0` 时才读取正文缓存；命中并通过版本检查才直接返回。`needSave=false` 会绕过这次缓存读取并执行规则，避免预览或检查被旧正文短路。TypeScript 的 Android-compatible adapter 应保持该条件，若 Web 目标提供 cache-first 模式，必须在调用配置和结果中明确标记。未命中时：
+Android 的 `WebBook.getContentAwait` 只有在 `needSave=true` 且缓存 token 的 `version > 0` 时才读取正文缓存；命中并通过版本检查才直接返回。TypeScript 对应的 `loadStoredChapterContent` 把这段 cache-first 编排放在核心，`loadChapterContent` 仍是纯解析入口。未命中或 `refresh=true` 时：
 
 - JS 源调用 `getContent(chapter, book, nextChapterUrl)`；
 - 声明式源检查卷占位章节、正文规则和详情页缓存，再请求章节 URL。
@@ -43,18 +43,19 @@ source-core 已实现声明式正文的 `subContent`，Node 集成测试覆盖�
 ```text
 BookSource + Book + BookChapter + nextChapterUrl
   -> 计算下一章保护 URL
-  -> 读取正文缓存和版本 token
+  -> 按 ContentIdentity 读取最终正文和版本 token
   -> 缓存命中则返回
   -> 选择 JS 源或声明式源
   -> 请求章节页，得到 body、baseUrl、redirectUrl
   -> 规则解析和正文分页
   -> 副文、全文替换、标题和资源归一化
   -> 空正文检查
-  -> 版本校验后保存正文及章节元数据
+  -> reserve/write 条件提交正文、最终 URL 和章节元数据
+  -> 提交后重读；stale/rejected/unknown 不覆盖较新正文
   -> 返回正文、章节更新和诊断
 ```
 
-本流程描述目标保存契约中的 `ContentIdentity` 和 `ContentSaveToken`；当前实现入口为 `loadChapterContent`，**没有**公开 `ContentSaveToken` / `ContentOperationContext` 类型（差异见 [已知差异](../divergence/known-divergences.md)）。正文身份必须同时绑定 `sessionId`、`sourceId`、`bookUrl`、`chapterKey`、`resourceKind`、`sourceRevision`、`semanticVersion`、`tocRevision` 和 `chapterIndex`；保存 token 的 `identity`、`operationId`、`writeVersion` 和过期信息必须在同一原子边界校验。这样既不会把不同会话的缓存混用，也不会让旧目录的章节覆盖新目录。
+当前实现公开导出 `ContentIdentity`、`ContentSaveToken`、`ContentStore` 和 `StoredContentInput`；`loadStoredChapterContent` 使用它们完成 cache-first、条件提交和提交后重读。正文身份必须同时绑定 `sessionId`、`sourceId`、`bookUrl`、`chapterKey`、`resourceKind`、`sourceRevision`、`semanticVersion`、`tocRevision` 和 `chapterIndex`；保存 token 的 `identity`、`operationId`、`writeVersion` 和过期信息必须在同一原子边界校验。这样既不会把不同会话的缓存混用，也不会让旧目录的章节覆盖新目录。
 
 ```ts
 export interface ContentOperationContext {
@@ -64,6 +65,8 @@ export interface ContentOperationContext {
   chapterIndex: number
 }
 ```
+
+当前 TypeScript 入口返回 `RuntimeResult<ChapterContent>`；下面的 `ContentResult` 是 Android/统一门面目标形状，实际 cache-first 调用请使用 `loadStoredChapterContent`，不是该接口的直接返回类型。
 
 ```ts
 export interface ContentResult {
@@ -114,7 +117,7 @@ export interface ContentResult {
 
 ### 正文缓存提交
 
-仅在 `needSave=true` 且已有 token `version > 0` 时按 ContentIdentity 读取缓存；未命中且 needSave=true 才 reserve 新 ContentSaveToken。缓存记录必须同时包含正文、`finalUrl`、章节更新和歌词/弹幕附加数据，旧的只有字符串正文的记录按未命中处理。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。详情见 [状态契约](../standard/state-and-effects.md)。
+`loadStoredChapterContent` 在 `refresh` 未开启时按 ContentIdentity 读取缓存；命中有效记录直接返回，未命中才 reserve 新 ContentSaveToken。缓存记录必须同时包含正文、`finalUrl`、章节更新和歌词/弹幕附加数据，旧的只有字符串正文的记录按未命中处理。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。详情见 [状态契约](../standard/state-and-effects.md)。
 
 提交顺序固定为：
 

@@ -28,6 +28,7 @@
 | `loadBookDetails(ports, input)` | `WorkflowPorts`、`DetailInput`（candidates、canReName） | `RuntimeResult<WorkflowPage<BookMetadata>>` | package |
 | `loadTableOfContents(ports, input)` | `ReadingPorts`、`TocInput`（book、refresh、maxPages） | `RuntimeResult<WorkflowPage<Chapter>>` | package |
 | `loadChapterContent(ports, input)` | `ReadingPorts`、`ContentInput`（chapter、tocHtml、nextChapterUrl、replacements） | `RuntimeResult<ChapterContent>` | package |
+| `loadStoredChapterContent(ports, input)` | `ReadingPorts`、`StoredContentInput`（正文输入、`ContentIdentity`、`ContentStore`、可选 refresh） | `RuntimeResult<ChapterContent>`；命中不请求网络，提交后重读 | package + host store |
 | `loadChapterContentBatch(ports, input)` | `ReadingPorts`、`ContentBatchInput`（book、chapters、可选 `cacheContent` 宿主回调） | `RuntimeResult<ChapterContentBatchResult>`；已回存项与单章兜底结果按输入顺序返回 | package |
 | `decodeImage(ports, input)` | `WorkflowPorts`、`ImageDecodeInput`（source、src、bytes、isCover、book、resultInputKind、javascriptBudget、signal） | `RuntimeResult<Uint8Array>`；失败时不返回原密文 | package |
 | `refreshSubscription` | 订阅 revision/baseline、本地快照 | [订阅流程](../flows/source-subscriptions.md)定义的 diff 与提交计划；不调度、不保存 | package |
@@ -37,6 +38,8 @@
 声明式 `ruleContent.subContent` 会把在线文本副文并入 `ChapterContent.pages/raw/cleaned`；音频歌词或视频弹幕通过 `ChapterContent.auxiliary` 返回，并在返回的 `ChapterContent.chapter.variable` 中更新 `lyric` 或 `danmaku`。辅助字段是章节变量的便捷投影，持久化以返回章节变量为准。声明式正文工作流不修改调用方传入的章节对象；source-core 不直接持久化章节，应用适配器负责保存这些字段。JS 源 `getContent` 沿用其函数返回，不额外运行声明式副文规则。
 
 `decodeImage` 只解释图片解密规则，不下载或缓存图片。`isCover` 选择 `coverDecodeJs`，否则选择 `ruleContent.imageDecode`；规则缺省时原样返回输入 bytes。正文图片脚本把 `result` 作为 `Uint8Array` 接收；封面默认按 Android 图片加载路径把 `result` 暴露为常用 `InputStream` 兼容对象，也可用 `resultInputKind: 'bytes'` 显式选择字节数组形式。规则必须返回 `Uint8Array`，执行失败、宿主能力缺失和取消都可从 `RuntimeResult.status` 区分。`javascriptBudget` 可按调用方策略覆盖宿主默认输入、输出、内存和时限；实际网络下载、文件/图片缓存和失败后的缓存策略由调用方负责。
+
+`loadStoredChapterContent` 是最终正文的 cache-first 编排入口：它按 `ContentIdentity` 读取宿主 `ContentStore`，命中有效记录时不请求网络；未命中或 `refresh=true` 时执行 `loadChapterContent`，再用 `ContentSaveToken` 条件提交正文、最终响应 URL、章节元数据和副内容，并在提交后重读。宿主返回 `stale`、`rejected` 或 `unknown` 时不覆盖较新正文，当前结果仍可交付并带 `partial`/`cache-failed` 诊断。`loadChapterContent` 仍是纯解析入口，不直接读写存储。
 
 `loadChapterContentBatch` 接收调用方筛出的缓存未命中章节，忽略卷节点，按配置的 `maxBatchSize` 分组，运行普通源 `ruleContent.contentBatch` 或 JS 源 `getContentBatch(chapters, book)`，并将 `java.cacheContent(chapter, content)` 接到调用方提供的 `cacheContent(chapter, content, signal)` 回调。核心按章节 `index` 识别对象、只接受唯一命中的 URL，先应用书源 `replaceRegex`，再让宿主逐章提交。缺少批量函数、脚本失败或未回存的章节会走 `loadChapterContent` 单章兜底；已成功回存的项目保留。回调返回 `false` 表示宿主拒绝当前写入，核心跳过该章兜底以免覆盖更新后的正文。未提供缓存回调时会跳过批量脚本、返回单章解析结果且不写入缓存。每次脚本最多接收 50 章。
 
@@ -69,7 +72,7 @@ export interface RuntimeResult<T> {
 流程入口的第一个参数是端口对象，不是可选依赖注入容器：
 
 - `WorkflowPorts`：`network: NetworkHost`、`rules: WorkflowRulePort`、可选请求适配器 `request` / 响应解码器 `decodeResponse`。默认请求与 Node 请求适配都使用 `SourceRequestRuntime` 的请求语义。
-- `ReadingPorts`：在 `WorkflowPorts` 上增加可选 `ContentCache`。
+- `ReadingPorts`：在 `WorkflowPorts` 上保留批量流程的兼容 `ContentCache` 字段；最终正文必须使用 `ContentStore`，原始页面缓存不再由目录/正文流程读取或写入。
 
 Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委托给 `SourceRuleRuntime`，`SourceRequestHost` 委托给 `SourceRequestRuntime`；Node 包提供 `NodeNetworkHost`、HTML/JSONPath/XPath 解析器、`QuickJSJavaScriptHost`、`NodeCookieStore`、`NodeCharsetCodec` 等平台能力。端口语义见[宿主接口](runtime-host-interfaces.md)。
 
@@ -87,7 +90,7 @@ Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委�
 应用读取书源快照与用户输入
   -> 按 enabled、分组或用户选择确定范围
   -> 组合 Node 平台能力并构造 SourceRuleHost / SourceRequestHost（或等价 WorkflowPorts）与 AbortSignal
-  -> 调用 discoverBooks / searchBooks / loadBookDetails / loadTableOfContents / loadChapterContent
+  -> 调用 discoverBooks / searchBooks / loadBookDetails / loadTableOfContents / loadStoredChapterContent
   -> 处理 RuntimeResult 的 status、value、diagnostics、trace
   -> 应用自行提交书架、阅读进度等数据
   -> 等待请求、脚本与并发任务释放
@@ -106,7 +109,7 @@ Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委�
 1. 用户导入书源。应用把原文交给 `importSources` 解析和诊断，展示候选与冲突；用户确认后应用写入自己的存储。
 2. 用户搜索或选择发现分类。应用读取书源快照，调用 `searchBooks` 或 `discoverBooks`。
 3. 用户打开一本书。应用调用 `loadBookDetails`；需要章节时调用 `loadTableOfContents`。
-4. 用户打开章节。应用先查自己的正文缓存；未命中时调用 `loadChapterContent`。缓存键与版本由应用持有；标准侧 `ContentSaveToken` 契约见 [状态与副作用](../standard/state-and-effects.md)，package 内核尚未导出该令牌类型。
+4. 用户打开章节。应用构造包含书源指纹、目录 revision 和章节身份的 `ContentIdentity`，调用 `loadStoredChapterContent`；CLI 的 `ReaderStorage.contentStore(bookId)` 负责 token、条件写和原子文件替换。需要预览或强制刷新时传入 `refresh=true`。
 5. 订阅到期时，应用调度刷新；`refreshSubscription` 生成三方差异，应用确认后自行提交。
 
 书架、阅读器展示和阅读进度属于应用层；`apps/reader-cli` 已实现本地 JSON 存储，不经过 Supabase 或 Repository 端口。

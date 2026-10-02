@@ -25,7 +25,7 @@
 
 ## 多页和顺序
 
-- `TocInput.refresh=true` 跳过详情阶段暂存的 `tocHtml` 和每页的响应缓存读取，请求成功后仍更新缓存；默认读取可用缓存。
+- `TocInput.refresh=true` 跳过详情阶段的临时 `tocHtml` 复用；目录/正文流程不再读取或写入原始页面缓存。详情阶段只有同一次操作内且 `book.bookUrl === book.tocUrl` 的 `tocHtml` 可以复用。
 - 后续 URL 只有一个时串行跟随，直到空 URL 或遇到已访问 URL；
 - 多个后续 URL 时并发请求，mapAsync 按输入顺序收集单页结果，不按网络完成顺序收集；
 - 初始 `chapterList` 的 `+` 只表示去掉控制前缀；`-` 会设置目录流程的反转标志，但不会立即反转每个页面的提取结果；
@@ -51,9 +51,11 @@
   -> readConfig.reverseToc 书籍级反转
   -> 重新编号
   -> formatJs
-  -> 更新 Book 目录统计与旧章节元数据
-  -> 返回章节列表和 Book 更新
+  -> 返回章节列表
+  -> 应用层 reconcile 旧章节元数据并在同一写锁内保存目录快照与书籍 patch
 ```
+
+当前 TypeScript 入口返回 `RuntimeResult<WorkflowPage<Chapter>>`；下面的 `ChapterListResult` 是 Android/统一门面目标形状，用来说明应用提交时需要补齐的领域信息，不是 `source-core` 的实际返回类型。
 
 ```ts
 export interface ChapterListResult {
@@ -84,7 +86,7 @@ export interface ChapterListResult {
 
 核心状态为 `created -> page-loading -> page-parsing -> collecting -> ordered -> completed`，应用提交在返回后单独进行。分页失败或取消不提交不完整目录。单 URL 分支以后只跟随首个下一页；多 URL 分支只收集这一批返回的章节，不递归展开每页新 URL。FlowExtensions.mapAsync 按发送 deferred 的输入顺序 await，后页先完成也不提前合并。
 
-提交前必须完成空标题过滤、URL 占位、VIP/购买标记、去重、编号和标题格式化。提交会更新 `durChapterTitle`、`latestChapterTitle`、`lastCheckTime` 和 `totalChapterNum`；仅在 `totalChapterNum < list.size`（发现新章节）时更新 `lastCheckCount` 和 `latestChapterTime`；启用章节字数时，还要按索引与标题把已有章节的 `wordCount`、`variable`、`imgUrl` 合并回新列表。核心库返回这些更新和章节列表，宿主负责数据库事务或其他持久化。任何一步失败都不能只保存统计字段而丢失章节列表的一致性。
+提交前必须完成空标题过滤、URL 占位、VIP/购买标记、去重、编号和标题格式化。`reconcileTableOfContents` 会更新 `durChapterTitle`、`latestChapterTitle`、`lastCheckTime` 和 `totalChapterNum`；仅在 `totalChapterNum < list.size`（发现新章节）时更新 `lastCheckCount` 和 `latestChapterTime`；启用章节字数时，还要按索引与标题把已有章节的 `wordCount`、`variable`、`imgUrl` 合并回新列表。核心 reconcile 是纯函数，宿主负责把章节快照与书籍 patch 放入同一写锁。任何一步失败都不能只保存统计字段而丢失章节列表的一致性。
 
 目录顺序的最小真值表如下，`P` 表示页面解析后收集的顺序：
 
@@ -96,7 +98,7 @@ export interface ChapterListResult {
 
 当 `readConfig.reverseToc=true` 时，最终结果再反转一次。多页目录还要先按当前实现收集页面结果，再执行上面的整体顺序处理，不能在每页解析时提前反转。
 
-真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。输入需要旧目录及 `tocRevision`，才能合并元数据和拒绝并发旧写；输出更新书籍统计与完整目录，由应用在同一提交边界保存，见 [状态契约](../standard/state-and-effects.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
+真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。`loadTableOfContents` 不读取旧目录；CLI 成功后把旧快照和当前阅读投影传给 `reconcileTableOfContents`，再由应用在同一提交边界保存，见 [状态契约](../standard/state-and-effects.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
 
 BookChapter.equals/hashCode 只按 url 判断，因此 LinkedHashSet 不是按全部章节字段判断相等。相同 URL 不同标题也会去重；先反转的分支保留原收集顺序中最后出现的同 URL 章节。不能误用 JSON 深比较。isTrue 对空白及精确字符串 `null` 返回默认 false，trim 后忽略大小写的 false/no/not/0/0.0 为 false，其他文本为 true。
 
