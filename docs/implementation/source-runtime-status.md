@@ -34,7 +34,7 @@
 | D4 | 能力差异 | 尚未实现的公开能力 | 差异待处理 | [差异登记](../divergence/known-divergences.md)，D4 | 每项缺失能力都有独立状态、宿主边界和可识别错误 |
 | D5 | 请求差异 | Android 独立登录凭据头 | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts` | Android 同输入 golden；应用 SecretStore 的保存、删除清理和登录 UI 仍不属于当前包 |
 | D6 | 请求差异 | 默认 User-Agent | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D6；`source-session.test.ts`、`network.test.ts`、`source-request.test.ts` | Android 同输入 golden；Node 默认值与显式覆盖、source/URL Header 优先级已有测试 |
-| D7 | 生命周期差异 | `concurrentRate` 生命周期 | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts`；全量 `pnpm run test` 413/413 | Android 同输入 golden；未来源管理入口补编辑、覆盖、删除和重建源测试 |
+| D7 | 生命周期差异 | `concurrentRate` 生命周期 | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts`；全量 `pnpm run test` 414/414 | Android 同输入 golden；未来源管理入口补编辑、覆盖、删除和重建源测试 |
 | D8 | 安全差异 | HTTP、协议和本地地址限制 | 有意保留 | [差异登记](../divergence/known-divergences.md)，D8 | 安全审查完成并明确兼容边界 |
 | D9 | 请求差异 | bridge 子请求的动态 Header 重入 | 差异待处理 | [差异登记](../divergence/known-divergences.md)，D9 | 重入次数、请求顺序和有界策略有 Android 对照 |
 | D10 | 生命周期差异 | `preUpdateJs` 执行时限 | 差异待处理 | [差异登记](../divergence/known-divergences.md)，D10 | 取消、超时和有界预算完成 Android 对照与取舍记录 |
