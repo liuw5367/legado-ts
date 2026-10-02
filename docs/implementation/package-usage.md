@@ -22,7 +22,7 @@
 | `resolveSourceRequestUrl` / `resolveSourceRequestReference` / `splitSourceRequestUrl` | URL 规则相关输入 | 展开后的 URL 或结构化错误 | package |
 | `replaceFont` | 文本与错误/正确字体映射 | 按 glyph 轮廓替换文字 | package |
 | `discoverBooks(ports, input)` | `WorkflowPorts`、`DiscoveryInput`（source、cursor、budget、signal） | `RuntimeResult<WorkflowPage<BookCandidate>>` | package |
-| `searchBooks(ports, input)` | `WorkflowPorts`、`SearchInput`（source、keyword、cursor） | 同上 | package |
+| `searchBooks(ports, input)` | `WorkflowPorts`、`SearchInput`（source、keyword、cursor、可选纯候选策略） | 同上 | package |
 | `groupSearchCandidates` | 关键词与带 `BookCandidate`、`arrivalIndex` 的候选 | 按书名/作者身份归并并稳定排序的分组 | package |
 | `searchMatchRank` / `isBookTitleMatch` / `isAuthorMatch` | 搜索词或候选字段 | 核心匹配等级与规范化比较结果 | package |
 | `loadBookDetails(ports, input)` | `WorkflowPorts`、`DetailInput`（candidates、canReName） | `RuntimeResult<WorkflowPage<BookMetadata>>` | package |

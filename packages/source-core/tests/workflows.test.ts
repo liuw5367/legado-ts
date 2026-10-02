@@ -174,6 +174,39 @@ test('列表候选各自复制 list 阶段的 ruleData，变量写入不会跨�
   assert.deepEqual(result.value?.items.map((item) => item.variable), ['seed:first', 'seed'])
 })
 
+test('搜索候选策略可过滤结果并在命中后提前停止当前列表页', async () => {
+  const policySource = {
+    ...source,
+    searchUrl: '/search?page={{page}}',
+    ruleSearch: { bookList: 'list', bookName: 'name', bookAuthor: 'author', bookUrl: 'url', nextPage: 'next' },
+  } as unknown as NormalizedSource
+  const evaluated: string[] = []
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      if (request.rule === 'list') return { status: 'success', value: [{ name: 'Skip', author: 'Other', url: '/skip' }, { name: 'Wanted', author: 'Author', url: '/wanted' }, { name: 'Never read', author: 'Author', url: '/never' }] }
+      if (request.rule === 'name') return { status: 'success', value: (request.content as { name: string }).name }
+      if (request.rule === 'author') return { status: 'success', value: (request.content as { author: string }).author }
+      if (request.rule === 'url') return { status: 'success', value: (request.content as { url: string }).url }
+      if (request.rule === 'next') return { status: 'success', value: '/search?page=2' }
+      return { status: 'empty', value: null }
+    },
+  }
+  const accepted: string[] = []
+  const result = await searchBooks(workflowPorts, {
+    source: policySource,
+    keyword: 'Wanted',
+    acceptCandidate: (candidate) => candidate.author === 'Author',
+    shouldStop: (candidate, count) => { accepted.push(`${candidate.name}:${count}`); return candidate.name === 'Wanted' },
+  })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value?.items.map((item) => item.name), ['Wanted'])
+  assert.deepEqual(accepted, ['Wanted:1'])
+  assert.equal(result.value?.nextCursor, undefined)
+  assert.deepEqual(evaluated, ['list', 'name', 'author', 'url', 'name', 'author', 'url'])
+})
+
 test('搜索工作流按 Android 首页页码展开关键词并区分空关键词', async () => {
   const calls: string[] = []
   const result = await searchBooks(ports(calls), { source, keyword: '中文 test' })

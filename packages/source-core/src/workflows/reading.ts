@@ -41,11 +41,19 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       },
       reGetBook: async (signal: AbortSignal, scriptBook: unknown): Promise<unknown> => {
         absorbScriptBook(scriptBook)
-        const searched = await searchBooks(ports, { source: input.source, keyword: book.name ?? '', ...actionOptions(signal) })
+        const expectedName = book.name ?? ''
+        const expectedAuthor = book.author ?? ''
+        const searched = await searchBooks(ports, {
+          source: input.source,
+          keyword: expectedName,
+          acceptCandidate: (candidate) => candidate.name === expectedName && (candidate.author ?? '') === expectedAuthor,
+          shouldStop: () => true,
+          ...actionOptions(signal),
+        })
         trace.push(...searched.trace)
-        diagnostics.push(...searched.diagnostics)
-        const exact = searched.value?.items.find((candidate) => candidate.name === book.name && (candidate.author ?? '') === (book.author ?? ''))
+        const exact = searched.value?.items[0]
         if (exact === undefined) throw workflowActionError(searched.status, `没有搜索到 ${book.name ?? ''}(${book.author ?? ''})`)
+        diagnostics.push(...searched.diagnostics)
         const candidate: BookMetadata = {
           ...book,
           bookUrl: exact.bookUrl,

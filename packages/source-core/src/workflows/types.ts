@@ -251,6 +251,10 @@ export interface SearchInput extends WorkflowOptions {
   source: NormalizedSource
   keyword: string
   cursor?: PageCursor
+  /** 只接收满足调用方纯判断的候选；网络、存储和副作用不得放入回调。 */
+  acceptCandidate?: (candidate: BookCandidate) => boolean
+  /** 接收候选后提前结束当前列表页；返回结果不再声明下一页游标。 */
+  shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean
 }
 
 export interface DetailInput extends WorkflowOptions {

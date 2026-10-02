@@ -28,11 +28,11 @@ export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput)
 export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 1 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
   const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 1
-  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems)
+  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems, input.acceptCandidate, input.shouldStop)
   return listWorkflow(ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword, 'ruleSearch')
 }
 
-async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSource, name: 'search' | 'explore', firstArg: string | undefined, cursor: { index: number; token?: string }, signal: AbortSignal | undefined, stage: 'search' | 'discover', maxItems?: number): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSource, name: 'search' | 'explore', firstArg: string | undefined, cursor: { index: number; token?: string }, signal: AbortSignal | undefined, stage: 'search' | 'discover', maxItems?: number, acceptCandidate?: (candidate: BookCandidate) => boolean, shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   if (name === 'explore' && firstArg === undefined) {
@@ -64,8 +64,9 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
     return { status: 'failed', value: null, diagnostics, trace }
   }
   const books: BookCandidate[] = []
-  const rowLimit = maxItems === undefined ? rows.length : Math.max(0, maxItems)
-  for (const [itemIndex, row] of rows.slice(0, rowLimit).entries()) {
+  let stopped = false
+  for (const [itemIndex, row] of rows.entries()) {
+    if (maxItems !== undefined && books.length >= Math.max(0, maxItems)) break
     if (typeof row !== 'object' || row === null || Array.isArray(row)) continue
     const record = row as Record<string, unknown>
     const nameValue = primitiveText(record.name)?.trim() ?? ''
@@ -86,11 +87,21 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
     setOptionalText(candidate, 'coverUrl', record.coverUrl, source.bookSourceUrl)
     setOptionalText(candidate, 'tocUrl', record.tocUrl, bookUrl)
     setOptionalText(candidate, 'variable', record.variable)
-    books.push(candidate)
-    trace.push({ stage, event: 'candidate', target: `candidate:${books.length - 1}`, itemIndex })
+    try {
+      if (acceptCandidate !== undefined && !acceptCandidate(candidate)) continue
+      books.push(candidate)
+      trace.push({ stage, event: 'candidate', target: `candidate:${books.length - 1}`, itemIndex })
+      if (shouldStop?.(candidate, books.length) === true) {
+        stopped = true
+        break
+      }
+    } catch (error) {
+      diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
   }
   if (books.length === 0) diagnostics.push({ code: 'empty-page', stage, message: 'JS 书源没有可用候选', retryable: false })
-  const nextCursor = books.length > 0 ? { index: cursor.index + 1 } : undefined
+  const nextCursor = books.length > 0 && !stopped ? { index: cursor.index + 1 } : undefined
   const value = pageResult(cursor, books, nextCursor)
   return { status: statusFromDiagnostics(diagnostics, books.length), value, diagnostics, trace }
 }
@@ -151,6 +162,8 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     return { status: 'failed', value: null, diagnostics, trace }
   }
   const keywordReplacements = keyword === undefined ? {} : { key: keyword, keyword }
+  const acceptCandidate = stage === 'search' && 'acceptCandidate' in options ? options.acceptCandidate : undefined
+  const shouldStop = stage === 'search' && 'shouldStop' in options ? options.shouldStop : undefined
   let requestUrl: string
   if (pageCursor.token !== undefined) {
     try {
@@ -188,6 +201,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   const maxItems = options.maxItems
   const pattern = sourceString(source, 'bookUrlPattern')
   const candidates: BookCandidate[] = []
+  let stopped = false
   // searchUrl 命中 bookUrlPattern 时整页按详情页解析；Android 的这个分支只在搜索里判断，
   // 但「已配置 pattern 就不做空列表回退」对搜索和发现都生效（BookList.kt:64,100）。
   const patternMatch = pattern === undefined ? undefined : matchesBookUrlPattern(pattern, page.url)
@@ -247,7 +261,6 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       continue
     }
     identities.add(identityKey)
-    trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex })
     const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
     if (candidateRuleData.variable !== undefined && candidateRuleData.variable.length > 0) candidate.variable = candidateRuleData.variable
     if (author.length > 0) candidate.author = author
@@ -258,7 +271,18 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     if (fields.wordCount !== undefined) candidate.wordCount = formatWordCount(fields.wordCount)
     if (fields.lastChapter !== undefined) candidate.lastChapter = fields.lastChapter
     if (fields.updateTime !== undefined) candidate.updateTime = fields.updateTime
-    candidates.push(candidate)
+    try {
+      if (acceptCandidate !== undefined && !acceptCandidate(candidate)) continue
+      candidates.push(candidate)
+      trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length - 1}`, itemIndex })
+      if (shouldStop?.(candidate, candidates.length) === true) {
+        stopped = true
+        break
+      }
+    } catch (error) {
+      diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
   }
   if (candidates.length === 0 && (detailPage || (rawItems.length === 0 && pattern === undefined))) {
     // 列表为空（或命中 bookUrlPattern）时，书源把整个响应当作详情页。
@@ -269,16 +293,24 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
     if (fallback.candidate !== undefined) {
-      trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex: 0 })
-      candidates.push(fallback.candidate)
+      try {
+        if (acceptCandidate === undefined || acceptCandidate(fallback.candidate)) {
+          trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex: 0 })
+          candidates.push(fallback.candidate)
+          if (shouldStop?.(fallback.candidate, candidates.length) === true) stopped = true
+        }
+      } catch (error) {
+        diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex: 0, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
+        return { status: 'failed', value: null, diagnostics, trace }
+      }
     }
   }
   if (reverse) candidates.reverse()
   if (candidates.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '列表没有可用候选', retryable: false })
   // Android 由调用方递增页码继续翻页；只有地址模板引用页码时下一页才是不同的请求。
   let nextCursor: { index: number; token?: string } | undefined
-  if (candidates.length > 0 && pageCursor.token === undefined && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
-  if (nextRule !== undefined) {
+  if (!stopped && candidates.length > 0 && pageCursor.token === undefined && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
+  if (!stopped && nextRule !== undefined) {
     const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { bindings: { ruleData: listRuleData } })
     if (next.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'nextPage', message: '工作流已取消', retryable: false })
@@ -288,7 +320,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       const tokenText = textValue(next.value).trim()
       if (tokenText.length > 0) {
         try {
-          nextCursor = { index: pageCursor.index + 1, token: resolveSourceRequestReference(tokenText, page.url) }
+          if (!stopped) nextCursor = { index: pageCursor.index + 1, token: resolveSourceRequestReference(tokenText, page.url) }
         } catch {
           diagnostics.push({ code: 'item-skipped', stage, field: 'nextPage', message: 'nextPage 返回了无效的下一页 URL', retryable: false })
         }
