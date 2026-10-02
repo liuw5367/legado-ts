@@ -1,6 +1,6 @@
 import type { BookCandidate } from './types.ts'
 
-export type SearchMatchRank = 'exact' | 'contains' | 'other'
+export type SearchMatchRank = 'exact' | 'kind' | 'contains' | 'other'
 
 export interface SearchAggregationItem {
   candidate: BookCandidate
@@ -17,15 +17,13 @@ export interface SearchAggregationGroup<T extends SearchAggregationItem> {
   firstArrivalIndex: number
 }
 
-/** 按 CLI 当前行为归并跨源候选；缺少作者时仅在同一来源、同一 URL 内归并。 */
-export function groupSearchCandidates<T extends SearchAggregationItem>(keyword: string, results: readonly T[]): SearchAggregationGroup<T>[] {
+/** 按 Android SearchModel 的四组规则归并跨源候选；precision 为 true 时丢弃 other 组。 */
+export function groupSearchCandidates<T extends SearchAggregationItem>(keyword: string, results: readonly T[], precision = false): SearchAggregationGroup<T>[] {
   const groups = new Map<string, SearchAggregationGroup<T>>()
   for (const result of [...results].sort((left, right) => left.arrivalIndex - right.arrivalIndex)) {
-    const title = normalizeSearchTitle(result.candidate.name)
-    const author = normalizeSearchAuthor(result.candidate.author)
-    const key = title.length > 0 && author.length > 0
-      ? `title-author:${title}\u0000${author}`
-      : `edition:${result.candidate.sourceId}\u0000${result.candidate.bookUrl}`
+    const rank = searchMatchRank(keyword, result.candidate.name, result.candidate.author, result.candidate.kind)
+    if (precision && rank === 'other') continue
+    const key = searchGroupKey(rank, result.candidate.name, result.candidate.author)
     const existing = groups.get(key)
     if (existing === undefined) {
       groups.set(key, {
@@ -33,20 +31,23 @@ export function groupSearchCandidates<T extends SearchAggregationItem>(keyword: 
         candidate: result.candidate,
         first: result,
         candidates: [result],
-        rank: searchMatchRank(keyword, result.candidate.name),
+        rank,
         firstArrivalIndex: result.arrivalIndex,
       })
     } else existing.candidates.push(result)
   }
-  return [...groups.values()].sort((left, right) => rankValue(left.rank) - rankValue(right.rank) || left.firstArrivalIndex - right.firstArrivalIndex)
+  return [...groups.values()].sort((left, right) => rankValue(left.rank) - rankValue(right.rank) || right.candidates.length - left.candidates.length || left.firstArrivalIndex - right.firstArrivalIndex)
 }
 
-export function searchMatchRank(keyword: string, name: string | undefined): SearchMatchRank {
-  const expected = normalizeSearchTitle(keyword)
-  const actual = normalizeSearchTitle(name)
-  if (expected.length > 0 && actual === expected) return 'exact'
-  if (expected.length > 0 && actual.includes(expected)) return 'contains'
+export function searchMatchRank(keyword: string, name: string | undefined, author?: string, kind?: string): SearchMatchRank {
+  if (keyword.length > 0 && (name === keyword || author === keyword)) return 'exact'
+  if (keyword.length > 0 && kind?.includes(keyword) === true) return 'kind'
+  if (keyword.length > 0 && (name?.includes(keyword) === true || author?.includes(keyword) === true)) return 'contains'
   return 'other'
+}
+
+function searchGroupKey(rank: SearchMatchRank, name: string | undefined, author: string | undefined): string {
+  return JSON.stringify([rank, name ?? null, author ?? null])
 }
 
 export function normalizeSearchTitle(value: string | undefined): string {
@@ -71,5 +72,5 @@ export function isAuthorMatch(candidate: string | undefined, expected: string | 
 }
 
 function rankValue(rank: SearchMatchRank): number {
-  return rank === 'exact' ? 0 : rank === 'contains' ? 1 : 2
+  return rank === 'exact' ? 0 : rank === 'kind' ? 1 : rank === 'contains' ? 2 : 3
 }

@@ -5,8 +5,8 @@ import type { SearchOperationResult, SearchResult, SearchResultGroup } from './a
 export { isAuthorMatch, isBookTitleMatch, searchMatchRank }
 export const normalizeAuthor = normalizeSearchAuthor
 
-export function groupSearchResults(keyword: string, results: readonly SearchResult[]): SearchResultGroup[] {
-  return groupSearchCandidates(keyword, results).map((group) => ({
+export function groupSearchResults(keyword: string, results: readonly SearchResult[], precision = false): SearchResultGroup[] {
+  return groupSearchCandidates(keyword, results, precision).map((group) => ({
     key: group.key,
     candidate: group.candidate,
     source: group.first.source,
@@ -17,7 +17,7 @@ export function groupSearchResults(keyword: string, results: readonly SearchResu
 }
 
 export function searchMatchRankLabel(rank: SearchMatchRank): string {
-  return rank === 'exact' ? '完全匹配' : rank === 'contains' ? '包含关键词' : '其他'
+  return rank === 'exact' ? '完全匹配' : rank === 'kind' ? '分类命中' : rank === 'contains' ? '包含关键词' : '其他'
 }
 
 export function filterSearchSnapshot(snapshot: SearchOperationResult, expectedTitle: string, expectedAuthor: string | undefined): SearchOperationResult {

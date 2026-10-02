@@ -220,7 +220,7 @@ export function searchHeaderStatus(state: SearchUiState, progress: SearchProgres
 }
 
 export function searchMatchLabel(rank: SearchResultGroup['rank']): string {
-  return rank === 'exact' ? '完全匹配' : rank === 'contains' ? '包含关键词' : '其他'
+  return rank === 'exact' ? '完全匹配' : rank === 'kind' ? '分类命中' : rank === 'contains' ? '包含关键词' : '其他'
 }
 
 // Chapter mapping ignores punctuation and spacing so equivalent source titles can be aligned.

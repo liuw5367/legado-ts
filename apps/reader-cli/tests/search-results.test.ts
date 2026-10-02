@@ -15,16 +15,16 @@ function result(name: string, author: string | undefined, arrivalIndex: number, 
   }
 }
 
-test('搜索结果分组精确匹配优先，缺失作者不合并', () => {
+test('搜索结果分组精确匹配优先，缺失作者按 Android 语义合并', () => {
   const sameBook = result('三体', '刘慈欣', 1)
   const sameBookFromAnotherSource = result(' 三体！', '刘慈欣', 2, 'source-b')
   const missingAuthor = result('三体', undefined, 3, 'source-c')
   const groups = groupSearchResults('三体', [missingAuthor, sameBookFromAnotherSource, sameBook])
 
-  assert.equal(groups.length, 2)
-  assert.equal(groups[0]?.candidates.length, 2)
-  assert.equal(groups[0]?.candidate.bookUrl, sameBook.candidate.bookUrl)
-  assert.equal(groups[1]?.candidate.bookUrl, missingAuthor.candidate.bookUrl)
+  assert.equal(groups.length, 3)
+  assert.equal(groups.find((group) => group.candidate.bookUrl === sameBook.candidate.bookUrl)?.candidates.length, 1)
+  assert.equal(groups.find((group) => group.candidate.bookUrl === sameBookFromAnotherSource.candidate.bookUrl)?.rank, 'contains')
+  assert.equal(groups.find((group) => group.candidate.bookUrl === missingAuthor.candidate.bookUrl)?.candidates.length, 1)
 })
 
 test('严格换源匹配要求规范化后的书名和作者都非空', () => {
