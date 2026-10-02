@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { KeyedConcurrencyHost, loadChapterContent, loadTableOfContents } from '../src/index.ts'
+import { KeyedConcurrencyHost, loadChapterContent, loadStoredChapterContent, loadTableOfContents } from '../src/index.ts'
 import { formatChapterBody, unescapeHtml4 } from '../src/workflows/html-format.ts'
-import type { BookMetadata, ChapterIdentity, NormalizedSource, ReadingPorts } from '../src/index.ts'
+import type { BookMetadata, Chapter, ChapterIdentity, ContentCacheRecord, ContentIdentity, ContentSaveToken, NormalizedSource, ReadingPorts } from '../src/index.ts'
 
 const source = {
   bookSourceUrl: 'https://source.test',
@@ -72,6 +72,49 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
   ])
   assert.equal(calls.length, 2)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
+})
+
+test('最终正文存储命中时不请求网络，未命中提交后重读并保留最终地址', async () => {
+  const calls: string[] = []
+  const chapter: Chapter = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0, title: '第一章', rawFields: {}, traceRef: 'toc:0' }
+  const identity: ContentIdentity = { sessionId: 'session-1', sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterKey: 'chapter-1', tocRevision: 'toc-1', chapterIndex: 0, resourceKind: 'text', sourceRevision: 'source-1', semanticVersion: 'content-v1' }
+  let cached: ContentCacheRecord | undefined
+  let reserveCount = 0
+  let writeCount = 0
+  const store = {
+    read: async () => cached,
+    reserve: async (value: ContentIdentity, operationId: string): Promise<ContentSaveToken> => ({ identity: value, operationId, writeVersion: `write-${++reserveCount}` }),
+    write: async (input: { token: ContentSaveToken; record: ContentCacheRecord }): Promise<{ status: 'committed'; committed: true; operationId: string; resourceKey: string }> => {
+      writeCount += 1
+      cached = input.record
+      return { status: 'committed', committed: true, operationId: input.token.operationId, resourceKey: input.token.writeVersion }
+    },
+  }
+  const first = await loadStoredChapterContent(readingPorts(calls), { source, book, chapter, contentStore: store, contentIdentity: identity, operationId: 'op-1' })
+  assert.equal(first.status, 'success')
+  assert.equal(first.value?.finalUrl, 'https://source.test/c1?page=2')
+  assert.equal(calls.length, 2)
+  assert.equal(writeCount, 1)
+  const second = await loadStoredChapterContent(readingPorts(calls), { source, book, chapter, contentStore: store, contentIdentity: identity, operationId: 'op-2' })
+  assert.equal(second.status, 'success')
+  assert.equal(second.value?.cleaned, first.value?.cleaned)
+  assert.equal(calls.length, 2)
+  assert.equal(reserveCount, 1)
+})
+
+test('最终正文存储的过期写入不覆盖本次正文，并明确报告 cache-failed', async () => {
+  const calls: string[] = []
+  const chapter: Chapter = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0, title: '第一章', rawFields: {}, traceRef: 'toc:0' }
+  const identity: ContentIdentity = { sessionId: 'session-1', sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterKey: 'chapter-1', tocRevision: 'toc-1', chapterIndex: 0, resourceKind: 'text', sourceRevision: 'source-1', semanticVersion: 'content-v1' }
+  const store = {
+    read: async () => undefined,
+    reserve: async (value: ContentIdentity, operationId: string): Promise<ContentSaveToken> => ({ identity: value, operationId, writeVersion: 'expired' }),
+    write: async (input: { token: ContentSaveToken }): Promise<{ status: 'stale'; committed: false; operationId: string; resourceKey: string; reason: string }> => ({ status: 'stale', committed: false, operationId: input.token.operationId, resourceKey: 'chapter-1', reason: 'newer write' }),
+  }
+  const result = await loadStoredChapterContent(readingPorts(calls), { source, book, chapter, contentStore: store, contentIdentity: identity })
+  assert.equal(result.status, 'partial')
+  assert.equal(typeof result.value?.cleaned, 'string')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'cache-failed' && diagnostic.message.includes('newer write')))
 })
 
 test('目录下一页规则失败或缺少宿主能力时终止并丢弃半份目录', async () => {

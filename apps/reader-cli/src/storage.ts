@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ContentCache } from '@legado/source-core'
+import type { ContentCache, ContentCacheRecord, ContentIdentity, ContentSaveToken, ContentStore, ContentWriteInput, StoreWriteResult } from '@legado/source-core'
 import { CacheStore } from './cache-store.ts'
 import { JsonStore } from './json-store.ts'
 import { normalizeReaderSettings } from './reader-settings.ts'
 import {
   defaultStoragePaths,
   normalizeSearchName,
+  sha256,
   type BookDocument,
   type BookshelfEntry,
   type HomeBookView,
@@ -51,6 +52,14 @@ interface Manifest {
   storageVersion: 1
   createdAt: string
   lastSuccessfulStartAt: string
+}
+
+interface StoredContentState {
+  identity: ContentIdentity
+  record?: ContentCacheRecord
+  writeVersion?: string
+  operationId?: string
+  expiresAt?: number
 }
 
 const MAX_SEARCH_HISTORY = 100
@@ -280,6 +289,16 @@ export class ReaderStorage {
     })
   }
 
+  /** 返回绑定到单本书的数据存储；章节正文不会进入 source-core 的原始页面缓存。 */
+  public contentStore(bookId: string): ContentStore {
+    const safeBookId = safeUuid(bookId)
+    return {
+      read: (identity, signal) => this.readContentRecord(safeBookId, identity, signal),
+      reserve: (identity, operationId, signal) => this.reserveContentWrite(safeBookId, identity, operationId, signal),
+      write: (input, signal) => this.writeContentRecord(safeBookId, input, signal),
+    }
+  }
+
   public async findBookIdByEdition(sourceId: string, bookUrl: string): Promise<string | undefined> {
     const books = await this.listBooks()
     for (const book of books) {
@@ -431,6 +450,71 @@ export class ReaderStorage {
   private tocSnapshotPath(bookId: string, edition: string): string {
     return join(this.paths.dataRoot, 'books', safeUuid(bookId), 'toc', `${safeDigest(edition)}.json`)
   }
+
+  private contentPath(bookId: string, identity: ContentIdentity): string {
+    return join(this.paths.dataRoot, 'books', safeUuid(bookId), 'content', `${sha256(contentIdentityKey(identity))}.json`)
+  }
+
+  private async readContentState(bookId: string, identity: ContentIdentity): Promise<StoredContentState | undefined> {
+    const state = await this.jsonStore.readOptional<StoredContentState>(this.contentPath(bookId, identity))
+    if (state === undefined || !sameContentIdentity(state.identity, identity)) return undefined
+    return state
+  }
+
+  private async readContentRecord(bookId: string, identity: ContentIdentity, signal?: AbortSignal): Promise<ContentCacheRecord | undefined> {
+    throwIfAborted(signal)
+    const state = await this.readContentState(bookId, identity)
+    throwIfAborted(signal)
+    return state?.record
+  }
+
+  private async reserveContentWrite(bookId: string, identity: ContentIdentity, operationId: string, signal?: AbortSignal): Promise<ContentSaveToken> {
+    throwIfAborted(signal)
+    if (operationId.trim().length === 0) throw new Error('正文缓存操作身份不能为空')
+    const token: ContentSaveToken = { operationId, writeVersion: randomUUID(), identity: { ...identity }, expiresAt: this.now().getTime() + 5 * 60_000 }
+    await this.withWriteLock(async () => {
+      throwIfAborted(signal)
+      const path = this.contentPath(bookId, identity)
+      const previous = await this.jsonStore.readOptional<StoredContentState>(path)
+      const state: StoredContentState = {
+        identity: { ...identity },
+        ...(previous?.record === undefined ? {} : { record: previous.record }),
+        writeVersion: token.writeVersion,
+        operationId: token.operationId,
+        ...(token.expiresAt === undefined ? {} : { expiresAt: token.expiresAt }),
+      }
+      await this.jsonStore.writeFile(path, state)
+    })
+    return token
+  }
+
+  private async writeContentRecord(bookId: string, input: ContentWriteInput, signal?: AbortSignal): Promise<StoreWriteResult> {
+    const resourceKey = sha256(contentIdentityKey(input.token.identity))
+    if (input.token.expiresAt !== undefined && input.token.expiresAt <= this.now().getTime()) {
+      return { status: 'stale', committed: false, operationId: input.token.operationId, resourceKey, reason: '正文缓存写入令牌已过期' }
+    }
+    try {
+      throwIfAborted(signal)
+      return await this.withWriteLock(async () => {
+        throwIfAborted(signal)
+        const path = this.contentPath(bookId, input.token.identity)
+        const state = await this.jsonStore.readOptional<StoredContentState>(path)
+        if (state === undefined || !sameContentIdentity(state.identity, input.token.identity) || state.writeVersion !== input.token.writeVersion || state.operationId !== input.token.operationId) {
+          return { status: 'stale', committed: false, operationId: input.token.operationId, resourceKey, reason: '正文缓存写入版本已变化' }
+        }
+        if (state.expiresAt !== undefined && state.expiresAt <= this.now().getTime()) {
+          return { status: 'stale', committed: false, operationId: input.token.operationId, resourceKey, reason: '正文缓存写入令牌已过期' }
+        }
+        const record = input.saveChapterMetadata ? input.record : { ...input.record, chapter: state.record?.chapter ?? input.record.chapter }
+        const next: StoredContentState = { identity: { ...input.token.identity }, record }
+        await this.jsonStore.writeFile(path, next)
+        return { status: 'committed', committed: true, operationId: input.token.operationId, resourceKey } satisfies StoreWriteResult
+      })
+    } catch (error) {
+      if (signal?.aborted === true) return { status: 'cancelled', committed: false, operationId: input.token.operationId, resourceKey, reason: '正文缓存写入已取消' }
+      return { status: 'unknown', committed: false, operationId: input.token.operationId, resourceKey, reason: error instanceof Error ? error.message : '正文缓存写入结果未知' }
+    }
+  }
 }
 
 function safeUuid(value: string): string {
@@ -441,6 +525,18 @@ function safeUuid(value: string): string {
 function safeDigest(value: string): string {
   if (!/^[a-f0-9]{64}$/u.test(value)) throw new Error('无效的目录版本身份')
   return value
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) throw new DOMException('The operation was aborted', 'AbortError')
+}
+
+function contentIdentityKey(identity: ContentIdentity): string {
+  return [identity.sessionId, identity.sourceId, identity.bookUrl, identity.chapterKey, identity.tocRevision, String(identity.chapterIndex), identity.resourceKind, identity.sourceRevision, identity.semanticVersion].join('\u0000')
+}
+
+function sameContentIdentity(left: ContentIdentity | undefined, right: ContentIdentity): boolean {
+  return left !== undefined && contentIdentityKey(left) === contentIdentityKey(right)
 }
 
 function isUuid(value: string): boolean {

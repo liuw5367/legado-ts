@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { BookCandidate, BookMetadata, Chapter, ChapterContent, NormalizedSource, RuntimeResult, WorkflowPage } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentIdentity, ContentStore, NormalizedSource, RuntimeResult, WorkflowPage } from '@legado/source-core'
 import { ReaderApplication } from '../src/application.ts'
 import type { SearchOperationResult } from '../src/application.ts'
 import type { ReaderSourceSession } from '../src/application.ts'
@@ -33,6 +33,8 @@ class FakeSession implements ReaderSourceSession {
   private readonly onSearchFinish: (() => void) | undefined
   private readonly tocValue: RuntimeResult<WorkflowPage<Chapter>> | undefined
   public readonly contentRefreshes: boolean[] = []
+  public readonly contentIdentities: ContentIdentity[] = []
+  public readonly contentStoreAttached: boolean[] = []
   public closed = false
 
   public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void, tocValue?: RuntimeResult<WorkflowPage<Chapter>>) {
@@ -72,8 +74,10 @@ class FakeSession implements ReaderSourceSession {
     return this.tocValue ?? result<WorkflowPage<Chapter>>('failed', null)
   }
 
-  public async content(chapter: Chapter, _book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean }): Promise<RuntimeResult<ChapterContent>> {
+  public async content(chapter: Chapter, _book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean; contentStore?: ContentStore; contentIdentity?: ContentIdentity }): Promise<RuntimeResult<ChapterContent>> {
     this.contentRefreshes.push(options?.refresh === true)
+    if (options?.contentIdentity !== undefined) this.contentIdentities.push(options.contentIdentity)
+    this.contentStoreAttached.push(options?.contentStore !== undefined)
     if (this.contentValue === undefined) return result<ChapterContent>('failed', null)
     return result('success', { ...this.contentValue, chapter })
   }
@@ -298,6 +302,9 @@ test('刷新正文会把刷新选项传到当前书源并重新请求正文', as
     await application.loadContent(bookId, chapter, edition, undefined, { refresh: true })
     await application.loadContent(bookId, chapter, edition)
     assert.deepEqual(session.contentRefreshes, [true, false])
+    assert.equal(session.contentStoreAttached.every(Boolean), true)
+    assert.equal(session.contentIdentities[0]?.sourceRevision, sourceEntry.fingerprint)
+    assert.equal(session.contentIdentities[0]?.chapterIndex, 0)
     await application.close()
     assert.equal(session.closed, true)
   } finally {

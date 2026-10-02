@@ -1,5 +1,5 @@
-import { discoverBooks, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks, sourceDefinitionFingerprint } from '@legado/source-core'
-import type { BookCandidate, BookMetadata, Chapter, ConcurrencyHost, ContentCache, NormalizedSource, SourceSession as CoreSourceSession } from '@legado/source-core'
+import { discoverBooks, loadBookDetails, loadChapterContent, loadStoredChapterContent, loadTableOfContents, searchBooks } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ConcurrencyHost, ContentIdentity, ContentStore, NormalizedSource, SourceSession as CoreSourceSession, WorkflowPorts } from '@legado/source-core'
 import { createNodeSourceSession } from '@legado/source-node'
 import type { ReaderSourceSession } from './application-model.ts'
 import { ReaderStorage } from './storage.ts'
@@ -49,32 +49,27 @@ export class SourceSession implements ReaderSourceSession {
     const cachedPage = options.refresh !== true && this.tocPage?.bookUrl === book.bookUrl ? this.tocPage : undefined
     const inputBook = cachedPage !== undefined && cachedPage.url === book.tocUrl ? { ...book, tocHtml: cachedPage.html } : book
     capture?.beginStage('toc')
-    const result = await this.core.run((ports) => loadTableOfContents({ ...ports, cache: this.cache }, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.runPerJs === true ? { runPerJs: true } : {}), ...(options.isFromBookInfo === true ? { isFromBookInfo: true } : {}), ...(options.tocCountWords === undefined ? {} : { tocCountWords: options.tocCountWords }), maxPages: 32 }), capture === undefined ? undefined : { requestObserver: capture })
+    const result = await this.core.run((ports) => loadTableOfContents(ports, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.runPerJs === true ? { runPerJs: true } : {}), ...(options.isFromBookInfo === true ? { isFromBookInfo: true } : {}), ...(options.tocCountWords === undefined ? {} : { tocCountWords: options.tocCountWords }), maxPages: 32 }), capture === undefined ? undefined : { requestObserver: capture })
     capture?.recordResult('toc', result, { chapters: result.value?.items.length ?? 0 })
     return result
   }
 
-  public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }, capture?: DebugCapture): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
-    const cache: ContentCache = options?.refresh === true ? { get: async () => undefined, set: (key, value, cacheSignal) => this.cache.set(key, value, cacheSignal) } : this.cache
+  public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string; contentStore?: ContentStore; contentIdentity?: ContentIdentity; operationId?: string; saveChapterMetadata?: boolean }, capture?: DebugCapture): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
     const tocHtml = this.tocPage?.bookUrl === book.bookUrl && chapter.chapterUrl === book.bookUrl ? this.tocPage.html : undefined
     const nextChapterUrl = options?.nextChapterUrl
     capture?.beginStage('content')
-    const result = await this.core.run((ports) => loadChapterContent({ ...ports, cache }, { source: this.source, book, chapter, ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 }), capture === undefined ? undefined : { requestObserver: capture })
+    const run = (ports: WorkflowPorts) => options?.contentStore !== undefined && options.contentIdentity !== undefined
+      ? loadStoredChapterContent(ports, { source: this.source, book, chapter, contentStore: options.contentStore, contentIdentity: options.contentIdentity, ...(options.operationId === undefined ? {} : { operationId: options.operationId }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.saveChapterMetadata === undefined ? {} : { saveChapterMetadata: options.saveChapterMetadata }), ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
+      : loadChapterContent(ports, { source: this.source, book, chapter, ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
+    const result = await this.core.run(run, capture === undefined ? undefined : { requestObserver: capture })
     capture?.recordResult('content', result, { contentCharacters: result.value?.cleaned.length ?? 0 })
     return result
   }
 
-  public readonly cache = {
-    get: async (key: string, signal?: AbortSignal): Promise<string | undefined> => this.cacheStore?.get(key, signal),
-    set: async (key: string, value: string, signal?: AbortSignal): Promise<void> => this.cacheStore?.set(key, value, signal),
-  }
-
-  private cacheStore?: ReturnType<ReaderStorage['workflowCache']>
   private tocPage: { bookUrl: string; url: string; html: string } | undefined
 
-  public attachCache(storage: ReaderStorage): void {
-    this.cacheStore = storage.workflowCache(sourceDefinitionFingerprint(this.source))
-  }
+  /** 保留旧应用门面的生命周期调用；最终正文存储在每次正文请求中按书籍身份注入。 */
+  public attachCache(_storage: ReaderStorage): void {}
 
   public close(): void {
     this.core.close()

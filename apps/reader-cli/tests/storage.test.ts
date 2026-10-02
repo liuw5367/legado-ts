@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { Chapter } from '@legado/source-core'
+import type { Chapter, ContentIdentity } from '@legado/source-core'
 import { defaultStoragePaths, normalizeSearchName, ReaderStorage, editionKey } from '../src/storage.ts'
 
 async function temporaryStorage(): Promise<{ storage: ReaderStorage; root: string }> {
@@ -105,6 +105,33 @@ test('目录快照按书源版本持久化并可在重启后读取', async () =>
     const reopened = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
     await reopened.initialize()
     assert.equal((await reopened.getTocSnapshot(bookId, edition))?.revision, 'revision-1')
+    await reopened.close()
+  } finally {
+    await storage.close().catch(() => undefined)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('最终正文存储使用书源与目录身份隔离，并拒绝旧写入令牌', async () => {
+  const { storage, root } = await temporaryStorage()
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const identity: ContentIdentity = { sessionId: bookId, sourceId: 'https://source.test', bookUrl: 'https://source.test/book/1', chapterKey: 'chapter-1', tocRevision: 'toc-1', chapterIndex: 0, resourceKind: 'text', sourceRevision: 'fingerprint-a', semanticVersion: 'content-v1' }
+  const chapter: Chapter = { sourceId: identity.sourceId, bookUrl: identity.bookUrl, chapterUrl: 'https://source.test/book/1/c1', index: 0, title: '第一章', rawFields: {}, traceRef: 'toc:0' }
+  const store = storage.contentStore(bookId)
+  try {
+    const first = await store.reserve(identity, 'operation-1')
+    const second = await store.reserve(identity, 'operation-2')
+    const stale = await store.write({ token: first, record: { content: '旧正文', finalUrl: chapter.chapterUrl, chapter }, saveChapterMetadata: true })
+    assert.equal(stale.status, 'stale')
+    const committed = await store.write({ token: second, record: { content: '新正文', finalUrl: chapter.chapterUrl, chapter }, saveChapterMetadata: true })
+    assert.equal(committed.status, 'committed')
+    assert.equal((await store.read(identity))?.content, '新正文')
+    const isolated = { ...identity, sourceRevision: 'fingerprint-b' }
+    assert.equal(await store.read(isolated), undefined)
+    await storage.close()
+    const reopened = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+    await reopened.initialize()
+    assert.equal((await reopened.contentStore(bookId).read(identity))?.content, '新正文')
     await reopened.close()
   } finally {
     await storage.close().catch(() => undefined)

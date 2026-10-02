@@ -1,4 +1,4 @@
-import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, SearchMatchRank, TocBookPatch, TocChange, WorkflowStatus } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ContentIdentity, ContentStore, NormalizedSource, SearchMatchRank, TocBookPatch, TocChange, WorkflowStatus } from '@legado/source-core'
 import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
 import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition, SourceCheckRecord, ReaderSettings } from './storage.ts'
 import type { DebugCapture } from './debug-capture.ts'
@@ -115,7 +115,7 @@ export interface ReaderSourceSession {
   detail(candidate: BookCandidate, signal?: AbortSignal, capture?: DebugCapture): Promise<DetailWorkflowResult>
   toc(book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; runPerJs?: boolean; isFromBookInfo?: boolean; tocCountWords?: boolean }, capture?: DebugCapture): Promise<TocWorkflowResult>
   /** `nextChapterUrl` 触发正文分页护栏：命中时停止抓取，避免把下一章并入本章。 */
-  content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }, capture?: DebugCapture): Promise<ContentWorkflowResult>
+  content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string; contentStore?: ContentStore; contentIdentity?: ContentIdentity; operationId?: string; saveChapterMetadata?: boolean }, capture?: DebugCapture): Promise<ContentWorkflowResult>
   attachCache(storage: ReaderStorage): void
   /** 应用关闭时释放 source session 内的限流等待。 */
   close?(): void

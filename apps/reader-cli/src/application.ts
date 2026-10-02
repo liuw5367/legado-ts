@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { reconcileTableOfContents } from '@legado/source-core'
-import type { BookCandidate, BookMetadata, Chapter, ChapterContent } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentIdentity } from '@legado/source-core'
 import { KeyedConcurrencyHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
-import { editionKey, ReaderStorage } from './storage.ts'
+import { chapterKey, editionKey, ReaderStorage } from './storage.ts'
 import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, ReaderSettings, SearchHistoryEntry } from './storage.ts'
 import type {
   OpenBookResult,
@@ -527,9 +527,24 @@ export class ReaderApplication {
     if (edition === undefined) throw new Error('正文来源未记录')
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
+    const tocSnapshot = await this.storage.getTocSnapshot(bookId, edition.editionKey)
+    const reading = await this.storage.getReadingRecord(bookId)
+    const tocRevision = tocSnapshot?.revision ?? reading?.positions[edition.editionKey]?.tocRevision ?? ''
+    const contentIdentity: ContentIdentity = {
+      sessionId: bookId,
+      sourceId: edition.sourceId,
+      bookUrl: edition.bookUrl,
+      chapterKey: chapterKey({ editionKey: edition.editionKey, tocRevision, chapterUrl: chapter.chapterUrl, index: chapter.index }),
+      tocRevision,
+      chapterIndex: chapter.index,
+      resourceKind: 'text',
+      sourceRevision: edition.sourceFingerprint,
+      semanticVersion: 'source-core-content-v1',
+    }
     const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
     const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
-    const result = await session.content(chapter, metadata, signal, options, capture).finally(() => {
+    const contentOptions = { ...(options ?? {}), contentStore: this.storage.contentStore(bookId), contentIdentity, operationId: randomUUID() }
+    const result = await session.content(chapter, metadata, signal, contentOptions, capture).finally(() => {
       this.rememberEvidence('content', capture)
       this.rememberEvidence(`content:${bookId}:${edition.editionKey}`, capture)
     })

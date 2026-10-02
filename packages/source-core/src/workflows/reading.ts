@@ -6,7 +6,7 @@ import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeImageDecodeScript, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
-import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 let paginationBatchSequence = 0
 
@@ -307,7 +307,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const contentRule = ruleString(input.source, 'ruleContent', 'content') ?? sourceString(input.source, 'ruleContent')
   if (contentRule === undefined) {
     const url = rawChapterUrl
-    return { status: 'success', value: { chapter: input.chapter, contentType: 'text', raw: url, cleaned: url, pages: [url], resources: [] }, diagnostics, trace }
+    return { status: 'success', value: { chapter: input.chapter, contentType: 'text', raw: url, cleaned: url, pages: [url], resources: [], finalUrl: input.chapter.chapterUrl }, diagnostics, trace }
   }
   const contentType = input.contentType ?? (input.source.contentType === 'html' || ruleReturnsHtml(contentRule) ? 'html' : 'text')
   const titleRule = ruleString(input.source, 'ruleContent', 'title')
@@ -370,6 +370,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   let nextChapterAbsolute: string | undefined
   // Android 用第一页响应求值 ruleContent.title。
   let firstPage: { body: string; url: string; context: { baseUrl: string; redirectUrl: string } } | undefined
+  let finalResponseUrl: string | undefined
   for (let pageIndex = 0; pageIndex < maxPages && pendingPages.length > 0; pageIndex += 1) {
     if (input.signal?.aborted === true) return cancelled('正文工作流已取消', diagnostics, trace)
     const pendingPage = pendingPages.shift()!
@@ -392,6 +393,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const body = page.body
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
     const context = { baseUrl: normalizedUrl, redirectUrl: responseUrl }
+    finalResponseUrl = responseUrl
     if (pageIndex === 0) firstPage = { body, url: responseUrl, context }
     // Android BookContent 固定用第一页的最终响应地址解析下一章地址。
     if (pageIndex === 0 && input.nextChapterUrl !== undefined) nextChapterAbsolute = resolveUrl(input.nextChapterUrl, responseUrl)
@@ -490,6 +492,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
           }
           const branchUrl = scheduledUrls[branchIndex]!
           const branchResponseUrl = resolveUrl(outcome.page.url, branchUrl) ?? branchUrl
+          finalResponseUrl = branchResponseUrl
           const branchResult = await evaluateField(ports, input.source, stage, 'content', contentRule, outcome.page.body, pageIndex + branchIndex + 1, trace, input.signal, { baseUrl: branchUrl, redirectUrl: branchResponseUrl, bindings: ruleBindings })
           if (branchResult.state === 'cancelled') return cancelled('正文规则执行已取消', diagnostics, trace)
           if (branchResult.state === 'capability-missing') {
@@ -615,12 +618,124 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   if (fatalStatus !== undefined) return { status: fatalStatus, value: null, diagnostics, trace }
   if (cleaned.length === 0) {
     diagnostics.push({ code: 'empty-page', stage, message: '正文为空', retryable: false })
-    if (resultChapter.isVolume === true) return { status: 'empty', value: { chapter: resultChapter, contentType, raw, cleaned, pages, resources: [], ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
+    if (resultChapter.isVolume === true) return { status: 'empty', value: { chapter: resultChapter, contentType, raw, cleaned, pages, resources: [], ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
+  const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
   const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' && item.field === 'subContent') ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
+}
+
+function contentIdentityMatchesInput(identity: ContentIdentity, input: StoredContentInput): boolean {
+  return identity.sourceId === input.source.bookSourceUrl
+    && identity.bookUrl === input.chapter.bookUrl
+    && identity.chapterIndex === input.chapter.index
+    && identity.resourceKind === 'text'
+}
+
+function cacheChapter(value: ChapterContent, input: StoredContentInput): Chapter {
+  const chapterValue = value.chapter as Chapter & { title?: string; rawFields?: JsonObject; traceRef?: string }
+  return {
+    ...input.chapter,
+    ...chapterValue,
+    title: chapterValue.title ?? input.chapter.title ?? '',
+    rawFields: chapterValue.rawFields ?? input.chapter.rawFields ?? {},
+    traceRef: chapterValue.traceRef ?? `content:${input.contentIdentity.chapterIndex}`,
+  }
+}
+
+function toContentCacheRecord(value: ChapterContent, input: StoredContentInput): ContentCacheRecord {
+  return {
+    content: value.cleaned,
+    finalUrl: value.finalUrl ?? value.chapter.chapterUrl,
+    chapter: cacheChapter(value, input),
+    contentType: value.contentType,
+    raw: value.raw,
+    pages: [...value.pages],
+    resources: value.resources.map((resource) => ({ ...resource })),
+    ...(value.title === undefined ? {} : { title: value.title }),
+    ...(value.imgUrl === undefined ? {} : { imgUrl: value.imgUrl }),
+    ...(value.auxiliary === undefined ? {} : { auxiliary: { ...value.auxiliary } }),
+  }
+}
+
+function fromContentCacheRecord(record: ContentCacheRecord): ChapterContent {
+  return {
+    chapter: record.chapter,
+    contentType: record.contentType ?? 'text',
+    raw: record.raw ?? record.content,
+    cleaned: record.content,
+    pages: record.pages === undefined ? [record.content] : [...record.pages],
+    resources: record.resources === undefined ? [] : record.resources.map((resource) => ({ ...resource })),
+    finalUrl: record.finalUrl,
+    ...(record.auxiliary === undefined ? {} : { auxiliary: { ...record.auxiliary } }),
+    ...(record.title === undefined ? {} : { title: record.title }),
+    ...(record.imgUrl === undefined ? {} : { imgUrl: record.imgUrl }),
+  }
+}
+
+function cacheDiagnostic(message: string, reason?: string): WorkflowDiagnostic {
+  return { code: 'cache-failed', stage: 'detail', field: 'contentStore', message: reason === undefined ? message : `${message}: ${reason}`, retryable: false }
+}
+
+function withCacheFailure<T>(result: RuntimeResult<T>, diagnostic: WorkflowDiagnostic): RuntimeResult<T> {
+  return {
+    ...result,
+    status: result.value === null || result.status === 'cancelled' || result.status === 'capability-missing' ? result.status : 'partial',
+    diagnostics: [...result.diagnostics, diagnostic],
+  }
+}
+
+/**
+ * 以最终正文存储替代原始页面缓存：命中时不请求网络，未命中时条件保留、提交并重读。
+ * 存储失败或版本过期不会覆盖较新的正文；当前请求的正文仍可交付，并以 partial/cache-failed 标记。
+ */
+export async function loadStoredChapterContent(ports: ReadingPorts, input: StoredContentInput): Promise<RuntimeResult<ChapterContent>> {
+  const { contentStore, contentIdentity } = input
+  if (!contentIdentityMatchesInput(contentIdentity, input)) {
+    const diagnostic = cacheDiagnostic('正文缓存身份与当前书源或章节不一致')
+    return { status: 'failed', value: null, diagnostics: [diagnostic], trace: [] }
+  }
+  const readDiagnostics: WorkflowDiagnostic[] = []
+  if (input.refresh !== true) {
+    try {
+      const cached = await contentStore.read(contentIdentity, input.signal)
+      if (cached !== undefined && (cached.content.length > 0 || input.chapter.isVolume === true)) {
+        return { status: cached.content.length === 0 ? 'empty' : 'success', value: fromContentCacheRecord(cached), diagnostics: [], trace: [] }
+      }
+    } catch (error) {
+      if (input.signal?.aborted === true) return cancelled('正文缓存读取已取消', readDiagnostics, [])
+      readDiagnostics.push(cacheDiagnostic('正文缓存读取失败', error instanceof Error ? error.message : '未知错误'))
+    }
+  }
+  const loaded = await loadChapterContent(ports, input)
+  if (loaded.value === null || loaded.status === 'cancelled' || loaded.status === 'capability-missing') {
+    return readDiagnostics.length === 0 ? loaded : { ...loaded, diagnostics: [...readDiagnostics, ...loaded.diagnostics] }
+  }
+  if (input.signal?.aborted === true) return cancelled('正文缓存提交已取消', [...readDiagnostics, ...loaded.diagnostics], [])
+  const operationId = input.operationId ?? `${contentIdentity.sessionId}:${contentIdentity.chapterKey}:${Date.now()}`
+  let token
+  try {
+    token = await contentStore.reserve(contentIdentity, operationId, input.signal)
+  } catch (error) {
+    if (isSignalAborted(input.signal)) return cancelled('正文缓存保留已取消', [...readDiagnostics, ...loaded.diagnostics], [])
+    return withCacheFailure({ ...loaded, diagnostics: [...readDiagnostics, ...loaded.diagnostics] }, cacheDiagnostic('正文缓存保留失败', error instanceof Error ? error.message : '未知错误'))
+  }
+  try {
+    const write = await contentStore.write({ token, record: toContentCacheRecord(loaded.value, input), saveChapterMetadata: input.saveChapterMetadata !== false }, input.signal)
+    if (write.status !== 'committed') {
+      const reason = write.reason ?? write.status
+      return withCacheFailure({ ...loaded, diagnostics: [...readDiagnostics, ...loaded.diagnostics] }, cacheDiagnostic('正文缓存未提交', reason))
+    }
+    const committed = await contentStore.read(contentIdentity, input.signal)
+    if (committed === undefined) {
+      return withCacheFailure({ ...loaded, diagnostics: [...readDiagnostics, ...loaded.diagnostics] }, cacheDiagnostic('正文缓存提交后无法重读'))
+    }
+    return { ...loaded, value: fromContentCacheRecord(committed), diagnostics: [...readDiagnostics, ...loaded.diagnostics] }
+  } catch (error) {
+    if (isSignalAborted(input.signal)) return cancelled('正文缓存写入已取消', [...readDiagnostics, ...loaded.diagnostics], [])
+    return withCacheFailure({ ...loaded, diagnostics: [...readDiagnostics, ...loaded.diagnostics] }, cacheDiagnostic('正文缓存写入失败', error instanceof Error ? error.message : '未知错误'))
+  }
 }
 
 /** 对齐 Android contentBatch/getContentBatch；下载与持久化由 host 的 request/cache 适配器提供。 */
@@ -974,10 +1089,10 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
   }
   if (raw.trim().length === 0) {
     diagnostics.push({ code: 'empty-page', stage: 'detail', field: 'getContent', message: '正文为空', retryable: false })
-    if (input.chapter.isVolume === true) return { status: 'empty', value: { chapter, contentType: 'text', raw, cleaned: '', pages: [], resources: [] }, diagnostics, trace }
+    if (input.chapter.isVolume === true) return { status: 'empty', value: { chapter, contentType: 'text', raw, cleaned: '', pages: [], resources: [], finalUrl: chapter.chapterUrl }, diagnostics, trace }
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  return { status: 'success', value: { chapter, contentType: 'text', raw, cleaned: raw, pages: [raw], resources: [] }, diagnostics, trace }
+  return { status: 'success', value: { chapter, contentType: 'text', raw, cleaned: raw, pages: [raw], resources: [], finalUrl: chapter.chapterUrl }, diagnostics, trace }
 }
 
 async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSource, chapters: Chapter[], code: string, book: BookMetadata, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<void> {

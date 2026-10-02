@@ -323,6 +323,8 @@ export interface ChapterContent {
   cleaned: string
   pages: string[]
   resources: ContentResource[]
+  /** 生成该正文时最终收到的响应地址；缓存命中必须原样保留。 */
+  finalUrl?: string
   /** 音频歌词或视频弹幕；与 chapter.variable 的 lyric/danmaku 值同步，chapter.variable 是章节持久化字段。 */
   auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
   /** 书源 `ruleContent.title` 从正文提取的章节标题；未配置或提取为空时缺失。 */
@@ -373,6 +375,85 @@ export interface ContentBatchInput extends Omit<ContentInput, 'book' | 'chapter'
   chapters: readonly Chapter[]
   /** Optional persistence adapter. Without it, batch scripts are skipped and single parsing results are returned. */
   cacheContent?: ChapterContentCache
+}
+
+/** 最终正文缓存记录；不包含原始 HTTP 响应、Cookie 或宿主路径。 */
+export interface ContentCacheRecord {
+  /** 已按正文流程清洗、替换后的正文。 */
+  content: string
+  /** 生成正文时收到的最终响应 URL。 */
+  finalUrl: string
+  /** 与正文一起产生的章节字段。 */
+  chapter: Chapter
+  /** 缓存命中时恢复正文的结构化形态；旧记录可以只提供 content。 */
+  contentType?: 'text' | 'html'
+  raw?: string
+  pages?: string[]
+  resources?: ContentResource[]
+  title?: string
+  imgUrl?: string
+  /** 音频歌词或视频弹幕。 */
+  auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
+}
+
+export interface ContentIdentity {
+  /** 同一应用会话和书籍实例的稳定身份。 */
+  sessionId: string
+  sourceId: string
+  bookUrl: string
+  /** 由书源版本、目录 revision、章节地址和索引派生的章节身份。 */
+  chapterKey: string
+  tocRevision: string
+  chapterIndex: number
+  /** 正文、图片、音频、视频和文件必须使用不同身份。 */
+  resourceKind: 'text' | 'image' | 'audio' | 'video' | 'file'
+  /** 书源定义指纹或其他源版本身份。 */
+  sourceRevision: string
+  /** source-core 正文语义版本；语义变化时不得命中旧缓存。 */
+  semanticVersion: string
+}
+
+export interface ContentSaveToken {
+  /** 一次正文写入操作的身份。 */
+  operationId: string
+  /** 宿主为目标资源保留的写入代次。 */
+  writeVersion: string
+  identity: ContentIdentity
+  /** 超过该时间后宿主必须拒绝写入。 */
+  expiresAt?: number
+}
+
+export interface ContentWriteInput {
+  token: ContentSaveToken
+  record: ContentCacheRecord
+  /** 是否提交章节标题、图片和变量等伴随字段。 */
+  saveChapterMetadata: boolean
+}
+
+export interface StoreWriteResult {
+  /** 已确认提交、拒绝、版本过期、取消或无法确认底层结果。 */
+  status: 'committed' | 'rejected' | 'stale' | 'cancelled' | 'unknown'
+  /** 兼容旧调用方；判断结果必须使用 status。 */
+  committed: boolean
+  operationId: string
+  resourceKey: string
+  reason?: string
+}
+
+/** 宿主提供最终正文的读取、条件保留和提交能力；核心不持有文件或数据库。 */
+export interface ContentStore {
+  read(identity: ContentIdentity, signal?: AbortSignal): Promise<ContentCacheRecord | undefined>
+  reserve(identity: ContentIdentity, operationId: string, signal?: AbortSignal): Promise<ContentSaveToken>
+  write(input: ContentWriteInput, signal?: AbortSignal): Promise<StoreWriteResult>
+}
+
+/** 需要最终正文缓存时使用的核心编排入口输入。 */
+export interface StoredContentInput extends ContentInput {
+  contentStore: ContentStore
+  contentIdentity: ContentIdentity
+  operationId?: string
+  refresh?: boolean
+  saveChapterMetadata?: boolean
 }
 
 /** 输入已由图片宿主取得；source-core 只执行书源解密脚本，不发起图片下载。 */
