@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ContentCache, ContentCacheRecord, ContentIdentity, ContentSaveToken, ContentStore, ContentWriteInput, StoreWriteResult } from '@legado/source-core'
+import type { ContentCacheRecord, ContentIdentity, ContentSaveToken, ContentStore, ContentWriteInput, StoreWriteResult } from '@legado/source-core'
 import { CacheStore } from './cache-store.ts'
+import type { WorkflowCache } from './cache-store.ts'
 import { JsonStore } from './json-store.ts'
 import { normalizeReaderSettings } from './reader-settings.ts'
 import {
@@ -352,7 +353,7 @@ export class ReaderStorage {
     }).sort((left, right) => (right.lastReadAt ?? right.book.updatedAt).localeCompare(left.lastReadAt ?? left.book.updatedAt))
   }
 
-  public workflowCache(namespace = ''): ContentCache {
+  public workflowCache(namespace = ''): WorkflowCache {
     return this.cacheStore.workflowCache(namespace)
   }
 

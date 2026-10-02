@@ -1,8 +1,13 @@
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import type { ContentCache } from '@legado/source-core'
 import { JsonStore } from './json-store.ts'
 import { sha256, type StoragePaths } from './storage-model.ts'
+
+/** 应用私有的旧工作流缓存门面；不再作为 source-core 的阅读端口。 */
+export interface WorkflowCache {
+  get(key: string, signal?: AbortSignal): Promise<string | undefined>
+  set(key: string, value: string, signal?: AbortSignal): Promise<void>
+}
 
 export type CacheCategory = 'source-input' | 'toc' | 'content'
 
@@ -107,7 +112,7 @@ export class CacheStore {
     this.cacheIndexDirty = false
   }
 
-  public workflowCache(namespace = ''): ContentCache {
+  public workflowCache(namespace = ''): WorkflowCache {
     return {
       get: async (key, signal) => this.getWorkflowCache(key, signal, namespace),
       set: async (key, value, signal) => this.setWorkflowCache(key, value, signal, namespace),

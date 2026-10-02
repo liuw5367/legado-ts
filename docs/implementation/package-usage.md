@@ -72,7 +72,7 @@ export interface RuntimeResult<T> {
 流程入口的第一个参数是端口对象，不是可选依赖注入容器：
 
 - `WorkflowPorts`：`network: NetworkHost`、`rules: WorkflowRulePort`、可选请求适配器 `request` / 响应解码器 `decodeResponse`。默认请求与 Node 请求适配都使用 `SourceRequestRuntime` 的请求语义。
-- `ReadingPorts`：在 `WorkflowPorts` 上保留批量流程的兼容 `ContentCache` 字段；最终正文必须使用 `ContentStore`，原始页面缓存不再由目录/正文流程读取或写入。
+- `ReadingPorts`：`WorkflowPorts` 的阅读工作流别名；不再暴露原始页面缓存字段。最终正文必须使用 `ContentStore`，原始页面缓存不由目录/正文流程读取或写入。CLI 仍可在应用层保留历史 `workflowCache()` 文件门面，但它不是核心端口。
 
 Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委托给 `SourceRuleRuntime`，`SourceRequestHost` 委托给 `SourceRequestRuntime`；Node 包提供 `NodeNetworkHost`、HTML/JSONPath/XPath 解析器、`QuickJSJavaScriptHost`、`NodeCookieStore`、`NodeCharsetCodec` 等平台能力。端口语义见[宿主接口](runtime-host-interfaces.md)。
 

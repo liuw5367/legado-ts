@@ -476,11 +476,5 @@ export interface ContentReplacement {
   all?: boolean
 }
 
-export interface ContentCache {
-  get(key: string, signal?: AbortSignal): Promise<string | undefined>
-  set(key: string, value: string, signal?: AbortSignal): Promise<void>
-}
-
-export interface ReadingPorts extends WorkflowPorts {
-  cache?: ContentCache
-}
+/** 阅读工作流只依赖通用网络、规则和并发端口；原始页面缓存不属于核心端口。 */
+export type ReadingPorts = WorkflowPorts

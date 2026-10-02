@@ -645,8 +645,7 @@ test('已持久化的非法目录地址回退书籍详情地址', async () => {
   assert.equal(calls[0], book.bookUrl)
 })
 
-test('目录每次请求都保留最终响应地址，不读取原始页面缓存', async () => {
-  const values = new Map<string, string>()
+test('目录每次请求都保留最终响应地址，不依赖原始页面缓存', async () => {
   let requests = 0
   const ports: ReadingPorts = {
     network: {
@@ -664,10 +663,6 @@ test('目录每次请求都保留最终响应地址，不读取原始页面缓�
             ? { status: 'success', value: 'chapter/1' }
             : { status: 'empty', value: null },
     },
-    cache: {
-      get: async (key) => values.get(key),
-      set: async (key, value) => { values.set(key, value) },
-    },
   }
   const first = await loadTableOfContents(ports, { source, book })
   const second = await loadTableOfContents(ports, { source, book })
@@ -676,15 +671,10 @@ test('目录每次请求都保留最终响应地址，不读取原始页面缓�
   assert.equal(requests, 2)
 })
 
-test('正文工作流拼接多页、净化 HTML，并忽略原始页面缓存', async () => {
+test('正文工作流拼接多页并净化 HTML，不依赖原始页面缓存', async () => {
   const calls: string[] = []
-  const values = new Map<string, string>()
-  const cache = {
-    get: async (key: string) => values.get(key),
-    set: async (key: string, value: string) => { values.set(key, value) },
-  }
   const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 }
-  const first = await loadChapterContent({ ...readingPorts(calls), cache }, { source, chapter, replacements: [{ pattern: 'One', replacement: 'First' }] })
+  const first = await loadChapterContent(readingPorts(calls), { source, chapter, replacements: [{ pattern: 'One', replacement: 'First' }] })
   assert.equal(first.status, 'success')
   assert.equal(first.value?.pages.length, 2)
   assert.equal(first.value?.raw.includes('One'), true)
@@ -693,7 +683,7 @@ test('正文工作流拼接多页、净化 HTML，并忽略原始页面缓存', 
   assert.equal(first.value?.cleaned.includes('hidden'), false)
   assert.deepEqual(first.value?.resources, [{ kind: 'image', url: 'https://source.test/img/a.png' }, { kind: 'image', url: 'https://img.test/a.png' }])
   const requestCount = calls.length
-  const second = await loadChapterContent({ ...readingPorts(calls), cache }, { source, chapter })
+  const second = await loadChapterContent(readingPorts(calls), { source, chapter })
   assert.equal(second.status, 'success')
   assert.equal(calls.length, requestCount * 2)
 })
