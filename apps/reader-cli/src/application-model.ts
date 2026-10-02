@@ -1,4 +1,4 @@
-import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, SearchMatchRank, WorkflowStatus } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, NormalizedSource, SearchMatchRank, TocBookPatch, TocChange, WorkflowStatus } from '@legado/source-core'
 import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
 import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition, SourceCheckRecord, ReaderSettings } from './storage.ts'
 import type { DebugCapture } from './debug-capture.ts'
@@ -95,6 +95,8 @@ export interface OpenBookResult {
 export interface TocResult {
   chapters: Chapter[]
   revision: string
+  bookPatch: TocBookPatch
+  changes: TocChange[]
   source: SourceEntry
   edition: KnownSource
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { reconcileTableOfContents } from '@legado/source-core'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent } from '@legado/source-core'
 import { KeyedConcurrencyHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
@@ -488,6 +489,8 @@ export class ReaderApplication {
     if (edition === undefined) throw new Error('书籍没有已知书源')
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
+    const previousSnapshot = await this.storage.getTocSnapshot(bookId, edition.editionKey)
+    const reading = await this.storage.getReadingRecord(bookId)
     const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
     const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
     const result = await session.toc(metadata, signal, options, capture).finally(() => {
@@ -496,8 +499,19 @@ export class ReaderApplication {
     })
     throwIfAborted(signal)
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '目录加载失败')
-    const revision = sha256(JSON.stringify(result.value.items.map((item) => ({ url: item.chapterUrl, title: item.title }))))
-    return { chapters: result.value.items, revision, source, edition }
+    const reconciled = reconcileTableOfContents({
+      chapters: result.value.items,
+      ...(previousSnapshot === undefined ? {} : { previousChapters: previousSnapshot.chapters }),
+      book: {
+        totalChapterNum: previousSnapshot?.bookPatch.totalChapterNum ?? 0,
+        durChapterIndex: reading?.positions[edition.editionKey]?.index ?? 0,
+      },
+      now: Date.now(),
+      carryMetadata: true,
+    })
+    const revision = sha256(JSON.stringify(reconciled.chapters.map((item) => ({ url: item.url ?? item.chapterUrl, baseUrl: item.baseUrl, chapterUrl: item.chapterUrl, title: item.title }))))
+    await this.storage.saveTocSnapshot(bookId, edition.editionKey, { editionKey: edition.editionKey, revision, chapters: reconciled.chapters, bookPatch: reconciled.bookPatch, updatedAt: new Date().toISOString() })
+    return { chapters: reconciled.chapters, revision, bookPatch: reconciled.bookPatch, changes: reconciled.changes, source, edition }
   }
 
   public loadContent(bookId: string, chapter: Chapter, editionId?: string, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {

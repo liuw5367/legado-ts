@@ -22,6 +22,7 @@ import {
   type SourceStateFile,
   type StorageOptions,
   type StoragePaths,
+  type TocSnapshot,
 } from './storage-model.ts'
 
 export type {
@@ -42,6 +43,7 @@ export type {
   SourceStateRecord,
   StorageOptions,
   StoragePaths,
+  TocSnapshot,
 } from './storage-model.ts'
 export { chapterKey, defaultStoragePaths, editionKey, normalizeSearchName, sha256 } from './storage-model.ts'
 
@@ -268,6 +270,16 @@ export class ReaderStorage {
     await this.withWriteLock(async () => this.jsonStore.writeFile(join(this.paths.dataRoot, 'books', safeUuid(book.bookId), 'book.json'), book))
   }
 
+  public async getTocSnapshot(bookId: string, edition: string): Promise<TocSnapshot | undefined> {
+    return this.jsonStore.readOptional<TocSnapshot>(this.tocSnapshotPath(bookId, edition))
+  }
+
+  public async saveTocSnapshot(bookId: string, edition: string, snapshot: TocSnapshot): Promise<void> {
+    await this.withWriteLock(async () => {
+      await this.jsonStore.writeFile(this.tocSnapshotPath(bookId, edition), snapshot)
+    })
+  }
+
   public async findBookIdByEdition(sourceId: string, bookUrl: string): Promise<string | undefined> {
     const books = await this.listBooks()
     for (const book of books) {
@@ -415,10 +427,19 @@ export class ReaderStorage {
     this.writeQueue = run.then(() => undefined, () => undefined)
     return run
   }
+
+  private tocSnapshotPath(bookId: string, edition: string): string {
+    return join(this.paths.dataRoot, 'books', safeUuid(bookId), 'toc', `${safeDigest(edition)}.json`)
+  }
 }
 
 function safeUuid(value: string): string {
   if (!isUuid(value)) throw new Error('bookId 必须是 UUID')
+  return value
+}
+
+function safeDigest(value: string): string {
+  if (!/^[a-f0-9]{64}$/u.test(value)) throw new Error('无效的目录版本身份')
   return value
 }
 

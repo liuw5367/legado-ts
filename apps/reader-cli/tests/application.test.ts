@@ -31,16 +31,18 @@ class FakeSession implements ReaderSourceSession {
   private readonly contentValue: ChapterContent | undefined
   private readonly onSearch: (() => void) | undefined
   private readonly onSearchFinish: (() => void) | undefined
+  private readonly tocValue: RuntimeResult<WorkflowPage<Chapter>> | undefined
   public readonly contentRefreshes: boolean[] = []
   public closed = false
 
-  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void) {
+  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void, tocValue?: RuntimeResult<WorkflowPage<Chapter>>) {
     this.candidates = candidates
     this.delayMs = delayMs
     this.failDetail = failDetail
     this.contentValue = contentValue
     this.onSearch = onSearch
     this.onSearchFinish = onSearchFinish
+    this.tocValue = tocValue
   }
 
   public attachCache(): void {}
@@ -67,7 +69,7 @@ class FakeSession implements ReaderSourceSession {
   }
 
   public async toc(_book: BookMetadata): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
-    return result<WorkflowPage<Chapter>>('failed', null)
+    return this.tocValue ?? result<WorkflowPage<Chapter>>('failed', null)
   }
 
   public async content(chapter: Chapter, _book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean }): Promise<RuntimeResult<ChapterContent>> {
@@ -298,6 +300,33 @@ test('刷新正文会把刷新选项传到当前书源并重新请求正文', as
     assert.deepEqual(session.contentRefreshes, [true, false])
     await application.close()
     assert.equal(session.closed, true)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('刷新目录通过 source-core reconcile 并持久化书源版本快照', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-toc-snapshot-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/toc-snapshot'), 0)
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const bookUrl = 'https://source.test/toc-snapshot/book'
+  const edition = editionKey(sourceEntry.source.bookSourceUrl, bookUrl)
+  const first: Chapter = { sourceId: sourceEntry.source.bookSourceUrl, bookUrl, chapterUrl: `${bookUrl}/c1`, index: 0, title: '第一章', rawFields: {}, traceRef: 'fixture' }
+  const session = new FakeSession([], 0, false, undefined, undefined, undefined, result('success', { items: [first], cursor: { index: 0 } }))
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => session })
+  try {
+    await storage.upsertBook({ bookId, name: '目录书', activeEditionKey: edition, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: edition, sourceId: sourceEntry.source.bookSourceUrl, sourceFingerprint: sourceEntry.fingerprint, bookUrl, name: '目录书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    const firstLoad = await application.loadToc(bookId, edition)
+    assert.equal(firstLoad.bookPatch.totalChapterNum, 1)
+    assert.deepEqual(firstLoad.changes.map((item) => item.kind), ['added'])
+    assert.equal((await storage.getTocSnapshot(bookId, edition))?.revision, firstLoad.revision)
+    const secondLoad = await application.loadToc(bookId, edition)
+    assert.deepEqual(secondLoad.changes, [])
+    assert.equal(secondLoad.bookPatch.lastCheckCount, undefined)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import type { Chapter } from '@legado/source-core'
 import { defaultStoragePaths, normalizeSearchName, ReaderStorage, editionKey } from '../src/storage.ts'
 
 async function temporaryStorage(): Promise<{ storage: ReaderStorage; root: string }> {
@@ -88,6 +89,25 @@ test('多文件存储保留搜索、书架和阅读记录，并派生书架标�
     assert.equal(persisted.data?.name, '测试书')
   } finally {
     await storage.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('目录快照按书源版本持久化并可在重启后读取', async () => {
+  const { storage, root } = await temporaryStorage()
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const edition = editionKey('https://source.test', 'https://source.test/book/1')
+  const first: Chapter = { sourceId: 'https://source.test', bookUrl: 'https://source.test/book/1', chapterUrl: 'https://source.test/book/1/c1', index: 0, title: '第一章', rawFields: {}, traceRef: 'toc:0' }
+  try {
+    await storage.saveTocSnapshot(bookId, edition, { editionKey: edition, revision: 'revision-1', chapters: [first], bookPatch: { totalChapterNum: 1, lastCheckTime: 123, latestChapterTitle: '第一章' }, updatedAt: '2026-01-01T00:00:00.000Z' })
+    assert.deepEqual(await storage.getTocSnapshot(bookId, edition), { editionKey: edition, revision: 'revision-1', chapters: [first], bookPatch: { totalChapterNum: 1, lastCheckTime: 123, latestChapterTitle: '第一章' }, updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.close()
+    const reopened = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+    await reopened.initialize()
+    assert.equal((await reopened.getTocSnapshot(bookId, edition))?.revision, 'revision-1')
+    await reopened.close()
+  } finally {
+    await storage.close().catch(() => undefined)
     await rm(root, { recursive: true, force: true })
   }
 })
