@@ -64,6 +64,116 @@ test('发现工作流保留书源内身份、页码起点、去重和 partial �
   assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing'))
 })
 
+test('列表必需字段规则失败会终止当前工作流，不把失败误判成候选缺失', async () => {
+  const failingSource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookAuthor: 'author', bookKind: 'kind', bookUrl: 'url' },
+  } as unknown as NormalizedSource
+  const evaluated: string[] = []
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      if (request.rule === 'list') return { status: 'success', value: [{ name: 'Book', url: '/book' }] }
+      if (request.rule === 'name') return { status: 'success', value: 'Book' }
+      if (request.rule === 'author') return { status: 'failed', value: null, message: 'author parser failed' }
+      return { status: 'success', value: '/book' }
+    },
+  }
+
+  const result = await searchBooks(workflowPorts, { source: failingSource, keyword: 'Book' })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
+  assert.deepEqual(evaluated, ['list', 'name', 'author'])
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed' && diagnostic.field === 'bookAuthor' && diagnostic.itemIndex === 0))
+  assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing'))
+})
+
+test('列表详情 URL 规则失败不会回退为响应地址', async () => {
+  const failingSource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookAuthor: 'author', bookUrl: 'url' },
+  } as unknown as NormalizedSource
+  const evaluated: string[] = []
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      evaluated.push(request.rule)
+      if (request.rule === 'list') return { status: 'success', value: [{ name: 'Book', url: '/book' }] }
+      if (request.rule === 'name') return { status: 'success', value: 'Book' }
+      if (request.rule === 'author') return { status: 'success', value: 'Author' }
+      if (request.rule === 'url') return { status: 'failed', value: null, message: 'url parser failed' }
+      return { status: 'empty', value: null }
+    },
+  }
+
+  const result = await searchBooks(workflowPorts, { source: failingSource, keyword: 'Book' })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
+  assert.deepEqual(evaluated, ['list', 'name', 'author', 'url'])
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'rule-failed' && diagnostic.field === 'bookUrl' && diagnostic.itemIndex === 0))
+  assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing'))
+})
+
+test('列表可选字段规则失败仍保留候选并报告 partial', async () => {
+  const optionalSource = {
+    ...source,
+    ruleSearch: {
+      bookList: 'list', bookName: 'name', bookAuthor: 'author', bookKind: 'kind', bookWordCount: 'words',
+      bookLastChapter: 'last', bookIntro: 'intro', bookCoverUrl: 'cover', bookUrl: 'url',
+    },
+  } as unknown as NormalizedSource
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      if (request.rule === 'list') return { status: 'success', value: [{ name: 'Book', url: '/book' }] }
+      if (request.rule === 'name') return { status: 'success', value: 'Book' }
+      if (request.rule === 'author') return { status: 'success', value: 'Author' }
+      if (request.rule === 'url') return { status: 'success', value: '/book' }
+      return { status: 'failed', value: null, message: `${request.rule} parser failed` }
+    },
+  }
+
+  const result = await searchBooks(workflowPorts, { source: optionalSource, keyword: 'Book' })
+  assert.equal(result.status, 'partial')
+  assert.equal(result.value?.items.length, 1)
+  assert.equal(result.value?.items[0]?.bookUrl, 'https://source.test/book')
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'item-skipped' && diagnostic.field === 'bookKind'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'item-skipped' && diagnostic.field === 'bookIntro'))
+})
+
+test('列表候选各自复制 list 阶段的 ruleData，变量写入不会跨候选泄漏', async () => {
+  const variableSource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookUrl: 'url' },
+  } as unknown as NormalizedSource
+  const seen: Array<string | undefined> = []
+  const workflowPorts = ports([])
+  workflowPorts.rules = {
+    evaluate: async (request) => {
+      const ruleData = request.bindings?.ruleData as { variable?: string } | undefined
+      if (request.rule === 'list') {
+        if (ruleData !== undefined) ruleData.variable = 'seed'
+        return { status: 'success', value: [{ name: 'First', url: '/first' }, { name: 'Second', url: '/second' }] }
+      }
+      if (request.rule === 'name') {
+        if (request.itemIndex === 0 && ruleData !== undefined) ruleData.variable = `${ruleData.variable}:first`
+        return { status: 'success', value: (request.content as { name: string }).name }
+      }
+      if (request.rule === 'url') {
+        seen.push(ruleData?.variable)
+        return { status: 'success', value: (request.content as { url: string }).url }
+      }
+      return { status: 'empty', value: null }
+    },
+  }
+
+  const result = await searchBooks(workflowPorts, { source: variableSource, keyword: 'Book' })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(seen, ['seed:first', 'seed'])
+  assert.deepEqual(result.value?.items.map((item) => item.variable), ['seed:first', 'seed'])
+})
+
 test('搜索工作流按 Android 首页页码展开关键词并区分空关键词', async () => {
   const calls: string[] = []
   const result = await searchBooks(ports(calls), { source, keyword: '中文 test' })

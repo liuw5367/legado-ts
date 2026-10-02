@@ -216,13 +216,18 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       diagnostics.push({ code: 'item-skipped', stage, field: 'bookList', message: 'bookList 规则必须返回列表', retryable: false })
     }
   }
+  // Android 为每个 SearchBook 复制列表阶段的 ruleData；候选字段规则对当前书籍的
+  // @put/JavaScript 写入不能污染下一条候选，也不能改变下一页规则看到的初始值。
+  const listRuleData = { ...ruleData }
   const identities = new Set<string>()
   for (let itemIndex = 0; itemIndex < rawItems.length && (maxItems === undefined || candidates.length < maxItems); itemIndex += 1) {
-    const fields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace, { ruleData })
+    const candidateRuleData = { ...listRuleData }
+    const fields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace, { ruleData: candidateRuleData })
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
+    if (fields.fatal !== undefined) return { status: fields.fatal.status, value: null, diagnostics, trace }
     // 相对详情地址按响应地址转绝对；空地址回退响应地址（Android isUrl 语义）。
     const bookUrl = resolveCandidateUrl(fields.bookUrl, page.url)
     if (bookUrl === undefined) {
@@ -244,7 +249,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     identities.add(identityKey)
     trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex })
     const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
-    if (ruleData.variable !== undefined && ruleData.variable.length > 0) candidate.variable = ruleData.variable
+    if (candidateRuleData.variable !== undefined && candidateRuleData.variable.length > 0) candidate.variable = candidateRuleData.variable
     if (author.length > 0) candidate.author = author
     if (fields.intro !== undefined) candidate.intro = formatIntro(fields.intro)
     if (bookUrl === requestUrl || bookUrl === page.url) candidate.infoPage = { body: content, requestUrl, responseUrl: page.url }
@@ -257,7 +262,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   }
   if (candidates.length === 0 && (detailPage || (rawItems.length === 0 && pattern === undefined))) {
     // 列表为空（或命中 bookUrlPattern）时，书源把整个响应当作详情页。
-    const fallback = await detailPageCandidate(ports, source, stage, page, requestUrl, options, diagnostics, trace, { ruleData })
+    const fallback = await detailPageCandidate(ports, source, stage, page, requestUrl, options, diagnostics, trace, { ruleData: { ...listRuleData } })
     if (fallback.cancelled) {
       // 回退分支内部的字段诊断都属于 detail，这里保持一致。
       diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情页回退已取消', retryable: false })
@@ -274,7 +279,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   let nextCursor: { index: number; token?: string } | undefined
   if (candidates.length > 0 && pageCursor.token === undefined && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
   if (nextRule !== undefined) {
-    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { bindings: { ruleData } })
+    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { bindings: { ruleData: listRuleData } })
     if (next.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'nextPage', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -305,6 +310,8 @@ interface ExtractedFields {
   lastChapter?: string
   updateTime?: string
   rawFields: JsonObject
+  /** Android 对书名、作者和详情 URL 的规则执行失败会终止当前列表工作流。 */
+  fatal?: { field: string; status: 'failed' | 'capability-missing'; message: string }
 }
 
 async function extractFields(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', ruleGroup: 'ruleExplore' | 'ruleSearch', content: unknown, fields: readonly (readonly [string, string])[], itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], bindings?: Readonly<Record<string, unknown>>): Promise<ExtractedFields> {
@@ -314,8 +321,17 @@ async function extractFields(ports: WorkflowPorts, source: NormalizedSource, sta
     if (rule === undefined) continue
     const result = await evaluateField(ports, source, stage, ruleField, rule, content, itemIndex, trace, signal, bindings === undefined ? undefined : { bindings })
     if (result.state === 'cancelled') break
-    if (result.state === 'failed') diagnostics.push({ code: 'item-skipped', stage, field: ruleField, itemIndex, message: result.message ?? '字段规则失败', retryable: false })
-    if (result.state === 'capability-missing') diagnostics.push({ code: 'capability-missing', stage, field: ruleField, itemIndex, message: result.message ?? '字段规则能力不可用', retryable: false })
+    if (result.state === 'failed' || result.state === 'capability-missing') {
+      const message = result.message ?? (result.state === 'capability-missing' ? '字段规则能力不可用' : '字段规则失败')
+      const status = result.state === 'capability-missing' ? 'capability-missing' : 'failed'
+      const required = outputField === 'name' || outputField === 'author' || outputField === 'bookUrl'
+      const code = required ? status === 'failed' ? 'rule-failed' : 'capability-missing' : result.state === 'capability-missing' ? 'capability-missing' : 'item-skipped'
+      diagnostics.push({ code, stage, field: ruleField, itemIndex, message, retryable: false })
+      if (required) {
+        extracted.fatal = { field: ruleField, status, message }
+        return extracted
+      }
+    }
     if (result.state === 'value') {
       const value = fieldText(result.value, outputField)
       extracted.rawFields[outputField] = jsonValue(result.value)
