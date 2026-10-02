@@ -284,6 +284,8 @@ export interface ChapterIdentity {
   tag?: string
   /** 当 tocCountWords 开启且 updateTime 可识别时提取的字数。 */
   wordCount?: string
+  /** Android BookChapter.imgUrl；正文标题规则或目录元数据可更新。 */
+  imgUrl?: string
 }
 
 export interface Chapter extends ChapterIdentity {

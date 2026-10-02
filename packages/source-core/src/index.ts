@@ -29,4 +29,6 @@ export type { SearchAggregationGroup, SearchAggregationItem, SearchMatchRank } f
 export { SourceRequestError, SourceRequestRuntime } from './workflows/source-request.ts'
 export type { SourceRequestErrorCode, SourceRequestOptions, SourceRequestRuntimeOptions } from './workflows/source-request.ts'
 export { loadTableOfContents, loadChapterContent, loadChapterContentBatch, decodeImage } from './workflows/reading.ts'
+export { reconcileTableOfContents } from './workflows/toc-reconcile.ts'
+export type { TocBookPatch, TocCarriedMetadata, TocChange, TocChangeKind, TocReconcileBookState, TocReconcileInput, TocReconcileResult } from './workflows/toc-reconcile.ts'
 export type * from './workflows/types.ts'
