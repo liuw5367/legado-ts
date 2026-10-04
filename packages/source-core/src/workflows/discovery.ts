@@ -4,7 +4,7 @@ import type { SourcePatternError } from '../rules/pattern-guard.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { detailFields, evaluateField, executeSourceFunction, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { formatDetailIntro, formatIntro } from './html-format.ts'
-import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
+import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 1 }
@@ -28,11 +28,11 @@ export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput)
 export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 1 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
   const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 1
-  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems, input.acceptCandidate, input.shouldStop)
+  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems, input.acceptSearchFields, input.acceptCandidate, input.shouldStop)
   return listWorkflow(ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword, 'ruleSearch')
 }
 
-async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSource, name: 'search' | 'explore', firstArg: string | undefined, cursor: { index: number; token?: string }, signal: AbortSignal | undefined, stage: 'search' | 'discover', maxItems?: number, acceptCandidate?: (candidate: BookCandidate) => boolean, shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSource, name: 'search' | 'explore', firstArg: string | undefined, cursor: { index: number; token?: string }, signal: AbortSignal | undefined, stage: 'search' | 'discover', maxItems?: number, acceptSearchFields?: (fields: SearchCandidateFields) => boolean, acceptCandidate?: (candidate: BookCandidate) => boolean, shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   if (name === 'explore' && firstArg === undefined) {
@@ -77,6 +77,13 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
       continue
     }
     const author = primitiveText(record.author)?.trim() ?? ''
+    const kind = primitiveText(record.kind)?.trim() ?? ''
+    try {
+      if (acceptSearchFields !== undefined && !acceptSearchFields({ name: formatBookName(nameValue), ...(author.length === 0 ? {} : { author: formatBookAuthor(author) }), ...(kind.length === 0 ? {} : { kind }) })) continue
+    } catch (error) {
+      diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
     const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name: formatBookName(nameValue), rawFields: jsonValue(record) as JsonObject, traceRef: `${stage}:${books.length}` }
     if (author.length > 0) candidate.author = formatBookAuthor(author)
     setOptionalText(candidate, 'intro', record.intro)
@@ -162,6 +169,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     return { status: 'failed', value: null, diagnostics, trace }
   }
   const keywordReplacements = keyword === undefined ? {} : { key: keyword, keyword }
+  const acceptSearchFields = stage === 'search' && 'acceptSearchFields' in options ? options.acceptSearchFields : undefined
   const acceptCandidate = stage === 'search' && 'acceptCandidate' in options ? options.acceptCandidate : undefined
   const shouldStop = stage === 'search' && 'shouldStop' in options ? options.shouldStop : undefined
   let requestUrl: string
@@ -236,31 +244,43 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   const identities = new Set<string>()
   for (let itemIndex = 0; itemIndex < rawItems.length && (maxItems === undefined || candidates.length < maxItems); itemIndex += 1) {
     const candidateRuleData = { ...listRuleData }
-    const fields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields, itemIndex, options.signal, diagnostics, trace, { ruleData: candidateRuleData })
+    const identityFields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields.slice(0, 3), itemIndex, options.signal, diagnostics, trace, { ruleData: candidateRuleData })
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
-    if (fields.fatal !== undefined) return { status: fields.fatal.status, value: null, diagnostics, trace }
+    if (identityFields.fatal !== undefined) return { status: identityFields.fatal.status, value: null, diagnostics, trace }
+    const name = formatBookName(identityFields.name ?? '')
+    const author = formatBookAuthor(identityFields.author ?? '')
+    try {
+      if (acceptSearchFields !== undefined && !acceptSearchFields({ name, ...(author.length === 0 ? {} : { author }), ...(identityFields.kind === undefined ? {} : { kind: identityFields.kind }) })) continue
+    } catch (error) {
+      diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
+    const optionalFields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields.slice(3), itemIndex, options.signal, diagnostics, trace, { ruleData: candidateRuleData })
+    if (options.signal !== undefined && options.signal.aborted) {
+      diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
+      return { status: 'cancelled', value: null, diagnostics, trace }
+    }
+    if (optionalFields.fatal !== undefined) return { status: optionalFields.fatal.status, value: null, diagnostics, trace }
+    const fields = { ...identityFields, ...optionalFields, rawFields: { ...identityFields.rawFields, ...optionalFields.rawFields } }
     // 相对详情地址按响应地址转绝对；空地址回退响应地址（Android isUrl 语义）。
     const bookUrl = resolveCandidateUrl(fields.bookUrl, page.url)
     if (bookUrl === undefined) {
       diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '候选缺少书源内详情 URL', retryable: false })
       continue
     }
-    const name = formatBookName(fields.name ?? '')
     if (name.length === 0) {
       diagnostics.push({ code: 'identity-missing', stage, itemIndex, message: '候选缺少书名', retryable: false })
       continue
     }
-    const author = formatBookAuthor(fields.author ?? '')
     // Android SearchBook.equals 只比较 bookUrl：同地址候选折叠为一条。
     const identityKey = `${source.bookSourceUrl}\u0000${bookUrl}`
     if (identities.has(identityKey)) {
       diagnostics.push({ code: 'duplicate-item', stage, itemIndex, message: '重复候选已折叠', retryable: false })
       continue
     }
-    identities.add(identityKey)
     const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
     if (candidateRuleData.variable !== undefined && candidateRuleData.variable.length > 0) candidate.variable = candidateRuleData.variable
     if (author.length > 0) candidate.author = author
@@ -273,6 +293,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     if (fields.updateTime !== undefined) candidate.updateTime = fields.updateTime
     try {
       if (acceptCandidate !== undefined && !acceptCandidate(candidate)) continue
+      identities.add(identityKey)
       candidates.push(candidate)
       trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length - 1}`, itemIndex })
       if (shouldStop?.(candidate, candidates.length) === true) {

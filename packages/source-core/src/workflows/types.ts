@@ -251,10 +251,18 @@ export interface SearchInput extends WorkflowOptions {
   source: NormalizedSource
   keyword: string
   cursor?: PageCursor
+  /** 搜索阶段的早期过滤；只读取已解析的书名、作者和分类，后续字段规则不会执行。 */
+  acceptSearchFields?: (fields: SearchCandidateFields) => boolean
   /** 只接收满足调用方纯判断的候选；网络、存储和副作用不得放入回调。 */
   acceptCandidate?: (candidate: BookCandidate) => boolean
   /** 接收候选后提前结束当前列表页；返回结果不再声明下一页游标。 */
   shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean
+}
+
+export interface SearchCandidateFields {
+  name: string
+  author?: string
+  kind?: string
 }
 
 export interface DetailInput extends WorkflowOptions {

@@ -254,7 +254,7 @@ test('搜索和详情字段按 Android 的副作用顺序执行', async () => {
     ...source,
     ruleSearch: {
       bookList: 'list', name: 'name', author: 'author', kind: 'kind', wordCount: 'words',
-      lastChapter: 'last', intro: 'intro', coverUrl: 'cover', bookUrl: 'url', updateTime: 'updated',
+      lastChapter: 'last', intro: 'intro', coverUrl: 'cover', bookUrl: 'url',
     },
     ruleBookInfo: {
       name: 'detail-name', author: 'detail-author', kind: 'detail-kind', wordCount: 'detail-words',
@@ -274,12 +274,42 @@ test('搜索和详情字段按 Android 的副作用顺序执行', async () => {
 
   const searched = await searchBooks(workflowPorts, { source: orderedSource, keyword: '书' })
   assert.equal(searched.status, 'success')
-  assert.deepEqual(calls, ['name', 'author', 'kind', 'words', 'last', 'intro', 'cover', 'url', 'updated'])
+  assert.deepEqual(calls, ['name', 'author', 'kind', 'words', 'last', 'intro', 'cover', 'url'])
 
   calls.length = 0
   const detailed = await loadBookDetails(workflowPorts, { source: orderedSource, candidates: [searched.value!.items[0]!] })
   assert.equal(detailed.status, 'success')
   assert.deepEqual(calls, ['detail-name', 'detail-author', 'detail-kind', 'detail-words', 'detail-last', 'detail-intro', 'detail-cover', 'detail-toc', 'detail-updated'])
+})
+
+test('搜索早期过滤不会执行可选字段，也不会提前占用重复地址', async () => {
+  const calls: string[] = []
+  const earlySource = {
+    ...source,
+    ruleSearch: { bookList: 'list', bookName: 'name', bookAuthor: 'author', bookKind: 'kind', bookWordCount: 'words', bookUrl: 'url' },
+  } as unknown as NormalizedSource
+  const workflowPorts = ports(calls)
+  workflowPorts.rules = {
+    evaluate: async ({ rule, content }) => {
+      if (rule === 'list') return { status: 'success', value: [{ name: '跳过', author: '作者', kind: '分类' }, { name: '保留', author: '作者', kind: '分类' }] }
+      if (rule === 'name' || rule === 'author' || rule === 'kind') return { status: 'success', value: (content as Record<string, string>)[rule] }
+      if (rule === 'words') {
+        if ((content as Record<string, string>).name === '跳过') throw new Error('被过滤项不应执行字数规则')
+        return { status: 'success', value: '100' }
+      }
+      if (rule === 'url') return { status: 'success', value: '/same-book' }
+      return { status: 'empty', value: null }
+    },
+  }
+  const result = await searchBooks(workflowPorts, {
+    source: earlySource,
+    keyword: '书',
+    acceptSearchFields: (fields) => fields.name === '保留',
+  })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items.length, 1)
+  assert.equal(result.value?.items[0]?.name, '保留')
+  assert.equal(result.value?.items[0]?.wordCount, '100字')
 })
 
 test('搜索和详情工作流保留最新章节与更新时间字段', async () => {
@@ -301,7 +331,7 @@ test('搜索和详情工作流保留最新章节与更新时间字段', async ()
   }
   const searched = await searchBooks(base, { source: latestSource, keyword: '中文' })
   assert.equal(searched.value?.items[0]?.lastChapter, '列表最新章')
-  assert.equal(searched.value?.items[0]?.updateTime, '2026-09-22')
+  assert.equal(searched.value?.items[0]?.updateTime, undefined)
   const detailed = await loadBookDetails(base, { source: latestSource, candidates: [searched.value!.items[0]!] })
   assert.equal(detailed.value?.items[0]?.lastChapter, '详情最新章')
   assert.equal(detailed.value?.items[0]?.updateTime, '2026-09-23')

@@ -15,8 +15,8 @@
 2. 若 `bookUrlPattern` 与响应 URL 匹配，把整个响应当作详情页，直接执行详情规则；
 3. 否则使用 `ruleSearch` 的 `bookList` 获取元素列表；
 4. `bookList` 以 `-` 开头表示解析后反转，以 `+` 开头表示去掉控制前缀但不反转；
-5. 对每个元素执行 `name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`；书名和作者分别先经过 `formatBookName`/`formatBookAuthor` 清洗（规则见[书源数据模型](../standard/source-schema.md#书名和作者清洗)）；
-6. 清洗后的书名为空丢弃；作者、简介等字段按各自字段错误策略处理；
+5. 先解析每个元素的 `name`、`author`、`kind`；书名和作者分别经过 `formatBookName`/`formatBookAuthor` 清洗（规则见[书源数据模型](../standard/source-schema.md#书名和作者清洗)）；
+6. 清洗后的书名为空丢弃；调用方提供 `acceptSearchFields` 时，先按已解析的书名、作者和分类过滤候选，再读取 `wordCount`、`lastChapter`、`intro`、`coverUrl` 和 `bookUrl` 等可选字段；作者、简介等字段按各自字段错误策略处理；
 7. 相对封面和详情 URL 按响应 URL 转绝对 URL；详情 URL 为空时回退响应 URL；
 8. 同书源内按 `SearchBook.bookUrl` 去重；
 9. 列表为空且没有 `bookUrlPattern` 时，回退为详情页解析。
@@ -42,7 +42,7 @@
 
 - 匹配等级按 Android 顺序为 `exact`、`kind`、`contains`、`other`：书名或作者原始字符串等于关键词为 `exact`，分类包含关键词为 `kind`，书名或作者包含关键词为 `contains`，其余为 `other`。
 - 分组键是同一匹配组中的原始书名和作者；因此相同书名/作者的不同来源合并到一个候选组，首次到达候选作为代表，其他来源保留在 `candidates` 中。
-- 组先按匹配等级，再按来源候选数量降序，最后按最早 `arrivalIndex` 稳定排序。普通 CLI 搜索默认保留 `other`；调用 `groupSearchResults(keyword, results, true)` 或核心 `groupSearchCandidates(..., true)` 时会丢弃 `other`。
+- 组先按匹配等级，再按组内不同 `sourceId` 的来源数量降序，最后按最早 `arrivalIndex` 稳定排序。普通 CLI 搜索默认保留 `other`；调用 `groupSearchResults(keyword, results, true)` 或核心 `groupSearchCandidates(..., true)` 时会丢弃 `other`。
 - `normalizeSearchTitle` / `normalizeSearchAuthor` 只供严格换源匹配等身份比较使用：标题做 NFKC、小写并移除空白/标点/符号，作者做 NFKC、小写并移除空白；它们不替代 Android 普通搜索的原始字符串分组。
 - `searchMoreSources` 仍额外要求规范化后的书名和作者都完整匹配，避免把普通搜索的分类/包含结果误当成换源候选。
 

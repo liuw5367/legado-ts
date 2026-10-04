@@ -59,3 +59,12 @@ test('precision 模式丢弃 other 组，严格换源比较仍使用独立规范
   assert.equal(isAuthorMatch(' 刘慈欣 ', '刘慈欣'), true)
   assert.equal(isAuthorMatch(undefined, '刘慈欣'), false)
 })
+
+test('同组排序按唯一书源数量，不按同一书源的候选条数', () => {
+  const sameSourceA = item('同源书', '作者', 'source-a', 1)
+  const sameSourceB = item('同源书', '作者', 'source-a', 2)
+  const multiSourceA = item('多源书', '作者', 'source-b', 3)
+  const multiSourceB = item('多源书', '作者', 'source-c', 4)
+  const groups = groupSearchCandidates('书', [sameSourceA, sameSourceB, multiSourceA, multiSourceB])
+  assert.deepEqual(groups.map((group) => group.candidate.name), ['多源书', '同源书'])
+})

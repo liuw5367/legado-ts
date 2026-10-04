@@ -13,7 +13,6 @@ export const listFields = [
   ['bookIntro', 'intro'],
   ['bookCoverUrl', 'coverUrl'],
   ['bookUrl', 'bookUrl'],
-  ['bookUpdateTime', 'updateTime'],
 ] as const
 
 export const detailFields = [

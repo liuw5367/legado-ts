@@ -36,7 +36,11 @@ export function groupSearchCandidates<T extends SearchAggregationItem>(keyword: 
       })
     } else existing.candidates.push(result)
   }
-  return [...groups.values()].sort((left, right) => rankValue(left.rank) - rankValue(right.rank) || right.candidates.length - left.candidates.length || left.firstArrivalIndex - right.firstArrivalIndex)
+  return [...groups.values()].sort((left, right) => rankValue(left.rank) - rankValue(right.rank) || uniqueSourceCount(right) - uniqueSourceCount(left) || left.firstArrivalIndex - right.firstArrivalIndex)
+}
+
+function uniqueSourceCount<T extends SearchAggregationItem>(group: SearchAggregationGroup<T>): number {
+  return new Set(group.candidates.map((item) => item.candidate.sourceId)).size
 }
 
 export function searchMatchRank(keyword: string, name: string | undefined, author?: string, kind?: string): SearchMatchRank {
