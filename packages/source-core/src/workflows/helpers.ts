@@ -402,11 +402,7 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
     const checked = await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics)
     if (checked === undefined) return undefined
     response = checked
-    // 真实 4xx/5xx 已先经过 loginCheckJs；未恢复时按状态报告，5xx 可重试、4xx 不可重试。
-    if (response.status >= 400) {
-      diagnostics.push({ code: 'request-failed', stage, message: `书源请求返回 HTTP ${response.status}`, retryable: response.status >= 500 })
-      return undefined
-    }
+    // Android 在重试耗尽后仍把有响应的正文交给规则解析；状态码保留在 NetworkResponse 和请求观察中。
     return { content: responseText(response, source, ports), url: response.url }
   } catch (error) {
     if (options.signal !== undefined && options.signal.aborted) {

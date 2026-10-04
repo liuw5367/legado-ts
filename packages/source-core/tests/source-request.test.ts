@@ -282,8 +282,8 @@ test('loginCheckJs 看到真实 401，恢复后继续解析', async () => {
   assert.equal(ports.listContent, 'recovered-ok')
 })
 
-test('loginCheckJs 未恢复时 4xx 不可重试、5xx 可重试', async () => {
-  for (const [status, retryable] of [[403, false], [503, true]] as const) {
+test('loginCheckJs 未恢复时仍把真实 4xx/5xx 正文交给解析器', async () => {
+  for (const status of [403, 503] as const) {
     const source = await importFixture({ loginCheckJs: 'login-check' })
     const ports = probePorts({
       network: () => ({
@@ -301,11 +301,41 @@ test('loginCheckJs 未恢复时 4xx 不可重试、5xx 可重试', async () => {
       },
     })
     const result = await searchBooks(ports, { source, keyword: 'x' })
-    const diagnostic = result.diagnostics.find((item) => item.code === 'request-failed')
-    assert.ok(diagnostic, `HTTP ${status} 应产生 request-failed`)
-    assert.equal(diagnostic.retryable, retryable)
-    assert.match(diagnostic.message, new RegExp(String(status)))
+    assert.equal(result.status, 'success')
+    assert.equal(ports.listContent, 'still-error')
+    assert.equal(result.diagnostics.some((item) => item.code === 'request-failed'), false)
   }
+})
+
+test('HTTP 错误正文无法解析时报告解析结果而不是状态码请求失败', async () => {
+  const source = await importFixture({ loginCheckJs: 'login-check' })
+  const bodies: string[] = []
+  const ports = probePorts({
+    network: () => ({
+      url: 'https://fixture.invalid/search?q=x',
+      status: 503,
+      headers: {},
+      bytes: new TextEncoder().encode('error-page'),
+      redirected: false,
+    }),
+    evaluate: async (request) => {
+      if (request.field === 'bookList') {
+        bodies.push(String(request.content))
+        return { status: 'empty', value: null }
+      }
+      return { status: 'empty', value: null }
+    },
+    executeWorkflowJavaScript: async (request) => {
+      if (request.code !== 'login-check') return { status: 'failed', value: null, message: 'unexpected script' }
+      const content = request.content as { status: number }
+      assert.equal(content.status, 503)
+      return { status: 'success', value: { status: 503, body: 'error-page', headers: {} } }
+    },
+  })
+  const result = await searchBooks(ports, { source, keyword: 'x' })
+  assert.equal(result.status, 'empty')
+  assert.deepEqual(bodies, ['error-page'])
+  assert.equal(result.diagnostics.some((item) => item.code === 'request-failed'), false)
 })
 
 test('缺少 encodeCharset 时非 UTF-8 查询明确失败且不发请求', async () => {
