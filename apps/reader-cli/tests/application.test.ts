@@ -6,7 +6,7 @@ import test from 'node:test'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentIdentity, ContentStore, NormalizedSource, RuntimeResult, WorkflowPage } from '@legado/source-core'
 import { ReaderApplication } from '../src/application.ts'
 import type { SearchOperationResult } from '../src/application.ts'
-import type { ReaderSourceSession } from '../src/application.ts'
+import type { ReaderSourceSearchOptions, ReaderSourceSession } from '../src/application.ts'
 import type { SourceCatalogResult, SourceEntry } from '../src/source-catalog.ts'
 import { ReaderStorage, editionKey } from '../src/storage.ts'
 
@@ -35,6 +35,7 @@ class FakeSession implements ReaderSourceSession {
   public readonly contentRefreshes: boolean[] = []
   public readonly contentIdentities: ContentIdentity[] = []
   public readonly contentStoreAttached: boolean[] = []
+  public readonly searchOptions: ReaderSourceSearchOptions[] = []
   public closed = false
 
   public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void, tocValue?: RuntimeResult<WorkflowPage<Chapter>>) {
@@ -53,13 +54,17 @@ class FakeSession implements ReaderSourceSession {
     this.closed = true
   }
 
-  public async search(_keyword: string, signal?: AbortSignal): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+  public async search(keyword: string, signal?: AbortSignal, _capture?: unknown, options?: ReaderSourceSearchOptions): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
     this.onSearch?.()
+    this.searchOptions.push(options ?? {})
     try {
       if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
       if (this.delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, this.delayMs))
       if (signal?.aborted) return result<WorkflowPage<BookCandidate>>('cancelled', null)
-      return result('success', { items: this.candidates, cursor: { index: 0 } })
+      const candidates = options?.precision === true
+        ? this.candidates.filter((candidate) => candidate.name?.includes(keyword) === true || candidate.author?.includes(keyword) === true || candidate.kind?.includes(keyword) === true)
+        : this.candidates
+      return result('success', { items: candidates, cursor: { index: 0 } })
     } finally {
       this.onSearchFinish?.()
     }
@@ -172,6 +177,51 @@ test('搜索进度包含书源总数、已完成数和当前书源', async () =>
     assert.ok(progress.some((item) => item.active.includes('第一个书源') || item.active.includes('第二个书源')))
     const opened = await application.openSearchResult(operation.results[0]!, operation.results)
     assert.equal((await storage.listSearchHistory())[0]?.openedBookIds.includes(opened.book.bookId), true)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('精准搜索把 Android 的名称、作者和分类包含过滤传到书源，并丢弃其他结果', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-precision-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/precision'), 0)
+  const session = new FakeSession([
+    { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/precision/match', name: '目标书', author: '作者', rawFields: {}, traceRef: 'match' },
+    { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/precision/other', name: '无关书', author: '其他', kind: '其他', rawFields: {}, traceRef: 'other' },
+  ])
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => session })
+  try {
+    const operation = await application.search('目标', undefined, undefined, undefined, undefined, { precision: true })
+    assert.equal(operation.precision, true)
+    assert.deepEqual(operation.results.map((item) => item.candidate.name), ['目标书'])
+    assert.deepEqual(operation.groups.map((item) => item.candidate.name), ['目标书'])
+    assert.equal(session.searchOptions[0]?.precision, true)
+    assert.equal(session.searchOptions[0]?.budget?.timeoutMs, 30_000)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('单个书源搜索超时按失败记录，且不把超时误报为用户取消', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-search-timeout-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/timeout'), 0)
+  const application = new ReaderApplication({
+    catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false },
+    storage,
+    sourceSearchTimeoutMs: 10,
+    sessionFactory: (value) => new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '慢书', rawFields: {}, traceRef: 'slow' }], 40),
+  })
+  try {
+    const operation = await application.search('慢书')
+    assert.equal(operation.cancelled, false)
+    assert.equal(operation.sources[0]?.status, 'failed')
+    assert.equal(operation.sources[0]?.message, '书源搜索超时')
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

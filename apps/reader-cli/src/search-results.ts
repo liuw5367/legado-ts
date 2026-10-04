@@ -24,5 +24,5 @@ export function filterSearchSnapshot(snapshot: SearchOperationResult, expectedTi
   const results = snapshot.results.filter((item) => isBookTitleMatch(item.candidate.name, expectedTitle) && isAuthorMatch(item.candidate.author, expectedAuthor))
   const allowed = new Set(results)
   const sources = snapshot.sources.map((item) => ({ ...item, candidates: item.candidates.filter((candidate) => allowed.has(candidate)) }))
-  return { ...snapshot, results, sources, groups: groupSearchResults(expectedTitle, results) }
+  return { ...snapshot, results, sources, groups: groupSearchResults(expectedTitle, results, snapshot.precision === true) }
 }

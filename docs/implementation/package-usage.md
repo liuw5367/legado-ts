@@ -43,7 +43,7 @@
 
 `loadChapterContentBatch` 接收调用方筛出的缓存未命中章节，忽略卷节点，按配置的 `maxBatchSize` 分组，运行普通源 `ruleContent.contentBatch` 或 JS 源 `getContentBatch(chapters, book)`，并将 `java.cacheContent(chapter, content)` 接到调用方提供的 `cacheContent(chapter, content, signal)` 回调。核心按章节 `index` 识别对象、只接受唯一命中的 URL，先应用书源 `replaceRegex`，再让宿主逐章提交。缺少批量函数、脚本失败或未回存的章节会走 `loadChapterContent` 单章兜底；已成功回存的项目保留。回调返回 `false` 表示宿主拒绝当前写入，核心跳过该章兜底以免覆盖更新后的正文。未提供缓存回调时会跳过批量脚本、返回单章解析结果且不写入缓存。每次脚本最多接收 50 章。
 
-多源 fan-out、并发调度、进度事件和书源检测（`ReaderApplication.search` / `ReaderApplication.checkSources`）由 `apps/reader-cli` 应用层提供；核心 package 仍只负责单源工作流。CLI 还提供书源状态与优先级持久化、批量启用/禁用，以及检测取消后对已确认失败书源的再次选择。段评结构化读取仍未实现。纯候选归并与匹配排序已由 `groupSearchCandidates` 等核心函数提供；CLI 当前分组规则说明见[搜索流程](../flows/search-flow.md#typescript-当前聚合行为)。检测细节见[书源校验流程](../flows/source-check-flow.md)，其余能力见[能力清单](../standard/capability-inventory.md)与[已知差异](../divergence/known-divergences.md)。
+多源 fan-out、并发调度、进度事件和书源检测（`ReaderApplication.search` / `ReaderApplication.checkSources`）由 `apps/reader-cli` 应用层提供；核心 package 仍只负责单源工作流。`ReaderApplication.search` 的可选 `{ precision: true }` 会传递 Android 兼容的名称、作者或分类早期过滤；每个书源默认有 30 秒总期限，期限同时进入请求预算和规则取消信号。CLI 还提供书源状态与优先级持久化、批量启用/禁用，以及检测取消后对已确认失败书源的再次选择。段评结构化读取仍未实现。纯候选归并与匹配排序已由 `groupSearchCandidates` 等核心函数提供；CLI 当前分组规则说明见[搜索流程](../flows/search-flow.md#typescript-当前聚合行为)。检测细节见[书源校验流程](../flows/source-check-flow.md)，其余能力见[能力清单](../standard/capability-inventory.md)与[已知差异](../divergence/known-divergences.md)。
 
 ## 结果形状
 

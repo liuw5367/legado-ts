@@ -1,7 +1,7 @@
 import { discoverBooks, loadBookDetails, loadChapterContent, loadStoredChapterContent, loadTableOfContents, searchBooks } from '@legado/source-core'
-import type { BookCandidate, BookMetadata, Chapter, ConcurrencyHost, ContentIdentity, ContentStore, NormalizedSource, SourceSession as CoreSourceSession, WorkflowPorts } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ConcurrencyHost, ContentIdentity, ContentStore, NormalizedSource, SearchCandidateFields, SourceSession as CoreSourceSession, WorkflowPorts } from '@legado/source-core'
 import { createNodeSourceSession } from '@legado/source-node'
-import type { ReaderSourceSession } from './application-model.ts'
+import type { ReaderSourceSearchOptions, ReaderSourceSession } from './application-model.ts'
 import { ReaderStorage } from './storage.ts'
 import type { DebugCapture } from './debug-capture.ts'
 
@@ -14,9 +14,20 @@ export class SourceSession implements ReaderSourceSession {
     this.source = this.core.source
   }
 
-  public async search(keyword: string, signal?: AbortSignal, capture?: DebugCapture): Promise<Awaited<ReturnType<typeof searchBooks>>> {
+  public async search(keyword: string, signal?: AbortSignal, capture?: DebugCapture, options?: ReaderSourceSearchOptions): Promise<Awaited<ReturnType<typeof searchBooks>>> {
     capture?.beginStage('search')
-    const result = await this.core.run((ports) => searchBooks(ports, { source: this.source, keyword, ...(signal === undefined ? {} : { signal }), maxItems: 100 }), capture === undefined ? undefined : { requestObserver: capture })
+    const acceptSearchFields = options?.precision === true
+      ? (fields: SearchCandidateFields): boolean => fields.name.includes(keyword) || fields.author?.includes(keyword) === true || fields.kind?.includes(keyword) === true
+      : undefined
+    const result = await this.core.run((ports) => searchBooks(ports, {
+      source: this.source,
+      keyword,
+      ...(signal === undefined ? {} : { signal }),
+      ...(options?.cursor === undefined ? {} : { cursor: options.cursor }),
+      ...(options?.budget === undefined ? {} : { budget: options.budget }),
+      ...(acceptSearchFields === undefined ? {} : { acceptSearchFields }),
+      maxItems: 100,
+    }), capture === undefined ? undefined : { requestObserver: capture })
     capture?.recordResult('search', result, { candidates: result.value?.items.length ?? 0 })
     return result
   }

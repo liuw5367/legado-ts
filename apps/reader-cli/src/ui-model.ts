@@ -52,7 +52,7 @@ export interface HelpSection {
 export function helpSections(page: Page, homeArea: number): HelpSection[] {
   const current: Partial<Record<Page, HelpSection>> = {
     home: { title: '当前页面 · 首页', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开或重复搜索' }, { keys: '1/2/3', description: '切换书架、最近阅读、搜索记录' }, { keys: 'm', description: '书源管理' }, { keys: 's', description: '打开设置' }, ...(homeArea === 2 ? [] : [{ keys: 'o', description: '打开书籍操作' }])] },
-    search: { title: '当前页面 · 搜索', entries: [{ keys: '输入文字', description: '填写书名' }, { keys: '↵', description: '开始搜索' }, { keys: '退格', description: '删除输入' }] },
+    search: { title: '当前页面 · 搜索', entries: [{ keys: '输入文字', description: '填写书名' }, { keys: 'Ctrl+P', description: '切换精准搜索' }, { keys: '↵', description: '开始搜索' }, { keys: '退格', description: '删除输入' }] },
     results: { title: '当前页面 · 搜索结果', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开书籍详情' }, { keys: 't', description: '直接打开目录' }, { keys: 'o', description: '书籍操作' }, { keys: '⎋', description: '搜索中取消任务' }] },
     detail: { title: '当前页面 · 书籍信息', entries: [{ keys: '↵', description: '开始阅读' }, { keys: 't', description: '打开目录' }, { keys: 's', description: '查看书源' }, { keys: 'a', description: '加入或移出书架' }] },
     toc: { title: '当前页面 · 目录', entries: [{ keys: '↑/↓  j/k', description: '移动章节' }, { keys: '↵', description: '阅读选中章节' }, { keys: '/', description: '搜索章节' }, { keys: 'r', description: '刷新目录' }, { keys: 's', description: '切换正序/倒序' }, { keys: 'Home/End  Ctrl+A/E', description: '跳到开头或结尾' }] },

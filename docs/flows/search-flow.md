@@ -43,6 +43,8 @@
 - 匹配等级按 Android 顺序为 `exact`、`kind`、`contains`、`other`：书名或作者原始字符串等于关键词为 `exact`，分类包含关键词为 `kind`，书名或作者包含关键词为 `contains`，其余为 `other`。
 - 分组键是同一匹配组中的原始书名和作者；因此相同书名/作者的不同来源合并到一个候选组，首次到达候选作为代表，其他来源保留在 `candidates` 中。
 - 组先按匹配等级，再按组内不同 `sourceId` 的来源数量降序，最后按最早 `arrivalIndex` 稳定排序。普通 CLI 搜索默认保留 `other`；调用 `groupSearchResults(keyword, results, true)` 或核心 `groupSearchCandidates(..., true)` 时会丢弃 `other`。
+- `ReaderApplication.search(..., { precision: true })` 会把 `name.contains(keyword) || author.contains(keyword) || kind.contains(keyword)` 作为书源搜索的早期过滤传入 `source-core`，被过滤候选不会解析可选字段、占用同源去重身份或进入最终结果；命令行搜索页用 `Ctrl+P` 切换该模式。
+- 每个书源搜索从真正开始执行请求时计时，默认共享 30 秒总期限；应用把同一 `deadlineMs` 和请求预算传给 HTTP 与 JavaScript 规则，超时只标记该书源失败，用户取消仍记录为取消。
 - `normalizeSearchTitle` / `normalizeSearchAuthor` 只供严格换源匹配等身份比较使用：标题做 NFKC、小写并移除空白/标点/符号，作者做 NFKC、小写并移除空白；它们不替代 Android 普通搜索的原始字符串分组。
 - `searchMoreSources` 仍额外要求规范化后的书名和作者都完整匹配，避免把普通搜索的分类/包含结果误当成换源候选。
 

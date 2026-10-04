@@ -9,6 +9,7 @@ import type {
   OpenBookResult,
   ReaderApplicationOptions,
   ReaderSourceSession,
+  SearchOptions,
   SearchOperationResult,
   SearchProgressListener,
   SearchResult,
@@ -31,7 +32,9 @@ export type {
   OpenBookResult,
   ReaderApplicationOptions,
   ReaderSourceSession,
+  ReaderSourceSearchOptions,
   SearchMatchRank,
+  SearchOptions,
   SearchOperationResult,
   SearchProgress,
   SearchProgressListener,
@@ -57,6 +60,7 @@ export class ReaderApplication {
   private readonly storage: ReaderStorage
   private readonly sessions = new Map<string, ReaderSourceSession>()
   private readonly concurrency: KeyedConcurrencyHost
+  private readonly sourceSearchTimeoutMs: number
   private settings: ReaderSettings
   private readonly activeOperations = new Set<TrackedOperation>()
   private readonly evidence = new Map<string, DebugCapture>()
@@ -67,6 +71,7 @@ export class ReaderApplication {
     this.catalog = options.catalog
     this.storage = options.storage
     const fallback = options.maxConcurrentSources ?? 4
+    this.sourceSearchTimeoutMs = normalizeSourceSearchTimeout(options.sourceSearchTimeoutMs)
     this.settings = normalizeReaderSettings(options.settings ?? { searchConcurrency: fallback, sourceSearchConcurrency: fallback, sourceCheckConcurrency: fallback })
     this.concurrency = new KeyedConcurrencyHost({ maxConcurrent: Math.max(this.settings.searchConcurrency, this.settings.sourceSearchConcurrency, this.settings.sourceCheckConcurrency), maxConcurrentPerKey: 1 })
     for (const entry of this.catalog.entries.filter((item) => item.state === 'available' || item.state === 'disabled')) {
@@ -141,11 +146,11 @@ export class ReaderApplication {
     return this.storage.listSearchHistory(limit)
   }
 
-  public search(keyword: string, sourceIds?: readonly string[], signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener): Promise<SearchOperationResult> {
-    return this.trackOperation(signal, (operationSignal) => this.searchInternal(keyword, sourceIds, operationSignal, onProgress, onUpdate))
+  public search(keyword: string, sourceIds?: readonly string[], signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, options: SearchOptions = {}): Promise<SearchOperationResult> {
+    return this.trackOperation(signal, (operationSignal) => this.searchInternal(keyword, sourceIds, operationSignal, onProgress, onUpdate, this.settings.searchConcurrency, options))
   }
 
-  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, maxConcurrentSources = this.settings.searchConcurrency): Promise<SearchOperationResult> {
+  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, maxConcurrentSources = this.settings.searchConcurrency, options: SearchOptions = {}): Promise<SearchOperationResult> {
     const trimmed = keyword.trim()
     const searchId = randomUUID()
     const startedAt = new Date().toISOString()
@@ -179,7 +184,8 @@ export class ReaderApplication {
         keyword: trimmed,
         results: flattened,
         sources: results.map((item) => ({ ...item, candidates: item.candidates.map((candidate) => clones.get(candidate)!) })),
-        groups: groupSearchResults(trimmed, flattened),
+        groups: groupSearchResults(trimmed, flattened, options.precision === true),
+        ...(options.precision === true ? { precision: true } : {}),
         elapsedMs: Date.now() - startedClock,
         startedAt,
         completedAt,
@@ -210,10 +216,23 @@ export class ReaderApplication {
         emitProgress()
         let sourceStartedClock = Date.now()
         try {
-          const response = await this.concurrency.run(source.id, (innerSignal) => {
+          const response = await this.concurrency.run(source.id, async (innerSignal) => {
             // 并发宿主可能先排队；耗时从真正进入书源会话开始计算，不包含队列等待。
             sourceStartedClock = Date.now()
-            return session.search(trimmed, innerSignal, capture)
+            const deadline = sourceSearchDeadline(innerSignal, this.sourceSearchTimeoutMs)
+            try {
+              const response = await session.search(trimmed, deadline.signal, capture, {
+                ...(options.precision === true ? { precision: true } : {}),
+                budget: { timeoutMs: this.sourceSearchTimeoutMs, deadlineMs: Date.now() + this.sourceSearchTimeoutMs },
+              })
+              if (deadline.timedOut()) throw new Error('书源搜索超时')
+              return response
+            } catch (error) {
+              if (deadline.timedOut()) throw new Error('书源搜索超时')
+              throw error
+            } finally {
+              deadline.dispose()
+            }
           }, signal)
           const found = response.value?.items ?? []
           const durationMs = Date.now() - sourceStartedClock
@@ -453,7 +472,7 @@ export class ReaderApplication {
     })
   }
 
-  public searchMoreSources(bookId: string, signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener): Promise<SearchOperationResult> {
+  public searchMoreSources(bookId: string, signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, options: SearchOptions = {}): Promise<SearchOperationResult> {
     return this.trackOperation(signal, async (operationSignal) => {
       throwIfAborted(operationSignal)
       const book = await this.storage.getBook(bookId)
@@ -462,7 +481,7 @@ export class ReaderApplication {
       const valid = new Set(known.filter((item) => this.catalog.entries.some((entry) => entry.source.bookSourceUrl === item.sourceId && entry.fingerprint === item.sourceFingerprint && entry.state === 'available')).map((item) => item.sourceId))
       const sourceIds = orderedSearchSources(this.catalog.entries).filter((entry) => !valid.has(entry.source.bookSourceUrl)).map((entry) => entry.id)
       const update = onUpdate === undefined ? undefined : (snapshot: SearchOperationResult): void => onUpdate(filterSearchSnapshot(snapshot, book.name, book.author))
-      const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update, this.settings.sourceSearchConcurrency)
+      const result = await this.searchInternal(book.name, sourceIds, operationSignal, onProgress, update, this.settings.sourceSearchConcurrency, options)
       const searchEvidence = this.evidence.get('search')
       if (searchEvidence !== undefined) this.rememberEvidence('sources', searchEvidence)
       // searchInternal 在取消后仍会返回已完成书源的快照；先持久化其中的
@@ -655,6 +674,26 @@ function mergeMetadataIntoSource(source: KnownSource, metadata: BookMetadata): K
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function normalizeSourceSearchTimeout(value: number | undefined): number {
+  const timeout = value ?? 30_000
+  if (!Number.isInteger(timeout) || timeout < 1) throw new Error('书源搜索超时必须是正整数毫秒数')
+  return timeout
+}
+
+function sourceSearchDeadline(parent: AbortSignal, timeoutMs: number): { signal: AbortSignal; timedOut: () => boolean; dispose: () => void } {
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
+  const relay = (): void => controller.abort()
+  if (parent.aborted) controller.abort()
+  else parent.addEventListener('abort', relay, { once: true })
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    dispose: () => { clearTimeout(timer); parent.removeEventListener('abort', relay) },
+  }
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

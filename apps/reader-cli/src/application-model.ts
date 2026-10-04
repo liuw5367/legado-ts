@@ -1,4 +1,4 @@
-import type { BookCandidate, BookMetadata, Chapter, ContentIdentity, ContentStore, NormalizedSource, SearchMatchRank, TocBookPatch, TocChange, WorkflowStatus } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ContentIdentity, ContentStore, NormalizedSource, PageCursor, RequestBudget, SearchMatchRank, TocBookPatch, TocChange, WorkflowStatus } from '@legado/source-core'
 import type { SourceCatalogResult, SourceEntry } from './source-catalog.ts'
 import type { BookDocument, KnownSource, KnownSourceView, ReadingRecord, ReaderStorage, SearchHistoryEntry, ReadingPosition, SourceCheckRecord, ReaderSettings } from './storage.ts'
 import type { DebugCapture } from './debug-capture.ts'
@@ -44,6 +44,8 @@ export interface SearchOperationResult {
   results: SearchResult[]
   sources: SourceSearchResult[]
   groups: SearchResultGroup[]
+  /** 是否启用了 Android 兼容的名称、作者或分类包含过滤。 */
+  precision?: boolean
   elapsedMs: number
   startedAt: string
   completedAt: string
@@ -51,6 +53,18 @@ export interface SearchOperationResult {
 }
 
 export type SearchUpdateListener = (snapshot: SearchOperationResult) => void
+
+/** 应用层搜索策略；未设置时保留普通搜索结果。 */
+export interface SearchOptions {
+  precision?: boolean
+}
+
+/** 单个书源会话的搜索参数，由应用层把操作期限传入核心工作流。 */
+export interface ReaderSourceSearchOptions {
+  precision?: boolean
+  cursor?: PageCursor
+  budget?: Partial<RequestBudget>
+}
 
 export interface SearchProgress {
   total: number
@@ -105,12 +119,14 @@ export interface ReaderApplicationOptions {
   catalog: SourceCatalogResult
   storage: ReaderStorage
   maxConcurrentSources?: number
+  /** 单个书源搜索的总期限，默认 30 秒；测试和宿主可按需缩短。 */
+  sourceSearchTimeoutMs?: number
   settings?: ReaderSettings
   sessionFactory?: (source: NormalizedSource) => ReaderSourceSession
 }
 
 export interface ReaderSourceSession {
-  search(keyword: string, signal?: AbortSignal, capture?: DebugCapture): Promise<SearchWorkflowResult>
+  search(keyword: string, signal?: AbortSignal, capture?: DebugCapture, options?: ReaderSourceSearchOptions): Promise<SearchWorkflowResult>
   discover?(signal?: AbortSignal, capture?: DebugCapture): Promise<SearchWorkflowResult>
   detail(candidate: BookCandidate, signal?: AbortSignal, capture?: DebugCapture): Promise<DetailWorkflowResult>
   toc(book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; runPerJs?: boolean; isFromBookInfo?: boolean; tocCountWords?: boolean }, capture?: DebugCapture): Promise<TocWorkflowResult>

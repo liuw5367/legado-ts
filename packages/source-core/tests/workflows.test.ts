@@ -857,6 +857,10 @@ test('列表为空且没有 bookUrlPattern 时回退详情页解析', async () =
   const noFallback = await searchBooks(workflowPorts, { source: patterned, keyword: 'A' })
   assert.equal(noFallback.status, 'empty')
   assert.equal(noFallback.value?.items.length, 0)
+
+  const filteredFallback = await searchBooks(workflowPorts, { source: fallbackSource, keyword: 'A', acceptSearchFields: () => false })
+  assert.equal(filteredFallback.status, 'empty')
+  assert.equal(filteredFallback.value?.items.length, 0)
 })
 
 test('候选缺少书名时按身份缺失丢弃并给出正例诊断', async () => {

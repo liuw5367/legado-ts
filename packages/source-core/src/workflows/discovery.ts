@@ -315,7 +315,12 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     }
     if (fallback.candidate !== undefined) {
       try {
-        if (acceptCandidate === undefined || acceptCandidate(fallback.candidate)) {
+        const fallbackFieldsAccepted = acceptSearchFields === undefined || acceptSearchFields({
+          name: fallback.candidate.name ?? '',
+          ...(fallback.candidate.author === undefined ? {} : { author: fallback.candidate.author }),
+          ...(fallback.candidate.kind === undefined ? {} : { kind: fallback.candidate.kind }),
+        })
+        if (fallbackFieldsAccepted && (acceptCandidate === undefined || acceptCandidate(fallback.candidate))) {
           trace.push({ stage, event: 'candidate', target: `candidate:${candidates.length}`, itemIndex: 0 })
           candidates.push(fallback.candidate)
           if (shouldStop?.(fallback.candidate, candidates.length) === true) stopped = true

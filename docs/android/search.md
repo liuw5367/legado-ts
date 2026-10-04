@@ -59,7 +59,7 @@
 精准搜索过滤器在书名、作者、分类解析后执行：
 
 ```text
-name == key 或 author == key 或 kind.contains(key)
+name.contains(key) 或 author.contains(key) 或 kind.contains(key)
 ```
 
 实际代码使用大小写敏感的 Kotlin `contains`。输入框提交前会去除首尾空白，但不会做作者规范化、书名清洗或标点统一。

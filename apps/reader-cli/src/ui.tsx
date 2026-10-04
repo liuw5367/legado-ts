@@ -116,6 +116,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [history, setHistory] = useState<Awaited<ReturnType<ReaderApplication['searchHistory']>>>([])
   const [homeArea, setHomeArea] = useState(0)
   const [query, setQuery] = useState('')
+  const [searchPrecision, setSearchPrecision] = useState(false)
   const [search, setSearch] = useState<SearchOperationResult>()
   const [searchState, setSearchState] = useState<SearchUiState>('idle')
   const [sourceSearch, setSourceSearch] = useState<SearchOperationResult>()
@@ -562,7 +563,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setSearchState('running')
     selectedGroupKeyRef.current = undefined
     setSearchProgress(undefined)
-    setMessage(`正在搜索“${display(query.trim())}”…`)
+    setMessage(`正在${searchPrecision ? '精准' : ''}搜索“${display(query.trim())}”…`)
     setPage('results')
     const request = application.search(query, undefined, operation.controller.signal, (progress) => {
       if (isCurrent(operation)) setSearchProgress(progress)
@@ -573,7 +574,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         if (previousKey !== undefined) selectedGroupKeyRef.current = previousKey
         return snapshot
       })
-    })
+    }, { precision: searchPrecision })
     operation.promise = request
     try {
       const result = await request
@@ -1442,6 +1443,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       }
     }
     if (page === 'search') {
+      if (key.ctrl && (input === 'p' || input === 'P')) { setSearchPrecision((value) => !value); setMessage(searchPrecision ? '精准搜索已关闭' : '精准搜索已开启'); return }
       if (key.escape) { goBack(); return }
       if (key.return) { void submitSearch(); return }
       if (key.backspace || key.delete) { setQuery((value) => Array.from(value).slice(0, -1).join('')); return }
@@ -1530,7 +1532,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const visiblePage = renderPage(page, state)
   const inputMode = page === 'search' || page === 'toc' && tocSearchActive || page === 'debug' && (debugFilterActive || debugKeywordActive) || page === 'source-manager' && (sourceManagerFilterActive || sourceManagerOrderActive)
   const commandActions = footerLayout(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0, tocReversed, { textInput: inputMode, settingsEditing, settingsResetConfirm })
-  const inputLabel = page === 'search' ? '搜索 › ' : page === 'toc' && tocSearchActive ? '章节 › ' : page === 'debug' && debugKeywordActive ? '关键词 › ' : page === 'debug' && debugFilterActive ? '过滤 › ' : page === 'source-manager' && sourceManagerOrderActive ? '优先级 › ' : page === 'source-manager' && sourceManagerFilterActive ? '筛选 › ' : ''
+  const inputLabel = page === 'search' ? `搜索${searchPrecision ? ' [精准]' : ''} › ` : page === 'toc' && tocSearchActive ? '章节 › ' : page === 'debug' && debugKeywordActive ? '关键词 › ' : page === 'debug' && debugFilterActive ? '过滤 › ' : page === 'source-manager' && sourceManagerOrderActive ? '优先级 › ' : page === 'source-manager' && sourceManagerFilterActive ? '筛选 › ' : ''
   const inputValue = page === 'search' ? query : page === 'toc' ? tocQuery : debugKeywordActive ? debugKeyword : debugFilterActive ? debugFilter : sourceManagerOrderActive ? sourceManagerOrderValue : sourceManagerFilter
   const inputWidth = Math.max(0, columns - terminalWidth(commandActions.right) - 1 - terminalWidth(inputLabel) - 1)
   const commandInput = inputMode ? `${inputLabel}${tailTerminalText(inputValue, inputWidth)}█` : ''
