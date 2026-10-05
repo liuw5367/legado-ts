@@ -36,6 +36,8 @@ source-core 已实现声明式正文的 `subContent`，Node 集成测试覆盖�
 
 首个章节请求把 `webJs` 和 `sourceRegex` 传给 `AnalyzeUrl`；`webJs` 用于页面脚本加载，`sourceRegex` 用于资源嗅探。Android 的串行和并发正文分页只把 `webJs` 传给后续 `AnalyzeUrl`，不会再次传入 `sourceRegex`，不能把首页参数推广到分页分支。JS 源由自身 `getContent` 函数决定请求参数。每次响应的最终 URL 用于正文中的相对图片/链接。
 
+URL/options 的请求脚本按 Android 绑定边界接收当前 `book`；正文首请求另有只供 `java.get/put` 使用的内部章节作用域，脚本全局不会出现 `chapter`。正文分页和副内容请求只携带 `book`，不会把首页章节对象暴露给后续请求。脚本对 `book` 的 DTO 修改会回写到本次工作流的书籍快照，应用可在成功目录快照中持久化它；这套上下文由 source-core 传递，宿主只负责执行脚本和请求。
+
 ## 数据流和状态转换
 
 正文流程的输入、请求和持久化顺序如下：

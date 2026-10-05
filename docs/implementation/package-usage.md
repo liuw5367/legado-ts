@@ -26,7 +26,7 @@
 | `groupSearchCandidates` | 关键词与带 `BookCandidate`、`arrivalIndex` 的候选 | 按书名/作者身份归并并稳定排序的分组 | package |
 | `searchMatchRank` / `isBookTitleMatch` / `isAuthorMatch` | 搜索词或候选字段 | 核心匹配等级与规范化比较结果 | package |
 | `loadBookDetails(ports, input)` | `WorkflowPorts`、`DetailInput`（candidates、canReName） | `RuntimeResult<WorkflowPage<BookMetadata>>` | package |
-| `loadTableOfContents(ports, input)` | `ReadingPorts`、`TocInput`（book、refresh、maxPages） | `RuntimeResult<WorkflowPage<Chapter>>` | package |
+| `loadTableOfContents(ports, input)` | `ReadingPorts`、`TocInput`（book、refresh、maxPages） | `RuntimeResult<WorkflowPage<Chapter>>`；成功页可带 `bookAfter` 书籍快照 | package |
 | `loadChapterContent(ports, input)` | `ReadingPorts`、`ContentInput`（chapter、tocHtml、nextChapterUrl、replacements） | `RuntimeResult<ChapterContent>` | package |
 | `loadStoredChapterContent(ports, input)` | `ReadingPorts`、`StoredContentInput`（正文输入、`ContentIdentity`、`ContentStore`、可选 refresh） | `RuntimeResult<ChapterContent>`；命中不请求网络，提交后重读 | package + host store |
 | `loadChapterContentBatch(ports, input)` | `ReadingPorts`、`ContentBatchInput`（book、chapters、可选 `cacheContent` 宿主回调） | `RuntimeResult<ChapterContentBatchResult>`；已回存项与单章兜底结果按输入顺序返回 | package |
@@ -40,6 +40,8 @@
 `decodeImage` 只解释图片解密规则，不下载或缓存图片。`isCover` 选择 `coverDecodeJs`，否则选择 `ruleContent.imageDecode`；规则缺省时原样返回输入 bytes。正文图片脚本把 `result` 作为 `Uint8Array` 接收；封面默认按 Android 图片加载路径把 `result` 暴露为常用 `InputStream` 兼容对象，也可用 `resultInputKind: 'bytes'` 显式选择字节数组形式。规则必须返回 `Uint8Array`，执行失败、宿主能力缺失和取消都可从 `RuntimeResult.status` 区分。`javascriptBudget` 可按调用方策略覆盖宿主默认输入、输出、内存和时限；实际网络下载、文件/图片缓存和失败后的缓存策略由调用方负责。
 
 `loadStoredChapterContent` 是最终正文的 cache-first 编排入口：它按 `ContentIdentity` 读取宿主 `ContentStore`，命中有效记录时不请求网络；未命中或 `refresh=true` 时执行 `loadChapterContent`，再用 `ContentSaveToken` 条件提交正文、最终响应 URL、章节元数据和副内容，并在提交后重读。宿主返回 `stale`、`rejected` 或 `unknown` 时不覆盖较新正文，当前结果仍可交付并带 `partial`/`cache-failed` 诊断。`loadChapterContent` 仍是纯解析入口，不直接读写存储。
+
+请求选项脚本沿 `WorkflowRequest.book` 接收当前书籍，正文首请求的章节只保存在内部 `java.get/put` 作用域，不作为脚本全局 `chapter`；分页和副内容请求不携带章节作用域。书籍 DTO 的脚本修改由核心回写到本次结果，应用负责按版本提交。
 
 `loadChapterContentBatch` 接收调用方筛出的缓存未命中章节，忽略卷节点，按配置的 `maxBatchSize` 分组，运行普通源 `ruleContent.contentBatch` 或 JS 源 `getContentBatch(chapters, book)`，并将 `java.cacheContent(chapter, content)` 接到调用方提供的 `cacheContent(chapter, content, signal)` 回调。核心按章节 `index` 识别对象、只接受唯一命中的 URL，先应用书源 `replaceRegex`，再让宿主逐章提交。缺少批量函数、脚本失败或未回存的章节会走 `loadChapterContent` 单章兜底；已成功回存的项目保留。回调返回 `false` 表示宿主拒绝当前写入，核心跳过该章兜底以免覆盖更新后的正文。未提供缓存回调时会跳过批量脚本、返回单章解析结果且不写入缓存。每次脚本最多接收 50 章。
 

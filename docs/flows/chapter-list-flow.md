@@ -54,7 +54,7 @@
   -> readConfig.reverseToc 书籍级反转
   -> 重新编号
   -> formatJs
-  -> 返回章节列表
+  -> 返回章节列表 + 成功时的 bookAfter 书籍快照
   -> 应用层 reconcile 旧章节元数据并在同一写锁内保存目录快照与书籍 patch
 ```
 
@@ -89,7 +89,7 @@ export interface ChapterListResult {
 
 核心状态为 `created -> page-loading -> page-parsing -> collecting -> ordered -> completed`，应用提交在返回后单独进行。分页失败或取消不提交不完整目录。单 URL 分支以后只跟随首个下一页；多 URL 分支只收集这一批返回的章节，不递归展开每页新 URL。FlowExtensions.mapAsync 按发送 deferred 的输入顺序 await，后页先完成也不提前合并。
 
-提交前必须完成空标题过滤、URL 占位、VIP/购买标记、去重、编号和标题格式化。`reconcileTableOfContents` 会更新 `durChapterTitle`、`latestChapterTitle`、`lastCheckTime` 和 `totalChapterNum`；仅在 `totalChapterNum < list.size`（发现新章节）时更新 `lastCheckCount` 和 `latestChapterTime`；启用章节字数时，还要按索引与标题把已有章节的 `wordCount`、`variable`、`imgUrl` 合并回新列表。核心 reconcile 是纯函数，宿主负责把章节快照与书籍 patch 放入同一写锁。任何一步失败都不能只保存统计字段而丢失章节列表的一致性。
+提交前必须完成空标题过滤、URL 占位、VIP/购买标记、去重、编号和标题格式化。成功的 `TocPage` 还可带 `bookAfter`，表示 `preUpdateJs`、详情刷新和目录脚本实际使用后的书籍快照；失败或取消不发布半份快照。`reconcileTableOfContents` 会更新 `durChapterTitle`、`latestChapterTitle`、`lastCheckTime` 和 `totalChapterNum`；仅在 `totalChapterNum < list.size`（发现新章节）时更新 `lastCheckCount` 和 `latestChapterTime`；启用章节字数时，还要按索引与标题把已有章节的 `wordCount`、`variable`、`imgUrl` 合并回新列表。核心 reconcile 是纯函数，宿主负责把章节快照、`bookAfter` 与书籍 patch 放入同一写锁。任何一步失败都不能只保存统计字段而丢失章节列表的一致性。Android 应用还会用 `ContentProcessor` 的用户标题替换规则计算展示标题；source-core 没有应用数据库端口，因此 `bookPatch` 保留原始章节标题，具体应用可在提交前投影展示标题。
 
 目录顺序的最小真值表如下，`P` 表示页面解析后收集的顺序：
 
@@ -102,6 +102,8 @@ export interface ChapterListResult {
 当 `readConfig.reverseToc=true` 时，最终结果再反转一次。多页目录还要先按当前实现收集页面结果，再执行上面的整体顺序处理，不能在每页解析时提前反转。
 
 真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。`loadTableOfContents` 不读取旧目录；CLI 成功后把旧快照和当前阅读投影传给 `reconcileTableOfContents`，再由应用在同一提交边界保存，见 [状态契约](../standard/state-and-effects.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
+
+CLI 将 `bookAfter` 与章节、统计 patch 绑定在同一 `TocSnapshot`。正文调用带 `editionKey` 时直接使用该版本；省略版本且章节 `bookUrl` 已被目录脚本改写时，应用会按同一版本快照的有效 `bookAfter.bookUrl` 解析书源，随后以该有效地址建立正文请求和缓存身份。
 
 BookChapter.equals/hashCode 只按 url 判断，因此 LinkedHashSet 不是按全部章节字段判断相等。相同 URL 不同标题也会去重；先反转的分支保留原收集顺序中最后出现的同 URL 章节。不能误用 JSON 深比较。isTrue 对空白及精确字符串 `null` 返回默认 false，trim 后忽略大小写的 false/no/not/0/0.0 为 false，其他文本为 true。
 
