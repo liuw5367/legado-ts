@@ -463,7 +463,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
         stoppedByLimit = true
         continue
       }
-      resolvedNextUrls.push(nextUrl)
+      if (!resolvedNextUrls.includes(nextUrl)) resolvedNextUrls.push(nextUrl)
     }
     if (resolvedNextUrls.length === 1 && nextChapterAbsolute !== undefined && resolvedNextUrls[0] === nextChapterAbsolute) {
       reachedNextChapter = true

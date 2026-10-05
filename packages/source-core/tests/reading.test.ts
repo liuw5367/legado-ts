@@ -962,7 +962,7 @@ test('正文分页规则一次返回多个链接时按顺序读取全部页面',
   assert.equal(result.value?.pages.length, 3)
 })
 
-test('正文多 URL 分支保留重复输入地址并分别读取', async () => {
+test('正文多 URL 分支按绝对地址稳定去重后读取', async () => {
   const calls: string[] = []
   const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0 }
   const multiPageSource = { ...source, contentType: 'text', ruleContent: { content: 'content', nextContentUrl: 'next-content' } } as NormalizedSource
@@ -977,8 +977,8 @@ test('正文多 URL 分支保留重复输入地址并分别读取', async () => 
       return { status: 'empty', value: null }
     } },
   }, { source: multiPageSource, chapter })
-  assert.deepEqual(calls, ['https://source.test/chapter/1', 'https://source.test/chapter/2', 'https://source.test/chapter/2'])
-  assert.deepEqual(result.value?.pages, ['first', 'branch-2', 'branch-3'])
+  assert.deepEqual(calls, ['https://source.test/chapter/1', 'https://source.test/chapter/2'])
+  assert.deepEqual(result.value?.pages, ['first', 'branch-2'])
 })
 
 test('正文多 URL 分支按输入顺序受限并发，分支不递归且不携带首页 webJs/sourceRegex', async () => {
