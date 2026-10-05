@@ -133,20 +133,21 @@ test('URL 请求脚本携带书籍和内部章节变量作用域，但不暴露�
     variable: '{"chapterToken":"chapter-initial"}',
   }
   const options = JSON.stringify({
-    js: 'java.put("chapterToken", "chapter-updated"); java.put("bookToken", "book-updated"); result + "?name=" + book.name + "&global=" + typeof chapter + "&chapter=" + java.get("chapterToken") + "&book=" + java.get("bookToken")',
+    js: 'book.name = "请求后书"; java.put("chapterToken", "chapter-updated"); java.put("bookToken", "book-updated"); result + "?name=" + book.name + "&global=" + typeof chapter + "&chapter=" + java.get("chapterToken") + "&book=" + java.get("bookToken")',
   })
   await host.request({ source, url: `/context,${options}`, stage: 'detail', options: {}, book, chapter })
-  assert.equal(plans[0], 'https://fixture.invalid/context?name=%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B9%A6&global=undefined&chapter=chapter-updated&book=book-updated')
+  assert.equal(plans[0], 'https://fixture.invalid/context?name=%E8%AF%B7%E6%B1%82%E5%90%8E%E4%B9%A6&global=undefined&chapter=chapter-updated&book=book-updated')
   assert.deepEqual(JSON.parse(chapter.variable), { chapterToken: 'chapter-updated', bookToken: 'book-updated' })
+  assert.equal(book.name, '请求后书')
   assert.equal(book.variable, '{"bookToken":"book-initial"}')
 
   const bodyOptions = JSON.stringify({ bodyJs: 'book.name + "/" + typeof chapter + "/" + java.get("chapterToken")' })
   const bodyResponse = await host.request({ source, url: `/body,${bodyOptions}`, stage: 'detail', options: {}, book, chapter })
-  assert.equal(host.decodeResponse(bodyResponse), '上下文书/undefined/chapter-updated')
+  assert.equal(host.decodeResponse(bodyResponse), '请求后书/undefined/chapter-updated')
 
   const laterOptions = JSON.stringify({ js: 'book.name + "/" + typeof chapter' })
   await host.request({ source, url: `/later,${laterOptions}`, stage: 'detail', options: {}, book })
-  assert.equal(plans[2], 'https://fixture.invalid/%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B9%A6/undefined')
+  assert.equal(plans[2], 'https://fixture.invalid/%E8%AF%B7%E6%B1%82%E5%90%8E%E4%B9%A6/undefined')
 })
 
 test('非 WebView 请求选项把 dnsIp 传入 RequestPlan', async () => {

@@ -58,6 +58,8 @@ export interface SourceRequestRuntimeOptions {
 export interface RequestScriptContext {
   bindings?: Readonly<Record<string, unknown>>
   chapterScope?: unknown
+  /** DTO bindings whose direct JavaScript field mutations must be returned to the caller. */
+  captureBindings?: readonly string[]
 }
 
 function text(value: unknown): string {
@@ -67,6 +69,23 @@ function text(value: unknown): string {
 
 function object(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
+}
+
+function unwrapCapturedBindings(value: unknown, context: RequestScriptContext | undefined): unknown {
+  const names = context?.captureBindings
+  if (names === undefined || names.length === 0) return value
+  const wrapper = object(value)
+  if (wrapper === undefined || !Object.hasOwn(wrapper, '__legadoWorkflowBindings')) return value
+  const captured = object(wrapper.__legadoWorkflowBindings)
+  if (captured === undefined) return value
+  for (const name of names) {
+    const target = object(context?.bindings?.[name])
+    const changed = object(captured[name])
+    if (target === undefined || changed === undefined) continue
+    for (const key of Object.keys(target)) if (!Object.hasOwn(changed, key)) delete target[key]
+    Object.assign(target, changed)
+  }
+  return Object.hasOwn(wrapper, '__legadoWorkflowValue') ? wrapper.__legadoWorkflowValue : value
 }
 
 function headerObject(value: unknown): Readonly<Record<string, string>> | undefined {
@@ -302,7 +321,7 @@ export class SourceRequestRuntime {
   public async request(input: WorkflowRequest): Promise<NetworkResponse> {
     // 书源随这次调用显式传递：宿主上没有「当前书源」字段，同一宿主并发不同书源不会串源。
     const scriptContext: RequestScriptContext = {
-      ...(input.book === undefined ? {} : { bindings: { book: input.book } }),
+      ...(input.book === undefined ? {} : { bindings: { book: input.book }, captureBindings: ['book'] }),
       ...(input.chapter === undefined ? {} : { chapterScope: input.chapter }),
     }
     const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source, scriptContext)
@@ -343,7 +362,7 @@ export class SourceRequestRuntime {
     source: NormalizedSource,
     content: string,
     signal: AbortSignal | undefined,
-    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown },
+    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[] },
   ): Promise<unknown> {
     if (this.ruleHost === undefined) throw new SourceRequestError('capability-missing', '脚本执行需要 JavaScript 宿主', context.field)
     const scriptStage = context.scriptStage ?? (stage === 'detail' ? 'book' : 'search')
@@ -366,6 +385,7 @@ export class SourceRequestRuntime {
               ...(context.chapterScope === undefined ? {} : { [internalChapterScopeBinding]: context.chapterScope }),
             },
           }),
+          ...(context.captureBindings === undefined ? {} : { captureMutations: context.captureBindings }),
           ...(signal === undefined ? {} : { signal }),
         })
       } else {
@@ -383,6 +403,7 @@ export class SourceRequestRuntime {
               ...(context.chapterScope === undefined ? {} : { [internalChapterScopeBinding]: context.chapterScope }),
             },
           }),
+          ...(context.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
           ...(signal === undefined ? {} : { signal }),
         })
       }
@@ -393,7 +414,10 @@ export class SourceRequestRuntime {
     if (signal?.aborted === true || output.status === 'cancelled') throw new SourceRequestError('cancelled', output.message ?? '脚本执行已取消', context.field)
     if (output.status === 'capability-missing') throw new SourceRequestError('capability-missing', output.message ?? '脚本需要 JavaScript 能力', context.field)
     if (output.status !== 'success') throw new SourceRequestError('rule-failed', output.message ?? '脚本执行失败', context.field)
-    return output.value
+    return unwrapCapturedBindings(output.value, {
+      ...(context.bindings === undefined ? {} : { bindings: context.bindings }),
+      ...(context.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
+    })
   }
 
   private async evaluateUrlScript(
@@ -402,7 +426,7 @@ export class SourceRequestRuntime {
     stage: WorkflowStage,
     source: NormalizedSource,
     signal?: AbortSignal,
-    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown },
+    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[] },
   ): Promise<string> {
     const value = await this.runSourceScript(code, stage, source, result, signal, {
       evaluateField: context?.evaluateField ?? 'url',
@@ -411,6 +435,7 @@ export class SourceRequestRuntime {
       ...(context?.redirectUrl === undefined ? {} : { redirectUrl: context.redirectUrl }),
       ...(context?.bindings === undefined ? {} : { bindings: context.bindings }),
       ...(context?.chapterScope === undefined ? {} : { chapterScope: context.chapterScope }),
+      ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
     })
     return text(value)
   }
