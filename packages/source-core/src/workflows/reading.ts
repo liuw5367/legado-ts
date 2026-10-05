@@ -1156,17 +1156,28 @@ async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSourc
       if (captured !== undefined && Object.hasOwn(captured, '__legadoWorkflowBindings')) {
         const outputValue = captured.__legadoWorkflowValue
         const mutatedChapter = captured.__legadoWorkflowBindings?.chapter
-        const mutatedTitle = typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter)
-          ? (mutatedChapter as Record<string, unknown>).title
-          : undefined
-        const mutatedVariable = typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter)
-          ? (mutatedChapter as Record<string, unknown>).variable
-          : undefined
+        if (typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter)) mergeFormattedChapter(chapter, mutatedChapter as Record<string, unknown>, book)
+        const mutatedTitle = typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter) ? (mutatedChapter as Record<string, unknown>).title : undefined
+        const mutatedVariable = typeof mutatedChapter === 'object' && mutatedChapter !== null && !Array.isArray(mutatedChapter) ? (mutatedChapter as Record<string, unknown>).variable : undefined
         if (outputValue !== null && outputValue !== undefined) chapter.title = textValue(outputValue)
         else if (javascriptPrimitiveText(mutatedTitle) !== undefined) chapter.title = javascriptPrimitiveText(mutatedTitle)!
         if (typeof mutatedVariable === 'string') chapter.variable = mutatedVariable
       } else chapter.title = textValue(script.value)
     }
+  }
+}
+
+function mergeFormattedChapter(chapter: Chapter, mutated: Record<string, unknown>, book: BookMetadata): void {
+  const stringFields = ['sourceId', 'bookUrl', 'url', 'baseUrl', 'chapterUrl', 'volume', 'updateTime', 'tag', 'wordCount', 'imgUrl', 'variable'] as const
+  for (const field of stringFields) if (typeof mutated[field] === 'string') chapter[field] = mutated[field] as never
+  for (const field of ['isVolume', 'isVip', 'isPay'] as const) if (typeof mutated[field] === 'boolean') chapter[field] = mutated[field]
+  if (typeof mutated.title === 'string') chapter.title = mutated.title
+  const directChapterUrl = typeof mutated.chapterUrl === 'string'
+  if (!directChapterUrl || Object.hasOwn(mutated, 'url') || Object.hasOwn(mutated, 'baseUrl')) {
+    const baseReference = chapter.baseUrl?.trim() || book.tocUrl?.trim() || book.bookUrl
+    const baseUrl = resolveUrl(baseReference, book.bookUrl) ?? book.bookUrl
+    const rawUrl = chapter.url?.trim() || chapter.chapterUrl
+    chapter.chapterUrl = resolveUrl(rawUrl, baseUrl) ?? rawUrl
   }
 }
 
@@ -1271,7 +1282,7 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
   const chapters: Chapter[] = []
   for (const [itemIndex, rawItem] of rawItems.entries()) {
     const diagnosticIndex = pageIndex * 100000 + itemIndex
-    const fields = await chapterFields(ports, input.source, rawItem, diagnosticIndex, signal, diagnostics, trace, volume, context, book)
+    const fields = await chapterFields(ports, input.source, rawItem, diagnosticIndex, signal, diagnostics, trace, volume, context, book, input.tocCountWords !== false)
     if (signal?.aborted === true) return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: false, cancelled: true }
     if (fields.fatal !== undefined) return { chapters, diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: true, cancelled: false }
     if (fields.isVolume === true && fields.title !== undefined && fields.title.length > 0) volume = fields.title
@@ -1312,6 +1323,8 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
       isPay: fields.isPay ?? false,
       ...(fields.updateTime === undefined ? {} : { updateTime: fields.updateTime }),
       ...chapterInfoProjection(fields.updateTime, isVolume, input.tocCountWords !== false),
+      ...(fields.tag === undefined ? {} : { tag: fields.tag }),
+      ...(fields.wordCount === undefined ? {} : { wordCount: fields.wordCount }),
     }
     if (volume !== undefined) chapter.volume = volume
     chapters.push(chapter)
@@ -1441,6 +1454,8 @@ interface ChapterFields {
   isVip?: boolean
   isPay?: boolean
   updateTime?: string
+  tag?: string
+  wordCount?: string
   rawFields: JsonObject
   fatal?: 'failed' | 'capability-missing'
 }
@@ -1456,9 +1471,9 @@ function chapterInfoProjection(updateTime: string | undefined, isVolume: boolean
     : { tag: updateTime.replace(match[0], ''), wordCount: match[1]!.trim() }
 }
 
-async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }, book: BookMetadata): Promise<ChapterFields> {
+async function chapterFields(ports: ReadingPorts, source: NormalizedSource, content: unknown, itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], inheritedVolume: string | undefined, context: { baseUrl: string; redirectUrl: string }, book: BookMetadata, countWords: boolean): Promise<ChapterFields> {
   const result: ChapterFields = { rawFields: {} }
-  const chapter: Record<string, unknown> = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, url: '', baseUrl: context.redirectUrl, chapterUrl: '', index: itemIndex, title: '', rawFields: result.rawFields }
+  const chapter: Record<string, unknown> = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, url: '', baseUrl: context.redirectUrl, chapterUrl: '', index: itemIndex, title: '', isVolume: false, isVip: false, isPay: false, ...(inheritedVolume === undefined ? {} : { volume: inheritedVolume }), rawFields: result.rawFields }
   // Android 的目录解析顺序是标题、地址、更新时间、卷标，然后才读取 VIP/购买状态。
   // chapterVolume 是 TS 运行时保留的卷名扩展，放在 Android 的 isVolume 之后，避免改变
   // 必要字段和付费字段的先后关系。
@@ -1472,7 +1487,7 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
           : ruleField
     const rule = ruleString(source, 'ruleToc', ruleField)
     if (rule === undefined) continue
-    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, bindings: { book, chapter } })
+    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, bindings: { book, chapter }, captureBindings: ['chapter'] })
     if (field.state === 'cancelled') return result
     if (field.state === 'failed' || field.state === 'capability-missing') {
       diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: ruleField, itemIndex, message: field.message ?? '章节字段失败', retryable: false })
@@ -1483,16 +1498,22 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
       if (ruleField === 'isVolume') {
         result.isVolume = field.state === 'value' ? booleanValue(field.value) : false
         result.rawFields.isVolume = result.isVolume
+        chapter.isVolume = result.isVolume
+        syncChapterFields(result, chapter, countWords)
         continue
       }
       if (ruleField === 'isVip') {
         result.isVip = field.state === 'value' ? booleanValue(field.value) : false
         result.rawFields.isVip = result.isVip
+        chapter.isVip = result.isVip
+        syncChapterFields(result, chapter, countWords)
         continue
       }
       if (ruleField === 'isPay') {
         result.isPay = field.state === 'value' ? booleanValue(field.value) : false
         result.rawFields.isPay = result.isPay
+        chapter.isPay = result.isPay
+        syncChapterFields(result, chapter, countWords)
         continue
       }
     }
@@ -1506,11 +1527,45 @@ async function chapterFields(ports: ReadingPorts, source: NormalizedSource, cont
       if (outputField === 'title') chapter.title = value
       else if (outputField === 'url') chapter.url = value
     }
+    syncChapterFields(result, chapter, countWords)
     if (ruleField === 'chapterName' && (field.state !== 'value' || result.title === undefined || result.title.length === 0)) return result
   }
-  if (typeof chapter.variable === 'string') result.variable = chapter.variable
+  syncChapterFields(result, chapter, countWords)
   if (result.volume === undefined && inheritedVolume !== undefined) result.volume = inheritedVolume
   return result
+}
+
+function syncChapterFields(result: ChapterFields, chapter: Record<string, unknown>, countWords: boolean): void {
+  if (typeof chapter.title === 'string') result.title = chapter.title
+  if (typeof chapter.url === 'string') result.url = chapter.url
+  if (typeof chapter.variable === 'string') result.variable = chapter.variable
+  if (typeof chapter.volume === 'string' && chapter.volume.length > 0) result.volume = chapter.volume
+  if (typeof chapter.isVolume === 'boolean') result.isVolume = chapter.isVolume
+  if (typeof chapter.isVip === 'boolean') result.isVip = chapter.isVip
+  if (typeof chapter.isPay === 'boolean') result.isPay = chapter.isPay
+  if (typeof chapter.updateTime === 'string') result.updateTime = chapter.updateTime
+  if (result.updateTime !== undefined) {
+    const projection = chapterInfoProjection(result.updateTime, result.isVolume === true, countWords)
+    if (projection.tag !== undefined) {
+      result.tag = projection.tag
+      chapter.tag = projection.tag
+    } else delete result.tag
+    if (projection.wordCount !== undefined) {
+      result.wordCount = projection.wordCount
+      chapter.wordCount = projection.wordCount
+    } else delete result.wordCount
+  } else {
+    if (typeof chapter.tag === 'string') result.tag = chapter.tag
+    if (typeof chapter.wordCount === 'string') result.wordCount = chapter.wordCount
+  }
+  if (result.title !== undefined) chapter.title = result.title
+  if (result.url !== undefined) chapter.url = result.url
+  if (result.variable !== undefined) chapter.variable = result.variable
+  if (result.volume !== undefined) chapter.volume = result.volume
+  if (result.isVolume !== undefined) chapter.isVolume = result.isVolume
+  if (result.isVip !== undefined) chapter.isVip = result.isVip
+  if (result.isPay !== undefined) chapter.isPay = result.isPay
+  if (result.updateTime !== undefined) chapter.updateTime = result.updateTime
 }
 
 function listValues(value: unknown): string[] {

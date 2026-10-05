@@ -705,7 +705,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         const code = await this.expandTemplate(segment.text, state, content)
         const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, result, state.request.signal, { ...state.request, bindings: state.bindings, ruleState: state, mode: 'script' })
         if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
-        result = output.value
+        result = this.unwrapCapturedRuleValue(output.value, state)
       }
       return result
     }
@@ -812,9 +812,25 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     else if (rule.mode === 'Js') {
       const result = await this.runJavaScript(interpolated, this.javascriptStage(state.request.stage), state.source, content, state.request.signal, { ...state.request, bindings: state.bindings, ruleState: state, mode: 'script' })
       if (result.status !== 'success') throw new SourceRuleError(result.status === 'capability-missing' ? 'capability-missing' : result.status === 'cancelled' ? 'cancelled' : 'failed', result.message ?? 'JavaScript 规则执行失败')
-      value = result.value
+      value = this.unwrapCapturedRuleValue(result.value, state)
     } else throw new SourceRuleError('capability-missing', 'WebView 规则需要浏览器宿主')
     return this.applyReplacement(value, rule, state, content)
+  }
+
+  private unwrapCapturedRuleValue(value: unknown, state: EvaluationState): unknown {
+    const names = state.request.captureBindings
+    if (names === undefined || typeof value !== 'object' || value === null || Array.isArray(value)) return value
+    const wrapper = value as RuleEntity
+    const captured = wrapper.__legadoWorkflowBindings
+    if (typeof captured !== 'object' || captured === null || Array.isArray(captured)) return value
+    for (const name of names) {
+      const target = state.bindings[name]
+      const returned = (captured as RuleEntity)[name]
+      if (typeof target !== 'object' || target === null || Array.isArray(target) || typeof returned !== 'object' || returned === null || Array.isArray(returned)) continue
+      for (const key of Object.keys(target as RuleEntity)) if (!Object.hasOwn(returned as RuleEntity, key)) delete (target as RuleEntity)[key]
+      Object.assign(target as RuleEntity, returned as RuleEntity)
+    }
+    return wrapper.__legadoWorkflowValue
   }
 
   private async evaluateDefault(body: string, state: EvaluationState, content: unknown): Promise<unknown> {

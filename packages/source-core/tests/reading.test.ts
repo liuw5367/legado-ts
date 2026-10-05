@@ -144,6 +144,7 @@ test('目录下一页规则失败或缺少宿主能力时终止并丢弃半份�
 
 test('目录先求下一页规则，再解析当前页章节字段', async () => {
   const calls: string[] = []
+  const bindings: Array<{ field: string; updateTime?: unknown; tag?: unknown; wordCount?: unknown; isVolume?: unknown }> = []
   const orderedSource = {
     ...source,
     ruleToc: {
@@ -161,12 +162,17 @@ test('目录先求下一页规则，再解析当前页章节字段', async () =>
   const result = await loadTableOfContents({
     network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: false }) },
     rules: {
-      evaluate: async ({ field, content }) => {
+      evaluate: async ({ field, content, bindings: fieldBindings }) => {
         calls.push(field)
+        const chapter = fieldBindings?.chapter
+        if (typeof chapter === 'object' && chapter !== null && !Array.isArray(chapter)) {
+          const value = chapter as Record<string, unknown>
+          bindings.push({ field, updateTime: value.updateTime, tag: value.tag, wordCount: value.wordCount, isVolume: value.isVolume })
+        }
         if (field === 'chapterList') return { status: 'success', value: [{ title: '第一章', url: '/chapter/1' }] }
         if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
         if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
-        if (field === 'updateTime') return { status: 'success', value: '2026-01-01' }
+        if (field === 'updateTime') return { status: 'success', value: '更新 1234字' }
         if (field === 'isVolume' || field === 'isVip' || field === 'isPay') return { status: 'success', value: false }
         if (field === 'chapterVolume') return { status: 'empty', value: null }
         return { status: 'empty', value: null }
@@ -175,6 +181,7 @@ test('目录先求下一页规则，再解析当前页章节字段', async () =>
   }, { source: orderedSource, book })
   assert.equal(result.status, 'success')
   assert.deepEqual(calls.slice(0, 9), ['chapterList', 'nextTocUrl', 'chapterName', 'chapterUrl', 'updateTime', 'isVolume', 'chapterVolume', 'isVip', 'isPay'])
+  assert.deepEqual(bindings.find((item) => item.field === 'isVolume'), { field: 'isVolume', updateTime: '更新 1234字', tag: '更新', wordCount: '1234字', isVolume: false })
 })
 
 test('目录章节字段规则失败时不返回已解析的半份目录', async () => {

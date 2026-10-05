@@ -135,6 +135,8 @@ export interface WorkflowRuleRequest {
   expect?: 'text' | 'nodes'
   /** 本次求值附加的 JS 绑定，例如 URL 展开需要的 `key`、`page`。 */
   bindings?: Readonly<Record<string, unknown>>
+  /** JavaScript 规则片段需要回写的 DTO 绑定；目录字段使用 chapter 保持渐进可见性。 */
+  captureBindings?: readonly string[]
 }
 
 export interface WorkflowRuleOutput {

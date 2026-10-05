@@ -503,7 +503,7 @@ export async function requestPage(ports: WorkflowPorts, source: NormalizedSource
   return (await requestPageResponse(ports, source, url, stage, options, diagnostics, trace))?.content
 }
 
-export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined, context?: { baseUrl?: string; redirectUrl?: string; expect?: 'text' | 'nodes'; bindings?: Readonly<Record<string, unknown>> }): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
+export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined, context?: { baseUrl?: string; redirectUrl?: string; expect?: 'text' | 'nodes'; bindings?: Readonly<Record<string, unknown>>; captureBindings?: readonly string[] }): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
   trace.push({ stage, event: 'rule', target: field, ...(itemIndex === undefined ? {} : { itemIndex }) })
   let output: WorkflowRuleOutput
   try {

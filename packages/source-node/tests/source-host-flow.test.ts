@@ -389,11 +389,12 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
       chapterName: 'text',
       chapterUrl: 'href',
       preUpdateJs: 'book.tocUrl = fromBookInfo ? "/from-info" : "/updated-toc"',
-      formatJs: 'if (index === 1) { chapter.title = title + "✓"; }',
+      formatJs: 'if (index === 1) { chapter.title = title + "✓"; chapter.url = "formatted"; chapter.baseUrl = "https://format.test/base/"; chapter.isVip = true; chapter.tag = "formatted-tag"; void 0; }',
     },
+    ruleContent: { content: 'literal:正文' },
   } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const requested: string[] = []
-  const network: NetworkHost = { request: async (plan) => { requested.push(plan.url); return response(plan.url, '<a href="/chapter/1">第一章</a>') } }
+  const network: NetworkHost = { request: async (plan) => { requested.push(plan.url); return response(plan.url, plan.url.endsWith('/base/formatted') ? '<p>正文</p>' : '<a href="/chapter/1">第一章</a>') } }
   const ports: WorkflowPorts = { network, rules: new SourceRuleHost() }
   const book = {
     sourceId: source.bookSourceUrl,
@@ -409,8 +410,58 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
   assert.equal(result.status, 'success')
   assert.equal(requested[0], 'https://format.test/updated-toc')
   assert.equal(result.value?.items[0]?.title, '第一章✓')
+  assert.equal(result.value?.items[0]?.chapterUrl, 'https://format.test/base/formatted')
+  assert.equal(result.value?.items[0]?.isVip, true)
+  assert.equal(result.value?.items[0]?.tag, 'formatted-tag')
+  const content = await loadChapterContent(ports, { source, book, chapter: result.value!.items[0]! })
+  assert.equal(content.status, 'success')
+  assert.equal(content.value?.cleaned, '正文')
+  assert.ok(requested.includes('https://format.test/base/formatted'))
   await loadTableOfContents(ports, { source, book, runPerJs: true, isFromBookInfo: true })
-  assert.equal(requested[1], 'https://format.test/from-info')
+  assert.ok(requested.includes('https://format.test/from-info'))
+})
+
+test('声明式目录字段的 JavaScript 绑定按字段顺序渐进回写', async () => {
+  const source = {
+    bookSourceUrl: 'https://progressive.test',
+    bookSourceName: 'Progressive',
+    ruleToc: {
+      chapterList: 'a',
+      chapterName: '@js:chapter.title = "渐进章"; chapter.title',
+      chapterUrl: '@js:chapter.url = "/progressive"; chapter.url',
+      updateTime: '@js:chapter.updateTime = "更新 1234字"; chapter.updateTime',
+      isVolume: '@js:chapter.isVolume = true; chapter.isVolume',
+      isVip: '@js:chapter.tag === "更新 1234字" && chapter.isVolume === true',
+      isPay: '@js:chapter.isVolume === true',
+    },
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => response(plan.url, '<a>原始节点</a>') },
+    rules: new SourceRuleHost(),
+  }
+  const result = await loadTableOfContents(ports, {
+    source,
+    book: {
+      sourceId: source.bookSourceUrl,
+      bookUrl: 'https://progressive.test/book',
+      tocUrl: 'https://progressive.test/book',
+      tocHtml: '<a>原始节点</a>',
+      name: '书',
+      rawFields: {},
+      traceRef: 'progressive',
+      emptyFields: [],
+      fieldErrors: {},
+    },
+  })
+  assert.equal(result.status, 'success')
+  const chapter = result.value?.items[0]
+  assert.equal(chapter?.title, '渐进章')
+  assert.equal(chapter?.chapterUrl, 'https://progressive.test/progressive')
+  assert.equal(chapter?.isVolume, true)
+  assert.equal(chapter?.isVip, true)
+  assert.equal(chapter?.isPay, true)
+  assert.equal(chapter?.tag, '更新 1234字')
+  assert.equal(chapter?.wordCount, undefined)
 })
 
 test('目录规则读取 preUpdateJs 更新后的 book 对象', async () => {

@@ -34,7 +34,9 @@
 - `Book.readConfig.reverseToc` 是书籍刷新顺序，Android 通过 `book.getReverseToc()` 读取；`readConfig.reverseTocDisplay` 只影响展示，不能改写下一次刷新输入顺序；
 - 去重和最终顺序确定后重新从 0 编号，再执行 `formatJs`。
 
-`formatJs` 在整个循环开始时设置 gInt=0，每章更新一基 index、chapter、title；gInt 可跨章累计。返回值不为 null 时覆盖标题，空字符串也覆盖；异常保留该章原标题。依据为 BookChapterList.analyzeChapterList 的 bindings 循环。
+`formatJs` 在整个循环开始时设置 gInt=0，每章更新一基 index、chapter、title；gInt 可跨章累计。脚本对 `chapter` 的 URL、baseUrl、卷、VIP、购买、tag、字数和变量等字段修改会回写到最终章节，并按新的原始 URL/基准地址重新计算 `chapterUrl`。返回值不为 null 时覆盖标题，空字符串也覆盖；异常保留该章原标题。依据为 BookChapterList.analyzeChapterList 的 bindings 循环。
+
+章节字段规则也共享同一个可变 `chapter` 绑定：标题、原始 URL、更新时间投影和卷标状态完成后，后续 VIP/购买规则可以读取这些最新字段；JavaScript 规则对绑定的直接修改会在下一字段前合并。
 
 ## 数据流、状态和持久化边界
 
