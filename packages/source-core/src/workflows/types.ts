@@ -19,6 +19,11 @@ export interface WorkflowPage<T> {
   nextCursor?: PageCursor
 }
 
+/** 目录成功后脚本实际使用的书籍状态；仅由目录流程返回，应用可按书源版本持久化。 */
+export interface TocPage extends WorkflowPage<Chapter> {
+  bookAfter?: BookMetadata
+}
+
 export interface BookIdentity {
   /** 书源身份，跨书源聚合不得复用此值。 */
   sourceId: string

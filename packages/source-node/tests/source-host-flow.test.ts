@@ -502,6 +502,9 @@ test('目录规则读取 preUpdateJs 更新后的 book 对象', async () => {
   assert.deepEqual(requested, ['https://binding-book.test/new-toc'])
   assert.equal(result.value?.items[0]?.title, 'https://binding-book.test/new-book')
   assert.equal(result.value?.items[0]?.bookUrl, 'https://binding-book.test/new-book')
+  assert.equal(result.value?.bookAfter?.bookUrl, 'https://binding-book.test/new-book')
+  assert.equal(result.value?.bookAfter?.tocUrl, 'https://binding-book.test/new-toc')
+  assert.equal(result.value?.bookAfter?.tocHtml, undefined)
 })
 
 test('preUpdateJs 的 refreshTocUrl 更新详情并让脚本和后续 TOC 使用新地址', async () => {

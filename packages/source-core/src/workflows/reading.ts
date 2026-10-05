@@ -6,11 +6,11 @@ import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeImageDecodeScript, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
-import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, WorkflowDiagnostic, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, TocPage, WorkflowDiagnostic, WorkflowOptions, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 let paginationBatchSequence = 0
 
-export async function loadTableOfContents(ports: ReadingPorts, input: TocInput): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
+export async function loadTableOfContents(ports: ReadingPorts, input: TocInput): Promise<RuntimeResult<TocPage>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   const stage: WorkflowStage = 'detail'
@@ -216,7 +216,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (input.signal?.aborted === true || diagnostics.some((item) => item.code === 'cancelled')) return { status: 'cancelled', value: null, diagnostics, trace }
   }
   if (uniqueChapters.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '目录为空', retryable: false })
-  const value: WorkflowPage<Chapter> = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}) }
+  const value: TocPage = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}) }
   const fatalCode = diagnostics.find((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'capability-missing')?.code
   if (fatalCode !== undefined) return { status: fatalCode === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
   if (uniqueChapters.length === 0) {
@@ -225,10 +225,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   }
   const status = statusFromDiagnostics(diagnostics, uniqueChapters.length)
   // 取消的调用不能拿到半份目录。
-  return { status, value: status === 'cancelled' ? null : value, diagnostics, trace }
+  return { status, value: status === 'success' ? { ...value, bookAfter: withoutTransientBookFields(book) } : status === 'cancelled' ? null : value, diagnostics, trace }
 }
 
-async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
+async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<TocPage>> {
   const cursor = input.cursor ?? { index: 0 }
   const book = { ...input.book.rawFields, ...input.book, origin: input.book.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(undefined, input.source) }
   const result = await executeSourceFunction(ports, input.source, 'getChapters', [book], { book }, 'detail', 'chapter', trace, input.signal)
@@ -292,10 +292,11 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
   }
   chapters.forEach((chapter, index) => { chapter.index = index })
   if (chapters.length === 0) diagnostics.push({ code: 'empty-page', stage: 'detail', message: 'JS 目录为空', retryable: false })
-  const value: WorkflowPage<Chapter> = { items: chapters, cursor }
+  const value: TocPage = { items: chapters, cursor }
+  const status = statusFromDiagnostics(diagnostics, chapters.length)
   return chapters.length === 0
     ? { status: 'failed', value: null, diagnostics, trace }
-    : { status: statusFromDiagnostics(diagnostics, chapters.length), value, diagnostics, trace }
+    : { status, value: status === 'success' ? { ...value, bookAfter: withoutTransientBookFields(mergeBookScriptValues(input.book, book)) } : value, diagnostics, trace }
 }
 
 function chapterRuleUrl(chapter: Pick<Chapter, 'url' | 'chapterUrl'>): string {
@@ -1218,6 +1219,16 @@ function mergeBookScriptValues(book: BookMetadata, values: Record<string, unknow
   if (merged.coverUrl !== undefined) merged.coverUrl = resolveUrl(merged.coverUrl, bookBaseUrl) ?? merged.coverUrl
   if (merged.tocUrl !== undefined) merged.tocUrl = resolveUrl(merged.tocUrl, bookBaseUrl) ?? merged.tocUrl
   return merged
+}
+
+function withoutTransientBookFields(book: BookMetadata): BookMetadata {
+  const { tocHtml: _tocHtml, ...persisted } = book
+  return {
+    ...persisted,
+    rawFields: { ...book.rawFields },
+    emptyFields: [...book.emptyFields],
+    fieldErrors: { ...book.fieldErrors },
+  }
 }
 
 function mergeVariableJson(current: string | undefined, incoming: string): string {
