@@ -599,7 +599,8 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
     const candidate = input.candidates[itemIndex]!
-    const book = { ...candidate.rawFields, ...candidate, tocUrl: candidate.tocUrl ?? candidate.bookUrl, origin: candidate.sourceId, originName: input.source.bookSourceName, type: sourceNumber(input.source, 'bookSourceType') ?? 0 }
+    // Android getBookInfoAwait 进入脚本前会清掉旧位标记，再写回书源对应的 BookType。
+    const book = { ...candidate.rawFields, ...candidate, tocUrl: candidate.tocUrl ?? candidate.bookUrl, origin: candidate.sourceId, originName: input.source.bookSourceName, type: androidBookType(undefined, input.source) }
     const info = await executeSourceFunction(ports, input.source, 'getBookInfo', [book], { book }, 'detail', 'book', trace, input.signal)
     if (info.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage: 'detail', itemIndex, message: '详情脚本执行已取消', retryable: false })
@@ -666,4 +667,22 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
 
 function primitiveText(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
+}
+
+const BOOK_TYPE_VIDEO = 4
+const BOOK_TYPE_TEXT = 8
+const BOOK_TYPE_AUDIO = 32
+const BOOK_TYPE_IMAGE = 64
+const BOOK_TYPE_WEB_FILE = 128
+
+function androidBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
+  const explicitType = book?.type
+  if (typeof explicitType === 'number' && Number.isInteger(explicitType) && explicitType > 0) return explicitType
+  switch (sourceNumber(source, 'bookSourceType')) {
+    case 1: return BOOK_TYPE_AUDIO
+    case 2: return BOOK_TYPE_IMAGE
+    case 3: return BOOK_TYPE_TEXT | BOOK_TYPE_WEB_FILE
+    case 4: return BOOK_TYPE_VIDEO
+    default: return BOOK_TYPE_TEXT
+  }
 }

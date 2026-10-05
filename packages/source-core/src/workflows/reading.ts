@@ -230,7 +230,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
 
 async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
   const cursor = input.cursor ?? { index: 0 }
-  const book = { ...input.book.rawFields, ...input.book, origin: input.book.sourceId, originName: input.source.bookSourceName, type: sourceNumber(input.source, 'bookSourceType') ?? 0 }
+  const book = { ...input.book.rawFields, ...input.book, origin: input.book.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(undefined, input.source) }
   const result = await executeSourceFunction(ports, input.source, 'getChapters', [book], { book }, 'detail', 'chapter', trace, input.signal)
   if (typeof book.variable === 'string') input.book.variable = book.variable
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 目录工作流已取消', diagnostics, trace)
@@ -1102,7 +1102,7 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
     index: input.chapter.index,
     title: input.chapter.title ?? '',
   }
-  const bookValue = { ...book.rawFields, ...book, origin: book.sourceId, originName: input.source.bookSourceName, type: sourceNumber(input.source, 'bookSourceType') ?? 0 }
+  const bookValue = { ...book.rawFields, ...book, origin: book.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(book, input.source) }
   const result = await executeSourceFunction(ports, input.source, 'getContent', [chapter, bookValue, input.nextChapterUrl ?? null], { chapter, book: bookValue, nextChapterUrl: input.nextChapterUrl ?? null }, 'detail', 'content', trace, input.signal)
   if (input.book !== undefined && typeof bookValue.variable === 'string') input.book.variable = bookValue.variable
   if (typeof chapter.variable === 'string') input.chapter.variable = chapter.variable
@@ -1599,7 +1599,7 @@ function resolvedBookType(book: BookMetadata | undefined, source: NormalizedSour
 
 function androidBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
   const explicitType = book?.type
-  if (typeof explicitType === 'number' && Number.isInteger(explicitType) && explicitType >= 0) return explicitType
+  if (typeof explicitType === 'number' && Number.isInteger(explicitType) && explicitType > 0) return explicitType
   switch (sourceNumber(source, 'bookSourceType')) {
     case 0: return BOOK_TYPE_TEXT
     case 1: return BOOK_TYPE_AUDIO
@@ -1608,6 +1608,10 @@ function androidBookType(book: BookMetadata | undefined, source: NormalizedSourc
     case 4: return BOOK_TYPE_VIDEO
     default: return 0
   }
+}
+
+function javascriptBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
+  return androidBookType(book, source) || BOOK_TYPE_TEXT
 }
 
 function isLocalBook(type: number, book: BookMetadata | undefined): boolean {
