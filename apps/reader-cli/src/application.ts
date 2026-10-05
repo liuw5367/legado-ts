@@ -641,7 +641,17 @@ export class ReaderApplication {
     const book = await this.storage.getBook(bookId)
     if (book === undefined) throw new Error('书籍记录不存在')
     const known = await this.storage.listKnownSources(bookId)
-    const edition = known.find((item) => item.editionKey === editionId) ?? known.find((item) => item.sourceId === chapter.sourceId && item.bookUrl === chapter.bookUrl)
+    let edition = known.find((item) => item.editionKey === editionId) ?? known.find((item) => item.sourceId === chapter.sourceId && item.bookUrl === chapter.bookUrl)
+    if (edition === undefined) {
+      const candidates = known.filter((item) => item.sourceId === chapter.sourceId)
+      for (const candidate of candidates) {
+        const snapshot = await this.storage.getTocSnapshot(bookId, candidate.editionKey)
+        if (snapshot?.bookAfter?.bookUrl === chapter.bookUrl) {
+          edition = candidate
+          break
+        }
+      }
+    }
     if (edition === undefined) throw new Error('正文来源未记录')
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
