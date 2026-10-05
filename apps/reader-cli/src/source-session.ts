@@ -66,7 +66,9 @@ export class SourceSession implements ReaderSourceSession {
   }
 
   public async content(chapter: Chapter, book: BookMetadata, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string; contentStore?: ContentStore; contentIdentity?: ContentIdentity; operationId?: string; saveChapterMetadata?: boolean }, capture?: DebugCapture): Promise<Awaited<ReturnType<typeof loadChapterContent>>> {
-    const tocHtml = this.tocPage?.bookUrl === book.bookUrl && chapter.chapterUrl === book.bookUrl ? this.tocPage.html : undefined
+    // Android BookContent compares the chapter's original `url` with book.bookUrl;
+    // chapterUrl may be a derived absolute address and must not disable reuse.
+    const tocHtml = this.tocPage?.bookUrl === book.bookUrl && chapter.url === book.bookUrl ? this.tocPage.html : undefined
     const nextChapterUrl = options?.nextChapterUrl
     capture?.beginStage('content')
     const run = (ports: WorkflowPorts) => options?.contentStore !== undefined && options.contentIdentity !== undefined

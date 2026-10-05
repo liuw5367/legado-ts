@@ -763,7 +763,15 @@ test('JS 正文绑定使用章节原始 URL 与页面基准地址', async () => 
 })
 
 test('章节地址等于详情地址时复用详情响应解析正文', async () => {
-  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: book.bookUrl, index: 0 }
+  const chapter: ChapterIdentity = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: book.bookUrl,
+    // Android BookContent checks the raw chapter URL (`url`) against bookUrl;
+    // chapterUrl may already be a derived address from an earlier projection.
+    url: book.bookUrl,
+    chapterUrl: 'https://source.test/derived/chapter',
+    index: 0,
+  }
   const result = await loadChapterContent({
     network: { request: async () => { throw new Error('不应重复请求详情页') } },
     rules: { evaluate: async ({ field, content }) => field === 'content' && content === '<p>详情正文</p>' ? { status: 'success', value: '详情正文' } : { status: 'empty', value: null } },
