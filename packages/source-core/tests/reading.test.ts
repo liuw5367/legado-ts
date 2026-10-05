@@ -868,6 +868,17 @@ test('text contentType 不会跳过 Android 正文格式化；音视频链接保
   }
 })
 
+test('媒体正文仅含 Unicode 空白时按 Android isBlank 判为空', async () => {
+  const mediaSource = { ...source, bookSourceType: 1, ruleContent: { content: 'content' } } as NormalizedSource
+  const result = await loadChapterContent({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('body'), redirected: false }) },
+    rules: { evaluate: async ({ field }) => field === 'content' ? { status: 'success', value: '\u3000\u2003' } : { status: 'empty', value: null } },
+  }, { source: mediaSource, chapter: { sourceId: mediaSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 } })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
+  assert.ok(result.diagnostics.some((item) => item.code === 'empty-page'))
+})
+
 test('正文 subContent 对在线文本原样追加且先于全文替换', async () => {
   const calls: string[] = []
   let replacementInput = ''

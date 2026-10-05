@@ -662,7 +662,10 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   }
   const fatalStatus = contentFatalStatus(diagnostics)
   if (fatalStatus !== undefined) return { status: fatalStatus, value: null, diagnostics, trace }
-  if (cleaned.length === 0) {
+  // Kotlin's String.isBlank() treats Unicode whitespace (for example U+3000)
+  // as empty; checking only length would incorrectly deliver media chapters
+  // whose extracted URL is whitespace.
+  if (isAndroidBlank(cleaned)) {
     diagnostics.push({ code: 'empty-page', stage, message: '正文为空', retryable: false })
     if (resultChapter.isVolume === true) return { status: 'empty', value: { chapter: resultChapter, contentType, raw, cleaned, pages, resources: [], ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
     return { status: 'failed', value: null, diagnostics, trace }
@@ -670,6 +673,10 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
   const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' && item.field === 'subContent') ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
+}
+
+function isAndroidBlank(value: string): boolean {
+  return value.trim().length === 0
 }
 
 function contentIdentityMatchesInput(identity: ContentIdentity, input: StoredContentInput): boolean {
