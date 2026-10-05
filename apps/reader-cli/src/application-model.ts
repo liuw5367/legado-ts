@@ -118,6 +118,7 @@ export interface TocResult {
   chapters: Chapter[]
   revision: string
   bookPatch: TocBookPatch
+  bookAfter?: BookMetadata
   changes: TocChange[]
   source: SourceEntry
   edition: KnownSource

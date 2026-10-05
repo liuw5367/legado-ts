@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { Chapter, JsonObject, TocBookPatch } from '@legado/source-core'
+import type { BookMetadata, Chapter, JsonObject, TocBookPatch } from '@legado/source-core'
 
 export interface SearchHistoryEntry {
   id: string
@@ -67,6 +67,8 @@ export interface TocSnapshot {
   revision: string
   chapters: Chapter[]
   bookPatch: TocBookPatch
+  /** 目录脚本成功后产生的书籍状态；按 editionKey 绑定，旧快照可缺省。 */
+  bookAfter?: BookMetadata
   updatedAt: string
 }
 

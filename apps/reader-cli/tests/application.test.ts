@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentIdentity, ContentStore, NormalizedSource, RuntimeResult, WorkflowPage } from '@legado/source-core'
+import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentIdentity, ContentStore, NormalizedSource, RuntimeResult, TocPage, WorkflowPage } from '@legado/source-core'
 import { ReaderApplication } from '../src/application.ts'
 import type { SearchOperationResult } from '../src/application.ts'
 import type { ReaderSourceSearchOptions, ReaderSourceSession } from '../src/application.ts'
@@ -31,7 +31,7 @@ class FakeSession implements ReaderSourceSession {
   private readonly contentValue: ChapterContent | undefined
   private readonly onSearch: (() => void) | undefined
   private readonly onSearchFinish: (() => void) | undefined
-  private readonly tocValue: RuntimeResult<WorkflowPage<Chapter>> | undefined
+  private readonly tocValue: RuntimeResult<TocPage> | undefined
   public readonly contentRefreshes: boolean[] = []
   public readonly contentNextChapterUrls: Array<string | undefined> = []
   public readonly contentBooks: BookMetadata[] = []
@@ -40,7 +40,7 @@ class FakeSession implements ReaderSourceSession {
   public readonly searchOptions: ReaderSourceSearchOptions[] = []
   public closed = false
 
-  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void, tocValue?: RuntimeResult<WorkflowPage<Chapter>>) {
+  public constructor(candidates: BookCandidate[], delayMs = 0, failDetail = false, contentValue?: ChapterContent, onSearch?: () => void, onSearchFinish?: () => void, tocValue?: RuntimeResult<TocPage>) {
     this.candidates = candidates
     this.delayMs = delayMs
     this.failDetail = failDetail
@@ -77,7 +77,7 @@ class FakeSession implements ReaderSourceSession {
     return result<WorkflowPage<BookMetadata>>('capability-missing', null)
   }
 
-  public async toc(_book: BookMetadata): Promise<RuntimeResult<WorkflowPage<Chapter>>> {
+  public async toc(_book: BookMetadata): Promise<RuntimeResult<TocPage>> {
     return this.tocValue ?? result<WorkflowPage<Chapter>>('failed', null)
   }
 
@@ -485,6 +485,36 @@ test('刷新目录通过 source-core reconcile 并持久化书源版本快照', 
     const secondLoad = await application.loadToc(bookId, edition)
     assert.deepEqual(secondLoad.changes, [])
     assert.equal(secondLoad.bookPatch.lastCheckCount, undefined)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('目录刷新后的 bookAfter 按书源版本快照交给正文', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-book-after-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/book-after'), 0)
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const bookUrl = 'https://source.test/book-after/book'
+  const effectiveBookUrl = 'https://source.test/book-after/new-book'
+  const edition = editionKey(sourceEntry.source.bookSourceUrl, bookUrl)
+  const chapter: Chapter = { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: effectiveBookUrl, chapterUrl: `${effectiveBookUrl}/c1`, index: 0, title: '第一章', rawFields: {}, traceRef: 'fixture' }
+  const bookAfter: BookMetadata = { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: effectiveBookUrl, tocUrl: `${effectiveBookUrl}/toc`, name: '更新书', variable: '{"chapterToken":"new"}', rawFields: { marker: 'new' }, traceRef: 'book-after', emptyFields: [], fieldErrors: {} }
+  const session = new FakeSession([], 0, false, { chapter, contentType: 'text', raw: '正文', cleaned: '正文', pages: ['正文'], resources: [] }, undefined, undefined, result('success', { items: [chapter], cursor: { index: 0 }, bookAfter }))
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => session })
+  try {
+    await storage.upsertBook({ bookId, name: '旧书', activeEditionKey: edition, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: edition, sourceId: sourceEntry.source.bookSourceUrl, sourceFingerprint: sourceEntry.fingerprint, bookUrl, name: '旧书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    const toc = await application.loadToc(bookId, edition)
+    assert.equal(toc.bookAfter?.bookUrl, effectiveBookUrl)
+    const snapshot = await storage.getTocSnapshot(bookId, edition)
+    assert.equal(snapshot?.bookAfter?.variable, bookAfter.variable)
+    await application.loadContent(bookId, chapter, edition)
+    assert.equal(session.contentBooks.at(-1)?.bookUrl, effectiveBookUrl)
+    assert.equal(session.contentBooks.at(-1)?.variable, bookAfter.variable)
+    assert.equal(session.contentIdentities.at(-1)?.bookUrl, effectiveBookUrl)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

@@ -625,8 +625,9 @@ export class ReaderApplication {
       carryMetadata: true,
     })
     const revision = sha256(JSON.stringify(reconciled.chapters.map((item) => ({ url: item.url ?? item.chapterUrl, baseUrl: item.baseUrl, chapterUrl: item.chapterUrl, title: item.title }))))
-    await this.storage.saveTocSnapshot(bookId, edition.editionKey, { editionKey: edition.editionKey, revision, chapters: reconciled.chapters, bookPatch: reconciled.bookPatch, updatedAt: new Date().toISOString() })
-    return { chapters: reconciled.chapters, revision, bookPatch: reconciled.bookPatch, changes: reconciled.changes, source, edition }
+    const bookAfter = result.value.bookAfter
+    await this.storage.saveTocSnapshot(bookId, edition.editionKey, { editionKey: edition.editionKey, revision, chapters: reconciled.chapters, bookPatch: reconciled.bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }), updatedAt: new Date().toISOString() })
+    return { chapters: reconciled.chapters, revision, bookPatch: reconciled.bookPatch, changes: reconciled.changes, ...(bookAfter === undefined ? {} : { bookAfter }), source, edition }
   }
 
   public loadContent(bookId: string, chapter: Chapter, editionId?: string, signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string }): Promise<{ content: ChapterContent; source: SourceEntry; edition: KnownSource }> {
@@ -645,10 +646,12 @@ export class ReaderApplication {
     const tocSnapshot = await this.storage.getTocSnapshot(bookId, edition.editionKey)
     const reading = await this.storage.getReadingRecord(bookId)
     const tocRevision = tocSnapshot?.revision ?? reading?.positions[edition.editionKey]?.tocRevision ?? ''
+    const snapshotBook = tocSnapshot?.bookAfter
+    const effectiveBookUrl = snapshotBook?.bookUrl ?? edition.bookUrl
     const contentIdentity: ContentIdentity = {
       sessionId: bookId,
       sourceId: edition.sourceId,
-      bookUrl: edition.bookUrl,
+      bookUrl: effectiveBookUrl,
       chapterKey: chapterKey({ editionKey: edition.editionKey, tocRevision, chapterUrl: chapter.chapterUrl, index: chapter.index }),
       tocRevision,
       chapterIndex: chapter.index,
@@ -657,10 +660,13 @@ export class ReaderApplication {
       semanticVersion: 'source-core-content-v1',
     }
     const nextChapterUrl = options?.nextChapterUrl ?? nextChapterUrlFromSnapshot(tocSnapshot?.chapters, chapter)
-    const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), ...(edition.variable === undefined ? {} : { variable: edition.variable }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
+    const metadata: BookMetadata = snapshotBook === undefined
+      ? { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), ...(edition.variable === undefined ? {} : { variable: edition.variable }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
+      : { ...snapshotBook, sourceId: edition.sourceId, rawFields: { ...edition.rawFields, ...snapshotBook.rawFields }, traceRef: `stored:${edition.editionKey}`, emptyFields: [...snapshotBook.emptyFields], fieldErrors: { ...snapshotBook.fieldErrors } }
     const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
+    const contentChapter = metadata.bookUrl === chapter.bookUrl ? chapter : { ...chapter, bookUrl: metadata.bookUrl }
     const contentOptions = { ...(options ?? {}), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), contentStore: this.storage.contentStore(bookId), contentIdentity, operationId: randomUUID() }
-    const result = await session.content(chapter, metadata, signal, contentOptions, capture).finally(() => {
+    const result = await session.content(contentChapter, metadata, signal, contentOptions, capture).finally(() => {
       this.rememberEvidence('content', capture)
       this.rememberEvidence(`content:${bookId}:${edition.editionKey}`, capture)
     })
