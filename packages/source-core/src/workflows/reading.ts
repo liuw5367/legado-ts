@@ -389,6 +389,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   const pendingPages = [{ url: firstPageUrl, followNext: true }]
   let totalBytes = 0
   let stoppedByLimit = false
+  let loginCheckConsumed = false
   // 命中下一章时终止分页（Android BookContent 的 nextChapterUrl 护栏）。
   let reachedNextChapter = false
   let nextChapterAbsolute: string | undefined
@@ -410,9 +411,17 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       break
     }
     visited.add(normalizedUrl)
-    const page = pageIndex === 0 && input.tocHtml !== undefined && normalizedUrl === bookUrl
-      ? { body: input.tocHtml, url: normalizedUrl }
-      : await loadPage(ports, input.source, normalizedUrl, stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace, pageIndex === 0 ? firstPageExecution : pagedExecution)
+    let page: { body: string; url: string } | undefined
+    const canReuseTocHtml = pageIndex === 0 && input.tocHtml !== undefined && normalizedUrl === bookUrl
+    if (canReuseTocHtml) {
+      page = { body: input.tocHtml!, url: normalizedUrl }
+    } else {
+      const requestOptions = pageOptions(input, maxBytes, totalBytes)
+      if (loginCheckConsumed) requestOptions.skipLoginCheck = true
+      // 只有第一个实际网络请求运行 loginCheckJs；详情页复用不消耗资格。
+      loginCheckConsumed = true
+      page = await loadPage(ports, input.source, normalizedUrl, stage, requestOptions, diagnostics, trace, pageIndex === 0 ? firstPageExecution : pagedExecution)
+    }
     if (page === undefined) break
     const body = page.body
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
@@ -496,7 +505,9 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       for (const branchUrl of scheduledUrls) visited.add(branchUrl)
       if (scheduledUrls.length > 0) {
         // Android 多 URL 分支调用 getStrResponseAwait() 时不传 webJs/sourceRegex。
-        const batch = await fetchPageBatch(ports, input.source, scheduledUrls, stage, pageOptions(input, maxBytes, totalBytes))
+        const firstBranchNeedsLoginCheck = !loginCheckConsumed
+        const batch = await fetchPageBatch(ports, input.source, scheduledUrls, stage, { ...pageOptions(input, maxBytes, totalBytes), ...(loginCheckConsumed ? { skipLoginCheck: true } : {}) }, undefined, firstBranchNeedsLoginCheck)
+        loginCheckConsumed = true
         if (isSignalAborted(input.signal)) {
           appendBatchDiagnostics(batch, diagnostics, trace, true)
           return cancelled('正文工作流已取消', diagnostics, trace)
@@ -562,7 +573,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       let storeAuxiliary = true
       if (/^http/i.test(subContent)) {
         const beforeRequest = diagnostics.length
-        const response = await requestPageResponse(ports, input.source, subContent, stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
+        const response = await requestPageResponse(ports, input.source, subContent, stage, { ...pageOptions(input, maxBytes, totalBytes), skipLoginCheck: true }, diagnostics, trace)
         const requestDiagnostics = diagnostics.slice(beforeRequest)
         for (const diagnostic of requestDiagnostics) if (diagnostic.field === undefined) diagnostic.field = 'subContent'
         if (isSignalAborted(input.signal) || requestDiagnostics.some((item) => item.code === 'cancelled')) {

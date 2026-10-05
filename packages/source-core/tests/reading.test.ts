@@ -350,6 +350,77 @@ test('目录 loginCheckJs 只在首个实际网络请求执行，tocHtml 命中�
   assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['branch-a', 'branch-b'])
 })
 
+test('正文 loginCheckJs 只在首个实际网络请求执行，分页和副内容跳过检查', async () => {
+  const calls: Array<{ url: string; skipLoginCheck?: boolean }> = []
+  let loginChecks = 0
+  const loginSource = {
+    ...source,
+    loginCheckJs: 'check-login',
+    ruleContent: { content: 'content', nextContentUrl: 'next', subContent: 'sub' },
+    bookSourceType: 1,
+  } as NormalizedSource
+  const ports: ReadingPorts = {
+    request: async ({ url, options }) => {
+      calls.push({ url, ...(options.skipLoginCheck === true ? { skipLoginCheck: true } : {}) })
+      const body = url.endsWith('/c1') ? 'first' : url.endsWith('/c2') ? 'second' : url.endsWith('/c3') ? 'third' : 'lyrics'
+      return { url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    },
+    network: { request: async () => { throw new Error('complete request adapter should be used') } },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'content') return { status: 'success', value: content }
+        if (field === 'nextContentUrl' && content === 'first') return { status: 'success', value: ['/c2', '/c3'] }
+        if (field === 'subContent') return { status: 'success', value: 'https://source.test/lyrics' }
+        return { status: 'empty', value: null }
+      },
+      executeWorkflowJavaScript: async ({ content }) => {
+        loginChecks += 1
+        return { status: 'success', value: content }
+      },
+    },
+  }
+  const result = await loadChapterContent(ports, { source: loginSource, book, chapter: { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0 } })
+  assert.equal(result.status, 'success')
+  assert.equal(loginChecks, 1)
+  assert.deepEqual(calls, [
+    { url: 'https://source.test/c1' },
+    { url: 'https://source.test/c2', skipLoginCheck: true },
+    { url: 'https://source.test/c3', skipLoginCheck: true },
+    { url: 'https://source.test/lyrics', skipLoginCheck: true },
+  ])
+})
+
+test('正文 tocHtml 复用不消耗 loginCheckJs 的首个网络请求资格', async () => {
+  let loginChecks = 0
+  const calls: string[] = []
+  const loginSource = {
+    ...source,
+    loginCheckJs: 'check-login',
+    ruleContent: { content: 'content', nextContentUrl: 'next' },
+  } as NormalizedSource
+  const result = await loadChapterContent({
+    request: async ({ url }) => {
+      calls.push(url)
+      return { url, status: 200, headers: {}, bytes: new TextEncoder().encode('network-page'), redirected: false }
+    },
+    network: { request: async () => { throw new Error('complete request adapter should be used') } },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'content') return { status: 'success', value: content }
+        if (field === 'nextContentUrl' && content === 'cached-page') return { status: 'success', value: '/c2' }
+        return { status: 'empty', value: null }
+      },
+      executeWorkflowJavaScript: async ({ content }) => {
+        loginChecks += 1
+        return { status: 'success', value: content }
+      },
+    },
+  }, { source: loginSource, book, chapter: { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: book.bookUrl, index: 0 }, tocHtml: 'cached-page' })
+  assert.equal(result.status, 'success')
+  assert.equal(loginChecks, 1)
+  assert.deepEqual(calls, ['https://source.test/c2'])
+})
+
 test('目录分页按 URL 而非响应正文去重，并拆分换行地址列表', async () => {
   const calls: string[] = []
   const ports: ReadingPorts = {
