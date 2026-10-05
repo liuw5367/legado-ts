@@ -313,6 +313,8 @@ test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章
   const toc = await loadTableOfContents(ports, { source, book })
   const chapter = toc.value?.items[0]
   assert.ok(chapter)
+  assert.equal(chapter.url, 'https://js-source.test/book/chapter/1')
+  assert.equal(chapter.baseUrl, 'https://js-source.test/book/toc')
   assert.equal(chapter.chapterUrl, 'https://js-source.test/book/chapter/1')
   assert.equal(chapter.isVip, true)
 
@@ -773,8 +775,9 @@ test('JavaScript 书源空返回与 Android 一样作为空列表处理', async 
     source,
     book: { sourceId: source.bookSourceUrl, bookUrl: 'https://empty-js-source.test/book', name: '书', rawFields: {}, traceRef: 'book:0', emptyFields: [], fieldErrors: {} },
   })
-  assert.equal(toc.status, 'empty')
-  assert.deepEqual(toc.value?.items, [])
+  assert.equal(toc.status, 'failed')
+  assert.equal(toc.value, null)
+  assert.ok(toc.diagnostics.some((diagnostic) => diagnostic.message === 'JS 目录为空'))
 })
 
 test('getBookInfo 空字符串沿用搜索阶段字段', async () => {

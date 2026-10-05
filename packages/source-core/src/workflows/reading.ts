@@ -271,7 +271,7 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
     const chapter: Chapter = {
       sourceId: input.source.bookSourceUrl,
       bookUrl: input.book.bookUrl,
-      url: rawUrl,
+      url: isVolume && rawUrl === title ? rawUrl : chapterUrl,
       baseUrl: tocBaseUrl,
       chapterUrl,
       index: chapters.length,
@@ -293,7 +293,9 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
   chapters.forEach((chapter, index) => { chapter.index = index })
   if (chapters.length === 0) diagnostics.push({ code: 'empty-page', stage: 'detail', message: 'JS 目录为空', retryable: false })
   const value: WorkflowPage<Chapter> = { items: chapters, cursor }
-  return { status: statusFromDiagnostics(diagnostics, chapters.length), value, diagnostics, trace }
+  return chapters.length === 0
+    ? { status: 'failed', value: null, diagnostics, trace }
+    : { status: statusFromDiagnostics(diagnostics, chapters.length), value, diagnostics, trace }
 }
 
 function chapterRuleUrl(chapter: Pick<Chapter, 'url' | 'chapterUrl'>): string {
