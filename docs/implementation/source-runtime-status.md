@@ -43,6 +43,7 @@
 | D13 | 二进制差异 | 图片脚本执行预算 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D13 | 预算、取消、资源释放和大输入行为都有跨端 fixture |
 | D14 | JavaScript bridge | JavaScript bridge 逐重载覆盖 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D14 | 真实书源方法逐重载通过，未支持方法明确返回能力状态 |
 | D15 | 应用边界差异 | 目录统计标题的应用替换规则 | 有意保留 | [差异登记](../divergence/known-divergences.md)，D15；`toc-reconcile.ts` | source-core 保持纯函数；应用提供标题替换规则快照或投影回调后再做跨端 fixture |
+| D16 | JS 源行为差异 | JS 搜索候选 URL 的可见形式 | 已实现待验证 | [差异登记](../divergence/known-divergences.md)，D16；`discovery.ts`、`source-host-flow.test.ts`；隔离 Android smoke 已确认 marshaller 保留相对地址 | 规范化候选身份与脚本可见原始 URL 的双字段契约完成 Android/TS fixture 决策；未决定前不得改写现有绝对 URL API |
 
 ## 完成时如何更新
 
