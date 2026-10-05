@@ -962,7 +962,7 @@ test('非在线文本非音视频类型不追加 subContent；歌词请求失败
   }
   const audioChapter = { sourceId: audioSource.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/chapter/1', index: 0, variable: '{"keep":"yes"}' }
   const failedLyrics = await loadChapterContent(failingPorts, { source: audioSource, chapter: audioChapter })
-  assert.equal(failedLyrics.status, 'partial')
+  assert.equal(failedLyrics.status, 'success')
   assert.equal(failedLyrics.value?.raw, 'Main content')
   assert.equal(failedLyrics.value?.auxiliary, undefined)
   assert.equal(failedLyrics.value?.chapter.variable, '{"keep":"yes"}')

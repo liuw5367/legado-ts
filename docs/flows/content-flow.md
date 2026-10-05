@@ -21,7 +21,7 @@ Android 的 `WebBook.getContentAwait` 只有在 `needSave=true` 且缓存 token 
 
 ## 副文、替换和标题
 
-- `subContent` 使用首次正文响应的规则上下文提取。在线文本书（`BookType.text` 且非 local）无条件把副文原文追加进正文列表，即使它看起来像 `http` URL，也不再次请求；非在线类型会先 trim，副文以 `http` 开头（忽略大小写）时请求并取响应 body，否则保留 trim 后的原文。音频将结果写入章节变量 `lyric`，视频写入 `danmaku`，其他类型不追加；副文请求失败保留已取得的主正文，规则提取失败则正文失败。Android 把处理异常记录为日志；TS 保留结构化诊断，取消会终止整个流程（见 D11）；
+- `subContent` 使用首次正文响应的规则上下文提取。在线文本书（`BookType.text` 且非 local）无条件把副文原文追加进正文列表，即使它看起来像 `http` URL，也不再次请求；非在线类型会先 trim，副文以 `http` 开头（忽略大小写）时请求并取响应 body，否则保留 trim 后的原文。音频将结果写入章节变量 `lyric`，视频写入 `danmaku`，其他类型不追加；副文请求失败保留已取得的主正文并返回 `success`，同时附带结构化诊断；规则提取失败则正文失败。Android 把处理异常记录为日志，取消会终止整个流程（见 D11）；
 - `replaceRegex` 在所有正文分页合并后执行；正文行会先 trim 再替换，在线文本替换后为每行增加缩进；
 - `title` 在正文提取后执行，非空时覆盖章节标题；标题里包含图片 URL 时拆出 `imgUrl`，保留标题前缀或回退原章节标题；
 - 非卷章节正文最终为空抛出 `ContentEmptyException`；卷章节允许空正文。

@@ -671,7 +671,9 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     return { status: 'failed', value: null, diagnostics, trace }
   }
   const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
-  const status = stoppedByLimit || diagnostics.some((item) => item.code === 'request-failed' && item.field === 'subContent') ? 'partial' : 'success'
+  // Android catches副内容网络异常、记录日志并继续交付主正文；保留诊断，
+  // 但不能把可选副内容失败升级成 partial 正文结果。
+  const status = stoppedByLimit ? 'partial' : 'success'
   return { status, value, diagnostics, trace }
 }
 
