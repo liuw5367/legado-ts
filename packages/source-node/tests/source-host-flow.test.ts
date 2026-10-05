@@ -687,7 +687,8 @@ test('refreshTocUrl 详情请求失败时不继续解析旧目录', async () => 
   const result = await loadTableOfContents(ports, { source, book, runPerJs: true })
 
   assert.equal(result.status, 'failed')
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'preUpdateJs'))
+  assert.equal(result.value, null)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'empty-page' && diagnostic.stage === 'detail'))
   assert.deepEqual(requested, ['https://refresh-fail.test/book'])
 })
 
