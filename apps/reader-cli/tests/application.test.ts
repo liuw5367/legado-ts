@@ -35,6 +35,7 @@ class FakeSession implements ReaderSourceSession {
   public readonly contentRefreshes: boolean[] = []
   public readonly contentNextChapterUrls: Array<string | undefined> = []
   public readonly contentBooks: BookMetadata[] = []
+  public readonly tocBooks: BookMetadata[] = []
   public readonly contentIdentities: ContentIdentity[] = []
   public readonly contentStoreAttached: boolean[] = []
   public readonly searchOptions: ReaderSourceSearchOptions[] = []
@@ -78,6 +79,7 @@ class FakeSession implements ReaderSourceSession {
   }
 
   public async toc(_book: BookMetadata): Promise<RuntimeResult<TocPage>> {
+    this.tocBooks.push(_book)
     return this.tocValue ?? result<WorkflowPage<Chapter>>('failed', null)
   }
 
@@ -511,6 +513,9 @@ test('目录刷新后的 bookAfter 按书源版本快照交给正文', async () 
     assert.equal(toc.bookAfter?.bookUrl, effectiveBookUrl)
     const snapshot = await storage.getTocSnapshot(bookId, edition)
     assert.equal(snapshot?.bookAfter?.variable, bookAfter.variable)
+    await application.loadToc(bookId, edition)
+    assert.equal(session.tocBooks.at(-1)?.bookUrl, effectiveBookUrl)
+    assert.equal(session.tocBooks.at(-1)?.variable, bookAfter.variable)
     await application.loadContent(bookId, chapter, edition)
     assert.equal(session.contentBooks.at(-1)?.bookUrl, effectiveBookUrl)
     assert.equal(session.contentBooks.at(-1)?.variable, bookAfter.variable)
