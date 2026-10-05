@@ -45,6 +45,7 @@
 - 组先按匹配等级，再按组内不同 `sourceId` 的来源数量降序，最后按最早 `arrivalIndex` 稳定排序。普通 CLI 搜索默认保留 `other`；调用 `groupSearchResults(keyword, results, true)` 或核心 `groupSearchCandidates(..., true)` 时会丢弃 `other`。
 - `ReaderApplication.search(..., { precision: true })` 会把 `name.contains(keyword) || author.contains(keyword) || kind.contains(keyword)` 作为书源搜索的早期过滤传入 `source-core`，被过滤候选不会解析可选字段、占用同源去重身份或进入最终结果；命令行搜索页用 `Ctrl+P` 切换该模式。
 - 每个书源搜索从真正开始执行请求时计时，默认共享 30 秒总期限；应用把同一 `deadlineMs` 和请求预算传给 HTTP 与 JavaScript 规则，超时只标记该书源失败，用户取消仍记录为取消。
+- `ReaderApplication.searchNext(previous)` 只请求上一页返回 `nextCursor` 的书源，把结果追加到同一个 `searchId`，并更新已有搜索历史摘要；结果的 `page` 和 `hasMore` 表示当前页及是否还能继续。CLI 结果页用 `n` 触发续页，空关键字或没有 `nextCursor` 时不会发起新请求。
 - `normalizeSearchTitle` / `normalizeSearchAuthor` 只供严格换源匹配等身份比较使用：标题做 NFKC、小写并移除空白/标点/符号，作者做 NFKC、小写并移除空白；它们不替代 Android 普通搜索的原始字符串分组。
 - `searchMoreSources` 仍额外要求规范化后的书名和作者都完整匹配，避免把普通搜索的分类/包含结果误当成换源候选。
 

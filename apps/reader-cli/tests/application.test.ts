@@ -88,6 +88,23 @@ class FakeSession implements ReaderSourceSession {
   }
 }
 
+class PagingSession extends FakeSession {
+  private readonly pages: BookCandidate[][]
+
+  public constructor(pages: BookCandidate[][]) {
+    super([])
+    this.pages = pages
+  }
+
+  public override async search(_keyword: string, signal?: AbortSignal, _capture?: unknown, options?: ReaderSourceSearchOptions): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+    this.searchOptions.push(options ?? {})
+    if (signal?.aborted === true) return result<WorkflowPage<BookCandidate>>('cancelled', null)
+    const index = options?.cursor?.index ?? 1
+    const items = this.pages[index - 1] ?? []
+    return result('success', { items, cursor: { index }, ...(index < this.pages.length ? { nextCursor: { index: index + 1 } } : {}) })
+  }
+}
+
 test('已知书源页面读取本地候选，不触发搜索', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-app-'))
   const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
@@ -200,6 +217,38 @@ test('精准搜索把 Android 的名称、作者和分类包含过滤传到书�
     assert.deepEqual(operation.groups.map((item) => item.candidate.name), ['目标书'])
     assert.equal(session.searchOptions[0]?.precision, true)
     assert.equal(session.searchOptions[0]?.budget?.timeoutMs, 30_000)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('搜索续页复用同一 searchId，按书源游标追加结果并只保留一条历史', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-search-pagination-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/pagination'), 0)
+  const session = new PagingSession([
+    [{ sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/pagination/one', name: '页一', rawFields: {}, traceRef: 'page-1' }],
+    [{ sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/pagination/two', name: '页二', rawFields: {}, traceRef: 'page-2' }],
+  ])
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => session })
+  try {
+    const first = await application.search('页')
+    assert.equal(first.page, 1)
+    assert.equal(first.hasMore, true)
+    assert.equal(first.sources[0]?.nextCursor?.index, 2)
+    const second = await application.searchNext(first)
+    assert.equal(second.searchId, first.searchId)
+    assert.equal(second.page, 2)
+    assert.equal(second.hasMore, false)
+    assert.deepEqual(second.results.map((item) => item.candidate.name), ['页一', '页二'])
+    assert.ok(second.results.every((item) => item.searchId === first.searchId))
+    assert.deepEqual(session.searchOptions.map((item) => item.cursor?.index), [undefined, 2])
+    const history = await storage.listSearchHistory()
+    assert.equal(history.length, 1)
+    assert.equal(history[0]?.summary.candidates, 2)
+    assert.equal(await application.searchNext(second), second)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })

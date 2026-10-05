@@ -22,6 +22,10 @@ export interface SourceSearchResult {
   source: SourceEntry
   status: WorkflowStatus
   candidates: SearchResult[]
+  /** 当前书源结果所在页；旧调用方构造结果时可省略。 */
+  page?: number
+  cursor?: PageCursor
+  nextCursor?: PageCursor
   /** 从该书源真正开始执行请求到返回终态的耗时，单位毫秒。 */
   durationMs: number
   message?: string
@@ -41,6 +45,10 @@ export interface SearchResultGroup {
 export interface SearchOperationResult {
   searchId: string
   keyword: string
+  /** 本次 searchId 已完成的页码；应用实际返回时总会提供。 */
+  page?: number
+  /** 是否仍有至少一个书源可以继续请求下一页。 */
+  hasMore?: boolean
   results: SearchResult[]
   sources: SourceSearchResult[]
   groups: SearchResultGroup[]

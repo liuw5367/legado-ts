@@ -170,6 +170,18 @@ export class ReaderStorage {
     })
   }
 
+  public async updateSearchHistory(searchId: string, patch: { summary: SearchHistoryEntry['summary']; completedAt?: string }): Promise<void> {
+    await this.withWriteLock(async () => {
+      const path = join(this.paths.dataRoot, 'search-history.json')
+      const records = await this.jsonStore.readFile<SearchHistoryEntry[]>(path, [])
+      const record = records.find((item) => item.id === searchId)
+      if (record === undefined) return
+      record.summary = { ...patch.summary }
+      if (patch.completedAt !== undefined) record.completedAt = patch.completedAt
+      await this.jsonStore.writeFile(path, records)
+    })
+  }
+
   public async markSearchOpened(searchId: string, bookId: string): Promise<void> {
     await this.withWriteLock(async () => {
       const path = join(this.paths.dataRoot, 'search-history.json')

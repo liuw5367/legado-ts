@@ -55,12 +55,19 @@ interface TrackedOperation {
   promise: Promise<unknown>
 }
 
+interface SearchContinuation {
+  previous: SearchOperationResult
+  searchId: string
+  page: number
+}
+
 export class ReaderApplication {
   private readonly catalog: SourceCatalogResult
   private readonly storage: ReaderStorage
   private readonly sessions = new Map<string, ReaderSourceSession>()
   private readonly concurrency: KeyedConcurrencyHost
   private readonly sourceSearchTimeoutMs: number
+  private latestSearchId: string | undefined
   private settings: ReaderSettings
   private readonly activeOperations = new Set<TrackedOperation>()
   private readonly evidence = new Map<string, DebugCapture>()
@@ -150,18 +157,40 @@ export class ReaderApplication {
     return this.trackOperation(signal, (operationSignal) => this.searchInternal(keyword, sourceIds, operationSignal, onProgress, onUpdate, this.settings.searchConcurrency, options))
   }
 
-  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, maxConcurrentSources = this.settings.searchConcurrency, options: SearchOptions = {}): Promise<SearchOperationResult> {
+  public searchNext(previous: SearchOperationResult, signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener): Promise<SearchOperationResult> {
+    if (this.closed) return Promise.reject(new Error('阅读器应用已关闭'))
+    if (previous.hasMore !== true) return Promise.resolve(previous)
+    if (previous.searchId !== this.latestSearchId) return Promise.reject(new Error('搜索结果已过期'))
+    const continuation: SearchContinuation = { previous, searchId: previous.searchId, page: (previous.page ?? 1) + 1 }
+    return this.trackOperation(signal, (operationSignal) => this.searchInternal(previous.keyword, undefined, operationSignal, onProgress, onUpdate, this.settings.searchConcurrency, { precision: previous.precision === true }, continuation))
+  }
+
+  private async searchInternal(keyword: string, sourceIds: readonly string[] | undefined, signal: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, maxConcurrentSources = this.settings.searchConcurrency, options: SearchOptions = {}, continuation?: SearchContinuation): Promise<SearchOperationResult> {
     const trimmed = keyword.trim()
-    const searchId = randomUUID()
-    const startedAt = new Date().toISOString()
-    const startedClock = Date.now()
-    const entries = orderedSearchSources(this.catalog.entries, sourceIds)
+    const searchId = continuation?.searchId ?? randomUUID()
+    if (continuation === undefined) this.latestSearchId = searchId
+    const startedAt = continuation?.previous.startedAt ?? new Date().toISOString()
+    const startedClock = Date.now() - (continuation?.previous.elapsedMs ?? 0)
+    const entries = continuation === undefined
+      ? orderedSearchSources(this.catalog.entries, sourceIds)
+      : continuation.previous.sources.filter((item) => item.nextCursor !== undefined).map((item) => item.source)
+    const historySourceIds = continuation === undefined
+      ? sourceIds
+      : continuation.previous.sources.map((item) => item.source.id)
     const capture = new DebugCapture({ sourceId: 'multi', sourceName: '搜索', mode: 'light' })
-    const results: SourceSearchResult[] = []
+    const results: SourceSearchResult[] = continuation === undefined
+      ? []
+      : continuation.previous.sources.map((item) => ({
+        ...item,
+        candidates: item.candidates.map((candidate) => ({ ...candidate, candidate: { ...candidate.candidate, rawFields: { ...candidate.candidate.rawFields } } })),
+        ...(item.cursor === undefined ? {} : { cursor: { ...item.cursor } }),
+        ...(item.nextCursor === undefined ? {} : { nextCursor: { ...item.nextCursor } }),
+      }))
+    const pageResults: SourceSearchResult[] = []
     const activeSources = new Map<string, number>()
     let completed = 0
     let progressCandidates = 0
-    let arrivalIndex = 0
+    let arrivalIndex = results.reduce((maximum, item) => item.candidates.reduce((innerMaximum, candidate) => Math.max(innerMaximum, candidate.arrivalIndex + 1), maximum), 0)
     const progressCounts = { success: 0, partial: 0, empty: 0, failed: 0, capabilityMissing: 0, cancelled: 0 }
     const emitProgress = (): void => {
       if (onProgress === undefined) return
@@ -182,6 +211,8 @@ export class ReaderApplication {
       return {
         searchId,
         keyword: trimmed,
+        page: continuation?.page ?? 1,
+        hasMore: results.some((item) => item.nextCursor !== undefined),
         results: flattened,
         sources: results.map((item) => ({ ...item, candidates: item.candidates.map((candidate) => clones.get(candidate)!) })),
         groups: groupSearchResults(trimmed, flattened, options.precision === true),
@@ -211,7 +242,27 @@ export class ReaderApplication {
         const source = entries[index]
         if (source === undefined) return
         const session = this.sessions.get(source.id)
-        if (session === undefined) continue
+        if (session === undefined) {
+          const pageResult: SourceSearchResult = { source, status: 'failed', candidates: [], page: continuation?.page ?? 1, durationMs: 0, message: '书源会话不可用' }
+          const previous = results.find((item) => item.source.id === source.id)
+          if (previous === undefined) results.push(pageResult)
+            else {
+            previous.status = pageResult.status
+            if (pageResult.page === undefined) delete previous.page
+            else previous.page = pageResult.page
+            delete previous.cursor
+            delete previous.nextCursor
+            if (pageResult.message === undefined) delete previous.message
+            else previous.message = pageResult.message
+          }
+          pageResults.push(pageResult)
+          progressCounts.failed += 1
+          completed += 1
+          emitProgress()
+          emitUpdate(signal.aborted)
+          continue
+        }
+        const continuationCursor = continuation?.previous.sources.find((item) => item.source.id === source.id)?.nextCursor
         activeSources.set(source.source.bookSourceName, (activeSources.get(source.source.bookSourceName) ?? 0) + 1)
         emitProgress()
         let sourceStartedClock = Date.now()
@@ -223,6 +274,7 @@ export class ReaderApplication {
             try {
               const response = await session.search(trimmed, deadline.signal, capture, {
                 ...(options.precision === true ? { precision: true } : {}),
+                ...(continuationCursor === undefined ? {} : { cursor: continuationCursor }),
                 budget: { timeoutMs: this.sourceSearchTimeoutMs, deadlineMs: Date.now() + this.sourceSearchTimeoutMs },
               })
               if (deadline.timedOut()) throw new Error('书源搜索超时')
@@ -237,7 +289,32 @@ export class ReaderApplication {
           const found = response.value?.items ?? []
           const durationMs = Date.now() - sourceStartedClock
           const candidates = found.map((candidate) => ({ candidate, source, searchId, arrivalIndex: arrivalIndex++, searchDurationMs: durationMs }))
-          results.push({ source, status: response.status, candidates, durationMs, ...(response.diagnostics[0] === undefined ? {} : { message: response.diagnostics[0].message }) })
+          const pageResult: SourceSearchResult = {
+            source,
+            status: response.status,
+            candidates,
+            page: continuation?.page ?? 1,
+            ...(response.value?.cursor === undefined ? {} : { cursor: { ...response.value.cursor } }),
+            ...(response.value?.nextCursor === undefined ? {} : { nextCursor: { ...response.value.nextCursor } }),
+            durationMs,
+            ...(response.diagnostics[0] === undefined ? {} : { message: response.diagnostics[0].message }),
+          }
+          const previous = results.find((item) => item.source.id === source.id)
+          if (previous === undefined) results.push(pageResult)
+          else {
+            previous.candidates.push(...candidates)
+            previous.status = response.status
+            if (pageResult.page === undefined) delete previous.page
+            else previous.page = pageResult.page
+            if (pageResult.cursor === undefined) delete previous.cursor
+            else previous.cursor = pageResult.cursor
+            if (pageResult.nextCursor === undefined) delete previous.nextCursor
+            else previous.nextCursor = pageResult.nextCursor
+            previous.durationMs += durationMs
+            if (pageResult.message === undefined) delete previous.message
+            else previous.message = pageResult.message
+          }
+          pageResults.push(pageResult)
           progressCandidates += found.length
           if (response.status === 'success') progressCounts.success += 1
           else if (response.status === 'partial') progressCounts.partial += 1
@@ -246,7 +323,20 @@ export class ReaderApplication {
           else if (response.status === 'cancelled') progressCounts.cancelled += 1
           else if (response.status === 'failed') progressCounts.failed += 1
         } catch (error) {
-          results.push({ source, status: signal?.aborted ? 'cancelled' : 'failed', candidates: [], durationMs: Date.now() - sourceStartedClock, message: errorMessage(error) })
+          const pageResult: SourceSearchResult = { source, status: signal?.aborted ? 'cancelled' : 'failed', candidates: [], page: continuation?.page ?? 1, durationMs: Date.now() - sourceStartedClock, message: errorMessage(error) }
+          const previous = results.find((item) => item.source.id === source.id)
+          if (previous === undefined) results.push(pageResult)
+          else {
+            previous.status = pageResult.status
+            if (pageResult.page === undefined) delete previous.page
+            else previous.page = pageResult.page
+            delete previous.cursor
+            delete previous.nextCursor
+            previous.durationMs += pageResult.durationMs
+            if (pageResult.message === undefined) delete previous.message
+            else previous.message = pageResult.message
+          }
+          pageResults.push(pageResult)
           if (signal.aborted) progressCounts.cancelled += 1
           else progressCounts.failed += 1
         } finally {
@@ -262,21 +352,27 @@ export class ReaderApplication {
     await Promise.all(Array.from({ length: Math.min(maxConcurrentSources, Math.max(1, entries.length)) }, () => worker()))
     const cancelled = signal?.aborted === true
     const sourceSummary: SearchHistoryEntry['summary'] = {
-      searched: entries.length,
+      searched: continuation === undefined ? entries.length : results.length,
       success: results.filter((item) => item.status === 'success' || item.status === 'partial').length,
       empty: results.filter((item) => item.status === 'empty').length,
       failed: results.filter((item) => item.status === 'failed').length,
       capabilityMissing: results.filter((item) => item.status === 'capability-missing').length,
       candidates: results.reduce((sum, item) => sum + item.candidates.length, 0),
     }
-    const history = await this.storage.addSearchHistory({ keyword: trimmed, sourceScope: sourceIds === undefined ? 'all' : [...sourceIds], startedAt, completedAt: new Date().toISOString(), summary: sourceSummary, openedBookIds: [] })
+    const completedAt = new Date().toISOString()
+    const historyId = continuation === undefined
+      ? (await this.storage.addSearchHistory({ keyword: trimmed, sourceScope: historySourceIds === undefined ? 'all' : [...historySourceIds], startedAt, completedAt, summary: sourceSummary, openedBookIds: [] })).id
+      : continuation.searchId
+    if (continuation !== undefined) await this.storage.updateSearchHistory(historyId, { completedAt, summary: sourceSummary })
     for (const source of results) {
-      for (const candidate of source.candidates) candidate.searchId = history.id
+      for (const candidate of source.candidates) candidate.searchId = historyId
     }
     results.sort((left, right) => left.source.source.bookSourceName.localeCompare(right.source.source.bookSourceName, 'zh-Hans'))
-    const completedAt = new Date().toISOString()
-    const operation: SearchOperationResult = { ...snapshot(cancelled, completedAt), searchId: history.id, completedAt }
-    if (!cancelled) await this.updateSearchHealth(results)
+    const operation: SearchOperationResult = { ...snapshot(cancelled, completedAt), searchId: historyId, completedAt }
+    if (!cancelled) {
+      await this.updateSearchHealth(pageResults)
+      this.latestSearchId = historyId
+    }
     emitUpdate(cancelled)
     this.rememberEvidence('search', capture)
     return operation

@@ -599,6 +599,45 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }
   }
 
+  const continueSearch = async (): Promise<void> => {
+    const currentSearch = search
+    if (currentSearch === undefined || currentSearch.hasMore !== true) { setMessage('当前搜索没有下一页'); return }
+    const operation = beginOperation('search')
+    startSearchClock()
+    setSearchState('running')
+    setSearchProgress(undefined)
+    setMessage(`正在加载第 ${(currentSearch.page ?? 1) + 1} 页…`)
+    const request = application.searchNext(currentSearch, operation.controller.signal, (progress) => {
+      if (isCurrent(operation)) setSearchProgress(progress)
+    }, (snapshot) => {
+      if (!isCurrent(operation)) return
+      setSearch((current) => {
+        const previousKey = current?.groups[selectedGroupIndex(current, selected)]?.key ?? selectedGroupKeyRef.current
+        if (previousKey !== undefined) selectedGroupKeyRef.current = previousKey
+        return snapshot
+      })
+    })
+    operation.promise = request
+    try {
+      const result = await request
+      if (!isCurrent(operation)) return
+      stopSearchClock(result.elapsedMs)
+      setSearch(result)
+      setSearchState(result.cancelled ? 'cancelled' : 'complete')
+      setSelected((current) => restoreGroupSelection(result.groups, current, selectedGroupKeyRef.current))
+      setMessage(result.cancelled ? '搜索已取消，已保留已返回结果' : `已加载第 ${result.page ?? 1} 页 · 找到 ${result.groups.length} 本书${result.hasMore === true ? ' · 可继续' : ''}`)
+    } catch (error) {
+      if (isCurrent(operation) && !isAbortError(error)) {
+        stopSearchClock()
+        setSearchState('error')
+        setMessage(errorMessage(error))
+      }
+    } finally {
+      if (isCurrent(operation)) stopSearchClock()
+      finishOperation(operation)
+    }
+  }
+
   const openSearchGroup = async (group: SearchResultGroup, navigate = true): Promise<OpenBookResult | undefined> => {
     const operation = beginOperation('task')
     setMessage('正在加载书籍详情…')
@@ -1136,6 +1175,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setListStart((start) => keepIndexVisible(next, groups.length, rowVisible, start).start)
     }
     if (key.return && !busy && searchState !== 'running' && searchState !== 'cancelling') void openSelected()
+    if (input === 'n' && !busy && searchState !== 'running' && searchState !== 'cancelling' && search?.hasMore === true) { void continueSearch(); return }
     if (input === 't' && !busy && searchState !== 'running' && searchState !== 'cancelling') {
       void (async () => {
         const opened = await openSelected(false)
