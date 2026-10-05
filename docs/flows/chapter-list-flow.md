@@ -21,13 +21,14 @@
 5. URL 为空时，卷节点使用 `title + index` 作为稳定占位 URL，普通章节使用当前 baseUrl；
 6. 卷名节点把 `updateTime` 放入 tag；普通章节把它放入 tag，并可从 tag 识别字数；
 7. VIP/购买规则的结果使用当前 `isTrue` 语义判断；
-8. `nextTocUrl` 获取一个或多个后续目录页 URL，并去掉当前 redirectUrl。
+8. `nextTocUrl` 获取一个或多个后续目录页 URL，稳定去重并去掉当前 redirectUrl。
 
 ## 多页和顺序
 
 - `TocInput.refresh=true` 跳过详情阶段的临时 `tocHtml` 复用；目录/正文流程不再读取或写入原始页面缓存。详情阶段只有同一次操作内且 `book.bookUrl === book.tocUrl` 的 `tocHtml` 可以复用。
-- 后续 URL 只有一个时串行跟随，直到空 URL 或遇到已访问 URL；
-- 多个后续 URL 时并发请求，mapAsync 按输入顺序收集单页结果，不按网络完成顺序收集；
+- 第一页的后续 URL 数量决定分页模式：一个时串行跟随且后续页面只取首个 URL，多个时只并发这一批页面；
+- 并发请求由 mapAsync 按输入顺序收集单页结果，不按网络完成顺序收集；
+- `loginCheckJs` 只在首个实际目录网络请求上执行；复用 `tocHtml` 不消耗这次检查，后续分页请求不重复执行；
 - 初始 `chapterList` 的 `+` 只表示去掉控制前缀；`-` 会设置目录流程的反转标志，但不会立即反转每个页面的提取结果；
 - 所有页收集后，未设置 `-` 时先整体反转，再用 LinkedHashSet 按章节对象去重，最后在 book.getReverseToc() 为 false 时再次反转。第一次反转决定重复项保留方向，不能把去重移到最后；
 - `Book.readConfig.reverseToc` 是书籍刷新顺序，Android 通过 `book.getReverseToc()` 读取；`readConfig.reverseTocDisplay` 只影响展示，不能改写下一次刷新输入顺序；

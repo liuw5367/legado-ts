@@ -310,6 +310,39 @@ test('相对或空目录地址按 Android 的书籍 URL 基准解析', async () 
   assert.equal(calls[0], book.bookUrl)
 })
 
+test('目录 loginCheckJs 只在首个实际网络请求执行，tocHtml 命中不消耗资格', async () => {
+  const calls: string[] = []
+  let loginChecks = 0
+  const loginSource = {
+    ...source,
+    loginCheckJs: 'check-login',
+    ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' },
+  } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      const body = plan.url.endsWith('/branch-a') ? 'branch-a' : 'branch-b'
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    } },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'chapterList') return { status: 'success', value: content === 'cached-root' ? [] : [{ title: String(content), url: `/chapter/${content}` }] }
+        if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+        if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+        if (field === 'nextTocUrl' && content === 'cached-root') return { status: 'success', value: ['/branch-a', '/branch-b'] }
+        return { status: 'empty', value: null }
+      },
+      executeWorkflowJavaScript: async ({ content }) => {
+        loginChecks += 1
+        return { status: 'success', value: content }
+      },
+    },
+  }, { source: loginSource, book: { ...book, tocUrl: book.bookUrl, tocHtml: 'cached-root' } })
+  assert.deepEqual(calls, ['https://source.test/branch-a', 'https://source.test/branch-b'])
+  assert.equal(loginChecks, 1)
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['branch-a', 'branch-b'])
+})
+
 test('目录分页按 URL 而非响应正文去重，并拆分换行地址列表', async () => {
   const calls: string[] = []
   const ports: ReadingPorts = {

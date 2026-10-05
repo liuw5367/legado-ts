@@ -109,6 +109,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   let totalBytes = 0
   let volume: string | undefined
   let paginationMode: 'undecided' | 'serial' | 'parallel' | 'none' = 'undecided'
+  let loginCheckConsumed = false
   const listRuleBody = normalizeChapterListRule(listRule)
   for (let pageIndex = 0; pageIndex < maxPages && pendingPages.length > 0; pageIndex += 1) {
     if (input.signal?.aborted === true) return cancelled('目录工作流已取消', diagnostics, trace)
@@ -127,9 +128,16 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     pagesFetched += 1
     // 明确刷新时详情阶段暂存的目录响应也可能过期，必须重新请求第一页。
     const canReuseTocHtml = input.refresh !== true && book.tocHtml !== undefined && book.tocHtml.length > 0 && book.tocUrl !== undefined && book.tocUrl === book.bookUrl
-    const page = pageIndex === 0 && canReuseTocHtml && normalizedUrl === bookBaseUrl
-      ? { body: book.tocHtml!, url: normalizedUrl }
-      : await loadPage(ports, input.source, normalizedUrl, stage, pageOptions(input, maxBytes, totalBytes), diagnostics, trace)
+    let page: { body: string; url: string } | undefined
+    if (pageIndex === 0 && canReuseTocHtml && normalizedUrl === bookBaseUrl) {
+      page = { body: book.tocHtml!, url: normalizedUrl }
+    } else {
+      const requestOptions = pageOptions(input, maxBytes, totalBytes)
+      if (loginCheckConsumed) requestOptions.skipLoginCheck = true
+      // 缓存命中不消耗资格；第一个真实网络请求（即使失败）才消耗一次 loginCheckJs。
+      loginCheckConsumed = true
+      page = await loadPage(ports, input.source, normalizedUrl, stage, requestOptions, diagnostics, trace)
+    }
     if (page === undefined) break
     const body = page.body
     totalBytes += new TextEncoder().encode(body).byteLength
@@ -165,7 +173,9 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (branchUrls.length < unseenNextUrls.length) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
     if (branchUrls.length > 0) {
       for (const branchUrl of branchUrls) visited.add(branchUrl)
-      const batch = await fetchPageBatch(ports, input.source, branchUrls, stage, pageOptions(input, maxBytes, totalBytes))
+      const firstBranchNeedsLoginCheck = !loginCheckConsumed
+      const batch = await fetchPageBatch(ports, input.source, branchUrls, stage, { ...pageOptions(input, maxBytes, totalBytes), skipLoginCheck: loginCheckConsumed }, undefined, firstBranchNeedsLoginCheck)
+      loginCheckConsumed = true
       if (isSignalAborted(input.signal)) {
         appendBatchDiagnostics(batch, diagnostics, trace, true)
         return cancelled('目录工作流已取消', diagnostics, trace)
@@ -1336,7 +1346,7 @@ interface PageBatchResult {
   failed: boolean
 }
 
-async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, urls: readonly string[], stage: WorkflowStage, options: WorkflowOptions, execution?: { webJs?: string; sourceRegex?: string }): Promise<PageBatchResult> {
+async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, urls: readonly string[], stage: WorkflowStage, options: WorkflowOptions, execution?: { webJs?: string; sourceRegex?: string }, loginCheckFirstOnly = false): Promise<PageBatchResult> {
   const batchController = new AbortController()
   const onAbort = (): void => batchController.abort()
   options.signal?.addEventListener('abort', onAbort, { once: true })
@@ -1350,6 +1360,7 @@ async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, ur
       const trace: WorkflowTraceEntry[] = []
       try {
         const branchOptions = batchPageOptions(options, index, urls.length)
+        if (loginCheckFirstOnly && index > 0) branchOptions.skipLoginCheck = true
         const page = await loadPage(ports, source, url, stage, { ...branchOptions, signal }, diagnostics, trace, execution)
         const fatal = page === undefined && !signal.aborted && diagnostics.some((item) => item.code !== 'cancelled')
         if (fatal) {
@@ -1418,7 +1429,7 @@ async function loadPage(ports: WorkflowPorts, source: NormalizedSource, url: str
 function pageOptions(options: WorkflowOptions, maxBytes: number, usedBytes: number): WorkflowOptions {
   const remaining = Math.max(0, maxBytes - usedBytes)
   const budget = { ...options.budget, maxTotalBytes: Math.min(options.budget?.maxTotalBytes ?? remaining, remaining) }
-  return { ...(options.signal === undefined ? {} : { signal: options.signal }), ...(options.maxItems === undefined ? {} : { maxItems: options.maxItems }), budget }
+  return { ...(options.signal === undefined ? {} : { signal: options.signal }), ...(options.maxItems === undefined ? {} : { maxItems: options.maxItems }), ...(options.skipLoginCheck === true ? { skipLoginCheck: true } : {}), budget }
 }
 
 interface ChapterFields {

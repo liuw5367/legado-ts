@@ -399,7 +399,9 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
       return undefined
     }
     if (response === undefined) throw new Error('书源请求没有响应')
-    const checked = await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics)
+    const checked = options.skipLoginCheck === true
+      ? response
+      : await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics)
     if (checked === undefined) return undefined
     response = checked
     // Android 在重试耗尽后仍把有响应的正文交给规则解析；状态码保留在 NetworkResponse 和请求观察中。
@@ -421,7 +423,7 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
       return undefined
     }
     const loginCheckJs = sourceString(source, 'loginCheckJs')
-    if (loginCheckJs !== undefined && !isWebViewError(error)) {
+    if (options.skipLoginCheck !== true && loginCheckJs !== undefined && !isWebViewError(error)) {
       const errorText = error instanceof Error ? error.message : '书源请求失败'
       let errorUrl = url
       try {

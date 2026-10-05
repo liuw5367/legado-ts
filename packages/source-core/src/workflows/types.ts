@@ -230,6 +230,8 @@ export interface WorkflowOptions {
   signal?: AbortSignal
   budget?: Partial<RequestBudget>
   maxItems?: number
+  /** 目录后续页跳过 loginCheckJs；由流程入口标记首次实际网络请求。 */
+  skipLoginCheck?: boolean
 }
 
 export interface WorkflowRequest {
