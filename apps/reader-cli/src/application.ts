@@ -656,9 +656,10 @@ export class ReaderApplication {
       sourceRevision: edition.sourceFingerprint,
       semanticVersion: 'source-core-content-v1',
     }
+    const nextChapterUrl = options?.nextChapterUrl ?? nextChapterUrlFromSnapshot(tocSnapshot?.chapters, chapter)
     const metadata: BookMetadata = { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
     const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
-    const contentOptions = { ...(options ?? {}), contentStore: this.storage.contentStore(bookId), contentIdentity, operationId: randomUUID() }
+    const contentOptions = { ...(options ?? {}), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), contentStore: this.storage.contentStore(bookId), contentIdentity, operationId: randomUUID() }
     const result = await session.content(chapter, metadata, signal, contentOptions, capture).finally(() => {
       this.rememberEvidence('content', capture)
       this.rememberEvidence(`content:${bookId}:${edition.editionKey}`, capture)
@@ -766,6 +767,17 @@ function updateBook(book: BookDocument, metadata: BookMetadata, activeEditionKey
 
 function mergeMetadataIntoSource(source: KnownSource, metadata: BookMetadata): KnownSource {
   return { ...source, ...(metadata.name === undefined ? {} : { name: metadata.name }), ...(metadata.author === undefined ? {} : { author: metadata.author }), ...(metadata.intro === undefined ? {} : { intro: metadata.intro }), ...(metadata.coverUrl === undefined ? {} : { coverUrl: metadata.coverUrl }), ...(metadata.tocUrl === undefined ? {} : { tocUrl: metadata.tocUrl }), ...(metadata.lastChapter === undefined ? {} : { lastChapter: metadata.lastChapter }), ...(metadata.updateTime === undefined ? {} : { updateTime: metadata.updateTime }), rawFields: { ...source.rawFields, ...metadata.rawFields } }
+}
+
+function nextChapterUrlFromSnapshot(chapters: readonly Chapter[] | undefined, current: Chapter): string | undefined {
+  if (chapters === undefined || chapters.length === 0) return undefined
+  const currentIndex = Number.isInteger(current.index) && current.index >= 0 && chapters[current.index]?.chapterUrl === current.chapterUrl
+    ? current.index
+    : chapters.findIndex((item) => item.chapterUrl === current.chapterUrl)
+  if (currentIndex < 0) return undefined
+  const next = chapters[(currentIndex + 1) % chapters.length]
+  if (next === undefined || next.chapterUrl.length === 0) return undefined
+  return next.url?.trim() || next.chapterUrl
 }
 
 function errorMessage(error: unknown): string {

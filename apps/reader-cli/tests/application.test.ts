@@ -33,6 +33,7 @@ class FakeSession implements ReaderSourceSession {
   private readonly onSearchFinish: (() => void) | undefined
   private readonly tocValue: RuntimeResult<WorkflowPage<Chapter>> | undefined
   public readonly contentRefreshes: boolean[] = []
+  public readonly contentNextChapterUrls: Array<string | undefined> = []
   public readonly contentIdentities: ContentIdentity[] = []
   public readonly contentStoreAttached: boolean[] = []
   public readonly searchOptions: ReaderSourceSearchOptions[] = []
@@ -79,8 +80,9 @@ class FakeSession implements ReaderSourceSession {
     return this.tocValue ?? result<WorkflowPage<Chapter>>('failed', null)
   }
 
-  public async content(chapter: Chapter, _book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean; contentStore?: ContentStore; contentIdentity?: ContentIdentity }): Promise<RuntimeResult<ChapterContent>> {
+  public async content(chapter: Chapter, _book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string; contentStore?: ContentStore; contentIdentity?: ContentIdentity }): Promise<RuntimeResult<ChapterContent>> {
     this.contentRefreshes.push(options?.refresh === true)
+    this.contentNextChapterUrls.push(options?.nextChapterUrl)
     if (options?.contentIdentity !== undefined) this.contentIdentities.push(options.contentIdentity)
     this.contentStoreAttached.push(options?.contentStore !== undefined)
     if (this.contentValue === undefined) return result<ChapterContent>('failed', null)
@@ -406,6 +408,32 @@ test('刷新正文会把刷新选项传到当前书源并重新请求正文', as
     assert.equal(session.contentIdentities[0]?.chapterIndex, 0)
     await application.close()
     assert.equal(session.closed, true)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('正文入口未显式传下一章时从目录快照提供护栏并在末章回到首章', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-next-chapter-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/next-chapter'), 0)
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const bookUrl = 'https://source.test/next-chapter/book'
+  const edition = editionKey(sourceEntry.source.bookSourceUrl, bookUrl)
+  const first: Chapter = { sourceId: sourceEntry.source.bookSourceUrl, bookUrl, url: '/c1', chapterUrl: `${bookUrl}/c1`, index: 0, title: '第一章', rawFields: {}, traceRef: 'fixture' }
+  const second: Chapter = { sourceId: sourceEntry.source.bookSourceUrl, bookUrl, url: '/c2', chapterUrl: `${bookUrl}/c2`, index: 1, title: '第二章', rawFields: {}, traceRef: 'fixture' }
+  const session = new FakeSession([], 0, false, { chapter: first, contentType: 'text', raw: '正文', cleaned: '正文', pages: ['正文'], resources: [] })
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => session })
+  try {
+    await storage.upsertBook({ bookId, name: '下一章书', activeEditionKey: edition, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [{ editionKey: edition, sourceId: sourceEntry.source.bookSourceUrl, sourceFingerprint: sourceEntry.fingerprint, bookUrl, name: '下一章书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' }])
+    await storage.saveTocSnapshot(bookId, edition, { editionKey: edition, revision: 'toc-next', chapters: [first, second], bookPatch: { totalChapterNum: 2, lastCheckTime: 0 }, updatedAt: '2026-01-01T00:00:00.000Z' })
+    await application.loadContent(bookId, first, edition)
+    await application.loadContent(bookId, second, edition)
+    await application.loadContent(bookId, first, edition, undefined, { nextChapterUrl: 'https://override.test/chapter' })
+    assert.deepEqual(session.contentNextChapterUrls, [second.url, first.url, 'https://override.test/chapter'])
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })
