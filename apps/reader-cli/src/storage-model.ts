@@ -84,6 +84,8 @@ export interface KnownSource {
   tocUrl?: string
   lastChapter?: string
   updateTime?: string
+  /** 搜索/详情阶段由书源脚本写入的书籍变量 JSON。 */
+  variable?: string
   /** 本次搜索从书源请求真正开始到返回终态的耗时，单位毫秒。 */
   searchDurationMs?: number
   rawFields: JsonObject

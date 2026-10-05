@@ -34,6 +34,7 @@ class FakeSession implements ReaderSourceSession {
   private readonly tocValue: RuntimeResult<WorkflowPage<Chapter>> | undefined
   public readonly contentRefreshes: boolean[] = []
   public readonly contentNextChapterUrls: Array<string | undefined> = []
+  public readonly contentBooks: BookMetadata[] = []
   public readonly contentIdentities: ContentIdentity[] = []
   public readonly contentStoreAttached: boolean[] = []
   public readonly searchOptions: ReaderSourceSearchOptions[] = []
@@ -83,6 +84,7 @@ class FakeSession implements ReaderSourceSession {
   public async content(chapter: Chapter, _book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean; nextChapterUrl?: string; contentStore?: ContentStore; contentIdentity?: ContentIdentity }): Promise<RuntimeResult<ChapterContent>> {
     this.contentRefreshes.push(options?.refresh === true)
     this.contentNextChapterUrls.push(options?.nextChapterUrl)
+    this.contentBooks.push(_book)
     if (options?.contentIdentity !== undefined) this.contentIdentities.push(options.contentIdentity)
     this.contentStoreAttached.push(options?.contentStore !== undefined)
     if (this.contentValue === undefined) return result<ChapterContent>('failed', null)
@@ -219,6 +221,28 @@ test('精准搜索把 Android 的名称、作者和分类包含过滤传到书�
     assert.deepEqual(operation.groups.map((item) => item.candidate.name), ['目标书'])
     assert.equal(session.searchOptions[0]?.precision, true)
     assert.equal(session.searchOptions[0]?.budget?.timeoutMs, 30_000)
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('搜索书籍变量按书源版本保存并在正文入口恢复', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-variable-handoff-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const sourceEntry = entry(source('https://source.test/variable'), 0)
+  const candidate: BookCandidate = { sourceId: sourceEntry.source.bookSourceUrl, bookUrl: 'https://source.test/variable/book', name: '变量书', variable: '{"token":"from-search"}', rawFields: {}, traceRef: 'variable' }
+  const chapter: Chapter = { sourceId: candidate.sourceId, bookUrl: candidate.bookUrl, chapterUrl: `${candidate.bookUrl}/c1`, index: 0, title: '第一章', rawFields: {}, traceRef: 'chapter' }
+  const session = new FakeSession([candidate], 0, false, { chapter, contentType: 'text', raw: '正文', cleaned: '正文', pages: ['正文'], resources: [] })
+  const application = new ReaderApplication({ catalog: { entries: [sourceEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false }, storage, sessionFactory: () => session })
+  try {
+    const operation = await application.search('变量书')
+    const opened = await application.openSearchResult(operation.results[0]!)
+    const edition = editionKey(sourceEntry.source.bookSourceUrl, candidate.bookUrl)
+    assert.equal((await storage.listKnownSources(opened.book.bookId)).find((item) => item.editionKey === edition)?.variable, candidate.variable)
+    await application.loadContent(opened.book.bookId, chapter, edition)
+    assert.equal(session.contentBooks.at(-1)?.variable, candidate.variable)
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })
