@@ -2,6 +2,7 @@ import { createRequestPlan } from '../runtime/request-plan.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkHost, NetworkResponse } from '../runtime/contracts.ts'
 import type { NormalizedSource } from '../model/types.ts'
+import { internalChapterScopeBinding } from './types.ts'
 import type { RequestObserver, WorkflowRequest, WorkflowRuleOutput, WorkflowRulePort, WorkflowStage } from './types.ts'
 
 /** 请求边界内的结构化失败分类；与 WorkflowDiagnostic.code 对齐，避免压成可重试网络错误。 */
@@ -52,6 +53,11 @@ export interface SourceRequestRuntimeOptions {
   decodeResponse?: (response: NetworkResponse) => string
   rules?: WorkflowRulePort
   requestObserver?: RequestObserver
+}
+
+export interface RequestScriptContext {
+  bindings?: Readonly<Record<string, unknown>>
+  chapterScope?: unknown
 }
 
 function text(value: unknown): string {
@@ -295,19 +301,23 @@ export class SourceRequestRuntime {
 
   public async request(input: WorkflowRequest): Promise<NetworkResponse> {
     // 书源随这次调用显式传递：宿主上没有「当前书源」字段，同一宿主并发不同书源不会串源。
-    const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source)
+    const scriptContext: RequestScriptContext = {
+      ...(input.book === undefined ? {} : { bindings: { book: input.book } }),
+      ...(input.chapter === undefined ? {} : { chapterScope: input.chapter }),
+    }
+    const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source, scriptContext)
     const overrides: SourceRequestOptions = {
       ...(input.execution?.webJs === undefined ? {} : { webJs: input.execution.webJs }),
       ...(input.execution?.sourceRegex === undefined ? {} : { sourceRegex: input.execution.sourceRegex }),
     }
-    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget, input.stage, false, false, 'primary', input.url)
+    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget, input.stage, false, false, 'primary', input.url, scriptContext)
   }
 
   public decodeResponse(response: NetworkResponse): string {
     return this.decode(response)
   }
 
-  private async resolveExpression(input: string, stage: WorkflowStage, signal: AbortSignal | undefined, source: NormalizedSource): Promise<string> {
+  private async resolveExpression(input: string, stage: WorkflowStage, signal: AbortSignal | undefined, source: NormalizedSource, scriptContext?: RequestScriptContext): Promise<string> {
     const trimmed = input.trim()
     // Android 对整条规则匹配 JS_PATTERN：<js> 与任意位置的 @js: 按出现顺序执行。
     const blocks = [...trimmed.matchAll(/<js>([\s\S]*?)<\/js>|@js:([\s\S]*)/gi)]
@@ -317,7 +327,7 @@ export class SourceRequestRuntime {
       for (const block of blocks) {
         const literal = trimmed.slice(end, block.index!).trim()
         if (literal.length > 0) result = literal.split('@result').join(result)
-        result = await this.evaluateUrlScript(block[1] ?? block[2] ?? '', result, stage, source, signal)
+        result = await this.evaluateUrlScript(block[1] ?? block[2] ?? '', result, stage, source, signal, scriptContext)
         end = block.index! + block[0]!.length
       }
       const tail = trimmed.slice(end).trim()
@@ -333,7 +343,7 @@ export class SourceRequestRuntime {
     source: NormalizedSource,
     content: string,
     signal: AbortSignal | undefined,
-    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content' },
+    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown },
   ): Promise<unknown> {
     if (this.ruleHost === undefined) throw new SourceRequestError('capability-missing', '脚本执行需要 JavaScript 宿主', context.field)
     const scriptStage = context.scriptStage ?? (stage === 'detail' ? 'book' : 'search')
@@ -343,9 +353,38 @@ export class SourceRequestRuntime {
     try {
       // 可选钩子优先；只实现必需 evaluate 的宿主用 @js: 规则回退，保持与基线默认路径一致。
       if (this.ruleHost.executeWorkflowJavaScript !== undefined) {
-        output = await this.ruleHost.executeWorkflowJavaScript({ source, code, stage: scriptStage, content, baseUrl, redirectUrl, ...(signal === undefined ? {} : { signal }) })
+        output = await this.ruleHost.executeWorkflowJavaScript({
+          source,
+          code,
+          stage: scriptStage,
+          content,
+          baseUrl,
+          redirectUrl,
+          ...(context.bindings === undefined && context.chapterScope === undefined ? {} : {
+            bindings: {
+              ...(context.bindings ?? {}),
+              ...(context.chapterScope === undefined ? {} : { [internalChapterScopeBinding]: context.chapterScope }),
+            },
+          }),
+          ...(signal === undefined ? {} : { signal }),
+        })
       } else {
-        output = await this.ruleHost.evaluate({ source, stage, field: context.evaluateField, rule: `@js:${code}`, content, baseUrl, redirectUrl, ...(signal === undefined ? {} : { signal }) })
+        output = await this.ruleHost.evaluate({
+          source,
+          stage,
+          field: context.evaluateField,
+          rule: `@js:${code}`,
+          content,
+          baseUrl,
+          redirectUrl,
+          ...(context.bindings === undefined && context.chapterScope === undefined ? {} : {
+            bindings: {
+              ...(context.bindings ?? {}),
+              ...(context.chapterScope === undefined ? {} : { [internalChapterScopeBinding]: context.chapterScope }),
+            },
+          }),
+          ...(signal === undefined ? {} : { signal }),
+        })
       }
     } catch (error) {
       if (signal?.aborted === true) throw new SourceRequestError('cancelled', '脚本执行已取消', context.field)
@@ -363,18 +402,20 @@ export class SourceRequestRuntime {
     stage: WorkflowStage,
     source: NormalizedSource,
     signal?: AbortSignal,
-    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string },
+    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown },
   ): Promise<string> {
     const value = await this.runSourceScript(code, stage, source, result, signal, {
       evaluateField: context?.evaluateField ?? 'url',
       field: context?.field ?? 'url',
       ...(context?.baseUrl === undefined ? {} : { baseUrl: context.baseUrl }),
       ...(context?.redirectUrl === undefined ? {} : { redirectUrl: context.redirectUrl }),
+      ...(context?.bindings === undefined ? {} : { bindings: context.bindings }),
+      ...(context?.chapterScope === undefined ? {} : { chapterScope: context.chapterScope }),
     })
     return text(value)
   }
 
-  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary', loginHeaderUrl = rawUrl): Promise<NetworkResponse> {
+  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary', loginHeaderUrl = rawUrl, scriptContext?: RequestScriptContext): Promise<NetworkResponse> {
     const split = splitSourceRequestUrl(rawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
@@ -383,7 +424,7 @@ export class SourceRequestRuntime {
     const requestedMethod = typeof options.method === 'string' ? options.method.toUpperCase() : 'GET'
     // AnalyzeUrl maps every method except POST and HEAD to GET.
     const method = requestedMethod === 'POST' || requestedMethod === 'HEAD' ? requestedMethod : 'GET'
-    const sourceHeaders = await this.sourceHeaders(source, signal, nested)
+    const sourceHeaders = await this.sourceHeaders(source, signal, nested, scriptContext)
     const defaultHeaders = getHeader(sourceHeaders, 'user-agent') === undefined && this.network.defaultUserAgent !== undefined
       ? { 'User-Agent': this.network.defaultUserAgent }
       : undefined
@@ -473,7 +514,7 @@ export class SourceRequestRuntime {
     const scriptBaseUrl = originBaseUrl(request.plan.url)
     if (typeof options.js === 'string' && options.js.trim().length > 0) {
       const planUrl = request.plan.url
-      const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: scriptBaseUrl, redirectUrl: planUrl })
+      const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: scriptBaseUrl, redirectUrl: planUrl, ...scriptContext })
       const rewrittenUrl = resolveSourceRequestUrl(rewritten, source.bookSourceUrl, charset, queryEncoder)
       request = makePlan(rewrittenUrl)
       if (request.plan === undefined) {
@@ -522,6 +563,7 @@ export class SourceRequestRuntime {
           field: 'bodyJs',
           baseUrl: scriptBaseUrl,
           redirectUrl: result.url,
+          ...scriptContext,
         })
         result = { ...result, bytes: new TextEncoder().encode(transformed), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
       }
@@ -541,7 +583,7 @@ export class SourceRequestRuntime {
     try { this.requestObserver?.onError?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
   }
 
-  private async sourceHeaders(source: NormalizedSource, signal?: AbortSignal, nested = false): Promise<Readonly<Record<string, string>> | undefined> {
+  private async sourceHeaders(source: NormalizedSource, signal?: AbortSignal, nested = false, scriptContext?: RequestScriptContext): Promise<Readonly<Record<string, string>> | undefined> {
     const header = source.header
     if (header === undefined || header === null) return undefined
     if (typeof header === 'object' && !Array.isArray(header)) return headerObject(header)
@@ -559,6 +601,7 @@ export class SourceRequestRuntime {
           evaluateField: 'header',
           field: 'header',
           scriptStage: 'search',
+          ...scriptContext,
         })
       } catch (error) {
         if (error instanceof SourceRequestError && error.code === 'rule-failed') return undefined

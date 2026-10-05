@@ -28,6 +28,7 @@ import type {
   SourceFunctionOutput,
   SourceFunctionRequest,
 } from '../workflows/types.ts'
+import { internalChapterScopeBinding } from '../workflows/types.ts'
 
 export interface SourceRuleBridgeRequest {
   kind: string
@@ -571,7 +572,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   private entityForScope(bindings: Readonly<Record<string, unknown>>, scope: JavaScriptVariableScope): RuleEntity | undefined {
-    const value = scope === 'rule-data' ? bindings.ruleData ?? bindings.rule_data : bindings[scope]
+    const value = scope === 'rule-data'
+      ? bindings.ruleData ?? bindings.rule_data
+      : scope === 'chapter'
+        ? bindings.chapter ?? bindings[internalChapterScopeBinding]
+        : bindings[scope]
     return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RuleEntity : undefined
   }
 
@@ -1078,7 +1083,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'globalThis.sourceApi = sourceValue;',
       'const bookValue = bindings.book ?? {};',
       'globalThis.book = { ...bookValue }; Object.defineProperties(globalThis.book, { getVariable: { value: (name) => getVar(String(name), "book") ?? "" }, putVariable: { value: (name, value) => { setVar(String(name), value, "book"); return true; } } });',
-      'globalThis.chapter = { ...(bindings.chapter ?? {}) }; Object.defineProperties(globalThis.chapter, { getVariable: { value: (name) => getVar(String(name), "chapter") ?? "" }, putVariable: { value: (name, value) => { setVar(String(name), value, "chapter"); return true; } } });',
+      'if (bindings.chapter !== undefined) { globalThis.chapter = { ...(bindings.chapter ?? {}) }; Object.defineProperties(globalThis.chapter, { getVariable: { value: (name) => getVar(String(name), "chapter") ?? "" }, putVariable: { value: (name, value) => { setVar(String(name), value, "chapter"); return true; } } }); } else { globalThis.chapter = undefined; }',
       'const getVariable = (name) => getVar(String(name));',
       'const putVariable = (name, value) => setVar(String(name), value);',
       // Android CookieStore 的 set/remove 返回 Unit，`{{cookie.removeCookie(...)}}` 必须展开为空串而不是 "true"。

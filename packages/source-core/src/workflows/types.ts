@@ -249,7 +249,14 @@ export interface WorkflowRequest {
   options: WorkflowOptions
   /** 书源声明的执行提示；正文请求会携带 `webJs`/`sourceRegex`。 */
   execution?: { webJs?: string; sourceRegex?: string }
+  /** URL/options 脚本可见的当前书籍；缺省时不向请求脚本注入书籍状态。 */
+  book?: BookCandidate
+  /** 仅供 `java.get/put` 使用的内部章节作用域；不会映射为 URL 脚本的全局 `chapter`。 */
+  chapter?: ChapterIdentity & { title?: string; variable?: string; rawFields?: JsonObject }
 }
+
+/** SourceRuleRuntime 用于请求脚本内部变量作用域的保留绑定名；不会创建 guest 全局变量。 */
+export const internalChapterScopeBinding = '__legadoInternalChapterScope'
 
 export interface DiscoveryInput extends WorkflowOptions {
   source: NormalizedSource

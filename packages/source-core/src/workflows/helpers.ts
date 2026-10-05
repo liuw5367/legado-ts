@@ -2,7 +2,8 @@ import type { JsonObject, JsonValue, NormalizedSource } from '../model/types.ts'
 import { SourceRequestError, SourceRequestRuntime } from './source-request.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
-import type { SourceFunctionName, SourceFunctionRequest, WorkflowDiagnostic, WorkflowImageDecodeRequest, WorkflowJavaScriptRequest, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { SourceFunctionName, SourceFunctionRequest, WorkflowDiagnostic, WorkflowImageDecodeRequest, WorkflowJavaScriptRequest, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRequest, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import { internalChapterScopeBinding } from './types.ts'
 
 export const listFields = [
   ['bookName', 'name'],
@@ -363,14 +364,22 @@ export interface WorkflowPageResponse {
   url: string
 }
 
-export async function requestPageResponse(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }): Promise<WorkflowPageResponse | undefined> {
+export async function requestPageResponse(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }, requestContext?: Pick<WorkflowRequest, 'book' | 'chapter'>): Promise<WorkflowPageResponse | undefined> {
   if (options.signal?.aborted === true) {
     diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
     return undefined
   }
   trace.push({ stage, event: 'request', target: stage })
   try {
-    const requestInput = { source, url, stage, options, ...(execution === undefined ? {} : { execution }) }
+    const requestInput: WorkflowRequest = {
+      source,
+      url,
+      stage,
+      options,
+      ...(execution === undefined ? {} : { execution }),
+      ...(requestContext?.book === undefined ? {} : { book: requestContext.book }),
+      ...(requestContext?.chapter === undefined ? {} : { chapter: requestContext.chapter }),
+    }
     let response: NetworkResponse
     if (ports.request !== undefined) response = await ports.request(requestInput)
     else {
@@ -401,7 +410,7 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
     if (response === undefined) throw new Error('书源请求没有响应')
     const checked = options.skipLoginCheck === true
       ? response
-      : await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics)
+      : await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics, requestContext)
     if (checked === undefined) return undefined
     response = checked
     // Android 在重试耗尽后仍把有响应的正文交给规则解析；状态码保留在 NetworkResponse 和请求观察中。
@@ -433,7 +442,7 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
         // 保留原地址供 hook 检查，之后仍返回原请求失败诊断。
       }
       const errorResponse: NetworkResponse = { url: errorUrl, status: 500, headers: {}, bytes: new TextEncoder().encode(errorText), redirected: false }
-      const recovered = await applyLoginCheck(ports, source, stage, errorResponse, options.signal, diagnostics)
+      const recovered = await applyLoginCheck(ports, source, stage, errorResponse, options.signal, diagnostics, requestContext)
       if (recovered !== undefined && recovered.status !== 500) return { content: responseText(recovered, source, ports), url: recovered.url }
       if (recovered === undefined) return undefined
     }
@@ -442,7 +451,7 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
   }
 }
 
-async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, response: NetworkResponse, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[]): Promise<NetworkResponse | undefined> {
+async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, response: NetworkResponse, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], requestContext?: Pick<WorkflowRequest, 'book' | 'chapter'>): Promise<NetworkResponse | undefined> {
   const code = sourceString(source, 'loginCheckJs')
   if (code === undefined) return response
   if (ports.rules.executeWorkflowJavaScript === undefined) {
@@ -458,7 +467,11 @@ async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, s
       code,
       stage: stage === 'search' ? 'search' : stage === 'detail' ? 'book' : 'search',
       content: responseBinding,
-      bindings: { __strResponse: responseBinding },
+      bindings: {
+        __strResponse: responseBinding,
+        ...(requestContext?.book === undefined ? {} : { book: requestContext.book }),
+        ...(requestContext?.chapter === undefined ? {} : { [internalChapterScopeBinding]: requestContext.chapter }),
+      },
       ...(signal === undefined ? {} : { signal }),
     })
   } catch {

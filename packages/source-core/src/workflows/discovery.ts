@@ -536,7 +536,7 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       && (expandedUrl.url === candidate.infoPage.requestUrl || expandedUrl.url === candidate.infoPage.responseUrl)
     const page = canReuseInfoPage
       ? { content: candidate.infoPage!.body, url: candidate.infoPage!.responseUrl }
-      : await requestPageResponse(ports, input.source, expandedUrl.url, 'detail', input, diagnostics, trace)
+      : await requestPageResponse(ports, input.source, expandedUrl.url, 'detail', input, diagnostics, trace, undefined, { book: candidate })
     if (page === undefined) continue
     const context = { baseUrl: candidate.bookUrl, redirectUrl: page.url }
     // Android BookInfo：init 规则先执行，其结果成为后续详情字段的内容基准。

@@ -103,6 +103,52 @@ test('URL 请求选项执行 js/bodyJs、重试和十六进制响应类型', asy
   assert.equal(host.decodeResponse(binary), '00ff')
 })
 
+test('URL 请求脚本携带书籍和内部章节变量作用域，但不暴露全局 chapter', async () => {
+  const plans: string[] = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    plans.push(plan.url)
+    return response(plan.url)
+  } } })
+  host.attachRuleHost(new SourceRuleHost())
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://fixture.invalid/book/one',
+    name: '上下文书',
+    rawFields: {},
+    traceRef: 'detail:0',
+    emptyFields: [],
+    fieldErrors: {},
+    variable: '{"bookToken":"book-initial"}',
+  }
+  const chapter = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: book.bookUrl,
+    chapterUrl: 'https://fixture.invalid/book/one/chapter/1',
+    url: '/chapter/1',
+    baseUrl: book.bookUrl,
+    index: 0,
+    title: '第一章',
+    rawFields: {},
+    traceRef: 'toc:0',
+    variable: '{"chapterToken":"chapter-initial"}',
+  }
+  const options = JSON.stringify({
+    js: 'java.put("chapterToken", "chapter-updated"); java.put("bookToken", "book-updated"); result + "?name=" + book.name + "&global=" + typeof chapter + "&chapter=" + java.get("chapterToken") + "&book=" + java.get("bookToken")',
+  })
+  await host.request({ source, url: `/context,${options}`, stage: 'detail', options: {}, book, chapter })
+  assert.equal(plans[0], 'https://fixture.invalid/context?name=%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B9%A6&global=undefined&chapter=chapter-updated&book=book-updated')
+  assert.deepEqual(JSON.parse(chapter.variable), { chapterToken: 'chapter-updated', bookToken: 'book-updated' })
+  assert.equal(book.variable, '{"bookToken":"book-initial"}')
+
+  const bodyOptions = JSON.stringify({ bodyJs: 'book.name + "/" + typeof chapter + "/" + java.get("chapterToken")' })
+  const bodyResponse = await host.request({ source, url: `/body,${bodyOptions}`, stage: 'detail', options: {}, book, chapter })
+  assert.equal(host.decodeResponse(bodyResponse), '上下文书/undefined/chapter-updated')
+
+  const laterOptions = JSON.stringify({ js: 'book.name + "/" + typeof chapter' })
+  await host.request({ source, url: `/later,${laterOptions}`, stage: 'detail', options: {}, book })
+  assert.equal(plans[2], 'https://fixture.invalid/%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B9%A6/undefined')
+})
+
 test('非 WebView 请求选项把 dnsIp 传入 RequestPlan', async () => {
   let dnsIp: string | undefined
   const host = new SourceRequestHost({ network: { request: async (plan) => { dnsIp = plan.execution.dnsIp; return response(plan.url) } } })

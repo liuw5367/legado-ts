@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { NormalizedSource, WorkflowPorts } from '../src/index.ts'
 import { expandUrl } from '../src/workflows/helpers.ts'
+import { internalChapterScopeBinding } from '../src/workflows/types.ts'
 
 const source = { bookSourceUrl: 'https://fixture.invalid' } as NormalizedSource
 
@@ -44,4 +45,27 @@ test('@js 在 {{}} 前执行，result 保留此前 URL 原文', async () => {
   const result = await expandUrl(workflow, source, 'search', '/search?q={{keyword}}@js:result', { keyword: '中文' }, { keyword: '中文' })
   assert.equal(seen[0]?.content, '/search?q={{keyword}}')
   assert.equal(result.url, '/search?q=中文-script')
+})
+
+test('请求 URL 内联脚本只接收 book 与隐藏章节变量作用域', async () => {
+  const seen: Array<Record<string, unknown> | undefined> = []
+  const workflow: WorkflowPorts = {
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }) },
+    rules: {
+      evaluate: async ({ bindings }) => {
+        seen.push(bindings as Record<string, unknown> | undefined)
+        return { status: 'success', value: '/chapter/1' }
+      },
+    },
+  }
+  const book = { name: '上下文书' }
+  const chapter = { title: '第一章', variable: '{"token":"chapter"}' }
+  const result = await expandUrl(workflow, source, 'detail', '/chapter/<js>book.name</js>', {}, {
+    book,
+    [internalChapterScopeBinding]: chapter,
+  })
+  assert.equal(result.url, '/chapter/1')
+  assert.equal(Object.hasOwn(seen[0] ?? {}, 'chapter'), false)
+  assert.equal((seen[0] ?? {}).book, book)
+  assert.equal((seen[0] ?? {})[internalChapterScopeBinding], chapter)
 })

@@ -27,7 +27,7 @@ export { discoverBooks, searchBooks, loadBookDetails } from './workflows/discove
 export { groupSearchCandidates, isAuthorMatch, isBookTitleMatch, normalizeSearchAuthor, normalizeSearchTitle, searchMatchRank } from './workflows/search-aggregation.ts'
 export type { SearchAggregationGroup, SearchAggregationItem, SearchMatchRank } from './workflows/search-aggregation.ts'
 export { SourceRequestError, SourceRequestRuntime } from './workflows/source-request.ts'
-export type { SourceRequestErrorCode, SourceRequestOptions, SourceRequestRuntimeOptions } from './workflows/source-request.ts'
+export type { RequestScriptContext, SourceRequestErrorCode, SourceRequestOptions, SourceRequestRuntimeOptions } from './workflows/source-request.ts'
 export { loadTableOfContents, loadChapterContent, loadStoredChapterContent, loadChapterContentBatch, decodeImage } from './workflows/reading.ts'
 export { reconcileTableOfContents } from './workflows/toc-reconcile.ts'
 export type { TocBookPatch, TocCarriedMetadata, TocChange, TocChangeKind, TocReconcileBookState, TocReconcileInput, TocReconcileResult } from './workflows/toc-reconcile.ts'

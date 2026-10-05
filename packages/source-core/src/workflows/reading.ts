@@ -6,7 +6,8 @@ import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeImageDecodeScript, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
-import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, TocPage, WorkflowDiagnostic, WorkflowOptions, WorkflowPorts, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import { internalChapterScopeBinding } from './types.ts'
+import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, TocPage, WorkflowDiagnostic, WorkflowOptions, WorkflowPorts, WorkflowRequest, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 let paginationBatchSequence = 0
 
@@ -136,7 +137,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
       if (loginCheckConsumed) requestOptions.skipLoginCheck = true
       // 缓存命中不消耗资格；第一个真实网络请求（即使失败）才消耗一次 loginCheckJs。
       loginCheckConsumed = true
-      page = await loadPage(ports, input.source, normalizedUrl, stage, requestOptions, diagnostics, trace)
+      page = await loadPage(ports, input.source, normalizedUrl, stage, requestOptions, diagnostics, trace, undefined, { book })
     }
     if (page === undefined) break
     const body = page.body
@@ -174,7 +175,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (branchUrls.length > 0) {
       for (const branchUrl of branchUrls) visited.add(branchUrl)
       const firstBranchNeedsLoginCheck = !loginCheckConsumed
-      const batch = await fetchPageBatch(ports, input.source, branchUrls, stage, { ...pageOptions(input, maxBytes, totalBytes), skipLoginCheck: loginCheckConsumed }, undefined, firstBranchNeedsLoginCheck)
+      const batch = await fetchPageBatch(ports, input.source, branchUrls, stage, { ...pageOptions(input, maxBytes, totalBytes), skipLoginCheck: loginCheckConsumed }, undefined, firstBranchNeedsLoginCheck, { book })
       loginCheckConsumed = true
       if (isSignalAborted(input.signal)) {
         appendBatchDiagnostics(batch, diagnostics, trace, true)
@@ -366,6 +367,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   }
   // AnalyzeRule.setNextChapterUrl 在 Android 中会把该值暴露给每个声明式正文规则。
   const ruleBindings = { book: variableBook, chapter: resultChapter, nextChapterUrl: input.nextChapterUrl ?? null }
+  const firstRequestContext: Pick<WorkflowRequest, 'book' | 'chapter'> = { book: variableBook, chapter: resultChapter }
+  const laterRequestContext: Pick<WorkflowRequest, 'book'> = { book: variableBook }
   const visited = new Set<string>()
   const pages: string[] = []
   const cleanedPages: string[] = []
@@ -381,7 +384,11 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     resources.push(...formattedPage.imageUrls.map((url) => ({ kind: 'image' as const, url })))
   }
   const rawFirstPageUrl = resolveUrl(rawChapterUrl, chapterBaseUrl) ?? resolveUrl(rawChapterUrl, bookUrl) ?? rawChapterUrl
-  const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, ...ruleBindings }, input.signal)
+  const expandedFirstPage = await expandUrl(ports, input.source, stage, rawFirstPageUrl, { 'source.bookSourceUrl': input.source.bookSourceUrl }, {
+    'source.bookSourceUrl': input.source.bookSourceUrl,
+    book: variableBook,
+    [internalChapterScopeBinding]: resultChapter,
+  }, input.signal)
   if (expandedFirstPage.url === undefined) {
     diagnostics.push(expansionDiagnostic(expandedFirstPage.error, stage, 'chapterUrl', '章节地址展开失败'))
     return { status: expansionStatus(expandedFirstPage.error), value: null, diagnostics, trace }
@@ -421,7 +428,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       if (loginCheckConsumed) requestOptions.skipLoginCheck = true
       // 只有第一个实际网络请求运行 loginCheckJs；详情页复用不消耗资格。
       loginCheckConsumed = true
-      page = await loadPage(ports, input.source, normalizedUrl, stage, requestOptions, diagnostics, trace, pageIndex === 0 ? firstPageExecution : pagedExecution)
+      page = await loadPage(ports, input.source, normalizedUrl, stage, requestOptions, diagnostics, trace, pageIndex === 0 ? firstPageExecution : pagedExecution, pageIndex === 0 ? firstRequestContext : laterRequestContext)
     }
     if (page === undefined) break
     const body = page.body
@@ -465,7 +472,10 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     const resolvedNextUrls: string[] = []
     for (const value of nextValues) {
       const resolvedNext = resolveUrl(value, responseUrl)
-      const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, { 'source.bookSourceUrl': input.source.bookSourceUrl, ...ruleBindings }, input.signal)
+      const expandedNext = resolvedNext === undefined ? undefined : await expandUrl(ports, input.source, stage, resolvedNext, { 'source.bookSourceUrl': input.source.bookSourceUrl }, {
+        'source.bookSourceUrl': input.source.bookSourceUrl,
+        book: variableBook,
+      }, input.signal)
       const nextUrl = expandedNext?.url
       if (nextUrl === undefined) {
         if (expandedNext?.error?.code === 'cancelled') return cancelled('正文下一页地址展开已取消', diagnostics, trace)
@@ -507,7 +517,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       if (scheduledUrls.length > 0) {
         // Android 多 URL 分支调用 getStrResponseAwait() 时不传 webJs/sourceRegex。
         const firstBranchNeedsLoginCheck = !loginCheckConsumed
-        const batch = await fetchPageBatch(ports, input.source, scheduledUrls, stage, { ...pageOptions(input, maxBytes, totalBytes), ...(loginCheckConsumed ? { skipLoginCheck: true } : {}) }, undefined, firstBranchNeedsLoginCheck)
+        const batch = await fetchPageBatch(ports, input.source, scheduledUrls, stage, { ...pageOptions(input, maxBytes, totalBytes), ...(loginCheckConsumed ? { skipLoginCheck: true } : {}) }, undefined, firstBranchNeedsLoginCheck, laterRequestContext)
         loginCheckConsumed = true
         if (isSignalAborted(input.signal)) {
           appendBatchDiagnostics(batch, diagnostics, trace, true)
@@ -574,7 +584,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       let storeAuxiliary = true
       if (/^http/i.test(subContent)) {
         const beforeRequest = diagnostics.length
-        const response = await requestPageResponse(ports, input.source, subContent, stage, { ...pageOptions(input, maxBytes, totalBytes), skipLoginCheck: true }, diagnostics, trace)
+        const response = await requestPageResponse(ports, input.source, subContent, stage, { ...pageOptions(input, maxBytes, totalBytes), skipLoginCheck: true }, diagnostics, trace, undefined, laterRequestContext)
         const requestDiagnostics = diagnostics.slice(beforeRequest)
         for (const diagnostic of requestDiagnostics) if (diagnostic.field === undefined) diagnostic.field = 'subContent'
         if (isSignalAborted(input.signal) || requestDiagnostics.some((item) => item.code === 'cancelled')) {
@@ -1383,7 +1393,7 @@ interface PageBatchResult {
   failed: boolean
 }
 
-async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, urls: readonly string[], stage: WorkflowStage, options: WorkflowOptions, execution?: { webJs?: string; sourceRegex?: string }, loginCheckFirstOnly = false): Promise<PageBatchResult> {
+async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, urls: readonly string[], stage: WorkflowStage, options: WorkflowOptions, execution?: { webJs?: string; sourceRegex?: string }, loginCheckFirstOnly = false, requestContext?: Pick<WorkflowRequest, 'book' | 'chapter'>): Promise<PageBatchResult> {
   const batchController = new AbortController()
   const onAbort = (): void => batchController.abort()
   options.signal?.addEventListener('abort', onAbort, { once: true })
@@ -1398,7 +1408,7 @@ async function fetchPageBatch(ports: WorkflowPorts, source: NormalizedSource, ur
       try {
         const branchOptions = batchPageOptions(options, index, urls.length)
         if (loginCheckFirstOnly && index > 0) branchOptions.skipLoginCheck = true
-        const page = await loadPage(ports, source, url, stage, { ...branchOptions, signal }, diagnostics, trace, execution)
+        const page = await loadPage(ports, source, url, stage, { ...branchOptions, signal }, diagnostics, trace, execution, requestContext)
         const fatal = page === undefined && !signal.aborted && diagnostics.some((item) => item.code !== 'cancelled')
         if (fatal) {
           failed = true
@@ -1458,8 +1468,8 @@ function isSignalAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true
 }
 
-async function loadPage(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }): Promise<{ body: string; url: string } | undefined> {
-  const value = await requestPageResponse(ports, source, url, stage, options, diagnostics, trace, execution)
+async function loadPage(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }, requestContext?: Pick<WorkflowRequest, 'book' | 'chapter'>): Promise<{ body: string; url: string } | undefined> {
+  const value = await requestPageResponse(ports, source, url, stage, options, diagnostics, trace, execution, requestContext)
   return value === undefined ? undefined : { body: value.content, url: value.url }
 }
 
