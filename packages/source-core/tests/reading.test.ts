@@ -690,6 +690,16 @@ test('缺少正文规则时按 Android 行为显示章节链接', async () => {
   assert.equal(result.value?.cleaned, chapter.url)
 })
 
+test('正文规则为空字符串时按 Android 行为回退章节链接', async () => {
+  const chapter: ChapterIdentity = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, url: '/raw/chapter/empty', chapterUrl: 'https://wrong.test/derived', index: 0 }
+  const result = await loadChapterContent({
+    network: { request: async () => { throw new Error('空正文规则不应请求网络') } },
+    rules: { evaluate: async () => { throw new Error('不应执行正文规则') } },
+  }, { source: { ...source, ruleContent: { content: '' } } as NormalizedSource, chapter })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.cleaned, chapter.url)
+})
+
 test('正文请求和规则绑定优先使用章节原始 URL 与 baseUrl', async () => {
   const calls: string[] = []
   let binding: { url?: string; baseUrl?: string; chapterUrl?: string } | undefined

@@ -330,7 +330,12 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     return { status: 'empty', value: { chapter: input.chapter, contentType: 'text', raw: '', cleaned: '', pages: [], resources: [] }, diagnostics, trace }
   }
   if (sourceString(input.source, 'mainJs') !== undefined) return javascriptChapterContent(ports, input, diagnostics, trace)
-  const contentRule = ruleString(input.source, 'ruleContent', 'content') ?? sourceString(input.source, 'ruleContent')
+  const configuredContentRule = ruleString(input.source, 'ruleContent', 'content')
+  // Android uses isNullOrEmpty() for ContentRule.content; an explicit empty
+  // string therefore follows the same chapter-link fallback as a missing rule.
+  const contentRule = configuredContentRule !== undefined && configuredContentRule.length > 0
+    ? configuredContentRule
+    : sourceString(input.source, 'ruleContent')
   if (contentRule === undefined) {
     const url = rawChapterUrl
     return { status: 'success', value: { chapter: input.chapter, contentType: 'text', raw: url, cleaned: url, pages: [url], resources: [], finalUrl: input.chapter.chapterUrl }, diagnostics, trace }
