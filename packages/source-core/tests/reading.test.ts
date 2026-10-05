@@ -376,7 +376,7 @@ test('目录按章节原始 URL 去重而非按解析后的绝对地址去重', 
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
 
-test('目录多 URL 分支保留重复输入地址并分别解析', async () => {
+test('目录多 URL 分支在调度前稳定去重', async () => {
   const calls: string[] = []
   let branchCount = 0
   const branchSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
@@ -394,8 +394,30 @@ test('目录多 URL 分支保留重复输入地址并分别解析', async () => 
       return { status: 'empty', value: null }
     } },
   }, { source: branchSource, book: { ...book, tocUrl: 'https://source.test/toc' } })
-  assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/branch', 'https://source.test/branch'])
-  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['branch-1', 'branch-2'])
+  assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/branch'])
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['branch-1'])
+})
+
+test('目录串行模式由首页决定，后续多地址只跟随首个下一页', async () => {
+  const calls: string[] = []
+  const serialSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      calls.push(plan.url)
+      const body = plan.url.endsWith('/toc') ? 'root' : plan.url.endsWith('/page1') ? 'page1' : 'page2'
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: content === 'root' ? [] : [{ title: String(content), url: `/chapter/${content}` }] }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl' && content === 'root') return { status: 'success', value: '/page1' }
+      if (field === 'nextTocUrl' && content === 'page1') return { status: 'success', value: ['/page2', '/ignored-page'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: serialSource, book: { ...book, tocUrl: 'https://source.test/toc' } })
+  assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/page1', 'https://source.test/page2'])
+  assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['page1', 'page2'])
 })
 
 test('目录多 URL 分支按输入顺序解析、受应用并发额度限制且不递归分支 next URL', async () => {

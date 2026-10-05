@@ -108,6 +108,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   let pagesFetched = 0
   let totalBytes = 0
   let volume: string | undefined
+  let paginationMode: 'undecided' | 'serial' | 'parallel' | 'none' = 'undecided'
   const listRuleBody = normalizeChapterListRule(listRule)
   for (let pageIndex = 0; pageIndex < maxPages && pendingPages.length > 0; pageIndex += 1) {
     if (input.signal?.aborted === true) return cancelled('目录工作流已取消', diagnostics, trace)
@@ -149,13 +150,16 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (parsed.fatal) break
     if (parsed.nextUrls === undefined) continue
     const resolvedNextUrls = parsed.nextUrls
-    const followNext = resolvedNextUrls.length === 1
+    if (pageIndex === 0 && paginationMode === 'undecided') {
+      paginationMode = resolvedNextUrls.length === 0 ? 'none' : resolvedNextUrls.length === 1 ? 'serial' : 'parallel'
+    }
+    if (paginationMode === 'none') continue
     const unseenNextUrls = resolvedNextUrls.filter((nextUrl) => !visited.has(nextUrl) && !pendingPages.some((item) => item.url === nextUrl))
-    if (followNext) {
-      for (const nextUrl of unseenNextUrls) pendingPages.push({ url: nextUrl, followNext: true })
+    if (paginationMode === 'serial') {
+      const nextUrl = unseenNextUrls[0]
+      if (nextUrl !== undefined) pendingPages.push({ url: nextUrl, followNext: true })
       continue
     }
-    if (resolvedNextUrls.length <= 1) continue
     const availablePages = Math.max(0, maxPages - pagesFetched)
     const branchUrls = unseenNextUrls.slice(0, availablePages)
     if (branchUrls.length < unseenNextUrls.length) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
@@ -1248,7 +1252,7 @@ async function parseTocPage(ports: ReadingPorts, input: TocInput, book: BookMeta
             diagnostics.push({ code: expandedNext?.error?.code === 'capability-missing' ? 'capability-missing' : 'rule-failed', stage: 'detail', field: 'nextTocUrl', message: expandedNext?.error?.message ?? '目录下一页 URL 无效', retryable: false })
             return { chapters: [], diagnostics, trace, ...(volume === undefined ? {} : { volume }), fatal: true, cancelled: false }
           }
-          nextUrls.push(nextUrl)
+          if (nextUrl !== responseUrl && !nextUrls.includes(nextUrl)) nextUrls.push(nextUrl)
         }
       }
     }
