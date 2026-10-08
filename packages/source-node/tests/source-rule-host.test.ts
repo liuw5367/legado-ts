@@ -203,7 +203,7 @@ test('java.ajaxAll 返回可调用 body、code 和 url 的响应对象', async (
   const result = await evaluate(host, '@js:java.ajaxAll(["https://a.test", "https://b.test"]).map((item) => item.body() + ":" + item.code() + ":" + item.header("Location")).join("|")', '')
   assert.equal(result.status, 'success')
   assert.equal(result.value, 'body:https://a.test:204:https://a.test|body:https://b.test:204:https://b.test')
-  assert.deepEqual(calls, [{ kind: 'network-all', urls: ['https://a.test', 'https://b.test'], skipRateLimit: false }])
+  assert.deepEqual(calls, [{ kind: 'network-all', urls: ['https://a.test', 'https://b.test'], skipRateLimit: false, stage: 'search' }])
 })
 
 test('java.get 和 java.connect 返回 Android 风格的响应对象', async () => {
@@ -216,8 +216,8 @@ test('java.get 和 java.connect 返回 Android 风格的响应对象', async () 
   assert.equal(result.status, 'success')
   assert.equal(result.value, '302|redirect-body|https://b.test/|https://b.test/|false|https://b.test/')
   assert.deepEqual(calls, [
-    { kind: 'network-response', url: 'https://a.test', method: 'GET', headers: {}, options: { timeout: 30000, followRedirects: false } },
-    { kind: 'network-response', url: 'https://a.test', method: 'GET' },
+    { kind: 'network-response', url: 'https://a.test', method: 'GET', headers: {}, options: { timeout: 30000, followRedirects: false }, stage: 'search' },
+    { kind: 'network-response', url: 'https://a.test', method: 'GET', stage: 'search' },
   ])
 })
 
@@ -236,6 +236,7 @@ test('java.connect 支持 JSON 请求头和超时重载', async () => {
     method: 'GET',
     headers: { 'X-Test': '42' },
     options: { timeout: 321 },
+    stage: 'search',
   }])
 })
 
@@ -250,9 +251,9 @@ test('java.post、java.head 和 ajaxTestAll 保留 Android 请求形态', async 
   assert.equal(result.status, 'success')
   assert.equal(result.value, '201|q=1|204|https://a.test/one,https://a.test/two')
   assert.deepEqual(calls, [
-    { kind: 'network-response', url: 'https://a.test/post', method: 'POST', body: 'q=1', headers: { 'X-Test': 'yes' }, options: { timeout: 123, followRedirects: false } },
-    { kind: 'network-response', url: 'https://a.test/head', method: 'HEAD', headers: { 'X-Test': 'yes' }, options: { timeout: 30000, followRedirects: false } },
-    { kind: 'network-all', urls: ['https://a.test/one', 'https://a.test/two'], skipRateLimit: true, options: { timeout: 456 } },
+    { kind: 'network-response', url: 'https://a.test/post', method: 'POST', body: 'q=1', headers: { 'X-Test': 'yes' }, options: { timeout: 123, followRedirects: false }, stage: 'search' },
+    { kind: 'network-response', url: 'https://a.test/head', method: 'HEAD', headers: { 'X-Test': 'yes' }, options: { timeout: 30000, followRedirects: false }, stage: 'search' },
+    { kind: 'network-all', urls: ['https://a.test/one', 'https://a.test/two'], skipRateLimit: true, options: { timeout: 456 }, stage: 'search' },
   ])
 })
 
@@ -266,7 +267,7 @@ test('java.ajax 的第二参数是超时并把普通网络错误转成正文', a
   const result = await evaluate(host, '@js:java.ajax("https://a.test", 456)', '')
   assert.equal(result.status, 'success')
   assert.equal(result.value, 'ajax-body')
-  assert.deepEqual(calls, [{ kind: 'network', url: 'https://a.test', method: 'GET', options: { timeout: 456 } }])
+  assert.deepEqual(calls, [{ kind: 'network', url: 'https://a.test', method: 'GET', options: { timeout: 456 }, stage: 'search' }])
 
   const connect = await evaluate(host, '@js:var response = java.connect("https://a.test"); [response.code(), response.isSuccessful(), response.body()].join("|")', '')
   assert.equal(connect.status, 'success')
@@ -569,7 +570,7 @@ test('规则宿主兼容 java.ajax 的对象请求形式', async () => {
   const result = await evaluate(host, '@js:java.ajax({url: "https://fixture.invalid/api", method: "POST", body: "q=1"})', '')
   assert.equal(result.status, 'success')
   assert.equal(result.value, 'ok')
-  assert.deepEqual(calls, [{ kind: 'network', url: 'https://fixture.invalid/api', method: 'POST', body: 'q=1' }])
+  assert.deepEqual(calls, [{ kind: 'network', url: 'https://fixture.invalid/api', method: 'POST', body: 'q=1', stage: 'search' }])
 })
 
 test('字符串规则的末段按属性名取值，不再返回内部节点引用', async () => {

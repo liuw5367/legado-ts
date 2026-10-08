@@ -233,6 +233,20 @@ test('bridge 的 ajaxAll 和 response 请求复用完整网络响应并保持顺
   assert.equal(skipFlags.at(-1), true)
 })
 
+test('bridge 子请求继承当前工作流阶段', async () => {
+  const observations: Array<{ stage: string; kind?: string }> = []
+  const host = new SourceRequestHost({
+    network: { request: async (plan) => response(plan.url) },
+    requestObserver: { onStart: (event) => observations.push({ stage: event.stage, ...(event.kind === undefined ? {} : { kind: event.kind }) }) },
+  })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, requestSource) => host.requestFromBridge(input, signal, requestSource) })
+  host.attachRuleHost(ruleHost)
+  const options = JSON.stringify({ js: 'java.ajax("https://fixture.invalid/bridge"); result' })
+  await host.request({ source, url: `/detail,${options}`, stage: 'detail', options: {} })
+  assert.ok(observations.some((observation) => observation.kind === 'bridge'))
+  assert.ok(observations.every((observation) => observation.stage === 'detail'), JSON.stringify(observations))
+})
+
 test('bridge 的 ajaxAll 失败时等待所有兄弟请求收尾', async () => {
   let releaseSlow!: () => void
   const slowGate = new Promise<void>((resolve) => { releaseSlow = resolve })

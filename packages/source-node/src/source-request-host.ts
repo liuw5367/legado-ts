@@ -147,7 +147,7 @@ export class SourceRequestHost {
     if (input.kind === 'network-all') {
       const urls = Array.isArray(input.urls) ? input.urls.map((value) => text(value)).filter((value) => value.length > 0) : []
       return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url, batchSignal) => {
-        const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, undefined, 'search', true, input.skipRateLimit === true, 'bridge')
+        const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, undefined, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge')
         return this.responseObject(response)
       }))
     }
@@ -159,7 +159,7 @@ export class SourceRequestHost {
     }
     return this.bridgeDepth.run(depth + 1, async () => {
       // nested：子请求跳过动态 source header，只保留静态头，切断 header 脚本自递归。
-      const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, 'search', true, input.skipRateLimit === true, 'bridge')
+      const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge')
       return input.kind === 'network-response' ? this.responseObject(response) : this.decode(response)
     })
   }

@@ -162,6 +162,8 @@ export interface WorkflowJavaScriptRequest {
   source: NormalizedSource
   code: string
   stage: WorkflowJavaScriptStage
+  /** Core workflow stage used for request observations and bridge policy; absent for direct host calls. */
+  workflowStage?: WorkflowStage
   content?: unknown
   /** 当前脚本访问请求上下文时使用的基准 URL；缺省为书源 URL。 */
   baseUrl?: string
@@ -201,6 +203,8 @@ export interface SourceFunctionRequest {
   /** Actions exposed only during this source-function call, such as batch cacheContent. */
   workflowActions?: Readonly<Record<string, WorkflowAction>>
   stage: WorkflowJavaScriptStage
+  /** Core workflow stage used for request observations and bridge policy. */
+  workflowStage?: WorkflowStage
   signal?: AbortSignal
 }
 

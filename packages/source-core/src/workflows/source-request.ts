@@ -376,6 +376,7 @@ export class SourceRequestRuntime {
           source,
           code,
           stage: scriptStage,
+          workflowStage: stage,
           content,
           baseUrl,
           redirectUrl,

@@ -27,11 +27,14 @@ import type {
   SourceFunctionName,
   SourceFunctionOutput,
   SourceFunctionRequest,
+  WorkflowStage,
 } from '../workflows/types.ts'
 import { internalChapterScopeBinding } from '../workflows/types.ts'
 
 export interface SourceRuleBridgeRequest {
   kind: string
+  /** Core workflow stage of the script that issued this bridge request. */
+  stage?: WorkflowStage
   action?: unknown
   input?: unknown
   url?: string
@@ -625,6 +628,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   public async executeWorkflowJavaScript(request: WorkflowJavaScriptRequest): Promise<WorkflowRuleOutput> {
     return this.runJavaScript(request.code, request.stage, request.source, request.content ?? '', request.signal, {
       mode: 'script',
+      ...(request.workflowStage === undefined ? {} : { workflowStage: request.workflowStage }),
       ...(request.captureMutations === undefined ? {} : { captureBindings: request.captureMutations }),
       ...(request.content === undefined ? {} : { content: request.content }),
       ...(request.baseUrl === undefined ? {} : { baseUrl: request.baseUrl }),
@@ -667,7 +671,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       `typeof ${request.name} === 'function' ? { __legadoSourceFunctionExists: true, value: ${call} } : { __legadoSourceFunctionExists: false }`,
     ].join('\n')
     const captureBindings = parameters.filter((name) => Object.hasOwn(bindings, name))
-    const output = await this.runJavaScript(code, request.stage, request.source, '', request.signal, { bindings, mode: 'script', captureBindings, ...(request.workflowActions === undefined ? {} : { workflowActions: request.workflowActions }) })
+    const output = await this.runJavaScript(code, request.stage, request.source, '', request.signal, { bindings, mode: 'script', captureBindings, ...(request.workflowStage === undefined ? {} : { workflowStage: request.workflowStage }), ...(request.workflowActions === undefined ? {} : { workflowActions: request.workflowActions }) })
     if (output.status !== 'success') return { ...output, exists: false }
     let value = output.value
     if (captureBindings.length > 0) {
@@ -1060,7 +1064,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind'] }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; workflowStage?: WorkflowStage; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind'] }): Promise<WorkflowRuleOutput> {
     const bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
@@ -1142,7 +1146,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
     const runSignal = signal ?? new AbortController().signal
     try {
-      const libraries = await this.loadSourceLibraries(source, runSignal)
+      const libraries = await this.loadSourceLibraries(source, runSignal, context?.workflowStage ?? this.workflowStageForJavaScript(stage))
       const executable = `${prelude}\n${libraries.join('\n')}\n${code}`
       const initialCaptureVariables: Record<string, string | undefined> = {}
       for (const name of context?.captureBindings ?? []) {
@@ -1178,7 +1182,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             if (action === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${name} unavailable`)
             return action(bridgeSignal, actionRequest.input)
           }
-          return this.handleBridge(payload, bridgeSignal, source)
+          return this.handleBridge(payload, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage))
         },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })
@@ -1209,7 +1213,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return { request, source, content, bindings, budget: { steps: 0, depth: 0 }, expect: 'text' }
   }
 
-  private async loadSourceLibraries(source: NormalizedSource, signal: AbortSignal): Promise<string[]> {
+  private async loadSourceLibraries(source: NormalizedSource, signal: AbortSignal, workflowStage: WorkflowStage): Promise<string[]> {
     const value = source.jsLib
     if (typeof value !== 'string' || value.trim().length === 0) return []
     let remoteUrls: string[] | undefined
@@ -1239,7 +1243,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       let script = await this.cache.get(cacheKey, signal)
       if (script === undefined) {
         if (this.requestBridge === undefined) throw new SourceRuleError('capability-missing', '加载 jsLib 需要网络宿主')
-        const response = await this.requestBridge({ kind: 'network', url: url.toString() }, signal, source)
+        const response = await this.requestBridge({ kind: 'network', url: url.toString(), stage: workflowStage }, signal, source)
         if (typeof response !== 'string') throw new SourceRuleError('failed', 'jsLib 网络响应不是文本')
         script = response
         await this.cache.put(cacheKey, script, 0, signal)
@@ -1249,7 +1253,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return scripts
   }
 
-  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource): Promise<unknown> {
+  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'resolve-url') return resolveSourceUrl(request.url, request.value)
@@ -1303,7 +1307,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     if (request.kind === 'runtime-capability') throw new Error(`__LEGADO_CAPABILITY__runtime ${textValue(request.capability)} unavailable`)
     if (this.requestBridge === undefined) throw new Error('__LEGADO_CAPABILITY__network 书源网络或宿主 bridge 不可用')
-    return this.requestBridge(request, signal, source)
+    return this.requestBridge({ ...request, stage: workflowStage }, signal, source)
   }
 
   private remember(document: HtmlDocument, node: ParserNode): NodeRef {
@@ -1322,6 +1326,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private javascriptStage(stage: WorkflowRuleRequest['stage']): 'mainJs' | 'book' | 'chapter' | 'search' | 'content' {
     return stage === 'search' ? 'search' : stage === 'detail' ? 'book' : 'content'
+  }
+
+  private workflowStageForJavaScript(stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content'): WorkflowStage {
+    return stage === 'search' || stage === 'mainJs' ? 'search' : 'detail'
   }
 
   private check(state: EvaluationState): void {
