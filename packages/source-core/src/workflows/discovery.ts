@@ -4,6 +4,7 @@ import type { SourcePatternError } from '../rules/pattern-guard.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { detailFields, evaluateField, executeSourceFunction, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { formatDetailIntro, formatIntro } from './html-format.ts'
+import { javascriptBookProjection } from './javascript-projection.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
@@ -693,7 +694,7 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     }
     const candidate = input.candidates[itemIndex]!
     // Android getBookInfoAwait 进入脚本前会清掉旧位标记，再写回书源对应的 BookType。
-    const book = { ...candidate.rawFields, ...candidate, tocUrl: candidate.tocUrl ?? candidate.bookUrl, origin: candidate.sourceId, originName: input.source.bookSourceName, type: androidBookType(undefined, input.source) }
+    const book = javascriptBookProjection(candidate, input.source, androidBookType(undefined, input.source), 'empty')
     const info = await executeSourceFunction(ports, input.source, 'getBookInfo', [book], { book }, 'detail', 'book', trace, input.signal)
     if (info.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage: 'detail', itemIndex, message: '详情脚本执行已取消', retryable: false })
@@ -717,9 +718,14 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     }
     const record = values as Record<string, unknown> | undefined
     const { infoPage: _infoPage, ...metadataCandidate } = candidate
+    const detailRawFields = record === undefined ? {} : jsonValue(record) as JsonObject
+    // Android mergeBookInfo ignores identity fields even when a script returns
+    // them; preserve the search marshaller's original bookUrl for later JS
+    // bindings instead of letting an ignored detail key replace it.
+    delete detailRawFields.bookUrl
     const metadata: BookMetadata = {
       ...metadataCandidate,
-      rawFields: { ...candidate.rawFields, ...(record === undefined ? {} : jsonValue(record) as JsonObject) },
+      rawFields: { ...candidate.rawFields, ...detailRawFields },
       emptyFields: [],
       fieldErrors: {},
       tocUrl: candidate.tocUrl ?? candidate.bookUrl,

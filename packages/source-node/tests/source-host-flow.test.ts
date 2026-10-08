@@ -449,9 +449,9 @@ test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章
     bookSourceName: 'JS Source',
     mainJs: [
       'function search(key, page) { return [{ name: key, author: "Writer", bookUrl: "/book", coverUrl: "/cover.png" }]; }',
-      'function getBookInfo(book) { if (book.type !== 8) throw new Error("getBookInfo type mismatch: " + book.type); return { tocUrl: "/book/toc", coverUrl: "../covers/detail.png", latestChapterTitle: "最后一章" }; }',
-      'function getChapters(book) { if (book.type !== 8) throw new Error("getChapters type mismatch: " + book.type); return [{ title: "第一章", url: "./chapter/1", isVip: true }]; }',
-      'function getContent(chapter, book, nextChapterUrl) { if (book.type !== 8) throw new Error("getContent type mismatch: " + book.type); return chapter.title + ":" + book.name + ":" + nextChapterUrl; }',
+      'function getBookInfo(book) { if (book.type !== 8 || book.bookUrl !== "/book" || book.tocUrl !== "") throw new Error("getBookInfo Android URL projection mismatch"); return { bookUrl: "/ignored-by-android", tocUrl: "/book/toc", coverUrl: "../covers/detail.png", latestChapterTitle: "最后一章" }; }',
+      'function getChapters(book) { if (book.type !== 8 || book.bookUrl !== "/book" || book.tocUrl !== "/book/toc") throw new Error("getChapters Android URL projection mismatch"); return [{ title: "第一章", url: "./chapter/1", isVip: true }]; }',
+      'function getContent(chapter, book, nextChapterUrl) { if (book.type !== 8 || book.bookUrl !== "/book" || book.tocUrl !== "/book/toc" || chapter.baseUrl !== "/book/toc") throw new Error("getContent Android URL projection mismatch"); return chapter.title + ":" + book.name + ":" + nextChapterUrl; }',
     ].join('\n'),
   } as unknown as import('../../source-core/src/index.ts').NormalizedSource
   const requests: string[] = []
@@ -479,7 +479,7 @@ test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章
   const chapter = toc.value?.items[0]
   assert.ok(chapter)
   assert.equal(chapter.url, 'https://js-source.test/book/chapter/1')
-  assert.equal(chapter.baseUrl, 'https://js-source.test/book/toc')
+  assert.equal(chapter.baseUrl, '/book/toc')
   assert.equal(chapter.chapterUrl, 'https://js-source.test/book/chapter/1')
   assert.equal(chapter.isVip, true)
 

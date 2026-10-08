@@ -5,6 +5,7 @@ import type { CompiledRule } from '../rules/types.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
+import { javascriptBookProjection, javascriptChapterProjection } from './javascript-projection.ts'
 import { evaluateField, executeImageDecodeScript, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { internalChapterScopeBinding } from './types.ts'
 import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, Int64, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, TocPage, WorkflowDiagnostic, WorkflowOptions, WorkflowPorts, WorkflowRequest, WorkflowStage, WorkflowTraceEntry } from './types.ts'
@@ -235,7 +236,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
 async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<TocPage>> {
   const cursor = input.cursor ?? { index: 0 }
   const sourceBook = cloneBookMetadata(input.book)
-  const book = { ...sourceBook.rawFields, ...sourceBook, origin: sourceBook.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(undefined, input.source) }
+  const book = javascriptBookProjection(sourceBook, input.source, javascriptBookType(undefined, input.source), 'bookUrl')
   const result = await executeSourceFunction(ports, input.source, 'getChapters', [book], { book }, 'detail', 'chapter', trace, input.signal)
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 目录工作流已取消', diagnostics, trace)
   if (result.state === 'capability-missing') {
@@ -255,19 +256,23 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
     diagnostics.push({ code: 'rule-failed', stage: 'detail', field: 'getChapters', message: 'JS 书源 getChapters 必须返回数组', retryable: false })
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  const tocBaseUrl = resolveUrl(input.book.tocUrl?.trim() ? input.book.tocUrl : input.book.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
+  const tocRawBaseUrl = typeof book.tocUrl === 'string' && book.tocUrl.length > 0
+    ? book.tocUrl
+    : typeof book.bookUrl === 'string' ? book.bookUrl : input.book.bookUrl
+  const tocBaseUrl = resolveUrl(tocRawBaseUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
   const chapters: Chapter[] = []
   for (const [itemIndex, row] of rows.entries()) {
     if (typeof row !== 'object' || row === null || Array.isArray(row)) continue
     const record = row as Record<string, unknown>
-    const title = javascriptPrimitiveText(record.title)?.trim() ?? ''
-    const rawUrl = javascriptPrimitiveText(record.url ?? record.chapterUrl)?.trim() ?? ''
-    if (title.length === 0 || rawUrl.length === 0) {
+    const title = javascriptPrimitiveText(record.title) ?? ''
+    const rawUrl = javascriptPrimitiveText(record.url ?? record.chapterUrl) ?? ''
+    if (title.trim().length === 0 || rawUrl.trim().length === 0) {
       diagnostics.push({ code: 'item-skipped', stage: 'detail', itemIndex, message: 'JS 目录项缺少 title 或 url', retryable: false })
       continue
     }
     const isVolume = booleanValue(record.isVolume)
-    const chapterUrl = isVolume && rawUrl === title ? rawUrl : resolveUrl(rawUrl, tocBaseUrl)
+    const chapterInputUrl = rawUrl.trim()
+    const chapterUrl = isVolume && rawUrl === title ? rawUrl : resolveUrl(chapterInputUrl, tocBaseUrl)
     if (chapterUrl === undefined) {
       diagnostics.push({ code: 'item-skipped', stage: 'detail', itemIndex, message: 'JS 目录项 URL 无效', retryable: false })
       continue
@@ -276,7 +281,7 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
       sourceId: input.source.bookSourceUrl,
       bookUrl: input.book.bookUrl,
       url: isVolume && rawUrl === title ? rawUrl : chapterUrl,
-      baseUrl: tocBaseUrl,
+      baseUrl: tocRawBaseUrl,
       chapterUrl,
       index: chapters.length,
       title,
@@ -872,13 +877,15 @@ export async function loadChapterContentBatch(ports: ReadingPorts, input: Conten
 
   const { chapters: _chapters, cacheContent, ...contentOptions } = input
   const bookBaseUrl = input.book.tocUrl?.trim() ? input.book.tocUrl : input.book.bookUrl
-  const bookValue = {
-    ...input.book.rawFields,
-    ...input.book,
-    origin: input.book.sourceId,
-    originName: input.source.bookSourceName,
-    type: androidBookType(input.book, input.source),
-  }
+  const bookValue = isJavaScriptSource
+    ? javascriptBookProjection(input.book, input.source, androidBookType(input.book, input.source), 'bookUrl')
+    : {
+        ...input.book.rawFields,
+        ...input.book,
+        origin: input.book.sourceId,
+        originName: input.source.bookSourceName,
+        type: androidBookType(input.book, input.source),
+      }
   let batchCount = 0
   const fallbackSuppressed = new Set<number>()
 
@@ -1136,18 +1143,8 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
     tocUrl: input.chapter.bookUrl,
   } : cloneBookMetadata(input.book)
   const chapterData = input.chapter as ContentInput['chapter'] & { rawFields?: JsonObject }
-  const rawChapterUrl = chapterRuleUrl(input.chapter)
-  const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
-  const chapterBaseReference = input.chapter.baseUrl?.trim() || book.tocUrl?.trim() || input.chapter.bookUrl
-  const chapter = {
-    ...(chapterData.rawFields === undefined ? {} : cloneJsonObject(chapterData.rawFields)),
-    ...input.chapter,
-    url: rawChapterUrl,
-    baseUrl: resolveUrl(chapterBaseReference, bookUrl) ?? bookUrl,
-    index: input.chapter.index,
-    title: input.chapter.title ?? '',
-  }
-  const bookValue = { ...book.rawFields, ...book, origin: book.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(book, input.source) }
+  const chapter = javascriptChapterProjection(chapterData)
+  const bookValue = javascriptBookProjection(book, input.source, javascriptBookType(book, input.source), 'bookUrl')
   const result = await executeSourceFunction(ports, input.source, 'getContent', [chapter, bookValue, input.nextChapterUrl ?? null], { chapter, book: bookValue, nextChapterUrl: input.nextChapterUrl ?? null }, 'detail', 'content', trace, input.signal)
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 正文工作流已取消', diagnostics, trace)
   if (result.state === 'capability-missing') {
