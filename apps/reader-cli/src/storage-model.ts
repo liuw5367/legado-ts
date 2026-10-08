@@ -64,6 +64,8 @@ export interface BookDocument {
 /** 单个书源版本的目录快照；章节和目录统计由应用在同一写锁内提交。 */
 export interface TocSnapshot {
   editionKey: string
+  /** 目录缓存对应的书源定义指纹；缺失时视为旧格式，不能直接命中缓存。 */
+  sourceFingerprint?: string
   revision: string
   chapters: Chapter[]
   bookPatch: TocBookPatch

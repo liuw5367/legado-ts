@@ -33,6 +33,7 @@ class FakeSession implements ReaderSourceSession {
   private readonly onSearchFinish: (() => void) | undefined
   private readonly tocValue: RuntimeResult<TocPage> | undefined
   public readonly contentRefreshes: boolean[] = []
+  public readonly tocRefreshes: boolean[] = []
   public readonly contentNextChapterUrls: Array<string | undefined> = []
   public readonly contentBooks: BookMetadata[] = []
   public readonly tocBooks: BookMetadata[] = []
@@ -78,8 +79,9 @@ class FakeSession implements ReaderSourceSession {
     return result<WorkflowPage<BookMetadata>>('capability-missing', null)
   }
 
-  public async toc(_book: BookMetadata): Promise<RuntimeResult<TocPage>> {
+  public async toc(_book: BookMetadata, _signal?: AbortSignal, options?: { refresh?: boolean }): Promise<RuntimeResult<TocPage>> {
     this.tocBooks.push(_book)
+    this.tocRefreshes.push(options?.refresh === true)
     return this.tocValue ?? result<WorkflowPage<Chapter>>('failed', null)
   }
 
@@ -466,7 +468,7 @@ test('正文入口未显式传下一章时从目录快照提供护栏并在末�
   }
 })
 
-test('刷新目录通过 source-core reconcile 并持久化书源版本快照', async () => {
+test('目录缓存命中且手动刷新仍通过 source-core reconcile 并持久化书源版本快照', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-toc-snapshot-'))
   const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
   await storage.initialize()
@@ -486,7 +488,49 @@ test('刷新目录通过 source-core reconcile 并持久化书源版本快照', 
     assert.equal((await storage.getTocSnapshot(bookId, edition))?.revision, firstLoad.revision)
     const secondLoad = await application.loadToc(bookId, edition)
     assert.deepEqual(secondLoad.changes, [])
-    assert.equal(secondLoad.bookPatch.lastCheckCount, undefined)
+    assert.equal(secondLoad.bookPatch.lastCheckCount, firstLoad.bookPatch.lastCheckCount)
+    assert.deepEqual(session.tocRefreshes, [false])
+    const refreshed = await application.loadToc(bookId, edition, undefined, { refresh: true })
+    assert.deepEqual(refreshed.changes, [])
+    assert.deepEqual(session.tocRefreshes, [false, true])
+  } finally {
+    await application.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('目录缓存只写入当前活动书源，其他书源仅临时预览', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-toc-active-source-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data-v1'), cacheRoot: join(root, 'cache-v1') } })
+  await storage.initialize()
+  const currentEntry = entry(source('https://source.test/current'), 0)
+  const previewEntry = entry(source('https://source.test/preview'), 1)
+  const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  const currentUrl = 'https://source.test/current/book'
+  const previewUrl = 'https://source.test/preview/book'
+  const currentEdition = editionKey(currentEntry.source.bookSourceUrl, currentUrl)
+  const previewEdition = editionKey(previewEntry.source.bookSourceUrl, previewUrl)
+  const currentChapter: Chapter = { sourceId: currentEntry.source.bookSourceUrl, bookUrl: currentUrl, chapterUrl: `${currentUrl}/c1`, index: 0, title: '当前章节', rawFields: {}, traceRef: 'fixture' }
+  const previewChapter: Chapter = { sourceId: previewEntry.source.bookSourceUrl, bookUrl: previewUrl, chapterUrl: `${previewUrl}/c1`, index: 0, title: '预览章节', rawFields: {}, traceRef: 'fixture' }
+  const currentSession = new FakeSession([], 0, false, undefined, undefined, undefined, result('success', { items: [currentChapter], cursor: { index: 0 } }))
+  const previewSession = new FakeSession([], 0, false, undefined, undefined, undefined, result('success', { items: [previewChapter], cursor: { index: 0 } }))
+  const application = new ReaderApplication({
+    catalog: { entries: [currentEntry, previewEntry], diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false },
+    storage,
+    sessionFactory: (value) => value.bookSourceUrl === currentEntry.source.bookSourceUrl ? currentSession : previewSession,
+  })
+  try {
+    await storage.upsertBook({ bookId, name: '当前书', activeEditionKey: currentEdition, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.mergeKnownSources(bookId, [
+      { editionKey: currentEdition, sourceId: currentEntry.source.bookSourceUrl, sourceFingerprint: currentEntry.fingerprint, bookUrl: currentUrl, name: '当前书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'selected' },
+      { editionKey: previewEdition, sourceId: previewEntry.source.bookSourceUrl, sourceFingerprint: previewEntry.fingerprint, bookUrl: previewUrl, name: '当前书', rawFields: {}, discoveredAt: '2026-01-01T00:00:00.000Z', matchKind: 'title-author' },
+    ])
+    await application.loadToc(bookId, currentEdition)
+    await application.loadToc(bookId, previewEdition)
+    await application.loadToc(bookId, previewEdition)
+    assert.equal((await storage.getTocSnapshot(bookId, currentEdition))?.sourceFingerprint, currentEntry.fingerprint)
+    assert.equal(await storage.getTocSnapshot(bookId, previewEdition), undefined)
+    assert.deepEqual(previewSession.tocRefreshes, [false, false])
   } finally {
     await application.close()
     await rm(root, { recursive: true, force: true })
@@ -513,9 +557,9 @@ test('目录刷新后的 bookAfter 按书源版本快照交给正文', async () 
     assert.equal(toc.bookAfter?.bookUrl, effectiveBookUrl)
     const snapshot = await storage.getTocSnapshot(bookId, edition)
     assert.equal(snapshot?.bookAfter?.variable, bookAfter.variable)
-    await application.loadToc(bookId, edition)
-    assert.equal(session.tocBooks.at(-1)?.bookUrl, effectiveBookUrl)
-    assert.equal(session.tocBooks.at(-1)?.variable, bookAfter.variable)
+    const cached = await application.loadToc(bookId, edition)
+    assert.equal(cached.bookAfter?.bookUrl, effectiveBookUrl)
+    assert.equal(cached.bookAfter?.variable, bookAfter.variable)
     await application.loadContent(bookId, chapter, edition)
     await application.loadContent(bookId, chapter)
     assert.equal(session.contentBooks.at(-1)?.bookUrl, effectiveBookUrl)

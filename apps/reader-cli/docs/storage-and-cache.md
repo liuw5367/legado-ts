@@ -13,6 +13,8 @@
     books/<bookId>/
       book.json
       sources.json
+      toc/<editionKey 摘要>.json
+      content/<content identity 摘要>.json
   cache-v1/
     index.json
     source-input/<sha256>.json
@@ -37,7 +39,7 @@
 
 ## 缓存
 
-缓存可以全部删除并重建，不决定书架、历史或书籍信息是否存在。`source-input` 保存远程来源最近一次成功原文；目录和正文缓存使用 `sourceDefinitionFingerprint + 核心工作流 key` 的 SHA-256，因此同一 URL 在规则更新后不会命中旧内容。缓存命中仍需检查书源定义和章节身份。
+缓存可以全部删除并重建，不决定书架、历史或书籍信息是否存在。`source-input` 保存远程来源最近一次成功原文。目录成功结果作为书籍快照写入 `data-v1/books/<bookId>/toc/`，仅当前书的活动书源参与普通目录加载的缓存命中；快照带有 `sourceDefinitionFingerprint`，书源定义变化时按未命中处理。按 `r` 刷新目录会跳过快照并在成功后覆盖当前活动书源快照，预览其他书源不写入目录快照。正文缓存写入同一本书的 `content/`，并按书源、目录修订和章节身份隔离。
 
 `index.json` 保存缓存文件相对路径、类别、字节数和最近访问时间。索引损坏时通过扫描目录重建；加载索引时只接受 `source-input|toc|content/<sha256>.json` 形式的路径，任何父目录、绝对路径或未知类别都会被丢弃，LRU 清理也会再次校验目标路径。缓存总量超过 512 MiB 时按 LRU 删除缓存文件，不能删除 `data-v1`。
 

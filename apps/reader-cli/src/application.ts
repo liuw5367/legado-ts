@@ -4,7 +4,7 @@ import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentIdent
 import { KeyedConcurrencyHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
 import { chapterKey, editionKey, ReaderStorage } from './storage.ts'
-import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, ReaderSettings, SearchHistoryEntry } from './storage.ts'
+import type { BookDocument, KnownSource, KnownSourceView, ReadingPosition, ReaderSettings, SearchHistoryEntry, TocSnapshot } from './storage.ts'
 import type {
   OpenBookResult,
   ReaderApplicationOptions,
@@ -71,6 +71,8 @@ export class ReaderApplication {
   private settings: ReaderSettings
   private readonly activeOperations = new Set<TrackedOperation>()
   private readonly evidence = new Map<string, DebugCapture>()
+  /** 预览书源的目录只在当前应用生命周期内保留，供直接打开章节时恢复目录产生的书籍状态。 */
+  private transientToc?: { bookId: string; editionKey: string; sourceFingerprint: string; snapshot: TocSnapshot }
   private closed = false
   private closePromise?: Promise<void>
 
@@ -600,15 +602,31 @@ export class ReaderApplication {
     const book = await this.storage.getBook(bookId)
     if (book === undefined) throw new Error('书籍记录不存在')
     const known = await this.storage.listKnownSources(bookId)
-    const edition = known.find((item) => item.editionKey === requestedEdition) ?? known.find((item) => item.editionKey === book.activeEditionKey) ?? known[0]
+    const reading = await this.storage.getReadingRecord(bookId)
+    const activeEditionKey = reading?.activeEditionKey ?? book.activeEditionKey
+    const edition = known.find((item) => item.editionKey === requestedEdition) ?? known.find((item) => item.editionKey === activeEditionKey) ?? known[0]
     if (edition === undefined) throw new Error('书籍没有已知书源')
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
-    const previousSnapshot = await this.storage.getTocSnapshot(bookId, edition.editionKey)
-    const reading = await this.storage.getReadingRecord(bookId)
-    const metadata: BookMetadata = previousSnapshot?.bookAfter === undefined
+    const previousSnapshot = await this.getTocSnapshot(bookId, edition.editionKey, edition.sourceFingerprint)
+    const cacheEditionKey = activeEditionKey ?? (requestedEdition === undefined ? edition.editionKey : undefined)
+    const cacheable = edition.editionKey === cacheEditionKey
+    const usableSnapshot = previousSnapshot?.sourceFingerprint === edition.sourceFingerprint ? previousSnapshot : undefined
+    if (options.refresh !== true && cacheable && usableSnapshot !== undefined) {
+      this.transientToc = { bookId, editionKey: edition.editionKey, sourceFingerprint: edition.sourceFingerprint, snapshot: usableSnapshot }
+      return {
+        chapters: usableSnapshot.chapters,
+        revision: usableSnapshot.revision,
+        bookPatch: usableSnapshot.bookPatch,
+        changes: [],
+        ...(usableSnapshot.bookAfter === undefined ? {} : { bookAfter: usableSnapshot.bookAfter }),
+        source,
+        edition,
+      }
+    }
+    const metadata: BookMetadata = usableSnapshot?.bookAfter === undefined
       ? { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), ...(edition.variable === undefined ? {} : { variable: edition.variable }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
-      : { ...previousSnapshot.bookAfter, sourceId: edition.sourceId, rawFields: { ...edition.rawFields, ...previousSnapshot.bookAfter.rawFields }, traceRef: `stored:${edition.editionKey}`, emptyFields: [...previousSnapshot.bookAfter.emptyFields], fieldErrors: { ...previousSnapshot.bookAfter.fieldErrors } }
+      : { ...usableSnapshot.bookAfter, sourceId: edition.sourceId, rawFields: { ...edition.rawFields, ...usableSnapshot.bookAfter.rawFields }, traceRef: `stored:${edition.editionKey}`, emptyFields: [...usableSnapshot.bookAfter.emptyFields], fieldErrors: { ...usableSnapshot.bookAfter.fieldErrors } }
     const capture = new DebugCapture({ sourceId: source.id, sourceName: source.source.bookSourceName, mode: 'light' })
     const result = await session.toc(metadata, signal, options, capture).finally(() => {
       this.rememberEvidence('toc', capture)
@@ -618,9 +636,9 @@ export class ReaderApplication {
     if (result.value === null) throw new Error(result.diagnostics[0]?.message ?? '目录加载失败')
     const reconciled = reconcileTableOfContents({
       chapters: result.value.items,
-      ...(previousSnapshot === undefined ? {} : { previousChapters: previousSnapshot.chapters }),
+      ...(usableSnapshot === undefined ? {} : { previousChapters: usableSnapshot.chapters }),
       book: {
-        totalChapterNum: previousSnapshot?.bookPatch.totalChapterNum ?? 0,
+        totalChapterNum: usableSnapshot?.bookPatch.totalChapterNum ?? 0,
         durChapterIndex: reading?.positions[edition.editionKey]?.index ?? 0,
       },
       now: Date.now(),
@@ -628,7 +646,12 @@ export class ReaderApplication {
     })
     const revision = sha256(JSON.stringify(reconciled.chapters.map((item) => ({ url: item.url ?? item.chapterUrl, baseUrl: item.baseUrl, chapterUrl: item.chapterUrl, title: item.title }))))
     const bookAfter = result.value.bookAfter
-    await this.storage.saveTocSnapshot(bookId, edition.editionKey, { editionKey: edition.editionKey, revision, chapters: reconciled.chapters, bookPatch: reconciled.bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }), updatedAt: new Date().toISOString() })
+    const snapshot: TocSnapshot = { editionKey: edition.editionKey, sourceFingerprint: edition.sourceFingerprint, revision, chapters: reconciled.chapters, bookPatch: reconciled.bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }), updatedAt: new Date().toISOString() }
+    // 目录缓存只服务当前书源；预览其他书源时仍返回本次结果，但不把它变成下次打开的缓存。
+    if (cacheable && result.status === 'success' && reconciled.chapters.length > 0) {
+      await this.storage.saveTocSnapshot(bookId, edition.editionKey, snapshot)
+    }
+    this.transientToc = { bookId, editionKey: edition.editionKey, sourceFingerprint: edition.sourceFingerprint, snapshot }
     return { chapters: reconciled.chapters, revision, bookPatch: reconciled.bookPatch, changes: reconciled.changes, ...(bookAfter === undefined ? {} : { bookAfter }), source, edition }
   }
 
@@ -645,7 +668,7 @@ export class ReaderApplication {
     if (edition === undefined) {
       const candidates = known.filter((item) => item.sourceId === chapter.sourceId)
       for (const candidate of candidates) {
-        const snapshot = await this.storage.getTocSnapshot(bookId, candidate.editionKey)
+        const snapshot = await this.getTocSnapshot(bookId, candidate.editionKey)
         if (snapshot?.bookAfter?.bookUrl === chapter.bookUrl) {
           edition = candidate
           break
@@ -655,7 +678,7 @@ export class ReaderApplication {
     if (edition === undefined) throw new Error('正文来源未记录')
     const source = this.requireSource(edition)
     const session = this.requireSession(source)
-    const tocSnapshot = await this.storage.getTocSnapshot(bookId, edition.editionKey)
+    const tocSnapshot = await this.getTocSnapshot(bookId, edition.editionKey, edition.sourceFingerprint)
     const reading = await this.storage.getReadingRecord(bookId)
     const tocRevision = tocSnapshot?.revision ?? reading?.positions[edition.editionKey]?.tocRevision ?? ''
     const snapshotBook = tocSnapshot?.bookAfter
@@ -754,6 +777,13 @@ export class ReaderApplication {
     const source = this.catalog.entries.find((entry) => entry.source.bookSourceUrl === edition.sourceId && entry.fingerprint === edition.sourceFingerprint)
     if (source === undefined) throw new Error('书源定义已变化')
     return source
+  }
+
+  private async getTocSnapshot(bookId: string, editionKey: string, sourceFingerprint?: string): Promise<TocSnapshot | undefined> {
+    const transient = this.transientToc
+    if (transient?.bookId === bookId && transient.editionKey === editionKey && (sourceFingerprint === undefined || transient.sourceFingerprint === sourceFingerprint)) return transient.snapshot
+    const snapshot = await this.storage.getTocSnapshot(bookId, editionKey)
+    return sourceFingerprint === undefined || snapshot?.sourceFingerprint === undefined || snapshot.sourceFingerprint === sourceFingerprint ? snapshot : undefined
   }
 
   private rememberEvidence(context: string, capture: DebugCapture): void {
