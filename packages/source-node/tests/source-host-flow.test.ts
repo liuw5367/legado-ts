@@ -226,6 +226,33 @@ test('详情规则区分原始详情地址和重定向后的响应地址', async
   assert.equal(result.value?.items[0]?.tocUrl, 'https://redirect-source.test/original/detail/toc')
 })
 
+test('搜索字段逐步看到当前书籍和最终响应地址', async () => {
+  const source = {
+    bookSourceUrl: 'https://search-context.test',
+    bookSourceName: 'Search Context',
+    searchUrl: '/search',
+    ruleSearch: {
+      bookList: 'article',
+      name: '.title@text',
+      author: '@js:String(book.name) + "|" + baseUrl + "|" + redirectUrl',
+      bookUrl: 'a@href',
+    },
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = {
+    network: {
+      request: async () => response('https://redirect-context.test/results/', '<article><span class="title">上下文书</span><a href="/book">详情</a></article>'),
+    },
+    rules: new SourceRuleHost(),
+  }
+
+  const result = await searchBooks(ports, { source, keyword: '上下文书' })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.name, '上下文书')
+  assert.equal(result.value?.items[0]?.author, '上下文书|https://redirect-context.test/results/|https://redirect-context.test/results/')
+  assert.equal(result.value?.items[0]?.bookUrl, 'https://redirect-context.test/book')
+})
+
 test('声明式音频正文通过 Node 规则宿主提取 subContent 并写回歌词变量', async () => {
   const source = {
     bookSourceUrl: 'https://audio-sub.test',

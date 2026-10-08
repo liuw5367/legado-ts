@@ -243,8 +243,14 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   const listRuleData = { ...ruleData }
   const identities = new Set<string>()
   for (let itemIndex = 0; itemIndex < rawItems.length && (maxItems === undefined || candidates.length < maxItems); itemIndex += 1) {
-    const candidateRuleData = { ...listRuleData }
-    const identityFields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields.slice(0, 3), itemIndex, options.signal, diagnostics, trace, { ruleData: candidateRuleData })
+    const candidateRuleData: Record<string, unknown> = {
+      ...listRuleData,
+      origin: source.bookSourceUrl,
+      originName: source.bookSourceName,
+      type: androidBookType(undefined, source),
+    }
+    const fieldContext = { baseUrl: page.url, redirectUrl: page.url, bindings: { ruleData: candidateRuleData, book: candidateRuleData }, captureBindings: ['book'] as const }
+    const identityFields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields.slice(0, 3), itemIndex, options.signal, diagnostics, trace, fieldContext)
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -258,7 +264,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
       return { status: 'failed', value: null, diagnostics, trace }
     }
-    const optionalFields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields.slice(3), itemIndex, options.signal, diagnostics, trace, { ruleData: candidateRuleData })
+    const optionalFields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields.slice(3), itemIndex, options.signal, diagnostics, trace, fieldContext)
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -282,7 +288,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       continue
     }
     const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name, rawFields: fields.rawFields, traceRef: `${stage}:${candidates.length}` }
-    if (candidateRuleData.variable !== undefined && candidateRuleData.variable.length > 0) candidate.variable = candidateRuleData.variable
+    if (typeof candidateRuleData.variable === 'string' && candidateRuleData.variable.length > 0) candidate.variable = candidateRuleData.variable
     if (author.length > 0) candidate.author = author
     if (fields.intro !== undefined) candidate.intro = formatIntro(fields.intro)
     if (bookUrl === requestUrl || bookUrl === page.url) candidate.infoPage = { body: content, requestUrl, responseUrl: page.url }
@@ -337,7 +343,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   let nextCursor: { index: number; token?: string } | undefined
   if (!stopped && candidates.length > 0 && pageCursor.token === undefined && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
   if (!stopped && nextRule !== undefined) {
-    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { bindings: { ruleData: listRuleData } })
+    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { baseUrl: page.url, redirectUrl: page.url, bindings: { ruleData: listRuleData } })
     if (next.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'nextPage', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -372,12 +378,12 @@ interface ExtractedFields {
   fatal?: { field: string; status: 'failed' | 'capability-missing'; message: string }
 }
 
-async function extractFields(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', ruleGroup: 'ruleExplore' | 'ruleSearch', content: unknown, fields: readonly (readonly [string, string])[], itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], bindings?: Readonly<Record<string, unknown>>): Promise<ExtractedFields> {
+async function extractFields(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', ruleGroup: 'ruleExplore' | 'ruleSearch', content: unknown, fields: readonly (readonly [string, string])[], itemIndex: number, signal: AbortSignal | undefined, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], context?: { baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; captureBindings?: readonly string[] }): Promise<ExtractedFields> {
   const extracted: ExtractedFields = { rawFields: {} }
   for (const [ruleField, outputField] of fields) {
     const rule = ruleString(source, ruleGroup, ruleField)
     if (rule === undefined) continue
-    const result = await evaluateField(ports, source, stage, ruleField, rule, content, itemIndex, trace, signal, bindings === undefined ? undefined : { bindings })
+    const result = await evaluateField(ports, source, stage, ruleField, rule, content, itemIndex, trace, signal, context)
     if (result.state === 'cancelled') break
     if (result.state === 'failed' || result.state === 'capability-missing') {
       const message = result.message ?? (result.state === 'capability-missing' ? '字段规则能力不可用' : '字段规则失败')
@@ -402,9 +408,26 @@ async function extractFields(ports: WorkflowPorts, source: NormalizedSource, sta
       if (outputField === 'wordCount') extracted.wordCount = value
       if (outputField === 'lastChapter') extracted.lastChapter = value
       if (outputField === 'updateTime') extracted.updateTime = value
+      updateSearchBookBinding(context?.bindings?.book, outputField, value, context?.baseUrl)
     }
   }
   return extracted
+}
+
+function updateSearchBookBinding(binding: unknown, field: string, value: string, baseUrl?: string): void {
+  if (typeof binding !== 'object' || binding === null || Array.isArray(binding)) return
+  const book = binding as Record<string, unknown>
+  if (field === 'name') book.name = formatBookName(value)
+  else if (field === 'author') book.author = formatBookAuthor(value)
+  else if (field === 'kind') book.kind = value
+  else if (field === 'wordCount') book.wordCount = formatWordCount(value)
+  else if (field === 'lastChapter') book.latestChapterTitle = value
+  else if (field === 'intro') book.intro = formatIntro(value)
+  else if (field === 'coverUrl') {
+    if (value.length > 0) book.coverUrl = resolveCandidateUrl(value, baseUrl ?? '') ?? value
+  } else if (field === 'bookUrl') {
+    book.bookUrl = resolveCandidateUrl(value, baseUrl ?? '') ?? value
+  } else if (field === 'updateTime') book.updateTime = value
 }
 
 /** 分类规则在 Android 里取列表并按逗号连接，其余字段按文本拼接。 */
