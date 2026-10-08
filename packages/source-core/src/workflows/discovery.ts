@@ -455,7 +455,52 @@ function resolveCandidateUrl(value: string | undefined, baseUrl: string): string
 
 /** 把整个响应当作详情页解析：Android 在 bookUrlPattern 命中或列表为空时使用该分支。 */
 async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSource, stage: 'discover' | 'search', page: { content: string; url: string }, requestUrl: string, options: DiscoveryInput | SearchInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], bindings?: Readonly<Record<string, unknown>>): Promise<{ candidate?: BookCandidate; cancelled: boolean }> {
-  const extraction = await extractDetailFields(ports, source, 0, page.content, { baseUrl: page.url, redirectUrl: page.url }, options.signal, trace, diagnostics, undefined, bindings)
+  // Android BookList.getInfoItem creates the Book before running any detail
+  // field.  The same object is exposed as both ruleData and book, so a field
+  // can read the URL/source identity and the values written by earlier fields.
+  const fallbackBook = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: page.url,
+    rawFields: {},
+    traceRef: 'detail-page:0',
+    origin: source.bookSourceUrl,
+    originName: source.bookSourceName,
+    type: androidBookType(undefined, source),
+  } as BookCandidate & Record<string, unknown>
+  const ruleData = bindings?.ruleData
+  if (typeof ruleData === 'object' && ruleData !== null && typeof (ruleData as { variable?: unknown }).variable === 'string' && (ruleData as { variable: string }).variable.length > 0) {
+    fallbackBook.variable = (ruleData as { variable: string }).variable
+  }
+  let content: unknown = page.content
+  const initRule = ruleString(source, 'ruleBookInfo', 'init')
+  if (initRule !== undefined && initRule.trim().length > 0) {
+    const init = await evaluateField(ports, source, 'detail', 'init', initRule, content, 0, trace, options.signal, {
+      baseUrl: page.url,
+      redirectUrl: page.url,
+      expect: 'nodes',
+      bindings: { ruleData: fallbackBook, book: fallbackBook },
+      captureBindings: ['book'],
+    })
+    if (init.state === 'cancelled') return { cancelled: true }
+    if (init.state === 'failed' || init.state === 'capability-missing') {
+      diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex: 0, message: init.message ?? '详情初始化规则失败', retryable: false })
+      return { cancelled: false }
+    }
+    if (init.state === 'value') content = init.value
+  }
+  const extraction = await extractDetailFields(
+    ports,
+    source,
+    0,
+    content,
+    { baseUrl: page.url, redirectUrl: page.url },
+    options.signal,
+    trace,
+    diagnostics,
+    fallbackBook,
+    { ...(bindings ?? {}), ruleData: fallbackBook },
+    true,
+  )
   // 取消必须向上传播；回退失败和取消在调用方是两种不同的结果。
   if (extraction.cancelled) return { cancelled: true }
   if (extraction.fatal !== undefined) return { cancelled: false }
@@ -464,9 +509,8 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
     diagnostics.push({ code: 'identity-missing', stage: 'detail', itemIndex: 0, message: '详情页没有解析出书名', retryable: false })
     return { cancelled: false }
   }
-  const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: page.url, name, rawFields: extraction.raw, traceRef: 'detail-page:0' }
-  const ruleData = bindings?.ruleData
-  if (typeof ruleData === 'object' && ruleData !== null && typeof (ruleData as { variable?: unknown }).variable === 'string' && (ruleData as { variable: string }).variable.length > 0) candidate.variable = (ruleData as { variable: string }).variable
+  const candidate: BookCandidate = { ...fallbackBook, bookUrl: fallbackBook.bookUrl, name, rawFields: { ...fallbackBook.rawFields, ...extraction.raw }, traceRef: 'detail-page:0' }
+  if (typeof fallbackBook.variable === 'string' && fallbackBook.variable.length > 0) candidate.variable = fallbackBook.variable
   if (stage === 'search') candidate.infoPage = { body: page.content, requestUrl, responseUrl: page.url }
   const author = formatBookAuthor(extraction.values.author ?? '')
   if (author.length > 0) candidate.author = author
@@ -493,14 +537,21 @@ interface DetailExtraction {
   cancelled: boolean
 }
 
-async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSource, itemIndex: number, content: unknown, context: { baseUrl: string; redirectUrl: string }, signal: AbortSignal | undefined, trace: WorkflowTraceEntry[], diagnostics: WorkflowDiagnostic[], book?: BookCandidate, extraBindings?: Readonly<Record<string, unknown>>): Promise<DetailExtraction> {
+async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSource, itemIndex: number, content: unknown, context: { baseUrl: string; redirectUrl: string }, signal: AbortSignal | undefined, trace: WorkflowTraceEntry[], diagnostics: WorkflowDiagnostic[], book?: BookCandidate, extraBindings?: Readonly<Record<string, unknown>>, updateBookBinding = false): Promise<DetailExtraction> {
   const result: DetailExtraction = { values: {}, empty: [], errors: {}, raw: {}, cancelled: false }
   for (const [ruleField, outputField] of detailFields) {
     const rule = ruleString(source, 'ruleBookInfo', ruleField)
     if (rule === undefined) continue
     // Android 将空 tocUrl 规则视为“使用详情页”，而不是“返回整页内容”。
     if (ruleField === 'tocUrl' && rule.length === 0) continue
-    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, { ...context, ...(book === undefined && extraBindings === undefined ? {} : { bindings: { ...extraBindings, ...(book === undefined ? {} : { book }) } }) })
+    const fieldBindings = book === undefined && extraBindings === undefined
+      ? undefined
+      : { ...extraBindings, ...(book === undefined ? {} : { book }) }
+    const field = await evaluateField(ports, source, 'detail', ruleField, rule, content, itemIndex, trace, signal, {
+      ...context,
+      ...(fieldBindings === undefined ? {} : { bindings: fieldBindings }),
+      ...(book === undefined ? {} : { captureBindings: ['book'] }),
+    })
     if (field.state === 'cancelled') {
       result.cancelled = true
       return result
@@ -522,9 +573,24 @@ async function extractDetailFields(ports: WorkflowPorts, source: NormalizedSourc
     const value = fieldText(field.value, outputField)
     result.raw[outputField] = jsonValue(field.value)
     result.values[outputField] = outputField === 'wordCount' ? formatWordCount(value) : value
+    if (book !== undefined && updateBookBinding) updateDetailBookBinding(book, outputField, value, context.baseUrl, context.redirectUrl)
     trace.push({ stage: 'detail', event: 'field', target: outputField, itemIndex })
   }
   return result
+}
+
+function updateDetailBookBinding(book: BookCandidate, field: string, value: string, baseUrl: string, redirectUrl: string): void {
+  if (field === 'name') book.name = formatBookName(value)
+  else if (field === 'author') book.author = formatBookAuthor(value)
+  else if (field === 'kind') book.kind = value
+  else if (field === 'wordCount') book.wordCount = formatWordCount(value)
+  else if (field === 'lastChapter') book.lastChapter = value
+  else if (field === 'intro') book.intro = formatDetailIntro(value)
+  else if (field === 'coverUrl') {
+    if (value.length > 0) book.coverUrl = resolveCandidateUrl(value, redirectUrl) ?? value
+  } else if (field === 'tocUrl') {
+    book.tocUrl = resolveCandidateUrl(value, baseUrl) ?? value
+  } else if (field === 'updateTime') book.updateTime = value
 }
 
 export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput): Promise<RuntimeResult<WorkflowPage<BookMetadata>>> {

@@ -253,6 +253,45 @@ test('搜索字段逐步看到当前书籍和最终响应地址', async () => {
   assert.equal(result.value?.items[0]?.bookUrl, 'https://redirect-context.test/book')
 })
 
+test('搜索详情页回退复用同一响应并提供渐进 book 绑定', async () => {
+  const source = {
+    bookSourceUrl: 'https://fallback-book.test',
+    bookSourceName: 'Fallback Book',
+    searchUrl: '/search',
+    ruleSearch: { bookList: '.missing' },
+    ruleBookInfo: {
+      init: '.detail',
+      name: '.title@text',
+      author: '@js:book.putVariable("phase", "author"); book.name + "|" + book.bookUrl + "|" + book.originName',
+    },
+  } as unknown as NormalizedSource
+  let requests = 0
+  const ports: WorkflowPorts = {
+    network: {
+      request: async () => {
+        requests += 1
+        return response('https://fallback-book.test/final/book', '<main><section class="detail"><h1 class="title">回退详情</h1></section></main>')
+      },
+    },
+    rules: new SourceRuleHost(),
+  }
+
+  const result = await searchBooks(ports, { source, keyword: '回退书' })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(requests, 1)
+  assert.equal(result.value?.items[0]?.name, '回退详情')
+  assert.equal(result.value?.items[0]?.author, '回退详情|https://fallback-book.test/final/book|Fallback Book')
+  assert.equal(result.value?.items[0]?.variable, '{"phase":"author"}')
+  assert.equal(result.value?.items[0]?.bookUrl, 'https://fallback-book.test/final/book')
+
+  const patterned = { ...source, bookUrlPattern: 'https://fallback-book.test/final/.*' } as unknown as NormalizedSource
+  const patternResult = await searchBooks(ports, { source: patterned, keyword: '回退书' })
+  assert.equal(patternResult.status, 'success', JSON.stringify(patternResult.diagnostics))
+  assert.equal(requests, 2)
+  assert.equal(patternResult.value?.items[0]?.author, '回退详情|https://fallback-book.test/final/book|Fallback Book')
+})
+
 test('声明式音频正文通过 Node 规则宿主提取 subContent 并写回歌词变量', async () => {
   const source = {
     bookSourceUrl: 'https://audio-sub.test',
