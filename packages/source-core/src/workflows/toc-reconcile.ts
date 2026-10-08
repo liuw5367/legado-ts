@@ -142,6 +142,11 @@ function chapterFingerprint(chapter: Chapter): string {
     chapter.isPay,
     chapter.updateTime,
     chapter.wordCount,
+    chapter.resourceUrl,
+    chapter.start,
+    chapter.end,
+    chapter.startFragmentId,
+    chapter.endFragmentId,
     chapter.variable,
     chapter.imgUrl,
   ])

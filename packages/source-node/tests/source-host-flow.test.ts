@@ -205,11 +205,11 @@ test('声明式目录按当前书源类型准备 book 工作副本', async () =>
   assert.equal(book.type, 8)
 })
 
-test('JavaScript 目录保留章节 tag、wordCount 和 updateTime 投影', async () => {
+test('JavaScript 目录保留章节元数据投影', async () => {
   const source = {
     bookSourceUrl: 'https://js-toc-fields.test',
     bookSourceName: 'JS TOC Fields',
-    mainJs: 'function getChapters(book) { return [{ title: "第一章", url: "/chapter/1", tag: "更新标签", wordCount: "123", updateTime: "更新时间" }]; }',
+    mainJs: 'function getChapters(book) { return [{ title: "第一章", url: "/chapter/1", tag: "更新标签", wordCount: "123", updateTime: "更新时间", resourceUrl: "https://media.test/audio.mp3", start: 12, end: "34", startFragmentId: "frag-a", endFragmentId: "frag-b", imgUrl: "https://img.test/chapter.png" }]; }',
   } as unknown as NormalizedSource
   const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
   const book = {
@@ -234,6 +234,12 @@ test('JavaScript 目录保留章节 tag、wordCount 和 updateTime 投影', asyn
   assert.equal(chapter.rawFields.tag, '更新标签')
   assert.equal(chapter.rawFields.wordCount, '123')
   assert.equal(chapter.rawFields.updateTime, '更新时间')
+  assert.equal(chapter.resourceUrl, 'https://media.test/audio.mp3')
+  assert.equal(chapter.start, 12)
+  assert.equal(chapter.end, 34)
+  assert.equal(chapter.startFragmentId, 'frag-a')
+  assert.equal(chapter.endFragmentId, 'frag-b')
+  assert.equal(chapter.imgUrl, 'https://img.test/chapter.png')
 })
 
 test('详情 init 保留多节点内容供后续字段规则继续解析', async () => {

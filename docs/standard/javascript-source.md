@@ -48,6 +48,8 @@ export interface JsLoginFunctions {
 
 这些是 JavaScript 脚本边界的逻辑类型，不表示脚本可以直接返回运行时实例。实际调用先执行脚本自身的 JSON 归一化，再由 marshaller 校验数组、对象、必需字段、来源身份、URL 和可覆盖字段。`search`、`explore` 返回数组以外的结果是调用错误；`getBookInfo` 的 `Partial<Book>` 只代表允许字段集合，不能覆盖 `bookUrl`、阅读状态或用户自定义字段。
 
+`getChapters` 返回的章节对象会按 Android `BookChapter` 投影 `resourceUrl`、`start`、`end`、`startFragmentId`、`endFragmentId` 和 `imgUrl`；`start/end` 保留 `Int64` 的安全整数、十进制字符串或 `bigint` 形态，不能静默截断超出安全整数范围的值。
+
 配置中的声明式规则会从配置 JSON 中剥离，但完整脚本原文保存在 `mainJs`；编辑器导出时必须使用 `mainJs`，不能使用剥离后的对象重建脚本。对于 JS 源，`ruleReview` 也属于被剥离的声明式配置，但段评能力仍由脚本函数和运行时参数决定。
 
 ## 执行 scope

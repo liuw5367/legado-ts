@@ -7,7 +7,7 @@ import { loadBookDetails, searchBooks } from './discovery.ts'
 import { formatChapterBody } from './html-format.ts'
 import { evaluateField, executeImageDecodeScript, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, jsonValue, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { internalChapterScopeBinding } from './types.ts'
-import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, TocPage, WorkflowDiagnostic, WorkflowOptions, WorkflowPorts, WorkflowRequest, WorkflowStage, WorkflowTraceEntry } from './types.ts'
+import type { BookMetadata, Chapter, ChapterContent, ChapterContentBatchItem, ChapterContentBatchResult, ContentBatchInput, ContentCacheRecord, ContentIdentity, ContentInput, ContentResource, ImageDecodeInput, Int64, ReadingPorts, RuntimeResult, StoredContentInput, TocInput, TocPage, WorkflowDiagnostic, WorkflowOptions, WorkflowPorts, WorkflowRequest, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 
 let paginationBatchSequence = 0
 
@@ -296,6 +296,18 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
     if (tag !== undefined) chapter.tag = tag
     const wordCount = javascriptPrimitiveText(record.wordCount)
     if (wordCount !== undefined) chapter.wordCount = wordCount
+    const resourceUrl = javascriptPrimitiveText(record.resourceUrl)
+    if (resourceUrl !== undefined) chapter.resourceUrl = resourceUrl
+    const start = javascriptLong(record.start)
+    if (start !== undefined) chapter.start = start
+    const end = javascriptLong(record.end)
+    if (end !== undefined) chapter.end = end
+    const startFragmentId = javascriptPrimitiveText(record.startFragmentId)
+    if (startFragmentId !== undefined) chapter.startFragmentId = startFragmentId
+    const endFragmentId = javascriptPrimitiveText(record.endFragmentId)
+    if (endFragmentId !== undefined) chapter.endFragmentId = endFragmentId
+    const imgUrl = javascriptPrimitiveText(record.imgUrl)
+    if (imgUrl !== undefined) chapter.imgUrl = imgUrl
     chapters.push(chapter)
   }
   chapters.forEach((chapter, index) => { chapter.index = index })
@@ -1216,8 +1228,12 @@ async function formatChapterTitles(ports: WorkflowPorts, source: NormalizedSourc
 }
 
 function mergeFormattedChapter(chapter: Chapter, mutated: Record<string, unknown>, book: BookMetadata): void {
-  const stringFields = ['sourceId', 'bookUrl', 'url', 'baseUrl', 'chapterUrl', 'volume', 'updateTime', 'tag', 'wordCount', 'imgUrl', 'variable'] as const
+  const stringFields = ['sourceId', 'bookUrl', 'url', 'baseUrl', 'chapterUrl', 'volume', 'updateTime', 'tag', 'wordCount', 'resourceUrl', 'startFragmentId', 'endFragmentId', 'imgUrl', 'variable'] as const
   for (const field of stringFields) if (typeof mutated[field] === 'string') chapter[field] = mutated[field] as never
+  for (const field of ['start', 'end'] as const) {
+    const value = javascriptLong(mutated[field])
+    if (value !== undefined) chapter[field] = value
+  }
   for (const field of ['isVolume', 'isVip', 'isPay'] as const) if (typeof mutated[field] === 'boolean') chapter[field] = mutated[field]
   if (typeof mutated.title === 'string') chapter.title = mutated.title
   const directChapterUrl = typeof mutated.chapterUrl === 'string'
@@ -1763,6 +1779,17 @@ function booleanValue(value: unknown): boolean {
 
 function javascriptPrimitiveText(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
+}
+
+function javascriptLong(value: unknown): Int64 | undefined {
+  // Chapters are persisted and transported as JSON; keep a BigInt's exact
+  // decimal value without letting it escape into JSON.stringify callers.
+  if (typeof value === 'bigint') return value.toString()
+  if (typeof value === 'number') return Number.isSafeInteger(value) ? value : undefined
+  if (typeof value !== 'string' || !/^-?\d+$/u.test(value.trim())) return undefined
+  const text = value.trim()
+  const parsed = Number(text)
+  return Number.isSafeInteger(parsed) ? parsed : text
 }
 
 /** Android BookChapter.equals 只比较原始 url：同地址不同标题也折叠，保留反转后最先出现的条目。 */

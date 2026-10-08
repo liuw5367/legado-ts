@@ -4,6 +4,8 @@ import type { JavaScriptBudget } from '../runtime/javascript.ts'
 
 export type WorkflowStatus = 'success' | 'partial' | 'empty' | 'failed' | 'cancelled' | 'capability-missing'
 export type WorkflowStage = 'discover' | 'search' | 'detail'
+/** Android Long projection; safe values use number and larger values retain decimal text or bigint. */
+export type Int64 = number | bigint | string
 
 export interface PageCursor {
   /** 书源内页码；不把页码解释为全局 offset。 */
@@ -312,6 +314,14 @@ export interface ChapterIdentity {
   tag?: string
   /** 当 tocCountWords 开启且 updateTime 可识别时提取的字数。 */
   wordCount?: string
+  /** Android BookChapter.resourceUrl；音频章节的真实媒体地址。 */
+  resourceUrl?: string
+  /** Android BookChapter.start/end；本地或 EPUB 章节的范围位置。 */
+  start?: Int64
+  end?: Int64
+  /** Android BookChapter 的 EPUB 起止 fragment id。 */
+  startFragmentId?: string
+  endFragmentId?: string
   /** Android BookChapter.imgUrl；正文标题规则或目录元数据可更新。 */
   imgUrl?: string
 }
