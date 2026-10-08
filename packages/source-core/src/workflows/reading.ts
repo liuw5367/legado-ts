@@ -290,8 +290,12 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
     else if (typeof record.variable === 'object' && record.variable !== null && !Array.isArray(record.variable)) chapter.variable = JSON.stringify(record.variable)
     const volume = typeof record.volume === 'string' ? record.volume : undefined
     if (volume !== undefined && volume.length > 0) chapter.volume = volume
-    const updateTime = typeof record.updateTime === 'string' ? record.updateTime : typeof record.tag === 'string' ? record.tag : undefined
-    if (updateTime !== undefined && updateTime.length > 0) chapter.updateTime = updateTime
+    const updateTime = javascriptPrimitiveText(record.updateTime)
+    if (updateTime !== undefined) chapter.updateTime = updateTime
+    const tag = javascriptPrimitiveText(record.tag)
+    if (tag !== undefined) chapter.tag = tag
+    const wordCount = javascriptPrimitiveText(record.wordCount)
+    if (wordCount !== undefined) chapter.wordCount = wordCount
     chapters.push(chapter)
   }
   chapters.forEach((chapter, index) => { chapter.index = index })

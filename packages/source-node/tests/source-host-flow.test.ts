@@ -205,6 +205,37 @@ test('声明式目录按当前书源类型准备 book 工作副本', async () =>
   assert.equal(book.type, 8)
 })
 
+test('JavaScript 目录保留章节 tag、wordCount 和 updateTime 投影', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-toc-fields.test',
+    bookSourceName: 'JS TOC Fields',
+    mainJs: 'function getChapters(book) { return [{ title: "第一章", url: "/chapter/1", tag: "更新标签", wordCount: "123", updateTime: "更新时间" }]; }',
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://js-toc-fields.test/book',
+    tocUrl: 'https://js-toc-fields.test/toc',
+    name: '字段测试',
+    rawFields: {},
+    emptyFields: [],
+    fieldErrors: {},
+    traceRef: 'book:fields',
+  }
+
+  const result = await loadTableOfContents(ports, { source, book })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  const chapter = result.value?.items[0]
+  assert.ok(chapter)
+  assert.equal(chapter.tag, '更新标签')
+  assert.equal(chapter.wordCount, '123')
+  assert.equal(chapter.updateTime, '更新时间')
+  assert.equal(chapter.rawFields.tag, '更新标签')
+  assert.equal(chapter.rawFields.wordCount, '123')
+  assert.equal(chapter.rawFields.updateTime, '更新时间')
+})
+
 test('详情 init 保留多节点内容供后续字段规则继续解析', async () => {
   const source = {
     bookSourceUrl: 'https://multi-init.test',
