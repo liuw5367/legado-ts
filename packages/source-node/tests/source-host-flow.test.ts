@@ -226,6 +226,33 @@ test('详情规则区分原始详情地址和重定向后的响应地址', async
   assert.equal(result.value?.items[0]?.tocUrl, 'https://redirect-source.test/original/detail/toc')
 })
 
+test('详情缺少目录地址时回退候选原始地址并复用当前响应', async () => {
+  const source = {
+    bookSourceUrl: 'https://toc-fallback.test',
+    bookSourceName: 'TOC Fallback',
+    ruleBookInfo: { name: '@js:baseUrl' },
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = {
+    network: {
+      request: async () => response('https://redirect-toc.test/book-new', '<div class="toc">当前响应目录</div>'),
+    },
+    rules: new SourceRuleHost(),
+  }
+  const candidate = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://toc-fallback.test/book-old',
+    name: '候选书',
+    rawFields: {},
+    traceRef: 'search:0',
+  }
+
+  const result = await loadBookDetails(ports, { source, candidates: [candidate] })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.tocUrl, 'https://toc-fallback.test/book-old')
+  assert.equal(result.value?.items[0]?.tocHtml, '<div class="toc">当前响应目录</div>')
+})
+
 test('搜索字段逐步看到当前书籍和最终响应地址', async () => {
   const source = {
     bookSourceUrl: 'https://search-context.test',

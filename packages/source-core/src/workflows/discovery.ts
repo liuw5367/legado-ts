@@ -627,7 +627,8 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       ? { content: candidate.infoPage!.body, url: candidate.infoPage!.responseUrl }
       : await requestPageResponse(ports, input.source, expandedUrl.url, 'detail', input, diagnostics, trace, undefined, { book: candidate })
     if (page === undefined) continue
-    const context = { baseUrl: candidate.bookUrl, redirectUrl: page.url }
+    const detailBaseUrl = resolveCandidateUrl(candidate.bookUrl, input.source.bookSourceUrl) ?? candidate.bookUrl
+    const context = { baseUrl: detailBaseUrl, redirectUrl: page.url }
     // Android BookInfo：init 规则先执行，其结果成为后续详情字段的内容基准。
     let content: unknown = page.content
     if (initRule !== undefined) {
@@ -663,9 +664,12 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
     if (extraction.values.wordCount !== undefined) metadata.wordCount = extraction.values.wordCount
     if (extraction.values.lastChapter !== undefined) metadata.lastChapter = extraction.values.lastChapter
     if (extraction.values.updateTime !== undefined) metadata.updateTime = extraction.values.updateTime
-    const tocUrl = resolveCandidateUrl(extraction.values.tocUrl, page.url) ?? page.url
+    const tocRuleValue = extraction.values.tocUrl
+    const tocUrl = tocRuleValue === undefined || tocRuleValue.length === 0
+      ? detailBaseUrl
+      : resolveCandidateUrl(tocRuleValue, page.url) ?? page.url
     metadata.tocUrl = tocUrl
-    if (tocUrl === page.url) metadata.tocHtml = page.content
+    if (tocUrl === detailBaseUrl) metadata.tocHtml = page.content
     items.push(metadata)
   }
   const endIndex = Math.min(input.candidates.length, cursor.index + maxItems)

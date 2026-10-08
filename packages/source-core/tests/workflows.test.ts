@@ -490,7 +490,7 @@ test('nextPage 游标作为 URL 被下一次搜索实际消费', async () => {
   assert.equal(calls[1], 'https://source.test/next-token')
 })
 
-test('空目录规则回退详情响应地址并保留同页内容', async () => {
+test('空目录规则回退详情原始地址并保留同页内容', async () => {
   const calls: string[] = []
   const emptyTocSource = {
     ...source,
@@ -511,9 +511,9 @@ test('空目录规则回退详情响应地址并保留同页内容', async () =>
       return baseEvaluate(request)
     },
   }
-  const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: '/book/a', name: 'A', rawFields: {}, traceRef: 'search:0' }
+  const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl: 'https://source.test/book/a', name: 'A', rawFields: {}, traceRef: 'search:0' }
   const result = await loadBookDetails(workflowPorts, { source: emptyTocSource, candidates: [candidate] })
-  assert.equal(result.value?.items[0]?.tocUrl, 'https://redirect.test/book/a')
+  assert.equal(result.value?.items[0]?.tocUrl, 'https://source.test/book/a')
   assert.equal(result.value?.items[0]?.tocHtml, '<div class="chapters">toc</div>')
   assert.equal(evaluated.includes(''), false)
 })
