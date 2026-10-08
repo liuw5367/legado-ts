@@ -772,6 +772,56 @@ test('JS 正文绑定使用章节原始 URL 与页面基准地址', async () => 
   assert.deepEqual(request, { chapter: { url: '/raw/chapter', baseUrl: 'https://source.test/catalog/page.html', chapterUrl: 'https://wrong.test/derived' } })
 })
 
+test('JS 目录失败或取消时不回写调用方书籍变量', async () => {
+  const jsSource = { ...source, mainJs: 'function getChapters(book) { return []; }' } as NormalizedSource
+  for (const status of ['failed', 'cancelled'] as const) {
+    const candidate: BookMetadata = { ...book, variable: '{"before":"book"}' }
+    const result = await loadTableOfContents({
+      network: { request: async () => ({ url: candidate.bookUrl, status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }) },
+      rules: {
+        evaluate: async () => ({ status: 'empty', value: null }),
+        executeSourceFunction: async ({ args }) => {
+          const boundBook = args[0] as { variable?: string }
+          boundBook.variable = '{"after":"script"}'
+          return { status, value: null, exists: status !== 'cancelled' }
+        },
+      },
+    }, { source: jsSource, book: candidate })
+    assert.equal(result.status, status)
+    assert.equal(candidate.variable, '{"before":"book"}', status)
+  }
+})
+
+test('JS 正文失败或取消时不回写调用方书籍和章节变量', async () => {
+  const jsSource = { ...source, mainJs: 'function getContent(chapter, book) { return ""; }' } as NormalizedSource
+  for (const status of ['failed', 'cancelled'] as const) {
+    const candidate: BookMetadata = { ...book, variable: '{"before":"book"}' }
+    const chapter: ChapterIdentity & { variable?: string } = {
+      sourceId: source.bookSourceUrl,
+      bookUrl: book.bookUrl,
+      chapterUrl: 'https://source.test/c1',
+      index: 0,
+      variable: '{"before":"chapter"}',
+    }
+    const result = await loadChapterContent({
+      network: { request: async () => { throw new Error('JS 正文不应请求网络') } },
+      rules: {
+        evaluate: async () => ({ status: 'empty', value: null }),
+        executeSourceFunction: async ({ args }) => {
+          const boundChapter = args[0] as { variable?: string }
+          const boundBook = args[1] as { variable?: string }
+          boundChapter.variable = '{"after":"chapter"}'
+          boundBook.variable = '{"after":"book"}'
+          return { status, value: status === 'failed' ? '' : null, exists: status !== 'cancelled' }
+        },
+      },
+    }, { source: jsSource, book: candidate, chapter })
+    assert.equal(result.status, status)
+    assert.equal(candidate.variable, '{"before":"book"}', status)
+    assert.equal(chapter.variable, '{"before":"chapter"}', status)
+  }
+})
+
 test('章节地址等于详情地址时复用详情响应解析正文', async () => {
   const chapter: ChapterIdentity = {
     sourceId: source.bookSourceUrl,

@@ -17,7 +17,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const stage: WorkflowStage = 'detail'
   const cursor = input.cursor ?? { index: 0 }
   if (sourceString(input.source, 'mainJs') !== undefined) return javascriptTableOfContents(ports, input, diagnostics, trace)
-  let book = input.book
+  let book = cloneBookMetadata(input.book)
   const preUpdateJs = ruleString(input.source, 'ruleToc', 'preUpdateJs')
   if (input.runPerJs === true && preUpdateJs !== undefined) {
     const actionOptions = (signal: AbortSignal) => ({ signal, ...(input.budget === undefined ? {} : { budget: input.budget }) })
@@ -231,9 +231,9 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
 
 async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<TocPage>> {
   const cursor = input.cursor ?? { index: 0 }
-  const book = { ...input.book.rawFields, ...input.book, origin: input.book.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(undefined, input.source) }
+  const sourceBook = cloneBookMetadata(input.book)
+  const book = { ...sourceBook.rawFields, ...sourceBook, origin: sourceBook.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(undefined, input.source) }
   const result = await executeSourceFunction(ports, input.source, 'getChapters', [book], { book }, 'detail', 'chapter', trace, input.signal)
-  if (typeof book.variable === 'string') input.book.variable = book.variable
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 目录工作流已取消', diagnostics, trace)
   if (result.state === 'capability-missing') {
     diagnostics.push({ code: 'capability-missing', stage: 'detail', field: 'getChapters', message: result.message ?? 'JavaScript 源函数宿主不可用', retryable: false })
@@ -295,6 +295,7 @@ async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, d
   if (chapters.length === 0) diagnostics.push({ code: 'empty-page', stage: 'detail', message: 'JS 目录为空', retryable: false })
   const value: TocPage = { items: chapters, cursor }
   const status = statusFromDiagnostics(diagnostics, chapters.length)
+  if ((status === 'success' || status === 'partial') && typeof book.variable === 'string') input.book.variable = book.variable
   return chapters.length === 0
     ? { status: 'failed', value: null, diagnostics, trace }
     : { status, value: status === 'success' ? { ...value, bookAfter: withoutTransientBookFields(mergeBookScriptValues(input.book, book)) } : value, diagnostics, trace }
@@ -1105,7 +1106,7 @@ export async function decodeImage(ports: WorkflowPorts, input: ImageDecodeInput)
 }
 
 async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<ChapterContent>> {
-  const book: BookMetadata = input.book ?? {
+  const book: BookMetadata = input.book === undefined ? {
     sourceId: input.chapter.sourceId,
     bookUrl: input.chapter.bookUrl,
     name: '',
@@ -1114,13 +1115,13 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
     emptyFields: [],
     fieldErrors: {},
     tocUrl: input.chapter.bookUrl,
-  }
+  } : cloneBookMetadata(input.book)
   const chapterData = input.chapter as ContentInput['chapter'] & { rawFields?: JsonObject }
   const rawChapterUrl = chapterRuleUrl(input.chapter)
   const bookUrl = resolveUrl(input.chapter.bookUrl, input.source.bookSourceUrl) ?? input.source.bookSourceUrl
   const chapterBaseReference = input.chapter.baseUrl?.trim() || book.tocUrl?.trim() || input.chapter.bookUrl
   const chapter = {
-    ...(chapterData.rawFields ?? {}),
+    ...(chapterData.rawFields === undefined ? {} : cloneJsonObject(chapterData.rawFields)),
     ...input.chapter,
     url: rawChapterUrl,
     baseUrl: resolveUrl(chapterBaseReference, bookUrl) ?? bookUrl,
@@ -1129,8 +1130,6 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
   }
   const bookValue = { ...book.rawFields, ...book, origin: book.sourceId, originName: input.source.bookSourceName, type: javascriptBookType(book, input.source) }
   const result = await executeSourceFunction(ports, input.source, 'getContent', [chapter, bookValue, input.nextChapterUrl ?? null], { chapter, book: bookValue, nextChapterUrl: input.nextChapterUrl ?? null }, 'detail', 'content', trace, input.signal)
-  if (input.book !== undefined && typeof bookValue.variable === 'string') input.book.variable = bookValue.variable
-  if (typeof chapter.variable === 'string') input.chapter.variable = chapter.variable
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 正文工作流已取消', diagnostics, trace)
   if (result.state === 'capability-missing') {
     diagnostics.push({ code: 'capability-missing', stage: 'detail', field: 'getContent', message: result.message ?? 'JavaScript 源函数宿主不可用', retryable: false })
@@ -1149,9 +1148,13 @@ async function javascriptChapterContent(ports: ReadingPorts, input: ContentInput
   }
   if (raw.trim().length === 0) {
     diagnostics.push({ code: 'empty-page', stage: 'detail', field: 'getContent', message: '正文为空', retryable: false })
-    if (input.chapter.isVolume === true) return { status: 'empty', value: { chapter, contentType: 'text', raw, cleaned: '', pages: [], resources: [], finalUrl: chapter.chapterUrl }, diagnostics, trace }
+    if (input.chapter.isVolume === true) {
+      commitJavascriptContentMutations(input, bookValue, chapter)
+      return { status: 'empty', value: { chapter, contentType: 'text', raw, cleaned: '', pages: [], resources: [], finalUrl: chapter.chapterUrl }, diagnostics, trace }
+    }
     return { status: 'failed', value: null, diagnostics, trace }
   }
+  commitJavascriptContentMutations(input, bookValue, chapter)
   return { status: 'success', value: { chapter, contentType: 'text', raw, cleaned: raw, pages: [raw], resources: [], finalUrl: chapter.chapterUrl }, diagnostics, trace }
 }
 
@@ -1249,10 +1252,29 @@ function withoutTransientBookFields(book: BookMetadata): BookMetadata {
   const { tocHtml: _tocHtml, ...persisted } = book
   return {
     ...persisted,
-    rawFields: { ...book.rawFields },
+    rawFields: cloneJsonObject(book.rawFields),
     emptyFields: [...book.emptyFields],
     fieldErrors: { ...book.fieldErrors },
   }
+}
+
+function cloneBookMetadata(book: BookMetadata): BookMetadata {
+  return {
+    ...book,
+    rawFields: cloneJsonObject(book.rawFields),
+    emptyFields: [...book.emptyFields],
+    fieldErrors: { ...book.fieldErrors },
+    ...(book.readConfig === undefined ? {} : { readConfig: { ...book.readConfig } }),
+  }
+}
+
+function cloneJsonObject(value: JsonObject): JsonObject {
+  return structuredClone(value)
+}
+
+function commitJavascriptContentMutations(input: ContentInput, book: Record<string, unknown>, chapter: Record<string, unknown>): void {
+  if (input.book !== undefined && typeof book.variable === 'string') input.book.variable = book.variable
+  if (typeof chapter.variable === 'string') input.chapter.variable = chapter.variable
 }
 
 function mergeVariableJson(current: string | undefined, incoming: string): string {
