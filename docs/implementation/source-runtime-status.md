@@ -44,6 +44,7 @@
 | D14 | JavaScript bridge | JavaScript bridge 逐重载覆盖 | 部分实现 | [差异登记](../divergence/known-divergences.md)，D14 | 真实书源方法逐重载通过，未支持方法明确返回能力状态 |
 | D15 | 应用边界差异 | 目录统计标题的应用替换规则 | 有意保留 | [差异登记](../divergence/known-divergences.md)，D15；`toc-reconcile.ts` | source-core 保持纯函数；应用提供标题替换规则快照或投影回调后再做跨端 fixture |
 | D16 | JS 源行为差异 | JS 源 URL 的公开身份与脚本可见形式 | 已实现待 Android golden | [差异登记](../divergence/known-divergences.md)，D16；`javascript-projection.ts`、`discovery.ts`、`reading.ts`、`source-host-flow.test.ts` | 已有 Node 回归覆盖 raw bookUrl/tocUrl/baseUrl 与详情身份字段白名单；待同输入 Android runner/golden |
+| D17 | JS 源行为差异 | JS 详情 `updateTime` 扩展字段 | 有意保留 | [差异登记](../divergence/known-divergences.md)，D17；`workflows.test.ts` | Android 当前 marshaller 不接收该字段；TypeScript 保留已有字段并按允许差异处理 |
 
 ## 完成时如何更新
 
