@@ -163,6 +163,23 @@ function textValue(value: unknown): string {
   }
 }
 
+/** Android NetworkUtils.getAbsoluteURL 的最小跨平台等价实现。 */
+function resolveSourceUrl(baseValue: unknown, relativeValue: unknown): string {
+  const relative = textValue(relativeValue).trim()
+  if (relative.startsWith('javascript')) return ''
+  const base = textValue(baseValue).split(',')[0]?.trim() ?? ''
+  if (base.length === 0) return relative
+  try {
+    return new URL(relative, base).toString()
+  } catch {
+    return relative
+  }
+}
+
+function resolveSourceUrls(baseValue: unknown, relativeValues: unknown): string[] {
+  return Array.isArray(relativeValues) ? relativeValues.map((value) => resolveSourceUrl(baseValue, value)) : []
+}
+
 function byteValue(value: unknown): Uint8Array {
   if (value instanceof Uint8Array) return value
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
@@ -1112,6 +1129,15 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'globalThis.Packages.io.legado.app.help.http.StrResponse = (url, body) => ({ url: String(url), status: 200, code: 200, headers: {}, body: String(body ?? "") });',
       'const checkEnv = () => "default";',
       'const isVs = () => false;',
+      'const legadoResolveJavaUrl = (value) => request({ kind: "resolve-url", url: String(redirectUrl ?? baseUrl ?? bindings.sourceKey ?? ""), value: String(value ?? "") });',
+      'const legadoResolveJavaUrls = (values) => request({ kind: "resolve-urls", url: String(redirectUrl ?? baseUrl ?? bindings.sourceKey ?? ""), urls: values.map((value) => String(value ?? "")) });',
+      'const legadoJavaErrorText = (error) => { if (error && typeof error === "object") { const stack = error.stack == null ? "" : String(error.stack); const message = error.message == null ? "" : String(error.message); return stack.length > 0 && message.length > 0 && !stack.includes(message) ? `${message}\\n${stack}` : stack || message; } return String(error ?? ""); };',
+      'const legadoJavaErrorMustPropagate = (error) => { const text = legadoJavaErrorText(error); return /__LEGADO_(?:CAPABILITY|CANCELLED|BUDGET|SERIALIZATION)__/.test(text) || text.includes("书源请求嵌套过深"); };',
+      'const legadoJavaHeaders = (value) => { if (value == null) return {}; const raw = typeof value === "string" ? JSON.parse(value) : value; if (raw == null || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Request headers must be a map or JSON string"); const result = {}; for (const [name, item] of Object.entries(raw)) { if (item == null) throw new Error("Request header names and values cannot be null"); result[String(name)] = String(item); } return result; };',
+      'const legadoJavaConnectHeaders = (value) => { if (value == null) return undefined; try { return legadoJavaHeaders(value); } catch { return undefined; } };',
+      'const legadoJavaUrl = (value) => Array.isArray(value) ? String(value[0] ?? "") : String(value);',
+      'const legadoJavaRequestOptions = (timeout) => ({ timeout: timeout == null ? 30000 : Number(timeout), followRedirects: false });',
+      'Object.assign(java, { ajax: (value, callTimeout) => { try { if (value != null && typeof value === "object" && !Array.isArray(value)) return request(Object.assign({ kind: "network" }, value)); const urlValue = legadoJavaUrl(value); if (callTimeout != null && typeof callTimeout === "object" && !Array.isArray(callTimeout)) return request(Object.assign({ kind: "network", url: urlValue }, callTimeout)); const input = { kind: "network", url: urlValue, method: "GET" }; if (callTimeout != null) input.options = { timeout: Number(callTimeout) }; return request(input); } catch (error) { if (legadoJavaErrorMustPropagate(error)) throw error; return legadoJavaErrorText(error); } }, get: (value, headers, timeout) => { const urlValue = String(value); if (headers === undefined && timeout === undefined && !/^(?:https?:)?\\/\\//.test(urlValue)) return Object.prototype.hasOwnProperty.call(bindings, urlValue) ? bindings[urlValue] : getVar(urlValue); const headerMap = legadoJavaHeaders(headers); return legadoResponse(urlValue, request({ kind: "network-response", url: urlValue, method: "GET", headers: headerMap, options: legadoJavaRequestOptions(timeout) })); }, connect: (value, header, timeout) => { const urlValue = String(value); try { const headerMap = legadoJavaConnectHeaders(header); const input = { kind: "network-response", url: urlValue, method: "GET" }; if (headerMap !== undefined) input.headers = headerMap; if (timeout != null) input.options = { timeout: Number(timeout) }; return legadoResponse(urlValue, request(input)); } catch (error) { if (legadoJavaErrorMustPropagate(error)) throw error; return legadoResponse(urlValue, { url: urlValue, status: 200, code: 200, body: legadoJavaErrorText(error) }); } }, getString: (rule, content, isUrl) => { const value = legadoValueText(evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content })); if (!isUrl) return value; return value.trim().length === 0 ? String(baseUrl ?? "") : legadoResolveJavaUrl(value); }, getStringList: (rule, content, isUrl) => { const value = evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content }); const values = Array.isArray(value) ? value.map((item) => String(item ?? "")) : String(value ?? "").split("\\n"); if (!isUrl) return values.filter(Boolean); const result = []; for (const absolute of legadoResolveJavaUrls(values)) if (absolute && !result.includes(absolute)) result.push(absolute); return result; }, post: (value, body, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) })), head: (value, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) })) });',
     ].join('\n')
     const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
     const runSignal = signal ?? new AbortController().signal
@@ -1226,6 +1252,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
+    if (request.kind === 'resolve-url') return resolveSourceUrl(request.url, request.value)
+    if (request.kind === 'resolve-urls') return resolveSourceUrls(request.url, request.urls)
     if (request.kind === 'base64-encode') return this.encoding.base64Encode(textValue(request.value))
     if (request.kind === 'base64-decode-bytes') {
       if (request.flags !== undefined && Number(request.flags) !== 0) throw new Error('书源 Base64 flags 尚未支持')

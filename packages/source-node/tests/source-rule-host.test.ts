@@ -216,9 +216,27 @@ test('java.get 和 java.connect 返回 Android 风格的响应对象', async () 
   assert.equal(result.status, 'success')
   assert.equal(result.value, '302|redirect-body|https://b.test/|https://b.test/|false|https://b.test/')
   assert.deepEqual(calls, [
-    { kind: 'network-response', url: 'https://a.test', method: 'GET', options: {} },
-    { kind: 'network-response', url: 'https://a.test', method: 'GET', options: undefined },
+    { kind: 'network-response', url: 'https://a.test', method: 'GET', headers: {}, options: { timeout: 30000, followRedirects: false } },
+    { kind: 'network-response', url: 'https://a.test', method: 'GET' },
   ])
+})
+
+test('java.connect 支持 JSON 请求头和超时重载', async () => {
+  const calls: unknown[] = []
+  const host = new SourceRuleHost({ request: async (input) => {
+    calls.push(input)
+    return { body: 'connected', status: 200, headers: {}, url: String(input.url) }
+  } })
+  const result = await evaluate(host, '@js:java.connect("https://a.test", JSON.stringify({"X-Test": 42}), 321).body()', '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, 'connected')
+  assert.deepEqual(calls, [{
+    kind: 'network-response',
+    url: 'https://a.test',
+    method: 'GET',
+    headers: { 'X-Test': '42' },
+    options: { timeout: 321 },
+  }])
 })
 
 test('java.post、java.head 和 ajaxTestAll 保留 Android 请求形态', async () => {
@@ -232,9 +250,46 @@ test('java.post、java.head 和 ajaxTestAll 保留 Android 请求形态', async 
   assert.equal(result.status, 'success')
   assert.equal(result.value, '201|q=1|204|https://a.test/one,https://a.test/two')
   assert.deepEqual(calls, [
-    { kind: 'network-response', url: 'https://a.test/post', method: 'POST', body: 'q=1', headers: { 'X-Test': 'yes' }, options: { timeout: 123 } },
-    { kind: 'network-response', url: 'https://a.test/head', method: 'HEAD', headers: { 'X-Test': 'yes' }, options: undefined },
+    { kind: 'network-response', url: 'https://a.test/post', method: 'POST', body: 'q=1', headers: { 'X-Test': 'yes' }, options: { timeout: 123, followRedirects: false } },
+    { kind: 'network-response', url: 'https://a.test/head', method: 'HEAD', headers: { 'X-Test': 'yes' }, options: { timeout: 30000, followRedirects: false } },
     { kind: 'network-all', urls: ['https://a.test/one', 'https://a.test/two'], skipRateLimit: true, options: { timeout: 456 } },
+  ])
+})
+
+test('java.ajax 的第二参数是超时并把普通网络错误转成正文', async () => {
+  const calls: unknown[] = []
+  const host = new SourceRuleHost({ request: async (input) => {
+    calls.push(input)
+    if (input.kind === 'network') return 'ajax-body'
+    throw new Error('network unavailable')
+  } })
+  const result = await evaluate(host, '@js:java.ajax("https://a.test", 456)', '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, 'ajax-body')
+  assert.deepEqual(calls, [{ kind: 'network', url: 'https://a.test', method: 'GET', options: { timeout: 456 } }])
+
+  const connect = await evaluate(host, '@js:var response = java.connect("https://a.test"); [response.code(), response.isSuccessful(), response.body()].join("|")', '')
+  assert.equal(connect.status, 'success')
+  assert.match(String(connect.value), /^200\|true\|.*network unavailable/us)
+})
+
+test('java.getString 和 java.getStringList 的 isUrl 使用重定向地址并去重', async () => {
+  const host = new SourceRuleHost()
+  const content = { url: '../chapter/1', missing: '', links: ['/a', '/a', 'chapter/2', 'javascript:void(0)'] }
+  const result = await host.evaluate({
+    source,
+    stage: 'detail',
+    field: 'fixture',
+    rule: '@js:JSON.stringify([java.getString("$.url", result, true), java.getString("$.missing", result, true), java.getStringList("$.links", result, true)])',
+    content,
+    baseUrl: 'https://base.test/book/info',
+    redirectUrl: 'https://redirect.test/book/page',
+  })
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), [
+    'https://redirect.test/chapter/1',
+    'https://base.test/book/info',
+    ['https://redirect.test/a', 'https://redirect.test/book/chapter/2'],
   ])
 })
 
