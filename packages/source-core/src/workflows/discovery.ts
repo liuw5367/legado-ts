@@ -487,6 +487,10 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
       diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex: 0, message: init.message ?? '详情初始化规则失败', retryable: false })
       return { cancelled: false }
     }
+    if (init.state === 'empty' || init.state === 'missing') {
+      diagnostics.push({ code: 'item-skipped', stage: 'detail', field: 'init', itemIndex: 0, message: '详情初始化规则没有匹配节点', retryable: false })
+      return { cancelled: false }
+    }
     if (init.state === 'value') content = init.value
   }
   const extraction = await extractDetailFields(
@@ -636,6 +640,10 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       const init = await evaluateField(ports, input.source, 'detail', 'init', initRule, content, itemIndex, trace, input.signal, { ...context, expect: 'nodes', bindings: { book: candidate } })
       if (init.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
       if (init.state === 'value') content = init.value
+      else if (init.state === 'empty' || init.state === 'missing') {
+        diagnostics.push({ code: 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: '详情初始化规则没有匹配节点', retryable: false })
+        continue
+      }
       else if (init.state === 'failed' || init.state === 'capability-missing') {
         diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: init.message ?? '详情初始化规则失败', retryable: false })
         continue

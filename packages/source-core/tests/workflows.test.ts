@@ -456,6 +456,26 @@ test('详情 init 失败时不把未初始化页面解析成成功详情', async
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'init'))
 })
 
+test('详情 init 没有匹配节点时按 Android 的空内容失败', async () => {
+  const calls: string[] = []
+  const initSource = {
+    ...source,
+    ruleBookInfo: { init: 'missing-init', name: 'detail-name' },
+  } as unknown as NormalizedSource
+  const base = ports(calls)
+  base.rules = {
+    evaluate: async ({ rule }) => rule === 'missing-init'
+      ? { status: 'empty', value: [] }
+      : { status: 'success', value: 'should not be used' },
+  }
+  const result = await loadBookDetails(base, {
+    source: initSource,
+    candidates: [{ sourceId: source.bookSourceUrl, bookUrl: '/book/missing-init', name: 'Old', rawFields: {}, traceRef: 'test' }],
+  })
+  assert.equal(result.value?.items.length, 0)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'init' && diagnostic.message.includes('没有匹配节点')))
+})
+
 test('详情书名、作者或目录字段失败时跳过当前书籍', async () => {
   for (const field of ['name', 'author', 'tocUrl'] as const) {
     const currentSource = {
