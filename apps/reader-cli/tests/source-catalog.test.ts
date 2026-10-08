@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { loadSourceCatalog, usableSources } from '../src/source-catalog.ts'
 import { ReaderStorage } from '../src/storage.ts'
+import { setEmbeddedSourceInputs } from '../src/embedded-sources.ts'
 
 test('本地书源目录递归导入并过滤文本能力', async () => {
   const catalog = await loadSourceCatalog(new URL('../../../fixtures/source/collection', import.meta.url).pathname)
@@ -14,9 +15,25 @@ test('本地书源目录递归导入并过滤文本能力', async () => {
 })
 
 test('缺少来源时返回可展示诊断，不发起网络请求', async () => {
-  const catalog = await loadSourceCatalog(undefined)
-  assert.equal(catalog.entries.length, 0)
-  assert.match(catalog.diagnostics[0] ?? '', /没有配置书源/)
+  setEmbeddedSourceInputs([])
+  try {
+    const catalog = await loadSourceCatalog(undefined)
+    assert.equal(catalog.entries.length, 0)
+    assert.match(catalog.diagnostics[0] ?? '', /没有配置书源/)
+  } finally {
+    setEmbeddedSourceInputs([])
+  }
+})
+
+test('未配置外部来源时加载构建入口提供的内置书源', async () => {
+  setEmbeddedSourceInputs([{ location: 'builtin:test.json', text: JSON.stringify({ bookSourceUrl: 'https://builtin.test', bookSourceName: '内置书源', bookSourceType: 0, enabled: true, searchUrl: 'https://builtin.test/search?key={{key}}', ruleSearch: {}, ruleBookInfo: {}, ruleToc: {}, ruleContent: {} }) }])
+  try {
+    const catalog = await loadSourceCatalog(undefined)
+    assert.equal(catalog.sourceLocation, '内置书源')
+    assert.equal(catalog.entries[0]?.source.bookSourceName, '内置书源')
+  } finally {
+    setEmbeddedSourceInputs([])
+  }
 })
 
 test('书源目录加载时应用持久化的启用状态、优先级和同版本检测结果', async () => {

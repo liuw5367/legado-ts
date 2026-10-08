@@ -19,6 +19,15 @@ LEGADO_READER_SOURCE=https://example.test/sources.json node apps/reader-cli/dist
 
 参数 `--source` 优先于 `LEGADO_READER_SOURCE`。来源可以是单个 JSON/JavaScript 文件、目录或 HTTP/HTTPS JSON 地址。目录递归读取 `.json` 和 `.js`，不跟随符号链接；导入和网络响应均有字节、文件数和候选数限制。
 
+可以使用 Bun 构建不依赖 Node.js、Bun 或仓库文件的单文件程序，并在构建时嵌入默认书源：
+
+```bash
+pnpm build:binary --source-dir ./fixtures/source/single --outfile ./dist/legado-reader
+./dist/legado-reader
+```
+
+`--source-dir` 会递归嵌入目录中的 `.json` 和 `.js` 文件；未配置 `--source` 或 `LEGADO_READER_SOURCE` 时，程序使用这些内置书源。外部来源优先于内置书源，书源冲突继续按现有规则处理。可以通过 `--target` 生成 Bun 支持的其他平台目标，例如 `bun-linux-x64`。书源文件在构建时复制进二进制，更新它们需要重新构建。
+
 ## 功能边界
 
 - 首页包含书架、最近阅读、搜索记录、书源管理入口（`m`）和设置入口（`s`）。

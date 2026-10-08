@@ -42,7 +42,8 @@ export async function main(args: readonly string[] = process.argv.slice(2), envi
 }
 
 const invokedPath = process.argv[1]
-if (invokedPath !== undefined && fileURLToPath(import.meta.url) === resolve(invokedPath)) {
+const manualEntry = (globalThis as { __LEGADO_READER_MANUAL_ENTRY__?: boolean }).__LEGADO_READER_MANUAL_ENTRY__ === true
+if (!manualEntry && invokedPath !== undefined && fileURLToPath(import.meta.url) === resolve(invokedPath)) {
   void main().then((code) => { if (code !== 0) process.exitCode = code })
 }
 

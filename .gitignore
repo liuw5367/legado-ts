@@ -9,6 +9,7 @@
 # production
 /dist
 **/dist
+*.bun-build
 
 # misc
 .DS_Store

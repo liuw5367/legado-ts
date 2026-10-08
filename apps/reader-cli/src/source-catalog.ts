@@ -7,6 +7,7 @@ import { createRequestPlan } from '@legado/source-core'
 import { ReaderStorage } from './storage.ts'
 import { applySourceState, sourceStateDefaults } from './source-policy.ts'
 import type { SourceCheckRecord, SourceHealthState } from './storage-model.ts'
+import { getEmbeddedSourceInputs } from './embedded-sources.ts'
 
 const MAX_FILES = 256
 const MAX_BYTES = 4 * 1024 * 1024
@@ -39,14 +40,16 @@ export interface SourceCatalogOptions {
 
 export async function loadSourceCatalog(input: string | undefined, options: SourceCatalogOptions = {}): Promise<SourceCatalogResult> {
   const diagnostics: string[] = []
-  if (input === undefined || input.trim().length === 0) return { entries: [], diagnostics: ['没有配置书源。请使用 --source 或 LEGADO_READER_SOURCE。'], sourceLocation: '', loadedFromCache: false }
-  const location = input.trim()
+  const location = input?.trim() ?? ''
   const storage = options.storage
   const maxFiles = options.maxFiles ?? MAX_FILES
   const maxBytes = options.maxBytes ?? MAX_BYTES
   const texts: Array<{ text: string; location: string }> = []
   let loadedFromCache = false
-  if (isHttpUrl(location)) {
+  if (location.length === 0) {
+    texts.push(...getEmbeddedSourceInputs())
+    if (texts.length === 0) return { entries: [], diagnostics: ['没有配置书源。请使用 --source 或 LEGADO_READER_SOURCE。'], sourceLocation: '', loadedFromCache: false }
+  } else if (isHttpUrl(location)) {
     const reader = createImportReader(options.network ?? new NodeNetworkHost(), storage)
     try {
       const response = await reader.read({ uri: location, maxBytes })
@@ -104,7 +107,7 @@ export async function loadSourceCatalog(input: string | undefined, options: Sour
   }
   const unique = [...new Map(entries.map((entry) => [entry.id, entry])).values()]
   markConflicts(unique)
-  return { entries: unique.sort((left, right) => left.source.bookSourceName.localeCompare(right.source.bookSourceName, 'zh-Hans')), diagnostics, sourceLocation: location, loadedFromCache }
+  return { entries: unique.sort((left, right) => left.source.bookSourceName.localeCompare(right.source.bookSourceName, 'zh-Hans')), diagnostics, sourceLocation: location.length === 0 ? '内置书源' : location, loadedFromCache }
 }
 
 export function usableSources(catalog: SourceCatalogResult): SourceEntry[] {
