@@ -803,7 +803,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setTocSearchActive(false)
       if (result.edition.editionKey !== activeEditionKey(currentBook)) sourceCommitRef.current = result.edition.editionKey
       if (!returnToReader) setPage('reader')
-      setMessage(partialCommit ? '阅读位置已保存，书籍信息待同步' : formatted.text.length === 0 ? '章节内容为空 · 阅读位置已保存' : `${refresh ? '正文已刷新' : '正文已加载'}${resumeLine > 0 && !refresh ? ' · 已恢复上次位置' : ''}`)
+      setMessage(partialCommit ? '阅读位置已保存，书籍信息待同步' : formatted.text.length === 0 ? '章节内容为空 · 进度已保存' : `${refresh ? '已刷新' : '已加载'}${resumeLine > 0 && !refresh ? ' · 已加载进度' : ''}`)
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
     } finally {
