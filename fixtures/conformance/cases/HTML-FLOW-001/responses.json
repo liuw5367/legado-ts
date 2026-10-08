@@ -1,0 +1,6 @@
+{
+  "/search": { "contentType": "text/html; charset=utf-8", "body": "<div class=\"novel-item\"><a class=\"title\" href=\"/book/1\">测试书</a><span class=\"author\">作者</span><p class=\"desc\">搜索简介</p></div>" },
+  "/book/1": { "contentType": "text/html; charset=utf-8", "body": "<h1>测试书</h1><span class=\"author\">作者</span><p class=\"desc-content\">详情简介</p><a class=\"toc\" href=\"/book/1/toc\">目录</a>" },
+  "/book/1/toc": { "contentType": "text/html; charset=utf-8", "body": "<div class=\"chapter-list\"><a href=\"/book/1/chapter/1\"><span>第一章</span></a></div>" },
+  "/book/1/chapter/1": { "contentType": "text/html; charset=utf-8", "body": "<div class=\"content\"><p>正文内容：HTML 规则通过。</p></div>" }
+}

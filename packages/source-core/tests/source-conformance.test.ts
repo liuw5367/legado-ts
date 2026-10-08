@@ -51,7 +51,7 @@ function conformancePorts(calls: string[], plans?: RequestPlan[]): WorkflowPorts
 test('书源兼容清单逐项执行并覆盖对应断言', async () => {
   const text = await readFile(new URL('../../../fixtures/conformance/manifest.json', import.meta.url), 'utf8')
   const manifest = JSON.parse(text) as { version: number; fixtures: Array<Record<string, unknown>> }
-  assert.equal(manifest.version, 1)
+  assert.equal(manifest.version, 2)
   const assertions = new Set([
     'IMP-001/source-object',
     'SCH-006/public-rule-entry',
@@ -60,7 +60,7 @@ test('书源兼容清单逐项执行并覆盖对应断言', async () => {
     'FLOW-CANCEL-001/source-abort',
   ])
   const seen = new Set<string>()
-  for (const fixture of manifest.fixtures) {
+  for (const fixture of manifest.fixtures.filter((item) => item.typescript === 'source-conformance.test.ts')) {
     const id = fixture.id
     assert.equal(typeof id, 'string')
     assert.equal(seen.has(id as string), false, `重复 conformance id: ${String(id)}`)

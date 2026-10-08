@@ -1,0 +1,8 @@
+{
+  "status": "success",
+  "search": { "name": "测试书", "author": "作者", "bookUrl": "https://html.fixture.test/book/1" },
+  "details": { "name": "测试书", "author": "作者", "tocUrl": "https://html.fixture.test/book/1/toc" },
+  "toc": [{ "title": "第一章", "chapterUrl": "https://html.fixture.test/book/1/chapter/1" }],
+  "content": { "contentType": "html", "cleaned": "正文内容：HTML 规则通过。" },
+  "requests": ["/search", "/book/1", "/book/1/toc", "/book/1/chapter/1"]
+}

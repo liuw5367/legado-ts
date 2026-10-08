@@ -40,6 +40,7 @@ test('导入 fixture 清单逐项执行并校验预期', async () => {
     'IMP-003/static-js',
     'SUB-001/added',
     'SUB-002/conflict',
+    'IMP-004/schema-completeness',
   ])
 
   for (const fixture of manifest.fixtures) {
@@ -105,6 +106,15 @@ test('导入 fixture 清单逐项执行并校验预期', async () => {
       assert.equal(plan.outcome, 'conflict', fixture.expected)
       assert.deepEqual(plan.diffs[0]?.fields, ['header'], fixture.expected)
       assert.equal(plan.commitPlan.expectedSourceRevisions[remote.bookSourceUrl], 'local-r1', fixture.expected)
+    } else if (fixture.id === 'IMP-004/schema-completeness') {
+      const candidate = (await importSources(text))[0]
+      assert.equal(candidate?.status, 'ready', fixture.expected)
+      assert.equal(candidate?.writable, true, fixture.expected)
+      assert.equal(candidate?.source?.enabled, false, fixture.expected)
+      assert.equal(candidate?.source?.customOrder, 7, fixture.expected)
+      assert.equal(candidate?.source?.ruleBookInfo, null, fixture.expected)
+      assert.deepEqual(candidate?.source?.ruleToc, [], fixture.expected)
+      assert.deepEqual(candidate?.unknownFields, { customUnknown: { keep: [true, { nested: 'value' }] } }, fixture.expected)
     }
   }
 

@@ -1,0 +1,5 @@
+{
+  "bookSourceUrl": "https://toc.fixture.test",
+  "bookSourceName": "TOC edge fixture",
+  "ruleToc": { "chapterList": ".entry", "chapterName": "text", "chapterUrl": "href", "isVolume": "@js:chapter.title === '卷一'", "isVip": "@js:chapter.title === '第二章'", "isPay": "@js:chapter.title === '第二章'", "nextTocUrl": ".next@href" }
+}

@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "toc": [
+    { "title": "第二章", "chapterUrl": "https://toc.fixture.test/chapter/2", "isVolume": false, "isVip": true, "isPay": true },
+    { "title": "第一章重复", "chapterUrl": "https://toc.fixture.test/chapter/1", "isVolume": false, "isVip": false, "isPay": false },
+    { "title": "卷一", "chapterUrl": "卷一0", "isVolume": true, "isVip": false, "isPay": false }
+  ],
+  "requests": ["/toc", "/toc?page=2"]
+}

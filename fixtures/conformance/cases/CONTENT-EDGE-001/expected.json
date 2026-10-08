@@ -1,0 +1,6 @@
+{
+  "status": "partial",
+  "content": { "contentType": "text", "pages": ["第一段 广告", "第二段"], "cleaned": "　　第一段 \n　　第二段" },
+  "diagnostics": ["正文下一页形成循环"],
+  "requests": ["/chapter/1", "/chapter/2"]
+}

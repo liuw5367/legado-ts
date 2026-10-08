@@ -1,0 +1,6 @@
+{
+  "bookSourceUrl": "https://xpath.fixture.test",
+  "bookSourceName": "XPath content fixture",
+  "ruleContent": { "content": "@xpath://content/text()" },
+  "contentType": "text"
+}

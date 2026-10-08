@@ -1,0 +1,4 @@
+{
+  "book": { "sourceId": "https://js.fixture.test", "bookUrl": "https://js.fixture.test/book", "tocUrl": "https://js.fixture.test/book/toc", "name": "JS书", "rawFields": {}, "traceRef": "book:js", "emptyFields": [], "fieldErrors": {} },
+  "nextChapterUrl": "https://js.fixture.test/book/chapter/2"
+}

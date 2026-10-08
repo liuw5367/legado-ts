@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { exportSource, importSources, sameSourceDefinition } from '../src/index.ts'
 
@@ -97,4 +98,132 @@ test('读取限制、取消和失败不会产生可写候选', async () => {
   assert.equal(cancelled[0]?.error?.code, 'cancelled')
   const failed = await importSources({ kind: 'uri', uri: 'https://a.test' }, { reader: { read: async () => { throw new Error('network') } } })
   assert.equal(failed[0]?.error?.code, 'reader-failed')
+})
+
+test('完整 schema 字段矩阵保留规则组、未知字段和显式空值语义', async () => {
+  const text = await readFile(new URL('../../../fixtures/import/schema-completeness.json', import.meta.url), 'utf8')
+  const candidate = (await importSources(text))[0]
+  assert.equal(candidate?.status, 'ready')
+  assert.equal(candidate?.writable, true)
+  assert.ok(candidate?.source)
+
+  const normalized = candidate.source
+  assert.deepEqual({
+    bookSourceUrl: normalized.bookSourceUrl,
+    bookSourceName: normalized.bookSourceName,
+    bookSourceGroup: normalized.bookSourceGroup,
+    bookSourceType: normalized.bookSourceType,
+    bookUrlPattern: normalized.bookUrlPattern,
+    customOrder: normalized.customOrder,
+    enabled: normalized.enabled,
+    enabledExplore: normalized.enabledExplore,
+    jsLib: normalized.jsLib,
+    enabledCookieJar: normalized.enabledCookieJar,
+    concurrentRate: normalized.concurrentRate,
+    header: normalized.header,
+    loginUrl: normalized.loginUrl,
+    loginUi: normalized.loginUi,
+    loginCheckJs: normalized.loginCheckJs,
+    coverDecodeJs: normalized.coverDecodeJs,
+    bookSourceComment: normalized.bookSourceComment,
+    variableComment: normalized.variableComment,
+    lastUpdateTime: normalized.lastUpdateTime,
+    respondTime: normalized.respondTime,
+    weight: normalized.weight,
+    exploreUrl: normalized.exploreUrl,
+    exploreScreen: normalized.exploreScreen,
+    searchUrl: normalized.searchUrl,
+    mainJs: normalized.mainJs,
+    eventListener: normalized.eventListener,
+    customButton: normalized.customButton,
+  }, {
+    bookSourceUrl: 'https://fixture.test/schema',
+    bookSourceName: 'Schema completeness',
+    bookSourceGroup: '测试',
+    bookSourceType: 0,
+    bookUrlPattern: 'https://fixture.test/book/.*',
+    customOrder: 7,
+    enabled: false,
+    enabledExplore: false,
+    jsLib: 'const helper = true;',
+    enabledCookieJar: false,
+    concurrentRate: '250',
+    header: 'User-Agent: Fixture',
+    loginUrl: 'https://fixture.test/login',
+    loginUi: [{ name: '账号', type: 'text', key: 'user' }],
+    loginCheckJs: "cookie.get('session')",
+    coverDecodeJs: 'bytes',
+    bookSourceComment: '字段矩阵',
+    variableComment: '变量说明',
+    lastUpdateTime: 1710000000000,
+    respondTime: 321,
+    weight: 9,
+    exploreUrl: '/explore',
+    exploreScreen: '分类',
+    searchUrl: '/search?q={{key}}',
+    mainJs: 'function helper() { return true; }',
+    eventListener: true,
+    customButton: true,
+  })
+  assert.deepEqual(normalized.ruleExplore, { bookList: '.book', name: '.name', author: '.author', bookUrl: 'href' })
+  assert.deepEqual(normalized.ruleSearch, { bookList: '.book', name: '.name', author: '.author', bookUrl: 'href' })
+  assert.equal(normalized.ruleBookInfo, null)
+  assert.deepEqual(normalized.ruleToc, [])
+  assert.deepEqual(normalized.ruleContent, { content: '.content', nextContentUrl: '.next@href', maxBatchSize: 4 })
+  assert.deepEqual(normalized.ruleReview, {
+    reviewUrl: '/review',
+    avatarRule: '.avatar@src',
+    contentRule: '.content',
+    postTimeRule: '.time',
+    reviewQuoteUrl: '.quote@href',
+    voteUpUrl: '.up@href',
+    voteDownUrl: '.down@href',
+    postReviewUrl: '/review/post',
+    postQuoteUrl: '/review/quote',
+    deleteUrl: '/review/delete',
+    enabled: false,
+    reviewSummaryUrl: '/review/summary',
+    summaryListRule: '.summary',
+    summaryParagraphIndexRule: 'data-index',
+    summaryParagraphDataRule: 'data-value',
+    summaryCountRule: '.count',
+    reviewDetailUrl: '/review/detail',
+    reviewDetailNextPageUrl: '.next@href',
+    detailListRule: '.detail',
+    detailIdRule: 'data-id',
+    detailAvatarRule: '.avatar@src',
+    detailNameRule: '.name',
+    detailBadgeRule: '.badge',
+    detailContentRule: '.content',
+    replyListRule: '.reply',
+    replyIdRule: 'data-id',
+    replyAvatarRule: '.avatar@src',
+    replyNameRule: '.name',
+    replyBadgeRule: '.badge',
+    replyContentRule: '.content',
+  })
+  assert.deepEqual(candidate.unknownFields, { customUnknown: { keep: [true, { nested: 'value' }] } })
+  assert.equal(candidate.raw.fieldShapes.ruleSearch, '{"bookList":".book","name":".name","author":".author","bookUrl":"href"}')
+  assert.equal(candidate.raw.fieldShapes.ruleBookInfo, null)
+  assert.deepEqual(candidate.raw.fieldShapes.ruleToc, [])
+
+  const patched = exportSource(candidate, { format: 'json', patch: { customOrder: 8 } })
+  const exported = JSON.parse(patched.text) as Record<string, unknown>
+  assert.equal(exported.customOrder, 8)
+  assert.equal(exported.enabled, false)
+  assert.deepEqual(exported.customUnknown, { keep: [true, { nested: 'value' }] })
+  assert.deepEqual(exported.ruleContent, { content: '.content', nextContentUrl: '.next@href', maxBatchSize: 4 })
+})
+
+test('Schema 不可写候选保留缺失 URL、非法规则和错误路径', async () => {
+  const missingUrl = await importSources(JSON.stringify({ bookSourceName: 'missing' }))
+  assert.equal(missingUrl[0]?.status, 'invalid')
+  assert.equal(missingUrl[0]?.writable, false)
+  assert.equal(missingUrl[0]?.error?.code, 'source-url-missing')
+
+  const invalidRule = await importSources(JSON.stringify({ bookSourceUrl: 'https://fixture.test/invalid', ruleSearch: 42 }))
+  assert.equal(invalidRule[0]?.status, 'invalid')
+  assert.equal(invalidRule[0]?.writable, false)
+  assert.equal(invalidRule[0]?.error?.code, 'rule-invalid')
+  assert.equal(invalidRule[0]?.raw.fieldShapes.ruleSearch, 42)
 })

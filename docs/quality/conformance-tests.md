@@ -25,13 +25,14 @@
 
 TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-conformance.test.ts`、`source-fixtures.test.ts` 等）与 `packages/source-node/tests/`（宿主与组合流），入口见根 `package.json` 的 `test` / `test:source`。与上列 Kotlin 结果逐项对照的 Android golden 仍不完整（07-A 中部分 `android: not-run`），需要继续补 fixture 与 golden 输出。2026-10-05 已在 Android 当前快照的只读归档副本实际运行完整 app JVM 单测集，作为独立的 Android test-run 证据。
 
-2026-10-05 的可执行证据如下：
+截至 2026-10-08 的可执行证据如下（Android 独立 test-run 证据仍标注其 2026-10-05 快照日期）：
 
-- `fixture-manifest.test.ts` 实际读取并执行 import manifest 的 6 条记录；`source-conformance.test.ts` 实际执行 conformance manifest 的 5 条记录，并校验每条记录都有断言映射。
-- `source-host-flow.test.ts` 使用真实书源规则和离线响应覆盖 JSON/CSS/XPath/JavaScript/HTML；另从大型 collection 按结构索引回放 JSONPath 条件过滤和 `java.getElements` 书源。不会把完整 collection 输出到日志。
+- `fixture-manifest.test.ts` 实际读取并执行 import manifest 的 7 条记录，其中 `IMP-004/schema-completeness` 覆盖完整已知字段矩阵、六类规则组、未知字段和不可写诊断；`source-conformance.test.ts` 继续执行 conformance manifest 的 5 条历史记录。
+- `source-cross-runtime.test.ts` 读取 conformance manifest 中的 6 个离线 case 目录（`HTML-FLOW-001`、`JSON-FLOW-001`、`XPATH-CONTENT-001`、`JS-TOC-001`、`TOC-EDGE-001`、`CONTENT-EDGE-001`），使用真实 `SourceRuleHost`、`SourceRequestHost`、Node HTML/JSONPath/XPath 解析器和 QuickJS，覆盖搜索、详情、目录、正文、分页、去重、卷/VIP/购买、替换和失败轨迹；不访问公网。
+- `source-host-flow.test.ts` 使用真实书源规则和离线响应覆盖 JSON/CSS/XPath/JavaScript/HTML，并额外断言正文网络失败不会伪造成成功；另从大型 collection 按结构索引回放 JSONPath 条件过滤和 `java.getElements` 书源。不会把完整 collection 输出到日志。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
-- core、source-node、reader-cli 构建与类型检查通过；分层专项 93/93 通过。当前完整套件 `pnpm run test` 为 432/432（需允许本机环回监听）。以上是 `ts-executed` 证据，不能替代 Android golden。
+- core、source-node、reader-cli 构建与类型检查通过；分层专项 `pnpm run test:source` 为 110/110，当前完整套件 `pnpm run test` 为 459/459（需允许本机环回监听）。以上是 `ts-executed` 证据，不能替代 Android golden。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
 跨端用例状态和完成后的删除线记录统一维护在[书源运行时状态总览](../implementation/source-runtime-status.md)。本节继续维护 fixture 格式、断言和执行门槛；机器清单保留稳定 ID，不删除历史记录。

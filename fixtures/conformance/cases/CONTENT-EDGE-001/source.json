@@ -1,0 +1,6 @@
+{
+  "bookSourceUrl": "https://content.fixture.test",
+  "bookSourceName": "Content edge fixture",
+  "ruleContent": { "content": ".content@text", "nextContentUrl": ".next@href", "replaceRegex": "##广告##" },
+  "contentType": "text"
+}

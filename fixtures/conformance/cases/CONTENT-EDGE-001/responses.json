@@ -1,0 +1,4 @@
+{
+  "/chapter/1": { "contentType": "text/html; charset=utf-8", "body": "<div class=\"content\">第一段 广告</div><a class=\"next\" href=\"/chapter/2\">下一页</a>" },
+  "/chapter/2": { "contentType": "text/html; charset=utf-8", "body": "<div class=\"content\">第二段</div><a class=\"next\" href=\"/chapter/2\">循环</a>" }
+}

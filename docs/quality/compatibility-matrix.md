@@ -27,7 +27,9 @@
 
 未完成项、差异项和完成后的删除线记录统一维护在[书源运行时状态总览](../implementation/source-runtime-status.md)。本矩阵继续维护五维兼容证据；`implementation=absent/partial` 和 `execution=not-run` 的含义以状态总览为准。
 
-当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、import/conformance manifest 和真实书源离线回放均已实际执行。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
+当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；`pnpm run test:source` 为 110/110，`pnpm run test` 为 459/459。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
+
+本次新增的 `HTML-FLOW-001`、`JSON-FLOW-001`、`XPATH-CONTENT-001`、`JS-TOC-001`、`TOC-EDGE-001`、`CONTENT-EDGE-001` 仍记录为 `android=not-run`；它们是 TypeScript 离线执行证据，不是 Android 兼容结论。
 
 2026-09-28 Android 执行证据使用页面快照提交 `32a87b253e7cc28273c3850de86242caac83f1fd`，Android Studio JBR 21，临时 SDK `platforms;android-36` / `build-tools;36.0.0`；`./gradlew :app:testDebugUnitTest` 共 1,948/1,948 通过（399 个测试类）。书源专项的规则 DOM、JS source、目录回写、批量正文和搜索分页测试共 48/48 通过。该证据只更新 Android `test-run` 状态；没有把未执行的跨端 fixture/golden 改为 `pass`。长期规则和源码引用仍以 `62003ce732a7e30602754d28996da7f98b9ea296` 为基线。
 

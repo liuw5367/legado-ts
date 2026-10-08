@@ -1,0 +1,5 @@
+{
+  "bookSourceUrl": "https://js.fixture.test",
+  "bookSourceName": "JavaScript TOC fixture",
+  "mainJs": "function getChapters(book) { return [{ title: '卷一', url: '卷一', isVolume: true }, { title: '第一章', url: './chapter/1', isVip: true, isPay: false }]; }\nfunction getContent(chapter, book, nextChapterUrl) { return chapter.title + '|' + nextChapterUrl; }"
+}

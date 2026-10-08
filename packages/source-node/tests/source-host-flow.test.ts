@@ -1059,3 +1059,36 @@ test('getBookInfo 空字符串沿用搜索阶段字段', async () => {
   assert.equal(result.value?.items[0]?.name, '搜索书名')
   assert.equal(result.value?.items[0]?.author, '搜索作者')
 })
+
+test('真实正文规则请求失败时返回失败并保留请求轨迹', async () => {
+  const source = {
+    bookSourceUrl: 'https://content-failure.test',
+    bookSourceName: 'Content Failure',
+    ruleContent: { content: '.content@text' },
+    contentType: 'text',
+  } as unknown as NormalizedSource
+  let requests = 0
+  const result = await loadChapterContent({
+    network: {
+      request: async () => {
+        requests += 1
+        throw new Error('offline fixture')
+      },
+    },
+    rules: new SourceRuleHost(),
+  }, {
+    source,
+    chapter: {
+      sourceId: source.bookSourceUrl,
+      bookUrl: 'https://content-failure.test/book',
+      chapterUrl: 'https://content-failure.test/chapter/1',
+      index: 0,
+      title: '失败章',
+    },
+  })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
+  assert.equal(requests, 1)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'request-failed'))
+  assert.ok(result.trace.some((entry) => entry.event === 'request'))
+})

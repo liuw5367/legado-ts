@@ -1,0 +1,3 @@
+{
+  "book": { "sourceId": "https://toc.fixture.test", "bookUrl": "https://toc.fixture.test/book", "tocUrl": "https://toc.fixture.test/toc", "name": "目录边界书", "rawFields": {}, "traceRef": "book:toc-edge", "emptyFields": [], "fieldErrors": {}, "readConfig": { "reverseToc": true } }
+}

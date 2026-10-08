@@ -4,6 +4,8 @@
 
 状态总览和完成标记规则统一维护在[书源运行时状态总览](../implementation/source-runtime-status.md)。本表只保留每条差异的详细事实、影响和策略。
 
+2026-10-08 已补齐 TypeScript 侧 schema/import 字段矩阵和六个无公网真实规则回放 fixture；`pnpm run test:source` 110/110、`pnpm run test` 459/459。新增 fixture 的 Android 字段仍为 `not-run`，不把 Node 侧通过误写成跨端兼容。
+
 | 编号 | 主题 | 标准侧 | 实现侧 | 影响 | 策略 |
 | --- | --- | --- | --- | --- | --- |
 | D1 | 搜索与流程入口命名 | [搜索流程](../flows/search-flow.md) 的 `SearchRequest` / `SearchResultSink` / `SearchSourceStatus`（含 `stale`、`storage-error`），[阶段 C](../implementation/phase-c-workflows.md) 历史名 `searchOne` / `searchMany`，[阶段 D](../implementation/phase-d-extended-capabilities.md) 历史名 `searchOne` / `explore` / `getBookInfo` / `getChapterList` / `getContent` | `packages/source-core/src/index.ts` 导出 `searchBooks` / `discoverBooks` / `loadBookDetails` / `loadTableOfContents` / `loadChapterContent`，输入为 `SearchInput` 等，输出 `RuntimeResult` | 标准与流程文档中的入口名不能直接 `grep` 到代码；集成方按文档实现会失败 | 代码为准；文档已标注历史/目标名。若未来补齐多源 `searchMany` 或统一门面，先改代码再改标准 |

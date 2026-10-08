@@ -1,0 +1,4 @@
+{
+  "chapter": { "sourceId": "https://content.fixture.test", "bookUrl": "https://content.fixture.test/book", "chapterUrl": "https://content.fixture.test/chapter/1", "index": 0, "title": "正文边界章" },
+  "maxPages": 3
+}

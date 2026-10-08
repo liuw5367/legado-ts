@@ -1,0 +1,10 @@
+{
+  "bookSourceUrl": "https://html.fixture.test",
+  "bookSourceName": "HTML fixture",
+  "searchUrl": "/search?q={{key}}",
+  "ruleSearch": { "bookList": ".novel-item", "name": ".title@text", "author": ".author@text", "bookUrl": ".title@href", "intro": ".desc@text" },
+  "ruleBookInfo": { "name": "h1@text", "author": ".author@text", "tocUrl": "a.toc@href", "intro": ".desc-content@text" },
+  "ruleToc": { "chapterList": ".chapter-list a", "chapterName": "text", "chapterUrl": "href" },
+  "ruleContent": { "content": ".content@text" },
+  "contentType": "html"
+}

@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "toc": [
+    { "title": "卷一", "chapterUrl": "卷一", "isVolume": true, "isVip": false, "isPay": false },
+    { "title": "第一章", "chapterUrl": "https://js.fixture.test/book/chapter/1", "isVolume": false, "isVip": true, "isPay": false }
+  ],
+  "content": { "contentType": "text", "cleaned": "第一章|https://js.fixture.test/book/chapter/2" },
+  "requests": []
+}

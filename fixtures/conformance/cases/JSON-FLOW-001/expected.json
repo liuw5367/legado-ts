@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "search": { "name": "JSON书", "author": "作者", "bookUrl": "https://json.fixture.test/book/1" },
+  "details": { "name": "JSON书", "author": "作者", "tocUrl": "https://json.fixture.test/book/1/toc" },
+  "toc": [
+    { "title": "第一章", "chapterUrl": "https://json.fixture.test/book/1/chapter/1", "isVip": false },
+    { "title": "第二章", "chapterUrl": "https://json.fixture.test/book/1/chapter/2", "isVip": true }
+  ],
+  "content": { "contentType": "text", "pages": ["正文一", "正文二"] },
+  "requests": ["/search", "/book/1", "/book/1/toc", "/book/1/chapter/1", "/book/1/chapter/2"]
+}

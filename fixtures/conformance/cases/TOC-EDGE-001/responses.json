@@ -1,0 +1,4 @@
+{
+  "/toc": { "contentType": "text/html; charset=utf-8", "body": "<a class=\"entry\" href=\"卷一\">卷一</a><a class=\"entry\" href=\"/chapter/1\">第一章</a><a class=\"next\" href=\"/toc?page=2\">下一页</a>" },
+  "/toc?page=2": { "contentType": "text/html; charset=utf-8", "body": "<a class=\"entry\" href=\"/chapter/1\">第一章重复</a><a class=\"entry\" href=\"/chapter/2\">第二章</a>" }
+}

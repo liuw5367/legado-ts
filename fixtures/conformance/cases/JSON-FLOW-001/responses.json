@@ -1,0 +1,7 @@
+{
+  "/search": { "contentType": "application/json; charset=utf-8", "body": "{\"books\":[{\"name\":\"JSON书\",\"author\":\"作者\",\"url\":\"/book/1\"}]}" },
+  "/book/1": { "contentType": "application/json; charset=utf-8", "body": "{\"name\":\"JSON书\",\"author\":\"作者\",\"toc\":\"/book/1/toc\"}" },
+  "/book/1/toc": { "contentType": "application/json; charset=utf-8", "body": "{\"chapters\":[{\"grade\":1,\"title\":\"卷一\",\"url\":\"volume\",\"vip\":false},{\"grade\":2,\"title\":\"第一章\",\"url\":\"/book/1/chapter/1\",\"vip\":false},{\"grade\":3,\"title\":\"第二章\",\"url\":\"/book/1/chapter/2\",\"vip\":true}]}" },
+  "/book/1/chapter/1": { "contentType": "application/json; charset=utf-8", "body": "{\"content\":\"正文一\",\"next\":\"/book/1/chapter/2\"}" },
+  "/book/1/chapter/2": { "contentType": "application/json; charset=utf-8", "body": "{\"content\":\"正文二\"}" }
+}

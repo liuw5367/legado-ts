@@ -1,0 +1,5 @@
+{
+  "status": "success",
+  "content": { "contentType": "text", "cleaned": "XPath 正文", "pages": ["XPath 正文"] },
+  "requests": ["/chapter/1"]
+}

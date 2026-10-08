@@ -1,0 +1,10 @@
+{
+  "bookSourceUrl": "https://json.fixture.test",
+  "bookSourceName": "JSON fixture",
+  "searchUrl": "/search?q={{key}}",
+  "ruleSearch": { "bookList": "$.books[*]", "name": "$.name", "author": "$.author", "bookUrl": "$.url" },
+  "ruleBookInfo": { "name": "$.name", "author": "$.author", "tocUrl": "$.toc" },
+  "ruleToc": { "chapterList": "$.chapters[?(@.grade > 1)]", "chapterName": "$.title", "chapterUrl": "$.url", "isVip": "$.vip" },
+  "ruleContent": { "content": "$.content", "nextContentUrl": "$.next" },
+  "contentType": "text"
+}
