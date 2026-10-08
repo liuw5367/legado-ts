@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink'
+import { nextChapterUrlFor } from '@legado/source-core'
 import type { SourceCatalogResult } from './source-catalog.ts'
 import { ReaderApplication } from './application.ts'
 import type { OpenBookResult, SearchOperationResult, SearchProgress, SearchResultGroup, TocResult, SourceCheckProgress, SourceCheckResult } from './application.ts'
@@ -735,8 +736,8 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setMessage(refresh ? '正在刷新当前章节…' : `正在加载第 ${index + 1} 章…`)
     try {
       // 下一章地址用于正文分页护栏：命中时停止抓取，避免把下一章正文并入本章。
-      const nextChapter = currentToc.chapters[index + 1] ?? currentToc.chapters[0]
-      const result = await application.loadContent(currentBook.book.bookId, chapter, currentToc.edition.editionKey, operation.controller.signal, { refresh, ...(nextChapter === undefined ? {} : { nextChapterUrl: nextChapter.chapterUrl }) })
+      const nextChapterUrl = nextChapterUrlFor(currentToc.chapters, chapter)
+      const result = await application.loadContent(currentBook.book.bookId, chapter, currentToc.edition.editionKey, operation.controller.signal, { refresh, ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }) })
       if (!isCurrent(operation)) return
       const width = Math.max(8, columns)
       const formatted = formatChapterContent(result.content.cleaned, result.content.contentType)

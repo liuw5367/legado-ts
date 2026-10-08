@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { reconcileTableOfContents } from '@legado/source-core'
+import { nextChapterUrlFor, reconcileTableOfContents } from '@legado/source-core'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent, ContentIdentity } from '@legado/source-core'
 import { KeyedConcurrencyHost } from '@legado/source-node'
 import type { SourceEntry, SourceCatalogResult } from './source-catalog.ts'
@@ -671,7 +671,7 @@ export class ReaderApplication {
       sourceRevision: edition.sourceFingerprint,
       semanticVersion: 'source-core-content-v1',
     }
-    const nextChapterUrl = options?.nextChapterUrl ?? nextChapterUrlFromSnapshot(tocSnapshot?.chapters, chapter)
+    const nextChapterUrl = options?.nextChapterUrl ?? nextChapterUrlFor(tocSnapshot?.chapters, chapter)
     const metadata: BookMetadata = snapshotBook === undefined
       ? { sourceId: edition.sourceId, bookUrl: edition.bookUrl, ...(edition.name === undefined ? {} : { name: edition.name }), ...(edition.author === undefined ? {} : { author: edition.author }), ...(edition.intro === undefined ? {} : { intro: edition.intro }), ...(edition.coverUrl === undefined ? {} : { coverUrl: edition.coverUrl }), ...(edition.tocUrl === undefined ? {} : { tocUrl: edition.tocUrl }), ...(edition.lastChapter === undefined ? {} : { lastChapter: edition.lastChapter }), ...(edition.updateTime === undefined ? {} : { updateTime: edition.updateTime }), ...(edition.variable === undefined ? {} : { variable: edition.variable }), rawFields: edition.rawFields, traceRef: `stored:${edition.editionKey}`, emptyFields: [], fieldErrors: {} }
       : { ...snapshotBook, sourceId: edition.sourceId, rawFields: { ...edition.rawFields, ...snapshotBook.rawFields }, traceRef: `stored:${edition.editionKey}`, emptyFields: [...snapshotBook.emptyFields], fieldErrors: { ...snapshotBook.fieldErrors } }
@@ -785,17 +785,6 @@ function updateBook(book: BookDocument, metadata: BookMetadata, activeEditionKey
 
 function mergeMetadataIntoSource(source: KnownSource, metadata: BookMetadata): KnownSource {
   return { ...source, ...(metadata.name === undefined ? {} : { name: metadata.name }), ...(metadata.author === undefined ? {} : { author: metadata.author }), ...(metadata.intro === undefined ? {} : { intro: metadata.intro }), ...(metadata.coverUrl === undefined ? {} : { coverUrl: metadata.coverUrl }), ...(metadata.tocUrl === undefined ? {} : { tocUrl: metadata.tocUrl }), ...(metadata.lastChapter === undefined ? {} : { lastChapter: metadata.lastChapter }), ...(metadata.updateTime === undefined ? {} : { updateTime: metadata.updateTime }), ...(metadata.variable === undefined ? {} : { variable: metadata.variable }), rawFields: { ...source.rawFields, ...metadata.rawFields } }
-}
-
-function nextChapterUrlFromSnapshot(chapters: readonly Chapter[] | undefined, current: Chapter): string | undefined {
-  if (chapters === undefined || chapters.length === 0) return undefined
-  const currentIndex = Number.isInteger(current.index) && current.index >= 0 && chapters[current.index]?.chapterUrl === current.chapterUrl
-    ? current.index
-    : chapters.findIndex((item) => item.chapterUrl === current.chapterUrl)
-  if (currentIndex < 0) return undefined
-  const next = chapters[(currentIndex + 1) % chapters.length]
-  if (next === undefined || next.chapterUrl.length === 0) return undefined
-  return next.url?.trim() || next.chapterUrl
 }
 
 function errorMessage(error: unknown): string {

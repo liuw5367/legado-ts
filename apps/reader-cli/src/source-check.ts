@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { nextChapterUrlFor } from '@legado/source-core'
 import type { BookCandidate, BookMetadata } from '@legado/source-core'
 import type { ReaderSourceSession, SourceCheckResult } from './application-model.ts'
 import type { SourceEntry } from './source-catalog.ts'
@@ -195,8 +196,8 @@ async function checkBookBranch(input: SourceCheckInput, branch: 'search' | 'disc
   }
   input.onStage?.(`${branch}:content`)
   const contentStarted = Date.now()
-  const nextChapter = readable[1] ?? readable[0]
-  const content = await session.content(readable[0], book, signal, { refresh: true, nextChapterUrl: nextChapter.chapterUrl })
+  const nextChapterUrl = nextChapterUrlFor(readable, readable[0])
+  const content = await session.content(readable[0], book, signal, { refresh: true, ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }) })
   if (content.status === 'cancelled' || signal.aborted) {
     if (deadline.cancelled()) return 'cancelled'
     failedStages.push(`${branch}:content`)
