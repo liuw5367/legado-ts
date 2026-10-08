@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { countChapterCharacters, formatChapterContent } from '../src/content-format.ts'
+import { layoutFormattedContent } from '../src/content-layout.ts'
 
 test('HTML 正文保留块级段落语义并隐藏脚本样式', () => {
   const result = formatChapterContent('<p>第一段&nbsp;内容</p><div>第二段<br>换行</div><script>恶意脚本</script><style>隐藏</style>', 'html')
@@ -24,6 +25,13 @@ test('纯文本输入保持空行分段', () => {
   const result = formatChapterContent('第一段\n\n第二段', 'text')
   assert.deepEqual(result.blocks.map((block) => block.text), ['第一段', '第二段'])
   assert.equal(result.text, '第一段\n\n第二段')
+})
+
+test('核心层清洗后的 HTML 文本仍保留段落换行', () => {
+  const result = formatChapterContent('　　第一段\n　　第二段', 'html')
+  assert.equal(result.blocks.length, 1)
+  assert.equal(result.text, '　　第一段\n　　第二段')
+  assert.deepEqual(layoutFormattedContent(result, 80).lines, ['第一段', '　　第二段'])
 })
 
 test('容器中的混合文本和嵌套列表不会吞掉块级内容', () => {

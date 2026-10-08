@@ -17,15 +17,42 @@ export function terminalLayout(columns: number, rows: number): TerminalLayout {
   return { bodyHeight: Math.max(1, rows - fixedRows), separator, supported }
 }
 
-/** 将正文视口首行限制在可完整显示的范围内。 */
-export function clampContentLine(line: number, totalLines: number, pageHeight: number): number {
-  const maxLine = Math.max(0, Math.max(0, totalLines) - Math.max(1, pageHeight))
+/** 将正文视口首行限制在正文范围内，末页允许不足一个完整视口。 */
+export function clampContentLine(line: number, totalLines: number, _pageHeight: number): number {
+  const maxLine = Math.max(0, Math.max(0, totalLines) - 1)
   return Math.max(0, Math.min(maxLine, line))
+}
+
+/** 返回正文最后一页的首行；最后一页可以只有部分内容。 */
+export function lastContentPageStart(totalLines: number, pageHeight: number): number {
+  const total = Math.max(0, totalLines)
+  if (total === 0) return 0
+  const height = Math.max(1, pageHeight)
+  return Math.floor((total - 1) / height) * height
+}
+
+/** 将任意正文行映射到它所在页的首行。 */
+export function contentPageStart(line: number, totalLines: number, pageHeight: number): number {
+  const total = Math.max(0, totalLines)
+  if (total === 0) return 0
+  const height = Math.max(1, pageHeight)
+  const safeLine = clampContentLine(line, total, height)
+  return Math.min(Math.floor(safeLine / height) * height, lastContentPageStart(total, height))
+}
+
+export function nextContentPageStart(line: number, totalLines: number, pageHeight: number): number {
+  const height = Math.max(1, pageHeight)
+  return Math.min(contentPageStart(line, totalLines, height) + height, lastContentPageStart(totalLines, height))
+}
+
+export function previousContentPageStart(line: number, totalLines: number, pageHeight: number): number {
+  const height = Math.max(1, pageHeight)
+  return Math.max(0, contentPageStart(line, totalLines, height) - height)
 }
 
 export function pagePosition(line: number, totalLines: number, pageHeight: number): { current: number; total: number } {
   const height = Math.max(1, pageHeight)
-  const safeLine = clampContentLine(line, totalLines, height)
+  const safeLine = contentPageStart(line, totalLines, height)
   const total = Math.max(1, Math.ceil(Math.max(0, totalLines) / height))
   return { current: Math.min(total, Math.ceil((safeLine + height) / height)), total }
 }

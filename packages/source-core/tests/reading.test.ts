@@ -74,6 +74,25 @@ test('目录工作流支持跨页、卷名传播、相对 URL、同名不同 URL
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
 })
 
+test('目录工作流不会把单页章节固定截断到 100 条', async () => {
+  const items = Array.from({ length: 150 }, (_, index) => ({ title: `第${index + 1}章`, url: `/chapter/${index + 1}` }))
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('toc'), redirected: false }) },
+    rules: {
+      evaluate: async ({ field, content }) => {
+        if (field === 'chapterList') return { status: 'success', value: items }
+        if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+        if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+        return { status: 'empty', value: null }
+      },
+    },
+  }, { source, book })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items.length, 150)
+  assert.equal(result.value?.items[0]?.title, '第1章')
+  assert.equal(result.value?.items.at(-1)?.title, '第150章')
+})
+
 test('最终正文存储命中时不请求网络，未命中提交后重读并保留最终地址', async () => {
   const calls: string[] = []
   const chapter: Chapter = { sourceId: source.bookSourceUrl, bookUrl: book.bookUrl, chapterUrl: 'https://source.test/c1', index: 0, title: '第一章', rawFields: {}, traceRef: 'toc:0' }

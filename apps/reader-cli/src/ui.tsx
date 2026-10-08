@@ -10,7 +10,7 @@ import { countChapterCharacters, formatChapterContent } from './content-format.t
 import type { FormattedContent } from './content-format.ts'
 import { actionMenuItems } from './action-menu.ts'
 import type { ReaderAction } from './action-menu.ts'
-import { clampContentLine, keepIndexVisible, terminalLayout } from './viewport.ts'
+import { clampContentLine, keepIndexVisible, lastContentPageStart, nextContentPageStart, previousContentPageStart, terminalLayout } from './viewport.ts'
 import { layoutCommandLine, layoutContextLine, tailTerminalText, terminalWidth } from './ui-actions.ts'
 import { pageHeader, renderPage, type RenderState } from './ui-pages.tsx'
 import { ActionMenuView } from './action-menu-view.tsx'
@@ -1261,9 +1261,9 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const height = Math.max(1, bodyHeight)
     const navigation = readerNavigation(input, key)
     if (key.home || key.ctrl && input === 'a') setReaderLine(0)
-    if (key.end || key.ctrl && input === 'e') setReaderLine(clampContentLine(Number.MAX_SAFE_INTEGER, currentLines.length, height))
-    if (input === ' ' || key.pageDown || navigation === 'next-page') setReaderLine((value) => clampContentLine(value + height, currentLines.length, height))
-    if (key.pageUp || navigation === 'previous-page') setReaderLine((value) => clampContentLine(value - height, currentLines.length, height))
+    if (key.end || key.ctrl && input === 'e') setReaderLine(lastContentPageStart(currentLines.length, height))
+    if (input === ' ' || key.pageDown || navigation === 'next-page') setReaderLine((value) => nextContentPageStart(value, currentLines.length, height))
+    if (key.pageUp || navigation === 'previous-page') setReaderLine((value) => previousContentPageStart(value, currentLines.length, height))
     if (input === 'r' && !busy) void loadChapter(chapterIndex, { refresh: true })
     if (input === 'i' && !busy) setPage('detail')
     if (navigation === 'previous-chapter' && chapterIndex > 0 && !busy) void loadChapter(chapterIndex - 1)

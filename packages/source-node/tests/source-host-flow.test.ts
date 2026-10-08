@@ -170,6 +170,66 @@ test('真实 JavaScript 目录规则通过 java.getElements 解析离线 HTML', 
   ])
 })
 
+test('真实 JavaScript 目录规则不会把单页章节截断到 100 条', async () => {
+  const source = {
+    bookSourceUrl: 'https://large-toc.test',
+    bookSourceName: 'Large TOC',
+    ruleToc: {
+      chapterList: '<js>java.getElements("a")</js>',
+      chapterName: 'text',
+      chapterUrl: 'href',
+    },
+  } as unknown as NormalizedSource
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://large-toc.test/book',
+    tocUrl: 'https://large-toc.test/toc',
+    name: '大目录测试书',
+    rawFields: {},
+    emptyFields: [],
+    fieldErrors: {},
+    traceRef: 'book:large-toc',
+  }
+  const body = `<main>${Array.from({ length: 150 }, (_, index) => `<a href="/chapter/${index + 1}">第${index + 1}章</a>`).join('')}</main>`
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => response(plan.url, body) },
+    rules: new SourceRuleHost(),
+  }, { source, book })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items.length, 150)
+  assert.equal(result.value?.items[0]?.title, '第1章')
+  assert.equal(result.value?.items.at(-1)?.title, '第150章')
+})
+
+test('JavaScript 目录读取 null 数据时保留书源脚本诊断', async () => {
+  const source = {
+    bookSourceUrl: 'https://null-toc.test',
+    bookSourceName: 'Null TOC',
+    ruleToc: {
+      chapterList: '<js>var data = { data: null }; data.data.vs</js>',
+      chapterName: 'text',
+      chapterUrl: 'href',
+    },
+  } as unknown as NormalizedSource
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://null-toc.test/book',
+    tocUrl: 'https://null-toc.test/toc',
+    name: '空数据测试书',
+    rawFields: {},
+    traceRef: 'book:null-toc',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => response(plan.url, '{"data":null}') },
+    rules: new SourceRuleHost(),
+  }, { source, book })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'chapterList' && diagnostic.message.includes("property 'vs'")))
+})
+
 test('声明式目录按当前书源类型准备 book 工作副本', async () => {
   const source = {
     bookSourceUrl: 'https://toc-type.test',

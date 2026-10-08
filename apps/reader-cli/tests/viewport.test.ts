@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { clampContentLine, keepIndexVisible, moveIndex, pageIndex, pageIndexForKey, pagePosition, terminalLayout, viewportFor } from '../src/viewport.ts'
+import { clampContentLine, contentPageStart, keepIndexVisible, lastContentPageStart, moveIndex, nextContentPageStart, pageIndex, pageIndexForKey, pagePosition, previousContentPageStart, terminalLayout, viewportFor } from '../src/viewport.ts'
 
 test('列表视口会把选中项保持在可见范围', () => {
   assert.deepEqual(keepIndexVisible(0, 100, 5, 0), { start: 0, end: 5 })
@@ -29,10 +29,19 @@ test('页面骨架按终端高度分配固定栏和正文视口', () => {
 })
 
 test('阅读页首行、当前页和总页数共用可见视口边界', () => {
-  assert.equal(clampContentLine(100, 100, 20), 80)
+  assert.equal(clampContentLine(100, 100, 20), 99)
   assert.equal(clampContentLine(-4, 100, 20), 0)
   assert.deepEqual(pagePosition(100, 100, 20), { current: 5, total: 5 })
   assert.deepEqual(pagePosition(0, 21, 20), { current: 1, total: 2 })
   assert.deepEqual(pagePosition(100, 101, 20), { current: 6, total: 6 })
   assert.deepEqual(pagePosition(0, 0, 20), { current: 1, total: 1 })
+})
+
+test('正文翻页以页首移动，最后一页不足视口时不回填上一页', () => {
+  assert.equal(lastContentPageStart(15, 10), 10)
+  assert.equal(contentPageStart(13, 15, 10), 10)
+  assert.equal(nextContentPageStart(0, 15, 10), 10)
+  assert.equal(nextContentPageStart(10, 15, 10), 10)
+  assert.equal(previousContentPageStart(10, 15, 10), 0)
+  assert.equal(lastContentPageStart(21, 20), 20)
 })

@@ -124,7 +124,11 @@ export function formatChapterContent(value: string, contentType: 'text' | 'html'
 
   for (const node of document.children) {
     if (isTag(node)) walk(node)
-    else if (node.type === 'text' && node.data.trim().length > 0) append({ kind: 'paragraph', text: collapseInlineWhitespace(node.data) })
+    // source-core formats HTML blocks into plain text before handing the
+    // content to the CLI, while retaining contentType='html'.  A top-level
+    // text node can therefore still carry intentional paragraph newlines;
+    // collapsing it as inline HTML whitespace joins adjacent paragraphs.
+    else if (node.type === 'text' && node.data.trim().length > 0) append({ kind: 'paragraph', text: node.data })
   }
   if (visited > MAX_NODES) append({ kind: 'paragraph', text: '[正文过长，后续结构已省略]' })
   return toFormattedContent(blocks)
