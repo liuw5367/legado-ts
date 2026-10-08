@@ -26,7 +26,7 @@ pnpm build:binary --source-dir ./fixtures/source/single --outfile ./dist/legado-
 ./dist/legado-reader
 ```
 
-`--source-dir` 会递归嵌入目录中的 `.json` 和 `.js` 文件；未配置 `--source` 或 `LEGADO_READER_SOURCE` 时，程序使用这些内置书源。外部来源优先于内置书源，书源冲突继续按现有规则处理。可以通过 `--target` 生成 Bun 支持的其他平台目标，例如 `bun-linux-x64`。书源文件在构建时复制进二进制，更新它们需要重新构建。
+`--source-dir` 会递归读取目录中的 `.json` 和 `.js` 文件，构建时以压缩资源嵌入；未配置 `--source` 或 `LEGADO_READER_SOURCE` 时，程序使用这些内置书源。外部来源优先于内置书源，书源冲突继续按现有规则处理。可以通过 `--target` 生成 Bun 支持的其他平台目标，例如 `bun-linux-x64`。更新内置书源需要重新构建。
 
 ## 功能边界
 

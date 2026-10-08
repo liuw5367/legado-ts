@@ -36,7 +36,7 @@ ReaderStorage <----------- ReaderApplication
 
 每个 `SourceEntry` 使用 `bookSourceUrl` 作为 sourceId，使用 `sourceDefinitionFingerprint` 区分定义版本。冲突来源不进入默认搜索队列。每个来源会话共享自己的 `NodeCookieStore` 和 `NodeNetworkHost`，但每次搜索、详情、目录或正文调用都新建 `SourceRequestHost`/`SourceRuleHost`；这两个 Node 门面分别组合网络/字符集能力和解析器/QuickJS 等能力，再委托给 source-core 运行时。同一 sourceId 由 `KeyedConcurrencyHost` 串行执行。
 
-单文件构建由仓库根目录的 `build:binary` 命令执行。构建脚本把指定目录的书源原文嵌入入口，运行时由 `embedded-sources.ts` 提供给 `SourceCatalog`；构建脚本同时把 QuickJS asyncify 的 WASM 资源嵌入二进制，并替换 Ink 的可选开发工具模块。内置来源只读，启用状态、优先级和阅读数据仍由 `ReaderStorage` 写入用户数据目录。
+单文件构建由仓库根目录的 `build:binary` 命令执行。构建脚本把指定目录的书源序列化并以 Brotli 资源嵌入二进制，启动时解压后由 `embedded-sources.ts` 提供给 `SourceCatalog`；构建默认启用代码压缩，并且只保留实际使用的 QuickJS release asyncify 变体，同时把它的 WASM 资源嵌入二进制，再替换 Ink 的可选开发工具模块。内置来源只读，启用状态、优先级和阅读数据仍由 `ReaderStorage` 写入用户数据目录。
 
 UI 使用同文件私有 `PageShell` 和 `CommandBar` 渲染所有页面：单行上下文、按终端高度分配的正文区和固定命令栏；输入、状态和快捷键共用一行命令槽。`viewport.ts` 统一处理终端最小尺寸、正文行数、分页与边界，`ui-model.ts` 将 Home/End 与 Ctrl+A/Ctrl+E 映射为首尾跳转；`source-order.ts` 将当前来源置顶并按搜索耗时稳定升序排列；`ui-actions.ts` 按终端显示宽度分栏省略放不下的低优先级动作并测量 Unicode 字素簇，避免快捷键拆分或光标落在宽字符内部；`action-menu.ts` 与 `action-menu-view.tsx` 固定四项动作、数字快捷键及禁用原因，但 `o` 只由首页和搜索结果接入，弹窗使用居中覆盖层保留底层页面。设置由 `reader-settings.ts` 校验并通过 `ReaderStorage` 写入 `reader-settings.json`，`ReaderApplication` 为搜索、换源搜索和书源检测分别创建 worker 上限。真实导航栈保留页面、焦点、筛选和视口状态，目录筛选单独维护当前阅读章节身份。搜索和换源搜索通过 `SearchUpdateListener` 将已返回候选逐次推送到 UI，`AbortController` 只改变任务状态，不直接销毁当前页面。
 

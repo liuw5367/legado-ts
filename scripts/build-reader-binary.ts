@@ -1,6 +1,8 @@
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
+import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
 
 const MAX_FILES = 256
 const MAX_BYTES = 4 * 1024 * 1024
@@ -35,11 +37,16 @@ interface BuildResult {
   logs: readonly { message?: unknown }[]
 }
 
+interface EmbeddedSourceBundle {
+  path?: string
+}
+
 declare const Bun: {
   build(options: {
     entrypoints: readonly string[]
     target: string
     compile: { outfile: string }
+    minify: boolean
     plugins: readonly { name: string; setup(build: BuildPluginApi): void }[]
   }): Promise<BuildResult>
   file(path: string): { text(): Promise<string> }
@@ -64,12 +71,14 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<nu
     const tempRoot = await mkdtemp(join(tmpdir(), 'legado-reader-binary-'))
     try {
       const entrypoint = join(tempRoot, 'entry.ts')
-      await writeFile(entrypoint, createEntrypoint(sources), 'utf8')
+      const sourceBundle = await writeEmbeddedSourceBundle(tempRoot, sources)
+      await writeFile(entrypoint, createEntrypoint(sourceBundle.path), 'utf8')
       const result = await Bun.build({
         entrypoints: [entrypoint],
         target: options.target ?? 'bun',
         compile: { outfile: options.outfile },
-        plugins: [quickJsWasmPlugin(), reactDevtoolsPlugin()],
+        minify: true,
+        plugins: [quickJsReleaseOnlyPlugin(), quickJsWasmPlugin(), reactDevtoolsPlugin()],
       })
       if (!result.success) throw new Error(result.logs.map((log) => String(log.message ?? log)).join('\n'))
     } finally {
@@ -155,19 +164,41 @@ async function collectSources(directory: string): Promise<EmbeddedSourceInput[]>
   return sources
 }
 
-function createEntrypoint(sources: readonly EmbeddedSourceInput[]): string {
+async function writeEmbeddedSourceBundle(tempRoot: string, sources: readonly EmbeddedSourceInput[]): Promise<EmbeddedSourceBundle> {
+  if (sources.length === 0) return {}
+  const payload = Buffer.from(JSON.stringify(sources), 'utf8')
+  const compressed = brotliCompressSync(payload, {
+    params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
+  })
+  const path = join(tempRoot, 'embedded-sources.br')
+  await writeFile(path, compressed)
+  process.stdout.write(`压缩内置书源：${payload.byteLength} -> ${compressed.byteLength} 字节\n`)
+  return { path }
+}
+
+function createEntrypoint(embeddedSourcePath?: string): string {
   const sourceModule = JSON.stringify(resolve('apps/reader-cli/src/embedded-sources.ts'))
   const mainModule = JSON.stringify(resolve('apps/reader-cli/src/index.tsx'))
-  const sourceLiteral = JSON.stringify(sources).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
-  return [
+  const lines = [
     `import { setEmbeddedSourceInputs } from ${sourceModule}`,
-    `setEmbeddedSourceInputs(${sourceLiteral})`,
-    "globalThis.__LEGADO_READER_MANUAL_ENTRY__ = true",
+  ]
+  if (embeddedSourcePath !== undefined) {
+    lines.push(
+      'import { brotliDecompressSync } from "node:zlib"',
+      `import embeddedSourcePath from ${JSON.stringify(embeddedSourcePath)} with { type: "file" }`,
+      'const embeddedSourceBytes = new Uint8Array(await Bun.file(embeddedSourcePath).arrayBuffer())',
+      'const embeddedSourceText = new TextDecoder().decode(brotliDecompressSync(embeddedSourceBytes))',
+      'setEmbeddedSourceInputs(JSON.parse(embeddedSourceText))',
+    )
+  }
+  lines.push(
+    'globalThis.__LEGADO_READER_MANUAL_ENTRY__ = true',
     `const { main } = await import(${mainModule})`,
     'const code = await main()',
     'if (code !== 0) process.exitCode = code',
     '',
-  ].join('\n')
+  )
+  return lines.join('\n')
 }
 
 function quickJsWasmPlugin() {
@@ -184,6 +215,32 @@ function quickJsWasmPlugin() {
       })
     },
   }
+}
+
+function quickJsReleaseOnlyPlugin() {
+  const nodeRequire = createRequire(import.meta.url)
+  const sourceNodeRoot = resolve('packages/source-node')
+  const quickJsRoot = resolvePackageRoot(nodeRequire, 'quickjs-emscripten', sourceNodeRoot)
+  const quickJsCoreRoot = resolvePackageRoot(nodeRequire, 'quickjs-emscripten-core', quickJsRoot)
+  const releaseAsyncRoot = resolvePackageRoot(nodeRequire, '@jitl/quickjs-wasmfile-release-asyncify', quickJsRoot)
+  const facade = [
+    `import { DefaultIntrinsics, newQuickJSAsyncWASMModuleFromVariant } from ${JSON.stringify(join(quickJsCoreRoot, 'dist/index.mjs'))}`,
+    `import RELEASE_ASYNC from ${JSON.stringify(join(releaseAsyncRoot, 'dist/index.mjs'))}`,
+    'export { DefaultIntrinsics }',
+    'export async function newAsyncContext(options) { return (await newQuickJSAsyncWASMModuleFromVariant(RELEASE_ASYNC)).newContext(options) }',
+    '',
+  ].join('\n')
+  return {
+    name: 'legado-release-only-quickjs',
+    setup(build: BuildPluginApi): void {
+      build.onResolve({ filter: /^quickjs-emscripten$/ }, () => ({ path: 'quickjs-emscripten', namespace: 'legado-quickjs' }))
+      build.onLoad({ filter: /^quickjs-emscripten$/, namespace: 'legado-quickjs' }, () => ({ contents: facade, loader: 'js' }))
+    },
+  }
+}
+
+function resolvePackageRoot(nodeRequire: ReturnType<typeof createRequire>, packageName: string, from: string): string {
+  return dirname(nodeRequire.resolve(`${packageName}/package.json`, { paths: [from] }))
 }
 
 function reactDevtoolsPlugin() {
