@@ -18,6 +18,9 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const cursor = input.cursor ?? { index: 0 }
   if (sourceString(input.source, 'mainJs') !== undefined) return javascriptTableOfContents(ports, input, diagnostics, trace)
   let book = cloneBookMetadata(input.book)
+  // Android WebBook.getChapterList removes stale type bits and reapplies the
+  // current BookSource type before evaluating declaration-based TOC rules.
+  book.type = androidBookType(undefined, input.source)
   const preUpdateJs = ruleString(input.source, 'ruleToc', 'preUpdateJs')
   if (input.runPerJs === true && preUpdateJs !== undefined) {
     const actionOptions = (signal: AbortSignal) => ({ signal, ...(input.budget === undefined ? {} : { budget: input.budget }) })

@@ -170,6 +170,41 @@ test('真实 JavaScript 目录规则通过 java.getElements 解析离线 HTML', 
   ])
 })
 
+test('声明式目录按当前书源类型准备 book 工作副本', async () => {
+  const source = {
+    bookSourceUrl: 'https://toc-type.test',
+    bookSourceName: 'TOC Type',
+    bookSourceType: 1,
+    ruleToc: {
+      chapterList: 'article',
+      chapterName: '@js:String(book.type)',
+      chapterUrl: 'href',
+    },
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => response(plan.url, '<article><a href="/chapter/1">章节</a></article>') },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://toc-type.test/book',
+    tocUrl: 'https://toc-type.test/toc',
+    name: '类型测试',
+    type: 8,
+    rawFields: {},
+    emptyFields: [],
+    fieldErrors: {},
+    traceRef: 'book:type',
+  }
+
+  const result = await loadTableOfContents(ports, { source, book })
+
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.title, '32')
+  assert.equal(result.value?.bookAfter?.type, 32)
+  assert.equal(book.type, 8)
+})
+
 test('详情 init 保留多节点内容供后续字段规则继续解析', async () => {
   const source = {
     bookSourceUrl: 'https://multi-init.test',
