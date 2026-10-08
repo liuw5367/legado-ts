@@ -233,6 +233,44 @@ test('bridge 的 ajaxAll 和 response 请求复用完整网络响应并保持顺
   assert.equal(skipFlags.at(-1), true)
 })
 
+test('bridge 的 ajaxAll 失败时等待所有兄弟请求收尾', async () => {
+  let releaseSlow!: () => void
+  const slowGate = new Promise<void>((resolve) => { releaseSlow = resolve })
+  let slowStarted = 0
+  let slowSettled = 0
+  let resolveAllSettled!: () => void
+  const allSettled = new Promise<void>((resolve) => { resolveAllSettled = resolve })
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    if (plan.url.endsWith('/fail')) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      throw new Error('batch failure')
+    }
+    slowStarted += 1
+    await Promise.race([
+      slowGate,
+      new Promise<void>((resolve) => plan.budget.signal?.addEventListener('abort', () => resolve(), { once: true })),
+    ])
+    slowSettled += 1
+    if (slowSettled === 2) resolveAllSettled()
+    return response(plan.url)
+  } } })
+
+  let failure: unknown
+  let settledAtReturn = 0
+  try {
+    await host.requestFromBridge({ kind: 'network-all', urls: ['https://fixture.invalid/slow-a', 'https://fixture.invalid/fail', 'https://fixture.invalid/slow-b'] }, new AbortController().signal, source)
+  } catch (error) {
+    failure = error
+  } finally {
+    settledAtReturn = slowSettled
+    releaseSlow()
+    await allSettled
+  }
+  assert.match(String(failure), /batch failure/u)
+  assert.equal(slowStarted, 2)
+  assert.equal(settledAtReturn, 2)
+})
+
 test('四个并发 bridge 根请求分别计算深度，不会互相触发嵌套限制', async () => {
   const calls: string[] = []
   const requestHost = new SourceRequestHost({ network: { request: async (plan) => {

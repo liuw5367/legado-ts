@@ -19,20 +19,38 @@ export interface SourceRequestHostOptions {
 const maxBridgeDepth = 3
 const maxAjaxAllConcurrency = 8
 
-async function mapConcurrent<T, R>(values: readonly T[], limit: number, signal: AbortSignal, task: (value: T) => Promise<R>): Promise<R[]> {
+async function mapConcurrent<T, R>(values: readonly T[], limit: number, signal: AbortSignal, task: (value: T, signal: AbortSignal) => Promise<R>): Promise<R[]> {
   const result = new Array<R>(values.length)
+  const localController = new AbortController()
+  const abortLocal = () => localController.abort()
+  if (signal.aborted) localController.abort()
+  else signal.addEventListener('abort', abortLocal, { once: true })
   let next = 0
+  let firstFailure: unknown
+  let hasFailure = false
   const worker = async (): Promise<void> => {
     while (true) {
-      if (signal.aborted) throw new DOMException('The operation was aborted', 'AbortError')
+      if (localController.signal.aborted) throw new DOMException('The operation was aborted', 'AbortError')
       const index = next
       next += 1
       if (index >= values.length) return
-      result[index] = await task(values[index]!)
+      try {
+        result[index] = await task(values[index]!, localController.signal)
+      } catch (error) {
+        if (!hasFailure) {
+          hasFailure = true
+          firstFailure = error
+        }
+        localController.abort()
+        throw error
+      }
     }
   }
   const workers = Math.min(limit, values.length)
-  await Promise.all(Array.from({ length: workers }, () => worker()))
+  await Promise.allSettled(Array.from({ length: workers }, () => worker()))
+  signal.removeEventListener('abort', abortLocal)
+  if (hasFailure) throw firstFailure
+  if (signal.aborted || localController.signal.aborted) throw new DOMException('The operation was aborted', 'AbortError')
   return result
 }
 
@@ -128,8 +146,8 @@ export class SourceRequestHost {
     const options = object(input.options) as SourceRequestOptions | undefined
     if (input.kind === 'network-all') {
       const urls = Array.isArray(input.urls) ? input.urls.map((value) => text(value)).filter((value) => value.length > 0) : []
-      return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url) => {
-        const response = await this.runtime.requestRaw(source, url, options ?? {}, signal, undefined, 'search', true, input.skipRateLimit === true, 'bridge')
+      return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url, batchSignal) => {
+        const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, undefined, 'search', true, input.skipRateLimit === true, 'bridge')
         return this.responseObject(response)
       }))
     }
