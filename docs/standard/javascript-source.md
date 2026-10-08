@@ -75,7 +75,7 @@ export interface JsLoginFunctions {
 
 ### 目录
 
-`getChapters` 返回数组。缺少 `title`/`url` 的项丢弃；相对 URL 相对 `book.tocUrl` 解析；卷节点在标题等于 URL 时保留占位语义；索引、书籍 URL 和 base URL 由运行时注入。
+`getChapters` 返回数组。缺少 `title`/`url` 的项丢弃；相对 URL 相对 `book.tocUrl` 解析；卷节点在标题等于 URL 时保留占位语义；索引、书籍 URL 和 base URL 由运行时注入。返回对象的 `tag`、`wordCount` 与 `updateTime` 分别映射到章节对应字段，不把 `tag` 当作更新时间。
 
 ### 正文和批量
 

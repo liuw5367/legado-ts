@@ -10,11 +10,11 @@
 
 搜索期间由规则写入的 `RuleData` 变量会随候选带回；精准重搜得到的新变量会覆盖同名旧变量并保留其他旧变量。TS 还将预更新脚本及其等待中的助手限制在 30 秒内；Android 助手的超时上限是 30 分钟，因此较慢的详情请求可能在 TS 提前取消。
 
-详情规则可以不配置书名、作者或简介。Android 仍会处理目录地址；目录地址规则缺失、为空或未返回有效值时，使用详情响应 URL，并把该响应正文作为 `tocHtml`。
+详情规则可以不配置书名、作者或简介。目录地址规则缺失或返回空值时，使用详情请求的 `baseUrl`（候选书籍的原始 `bookUrl`），并把当前响应正文作为 `tocHtml`；明确返回的相对目录地址按最终 `redirectUrl` 解析。实现对误返回 HTML 的目录地址保留响应地址回退兼容。
 
 ## 单页解析
 
-1. 创建 `AnalyzeRule(book, source)`，设置 body、baseUrl、redirectUrl；
+1. 在工作副本上按当前书源重设 `book.type`，再创建 `AnalyzeRule(book, source)`，设置 body、baseUrl、redirectUrl；
 2. 对 `chapterList` 执行 `getElements`；
 3. 对每个元素执行 `chapterName`、`chapterUrl`、`updateTime` 和 `isVolume`；
 4. 标题为空的节点直接丢弃，不执行该节点的 `isVip`/`isPay` 规则；标题非空时才继续解析 VIP 和购买标记；
@@ -109,7 +109,7 @@ BookChapter.equals/hashCode 只按 url 判断，因此 LinkedHashSet 不是按�
 
 ## JavaScript 源目录
 
-`getChapters` 必须返回数组。缺少 `title` 或 `url` 的项丢弃；普通 URL 相对 `book.tocUrl` 转绝对 URL；卷节点在 `isVolume=true` 且 URL 等于标题时保留占位 URL。最终注入 `bookUrl`、`baseUrl` 和 `index`。数组为空抛出目录为空错误。
+`getChapters` 必须返回数组。缺少 `title` 或 `url` 的项丢弃；普通 URL 相对 `book.tocUrl` 转绝对 URL；卷节点在 `isVolume=true` 且 URL 等于标题时保留占位 URL。最终注入 `bookUrl`、`baseUrl` 和 `index`，并分别保留返回对象中的 `tag`、`wordCount`、`updateTime` 字段。数组为空抛出目录为空错误。
 
 ## 空值和错误
 

@@ -111,7 +111,7 @@ export interface ContentResult {
 
 状态为 `created -> cache-check -> loading -> parsing -> paginating -> normalized -> validated -> saving/completed`。只有满足 Android 缓存读取条件的命中才直接 `completed`；needSave=false 跳过 cache read 和 saving，错误和取消不启动新保存；已完成提交如实记录，不能因后续取消否认已保存事件。文件源从详情返回下载链接，不强行进入 ContentResult。
 
-`nextChapterUrl` 未显式传入时，Android 查询下一索引 URL，再回退目录首章 URL。Web 调用方提供目录快照/保护 URL，核心不能直接查数据库。分页遇到下一章即停止。多 URL 分支使用 FlowExtensions.mapAsync，按输入 URL 顺序收集，不能按响应完成顺序合并；测试必须设置后页先返回，断言正文仍按输入顺序组成。
+`nextChapterUrl` 未显式传入时，Android 查询下一索引 URL，再回退目录首章 URL。TypeScript 核心不访问数据库；调用方必须从同一目录快照计算并传入保护 URL（CLI 已在应用层补齐），否则核心无法保证识别跨章分页。分页遇到下一章即停止。多 URL 分支使用 FlowExtensions.mapAsync，按输入 URL 顺序收集，不能按响应完成顺序合并；测试必须设置后页先返回，断言正文仍按输入顺序组成。
 
 正文归一化完成后，核心库返回 `content`、章节标题和 `imgUrl` 更新、音频歌词或视频弹幕附加数据、最终响应 URL、已访问分页 URL 以及诊断。`source-core` 不直接写文件或数据库，宿主通过正文存储端口提交结果；Android 的 `BookHelp.saveContent` 行为由适配器复现。`finalUrl` 是结果字段的一部分，不能只在说明文字中承诺。
 
