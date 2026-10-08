@@ -582,6 +582,37 @@ test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章
   assert.ok(requested.includes('https://format.test/from-info'))
 })
 
+test('formatJs 单章失败时保留原章节并维持目录成功状态', async () => {
+  const source = {
+    bookSourceUrl: 'https://format-error.test',
+    bookSourceName: 'Format Error',
+    ruleToc: {
+      chapterList: 'a',
+      chapterName: 'text',
+      chapterUrl: 'href',
+      formatJs: 'if (index === 1) throw new Error("格式化失败")',
+    },
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = {
+    network: { request: async (plan) => response(plan.url, '<a href="/chapter/1">原始标题</a>') },
+    rules: new SourceRuleHost(),
+  }
+  const book = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://format-error.test/book',
+    tocUrl: 'https://format-error.test/toc',
+    name: '书',
+    rawFields: {},
+    traceRef: 'book:format-error',
+    emptyFields: [],
+    fieldErrors: {},
+  }
+  const result = await loadTableOfContents(ports, { source, book })
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.title, '原始标题')
+  assert.equal(result.diagnostics.some((diagnostic) => diagnostic.field === 'formatJs' && diagnostic.code === 'item-skipped'), true)
+})
+
 test('声明式目录字段的 JavaScript 绑定按字段顺序渐进回写', async () => {
   const source = {
     bookSourceUrl: 'https://progressive.test',

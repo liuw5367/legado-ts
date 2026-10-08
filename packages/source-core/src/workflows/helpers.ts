@@ -596,5 +596,9 @@ export function statusFromDiagnostics(diagnostics: readonly WorkflowDiagnostic[]
   if (diagnostics.some((diagnostic) => diagnostic.code === 'cancelled')) return 'cancelled'
   if (diagnostics.some((diagnostic) => diagnostic.code === 'capability-missing')) return itemCount > 0 ? 'partial' : 'capability-missing'
   if (itemCount === 0) return diagnostics.some((diagnostic) => diagnostic.code === 'empty-page') ? 'empty' : 'failed'
-  return diagnostics.some((diagnostic) => diagnostic.code !== 'duplicate-item') ? 'partial' : 'success'
+  // Android BookChapterList logs a per-chapter formatJs exception and keeps
+  // that chapter unchanged. Keep the diagnostic for observability, but do not
+  // turn an otherwise valid directory into a partial result.
+  const hasBlockingDiagnostic = diagnostics.some((diagnostic) => diagnostic.code !== 'duplicate-item' && !(diagnostic.code === 'item-skipped' && diagnostic.field === 'formatJs'))
+  return hasBlockingDiagnostic ? 'partial' : 'success'
 }

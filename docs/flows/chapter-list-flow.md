@@ -89,7 +89,7 @@ export interface ChapterListResult {
 
 核心状态为 `created -> page-loading -> page-parsing -> collecting -> ordered -> completed`，应用提交在返回后单独进行。分页失败或取消不提交不完整目录。单 URL 分支以后只跟随首个下一页；多 URL 分支只收集这一批返回的章节，不递归展开每页新 URL。FlowExtensions.mapAsync 按发送 deferred 的输入顺序 await，后页先完成也不提前合并。
 
-提交前必须完成空标题过滤、URL 占位、VIP/购买标记、去重、编号和标题格式化。成功的 `TocPage` 还可带 `bookAfter`，表示 `preUpdateJs`、详情刷新和目录脚本实际使用后的书籍快照；失败或取消不发布半份快照。`reconcileTableOfContents` 会更新 `durChapterTitle`、`latestChapterTitle`、`lastCheckTime` 和 `totalChapterNum`；仅在 `totalChapterNum < list.size`（发现新章节）时更新 `lastCheckCount` 和 `latestChapterTime`；启用章节字数时，还要按索引与标题把已有章节的 `wordCount`、`variable`、`imgUrl` 合并回新列表。核心 reconcile 是纯函数，宿主负责把章节快照、`bookAfter` 与书籍 patch 放入同一写锁。任何一步失败都不能只保存统计字段而丢失章节列表的一致性。Android 应用还会用 `ContentProcessor` 的用户标题替换规则计算展示标题；source-core 没有应用数据库端口，因此 `bookPatch` 保留原始章节标题，具体应用可在提交前投影展示标题。
+提交前必须完成空标题过滤、URL 占位、VIP/购买标记、去重、编号和标题格式化。成功的 `TocPage` 还可带 `bookAfter`，表示 `preUpdateJs`、详情刷新和目录脚本实际使用后的书籍快照；失败或取消不发布半份快照。`formatJs` 单章异常按 Android `BookChapterList` 的行为保留原章节并记录诊断，不把整页降为 partial。`reconcileTableOfContents` 会更新 `durChapterTitle`、`latestChapterTitle`、`lastCheckTime` 和 `totalChapterNum`；仅在 `totalChapterNum < list.size`（发现新章节）时更新 `lastCheckCount` 和 `latestChapterTime`；启用章节字数时，还要按索引与标题把已有章节的 `wordCount`、`variable`、`imgUrl` 合并回新列表。核心 reconcile 是纯函数，宿主负责把章节快照、`bookAfter` 与书籍 patch 放入同一写锁。任何一步失败都不能只保存统计字段而丢失章节列表的一致性。Android 应用还会用 `ContentProcessor` 的用户标题替换规则计算展示标题；source-core 没有应用数据库端口，因此 `bookPatch` 保留原始章节标题，具体应用可在提交前投影展示标题。
 
 目录顺序的最小真值表如下，`P` 表示页面解析后收集的顺序：
 
