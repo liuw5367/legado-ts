@@ -8,6 +8,7 @@ import { ForgotPasswordPage } from './pages/forgot-password.tsx'
 import { LoginPage } from './pages/login.tsx'
 import { RegisterPage } from './pages/register.tsx'
 import { ResetPasswordPage } from './pages/reset-password.tsx'
+import { SearchPage } from './pages/search.tsx'
 
 function ProtectedRoute() {
   const { error, loading, session } = useAuth(); const location = useLocation()
@@ -22,7 +23,7 @@ const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/auth/confirm', element: <AuthConfirmPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
-  { element: <ProtectedRoute />, children: [{ element: <AccountLayout />, children: [{ index: true, element: <AccountHomePage /> }, { path: '/account/password', element: <ChangePasswordPage /> }] }] },
+  { element: <ProtectedRoute />, children: [{ element: <AccountLayout />, children: [{ index: true, element: <AccountHomePage /> }, { path: '/search', element: <SearchPage /> }, { path: '/account/password', element: <ChangePasswordPage /> }] }] },
   { path: '*', element: <Navigate to="/" replace /> },
 ])
 

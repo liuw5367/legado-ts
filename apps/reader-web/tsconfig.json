@@ -9,7 +9,9 @@
     "noEmit": true,
     "types": ["node", "react", "react-dom"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@legado/source-core": ["../../packages/source-core/src/index.ts"],
+      "@legado/source-node": ["../../packages/source-node/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "server/**/*.ts", "tests/**/*.ts", "rsbuild.config.ts", "server.ts", "env.d.ts"],

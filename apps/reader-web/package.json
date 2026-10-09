@@ -11,12 +11,18 @@
     "test": "node --test tests/*.test.ts",
     "test:e2e": "node --test tests/*.test.ts",
     "test:db": "node --test tests/db/*.test.ts",
+    "db:migrate": "tsx server/db/migrate.ts",
+    "db:generate": "drizzle-kit generate",
     "preview": "rsbuild preview"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",
+    "@legado/source-core": "workspace:*",
+    "@legado/source-node": "workspace:*",
     "@supabase/supabase-js": "^2.102.0",
+    "drizzle-orm": "^0.45.3",
     "hono": "^4.13.0",
+    "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router-dom": "^7.9.0",
@@ -28,6 +34,7 @@
     "@rsbuild/plugin-tailwindcss": "^2.0.3",
     "@types/react": "catalog:",
     "@types/react-dom": "^19.2.0",
+    "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4.1.0",
     "tsx": "^4.19.0"
   }

@@ -39,4 +39,17 @@ button { cursor: pointer; }
 .link { color: var(--primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 .nav-links { display: flex; gap: 1rem; align-items: center; }
+.page-stack { display: flex; flex-direction: column; gap: 1.25rem; }
+.page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.page-heading h1 { margin: .25rem 0 .5rem; font-size: clamp(1.75rem, 4vw, 2.4rem); letter-spacing: -.03em; }
+.eyebrow { margin: 0; color: var(--primary); font-size: .7rem; font-weight: 800; letter-spacing: .14em; }
+.search-form { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(10rem, 1fr) auto; align-items: end; gap: 1rem; }
+.field select { width: 100%; border: 1px solid var(--border); border-radius: .5rem; padding: .7rem .8rem; background: var(--card); color: var(--foreground); }
+.result-list { display: flex; flex-direction: column; gap: .75rem; }
+.result-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: .75rem; padding: 1rem 1.1rem; }
+.result-card h2 { margin: 0 0 .3rem; font-size: 1.05rem; }
+.result-card p { margin: .45rem 0 0; line-height: 1.55; }
+.small { font-size: .78rem; }
+.empty-state { border: 1px dashed var(--border); border-radius: .75rem; padding: 2rem; text-align: center; color: var(--muted); }
 @media (max-width: 600px) { .app-main { padding: 2rem 0; } .app-header { padding-inline: 1rem; } .nav-links { gap: .5rem; } }
+@media (max-width: 720px) { .search-form { grid-template-columns: 1fr; } .page-heading { flex-direction: column; } .result-card { flex-direction: column; } }
