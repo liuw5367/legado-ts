@@ -19,7 +19,7 @@ export interface ReaderRuntime {
   runSearchBatch(userId: string, searchId: string, options?: SearchBatchOptions): Promise<SearchBatchResult>
   runSearchBatchStream(userId: string, searchId: string, listener: SearchSourceListener, options?: SearchBatchOptions): Promise<SearchBatchResult>
   cancelSearch(userId: string, searchId: string): Promise<SearchRunState | null>
-  createBookFromSearch(userId: string, searchId: string, candidateIndex: number): Promise<{ book: StoredBook; edition: StoredEdition }>
+  createBookFromSearch(userId: string, searchId: string, candidateIndex: number, bookId?: string): Promise<{ book: StoredBook; edition: StoredEdition }>
   getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc>
   getOrLoadContent(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<StoredContent>
 }
@@ -32,7 +32,7 @@ export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime
     runSearchBatch: (userId, searchId, options) => runSearchBatch(repository, userId, searchId, options),
     runSearchBatchStream: (userId, searchId, listener, options) => runSearchBatchStream(repository, userId, searchId, listener, options),
     cancelSearch: (userId, searchId) => cancelSearch(repository, userId, searchId),
-    createBookFromSearch: (userId, searchId, candidateIndex) => createBookFromSearch(repository, userId, searchId, candidateIndex),
+    createBookFromSearch: (userId, searchId, candidateIndex, bookId) => createBookFromSearch(repository, userId, searchId, candidateIndex, bookId),
     getOrLoadToc: (userId, bookId, editionKey, refresh) => getOrLoadToc(repository, userId, bookId, editionKey, refresh),
     getOrLoadContent: (userId, bookId, editionKey, chapterId, refresh) => getOrLoadContent(repository, userId, bookId, editionKey, chapterId, refresh),
   }
@@ -51,6 +51,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
   if (run === null) throw new ReaderRuntimeError('not-found', '搜索任务不存在')
   const states = prepareSourceStates(run, options)
   if (run.status !== 'running' && options?.nextPage !== true) return { search: run, candidates: run.candidates, sourceResults: run.sourceStates, sourceStatus: toBatchStatus(run.status), progress: run.progress, diagnostics: [] }
+  const preservedCandidates = preserveCandidates(run, states, options)
   if (activeSearches.has(searchId)) throw new ReaderRuntimeError('source-busy', '该搜索正在执行')
   const operationId = randomUUID()
   const controller = new AbortController()
@@ -67,7 +68,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
         if (controller.signal.aborted) for (const state of states) if (state.status === 'pending' || state.status === 'running') { state.status = 'cancelled'; state.completedAt = new Date().toISOString() }
         const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'running')
         const nextStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'running' : aggregate
-        current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates: states.flatMap((item) => item.candidates), status: nextStatus, expectedOperationId: operationId, operationId, progress: { completed: completedCount(states), total: states.length }, cancelled: controller.signal.aborted })
+        current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates: [...preservedCandidates, ...states.flatMap((item) => item.candidates)], status: nextStatus, expectedOperationId: operationId, operationId, progress: { completed: completedCount(states), total: states.length }, cancelled: controller.signal.aborted })
         if (current === null) {
           if (controller.signal.aborted) return
           throw new ReaderRuntimeError('source-busy', '搜索操作已失效')
@@ -80,7 +81,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
     await Promise.all(outcomes)
     const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'success')
     const finalStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'partial' : aggregate
-    current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates: states.flatMap((item) => item.candidates), status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
+    current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates: [...preservedCandidates, ...states.flatMap((item) => item.candidates)], status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
     if (current === null) { const latest = await repository.getSearch(userId, searchId); if (latest !== null && latest.cancelled) return { search: latest, candidates: latest.candidates, sourceResults: latest.sourceStates, sourceStatus: 'cancelled', progress: latest.progress, diagnostics: [] }; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
     return { search: current, candidates: states.flatMap((item) => item.candidates), sourceResults: states, sourceStatus: toBatchStatus(finalStatus), progress: current.progress, diagnostics: states.flatMap((item) => item.diagnostics) }
   } finally {
@@ -122,13 +123,20 @@ function prepareSourceStates(run: SearchRunState, options?: SearchBatchOptions):
   return states
 }
 
+function preserveCandidates(run: SearchRunState, states: SourceSearchState[], options?: SearchBatchOptions): StoredCandidate[] {
+  if (options?.nextPage !== true) return []
+  const resetSources = new Set(states.filter((state) => state.status === 'pending').map((state) => state.sourceId))
+  return run.candidates.filter((candidate) => resetSources.has(candidate.sourceId))
+}
+
 function completedCount(states: SourceSearchState[]): number { return states.filter((state) => state.status !== 'pending' && state.status !== 'running').length }
 function aggregateStatus(states: SourceSearchState[], fallback: SearchRunState['status'] | 'running'): SearchRunState['status'] | 'running' | 'capability-missing' { if (states.some((state) => state.status === 'pending' || state.status === 'running')) return 'running'; if (states.every((state) => state.status === 'cancelled')) return 'cancelled'; const success = states.some((state) => state.status === 'success' || state.status === 'empty' || state.status === 'partial'); const failed = states.some((state) => state.status === 'failed' || state.status === 'capability-missing'); if (failed && success) return 'partial'; if (failed) return fallback === 'cancelled' ? 'cancelled' : states.some((state) => state.status === 'capability-missing') ? 'capability-missing' : 'failed'; if (states.flatMap((state) => state.candidates).length === 0) return 'empty'; return 'success' }
 function toBatchStatus(status: SearchRunState['status'] | 'running' | 'capability-missing'): SearchBatchResult['sourceStatus'] { return status === 'running' ? 'partial' : status }
 
-async function createBookFromSearch(repository: ReaderRepository, userId: string, searchId: string, candidateIndex: number): Promise<{ book: StoredBook; edition: StoredEdition }> {
+async function createBookFromSearch(repository: ReaderRepository, userId: string, searchId: string, candidateIndex: number, bookId?: string): Promise<{ book: StoredBook; edition: StoredEdition }> {
   const run = await repository.getSearch(userId, searchId)
   if (run === null) throw new ReaderRuntimeError('not-found', '搜索任务不存在')
+  if (bookId !== undefined && await repository.getBook(userId, bookId) === null) throw new ReaderRuntimeError('not-found', '目标书籍不存在')
   const stored = run.candidates[candidateIndex]
   if (stored === undefined) throw new ReaderRuntimeError('invalid-input', '搜索结果索引无效')
   const source = await requireSource(repository, stored.sourceId)
@@ -140,7 +148,7 @@ async function createBookFromSearch(repository: ReaderRepository, userId: string
     if (metadata === undefined) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '没有读取到书籍详情'))
     const candidate: BookCreationInput['candidate'] = stored
     const editionKey = digest(`${stored.sourceId}\u0000${metadata.bookUrl}\u0000${stored.sourceFingerprint}`)
-    return repository.createBook(userId, { candidate, metadata, editionKey, sourceFingerprint: stored.sourceFingerprint })
+    return repository.createBook(userId, { candidate, metadata, editionKey, sourceFingerprint: stored.sourceFingerprint, ...(bookId === undefined ? {} : { bookId }) })
   } finally {
     session.close()
   }

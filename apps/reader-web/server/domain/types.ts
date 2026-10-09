@@ -148,6 +148,23 @@ export interface SearchBatchResult {
 export interface BookCreationInput {
   candidate: StoredCandidate
   metadata: BookMetadata
+  bookId?: string
+}
+
+export type ThemeMode = 'system' | 'light' | 'dark'
+
+export interface ReaderSettings {
+  userId: string
+  theme: ThemeMode
+  fontSize: number
+  lineHeight: number
+  updatedAt: string
+}
+
+export const DEFAULT_READER_SETTINGS = {
+  theme: 'system' as ThemeMode,
+  fontSize: 18,
+  lineHeight: 1.9,
 }
 
 export interface RuntimeStateSnapshot {

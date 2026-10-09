@@ -33,6 +33,25 @@ test('memory repository keeps search and bookshelf data isolated by user', async
   assert.equal((await repository.getHome(userA)).searchHistory.length, 0)
 })
 
+test('memory repository keeps editions and settings scoped to a book and user', async () => {
+  const repository = new MemoryReaderRepository()
+  const userA = '00000000-0000-0000-0000-000000000001'
+  const userB = '00000000-0000-0000-0000-000000000002'
+  const first = await repository.createBook(userA, { candidate: { sourceId: 'source-a', sourceFingerprint: 'fp-a', candidate: { ...metadata, bookUrl: 'https://books.example.test/a' } }, metadata, editionKey: 'edition-a', sourceFingerprint: 'fp-a' })
+  const second = await repository.createBook(userA, { bookId: first.book.id, candidate: { sourceId: 'source-b', sourceFingerprint: 'fp-b', candidate: { ...metadata, bookUrl: 'https://books.example.test/b' } }, metadata: { ...metadata, bookUrl: 'https://books.example.test/b' }, editionKey: 'edition-b', sourceFingerprint: 'fp-b' })
+  assert.equal(second.book.id, first.book.id)
+  assert.equal((await repository.listEditions(userA, first.book.id)).length, 2)
+  assert.equal((await repository.listBooks(userA)).length, 1)
+  assert.equal((await repository.getHome(userA)).bookshelf.length, 1)
+  assert.equal((await repository.setActiveEdition(userA, first.book.id, 'edition-a'))?.editionKey, 'edition-a')
+  assert.equal((await repository.getBook(userA, first.book.id))?.activeEditionKey, 'edition-a')
+  assert.equal(await repository.getBook(userB, first.book.id), null)
+  assert.equal((await repository.getSettings(userA)).theme, 'system')
+  await repository.saveSettings(userA, { theme: 'dark', fontSize: 21, lineHeight: 2.1 })
+  assert.equal((await repository.getSettings(userA)).fontSize, 21)
+  assert.equal((await repository.getSettings(userB)).theme, 'system')
+})
+
 test('memory repository upserts content, toc, and reading position by user identity', async () => {
   const repository = new MemoryReaderRepository()
   const userId = '00000000-0000-0000-0000-000000000001'

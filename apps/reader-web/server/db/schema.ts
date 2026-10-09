@@ -14,6 +14,14 @@ export const sources = readerSchema.table('sources', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('sources_enabled_order_idx').on(table.enabled, table.customOrder)])
 
+export const readerSettings = readerSchema.table('reader_settings', {
+  userId: uuid('user_id').primaryKey(),
+  theme: text('theme').$type<'system' | 'light' | 'dark'>().notNull().default('system'),
+  fontSize: integer('font_size').notNull().default(18),
+  lineHeightUnits: integer('line_height_units').notNull().default(190),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const books = readerSchema.table('books', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull(),
@@ -136,6 +144,7 @@ export const sourceRuntimeState = readerSchema.table('source_runtime_state', {
 }, (table) => [uniqueIndex('source_runtime_user_source_idx').on(table.userId, table.sourceId, table.sourceFingerprint), index('source_runtime_lease_idx').on(table.leaseUntil)])
 
 export type SourceRow = typeof sources.$inferSelect
+export type ReaderSettingsRow = typeof readerSettings.$inferSelect
 export type BookRow = typeof books.$inferSelect
 export type BookshelfRow = typeof bookshelf.$inferSelect
 export type BookEditionRow = typeof bookEditions.$inferSelect

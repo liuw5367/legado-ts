@@ -45,6 +45,28 @@ app.get('/api/sources', async (context) => {
   }
 })
 
+app.get('/api/settings', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    return context.json({ settings: await dependencies.repository.getSettings(context.get('userId')) })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.put('/api/settings', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, settingsSchema)
+  if (body instanceof Response) return body
+  try {
+    return context.json({ settings: await dependencies.repository.saveSettings(context.get('userId'), body) })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
 app.post('/api/searches', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -112,7 +134,7 @@ app.post('/api/books', async (context) => {
   const body = await parseBody(context, createBookSchema)
   if (body instanceof Response) return body
   try {
-    const value = await dependencies.runtime.createBookFromSearch(context.get('userId'), body.searchId, body.candidateIndex)
+    const value = await dependencies.runtime.createBookFromSearch(context.get('userId'), body.searchId, body.candidateIndex, body.bookId)
     return context.json(value, 201)
   } catch (error) {
     return handleError(context, error)
@@ -124,6 +146,32 @@ app.get('/api/books', async (context) => {
   if (rejected !== undefined) return rejected
   try {
     return context.json({ books: await dependencies.repository.listBooks(context.get('userId')) })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.get('/api/books/:bookId/editions', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    const userId = context.get('userId')
+    const book = await dependencies.repository.getBook(userId, context.req.param('bookId'))
+    if (book === null) return context.json({ error: { code: 'not-found', message: '书籍不存在' } }, 404)
+    return context.json({ editions: await dependencies.repository.listEditions(userId, book.id), activeEditionKey: book.activeEditionKey })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.put('/api/books/:bookId/edition', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, activeEditionSchema)
+  if (body instanceof Response) return body
+  try {
+    const edition = await dependencies.repository.setActiveEdition(context.get('userId'), context.req.param('bookId'), body.editionKey)
+    return edition === null ? context.json({ error: { code: 'not-found', message: '书籍版本不存在' } }, 404) : context.json({ edition })
   } catch (error) {
     return handleError(context, error)
   }
@@ -245,7 +293,9 @@ export default app
 
 const searchInputSchema = z.object({ keyword: z.string().trim().min(1).max(200), sourceId: z.string().trim().min(1).max(500).optional(), sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), precision: z.boolean().optional() })
 const searchBatchSchema = z.object({ sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), nextPage: z.boolean().optional() }).default({})
-const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999) })
+const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999), bookId: z.string().uuid().optional() })
+const activeEditionSchema = z.object({ editionKey: z.string().min(1).max(128) })
+const settingsSchema = z.object({ theme: z.enum(['system', 'light', 'dark']).optional(), fontSize: z.number().int().min(15).max(28).optional(), lineHeight: z.number().min(1.4).max(2.6).optional() }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个设置项' })
 const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })
 
 async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: z.ZodType<T>, optional = false): Promise<T | Response> {
