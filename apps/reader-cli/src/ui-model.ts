@@ -23,20 +23,7 @@ export interface NavigationFrame {
   tocSearchActive?: boolean
   bookId?: string
   editionKey?: string
-}
-
-export function pushNavigationFrame(stack: readonly NavigationFrame[], frame: NavigationFrame): NavigationFrame[] {
-  if (stack.at(-1)?.page === frame.page && stack.at(-1)?.bookId === frame.bookId && stack.at(-1)?.editionKey === frame.editionKey) {
-    return [...stack.slice(0, -1), frame]
-  }
-  return [...stack, frame]
-}
-
-export function popNavigationFrame<T extends NavigationFrame>(stack: readonly T[], updatePrevious?: (frame: T) => T): T[] {
-  if (stack.length <= 1) return [...stack]
-  const next = stack.slice(0, -1)
-  if (updatePrevious !== undefined) next[next.length - 1] = updatePrevious(next.at(-1)!)
-  return next
+  navigationKey?: string
 }
 
 export function refreshOnHomeEntry(page: Page, refresh: () => Promise<void>, isCurrent: () => boolean): Promise<void> {

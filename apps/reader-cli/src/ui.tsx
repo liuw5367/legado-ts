@@ -29,8 +29,6 @@ import {
   navigationIndex,
   navigationPage,
   normalizeChapterTitle,
-  popNavigationFrame,
-  pushNavigationFrame,
   readerNavigation,
   refreshOnHomeEntry,
   restoreGroupSelection,
@@ -44,6 +42,7 @@ import {
   type Page,
   type SearchUiState,
 } from './ui-model.ts'
+import { currentNavigationFrame, findNavigationFrameIndex, navigateNavigationFrame, navigationFrameKey, navigationKey, navigationKeyForPage, navigationModeForPage, popNavigationFrame, popToNavigationFrame, previousNavigationFrame, updateNavigationFrames, type NavigationMode } from './navigation.ts'
 import { READER_SETTING_FIELDS, READER_SETTINGS_DEFAULTS, readerSettingRawValue, updateReaderSetting, type ReaderSettingField } from './reader-settings.ts'
 import { orderSourceViews } from './source-order.ts'
 import type { DebugCapture } from './debug-capture.ts'
@@ -76,6 +75,11 @@ interface NavigationSnapshot extends NavigationFrame {
   mappingTarget?: KnownSourceView
   mappingToc?: TocResult
   mappingIndex: number
+}
+
+interface PageNavigationOptions {
+  mode?: NavigationMode
+  key?: string
 }
 
 /** 展示层排序只变更章节数组的显示顺序，保留工作流索引、修订和章节身份。 */
@@ -188,6 +192,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
 
   const captureNavigationFrame = (framePage: Page): NavigationSnapshot => {
     const editionKey = toc?.edition.editionKey ?? activeEditionKey(book)
+    const existingNavigationKey = currentNavigationFrame(navigationRef.current)?.navigationKey
     return {
     page: framePage,
     selected,
@@ -216,6 +221,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     mappingIndex,
     ...(book === undefined ? {} : { bookId: book.book.bookId }),
     ...(editionKey === undefined ? {} : { editionKey }),
+    ...(existingNavigationKey === undefined ? {} : { navigationKey: existingNavigationKey }),
     }
   }
 
@@ -224,41 +230,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setMessageOwner(pageRef.current)
   }
 
-  const setPage = (next: Page): void => {
-    if (next === pageRef.current) return
-    const current = captureNavigationFrame(pageRef.current)
-    const stack = [...navigationRef.current]
-    stack[stack.length - 1] = current
-    const nextFrame: NavigationSnapshot = { ...current, page: next, selected: 0, listStart: 0, pageScroll: 0, ...(next === 'search' ? {} : { query }) }
-    navigationRef.current = pushNavigationFrame(stack, nextFrame) as NavigationSnapshot[]
-    pageRef.current = next
-    setMessageState('')
-    setMessageOwner(next)
-    setPageState(next)
-    setSelected(0)
-    setListStart(0)
-    setPageScroll(0)
-    if (next === 'settings') {
-      setSettingsSelected(0)
-      setSettingsStart(0)
-      setSettingsEditing(false)
-      setSettingsResetConfirm(false)
-    }
-  }
-
-  const goBack = (updatedBook?: OpenBookResult, updatedSources?: KnownSourceView[]): void => {
-    if (navigationRef.current.length <= 1) return
-    navigationRef.current = popNavigationFrame(navigationRef.current, (frame) => {
-      if (updatedBook === undefined) return frame
-      const editionKey = activeEditionKey(updatedBook)
-      const previous = { ...frame, book: updatedBook, sources: updatedSources ?? frame.sources, ...(editionKey === undefined ? {} : { editionKey }) }
-      if (editionKey === undefined) delete previous.editionKey
-      delete previous.toc
-      delete previous.content
-      delete previous.formattedContent
-      return previous
-    })
-    const previous = navigationRef.current.at(-1)!
+  const restoreNavigationFrame = (previous: NavigationSnapshot): void => {
     pageRef.current = previous.page
     setPageState(previous.page)
     setSelected(previous.selected)
@@ -291,6 +263,58 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setMenu(undefined)
     setMessageState('')
     setMessageOwner(previous.page)
+  }
+
+  const setPage = (next: Page, options: PageNavigationOptions = {}): void => {
+    const mode = options.mode ?? navigationModeForPage(next)
+    if (next === pageRef.current && mode === 'standard') return
+    const current = captureNavigationFrame(pageRef.current)
+    const stack = [...navigationRef.current]
+    stack[stack.length - 1] = current
+    const targetFrame: NavigationSnapshot = { ...current, page: next, selected: 0, listStart: 0, pageScroll: 0, ...(next === 'search' ? {} : { query }), navigationKey: options.key ?? navigationKeyForPage(next, { ...current, page: next }) }
+    const targetKey = targetFrame.navigationKey
+    const existingIndex = mode === 'singleTask' && targetKey !== undefined ? findNavigationFrameIndex(stack, targetKey, navigationFrameKey) : -1
+    const nextFrame = existingIndex >= 0 ? stack[existingIndex]! : targetFrame
+    navigationRef.current = navigateNavigationFrame(stack, nextFrame, { mode, key: targetKey ?? navigationKeyForPage(next, targetFrame), keyOf: navigationFrameKey })
+    const active = currentNavigationFrame(navigationRef.current)
+    if (active === undefined) return
+    if (existingIndex >= 0) {
+      restoreNavigationFrame(active)
+      return
+    }
+    pageRef.current = active.page
+    setMessageState('')
+    setMessageOwner(active.page)
+    setPageState(active.page)
+    setSelected(0)
+    setListStart(0)
+    setPageScroll(0)
+    if (active.page === 'settings') {
+      setSettingsSelected(0)
+      setSettingsStart(0)
+      setSettingsEditing(false)
+      setSettingsResetConfirm(false)
+    }
+  }
+
+  const goBack = (updatedBook?: OpenBookResult, updatedSources?: KnownSourceView[]): void => {
+    if (navigationRef.current.length <= 1) return
+    navigationRef.current = popNavigationFrame(navigationRef.current, (frame) => {
+      if (updatedBook === undefined) return frame
+      const editionKey = activeEditionKey(updatedBook)
+      const previous = { ...frame, book: updatedBook, sources: updatedSources ?? frame.sources, ...(editionKey === undefined ? {} : { editionKey }) }
+      if (editionKey === undefined) delete previous.editionKey
+      if (previous.page === 'reader') {
+        if (editionKey === undefined) delete previous.navigationKey
+        else previous.navigationKey = navigationKey('reader', updatedBook.book.bookId, editionKey)
+      }
+      delete previous.toc
+      delete previous.content
+      delete previous.formattedContent
+      return previous
+    })
+    const previous = currentNavigationFrame(navigationRef.current)
+    if (previous !== undefined) restoreNavigationFrame(previous)
   }
 
   const { operationRef, mountedRef, beginOperation, isCurrent, finishOperation, cancelOperation, cancelActiveSearch, cancelActiveSourceCheck } = useUiOperation({
@@ -331,7 +355,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setDebugRequestSelected(Math.max(0, capture.requests.length - 1))
     setDebugFilter('')
     setDebugFilterActive(false)
-    setPage('debug')
+    setPage('debug', { key: navigationKey('debug') })
     setMessage('已打开最近操作记录')
   }
 
@@ -391,7 +415,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     runner.setKeyword(keyword)
     setDebugKeyword(keyword)
     setDebugKeywordActive(false)
-    setPage('debug')
+    setPage('debug', { key: navigationKey('debug', runner.source.source.bookSourceUrl) })
     if (quickCheck) runDebugQuickCheck(runner, keyword)
     else runDebugSearch(runner, keyword)
   }
@@ -499,7 +523,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     const committedEdition = sourceCommitRef.current
     if (page !== 'reader' || book === undefined || toc === undefined || committedEdition !== toc.edition.editionKey) return
     const current = captureNavigationFrame('reader')
-    navigationRef.current = navigationRef.current.map((frame) => {
+    navigationRef.current = updateNavigationFrames(navigationRef.current, (frame) => {
       if (frame.bookId !== book.book.bookId) return frame
       const refreshed = { ...frame, book, sources }
       if (frame.page === 'reader' && frame.editionKey !== committedEdition) {
@@ -774,30 +798,32 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         try { setSources(await application.knownSources(currentBook.book.bookId)) }
         catch { partialCommit = true }
       }
-      const previousFrame = navigationRef.current.at(-2)
+      const previousFrame = previousNavigationFrame(navigationRef.current)
+      const readerKey = navigationKey('reader', currentBook.book.bookId, result.edition.editionKey)
+      const readerIndex = findNavigationFrameIndex(navigationRef.current, readerKey, navigationFrameKey)
       const returnToReader = pageRef.current === 'detail'
+        && readerIndex === navigationRef.current.length - 2
         && previousFrame?.page === 'reader'
         && previousFrame.bookId === currentBook.book.bookId
         && previousFrame.editionKey === result.edition.editionKey
-      if (returnToReader) {
-        goBack()
-        const restored = navigationRef.current.at(-1)
-        if (restored !== undefined) {
-          navigationRef.current[navigationRef.current.length - 1] = {
-            ...restored,
-            book: openedBook,
-            toc: currentToc,
-            content: formatted.text,
-            formattedContent: formatted,
-            chapterIndex: index,
-            readerLine: resumeLine,
-            tocSelected: index,
-            tocQuery: '',
-            tocSearchActive: false,
-            bookId: openedBook.book.bookId,
-            editionKey: result.edition.editionKey,
-          }
+      if (returnToReader && previousFrame !== undefined) {
+        const updatedReader: NavigationSnapshot = {
+          ...previousFrame,
+          book: openedBook,
+          toc: currentToc,
+          content: formatted.text,
+          formattedContent: formatted,
+          chapterIndex: index,
+          readerLine: resumeLine,
+          tocSelected: index,
+          tocQuery: '',
+          tocSearchActive: false,
+          bookId: openedBook.book.bookId,
+          editionKey: result.edition.editionKey,
+          navigationKey: readerKey,
         }
+        navigationRef.current = popToNavigationFrame(navigationRef.current, readerKey, navigationFrameKey, () => updatedReader)
+        restoreNavigationFrame(updatedReader)
       }
       setBook(openedBook)
       setToc(currentToc)
@@ -927,7 +953,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const startReading = async (bookOverride?: OpenBookResult): Promise<void> => {
     const currentBook = bookOverride ?? book
     if (currentBook === undefined) return
-    const previousFrame = pageRef.current === 'detail' ? navigationRef.current.at(-2) : undefined
+    const previousFrame = pageRef.current === 'detail' ? previousNavigationFrame(navigationRef.current) : undefined
     const loaded = await loadToc(undefined, currentBook, false)
     if (loaded === undefined) return
     const saved = currentBook.reading?.positions[loaded.edition.editionKey]
@@ -1402,7 +1428,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
             try { updatedSources = await application.knownSources(book.book.bookId) }
             catch { /* The active book can still be shown; a later visit will reload source status. */ }
             if (!isCurrent(operation)) return
-            if (navigationRef.current.at(-2)?.page === 'detail') {
+            if (previousNavigationFrame(navigationRef.current)?.page === 'detail') {
               goBack(opened, updatedSources)
               setMessage('书源已切换')
             } else {
@@ -1427,7 +1453,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       void application.switchSource(book.book.bookId, mappingTarget.editionKey, operation.controller.signal).then((opened) => {
         if (!isCurrent(operation)) return
         setBook(opened)
-        if (mappingToc !== undefined) { setToc(mappingToc); setChapterIndex(mappingIndex); setTocSelected(mappingIndex); setTocQuery(''); setTocSearchActive(false); setPage('toc') } else { setToc(undefined); setPage('detail') }
+        if (mappingToc !== undefined) { setToc(mappingToc); setChapterIndex(mappingIndex); setTocSelected(mappingIndex); setTocQuery(''); setTocSearchActive(false); setPage('toc', { mode: 'replace' }) } else { setToc(undefined); setPage('detail', { mode: 'replace' }) }
         setMessage('书源已切换，请从目标目录继续阅读')
       }).catch((error: unknown) => {
         if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))

@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer, footerLayout, formatDuration, helpLines, homeAreaLabel, navigationIndex, navigationPage, normalizeChapterTitle, popNavigationFrame, previousPage, pushNavigationFrame, readerNavigation, refreshOnHomeEntry, searchHeaderStatus } from '../src/ui-model.ts'
+import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer, footerLayout, formatDuration, helpLines, homeAreaLabel, navigationIndex, navigationPage, normalizeChapterTitle, previousPage, readerNavigation, refreshOnHomeEntry, searchHeaderStatus } from '../src/ui-model.ts'
 import { layoutContextLine, terminalWidth } from '../src/ui-actions.ts'
-import type { NavigationFrame } from '../src/ui-model.ts'
 
 test('界面模型保持列表导航在有效范围内', () => {
   assert.equal(navigationIndex(0, 0, 'j', { downArrow: true }, 4), 0)
@@ -50,25 +49,11 @@ test('返回首页时刷新当前数据，其他页面和已过期的进入请�
   assert.equal(refreshCalls, 1)
 })
 
-test('目录标题按 NFKC 和大小写不敏感匹配，导航栈按最近进入顺序返回', () => {
+test('目录标题按 NFKC 和大小写不敏感匹配', () => {
   assert.deepEqual(filterChapterIndices([{ title: 'ＣＨAPTER １' }, { title: '第一章 开始' }, { title: 'chapter 2' }], 'chapter 1'), [0])
   assert.deepEqual(filterChapterIndices([{ title: '第一章 开始' }, { title: '第二章 结束' }], '章节'), [])
   assert.equal(chapterIndexForSelection([{ title: '第一章' }, { title: '第二章' }, { title: '第三章' }], '第三', 0), 2)
   assert.equal(detailLineCount(undefined, 80), 8)
-  const home = { page: 'home' as const, selected: 2, listStart: 1, pageScroll: 0, homeArea: 1, query: '', readerLine: 0 }
-  const search = { ...home, page: 'search' as const }
-  const results = { ...search, page: 'results' as const }
-  const stack = pushNavigationFrame(pushNavigationFrame([home], search), results)
-  assert.equal(popNavigationFrame(stack).at(-1)?.page, 'search')
-  assert.equal(popNavigationFrame(popNavigationFrame(stack)).at(-1)?.page, 'home')
-  // 阅读页帧比 NavigationFrame 多带 toc；显式写 `| undefined` 才能在 exactOptionalPropertyTypes 下清空它。
-  type RefreshableFrame = NavigationFrame & { bookId: string; editionKey: string; toc?: string | undefined }
-  const detail: RefreshableFrame = { ...home, page: 'detail' as const, bookId: 'book', editionKey: 'old', toc: 'old-toc' }
-  const sources: RefreshableFrame = { ...detail, page: 'sources' as const }
-  const refreshedDetail = popNavigationFrame([detail, sources], (frame) => ({ ...frame, editionKey: 'new', toc: undefined }))
-  assert.equal(refreshedDetail.at(-1)?.page, 'detail')
-  assert.equal(refreshedDetail.at(-1)?.editionKey, 'new')
-  assert.equal(refreshedDetail.at(-1)?.toc, undefined)
 })
 
 test('阅读页帮助保留翻页和章节切换键位，底部省略这两项', () => {
