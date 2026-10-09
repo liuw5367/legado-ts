@@ -12,7 +12,7 @@ pnpm --filter @legado/reader-web db:migrate
 
 新增迁移后重新执行一次 `db:migrate`，不要在每次 Web 部署时自动运行迁移。
 
-`READER_SOURCES_JSON` 是部署者维护的书源数组，所有用户共享书源定义；用户的搜索、书架、目录缓存、阅读位置以及书源 Cookie/脚本变量按 Supabase 用户 ID 隔离。`SOURCE_RUNTIME_STATE_KEY` 至少使用 32 个字符的随机服务端密钥（例如 `openssl rand -base64 32` 的结果），用于 AES-256-GCM 加密书源运行状态；轮换该密钥会使旧 Cookie 和脚本变量失效。不要把数据库密码、Cookie 或运行状态密钥放入前端环境变量。
+`fixtures/source/` 是部署者维护的共享书源目录，Web 会按 CLI 的目录规则递归读取 `.json` 和 `.js` 文件，解析集合文件、跳过符号链接、限制文件数量/大小，并过滤无效与冲突书源；Vercel 函数通过 `vercel.json` 的 `includeFiles` 将该目录随服务端一起打包。需要临时使用其他目录时，可设置服务端变量 `READER_SOURCES_DIR`。用户的搜索、书架、目录缓存、阅读位置以及书源 Cookie/脚本变量按 Supabase 用户 ID 隔离。`SOURCE_RUNTIME_STATE_KEY` 至少使用 32 个字符的随机服务端密钥（例如 `openssl rand -base64 32` 的结果），用于 AES-256-GCM 加密书源运行状态；轮换该密钥会使旧 Cookie 和脚本变量失效。不要把数据库密码、Cookie 或运行状态密钥放入前端环境变量。
 
 阅读设置页提供跟随系统、浅色和夜间三种页面模式，以及字号和行距。设置保存在当前账号，书籍的每个书源版本也分别保存目录和阅读位置。搜索结果可以选择新建书籍，或追加到已有书籍作为新的来源版本。
 
@@ -45,7 +45,6 @@ Vercel 项目必须把仓库根目录作为 Project Root。根目录的 `vercel.
 | `SUPABASE_URL` | Hono 函数校验登录令牌 |
 | `SUPABASE_PUBLISHABLE_KEY` | Hono 函数校验登录令牌 |
 | `DATABASE_URL` | Supabase Postgres 连接串 |
-| `READER_SOURCES_JSON` | 部署者维护、所有用户共享的书源 JSON 数组 |
 | `SOURCE_RUNTIME_STATE_KEY` | 服务端加密每用户书源 Cookie/脚本变量的密钥，至少 32 个字符 |
 
 第一次部署前，在目标 Supabase 数据库执行迁移；Vercel 构建不会自动修改数据库：
@@ -62,7 +61,7 @@ Supabase Auth 的 Site URL 和 Redirect URL 需要包含部署域名。注册确
 pnpm run build:web:vercel
 ```
 
-该命令会生成 `public/index.html` 和 `public/static/`，部署配置会把 `/api/*` 交给 Hono，把其他前端深链回退到 `index.html`。搜索流式响应启用 60 秒函数上限和请求取消支持；如书源响应可能超过此时长，需要后续把搜索任务拆为后台队列。
+该命令会生成 `public/index.html` 和 `public/static/`，并让 Vercel 函数携带 `fixtures/source/`；部署配置会把 `/api/*` 交给 Hono，把其他前端深链回退到 `index.html`。搜索流式响应启用 60 秒函数上限和请求取消支持；如书源响应可能超过此时长，需要后续把搜索任务拆为后台队列。
 
 ## 检查
 

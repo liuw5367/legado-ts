@@ -6,6 +6,8 @@ import { bookEditions, books, bookshelf, chapterContents, readerSettings, readin
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type ThemeMode, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
 
+const SOURCE_UPSERT_BATCH_SIZE = 100
+
 export interface StoredSourceRecord extends SourceSummary {
   rawSource: unknown
   normalizedSource: NormalizedSource
@@ -23,7 +25,7 @@ export interface SourceRuntimeLease extends SourceRuntimeStateRecord {
 }
 
 export interface ReaderRepository {
-  upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource }>): Promise<void>
+  upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource; enabled?: boolean; customOrder?: number }>): Promise<void>
   listSources(): Promise<StoredSourceRecord[]>
   getSource(sourceId: string): Promise<StoredSourceRecord | null>
   acquireSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, leaseMs: number): Promise<SourceRuntimeLease | null>
@@ -54,11 +56,12 @@ export interface ReaderRepository {
 }
 
 export class PostgresReaderRepository implements ReaderRepository {
-  public async upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource }>): Promise<void> {
+  public async upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource; enabled?: boolean; customOrder?: number }>): Promise<void> {
     if (records.length === 0) return
     await withReaderDb(async (database) => {
-      for (const record of records) {
-        await database.insert(sources).values({ sourceId: record.sourceId, fingerprint: record.fingerprint, rawSource: record.rawSource, normalizedSource: record.normalizedSource, enabled: true }).onConflictDoUpdate({ target: sources.sourceId, set: { fingerprint: record.fingerprint, rawSource: record.rawSource, normalizedSource: record.normalizedSource, enabled: true, updatedAt: new Date() } })
+      for (let index = 0; index < records.length; index += SOURCE_UPSERT_BATCH_SIZE) {
+        const batch = records.slice(index, index + SOURCE_UPSERT_BATCH_SIZE).map((record) => ({ sourceId: record.sourceId, fingerprint: record.fingerprint, rawSource: record.rawSource, normalizedSource: record.normalizedSource, enabled: record.enabled ?? true, customOrder: record.customOrder ?? 0 }))
+        await database.insert(sources).values(batch).onConflictDoUpdate({ target: sources.sourceId, set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), updatedAt: new Date() } })
       }
     })
   }
@@ -408,7 +411,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   private readonly settings = new Map<string, ReaderSettings>()
 
   public constructor(sourcesToSeed: StoredSourceRecord[] = []) { for (const source of sourcesToSeed) this.sourceMap.set(source.sourceId, source) }
-  public async upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource }>): Promise<void> { for (const record of records) this.sourceMap.set(record.sourceId, { sourceId: record.sourceId, name: record.normalizedSource.bookSourceName, ...(typeof record.normalizedSource.bookSourceGroup === 'string' ? { group: record.normalizedSource.bookSourceGroup } : {}), fingerprint: record.fingerprint, enabled: true, rawSource: record.rawSource, normalizedSource: record.normalizedSource }) }
+  public async upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource; enabled?: boolean; customOrder?: number }>): Promise<void> { for (const record of records) this.sourceMap.set(record.sourceId, { sourceId: record.sourceId, name: record.normalizedSource.bookSourceName, ...(typeof record.normalizedSource.bookSourceGroup === 'string' ? { group: record.normalizedSource.bookSourceGroup } : {}), fingerprint: record.fingerprint, enabled: record.enabled ?? true, rawSource: record.rawSource, normalizedSource: record.normalizedSource }) }
   public async listSources(): Promise<StoredSourceRecord[]> { return [...this.sourceMap.values()].filter((source) => source.enabled) }
   public async getSource(sourceId: string): Promise<StoredSourceRecord | null> { const source = this.sourceMap.get(sourceId); return source?.enabled === true ? source : null }
   public async acquireSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, leaseMs: number): Promise<SourceRuntimeLease | null> { const key = runtimeStateKey(userId, sourceId, sourceFingerprint); const now = Date.now(); const current = this.runtimeStates.get(key); if (current !== undefined && current.leaseToken !== null && (current.leaseUntil ?? 0) > now) return null; const next = current ?? { snapshot: {}, version: 0, leaseToken: null, leaseUntil: null }; next.leaseToken = leaseToken; next.leaseUntil = now + Math.max(1_000, leaseMs); this.runtimeStates.set(key, next); return { sourceId, sourceFingerprint, snapshot: cloneRuntimeSnapshot(next.snapshot), version: next.version, leaseToken } }

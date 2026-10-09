@@ -6,7 +6,8 @@
   "functions": {
     "server.ts": {
       "maxDuration": 60,
-      "supportsCancellation": true
+      "supportsCancellation": true,
+      "includeFiles": ["fixtures/source/**/*"]
     }
   },
   "headers": [

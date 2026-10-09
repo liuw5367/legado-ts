@@ -1,8 +1,6 @@
-import { lstat, readdir, readFile } from 'node:fs/promises'
-import { basename, extname, join, resolve } from 'node:path'
 import { importSources, sourceDefinitionFingerprint } from '@legado/source-core'
 import type { ImportCandidate, ImportReader, NormalizedSource } from '@legado/source-core'
-import { NodeNetworkHost } from '@legado/source-node'
+import { NodeNetworkHost, readSourcePath } from '@legado/source-node'
 import { createRequestPlan } from '@legado/source-core'
 import { ReaderStorage } from './storage.ts'
 import { applySourceState, sourceStateDefaults } from './source-policy.ts'
@@ -66,13 +64,9 @@ export async function loadSourceCatalog(input: string | undefined, options: Sour
       }
     }
   } else {
-    const path = resolve(location)
-    const info = await lstat(path).catch(() => undefined)
-    if (info === undefined) diagnostics.push(`书源路径不存在：${path}`)
-    else if (info.isSymbolicLink()) diagnostics.push(`拒绝读取符号链接：${path}`)
-    else if (info.isDirectory()) await collectDirectory(path, texts, diagnostics, maxFiles, maxBytes)
-    else if (info.isFile()) await collectFile(path, texts, diagnostics, maxBytes)
-    else diagnostics.push(`书源路径不是普通文件或目录：${path}`)
+    const result = await readSourcePath(location, { maxFiles, maxBytes })
+    texts.push(...result.inputs)
+    diagnostics.push(...result.diagnostics)
   }
   const entries: SourceEntry[] = []
   const savedStates = storage === undefined ? {} : await storage.getSourceStates()
@@ -80,7 +74,7 @@ export async function loadSourceCatalog(input: string | undefined, options: Sour
     const candidates = await importSources({ kind: 'text', text: item.text, origin: { kind: 'file', location: item.location } }, { limits: { maxCandidates: 1000, maxBytes } })
     for (const candidate of candidates) {
       if (candidate.source === undefined) {
-        diagnostics.push(`${basename(item.location)}：${candidate.error?.message ?? '无效书源'}`)
+        diagnostics.push(`${item.location.split(/[\\/]/u).at(-1) ?? item.location}：${candidate.error?.message ?? '无效书源'}`)
         continue
       }
       const source = candidate.source
@@ -123,34 +117,6 @@ function markConflicts(entries: SourceEntry[]): void {
       entry.state = 'conflict'
       entry.reason = '同一 sourceId 存在不同书源定义'
     }
-  }
-}
-
-async function collectDirectory(path: string, texts: Array<{ text: string; location: string }>, diagnostics: string[], maxFiles: number, maxBytes: number): Promise<void> {
-  const files: string[] = []
-  async function visit(directory: string): Promise<void> {
-    if (files.length >= maxFiles) return
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => [])
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (files.length >= maxFiles) break
-      const child = join(directory, entry.name)
-      if (entry.isSymbolicLink()) continue
-      if (entry.isDirectory()) await visit(child)
-      else if (entry.isFile() && ['.json', '.js'].includes(extname(entry.name).toLowerCase())) files.push(child)
-    }
-  }
-  await visit(path)
-  if (files.length >= maxFiles) diagnostics.push(`书源目录达到文件上限 ${maxFiles}，其余文件未读取`)
-  for (const file of files) await collectFile(file, texts, diagnostics, maxBytes)
-}
-
-async function collectFile(path: string, texts: Array<{ text: string; location: string }>, diagnostics: string[], maxBytes: number): Promise<void> {
-  try {
-    const text = await readFile(path, 'utf8')
-    if (new TextEncoder().encode(text).byteLength > maxBytes) diagnostics.push(`书源文件超过 ${maxBytes} 字节：${path}`)
-    else texts.push({ text, location: path })
-  } catch (error) {
-    diagnostics.push(`书源文件读取失败：${path}，${message(error)}`)
   }
 }
 

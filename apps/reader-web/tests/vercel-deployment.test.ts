@@ -14,14 +14,14 @@ test('Vercel 配置保留 Hono API、SPA 深链和流式请求约束', async () 
   const config = JSON.parse(configSource) as {
     framework?: string
     buildCommand?: string
-    functions?: Record<string, { maxDuration?: number; supportsCancellation?: boolean }>
+    functions?: Record<string, { maxDuration?: number; supportsCancellation?: boolean; includeFiles?: string[] }>
     headers?: Array<{ source?: string; headers?: Array<{ key?: string; value?: string }> }>
     rewrites?: Array<{ source?: string; destination?: string }>
   }
 
   assert.equal(config.framework, 'hono')
   assert.equal(config.buildCommand, 'pnpm run build:web:vercel')
-  assert.deepEqual(config.functions?.['server.ts'], { maxDuration: 60, supportsCancellation: true })
+  assert.deepEqual(config.functions?.['server.ts'], { maxDuration: 60, supportsCancellation: true, includeFiles: ['fixtures/source/**/*'] })
   assert.match(entrySource, /from ['"]hono['"]/u)
   assert.match(buildScriptSource, /apps\/reader-web\/dist/u)
   assert.match(buildScriptSource, /public/u)
