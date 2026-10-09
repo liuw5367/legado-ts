@@ -5,6 +5,7 @@ import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { PostgresReaderRepository, type ReaderRepository } from './db/repository.ts'
 import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
+import { serveReaderAsset } from './static.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -284,6 +285,12 @@ app.post('/api/books/:bookId/position', async (context) => {
   } catch (error) {
     return handleError(context, error)
   }
+})
+
+app.on(['GET', 'HEAD'], '*', async (context, next) => {
+  const response = await serveReaderAsset(context.req.path, context.req.method)
+  if (response !== undefined) return response
+  await next()
 })
 
 app.notFound((context) => context.req.path.startsWith('/api/')

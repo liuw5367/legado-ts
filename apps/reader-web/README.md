@@ -61,7 +61,7 @@ Supabase Auth 的 Site URL 和 Redirect URL 需要包含部署域名。注册确
 pnpm run build:web:vercel
 ```
 
-该命令会生成 `public/index.html` 和 `public/static/`，并让 Vercel 函数携带 `fixtures/source/`；部署配置会把 `/api/*` 交给 Hono，把其他前端深链回退到 `index.html`。搜索流式响应启用 60 秒函数上限和请求取消支持；如书源响应可能超过此时长，需要后续把搜索任务拆为后台队列。
+该命令会生成 `public/index.html` 和 `public/static/`，并让 Vercel 函数携带 `fixtures/source/` 与前端产物；Hono 函数会在静态文件清单不可用时回退提供这些文件。部署配置会把 `/api/*` 交给 Hono，把其他前端深链回退到 `index.html`。搜索流式响应启用 60 秒函数上限和请求取消支持；如书源响应可能超过此时长，需要后续把搜索任务拆为后台队列。
 
 ## 检查
 
