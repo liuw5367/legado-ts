@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { PostgresReaderRepository, type ReaderRepository } from './db/repository.ts'
-import { createReaderRuntime, ReaderRuntimeError, type ReaderRuntime } from './runtime/reader-runtime.ts'
+import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime } from './runtime/reader-runtime.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -124,6 +124,61 @@ app.get('/api/books', async (context) => {
   }
 })
 
+app.get('/api/home', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    return context.json(await dependencies.repository.getHome(context.get('userId')))
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.put('/api/books/:bookId/bookshelf', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    await dependencies.repository.addToBookshelf(context.get('userId'), context.req.param('bookId'))
+    return context.json({ ok: true })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.delete('/api/books/:bookId/bookshelf', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    await dependencies.repository.removeFromBookshelf(context.get('userId'), context.req.param('bookId'))
+    return context.json({ ok: true })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.get('/api/books/:bookId/position', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const editionKey = context.req.query('editionKey')
+  if (editionKey === undefined || editionKey.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
+  try {
+    return context.json({ position: await dependencies.repository.getPosition(context.get('userId'), context.req.param('bookId'), editionKey) })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.delete('/api/search-history/:historyId', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    const removed = await dependencies.repository.deleteSearchHistory(context.get('userId'), context.req.param('historyId'))
+    return removed ? context.json({ ok: true }) : context.json({ error: { code: 'not-found', message: '搜索记录不存在' } }, 404)
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
 app.get('/api/books/:bookId/toc', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -131,7 +186,7 @@ app.get('/api/books/:bookId/toc', async (context) => {
   if (editionKey === undefined || editionKey.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
   try {
     const toc = await dependencies.runtime.getOrLoadToc(context.get('userId'), context.req.param('bookId'), editionKey, context.req.query('refresh') === 'true')
-    return context.json({ toc })
+    return context.json({ toc: { ...toc, chapters: toc.chapters.map((chapter) => ({ ...chapter, chapterId: chapterIdFor(chapter) })) } })
   } catch (error) {
     return handleError(context, error)
   }
@@ -144,7 +199,9 @@ app.get('/api/books/:bookId/chapters/:chapterId', async (context) => {
   if (editionKey === undefined || editionKey.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
   try {
     const content = await dependencies.runtime.getOrLoadContent(context.get('userId'), context.req.param('bookId'), editionKey, context.req.param('chapterId'), context.req.query('refresh') === 'true')
-    return context.json({ content })
+    const toc = await dependencies.repository.getToc(context.get('userId'), context.req.param('bookId'), editionKey)
+    const title = toc?.chapters.find((chapter) => chapterIdFor(chapter) === context.req.param('chapterId'))?.title
+    return context.json({ content: { ...content, content: { ...content.content, chapter: { ...content.content.chapter, ...(title === undefined ? {} : { title }) } } } })
   } catch (error) {
     return handleError(context, error)
   }
@@ -183,7 +240,7 @@ export default app
 
 const searchInputSchema = z.object({ keyword: z.string().trim().min(1).max(200), sourceId: z.string().trim().min(1).max(500).optional(), precision: z.boolean().optional() })
 const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999) })
-const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().url().max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })
+const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })
 
 async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: z.ZodType<T>): Promise<T | Response> {
   try {

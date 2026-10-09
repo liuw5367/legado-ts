@@ -3,6 +3,14 @@ import { currentSession } from './auth.ts'
 export interface ApiSource { sourceId: string; name: string; group?: string; fingerprint: string; enabled: boolean }
 export interface ApiCandidate { sourceId: string; sourceFingerprint: string; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string } }
 export interface ApiSearch { id: string; keyword: string; sourceId: string; status: string; candidates: ApiCandidate[]; nextCursor?: { index: number; token?: string } }
+export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
+export interface ApiEdition { id: string; userId: string; bookId: string; editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; metadata: Record<string, unknown> }
+export interface ApiPosition { userId: string; bookId: string; editionKey: string; chapterId: string; chapterUrl: string; chapterIndex: number; title: string; tocRevision?: string; paragraphIndex: number; offset: number; version: number; lastReadAt: string }
+export interface ApiHistory { id: string; searchId: string; keyword: string; sourceIds: string[]; status: string; resultCount: number; summary?: string; createdAt: string; updatedAt: string }
+export interface ApiHome { bookshelf: Array<{ book: ApiBook; edition: ApiEdition; position?: ApiPosition }>; reading: Array<{ book: ApiBook; edition: ApiEdition; position: ApiPosition }>; searchHistory: ApiHistory[] }
+export interface ApiChapter { chapterId: string; sourceId: string; bookUrl: string; chapterUrl: string; index: number; title: string; url?: string; isVolume?: boolean; isVip?: boolean; isPay?: boolean }
+export interface ApiToc { userId: string; bookId: string; editionKey: string; sourceFingerprint: string; revision: string; chapters: ApiChapter[]; bookPatch: Record<string, unknown>; bookAfter?: Record<string, unknown> }
+export interface ApiContent { chapter: ApiChapter; contentType: 'text' | 'html'; raw: string; cleaned: string; pages: string[]; resources: Array<{ kind: 'image'; url: string }>; title?: string; imgUrl?: string }
 
 export class ApiError extends Error {
   public constructor(public readonly code: string, message: string, public readonly status: number) { super(message) }

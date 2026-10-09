@@ -26,6 +26,13 @@ export const books = readerSchema.table('books', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('books_user_updated_idx').on(table.userId, table.updatedAt)])
 
+export const bookshelf = readerSchema.table('bookshelf', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull(),
+  bookId: uuid('book_id').notNull(),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex('bookshelf_user_book_idx').on(table.userId, table.bookId), index('bookshelf_user_added_idx').on(table.userId, table.addedAt)])
+
 export const bookEditions = readerSchema.table('book_editions', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull(),
@@ -72,6 +79,20 @@ export const searchRuns = readerSchema.table('search_runs', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex('search_runs_user_id_idx').on(table.userId, table.id), index('search_runs_user_updated_idx').on(table.userId, table.updatedAt)])
 
+export const searchHistory = readerSchema.table('search_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull(),
+  searchId: uuid('search_id').notNull(),
+  keyword: text('keyword').notNull(),
+  sourceIds: jsonb('source_ids').$type<string[]>().notNull().default([]),
+  status: text('status').notNull(),
+  resultCount: integer('result_count').notNull().default(0),
+  summary: text('summary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (table) => [uniqueIndex('search_history_user_search_idx').on(table.userId, table.searchId), index('search_history_user_updated_idx').on(table.userId, table.updatedAt)])
+
 export const tocSnapshots = readerSchema.table('toc_snapshots', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull(),
@@ -111,9 +132,11 @@ export const sourceRuntimeState = readerSchema.table('source_runtime_state', {
 
 export type SourceRow = typeof sources.$inferSelect
 export type BookRow = typeof books.$inferSelect
+export type BookshelfRow = typeof bookshelf.$inferSelect
 export type BookEditionRow = typeof bookEditions.$inferSelect
 export type ReadingRecordRow = typeof readingRecords.$inferSelect
 export type SearchRunRow = typeof searchRuns.$inferSelect
+export type SearchHistoryRow = typeof searchHistory.$inferSelect
 export type TocSnapshotRow = typeof tocSnapshots.$inferSelect
 export type ChapterContentRow = typeof chapterContents.$inferSelect
 export type SourceRuntimeRow = typeof sourceRuntimeState.$inferSelect

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { apiFetch, type ApiCandidate, type ApiSource, streamSearch } from '../lib/api.ts'
 
 export function SearchPage() {
+  const [searchParams] = useSearchParams()
   const [sources, setSources] = useState<ApiSource[]>([])
   const [sourceId, setSourceId] = useState('')
-  const [keyword, setKeyword] = useState('')
+  const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '')
   const [candidates, setCandidates] = useState<ApiCandidate[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [message, setMessage] = useState('')

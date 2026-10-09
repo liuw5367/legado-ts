@@ -86,6 +86,24 @@ export interface StoredPosition {
   lastReadAt: string
 }
 
+export interface SearchHistoryItem {
+  id: string
+  searchId: string
+  keyword: string
+  sourceIds: string[]
+  status: string
+  resultCount: number
+  summary?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HomeSnapshot {
+  bookshelf: Array<{ book: StoredBook; edition: StoredEdition } & ({ position: StoredPosition } | Record<never, never>)>
+  reading: Array<{ book: StoredBook; edition: StoredEdition; position: StoredPosition }>
+  searchHistory: SearchHistoryItem[]
+}
+
 export interface SourceSummary {
   sourceId: string
   name: string

@@ -23,7 +23,14 @@ test('memory repository keeps search and bookshelf data isolated by user', async
   const value = await repository.createBook(userA, { candidate: { sourceId: 'source-a', sourceFingerprint: 'fp', candidate: { ...metadata, name: '候选书' } }, metadata, editionKey: 'edition-a', sourceFingerprint: 'fp' })
   assert.equal((await repository.listBooks(userA)).length, 1)
   assert.equal((await repository.listBooks(userB)).length, 0)
+  assert.equal((await repository.getHome(userA)).bookshelf.length, 1)
+  assert.equal((await repository.getHome(userB)).bookshelf.length, 0)
   assert.equal((await repository.getEdition(userA, value.book.id, 'edition-a'))?.bookId, value.book.id)
+  const history = (await repository.getHome(userA)).searchHistory[0]
+  assert.ok(history !== undefined)
+  assert.equal(await repository.deleteSearchHistory(userB, history.id), false)
+  assert.equal(await repository.deleteSearchHistory(userA, history.id), true)
+  assert.equal((await repository.getHome(userA)).searchHistory.length, 0)
 })
 
 test('memory repository upserts content, toc, and reading position by user identity', async () => {

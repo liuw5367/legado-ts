@@ -9,6 +9,8 @@ import { LoginPage } from './pages/login.tsx'
 import { RegisterPage } from './pages/register.tsx'
 import { ResetPasswordPage } from './pages/reset-password.tsx'
 import { SearchPage } from './pages/search.tsx'
+import { ReaderPage } from './pages/reader.tsx'
+import { TocPage } from './pages/toc.tsx'
 
 function ProtectedRoute() {
   const { error, loading, session } = useAuth(); const location = useLocation()
@@ -23,7 +25,7 @@ const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/auth/confirm', element: <AuthConfirmPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
-  { element: <ProtectedRoute />, children: [{ element: <AccountLayout />, children: [{ index: true, element: <AccountHomePage /> }, { path: '/search', element: <SearchPage /> }, { path: '/account/password', element: <ChangePasswordPage /> }] }] },
+  { element: <ProtectedRoute />, children: [{ element: <AccountLayout />, children: [{ index: true, element: <AccountHomePage /> }, { path: '/search', element: <SearchPage /> }, { path: '/books/:bookId/toc', element: <TocPage /> }, { path: '/books/:bookId/read/:chapterId', element: <ReaderPage /> }, { path: '/account/password', element: <ChangePasswordPage /> }] }] },
   { path: '*', element: <Navigate to="/" replace /> },
 ])
 
