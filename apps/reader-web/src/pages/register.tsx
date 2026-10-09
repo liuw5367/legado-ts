@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthCard } from '../components/auth-form.tsx'
+import { Button } from '../components/ui/button.tsx'
+import { Input } from '../components/ui/input.tsx'
 import { resendConfirmation, signUp } from '../lib/auth.ts'
 
 export function RegisterPage() {
@@ -9,12 +11,12 @@ export function RegisterPage() {
   const resend = async () => { setError(undefined); setResending(true); try { await resendConfirmation(email); setMessage('验证邮件已重新发送，请检查收件箱。') } catch (reason) { setError(reason instanceof Error ? reason.message : '验证邮件发送失败') } finally { setResending(false) } }
   return <AuthCard title="注册" footer={<span>已有账号？ <Link className="link" to="/login">返回登录</Link></span>}>
     <form className="form" onSubmit={(event) => void submit(event)}>
-      <div className="field"><label htmlFor="email">邮箱</label><input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
-      <div className="field"><label htmlFor="password">密码</label><input id="password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>
-      <div className="field"><label htmlFor="confirmation">确认密码</label><input id="confirmation" type="password" autoComplete="new-password" minLength={8} required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>
-      {message === undefined ? null : <p className="success" role="status">{message} <button className="link" disabled={resending} type="button" onClick={() => void resend()}>{resending ? '发送中…' : '重新发送'}</button></p>}
+      <div className="field"><label htmlFor="email">邮箱</label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+      <div className="field"><label htmlFor="password">密码</label><Input id="password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>
+      <div className="field"><label htmlFor="confirmation">确认密码</label><Input id="confirmation" type="password" autoComplete="new-password" minLength={8} required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>
+      {message === undefined ? null : <p className="success" role="status">{message} <Button className="inline-action" size="sm" variant="secondary" disabled={resending} type="button" onClick={() => void resend()}>{resending ? '发送中…' : '重新发送'}</Button></p>}
       {error === undefined ? null : <p className="error" role="alert">{error}</p>}
-      <button className="button" disabled={pending} type="submit">{pending ? '注册中…' : '注册'}</button>
+      <Button disabled={pending} type="submit">{pending ? '注册中…' : '注册'}</Button>
     </form>
   </AuthCard>
 }
