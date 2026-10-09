@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ClockHost, NetworkHost, NormalizedSource, WorkflowRuleOutput } from '@legado/source-core'
-import { DEFAULT_ANDROID_USER_AGENT, createNodeSourceSession } from '../src/index.ts'
+import { DEFAULT_ANDROID_USER_AGENT, NodeCookieStore, createNodeSourceSession } from '../src/index.ts'
 
 const baseSource = {
   bookSourceUrl: 'https://fixture.invalid',
@@ -69,6 +69,14 @@ test('Node 书源会话持有深拷贝并冻结的书源定义', () => {
   inputExtension.label = 'external-change'
   assert.equal(sessionExtension.label, 'initial')
   assert.throws(() => { sessionExtension.label = 'session-change' }, TypeError)
+})
+
+test('NodeCookieStore 可以序列化并恢复跨请求 Cookie', async () => {
+  const store = new NodeCookieStore()
+  await store.set('https://fixture.invalid/path', 'sid=abc; Path=/; HttpOnly')
+  const restored = NodeCookieStore.fromSerialized(store.serialize())
+  assert.equal(await restored.get('https://fixture.invalid/next'), 'sid=abc')
+  assert.throws(() => NodeCookieStore.fromSerialized('{"invalid":true}'))
 })
 
 test('Node session preserves networkOptions defaultUserAgent through the source limiter wrapper', async () => {

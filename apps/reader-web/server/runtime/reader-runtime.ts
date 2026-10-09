@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '@legado/source-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, WorkflowStatus } from '@legado/source-core'
-import { createNodeSourceSession } from '@legado/source-node'
+import { NodeCookieStore, createNodeSourceSession } from '@legado/source-node'
+import type { SourceSession } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
 import { seedConfiguredSources } from '../db/source-seed.ts'
-import type { BookCreationInput, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
+import type { BookCreationInput, RuntimeStateSnapshot, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 
 export class ReaderRuntimeError extends Error {
   public readonly code: 'not-found' | 'invalid-input' | 'source-failed' | 'configuration' | 'source-busy'
@@ -25,6 +26,7 @@ export interface ReaderRuntime {
 }
 
 const activeSearches = new Map<string, { operationId: string; controller: AbortController }>()
+const SOURCE_RUNTIME_LEASE_MS = 5 * 60 * 1000
 
 export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime {
   return {
@@ -93,17 +95,14 @@ async function runOneSource(repository: ReaderRepository, run: SearchRunState, s
   const startedAt = new Date().toISOString()
   let source: StoredSourceRecord
   try { source = await requireSource(repository, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
-  const session = createNodeSourceSession(source.normalizedSource)
   try {
-    const result = await session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 }))
+    const result = await withPersistentSourceSession(repository, run.userId, source, (session) => session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 })))
     const additions = (result.value?.items ?? []).map((candidate) => ({ sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate }))
     const status = result.status === 'capability-missing' ? 'capability-missing' : result.status
     return { additions, state: { ...state, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
   } catch (error) {
     if (signal.aborted) return { additions: [], state: { ...state, status: 'cancelled', diagnostics: [{ message: '搜索已取消' }], startedAt, completedAt: new Date().toISOString() } }
     return { additions: [], state: { ...state, sourceFingerprint: source.fingerprint, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源执行失败' }], startedAt, completedAt: new Date().toISOString() } }
-  } finally {
-    session.close()
   }
 }
 
@@ -141,17 +140,14 @@ async function createBookFromSearch(repository: ReaderRepository, userId: string
   if (stored === undefined) throw new ReaderRuntimeError('invalid-input', '搜索结果索引无效')
   const source = await requireSource(repository, stored.sourceId)
   if (source.fingerprint !== stored.sourceFingerprint) throw new ReaderRuntimeError('configuration', '书源定义已更新，请重新搜索')
-  const session = createNodeSourceSession(source.normalizedSource)
-  try {
+  return withPersistentSourceSession(repository, userId, source, async (session) => {
     const result = await session.run((ports) => loadBookDetails(ports, { source: source.normalizedSource, candidates: [stored.candidate], maxItems: 1 }))
     const metadata = result.value?.items[0]
     if (metadata === undefined) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '没有读取到书籍详情'))
     const candidate: BookCreationInput['candidate'] = stored
     const editionKey = digest(`${stored.sourceId}\u0000${metadata.bookUrl}\u0000${stored.sourceFingerprint}`)
     return repository.createBook(userId, { candidate, metadata, editionKey, sourceFingerprint: stored.sourceFingerprint, ...(bookId === undefined ? {} : { bookId }) })
-  } finally {
-    session.close()
-  }
+  })
 }
 
 async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<StoredToc> {
@@ -162,8 +158,7 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
     const cached = await repository.getToc(userId, bookId, editionKey)
     if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
   }
-  const session = createNodeSourceSession(source.normalizedSource)
-  try {
+  return withPersistentSourceSession(repository, userId, source, async (session) => {
     const result = await session.run((ports) => loadTableOfContents(ports, { source: source.normalizedSource, book: edition.metadata, refresh, maxPages: 32 }))
     if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '目录读取失败'))
     const chapters = result.value.items
@@ -171,9 +166,7 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
     const bookAfter = result.value.bookAfter
     const bookPatch = createBookPatch(chapters)
     return repository.saveToc(userId, { userId, bookId, editionKey, sourceFingerprint: source.fingerprint, revision, chapters, bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }) })
-  } finally {
-    session.close()
-  }
+  })
 }
 
 async function getOrLoadContent(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, refresh = false): Promise<StoredContent> {
@@ -190,8 +183,7 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
     if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
   }
   const nextChapterUrl = toc.chapters[chapterIndex + 1]?.chapterUrl
-  const session = createNodeSourceSession(source.normalizedSource)
-  try {
+  return withPersistentSourceSession(repository, userId, source, async (session) => {
     const result = await session.run((ports) => loadChapterContent(ports, {
       source: source.normalizedSource,
       book: edition.metadata,
@@ -202,15 +194,54 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
     }))
     if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
     return repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
-  } finally {
-    session.close()
-  }
+  })
 }
 
 async function requireSource(repository: ReaderRepository, sourceId: string): Promise<StoredSourceRecord> {
   const source = await repository.getSource(sourceId)
   if (source === null) throw new ReaderRuntimeError('configuration', `书源不可用：${sourceId}`)
   return source
+}
+
+async function withPersistentSourceSession<T>(repository: ReaderRepository, userId: string, source: StoredSourceRecord, operation: (session: SourceSession) => Promise<T>): Promise<T> {
+  const leaseToken = randomUUID()
+  const lease = await repository.acquireSourceRuntimeLease(userId, source.sourceId, source.fingerprint, leaseToken, SOURCE_RUNTIME_LEASE_MS)
+  if (lease === null) throw new ReaderRuntimeError('source-busy', '该书源正在被其他请求使用，请稍后重试')
+  let session: SourceSession | undefined
+  let result!: T
+  let primaryError: unknown
+  let stateSaved = false
+  try {
+    const cookieStore = lease.snapshot.cookies === undefined ? new NodeCookieStore() : NodeCookieStore.fromSerialized(lease.snapshot.cookies)
+    session = createNodeSourceSession(source.normalizedSource, { cookieStore, ...(lease.snapshot.variables === undefined ? {} : { initialVariables: lease.snapshot.variables }) })
+    try {
+      result = await operation(session)
+    } catch (error) {
+      primaryError = error
+    }
+    const snapshot = snapshotRuntimeState(session, cookieStore)
+    const saved = await repository.saveSourceRuntimeState(userId, source.sourceId, source.fingerprint, lease.leaseToken, lease.version, snapshot)
+    if (saved === null) throw new ReaderRuntimeError('source-busy', '书源运行状态已被其他请求更新，请稍后重试')
+    stateSaved = true
+  } catch (error) {
+    if (primaryError === undefined) primaryError = error
+  } finally {
+    session?.close()
+    if (!stateSaved) {
+      try {
+        await repository.releaseSourceRuntimeLease(userId, source.sourceId, source.fingerprint, lease.leaseToken)
+      } catch (releaseError) {
+        if (primaryError === undefined) primaryError = releaseError
+      }
+    }
+  }
+  if (primaryError !== undefined) throw primaryError
+  return result
+}
+
+function snapshotRuntimeState(session: SourceSession, cookieStore: NodeCookieStore): RuntimeStateSnapshot {
+  const variables = session.snapshotVariables()
+  return { cookies: cookieStore.serialize(), ...(Object.keys(variables).length === 0 ? {} : { variables: { ...variables } }) }
 }
 
 function digest(value: string): string { return createHash('sha256').update(value).digest('hex') }

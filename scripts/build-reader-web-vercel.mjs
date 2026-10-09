@@ -2,12 +2,20 @@ import { cpSync, mkdirSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-const build = spawnSync('pnpm', ['--filter', '@legado/reader-web', 'build'], { stdio: 'inherit' })
-if (build.error !== undefined) {
-  console.error(`读取器 Web 构建进程启动失败：${build.error.message}`)
-  process.exit(1)
+function run(command, args) {
+  const result = spawnSync(command, args, { stdio: 'inherit' })
+  if (result.error !== undefined) {
+    console.error(`读取器 Web 构建进程启动失败：${result.error.message}`)
+    process.exit(1)
+  }
+  if (result.status !== 0) process.exit(result.status ?? 1)
 }
-if (build.status !== 0) process.exit(build.status ?? 1)
+
+// Vercel 从干净 checkout 开始，不会有 workspace 包的 dist/。先生成 core 和
+// Node runtime 的产物，Hono 函数入口才能解析书源运行时及 QuickJS 依赖。
+run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.build.json'])
+run('pnpm', ['--filter', '@legado/source-node', 'build'])
+run('pnpm', ['--filter', '@legado/reader-web', 'build'])
 
 const sourceDirectory = resolve('apps/reader-web/dist')
 const publicDirectory = resolve('public')

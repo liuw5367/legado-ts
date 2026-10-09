@@ -12,7 +12,7 @@ pnpm --filter @legado/reader-web db:migrate
 
 新增迁移后重新执行一次 `db:migrate`，不要在每次 Web 部署时自动运行迁移。
 
-`READER_SOURCES_JSON` 是部署者维护的书源数组，所有用户共享书源定义；用户的搜索、书架、目录缓存和阅读位置按 Supabase 用户 ID 隔离。不要把数据库密码、Cookie 或运行状态密钥放入前端环境变量。
+`READER_SOURCES_JSON` 是部署者维护的书源数组，所有用户共享书源定义；用户的搜索、书架、目录缓存、阅读位置以及书源 Cookie/脚本变量按 Supabase 用户 ID 隔离。`SOURCE_RUNTIME_STATE_KEY` 至少使用 32 个字符的随机服务端密钥（例如 `openssl rand -base64 32` 的结果），用于 AES-256-GCM 加密书源运行状态；轮换该密钥会使旧 Cookie 和脚本变量失效。不要把数据库密码、Cookie 或运行状态密钥放入前端环境变量。
 
 阅读设置页提供跟随系统、浅色和夜间三种页面模式，以及字号和行距。设置保存在当前账号，书籍的每个书源版本也分别保存目录和阅读位置。搜索结果可以选择新建书籍，或追加到已有书籍作为新的来源版本。
 
@@ -46,6 +46,7 @@ Vercel 项目必须把仓库根目录作为 Project Root。根目录的 `vercel.
 | `SUPABASE_PUBLISHABLE_KEY` | Hono 函数校验登录令牌 |
 | `DATABASE_URL` | Supabase Postgres 连接串 |
 | `READER_SOURCES_JSON` | 部署者维护、所有用户共享的书源 JSON 数组 |
+| `SOURCE_RUNTIME_STATE_KEY` | 服务端加密每用户书源 Cookie/脚本变量的密钥，至少 32 个字符 |
 
 第一次部署前，在目标 Supabase 数据库执行迁移；Vercel 构建不会自动修改数据库：
 

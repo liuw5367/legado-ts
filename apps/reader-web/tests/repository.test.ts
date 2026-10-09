@@ -87,3 +87,21 @@ test('memory search operation claims can be released and reclaimed', async () =>
   assert.equal(released?.operationId, undefined)
   assert.equal((await repository.claimSearch(userId, search.id, 'operation-b', states, { completed: 0, total: 1 }))?.operationId, 'operation-b')
 })
+
+test('source runtime state is isolated by user and fingerprint and uses a lease with versioned save', async () => {
+  const repository = new MemoryReaderRepository()
+  const userA = '00000000-0000-0000-0000-000000000001'
+  const userB = '00000000-0000-0000-0000-000000000002'
+  const first = await repository.acquireSourceRuntimeLease(userA, 'source-a', 'fp-a', 'lease-a', 5_000)
+  assert.deepEqual(first?.snapshot, {})
+  assert.equal(await repository.acquireSourceRuntimeLease(userA, 'source-a', 'fp-a', 'lease-b', 5_000), null)
+  assert.ok(await repository.acquireSourceRuntimeLease(userB, 'source-a', 'fp-a', 'lease-b', 5_000))
+  assert.ok(await repository.acquireSourceRuntimeLease(userA, 'source-a', 'fp-b', 'lease-c', 5_000))
+
+  const saved = await repository.saveSourceRuntimeState(userA, 'source-a', 'fp-a', 'lease-a', first!.version, { cookies: '{"cookies":[]}', variables: { session: 'user-a' } })
+  assert.equal(saved?.version, 1)
+  assert.equal(await repository.saveSourceRuntimeState(userA, 'source-a', 'fp-a', 'lease-a', first!.version, {}), null)
+  const restored = await repository.acquireSourceRuntimeLease(userA, 'source-a', 'fp-a', 'lease-d', 5_000)
+  assert.deepEqual(restored?.snapshot, { cookies: '{"cookies":[]}', variables: { session: 'user-a' } })
+  assert.equal((await repository.acquireSourceRuntimeLease(userB, 'source-a', 'fp-a', 'lease-e', 5_000))?.snapshot.cookies, undefined)
+})
