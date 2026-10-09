@@ -32,6 +32,37 @@ pnpm --filter @legado/reader-web dev
 
 在 Supabase Auth 的 Confirm signup 和 Reset password 模板中分别使用 `auth-email-templates/confirm-signup.html` 与 `auth-email-templates/reset-password.html`。模板把 `token_hash` 交给站内回调验证；生产环境必须配置自定义 SMTP，并把本站地址加入 Redirect URL 白名单。
 
+## Vercel 部署
+
+Vercel 项目必须把仓库根目录作为 Project Root。根目录的 `vercel.json` 使用 Hono 适配器承载 API，构建命令会先生成 Rsbuild 静态资源，再复制到根目录 `public/`；该目录是构建产物，不应手动提交。
+
+在 Vercel 的 Preview 和 Production 环境分别配置以下变量：
+
+| 变量 | 用途 |
+| --- | --- |
+| `PUBLIC_SUPABASE_URL` | 浏览器构建时使用的 Supabase URL |
+| `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 浏览器构建时使用的 Supabase publishable key |
+| `SUPABASE_URL` | Hono 函数校验登录令牌 |
+| `SUPABASE_PUBLISHABLE_KEY` | Hono 函数校验登录令牌 |
+| `DATABASE_URL` | Supabase Postgres 连接串 |
+| `READER_SOURCES_JSON` | 部署者维护、所有用户共享的书源 JSON 数组 |
+
+第一次部署前，在目标 Supabase 数据库执行迁移；Vercel 构建不会自动修改数据库：
+
+```sh
+pnpm --filter @legado/reader-web db:migrate
+```
+
+Supabase Auth 的 Site URL 和 Redirect URL 需要包含部署域名。注册确认和密码恢复回调分别使用 `/auth/confirm` 与 `/reset-password`，邮件模板仍按上面的 `auth-email-templates/` 文件配置。
+
+本地可以先验证与 Vercel 相同的静态产物准备步骤：
+
+```sh
+pnpm run build:web:vercel
+```
+
+该命令会生成 `public/index.html` 和 `public/static/`，部署配置会把 `/api/*` 交给 Hono，把其他前端深链回退到 `index.html`。搜索流式响应启用 60 秒函数上限和请求取消支持；如书源响应可能超过此时长，需要后续把搜索任务拆为后台队列。
+
 ## 检查
 
 ```sh

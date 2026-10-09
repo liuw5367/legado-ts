@@ -1,0 +1,29 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "hono",
+  "buildCommand": "pnpm run build:web:vercel",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "functions": {
+    "server.ts": {
+      "maxDuration": 60,
+      "supportsCancellation": true
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!api(?:/|$)|static(?:/|$)).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

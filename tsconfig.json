@@ -22,6 +22,6 @@
       "@legado/source-core": ["packages/source-core/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "packages/**/*.json", "apps/**/*.ts", "apps/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts"],
+  "include": ["packages/**/*.ts", "packages/**/*.json", "apps/**/*.ts", "apps/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts", "server.ts"],
   "exclude": ["**/dist/**", "node_modules"]
 }

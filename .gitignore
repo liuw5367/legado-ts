@@ -9,6 +9,7 @@
 # production
 /dist
 **/dist
+/public
 *.bun-build
 
 # misc
