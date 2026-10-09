@@ -28,3 +28,6 @@ catalog:
   undici: 7.29.0
   typescript: 6.0.2
   wrap-ansi: 10.0.1
+
+allowBuilds:
+  esbuild: true
