@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { findNavigationFrameIndex, navigateNavigationFrame, navigationKey, navigationModeForPage, popNavigationFrame, popToNavigationFrame, previousNavigationFrame, type NavigationRequest } from '../src/navigation.ts'
+import { findNavigationFrameIndex, navigateNavigationFrame, navigationKey, navigationModeForPage, popNavigationFrame, popToNavigationFrame, previousNavigationFrame, shouldNavigateAfterChapterLoad, updateCurrentNavigationFrame, type NavigationRequest } from '../src/navigation.ts'
 import type { NavigationFrame } from '../src/ui-model.ts'
 
 interface TestFrame extends NavigationFrame {
@@ -67,4 +67,19 @@ test('页面策略把工具页设为单例，把内容页保留为普通实例',
   assert.equal(navigationModeForPage('reader'), 'singleTop')
   assert.equal(navigationModeForPage('detail'), 'standard')
   assert.equal(navigationModeForPage('mapping'), 'standard')
+})
+
+test('阅读页内切换章节不重新进入阅读页，因此不改变导航栈', () => {
+  const initialReader = frame('reader', 'chapter-1', { bookId: 'book-1', navigationKey: navigationKey('reader', 'book-1', undefined) })
+  const nextChapter = frame('reader', 'chapter-2', { bookId: 'book-1', editionKey: 'edition-1', navigationKey: navigationKey('reader', 'book-1', 'edition-1') })
+  const initialStack = [home, initialReader]
+  const stackAfterChapterLoad = shouldNavigateAfterChapterLoad('reader', false)
+    ? navigateNavigationFrame(initialStack, nextChapter, request('singleTop', nextChapter.navigationKey!))
+    : updateCurrentNavigationFrame(initialStack, () => nextChapter)
+
+  assert.equal(shouldNavigateAfterChapterLoad('reader', false), false)
+  assert.deepEqual(stackAfterChapterLoad.map((item) => item.marker), ['home', 'chapter-2'])
+  assert.equal(stackAfterChapterLoad.length, initialStack.length)
+  assert.equal(shouldNavigateAfterChapterLoad('detail', false), true)
+  assert.equal(shouldNavigateAfterChapterLoad('toc', true), false)
 })

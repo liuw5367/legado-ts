@@ -29,6 +29,19 @@ export function navigationKeyForPage(page: Page, frame: NavigationFrame): string
   return navigationKey(page)
 }
 
+/** 章节加载完成后，仅从其他页面进入阅读页或尚未回收的返回路径才创建导航记录。 */
+export function shouldNavigateAfterChapterLoad(page: Page, returnToReader: boolean): boolean {
+  return page !== 'reader' && !returnToReader
+}
+
+/** 更新栈顶页面快照，保持导航栈的深度和既有页面顺序不变。 */
+export function updateCurrentNavigationFrame<T>(stack: readonly T[], update: (frame: T) => T): T[] {
+  if (stack.length === 0) return []
+  const next = [...stack]
+  next[next.length - 1] = update(next[next.length - 1]!)
+  return next
+}
+
 export function currentNavigationFrame<T>(stack: readonly T[]): T | undefined {
   return stack.at(-1)
 }

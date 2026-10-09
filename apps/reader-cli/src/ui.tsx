@@ -42,7 +42,7 @@ import {
   type Page,
   type SearchUiState,
 } from './ui-model.ts'
-import { currentNavigationFrame, findNavigationFrameIndex, navigateNavigationFrame, navigationFrameKey, navigationKey, navigationKeyForPage, navigationModeForPage, popNavigationFrame, popToNavigationFrame, previousNavigationFrame, updateNavigationFrames, type NavigationMode } from './navigation.ts'
+import { currentNavigationFrame, findNavigationFrameIndex, navigateNavigationFrame, navigationFrameKey, navigationKey, navigationKeyForPage, navigationModeForPage, popNavigationFrame, popToNavigationFrame, previousNavigationFrame, shouldNavigateAfterChapterLoad, updateCurrentNavigationFrame, updateNavigationFrames, type NavigationMode } from './navigation.ts'
 import { READER_SETTING_FIELDS, READER_SETTINGS_DEFAULTS, readerSettingRawValue, updateReaderSetting, type ReaderSettingField } from './reader-settings.ts'
 import { orderSourceViews } from './source-order.ts'
 import type { DebugCapture } from './debug-capture.ts'
@@ -806,24 +806,27 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
         && previousFrame?.page === 'reader'
         && previousFrame.bookId === currentBook.book.bookId
         && previousFrame.editionKey === result.edition.editionKey
+      const updateReaderFrame = (previous: NavigationSnapshot): NavigationSnapshot => ({
+        ...previous,
+        book: openedBook,
+        toc: currentToc,
+        content: formatted.text,
+        formattedContent: formatted,
+        chapterIndex: index,
+        readerLine: resumeLine,
+        tocSelected: index,
+        tocQuery: '',
+        tocSearchActive: false,
+        bookId: openedBook.book.bookId,
+        editionKey: result.edition.editionKey,
+        navigationKey: readerKey,
+      })
       if (returnToReader && previousFrame !== undefined) {
-        const updatedReader: NavigationSnapshot = {
-          ...previousFrame,
-          book: openedBook,
-          toc: currentToc,
-          content: formatted.text,
-          formattedContent: formatted,
-          chapterIndex: index,
-          readerLine: resumeLine,
-          tocSelected: index,
-          tocQuery: '',
-          tocSearchActive: false,
-          bookId: openedBook.book.bookId,
-          editionKey: result.edition.editionKey,
-          navigationKey: readerKey,
-        }
+        const updatedReader = updateReaderFrame(previousFrame)
         navigationRef.current = popToNavigationFrame(navigationRef.current, readerKey, navigationFrameKey, () => updatedReader)
         restoreNavigationFrame(updatedReader)
+      } else if (pageRef.current === 'reader' && currentNavigationFrame(navigationRef.current)?.page === 'reader') {
+        navigationRef.current = updateCurrentNavigationFrame(navigationRef.current, updateReaderFrame)
       }
       setBook(openedBook)
       setToc(currentToc)
@@ -835,7 +838,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       setTocQuery('')
       setTocSearchActive(false)
       if (result.edition.editionKey !== activeEditionKey(currentBook)) sourceCommitRef.current = result.edition.editionKey
-      if (!returnToReader) setPage('reader')
+      if (shouldNavigateAfterChapterLoad(pageRef.current, returnToReader)) setPage('reader')
       setMessage(partialCommit ? '阅读位置已保存，书籍信息待同步' : formatted.text.length === 0 ? '章节内容为空 · 进度已保存' : `${refresh ? '已刷新' : '已加载'}${resumeLine > 0 && !refresh ? ' · 已加载进度' : ''}`)
     } catch (error) {
       if (isCurrent(operation) && !isAbortError(error)) setMessage(errorMessage(error))
