@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withReaderDb, withUser } from './client.ts'
 import { bookEditions, books, bookshelf, chapterContents, readingRecords, searchHistory, searchRuns, sources, tocSnapshots, type BookEditionRow, type BookRow, type ChapterContentRow, type SearchHistoryRow, type SearchRunRow, type SourceRow, type TocSnapshotRow } from './schema.ts'
-import type { BookCreationInput, HomeSnapshot, SearchHistoryItem, SearchInput, SearchRunState, SourceSummary, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredPosition, StoredToc } from '../domain/types.ts'
+import type { BookCreationInput, HomeSnapshot, SearchHistoryItem, SearchInput, SearchRunState, SourceSearchState, SourceSummary, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredPosition, StoredToc } from '../domain/types.ts'
 
 export interface StoredSourceRecord extends SourceSummary {
   rawSource: unknown
@@ -16,7 +16,8 @@ export interface ReaderRepository {
   getSource(sourceId: string): Promise<StoredSourceRecord | null>
   createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState>
   getSearch(userId: string, searchId: string): Promise<SearchRunState | null>
-  updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; cursor?: PageCursor; nextCursor?: PageCursor; cancelled?: boolean }): Promise<SearchRunState | null>
+  claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null>
+  updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null>
   createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }>
   addToBookshelf(userId: string, bookId: string): Promise<void>
   removeFromBookshelf(userId: string, bookId: string): Promise<void>
@@ -58,16 +59,21 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> {
     return withUser(userId, async (transaction) => {
+      const sourceIds = input.sourceIds === undefined || input.sourceIds.length === 0 ? [input.sourceId] : [...new Set(input.sourceIds)]
+      const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, status: 'pending', candidates: [], diagnostics: [] }))
       const [row] = await transaction.insert(searchRuns).values({
         userId,
         keyword: input.keyword,
         sourceId: input.sourceId,
+        sourceIds,
         ...(sourceFingerprint === undefined ? {} : { sourceFingerprint }),
         status: 'running',
+        sourceStates,
+        progressTotal: sourceIds.length,
         ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
       }).returning()
       if (row === undefined) throw new Error('创建搜索任务失败')
-      await transaction.insert(searchHistory).values({ userId, searchId: row.id, keyword: input.keyword, sourceIds: [input.sourceId], status: 'running', resultCount: 0 })
+      await transaction.insert(searchHistory).values({ userId, searchId: row.id, keyword: input.keyword, sourceIds, status: 'running', resultCount: 0 })
       return toSearch(row)
     })
   }
@@ -79,16 +85,28 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; cursor?: PageCursor; nextCursor?: PageCursor; cancelled?: boolean }): Promise<SearchRunState | null> {
+  public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null> {
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.update(searchRuns).set({ operationId, sourceStates, progressCompleted: progress.completed, progressTotal: progress.total, status: 'running', cancelled: false, version: sql`${searchRuns.version} + 1`, updatedAt: new Date() }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), isNull(searchRuns.operationId))).returning()
+      return row === undefined ? null : toSearch(row)
+    })
+  }
+
+  public async updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> {
     return withUser(userId, async (transaction) => {
       const [row] = await transaction.update(searchRuns).set({
         ...(patch.status === undefined ? {} : { status: patch.status }),
         ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }),
+        ...(patch.sourceStates === undefined ? {} : { sourceStates: patch.sourceStates }),
+        ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }),
         ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }),
         ...(patch.nextCursor === undefined ? {} : { nextCursor: patch.nextCursor }),
+        ...(patch.operationId === undefined ? {} : { operationId: patch.operationId }),
+        ...(patch.progress === undefined ? {} : { progressCompleted: patch.progress.completed, progressTotal: patch.progress.total }),
         ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }),
         updatedAt: new Date(),
-      }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId))).returning()
+        version: sql`${searchRuns.version} + 1`,
+      }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), ...(patch.expectedOperationId === undefined ? [] : [eq(searchRuns.operationId, patch.expectedOperationId)]))).returning()
       if (row !== undefined) {
         const historyStatus = row.status === 'capability-missing' ? 'failed' : row.status
         await transaction.update(searchHistory).set({ status: historyStatus, resultCount: row.candidates.length, summary: searchSummary(historyStatus, row.candidates.length), updatedAt: new Date() }).where(and(eq(searchHistory.userId, userId), eq(searchHistory.searchId, searchId), isNull(searchHistory.deletedAt)))
@@ -297,9 +315,10 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource }>): Promise<void> { for (const record of records) this.sourceMap.set(record.sourceId, { sourceId: record.sourceId, name: record.normalizedSource.bookSourceName, ...(typeof record.normalizedSource.bookSourceGroup === 'string' ? { group: record.normalizedSource.bookSourceGroup } : {}), fingerprint: record.fingerprint, enabled: true, rawSource: record.rawSource, normalizedSource: record.normalizedSource }) }
   public async listSources(): Promise<StoredSourceRecord[]> { return [...this.sourceMap.values()].filter((source) => source.enabled) }
   public async getSource(sourceId: string): Promise<StoredSourceRecord | null> { const source = this.sourceMap.get(sourceId); return source?.enabled === true ? source : null }
-  public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> { const now = new Date().toISOString(); const search: SearchRunState = { id: randomUUID(), userId, keyword: input.keyword, sourceId: input.sourceId, ...(sourceFingerprint === undefined ? {} : { sourceFingerprint }), status: 'running', candidates: [], ...(input.cursor === undefined ? {} : { cursor: input.cursor }), version: 0, cancelled: false, createdAt: now, updatedAt: now }; this.searches.set(search.id, search); this.history.set(`${userId}:${search.id}`, { id: randomUUID(), searchId: search.id, keyword: input.keyword, sourceIds: [input.sourceId], status: 'running', resultCount: 0, createdAt: now, updatedAt: now }); return search }
+  public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> { const now = new Date().toISOString(); const sourceIds = input.sourceIds === undefined || input.sourceIds.length === 0 ? [input.sourceId] : [...new Set(input.sourceIds)]; const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, status: 'pending', candidates: [], diagnostics: [] })); const search: SearchRunState = { id: randomUUID(), userId, keyword: input.keyword, sourceId: sourceIds[0] ?? input.sourceId, sourceIds, ...(sourceFingerprint === undefined ? {} : { sourceFingerprint }), status: 'running', candidates: [], sourceStates, ...(input.cursor === undefined ? {} : { cursor: input.cursor }), progress: { completed: 0, total: sourceIds.length }, version: 0, cancelled: false, createdAt: now, updatedAt: now }; this.searches.set(search.id, search); this.history.set(`${userId}:${search.id}`, { id: randomUUID(), searchId: search.id, keyword: input.keyword, sourceIds, status: 'running', resultCount: 0, createdAt: now, updatedAt: now }); return search }
   public async getSearch(userId: string, searchId: string): Promise<SearchRunState | null> { const search = this.searches.get(searchId); return search?.userId === userId ? search : null }
-  public async updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; cursor?: PageCursor; nextCursor?: PageCursor; cancelled?: boolean }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null) return null; const updated = { ...current, ...patch, updatedAt: new Date().toISOString() }; this.searches.set(searchId, updated); const history = this.history.get(`${userId}:${searchId}`); if (history !== undefined) this.history.set(`${userId}:${searchId}`, { ...history, status: updated.status, resultCount: updated.candidates.length, summary: searchSummary(updated.status, updated.candidates.length), updatedAt: updated.updatedAt }); return updated }
+  public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || current.operationId !== undefined) return null; return this.updateSearch(userId, searchId, { sourceStates, progress, operationId, status: 'running', cancelled: false }) }
+  public async updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || (patch.expectedOperationId !== undefined && current.operationId !== patch.expectedOperationId)) return null; const updated: SearchRunState = { ...current, ...(patch.status === undefined ? {} : { status: patch.status }), ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }), ...(patch.sourceStates === undefined ? {} : { sourceStates: patch.sourceStates }), ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }), ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }), ...(patch.nextCursor === undefined ? {} : { nextCursor: patch.nextCursor }), ...(patch.operationId === undefined || patch.operationId === null ? {} : { operationId: patch.operationId }), ...(patch.progress === undefined ? {} : { progress: patch.progress }), ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }), updatedAt: new Date().toISOString(), version: current.version + 1 }; if (patch.operationId === null) delete updated.operationId; this.searches.set(searchId, updated); const history = this.history.get(`${userId}:${searchId}`); if (history !== undefined) this.history.set(`${userId}:${searchId}`, { ...history, status: updated.status, resultCount: updated.candidates.length, summary: searchSummary(updated.status, updated.candidates.length), updatedAt: updated.updatedAt }); return updated }
   public async createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }> { const existing = [...this.books.values()].find((item) => item.book.userId === userId && item.edition.editionKey === input.editionKey); const now = new Date().toISOString(); const book: StoredBook = existing?.book ?? { id: randomUUID(), userId, name: input.metadata.name ?? input.candidate.candidate.name ?? '未命名书籍', ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), activeEditionKey: input.editionKey, createdAt: now, updatedAt: now }; const updatedBook = { ...book, name: input.metadata.name ?? book.name, ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), activeEditionKey: input.editionKey, updatedAt: now }; const edition: StoredEdition = { id: existing?.edition.id ?? randomUUID(), userId, bookId: updatedBook.id, editionKey: input.editionKey, sourceId: input.candidate.sourceId, sourceFingerprint: input.sourceFingerprint, bookUrl: input.metadata.bookUrl, metadata: input.metadata, ...(input.metadata.variable === undefined ? {} : { variable: input.metadata.variable }) }; const value = { book: updatedBook, edition }; this.books.set(`${userId}:${input.editionKey}`, value); this.shelf.set(`${userId}:${updatedBook.id}`, now); return value }
   public async addToBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.set(`${userId}:${bookId}`, new Date().toISOString()) }
   public async removeFromBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.delete(`${userId}:${bookId}`) }
@@ -319,7 +338,7 @@ export class MemoryReaderRepository implements ReaderRepository {
 function toSource(row: SourceRow): StoredSourceRecord { return { sourceId: row.sourceId, name: typeof row.normalizedSource.bookSourceName === 'string' ? row.normalizedSource.bookSourceName : row.sourceId, ...(typeof row.normalizedSource.bookSourceGroup === 'string' ? { group: row.normalizedSource.bookSourceGroup } : {}), fingerprint: row.fingerprint, enabled: row.enabled, rawSource: row.rawSource, normalizedSource: row.normalizedSource } }
 function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function toEdition(row: BookEditionRow): StoredEdition { return { id: row.id, userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, bookUrl: row.bookUrl, metadata: row.metadata, ...(row.variable === null ? {} : { variable: row.variable }) } }
-function toSearch(row: SearchRunRow): SearchRunState { return { id: row.id, userId: row.userId, keyword: row.keyword, sourceId: row.sourceId, ...(row.sourceFingerprint === null ? {} : { sourceFingerprint: row.sourceFingerprint }), status: row.status as SearchRunState['status'], candidates: row.candidates, ...(row.cursor === null || row.cursor === undefined ? {} : { cursor: row.cursor }), ...(row.nextCursor === null || row.nextCursor === undefined ? {} : { nextCursor: row.nextCursor }), version: row.version, cancelled: row.cancelled, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
+function toSearch(row: SearchRunRow): SearchRunState { const sourceIds = row.sourceIds.length === 0 ? [row.sourceId] : row.sourceIds; return { id: row.id, userId: row.userId, keyword: row.keyword, sourceId: row.sourceId, sourceIds, ...(row.sourceFingerprint === null ? {} : { sourceFingerprint: row.sourceFingerprint }), status: row.status as SearchRunState['status'], candidates: row.candidates, sourceStates: row.sourceStates, ...(row.cursor === null || row.cursor === undefined ? {} : { cursor: row.cursor }), ...(row.nextCursor === null || row.nextCursor === undefined ? {} : { nextCursor: row.nextCursor }), ...(row.operationId === null ? {} : { operationId: row.operationId }), progress: { completed: row.progressCompleted, total: row.progressTotal === 0 ? sourceIds.length : row.progressTotal }, version: row.version, cancelled: row.cancelled, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function toHistory(row: SearchHistoryRow): SearchHistoryItem { return { id: row.id, searchId: row.searchId, keyword: row.keyword, sourceIds: row.sourceIds, status: row.status, resultCount: row.resultCount, ...(row.summary === null ? {} : { summary: row.summary }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function searchSummary(status: string, count: number): string { if (status === 'success') return `${count} 条结果`; if (status === 'empty') return '没有找到结果'; if (status === 'partial') return `${count} 条结果，部分书源失败`; if (status === 'cancelled') return '已取消'; if (status === 'failed') return '搜索失败'; return status }
 function toToc(row: TocSnapshotRow): StoredToc { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceFingerprint: row.sourceFingerprint, revision: row.revision, chapters: row.chapters, bookPatch: row.bookPatch, ...(row.bookAfter === null || row.bookAfter === undefined ? {} : { bookAfter: row.bookAfter }), updatedAt: row.updatedAt.toISOString() } }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { apiFetch, type ApiCandidate, type ApiSource, streamSearch } from '../lib/api.ts'
@@ -7,14 +7,17 @@ export function SearchPage() {
   const [searchParams] = useSearchParams()
   const [sources, setSources] = useState<ApiSource[]>([])
   const [sourceId, setSourceId] = useState('')
+  const [sourceIds, setSourceIds] = useState<string[]>([])
   const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '')
   const [candidates, setCandidates] = useState<ApiCandidate[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState<number | null>(null)
+  const [hasNextPage, setHasNextPage] = useState(false)
+  const controllerRef = useRef<AbortController | null>(null)
   const sourceName = useMemo(() => sources.find((source) => source.sourceId === sourceId)?.name, [sourceId, sources])
 
-  useEffect(() => { void apiFetch<{ sources: ApiSource[] }>('/api/sources').then((result) => { setSources(result.sources); setSourceId(result.sources[0]?.sourceId ?? '') }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : '书源加载失败')) }, [])
+  useEffect(() => { void apiFetch<{ sources: ApiSource[] }>('/api/sources').then((result) => { setSources(result.sources); setSourceId(result.sources[0]?.sourceId ?? ''); setSourceIds(result.sources.map((source) => source.sourceId)) }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : '书源加载失败')) }, [])
 
   async function saveCandidate(index: number) {
     const result = candidates[index]
@@ -27,32 +30,45 @@ export function SearchPage() {
 
   async function submitWithId(event: FormEvent) {
     event.preventDefault()
-    if (keyword.trim().length === 0 || sourceId.length === 0) return
+    if (keyword.trim().length === 0 || sourceIds.length === 0) return
     setStatus('loading'); setMessage(''); setCandidates([])
+    const controller = new AbortController(); controllerRef.current = controller
     try {
-      const created = await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, sourceId }) })
+      const created = await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, sourceIds }) })
       setSearchId(created.search.id)
       await streamSearch(created.search.id, (streamEvent) => {
         if (streamEvent.type === 'error') {
           const error = streamEvent.data as { message?: string }
           throw new Error(error.message ?? '搜索失败')
         }
-        if (streamEvent.type === 'batch') {
-          const batch = streamEvent.data as { candidates?: ApiCandidate[]; sourceStatus?: string }
-          setCandidates((current) => [...current, ...(batch.candidates ?? [])])
-          if (batch.sourceStatus === 'failed' || batch.sourceStatus === 'capability-missing') setMessage('书源执行失败，请检查书源配置。')
+        if (streamEvent.type === 'source-result') {
+          const batch = streamEvent.data as { source?: { candidates?: ApiCandidate[]; status?: string; nextCursor?: unknown } }
+          setCandidates((current) => [...current, ...(batch.source?.candidates ?? [])])
+          if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') setMessage('部分书源执行失败，已保留可用结果。')
         }
-      })
+        if (streamEvent.type === 'batch-end') {
+          const batch = streamEvent.data as { search?: { sourceStates?: Array<{ nextCursor?: unknown }> } }
+          setHasNextPage(batch.search?.sourceStates?.some((source) => source.nextCursor !== undefined) === true)
+        }
+      }, controller.signal)
       setStatus('done')
-    } catch (error) { setStatus('error'); setMessage(error instanceof Error ? error.message : '搜索失败') }
+    } catch (error) { setStatus('error'); setMessage(error instanceof DOMException && error.name === 'AbortError' ? '搜索已取消' : error instanceof Error ? error.message : '搜索失败') } finally { controllerRef.current = null }
   }
+
+  async function continueNextPage() {
+    if (searchId.length === 0 || !hasNextPage) return
+    const controller = new AbortController(); controllerRef.current = controller; setStatus('loading'); setMessage('')
+    try { await streamSearch(searchId, (streamEvent) => { if (streamEvent.type === 'source-result') { const data = streamEvent.data as { source?: { candidates?: ApiCandidate[] } }; setCandidates((current) => [...current, ...(data.source?.candidates ?? [])]) } if (streamEvent.type === 'batch-end') { const data = streamEvent.data as { search?: { sourceStates?: Array<{ nextCursor?: unknown }> } }; setHasNextPage(data.search?.sourceStates?.some((source) => source.nextCursor !== undefined) === true) } }, controller.signal, { nextPage: true }); setStatus('done') } catch (error) { setStatus('error'); setMessage(error instanceof Error ? error.message : '加载下一页失败') } finally { controllerRef.current = null }
+  }
+
+  async function cancelSearch() { controllerRef.current?.abort(); if (searchId.length > 0) await apiFetch(`/api/searches/${encodeURIComponent(searchId)}/cancel`, { method: 'POST' }).catch(() => undefined); setStatus('done'); setMessage('搜索已取消') }
 
   return <section className="page-stack">
     <div className="page-heading"><div><p className="eyebrow">DISCOVER</p><h1>搜索书籍</h1><p className="muted">搜索会以流式结果逐步显示，较慢的书源也不会让页面失去响应。</p></div><Link className="button secondary" to="/">返回书架</Link></div>
     <form className="card search-form" onSubmit={submitWithId}>
       <div className="field"><label htmlFor="search-keyword">关键词</label><input id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /></div>
-      <div className="field"><label htmlFor="search-source">书源</label><select id="search-source" value={sourceId} onChange={(event) => setSourceId(event.target.value)} disabled={sources.length === 0}><option value="">选择书源</option>{sources.map((source) => <option key={source.sourceId} value={source.sourceId}>{source.name}{source.group === undefined ? '' : ` · ${source.group}`}</option>)}</select>{sourceName === undefined && sources.length > 0 ? <span className="muted">请选择可用书源</span> : null}</div>
-      <button className="button" type="submit" disabled={status === 'loading' || sourceId.length === 0}>{status === 'loading' ? '搜索中…' : '开始搜索'}</button>
+      <div className="field"><span className="field-label">书源</span><div className="source-checks">{sources.map((source) => <label className="source-check" key={source.sourceId}><input type="checkbox" checked={sourceIds.includes(source.sourceId)} onChange={(event) => setSourceIds((current) => event.target.checked ? [...current, source.sourceId] : current.filter((id) => id !== source.sourceId))} /><span>{source.name}{source.group === undefined ? '' : ` · ${source.group}`}</span></label>)}</div>{sourceName === undefined && sources.length > 0 ? <span className="muted">请选择可用书源</span> : null}</div>
+      <div className="actions"><button className="button" type="submit" disabled={status === 'loading' || sourceIds.length === 0}>{status === 'loading' ? '搜索中…' : '开始搜索'}</button>{status === 'loading' ? <button className="button secondary" type="button" onClick={() => void cancelSearch()}>取消</button> : null}{status === 'done' && hasNextPage ? <button className="button secondary" type="button" onClick={() => void continueNextPage()}>加载下一页</button> : null}</div>
     </form>
     {message.length > 0 ? <p className={status === 'error' ? 'error' : 'success'} role="status">{message}</p> : null}
     <div className="result-list" aria-live="polite">{candidates.length === 0 && status === 'done' ? <div className="empty-state">没有找到匹配书籍。</div> : candidates.map((item, index) => <article className="result-card" key={`${item.sourceId}:${item.candidate.bookUrl}:${index}`}><div><h2>{item.candidate.name ?? '未命名书籍'}</h2><p className="muted">{item.candidate.author ?? '作者未知'}</p>{item.candidate.intro === undefined ? null : <p>{item.candidate.intro}</p>}<p className="muted small">{item.sourceId}</p></div><button className="button secondary" type="button" onClick={() => void saveCandidate(index)} disabled={saving === index}>{saving === index ? '保存中…' : '加入书架'}</button></article>)}</div>

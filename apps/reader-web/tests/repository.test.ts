@@ -43,3 +43,28 @@ test('memory repository upserts content, toc, and reading position by user ident
   const position = await repository.savePosition(userId, { userId, bookId: 'book-a', editionKey: 'edition-a', chapterId: 'chapter-a', chapterUrl: 'https://books.example.test/a/1', chapterIndex: 0, title: '第一章', paragraphIndex: 2, offset: 3, version: 1 })
   assert.equal((await repository.getPosition(userId, 'book-a', 'edition-a'))?.paragraphIndex, position.paragraphIndex)
 })
+
+test('search snapshots retain per-source progress for stream recovery', async () => {
+  const repository = new MemoryReaderRepository()
+  const userId = '00000000-0000-0000-0000-000000000001'
+  const search = await repository.createSearch(userId, { keyword: '多源', sourceId: 'source-a', sourceIds: ['source-a', 'source-b'] })
+  assert.deepEqual(search.sourceIds, ['source-a', 'source-b'])
+  assert.equal(search.progress.total, 2)
+  const updated = await repository.updateSearch(userId, search.id, { sourceStates: [{ sourceId: 'source-a', status: 'success', candidates: [], diagnostics: [], nextCursor: { index: 2 } }, { sourceId: 'source-b', status: 'failed', candidates: [], diagnostics: [{ message: 'timeout' }] }], progress: { completed: 2, total: 2 }, status: 'partial' })
+  assert.equal(updated?.sourceStates[0]?.nextCursor?.index, 2)
+  assert.equal(updated?.status, 'partial')
+  assert.equal((await repository.getHome(userId)).searchHistory[0]?.status, 'partial')
+})
+
+test('memory search operation claims can be released and reclaimed', async () => {
+  const repository = new MemoryReaderRepository()
+  const userId = '00000000-0000-0000-0000-000000000001'
+  const search = await repository.createSearch(userId, { keyword: '占用', sourceId: 'source-a' })
+  const states = [{ sourceId: 'source-a', status: 'pending' as const, candidates: [], diagnostics: [] }]
+  const claimed = await repository.claimSearch(userId, search.id, 'operation-a', states, { completed: 0, total: 1 })
+  assert.equal(claimed?.operationId, 'operation-a')
+  assert.equal(await repository.claimSearch(userId, search.id, 'operation-b', states, { completed: 0, total: 1 }), null)
+  const released = await repository.updateSearch(userId, search.id, { expectedOperationId: 'operation-a', operationId: null, status: 'success' })
+  assert.equal(released?.operationId, undefined)
+  assert.equal((await repository.claimSearch(userId, search.id, 'operation-b', states, { completed: 0, total: 1 }))?.operationId, 'operation-b')
+})

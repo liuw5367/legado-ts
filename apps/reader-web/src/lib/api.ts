@@ -13,7 +13,34 @@ export interface ApiToc { userId: string; bookId: string; editionKey: string; so
 export interface ApiContent { chapter: ApiChapter; contentType: 'text' | 'html'; raw: string; cleaned: string; pages: string[]; resources: Array<{ kind: 'image'; url: string }>; title?: string; imgUrl?: string }
 
 export class ApiError extends Error {
-  public constructor(public readonly code: string, message: string, public readonly status: number) { super(message) }
+  public readonly code: string
+  public readonly status: number
+  public constructor(code: string, message: string, status: number) { super(message); this.code = code; this.status = status }
+}
+
+export interface StreamEvent { type: string; data: unknown }
+
+export class SseDecoder {
+  private readonly decoder = new TextDecoder()
+  private buffer = ''
+  private eventType = 'message'
+  private dataLines: string[] = []
+
+  public push(bytes: Uint8Array): StreamEvent[] { this.buffer += this.decoder.decode(bytes, { stream: true }); return this.consume(false) }
+  public finish(): StreamEvent[] { this.buffer += this.decoder.decode(); return this.consume(true) }
+  private consume(flushBuffer: boolean): StreamEvent[] {
+    const events: StreamEvent[] = []
+    const lines = this.buffer.split(/\r?\n/u)
+    this.buffer = flushBuffer ? '' : lines.pop() ?? ''
+    for (const line of lines) {
+      if (line.length === 0) { const event = this.flushEvent(); if (event !== undefined) events.push(event); continue }
+      if (line.startsWith('event:')) this.eventType = line.slice(6).trim()
+      if (line.startsWith('data:')) this.dataLines.push(line.slice(5).trimStart())
+    }
+    if (flushBuffer && this.buffer.length > 0) { this.dataLines.push(this.buffer); this.buffer = ''; const event = this.flushEvent(); if (event !== undefined) events.push(event) }
+    return events
+  }
+  private flushEvent(): StreamEvent | undefined { if (this.dataLines.length === 0) return undefined; const raw = this.dataLines.join('\n'); let data: unknown = raw; try { data = JSON.parse(raw) as unknown } catch { /* 保留文本事件 */ } const event = { type: this.eventType, data }; this.eventType = 'message'; this.dataLines = []; return event }
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -32,11 +59,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return body as T
 }
 
-export async function streamSearch(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal): Promise<void> {
+export async function streamSearch(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal, options?: { nextPage?: boolean; sourceIds?: string[] }): Promise<void> {
   const session = await currentSession()
   const headers = new Headers({ Accept: 'text/event-stream' })
   if (session?.access_token !== undefined) headers.set('Authorization', `Bearer ${session.access_token}`)
-  const response = await fetch(`/api/searches/${encodeURIComponent(searchId)}/stream`, { headers, ...(signal === undefined ? {} : { signal }) })
+  const requestOptions: RequestInit = options === undefined ? { headers } : { method: 'POST', headers: new Headers({ ...Object.fromEntries(headers.entries()), 'Content-Type': 'application/json' }), body: JSON.stringify(options), ...(signal === undefined ? {} : { signal }) }
+  const response = await fetch(options === undefined ? `/api/searches/${encodeURIComponent(searchId)}/stream` : `/api/searches/${encodeURIComponent(searchId)}/batches`, requestOptions)
   if (!response.ok || response.body === null) {
     const body = await readJson(response)
     const error = isRecord(body)?.error
@@ -44,34 +72,13 @@ export async function streamSearch(searchId: string, onEvent: (event: { type: st
     throw new ApiError(typeof errorRecord?.code === 'string' ? errorRecord.code : 'stream-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '搜索流连接失败', response.status)
   }
   const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let eventType = 'message'
-  let dataLines: string[] = []
-  const flush = () => {
-    if (dataLines.length === 0) return
-    const raw = dataLines.join('\n')
-    let data: unknown = raw
-    try { data = JSON.parse(raw) } catch { /* 保留文本事件 */ }
-    onEvent({ type: eventType, data })
-    eventType = 'message'
-    dataLines = []
-  }
+  const decoder = new SseDecoder()
   while (true) {
     const chunk = await reader.read()
     if (chunk.done) break
-    buffer += decoder.decode(chunk.value, { stream: true })
-    const lines = buffer.split(/\r?\n/u)
-    buffer = lines.pop() ?? ''
-    for (const line of lines) {
-      if (line.length === 0) { flush(); continue }
-      if (line.startsWith('event:')) eventType = line.slice(6).trim()
-      if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
-    }
+    for (const event of decoder.push(chunk.value)) onEvent(event)
   }
-  buffer += decoder.decode()
-  if (buffer.length > 0) dataLines.push(buffer)
-  flush()
+  for (const event of decoder.finish()) onEvent(event)
 }
 
 async function readJson(response: Response): Promise<unknown> {

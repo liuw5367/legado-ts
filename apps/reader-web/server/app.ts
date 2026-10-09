@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { PostgresReaderRepository, type ReaderRepository } from './db/repository.ts'
-import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime } from './runtime/reader-runtime.ts'
+import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -52,9 +52,11 @@ app.post('/api/searches', async (context) => {
   if (body instanceof Response) return body
   try {
     const availableSources = await dependencies.runtime.listSources()
-    const source = body.sourceId === undefined ? availableSources[0] : availableSources.find((item) => item.sourceId === body.sourceId)
+    const requestedIds = body.sourceIds === undefined || body.sourceIds.length === 0 ? body.sourceId === undefined ? availableSources.map((item) => item.sourceId) : [body.sourceId] : body.sourceIds
+    const selectedSources = availableSources.filter((item) => requestedIds.includes(item.sourceId))
+    const source = selectedSources[0]
     if (source === undefined || source === null) return context.json({ error: { code: 'source-not-found', message: '没有可用书源' } }, 404)
-    const search = await dependencies.repository.createSearch(context.get('userId'), { keyword: body.keyword, sourceId: source.sourceId, ...(body.precision === undefined ? {} : { precision: body.precision }) }, source.fingerprint)
+    const search = await dependencies.repository.createSearch(context.get('userId'), { keyword: body.keyword, sourceId: source.sourceId, sourceIds: selectedSources.map((item) => item.sourceId), ...(body.precision === undefined ? {} : { precision: body.precision }) }, source.fingerprint)
     return context.json({ search }, 201)
   } catch (error) {
     return handleError(context, error)
@@ -75,8 +77,12 @@ app.get('/api/searches/:searchId', async (context) => {
 app.post('/api/searches/:searchId/batches', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
+  const body = await parseBody(context, searchBatchSchema, true)
+  if (body instanceof Response) return body
+  const options: SearchBatchOptions = { ...(body.sourceIds === undefined ? {} : { sourceIds: body.sourceIds }), ...(body.nextPage === undefined ? {} : { nextPage: body.nextPage }) }
+  if (context.req.header('Accept')?.includes('text/event-stream') === true) return streamSearchResponse(context, context.get('userId'), context.req.param('searchId'), options)
   try {
-    const result = await dependencies.runtime.runSearchBatch(context.get('userId'), context.req.param('searchId'))
+    const result = await dependencies.runtime.runSearchBatch(context.get('userId'), context.req.param('searchId'), options)
     return context.json(result)
   } catch (error) {
     return handleError(context, error)
@@ -86,19 +92,18 @@ app.post('/api/searches/:searchId/batches', async (context) => {
 app.get('/api/searches/:searchId/stream', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
-  const userId = context.get('userId')
-  const searchId = context.req.param('searchId')
-  return streamSSE(context, async (stream) => {
-    await stream.writeSSE({ event: 'start', data: JSON.stringify({ searchId }) })
-    try {
-      const result = await dependencies.runtime.runSearchBatch(userId, searchId)
-      await stream.writeSSE({ event: 'batch', data: JSON.stringify(result) })
-      await stream.writeSSE({ event: 'done', data: JSON.stringify({ search: result.search }) })
-    } catch (error) {
-      const response = errorResponse(error)
-      await stream.writeSSE({ event: 'error', data: JSON.stringify(response.body.error) })
-    }
-  })
+  return streamSearchResponse(context, context.get('userId'), context.req.param('searchId'), {})
+})
+
+app.post('/api/searches/:searchId/cancel', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    const search = await dependencies.runtime.cancelSearch(context.get('userId'), context.req.param('searchId'))
+    return search === null ? context.json({ error: { code: 'not-found', message: '搜索任务不存在' } }, 404) : context.json({ search })
+  } catch (error) {
+    return handleError(context, error)
+  }
 })
 
 app.post('/api/books', async (context) => {
@@ -238,13 +243,16 @@ app.notFound((context) => context.req.path.startsWith('/api/')
 
 export default app
 
-const searchInputSchema = z.object({ keyword: z.string().trim().min(1).max(200), sourceId: z.string().trim().min(1).max(500).optional(), precision: z.boolean().optional() })
+const searchInputSchema = z.object({ keyword: z.string().trim().min(1).max(200), sourceId: z.string().trim().min(1).max(500).optional(), sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), precision: z.boolean().optional() })
+const searchBatchSchema = z.object({ sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), nextPage: z.boolean().optional() }).default({})
 const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999) })
 const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })
 
-async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: z.ZodType<T>): Promise<T | Response> {
+async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: z.ZodType<T>, optional = false): Promise<T | Response> {
   try {
-    const parsed = schema.safeParse(await context.req.json())
+    let input: unknown
+    try { input = await context.req.json() } catch { if (!optional) throw new Error('invalid-json'); input = {} }
+    const parsed = schema.safeParse(input)
     return parsed.success ? parsed.data : context.json({ error: { code: 'invalid-input', message: '请求参数无效', issues: parsed.error.issues } }, 400)
   } catch {
     return context.json({ error: { code: 'invalid-input', message: '请求体不是有效 JSON' } }, 400)
@@ -256,12 +264,34 @@ function handleError(context: Context<{ Variables: Variables }>, error: unknown)
   return context.json(response.body, response.status)
 }
 
-function errorResponse(error: unknown): { body: { error: { code: string; message: string } }; status: 400 | 404 | 500 } {
+function errorResponse(error: unknown): { body: { error: { code: string; message: string } }; status: 400 | 404 | 409 | 500 } {
   if (error instanceof ReaderRuntimeError) {
-    const status = error.code === 'not-found' ? 404 : error.code === 'invalid-input' ? 400 : 500
+    const status = error.code === 'not-found' ? 404 : error.code === 'invalid-input' ? 400 : error.code === 'source-busy' ? 409 : 500
     return { body: { error: { code: error.code, message: error.message } }, status }
   }
   const message = error instanceof Error && error.message.length > 0 ? error.message : '服务器内部错误'
   const body = { error: { code: 'server-error', message: process.env.NODE_ENV === 'production' ? '服务器内部错误' : message } }
   return { body, status: 500 }
+}
+
+function streamSearchResponse(context: Context<{ Variables: Variables }>, userId: string, searchId: string, options: SearchBatchOptions) {
+  return streamSSE(context, async (stream) => {
+    let sequence = 0
+    const heartbeat = setInterval(() => { void stream.write(': heartbeat\n\n').catch(() => undefined) }, 10_000)
+    await stream.writeSSE({ event: 'batch-start', data: JSON.stringify({ searchId, seq: sequence++ }) })
+    try {
+      const result = await dependencies.runtime.runSearchBatchStream(userId, searchId, async (source, search) => {
+        await stream.writeSSE({ event: 'source-result', data: JSON.stringify({ searchId, seq: sequence++, source, search, progress: search.progress }) })
+        await stream.writeSSE({ event: 'progress', data: JSON.stringify({ searchId, seq: sequence++, progress: search.progress }) })
+      }, options)
+      await stream.writeSSE({ event: 'batch-end', data: JSON.stringify({ searchId, seq: sequence++, search: result.search, progress: result.progress }) })
+      await stream.writeSSE({ event: 'batch', data: JSON.stringify(result) })
+      await stream.writeSSE({ event: 'done', data: JSON.stringify({ search: result.search }) })
+    } catch (error) {
+      const response = errorResponse(error)
+      await stream.writeSSE({ event: 'error', data: JSON.stringify(response.body.error) })
+    } finally {
+      clearInterval(heartbeat)
+    }
+  })
 }

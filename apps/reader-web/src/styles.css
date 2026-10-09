@@ -45,6 +45,9 @@ button { cursor: pointer; }
 .eyebrow { margin: 0; color: var(--primary); font-size: .7rem; font-weight: 800; letter-spacing: .14em; }
 .search-form { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(10rem, 1fr) auto; align-items: end; gap: 1rem; }
 .field select { width: 100%; border: 1px solid var(--border); border-radius: .5rem; padding: .7rem .8rem; background: var(--card); color: var(--foreground); }
+.field-label { font-size: .875rem; font-weight: 600; }
+.source-checks { display: flex; flex-wrap: wrap; gap: .5rem; }
+.source-check { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--border); border-radius: .45rem; padding: .55rem .65rem; color: var(--foreground); font-size: .85rem; }
 .result-list { display: flex; flex-direction: column; gap: .75rem; }
 .result-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: .75rem; padding: 1rem 1.1rem; }
 .result-card h2 { margin: 0 0 .3rem; font-size: 1.05rem; }

@@ -1,6 +1,6 @@
 import { boolean, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, PageCursor, TocBookPatch } from '@legado/source-core'
-import type { RuntimeStateSnapshot, StoredCandidate } from '../domain/types.ts'
+import type { RuntimeStateSnapshot, SourceSearchState, StoredCandidate } from '../domain/types.ts'
 
 export const readerSchema = pgSchema('reader')
 
@@ -68,11 +68,16 @@ export const searchRuns = readerSchema.table('search_runs', {
   userId: uuid('user_id').notNull(),
   keyword: text('keyword').notNull(),
   sourceId: text('source_id').notNull(),
+  sourceIds: jsonb('source_ids').$type<string[]>().notNull().default([]),
   sourceFingerprint: text('source_fingerprint'),
   status: text('status').notNull(),
   candidates: jsonb('candidates').$type<StoredCandidate[]>().notNull().default([]),
+  sourceStates: jsonb('source_states').$type<SourceSearchState[]>().notNull().default([]),
   cursor: jsonb('cursor').$type<PageCursor | null>(),
   nextCursor: jsonb('next_cursor').$type<PageCursor | null>(),
+  operationId: text('operation_id'),
+  progressCompleted: integer('progress_completed').notNull().default(0),
+  progressTotal: integer('progress_total').notNull().default(0),
   version: integer('version').notNull().default(0),
   cancelled: boolean('cancelled').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

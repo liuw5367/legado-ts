@@ -13,15 +13,31 @@ export interface SearchRunState {
   userId: string
   keyword: string
   sourceId: string
+  sourceIds: string[]
   sourceFingerprint?: string
+  sourceStates: SourceSearchState[]
   status: 'running' | 'success' | 'empty' | 'partial' | 'failed' | 'cancelled'
   candidates: StoredCandidate[]
   cursor?: PageCursor
   nextCursor?: PageCursor
+  operationId?: string
+  progress: { completed: number; total: number }
   version: number
   cancelled: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface SourceSearchState {
+  sourceId: string
+  sourceFingerprint?: string
+  status: 'pending' | 'running' | 'success' | 'empty' | 'partial' | 'failed' | 'capability-missing' | 'cancelled'
+  candidates: StoredCandidate[]
+  cursor?: PageCursor
+  nextCursor?: PageCursor
+  diagnostics: unknown[]
+  startedAt?: string
+  completedAt?: string
 }
 
 export interface StoredBook {
@@ -115,6 +131,7 @@ export interface SourceSummary {
 export interface SearchInput {
   keyword: string
   sourceId: string
+  sourceIds?: string[]
   precision?: boolean
   cursor?: PageCursor
 }
@@ -122,7 +139,9 @@ export interface SearchInput {
 export interface SearchBatchResult {
   search: SearchRunState
   candidates: StoredCandidate[]
-  sourceStatus: 'success' | 'empty' | 'partial' | 'failed' | 'capability-missing'
+  sourceResults: SourceSearchState[]
+  progress: { completed: number; total: number }
+  sourceStatus: 'success' | 'empty' | 'partial' | 'failed' | 'capability-missing' | 'cancelled'
   diagnostics: unknown[]
 }
 
