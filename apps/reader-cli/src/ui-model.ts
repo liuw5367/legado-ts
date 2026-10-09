@@ -283,7 +283,7 @@ export function footerLayout(page: Page, busy: boolean, columns: number, searchS
     left = [{ keys: '⎋', label: '取消检测', priority: 0 }]
     rightActions = right.filter((item) => item.keys !== '⎋')
   } else if (busy) {
-    left = [{ keys: '⎋', label: '取消处理中', priority: 0 }]
+    left = [{ keys: '⎋', label: '取消', priority: 0 }]
     rightActions = right.filter((item) => item.keys !== '⎋')
   } else if (page === 'detail') left = [{ keys: '↵', label: '阅读', priority: 0 }, { keys: 't', label: '目录', priority: 1 }, { keys: 's', label: '换源', priority: 1 }, { keys: 'a', label: '书架', priority: 1 }]
   else if (page === 'toc') left = tocSearchActive ? [{ keys: '↵', label: '完成', priority: 0 }, { keys: '⎋', label: '清除', priority: 1 }] : [{ keys: '↵', label: '阅读', priority: 0 }, { keys: '/', label: '搜索', priority: 1 }, { keys: 'r', label: '刷新', priority: 2 }, { keys: 's', label: tocReversed ? '正序' : '倒序', priority: 3 }, ...(tocHasQuery ? [{ keys: '⎋', label: '清除筛选', priority: 4 }] : [])]
