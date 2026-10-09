@@ -1,3 +1,4 @@
+import './env.ts'
 import { createClient } from '@supabase/supabase-js'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'

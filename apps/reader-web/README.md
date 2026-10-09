@@ -4,7 +4,7 @@
 
 ## 本地运行
 
-复制 `.env.example` 为本地环境文件并填入 Supabase 的公开 URL、publishable key 和服务端 `DATABASE_URL`。先执行数据库迁移：
+复制 `.env.example` 为 `apps/reader-web/.env.local`，填入 Supabase 的公开 URL、publishable key 和服务端 `DATABASE_URL`。API、Drizzle 迁移和 Drizzle 配置会自动读取这个文件；如果环境文件放在其他位置，可设置 `READER_WEB_ENV_FILE` 指向它。先执行数据库迁移：
 
 ```sh
 pnpm --filter @legado/reader-web db:migrate
