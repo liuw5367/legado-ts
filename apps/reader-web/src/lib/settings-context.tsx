@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './auth-context.tsx'
 import { apiFetch, type ApiSettings, type ApiThemeMode } from './api.ts'
+import { Select } from '../components/ui/select.tsx'
 
 export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', fontSize: 18, lineHeight: 1.9 }
 type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'fontSize' | 'lineHeight'>>
@@ -81,7 +82,7 @@ export function useReaderSettings(): ReaderSettingsContextValue {
 
 export function ThemeModeSelect({ className = '' }: { className?: string }) {
   const { settings, updateSettings } = useReaderSettings()
-  return <label className={`theme-select ${className}`.trim()}><span className="sr-only">页面模式</span><select aria-label="页面模式" value={settings.theme} onChange={(event) => void updateSettings({ theme: event.target.value as ApiThemeMode }).catch(() => undefined)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">夜间</option></select></label>
+  return <label className={`theme-select ${className}`.trim()}><span className="sr-only">页面模式</span><Select aria-label="页面模式" value={settings.theme} onChange={(event) => void updateSettings({ theme: event.target.value as ApiThemeMode }).catch(() => undefined)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">夜间</option></Select></label>
 }
 
 function resolveTheme(theme: ApiThemeMode): 'light' | 'dark' { return theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme }

@@ -1,6 +1,6 @@
 # Legado Reader Web
 
-这是阅读器 Web SPA 的应用目录。前端使用 Rsbuild + React Router，API 使用 Hono Node Functions；认证由 Supabase Auth 处理。
+这是阅读器 Web SPA 的应用目录。前端使用 Rsbuild + React Router，基础控件按 `components.json` 的 shadcn 约定放在 `src/components/ui/`，API 使用 Hono Node Functions；认证由 Supabase Auth 处理。
 
 ## 本地运行
 

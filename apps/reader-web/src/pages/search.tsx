@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { apiFetch, type ApiBook, type ApiCandidate, type ApiSource, streamSearch } from '../lib/api.ts'
+import { Button } from '../components/ui/button.tsx'
+import { Input } from '../components/ui/input.tsx'
+import { Select } from '../components/ui/select.tsx'
 
 export function SearchPage() {
   const [searchParams] = useSearchParams()
@@ -68,12 +71,12 @@ export function SearchPage() {
   return <section className="page-stack">
     <div className="page-heading"><div><p className="eyebrow">DISCOVER</p><h1>搜索书籍</h1><p className="muted">搜索会以流式结果逐步显示，较慢的书源也不会让页面失去响应。</p></div><Link className="button secondary" to="/">返回书架</Link></div>
     <form className="card search-form" onSubmit={submitWithId}>
-      <div className="field"><label htmlFor="search-keyword">关键词</label><input id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /></div>
+      <div className="field"><label htmlFor="search-keyword">关键词</label><Input id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /></div>
       <div className="field"><span className="field-label">书源</span><div className="source-checks">{sources.map((source) => <label className="source-check" key={source.sourceId}><input type="checkbox" checked={sourceIds.includes(source.sourceId)} onChange={(event) => setSourceIds((current) => event.target.checked ? [...current, source.sourceId] : current.filter((id) => id !== source.sourceId))} /><span>{source.name}{source.group === undefined ? '' : ` · ${source.group}`}</span></label>)}</div>{sourceName === undefined && sources.length > 0 ? <span className="muted">请选择可用书源</span> : null}</div>
-      {books.length > 0 ? <div className="field"><label htmlFor="target-book">保存到</label><select id="target-book" value={targetBookId} onChange={(event) => setTargetBookId(event.target.value)}><option value="">新建书籍</option>{books.map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}</select><span className="muted small">选择已有书籍后，会为它增加一个书源版本。</span></div> : null}
-      <div className="actions"><button className="button" type="submit" disabled={status === 'loading' || sourceIds.length === 0}>{status === 'loading' ? '搜索中…' : '开始搜索'}</button>{status === 'loading' ? <button className="button secondary" type="button" onClick={() => void cancelSearch()}>取消</button> : null}{status === 'done' && hasNextPage ? <button className="button secondary" type="button" onClick={() => void continueNextPage()}>加载下一页</button> : null}</div>
+      {books.length > 0 ? <div className="field"><label htmlFor="target-book">保存到</label><Select id="target-book" value={targetBookId} onChange={(event) => setTargetBookId(event.target.value)}><option value="">新建书籍</option>{books.map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}</Select><span className="muted small">选择已有书籍后，会为它增加一个书源版本。</span></div> : null}
+      <div className="actions"><Button type="submit" disabled={status === 'loading' || sourceIds.length === 0}>{status === 'loading' ? '搜索中…' : '开始搜索'}</Button>{status === 'loading' ? <Button variant="secondary" type="button" onClick={() => void cancelSearch()}>取消</Button> : null}{status === 'done' && hasNextPage ? <Button variant="secondary" type="button" onClick={() => void continueNextPage()}>加载下一页</Button> : null}</div>
     </form>
     {message.length > 0 ? <p className={status === 'error' ? 'error' : 'success'} role="status">{message}</p> : null}
-    <div className="result-list" aria-live="polite">{candidates.length === 0 && status === 'done' ? <div className="empty-state">没有找到匹配书籍。</div> : candidates.map((item, index) => <article className="result-card" key={`${item.sourceId}:${item.candidate.bookUrl}:${index}`}><div><h2>{item.candidate.name ?? '未命名书籍'}</h2><p className="muted">{item.candidate.author ?? '作者未知'}</p>{item.candidate.intro === undefined ? null : <p>{item.candidate.intro}</p>}<p className="muted small">{item.sourceId}</p></div><button className="button secondary" type="button" onClick={() => void saveCandidate(index)} disabled={saving === index}>{saving === index ? '保存中…' : '加入书架'}</button></article>)}</div>
+    <div className="result-list" aria-live="polite">{candidates.length === 0 && status === 'done' ? <div className="empty-state">没有找到匹配书籍。</div> : candidates.map((item, index) => <article className="result-card" key={`${item.sourceId}:${item.candidate.bookUrl}:${index}`}><div><h2>{item.candidate.name ?? '未命名书籍'}</h2><p className="muted">{item.candidate.author ?? '作者未知'}</p>{item.candidate.intro === undefined ? null : <p>{item.candidate.intro}</p>}<p className="muted small">{item.sourceId}</p></div><Button variant="secondary" type="button" onClick={() => void saveCandidate(index)} disabled={saving === index}>{saving === index ? '保存中…' : '加入书架'}</Button></article>)}</div>
   </section>
 }

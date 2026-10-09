@@ -1,6 +1,7 @@
 import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context.tsx'
 import { ThemeModeSelect } from '../lib/settings-context.tsx'
+import { Button } from './ui/button.tsx'
 
 export function AccountLayout() {
   const { user, logout } = useAuth()
@@ -13,7 +14,7 @@ export function AccountLayout() {
         <ThemeModeSelect />
         <span className="muted">{user?.email ?? ''}</span>
         <Link className="link" to="/account/password">修改密码</Link>
-        <button className="button secondary" type="button" onClick={() => void logout()}>退出</button>
+        <Button variant="secondary" type="button" onClick={() => void logout()}>退出</Button>
       </nav>
     </header>
     <main className="app-main"><Outlet /></main>
