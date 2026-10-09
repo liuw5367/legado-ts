@@ -11,3 +11,10 @@ test('reader migration defines encrypted per-user source runtime state with RLS'
   assert.match(migration, /alter table "reader"\."source_runtime_state" force row level security/u)
   assert.match(migration, /array\['books'.*'source_runtime_state'\]/su)
 })
+
+test('search precision is persisted as a migration-backed search option', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0004_search_precision.sql'), 'utf8')
+  const journal = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8')
+  assert.match(migration, /add column if not exists "precision" boolean not null default false/u)
+  assert.match(journal, /"tag": "0004_search_precision"/u)
+})

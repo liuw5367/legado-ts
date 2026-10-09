@@ -77,6 +77,7 @@ export const searchRuns = readerSchema.table('search_runs', {
   keyword: text('keyword').notNull(),
   sourceId: text('source_id').notNull(),
   sourceIds: jsonb('source_ids').$type<string[]>().notNull().default([]),
+  precision: boolean('precision').notNull().default(false),
   sourceFingerprint: text('source_fingerprint'),
   status: text('status').notNull(),
   candidates: jsonb('candidates').$type<StoredCandidate[]>().notNull().default([]),

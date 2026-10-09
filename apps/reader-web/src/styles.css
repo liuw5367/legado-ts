@@ -92,6 +92,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .field-label { font-size: .875rem; font-weight: 600; }
 .source-checks { display: flex; flex-wrap: wrap; gap: .5rem; }
 .source-check { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--border); border-radius: .45rem; padding: .55rem .65rem; color: var(--foreground); font-size: .85rem; }
+.precision-toggle { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; min-height: 40px; color: var(--foreground); }
 .result-list { display: flex; flex-direction: column; gap: .75rem; }
 .result-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: .75rem; padding: 1rem 1.1rem; }
 .result-card h2 { margin: 0 0 .3rem; font-size: 1.05rem; }

@@ -75,6 +75,14 @@ test('search snapshots retain per-source progress for stream recovery', async ()
   assert.equal((await repository.getHome(userId)).searchHistory[0]?.status, 'partial')
 })
 
+test('memory search snapshots retain precision mode for continuation', async () => {
+  const repository = new MemoryReaderRepository()
+  const userId = '00000000-0000-0000-0000-000000000001'
+  const search = await repository.createSearch(userId, { keyword: '目标', sourceId: 'source-a', precision: true })
+  assert.equal(search.precision, true)
+  assert.equal((await repository.getSearch(userId, search.id))?.precision, true)
+})
+
 test('memory search operation claims can be released and reclaimed', async () => {
   const repository = new MemoryReaderRepository()
   const userId = '00000000-0000-0000-0000-000000000001'

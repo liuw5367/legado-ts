@@ -6,6 +6,7 @@ import type { SourceSession } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
 import { seedConfiguredSources } from '../db/source-seed.ts'
 import type { BookCreationInput, RuntimeStateSnapshot, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
+import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
 
 export class ReaderRuntimeError extends Error {
   public readonly code: 'not-found' | 'invalid-input' | 'source-failed' | 'configuration' | 'source-busy'
@@ -68,9 +69,10 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
         const index = states.findIndex((item) => item.sourceId === outcome.state.sourceId)
         if (index >= 0) states[index] = outcome.state
         if (controller.signal.aborted) for (const state of states) if (state.status === 'pending' || state.status === 'running') { state.status = 'cancelled'; state.completedAt = new Date().toISOString() }
-        const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'running')
+        const candidates = orderSearchCandidates(run.keyword, [...preservedCandidates, ...states.flatMap((item) => item.candidates)], run.precision === true)
+        const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'running', candidates.length)
         const nextStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'running' : aggregate
-        current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates: [...preservedCandidates, ...states.flatMap((item) => item.candidates)], status: nextStatus, expectedOperationId: operationId, operationId, progress: { completed: completedCount(states), total: states.length }, cancelled: controller.signal.aborted })
+        current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates, status: nextStatus, expectedOperationId: operationId, operationId, progress: { completed: completedCount(states), total: states.length }, cancelled: controller.signal.aborted })
         if (current === null) {
           if (controller.signal.aborted) return
           throw new ReaderRuntimeError('source-busy', '搜索操作已失效')
@@ -81,11 +83,12 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
       return outcome
     }))
     await Promise.all(outcomes)
-    const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'success')
+    const candidates = orderSearchCandidates(run.keyword, [...preservedCandidates, ...states.flatMap((item) => item.candidates)], run.precision === true)
+    const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'success', candidates.length)
     const finalStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'partial' : aggregate
-    current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates: [...preservedCandidates, ...states.flatMap((item) => item.candidates)], status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
+    current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates, status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
     if (current === null) { const latest = await repository.getSearch(userId, searchId); if (latest !== null && latest.cancelled) return { search: latest, candidates: latest.candidates, sourceResults: latest.sourceStates, sourceStatus: 'cancelled', progress: latest.progress, diagnostics: [] }; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
-    return { search: current, candidates: states.flatMap((item) => item.candidates), sourceResults: states, sourceStatus: toBatchStatus(finalStatus), progress: current.progress, diagnostics: states.flatMap((item) => item.diagnostics) }
+    return { search: current, candidates: current.candidates, sourceResults: states, sourceStatus: toBatchStatus(finalStatus), progress: current.progress, diagnostics: states.flatMap((item) => item.diagnostics) }
   } finally {
     activeSearches.delete(searchId)
   }
@@ -96,7 +99,7 @@ async function runOneSource(repository: ReaderRepository, run: SearchRunState, s
   let source: StoredSourceRecord
   try { source = await requireSource(repository, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
   try {
-    const result = await withPersistentSourceSession(repository, run.userId, source, (session) => session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 })))
+    const result = await withPersistentSourceSession(repository, run.userId, source, (session) => session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(run.precision === true ? { acceptSearchFields: (fields) => acceptsPrecisionSearchFields(run.keyword, fields) } : {}), ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 })))
     const additions = (result.value?.items ?? []).map((candidate) => ({ sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate }))
     const status = result.status === 'capability-missing' ? 'capability-missing' : result.status
     return { additions, state: { ...state, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
@@ -129,7 +132,7 @@ function preserveCandidates(run: SearchRunState, states: SourceSearchState[], op
 }
 
 function completedCount(states: SourceSearchState[]): number { return states.filter((state) => state.status !== 'pending' && state.status !== 'running').length }
-function aggregateStatus(states: SourceSearchState[], fallback: SearchRunState['status'] | 'running'): SearchRunState['status'] | 'running' | 'capability-missing' { if (states.some((state) => state.status === 'pending' || state.status === 'running')) return 'running'; if (states.every((state) => state.status === 'cancelled')) return 'cancelled'; const success = states.some((state) => state.status === 'success' || state.status === 'empty' || state.status === 'partial'); const failed = states.some((state) => state.status === 'failed' || state.status === 'capability-missing'); if (failed && success) return 'partial'; if (failed) return fallback === 'cancelled' ? 'cancelled' : states.some((state) => state.status === 'capability-missing') ? 'capability-missing' : 'failed'; if (states.flatMap((state) => state.candidates).length === 0) return 'empty'; return 'success' }
+function aggregateStatus(states: SourceSearchState[], fallback: SearchRunState['status'] | 'running', candidateCount = states.flatMap((state) => state.candidates).length): SearchRunState['status'] | 'running' | 'capability-missing' { if (states.some((state) => state.status === 'pending' || state.status === 'running')) return 'running'; if (states.every((state) => state.status === 'cancelled')) return 'cancelled'; const success = states.some((state) => state.status === 'success' || state.status === 'empty' || state.status === 'partial'); const failed = states.some((state) => state.status === 'failed' || state.status === 'capability-missing'); if (failed && success) return 'partial'; if (failed) return fallback === 'cancelled' ? 'cancelled' : states.some((state) => state.status === 'capability-missing') ? 'capability-missing' : 'failed'; if (candidateCount === 0) return 'empty'; return 'success' }
 function toBatchStatus(status: SearchRunState['status'] | 'running' | 'capability-missing'): SearchBatchResult['sourceStatus'] { return status === 'running' ? 'partial' : status }
 
 async function createBookFromSearch(repository: ReaderRepository, userId: string, searchId: string, candidateIndex: number, bookId?: string): Promise<{ book: StoredBook; edition: StoredEdition }> {

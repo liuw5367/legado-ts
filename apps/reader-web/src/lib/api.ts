@@ -4,7 +4,7 @@ export interface ApiSource { sourceId: string; name: string; group?: string; fin
 export type ApiThemeMode = 'system' | 'light' | 'dark'
 export interface ApiSettings { userId: string; theme: ApiThemeMode; fontSize: number; lineHeight: number; updatedAt: string }
 export interface ApiCandidate { sourceId: string; sourceFingerprint: string; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string } }
-export interface ApiSearch { id: string; keyword: string; sourceId: string; status: string; candidates: ApiCandidate[]; nextCursor?: { index: number; token?: string } }
+export interface ApiSearch { id: string; keyword: string; sourceId: string; precision?: boolean; status: string; candidates: ApiCandidate[]; nextCursor?: { index: number; token?: string } }
 export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
 export interface ApiEdition { id: string; userId: string; bookId: string; editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; metadata: Record<string, unknown>; variable?: string }
 export interface ApiPosition { userId: string; bookId: string; editionKey: string; chapterId: string; chapterUrl: string; chapterIndex: number; title: string; tocRevision?: string; paragraphIndex: number; offset: number; version: number; lastReadAt: string }

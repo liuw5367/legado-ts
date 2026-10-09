@@ -14,6 +14,7 @@ export interface SearchRunState {
   keyword: string
   sourceId: string
   sourceIds: string[]
+  precision?: boolean
   sourceFingerprint?: string
   sourceStates: SourceSearchState[]
   status: 'running' | 'success' | 'empty' | 'partial' | 'failed' | 'cancelled'

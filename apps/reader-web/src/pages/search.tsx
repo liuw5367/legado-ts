@@ -13,6 +13,7 @@ export function SearchPage() {
   const [targetBookId, setTargetBookId] = useState('')
   const [sourceId, setSourceId] = useState('')
   const [sourceIds, setSourceIds] = useState<string[]>([])
+  const [precision, setPrecision] = useState(false)
   const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '')
   const [candidates, setCandidates] = useState<ApiCandidate[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
@@ -39,7 +40,7 @@ export function SearchPage() {
     setStatus('loading'); setMessage(''); setCandidates([])
     const controller = new AbortController(); controllerRef.current = controller
     try {
-      const created = await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, sourceIds }) })
+      const created = await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, sourceIds, precision }) })
       setSearchId(created.search.id)
       await streamSearch(created.search.id, (streamEvent) => {
         if (streamEvent.type === 'error') {
@@ -74,6 +75,7 @@ export function SearchPage() {
     <form className="card search-form" onSubmit={submitWithId}>
       <div className="field"><label htmlFor="search-keyword">关键词</label><Input id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /></div>
       <div className="field"><span className="field-label">书源</span><div className="source-checks">{sources.map((source) => <label className="source-check" key={source.sourceId}><input type="checkbox" checked={sourceIds.includes(source.sourceId)} onChange={(event) => setSourceIds((current) => event.target.checked ? [...current, source.sourceId] : current.filter((id) => id !== source.sourceId))} /><span>{source.name}{source.group === undefined ? '' : ` · ${source.group}`}</span></label>)}</div>{sourceName === undefined && sources.length > 0 ? <span className="muted">请选择可用书源</span> : null}</div>
+      <label className="precision-toggle"><input type="checkbox" checked={precision} onChange={(event) => setPrecision(event.target.checked)} /><span>精确搜索</span><span className="muted small">只保留书名、作者或分类包含关键词的结果</span></label>
       {books.length > 0 ? <div className="field"><label htmlFor="target-book">保存到</label><Select id="target-book" value={targetBookId} onChange={(event) => setTargetBookId(event.target.value)}><option value="">新建书籍</option>{books.map((book) => <option key={book.id} value={book.id}>{book.name}</option>)}</Select><span className="muted small">选择已有书籍后，会为它增加一个书源版本。</span></div> : null}
       <div className="actions"><Button type="submit" disabled={status === 'loading' || sourceIds.length === 0}>{status === 'loading' ? '搜索中…' : '开始搜索'}</Button>{status === 'loading' ? <Button variant="secondary" type="button" onClick={() => void cancelSearch()}>取消</Button> : null}{status === 'done' && hasNextPage ? <Button variant="secondary" type="button" onClick={() => void continueNextPage()}>加载下一页</Button> : null}</div>
     </form>
