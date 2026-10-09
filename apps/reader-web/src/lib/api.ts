@@ -21,6 +21,18 @@ export class ApiError extends Error {
 }
 
 export interface StreamEvent { type: string; data: unknown }
+export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
+
+export function createSearchStreamRequest(searchId: string, session: { access_token?: string } | null, signal?: AbortSignal, options?: SearchStreamOptions): { path: string; init: RequestInit } {
+  const headers = new Headers({ Accept: 'text/event-stream' })
+  if (session?.access_token !== undefined) headers.set('Authorization', `Bearer ${session.access_token}`)
+  const path = options === undefined ? `/api/searches/${encodeURIComponent(searchId)}/stream` : `/api/searches/${encodeURIComponent(searchId)}/batches`
+  const init: RequestInit = options === undefined
+    ? { headers }
+    : { method: 'POST', headers: new Headers({ ...Object.fromEntries(headers.entries()), 'Content-Type': 'application/json' }), body: JSON.stringify(options) }
+  if (signal !== undefined) init.signal = signal
+  return { path, init }
+}
 
 export class SseDecoder {
   private readonly decoder = new TextDecoder()
@@ -61,12 +73,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return body as T
 }
 
-export async function streamSearch(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal, options?: { nextPage?: boolean; sourceIds?: string[] }): Promise<void> {
+export async function streamSearch(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal, options?: SearchStreamOptions): Promise<void> {
   const session = await currentSession()
-  const headers = new Headers({ Accept: 'text/event-stream' })
-  if (session?.access_token !== undefined) headers.set('Authorization', `Bearer ${session.access_token}`)
-  const requestOptions: RequestInit = options === undefined ? { headers } : { method: 'POST', headers: new Headers({ ...Object.fromEntries(headers.entries()), 'Content-Type': 'application/json' }), body: JSON.stringify(options), ...(signal === undefined ? {} : { signal }) }
-  const response = await fetch(options === undefined ? `/api/searches/${encodeURIComponent(searchId)}/stream` : `/api/searches/${encodeURIComponent(searchId)}/batches`, requestOptions)
+  const request = createSearchStreamRequest(searchId, session, signal, options)
+  const response = await fetch(request.path, request.init)
   if (!response.ok || response.body === null) {
     const body = await readJson(response)
     const error = isRecord(body)?.error
@@ -75,11 +85,17 @@ export async function streamSearch(searchId: string, onEvent: (event: { type: st
   }
   const reader = response.body.getReader()
   const decoder = new SseDecoder()
+  const isAborted = () => signal?.aborted === true
   while (true) {
     const chunk = await reader.read()
     if (chunk.done) break
-    for (const event of decoder.push(chunk.value)) onEvent(event)
+    if (isAborted()) { await reader.cancel().catch(() => undefined); return }
+    for (const event of decoder.push(chunk.value)) {
+      if (isAborted()) { await reader.cancel().catch(() => undefined); return }
+      onEvent(event)
+    }
   }
+  if (isAborted()) { await reader.cancel().catch(() => undefined); return }
   for (const event of decoder.finish()) onEvent(event)
 }
 
