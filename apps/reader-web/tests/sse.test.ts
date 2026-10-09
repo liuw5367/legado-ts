@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createSearchStreamRequest, SseDecoder } from '../src/lib/api.ts'
+import { createSearchStreamRequest, mergeSearchStreamCandidates, SseDecoder, type ApiCandidate } from '../src/lib/api.ts'
 
 test('SSE decoder handles split UTF-8 bytes and event boundaries', () => {
   const source = new TextEncoder().encode('event: source-result\ndata: {"title":"中文"}\n\nevent: done\ndata: {"ok":true}\n\n')
@@ -23,4 +23,16 @@ test('search stream requests carry cancellation to initial and next-page fetches
   assert.equal(nextPage.init.method, 'POST')
   assert.equal(nextPage.init.signal, controller.signal)
   assert.equal(nextPage.init.body, JSON.stringify({ nextPage: true }))
+})
+
+test('search stream candidates follow the server snapshot order across out-of-order sources and pages', () => {
+  const candidate = (sourceId: string, bookUrl: string): ApiCandidate => ({ sourceId, sourceFingerprint: `${sourceId}-fingerprint`, candidate: { sourceId, bookUrl, name: sourceId } })
+  const sourceB = candidate('source-b', 'https://books.example.test/b')
+  const sourceA = candidate('source-a', 'https://books.example.test/a')
+  const afterFastSource = mergeSearchStreamCandidates([], { source: { candidates: [sourceB] }, search: { candidates: [sourceB] } })
+  assert.deepEqual(afterFastSource, [sourceB])
+  const afterSlowSource = mergeSearchStreamCandidates(afterFastSource, { source: { candidates: [sourceA] }, search: { candidates: [sourceA, sourceB] } })
+  assert.deepEqual(afterSlowSource, [sourceA, sourceB])
+  const afterNextPage = mergeSearchStreamCandidates(afterSlowSource, { source: { candidates: [candidate('source-a', 'https://books.example.test/a-2')] }, search: { candidates: [sourceA, candidate('source-a', 'https://books.example.test/a-2'), sourceB] } })
+  assert.deepEqual(afterNextPage.map((item) => item.candidate.bookUrl), ['https://books.example.test/a', 'https://books.example.test/a-2', 'https://books.example.test/b'])
 })

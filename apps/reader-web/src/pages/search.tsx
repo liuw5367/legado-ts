@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { apiFetch, type ApiBook, type ApiCandidate, type ApiSource, streamSearch } from '../lib/api.ts'
+import { apiFetch, mergeSearchStreamCandidates, type ApiBook, type ApiCandidate, type ApiSource, type SearchSourceEventData, streamSearch } from '../lib/api.ts'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
@@ -47,12 +47,13 @@ export function SearchPage() {
           throw new Error(error.message ?? '搜索失败')
         }
         if (streamEvent.type === 'source-result') {
-          const batch = streamEvent.data as { source?: { candidates?: ApiCandidate[]; status?: string; nextCursor?: unknown } }
-          setCandidates((current) => [...current, ...(batch.source?.candidates ?? [])])
+          const batch = streamEvent.data as SearchSourceEventData & { source?: { candidates?: ApiCandidate[]; status?: string; nextCursor?: unknown } }
+          setCandidates((current) => mergeSearchStreamCandidates(current, batch))
           if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') setMessage('部分书源执行失败，已保留可用结果。')
         }
         if (streamEvent.type === 'batch-end') {
-          const batch = streamEvent.data as { search?: { sourceStates?: Array<{ nextCursor?: unknown }> } }
+          const batch = streamEvent.data as SearchSourceEventData & { search?: { sourceStates?: Array<{ nextCursor?: unknown }>; candidates?: ApiCandidate[] } }
+          setCandidates((current) => mergeSearchStreamCandidates(current, batch))
           setHasNextPage(batch.search?.sourceStates?.some((source) => source.nextCursor !== undefined) === true)
         }
       }, controller.signal)
@@ -63,7 +64,7 @@ export function SearchPage() {
   async function continueNextPage() {
     if (searchId.length === 0 || !hasNextPage) return
     const controller = new AbortController(); controllerRef.current = controller; setStatus('loading'); setMessage('')
-    try { await streamSearch(searchId, (streamEvent) => { if (streamEvent.type === 'source-result') { const data = streamEvent.data as { source?: { candidates?: ApiCandidate[] } }; setCandidates((current) => [...current, ...(data.source?.candidates ?? [])]) } if (streamEvent.type === 'batch-end') { const data = streamEvent.data as { search?: { sourceStates?: Array<{ nextCursor?: unknown }> } }; setHasNextPage(data.search?.sourceStates?.some((source) => source.nextCursor !== undefined) === true) } }, controller.signal, { nextPage: true }); setStatus('done') } catch (error) { setStatus('error'); setMessage(error instanceof Error ? error.message : '加载下一页失败') } finally { controllerRef.current = null }
+    try { await streamSearch(searchId, (streamEvent) => { if (streamEvent.type === 'source-result') { const data = streamEvent.data as SearchSourceEventData; setCandidates((current) => mergeSearchStreamCandidates(current, data)) } if (streamEvent.type === 'batch-end') { const data = streamEvent.data as SearchSourceEventData & { search?: { sourceStates?: Array<{ nextCursor?: unknown }>; candidates?: ApiCandidate[] } }; setCandidates((current) => mergeSearchStreamCandidates(current, data)); setHasNextPage(data.search?.sourceStates?.some((source) => source.nextCursor !== undefined) === true) } }, controller.signal, { nextPage: true }); setStatus('done') } catch (error) { setStatus('error'); setMessage(error instanceof Error ? error.message : '加载下一页失败') } finally { controllerRef.current = null }
   }
 
   async function cancelSearch() { controllerRef.current?.abort(); if (searchId.length > 0) await apiFetch(`/api/searches/${encodeURIComponent(searchId)}/cancel`, { method: 'POST' }).catch(() => undefined); setStatus('done'); setMessage('搜索已取消') }

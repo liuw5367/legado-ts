@@ -22,6 +22,12 @@ export class ApiError extends Error {
 
 export interface StreamEvent { type: string; data: unknown }
 export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
+export interface SearchSourceEventData { source?: { candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[] } }
+
+export function mergeSearchStreamCandidates(current: ApiCandidate[], event: SearchSourceEventData): ApiCandidate[] {
+  if (event.search?.candidates !== undefined) return [...event.search.candidates]
+  return [...current, ...(event.source?.candidates ?? [])]
+}
 
 export function createSearchStreamRequest(searchId: string, session: { access_token?: string } | null, signal?: AbortSignal, options?: SearchStreamOptions): { path: string; init: RequestInit } {
   const headers = new Headers({ Accept: 'text/event-stream' })
