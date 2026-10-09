@@ -4,7 +4,7 @@ import { Card } from './ui/card.tsx'
 import { Input } from './ui/input.tsx'
 
 export function AuthCard({ title, children, footer }: { title: string; children: ReactNode; footer?: ReactNode }) {
-  return <div className="app-shell"><main className="app-main"><Card><h1>{title}</h1>{children}{footer === undefined ? null : <div className="muted" style={{ marginTop: '1.25rem' }}>{footer}</div>}</Card></main></div>
+  return <div className="app-shell"><main className="app-main app-main-standalone"><Card><h1>{title}</h1>{children}{footer === undefined ? null : <div className="muted" style={{ marginTop: '1.25rem' }}>{footer}</div>}</Card></main></div>
 }
 
 export function EmailPasswordFields({ submitLabel, onSubmit, includeCurrent = false }: { submitLabel: string; onSubmit: (values: { email: string; password: string; currentPassword?: string }) => Promise<void>; includeCurrent?: boolean }) {

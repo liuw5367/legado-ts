@@ -13,6 +13,10 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
     const source = await readFile(resolve(sourceRoot, `components/ui/${component}.tsx`), 'utf8')
     assert.match(source, /export function/u)
   }
+  for (const component of ['book-cover', 'reader-layout', 'reader-settings-panel', 'ui/sheet']) {
+    const source = await readFile(resolve(sourceRoot, `components/${component}.tsx`), 'utf8')
+    assert.match(source, /export function/u)
+  }
   const pageSources = await Promise.all(['components/auth-form.tsx', 'pages/register.tsx', 'pages/forgot-password.tsx', 'pages/change-password.tsx', 'pages/reset-password.tsx', 'pages/search.tsx', 'pages/toc.tsx', 'pages/settings.tsx', 'pages/account-home.tsx'].map((file) => readFile(resolve(sourceRoot, file), 'utf8')))
   for (const source of pageSources) assert.match(source, /(?:components\/ui\/|\.\/ui\/)/u)
   const searchPage = await readFile(resolve(sourceRoot, 'pages/search.tsx'), 'utf8')
