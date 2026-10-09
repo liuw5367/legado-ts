@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import type { Chapter, ContentIdentity } from '@legado/source-core'
 import { defaultStoragePaths, normalizeSearchName, ReaderStorage, editionKey } from '../src/storage.ts'
+import { READER_SETTINGS_DEFAULTS } from '../src/reader-settings.ts'
 
 async function temporaryStorage(): Promise<{ storage: ReaderStorage; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'legado-reader-'))
@@ -25,12 +26,24 @@ test('默认数据和缓存目录位于用户配置目录', () => {
 test('阅读器并发设置使用默认值并通过带 envelope 的文件持久化', async () => {
   const { storage, root } = await temporaryStorage()
   try {
-    assert.deepEqual(await storage.getReaderSettings(), { searchConcurrency: 4, sourceSearchConcurrency: 4, sourceCheckConcurrency: 4 })
-    await storage.saveReaderSettings({ searchConcurrency: 1, sourceSearchConcurrency: 32, sourceCheckConcurrency: 8 })
-    assert.deepEqual(await storage.getReaderSettings(), { searchConcurrency: 1, sourceSearchConcurrency: 32, sourceCheckConcurrency: 8 })
-    const persisted = JSON.parse(await readFile(join(root, 'data-v1', 'reader-settings.json'), 'utf8')) as { schemaVersion?: number; data?: Record<string, number> }
+    assert.deepEqual(await storage.getReaderSettings(), READER_SETTINGS_DEFAULTS)
+    await storage.saveReaderSettings({ ...READER_SETTINGS_DEFAULTS, searchConcurrency: 1, sourceSearchConcurrency: 32, sourceCheckConcurrency: 8, showReaderBookTitle: false, readerHeaderSeparator: 'hidden' })
+    assert.deepEqual(await storage.getReaderSettings(), { ...READER_SETTINGS_DEFAULTS, searchConcurrency: 1, sourceSearchConcurrency: 32, sourceCheckConcurrency: 8, showReaderBookTitle: false, readerHeaderSeparator: 'hidden' })
+    const persisted = JSON.parse(await readFile(join(root, 'data-v1', 'reader-settings.json'), 'utf8')) as { schemaVersion?: number; data?: Record<string, unknown> }
     assert.equal(persisted.schemaVersion, 1)
     assert.equal(persisted.data?.sourceSearchConcurrency, 32)
+    assert.equal(persisted.data?.readerHeaderSeparator, 'hidden')
+  } finally {
+    await storage.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('旧阅读器设置缺少新增字段时补齐默认值', async () => {
+  const { storage, root } = await temporaryStorage()
+  try {
+    await writeFile(join(root, 'data-v1', 'reader-settings.json'), JSON.stringify({ schemaVersion: 1, revision: 1, updatedAt: '2026-10-09T00:00:00.000Z', data: { searchConcurrency: 2, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5 } }))
+    assert.deepEqual(await storage.getReaderSettings(), { ...READER_SETTINGS_DEFAULTS, searchConcurrency: 2, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5 })
   } finally {
     await storage.close()
     await rm(root, { recursive: true, force: true })
@@ -40,8 +53,8 @@ test('阅读器并发设置使用默认值并通过带 envelope 的文件持久�
 test('非法阅读器并发设置读取时回退为默认值', async () => {
   const { storage, root } = await temporaryStorage()
   try {
-    await storage.saveReaderSettings({ searchConcurrency: 0, sourceSearchConcurrency: 99, sourceCheckConcurrency: 1.5 })
-    assert.deepEqual(await storage.getReaderSettings(), { searchConcurrency: 4, sourceSearchConcurrency: 4, sourceCheckConcurrency: 4 })
+    await writeFile(join(root, 'data-v1', 'reader-settings.json'), JSON.stringify({ schemaVersion: 1, revision: 1, updatedAt: '2026-10-09T00:00:00.000Z', data: { ...READER_SETTINGS_DEFAULTS, searchConcurrency: 0, sourceSearchConcurrency: 99, sourceCheckConcurrency: 1.5, showReaderChapterTitle: 'no', readerHeaderSeparator: 'space' } }))
+    assert.deepEqual(await storage.getReaderSettings(), READER_SETTINGS_DEFAULTS)
   } finally {
     await storage.close()
     await rm(root, { recursive: true, force: true })

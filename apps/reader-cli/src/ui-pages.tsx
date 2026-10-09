@@ -8,7 +8,8 @@ import type { ContentBlockKind } from './content-format.ts'
 import type { DebugCapture, DebugStage, ProcessRecord, RequestRecord } from './debug-capture.ts'
 import type { DebugRunner } from './debug-runner.ts'
 import type { SourceCheckProgress, SourceCheckResult } from './application-model.ts'
-import { READER_SETTING_FIELDS } from './reader-settings.ts'
+import { READER_SETTING_FIELDS, readerSettingDisplayValue } from './reader-settings.ts'
+import { formatReaderHeader } from './reader-header.ts'
 import { formatDisplayTime, formatSourceTime } from './time-format.ts'
 import { orderSourceViews } from './source-order.ts'
 import {
@@ -83,16 +84,36 @@ export interface RenderState {
   sourceCheckResults: readonly SourceCheckResult[]
   readerSettings: ReaderSettings
   settingsSelected: number
+  settingsStart: number
   settingsEditing: boolean
   settingsValue: string
   settingsCursor: number
   settingsResetConfirm: boolean
 }
 
-export function pageHeader(page: Page, state: RenderState): { left: string; right: string } {
+export interface PageHeader {
+  left: string
+  right: string
+  separator: string
+  rightSegments?: readonly string[]
+}
+
+export function pageHeader(page: Page, state: RenderState): PageHeader {
   const bookName = state.book?.book.name ?? ''
   const chapterName = state.toc?.chapters[state.chapterIndex]?.title ?? ''
-  const readerTitle = `${bookName} · ${chapterName} · ${state.chapterIndex + 1}/${state.toc?.chapters.length ?? 0} 章`
+  const readerPage = page === 'reader' ? pagePosition(state.readerLine, state.contentLines.length, state.bodyHeight) : undefined
+  const readerHeader = page === 'reader' ? formatReaderHeader({
+    bookName,
+    chapterName,
+    chapterIndex: state.chapterIndex,
+    chapterTotal: state.toc?.chapters.length ?? 0,
+    pageCurrent: readerPage?.current ?? 1,
+    pageTotal: readerPage?.total ?? 1,
+    chapterCharacters: state.chapterCharacters,
+    message: state.message,
+    settings: state.readerSettings,
+  }) : undefined
+  const readerTitle = readerHeader?.left ?? `${bookName} · ${chapterName} · ${state.chapterIndex + 1}/${state.toc?.chapters.length ?? 0} 章`
   const pageName = page === 'home' ? `首页 · ${homeAreaLabel(state.homeArea)}` : page === 'config' ? '书源配置' : page === 'settings' ? '设置' : page === 'search' ? '搜索书籍' : page === 'results' ? `搜索 · ${state.query}` : page === 'detail' ? bookName || '书籍信息' : page === 'toc' ? `目录 · ${bookName}` : page === 'reader' ? readerTitle : page === 'sources' ? `${bookName} / 书源` : page === 'mapping' ? `${bookName} / 章节映射` : page === 'help' ? `帮助 · ${pageLabel(state.helpPage)}` : page === 'diagnostics' ? '诊断' : page === 'debug' ? `书源调试 · ${state.debugRunner?.source.source.bookSourceName ?? state.debugCapture?.sourceName ?? '最近操作'}` : page === 'source-manager' ? '书源管理' : '配置'
   const left = page === 'reader' || page === 'toc' || page === 'home' || page === 'results' ? pageName : `Legado Reader · ${pageName}`
   let right = ''
@@ -105,21 +126,25 @@ export function pageHeader(page: Page, state: RenderState): { left: string; righ
     right = `${sourceMode} · ${state.tocReversed ? '倒序' : '正序'} · ${state.toc?.source.source.bookSourceName ?? ''} · ${matches.length} 项${state.tocQuery.length > 0 ? ` · ${state.tocQuery}` : ''}`
   }
   if (right.length === 0 && page === 'reader') {
-    const pageCount = pagePosition(state.readerLine, state.contentLines.length, state.bodyHeight)
-    right = `${pageCount.current}/${pageCount.total} 页 · ${state.chapterCharacters.toLocaleString('zh-CN')} 字`
+    right = readerHeader?.right ?? ''
   }
   if (right.length === 0 && page === 'sources') right = `${state.sources.length} 个来源`
-  if (page !== 'results') {
-    if (right.length === 0 || !['reader', 'toc'].includes(page)) {
+  if (page !== 'results' && page !== 'reader') {
+    if (right.length === 0 || !['toc'].includes(page)) {
       if (state.message.length > 0) right = state.message
     } else if (state.message.length > 0) right = `${right} · ${state.message}`
   }
-  return { left, right }
+  return {
+    left: page === 'reader' ? display(left) : left,
+    right: page === 'reader' ? display(right) : right,
+    separator: readerHeader?.separator ?? ' · ',
+    ...(readerHeader === undefined ? {} : { rightSegments: readerHeader.rightParts.map(display) }),
+  }
 }
 
 export function renderPage(page: Page, state: RenderState): React.ReactElement {
   if (page === 'config') return renderConfig(state.catalog, state.pageScroll, state.bodyHeight)
-  if (page === 'settings') return renderSettings(state.readerSettings, state.settingsSelected, state.settingsEditing, state.settingsValue, state.settingsCursor, state.settingsResetConfirm)
+  if (page === 'settings') return renderSettings(state.readerSettings, state.settingsSelected, state.settingsStart, state.bodyHeight, state.settingsEditing, state.settingsValue, state.settingsCursor, state.settingsResetConfirm)
   if (page === 'home') return renderHome(state.home, state.history, state.homeArea, state.selected, state.listStart, state.bodyHeight)
   if (page === 'source-manager') return renderSourceManager(state)
   if (page === 'search') return <Text dimColor>在底部输入书名，按 ↵ 搜索。</Text>
@@ -139,15 +164,19 @@ function renderConfig(catalog: SourceCatalogResult, scroll: number, height: numb
   return renderLineViewport(lines, scroll, height)
 }
 
-function renderSettings(settings: ReaderSettings, selected: number, editing: boolean, value: string, cursor: number, resetConfirm: boolean): React.ReactElement {
-  const rows = READER_SETTING_FIELDS.map((field, index) => {
-    const current = settings[field.key]
-    const position = Math.max(0, Math.min(cursor, value.length))
-    const editingValue = value.slice(0, position) + '█' + value.slice(position)
-    const shown = editing && index === selected ? editingValue : String(current)
-    return <Box key={field.key} flexDirection="column"><Text color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{field.label}：{shown}</Text><Text dimColor>     {field.description}（范围 {1}–{32}）</Text></Box>
+function renderSettings(settings: ReaderSettings, selected: number, start: number, height: number, editing: boolean, value: string, cursor: number, resetConfirm: boolean): React.ReactElement {
+  const visible = Math.max(1, Math.floor(Math.max(1, height - 2) / 2))
+  const range = viewportFor(selected, READER_SETTING_FIELDS.length, visible, start)
+  const rows = READER_SETTING_FIELDS.slice(range.start, range.end).map((field, offset) => {
+    const index = range.start + offset
+    const raw = index === selected && editing ? value : String(settings[field.key])
+    const position = Math.max(0, Math.min(cursor, raw.length))
+    const editingValue = field.kind === 'number' && index === selected && editing ? raw.slice(0, position) + '█' + raw.slice(position) : readerSettingDisplayValue(field, raw)
+    const shown = index === selected && editing && field.kind === 'number' ? editingValue : readerSettingDisplayValue(field, index === selected && editing ? value : String(settings[field.key]))
+    return <Box key={field.key} flexDirection="column"><Text color={index === selected ? 'yellow' : 'white'}>{index === selected ? '> ' : '  '}{field.label}：{shown}</Text><Text dimColor>     {field.description}{field.kind === 'number' ? `（范围 ${1}–${32}）` : ''}</Text></Box>
   })
-  return <Box flexDirection="column"><Text bold>应用设置</Text>{rows}<Text dimColor>保存后对下一次批量操作生效，当前操作不会改变。</Text>{resetConfirm ? <Text color="yellow">确认恢复默认值？按 Enter 确认，Esc 取消。</Text> : null}</Box>
+  const rangeHint = READER_SETTING_FIELDS.length > visible ? `（${range.start + 1}–${range.end}/${READER_SETTING_FIELDS.length}）` : ''
+  return <Box flexDirection="column"><Text bold>应用设置{rangeHint}</Text>{rows}<Text dimColor>保存后对下一次批量操作生效，当前操作不会改变。</Text>{resetConfirm ? <Text color="yellow">确认恢复默认值？按 Enter 确认，Esc 取消。</Text> : null}</Box>
 }
 
 function renderHome(items: HomeBookView[], history: Awaited<ReturnType<ReaderApplication['searchHistory']>>, area: number, selected: number, start: number, height: number): React.ReactElement {

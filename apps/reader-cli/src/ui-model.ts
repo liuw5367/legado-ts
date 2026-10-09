@@ -60,7 +60,7 @@ export function helpSections(page: Page, homeArea: number): HelpSection[] {
     sources: { title: '当前页面 · 书源切换', entries: [{ keys: '↑/↓  j/k', description: '移动书源' }, { keys: '↵', description: '切换书源' }, { keys: 't', description: '查看目录' }, { keys: 'm', description: '搜索更多书源' }] },
     mapping: { title: '当前页面 · 章节映射', entries: [{ keys: '↵', description: '确认切换' }, { keys: '⎋', description: '取消' }] },
     config: { title: '当前页面 · 配置', entries: [{ keys: 'd', description: '打开诊断' }, { keys: 's', description: '打开设置' }] },
-    settings: { title: '当前页面 · 设置', entries: [{ keys: '↑/↓  j/k', description: '选择设置项' }, { keys: '↵', description: '编辑或保存' }, { keys: 'r', description: '恢复默认值' }, { keys: '⎋', description: '返回或取消编辑' }] },
+    settings: { title: '当前页面 · 设置', entries: [{ keys: '↑/↓  j/k', description: '选择设置项' }, { keys: '↵', description: '编辑或保存' }, { keys: '空格/←/→', description: '切换开关或连接符' }, { keys: 'r', description: '恢复默认值' }, { keys: '⎋', description: '返回或取消编辑' }] },
     diagnostics: { title: '当前页面 · 诊断', entries: [{ keys: '↑/↓  j/k', description: '选择书源' }, { keys: '↵', description: '查看书源诊断' }, { keys: 'r', description: '执行快速检查' }] },
     'source-manager': { title: '当前页面 · 书源管理', entries: [{ keys: '↑/↓  j/k', description: '移动书源' }, { keys: '空格', description: '选择当前书源' }, { keys: 'a', description: '全选或清除选择' }, { keys: 'c', description: '检测所选书源' }, { keys: 'x/e', description: '批量禁用/启用' }, { keys: 'f', description: '选择本次失败项' }, { keys: 'p', description: '设置优先级' }, { keys: '⎋', description: '取消检测或返回' }] },
     debug: { title: '当前页面 · 书源调试', entries: [{ keys: 'i', description: '修改搜索关键词' }, { keys: 'l', description: '处理流程' }, { keys: 'n', description: '请求列表' }, { keys: 'r', description: '原始响应' }, { keys: 'p', description: '解析摘要' }] },

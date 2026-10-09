@@ -44,7 +44,7 @@ import {
   type Page,
   type SearchUiState,
 } from './ui-model.ts'
-import { READER_SETTING_FIELDS, READER_SETTINGS_DEFAULTS, isReaderSettingValue, type ReaderSettingKey } from './reader-settings.ts'
+import { READER_SETTING_FIELDS, READER_SETTINGS_DEFAULTS, readerSettingRawValue, updateReaderSetting, type ReaderSettingField } from './reader-settings.ts'
 import { orderSourceViews } from './source-order.ts'
 import type { DebugCapture } from './debug-capture.ts'
 import type { DebugRunner } from './debug-runner.ts'
@@ -89,14 +89,14 @@ function PageShell({ columns, rows, bodyHeight, separator, supported, header, co
   bodyHeight: number
   separator: boolean
   supported: boolean
-  header: { left: string; right: string }
+  header: { left: string; right: string; separator: string; rightSegments?: readonly string[] }
   command: { left: string; right: string }
   content: React.ReactElement
   menu: React.ReactElement | undefined
 }): React.ReactElement {
   if (!supported) return <Box width={columns} height={rows}><Text color="yellow">终端至少需要 40 列 × 12 行，当前 {columns} × {rows}</Text></Box>
   return <Box position="relative" flexDirection="column" width={columns} height={rows} overflow="hidden">
-    <Text color="cyan">{layoutContextLine(display(header.left), display(header.right), columns)}</Text>
+    <Text color="cyan">{layoutContextLine(display(header.left), display(header.right), columns, { separator: header.separator, ...(header.rightSegments === undefined ? {} : { rightSegments: header.rightSegments.map(display) }) })}</Text>
     <Box height={bodyHeight} overflow="hidden" flexDirection="column">{content}</Box>
     {separator ? <Text dimColor>{'─'.repeat(Math.max(1, columns))}</Text> : null}
     <CommandBar columns={columns} left={command.left} right={command.right} />
@@ -169,6 +169,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   const [sourceCheckResults, setSourceCheckResults] = useState<SourceCheckResult[]>([])
   const [readerSettings, setReaderSettings] = useState<ReaderSettings>(() => application.readerSettings)
   const [settingsSelected, setSettingsSelected] = useState(0)
+  const [settingsStart, setSettingsStart] = useState(0)
   const [settingsEditing, setSettingsEditing] = useState(false)
   const [settingsValue, setSettingsValue] = useState('')
   const [settingsCursor, setSettingsCursor] = useState(0)
@@ -237,6 +238,12 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     setSelected(0)
     setListStart(0)
     setPageScroll(0)
+    if (next === 'settings') {
+      setSettingsSelected(0)
+      setSettingsStart(0)
+      setSettingsEditing(false)
+      setSettingsResetConfirm(false)
+    }
   }
 
   const goBack = (updatedBook?: OpenBookResult, updatedSources?: KnownSourceView[]): void => {
@@ -1030,11 +1037,17 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     }
   }
 
-  const selectedReaderSettingKey = (): ReaderSettingKey => READER_SETTING_FIELDS[Math.max(0, Math.min(READER_SETTING_FIELDS.length - 1, settingsSelected))]!.key
+  const selectedReaderSetting = (): ReaderSettingField => READER_SETTING_FIELDS[Math.max(0, Math.min(READER_SETTING_FIELDS.length - 1, settingsSelected))]!
+
+  const settingsVisibleCount = (): number => Math.max(1, Math.floor(Math.max(1, bodyHeight - 2) / 2))
+
+  const keepSettingsSelectionVisible = (index: number): void => {
+    setSettingsStart((start) => keepIndexVisible(index, READER_SETTING_FIELDS.length, settingsVisibleCount(), start).start)
+  }
 
   const beginReaderSettingEdit = (): void => {
-    const key = selectedReaderSettingKey()
-    const value = String(readerSettings[key])
+    const field = selectedReaderSetting()
+    const value = readerSettingRawValue(readerSettings, field)
     setSettingsValue(value)
     setSettingsCursor(value.length)
     setSettingsEditing(true)
@@ -1042,13 +1055,12 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   }
 
   const saveReaderSettingValue = (): void => {
-    const key = selectedReaderSettingKey()
-    const value = Number(settingsValue)
-    if (!isReaderSettingValue(value)) {
-      setMessage(`设置值必须是 ${1}–${32} 的整数`)
+    const field = selectedReaderSetting()
+    const next = updateReaderSetting(readerSettings, field, settingsValue)
+    if (next === undefined) {
+      setMessage(field.kind === 'number' ? `设置值必须是 ${1}–${32} 的整数` : '设置值无效')
       return
     }
-    const next: ReaderSettings = { ...readerSettings, [key]: value }
     const operation = beginOperation('task')
     void application.saveReaderSettings(next).then(() => {
       if (!isCurrent(operation)) return
@@ -1070,6 +1082,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       if (!isCurrent(operation)) return
       setReaderSettings(application.readerSettings)
       setSettingsSelected(0)
+      setSettingsStart(0)
       setSettingsCursor(0)
       setSettingsResetConfirm(false)
       setMessage('已恢复默认设置')
@@ -1087,6 +1100,20 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
     if (settingsEditing) {
       if (key.escape) { setSettingsEditing(false); return }
       if (key.return) { if (!busy) saveReaderSettingValue(); return }
+      const field = selectedReaderSetting()
+      if (field.kind === 'boolean') {
+        if (input === ' ' || key.leftArrow || key.rightArrow) setSettingsValue((value) => value === 'true' ? 'false' : 'true')
+        return
+      }
+      if (field.kind === 'separator') {
+        if (key.leftArrow || key.rightArrow) {
+          const values = ['hidden', 'dot', 'dash'] as const
+          const current = Math.max(0, values.indexOf(settingsValue as typeof values[number]))
+          const direction = key.rightArrow ? 1 : -1
+          setSettingsValue(values[(current + direction + values.length) % values.length]!)
+        }
+        return
+      }
       if (key.leftArrow) { setSettingsCursor((cursor) => Math.max(0, cursor - 1)); return }
       if (key.rightArrow) { setSettingsCursor((cursor) => Math.min(settingsValue.length, cursor + 1)); return }
       if (key.home || key.ctrl && input === 'a') { setSettingsCursor(0); return }
@@ -1111,8 +1138,11 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
       }
       return
     }
-    const next = navigationIndex(settingsSelected, READER_SETTING_FIELDS.length, input, key, READER_SETTING_FIELDS.length)
-    if (next !== settingsSelected) setSettingsSelected(next)
+    const next = navigationIndex(settingsSelected, READER_SETTING_FIELDS.length, input, key, settingsVisibleCount())
+    if (next !== settingsSelected) {
+      setSettingsSelected(next)
+      keepSettingsSelectionVisible(next)
+    }
     if (key.return && !busy) beginReaderSettingEdit()
     if (input === 'r' && !busy) resetReaderSettings()
   }
@@ -1569,7 +1599,7 @@ export function ReaderUi({ application, catalog }: ReaderUiProps): React.ReactEl
   })
 
   const visibleMessage = messageOwner === page ? message : ''
-  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll: page === 'help' ? helpScrolls[helpTab] ?? 0 : pageScroll, message: visibleMessage, helpPage: helpTab, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator, readerSettings, settingsSelected, settingsEditing, settingsValue, settingsCursor, settingsResetConfirm, ...(debugRunner === undefined ? {} : { debugRunner }), ...(debugCapture === undefined ? {} : { debugCapture }), debugPanel, debugRequestSelected, debugResultSelected, debugFilter, sourceManagerSelected, sourceManagerSelectedIds, sourceManagerFilter, sourceManagerFilterMode, ...(sourceCheckProgress === undefined ? {} : { sourceCheckProgress }), sourceCheckResults }
+  const state: RenderState = { catalog, columns, home, history, homeArea, selected, listStart, bodyHeight, tocSelected, tocQuery, tocReversed, query, search, searchState, searchProgress, searchElapsedMs, book, toc, chapterIndex, contentLines: currentLines, contentLineKinds: currentLayout.lineKinds, readerLine: visibleReaderLine, sources, sourceSearch, sourceSearchState, sourceSearchStart, sourceSearchSelected, mappingToc, mappingIndex, mappingTarget, pageScroll: page === 'help' ? helpScrolls[helpTab] ?? 0 : pageScroll, message: visibleMessage, helpPage: helpTab, chapterCharacters: formattedContent === undefined ? 0 : countChapterCharacters(formattedContent), separator: terminal.separator, readerSettings, settingsSelected, settingsStart, settingsEditing, settingsValue, settingsCursor, settingsResetConfirm, ...(debugRunner === undefined ? {} : { debugRunner }), ...(debugCapture === undefined ? {} : { debugCapture }), debugPanel, debugRequestSelected, debugResultSelected, debugFilter, sourceManagerSelected, sourceManagerSelectedIds, sourceManagerFilter, sourceManagerFilterMode, ...(sourceCheckProgress === undefined ? {} : { sourceCheckProgress }), sourceCheckResults }
   const visiblePage = renderPage(page, state)
   const inputMode = page === 'search' || page === 'toc' && tocSearchActive || page === 'debug' && (debugFilterActive || debugKeywordActive) || page === 'source-manager' && (sourceManagerFilterActive || sourceManagerOrderActive)
   const commandActions = footerLayout(page, busy, columns, searchState, sourceSearchState, menu !== undefined, homeArea, tocSearchActive, tocQuery.length > 0, tocReversed, { textInput: inputMode, settingsEditing, settingsResetConfirm })

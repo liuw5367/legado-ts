@@ -9,6 +9,7 @@ import type { SearchOperationResult } from '../src/application.ts'
 import type { ReaderSourceSearchOptions, ReaderSourceSession } from '../src/application.ts'
 import type { SourceCatalogResult, SourceEntry } from '../src/source-catalog.ts'
 import { ReaderStorage, editionKey } from '../src/storage.ts'
+import { READER_SETTINGS_DEFAULTS } from '../src/reader-settings.ts'
 
 function source(url = 'https://source.test', name = '测试书源'): NormalizedSource {
   return { bookSourceUrl: url, bookSourceName: name, bookSourceType: 0, enabled: true, ruleSearch: {}, ruleBookInfo: {}, ruleToc: {}, ruleContent: {} }
@@ -317,7 +318,7 @@ test('搜索并发设置按批次限制 worker，并可持久化更新', async (
   const application = new ReaderApplication({
     catalog: { entries, diagnostics: [], sourceLocation: 'fixture', loadedFromCache: false },
     storage,
-    settings: { searchConcurrency: 2, sourceSearchConcurrency: 1, sourceCheckConcurrency: 1 },
+    settings: { ...READER_SETTINGS_DEFAULTS, searchConcurrency: 2, sourceSearchConcurrency: 1, sourceCheckConcurrency: 1 },
     sessionFactory: (value) => new FakeSession([{ sourceId: value.bookSourceUrl, bookUrl: `${value.bookSourceUrl}/book`, name: '测试书', rawFields: {}, traceRef: 'settings' }], 15, false, undefined, () => {
       active += 1
       maxActive = Math.max(maxActive, active)
@@ -326,8 +327,8 @@ test('搜索并发设置按批次限制 worker，并可持久化更新', async (
   try {
     await application.search('测试书')
     assert.equal(maxActive, 2)
-    await application.saveReaderSettings({ searchConcurrency: 1, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5 })
-    assert.deepEqual(application.readerSettings, { searchConcurrency: 1, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5 })
+    await application.saveReaderSettings({ ...READER_SETTINGS_DEFAULTS, searchConcurrency: 1, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5, readerHeaderSeparator: 'hidden' })
+    assert.deepEqual(application.readerSettings, { ...READER_SETTINGS_DEFAULTS, searchConcurrency: 1, sourceSearchConcurrency: 3, sourceCheckConcurrency: 5, readerHeaderSeparator: 'hidden' })
     maxActive = 0
     await application.search('测试书')
     assert.equal(maxActive, 1)

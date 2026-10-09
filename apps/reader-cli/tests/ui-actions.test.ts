@@ -59,3 +59,12 @@ test('上下文栏保留标题，命令栏不拆分快捷键并把输入光标�
   assert.equal(clipTerminalText('👨‍👩‍👧‍👦abc', 2), '👨‍👩‍👧‍👦')
   assert.equal(terminalWidth('👨‍👩‍👧‍👦'), 2)
 })
+
+test('上下文栏按阅读页项目连接符布局，隐藏分隔符只使用一个空格', () => {
+  const hidden = layoutContextLine('三体 红岸基地 3/12章', '3/12 1,234字 已加载', 80, { separator: ' ', rightSegments: ['3/12', '1,234字', '已加载'] })
+  assert.ok(hidden.includes('3/12 1,234字 已加载'))
+  assert.doesNotMatch(hidden, /3\/12  +1,234字/u)
+  assert.doesNotMatch(hidden, /1,234字  +已加载/u)
+  const dash = layoutContextLine('三体 — 红岸基地 — 3/12章', '3/12 — 1,234字 — 已加载', 80, { separator: ' — ', rightSegments: ['3/12', '1,234字', '已加载'] })
+  assert.ok(dash.includes('3/12 — 1,234字 — 已加载'))
+})

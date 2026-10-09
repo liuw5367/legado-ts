@@ -36,6 +36,7 @@ export type {
   KnownSourceView,
   ReadingPosition,
   ReadingRecord,
+  ReaderHeaderSeparator,
   ReaderSettings,
   SearchHistoryEntry,
   SourceCheckConfig,

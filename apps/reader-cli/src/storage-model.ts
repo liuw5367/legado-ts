@@ -104,10 +104,19 @@ export interface StoragePaths {
   cacheRoot: string
 }
 
+export type ReaderHeaderSeparator = 'hidden' | 'dot' | 'dash'
+
 export interface ReaderSettings {
   searchConcurrency: number
   sourceSearchConcurrency: number
   sourceCheckConcurrency: number
+  showReaderBookTitle: boolean
+  showReaderChapterTitle: boolean
+  showReaderChapterIndex: boolean
+  showReaderPageProgress: boolean
+  showReaderWordCount: boolean
+  showReaderStatus: boolean
+  readerHeaderSeparator: ReaderHeaderSeparator
 }
 
 export interface HomeBookView {

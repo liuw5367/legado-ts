@@ -29,13 +29,20 @@ export function layoutFooter(actions: readonly FooterAction[], columns: number):
   return selected.sort((left, right) => left.index - right.index).map((entry) => entry.token).join('  ')
 }
 
-export function layoutContextLine(left: string, right: string, columns: number): string {
+export interface ContextLineOptions {
+  separator?: string
+  rightSegments?: readonly string[]
+}
+
+export function layoutContextLine(left: string, right: string, columns: number, options: ContextLineOptions = {}): string {
   const width = Math.max(1, columns)
   const rightLimit = Math.min(terminalWidth(right), Math.floor(width * 0.55))
-  const segments = right.split(' · ')
+  const separator = options.separator ?? ' · '
+  const segments = options.rightSegments ?? right.split(' · ')
   let rightText = ''
   for (const segment of segments) {
-    const candidate = rightText.length === 0 ? segment : `${rightText} · ${segment}`
+    if (segment.length === 0) continue
+    const candidate = rightText.length === 0 ? segment : `${rightText}${separator}${segment}`
     if (terminalWidth(candidate) > rightLimit) break
     rightText = candidate
   }
