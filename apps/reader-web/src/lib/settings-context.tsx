@@ -8,6 +8,7 @@ type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'fontSize' | 'lineHeigh
 interface ReaderSettingsContextValue { settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; error?: string; updateSettings: (patch: SettingsPatch) => Promise<ApiSettings> }
 const ReaderSettingsContext = createContext<ReaderSettingsContextValue | undefined>(undefined)
 const storagePrefix = 'legado-reader-settings:'
+const themeColors: Record<'light' | 'dark', string> = { light: '#f6f3ed', dark: '#171513' }
 
 export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   const { session, user } = useAuth()
@@ -41,6 +42,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       setResolvedTheme(resolved)
       document.documentElement.dataset.theme = resolved
       document.documentElement.style.colorScheme = resolved
+      document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', themeColors[resolved])
     }
     apply()
     if (settings.theme !== 'system') return

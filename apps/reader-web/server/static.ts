@@ -15,6 +15,7 @@ const contentTypes: Record<string, string> = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 }
@@ -42,7 +43,9 @@ function assetPath(pathname: string): { relativePath: string; immutable: boolean
     return undefined
   }
   if (relativePath.length === 0 || relativePath.includes('\0')) return undefined
-  return { relativePath, immutable: true }
+  // Manifest 和图标使用固定 URL，不能沿用带 hash 的 JS/CSS 长缓存，否则用户安装后
+  // 更新图标或启动配置时会长期读到旧资源。
+  return { relativePath, immutable: !relativePath.startsWith('static/pwa/') }
 }
 
 function isInside(directory: string, filePath: string): boolean {
@@ -68,7 +71,7 @@ export async function serveReaderAsset(pathname: string, method: string): Promis
         'Content-Length': String(body.byteLength),
         'Content-Type': contentTypes[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
       })
-      if (asset.immutable) headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+      headers.set('Cache-Control', asset.immutable ? 'public, max-age=31536000, immutable' : 'no-cache')
       // Node 的 Buffer 是有效的 fetch 二进制响应体，但 DOM 类型定义没有声明 Buffer。
       return new Response(method === 'HEAD' ? undefined : (body as unknown as BodyInit), { headers })
     } catch (error) {

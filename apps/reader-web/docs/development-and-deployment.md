@@ -39,6 +39,12 @@ pnpm run build:web:vercel
 
 `build:web:vercel` 生成根目录 `public/index.html` 与 `public/static/`，这些是构建产物，不手动提交。`vercel.json` 把 `/api/*` 交给 Hono，其余深链回退到 `index.html`。
 
+## PWA 安装
+
+应用通过 `/static/pwa/manifest.webmanifest` 提供可安装的 PWA 配置，启动地址为 `/`，安装后使用独立窗口。阅读图标使用米白色主题背景和 📖，同时用于 manifest、favicon 与 iOS 主屏幕图标。浏览器需要 HTTPS，或在本地使用 `localhost`/`127.0.0.1`，才会显示安装入口；iOS 使用分享菜单添加到主屏幕。
+
+PWA 资源使用 `no-cache`，让 manifest 和图标更新可以重新校验；带 hash 的前端脚本和样式仍使用长期缓存。当前 PWA 仍依赖在线认证和 API，不提供离线章节阅读或后台同步。
+
 ## Vercel
 
 Vercel Project Root 必须是仓库根目录。Preview 和 Production 都要配置公开 Supabase 变量、服务端 Supabase 变量、数据库连接和运行状态密钥。第一次部署前在目标 Supabase 数据库执行迁移；构建过程只生成前端和函数产物。
