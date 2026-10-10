@@ -1,6 +1,6 @@
 # 书源编辑器规划
 
-> 归档（2026-09-24）：本文描述的目标在当前仓库无对应实现，仅作历史设计保留；现行事实见 docs/README.md。
+> 历史目标设计（未实现）：本文描述完整书源编辑器；当前只有导入预览和管理，本文不能作为现行契约。
 
 ## 现有基础
 
@@ -124,7 +124,7 @@ rawText
 
 未编辑导出原文；编辑后保留规则对象/字符串形态、未知值及完整 mainJs，允许 JSON 空白和 key 顺序变化。不能承诺编辑后字节不变。保存输入包含编辑会话身份、baseRevision、候选原文和覆盖选择，返回新版本或结构化冲突；编辑会话 sessionId 与宿主认证会话不是同一个身份，不可用于授权。
 
-编辑器保存不能直接调用数据库或把 Android API 当作核心依赖。它应把会话转换为 `SaveSourceInput`，由应用 service 重新读取当前用户快照、校验 `baseRevision`、计算规则与用户字段变化，再调用 `SourceRepository` 原子提交；规则变化后的检查失效和缓存清理遵循[书源持久化流程](source-persistence-flow.md)。兼容 Android API 的保存由 adapter 单独映射，见[API 适配](legado-web-api-bridge.md)。
+编辑器保存不能直接调用数据库或把 Android API 当作核心依赖。它应把会话转换为 `SaveSourceInput`，由应用 service 重新读取当前用户快照、校验 `baseRevision`、计算规则与用户字段变化，再调用 `SourceRepository` 原子提交；规则变化后的检查失效和缓存清理遵循[书源管理与状态](source-management-and-state.md)。兼容 Android API 的保存由 adapter 单独映射，见[API 适配](legado-web-api-bridge.md)。
 
 ## 目标能力
 

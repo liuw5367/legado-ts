@@ -24,16 +24,19 @@
 ### TypeScript 仓库现状
 
 ```text
-apps/reader-cli          应用层：UI、书架、本地 JSON 存储、多源循环
-  -> @legado/source-node 平台能力适配与宿主组合
-  -> @legado/source-core 规则解释、请求语义、候选归并和单源工作流
+apps/reader-cli          终端应用：UI、书架、本地 JSON 存储、多源循环
+apps/reader-web          Web 应用：React 页面、Hono API、用户数据 Repository
+          \               /
+           -> @legado/source-node 平台能力适配与宿主组合
+           -> @legado/source-core 规则解释、请求语义、候选归并和单源工作流
 ```
 
 - **source-core**：不依赖 Node 平台；`SourceRuleRuntime` 解释书源规则，`SourceRequestRuntime` 解释书源请求选项，搜索聚合函数处理跨源候选。核心还实现单源限流、可复用并发队列、分页策略、批量正文编排、最终正文 cache-first/条件提交编排、目录 reconcile 和图片解密流程；通过 `WorkflowPorts` / `ReadingPorts` 接收网络、脚本、并发额度与 `ContentStore` 等宿主能力；公开入口见 [package 使用指南](../implementation/package-usage.md)。
 - **source-node**：实现网络、HTML/JSONPath/XPath 解析器、QuickJS、Cookie、字符集、加密、归档和字体；`SourceRuleHost` / `SourceRequestHost` 组合这些能力并委托给核心，也提供兼容性 CLI。`concurrency.ts` 仅为兼容旧导入路径转出 source-core 的队列实现。
-- **reader-cli**：负责来源选择与读取、跨源调度、并发额度、进度和取消、搜索历史、持久化及终端交互；调用核心归并候选，但不重新解释书源规则或归并条件。应用保存目录快照/书籍 patch，并提供按书籍绑定的最终正文 `ContentStore`；核心消费应用注入的并发额度，并维护书源级限流和单源分页/批量工作流。
+- **reader-cli**：负责来源选择与读取、跨源调度、并发额度、进度和取消、搜索历史、持久化及终端交互；调用核心归并候选，但不重新解释书源规则或归并条件。应用保存目录快照/书籍 patch，并提供按书籍绑定的最终正文 `ContentStore`；核心消费应用注入的并发额度，并维护书源级限流和单源分页/批量工作流。详细边界见 [CLI 架构](../../apps/reader-cli/docs/architecture.md)。
+- **reader-web**：负责账号范围、书源导入确认、数据库 Repository、SSE 搜索进度、书籍来源版本、目录/正文缓存和阅读位置；通过 Hono 调用 source-core/source-node，不在浏览器或 API 层复制规则解释。详细边界见 [Web 架构](../../apps/reader-web/docs/architecture.md)。
 
-仓库中**没有** `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` 这些应用服务端口；书源保存与检测的 Repository 设计见 [归档](../archive/source-management-and-state.md)。reader-cli 使用自有 `json-store` / `cache-store`。
+仓库中仍没有通用的 `SourceApplicationService`、`SecretStore`、`JobStore` 和跨应用 `SourceRepository` 端口；reader-web 有应用内 `ReaderRepository`，只覆盖当前阅读器表和用户流程。通用管理与任务目标见 [归档](../archive/README.md)。reader-cli 使用自有 `json-store` / `cache-store`。
 
 ### 纯核心层
 
@@ -81,7 +84,7 @@ apps/reader-cli          应用层：UI、书架、本地 JSON 存储、多源�
     -> source-core package               解析、比较、执行、结构化结果
 ```
 
-Repository 是应用侧端口，不是规则解析器的内部全局状态。Supabase/RLS 设计见 [归档](../archive/storage-and-supabase.md)。
+Repository 是应用侧端口，不是规则解析器的内部全局状态。reader-web 的实际用户隔离、RLS 和运行状态见 [Web 存储](../../apps/reader-web/docs/storage-and-cache.md)；通用 Repository 目标见 [归档](../archive/source-management-and-state.md)。
 
 ## 关键边界
 
@@ -132,4 +135,4 @@ decodeImage(ports: WorkflowPorts, input: ImageDecodeInput): Promise<RuntimeResul
 
 远程导入、订阅刷新和编辑均使用同一 codec；静态规则预览与生产流程使用同一解释器。执行层依赖端口，端口实现可以调用网络和存储，但不依赖 UI。公开类型仅含可序列化数据；DOM/脚本句柄留在调用内部。
 
-书源保存、删除和检测是完整的业务流程，不是 DTO 转换：保存需要用户确认、版本条件写入、规则变化后的检查失效和缓存清理；检测需要固定 source snapshot、阶段依赖、取消及旧结果防覆盖。对应流程见 [书源保存](../archive/source-persistence-flow.md) 和 [书源检测](../flows/source-check-flow.md)。
+书源保存、删除和检测是完整的业务流程，不是 DTO 转换：保存需要用户确认、版本条件写入、规则变化后的检查失效和缓存清理；检测需要固定 source snapshot、阶段依赖、取消及旧结果防覆盖。通用目标见 [书源管理](../archive/source-management-and-state.md)，当前导入与保存见 [reader-web 实现](../../apps/reader-web/docs/implementation.md)，检测流程见 [书源校验流程](../flows/source-check-flow.md)。

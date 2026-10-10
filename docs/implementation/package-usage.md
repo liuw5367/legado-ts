@@ -120,7 +120,7 @@ Node 实现由 `@legado/source-node` 提供组合门面：`SourceRuleHost` 委�
 
 ## Node 与框架接入
 
-当前参考宿主是 Node（`@legado/source-node`）。SPA、SSR 或框架入口应调用同一组 source-core 公开入口，而不是各自解释规则。Edge 等受限环境的宿主能力判断见 [运行边界](../operations/runtime-security-and-deployment.md)；历史 Next.js 接入设计见 [归档](../archive/node-browser-nextjs.md)。
+当前参考宿主是 Node（`@legado/source-node`）。reader-cli 与 reader-web 都调用同一组 source-core 公开入口，应用只负责用户范围、调度、展示和持久化，不各自解释规则。SSR、Next.js、Edge 等受限或候选环境的宿主能力判断见 [运行边界](../operations/runtime-security-and-deployment.md)；Web 当前实现入口见 [reader-web 实现方案](../../apps/reader-web/docs/implementation.md)。
 
 ## package 维护约定
 

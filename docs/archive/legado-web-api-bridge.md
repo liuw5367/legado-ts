@@ -1,6 +1,6 @@
 # Legado Web API 适配
 
-> 归档（2026-09-24）：本文描述的目标在当前仓库无对应实现，仅作历史设计保留；现行事实见 docs/README.md。
+> 历史目标设计（未实现）：本文描述 Android 兼容 API 适配边界；当前 Hono API 不承诺兼容旧协议，本文不能作为现行契约。
 
 ## 依据与目标
 
@@ -76,7 +76,7 @@ type BridgeFrame =
 
 ### 普通与批量保存
 
-普通保存的最小校验是名称和 `bookSourceUrl` 非空。批量保存的 Android 实现会跳过无效数组成员，而不是把整批作为事务失败；适配器应将 `accepted`、`skipped` 及每项诊断显式返回，避免调用方误以为所有条目都已保存。Android Controller 直接写 DAO，可能绕过 `SourceHelp` 的域名拦截和排序修正；新 Web 应用推荐先预览、执行 `web-safe` 插入策略，再按 Repository 事务确认，见[保存流程](source-persistence-flow.md)。
+普通保存的最小校验是名称和 `bookSourceUrl` 非空。批量保存的 Android 实现会跳过无效数组成员，而不是把整批作为事务失败；适配器应将 `accepted`、`skipped` 及每项诊断显式返回，避免调用方误以为所有条目已保存。Android Controller 直接写 DAO，可能绕过 `SourceHelp` 的域名拦截和排序修正；新 Web 应用推荐先预览、执行 `web-safe` 插入策略，再按 Repository 事务确认，目标边界见[书源管理与状态](source-management-and-state.md)。
 
 ### JS 书源
 

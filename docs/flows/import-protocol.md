@@ -100,7 +100,7 @@ Android 应用的最终写入由 `SourceHelp.insertBookSource` 和 `BookSourceDa
 
 迁移库不应把导入和持久化绑在一起：核心返回 `ImportCandidate[]`，Node/应用层决定是否保存、如何确认更新和是否保留本地名称、分组、启用状态。
 
-保存成功后，若规则内容发生变化，必须重置或标记过期的书源检查状态，并使规则相关缓存失效（Android 的 `BookSourceDao.update` 在 `checkContent()` 变化时重置检查状态）。Web 目标要求仅改变用户排序或启用状态时不应误重置检查；Android 的 `bookSourceGroup` 属于 `checkContent()` 的一部分，修改分组仍会重置检查状态。删除还要清理变量、cookie 引用和检查记录，书籍/章节/阅读进度按应用策略单独处理。完整的数据写入和删除边界见 [书源保存与状态持久化流程](../archive/source-persistence-flow.md)。
+保存成功后，若规则内容发生变化，必须重置或标记过期的书源检查状态，并使规则相关缓存失效（Android 的 `BookSourceDao.update` 在 `checkContent()` 变化时重置检查状态）。Web 目标要求仅改变用户排序或启用状态时不应误重置检查；Android 的 `bookSourceGroup` 属于 `checkContent()` 的一部分，修改分组仍会重置检查状态。删除还要清理变量、cookie 引用和检查记录，书籍/章节/阅读进度按应用策略单独处理。通用目标边界见 [书源管理与状态](../archive/source-management-and-state.md)，Web 当前实现见 [Web 存储](../../apps/reader-web/docs/storage-and-cache.md)。
 
 比较本地版本时，以原始 `bookSourceUrl` 为身份；Android 使用 lastUpdateTime 参与比较，Web 同时比较内容，不因时间戳相同忽略变化。用户字段覆盖策略必须显式传入；sourceRevision 是独立保存版本。错误区分 `input`、`fetch`、`parse`、`normalize`、`replace`、`conflict`、`storage`。
 

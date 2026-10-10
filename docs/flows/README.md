@@ -14,4 +14,4 @@
 - [与书源关联的媒体和交互流程](adjacent-source-flows.md)：媒体、解密、付费、事件和交互。
 - [书源订阅与刷新](source-subscriptions.md)：订阅链接、多书源刷新、差异和确认。
 
-书源持久化事务流未在本仓库实现，历史设计见 [归档](../archive/source-persistence-flow.md)。典型调用会从导入或订阅开始，经搜索、详情、目录到正文；当前入口见 [package 使用指南](../implementation/package-usage.md)。
+通用书源持久化事务流仍是历史目标，见 [管理状态目标](../archive/source-management-and-state.md)；reader-web 当前导入确认和存储边界见 [Web 实现方案](../../apps/reader-web/docs/implementation.md)。典型调用会从导入或订阅开始，经搜索、详情、目录到正文；当前入口见 [package 使用指南](../implementation/package-usage.md)。

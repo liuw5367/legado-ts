@@ -2,7 +2,7 @@
 
 本目录是 Legado 书源运行时的文档库，记录 Android/Kotlin 可观察行为构成的书源规则标准、TypeScript 实现现状、两者已知差异、处理流程、质量证据和运维约定。文档面向实现、维护、集成和审查人员。
 
-仓库已包含可运行的 TypeScript 实现：`packages/source-core`（平台无关核心）、`packages/source-node`（Node 宿主）和 `apps/reader-cli`（交互式阅读 CLI）。“目标必须兼容”仍是验收承诺：只有同时具备 Android 事实证据、脱敏 fixture、golden 输出和 TypeScript 自动断言，才能标记为已验证。
+仓库已包含可运行的 TypeScript 实现：`packages/source-core`（平台无关核心）、`packages/source-node`（Node 宿主）、`apps/reader-cli`（交互式阅读 CLI）和 `apps/reader-web`（React + Hono Web 应用）。“目标必须兼容”仍是验收承诺：只有同时具备 Android 事实证据、脱敏 fixture、golden 输出和 TypeScript 自动断言，才能标记为已验证。
 
 ## 仓库实现现状
 
@@ -11,8 +11,9 @@
 | [`packages/source-core`](../packages/source-core) | 书源导入/导出、规则编译与求值、请求计划、发现/搜索/详情/目录/正文流程；零运行时依赖，宿主能力经端口注入 |
 | [`packages/source-node`](../packages/source-node) | HTTP、Cookie、字符集、解析器、QuickJS、字体、归档、并发与兼容性 CLI 等 Node 宿主实现 |
 | [`apps/reader-cli`](../apps/reader-cli) | `legado-reader` 交互式 CLI：书源加载、搜索、详情、目录、正文、书架、本地阅读状态和书源管理/检测 |
+| [`apps/reader-web`](../apps/reader-web) | React Router SPA、Hono API、Supabase Auth 和 Postgres/Drizzle 阅读应用：书源管理、搜索、来源版本、目录、正文、书架和阅读位置 |
 
-应用自身文档在 [`apps/reader-cli/README.md`](../apps/reader-cli/README.md) 及其 `docs/` 目录，不复制到本库。
+应用自身文档分别在 [`reader-cli docs`](../apps/reader-cli/docs/README.md) 和 [`reader-web docs`](../apps/reader-web/docs/README.md)，本库只维护共享规则、流程、质量和运行边界。
 
 ## 按任务进入
 
@@ -20,7 +21,7 @@
 | --- | --- |
 | 理解整体边界 | [架构](architecture/README.md) → [书源规则标准](standard/README.md) |
 | 实现或修改书源 package | [书源规则标准](standard/README.md) → [处理流程](flows/README.md) → [当前实现](implementation/README.md) → [已知差异](divergence/README.md) |
-| 组织应用调用 | [package 使用指南](implementation/package-usage.md) → [运行边界](operations/runtime-security-and-deployment.md)；应用侧见 [reader-cli](../apps/reader-cli/README.md) |
+| 组织应用调用 | [package 使用指南](implementation/package-usage.md) → [运行边界](operations/runtime-security-and-deployment.md)；应用侧见 [reader-cli docs](../apps/reader-cli/docs/README.md) 和 [reader-web docs](../apps/reader-web/docs/README.md) |
 | 查看书源运行时状态 | [状态总览](implementation/source-runtime-status.md) |
 | 导入、编辑或刷新书源 | [导入流程](flows/import-protocol.md) → [订阅流程](flows/source-subscriptions.md) |
 | 对照 Android 页面行为 | [Android 功能对照](android/README.md) |

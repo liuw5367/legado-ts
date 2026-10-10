@@ -22,7 +22,7 @@
 | 书源交互与事件 | `eventListener`、`customButton`、正文回调和宿主 UI 动作 | [模型](source-schema.md) | 后续规格；需核对 `SourceCallBack` 和调用方事件协议 |
 | 书源编辑与诊断 | 字段编辑、未知字段保留、规则预览、保存冲突、导入导出 | [编辑](../archive/source-editor.md) | 优先；所有能力字段至少可见、可保留、可诊断 |
 | 书源校验与健康状态 | 域名、搜索、发现、详情、目录、正文、会话、版本和结果写回 | [校验流程](../flows/source-check-flow.md)、[校验状态](source-check-state.md) | 优先；不能用一次搜索成功替代全流程校验 |
-| 用户持久化与状态清理 | 用户归属、版本、源变量、Cookie、缓存、校验状态和删除副作用 | [管理状态](../archive/source-management-and-state.md)、[持久化](../archive/source-persistence-flow.md) | 优先；存储由应用适配器提供 |
+| 用户持久化与状态清理 | 用户归属、版本、源变量、Cookie、缓存、校验状态和删除副作用 | [管理状态目标](../archive/source-management-and-state.md)、[reader-web 存储](../../apps/reader-web/docs/storage-and-cache.md) | 优先；存储由应用适配器提供 |
 
 ## 处理规则
 

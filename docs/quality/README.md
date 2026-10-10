@@ -4,5 +4,7 @@
 
 - [兼容性矩阵](compatibility-matrix.md)：能力、目标状态、Android 证据和 TypeScript 完成度。
 - [一致性测试基线](conformance-tests.md)：fixture、用例、断言、验证层级和完成门槛。
+- [真实书源 fixture](source-fixtures.md)：语料、manifest、坏规则登记和离线测试边界。
+- [真实书源兼容性审计](source-compatibility-audit.md)：静态/在线审计命令、报告脱敏和状态解释。
 
-测试用例应覆盖成功、空结果、错误、边界、取消、并发、缓存、提交和清理。新增能力先登记到 [能力清单](../standard/capability-inventory.md)，再在本目录定义证据和验收状态。
+测试用例应覆盖成功、空结果、错误、边界、取消、并发、缓存、提交和清理。新增能力先登记到 [能力清单](../standard/capability-inventory.md)，再在本目录定义证据和验收状态。旧任务编号可以作为 fixture 或测试标识保留，但不再作为文档分类。

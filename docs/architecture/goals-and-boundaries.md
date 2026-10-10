@@ -2,7 +2,7 @@
 
 ## 目标
 
-建立独立的 TypeScript 书源运行时，使同一份书源能够被 Node 服务、SSR/Next.js、React Router 服务端入口和带代理的 SPA 使用。完整登记 `BookSource` 的声明式、JavaScript、发现、媒体、登录、交互等能力。复杂登录、验证码和站点专用 WebView 可以低优先级实施，但任何能力是否最终放弃都需要单独说明收益、架构代价和兼容影响，并由用户审核。
+建立独立的 TypeScript 书源运行时，使同一份书源能够由 Node 宿主和带服务端代理的应用使用。当前应用是 reader-cli 与 React Router + Hono 的 reader-web；SSR/Next.js、Edge 和其他框架仍属于候选接入，不因存在 Web SPA 就视为已支持。完整登记 `BookSource` 的声明式、JavaScript、发现、媒体、登录、交互等能力。复杂登录、验证码和站点专用 WebView 可以低优先级实施，但任何能力是否最终放弃都需要单独说明收益、架构代价和兼容影响，并由用户审核。
 
 兼容目标是“结果和失败语义一致”，包括：
 
@@ -43,11 +43,14 @@
 
 @legado/reader-cli           已实现（apps/reader-cli）
   TUI 阅读器、书架、本地 JSON 存储
+
+@legado/reader-web           已实现（apps/reader-web）
+  React Router SPA、Hono API、Supabase Auth、Postgres/Drizzle
 ```
 
-以下包名是历史职责视图，**当前仓库不存在**：`source-next`、`source-editor`、`source-artifacts`（见 [归档](../archive/README.md)）。框架适配器只转换请求和结果；SPA、Next.js、React Router 不各自拥有规则层。Node 参考宿主已验证；Edge 的适用能力按 [运行边界](../operations/runtime-security-and-deployment.md) 判断。完整 JS 兼容不能用“TypeScript 可构建”替代实际执行证明。
+以下包名是历史职责视图，**当前仓库不存在**：`source-next`、`source-editor`、`source-artifacts`（见 [归档](../archive/README.md)）。框架适配器只转换请求和结果；reader-web 不拥有第二套规则层。Node 参考宿主已验证；Edge、SSR 和其他框架的适用能力按 [运行边界](../operations/runtime-security-and-deployment.md) 判断。完整 JS 兼容不能用“TypeScript 可构建”替代实际执行证明。
 
-完整能力的优先级和待审核项目见 [书源能力清单与审核决策](../standard/capability-inventory.md)。公开入口与上层调用顺序见 [独立 package 的调用契约](../implementation/package-usage.md)。应用层文档只描述书源选择、调用、结果保存和错误处理；书架、阅读器与阅读进度以后单独设计。
+完整能力的优先级和待审核项目见 [书源能力清单与审核决策](../standard/capability-inventory.md)。公开入口与上层调用顺序见 [独立 package 的调用契约](../implementation/package-usage.md)。CLI 与 Web 的应用层文档分别描述书源选择、调用、结果保存、书架和阅读进度；共享 package 不持有这些应用数据。
 
 ## 能力归属
 
