@@ -344,8 +344,8 @@ export function ReaderPage() {
     }
   }}>
     <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
-      {paged ? <button className="more-menu-item" type="button" onClick={() => setPageGuideVisible(true)}><CircleHelp aria-hidden="true" />翻页区域说明</button> : null}
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />书籍详情</Link>
+      {paged ? <button className="more-menu-item" type="button" onClick={() => setPageGuideVisible(true)}><CircleHelp aria-hidden="true" />翻页区域</button> : null}
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原文地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />查看原文</a>}
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新内容'}</button>
     </MoreMenu></div></header>
@@ -378,7 +378,7 @@ export function ReaderPage() {
       }}>
       {content.contentType === 'html' ? htmlContent.length === 0 && additionalResources.length === 0 ? <p className="muted">本章暂无正文。</p> : <><div className="reader-html-content" data-paragraph={0} dangerouslySetInnerHTML={{ __html: htmlContent }} />{additionalResources.map((url, index) => <p className="reader-resource" data-paragraph={index + 1} key={url}><img src={url} alt="正文插图" loading="lazy" decoding="async" /></p>)}</> : paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{paragraph}</p>)}
     </article>
-    {paged && pageGuideVisible ? <button ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" type="button" aria-label="关闭翻页区域说明" onClick={closePageGuide}>
+    {paged && pageGuideVisible ? <button ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" type="button" aria-label="关闭翻页区域" onClick={closePageGuide}>
       <span className="reader-page-guide-title">点击页面对应区域进行操作</span>
       <span className="reader-page-guide-zone"><strong>上一页</strong><small>点击左侧</small></span>
       <span className="reader-page-guide-zone reader-page-guide-zone-middle"><strong>显示 / 隐藏操作栏</strong><small>点击中间</small></span>
