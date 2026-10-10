@@ -252,8 +252,8 @@ a { color: inherit; }
 .reader-loading, .reader-error { width: min(calc(100% - 24px), 680px); margin: 0 auto; padding-top: 20px; }
 .reader-error { display: flex; flex-direction: column; gap: 12px; }
 
-.sheet { position: fixed; top: auto; right: 0; bottom: 0; left: 0; width: min(100%, 680px); max-height: 85vh; max-height: 85dvh; margin: 0 auto; padding: 0; overflow: hidden; color: var(--foreground); background: var(--card); border: 0; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 30px rgb(36 33 29 / 16%); }
-.sheet-top { top: 0; right: 0; bottom: auto; left: 0; margin: 0 auto; border-radius: 0 0 12px 12px; }
+.sheet { position: fixed; top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-width: none; max-height: 85vh; max-height: 85dvh; margin: 0; padding: 0; overflow: hidden; color: var(--foreground); background: var(--card); border: 0; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 30px rgb(36 33 29 / 16%); }
+.sheet-top { top: 0; right: 0; bottom: auto; left: 0; margin: 0; border-radius: 0 0 12px 12px; }
 .sheet::backdrop { background: rgb(36 33 29 / 34%); }
 .sheet-content { display: flex; max-height: 85vh; max-height: 85dvh; flex-direction: column; }
 .sheet-header { display: flex; min-height: 48px; flex: 0 0 auto; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--border); }

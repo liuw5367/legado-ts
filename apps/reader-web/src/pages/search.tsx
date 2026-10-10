@@ -1,5 +1,6 @@
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { SourceCacheWarning } from '../../shared/book-sources.ts'
+import { candidateSelectionKey, selectedCandidateIndex } from '../lib/search-selection.ts'
 import { useBookSearch } from '../lib/use-book-search.ts'
 import { pageReturnState } from '../lib/page-navigation.ts'
 import { PageBackButton } from '../components/page-back-button.tsx'
@@ -30,7 +31,7 @@ export function SearchPage() {
   const [keyword, setKeyword] = useState(queryKeyword)
   const { candidates, searchId, status, message: searchMessage, search, cancel } = useBookSearch()
   const [expandedKey, setExpandedKey] = useState<string>()
-  const [selectedByGroup, setSelectedByGroup] = useState<Record<string, number>>({})
+  const [selectedByGroup, setSelectedByGroup] = useState<Record<string, string>>({})
   const [message, setMessage] = useState('')
   const [messageTone, setMessageTone] = useState<'info' | 'success' | 'error'>('info')
   const [saving, setSaving] = useState<number | null>(null)
@@ -57,7 +58,7 @@ export function SearchPage() {
 
   async function saveCandidate(group: CandidateGroup, action: 'shelf' | 'directory' | 'details') {
     if (!booksLoaded || saveController.current !== null) return
-    const selectedIndex = selectedByGroup[group.key] ?? group.items[0]?.index
+    const selectedIndex = selectedCandidateIndex(group.items, selectedByGroup[group.key])
     if (selectedIndex === undefined || searchId.length === 0) return
     const result = candidates[selectedIndex]
     if (result === undefined) return
@@ -92,7 +93,7 @@ export function SearchPage() {
     {searchMessage.length > 0 ? <p className="muted compact-message" role="status">{searchMessage}</p> : null}
     {message.length > 0 ? <p className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</p> : null}
     <div className="result-summary" aria-live="polite">{status === 'loading' ? '正在搜索' : status === 'done' ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
-    <div className="result-list">{groups.length === 0 && status === 'done' ? <div className="empty-state">{booksLoaded ? '没有找到匹配书籍。' : '正在读取已有书籍…'}</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedByGroup[group.key] ?? group.items[0]?.index} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => setSelectedByGroup((current) => ({ ...current, [group.key]: index }))} onSave={(action) => void saveCandidate(group, action)} />)}</div>
+    <div className="result-list">{groups.length === 0 && status === 'done' ? <div className="empty-state">{booksLoaded ? '没有找到匹配书籍。' : '正在读取已有书籍…'}</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedCandidateIndex(group.items, selectedByGroup[group.key])} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => { const item = candidates[index]; if (item !== undefined) setSelectedByGroup((current) => ({ ...current, [group.key]: candidateSelectionKey(item) })) }} onSave={(action) => void saveCandidate(group, action)} />)}</div>
   </section>
 }
 

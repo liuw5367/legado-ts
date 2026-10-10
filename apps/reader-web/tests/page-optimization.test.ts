@@ -8,6 +8,7 @@ import { pageReturnTarget, readingEntryState } from '../src/lib/page-navigation.
 import { latestSearchHistory } from '../shared/search-history.ts'
 import { MemoryReaderRepository } from '../server/db/repository.ts'
 import { getBookDetails } from '../server/runtime/book-details.ts'
+import { candidateSelectionKey, selectedCandidateIndex } from '../src/lib/search-selection.ts'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -100,6 +101,15 @@ test('a completed search is not cancelled while its stream finishes closing', as
   closing.resolve()
   assert.equal((await running).cancelled, false)
   assert.equal(cancellations, 0)
+})
+
+test('explicit source selection retains its identity when streamed candidates reorder', () => {
+  const one = { sourceId: 'a', sourceFingerprint: 'f', candidate: { sourceId: 'a', bookUrl: 'https://example.test/a' } }
+  const two = { sourceId: 'b', sourceFingerprint: 'f', candidate: { sourceId: 'b', bookUrl: 'https://example.test/b' } }
+  const selected = candidateSelectionKey(two)
+  assert.equal(selectedCandidateIndex([{ item: one, index: 0 }, { item: two, index: 1 }], selected), 1)
+  assert.equal(selectedCandidateIndex([{ item: two, index: 0 }, { item: one, index: 1 }], selected), 0)
+  assert.equal(selectedCandidateIndex([{ item: one, index: 2 }], undefined), 2)
 })
 
 test('reading entry inherits original origin and blocks unsafe return URLs', () => {
