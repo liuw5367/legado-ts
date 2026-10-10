@@ -1,5 +1,6 @@
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { SourceCacheWarning } from '../../shared/book-sources.ts'
+import { useBookSearch } from '../lib/use-book-search.ts'
 import { pageReturnState } from '../lib/page-navigation.ts'
 import { PageBackButton } from '../components/page-back-button.tsx'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
@@ -8,7 +9,7 @@ import { BookCover } from '../components/book-cover.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
-import { apiFetch, mergeSearchStreamCandidates, type ApiBook, type ApiCandidate, type SearchSourceEventData, streamSearch } from '../lib/api.ts'
+import { apiFetch, type ApiBook, type ApiCandidate } from '../lib/api.ts'
 
 interface CandidateGroup {
   key: string
@@ -27,18 +28,14 @@ export function SearchPage() {
   const [booksLoaded, setBooksLoaded] = useState(false)
   const [precision, setPrecision] = useState(false)
   const [keyword, setKeyword] = useState(queryKeyword)
-  const [candidates, setCandidates] = useState<ApiCandidate[]>([])
+  const { candidates, searchId, status, message: searchMessage, search, cancel } = useBookSearch()
   const [expandedKey, setExpandedKey] = useState<string>()
   const [selectedByGroup, setSelectedByGroup] = useState<Record<string, number>>({})
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const [messageTone, setMessageTone] = useState<'info' | 'success' | 'error'>('info')
   const [saving, setSaving] = useState<number | null>(null)
-  const [hasNextPage, setHasNextPage] = useState(false)
-  const [searchId, setSearchId] = useState('')
-  const controllerRef = useRef<AbortController | null>(null)
-  const searchIdRef = useRef('')
-  const cancelRequestedRef = useRef(false)
+  const saveController = useRef<AbortController | null>(null)
+  useEffect(() => () => saveController.current?.abort(), [])
   const groups = useMemo(() => {
     const all = groupCandidates(candidates)
     if (targetBookId.length > 0 && !booksLoaded) return []
@@ -54,95 +51,56 @@ export function SearchPage() {
     }).catch((error: unknown) => {
       if (active) { setBooksLoaded(true); setMessageTone('error'); setMessage(error instanceof Error ? `已有书籍加载失败，仍可搜索：${error.message}` : '已有书籍加载失败，仍可搜索') }
     })
-    return () => { active = false; controllerRef.current?.abort() }
+    return () => { active = false }
   }, [])
   useEffect(() => { setKeyword(queryKeyword) }, [queryKeyword])
 
-  async function saveCandidate(group: CandidateGroup, action: 'shelf' | 'directory') {
-    if (!booksLoaded) return
+  async function saveCandidate(group: CandidateGroup, action: 'shelf' | 'directory' | 'details') {
+    if (!booksLoaded || saveController.current !== null) return
     const selectedIndex = selectedByGroup[group.key] ?? group.items[0]?.index
     if (selectedIndex === undefined || searchId.length === 0) return
     const result = candidates[selectedIndex]
     if (result === undefined) return
     const requestedBook = targetBookId.length > 0 ? books.find((book) => book.id === targetBookId) : undefined
     const existingBook = requestedBook ?? books.find((book) => sameBookIdentity(book.name, book.author, result.candidate.name, result.candidate.author))
+    const controller = new AbortController(); saveController.current = controller
     setSaving(selectedIndex); setMessageTone('info'); setMessage('')
     try {
-      const created = await apiFetch<{ book: ApiBook; edition: { editionKey: string }; cacheWarning?: SourceCacheWarning }>('/api/books', { method: 'POST', body: JSON.stringify({ searchId, candidateIndex: selectedIndex, addToBookshelf: action === 'shelf', activateEdition: action === 'shelf' || existingBook === undefined, ...(existingBook === undefined ? {} : { bookId: existingBook.id }) }) })
-      if (action === 'directory') {
-        navigate(`/books/${encodeURIComponent(created.book.id)}/toc?editionKey=${encodeURIComponent(created.edition.editionKey)}`, { state: pageReturnState(location) })
+      const created = await apiFetch<{ book: ApiBook; edition: { editionKey: string }; cacheWarning?: SourceCacheWarning }>('/api/books', { method: 'POST', signal: controller.signal, body: JSON.stringify({ searchId, candidateIndex: selectedIndex, addToBookshelf: action === 'shelf', activateEdition: action === 'shelf' || existingBook === undefined, ...(existingBook === undefined ? {} : { bookId: existingBook.id }) }) })
+      if (controller.signal.aborted) return
+      if (action !== 'shelf') {
+        navigate(`/books/${encodeURIComponent(created.book.id)}/${action === 'details' ? 'details' : 'toc'}?editionKey=${encodeURIComponent(created.edition.editionKey)}`, { state: pageReturnState(location) })
       } else {
         setBooks((current) => [...current.filter((book) => book.id !== created.book.id), created.book]); setMessageTone(created.cacheWarning === undefined ? 'success' : 'error'); setMessage(created.cacheWarning === undefined ? '已加入书架' : `书籍已保存，但${created.cacheWarning.message}`)
       }
-    } catch (error) { setMessageTone('error'); setMessage(error instanceof Error ? error.message : action === 'directory' ? '打开目录失败' : '加入书架失败') }
-    finally { setSaving(null) }
+    } catch (error) { if (!controller.signal.aborted) { setMessageTone('error'); setMessage(error instanceof Error ? error.message : action === 'directory' ? '打开目录失败' : action === 'details' ? '打开详情失败' : '加入书架失败') } }
+    finally { saveController.current = null; if (!controller.signal.aborted) setSaving(null) }
   }
 
-  async function submitSearch(event: FormEvent) {
+  function submitSearch(event: FormEvent) {
     event.preventDefault()
-    if (keyword.trim().length === 0) return
-    setStatus('loading'); setMessageTone('info'); setMessage(''); setCandidates([]); setExpandedKey(undefined); setSelectedByGroup({}); setHasNextPage(false); setSearchId(''); searchIdRef.current = ''; cancelRequestedRef.current = false
-    const controller = new AbortController(); controllerRef.current = controller
-    try {
-      const created = await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, precision }) })
-      searchIdRef.current = created.search.id; setSearchId(created.search.id)
-      if (controller.signal.aborted || cancelRequestedRef.current) {
-        await apiFetch(`/api/searches/${encodeURIComponent(created.search.id)}/cancel`, { method: 'POST' }).catch(() => undefined)
-        setStatus('done'); setMessageTone('info'); setMessage('搜索已取消'); return
-      }
-      await streamSearch(created.search.id, handleStreamEvent, controller.signal)
-      setStatus('done')
-    } catch (error) {
-      const cancelled = controller.signal.aborted || cancelRequestedRef.current || (error instanceof DOMException && error.name === 'AbortError')
-      setStatus(cancelled ? 'done' : 'error'); setMessageTone(cancelled ? 'info' : 'error'); setMessage(cancelled ? '搜索已取消' : error instanceof Error ? error.message : '搜索失败')
-    }
-    finally { controllerRef.current = null }
+    setMessage(''); setExpandedKey(undefined); setSelectedByGroup({})
+    void search(keyword, precision)
   }
-
-  async function continueNextPage() {
-    if (searchIdRef.current.length === 0 || !hasNextPage) return
-    cancelRequestedRef.current = false
-    const activeSearchId = searchIdRef.current
-    const controller = new AbortController(); controllerRef.current = controller; setStatus('loading'); setMessageTone('info'); setMessage('')
-    try { await streamSearch(activeSearchId, handleStreamEvent, controller.signal, { nextPage: true }); setStatus('done') }
-    catch (error) { const cancelled = controller.signal.aborted || cancelRequestedRef.current || (error instanceof DOMException && error.name === 'AbortError'); setStatus(cancelled ? 'done' : 'error'); setMessageTone(cancelled ? 'info' : 'error'); setMessage(cancelled ? '搜索已取消' : error instanceof Error ? error.message : '加载下一页失败') }
-    finally { controllerRef.current = null }
-  }
-
-  function handleStreamEvent(streamEvent: { type: string; data: unknown }) {
-    if (streamEvent.type === 'error') { const error = streamEvent.data as { message?: string }; throw new Error(error.message ?? '搜索失败') }
-    if (streamEvent.type === 'source-result') {
-      const batch = streamEvent.data as SearchSourceEventData & { source?: { candidates?: ApiCandidate[]; status?: string } }
-      setCandidates((current) => mergeSearchStreamCandidates(current, batch))
-      if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') { setMessageTone('error'); setMessage('部分书源执行失败，已保留可用结果。') }
-    }
-    if (streamEvent.type === 'batch') { const batch = streamEvent.data as { cacheWarning?: SourceCacheWarning }; if (batch.cacheWarning !== undefined) { setMessageTone('error'); setMessage(`搜索已完成，但${batch.cacheWarning.message}`) } }
-    if (streamEvent.type === 'batch-end') {
-      const batch = streamEvent.data as SearchSourceEventData & { search?: { sourceStates?: Array<{ nextCursor?: unknown }>; candidates?: ApiCandidate[] } }
-      setCandidates((current) => mergeSearchStreamCandidates(current, batch))
-      setHasNextPage(batch.search?.sourceStates?.some((source) => source.nextCursor !== undefined) === true)
-    }
-  }
-
-  async function cancelSearch() { cancelRequestedRef.current = true; controllerRef.current?.abort(); const activeSearchId = searchIdRef.current; if (activeSearchId.length > 0) await apiFetch(`/api/searches/${encodeURIComponent(activeSearchId)}/cancel`, { method: 'POST' }).catch(() => undefined); setStatus('done'); setMessageTone('info'); setMessage('搜索已取消') }
 
   return <section className="page-stack page-narrow search-page">
-    <div className="page-heading compact-heading">{targetBookId.length > 0 ? <PageBackButton fallback={`/books/${encodeURIComponent(targetBookId)}/sources`} /> : null}<div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者，使用当前账号已启用的书源搜索。'}</p></div><Link className="button secondary small" to="/sources">管理书源</Link></div>
+    <div className="page-heading compact-heading">{targetBookId.length > 0 ? <PageBackButton fallback={`/books/${encodeURIComponent(targetBookId)}/sources`} /> : null}<div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者'}</p></div><Link className="button secondary small" to="/sources">管理书源</Link></div>
     <form className="search-panel" onSubmit={(event) => void submitSearch(event)}>
-      <div className="search-row"><label className="sr-only" htmlFor="search-keyword">关键词</label><Input className="search-input" id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><Button type="submit" disabled={status === 'loading' || keyword.trim().length === 0}>{status === 'loading' ? '搜索中' : '搜索'}</Button></div>
-      <div className="search-options"><label className="check-inline"><input type="checkbox" checked={precision} onChange={(event) => setPrecision(event.target.checked)} /><span>精确</span></label>{status === 'loading' ? <Button className="cancel-button" variant="secondary" size="sm" type="button" onClick={() => void cancelSearch()}>取消</Button> : null}</div>
+      <div className="search-row"><label className="sr-only" htmlFor="search-keyword">关键词</label><Input className="search-input" id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><label className="check-inline"><input type="checkbox" checked={precision} disabled={status === 'loading'} onChange={(event) => setPrecision(event.target.checked)} /><span>精确</span></label><Button type={status === 'loading' ? 'button' : 'submit'} disabled={saving !== null || (status !== 'loading' && keyword.trim().length === 0)} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div>
+
     </form>
+    {searchMessage.length > 0 ? <p className="muted compact-message" role="status">{searchMessage}</p> : null}
     {message.length > 0 ? <p className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</p> : null}
-    <div className="result-summary" aria-live="polite">{status === 'loading' ? '正在搜索' : status === 'done' ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}{hasNextPage ? <Button className="inline-action" variant="secondary" size="sm" type="button" disabled={status === 'loading'} onClick={() => void continueNextPage()}>下一页</Button> : null}</div>
-    <div className="result-list">{groups.length === 0 && status === 'done' ? <div className="empty-state">{booksLoaded ? '没有找到匹配书籍。' : '正在读取已有书籍…'}</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedByGroup[group.key] ?? group.items[0]?.index} expanded={expandedKey === group.key} disabled={!booksLoaded} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => setSelectedByGroup((current) => ({ ...current, [group.key]: index }))} onSave={(action) => void saveCandidate(group, action)} />)}</div>
+    <div className="result-summary" aria-live="polite">{status === 'loading' ? '正在搜索' : status === 'done' ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
+    <div className="result-list">{groups.length === 0 && status === 'done' ? <div className="empty-state">{booksLoaded ? '没有找到匹配书籍。' : '正在读取已有书籍…'}</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedByGroup[group.key] ?? group.items[0]?.index} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => setSelectedByGroup((current) => ({ ...current, [group.key]: index }))} onSave={(action) => void saveCandidate(group, action)} />)}</div>
   </section>
 }
 
-function SearchResult({ group, selectedIndex, expanded, disabled, onToggle, saving, onSelect, onSave }: { group: CandidateGroup; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory') => void }) {
+function SearchResult({ group, selectedIndex, expanded, disabled, onToggle, saving, onSelect, onSave }: { group: CandidateGroup; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory' | 'details') => void }) {
   const selected = group.items.find((item) => item.index === selectedIndex) ?? group.items[0]
   if (selected === undefined) return null
   const intro = selected.item.candidate.intro?.trim() ?? ''
-  return <article className="result-card"><BookCover name={group.name} coverUrl={selected.item.candidate.coverUrl} size="result" /><div className="result-card-body"><div className="result-card-heading"><div><h2>{group.name}</h2><p className="muted small">{group.author} · {group.items.length} 个书源{group.items.length > 1 ? ' · 同一本书' : ''}</p></div><div className="result-card-actions"><Button className="save-button" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('shelf')}>{saving ? '处理中' : '添加书架'}</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('directory')}>目录</Button></div></div>{group.items.length > 1 ? <label className="result-source-select"><span className="muted small">选择书源</span><Select value={String(selected.index)} disabled={disabled || saving} onChange={(event) => onSelect(Number(event.target.value))}>{group.items.map(({ item, index }) => <option key={`${item.sourceId}:${item.candidate.bookUrl}`} value={index}>{item.sourceId}</option>)}</Select></label> : <p className="muted small result-source-label">书源：{selected.item.sourceId}</p>}{intro.length > 0 ? <div className={`result-intro ${expanded ? 'expanded' : ''}`}><p>{intro}</p>{intro.length > 90 ? <button className="text-button" type="button" onClick={onToggle}>{expanded ? '收起简介' : '展开简介'}</button> : null}</div> : null}</div></article>
+  return <article className="result-card"><button type="button" className="result-detail-cover" aria-label={"查看详情：" + group.name} disabled={disabled || saving} onClick={() => onSave('details')}><BookCover name={group.name} coverUrl={selected.item.candidate.coverUrl} size="result" /></button><div className="result-card-body"><div className="result-card-heading"><div><h2><button type="button" className="result-detail-title" disabled={disabled || saving} onClick={() => onSave('details')}>{group.name}</button></h2><p className="muted small">{group.author} · {group.items.length} 个书源</p></div><div className="result-card-actions"><Button className="save-button" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('shelf')}>{saving ? '处理中' : '添加书架'}</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('directory')}>目录</Button></div></div>{group.items.length > 1 ? <label className="result-source-select"><span className="muted small">选择书源</span><Select value={String(selected.index)} disabled={disabled || saving} onChange={(event) => onSelect(Number(event.target.value))}>{group.items.map(({ item, index }) => <option key={`${item.sourceId}:${item.candidate.bookUrl}`} value={index}>{item.sourceId}</option>)}</Select></label> : <p className="muted small result-source-label">书源：{selected.item.sourceId}</p>}{intro.length > 0 ? <div className={`result-intro ${expanded ? 'expanded' : ''}`}><button type="button" className="result-detail-intro" disabled={disabled || saving} onClick={() => onSave('details')}>{intro}</button>{intro.length > 90 ? <button className="text-button" type="button" onClick={onToggle}>{expanded ? '收起简介' : '展开简介'}</button> : null}</div> : null}</div></article>
 }
 
 function groupCandidates(candidates: ApiCandidate[]): CandidateGroup[] {

@@ -1,5 +1,7 @@
+import { latestSearchHistory } from '../../shared/search-history.ts'
+import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser } from './client.ts'
 import { bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
@@ -33,7 +35,7 @@ export interface ReaderRepository {
   listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
   listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>>
   getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null>
-  listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus }): Promise<SourceManagementPage>
+  listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage>
   applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }>
   saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void>
   getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null>
@@ -98,7 +100,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus }): Promise<SourceManagementPage> {
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
     return withUser(userId, async (transaction) => {
       const sourceRows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
       const allRows = sourceRows.map((row) => managedSummary(toUserSource(row), row.revision, 'account'))
@@ -111,8 +113,8 @@ export class PostgresReaderRepository implements ReaderRepository {
         })
         .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
       const offset = (params.page - 1) * params.pageSize
-      const page = rows.slice(offset, offset + params.pageSize)
-      return { sources: page, page: params.page, pageSize: params.pageSize, total: rows.length, enabledCount }
+      const page = params.all === true ? rows : rows.slice(offset, offset + params.pageSize)
+      return { sources: page, page: params.all === true ? 1 : params.page, pageSize: params.all === true ? Math.max(1, rows.length) : params.pageSize, total: rows.length, enabledCount }
     })
   }
 
@@ -399,19 +401,24 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const shelfRows = await transaction.select({ book: books, edition: bookEditions }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
       const readingRows = await transaction.select({ book: books, edition: bookEditions, position: readingRecords }).from(readingRecords).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingRecords.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, readingRecords.bookId), eq(bookEditions.editionKey, readingRecords.editionKey))).where(eq(readingRecords.userId, userId)).orderBy(desc(readingRecords.lastReadAt)).limit(50)
-      const historyRows = await transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))).orderBy(desc(searchHistory.updatedAt)).limit(50)
+      const historyRows = await transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))).orderBy(desc(searchHistory.createdAt), desc(searchHistory.id))
       const positions = new Map(readingRows.map((row) => [`${row.book.id}:${row.edition.editionKey}`, toPosition(row.position)]))
       const shelf = shelfRows.map((row) => { const book = toBook(row.book); const edition = toEdition(row.edition); const position = positions.get(`${row.book.id}:${row.edition.editionKey}`); return position === undefined ? { book, edition } : { book, edition, position } })
       const seenReadingBooks = new Set<string>()
       const reading = readingRows.filter((row) => { if (seenReadingBooks.has(row.book.id)) return false; seenReadingBooks.add(row.book.id); return true }).map((row) => ({ book: toBook(row.book), edition: toEdition(row.edition), position: toPosition(row.position) }))
-      return { bookshelf: shelf, reading, searchHistory: historyRows.map(toHistory) }
+      return { bookshelf: shelf, reading, searchHistory: latestSearchHistory(historyRows.map(toHistory)).slice(0, 50) }
     })
   }
 
   public async deleteSearchHistory(userId: string, historyId: string): Promise<boolean> {
     return withUser(userId, async (transaction) => {
-      const [row] = await transaction.update(searchHistory).set({ deletedAt: new Date(), updatedAt: new Date() }).where(and(eq(searchHistory.userId, userId), eq(searchHistory.id, historyId), isNull(searchHistory.deletedAt))).returning({ id: searchHistory.id })
-      return row !== undefined
+      const rows = await transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt)))
+      const target = rows.find((row) => row.id === historyId)
+      if (target === undefined) return false
+      const ids = rows.filter((row) => normalizeIdentity(row.keyword) === normalizeIdentity(target.keyword)).map((row) => row.id)
+      // 删除整组展示历史，避免旧请求记录在去重后重新出现；搜索任务仍保留。
+      await transaction.update(searchHistory).set({ deletedAt: new Date(), updatedAt: new Date() }).where(and(eq(searchHistory.userId, userId), inArray(searchHistory.id, ids)))
+      return true
     })
   }
 
@@ -566,7 +573,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.allSources(userId) }
   public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
   public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { return this.allSources(userId).find((source) => source.sourceId === sourceId && source.enabled) ?? null }
-  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus }): Promise<SourceManagementPage> {
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
     const query = params.query.toLocaleLowerCase()
     const allRows = this.allSources(userId)
     const enabledCount = allRows.filter((source) => source.enabled).length
@@ -575,7 +582,7 @@ export class MemoryReaderRepository implements ReaderRepository {
       return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
     }).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
     const offset = (params.page - 1) * params.pageSize
-    return { sources: rows.slice(offset, offset + params.pageSize).map((source) => managedSummary(source, this.sourceRevision(userId, source.sourceId), 'account')), page: params.page, pageSize: params.pageSize, total: rows.length, enabledCount }
+    return { sources: (params.all === true ? rows : rows.slice(offset, offset + params.pageSize)).map((source) => managedSummary(source, this.sourceRevision(userId, source.sourceId), 'account')), page: params.all === true ? 1 : params.page, pageSize: params.all === true ? Math.max(1, rows.length) : params.pageSize, total: rows.length, enabledCount }
   }
   public async applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }> {
     const seen = new Set<string>()
@@ -657,9 +664,9 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
   public async addToBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.set(`${userId}:${bookId}`, new Date().toISOString()) }
   public async removeFromBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.delete(`${userId}:${bookId}`) }
-  public async getHome(userId: string): Promise<HomeSnapshot> { const values = [...this.books.values()].filter((item) => item.book.userId === userId); const activeValues = values.filter((item) => item.book.activeEditionKey === item.edition.editionKey); const positions = [...this.positions.values()].filter((position) => position.userId === userId).sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt)); const seenReadingBooks = new Set<string>(); const reading = positions.map((position) => { const value = values.find((item) => item.book.id === position.bookId && item.edition.editionKey === position.editionKey); return value === undefined || seenReadingBooks.has(position.bookId) ? undefined : (seenReadingBooks.add(position.bookId), { book: value.book, edition: value.edition, position }) }).filter((item): item is { book: StoredBook; edition: StoredEdition; position: StoredPosition } => item !== undefined); const shelfValues = activeValues.filter((item) => this.shelf.has(`${userId}:${item.book.id}`)).sort((a, b) => (this.shelf.get(`${userId}:${b.book.id}`) ?? '').localeCompare(this.shelf.get(`${userId}:${a.book.id}`) ?? '')); const shelf = shelfValues.map((value) => { const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } }); return { bookshelf: shelf, reading, searchHistory: [...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) }
+  public async getHome(userId: string): Promise<HomeSnapshot> { const values = [...this.books.values()].filter((item) => item.book.userId === userId); const activeValues = values.filter((item) => item.book.activeEditionKey === item.edition.editionKey); const positions = [...this.positions.values()].filter((position) => position.userId === userId).sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt)); const seenReadingBooks = new Set<string>(); const reading = positions.map((position) => { const value = values.find((item) => item.book.id === position.bookId && item.edition.editionKey === position.editionKey); return value === undefined || seenReadingBooks.has(position.bookId) ? undefined : (seenReadingBooks.add(position.bookId), { book: value.book, edition: value.edition, position }) }).filter((item): item is { book: StoredBook; edition: StoredEdition; position: StoredPosition } => item !== undefined); const shelfValues = activeValues.filter((item) => this.shelf.has(`${userId}:${item.book.id}`)).sort((a, b) => (this.shelf.get(`${userId}:${b.book.id}`) ?? '').localeCompare(this.shelf.get(`${userId}:${a.book.id}`) ?? '')); const shelf = shelfValues.map((value) => { const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } }); return { bookshelf: shelf, reading, searchHistory: latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50) }
   }
-  public async deleteSearchHistory(userId: string, historyId: string): Promise<boolean> { const item = [...this.history.entries()].find(([, value]) => value.id === historyId && this.searches.get(value.searchId)?.userId === userId); if (item === undefined) return false; this.history.delete(item[0]); return true }
+  public async deleteSearchHistory(userId: string, historyId: string): Promise<boolean> { const item = [...this.history.entries()].find(([, value]) => value.id === historyId && this.searches.get(value.searchId)?.userId === userId); if (item === undefined) return false; for (const [key, value] of this.history) if (this.searches.get(value.searchId)?.userId === userId && normalizeIdentity(value.keyword) === normalizeIdentity(item[1].keyword)) this.history.delete(key); return true }
   public async listBooks(userId: string): Promise<Array<{ book: StoredBook; edition: StoredEdition }>> { return [...this.books.values()].filter((item) => item.book.userId === userId && item.book.activeEditionKey === item.edition.editionKey).sort((a, b) => b.book.updatedAt.localeCompare(a.book.updatedAt)) }
   public async getBook(userId: string, bookId: string): Promise<StoredBook | null> { return [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId)?.book ?? null }
   public async listEditions(userId: string, bookId: string): Promise<StoredEdition[]> { return [...this.books.values()].filter((item) => item.book.userId === userId && item.book.id === bookId).map((item) => item.edition).sort((a, b) => a.editionKey.localeCompare(b.editionKey)) }

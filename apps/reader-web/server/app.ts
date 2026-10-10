@@ -1,4 +1,5 @@
 import './env.ts'
+import { getBookDetails } from './runtime/book-details.ts'
 import { createClient } from '@supabase/supabase-js'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
@@ -53,7 +54,7 @@ app.get('/api/sources', async (context) => {
 app.get('/api/source-management', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
-  const parsed = sourceManagementPageSchema.safeParse({ page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status') })
+  const parsed = sourceManagementPageSchema.safeParse({ all: context.req.query('all'), page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status') })
   if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '书源列表参数无效' } }, 400)
   try { return context.json(await dependencies.repository.listManagedSources(context.get('userId'), parsed.data)) } catch (error) { return handleError(context, error) }
 })
@@ -186,6 +187,16 @@ app.get('/api/books', async (context) => {
   } catch (error) {
     return handleError(context, error)
   }
+})
+
+app.get('/api/books/:bookId/details', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    const value = await getBookDetails(dependencies.repository, context.get('userId'), context.req.param('bookId'), context.req.query('editionKey'))
+    if (value === null) return context.json({ error: { code: 'not-found', message: '书籍或版本不存在' } }, 404)
+    return context.json(value)
+  } catch (error) { return handleError(context, error) }
 })
 
 app.get('/api/books/:bookId/editions', async (context) => {

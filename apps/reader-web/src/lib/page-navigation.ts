@@ -10,3 +10,11 @@ export function pageReturnTarget(state: unknown, currentPath: string, fallback: 
 export function pageReturnState(location: { pathname: string; search: string; state: unknown }): { backTo: string; backState: unknown } {
   return { backTo: location.pathname + location.search, backState: location.state }
 }
+
+/** 在阅读中打开目录/换源/详情后再读章节，继承原阅读入口，避免插入中途查看页。 */
+export function readingEntryState(location: { pathname: string; search: string; state: unknown }): unknown {
+  const state = location.state !== null && typeof location.state === 'object' ? location.state as ReturnState : {}
+  // backTo只匹配站内书籍阅读路径；仍交由pageReturnTarget校验最终返回目标。
+  if (typeof state.backTo === 'string' && /^\/books\/[^/]+\/read(?:\/|\?|$)/u.test(state.backTo)) return state.backState ?? { backTo: '/' }
+  return pageReturnState(location)
+}

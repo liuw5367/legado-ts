@@ -14,6 +14,7 @@ import { SourcesPage } from './pages/sources.tsx'
 import { SettingsPage } from './pages/settings.tsx'
 import { ReaderEntryPage, ReaderPage } from './pages/reader.tsx'
 import { BookSourcesPage } from './pages/book-sources.tsx'
+import { BookDetailsPage } from './pages/book-details.tsx'
 import { TocPage } from './pages/toc.tsx'
 
 function ProtectedRoute() {
@@ -29,7 +30,7 @@ const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/auth/confirm', element: <AuthConfirmPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
-  { element: <ProtectedRoute />, children: [{ element: <AccountLayout />, children: [{ index: true, element: <AccountHomePage /> }, { path: '/search', element: <SearchPage /> }, { path: '/sources', element: <SourcesPage /> }, { path: '/books/:bookId/toc', element: <TocPage /> }, { path: '/books/:bookId/sources', element: <BookSourcesPage /> }, { path: '/account/password', element: <ChangePasswordPage /> }, { path: '/account/settings', element: <SettingsPage /> }] }, { element: <ReaderLayout />, children: [{ path: '/books/:bookId/read', element: <ReaderEntryPage /> }, { path: '/books/:bookId/read/:chapterId', element: <ReaderPage /> }] }] },
+  { element: <ProtectedRoute />, children: [{ element: <AccountLayout />, children: [{ index: true, element: <AccountHomePage /> }, { path: '/search', element: <SearchPage /> }, { path: '/sources', element: <SourcesPage /> }, { path: '/books/:bookId/details', element: <BookDetailsPage /> }, { path: '/books/:bookId/toc', element: <TocPage /> }, { path: '/books/:bookId/sources', element: <BookSourcesPage /> }, { path: '/account/password', element: <ChangePasswordPage /> }, { path: '/account/settings', element: <SettingsPage /> }] }, { element: <ReaderLayout />, children: [{ path: '/books/:bookId/read', element: <ReaderEntryPage /> }, { path: '/books/:bookId/read/:chapterId', element: <ReaderPage /> }] }] },
   { path: '*', element: <Navigate to="/" replace /> },
 ])
 

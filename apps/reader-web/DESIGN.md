@@ -17,6 +17,8 @@ Legado Reader uses a quiet ink-on-paper direction for long reading sessions: war
 
 The system theme resolves to light or dark through `prefers-color-scheme`; an account setting can override it.
 
+Page titles use 18px, section headings 14px, and supporting text 12px. Short title and subtitle pairs sit on one row when space permits. Navigation, return, and reader controls share Lucide outline icons.
+
 ## 3. Typography rules
 
 The stack is `ui-sans-serif`, system UI, and `PingFang SC`/`Noto Sans SC` fallbacks for Chinese text. Headings use a compact negative letter spacing only at display sizes. Reading text starts at 18px with a 1.9 line height, both adjustable per account. Body reading lines stay within a 680px column.
@@ -30,6 +32,8 @@ Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-p
 Pages use a single reading column capped at 680px, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped.
 
 The TOC heading, actions, and filter share one sticky area, below the desktop app header. Narrow actions wrap without hiding the return button. Reader top and bottom bars are fixed overlays, hidden initially and toggled by a text tap. The bottom bar uses two rows: previous / character count / next, then four icon shortcuts for TOC, sources, settings, and theme. Safe area padding and permanent text end padding keep the last paragraph reachable. Toggling bars must not move text or scroll position.
+
+Use `viewport-fit=cover` and all four safe-area insets. The reader top bar adds 8px of breathing room beyond the top inset, with solid surfaces for legibility. Result and source rows constrain their text column with `min-width: 0`; long URLs truncate within that column while actions remain aligned. The selected chapter is bold in both TOC views.
 
 ## 6. Depth and elevation
 

@@ -11,3 +11,9 @@ export function isReaderTap(start: { x: number; y: number; scrollY: number } | n
 export function isCurrentToc(toc: { bookId: string; editionKey: string } | null, bookId: string, editionKey: string): boolean {
   return toc !== null && toc.bookId === bookId && toc.editionKey === editionKey
 }
+
+/** 外部网页入口仅接受HTTP(S)，不把脚本URL交给浏览器。 */
+export function browserUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined
+  try { const url = new URL(value); return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : undefined } catch { return undefined }
+}

@@ -1,5 +1,5 @@
 import { PageBackButton } from '../components/page-back-button.tsx'
-import { pageReturnState } from '../lib/page-navigation.ts'
+import { readingEntryState } from '../lib/page-navigation.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Badge } from '../components/ui/badge.tsx'
@@ -7,10 +7,13 @@ import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
 import { apiFetch, type ApiBook, type ApiChapter, type ApiEdition, type ApiPosition, type ApiSource, type ApiToc } from '../lib/api.ts'
+import { useBookCache } from '../lib/book-cache-context.tsx'
+import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { isCurrentToc } from '../lib/reader-interactions.ts'
 
 export function TocPage() {
   const { bookId = '' } = useParams()
+  const cache = useBookCache()
   const navigate = useNavigate()
   const location = useLocation()
   const controlsRef = useRef<HTMLDivElement>(null)
@@ -40,16 +43,14 @@ export function TocPage() {
     if (refresh) setRefreshing(true); else setLoading(true)
     setError('')
     try {
-      const suffix = refresh ? '&refresh=true' : ''
-      const [result, allBooks, editionResult, positionResult, sourceResult] = await Promise.all([
-        apiFetch<{ toc: ApiToc }>(`/api/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}${suffix}`),
-        apiFetch<{ books: Array<{ book: ApiBook }> }>('/api/books'),
-        apiFetch<{ editions: ApiEdition[] }>(`/api/books/${encodeURIComponent(bookId)}/editions`),
-        apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`),
-        apiFetch<{ sources: ApiSource[] }>('/api/sources').catch(() => ({ sources: [] })),
+      const cachedPosition = cache.getPosition(bookId, editionKey)
+      const [snapshot, positionResult] = await Promise.all([
+        loadBookSnapshot(cache, bookId, editionKey, refresh),
+        cachedPosition === undefined ? apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position?editionKey=' + encodeURIComponent(editionKey)) : Promise.resolve({ position: cachedPosition }),
       ])
       if (requestId !== requestIdRef.current) return
-      setToc(result.toc); setBook(allBooks.books.map((item) => item.book).find((item) => item.id === bookId) ?? null); setEditions(editionResult.editions); setSources(sourceResult.sources); setPosition(positionResult.position)
+      cache.setPosition(bookId, editionKey, positionResult.position)
+      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(snapshot.editions); setSources([{ sourceId: snapshot.details.edition.sourceId, name: snapshot.details.sourceName, fingerprint: snapshot.toc.sourceFingerprint, enabled: true }]); setPosition(positionResult.position)
     } catch (reason) { if (requestId === requestIdRef.current) setError(reason instanceof Error ? reason.message : '目录加载失败') }
     finally { if (requestId === requestIdRef.current) { setLoading(false); setRefreshing(false) } }
   }
@@ -59,9 +60,12 @@ export function TocPage() {
     navigate(`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(nextEditionKey)}`, { replace: true, state: location.state })
   }
 
-  const currentToc = isCurrentToc(toc, bookId, editionKey) ? toc : null
+  const snapshot = cache.get(bookId, editionKey)
+  const displayedToc = snapshot?.toc ?? toc
+  const currentToc = isCurrentToc(displayedToc, bookId, editionKey) ? displayedToc : null
   const chapters = currentToc?.chapters.filter((chapter) => chapter.isVolume !== true) ?? []
-  const currentChapter = position === null ? undefined : chapters.find((chapter) => chapter.chapterId === position.chapterId)
+  const currentPosition = cache.getPosition(bookId, editionKey) ?? position
+  const currentChapter = currentPosition === null ? undefined : chapters.find((chapter) => chapter.chapterId === currentPosition.chapterId)
   const sourceName = editions.find((edition) => edition.editionKey === editionKey)?.sourceId
   const displaySource = sources.find((source) => source.sourceId === sourceName)?.name ?? sourceName ?? '当前来源'
   const filteredEntries = useMemo(() => filterEntries(currentToc?.chapters ?? [], filter), [filter, currentToc])
@@ -77,8 +81,8 @@ export function TocPage() {
     const header = document.querySelector<HTMLElement>('.app-header')
     const measure = () => {
       const headerHeight = header?.getBoundingClientRect().height ?? 0
-      controls.style.top = `${headerHeight}px`
-      controls.parentElement?.style.setProperty('--toc-scroll-offset', `${controls.getBoundingClientRect().height + headerHeight + 8}px`)
+      controls.style.top = 'calc(' + headerHeight + 'px + ' + (headerHeight > 0 ? '0px' : 'var(--safe-top) + 8px') + ')'
+      controls.parentElement?.style.setProperty('--toc-scroll-offset', `${controls.getBoundingClientRect().height + parseFloat(getComputedStyle(controls).top) + 8}px`)
     }
     const observer = new ResizeObserver(measure)
     observer.observe(controls); if (header !== null) observer.observe(header)
@@ -90,12 +94,12 @@ export function TocPage() {
   if (loading && currentToc === null) return <section className="page-stack page-narrow"><PageBackButton /><div className="loading-state"><p className="muted">正在读取目录…</p></div></section>
   if (currentToc === null) return <section className="page-stack page-narrow"><div className="error-state"><p className="error">{error || '目录加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void load(false)}>重试</Button><PageBackButton /></div></div></section>
   return <section className="page-stack page-narrow toc-page">
-    <div className="toc-controls" ref={controlsRef}><div className="toc-heading"><PageBackButton /><div className="toc-heading-main"><h1>{book?.name ?? '书籍目录'}</h1><p className="muted">{chapters.length} 章 · {displaySource}</p></div>{continueTarget === undefined ? null : <Link className="button small" to={chapterLink(bookId, continueTarget, editionKey)} state={pageReturnState(location)}>{currentChapter === undefined ? '开始阅读' : '继续阅读'}</Link>}</div>
+    <div className="toc-controls" ref={controlsRef}><div className="toc-heading"><PageBackButton /><div className="toc-heading-main"><h1>{book?.name ?? '书籍目录'}</h1><p className="muted">{chapters.length} 章 · {displaySource}</p></div>{continueTarget === undefined ? null : <Link className="button small" to={chapterLink(bookId, continueTarget, editionKey)} state={readingEntryState(location)}>{currentChapter === undefined ? '开始阅读' : '继续阅读'}</Link>}</div>
     <div className="toc-toolbar">{editions.length > 1 ? <label className="toc-source"><span className="sr-only">阅读来源</span><Select value={editionKey} onChange={(event) => void switchEdition(event.target.value)}>{editions.map((edition) => <option key={edition.editionKey} value={edition.editionKey}>{sources.find((source) => source.sourceId === edition.sourceId)?.name ?? edition.sourceId}</option>)}</Select></label> : <span className="muted small">{displaySource}</span>}<div className="toc-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? '正序' : '倒序'}</Button><Button variant="secondary" size="sm" type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>到顶部</Button><Button variant="secondary" size="sm" type="button" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}>到底部</Button><Button className="refresh-button" variant="secondary" size="sm" type="button" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? '刷新中' : '刷新'}</Button></div></div>
     {error.length > 0 ? <p className="error compact-message" role="alert">{error}</p> : null}
     <div className="toc-filter-row"><label className="sr-only" htmlFor="chapter-filter">筛选章节</label><Input id="chapter-filter" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="筛选章节" /><span className="muted small">{filter.length > 0 ? `${chapters.filter((chapter) => chapter.title.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase())).length} 个匹配` : `共 ${chapters.length} 章`}</span></div>
     </div>
-    <div className="toc-list" ref={listRef}>{orderedEntries.length === 0 ? <div className="empty-state">没有匹配的章节。</div> : orderedEntries.map((chapter) => chapter.isVolume === true ? <div className="toc-volume" key={`volume:${chapter.index}:${chapter.title}`}>{chapter.title}</div> : <Link className={`toc-row ${chapter.chapterId === position?.chapterId ? 'current' : ''}`} data-chapter-id={chapter.chapterId} aria-current={chapter.chapterId === position?.chapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} state={pageReturnState(location)}><span className="toc-index">{chapter.index + 1}</span><span className="toc-title">{chapter.title}</span>{chapter.chapterId === position?.chapterId ? <span className="toc-current" aria-label="当前阅读章节">✓</span> : chapter.isVip === true ? <Badge>VIP</Badge> : null}</Link>)}</div>
+    <div className="toc-list" ref={listRef}>{orderedEntries.length === 0 ? <div className="empty-state">没有匹配的章节。</div> : orderedEntries.map((chapter) => chapter.isVolume === true ? <div className="toc-volume" key={`volume:${chapter.index}:${chapter.title}`}>{chapter.title}</div> : <Link className={`toc-row ${chapter.chapterId === currentPosition?.chapterId ? 'current' : ''}`} data-chapter-id={chapter.chapterId} aria-current={chapter.chapterId === currentPosition?.chapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} state={readingEntryState(location)}><span className="toc-index">{chapter.index + 1}</span><span className="toc-title">{chapter.title}</span>{chapter.chapterId === currentPosition?.chapterId ? <span className="toc-current" aria-label="当前阅读章节">✓</span> : chapter.isVip === true ? <Badge>VIP</Badge> : null}</Link>)}</div>
   </section>
 }
 

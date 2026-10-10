@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { apiFetch, type ApiHome } from '../lib/api.ts'
@@ -9,7 +9,9 @@ type View = 'bookshelf' | 'reading' | 'history'
 
 export function AccountHomePage() {
   const [home, setHome] = useState<ApiHome | null>(null)
-  const [view, setView] = useState<View>('bookshelf')
+  const location = useLocation()
+  const initialView = (location.state as { homeView?: View } | null)?.homeView
+  const [view, setView] = useState<View>(initialView === 'reading' || initialView === 'history' ? initialView : 'bookshelf')
   const [message, setMessage] = useState('')
   const [removing, setRemoving] = useState<string>()
   const [deletingHistory, setDeletingHistory] = useState<string>()
@@ -44,26 +46,26 @@ export function AccountHomePage() {
       <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>搜索 <span>{home.searchHistory.length}</span></button>
     </div>
     {message.length > 0 ? <p className="error compact-message" role="alert">{message}</p> : null}
-    {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList items={bookItems} showRemove={view === 'bookshelf'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
+    {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList view={view} items={bookItems} showRemove={view === 'bookshelf'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
   </section>
 }
 
-function BookList({ items, showRemove, removingId, onRemove }: { items: BookItem[]; showRemove: boolean; removingId: string | undefined; onRemove: (bookId: string) => void }) {
+function BookList({ view, items, showRemove, removingId, onRemove }: { view: View; items: BookItem[]; showRemove: boolean; removingId: string | undefined; onRemove: (bookId: string) => void }) {
   if (items.length === 0) return <div className="empty-state">{showRemove ? '书架还是空的，去搜索一本书吧。' : '还没有阅读记录。'}</div>
-  return <div className="book-list">{items.map((item) => <BookRow key={`${item.book.id}:${item.edition.editionKey}`} item={item} showRemove={showRemove} removing={removingId === item.book.id} onRemove={onRemove} />)}</div>
+  return <div className="book-list">{items.map((item) => <BookRow key={`${item.book.id}:${item.edition.editionKey}`} item={item} view={view} showRemove={showRemove} removing={removingId === item.book.id} onRemove={onRemove} />)}</div>
 }
 
-function BookRow({ item, showRemove, removing, onRemove }: { item: BookItem; showRemove: boolean; removing: boolean; onRemove: (bookId: string) => void }) {
+function BookRow({ view, item, showRemove, removing, onRemove }: { view: View; item: BookItem; showRemove: boolean; removing: boolean; onRemove: (bookId: string) => void }) {
   const { book, edition, position } = item
   const target = position === undefined ? `/books/${encodeURIComponent(book.id)}/read?editionKey=${encodeURIComponent(edition.editionKey)}` : `/books/${encodeURIComponent(book.id)}/read/${encodeURIComponent(position.chapterId)}?editionKey=${encodeURIComponent(edition.editionKey)}`
   return <article className="book-row">
-    <Link className="book-row-main" to={target} aria-label={`阅读：${book.name}`}>
+    <Link className="book-row-main" to={target} state={{ backTo: '/', backState: { homeView: view } }} aria-label={`阅读：${book.name}`}>
       <BookCover name={book.name} coverUrl={book.coverUrl} />
       <span className="book-row-info"><strong>{book.name}</strong><span className="muted">{book.author ?? '作者未知'}</span><span className={position === undefined ? 'muted small' : 'small'}>{position === undefined ? '尚未阅读' : `读到：${position.title}`}</span></span>
     </Link>
     <details className="book-more">
       <summary aria-label={`更多操作：${book.name}`}>···</summary>
-      <div className="book-more-menu"><Link className="book-more-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`} state={{ backTo: '/' }}>查看目录</Link>{showRemove ? <button className="book-more-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}</div>
+      <div className="book-more-menu"><Link className="book-more-item" to={'/books/' + encodeURIComponent(book.id) + '/details?editionKey=' + encodeURIComponent(edition.editionKey)} state={{ backTo: '/', backState: { homeView: view } }}>查看详情</Link><Link className="book-more-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`} state={{ backTo: '/', backState: { homeView: view } }}>查看目录</Link>{showRemove ? <button className="book-more-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}</div>
     </details>
   </article>
 }

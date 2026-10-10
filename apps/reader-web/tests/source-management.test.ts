@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { importSources } from '@legado/source-core'
@@ -175,4 +176,21 @@ test('public import previews do not expose raw source configuration', () => {
   const preview = publicImportPreview({ previewId: 'preview-1', expiresAt: new Date(Date.now() + 60_000).toISOString(), writableCount: 1, candidates: [{ id: 'candidate-1', sourceId: 'https://source.example/new', name: '新书源', fingerprint: 'fp', normalizedSource: { bookSourceUrl: 'https://source.example/new', mainJs: 'secret' }, rawSource: { password: 'secret' }, disposition: 'new', reason: '可导入' }] })
   assert.equal('rawSource' in preview.candidates[0]!, false)
   assert.equal('normalizedSource' in preview.candidates[0]!, false)
+})
+
+test('all source summaries bypass pagination while preserving filters and the default page contract', async () => {
+  const repository = new MemoryReaderRepository()
+  const imported = await importSources({ kind: 'text', text: JSON.stringify(Array.from({ length: 65 }, (_, index) => ({ bookSourceUrl: 'https://all-source.test/' + index, bookSourceName: '全量书源' + String(index).padStart(2, '0'), bookSourceType: 0, searchUrl: '/search' }))) })
+  const candidates = compareImportCandidates(imported, new Map())
+  const previewId = randomUUID()
+  await repository.saveImportPreview('all-user', { previewId, expiresAt: new Date(Date.now() + 60000).toISOString(), candidates, writableCount: candidates.length }, 'https://all-source.test')
+  await repository.commitImportPreview('all-user', previewId, candidates.map((item) => item.id))
+  const params = { page: 1, pageSize: 50, query: '', status: 'all' as const }
+  assert.equal((await repository.listManagedSources('all-user', params)).sources.length, 50)
+  const all = await repository.listManagedSources('all-user', { ...params, all: true })
+  assert.equal(all.sources.length, 65)
+  assert.equal(all.total, 65)
+  assert.equal((await repository.listManagedSources('other-user', { ...params, all: true })).sources.length, 0)
+  assert.equal((await repository.listManagedSources('all-user', { ...params, all: true, query: '书源00' })).sources.length, 1)
+  assert.equal((await repository.listManagedSources('all-user', { ...params, all: true, status: 'disabled' })).sources.length, 0)
 })

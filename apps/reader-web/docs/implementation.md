@@ -8,7 +8,7 @@
 
 ## 搜索、流式进度与取消
 
-`POST /api/searches` 创建搜索记录，写入关键词、来源范围和精准模式。`GET /api/searches/:id/stream` 以 SSE 推送每个来源的状态、候选和进度；`POST /api/searches/:searchId/batches` 用同一搜索记录请求带游标的下一页。页面把 source 事件合并到当前候选快照，候选归并和排序调用 source-core 结果。
+`POST /api/searches` 创建搜索记录，写入关键词、来源范围和精准模式。`GET /api/searches/:id/stream` 以 SSE 推送每个来源的状态、候选和进度。普通搜索与换源页共享搜索生命周期，合并 source 事件到当前候选快照，只请求本次批次。服务端保留 `POST /api/searches/:searchId/batches`，页面不提供翻页入口。创建请求尚未取得 searchId 时取消，会在创建返回后补发取消请求；取消完成前不允许启动下一次搜索。
 
 取消同时中止浏览器请求、调用 `POST /api/searches/:searchId/cancel` 更新数据库状态，并由 runtime 中止活动来源的 `AbortController`。已经持久化的候选保留在结果页；未完成来源标记为 `cancelled`。同一搜索已经被其他操作领取时，Repository 的 operationId 条件会拒绝迟到更新。
 
@@ -24,7 +24,9 @@
 
 来源页面通过 `GET /api/books/:bookId/sources` 合并有效 editions 与持久候选，按来源、fingerprint 和 URL 去重。`POST /api/books/:bookId/sources/:candidateId/open` 按当前用户和书籍取得缓存候选，重新验证源与详情身份后仅保存 edition。加入书架及搜索批次结算增量缓存明确同书候选，失败通过可选 cacheWarning 反馈。
 
-来源页面可以查看同一本书的其他 editions；切换来源只更新活动 edition，不因查看目录自动切换。点击其他来源的章节后，阅读页用该 edition 的目录和正文，并保存新的阅读位置。
+来源页面可以查看同一本书的其他 editions，并原地搜索匹配书名、作者的候选。查看目录只创建或解析 edition，不激活；切换来源先加载目录和该版本的阅读位置，进入有效章节后由阅读页更新活动 edition。
+
+`GET /api/books/:bookId/details` 按当前用户验证书籍和指定 edition 的所有权，返回可展示的详情字段与书架状态，不执行书源脚本、不激活 edition，不返回变量、rawFields 或运行状态。`GET /api/source-management?all=true` 返回筛选后的全部摘要；未指定该参数的调用仍保留原分页契约。
 
 ## 状态、错误与安全
 

@@ -17,17 +17,23 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
   const saveQueue = useRef(Promise.resolve())
+  const latestSettings = useRef(settings)
+  const changeSequence = useRef(0)
+  const pendingSaves = useRef(0)
   const activeUserId = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     const userId = user?.id
     activeUserId.current = userId
-    setSettings(readLocalSettings(userId))
+    changeSequence.current += 1
+    const sequence = changeSequence.current
+    const local = readLocalSettings(userId); latestSettings.current = local; setSettings(local)
     setError(undefined)
     if (session === null || userId === undefined) return
     let active = true
     void apiFetch<{ settings: ApiSettings }>('/api/settings').then((result) => {
-      if (!active) return
+      if (!active || sequence !== changeSequence.current) return
+      latestSettings.current = result.settings
       setSettings(result.settings)
       writeLocalSettings(userId, result.settings)
     }).catch((reason: unknown) => {
@@ -58,14 +64,17 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     saving,
     ...(error === undefined ? {} : { error }),
     updateSettings: async (patch) => {
-      const next: ApiSettings = { ...settings, ...patch, updatedAt: new Date().toISOString() }
-      setSettings(next)
+      const next: ApiSettings = { ...latestSettings.current, ...patch, updatedAt: new Date().toISOString() }
+      const sequence = ++changeSequence.current
+      latestSettings.current = next; setSettings(next)
       writeLocalSettings(user?.id, next)
       if (session === null || user?.id === undefined) return next
-      setSaving(true)
+      pendingSaves.current += 1; setSaving(true)
       const request = saveQueue.current.then(async () => {
+        if (activeUserId.current !== user.id) throw new Error('账号已切换，设置保存已取消')
         const result = await apiFetch<{ settings: ApiSettings }>('/api/settings', { method: 'PUT', body: JSON.stringify(patch) })
-        if (activeUserId.current === user.id) {
+        if (activeUserId.current === user.id && sequence === changeSequence.current) {
+          latestSettings.current = result.settings
           setSettings(result.settings)
           writeLocalSettings(user.id, result.settings)
           setError(undefined)
@@ -73,7 +82,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
         return result.settings
       })
       saveQueue.current = request.then(() => undefined, () => undefined)
-      try { return await request } catch (reason) { setError(reason instanceof Error ? reason.message : '阅读设置保存失败'); throw reason } finally { setSaving(false) }
+      try { return await request } catch (reason) { if (activeUserId.current === user.id) setError(reason instanceof Error ? reason.message : '阅读设置保存失败'); throw reason } finally { pendingSaves.current -= 1; if (pendingSaves.current === 0) setSaving(false) }
     },
   }), [error, resolvedTheme, saving, session, settings, user?.id])
   return <ReaderSettingsContext.Provider value={value}>{children}</ReaderSettingsContext.Provider>
