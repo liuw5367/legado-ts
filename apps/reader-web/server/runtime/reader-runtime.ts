@@ -4,7 +4,6 @@ import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, WorkflowS
 import { NodeCookieStore, createNodeSourceSession } from '@legado/source-node'
 import type { SourceSession } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
-import { seedConfiguredSources } from '../db/source-seed.ts'
 import type { BookCreationInput, RuntimeStateSnapshot, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
 
@@ -17,7 +16,7 @@ export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean }
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
 
 export interface ReaderRuntime {
-  listSources(userId?: string): Promise<StoredSourceRecord[]>
+  listSources(userId: string): Promise<StoredSourceRecord[]>
   runSearchBatch(userId: string, searchId: string, options?: SearchBatchOptions): Promise<SearchBatchResult>
   runSearchBatchStream(userId: string, searchId: string, listener: SearchSourceListener, options?: SearchBatchOptions): Promise<SearchBatchResult>
   cancelSearch(userId: string, searchId: string): Promise<SearchRunState | null>
@@ -31,7 +30,7 @@ const SOURCE_RUNTIME_LEASE_MS = 5 * 60 * 1000
 
 export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime {
   return {
-    listSources: async (userId) => { await seedConfiguredSources(repository); return userId === undefined ? repository.listSources() : repository.listSourcesForUser(userId) },
+    listSources: (userId) => repository.listSourcesForUser(userId),
     runSearchBatch: (userId, searchId, options) => runSearchBatch(repository, userId, searchId, options),
     runSearchBatchStream: (userId, searchId, listener, options) => runSearchBatchStream(repository, userId, searchId, listener, options),
     cancelSearch: (userId, searchId) => cancelSearch(repository, userId, searchId),

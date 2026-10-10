@@ -1,24 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
-import { apiFetch, mergeSearchStreamCandidates, type ApiBook, type ApiCandidate, type ApiSource, type SearchSourceEventData, streamSearch } from '../lib/api.ts'
-
-const INITIAL_SOURCE_LIMIT = 100
+import { apiFetch, mergeSearchStreamCandidates, type ApiBook, type ApiCandidate, type SearchSourceEventData, streamSearch } from '../lib/api.ts'
 
 export function SearchPage() {
   const [searchParams] = useSearchParams()
   const queryKeyword = searchParams.get('q') ?? ''
-  const [sources, setSources] = useState<ApiSource[]>([])
   const [books, setBooks] = useState<ApiBook[]>([])
-  const [sourceIds, setSourceIds] = useState<string[]>([])
   const [precision, setPrecision] = useState(false)
   const [keyword, setKeyword] = useState(queryKeyword)
-  const [sourceFilter, setSourceFilter] = useState('')
-  const [sourceLimit, setSourceLimit] = useState(INITIAL_SOURCE_LIMIT)
-  const [sourcesOpen, setSourcesOpen] = useState(false)
   const [candidates, setCandidates] = useState<ApiCandidate[]>([])
   const [expandedIndex, setExpandedIndex] = useState<number>()
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
@@ -34,20 +27,14 @@ export function SearchPage() {
 
   useEffect(() => {
     let active = true
-    void Promise.all([apiFetch<{ sources: ApiSource[] }>('/api/sources'), apiFetch<{ books: Array<{ book: ApiBook }> }>('/api/books')]).then(([sourceResult, bookResult]) => {
-      if (!active) return
-      setSources(sourceResult.sources); setSourceIds(sourceResult.sources.map((source) => source.sourceId)); setBooks(bookResult.books.map((item) => item.book))
-    }).catch((error: unknown) => { if (active) { setStatus('error'); setMessageTone('error'); setMessage(error instanceof Error ? error.message : '搜索配置加载失败') } })
+    void apiFetch<{ books: Array<{ book: ApiBook }> }>('/api/books').then((result) => {
+      if (active) setBooks(result.books.map((item) => item.book))
+    }).catch((error: unknown) => {
+      if (active) { setMessageTone('error'); setMessage(error instanceof Error ? `已有书籍加载失败，仍可搜索：${error.message}` : '已有书籍加载失败，仍可搜索') }
+    })
     return () => { active = false; controllerRef.current?.abort() }
   }, [])
   useEffect(() => { setKeyword(queryKeyword) }, [queryKeyword])
-
-  const filteredSources = useMemo(() => {
-    const normalized = sourceFilter.trim().toLocaleLowerCase()
-    return sources.filter((source) => normalized.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(normalized))
-  }, [sourceFilter, sources])
-  const visibleSources = filteredSources.slice(0, sourceLimit)
-  const sourceLabel = sources.length === 0 ? '暂无可用书源' : sourceIds.length === sources.length ? '全部书源' : `已选 ${sourceIds.length} 个书源`
 
   async function saveCandidate(index: number, targetBookId?: string) {
     const result = candidates[index]
@@ -62,11 +49,11 @@ export function SearchPage() {
 
   async function submitSearch(event: FormEvent) {
     event.preventDefault()
-    if (keyword.trim().length === 0 || sourceIds.length === 0) return
+    if (keyword.trim().length === 0) return
     setStatus('loading'); setMessageTone('info'); setMessage(''); setCandidates([]); setExpandedIndex(undefined); setTargetByIndex({}); setHasNextPage(false); setSearchId(''); searchIdRef.current = ''; cancelRequestedRef.current = false
     const controller = new AbortController(); controllerRef.current = controller
     try {
-      const created = await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, sourceIds, precision }) })
+      const created = await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, precision }) })
       searchIdRef.current = created.search.id; setSearchId(created.search.id)
       if (controller.signal.aborted || cancelRequestedRef.current) {
         await apiFetch(`/api/searches/${encodeURIComponent(created.search.id)}/cancel`, { method: 'POST' }).catch(() => undefined)
@@ -106,14 +93,12 @@ export function SearchPage() {
   }
 
   async function cancelSearch() { cancelRequestedRef.current = true; controllerRef.current?.abort(); const activeSearchId = searchIdRef.current; if (activeSearchId.length > 0) await apiFetch(`/api/searches/${encodeURIComponent(activeSearchId)}/cancel`, { method: 'POST' }).catch(() => undefined); setStatus('done'); setMessageTone('info'); setMessage('搜索已取消') }
-  function toggleSource(sourceId: string, selected: boolean) { setSourceIds((current) => selected ? (current.includes(sourceId) ? current : [...current, sourceId]) : current.filter((id) => id !== sourceId)) }
 
   return <section className="page-stack page-narrow search-page">
-    <div className="page-heading compact-heading"><div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者，找到后直接加入书架。'}</p></div></div>
+    <div className="page-heading compact-heading"><div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者，使用当前账号已启用的书源搜索。'}</p></div><Link className="button secondary small" to="/sources">管理书源</Link></div>
     <form className="search-panel" onSubmit={(event) => void submitSearch(event)}>
-      <div className="search-row"><label className="sr-only" htmlFor="search-keyword">关键词</label><Input className="search-input" id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><Button type="submit" disabled={status === 'loading' || keyword.trim().length === 0 || sourceIds.length === 0}>{status === 'loading' ? '搜索中' : '搜索'}</Button></div>
-      <div className="search-options"><button className="filter-toggle" type="button" aria-expanded={sourcesOpen} onClick={() => setSourcesOpen((value) => !value)}><span>{sourceLabel}</span><span aria-hidden="true">{sourcesOpen ? '⌃' : '⌄'}</span></button><label className="check-inline"><input type="checkbox" checked={precision} onChange={(event) => setPrecision(event.target.checked)} /><span>精确</span></label>{status === 'loading' ? <Button className="cancel-button" variant="secondary" size="sm" type="button" onClick={() => void cancelSearch()}>取消</Button> : null}</div>
-      {sourcesOpen ? <div className="source-picker"><div className="source-picker-toolbar"><Input aria-label="筛选书源" value={sourceFilter} onChange={(event) => { setSourceFilter(event.target.value); setSourceLimit(INITIAL_SOURCE_LIMIT) }} placeholder="筛选书源" /><div className="source-picker-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setSourceIds(sources.map((source) => source.sourceId))}>全选</Button><Button variant="secondary" size="sm" type="button" onClick={() => setSourceIds([])}>清空</Button></div></div><div className="source-checks compact-source-checks">{visibleSources.map((source) => <label className="source-check" key={source.sourceId}><input type="checkbox" checked={sourceIds.includes(source.sourceId)} onChange={(event) => toggleSource(source.sourceId, event.target.checked)} /><span>{source.name}{source.group === undefined ? '' : ` · ${source.group}`}</span></label>)}</div>{visibleSources.length < filteredSources.length ? <button className="text-button" type="button" onClick={() => setSourceLimit((value) => value + INITIAL_SOURCE_LIMIT)}>显示更多书源</button> : null}{filteredSources.length === 0 ? <p className="muted small">没有匹配的书源。</p> : null}<Link className="text-button" to="/sources">管理书源</Link></div> : null}
+      <div className="search-row"><label className="sr-only" htmlFor="search-keyword">关键词</label><Input className="search-input" id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><Button type="submit" disabled={status === 'loading' || keyword.trim().length === 0}>{status === 'loading' ? '搜索中' : '搜索'}</Button></div>
+      <div className="search-options"><label className="check-inline"><input type="checkbox" checked={precision} onChange={(event) => setPrecision(event.target.checked)} /><span>精确</span></label>{status === 'loading' ? <Button className="cancel-button" variant="secondary" size="sm" type="button" onClick={() => void cancelSearch()}>取消</Button> : null}</div>
     </form>
     {message.length > 0 ? <p className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</p> : null}
     <div className="result-summary" aria-live="polite">{status === 'loading' ? '正在搜索' : status === 'done' ? `找到 ${candidates.length} 条结果` : candidates.length > 0 ? `${candidates.length} 条结果` : ''}{hasNextPage ? <Button className="inline-action" variant="secondary" size="sm" type="button" disabled={status === 'loading'} onClick={() => void continueNextPage()}>下一页</Button> : null}</div>

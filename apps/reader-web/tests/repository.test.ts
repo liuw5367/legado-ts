@@ -14,7 +14,7 @@ const metadata: BookMetadata = {
 }
 
 test('memory repository keeps search and bookshelf data isolated by user', async () => {
-  const repository = new MemoryReaderRepository([{ sourceId: 'source-a', name: '测试书源', fingerprint: 'fp', enabled: true, rawSource: {}, normalizedSource: { bookSourceUrl: 'source-a', bookSourceName: '测试书源' } }])
+  const repository = new MemoryReaderRepository()
   const userA = '00000000-0000-0000-0000-000000000001'
   const userB = '00000000-0000-0000-0000-000000000002'
   const search = await repository.createSearch(userA, { keyword: '测试书', sourceId: 'source-a' }, 'fp')

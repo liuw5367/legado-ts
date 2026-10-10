@@ -31,7 +31,7 @@ export interface ManagedSourceSummary {
   enabled: boolean
   sourceRevision: string
   lastUpdateTime?: number
-  origin: 'shared' | 'account'
+  origin: 'account'
 }
 
 export interface SourceManagementPage {

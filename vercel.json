@@ -7,7 +7,7 @@
     "server.ts": {
       "maxDuration": 60,
       "supportsCancellation": true,
-      "includeFiles": "{fixtures/source/**/*,public/**/*}"
+      "includeFiles": "public/**/*"
     }
   },
   "headers": [

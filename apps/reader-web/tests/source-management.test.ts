@@ -45,16 +45,17 @@ test('deleted source records still guard old imports and allow explicit restore'
   assert.equal(oldResult[0]?.skippedReason, 'old-version')
 })
 
-test('memory source actions are isolated per account and preserve shared defaults', async () => {
+test('memory source actions are isolated per account and do not expose shared defaults', async () => {
   const parsed = await candidates(baseSource)
   const source = parsed[0]?.source
   assert.ok(source)
-  const repository = new MemoryReaderRepository([{ sourceId: source.bookSourceUrl, name: source.bookSourceName, fingerprint: parsed[0]?.sourceFingerprint ?? '', enabled: true, rawSource: source, normalizedSource: source }])
+  const repository = new MemoryReaderRepository()
+  await saveNewSource(repository, 'user-a', source, parsed[0]?.sourceFingerprint ?? '', 'source-actions')
   const before = await repository.listManagedSources('user-a', { page: 1, pageSize: 50, query: '', status: 'all' })
-  assert.equal(before.sources[0]?.origin, 'shared')
+  assert.equal(before.sources[0]?.origin, 'account')
   await repository.applySourceActions('user-a', 'disable', [{ sourceId: source.bookSourceUrl, expectedSourceRevision: before.sources[0]!.sourceRevision }])
   assert.equal((await repository.listSourcesForUser('user-a')).length, 0)
-  assert.equal((await repository.listSourcesForUser('user-b')).length, 1)
+  assert.equal((await repository.listSourcesForUser('user-b')).length, 0)
   const disabled = await repository.listManagedSources('user-a', { page: 1, pageSize: 50, query: '', status: 'all' })
   await repository.applySourceActions('user-a', 'enable', [{ sourceId: source.bookSourceUrl, expectedSourceRevision: disabled.sources[0]!.sourceRevision }])
   assert.equal((await repository.listSourcesForUser('user-a')).length, 1)
@@ -66,7 +67,8 @@ test('source updates preserve account management fields while replacing remote r
   const local = localParsed[0]?.source
   const remote = remoteParsed[0]?.source
   assert.ok(local); assert.ok(remote)
-  const repository = new MemoryReaderRepository([{ sourceId: local.bookSourceUrl, name: local.bookSourceName, ...(typeof local.bookSourceGroup === 'string' ? { group: local.bookSourceGroup } : {}), fingerprint: localParsed[0]?.sourceFingerprint ?? '', enabled: true, rawSource: local, normalizedSource: local }])
+  const repository = new MemoryReaderRepository()
+  await saveNewSource(repository, 'user-a', local, localParsed[0]?.sourceFingerprint ?? '', 'source-update')
   const before = await repository.listManagedSources('user-a', { page: 1, pageSize: 50, query: '', status: 'all' })
   await repository.applySourceActions('user-a', 'disable', [{ sourceId: local.bookSourceUrl, expectedSourceRevision: before.sources[0]!.sourceRevision }])
   const disabled = await repository.listManagedSources('user-a', { page: 1, pageSize: 50, query: '', status: 'all' })
@@ -82,6 +84,11 @@ test('source updates preserve account management fields while replacing remote r
   assert.equal(saved.normalizedSource.customOrder, 7)
   assert.equal(saved.normalizedSource.weight, 9)
 })
+
+async function saveNewSource(repository: MemoryReaderRepository, userId: string, source: NonNullable<Awaited<ReturnType<typeof candidates>>[number]['source']>, fingerprint: string, previewId: string): Promise<void> {
+  await repository.saveImportPreview(userId, { previewId, expiresAt: new Date(Date.now() + 60_000).toISOString(), writableCount: 1, candidates: [{ id: `${previewId}-candidate`, sourceId: source.bookSourceUrl, name: source.bookSourceName, ...(typeof source.bookSourceGroup === 'string' ? { group: source.bookSourceGroup } : {}), fingerprint, normalizedSource: source, rawSource: source, disposition: 'new', reason: '可导入' }] }, `https://source.example/${previewId}.json`)
+  await repository.commitImportPreview(userId, previewId, [`${previewId}-candidate`])
+}
 
 test('memory import preview commits only selected candidates and is idempotent', async () => {
   const parsed = await candidates({ ...baseSource, bookSourceUrl: 'https://source.example/new', bookSourceName: '新书源' })

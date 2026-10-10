@@ -21,4 +21,6 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   for (const source of pageSources) assert.match(source, /(?:components\/ui\/|\.\/ui\/)/u)
   const searchPage = await readFile(resolve(sourceRoot, 'pages/search.tsx'), 'utf8')
   assert.match(searchPage, /precision/u)
+  assert.doesNotMatch(searchPage, /\/api\/sources/u)
+  assert.doesNotMatch(searchPage, /sourceIds/u)
 })
