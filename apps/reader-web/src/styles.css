@@ -345,15 +345,27 @@ a { color: inherit; }
 .reader-topbar { grid-template-columns: 60px minmax(0, 1fr) auto; padding: calc(var(--safe-top) + 8px) max(12px, var(--safe-right)) 0 max(12px, var(--safe-left)); background: var(--background); }
 .reader-back { min-height: 44px; }
 .reader-tools { gap: 2px; }
+.reader-guide-button { display: grid; width: 44px; height: 44px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
+.reader-guide-button svg { width: 20px; height: 20px; stroke-width: 1.7; }
+.reader-guide-button:active { transform: scale(.97); }
+@media (hover: hover) { .reader-guide-button:hover { background: color-mix(in srgb, var(--primary) 8%, var(--background)); color: var(--foreground); } }
 .reader-bottom-bar { padding-bottom: calc(var(--safe-bottom) + 8px); background: var(--card); }
 .reader-content { padding-top: calc(28px + var(--safe-top)); padding-bottom: calc(136px + var(--safe-bottom)); padding-left: max(16px, var(--safe-left)); padding-right: max(16px, var(--safe-right)); }
 .reader-page-paged { height: 100dvh; overflow: hidden; }
-.reader-content-paged { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding-top: calc(28px + var(--safe-top)); padding-bottom: calc(136px + var(--safe-bottom)); padding-left: 0; padding-right: 0; overflow: hidden; overscroll-behavior: none; scrollbar-width: none; column-width: 100%; column-gap: 0; column-fill: auto; touch-action: none; }
+.reader-content-paged { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding-top: calc(28px + var(--safe-top)); padding-bottom: calc(136px + var(--safe-bottom)); padding-left: 0; padding-right: 0; overflow: hidden; overscroll-behavior: none; scrollbar-width: none; column-width: var(--reader-page-width, 100vw); column-gap: 0; column-fill: auto; touch-action: none; }
 .reader-content-paged::-webkit-scrollbar { display: none; }
 .reader-content-paged > p, .reader-content-paged > .reader-html-content, .reader-content-paged > .reader-resource { box-sizing: border-box; padding-right: max(16px, var(--safe-right)); padding-left: max(16px, var(--safe-left)); }
 .reader-content-paged > p, .reader-content-paged > .reader-resource { break-inside: auto; }
 .reader-content-paged .reader-html-content { break-inside: auto; }
 .reader-content-paged img { max-height: calc(100dvh - 164px - var(--safe-top) - var(--safe-bottom)); object-fit: contain; break-inside: avoid; }
+.reader-page-guide { position: fixed; top: 0; bottom: 0; left: 50%; z-index: 7; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; width: min(100%, 680px); padding: calc(72px + var(--safe-top)) max(16px, var(--safe-right)) calc(24px + var(--safe-bottom)) max(16px, var(--safe-left)); overflow: hidden; transform: translateX(-50%); border: 0; background: color-mix(in srgb, var(--background) 95%, transparent); color: var(--foreground); text-align: center; cursor: pointer; }
+.reader-page-guide-title { grid-column: 1 / -1; align-self: end; font-size: 15px; font-weight: 650; }
+.reader-page-guide-zone { display: flex; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px 8px; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border); border-radius: 8px; }
+.reader-page-guide-zone strong { font-size: 14px; font-weight: 650; }
+.reader-page-guide-zone small, .reader-page-guide-dismiss { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.reader-page-guide-zone-middle { background: color-mix(in srgb, var(--primary) 10%, var(--card)); border-color: var(--primary); }
+.reader-page-guide-dismiss { grid-column: 1 / -1; align-self: start; }
+.reader-page-guide:active { background: color-mix(in srgb, var(--background) 90%, transparent); }
 .reader-pagination-error { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: calc(24px + var(--safe-top)) max(24px, var(--safe-right)) calc(24px + var(--safe-bottom)) max(24px, var(--safe-left)); text-align: center; background: var(--background); }
 .reader-pagination-error p { margin: 0; }
 .reader-page-paged > .reader-position-error { position: fixed; top: calc(56px + var(--safe-top)); right: max(16px, var(--safe-right)); left: max(16px, var(--safe-left)); z-index: 6; margin: 0; padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; }

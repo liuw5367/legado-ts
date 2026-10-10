@@ -1,4 +1,4 @@
-import { ChevronLeft, ExternalLink, Info, RefreshCw } from 'lucide-react'
+import { ChevronLeft, CircleHelp, ExternalLink, Info, RefreshCw } from 'lucide-react'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { MoreMenu } from '../components/more-menu.tsx'
@@ -27,6 +27,7 @@ export function ReaderPage() {
   const editionKey = searchParams.get('editionKey') ?? ''
   const { settings, resolvedTheme, updateSettings, saving: settingsSaving, error: settingsError } = useReaderSettings()
   const [controlsVisible, setControlsVisible] = useState(false)
+  const [pageGuideVisible, setPageGuideVisible] = useState(false)
   const [themeRetry, setThemeRetry] = useState<'light' | 'dark' | null>(null)
   const pointerStartRef = useRef<{ x: number; y: number; scrollY: number } | null>(null)
   const restoredPositionRef = useRef(false)
@@ -45,6 +46,7 @@ export function ReaderPage() {
   const [paginationError, setPaginationError] = useState('')
   const refreshController = useRef<AbortController | null>(null)
   const articleRef = useRef<HTMLElement>(null)
+  const pageGuideRef = useRef<HTMLButtonElement>(null)
   const latestPositionRef = useRef<ApiPosition | null>(null)
   const positionWriteQueueRef = useRef(Promise.resolve())
   const positionVersionRef = useRef(-1)
@@ -57,7 +59,7 @@ export function ReaderPage() {
   useEffect(() => {
     const requestId = ++requestIdRef.current
     const cachedContent = cache.getContent(bookId, editionKey, chapterId)
-    setControlsVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0); setPaginationError('')
+    setControlsVisible(false); setPageGuideVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0); setPaginationError('')
     latestPositionRef.current = null
     positionVersionRef.current = -1
     latestAnchorRef.current = null
@@ -166,6 +168,7 @@ export function ReaderPage() {
     setPageLayout({ pageWidth: 0, pageCount: 0 })
     setPageIndex(0)
     setPaginationError('')
+    setPageGuideVisible(false)
     if (settings.readingMode === 'scroll') {
       window.requestAnimationFrame(() => {
         if (articleRef.current === null) return
@@ -174,6 +177,10 @@ export function ReaderPage() {
       })
     }
   }, [settings.readingMode])
+
+  useEffect(() => {
+    if (pageGuideVisible) pageGuideRef.current?.focus()
+  }, [pageGuideVisible])
 
   useEffect(() => {
     const viewport = articleRef.current
@@ -186,8 +193,21 @@ export function ReaderPage() {
     const measure = () => {
       if (!active) return
       const pageWidth = viewport.clientWidth
+      if (pageWidth <= 0) {
+        attempts += 1
+        if (attempts >= 6) setPaginationError('分页排版失败，请重试或切换为滚动阅读。')
+        else schedule()
+        return
+      }
+      // column-width 不接受百分比值；先把实际视口宽度注入为像素长度，浏览器才会创建横向多栏。
+      const cssPageWidth = `${pageWidth}px`
+      if (viewport.style.getPropertyValue('--reader-page-width') !== cssPageWidth) {
+        viewport.style.setProperty('--reader-page-width', cssPageWidth)
+        schedule()
+        return
+      }
       const pageCount = pageCountFromScrollWidth(viewport.scrollWidth, pageWidth)
-      if (pageWidth <= 0 || pageCount <= 0) {
+      if (pageCount <= 0) {
         attempts += 1
         if (attempts >= 6) setPaginationError('分页排版失败，请重试或切换为滚动阅读。')
         else schedule()
@@ -266,6 +286,11 @@ export function ReaderPage() {
     else setControlsVisible((value) => !value)
   }
 
+  function closePageGuide() {
+    setPageGuideVisible(false)
+    window.requestAnimationFrame(() => articleRef.current?.focus({ preventScroll: true }))
+  }
+
   async function refreshChapter() {
     if (refreshing || content === null) return
     const requestId = requestIdRef.current
@@ -311,9 +336,12 @@ export function ReaderPage() {
   }
   const address = browserUrl(content.chapter.chapterUrl)
   return <section className={`reader-page${paged ? ' reader-page-paged' : ''}`} onKeyDown={(event) => {
-    if (event.key === 'Escape' && panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
+    if (event.key === 'Escape') {
+      if (pageGuideVisible) closePageGuide()
+      else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
+    }
   }}>
-    <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
+    <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools">{paged ? <button className="reader-guide-button" type="button" aria-label="查看翻页区域说明" aria-controls="reader-page-guide" aria-expanded={pageGuideVisible} title="查看翻页区域说明" onClick={() => setPageGuideVisible(true)}><CircleHelp aria-hidden="true" /></button> : null}<MoreMenu label="更多阅读操作">
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />详情</Link>
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />原地址</a>}
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新'}</button>
@@ -347,6 +375,13 @@ export function ReaderPage() {
       }}>
       {content.contentType === 'html' ? htmlContent.length === 0 && additionalResources.length === 0 ? <p className="muted">本章暂无正文。</p> : <><div className="reader-html-content" data-paragraph={0} dangerouslySetInnerHTML={{ __html: htmlContent }} />{additionalResources.map((url, index) => <p className="reader-resource" data-paragraph={index + 1} key={url}><img src={url} alt="正文插图" loading="lazy" decoding="async" /></p>)}</> : paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{paragraph}</p>)}
     </article>
+    {paged && pageGuideVisible ? <button ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" type="button" aria-label="关闭翻页区域说明" onClick={closePageGuide}>
+      <span className="reader-page-guide-title">点击页面对应区域进行操作</span>
+      <span className="reader-page-guide-zone"><strong>上一页</strong><small>点击左侧</small></span>
+      <span className="reader-page-guide-zone reader-page-guide-zone-middle"><strong>显示 / 隐藏操作栏</strong><small>点击中间</small></span>
+      <span className="reader-page-guide-zone"><strong>下一页</strong><small>点击右侧</small></span>
+      <span className="reader-page-guide-dismiss">点击任意位置关闭说明</span>
+    </button> : null}
     {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><p className="error">{paginationError}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
     {refreshError.length > 0 ? <p className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></p> : null}
     {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void persistPosition({ paragraphIndex: latestPositionRef.current?.paragraphIndex ?? 0, offset: latestPositionRef.current?.offset ?? 0, version: (latestPositionRef.current?.version ?? -1) + 1 })}>重试</button></p> : null}

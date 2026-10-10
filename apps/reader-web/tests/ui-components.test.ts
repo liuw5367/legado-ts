@@ -51,6 +51,8 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(readerPage, /pageActionForTap/u)
   assert.match(readerPage, /reader-content-paged/u)
   assert.match(readerPage, /分页进度/u)
+  assert.match(readerPage, /reader-guide-button/u)
+  assert.match(readerPage, /reader-page-guide/u)
   const pageSources = await Promise.all(['components/auth-form.tsx', 'pages/register.tsx', 'pages/forgot-password.tsx', 'pages/change-password.tsx', 'pages/reset-password.tsx', 'pages/search.tsx', 'pages/book-sources.tsx', 'pages/toc.tsx', 'pages/settings.tsx', 'pages/account-home.tsx'].map((file) => readFile(resolve(sourceRoot, file), 'utf8')))
   for (const source of pageSources) assert.match(source, /(?:components\/ui\/|\.\/ui\/)/u)
   for (const source of [pageSources[2], pageSources[3], pageSources[4]]) { assert.match(source ?? '', /backTo=/u); assert.doesNotMatch(source ?? '', /footer=/u) }
@@ -61,6 +63,9 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.doesNotMatch(styles, /\.reader-toc-actions \{ flex-direction: column/u)
   assert.match(styles, /\.reader-html-content \{[^}]*white-space: pre-wrap/u)
   assert.match(styles, /\.reader-content-paged \{/u)
+  assert.match(styles, /column-width: var\(--reader-page-width, 100vw\)/u)
+  assert.doesNotMatch(styles, /column-width: 100%/u)
+  assert.match(styles, /\.reader-page-guide \{/u)
   assert.match(sourcesPage, /source-status/u)
   assert.match(sourcesPage, /已启用/u)
   assert.match(sourcesPage, /已禁用/u)
