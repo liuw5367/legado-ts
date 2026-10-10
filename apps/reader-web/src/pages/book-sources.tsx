@@ -6,11 +6,13 @@ import type { BookSourceItem, BookSourcesResponse } from '../../shared/book-sour
 import { PageBackButton } from '../components/page-back-button.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
-import { apiFetch, type ApiEdition, type ApiPosition } from '../lib/api.ts'
+import { Sheet } from '../components/ui/sheet.tsx'
+import { apiFetch, type ApiChapter, type ApiEdition, type ApiPosition } from '../lib/api.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { pageReturnState, readingEntryState } from '../lib/page-navigation.ts'
 import { useBookSearch } from '../lib/use-book-search.ts'
+import { fallbackChapterForPosition } from '../lib/source-position.ts'
 
 export function BookSourcesPage() {
   const { bookId = '' } = useParams()
@@ -23,9 +25,10 @@ export function BookSourcesPage() {
   const [precision, setPrecision] = useState(true)
   const [error, setError] = useState('')
   const [opening, setOpening] = useState<string | null>(null)
+  const [pendingSwitch, setPendingSwitch] = useState<PendingSourceSwitch | null>(null)
   const [retry, setRetry] = useState(0)
   const controllerRef = useRef<AbortController | null>(null)
-  const { candidates, searchId, status, message, search, cancel } = useBookSearch()
+  const { candidates, searchId, status, message, progress, search, cancel } = useBookSearch()
   const prefix = '/books/' + encodeURIComponent(bookId)
 
   useEffect(() => {
@@ -53,16 +56,21 @@ export function BookSourcesPage() {
         navigate(prefix + '/toc' + query, { state: pageReturnState(location) })
         return
       }
-      const [snapshot, position] = await Promise.all([
-        loadBookSnapshot(cache, bookId, editionKey),
-        apiFetch<{ position: ApiPosition | null }>('/api' + prefix + '/position' + query, signal === undefined ? {} : { signal }),
-      ])
+      const targetSnapshot = await loadBookSnapshot(cache, bookId, editionKey)
       if (signal?.aborted) return
-      const chapters = snapshot.toc.chapters.filter((chapter) => chapter.isVolume !== true)
-      const target = chapters.find((chapter) => chapter.chapterId === position.position?.chapterId) ?? chapters[0]
-      if (target === undefined) throw new Error('目录中没有可阅读的章节')
-      cache.setPosition(bookId, editionKey, position.position)
-      navigate(prefix + '/read/' + encodeURIComponent(target.chapterId) + query, { state: readingEntryState(location) })
+      const targetChapters = targetSnapshot.toc.chapters.filter((chapter) => chapter.isVolume !== true)
+      const currentEditionKey = book?.activeEditionKey ?? data?.activeEditionKey
+      if (currentEditionKey === undefined || currentEditionKey === editionKey) {
+        const position = await apiFetch<{ position: ApiPosition | null }>('/api' + prefix + '/position' + query, signal === undefined ? {} : { signal })
+        const target = targetChapters.find((chapter) => chapter.chapterId === position.position?.chapterId) ?? targetChapters[0]
+        if (target === undefined) throw new Error('目录中没有可阅读的章节')
+        cache.setPosition(bookId, editionKey, position.position)
+        navigate(prefix + '/read/' + encodeURIComponent(target.chapterId) + query, { state: readingEntryState(location) })
+      } else {
+        const mapped = await mapSourcePosition(bookId, currentEditionKey, editionKey, cache, targetChapters, signal)
+        if (mapped.target === undefined) throw new Error('目标来源目录中没有可阅读的章节')
+        setPendingSwitch({ key, editionKey, target: mapped.target, targetRevision: targetSnapshot.toc.revision, currentTitle: mapped.currentTitle, matched: mapped.matched, targetPosition: mapped.targetPosition })
+      }
     } catch (reason) { if (!signal?.aborted) setError(reason instanceof Error ? reason.message : '来源加载失败') }
     finally { if (!signal?.aborted) setOpening(null) }
   }
@@ -75,6 +83,24 @@ export function BookSourcesPage() {
     const candidate = candidates[index]
     if (candidate === undefined) return
     void open('search:' + index, action, async () => (await apiFetch<{ edition: ApiEdition }>('/api/books', { method: 'POST', signal: controllerRef.current?.signal ?? null, body: JSON.stringify({ searchId, candidateIndex: index, candidateIdentity: { sourceId: candidate.sourceId, sourceFingerprint: candidate.sourceFingerprint, bookUrl: candidate.candidate.bookUrl }, bookId, addToBookshelf: false, activateEdition: false }) })).edition.editionKey)
+  }
+
+  async function confirmSwitch() {
+    const pending = pendingSwitch
+    if (pending === null || opening !== null) return
+    const signal = controllerRef.current?.signal
+    setOpening(pending.key); setError('')
+    try {
+      const query = '?editionKey=' + encodeURIComponent(pending.editionKey)
+      await apiFetch('/api' + prefix + '/edition', { method: 'PUT', signal: signal ?? null, body: JSON.stringify({ editionKey: pending.editionKey }) })
+      const saved = await apiFetch<{ position: ApiPosition } | { position: null }>('/api' + prefix + '/position', { method: 'POST', signal: signal ?? null, body: JSON.stringify({ editionKey: pending.editionKey, chapterId: pending.target.chapterId, chapterUrl: pending.target.chapterUrl, chapterIndex: pending.target.index, title: pending.target.title, tocRevision: pending.targetRevision, paragraphIndex: 0, offset: 0, version: (pending.targetPosition?.version ?? -1) + 1 }) })
+      if (signal?.aborted) return
+      const position = saved.position
+      cache.setPosition(bookId, pending.editionKey, position)
+      setPendingSwitch(null)
+      navigate(prefix + '/read/' + encodeURIComponent(pending.target.chapterId) + query, { state: readingEntryState(location) })
+    } catch (reason) { if (!signal?.aborted) setError(reason instanceof Error ? reason.message : '切换书源失败') }
+    finally { if (!signal?.aborted) setOpening(null) }
   }
 
   const known = new Set(data?.sources.map((source) => JSON.stringify([source.sourceId, source.sourceFingerprint, source.bookUrl])) ?? [])
@@ -94,13 +120,33 @@ export function BookSourcesPage() {
     {error.length > 0 ? <p className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>重试列表</Button></p> : null}
     {data === null ? error.length === 0 ? <p className="muted">正在读取可用书源…</p> : null : <>
       <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); void search(keyword, precision) }}><div className="search-row"><Input aria-label="搜索可用书源" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" /><label className="check-inline"><input type="checkbox" checked={precision} disabled={status === 'loading'} onChange={(event) => setPrecision(event.target.checked)} /><span>精确</span></label><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={status !== 'loading' && keyword.trim().length === 0} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div><p className="muted small">查看目录只预览；切换恢复该书源进度，无记录从首章开始。</p></form>
-      {message.length > 0 ? <p className="muted small" role="status">{message}</p> : null}
+      {message.length > 0 ? <p className="muted small" role="status">{message}</p> : null}{status === 'loading' && progress !== undefined ? <p className="muted small" role="status">书源 {progress.completed}/{progress.total}</p> : null}
       <div className="book-source-list">{data.sources.length === 0 && results.length === 0 ? <div className="empty-state">{status === 'loading' ? '正在搜索…' : '没有可用书源，请搜索。'}</div> : null}{data.sources.map((source) => {
         const current = source.status === 'saved' && source.editionKey === data.activeEditionKey
         const key = source.status === 'saved' ? source.editionKey : source.candidateId
         return <article className={'book-source-row' + (current ? ' current' : '')} key={key}><div className="book-source-info"><strong>{source.name}</strong><p className="muted small" title={source.bookUrl}>{source.bookUrl}</p><span className="muted small">{current ? '当前使用' : source.status === 'saved' ? '已保存' : '已发现'}</span></div><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null} onClick={() => openSource(source, 'directory')}>查看目录</Button><Button size="sm" disabled={current || opening !== null} onClick={() => openSource(source, 'switch')}>{opening === key ? '加载中…' : current ? '当前使用' : '切换书源'}</Button></div></article>
       })}{results.map(({ item, index }) => <article className="book-source-row" key={'search:' + index}><div className="book-source-info"><strong>{item.sourceId}</strong><p className="muted small" title={item.candidate.bookUrl}>{item.candidate.bookUrl}</p><span className="muted small">本次搜索</span></div><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null} onClick={() => openSearchCandidate(index, 'directory')}>查看目录</Button><Button size="sm" disabled={opening !== null} onClick={() => openSearchCandidate(index, 'switch')}>{opening === 'search:' + index ? '加载中…' : '切换书源'}</Button></div></article>)}</div>
     </>}
+    <Sheet open={pendingSwitch !== null} onOpenChange={(open) => { if (!open) setPendingSwitch(null) }} title="确认切换书源"><div className="source-switch-confirm">{pendingSwitch === null ? null : <><p>将切换到“{pendingSwitch.target.title}”。{pendingSwitch.matched ? `已按“${pendingSwitch.currentTitle}”匹配。` : '没有找到同名章节，将按章节序号定位。'}</p><div className="actions"><Button type="button" onClick={() => void confirmSwitch()} disabled={opening !== null}>确认切换</Button><Button type="button" variant="secondary" onClick={() => setPendingSwitch(null)}>取消</Button></div></>}</div></Sheet>
     <Link className="sr-only" to={fallback}>本书目录</Link>
   </section>
 }
+
+interface PendingSourceSwitch { key: string; editionKey: string; target: ApiChapter; targetRevision: string; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }
+
+async function mapSourcePosition(bookId: string, currentEditionKey: string, targetEditionKey: string, cache: ReturnType<typeof useBookCache>, targetChapters: ApiChapter[], signal?: AbortSignal): Promise<{ target: ApiChapter | undefined; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }> {
+  const [currentSnapshot, currentPosition, targetPosition] = await Promise.all([
+    loadBookSnapshot(cache, bookId, currentEditionKey),
+    apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position?editionKey=' + encodeURIComponent(currentEditionKey), signal === undefined ? {} : { signal }),
+    apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position?editionKey=' + encodeURIComponent(targetEditionKey), signal === undefined ? {} : { signal }),
+  ])
+  const currentChapter = currentSnapshot.toc.chapters.find((chapter) => chapter.isVolume !== true && chapter.chapterId === currentPosition.position?.chapterId)
+  const currentTitle = currentChapter?.title ?? currentPosition.position?.title
+  const normalizedTitle = currentTitle === undefined ? '' : normalizeChapterTitle(currentTitle)
+  const matchedChapter = normalizedTitle.length === 0 ? undefined : targetChapters.find((chapter) => normalizeChapterTitle(chapter.title) === normalizedTitle)
+  const fallbackIndex = currentChapter?.index ?? currentPosition.position?.chapterIndex ?? 0
+  const target = matchedChapter ?? fallbackChapterForPosition(targetChapters, fallbackIndex)
+  return { target, currentTitle, matched: matchedChapter !== undefined, targetPosition: targetPosition.position }
+}
+
+function normalizeChapterTitle(value: string): string { return value.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '') }

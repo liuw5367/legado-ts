@@ -155,6 +155,10 @@ export class ReaderApplication {
     return this.storage.listSearchHistory(limit)
   }
 
+  public async deleteSearchHistory(searchId: string): Promise<boolean> {
+    return this.storage.deleteSearchHistory(searchId)
+  }
+
   public search(keyword: string, sourceIds?: readonly string[], signal?: AbortSignal, onProgress?: SearchProgressListener, onUpdate?: SearchUpdateListener, options: SearchOptions = {}): Promise<SearchOperationResult> {
     return this.trackOperation(signal, (operationSignal) => this.searchInternal(keyword, sourceIds, operationSignal, onProgress, onUpdate, this.settings.searchConcurrency, options))
   }

@@ -106,9 +106,12 @@ async function runOneSource(repository: ReaderRepository, run: SearchRunState, s
   try { source = await requireSource(repository, run.userId, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
   try {
     const result = await withPersistentSourceSession(repository, run.userId, source, (session) => session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(run.precision === true ? { acceptSearchFields: (fields) => acceptsPrecisionSearchFields(run.keyword, fields) } : {}), ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 })))
-    const additions = (result.value?.items ?? []).map((candidate) => ({ sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate }))
+    const searchDurationMs = Math.max(0, Date.now() - Date.parse(startedAt))
+    const additions = (result.value?.items ?? []).map((candidate) => ({ sourceId: source.sourceId, sourceFingerprint: source.fingerprint, searchDurationMs, candidate }))
     const status = result.status === 'capability-missing' ? 'capability-missing' : result.status
-    return { additions, state: { ...state, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
+    const nextState = { ...state }
+    delete nextState.nextCursor
+    return { additions, state: { ...nextState, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
   } catch (error) {
     if (signal.aborted) return { additions: [], state: { ...state, status: 'cancelled', diagnostics: [{ message: '搜索已取消' }], startedAt, completedAt: new Date().toISOString() } }
     return { additions: [], state: { ...state, sourceFingerprint: source.fingerprint, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源执行失败' }], startedAt, completedAt: new Date().toISOString() } }
@@ -127,7 +130,13 @@ function prepareSourceStates(run: SearchRunState, options?: SearchBatchOptions):
   const states: SourceSearchState[] = run.sourceStates.length > 0 ? run.sourceStates.map((state) => ({ ...state })) : run.sourceIds.map((sourceId) => ({ sourceId, status: 'pending' as const, candidates: [], diagnostics: [] }))
   if (options?.nextPage !== true) return states
   const selected = options.sourceIds === undefined ? states : states.filter((state) => options.sourceIds?.includes(state.sourceId) === true)
-  for (const state of selected) if (state.nextCursor !== undefined) { state.cursor = state.nextCursor; state.status = 'pending'; state.candidates = []; state.diagnostics = [] }
+  for (const state of selected) if (state.nextCursor !== undefined) {
+    state.cursor = state.nextCursor
+    delete state.nextCursor
+    state.status = 'pending'
+    state.candidates = []
+    state.diagnostics = []
+  }
   return states
 }
 
@@ -159,7 +168,7 @@ async function createBookFromSearch(repository: ReaderRepository, userId: string
     if (targetBook !== null && !matchesBookTarget(targetBook, metadata)) throw new ReaderRuntimeError('invalid-input', '来源详情与目标书籍不匹配')
     const candidate: BookCreationInput['candidate'] = stored
     const editionKey = digest(`${stored.sourceId}\u0000${metadata.bookUrl}\u0000${stored.sourceFingerprint}`)
-    return repository.createBook(userId, { candidate, metadata, editionKey, sourceFingerprint: stored.sourceFingerprint, addToBookshelf, activateEdition, ...(bookId === undefined ? {} : { bookId }) })
+    return repository.createBook(userId, { candidate, metadata: { ...metadata, ...(stored.searchDurationMs === undefined ? {} : { searchDurationMs: stored.searchDurationMs }) }, editionKey, sourceFingerprint: stored.sourceFingerprint, addToBookshelf, activateEdition, ...(bookId === undefined ? {} : { bookId }) })
   })
   // 重新读取已提交结果，与批次结束后的书架读取互补，覆盖两种完成顺序。
   return { ...created, ...(await cacheSearchSources(repository, userId, run.candidates, searchId)) }
@@ -232,7 +241,7 @@ async function openBookSource(repository: ReaderRepository, userId: string, book
     if (metadata === undefined) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '没有读取到书籍详情'))
     if (!sameBookIdentity(book.name, book.author, metadata.name, metadata.author)) throw new ReaderRuntimeError('source-failed', '来源详情与书籍不匹配，请重新搜索')
     const editionKey = digest(`${cached.sourceId}\u0000${metadata.bookUrl}\u0000${cached.sourceFingerprint}`)
-    return repository.saveEdition(userId, bookId, { candidate: cached.candidate, metadata, editionKey, sourceFingerprint: cached.sourceFingerprint })
+    return repository.saveEdition(userId, bookId, { candidate: cached.candidate, metadata: { ...metadata, ...(cached.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: cached.candidate.searchDurationMs }) }, editionKey, sourceFingerprint: cached.sourceFingerprint })
   })
 }
 

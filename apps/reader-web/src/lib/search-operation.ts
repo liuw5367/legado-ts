@@ -1,8 +1,8 @@
-import type { StreamEvent } from './api.ts'
+import type { SearchStreamOptions, StreamEvent } from './api.ts'
 
 interface SearchTransport {
   create(keyword: string, precision: boolean): Promise<string>
-  stream(id: string, event: (value: StreamEvent) => void, signal: AbortSignal): Promise<void>
+  stream(id: string, event: (value: StreamEvent) => void, signal: AbortSignal, options?: SearchStreamOptions): Promise<void>
   cancel(id: string): Promise<unknown>
 }
 /** 流与服务端取消结算后才允许下一次；创建ID前取消也会补发取消。 */

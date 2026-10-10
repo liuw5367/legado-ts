@@ -13,6 +13,9 @@ export const sourceActionSchema = z.object({
   action: z.enum(['enable', 'disable', 'delete']),
   items: z.array(z.object({ sourceId: z.string().trim().min(1).max(2000), expectedSourceRevision: z.string().trim().min(1).max(200) })).min(1).max(1000),
 })
+export const sourceOrderSchema = z.object({
+  items: z.array(z.object({ sourceId: z.string().trim().min(1).max(2000), expectedSourceRevision: z.string().trim().min(1).max(200), customOrder: z.number().int().min(-1_000_000_000).max(1_000_000_000) })).min(1).max(1000),
+})
 
 export const importPreviewRequestSchema = z.object({ url: z.string().trim().url().max(4000) })
 export const importConfirmRequestSchema = z.object({ previewId: z.string().uuid(), candidateIds: z.array(z.string().trim().min(1).max(200)).min(1).max(1000) })
@@ -21,6 +24,7 @@ export type SourceManagementStatus = z.infer<typeof sourceManagementStatusSchema
 export type SourceManagementPageRequest = z.infer<typeof sourceManagementPageSchema>
 export type SourceAction = z.infer<typeof sourceActionSchema>
 export type SourceActionItem = z.infer<typeof sourceActionSchema>['items'][number]
+export type SourceOrderItem = z.infer<typeof sourceOrderSchema>['items'][number]
 export type ImportPreviewRequest = z.infer<typeof importPreviewRequestSchema>
 export type ImportConfirmRequest = z.infer<typeof importConfirmRequestSchema>
 
@@ -30,6 +34,7 @@ export interface ManagedSourceSummary {
   group?: string
   fingerprint: string
   enabled: boolean
+  customOrder: number
   sourceRevision: string
   lastUpdateTime?: number
   origin: 'account'

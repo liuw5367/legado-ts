@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer, footerLayout, formatDuration, helpLines, homeAreaLabel, navigationIndex, navigationPage, normalizeChapterTitle, previousPage, readerNavigation, refreshOnHomeEntry, searchHeaderStatus } from '../src/ui-model.ts'
+import { chapterIndexForSelection, detailLineCount, filterChapterIndices, footer, footerLayout, formatDuration, helpLines, homeAreaLabel, navigationIndex, navigationPage, normalizeChapterTitle, previousPage, readableChapterMatchIndex, readerNavigation, refreshOnHomeEntry, reverseTocEntries, searchHeaderStatus } from '../src/ui-model.ts'
 import { layoutContextLine, terminalWidth } from '../src/ui-actions.ts'
 
 test('界面模型保持列表导航在有效范围内', () => {
@@ -54,6 +54,14 @@ test('目录标题按 NFKC 和大小写不敏感匹配', () => {
   assert.deepEqual(filterChapterIndices([{ title: '第一章 开始' }, { title: '第二章 结束' }], '章节'), [])
   assert.equal(chapterIndexForSelection([{ title: '第一章' }, { title: '第二章' }, { title: '第三章' }], '第三', 0), 2)
   assert.equal(detailLineCount(undefined, 80), 8)
+})
+
+test('目录卷节点不可阅读，倒序时保留卷与章节分组', () => {
+  const entries = [{ title: '卷一', isVolume: true }, { title: '一', isVolume: false }, { title: '二', isVolume: false }, { title: '卷二', isVolume: true }, { title: '三', isVolume: false }]
+  assert.deepEqual(filterChapterIndices(entries, ''), [1, 2, 4])
+  assert.equal(readableChapterMatchIndex(entries, 2), 1)
+  assert.equal(readableChapterMatchIndex(entries, 0), 0)
+  assert.deepEqual(reverseTocEntries(entries).map((entry) => entry.title), ['卷二', '三', '卷一', '二', '一'])
 })
 
 test('阅读页帮助保留翻页和章节切换键位，底部省略这两项', () => {

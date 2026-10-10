@@ -3,8 +3,10 @@ import { currentSession } from './auth.ts'
 export interface ApiSource { sourceId: string; name: string; group?: string; fingerprint: string; enabled: boolean }
 export type ApiThemeMode = 'system' | 'light' | 'dark'
 export interface ApiSettings { userId: string; theme: ApiThemeMode; fontSize: number; lineHeight: number; updatedAt: string }
-export interface ApiCandidate { sourceId: string; sourceFingerprint: string; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string } }
-export interface ApiSearch { id: string; keyword: string; sourceId: string; precision?: boolean; status: string; candidates: ApiCandidate[]; nextCursor?: { index: number; token?: string } }
+export interface ApiCandidate { sourceId: string; sourceFingerprint: string; searchDurationMs?: number; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string; updateTime?: string; wordCount?: string } }
+export interface ApiSearchProgress { completed: number; total: number }
+export interface ApiSearchSourceState { sourceId: string; status: string; nextCursor?: { index: number; token?: string } }
+export interface ApiSearch { id: string; keyword: string; sourceId: string; precision?: boolean; status: string; candidates: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean; nextCursor?: { index: number; token?: string } }
 export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
 export interface ApiEdition { id: string; userId: string; bookId: string; editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; metadata: Record<string, unknown>; variable?: string }
 export interface ApiPosition { userId: string; bookId: string; editionKey: string; chapterId: string; chapterUrl: string; chapterIndex: number; title: string; tocRevision?: string; paragraphIndex: number; offset: number; version: number; lastReadAt: string }
@@ -22,11 +24,20 @@ export class ApiError extends Error {
 
 export interface StreamEvent { type: string; data: unknown }
 export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
-export interface SearchSourceEventData { source?: { candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[] } }
+export interface SearchSourceEventData { source?: { status?: string; candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
 
 export function mergeSearchStreamCandidates(current: ApiCandidate[], event: SearchSourceEventData): ApiCandidate[] {
   if (event.search?.candidates !== undefined) return [...event.search.candidates]
+  if (event.candidates !== undefined) return [...event.candidates]
   return [...current, ...(event.source?.candidates ?? [])]
+}
+
+export function searchProgressFromEvent(event: SearchSourceEventData): ApiSearchProgress | undefined {
+  return event.progress ?? event.search?.progress
+}
+
+export function searchHasNextPage(event: SearchSourceEventData): boolean {
+  return event.search?.sourceStates?.some((state) => state.nextCursor !== undefined) === true
 }
 
 export function createSearchStreamRequest(searchId: string, session: { access_token?: string } | null, signal?: AbortSignal, options?: SearchStreamOptions): { path: string; init: RequestInit } {
@@ -103,6 +114,47 @@ export async function streamSearch(searchId: string, onEvent: (event: { type: st
   }
   if (isAborted()) { await reader.cancel().catch(() => undefined); return }
   for (const event of decoder.finish()) onEvent(event)
+}
+
+/** Web 端自动继续拉取所有仍有游标的书源，调用方无需暴露分页操作。 */
+export async function streamSearchAll(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal): Promise<void> {
+  let nextPage = false
+  let finalDone: { type: string; data: unknown } | undefined
+  const seenNextPageCursors = new Set<string>()
+  do {
+    let hasNextPage = false
+    let repeatedCursor = false
+    let batchEndSeen = false
+    await streamSearch(searchId, (event) => {
+      if (event.type === 'done') { finalDone = event; return }
+      onEvent(event)
+      if (event.type === 'batch-end') {
+        batchEndSeen = true
+        const data = (event.data ?? {}) as SearchSourceEventData
+        hasNextPage = searchHasNextPage(data)
+        repeatedCursor = hasRepeatedNextPageCursor(data, seenNextPageCursors)
+      } else if (event.type === 'batch' && !batchEndSeen) {
+        const data = (event.data ?? {}) as SearchSourceEventData
+        hasNextPage = searchHasNextPage(data)
+        repeatedCursor = hasRepeatedNextPageCursor(data, seenNextPageCursors)
+      }
+    }, signal, nextPage ? { nextPage: true } : undefined)
+    // 异常书源可能重复返回同一游标，自动翻页必须在游标不前进时结束。
+    nextPage = hasNextPage && !repeatedCursor
+  } while (nextPage && signal?.aborted !== true)
+  if (signal?.aborted !== true && finalDone !== undefined) onEvent(finalDone)
+}
+
+function hasRepeatedNextPageCursor(event: SearchSourceEventData, seenCursors: Set<string>): boolean {
+  let repeated = false
+  for (const state of event.search?.sourceStates ?? []) {
+    const cursor = state.nextCursor
+    if (cursor === undefined) continue
+    const key = JSON.stringify([state.sourceId, cursor.index, cursor.token ?? null])
+    if (seenCursors.has(key)) repeated = true
+    seenCursors.add(key)
+  }
+  return repeated
 }
 
 async function readJson(response: Response): Promise<unknown> {

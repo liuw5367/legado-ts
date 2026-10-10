@@ -8,7 +8,7 @@
 
 ## 搜索、流式进度与取消
 
-`POST /api/searches` 创建搜索记录，写入关键词、来源范围和精准模式。`GET /api/searches/:id/stream` 以 SSE 推送每个来源的状态、候选和进度。普通搜索与换源页共享搜索生命周期，合并 source 事件到当前候选快照，只请求本次批次。服务端保留 `POST /api/searches/:searchId/batches`，页面不提供翻页入口。创建请求尚未取得 searchId 时取消，会在创建返回后补发取消请求；取消完成前不允许启动下一次搜索。
+`POST /api/searches` 创建搜索记录，写入关键词、来源范围和精准模式。`GET /api/searches/:id/stream` 以 SSE 推送每个来源的状态、候选和进度。普通搜索与换源页共享搜索生命周期，合并 source 事件到当前候选快照；Web 客户端收到仍有下一页游标的来源后自动请求 `POST /api/searches/:searchId/batches`，直到所有来源完成，并按约 5 秒更新一次可见进度，批次结束时立即刷新。创建请求尚未取得 searchId 时取消，会在创建返回后补发取消请求；取消完成前不允许启动下一次搜索。
 
 取消同时中止浏览器请求、调用 `POST /api/searches/:searchId/cancel` 更新数据库状态，并由 runtime 中止活动来源的 `AbortController`。已经持久化的候选保留在结果页；未完成来源标记为 `cancelled`。同一搜索已经被其他操作领取时，Repository 的 operationId 条件会拒绝迟到更新。
 

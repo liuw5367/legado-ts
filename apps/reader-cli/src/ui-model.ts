@@ -38,7 +38,7 @@ export interface HelpSection {
 
 export function helpSections(page: Page, homeArea: number): HelpSection[] {
   const current: Partial<Record<Page, HelpSection>> = {
-    home: { title: '当前页面 · 首页', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开或重复搜索' }, { keys: '1/2/3', description: '切换书架、最近阅读、搜索记录' }, { keys: 'm', description: '书源管理' }, { keys: 's', description: '打开设置' }, ...(homeArea === 2 ? [] : [{ keys: 'o', description: '打开书籍操作' }])] },
+    home: { title: '当前页面 · 首页', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: '↵', description: '打开或重复搜索' }, ...(homeArea === 2 ? [{ keys: 'x', description: '删除搜索记录' }] : []), { keys: '1/2/3', description: '切换书架、最近阅读、搜索记录' }, { keys: 'm', description: '书源管理' }, { keys: 's', description: '打开设置' }, ...(homeArea === 2 ? [] : [{ keys: 'o', description: '打开书籍操作' }])] },
     search: { title: '当前页面 · 搜索', entries: [{ keys: '输入文字', description: '填写书名' }, { keys: 'Ctrl+P', description: '切换精准搜索' }, { keys: '↵', description: '开始搜索' }, { keys: '退格', description: '删除输入' }] },
     results: { title: '当前页面 · 搜索结果', entries: [{ keys: '↑/↓  j/k', description: '移动选择' }, { keys: 'n', description: '加载下一页' }, { keys: '↵', description: '打开书籍详情' }, { keys: 't', description: '直接打开目录' }, { keys: 'o', description: '书籍操作' }, { keys: '⎋', description: '搜索中取消任务' }] },
     detail: { title: '当前页面 · 书籍信息', entries: [{ keys: '↵', description: '开始阅读' }, { keys: 't', description: '打开目录' }, { keys: 's', description: '查看书源' }, { keys: 'a', description: '加入或移出书架' }] },
@@ -71,13 +71,41 @@ export function helpLines(page: Page, homeArea: number, columns = 80): string[] 
   return lines
 }
 
-export function filterChapterIndices(chapters: readonly { title: string }[], query: string): number[] {
+export function filterChapterIndices(chapters: readonly { title: string; isVolume?: boolean }[], query: string): number[] {
   const normalizedQuery = query.normalize('NFKC').toLowerCase()
-  return chapters.flatMap((chapter, index) => chapter.title.normalize('NFKC').toLowerCase().includes(normalizedQuery) ? [index] : [])
+  return chapters.flatMap((chapter, index) => chapter.isVolume === true ? [] : chapter.title.normalize('NFKC').toLowerCase().includes(normalizedQuery) ? [index] : [])
+}
+
+export function reverseTocEntries<T extends { isVolume?: boolean }>(entries: readonly T[]): T[] {
+  const groups: T[][] = []
+  let current: T[] = []
+  for (const entry of entries) {
+    if (entry.isVolume === true && current.length > 0) { groups.push(current); current = [] }
+    current.push(entry)
+  }
+  if (current.length > 0) groups.push(current)
+  return groups.reverse().flatMap((group) => {
+    const volume = group.find((entry) => entry.isVolume === true)
+    const chapters = group.filter((entry) => entry.isVolume !== true).reverse()
+    return volume === undefined ? chapters : [volume, ...chapters]
+  })
+}
+
+export function firstReadableChapterIndex(chapters: readonly { isVolume?: boolean }[]): number { return chapters.findIndex((chapter) => chapter.isVolume !== true) }
+export function adjacentReadableChapterIndex(chapters: readonly { isVolume?: boolean }[], index: number, direction: -1 | 1): number {
+  let next = index + direction
+  while (next >= 0 && next < chapters.length) { if (chapters[next]?.isVolume !== true) return next; next += direction }
+  return -1
 }
 
 export function chapterIndexForSelection(chapters: readonly { title: string }[], query: string, selected: number, fallback = 0): number {
   return filterChapterIndices(chapters, query)[selected] ?? fallback
+}
+
+export function readableChapterMatchIndex(chapters: readonly { title: string; isVolume?: boolean }[], chapterIndex: number, fallback = 0): number {
+  const matches = filterChapterIndices(chapters, '')
+  const selected = matches.indexOf(chapterIndex)
+  return selected >= 0 ? selected : Math.max(0, Math.min(Math.max(0, matches.length - 1), fallback))
 }
 
 export interface UiOperation {
@@ -255,7 +283,7 @@ export function footerLayout(page: Page, busy: boolean, columns: number, searchS
     left = [{ keys: '↵', label: '执行', priority: 0 }]
     rightActions = [{ keys: '⎋', label: '关闭', priority: 0 }]
   }
-  else if (page === 'home') left = [{ keys: '↵', label: homeArea === 2 ? '重复搜索' : '阅读', priority: 0 }, ...(homeArea === 2 ? [] : [{ keys: 'o', label: '操作', priority: 1 }]), { keys: 'm', label: '书源', priority: 2 }, { keys: 's', label: '设置', priority: 3 }]
+  else if (page === 'home') left = [{ keys: '↵', label: homeArea === 2 ? '重复搜索' : '阅读', priority: 0 }, ...(homeArea === 2 ? [{ keys: 'x', label: '删除', priority: 1 }] : [{ keys: 'o', label: '操作', priority: 1 }]), { keys: 'm', label: '书源', priority: 2 }, { keys: 's', label: '设置', priority: 3 }]
   else if (page === 'settings') left = [{ keys: '↵', label: '编辑', priority: 0 }, { keys: 'r', label: '恢复默认', priority: 1 }]
   else if (page === 'search') left = [{ keys: '↵', label: '搜索', priority: 0 }]
   else if (page === 'results') {

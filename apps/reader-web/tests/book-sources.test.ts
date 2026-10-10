@@ -6,6 +6,7 @@ import { MemoryReaderRepository } from '../server/db/repository.ts'
 import { createReaderRuntime } from '../server/runtime/reader-runtime.ts'
 import { compareImportCandidates } from '../server/runtime/source-comparison.ts'
 import { bookIdentityKey, sameBookIdentity } from '../shared/book-identity.ts'
+import { fallbackChapterForPosition } from '../src/lib/source-position.ts'
 
 async function setup() {
   const repository = new MemoryReaderRepository()
@@ -31,6 +32,46 @@ test('book identity never automatically merges missing or different authors', ()
   assert.equal(sameBookIdentity('目标书', undefined, '目标书', undefined), false)
   assert.equal(sameBookIdentity('目标书', '作者', '目标书', '另一位作者'), false)
   assert.equal(bookIdentityKey('目标书', '作者未知'), undefined)
+})
+
+test('source switching keeps the raw chapter index when titles cannot be matched', () => {
+  const chapters = [
+    { chapterId: 'chapter-1', sourceId: 'source', bookUrl: 'book', chapterUrl: 'chapter-1', index: 1, title: '第一章' },
+    { chapterId: 'chapter-2', sourceId: 'source', bookUrl: 'book', chapterUrl: 'chapter-2', index: 2, title: '第二章' },
+    { chapterId: 'chapter-3', sourceId: 'source', bookUrl: 'book', chapterUrl: 'chapter-3', index: 3, title: '第三章' },
+  ]
+  assert.equal(fallbackChapterForPosition(chapters, 2)?.chapterId, 'chapter-2')
+})
+
+test('web pagination clears the source cursor after the final page', async (t) => {
+  const imported = await importSources({ kind: 'text', text: JSON.stringify({
+    bookSourceUrl: 'https://8.8.8.8/pagination-source',
+    bookSourceName: '分页源',
+    bookSourceType: 0,
+    searchUrl: '/search',
+    ruleSearch: { bookList: 'article', name: 'h2@text', author: '.author@text', bookUrl: 'a@href', nextPage: '.next@href' },
+    ruleBookInfo: { name: 'h1@text', author: '.author@text', tocUrl: 'a@href' },
+  }) })
+  const candidates = compareImportCandidates(imported, new Map())
+  const repository = new MemoryReaderRepository()
+  const previewId = randomUUID()
+  await repository.saveImportPreview('user-a', { previewId, expiresAt: new Date(Date.now() + 60_000).toISOString(), candidates, writableCount: candidates.length }, 'https://8.8.8.8/pagination-source')
+  await repository.commitImportPreview('user-a', previewId, candidates.map((item) => item.id))
+  const source = (await repository.listSourcesForUser('user-a'))[0]!
+  const run = await repository.createSearch('user-a', { keyword: '目标书', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const calls: string[] = []
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    calls.push(String(url))
+    return calls.length === 1
+      ? new Response('<article><h2>目标书</h2><span class="author">作者</span><a href="/book-1">详情</a></article><a class="next" href="/search?page=2">下一页</a>')
+      : new Response('<main></main>')
+  })
+  const runtime = createReaderRuntime(repository)
+  const first = await runtime.runSearchBatch('user-a', run.id)
+  assert.ok(first.sourceResults[0]?.nextCursor !== undefined)
+  const final = await runtime.runSearchBatch('user-a', run.id, { nextPage: true })
+  assert.equal(final.sourceResults[0]?.nextCursor, undefined)
+  assert.equal(calls.length, 2)
 })
 test('opening a selected source survives candidate snapshot reordering', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))

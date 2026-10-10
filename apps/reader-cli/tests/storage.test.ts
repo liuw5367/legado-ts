@@ -78,6 +78,20 @@ test('搜索历史按规范化名称只保留最新记录并显示完成时间',
   }
 })
 
+test('搜索历史可以按记录 ID 删除且不影响其他记录', async () => {
+  const { storage, root } = await temporaryStorage()
+  try {
+    const removed = await storage.addSearchHistory({ keyword: '要删除', sourceScope: 'all', startedAt: '2026-01-01T00:00:00.000Z', summary: { searched: 1, success: 1, empty: 0, failed: 0, capabilityMissing: 0, candidates: 1 }, openedBookIds: [] })
+    await storage.addSearchHistory({ keyword: '要保留', sourceScope: 'all', startedAt: '2026-01-02T00:00:00.000Z', summary: { searched: 1, success: 1, empty: 0, failed: 0, capabilityMissing: 0, candidates: 1 }, openedBookIds: [] })
+    assert.equal(await storage.deleteSearchHistory(removed.id), true)
+    assert.equal(await storage.deleteSearchHistory(removed.id), false)
+    assert.deepEqual((await storage.listSearchHistory()).map((item) => item.keyword), ['要保留'])
+  } finally {
+    await storage.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('多文件存储保留搜索、书架和阅读记录，并派生书架标记', async () => {
   const { storage, root } = await temporaryStorage()
   const bookId = '2f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'

@@ -183,6 +183,17 @@ export class ReaderStorage {
     })
   }
 
+  public async deleteSearchHistory(searchId: string): Promise<boolean> {
+    return this.withWriteLock(async () => {
+      const path = join(this.paths.dataRoot, 'search-history.json')
+      const records = await this.jsonStore.readFile<SearchHistoryEntry[]>(path, [])
+      const record = records.find((item) => item.id === searchId)
+      if (record === undefined) return false
+      await this.jsonStore.writeFile(path, records.filter((item) => item.id !== searchId))
+      return true
+    })
+  }
+
   public async markSearchOpened(searchId: string, bookId: string): Promise<void> {
     await this.withWriteLock(async () => {
       const path = join(this.paths.dataRoot, 'search-history.json')

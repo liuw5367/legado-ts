@@ -8,7 +8,7 @@ import { PostgresReaderRepository, SourceManagementError, type ReaderRepository 
 import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
 import { confirmImport, createImportPreview, listSourceActions, publicImportPreview } from './runtime/source-management.ts'
 import { serveReaderAsset } from './static.ts'
-import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema } from '../shared/source-management.ts'
+import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -65,6 +65,14 @@ app.post('/api/source-management/actions', async (context) => {
   const body = await parseBody(context, sourceActionSchema)
   if (body instanceof Response) return body
   try { return context.json(await listSourceActions(dependencies.repository, context.get('userId'), body.action, body.items)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/source-management/order', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, sourceOrderSchema)
+  if (body instanceof Response) return body
+  try { return context.json(await dependencies.repository.applySourceOrder(context.get('userId'), body.items)) } catch (error) { return handleError(context, error) }
 })
 
 app.post('/api/source-management/import-preview', async (context) => {

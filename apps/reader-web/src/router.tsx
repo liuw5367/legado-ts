@@ -22,7 +22,7 @@ function ProtectedRoute() {
   const { error, loading, session } = useAuth(); const location = useLocation()
   if (loading) return <main className="app-main app-main-standalone"><p className="muted">正在读取登录状态…</p></main>
   if (error !== undefined) return <main className="app-main app-main-standalone"><section className="card"><h1>认证服务未配置</h1><p className="error">{error.message}</p><p className="muted">请配置 Supabase 的公开 URL 和 publishable key 后重试。</p></section></main>
-  return session === null ? <Navigate to="/login" replace state={{ from: location.pathname }} /> : <Outlet />
+  return session === null ? <Navigate to="/login" replace state={{ from: location.pathname + location.search + location.hash }} /> : <Outlet />
 }
 
 const router = createBrowserRouter([

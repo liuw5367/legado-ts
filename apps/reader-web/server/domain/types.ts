@@ -6,8 +6,11 @@ export type StoredSource = Pick<NormalizedSource, 'bookSourceUrl' | 'bookSourceN
 export interface StoredCandidate {
   sourceId: string
   sourceFingerprint: string
+  searchDurationMs?: number
   candidate: BookCandidate
 }
+
+export type StoredBookMetadata = BookMetadata & { searchDurationMs?: number }
 
 export interface StoredBookSourceCandidate {
   id: string
@@ -73,7 +76,7 @@ export interface StoredEdition {
   sourceId: string
   sourceFingerprint: string
   bookUrl: string
-  metadata: BookMetadata
+  metadata: StoredBookMetadata
   variable?: string
 }
 
@@ -161,7 +164,7 @@ export interface SearchBatchResult {
 
 export interface BookCreationInput {
   candidate: StoredCandidate
-  metadata: BookMetadata
+  metadata: StoredBookMetadata
   bookId?: string
   addToBookshelf?: boolean
   activateEdition?: boolean

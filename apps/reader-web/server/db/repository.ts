@@ -5,7 +5,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser } from './client.ts'
 import { bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
-import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus } from '../../shared/source-management.ts'
+import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type ThemeMode, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
 
@@ -38,6 +38,7 @@ export interface ReaderRepository {
   getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined>
   listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage>
   applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }>
+  applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }>
   saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void>
   getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null>
   commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }>
@@ -112,7 +113,7 @@ export class PostgresReaderRepository implements ReaderRepository {
   public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
     return withUser(userId, async (transaction) => {
       const sourceRows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
-      const allRows = sourceRows.map((row) => managedSummary(toUserSource(row), row.revision, 'account'))
+      const allRows = sourceRows.map((row) => managedSummary(toUserSource(row), row.revision, 'account', row.customOrder))
       const enabledCount = allRows.filter((source) => source.enabled).length
       const rows = allRows
         .filter((source) => {
@@ -120,7 +121,7 @@ export class PostgresReaderRepository implements ReaderRepository {
           const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
           return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
         })
-        .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
+        .sort((a, b) => a.customOrder - b.customOrder || a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
       const offset = (params.page - 1) * params.pageSize
       const page = params.all === true ? rows : rows.slice(offset, offset + params.pageSize)
       return { sources: page, page: params.all === true ? 1 : params.page, pageSize: params.all === true ? Math.max(1, rows.length) : params.pageSize, total: rows.length, enabledCount }
@@ -157,6 +158,24 @@ export class PostgresReaderRepository implements ReaderRepository {
           revision: randomUUID(),
           updatedAt: new Date(),
         }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: sql.raw('excluded."deleted"'), revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
+      }
+      return { affected: items.length }
+    })
+  }
+
+  public async applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }> {
+    return withUser(userId, async (transaction) => {
+      const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false))).for('update')
+      const byId = new Map(rows.map((row) => [row.sourceId, row]))
+      const seen = new Set<string>()
+      for (const item of items) {
+        if (seen.has(item.sourceId)) throw new SourceManagementError('source-conflict', '排序列表包含重复书源')
+        seen.add(item.sourceId)
+        const current = byId.get(item.sourceId)
+        if (current === undefined) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
+        if (current.revision !== item.expectedSourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请刷新后重试：${item.sourceId}`)
+        const normalizedSource = { ...current.normalizedSource, customOrder: item.customOrder }
+        await transaction.update(userSources).set({ customOrder: item.customOrder, normalizedSource, revision: randomUUID(), updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, item.sourceId), eq(userSources.revision, item.expectedSourceRevision)))
       }
       return { affected: items.length }
     })
@@ -585,8 +604,8 @@ export class MemoryReaderRepository implements ReaderRepository {
   private readonly sourceCandidates = new Map<string, StoredBookSourceCandidate>()
   private readonly settings = new Map<string, ReaderSettings>()
 
-  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.allSources(userId).filter((source) => source.enabled) }
-  public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.allSources(userId) }
+  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.sortSources(this.allSources(userId).filter((source) => source.enabled)) }
+  public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.sortSources(this.allSources(userId)) }
   public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
   public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { return this.allSources(userId).find((source) => source.sourceId === sourceId && source.enabled) ?? null }
   public async getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined> { return this.allSources(userId).find((source) => source.sourceId === sourceId)?.normalizedSource.bookSourceName }
@@ -597,7 +616,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     const rows = allRows.filter((source) => {
       const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
       return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
-    }).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
+    }).sort((a, b) => readInteger(a.normalizedSource.customOrder, 0) - readInteger(b.normalizedSource.customOrder, 0) || a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
     const offset = (params.page - 1) * params.pageSize
     return { sources: (params.all === true ? rows : rows.slice(offset, offset + params.pageSize)).map((source) => managedSummary(source, this.sourceRevision(userId, source.sourceId), 'account')), page: params.all === true ? 1 : params.page, pageSize: params.all === true ? Math.max(1, rows.length) : params.pageSize, total: rows.length, enabledCount }
   }
@@ -620,6 +639,21 @@ export class MemoryReaderRepository implements ReaderRepository {
     }
     return { affected: items.length }
   }
+  public async applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }> {
+    const seen = new Set<string>()
+    for (const item of items) {
+      if (seen.has(item.sourceId)) throw new SourceManagementError('source-conflict', '排序列表包含重复书源')
+      seen.add(item.sourceId)
+      const key = `${userId}:${item.sourceId}`
+      const record = this.userSourceMap.get(key)
+      if (record === undefined || record.deleted) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
+      if (record.revision !== item.expectedSourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请刷新后重试：${item.sourceId}`)
+      const normalizedSource = { ...record.source.normalizedSource, customOrder: item.customOrder }
+      this.userSourceMap.set(key, { ...record, source: { ...record.source, normalizedSource }, revision: randomUUID() })
+    }
+    return { affected: items.length }
+  }
+  private sortSources(sources: StoredSourceRecord[]): StoredSourceRecord[] { return sources.sort((a, b) => readInteger(a.normalizedSource.customOrder, 0) - readInteger(b.normalizedSource.customOrder, 0) || a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId)) }
   public async saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void> { this.importPreviews.set(`${userId}:${preview.previewId}`, { userId, sourceUrl, preview, consumedIds: [] }) }
   public async getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null> { const record = this.importPreviews.get(`${userId}:${previewId}`); return record === undefined || new Date(record.preview.expiresAt).getTime() <= Date.now() ? null : record.preview }
   public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }> {
@@ -703,7 +737,7 @@ function toRuntimeLease(row: SourceRuntimeRow, leaseToken: string): SourceRuntim
 function runtimeStateKey(userId: string, sourceId: string, sourceFingerprint: string): string { return JSON.stringify([userId, sourceId, sourceFingerprint]) }
 function cloneRuntimeSnapshot(snapshot: RuntimeStateSnapshot): RuntimeStateSnapshot { return structuredClone(snapshot) }
 function toUserSource(row: UserSourceRow): StoredSourceRecord { return { sourceId: row.sourceId, name: typeof row.normalizedSource.bookSourceName === 'string' ? row.normalizedSource.bookSourceName : row.sourceId, ...(typeof row.normalizedSource.bookSourceGroup === 'string' ? { group: row.normalizedSource.bookSourceGroup } : {}), fingerprint: row.fingerprint, enabled: row.enabled, rawSource: row.rawSource, normalizedSource: row.normalizedSource } }
-function managedSummary(source: StoredSourceRecord, sourceRevision: string, origin: 'account'): ManagedSourceSummary { const time = readTimestamp(source.normalizedSource.lastUpdateTime); return { sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled, sourceRevision, origin, ...(time === undefined ? {} : { lastUpdateTime: time }) } }
+function managedSummary(source: StoredSourceRecord, sourceRevision: string, origin: 'account', customOrder = readInteger(source.normalizedSource.customOrder, 0)): ManagedSourceSummary { const time = readTimestamp(source.normalizedSource.lastUpdateTime); return { sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled, customOrder, sourceRevision, origin, ...(time === undefined ? {} : { lastUpdateTime: time }) } }
 function readInteger(value: unknown, fallback: number): number { return typeof value === 'number' && Number.isSafeInteger(value) ? value : fallback }
 function readTimestamp(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined }
 function sameStringSet(left: string[], right: string[]): boolean { return left.length === right.length && left.every((value) => right.includes(value)) }
@@ -736,5 +770,5 @@ export function sourceSummaryFromSource(source: NormalizedSource, fingerprint: s
 function cacheableCandidate(stored: StoredCandidate): StoredCandidate {
   const { sourceId, bookUrl, name, author, intro, coverUrl, kind, wordCount, lastChapter, updateTime, tocUrl, variable, rawFields } = stored.candidate
   const fields = Object.fromEntries(Object.entries({ name, author, intro, coverUrl, kind, wordCount, lastChapter, updateTime, tocUrl }).filter(([, value]) => value !== undefined))
-  return { sourceId: stored.sourceId, sourceFingerprint: stored.sourceFingerprint, candidate: { sourceId, bookUrl, ...fields, ...(variable === undefined ? {} : { variable }), rawFields: structuredClone(rawFields), traceRef: 'book-source-cache' } }
+  return { sourceId: stored.sourceId, sourceFingerprint: stored.sourceFingerprint, ...(stored.searchDurationMs === undefined ? {} : { searchDurationMs: stored.searchDurationMs }), candidate: { sourceId, bookUrl, ...fields, ...(variable === undefined ? {} : { variable }), rawFields: structuredClone(rawFields), traceRef: 'book-source-cache' } }
 }

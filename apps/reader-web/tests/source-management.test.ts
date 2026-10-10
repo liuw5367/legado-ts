@@ -194,3 +194,23 @@ test('all source summaries bypass pagination while preserving filters and the de
   assert.equal((await repository.listManagedSources('all-user', { ...params, all: true, query: '书源00' })).sources.length, 1)
   assert.equal((await repository.listManagedSources('all-user', { ...params, all: true, status: 'disabled' })).sources.length, 0)
 })
+
+test('web source order is persisted, returned in summaries, and checked by revision', async () => {
+  const repository = new MemoryReaderRepository()
+  const imported = await importSources({ kind: 'text', text: JSON.stringify([
+    { ...baseSource, bookSourceUrl: 'https://order.example/a', bookSourceName: '甲' },
+    { ...baseSource, bookSourceUrl: 'https://order.example/b', bookSourceName: '乙' },
+  ]) })
+  const previewId = randomUUID()
+  const candidates = compareImportCandidates(imported, new Map())
+  await repository.saveImportPreview('order-user', { previewId, expiresAt: new Date(Date.now() + 60_000).toISOString(), candidates, writableCount: candidates.length }, 'https://order.example/list')
+  await repository.commitImportPreview('order-user', previewId, candidates.map((item) => item.id))
+  const before = await repository.listManagedSources('order-user', { page: 1, pageSize: 50, query: '', status: 'all', all: true })
+  const first = before.sources.find((source) => source.name === '甲')!
+  const second = before.sources.find((source) => source.name === '乙')!
+  await repository.applySourceOrder('order-user', [{ sourceId: first.sourceId, expectedSourceRevision: first.sourceRevision, customOrder: 20 }, { sourceId: second.sourceId, expectedSourceRevision: second.sourceRevision, customOrder: -1 }])
+  const after = await repository.listManagedSources('order-user', { page: 1, pageSize: 50, query: '', status: 'all', all: true })
+  assert.deepEqual(after.sources.map((source) => [source.name, source.customOrder]), [['乙', -1], ['甲', 20]])
+  assert.deepEqual((await repository.listSourcesForUser('order-user')).map((source) => source.name), ['乙', '甲'])
+  await assert.rejects(repository.applySourceOrder('order-user', [{ sourceId: first.sourceId, expectedSourceRevision: first.sourceRevision, customOrder: 0 }]), /已更新/u)
+})

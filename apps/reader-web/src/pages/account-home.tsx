@@ -4,6 +4,7 @@ import { BookCover } from '../components/book-cover.tsx'
 import { MoreMenu } from '../components/more-menu.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { apiFetch, type ApiHome } from '../lib/api.ts'
+import { formatShanghaiDateTime } from '../lib/time-format.ts'
 
 type BookItem = ApiHome['bookshelf'][number]
 type View = 'bookshelf' | 'reading' | 'history'
@@ -74,7 +75,5 @@ function BookRow({ view, item, showRemove, removing, onRemove }: { view: View; i
 
 function SearchHistory({ items, deletingId, onRemove }: { items: ApiHome['searchHistory']; deletingId: string | undefined; onRemove: (id: string) => void }) {
   if (items.length === 0) return <div className="empty-state">还没有搜索记录。</div>
-  return <div className="history-list">{items.map((item) => <article className="history-row" key={item.id}><div className="history-content"><Link className="link history-keyword" to={`/search?q=${encodeURIComponent(item.keyword)}`}>{item.keyword}</Link><span className="muted small">{item.resultCount} 条结果 · {formatTime(item.updatedAt)}</span><span className="muted small">{item.summary ?? item.status}</span></div><Button size="sm" variant="secondary" type="button" disabled={deletingId === item.id} onClick={() => onRemove(item.id)}>{deletingId === item.id ? '删除中…' : '删除'}</Button></article>)}</div>
+  return <div className="history-list">{items.map((item) => <article className="history-row" key={item.id}><div className="history-content"><Link className="link history-keyword" to={`/search?q=${encodeURIComponent(item.keyword)}`}>{item.keyword}</Link><span className="muted small">{item.resultCount} 条结果 · {formatShanghaiDateTime(item.updatedAt)}</span><span className="muted small">{item.summary ?? item.status}</span></div><Button size="sm" variant="secondary" type="button" disabled={deletingId === item.id} onClick={() => onRemove(item.id)}>{deletingId === item.id ? '删除中…' : '删除'}</Button></article>)}</div>
 }
-
-function formatTime(value: string): string { const date = new Date(value); return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) }

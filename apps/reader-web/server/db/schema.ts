@@ -1,6 +1,6 @@
 import { boolean, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, PageCursor, TocBookPatch } from '@legado/source-core'
-import type { RuntimeStateSnapshot, SourceSearchState, StoredCandidate } from '../domain/types.ts'
+import type { RuntimeStateSnapshot, SourceSearchState, StoredBookMetadata, StoredCandidate } from '../domain/types.ts'
 
 export const readerSchema = pgSchema('reader')
 
@@ -73,7 +73,7 @@ export const bookEditions = readerSchema.table('book_editions', {
   sourceId: text('source_id').notNull(),
   sourceFingerprint: text('source_fingerprint').notNull(),
   bookUrl: text('book_url').notNull(),
-  metadata: jsonb('metadata').$type<BookMetadata>().notNull(),
+  metadata: jsonb('metadata').$type<StoredBookMetadata>().notNull(),
   variable: text('variable'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
