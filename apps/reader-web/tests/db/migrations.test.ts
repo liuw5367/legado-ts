@@ -37,3 +37,15 @@ test('reader pagination migration adds a validated per-user reading mode', async
   assert.match(migration, /check \("reading_mode" in \('scroll', 'paged'\)\)/u)
   assert.match(journal, /"tag": "0007_reader_pagination"/u)
 })
+
+test('reader margins migration adds validated per-user reading margins', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0008_reader_margins.sql'), 'utf8')
+  const journal = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8')
+  assert.match(migration, /add column if not exists "margin_top" integer not null default 16/u)
+  assert.match(migration, /"margin_right" integer not null default 16/u)
+  assert.match(migration, /"margin_bottom" integer not null default 16/u)
+  assert.match(migration, /"margin_left" integer not null default 16/u)
+  assert.match(migration, /constraint "reader_settings_margin_top_check" check \("margin_top" between 0 and 64\)/u)
+  assert.match(migration, /constraint "reader_settings_margin_left_check" check \("margin_left" between 0 and 64\)/u)
+  assert.match(journal, /"tag": "0008_reader_margins"/u)
+})

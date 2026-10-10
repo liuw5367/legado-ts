@@ -57,6 +57,13 @@
       "when": 1791610000000,
       "tag": "0007_reader_pagination",
       "breakpoints": false
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791611000000,
+      "tag": "0008_reader_margins",
+      "breakpoints": false
     }
   ]
 }

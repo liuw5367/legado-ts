@@ -7,7 +7,7 @@ import { ReaderIcon } from '../components/reader-icon.tsx'
 import { browserUrl, chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
 import { pageReturnState, pageReturnTarget } from '../lib/page-navigation.ts'
 import { anchorFromViewport, clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageIndexForAnchor, pageLabel, type PageLayout, type ReaderAnchor, type ReaderPageAction } from '../lib/reader-pagination.ts'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ReaderSettingsPanel } from '../components/reader-settings-panel.tsx'
 import { Button } from '../components/ui/button.tsx'
@@ -244,7 +244,7 @@ export function ReaderPage() {
       resources.forEach((image) => { image.removeEventListener('load', schedule); image.removeEventListener('error', schedule) })
       void fontsReady
     }
-  }, [content, paginationError, settings.fontSize, settings.lineHeight, settings.readingMode])
+  }, [content, paginationError, settings.fontSize, settings.lineHeight, settings.marginTop, settings.marginRight, settings.marginBottom, settings.marginLeft, settings.readingMode])
 
   const paragraphs = useMemo(() => content?.cleaned.split(/\n+/u).map((text) => text.trim()).filter(Boolean) ?? [], [content])
   const htmlContent = useMemo(() => content?.contentType === 'html' ? sanitizeChapterHtml(content.cleaned) : '', [content])
@@ -330,6 +330,8 @@ export function ReaderPage() {
   const dark = resolvedTheme === 'dark'
   const paged = settings.readingMode === 'paged'
   const pageCounter = pageLayout.pageCount > 0 ? pageLabel(pageIndex, pageLayout.pageCount) : '排版中…'
+  const wordCountLabel = `${chapterCharacterCount(content.cleaned).toLocaleString('zh-CN')} 字`
+  const readerStyle = { fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight, '--reader-margin-top': `${settings.marginTop}px`, '--reader-margin-right': `${settings.marginRight}px`, '--reader-margin-bottom': `${settings.marginBottom}px`, '--reader-margin-left': `${settings.marginLeft}px` } as CSSProperties
   async function toggleTheme(target: 'light' | 'dark' = dark ? 'light' : 'dark') {
     setThemeRetry(null)
     try { await updateSettings({ theme: target }) } catch { setThemeRetry(target) }
@@ -341,12 +343,13 @@ export function ReaderPage() {
       else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
     }
   }}>
-    <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools">{paged ? <button className="reader-guide-button" type="button" aria-label="查看翻页区域说明" aria-controls="reader-page-guide" aria-expanded={pageGuideVisible} title="查看翻页区域说明" onClick={() => setPageGuideVisible(true)}><CircleHelp aria-hidden="true" /></button> : null}<MoreMenu label="更多阅读操作">
-      <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />详情</Link>
-      {address === undefined ? <span className="more-menu-note muted small">没有可用的原地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />原地址</a>}
-      <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新'}</button>
+    <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
+      {paged ? <button className="more-menu-item" type="button" onClick={() => setPageGuideVisible(true)}><CircleHelp aria-hidden="true" />翻页区域说明</button> : null}
+      <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />书籍详情</Link>
+      {address === undefined ? <span className="more-menu-note muted small">没有可用的原文地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />查看原文</a>}
+      <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新内容'}</button>
     </MoreMenu></div></header>
-    <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? '正文，左侧上一页，中间显示或隐藏操作栏，右侧下一页' : '正文，按回车显示或隐藏阅读操作'} style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }}
+    <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? '正文，左侧上一页，中间显示或隐藏操作栏，右侧下一页' : '正文，按回车显示或隐藏阅读操作'} style={readerStyle}
       onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY } }}
       onPointerCancel={() => { pointerStartRef.current = null }}
       onClick={(event) => {
@@ -386,7 +389,7 @@ export function ReaderPage() {
     {refreshError.length > 0 ? <p className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></p> : null}
     {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void persistPosition({ paragraphIndex: latestPositionRef.current?.paragraphIndex ?? 0, offset: latestPositionRef.current?.offset ?? 0, version: (latestPositionRef.current?.version ?? -1) + 1 })}>重试</button></p> : null}
     <div className="reader-bottom-bar" hidden={!controlsVisible}>
-      <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? '分页进度' : '章节字数'}>{paged ? pageCounter : `${chapterCharacterCount(content.cleaned).toLocaleString('zh-CN')} 字`}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
+      <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? `分页进度 ${pageCounter}，${wordCountLabel}` : '章节字数'}>{paged ? <><span>{pageCounter}</span><span className="reader-word-count-separator" aria-hidden="true">·</span><span>{wordCountLabel}</span></> : wordCountLabel}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">
         <button type="button" className="reader-shortcut" aria-label="目录" onClick={() => setPanel('toc')}><ReaderIcon name="toc" /><span>目录</span></button>
         <Link className="reader-shortcut" to={`/books/${encodeURIComponent(bookId)}/sources`} state={pageReturnState(location)} aria-label="换源"><ReaderIcon name="source" /><span>换源</span></Link>

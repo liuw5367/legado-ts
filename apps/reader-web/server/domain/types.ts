@@ -179,6 +179,10 @@ export interface ReaderSettings {
   readingMode: ReadingMode
   fontSize: number
   lineHeight: number
+  marginTop: number
+  marginRight: number
+  marginBottom: number
+  marginLeft: number
   updatedAt: string
 }
 
@@ -187,6 +191,10 @@ export const DEFAULT_READER_SETTINGS = {
   readingMode: 'scroll' as ReadingMode,
   fontSize: 18,
   lineHeight: 1.9,
+  marginTop: 16,
+  marginRight: 16,
+  marginBottom: 16,
+  marginLeft: 16,
 }
 
 export interface RuntimeStateSnapshot {

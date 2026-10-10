@@ -44,6 +44,10 @@ export const readerSettings = readerSchema.table('reader_settings', {
   readingMode: text('reading_mode').$type<ReadingMode>().notNull().default('scroll'),
   fontSize: integer('font_size').notNull().default(18),
   lineHeightUnits: integer('line_height_units').notNull().default(190),
+  marginTop: integer('margin_top').notNull().default(16),
+  marginRight: integer('margin_right').notNull().default(16),
+  marginBottom: integer('margin_bottom').notNull().default(16),
+  marginLeft: integer('margin_left').notNull().default(16),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
