@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { AuthCard } from '../components/auth-form.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
@@ -8,7 +7,7 @@ import { requestPasswordReset } from '../lib/auth.ts'
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState(''); const [sent, setSent] = useState(false); const [error, setError] = useState<string>(); const [pending, setPending] = useState(false)
   const submit = async (event: React.FormEvent) => { event.preventDefault(); setError(undefined); setPending(true); try { await requestPasswordReset(email); setSent(true) } catch (reason) { setError(reason instanceof Error ? reason.message : '发送失败') } finally { setPending(false) } }
-  return <AuthCard title="忘记密码" footer={<Link className="link" to="/login">返回登录</Link>}>
+  return <AuthCard title="忘记密码" backTo="/login">
     <form className="form" onSubmit={(event) => void submit(event)}>
       <p className="muted">输入注册邮箱后，我们会发送密码恢复链接。</p>
       <div className="field"><label htmlFor="email">邮箱</label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>

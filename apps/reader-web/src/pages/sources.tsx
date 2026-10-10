@@ -1,6 +1,6 @@
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { PageBackButton } from '../components/page-back-button.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
@@ -61,12 +61,11 @@ export function SourcesPage() {
   }
 
   return <section className="page-stack page-narrow sources-page">
-    <div className="page-heading compact-heading"><div><h1>书源</h1><p className="muted">{data === null ? '管理当前账号可用的书源。' : `共 ${data.total} 个，启用 ${data.enabledCount} 个`}</p></div><Button type="button" onClick={() => setImportOpen(true)}>导入</Button></div>
+    <div className="toc-heading"><PageBackButton fallback="/account/settings" /><div className="toc-heading-main"><h1>书源</h1><p className="muted">{data === null ? '管理当前账号可用的书源。' : `共 ${data.total} 个，启用 ${data.enabledCount} 个`}</p></div><Button size="sm" type="button" onClick={() => setImportOpen(true)}>导入</Button></div>
     <div className="source-management-filters"><Input aria-label="搜索书源" placeholder="搜索名称、分组或 URL" value={query} onChange={(event) => { setQuery(event.target.value); setSelected(new Map()) }} /><Select aria-label="筛选状态" value={status} onChange={(event) => { setStatus(event.target.value as SourceManagementStatus); setSelected(new Map()) }}><option value="all">全部</option><option value="enabled">启用</option><option value="disabled">禁用</option></Select></div>
     {message.length > 0 ? <p className="success" role="status">{message}</p> : null}{error.length > 0 ? <p className="error" role="alert">{error}</p> : null}
     {selected.size > 0 ? <div className="source-bulk-bar"><span>已选 {selected.size} 个</span><div className="actions"><Button size="sm" type="button" disabled={acting} onClick={() => void apply('enable')}>启用</Button><Button size="sm" variant="secondary" type="button" disabled={acting} onClick={() => void apply('disable')}>禁用</Button><Button size="sm" variant="secondary" type="button" disabled={acting} onClick={() => void apply('delete')}>删除</Button><Button size="sm" variant="secondary" type="button" disabled={acting} onClick={() => setSelected(new Map())}>清空</Button></div></div> : null}
     {loading ? <p className="loading-state muted">正在加载书源…</p> : data?.sources.length === 0 ? <div className="empty-state">没有匹配的书源。</div> : <><div className="source-list-header"><label><input type="checkbox" checked={pageSelected} onChange={(event) => togglePage(event.target.checked)} /> 全选筛选结果</label></div><div className="source-management-list">{data?.sources.map((source) => <SourceRow key={source.sourceId} source={source} busy={acting} selected={selected.has(source.sourceId)} onToggle={(checked) => toggle(source, checked)} onAction={(action) => void apply(action, [source])} />)}</div></>}
-    <p className="muted small"><Link className="link" to="/account/settings">返回设置</Link></p>
     <SourceImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={(imported) => { setImportOpen(false); cache.clear(); setMessage(`已导入 ${imported} 个书源`); void load() }} />
   </section>
 }

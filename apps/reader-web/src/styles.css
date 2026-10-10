@@ -107,6 +107,8 @@ a { color: inherit; }
 .field input:focus, .input:focus, .field select:focus, .select:focus { border-color: var(--primary); outline: 2px solid color-mix(in srgb, var(--primary) 25%, transparent); }
 .inline-action { margin-left: 6px; vertical-align: middle; }
 .auth-form { width: min(100%, 448px); margin: 0 auto; }
+.auth-card-heading { display: flex; min-height: 48px; align-items: center; gap: 8px; margin-bottom: 16px; }
+.auth-card-heading h1 { min-width: 0; margin: 0; }
 
 .segmented { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; width: 100%; padding: 2px; background: color-mix(in srgb, var(--border) 45%, transparent); border-radius: 7px; }
 .segmented button { min-height: 40px; padding: 6px 4px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 13px; }

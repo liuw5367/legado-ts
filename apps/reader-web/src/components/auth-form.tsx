@@ -1,10 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { PageBackButton } from './page-back-button.tsx'
 import { Button } from './ui/button.tsx'
 import { Card } from './ui/card.tsx'
 import { Input } from './ui/input.tsx'
 
-export function AuthCard({ title, children, footer }: { title: string; children: ReactNode; footer?: ReactNode }) {
-  return <div className="app-shell"><main className="app-main app-main-standalone"><Card><h1>{title}</h1>{children}{footer === undefined ? null : <div className="muted" style={{ marginTop: '1.25rem' }}>{footer}</div>}</Card></main></div>
+export function AuthCard({ title, children, footer, backTo }: { title: string; children: ReactNode; footer?: ReactNode; backTo?: string }) {
+  return <div className="app-shell"><main className="app-main app-main-standalone"><Card>{backTo === undefined ? <h1>{title}</h1> : <div className="auth-card-heading"><PageBackButton fallback={backTo} /><h1>{title}</h1></div>}{children}{footer === undefined ? null : <div className="muted" style={{ marginTop: '1.25rem' }}>{footer}</div>}</Card></main></div>
 }
 
 export function EmailPasswordFields({ submitLabel, onSubmit, includeCurrent = false }: { submitLabel: string; onSubmit: (values: { email: string; password: string; currentPassword?: string }) => Promise<void>; includeCurrent?: boolean }) {
