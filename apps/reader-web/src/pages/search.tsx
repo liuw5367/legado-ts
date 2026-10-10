@@ -1,5 +1,9 @@
+import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
+import type { SourceCacheWarning } from '../../shared/book-sources.ts'
+import { pageReturnState } from '../lib/page-navigation.ts'
+import { PageBackButton } from '../components/page-back-button.tsx'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
@@ -16,6 +20,7 @@ interface CandidateGroup {
 export function SearchPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryKeyword = searchParams.get('q') ?? ''
   const targetBookId = searchParams.get('bookId') ?? ''
   const [books, setBooks] = useState<ApiBook[]>([])
@@ -39,7 +44,7 @@ export function SearchPage() {
     if (targetBookId.length > 0 && !booksLoaded) return []
     const target = targetBookId.length === 0 ? undefined : books.find((book) => book.id === targetBookId)
     if (targetBookId.length > 0 && target === undefined) return []
-    return target === undefined ? all : all.filter((group) => sameBookIdentity(target.name, target.author, group.name, group.author))
+    return target === undefined ? all : all.filter((group) => target.author?.trim().length && target.author !== '作者未知' ? sameBookIdentity(target.name, target.author, group.name, group.author) : normalizeIdentity(target.name) === normalizeIdentity(group.name))
   }, [books, booksLoaded, candidates, targetBookId])
 
   useEffect(() => {
@@ -63,11 +68,11 @@ export function SearchPage() {
     const existingBook = requestedBook ?? books.find((book) => sameBookIdentity(book.name, book.author, result.candidate.name, result.candidate.author))
     setSaving(selectedIndex); setMessageTone('info'); setMessage('')
     try {
-      const created = await apiFetch<{ book: ApiBook; edition: { editionKey: string } }>('/api/books', { method: 'POST', body: JSON.stringify({ searchId, candidateIndex: selectedIndex, addToBookshelf: action === 'shelf', activateEdition: action === 'shelf' || existingBook === undefined, ...(existingBook === undefined ? {} : { bookId: existingBook.id }) }) })
+      const created = await apiFetch<{ book: ApiBook; edition: { editionKey: string }; cacheWarning?: SourceCacheWarning }>('/api/books', { method: 'POST', body: JSON.stringify({ searchId, candidateIndex: selectedIndex, addToBookshelf: action === 'shelf', activateEdition: action === 'shelf' || existingBook === undefined, ...(existingBook === undefined ? {} : { bookId: existingBook.id }) }) })
       if (action === 'directory') {
-        navigate(`/books/${encodeURIComponent(created.book.id)}/toc?editionKey=${encodeURIComponent(created.edition.editionKey)}`)
+        navigate(`/books/${encodeURIComponent(created.book.id)}/toc?editionKey=${encodeURIComponent(created.edition.editionKey)}`, { state: pageReturnState(location) })
       } else {
-        setMessageTone('success'); setMessage('已加入书架')
+        setBooks((current) => [...current.filter((book) => book.id !== created.book.id), created.book]); setMessageTone(created.cacheWarning === undefined ? 'success' : 'error'); setMessage(created.cacheWarning === undefined ? '已加入书架' : `书籍已保存，但${created.cacheWarning.message}`)
       }
     } catch (error) { setMessageTone('error'); setMessage(error instanceof Error ? error.message : action === 'directory' ? '打开目录失败' : '加入书架失败') }
     finally { setSaving(null) }
@@ -111,6 +116,7 @@ export function SearchPage() {
       setCandidates((current) => mergeSearchStreamCandidates(current, batch))
       if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') { setMessageTone('error'); setMessage('部分书源执行失败，已保留可用结果。') }
     }
+    if (streamEvent.type === 'batch') { const batch = streamEvent.data as { cacheWarning?: SourceCacheWarning }; if (batch.cacheWarning !== undefined) { setMessageTone('error'); setMessage(`搜索已完成，但${batch.cacheWarning.message}`) } }
     if (streamEvent.type === 'batch-end') {
       const batch = streamEvent.data as SearchSourceEventData & { search?: { sourceStates?: Array<{ nextCursor?: unknown }>; candidates?: ApiCandidate[] } }
       setCandidates((current) => mergeSearchStreamCandidates(current, batch))
@@ -121,14 +127,14 @@ export function SearchPage() {
   async function cancelSearch() { cancelRequestedRef.current = true; controllerRef.current?.abort(); const activeSearchId = searchIdRef.current; if (activeSearchId.length > 0) await apiFetch(`/api/searches/${encodeURIComponent(activeSearchId)}/cancel`, { method: 'POST' }).catch(() => undefined); setStatus('done'); setMessageTone('info'); setMessage('搜索已取消') }
 
   return <section className="page-stack page-narrow search-page">
-    <div className="page-heading compact-heading"><div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者，使用当前账号已启用的书源搜索。'}</p></div><Link className="button secondary small" to="/sources">管理书源</Link></div>
+    <div className="page-heading compact-heading">{targetBookId.length > 0 ? <PageBackButton fallback={`/books/${encodeURIComponent(targetBookId)}/sources`} /> : null}<div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者，使用当前账号已启用的书源搜索。'}</p></div><Link className="button secondary small" to="/sources">管理书源</Link></div>
     <form className="search-panel" onSubmit={(event) => void submitSearch(event)}>
       <div className="search-row"><label className="sr-only" htmlFor="search-keyword">关键词</label><Input className="search-input" id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><Button type="submit" disabled={status === 'loading' || keyword.trim().length === 0}>{status === 'loading' ? '搜索中' : '搜索'}</Button></div>
       <div className="search-options"><label className="check-inline"><input type="checkbox" checked={precision} onChange={(event) => setPrecision(event.target.checked)} /><span>精确</span></label>{status === 'loading' ? <Button className="cancel-button" variant="secondary" size="sm" type="button" onClick={() => void cancelSearch()}>取消</Button> : null}</div>
     </form>
     {message.length > 0 ? <p className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</p> : null}
     <div className="result-summary" aria-live="polite">{status === 'loading' ? '正在搜索' : status === 'done' ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}{hasNextPage ? <Button className="inline-action" variant="secondary" size="sm" type="button" disabled={status === 'loading'} onClick={() => void continueNextPage()}>下一页</Button> : null}</div>
-    <div className="result-list">{groups.length === 0 && status === 'done' ? <div className="empty-state">{booksLoaded ? '没有找到匹配书籍。' : '正在读取已有书籍…'}</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedByGroup[group.key] ?? group.items[0]?.index} expanded={expandedKey === group.key} disabled={status !== 'done' || !booksLoaded} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => setSelectedByGroup((current) => ({ ...current, [group.key]: index }))} onSave={(action) => void saveCandidate(group, action)} />)}</div>
+    <div className="result-list">{groups.length === 0 && status === 'done' ? <div className="empty-state">{booksLoaded ? '没有找到匹配书籍。' : '正在读取已有书籍…'}</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedByGroup[group.key] ?? group.items[0]?.index} expanded={expandedKey === group.key} disabled={!booksLoaded} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => setSelectedByGroup((current) => ({ ...current, [group.key]: index }))} onSave={(action) => void saveCandidate(group, action)} />)}</div>
   </section>
 }
 
@@ -144,17 +150,10 @@ function groupCandidates(candidates: ApiCandidate[]): CandidateGroup[] {
   candidates.forEach((item, index) => {
     const name = item.candidate.name?.trim() || `未命名书籍 · ${item.sourceId}`
     const author = item.candidate.author?.trim() || '作者未知'
-    const key = item.candidate.name?.trim().length ? `${normalizeIdentity(name)}\u0000${normalizeIdentity(author)}` : `${item.sourceId}\u0000${item.candidate.bookUrl}`
+    const key = item.candidate.name?.trim().length && author !== '作者未知' ? `${normalizeIdentity(name)}\u0000${normalizeIdentity(author)}` : `${item.sourceId}\u0000${item.candidate.bookUrl}`
     const group = groups.get(key) ?? { key, name, author, items: [] }
     if (!group.items.some((entry) => entry.item.sourceId === item.sourceId && entry.item.candidate.bookUrl === item.candidate.bookUrl)) group.items.push({ item, index })
     groups.set(key, group)
   })
   return [...groups.values()]
 }
-
-function sameBookIdentity(leftName: string, leftAuthor: string | undefined, rightName: string | undefined, rightAuthor: string | undefined): boolean {
-  return normalizeIdentity(leftName) === normalizeIdentity(rightName ?? '') && normalizeAuthor(leftAuthor) === normalizeAuthor(rightAuthor)
-}
-
-function normalizeIdentity(value: string): string { return value.trim().normalize('NFC') }
-function normalizeAuthor(value: string | undefined): string { return normalizeIdentity(value?.trim() || '作者未知') }

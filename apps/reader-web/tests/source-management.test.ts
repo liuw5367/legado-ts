@@ -3,11 +3,80 @@ import test from 'node:test'
 import { importSources } from '@legado/source-core'
 import { MemoryReaderRepository } from '../server/db/repository.ts'
 import { compareImportCandidates } from '../server/runtime/source-comparison.ts'
-import { publicImportPreview } from '../server/runtime/source-management.ts'
+import { createImportPreview, publicImportPreview } from '../server/runtime/source-management.ts'
 
 const baseSource = { bookSourceUrl: 'https://source.example/books', bookSourceName: '示例书源', bookSourceType: 0, lastUpdateTime: 10, searchUrl: 'https://source.example/search?q={{key}}', ruleSearch: {}, ruleBookInfo: {}, ruleToc: {}, ruleContent: {} }
 
 async function candidates(source: Record<string, unknown>) { return importSources({ kind: 'text', text: JSON.stringify(source) }) }
+
+test('import preview follows HTTP redirects through the real network host', async (t) => {
+  for (const status of [301, 302, 303, 307, 308]) {
+    let calls = 0
+    t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+      calls += 1
+      if (calls === 1) return new Response(null, { status, headers: { location: '/sources.json' } })
+      assert.equal(String(url), 'https://8.8.8.8/sources.json')
+      return new Response(JSON.stringify([baseSource]))
+    })
+    const repository = new MemoryReaderRepository()
+    const preview = await createImportPreview(repository, 'user-a', 'https://8.8.8.8/start')
+    assert.equal(preview.writableCount, 1)
+    assert.equal(calls, 2)
+    assert.equal((await repository.listSourcesForUser('user-a')).length, 0)
+    t.mock.restoreAll()
+  }
+})
+
+test('import accepts five redirects and rejects loops and private redirect targets', async (t) => {
+  for (const redirects of [0, 5, 6]) {
+    let calls = 0
+    t.mock.method(globalThis, 'fetch', async () => ++calls <= redirects
+      ? new Response(null, { status: 302, headers: { location: `/hop-${calls}` } })
+      : new Response(JSON.stringify([baseSource])))
+    const operation = createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/start')
+    if (redirects <= 5) assert.equal((await operation).writableCount, 1)
+    else assert.equal((await operation).writableCount, 0)
+    assert.equal(calls, Math.min(redirects + 1, 6))
+    t.mock.restoreAll()
+  }
+  let calls = 0
+  t.mock.method(globalThis, 'fetch', async () => { calls += 1; return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } }) })
+  const preview = await createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/start')
+  assert.equal(preview.writableCount, 0)
+  assert.equal(calls, 1)
+})
+
+test('redirect import supports another public host and rejects invalid final responses', async (t) => {
+  let calls = 0
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    calls += 1
+    if (calls === 1) return new Response(null, { status: 302, headers: { location: 'https://8.8.4.4/final.json' } })
+    assert.equal(String(url), 'https://8.8.4.4/final.json')
+    return new Response(JSON.stringify([baseSource]))
+  })
+  assert.equal((await createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/start')).writableCount, 1)
+  t.mock.restoreAll()
+  for (const finalResponse of [() => new Response('<html>login</html>'), () => new Response('unavailable', { status: 503 }), () => new Response('x'.repeat(4 * 1024 * 1024 + 1))]) {
+    calls = 0
+    t.mock.method(globalThis, 'fetch', async () => ++calls === 1 ? new Response(null, { status: 302, headers: { location: '/final.json' } }) : finalResponse())
+    const repository = new MemoryReaderRepository()
+    assert.equal((await createImportPreview(repository, 'user-a', 'https://8.8.8.8/start')).writableCount, 0)
+    assert.equal((await repository.listSourcesForUser('user-a')).length, 0)
+    t.mock.restoreAll()
+  }
+})
+
+test('cancelled import does not make a network request or write sources', async (t) => {
+  let calls = 0
+  t.mock.method(globalThis, 'fetch', async () => { calls += 1; return new Response(JSON.stringify([baseSource])) })
+  const repository = new MemoryReaderRepository()
+  try {
+    const preview = await createImportPreview(repository, 'user-a', 'https://8.8.8.8/start', AbortSignal.abort())
+    assert.equal(preview.writableCount, 0)
+  } catch (reason) { assert.equal((reason as Error).name, 'AbortError') }
+  assert.equal(calls, 0)
+  assert.equal((await repository.listSourcesForUser('user-a')).length, 0)
+})
 
 test('source comparison keeps identical content out of the writable list and accepts a newer definition', async () => {
   const local = await candidates(baseSource)

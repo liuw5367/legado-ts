@@ -201,6 +201,20 @@ app.get('/api/books/:bookId/editions', async (context) => {
   }
 })
 
+app.get('/api/books/:bookId/sources', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try { return context.json(await dependencies.runtime.listBookSources(context.get('userId'), context.req.param('bookId'))) }
+  catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/books/:bookId/sources/:candidateId/open', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try { return context.json({ edition: await dependencies.runtime.openBookSource(context.get('userId'), context.req.param('bookId'), context.req.param('candidateId')) }) }
+  catch (error) { return handleError(context, error) }
+})
+
 app.put('/api/books/:bookId/edition', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected

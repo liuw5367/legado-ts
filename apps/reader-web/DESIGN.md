@@ -2,24 +2,24 @@
 
 ## 1. Visual theme and atmosphere
 
-Legado Reader uses a quiet ink-on-paper direction for long reading sessions: warm neutral surfaces, restrained blue ink in light mode, and muted amber ink in night mode. The application is utility-first, with a clear reading column, low visual noise, and no decorative motion.
+Legado Reader uses a quiet ink-on-paper direction for long reading sessions: warm neutral surfaces, restrained brown ink in light mode, and muted amber ink in night mode. The application is utility-first, with a clear reading column, low visual noise, and no decorative motion.
 
 ## 2. Color palette and roles
 
 | Token | Light | Dark | Role |
 | --- | --- | --- | --- |
-| `--background` | `#f7f8fa` | `#171513` | Page canvas |
-| `--card` | `#ffffff` | `#211f1c` | Reading and form surfaces |
-| `--foreground` | `#17202a` | `#f3eee7` | Primary text |
-| `--muted` | `#64748b` | `#b8afa4` | Supporting text |
-| `--border` | `#dfe4ea` | `#3c3832` | Dividers and control outlines |
-| `--primary` | `#1f6feb` | `#d6aa72` | Actions and links |
+| `--background` | `#f6f3ed` | `#171513` | Page canvas |
+| `--card` | `#fffefa` | `#211f1c` | Reading and form surfaces |
+| `--foreground` | `#24211d` | `#f3eee7` | Primary text |
+| `--muted` | `#70685e` | `#b8afa4` | Supporting text |
+| `--border` | `#ded8ce` | `#3c3832` | Dividers and control outlines |
+| `--primary` | `#76542e` | `#d6aa72` | Actions and links |
 
 The system theme resolves to light or dark through `prefers-color-scheme`; an account setting can override it.
 
 ## 3. Typography rules
 
-The stack is `ui-sans-serif`, system UI, and `PingFang SC`/`Noto Sans SC` fallbacks for Chinese text. Headings use a compact negative letter spacing only at display sizes. Reading text starts at 18px with a 1.9 line height, both adjustable per account. Body reading lines stay within a 48rem column.
+The stack is `ui-sans-serif`, system UI, and `PingFang SC`/`Noto Sans SC` fallbacks for Chinese text. Headings use a compact negative letter spacing only at display sizes. Reading text starts at 18px with a 1.9 line height, both adjustable per account. Body reading lines stay within a 680px column.
 
 ## 4. Component styling
 
@@ -27,7 +27,9 @@ Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-p
 
 ## 5. Layout principles
 
-Pages use a single reading column capped at 48rem, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped.
+Pages use a single reading column capped at 680px, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped.
+
+The TOC heading, actions, and filter share one sticky area, below the desktop app header. Narrow actions wrap without hiding the return button. Reader top and bottom bars are fixed overlays, hidden initially and toggled by a text tap. The bottom bar uses two rows: previous / character count / next, then four icon shortcuts for TOC, sources, settings, and theme. Safe area padding and permanent text end padding keep the last paragraph reachable. Toggling bars must not move text or scroll position.
 
 ## 6. Depth and elevation
 
@@ -45,7 +47,7 @@ Light surfaces use a small neutral shadow only where a card needs separation. Da
 
 ## 8. Responsive behavior
 
-The supported narrow layout is 360px and up. Header secondary text hides below 720px, controls wrap, and range inputs become full width in the settings page. Interactive controls keep a 40px or larger hit area. Desktop uses the same structure with more breathing room, not a separate visual language.
+The supported narrow layout is 320px and up. Header secondary text hides below 720px, controls wrap, and range inputs become full width in the settings page. Interactive controls keep a 44px or larger hit area. Desktop uses the same structure with more breathing room, not a separate visual language.
 
 ## 9. Agent prompt guide
 
@@ -58,10 +60,10 @@ Use these existing tokens and values when extending the UI:
 - Divider: `var(--border)`
 - Action: `var(--primary)`
 - Radius: `0.5rem` controls, `0.75rem` content cards
-- Reading type: 18px, line height 1.9, max width 48rem
+- Reading type: 18px, line height 1.9, max width 680px
 
 Example prompts:
 
 1. Add a source detail panel using `var(--card)`, a `0.75rem` radius, a `1px solid var(--border)` outline, and a two-column layout that collapses below 720px.
-2. Add a reader control using `var(--foreground)` labels, `var(--muted)` helper copy, and a `var(--primary)` range accent. Keep the hit area at least 40px.
+2. Add a reader control using `var(--foreground)` labels, `var(--muted)` helper copy, and a `var(--primary)` range accent. Keep the hit area at least 44px.
 3. Add an empty reading state with a dashed `var(--border)` outline, 2rem padding, and one direct action link in `var(--primary)`.

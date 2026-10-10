@@ -5,13 +5,14 @@ import { Select } from '../components/ui/select.tsx'
 
 export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', fontSize: 18, lineHeight: 1.9 }
 type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'fontSize' | 'lineHeight'>>
-interface ReaderSettingsContextValue { settings: ApiSettings; saving: boolean; error?: string; updateSettings: (patch: SettingsPatch) => Promise<ApiSettings> }
+interface ReaderSettingsContextValue { settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; error?: string; updateSettings: (patch: SettingsPatch) => Promise<ApiSettings> }
 const ReaderSettingsContext = createContext<ReaderSettingsContextValue | undefined>(undefined)
 const storagePrefix = 'legado-reader-settings:'
 
 export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   const { session, user } = useAuth()
   const [settings, setSettings] = useState<ApiSettings>(() => readLocalSettings(undefined))
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => resolveTheme('system'))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
   const saveQueue = useRef(Promise.resolve())
@@ -37,6 +38,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const apply = () => {
       const resolved = resolveTheme(settings.theme)
+      setResolvedTheme(resolved)
       document.documentElement.dataset.theme = resolved
       document.documentElement.style.colorScheme = resolved
     }
@@ -50,6 +52,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ReaderSettingsContextValue>(() => ({
     settings,
+    resolvedTheme,
     saving,
     ...(error === undefined ? {} : { error }),
     updateSettings: async (patch) => {
@@ -70,7 +73,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       saveQueue.current = request.then(() => undefined, () => undefined)
       try { return await request } catch (reason) { setError(reason instanceof Error ? reason.message : '阅读设置保存失败'); throw reason } finally { setSaving(false) }
     },
-  }), [error, saving, session, settings, user?.id])
+  }), [error, resolvedTheme, saving, session, settings, user?.id])
   return <ReaderSettingsContext.Provider value={value}>{children}</ReaderSettingsContext.Provider>
 }
 

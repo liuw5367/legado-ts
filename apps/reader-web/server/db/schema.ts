@@ -79,6 +79,17 @@ export const bookEditions = readerSchema.table('book_editions', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex('book_editions_user_edition_idx').on(table.userId, table.editionKey), index('book_editions_user_book_idx').on(table.userId, table.bookId)])
 
+export const bookSourceCandidates = readerSchema.table('book_source_candidates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull(),
+  bookId: uuid('book_id').notNull(),
+  sourceId: text('source_id').notNull(),
+  sourceFingerprint: text('source_fingerprint').notNull(),
+  bookUrl: text('book_url').notNull(),
+  candidate: jsonb('candidate').$type<StoredCandidate>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex('book_source_candidates_identity_idx').on(table.userId, table.bookId, table.sourceId, table.sourceFingerprint, table.bookUrl), index('book_source_candidates_user_book_idx').on(table.userId, table.bookId)])
+
 export const readingRecords = readerSchema.table('reading_records', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull(),

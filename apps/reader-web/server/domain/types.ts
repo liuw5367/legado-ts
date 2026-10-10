@@ -1,3 +1,4 @@
+import type { SourceCacheWarning } from '../../shared/book-sources.ts'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent, JsonObject, NormalizedSource, PageCursor, TocBookPatch } from '@legado/source-core'
 
 export type StoredSource = Pick<NormalizedSource, 'bookSourceUrl' | 'bookSourceName' | 'bookSourceGroup' | 'bookSourceType' | 'searchUrl' | 'exploreUrl' | 'ruleSearch' | 'ruleExplore' | 'ruleBookInfo' | 'ruleToc' | 'ruleContent' | 'concurrentRate' | 'loginUrl' | 'enabled'> & Record<string, unknown>
@@ -6,6 +7,17 @@ export interface StoredCandidate {
   sourceId: string
   sourceFingerprint: string
   candidate: BookCandidate
+}
+
+export interface StoredBookSourceCandidate {
+  id: string
+  userId: string
+  bookId: string
+  sourceId: string
+  sourceFingerprint: string
+  bookUrl: string
+  candidate: StoredCandidate
+  updatedAt: string
 }
 
 export interface SearchRunState {
@@ -138,6 +150,7 @@ export interface SearchInput {
 }
 
 export interface SearchBatchResult {
+  cacheWarning?: SourceCacheWarning
   search: SearchRunState
   candidates: StoredCandidate[]
   sourceResults: SourceSearchState[]

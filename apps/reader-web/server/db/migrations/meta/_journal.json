@@ -43,6 +43,13 @@
       "when": 1791597400000,
       "tag": "0005_source_management",
       "breakpoints": false
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791600000000,
+      "tag": "0006_book_source_candidates",
+      "breakpoints": false
     }
   ]
 }

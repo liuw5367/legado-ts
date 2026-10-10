@@ -67,8 +67,10 @@ function createImportReader(): ImportReader {
         url: request.uri,
         method: 'GET',
         responseType: 'bytes',
+        followRedirects: true,
         execution: { cookieJar: false },
-        budget: { timeoutMs: 15_000, maxRequests: 1, maxPages: 1, maxResponseBytes: Math.min(request.maxBytes, MAX_RESPONSE_BYTES), maxTotalBytes: MAX_TOTAL_BYTES, maxRedirects: 5, ...(request.signal === undefined ? {} : { signal: request.signal }) },
+        // 每次跳转也占用请求预算，5次跳转需要包含首个请求的6次预算。
+        budget: { timeoutMs: 15_000, maxRequests: 6, maxPages: 1, maxResponseBytes: Math.min(request.maxBytes, MAX_RESPONSE_BYTES), maxTotalBytes: MAX_TOTAL_BYTES, maxRedirects: 5, ...(request.signal === undefined ? {} : { signal: request.signal }) },
       })
       if (planResult.plan === undefined) throw new Error(planResult.error?.message ?? '导入地址无效')
       const response = await network.request(planResult.plan)

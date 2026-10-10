@@ -63,7 +63,7 @@ function BookRow({ item, showRemove, removing, onRemove }: { item: BookItem; sho
     </Link>
     <details className="book-more">
       <summary aria-label={`更多操作：${book.name}`}>···</summary>
-      <div className="book-more-menu"><Link className="book-more-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`}>查看目录</Link>{showRemove ? <button className="book-more-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}</div>
+      <div className="book-more-menu"><Link className="book-more-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`} state={{ backTo: '/' }}>查看目录</Link>{showRemove ? <button className="book-more-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}</div>
     </details>
   </article>
 }

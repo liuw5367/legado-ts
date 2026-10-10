@@ -11,6 +11,7 @@
 | `user_sources` | 用户书源、raw/normalized 内容、fingerprint、enabled、customOrder、revision 和删除标记 |
 | `source_import_previews` | 有效期 15 分钟的导入候选与已消费候选，确认前不改变书源 |
 | `books`、`bookshelf` | 逻辑书籍与书架关系；移出书架不删除书籍 |
+| `book_source_candidates` | 书架书籍发现过的来源候选，按账号、书籍、来源、fingerprint 和 URL 去重 |
 | `book_editions` | 一本书在某个 sourceId、bookUrl 和 fingerprint 下的来源版本 |
 | `search_runs`、`search_history` | 当前搜索的候选、分源状态、游标、operationId、进度和历史摘要 |
 | `toc_snapshots` | edition 的章节列表、sourceFingerprint 和目录 revision |
@@ -32,6 +33,12 @@
 搜索开始时写入 `search_runs` 和 `search_history`，每次来源完成后更新 sourceStates、候选、进度和 operationId。领取、更新和取消都带用户身份及当前操作条件，防止迟到结果覆盖新状态。搜索历史只记录摘要和数量，不保存 Cookie 或完整请求体。
 
 导入确认在事务中锁定预览和用户源覆盖，候选 ID 去重后写入 `user_sources`。同一 sourceId 的定义更新保留用户 enabled/customOrder 状态；预览失效、候选不可写或数据库失败都不返回导入成功。
+
+## 书籍来源候选
+
+加入书架和搜索批次结算时，按 trim/NFC 后的书名和已知作者完全匹配，批量 upsert 同书候选。没有作者或“作者未知”时不自动合并。候选只保存书名、作者、简介、封面、分类、字数、最新章节、更新时间和目录 URL；不保存 rawFields、infoPage 或执行变量。缓存写入失败通过 cacheWarning 单独反馈，主保存结果保留。
+
+列表合并缓存与有效 edition，edition 优先；读取时过滤删除、禁用和 fingerprint 不匹配的源。旧 fingerprint 行保留，重新搜索增量写入新版本；重新启用相同版本可恢复展示。无时间 TTL 和后台搜索，移出书架保留缓存，普通搜索不再更新该书缓存。打开候选时重新验证身份、源状态和版本，仅创建 edition，不覆盖书籍元数据、活动版本或阅读位置。新增表启用并强制 RLS，沿用 app.user_id。
 
 ## 运行状态加密与租约
 
