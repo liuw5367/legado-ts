@@ -55,12 +55,11 @@ function BookList({ items, showRemove, removingId, onRemove }: { items: BookItem
 
 function BookRow({ item, showRemove, removing, onRemove }: { item: BookItem; showRemove: boolean; removing: boolean; onRemove: (bookId: string) => void }) {
   const { book, edition, position } = item
-  const target = position === undefined ? `/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}` : `/books/${encodeURIComponent(book.id)}/read/${encodeURIComponent(position.chapterId)}?editionKey=${encodeURIComponent(edition.editionKey)}`
+  const target = position === undefined ? `/books/${encodeURIComponent(book.id)}/read?editionKey=${encodeURIComponent(edition.editionKey)}` : `/books/${encodeURIComponent(book.id)}/read/${encodeURIComponent(position.chapterId)}?editionKey=${encodeURIComponent(edition.editionKey)}`
   return <article className="book-row">
-    <Link className="book-row-main" to={target} aria-label={`${position === undefined ? '开始阅读' : '继续阅读'}：${book.name}`}>
+    <Link className="book-row-main" to={target} aria-label={`阅读：${book.name}`}>
       <BookCover name={book.name} coverUrl={book.coverUrl} />
-      <span className="book-row-info"><strong>{book.name}</strong><span className="muted">{book.author ?? '作者未知'}</span><span className={position === undefined ? 'muted small' : 'small'}>{position === undefined ? '尚未开始阅读' : `读到：${position.title}`}</span></span>
-      <span className="book-row-action" aria-hidden="true">{position === undefined ? '开始' : '继续'}</span>
+      <span className="book-row-info"><strong>{book.name}</strong><span className="muted">{book.author ?? '作者未知'}</span><span className={position === undefined ? 'muted small' : 'small'}>{position === undefined ? '尚未阅读' : `读到：${position.title}`}</span></span>
     </Link>
     <details className="book-more">
       <summary aria-label={`更多操作：${book.name}`}>···</summary>

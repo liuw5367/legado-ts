@@ -150,6 +150,8 @@ export interface BookCreationInput {
   candidate: StoredCandidate
   metadata: BookMetadata
   bookId?: string
+  addToBookshelf?: boolean
+  activateEdition?: boolean
 }
 
 export type ThemeMode = 'system' | 'light' | 'dark'

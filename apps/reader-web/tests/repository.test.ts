@@ -52,6 +52,28 @@ test('memory repository keeps editions and settings scoped to a book and user', 
   assert.equal((await repository.getSettings(userB)).theme, 'system')
 })
 
+test('home reading history keeps the most recent position once per book', async () => {
+  const repository = new MemoryReaderRepository()
+  const userId = '00000000-0000-0000-0000-000000000001'
+  const first = await repository.createBook(userId, { candidate: { sourceId: 'source-a', sourceFingerprint: 'fp-a', candidate: { ...metadata, bookUrl: 'https://books.example.test/a' } }, metadata, editionKey: 'edition-a', sourceFingerprint: 'fp-a' })
+  await repository.createBook(userId, { bookId: first.book.id, candidate: { sourceId: 'source-b', sourceFingerprint: 'fp-b', candidate: { ...metadata, bookUrl: 'https://books.example.test/b' } }, metadata: { ...metadata, bookUrl: 'https://books.example.test/b' }, editionKey: 'edition-b', sourceFingerprint: 'fp-b' })
+  await repository.savePosition(userId, { userId, bookId: first.book.id, editionKey: 'edition-a', chapterId: 'chapter-a', chapterUrl: 'https://books.example.test/a/1', chapterIndex: 0, title: '旧来源第一章', paragraphIndex: 0, offset: 0, version: 1, lastReadAt: '2026-10-10T00:00:00.000Z' })
+  await repository.savePosition(userId, { userId, bookId: first.book.id, editionKey: 'edition-b', chapterId: 'chapter-b', chapterUrl: 'https://books.example.test/b/2', chapterIndex: 1, title: '新来源第二章', paragraphIndex: 2, offset: 0, version: 2, lastReadAt: '2026-10-10T01:00:00.000Z' })
+  const home = await repository.getHome(userId)
+  assert.equal(home.reading.length, 1)
+  assert.equal(home.reading[0]?.position.title, '新来源第二章')
+})
+
+test('preparing a directory candidate can keep it off the bookshelf', async () => {
+  const repository = new MemoryReaderRepository()
+  const userId = '00000000-0000-0000-0000-000000000001'
+  const value = await repository.createBook(userId, { candidate: { sourceId: 'source-a', sourceFingerprint: 'fp-a', candidate: metadata }, metadata, editionKey: 'edition-a', sourceFingerprint: 'fp-a', addToBookshelf: false })
+  const preview = await repository.createBook(userId, { bookId: value.book.id, candidate: { sourceId: 'source-b', sourceFingerprint: 'fp-b', candidate: { ...metadata, bookUrl: 'https://books.example.test/b' } }, metadata: { ...metadata, bookUrl: 'https://books.example.test/b' }, editionKey: 'edition-b', sourceFingerprint: 'fp-b', addToBookshelf: false, activateEdition: false })
+  assert.equal((await repository.listBooks(userId)).length, 1)
+  assert.equal((await repository.getHome(userId)).bookshelf.length, 0)
+  assert.equal(preview.book.activeEditionKey, 'edition-a')
+})
+
 test('memory repository upserts content, toc, and reading position by user identity', async () => {
   const repository = new MemoryReaderRepository()
   const userId = '00000000-0000-0000-0000-000000000001'

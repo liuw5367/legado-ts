@@ -19,6 +19,7 @@ export function ReaderPage() {
   const [position, setPosition] = useState<ApiPosition | null>(null)
   const [positionLoaded, setPositionLoaded] = useState(false)
   const [error, setError] = useState('')
+  const [positionError, setPositionError] = useState('')
   const [panel, setPanel] = useState<ReaderPanel>(null)
   const [retryNonce, setRetryNonce] = useState(0)
   const articleRef = useRef<HTMLElement>(null)
@@ -27,13 +28,15 @@ export function ReaderPage() {
 
   useEffect(() => {
     const requestId = ++requestIdRef.current
-    setPanel(null); setContent(null); setToc(null); setPosition(null); setPositionLoaded(false); setError('')
+    setPanel(null); setContent(null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError('')
     let active = true
     void Promise.all([
       apiFetch<{ content: { content: ApiContent } }>(`/api/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?editionKey=${encodeURIComponent(editionKey)}`),
       apiFetch<{ toc: ApiToc }>(`/api/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`),
       apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`),
-    ]).then(([contentResult, tocResult, positionResult]) => {
+    ]).then(async ([contentResult, tocResult, positionResult]) => {
+      if (!active || requestId !== requestIdRef.current) return
+      if (editionKey.length > 0) await apiFetch(`/api/books/${encodeURIComponent(bookId)}/edition`, { method: 'PUT', body: JSON.stringify({ editionKey }) })
       if (!active || requestId !== requestIdRef.current) return
       setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); window.scrollTo({ top: 0, behavior: 'auto' })
     }).catch((reason: unknown) => { if (active && requestId === requestIdRef.current) setError(reason instanceof Error ? reason.message : '正文加载失败') })
@@ -43,18 +46,18 @@ export function ReaderPage() {
   async function persistPosition(input: { paragraphIndex: number; offset: number; version: number }): Promise<void> {
     if (content === null || content.chapter.chapterId !== chapterId) return
     const requestId = requestIdRef.current
+    setPositionError('')
     try {
       const result = await apiFetch<{ position: ApiPosition }>(`/api/books/${encodeURIComponent(bookId)}/position`, { method: 'POST', body: JSON.stringify({ editionKey, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, title: content.chapter.title ?? `第 ${content.chapter.index + 1} 章`, tocRevision: toc?.revision, paragraphIndex: input.paragraphIndex, offset: input.offset, version: input.version }) })
       if (requestId !== requestIdRef.current) return
       latestPositionRef.current = result.position; setPosition(result.position)
-    } catch { /* 阅读位置保存失败不应阻断阅读 */ }
+    } catch (reason) { if (requestId === requestIdRef.current) setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败') }
   }
 
   useEffect(() => { latestPositionRef.current = position }, [position])
   useEffect(() => {
     if (content === null || content.chapter.chapterId !== chapterId || !positionLoaded || position?.chapterId === chapterId) return
-    const timer = window.setTimeout(() => { void persistPosition({ paragraphIndex: 0, offset: 0, version: (position?.version ?? -1) + 1 }) }, 600)
-    return () => window.clearTimeout(timer)
+    void persistPosition({ paragraphIndex: 0, offset: 0, version: (position?.version ?? -1) + 1 })
   }, [bookId, chapterId, editionKey, content, positionLoaded, position?.chapterId, position?.version, toc?.revision])
   useEffect(() => {
     if (content === null || content.chapter.chapterId !== chapterId || !positionLoaded) return
@@ -90,23 +93,62 @@ export function ReaderPage() {
   if (error.length > 0) return <section className="reader-error"><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button><Link className="link" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`}>返回目录</Link></div></section>
   if (content === null) return <section className="reader-loading"><p className="muted">正在读取正文…</p></section>
   return <section className="reader-page">
-    <header className="reader-topbar"><Link className="reader-back" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} aria-label="返回目录">‹ <span>目录</span></Link><div className="reader-title"><span className="muted">{content.chapter.index + 1}</span><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? `第 ${content.chapter.index + 1} 章`}</strong></div><button className="reader-tool-button" type="button" aria-label="打开阅读设置" onClick={() => setPanel('settings')}>设置</button></header>
+    <header className="reader-topbar"><Link className="reader-back" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} aria-label="返回目录">‹ <span>返回</span></Link><div className="reader-title"><span className="muted">{content.chapter.index + 1}</span><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? `第 ${content.chapter.index + 1} 章`}</strong></div><div className="reader-tools"><Link className="reader-tool-button" to={`/books/${encodeURIComponent(bookId)}/sources`} aria-label="切换书源">换源</Link><button className="reader-tool-button" type="button" aria-label="打开阅读设置" onClick={() => setPanel('settings')}>设置</button></div></header>
     <article className="reader-content" ref={articleRef} style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }}>{paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{paragraph}</p>)}</article>
+    {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void persistPosition({ paragraphIndex: latestPositionRef.current?.paragraphIndex ?? 0, offset: latestPositionRef.current?.offset ?? 0, version: (latestPositionRef.current?.version ?? -1) + 1 })}>重试</button></p> : null}
     <nav className="reader-bottom-bar" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey)) }}>上一章</button><button className="reader-nav-button reader-toc-button" type="button" onClick={() => setPanel('toc')}>目录 <span className="muted">{currentIndex < 0 ? '' : `${currentIndex + 1}/${siblings.length}`}</span></button><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey)) }}>下一章</button></nav>
-    <Sheet open={panel === 'toc'} onOpenChange={(open) => setPanel(open ? 'toc' : null)} title="章节目录"><ReaderTocPanel bookId={bookId} editionKey={editionKey} chapters={siblings} currentChapterId={chapterId} onNavigate={() => setPanel(null)} /></Sheet>
+    <Sheet open={panel === 'toc'} onOpenChange={(open) => setPanel(open ? 'toc' : null)} title="章节目录"><ReaderTocPanel open={panel === 'toc'} bookId={bookId} editionKey={editionKey} chapters={siblings} currentChapterId={chapterId} onNavigate={() => setPanel(null)} /></Sheet>
     <Sheet open={panel === 'settings'} onOpenChange={(open) => setPanel(open ? 'settings' : null)} title="阅读设置"><ReaderSettingsPanel /></Sheet>
   </section>
 }
 
-function ReaderTocPanel({ bookId, editionKey, chapters, currentChapterId, onNavigate }: { bookId: string; editionKey: string; chapters: ApiChapter[]; currentChapterId: string; onNavigate: () => void }) {
+function ReaderTocPanel({ open, bookId, editionKey, chapters, currentChapterId, onNavigate }: { open: boolean; bookId: string; editionKey: string; chapters: ApiChapter[]; currentChapterId: string; onNavigate: () => void }) {
   const currentIndex = chapters.findIndex((chapter) => chapter.chapterId === currentChapterId)
-  const [visibleLimit, setVisibleLimit] = useState(() => Math.max(200, Math.ceil((currentIndex + 1) / 200) * 200))
+  const [reversed, setReversed] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (currentIndex < 0) return
-    setVisibleLimit((value) => Math.max(value, Math.ceil((currentIndex + 1) / 200) * 200))
-  }, [currentIndex])
-  const visibleChapters = chapters.slice(0, visibleLimit)
-  return <div className="reader-toc-panel"><Link className="button secondary full-button" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} onClick={onNavigate}>打开完整目录</Link><div className="reader-toc-list">{visibleChapters.map((chapter) => <Link className={`reader-toc-row ${chapter.chapterId === currentChapterId ? 'current' : ''}`} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} onClick={onNavigate}><span className="toc-index">{chapter.index + 1}</span><span>{chapter.title}</span></Link>)}</div>{visibleChapters.length < chapters.length ? <Button className="load-more" variant="secondary" type="button" onClick={() => setVisibleLimit((value) => value + 200)}>显示更多章节</Button> : null}</div>
+    if (!open || currentIndex < 0) return
+    const frame = window.requestAnimationFrame(() => {
+      const current = listRef.current?.querySelector<HTMLElement>('.reader-toc-row.current')
+      current?.scrollIntoView({ block: 'center' })
+      current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [currentIndex, open, reversed])
+  const orderedChapters = reversed ? [...chapters].reverse() : chapters
+  return <div className="reader-toc-panel"><div className="reader-toc-actions"><Link className="button secondary" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} onClick={onNavigate}>打开完整目录</Link><Button variant="secondary" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? '正序' : '倒序'}</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>到顶部</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })}>到底部</Button></div><div className="reader-toc-list" ref={listRef}>{orderedChapters.map((chapter) => <Link className={`reader-toc-row ${chapter.chapterId === currentChapterId ? 'current' : ''}`} aria-current={chapter.chapterId === currentChapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} onClick={onNavigate}><span className="toc-index">{chapter.index + 1}</span><span>{chapter.title}</span>{chapter.chapterId === currentChapterId ? <span className="toc-check" aria-label="当前阅读章节">✓</span> : null}</Link>)}</div></div>
+}
+
+export function ReaderEntryPage() {
+  const { bookId = '' } = useParams()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedEditionKey = searchParams.get('editionKey') ?? ''
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    void (async () => {
+      try {
+        const booksResult = await apiFetch<{ books: Array<{ book: { id: string; activeEditionKey?: string } }> }>('/api/books')
+        const book = booksResult.books.find((item) => item.book.id === bookId)?.book
+        const editionKey = requestedEditionKey || book?.activeEditionKey || ''
+        if (editionKey.length === 0) throw new Error('没有可用的书源版本')
+        const [tocResult, positionResult] = await Promise.all([
+          apiFetch<{ toc: ApiToc }>(`/api/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`),
+          apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`),
+        ])
+        const positionChapter = positionResult.position?.chapterId === undefined ? undefined : tocResult.toc.chapters.find((chapter) => chapter.chapterId === positionResult.position?.chapterId && chapter.isVolume !== true)
+        const target = positionChapter ?? tocResult.toc.chapters.find((chapter) => chapter.isVolume !== true)
+        if (target === undefined) throw new Error('目录中没有可阅读的章节')
+        if (active) navigate(chapterLink(bookId, target, editionKey), { replace: true })
+      } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : '无法打开阅读') }
+    })()
+    return () => { active = false }
+  }, [bookId, navigate, requestedEditionKey])
+
+  if (error.length > 0) return <section className="reader-error"><p className="error">{error}</p><div className="actions"><Link className="link" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(requestedEditionKey)}`}>返回目录</Link><Link className="link" to="/">返回书架</Link></div></section>
+  return <section className="reader-loading"><p className="muted">正在打开阅读…</p></section>
 }
 
 function chapterLink(bookId: string, chapter: ApiChapter, editionKey: string): string { return `/books/${encodeURIComponent(bookId)}/read/${encodeURIComponent(chapter.chapterId)}?editionKey=${encodeURIComponent(editionKey)}` }
