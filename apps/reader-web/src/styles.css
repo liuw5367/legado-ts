@@ -371,8 +371,8 @@ a { color: inherit; }
 .book-original-link { min-height: 44px; display: inline-flex; align-items: center; }
 .source-management-row, .result-card { content-visibility: auto; contain-intrinsic-size: auto 120px; }
 @media (max-width: 520px) {
-  .source-management-row { grid-template-columns: 28px minmax(0, 1fr); align-items: start; }
-  .source-row-actions { grid-column: 2; justify-content: flex-start; }
+  .source-management-row { grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; }
+  .source-row-actions { grid-column: auto; justify-content: flex-end; }
 }
 .reader-loading, .reader-error { padding-top: calc(28px + var(--safe-top)); }
 @media (max-width: 380px) {

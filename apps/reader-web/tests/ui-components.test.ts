@@ -60,6 +60,8 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(sourcesPage, /已启用/u)
   assert.match(sourcesPage, /已禁用/u)
   assert.doesNotMatch(sourcesPage, /saveOrder|source-order-field|onOrder/u)
+  assert.match(styles, /@media \(max-width: 520px\) \{\s+\.source-management-row \{ grid-template-columns: 28px minmax\(0, 1fr\) auto; align-items: center; \}/u)
+  assert.match(styles, /\.source-row-actions \{ grid-column: auto; justify-content: flex-end; \}/u)
   assert.match(searchPage, /precision/u)
   assert.match(searchPage, /cancel-button-active/u)
   assert.match(pageSources[6] ?? '', /cancel-button-active/u)
