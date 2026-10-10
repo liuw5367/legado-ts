@@ -18,7 +18,7 @@
 | `chapter_contents` | edition、toc revision、chapterId 和 sourceFingerprint 对应的正文 |
 | `reading_records` | 每个用户/书籍/edition 的章节、段落索引、偏移、版本和最近阅读时间 |
 | `source_runtime_state` | 加密的 Cookie/变量快照、fingerprint、版本和五分钟租约 |
-| `reader_settings` | 当前账号的主题、字号和行距 |
+| `reader_settings` | 当前账号的主题、阅读模式、字号和行距 |
 
 表定义位于 `server/db/schema.ts`，迁移位于 `server/db/migrations/`。共享书源字段和规则语义仍以根目录标准文档为准。
 

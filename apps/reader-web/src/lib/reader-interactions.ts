@@ -4,7 +4,8 @@ export function chapterCharacterCount(text: string): number {
   return [...text.replace(/\s/gu, '')].length
 }
 /** 拖动、滚动或选字结束不应触发工具栏显隐。 */
-export function isReaderTap(start: { x: number; y: number; scrollY: number } | null, end: { x: number; y: number; scrollY: number }, selectedText: string): boolean {
+export interface ReaderTapPoint { x: number; y: number; scrollY: number }
+export function isReaderTap(start: ReaderTapPoint | null, end: ReaderTapPoint, selectedText: string): boolean {
   return selectedText.length === 0 && (start === null || (Math.hypot(end.x - start.x, end.y - start.y) < 8 && end.scrollY === start.scrollY))
 }
 /** 目录响应必须同时属于当前书籍和书源版本，避免切换期间复用旧章节链接。 */

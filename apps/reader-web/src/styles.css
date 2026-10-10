@@ -347,6 +347,16 @@ a { color: inherit; }
 .reader-tools { gap: 2px; }
 .reader-bottom-bar { padding-bottom: calc(var(--safe-bottom) + 8px); background: var(--card); }
 .reader-content { padding-top: calc(28px + var(--safe-top)); padding-bottom: calc(136px + var(--safe-bottom)); padding-left: max(16px, var(--safe-left)); padding-right: max(16px, var(--safe-right)); }
+.reader-page-paged { height: 100dvh; overflow: hidden; }
+.reader-content-paged { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding-top: calc(28px + var(--safe-top)); padding-bottom: calc(136px + var(--safe-bottom)); padding-left: 0; padding-right: 0; overflow: hidden; overscroll-behavior: none; scrollbar-width: none; column-width: 100%; column-gap: 0; column-fill: auto; touch-action: none; }
+.reader-content-paged::-webkit-scrollbar { display: none; }
+.reader-content-paged > p, .reader-content-paged > .reader-html-content, .reader-content-paged > .reader-resource { box-sizing: border-box; padding-right: max(16px, var(--safe-right)); padding-left: max(16px, var(--safe-left)); }
+.reader-content-paged > p, .reader-content-paged > .reader-resource { break-inside: auto; }
+.reader-content-paged .reader-html-content { break-inside: auto; }
+.reader-content-paged img { max-height: calc(100dvh - 164px - var(--safe-top) - var(--safe-bottom)); object-fit: contain; break-inside: avoid; }
+.reader-pagination-error { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: calc(24px + var(--safe-top)) max(24px, var(--safe-right)) calc(24px + var(--safe-bottom)) max(24px, var(--safe-left)); text-align: center; background: var(--background); }
+.reader-pagination-error p { margin: 0; }
+.reader-page-paged > .reader-position-error { position: fixed; top: calc(56px + var(--safe-top)); right: max(16px, var(--safe-right)); left: max(16px, var(--safe-left)); z-index: 6; margin: 0; padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; }
 .toc-row.current .toc-title, .reader-toc-row.current { font-weight: 700; }
 .book-source-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
 .book-source-info { min-width: 0; }

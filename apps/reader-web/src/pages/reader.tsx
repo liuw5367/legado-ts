@@ -6,6 +6,7 @@ import { PageBackButton } from '../components/page-back-button.tsx'
 import { ReaderIcon } from '../components/reader-icon.tsx'
 import { browserUrl, chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
 import { pageReturnState, pageReturnTarget } from '../lib/page-navigation.ts'
+import { anchorFromViewport, clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageIndexForAnchor, pageLabel, type PageLayout, type ReaderAnchor, type ReaderPageAction } from '../lib/reader-pagination.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ReaderSettingsPanel } from '../components/reader-settings-panel.tsx'
@@ -39,16 +40,28 @@ export function ReaderPage() {
   const [retryNonce, setRetryNonce] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState('')
+  const [pageLayout, setPageLayout] = useState<PageLayout>({ pageWidth: 0, pageCount: 0 })
+  const [pageIndex, setPageIndex] = useState(0)
+  const [paginationError, setPaginationError] = useState('')
   const refreshController = useRef<AbortController | null>(null)
   const articleRef = useRef<HTMLElement>(null)
   const latestPositionRef = useRef<ApiPosition | null>(null)
+  const positionWriteQueueRef = useRef(Promise.resolve())
+  const positionVersionRef = useRef(-1)
+  const latestAnchorRef = useRef<ReaderAnchor | null>(null)
+  const paginationAnchorRef = useRef<ReaderAnchor | null>(null)
+  const readingModeRef = useRef(settings.readingMode)
   const requestIdRef = useRef(0)
   const liveToc = cache.get(bookId, editionKey)?.toc ?? toc
 
   useEffect(() => {
     const requestId = ++requestIdRef.current
     const cachedContent = cache.getContent(bookId, editionKey, chapterId)
-    setControlsVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError('')
+    setControlsVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0); setPaginationError('')
+    latestPositionRef.current = null
+    positionVersionRef.current = -1
+    latestAnchorRef.current = null
+    paginationAnchorRef.current = null
     let active = true
     const controller = new AbortController()
     const snapshotRequest = loadBookSnapshot(cache, bookId, editionKey)
@@ -61,6 +74,12 @@ export function ReaderPage() {
       if (editionKey.length > 0) await apiFetch(`/api/books/${encodeURIComponent(bookId)}/edition`, { method: 'PUT', signal: controller.signal, body: JSON.stringify({ editionKey }) })
       if (!active || requestId !== requestIdRef.current) return
       restoredPositionRef.current = positionResult.position?.chapterId !== chapterId
+      const chapterPosition = positionResult.position?.chapterId === chapterId ? positionResult.position : null
+      const chapterAnchor = chapterPosition === null ? null : { paragraphIndex: chapterPosition.paragraphIndex, offset: chapterPosition.offset }
+      latestPositionRef.current = positionResult.position
+      positionVersionRef.current = positionResult.position?.version ?? -1
+      latestAnchorRef.current = chapterAnchor
+      paginationAnchorRef.current = chapterAnchor
       cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
     }).catch((reason: unknown) => {
       if (!active || requestId !== requestIdRef.current) return
@@ -75,45 +94,137 @@ export function ReaderPage() {
   async function persistPosition(input: { paragraphIndex: number; offset: number; version: number }): Promise<void> {
     if (content === null || content.chapter.chapterId !== chapterId) return
     const requestId = requestIdRef.current
+    const version = Math.max(input.version, positionVersionRef.current + 1)
+    positionVersionRef.current = version
     setPositionError('')
-    try {
-      const result = await apiFetch<{ position: ApiPosition }>(`/api/books/${encodeURIComponent(bookId)}/position`, { method: 'POST', body: JSON.stringify({ editionKey, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, title: content.chapter.title ?? `第 ${content.chapter.index + 1} 章`, tocRevision: liveToc?.revision, paragraphIndex: input.paragraphIndex, offset: input.offset, version: input.version }) })
+    const write = async () => {
       if (requestId !== requestIdRef.current) return
-      latestPositionRef.current = result.position; setPosition(result.position); cache.setPosition(bookId, editionKey, result.position)
-    } catch (reason) { if (requestId === requestIdRef.current) setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败') }
+      try {
+        const result = await apiFetch<{ position: ApiPosition }>(`/api/books/${encodeURIComponent(bookId)}/position`, { method: 'POST', body: JSON.stringify({ editionKey, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, title: content.chapter.title ?? `第 ${content.chapter.index + 1} 章`, tocRevision: liveToc?.revision, paragraphIndex: input.paragraphIndex, offset: input.offset, version }) })
+        if (requestId !== requestIdRef.current) return
+        positionVersionRef.current = Math.max(positionVersionRef.current, result.position.version)
+        latestPositionRef.current = result.position
+        latestAnchorRef.current = { paragraphIndex: result.position.paragraphIndex, offset: result.position.offset }
+        if (settings.readingMode === 'paged') paginationAnchorRef.current = latestAnchorRef.current
+        setPosition(result.position); cache.setPosition(bookId, editionKey, result.position)
+      } catch (reason) { if (requestId === requestIdRef.current) setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败') }
+    }
+    const request = positionWriteQueueRef.current.then(write, write)
+    positionWriteQueueRef.current = request.then(() => undefined, () => undefined)
+    await request
   }
 
-  useEffect(() => { latestPositionRef.current = position }, [position])
+  useEffect(() => {
+    latestPositionRef.current = position
+    if (position?.chapterId !== chapterId) return
+    latestAnchorRef.current = { paragraphIndex: position.paragraphIndex, offset: position.offset }
+    if (settings.readingMode === 'paged') paginationAnchorRef.current = latestAnchorRef.current
+  }, [chapterId, position, settings.readingMode])
   useEffect(() => {
     if (content === null || content.chapter.chapterId !== chapterId || !positionLoaded || position?.chapterId === chapterId) return
     void persistPosition({ paragraphIndex: 0, offset: 0, version: (position?.version ?? -1) + 1 })
   }, [bookId, chapterId, editionKey, content, positionLoaded, position?.chapterId, position?.version, liveToc?.revision])
   useEffect(() => {
-    if (content === null || content.chapter.chapterId !== chapterId || !positionLoaded) return
+    if (settings.readingMode !== 'scroll' || content === null || content.chapter.chapterId !== chapterId || !positionLoaded) return
     let timer: number | undefined
-    const persist = () => {
+    const readAnchor = (): ReaderAnchor | undefined => {
       if (articleRef.current === null) return
       const paragraphs = [...articleRef.current.querySelectorAll<HTMLElement>('[data-paragraph]')]
       const toolbarHeight = 0
       const firstVisible = paragraphs.find((paragraph) => paragraph.getBoundingClientRect().bottom > toolbarHeight + 16)
       const paragraphIndex = firstVisible === undefined ? 0 : Number(firstVisible.dataset.paragraph ?? 0)
-      const current = latestPositionRef.current
-      if (current?.chapterId === chapterId && current.paragraphIndex === paragraphIndex) return
-      const offset = current?.chapterId === chapterId ? current.offset : 0
-      void persistPosition({ paragraphIndex, offset, version: (current?.version ?? -1) + 1 })
+      return { paragraphIndex, offset: 0 }
     }
-    const onScroll = () => { if (timer !== undefined) window.clearTimeout(timer); timer = window.setTimeout(() => { timer = undefined; persist() }, 500) }
+    const persist = () => {
+      const current = latestPositionRef.current
+      const anchor = readAnchor()
+      if (anchor === undefined) return
+      latestAnchorRef.current = anchor
+      if (current?.chapterId === chapterId && current.paragraphIndex === anchor.paragraphIndex) return
+      const offset = current?.chapterId === chapterId ? current.offset : 0
+      void persistPosition({ paragraphIndex: anchor.paragraphIndex, offset, version: (current?.version ?? -1) + 1 })
+    }
+    const onScroll = () => { const anchor = readAnchor(); if (anchor !== undefined) latestAnchorRef.current = anchor; if (timer !== undefined) window.clearTimeout(timer); timer = window.setTimeout(() => { timer = undefined; persist() }, 500) }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => { window.removeEventListener('scroll', onScroll); if (timer !== undefined) window.clearTimeout(timer) }
-  }, [bookId, chapterId, editionKey, content, positionLoaded, liveToc?.revision])
+  }, [bookId, chapterId, editionKey, content, positionLoaded, liveToc?.revision, settings.readingMode])
   useEffect(() => {
-    if (content === null || position?.chapterId !== chapterId || articleRef.current === null || restoredPositionRef.current) return
+    if (settings.readingMode !== 'scroll' || content === null || position?.chapterId !== chapterId || articleRef.current === null || restoredPositionRef.current) return
     const paragraph = articleRef.current.querySelector<HTMLElement>(`[data-paragraph="${position.paragraphIndex}"]`)
     if (paragraph === null) return
     restoredPositionRef.current = true
     const toolbarHeight = 0
     window.scrollTo({ top: window.scrollY + paragraph.getBoundingClientRect().top - toolbarHeight - 12, behavior: 'auto' })
-  }, [chapterId, content, position?.chapterId, position?.paragraphIndex, settings.fontSize, settings.lineHeight])
+  }, [chapterId, content, position?.chapterId, position?.paragraphIndex, settings.fontSize, settings.lineHeight, settings.readingMode])
+
+  useEffect(() => {
+    const previousMode = readingModeRef.current
+    if (previousMode === settings.readingMode) return
+    readingModeRef.current = settings.readingMode
+    const anchor = latestAnchorRef.current
+    paginationAnchorRef.current = anchor
+    setPageLayout({ pageWidth: 0, pageCount: 0 })
+    setPageIndex(0)
+    setPaginationError('')
+    if (settings.readingMode === 'scroll') {
+      window.requestAnimationFrame(() => {
+        if (articleRef.current === null) return
+        const paragraph = anchor === null ? null : articleRef.current.querySelector<HTMLElement>(`[data-paragraph="${anchor.paragraphIndex}"]`)
+        if (paragraph !== null) window.scrollTo({ top: window.scrollY + paragraph.getBoundingClientRect().top - 12, behavior: 'auto' })
+      })
+    }
+  }, [settings.readingMode])
+
+  useEffect(() => {
+    const viewport = articleRef.current
+    if (settings.readingMode !== 'paged' || paginationError.length > 0 || content === null || viewport === null) return
+    let active = true
+    let attempts = 0
+    let measuredWidth = 0
+    let measured = false
+    let frame: number | undefined
+    const measure = () => {
+      if (!active) return
+      const pageWidth = viewport.clientWidth
+      const pageCount = pageCountFromScrollWidth(viewport.scrollWidth, pageWidth)
+      if (pageWidth <= 0 || pageCount <= 0) {
+        attempts += 1
+        if (attempts >= 6) setPaginationError('分页排版失败，请重试或切换为滚动阅读。')
+        else schedule()
+        return
+      }
+      attempts = 0
+      const layout = { pageWidth, pageCount }
+      setPageLayout((current) => current.pageWidth === layout.pageWidth && current.pageCount === layout.pageCount ? current : layout)
+      const targetPage = !measured || measuredWidth !== pageWidth
+        ? pageIndexForAnchor(viewport, paginationAnchorRef.current ?? latestAnchorRef.current, layout)
+        : clampPageIndex(Math.round(viewport.scrollLeft / pageWidth), pageCount)
+      measuredWidth = pageWidth
+      measured = true
+      viewport.scrollLeft = targetPage * pageWidth
+      viewport.scrollTo({ left: targetPage * pageWidth, top: 0, behavior: 'auto' })
+      setPageIndex(targetPage)
+      setPaginationError('')
+    }
+    const schedule = () => {
+      if (!active) return
+      if (frame !== undefined) window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => { frame = undefined; measure() })
+    }
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    resizeObserver?.observe(viewport)
+    const resources = [...viewport.querySelectorAll<HTMLImageElement>('img')]
+    resources.forEach((image) => { image.addEventListener('load', schedule); image.addEventListener('error', schedule) })
+    const fontsReady = document.fonts?.ready.then(schedule, schedule)
+    schedule()
+    return () => {
+      active = false
+      if (frame !== undefined) window.cancelAnimationFrame(frame)
+      resizeObserver?.disconnect()
+      resources.forEach((image) => { image.removeEventListener('load', schedule); image.removeEventListener('error', schedule) })
+      void fontsReady
+    }
+  }, [content, paginationError, settings.fontSize, settings.lineHeight, settings.readingMode])
 
   const paragraphs = useMemo(() => content?.cleaned.split(/\n+/u).map((text) => text.trim()).filter(Boolean) ?? [], [content])
   const htmlContent = useMemo(() => content?.contentType === 'html' ? sanitizeChapterHtml(content.cleaned) : '', [content])
@@ -125,13 +236,45 @@ export function ReaderPage() {
   const currentIndex = siblings.findIndex((chapter) => chapter.chapterId === chapterId)
   const previous = currentIndex > 0 ? siblings[currentIndex - 1] : undefined
   const next = currentIndex >= 0 ? siblings[currentIndex + 1] : undefined
+
+  async function switchToScroll() {
+    try {
+      await updateSettings({ readingMode: 'scroll' })
+    } catch (reason) {
+      setPaginationError(reason instanceof Error ? reason.message : '切换滚动阅读失败')
+    }
+  }
+
+  function turnPage(targetPage: number) {
+    const viewport = articleRef.current
+    if (viewport === null || pageLayout.pageWidth <= 0 || pageLayout.pageCount <= 0) return
+    const nextPage = clampPageIndex(targetPage, pageLayout.pageCount)
+    if (nextPage === pageIndex) return
+    viewport.scrollTo({ left: nextPage * pageLayout.pageWidth, top: 0, behavior: 'auto' })
+    setPageIndex(nextPage)
+    const anchor = anchorFromViewport(viewport)
+    if (anchor === undefined) return
+    latestAnchorRef.current = anchor
+    paginationAnchorRef.current = anchor
+    const current = latestPositionRef.current
+    void persistPosition({ paragraphIndex: anchor.paragraphIndex, offset: anchor.offset, version: (current?.version ?? -1) + 1 })
+  }
+
+  function handlePageAction(action: ReaderPageAction) {
+    if (action === 'previous') turnPage(pageIndex - 1)
+    else if (action === 'next') turnPage(pageIndex + 1)
+    else setControlsVisible((value) => !value)
+  }
+
   async function refreshChapter() {
     if (refreshing || content === null) return
     const requestId = requestIdRef.current
     const controller = new AbortController(); refreshController.current = controller
+    const paged = settings.readingMode === 'paged'
     const nodes = [...articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph]') ?? []]
     const visible = nodes.find((node) => node.getBoundingClientRect().bottom > 16)
-    const paragraphIndex = Number(visible?.dataset.paragraph ?? 0)
+    const anchor = paged ? anchorFromViewport(articleRef.current) : { paragraphIndex: Number(visible?.dataset.paragraph ?? 0), offset: 0 }
+    const paragraphIndex = anchor?.paragraphIndex ?? 0
     const top = visible?.getBoundingClientRect().top ?? 0
     setRefreshing(true); setRefreshError('')
     try {
@@ -140,6 +283,13 @@ export function ReaderPage() {
       if (result.content.tocRevision !== cache.get(bookId, editionKey)?.toc.revision) await loadBookSnapshot(cache, bookId, editionKey, true)
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content)
+      if (paged) {
+        paginationAnchorRef.current = anchor ?? latestAnchorRef.current
+        setPageLayout({ pageWidth: 0, pageCount: 0 })
+        setPageIndex(0)
+        setPaginationError('')
+        return
+      }
       window.requestAnimationFrame(() => {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return
         const paragraphs = [...articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph]') ?? []]
@@ -153,12 +303,14 @@ export function ReaderPage() {
   if (error.length > 0) return <section className="reader-error"><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button><PageBackButton /></div></section>
   if (content === null) return <section className="reader-loading"><p className="muted">正在读取正文…</p><PageBackButton /></section>
   const dark = resolvedTheme === 'dark'
+  const paged = settings.readingMode === 'paged'
+  const pageCounter = pageLayout.pageCount > 0 ? pageLabel(pageIndex, pageLayout.pageCount) : '排版中…'
   async function toggleTheme(target: 'light' | 'dark' = dark ? 'light' : 'dark') {
     setThemeRetry(null)
     try { await updateSettings({ theme: target }) } catch { setThemeRetry(target) }
   }
   const address = browserUrl(content.chapter.chapterUrl)
-  return <section className="reader-page" onKeyDown={(event) => {
+  return <section className={`reader-page${paged ? ' reader-page-paged' : ''}`} onKeyDown={(event) => {
     if (event.key === 'Escape' && panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
   }}>
     <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
@@ -166,21 +318,40 @@ export function ReaderPage() {
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />原地址</a>}
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新'}</button>
     </MoreMenu></div></header>
-    <article className="reader-content" ref={articleRef} tabIndex={0} aria-label="正文，按回车显示或隐藏阅读操作" style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }}
+    <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? '正文，左侧上一页，中间显示或隐藏操作栏，右侧下一页' : '正文，按回车显示或隐藏阅读操作'} style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }}
       onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY } }}
       onPointerCancel={() => { pointerStartRef.current = null }}
       onClick={(event) => {
-        const tap = isReaderTap(pointerStartRef.current, { x: event.clientX, y: event.clientY, scrollY: window.scrollY }, window.getSelection()?.toString() ?? '')
+        const start = pointerStartRef.current
+        const selectedText = window.getSelection()?.toString() ?? ''
+        const end = { x: event.clientX, y: event.clientY, scrollY: window.scrollY }
+        const tap = isReaderTap(start, end, selectedText)
         pointerStartRef.current = null
-        if (tap) setControlsVisible((value) => !value)
+        if (!tap) return
+        if (paged && articleRef.current !== null) {
+          const rect = articleRef.current.getBoundingClientRect()
+          const action = pageActionForTap(start, end, selectedText, event.clientX, rect.left, rect.width)
+          if (action !== null) handlePageAction(action)
+        } else setControlsVisible((value) => !value)
       }}
-      onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) { event.preventDefault(); setControlsVisible((value) => !value) } }}>
+      onWheel={(event) => { if (paged) event.preventDefault() }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
+        if (paged && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+          event.preventDefault()
+          handlePageAction(event.key === 'ArrowLeft' ? 'previous' : 'next')
+        } else if (event.key === 'Enter') {
+          event.preventDefault()
+          setControlsVisible((value) => !value)
+        }
+      }}>
       {content.contentType === 'html' ? htmlContent.length === 0 && additionalResources.length === 0 ? <p className="muted">本章暂无正文。</p> : <><div className="reader-html-content" data-paragraph={0} dangerouslySetInnerHTML={{ __html: htmlContent }} />{additionalResources.map((url, index) => <p className="reader-resource" data-paragraph={index + 1} key={url}><img src={url} alt="正文插图" loading="lazy" decoding="async" /></p>)}</> : paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{paragraph}</p>)}
     </article>
+    {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><p className="error">{paginationError}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
     {refreshError.length > 0 ? <p className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></p> : null}
     {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void persistPosition({ paragraphIndex: latestPositionRef.current?.paragraphIndex ?? 0, offset: latestPositionRef.current?.offset ?? 0, version: (latestPositionRef.current?.version ?? -1) + 1 })}>重试</button></p> : null}
     <div className="reader-bottom-bar" hidden={!controlsVisible}>
-      <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label="章节字数">{chapterCharacterCount(content.cleaned).toLocaleString('zh-CN')} 字</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
+      <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? '分页进度' : '章节字数'}>{paged ? pageCounter : `${chapterCharacterCount(content.cleaned).toLocaleString('zh-CN')} 字`}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">
         <button type="button" className="reader-shortcut" aria-label="目录" onClick={() => setPanel('toc')}><ReaderIcon name="toc" /><span>目录</span></button>
         <Link className="reader-shortcut" to={`/books/${encodeURIComponent(bookId)}/sources`} state={pageReturnState(location)} aria-label="换源"><ReaderIcon name="source" /><span>换源</span></Link>

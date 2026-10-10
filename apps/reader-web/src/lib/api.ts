@@ -2,7 +2,8 @@ import { currentSession } from './auth.ts'
 
 export interface ApiSource { sourceId: string; name: string; group?: string; fingerprint: string; enabled: boolean }
 export type ApiThemeMode = 'system' | 'light' | 'dark'
-export interface ApiSettings { userId: string; theme: ApiThemeMode; fontSize: number; lineHeight: number; updatedAt: string }
+export type ApiReadingMode = 'scroll' | 'paged'
+export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; updatedAt: string }
 export interface ApiCandidate { sourceId: string; sourceFingerprint: string; searchDurationMs?: number; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string; updateTime?: string; wordCount?: string } }
 export interface ApiSearchProgress { completed: number; total: number }
 export interface ApiSearchSourceState { sourceId: string; status: string; nextCursor?: { index: number; token?: string } }

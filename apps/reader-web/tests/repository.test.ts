@@ -47,8 +47,10 @@ test('memory repository keeps editions and settings scoped to a book and user', 
   assert.equal((await repository.getBook(userA, first.book.id))?.activeEditionKey, 'edition-a')
   assert.equal(await repository.getBook(userB, first.book.id), null)
   assert.equal((await repository.getSettings(userA)).theme, 'system')
-  await repository.saveSettings(userA, { theme: 'dark', fontSize: 21, lineHeight: 2.1 })
+  assert.equal((await repository.getSettings(userA)).readingMode, 'scroll')
+  await repository.saveSettings(userA, { theme: 'dark', readingMode: 'paged', fontSize: 21, lineHeight: 2.1 })
   assert.equal((await repository.getSettings(userA)).fontSize, 21)
+  assert.equal((await repository.getSettings(userA)).readingMode, 'paged')
   assert.equal((await repository.getSettings(userB)).theme, 'system')
 })
 

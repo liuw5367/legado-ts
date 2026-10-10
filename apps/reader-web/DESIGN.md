@@ -29,9 +29,9 @@ Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-p
 
 ## 5. Layout principles
 
-Pages use a single reading column capped at 680px, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped.
+Pages use a single reading column capped at 680px, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped. Paginated reading reuses the same viewport width and lays out one non-scrollable page per column.
 
-The TOC heading, actions, and filter share one sticky area, below the desktop app header. Narrow actions wrap without hiding the return button. Reader top and bottom bars are fixed overlays, hidden initially and toggled by a text tap. The bottom bar uses two rows: previous / character count / next, then four icon shortcuts for TOC, sources, settings, and theme. Safe area padding and permanent text end padding keep the last paragraph reachable. Toggling bars must not move text or scroll position.
+The TOC heading, actions, and filter share one sticky area, below the desktop app header. Narrow actions wrap without hiding the return button. Reader top and bottom bars are fixed overlays, hidden initially and toggled by a text tap. The bottom bar uses two rows: previous / character count or page fraction / next, then four icon shortcuts for TOC, sources, settings, and theme. Paginated reading maps the left, middle, and right thirds of the page to previous page, controls visibility, and next page; the page viewport does not expose manual scrolling. Safe area padding and permanent text end padding keep the last paragraph reachable. Toggling bars must not move text or scroll position.
 
 Use `viewport-fit=cover` and all four safe-area insets. The reader top bar adds 8px of breathing room beyond the top inset, with solid surfaces for legibility. Result and source rows constrain their text column with `min-width: 0`; long URLs truncate within that column while actions remain aligned. The selected chapter is bold in both TOC views.
 

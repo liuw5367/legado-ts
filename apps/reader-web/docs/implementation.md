@@ -22,7 +22,9 @@
 
 目录接口先按 userId、bookId、editionKey 查找快照；快照的 sourceFingerprint 与当前书源一致且未请求 refresh 时直接返回。未命中或 refresh 时，runtime 创建 Node source session，调用 `loadTableOfContents`，按章节列表摘要生成 revision 后保存。
 
-正文接口按目录 revision 和 chapterId 查找缓存。chapterId 是章节 URL 与 index 的 SHA-256 摘要；缓存命中且来源 fingerprint 一致时不请求网络。未命中时调用 `loadChapterContent`，限制正文输出为 4 MiB，成功后保存内容。阅读页提交段落索引、字符偏移和 version 到 reading_records，并以 editionKey 保存每个来源版本的阅读位置。
+正文接口按目录 revision 和 chapterId 查找缓存。chapterId 是章节 URL 与 index 的 SHA-256 摘要；缓存命中且来源 fingerprint 一致时不请求网络。未命中时调用 `loadChapterContent`，限制正文输出为 4 MiB，成功后保存内容。阅读页提交段落索引、字符偏移和 version 到 reading_records，并以 editionKey 保存每个来源版本的阅读位置。`reader_settings.reading_mode` 通过现有 `/api/settings` 以 `scroll` 或 `paged` 保存，默认滚动模式；`0007_reader_pagination.sql` 为旧账号补充带检查约束的 `reading_mode` 列。
+
+分页阅读在浏览器端基于固定高度的 CSS 多列布局生成屏幕页，不使用正文接口返回的 `ChapterContent.pages`。正文等待字体、图片和容器尺寸稳定后，以实际 `scrollWidth` 和视口宽度计算页数，再通过 `scrollLeft` 定位当前页。翻页只保存当前页首个可见段落，字号、行距、窗口尺寸变化后按该段落重新定位；分页布局无法取得有效几何结果时显示可重试或切换滚动阅读的恢复态。
 
 来源页面通过 `GET /api/books/:bookId/sources` 合并有效 editions 与持久候选，按来源、fingerprint 和 URL 去重。`POST /api/books/:bookId/sources/:candidateId/open` 按当前用户和书籍取得缓存候选，重新验证源与详情身份后仅保存 edition。加入书架及搜索批次结算增量缓存明确同书候选，失败通过可选 cacheWarning 反馈。
 

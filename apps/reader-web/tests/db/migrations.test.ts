@@ -29,3 +29,11 @@ test('source management migration isolates account overrides and previews with R
   assert.match(migration, /source_import_previews_user_isolation/u)
   assert.match(journal, /"tag": "0005_source_management"/u)
 })
+
+test('reader pagination migration adds a validated per-user reading mode', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0007_reader_pagination.sql'), 'utf8')
+  const journal = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8')
+  assert.match(migration, /add column if not exists "reading_mode" text not null default 'scroll'/u)
+  assert.match(migration, /check \("reading_mode" in \('scroll', 'paged'\)\)/u)
+  assert.match(journal, /"tag": "0007_reader_pagination"/u)
+})

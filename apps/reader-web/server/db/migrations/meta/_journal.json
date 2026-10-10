@@ -50,6 +50,13 @@
       "when": 1791600000000,
       "tag": "0006_book_source_candidates",
       "breakpoints": false
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791610000000,
+      "tag": "0007_reader_pagination",
+      "breakpoints": false
     }
   ]
 }

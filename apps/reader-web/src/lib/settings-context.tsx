@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './auth-context.tsx'
-import { apiFetch, type ApiSettings, type ApiThemeMode } from './api.ts'
+import { apiFetch, type ApiReadingMode, type ApiSettings, type ApiThemeMode } from './api.ts'
 import { Select } from '../components/ui/select.tsx'
 
-export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', fontSize: 18, lineHeight: 1.9 }
-type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'fontSize' | 'lineHeight'>>
+export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9 }
+type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight'>>
 interface ReaderSettingsContextValue { settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; error?: string; updateSettings: (patch: SettingsPatch) => Promise<ApiSettings> }
 const ReaderSettingsContext = createContext<ReaderSettingsContextValue | undefined>(undefined)
 const storagePrefix = 'legado-reader-settings:'
@@ -99,6 +99,11 @@ export function ThemeModeSelect({ className = '' }: { className?: string }) {
   return <label className={`theme-select ${className}`.trim()}><span className="sr-only">页面模式</span><Select aria-label="页面模式" value={settings.theme} onChange={(event) => void updateSettings({ theme: event.target.value as ApiThemeMode }).catch(() => undefined)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">夜间</option></Select></label>
 }
 
+export function ReadingModeSelect({ className = '' }: { className?: string }) {
+  const { settings, updateSettings } = useReaderSettings()
+  return <label className={`theme-select ${className}`.trim()}><span className="sr-only">阅读模式</span><Select aria-label="阅读模式" value={settings.readingMode} onChange={(event) => void updateSettings({ readingMode: event.target.value as ApiReadingMode }).catch(() => undefined)}><option value="scroll">滚动阅读</option><option value="paged">分页阅读</option></Select></label>
+}
+
 function resolveTheme(theme: ApiThemeMode): 'light' | 'dark' { return theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme }
-function readLocalSettings(userId: string | undefined): ApiSettings { const fallback: ApiSettings = { userId: userId ?? '', ...DEFAULT_SETTINGS, updatedAt: new Date(0).toISOString() }; try { const raw = window.localStorage.getItem(`${storagePrefix}${userId ?? 'anonymous'}`); if (raw === null) return fallback; const value = JSON.parse(raw) as Partial<ApiSettings>; return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) } } catch { return fallback } }
+function readLocalSettings(userId: string | undefined): ApiSettings { const fallback: ApiSettings = { userId: userId ?? '', ...DEFAULT_SETTINGS, updatedAt: new Date(0).toISOString() }; try { const raw = window.localStorage.getItem(`${storagePrefix}${userId ?? 'anonymous'}`); if (raw === null) return fallback; const value = JSON.parse(raw) as Partial<ApiSettings>; return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(value.readingMode === 'scroll' || value.readingMode === 'paged' ? { readingMode: value.readingMode } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) } } catch { return fallback } }
 function writeLocalSettings(userId: string | undefined, value: ApiSettings): void { try { window.localStorage.setItem(`${storagePrefix}${userId ?? 'anonymous'}`, JSON.stringify(value)) } catch { /* 私有浏览器模式可能禁用存储 */ } }

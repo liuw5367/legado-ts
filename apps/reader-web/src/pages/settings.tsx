@@ -11,7 +11,7 @@ export function SettingsPage() {
     <nav className="settings-entry-list" aria-label="设置选项">
       <SettingsEntry to="/account/password" title="修改密码" description="更新登录密码" />
       <SettingsEntry to="/sources" title="书源管理" description="导入、启用与管理书源" />
-      <SettingsEntry to="/account/settings/reading" title="阅读设置" description="调整字号、行距与页面模式" />
+      <SettingsEntry to="/account/settings/reading" title="阅读设置" description="调整字号、行距与阅读模式" />
     </nav>
     <div className="settings-logout-area"><Button className="settings-logout-button" variant="secondary" type="button" onClick={() => void logout()}>退出登录</Button></div>
   </section>

@@ -1,6 +1,6 @@
 import { Minus, Plus } from 'lucide-react'
 import { stepSetting } from '../lib/setting-step.ts'
-import { ThemeModeSelect, useReaderSettings } from '../lib/settings-context.tsx'
+import { ReadingModeSelect, ThemeModeSelect, useReaderSettings } from '../lib/settings-context.tsx'
 
 export function ReaderSettingsPanel() {
   const { settings, saving, error, updateSettings } = useReaderSettings()
@@ -10,6 +10,7 @@ export function ReaderSettingsPanel() {
   }
   return <div className="reader-settings-panel">
     <div className="reader-setting-row"><div><strong>页面模式</strong><p className="muted small">跟随系统或固定浅色、夜间模式。</p></div><ThemeModeSelect /></div>
+    <div className="reader-setting-row"><div><strong>阅读模式</strong><p className="muted small">滚动浏览章节，或按屏幕分页阅读。</p></div><ReadingModeSelect /></div>
     <SettingRange label="字号" value={settings.fontSize} min={15} max={28} step={1} suffix="px" onChange={(value) => void save({ fontSize: value })} />
     <SettingRange label="行距" value={settings.lineHeight} min={1.4} max={2.6} step={0.1} onChange={(value) => void save({ lineHeight: value })} />
     {saving ? <p className="muted small" role="status">正在保存…</p> : null}

@@ -171,10 +171,12 @@ export interface BookCreationInput {
 }
 
 export type ThemeMode = 'system' | 'light' | 'dark'
+export type ReadingMode = 'scroll' | 'paged'
 
 export interface ReaderSettings {
   userId: string
   theme: ThemeMode
+  readingMode: ReadingMode
   fontSize: number
   lineHeight: number
   updatedAt: string
@@ -182,6 +184,7 @@ export interface ReaderSettings {
 
 export const DEFAULT_READER_SETTINGS = {
   theme: 'system' as ThemeMode,
+  readingMode: 'scroll' as ReadingMode,
   fontSize: 18,
   lineHeight: 1.9,
 }
