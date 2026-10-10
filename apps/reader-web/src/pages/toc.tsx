@@ -50,7 +50,7 @@ export function TocPage() {
       ])
       if (requestId !== requestIdRef.current) return
       cache.setPosition(bookId, editionKey, positionResult.position)
-      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(snapshot.editions); setSources([{ sourceId: snapshot.details.edition.sourceId, name: snapshot.details.sourceName, fingerprint: snapshot.toc.sourceFingerprint, enabled: true }]); setPosition(positionResult.position)
+      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(snapshot.editions); setSources([...snapshot.sources.filter((source) => source.sourceId !== snapshot.details.edition.sourceId), { sourceId: snapshot.details.edition.sourceId, name: snapshot.details.sourceName, fingerprint: snapshot.toc.sourceFingerprint, enabled: true }]); setPosition(positionResult.position)
     } catch (reason) { if (requestId === requestIdRef.current) setError(reason instanceof Error ? reason.message : '目录加载失败') }
     finally { if (requestId === requestIdRef.current) { setLoading(false); setRefreshing(false) } }
   }

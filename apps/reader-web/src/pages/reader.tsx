@@ -56,7 +56,7 @@ export function ReaderPage() {
       apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`, { signal: controller.signal }),
     ]).then(async ([contentResult, tocResult, positionResult]) => {
       if (!active || requestId !== requestIdRef.current) return
-      if (editionKey.length > 0) await apiFetch(`/api/books/${encodeURIComponent(bookId)}/edition`, { method: 'PUT', body: JSON.stringify({ editionKey }) })
+      if (editionKey.length > 0) await apiFetch(`/api/books/${encodeURIComponent(bookId)}/edition`, { method: 'PUT', signal: controller.signal, body: JSON.stringify({ editionKey }) })
       if (!active || requestId !== requestIdRef.current) return
       restoredPositionRef.current = positionResult.position?.chapterId !== chapterId
       setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
@@ -211,15 +211,18 @@ export function ReaderEntryPage() {
 
   useEffect(() => {
     let active = true
+    const controller = new AbortController()
+    setError('')
     void (async () => {
       try {
-        const booksResult = await apiFetch<{ books: Array<{ book: { id: string; activeEditionKey?: string } }> }>('/api/books')
+        const booksResult = requestedEditionKey.length > 0 ? { books: [] } : await apiFetch<{ books: Array<{ book: { id: string; activeEditionKey?: string } }> }>('/api/books', { signal: controller.signal })
+        if (!active) return
         const book = booksResult.books.find((item) => item.book.id === bookId)?.book
         const editionKey = requestedEditionKey || book?.activeEditionKey || ''
         if (editionKey.length === 0) throw new Error('没有可用的书源版本')
         const [tocResult, positionResult] = await Promise.all([
           loadBookSnapshot(cache, bookId, editionKey),
-          apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`),
+          apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`, { signal: controller.signal }),
         ])
         const positionChapter = positionResult.position?.chapterId === undefined ? undefined : tocResult.toc.chapters.find((chapter) => chapter.chapterId === positionResult.position?.chapterId && chapter.isVolume !== true)
         const target = positionChapter ?? tocResult.toc.chapters.find((chapter) => chapter.isVolume !== true)
@@ -227,7 +230,7 @@ export function ReaderEntryPage() {
         if (active) { cache.setPosition(bookId, editionKey, positionResult.position); navigate(chapterLink(bookId, target, editionKey), { replace: true, state: location.state }) }
       } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : '无法打开阅读') }
     })()
-    return () => { active = false }
+    return () => { active = false; controller.abort() }
   }, [bookId, navigate, requestedEditionKey, cache, location.state])
 
   if (error.length > 0) return <section className="reader-error"><p className="error">{error}</p><PageBackButton /></section>

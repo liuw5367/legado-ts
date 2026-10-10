@@ -35,6 +35,7 @@ export interface ReaderRepository {
   listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
   listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>>
   getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null>
+  getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined>
   listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage>
   applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }>
   saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void>
@@ -56,6 +57,7 @@ export interface ReaderRepository {
   saveEdition(userId: string, bookId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<StoredEdition>
   addToBookshelf(userId: string, bookId: string): Promise<void>
   removeFromBookshelf(userId: string, bookId: string): Promise<void>
+  isOnBookshelf(userId: string, bookId: string): Promise<boolean>
   getHome(userId: string): Promise<HomeSnapshot>
   deleteSearchHistory(userId: string, historyId: string): Promise<boolean>
   listBooks(userId: string): Promise<Array<{ book: StoredBook; edition: StoredEdition }>>
@@ -97,6 +99,13 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const [row] = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sourceId), eq(userSources.enabled, true), eq(userSources.deleted, false))).limit(1)
       return row === undefined ? null : toUserSource(row)
+    })
+  }
+
+  public async getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined> {
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.select({ normalizedSource: userSources.normalizedSource }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sourceId), eq(userSources.deleted, false))).limit(1)
+      return row?.normalizedSource.bookSourceName
     })
   }
 
@@ -397,6 +406,13 @@ export class PostgresReaderRepository implements ReaderRepository {
     await withUser(userId, async (transaction) => { await transaction.delete(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId))) })
   }
 
+  public async isOnBookshelf(userId: string, bookId: string): Promise<boolean> {
+    return withUser(userId, async (transaction) => {
+      const rows = await transaction.select({ bookId: bookshelf.bookId }).from(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId))).limit(1)
+      return rows.length > 0
+    })
+  }
+
   public async getHome(userId: string): Promise<HomeSnapshot> {
     return withUser(userId, async (transaction) => {
       const shelfRows = await transaction.select({ book: books, edition: bookEditions }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
@@ -573,6 +589,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.allSources(userId) }
   public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
   public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { return this.allSources(userId).find((source) => source.sourceId === sourceId && source.enabled) ?? null }
+  public async getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined> { return this.allSources(userId).find((source) => source.sourceId === sourceId)?.normalizedSource.bookSourceName }
   public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
     const query = params.query.toLocaleLowerCase()
     const allRows = this.allSources(userId)
@@ -664,6 +681,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
   public async addToBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.set(`${userId}:${bookId}`, new Date().toISOString()) }
   public async removeFromBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.delete(`${userId}:${bookId}`) }
+  public async isOnBookshelf(userId: string, bookId: string): Promise<boolean> { return this.shelf.has(`${userId}:${bookId}`) }
   public async getHome(userId: string): Promise<HomeSnapshot> { const values = [...this.books.values()].filter((item) => item.book.userId === userId); const activeValues = values.filter((item) => item.book.activeEditionKey === item.edition.editionKey); const positions = [...this.positions.values()].filter((position) => position.userId === userId).sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt)); const seenReadingBooks = new Set<string>(); const reading = positions.map((position) => { const value = values.find((item) => item.book.id === position.bookId && item.edition.editionKey === position.editionKey); return value === undefined || seenReadingBooks.has(position.bookId) ? undefined : (seenReadingBooks.add(position.bookId), { book: value.book, edition: value.edition, position }) }).filter((item): item is { book: StoredBook; edition: StoredEdition; position: StoredPosition } => item !== undefined); const shelfValues = activeValues.filter((item) => this.shelf.has(`${userId}:${item.book.id}`)).sort((a, b) => (this.shelf.get(`${userId}:${b.book.id}`) ?? '').localeCompare(this.shelf.get(`${userId}:${a.book.id}`) ?? '')); const shelf = shelfValues.map((value) => { const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } }); return { bookshelf: shelf, reading, searchHistory: latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50) }
   }
   public async deleteSearchHistory(userId: string, historyId: string): Promise<boolean> { const item = [...this.history.entries()].find(([, value]) => value.id === historyId && this.searches.get(value.searchId)?.userId === userId); if (item === undefined) return false; for (const [key, value] of this.history) if (this.searches.get(value.searchId)?.userId === userId && normalizeIdentity(value.keyword) === normalizeIdentity(item[1].keyword)) this.history.delete(key); return true }

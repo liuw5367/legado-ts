@@ -14,6 +14,7 @@ export class ReaderRuntimeError extends Error {
   public constructor(code: 'not-found' | 'invalid-input' | 'source-failed' | 'configuration' | 'source-busy', message: string) { super(message); this.code = code }
 }
 
+export interface SearchCandidateIdentity { sourceId: string; sourceFingerprint: string; bookUrl: string }
 export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean }
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
 
@@ -22,7 +23,7 @@ export interface ReaderRuntime {
   runSearchBatch(userId: string, searchId: string, options?: SearchBatchOptions): Promise<SearchBatchResult>
   runSearchBatchStream(userId: string, searchId: string, listener: SearchSourceListener, options?: SearchBatchOptions): Promise<SearchBatchResult>
   cancelSearch(userId: string, searchId: string): Promise<SearchRunState | null>
-  createBookFromSearch(userId: string, searchId: string, candidateIndex: number, bookId?: string, addToBookshelf?: boolean, activateEdition?: boolean): Promise<{ book: StoredBook; edition: StoredEdition; cacheWarning?: SourceCacheWarning }>
+  createBookFromSearch(userId: string, searchId: string, candidateIndex: number, bookId?: string, addToBookshelf?: boolean, activateEdition?: boolean, candidateIdentity?: SearchCandidateIdentity): Promise<{ book: StoredBook; edition: StoredEdition; cacheWarning?: SourceCacheWarning }>
   listBookSources(userId: string, bookId: string): Promise<BookSourcesResponse>
   openBookSource(userId: string, bookId: string, candidateId: string): Promise<StoredEdition>
   getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc>
@@ -38,7 +39,7 @@ export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime
     runSearchBatch: (userId, searchId, options) => runSearchBatch(repository, userId, searchId, options),
     runSearchBatchStream: (userId, searchId, listener, options) => runSearchBatchStream(repository, userId, searchId, listener, options),
     cancelSearch: (userId, searchId) => cancelSearch(repository, userId, searchId),
-    createBookFromSearch: (userId, searchId, candidateIndex, bookId, addToBookshelf, activateEdition) => createBookFromSearch(repository, userId, searchId, candidateIndex, bookId, addToBookshelf, activateEdition),
+    createBookFromSearch: (userId, searchId, candidateIndex, bookId, addToBookshelf, activateEdition, candidateIdentity) => createBookFromSearch(repository, userId, searchId, candidateIndex, bookId, addToBookshelf, activateEdition, candidateIdentity),
     listBookSources: (userId, bookId) => listBookSources(repository, userId, bookId),
     openBookSource: (userId, bookId, candidateId) => openBookSource(repository, userId, bookId, candidateId),
     getOrLoadToc: (userId, bookId, editionKey, refresh) => getOrLoadToc(repository, userId, bookId, editionKey, refresh),
@@ -140,12 +141,13 @@ function completedCount(states: SourceSearchState[]): number { return states.fil
 function aggregateStatus(states: SourceSearchState[], fallback: SearchRunState['status'] | 'running', candidateCount = states.flatMap((state) => state.candidates).length): SearchRunState['status'] | 'running' | 'capability-missing' { if (states.some((state) => state.status === 'pending' || state.status === 'running')) return 'running'; if (states.every((state) => state.status === 'cancelled')) return 'cancelled'; const success = states.some((state) => state.status === 'success' || state.status === 'empty' || state.status === 'partial'); const failed = states.some((state) => state.status === 'failed' || state.status === 'capability-missing'); if (failed && success) return 'partial'; if (failed) return fallback === 'cancelled' ? 'cancelled' : states.some((state) => state.status === 'capability-missing') ? 'capability-missing' : 'failed'; if (candidateCount === 0) return 'empty'; return 'success' }
 function toBatchStatus(status: SearchRunState['status'] | 'running' | 'capability-missing'): SearchBatchResult['sourceStatus'] { return status === 'running' ? 'partial' : status }
 
-async function createBookFromSearch(repository: ReaderRepository, userId: string, searchId: string, candidateIndex: number, bookId?: string, addToBookshelf = true, activateEdition = true): Promise<{ book: StoredBook; edition: StoredEdition; cacheWarning?: SourceCacheWarning }> {
+async function createBookFromSearch(repository: ReaderRepository, userId: string, searchId: string, candidateIndex: number, bookId?: string, addToBookshelf = true, activateEdition = true, candidateIdentity?: SearchCandidateIdentity): Promise<{ book: StoredBook; edition: StoredEdition; cacheWarning?: SourceCacheWarning }> {
   const run = await repository.getSearch(userId, searchId)
   if (run === null) throw new ReaderRuntimeError('not-found', '搜索任务不存在')
   const targetBook = bookId === undefined ? null : await repository.getBook(userId, bookId)
   if (bookId !== undefined && targetBook === null) throw new ReaderRuntimeError('not-found', '目标书籍不存在')
-  const stored = run.candidates[candidateIndex]
+  // 流式排序会改变索引；新客户端以来源、版本和URL匹配服务端保存的候选。
+  const stored = candidateIdentity === undefined ? run.candidates[candidateIndex] : run.candidates.find((item) => item.sourceId === candidateIdentity.sourceId && item.sourceFingerprint === candidateIdentity.sourceFingerprint && item.candidate.bookUrl === candidateIdentity.bookUrl)
   if (stored === undefined) throw new ReaderRuntimeError('invalid-input', '搜索结果索引无效')
   if (targetBook !== null && !matchesBookTarget(targetBook, stored.candidate)) throw new ReaderRuntimeError('invalid-input', '搜索结果与目标书籍不匹配')
   const source = await requireSource(repository, userId, stored.sourceId)

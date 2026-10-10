@@ -13,8 +13,14 @@ export function pageReturnState(location: { pathname: string; search: string; st
 
 /** 在阅读中打开目录/换源/详情后再读章节，继承原阅读入口，避免插入中途查看页。 */
 export function readingEntryState(location: { pathname: string; search: string; state: unknown }): unknown {
-  const state = location.state !== null && typeof location.state === 'object' ? location.state as ReturnState : {}
-  // backTo只匹配站内书籍阅读路径；仍交由pageReturnTarget校验最终返回目标。
-  if (typeof state.backTo === 'string' && /^\/books\/[^/]+\/read(?:\/|\?|$)/u.test(state.backTo)) return state.backState ?? { backTo: '/' }
+  let state: unknown = location.state
+  const seen = new Set<unknown>()
+  while (state !== null && typeof state === 'object' && !seen.has(state)) {
+    seen.add(state)
+    const value = state as ReturnState
+    // 允许目录、详情、换源多层往返；最终目标仍交由pageReturnTarget校验。
+    if (typeof value.backTo === 'string' && /^\/books\/[^/]+\/read(?:\/|\?|$)/u.test(value.backTo)) return value.backState ?? { backTo: '/' }
+    state = value.backState
+  }
   return pageReturnState(location)
 }

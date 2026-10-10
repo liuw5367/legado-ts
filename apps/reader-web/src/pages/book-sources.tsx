@@ -72,7 +72,9 @@ export function BookSourcesPage() {
     void open(key, action, async () => source.status === 'saved' ? source.editionKey : (await apiFetch<{ edition: ApiEdition }>('/api' + prefix + '/sources/' + encodeURIComponent(source.candidateId) + '/open', { method: 'POST', signal: controllerRef.current?.signal ?? null })).edition.editionKey)
   }
   function openSearchCandidate(index: number, action: 'directory' | 'switch') {
-    void open('search:' + index, action, async () => (await apiFetch<{ edition: ApiEdition }>('/api/books', { method: 'POST', signal: controllerRef.current?.signal ?? null, body: JSON.stringify({ searchId, candidateIndex: index, bookId, addToBookshelf: false, activateEdition: false }) })).edition.editionKey)
+    const candidate = candidates[index]
+    if (candidate === undefined) return
+    void open('search:' + index, action, async () => (await apiFetch<{ edition: ApiEdition }>('/api/books', { method: 'POST', signal: controllerRef.current?.signal ?? null, body: JSON.stringify({ searchId, candidateIndex: index, candidateIdentity: { sourceId: candidate.sourceId, sourceFingerprint: candidate.sourceFingerprint, bookUrl: candidate.candidate.bookUrl }, bookId, addToBookshelf: false, activateEdition: false }) })).edition.editionKey)
   }
 
   const known = new Set(data?.sources.map((source) => JSON.stringify([source.sourceId, source.sourceFingerprint, source.bookUrl])) ?? [])

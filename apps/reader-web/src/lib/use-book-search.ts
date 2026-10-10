@@ -16,7 +16,7 @@ export function useBookSearch() {
   }), [])
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; void operation.cancel().catch(() => undefined) } }, [operation])
   async function search(keyword: string, precision: boolean) {
-    if (status === 'loading' || keyword.trim().length === 0) return
+    if (operation.isRunning || keyword.trim().length === 0) return
     setCandidates([]); setSearchId(''); setMessage(''); setStatus('loading')
     try {
       const result = await operation.start(keyword.trim(), precision, (event) => {

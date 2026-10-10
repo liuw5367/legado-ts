@@ -7,14 +7,14 @@ export async function getBookDetails(repository: ReaderRepository, userId: strin
   if (book === null) return null
   const edition = await repository.getEdition(userId, bookId, editionKey || book.activeEditionKey)
   if (edition === null) return null
-  const [home, sources] = await Promise.all([
-    repository.getHome(userId),
-    repository.listManagedSources(userId, { page: 1, pageSize: 50, query: '', status: 'all', all: true }),
+  const [onBookshelf, sourceName] = await Promise.all([
+    repository.isOnBookshelf(userId, bookId),
+    repository.getSourceDisplayName(userId, edition.sourceId),
   ])
   const metadata: BookDetailsResponse['edition']['metadata'] = {}
   for (const key of ['name', 'author', 'intro', 'coverUrl', 'kind', 'lastChapter'] as const) {
     const value = edition.metadata[key]
     if (typeof value === 'string') metadata[key] = value
   }
-  return { book, edition: { editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata }, sourceName: sources.sources.find((source) => source.sourceId === edition.sourceId)?.name ?? edition.sourceId, onBookshelf: home.bookshelf.some((item) => item.book.id === bookId) }
+  return { book, edition: { editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata }, sourceName: sourceName ?? edition.sourceId, onBookshelf }
 }

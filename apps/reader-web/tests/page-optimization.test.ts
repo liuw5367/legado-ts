@@ -16,7 +16,7 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 function snapshot(revision: string): BookSnapshot {
-  return { toc: { userId: 'a', bookId: 'b', editionKey: 'e', sourceFingerprint: 'f', revision, chapters: [], bookPatch: {} }, details: { book: { id: 'b', userId: 'a', name: '书', createdAt: '', updatedAt: '' }, edition: { editionKey: 'e', sourceId: 's', sourceFingerprint: 'f', bookUrl: 'https://example.test', metadata: {} }, sourceName: '源', onBookshelf: false }, editions: [] }
+  return { toc: { userId: 'a', bookId: 'b', editionKey: 'e', sourceFingerprint: 'f', revision, chapters: [], bookPatch: {} }, details: { book: { id: 'b', userId: 'a', name: '书', createdAt: '', updatedAt: '' }, edition: { editionKey: 'e', sourceId: 's', sourceFingerprint: 'f', bookUrl: 'https://example.test', metadata: {} }, sourceName: '源', onBookshelf: false }, editions: [], sources: [] }
 }
 
 test('shared book cache merges requests, retains success on refresh failure and rejects late responses', async () => {
@@ -89,10 +89,25 @@ test('step controls clamp bounds and never accumulate floating point line-height
   assert.equal(stepSetting(1.9, -1, 1.4, 2.6, 0.1), 1.8)
 })
 
+test('a completed search is not cancelled while its stream finishes closing', async () => {
+  const closing = deferred<void>()
+  const delivered = deferred<void>()
+  let cancellations = 0
+  const operation = new SearchOperation({ create: async () => 'search', stream: async (_id, event) => { event({ type: 'done', data: {} }); delivered.resolve(); await closing.promise }, cancel: async () => { cancellations++ } })
+  const running = operation.start('书', false, () => undefined, () => undefined)
+  await delivered.promise
+  await operation.cancel()
+  closing.resolve()
+  assert.equal((await running).cancelled, false)
+  assert.equal(cancellations, 0)
+})
+
 test('reading entry inherits original origin and blocks unsafe return URLs', () => {
   const origin = { backTo: '/', backState: { homeView: 'reading' } }
   const state = readingEntryState({ pathname: '/books/b/toc', search: '?editionKey=e', state: { backTo: '/books/b/read/c?editionKey=e', backState: origin } })
   assert.deepEqual(pageReturnTarget(state, '/books/b/read/d', '/'), { to: '/', state: { homeView: 'reading' } })
+  const nested = readingEntryState({ pathname: '/books/b/toc', search: '', state: { backTo: '/books/b/details', backState: { backTo: '/books/b/read/c', backState: origin } } })
+  assert.deepEqual(pageReturnTarget(nested, '/books/b/read/d', '/'), { to: '/', state: { homeView: 'reading' } })
   const direct = readingEntryState({ pathname: '/books/b/toc', search: '', state: null })
   assert.equal(pageReturnTarget(direct, '/books/b/read/c', '/').to, '/books/b/toc')
   assert.equal(pageReturnTarget({ backTo: '//evil.test' }, '/books/b/read/c', '/').to, '/')

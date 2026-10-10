@@ -16,6 +16,8 @@
 
 `POST /api/books` 根据搜索记录中的候选索引加载书籍详情，使用 `sourceId + bookUrl + sourceFingerprint` 生成 editionKey。新书可以加入书架，也可以追加到已有书籍；书籍本体和来源版本分开保存，活动 edition 由应用显式更新。书籍详情失败不会创建不完整版本。
 
+新页面同时提交候选的 sourceId、sourceFingerprint 和 bookUrl，服务端在当前账号保存的搜索结果中匹配这一身份，避免流式重排造成索引错配。未提交身份的旧调用仍兼容索引；客户端不能通过身份对象传入书籍元数据或脚本变量。
+
 ## 目录、正文和来源切换
 
 目录接口先按 userId、bookId、editionKey 查找快照；快照的 sourceFingerprint 与当前书源一致且未请求 refresh 时直接返回。未命中或 refresh 时，runtime 创建 Node source session，调用 `loadTableOfContents`，按章节列表摘要生成 revision 后保存。

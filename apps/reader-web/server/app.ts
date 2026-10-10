@@ -172,7 +172,7 @@ app.post('/api/books', async (context) => {
   const body = await parseBody(context, createBookSchema)
   if (body instanceof Response) return body
   try {
-    const value = await dependencies.runtime.createBookFromSearch(context.get('userId'), body.searchId, body.candidateIndex, body.bookId, body.addToBookshelf, body.activateEdition)
+    const value = await dependencies.runtime.createBookFromSearch(context.get('userId'), body.searchId, body.candidateIndex, body.bookId, body.addToBookshelf, body.activateEdition, body.candidateIdentity)
     return context.json(value, 201)
   } catch (error) {
     return handleError(context, error)
@@ -361,7 +361,7 @@ export default app
 
 const searchInputSchema = z.object({ keyword: z.string().trim().min(1).max(200), sourceId: z.string().trim().min(1).max(500).optional(), sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), precision: z.boolean().optional() })
 const searchBatchSchema = z.object({ sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), nextPage: z.boolean().optional() }).default({})
-const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999), bookId: z.string().uuid().optional(), addToBookshelf: z.boolean().optional(), activateEdition: z.boolean().optional() })
+const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999), candidateIdentity: z.object({ sourceId: z.string().min(1).max(4000), sourceFingerprint: z.string().min(1).max(128), bookUrl: z.string().min(1).max(4000) }).optional(), bookId: z.string().uuid().optional(), addToBookshelf: z.boolean().optional(), activateEdition: z.boolean().optional() })
 const activeEditionSchema = z.object({ editionKey: z.string().min(1).max(128) })
 const settingsSchema = z.object({ theme: z.enum(['system', 'light', 'dark']).optional(), fontSize: z.number().int().min(15).max(28).optional(), lineHeight: z.number().min(1.4).max(2.6).optional() }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个设置项' })
 const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })

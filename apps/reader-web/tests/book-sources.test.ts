@@ -32,6 +32,17 @@ test('book identity never automatically merges missing or different authors', ()
   assert.equal(sameBookIdentity('目标书', '作者', '目标书', '另一位作者'), false)
   assert.equal(bookIdentityKey('目标书', '作者未知'), undefined)
 })
+test('opening a selected source survives candidate snapshot reordering', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
+  const { repository, runtime, run } = await setup()
+  const batch = await runtime.runSearchBatch('user-a', run.id)
+  const selected = batch.candidates[0]!
+  await repository.updateSearch('user-a', run.id, { candidates: [...batch.candidates].reverse() })
+  const identity = { sourceId: selected.sourceId, sourceFingerprint: selected.sourceFingerprint, bookUrl: selected.candidate.bookUrl }
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0, undefined, false, false, identity)
+  assert.equal(created.edition.sourceId, selected.sourceId)
+  await assert.rejects(runtime.createBookFromSearch('user-a', run.id, 0, undefined, false, false, { ...identity, bookUrl: 'https://8.8.8.8/missing' }), /无效/u)
+})
 test('sources persist, deduplicate, open lazily and preserve book and active edition', async (t) => {
   const fetch = t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
   const { repository, runtime, run } = await setup()

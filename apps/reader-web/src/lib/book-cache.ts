@@ -1,7 +1,7 @@
-import { apiFetch, type ApiEdition, type ApiPosition, type ApiToc } from './api.ts'
+import { apiFetch, type ApiEdition, type ApiPosition, type ApiSource, type ApiToc } from './api.ts'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
 
-export interface BookSnapshot { toc: ApiToc; details: BookDetailsResponse; editions: ApiEdition[] }
+export interface BookSnapshot { toc: ApiToc; details: BookDetailsResponse; editions: ApiEdition[]; sources: ApiSource[] }
 type Loader = (signal: AbortSignal) => Promise<BookSnapshot>
 
 /** 仅持有当前书籍；刷新代次和失效控制阻止旧响应回写新快照。 */
@@ -50,11 +50,12 @@ export function loadBookSnapshot(cache: BookCache, bookId: string, editionKey: s
   const path = '/api/books/' + encodeURIComponent(bookId)
   const query = '?editionKey=' + encodeURIComponent(editionKey)
   return cache.load(bookId, editionKey, async (signal) => {
-    const [toc, details, editions] = await Promise.all([
+    const [toc, details, editions, sources] = await Promise.all([
       apiFetch<{ toc: ApiToc }>(path + '/toc' + query + (refresh ? '&refresh=true' : ''), { signal }),
       apiFetch<BookDetailsResponse>(path + '/details' + query, { signal }),
       apiFetch<{ editions: ApiEdition[] }>(path + '/editions', { signal }),
+      apiFetch<{ sources: ApiSource[] }>('/api/sources', { signal }).catch((reason: unknown) => { if (signal.aborted) throw reason; return { sources: [] } }),
     ])
-    return { toc: toc.toc, details, editions: editions.editions }
+    return { toc: toc.toc, details, editions: editions.editions, sources: sources.sources }
   }, refresh)
 }

@@ -19,6 +19,7 @@ export function SourcesPage() {
   const [error, setError] = useState('')
   const [importOpen, setImportOpen] = useState(false)
   const requestRef = useRef<AbortController | null>(null)
+  const mounted = useRef(false)
   const actionRef = useRef(false)
   const [acting, setActing] = useState(false)
 
@@ -33,7 +34,7 @@ export function SourcesPage() {
     } catch (loadError) { if (!controller.signal.aborted) setError(loadError instanceof Error ? loadError.message : '书源加载失败') }
     finally { if (!controller.signal.aborted) setLoading(false) }
   }, [query, status])
-  useEffect(() => { void load(); return () => requestRef.current?.abort() }, [load])
+  useEffect(() => { mounted.current = true; void load(); return () => { mounted.current = false; requestRef.current?.abort() } }, [load])
 
   const pageSelected = data?.sources.length !== 0 && data?.sources.every((source) => selected.has(source.sourceId))
 
@@ -50,12 +51,13 @@ export function SourcesPage() {
     try {
       let affected = 0
       for (let offset = 0; offset < items.length; offset += 1000) {
+        if (!mounted.current) return
         const result = await apiFetch<{ affected: number }>('/api/source-management/actions', { method: 'POST', body: JSON.stringify({ action, items: items.slice(offset, offset + 1000) }) })
-        affected += result.affected; cache.clear(); setMessage('已处理 ' + affected + ' 个书源')
+        affected += result.affected; cache.clear(); if (!mounted.current) return; setMessage('已处理 ' + affected + ' 个书源')
       }
       setMessage(`${action === 'delete' ? '已删除' : action === 'enable' ? '已启用' : '已禁用'} ${affected} 个书源`); setSelected(new Map()); await load()
-    } catch (actionError) { await load(); setError(actionError instanceof Error ? actionError.message : '书源操作失败') }
-    finally { actionRef.current = false; setActing(false) }
+    } catch (actionError) { if (!mounted.current) return; await load(); if (!mounted.current) return; setError(actionError instanceof Error ? actionError.message : '书源操作失败') }
+    finally { actionRef.current = false; if (mounted.current) setActing(false) }
   }
 
   return <section className="page-stack page-narrow sources-page">
