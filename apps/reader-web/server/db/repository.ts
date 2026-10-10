@@ -707,9 +707,9 @@ export function createRepository(): ReaderRepository { return new PostgresReader
 
 export function sourceSummaryFromSource(source: NormalizedSource, fingerprint: string, enabled = true): SourceSummary { return { sourceId: source.bookSourceUrl, name: source.bookSourceName, ...(typeof source.bookSourceGroup === 'string' ? { group: source.bookSourceGroup } : {}), fingerprint, enabled } }
 
-/** 缓存只保存详情所需的公开候选字段，不保存infoPage、rawFields或运行期变量。 */
+/** 缓存去掉只能在搜索响应中使用的详情页正文，但保留 JS 详情脚本重建候选所需的变量和原始字段。 */
 function cacheableCandidate(stored: StoredCandidate): StoredCandidate {
-  const { sourceId, bookUrl, name, author, intro, coverUrl, kind, wordCount, lastChapter, updateTime, tocUrl } = stored.candidate
+  const { sourceId, bookUrl, name, author, intro, coverUrl, kind, wordCount, lastChapter, updateTime, tocUrl, variable, rawFields } = stored.candidate
   const fields = Object.fromEntries(Object.entries({ name, author, intro, coverUrl, kind, wordCount, lastChapter, updateTime, tocUrl }).filter(([, value]) => value !== undefined))
-  return { sourceId: stored.sourceId, sourceFingerprint: stored.sourceFingerprint, candidate: { sourceId, bookUrl, ...fields, rawFields: {}, traceRef: 'book-source-cache' } }
+  return { sourceId: stored.sourceId, sourceFingerprint: stored.sourceFingerprint, candidate: { sourceId, bookUrl, ...fields, ...(variable === undefined ? {} : { variable }), rawFields: structuredClone(rawFields), traceRef: 'book-source-cache' } }
 }

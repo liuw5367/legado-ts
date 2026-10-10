@@ -58,6 +58,34 @@ test('sources persist, deduplicate, open lazily and preserve book and active edi
   await assert.rejects(runtime.openBookSource('user-b', created.book.id, candidate.candidateId), /不存在/u)
   await assert.rejects(runtime.listBookSources('user-b', created.book.id), /不存在/u)
 })
+
+test('cached JavaScript candidates keep detail rehydration state', async () => {
+  const repository = new MemoryReaderRepository()
+  const imported = await importSources({ kind: 'text', text: JSON.stringify({
+    bookSourceUrl: 'https://js-cache.test/source',
+    bookSourceName: 'JavaScript 缓存源',
+    bookSourceType: 0,
+    mainJs: [
+      'function search(key) { return [{ name: key, author: "作者", bookUrl: "/book-a", variable: "{\\"token\\":\\"a\\"}", cacheToken: "a" }, { name: key, author: "作者", bookUrl: "/book-b", variable: "{\\"token\\":\\"b\\"}", cacheToken: "b" }]; }',
+      'function getBookInfo(book) { if (book.bookUrl.endsWith("/book-b") && (book.variable !== "{\\"token\\":\\"b\\"}" || book.rawFields.cacheToken !== "b")) throw new Error("cached detail state missing"); return { tocUrl: book.bookUrl + "/toc" }; }',
+    ].join('\n'),
+  }) })
+  const candidates = compareImportCandidates(imported, new Map())
+  const previewId = randomUUID()
+  await repository.saveImportPreview('user-a', { previewId, expiresAt: new Date(Date.now() + 60_000).toISOString(), candidates, writableCount: candidates.length }, 'https://js-cache.test/source')
+  await repository.commitImportPreview('user-a', previewId, candidates.map((item) => item.id))
+  const source = (await repository.listSourcesForUser('user-a'))[0]!
+  const run = await repository.createSearch('user-a', { keyword: '目标书', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const runtime = createReaderRuntime(repository)
+  const batch = await runtime.runSearchBatch('user-a', run.id)
+  assert.equal(batch.candidates.length, 2)
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0)
+  const discovered = (await runtime.listBookSources('user-a', created.book.id)).sources.find((item) => item.status === 'discovered')
+  assert.ok(discovered?.status === 'discovered')
+  const edition = await runtime.openBookSource('user-a', created.book.id, discovered.candidateId)
+  assert.equal(edition.bookUrl, 'https://js-cache.test/book-b')
+})
+
 test('sources arriving after shelving are cached at batch settlement', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
   const { repository, runtime, run } = await setup()

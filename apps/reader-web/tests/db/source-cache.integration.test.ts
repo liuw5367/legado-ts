@@ -28,7 +28,7 @@ test('real migrations, cache persistence, RLS and authenticated source API', { s
   const repository = new PostgresReaderRepository()
   const userA = '00000000-0000-0000-0000-000000000001'
   const userB = '00000000-0000-0000-0000-000000000002'
-  const candidate: StoredCandidate = { sourceId: 'https://8.8.8.8/source', sourceFingerprint: 'fp', candidate: { sourceId: 'https://8.8.8.8/source', bookUrl: 'https://8.8.8.8/book', name: '测试书', author: '作者', rawFields: { secret: 'not-cacheable' }, traceRef: 'fixture', variable: 'not-cacheable', infoPage: { body: 'not-cacheable', requestUrl: 'url', responseUrl: 'url' } } }
+  const candidate: StoredCandidate = { sourceId: 'https://8.8.8.8/source', sourceFingerprint: 'fp', candidate: { sourceId: 'https://8.8.8.8/source', bookUrl: 'https://8.8.8.8/book', name: '测试书', author: '作者', rawFields: { cacheToken: 'runtime-marker' }, traceRef: 'fixture', variable: '{"token":"runtime-marker"}', infoPage: { body: '详情正文不应缓存', requestUrl: 'url', responseUrl: 'url' } } }
   const metadata = { ...candidate.candidate, emptyFields: [], fieldErrors: {} }
   const created = await repository.createBook(userA, { candidate, metadata, editionKey: 'edition-a', sourceFingerprint: 'fp' })
   await repository.saveBookSourceCandidates(userA, created.book.id, [candidate, candidate])
@@ -36,8 +36,8 @@ test('real migrations, cache persistence, RLS and authenticated source API', { s
   const cached = await repository.listBookSourceCandidates(userA, created.book.id)
   assert.equal(cached.length, 1)
   assert.equal(cached[0]?.candidate.candidate.infoPage, undefined)
-  assert.equal(cached[0]?.candidate.candidate.variable, undefined)
-  assert.deepEqual(cached[0]?.candidate.candidate.rawFields, {})
+  assert.equal(cached[0]?.candidate.candidate.variable, '{"token":"runtime-marker"}')
+  assert.deepEqual(cached[0]?.candidate.candidate.rawFields, { cacheToken: 'runtime-marker' })
   assert.equal((await repository.listBookSourceCandidates(userB, created.book.id)).length, 0)
   await assert.rejects(repository.saveBookSourceCandidates(userB, created.book.id, [candidate]), /不存在/u)
   // 不依赖Repository的where条件验证RLS。

@@ -7,3 +7,7 @@ export function chapterCharacterCount(text: string): number {
 export function isReaderTap(start: { x: number; y: number; scrollY: number } | null, end: { x: number; y: number; scrollY: number }, selectedText: string): boolean {
   return selectedText.length === 0 && (start === null || (Math.hypot(end.x - start.x, end.y - start.y) < 8 && end.scrollY === start.scrollY))
 }
+/** 目录响应必须同时属于当前书籍和书源版本，避免切换期间复用旧章节链接。 */
+export function isCurrentToc(toc: { bookId: string; editionKey: string } | null, bookId: string, editionKey: string): boolean {
+  return toc !== null && toc.bookId === bookId && toc.editionKey === editionKey
+}

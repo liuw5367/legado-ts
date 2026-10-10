@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
 import { apiFetch, type ApiBook, type ApiChapter, type ApiEdition, type ApiPosition, type ApiSource, type ApiToc } from '../lib/api.ts'
+import { isCurrentToc } from '../lib/reader-interactions.ts'
 
 export function TocPage() {
   const { bookId = '' } = useParams()
@@ -58,11 +59,12 @@ export function TocPage() {
     navigate(`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(nextEditionKey)}`, { replace: true, state: location.state })
   }
 
-  const chapters = toc?.chapters.filter((chapter) => chapter.isVolume !== true) ?? []
+  const currentToc = isCurrentToc(toc, bookId, editionKey) ? toc : null
+  const chapters = currentToc?.chapters.filter((chapter) => chapter.isVolume !== true) ?? []
   const currentChapter = position === null ? undefined : chapters.find((chapter) => chapter.chapterId === position.chapterId)
   const sourceName = editions.find((edition) => edition.editionKey === editionKey)?.sourceId
   const displaySource = sources.find((source) => source.sourceId === sourceName)?.name ?? sourceName ?? '当前来源'
-  const filteredEntries = useMemo(() => filterEntries(toc?.chapters ?? [], filter), [filter, toc])
+  const filteredEntries = useMemo(() => filterEntries(currentToc?.chapters ?? [], filter), [filter, currentToc])
   const orderedEntries = useMemo(() => reversed ? reverseEntries(filteredEntries) : filteredEntries, [filteredEntries, reversed])
   useEffect(() => {
     if (position?.chapterId === undefined) return
@@ -82,11 +84,11 @@ export function TocPage() {
     observer.observe(controls); if (header !== null) observer.observe(header)
     measure()
     return () => observer.disconnect()
-  }, [toc !== null])
+  }, [currentToc !== null])
   const continueTarget = currentChapter === undefined ? chapters[0] : currentChapter
 
-  if (loading && toc === null) return <section className="page-stack page-narrow"><PageBackButton /><div className="loading-state"><p className="muted">正在读取目录…</p></div></section>
-  if (toc === null) return <section className="page-stack page-narrow"><div className="error-state"><p className="error">{error || '目录加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void load(false)}>重试</Button><PageBackButton /></div></div></section>
+  if (loading && currentToc === null) return <section className="page-stack page-narrow"><PageBackButton /><div className="loading-state"><p className="muted">正在读取目录…</p></div></section>
+  if (currentToc === null) return <section className="page-stack page-narrow"><div className="error-state"><p className="error">{error || '目录加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void load(false)}>重试</Button><PageBackButton /></div></div></section>
   return <section className="page-stack page-narrow toc-page">
     <div className="toc-controls" ref={controlsRef}><div className="toc-heading"><PageBackButton /><div className="toc-heading-main"><h1>{book?.name ?? '书籍目录'}</h1><p className="muted">{chapters.length} 章 · {displaySource}</p></div>{continueTarget === undefined ? null : <Link className="button small" to={chapterLink(bookId, continueTarget, editionKey)} state={pageReturnState(location)}>{currentChapter === undefined ? '开始阅读' : '继续阅读'}</Link>}</div>
     <div className="toc-toolbar">{editions.length > 1 ? <label className="toc-source"><span className="sr-only">阅读来源</span><Select value={editionKey} onChange={(event) => void switchEdition(event.target.value)}>{editions.map((edition) => <option key={edition.editionKey} value={edition.editionKey}>{sources.find((source) => source.sourceId === edition.sourceId)?.name ?? edition.sourceId}</option>)}</Select></label> : <span className="muted small">{displaySource}</span>}<div className="toc-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? '正序' : '倒序'}</Button><Button variant="secondary" size="sm" type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>到顶部</Button><Button variant="secondary" size="sm" type="button" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}>到底部</Button><Button className="refresh-button" variant="secondary" size="sm" type="button" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? '刷新中' : '刷新'}</Button></div></div>
