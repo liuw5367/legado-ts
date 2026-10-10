@@ -1,4 +1,4 @@
-import { apiFetch, type ApiEdition, type ApiPosition, type ApiSource, type ApiToc } from './api.ts'
+import { apiFetch, type ApiContent, type ApiEdition, type ApiPosition, type ApiSource, type ApiToc } from './api.ts'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
 
 export interface BookSnapshot { toc: ApiToc; details: BookDetailsResponse; editions: ApiEdition[]; sources: ApiSource[] }
@@ -9,6 +9,7 @@ export class BookCache {
   private bookId = ''
   private snapshots = new Map<string, BookSnapshot>()
   private positions = new Map<string, ApiPosition | null>()
+  private currentContent: { editionKey: string; chapterId: string; content: ApiContent } | undefined
   private requests = new Map<string, { controller: AbortController; promise: Promise<BookSnapshot> }>()
   private listeners = new Set<() => void>()
   private version = 0
@@ -17,6 +18,15 @@ export class BookCache {
   private notify() { this.version++; for (const listener of this.listeners) listener() }
   private select(bookId: string) { if (this.bookId !== bookId) { this.clear(); this.bookId = bookId } }
   get(bookId: string, editionKey: string) { return bookId === this.bookId ? this.snapshots.get(editionKey) : undefined }
+  getContent(bookId: string, editionKey: string, chapterId: string) {
+    const cached = this.currentContent
+    return bookId === this.bookId && cached?.editionKey === editionKey && cached.chapterId === chapterId ? cached.content : undefined
+  }
+  setContent(bookId: string, editionKey: string, chapterId: string, content: ApiContent) {
+    if (bookId !== this.bookId) return
+    this.currentContent = { editionKey, chapterId, content }
+    this.notify()
+  }
   getPosition(bookId: string, editionKey: string) { return bookId === this.bookId ? this.positions.get(editionKey) : undefined }
   setPosition(bookId: string, editionKey: string, position: ApiPosition | null) {
     if (bookId !== this.bookId) return
@@ -26,7 +36,7 @@ export class BookCache {
   }
   clear() {
     for (const request of this.requests.values()) request.controller.abort()
-    this.requests.clear(); this.snapshots.clear(); this.positions.clear(); this.bookId = ''; this.notify()
+    this.requests.clear(); this.snapshots.clear(); this.positions.clear(); this.currentContent = undefined; this.bookId = ''; this.notify()
   }
   async load(bookId: string, editionKey: string, loader: Loader, refresh = false): Promise<BookSnapshot> {
     this.select(bookId)

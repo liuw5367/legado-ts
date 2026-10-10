@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
+import { MoreMenu } from '../components/more-menu.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { apiFetch, type ApiHome } from '../lib/api.ts'
 
@@ -63,10 +64,11 @@ function BookRow({ view, item, showRemove, removing, onRemove }: { view: View; i
       <BookCover name={book.name} coverUrl={book.coverUrl} />
       <span className="book-row-info"><strong>{book.name}</strong><span className="muted">{book.author ?? '作者未知'}</span><span className={position === undefined ? 'muted small' : 'small'}>{position === undefined ? '尚未阅读' : `读到：${position.title}`}</span></span>
     </Link>
-    <details className="book-more">
-      <summary aria-label={`更多操作：${book.name}`}>···</summary>
-      <div className="book-more-menu"><Link className="book-more-item" to={'/books/' + encodeURIComponent(book.id) + '/details?editionKey=' + encodeURIComponent(edition.editionKey)} state={{ backTo: '/', backState: { homeView: view } }}>查看详情</Link><Link className="book-more-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`} state={{ backTo: '/', backState: { homeView: view } }}>查看目录</Link>{showRemove ? <button className="book-more-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}</div>
-    </details>
+    <MoreMenu label={`更多操作：${book.name}`}>
+      <Link className="more-menu-item" to={'/books/' + encodeURIComponent(book.id) + '/details?editionKey=' + encodeURIComponent(edition.editionKey)} state={{ backTo: '/', backState: { homeView: view } }}>查看详情</Link>
+      <Link className="more-menu-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`} state={{ backTo: '/', backState: { homeView: view } }}>查看目录</Link>
+      {showRemove ? <button className="more-menu-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}
+    </MoreMenu>
   </article>
 }
 

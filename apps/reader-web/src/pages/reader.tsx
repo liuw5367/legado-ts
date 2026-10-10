@@ -1,10 +1,10 @@
-import { ChevronLeft } from 'lucide-react'
-import { ReaderMoreMenu } from '../components/reader-more-menu.tsx'
+import { ChevronLeft, ExternalLink, Info, RefreshCw } from 'lucide-react'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
+import { MoreMenu } from '../components/more-menu.tsx'
 import { PageBackButton } from '../components/page-back-button.tsx'
 import { ReaderIcon } from '../components/reader-icon.tsx'
-import { chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
+import { browserUrl, chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
 import { pageReturnState, pageReturnTarget } from '../lib/page-navigation.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -46,7 +46,8 @@ export function ReaderPage() {
 
   useEffect(() => {
     const requestId = ++requestIdRef.current
-    setControlsVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError('')
+    const cachedContent = cache.getContent(bookId, editionKey, chapterId)
+    setControlsVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError('')
     let active = true
     const controller = new AbortController()
     const snapshotRequest = loadBookSnapshot(cache, bookId, editionKey)
@@ -59,7 +60,7 @@ export function ReaderPage() {
       if (editionKey.length > 0) await apiFetch(`/api/books/${encodeURIComponent(bookId)}/edition`, { method: 'PUT', signal: controller.signal, body: JSON.stringify({ editionKey }) })
       if (!active || requestId !== requestIdRef.current) return
       restoredPositionRef.current = positionResult.position?.chapterId !== chapterId
-      setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
+      cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
     }).catch((reason: unknown) => {
       if (!active || requestId !== requestIdRef.current) return
       const snapshot = cache.get(bookId, editionKey)
@@ -132,7 +133,7 @@ export function ReaderPage() {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       if (result.content.tocRevision !== cache.get(bookId, editionKey)?.toc.revision) await loadBookSnapshot(cache, bookId, editionKey, true)
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      setContent(result.content.content)
+      cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content)
       window.requestAnimationFrame(() => {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return
         const paragraphs = [...articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph]') ?? []]
@@ -150,10 +151,15 @@ export function ReaderPage() {
     setThemeRetry(null)
     try { await updateSettings({ theme: target }) } catch { setThemeRetry(target) }
   }
+  const address = browserUrl(content.chapter.chapterUrl)
   return <section className="reader-page" onKeyDown={(event) => {
     if (event.key === 'Escape' && panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
   }}>
-    <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><Link className="reader-tool-button" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}>详情</Link><ReaderMoreMenu url={content.chapter.chapterUrl} refreshing={refreshing} onRefresh={() => void refreshChapter()} /></div></header>
+    <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
+      <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />详情</Link>
+      {address === undefined ? <span className="more-menu-note muted small">没有可用的原地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />原地址</a>}
+      <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新'}</button>
+    </MoreMenu></div></header>
     <article className="reader-content" ref={articleRef} tabIndex={0} aria-label="正文，按回车显示或隐藏阅读操作" style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }}
       onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY } }}
       onPointerCancel={() => { pointerStartRef.current = null }}
@@ -183,9 +189,12 @@ export function ReaderPage() {
 }
 
 function ReaderTocPanel({ open, bookId, editionKey, chapters, currentChapterId, onNavigate }: { open: boolean; bookId: string; editionKey: string; chapters: ApiChapter[]; currentChapterId: string; onNavigate: () => void }) {
+  const cache = useBookCache()
   const location = useLocation()
   const currentIndex = chapters.findIndex((chapter) => chapter.chapterId === currentChapterId)
   const [reversed, setReversed] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open || currentIndex < 0) return
@@ -196,8 +205,20 @@ function ReaderTocPanel({ open, bookId, editionKey, chapters, currentChapterId, 
     })
     return () => window.cancelAnimationFrame(frame)
   }, [currentIndex, open, reversed])
+  async function refreshDirectory() {
+    if (refreshing) return
+    setRefreshing(true)
+    setRefreshError('')
+    try {
+      await loadBookSnapshot(cache, bookId, editionKey, true)
+    } catch (reason) {
+      if (!(reason instanceof DOMException && reason.name === 'AbortError')) setRefreshError(reason instanceof Error ? reason.message : '目录刷新失败')
+    } finally {
+      setRefreshing(false)
+    }
+  }
   const orderedChapters = reversed ? [...chapters].reverse() : chapters
-  return <div className="reader-toc-panel"><div className="reader-toc-actions"><Link className="button secondary" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} state={pageReturnState(location)} onClick={onNavigate}>打开完整目录</Link><Button variant="secondary" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? '正序' : '倒序'}</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>到顶部</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })}>到底部</Button></div><div className="reader-toc-list" ref={listRef}>{orderedChapters.map((chapter) => <Link className={`reader-toc-row ${chapter.chapterId === currentChapterId ? 'current' : ''}`} aria-current={chapter.chapterId === currentChapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} replace state={location.state} onClick={onNavigate}><span className="toc-index">{chapter.index + 1}</span><span>{chapter.title}</span>{chapter.chapterId === currentChapterId ? <span className="toc-check" aria-label="当前阅读章节">✓</span> : null}</Link>)}</div></div>
+  return <div className="reader-toc-panel"><div className="reader-toc-actions"><Link className="button secondary reader-toc-directory" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} state={pageReturnState(location)} onClick={onNavigate}>打开完整目录</Link><div className="reader-toc-utility-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? '正序' : '倒序'}</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>到顶部</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })}>到底部</Button><Button variant="secondary" size="sm" type="button" aria-label="刷新目录数据" disabled={refreshing} onClick={() => void refreshDirectory()}>{refreshing ? '刷新中…' : '刷新'}</Button></div></div>{refreshError.length > 0 ? <p className="error reader-toc-error" role="alert">{refreshError}<button className="text-button" type="button" disabled={refreshing} onClick={() => void refreshDirectory()}>重试</button></p> : null}<div className="reader-toc-list" ref={listRef}>{orderedChapters.map((chapter) => <Link className={`reader-toc-row ${chapter.chapterId === currentChapterId ? 'current' : ''}`} aria-current={chapter.chapterId === currentChapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} replace state={location.state} onClick={onNavigate}><span className="toc-index">{chapter.index + 1}</span><span>{chapter.title}</span>{chapter.chapterId === currentChapterId ? <span className="toc-check" aria-label="当前阅读章节">✓</span> : null}</Link>)}</div></div>
 }
 
 export function ReaderEntryPage() {

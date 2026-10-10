@@ -1,20 +1,22 @@
+import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { ReaderSettingsPanel } from '../components/reader-settings-panel.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { useAuth } from '../lib/auth-context.tsx'
-import { useReaderSettings } from '../lib/settings-context.tsx'
 
 export function SettingsPage() {
   const { user, logout } = useAuth()
   return <section className="page-stack page-narrow settings-page">
     <div className="compact-heading"><h1>设置</h1><p className="muted">阅读偏好会跟随当前账号同步。</p></div>
-    <section className="settings-section account-section" aria-labelledby="account-settings-title"><h2 id="account-settings-title">账号</h2><div className="account-row"><span className="muted">{user?.email ?? '当前账号'}</span><Link className="button secondary small" to="/account/password">修改密码</Link></div><Button className="logout-button" variant="secondary" type="button" onClick={() => void logout()}>退出登录</Button></section>
-    <section className="settings-section"><Link className="settings-source-link" to="/sources"><strong>管理书源</strong><span className="muted small">导入、启用与管理</span></Link></section>
-    <section className="settings-section" aria-labelledby="reading-settings-title"><h2 id="reading-settings-title">阅读设置</h2><ReaderSettingsPanel /><SettingsPreview /></section>
+    <section className="settings-account" aria-labelledby="account-settings-title"><h2 id="account-settings-title">账号</h2><p>{user?.email ?? '当前账号'}</p><span className="muted small">当前登录账号</span></section>
+    <nav className="settings-entry-list" aria-label="设置选项">
+      <SettingsEntry to="/account/password" title="修改密码" description="更新登录密码" />
+      <SettingsEntry to="/sources" title="书源管理" description="导入、启用与管理书源" />
+      <SettingsEntry to="/account/settings/reading" title="阅读设置" description="调整字号、行距与页面模式" />
+    </nav>
+    <div className="settings-logout-area"><Button className="settings-logout-button" variant="secondary" type="button" onClick={() => void logout()}>退出登录</Button></div>
   </section>
 }
 
-function SettingsPreview() {
-  const { settings } = useReaderSettings()
-  return <div className="settings-preview" aria-label="排版预览"><p className="settings-preview-label muted small">排版预览</p><p className="settings-preview-copy" style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }}>晚风从窗边经过，书页上的句子也跟着慢下来。</p></div>
+function SettingsEntry({ to, title, description }: { to: string; title: string; description: string }) {
+  return <Link className="settings-entry" to={to}><span className="settings-entry-copy"><strong>{title}</strong><span className="muted small">{description}</span></span><ChevronRight aria-hidden="true" /></Link>
 }

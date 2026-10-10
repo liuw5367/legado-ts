@@ -1,14 +1,11 @@
 import { Minus, Plus } from 'lucide-react'
 import { stepSetting } from '../lib/setting-step.ts'
-import { useState } from 'react'
 import { ThemeModeSelect, useReaderSettings } from '../lib/settings-context.tsx'
 
 export function ReaderSettingsPanel() {
   const { settings, saving, error, updateSettings } = useReaderSettings()
-  const [message, setMessage] = useState('')
   async function save(patch: Parameters<typeof updateSettings>[0]) {
-    setMessage('')
-    try { await updateSettings(patch); setMessage('已保存') }
+    try { await updateSettings(patch) }
     catch { /* context 会保留错误并展示 */ }
   }
   return <div className="reader-settings-panel">
@@ -16,7 +13,6 @@ export function ReaderSettingsPanel() {
     <SettingRange label="字号" value={settings.fontSize} min={15} max={28} step={1} suffix="px" onChange={(value) => void save({ fontSize: value })} />
     <SettingRange label="行距" value={settings.lineHeight} min={1.4} max={2.6} step={0.1} onChange={(value) => void save({ lineHeight: value })} />
     {saving ? <p className="muted small" role="status">正在保存…</p> : null}
-    {message.length > 0 ? <p className="success compact-message" role="status">{message}</p> : null}
     {error === undefined ? null : <p className="error compact-message" role="alert">{error}</p>}
   </div>
 }

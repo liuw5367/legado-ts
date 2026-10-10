@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { BookCache, type BookSnapshot } from '../src/lib/book-cache.ts'
+import type { ApiContent } from '../src/lib/api.ts'
 import { SearchOperation } from '../src/lib/search-operation.ts'
 import { stepSetting } from '../src/lib/setting-step.ts'
 import { browserUrl } from '../src/lib/reader-interactions.ts'
@@ -18,6 +19,10 @@ function deferred<T>() {
 }
 function snapshot(revision: string): BookSnapshot {
   return { toc: { userId: 'a', bookId: 'b', editionKey: 'e', sourceFingerprint: 'f', revision, chapters: [], bookPatch: {} }, details: { book: { id: 'b', userId: 'a', name: '书', createdAt: '', updatedAt: '' }, edition: { editionKey: 'e', sourceId: 's', sourceFingerprint: 'f', bookUrl: 'https://example.test', metadata: {} }, sourceName: '源', onBookshelf: false }, editions: [], sources: [] }
+}
+function content(chapterId: string): ApiContent {
+  const chapter = { chapterId, sourceId: 's', bookUrl: 'https://example.test/book', chapterUrl: `https://example.test/chapter/${chapterId}`, index: 0, title: '章节' }
+  return { chapter, contentType: 'text', raw: '正文', cleaned: '正文', pages: [], resources: [] }
 }
 
 test('shared book cache merges requests, retains success on refresh failure and rejects late responses', async () => {
@@ -53,6 +58,21 @@ test('cache isolates editions and discards previous book, account and in-flight 
   cache.clear()
   assert.equal(cache.get('other', 'e'), undefined)
   assert.equal(new BookCache().get('b', 'f'), undefined)
+})
+
+test('book cache keeps only the current chapter content and isolates it by book and edition', async () => {
+  const cache = new BookCache()
+  await cache.load('b', 'e', async () => snapshot('r1'))
+  const first = content('c1')
+  const second = content('c2')
+  cache.setContent('b', 'e', 'c1', first)
+  assert.equal(cache.getContent('b', 'e', 'c1'), first)
+  cache.setContent('b', 'e', 'c2', second)
+  assert.equal(cache.getContent('b', 'e', 'c1'), undefined)
+  assert.equal(cache.getContent('b', 'e', 'c2'), second)
+  assert.equal(cache.getContent('b', 'other', 'c2'), undefined)
+  await cache.load('other', 'e', async () => snapshot('other'))
+  assert.equal(cache.getContent('b', 'e', 'c2'), undefined)
 })
 
 test('search cancellation before create returns settles server ID without starting the stream', async () => {
