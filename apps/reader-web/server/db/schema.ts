@@ -14,6 +14,30 @@ export const sources = readerSchema.table('sources', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('sources_enabled_order_idx').on(table.enabled, table.customOrder)])
 
+export const userSources = readerSchema.table('user_sources', {
+  userId: uuid('user_id').notNull(),
+  sourceId: text('source_id').notNull(),
+  fingerprint: text('fingerprint').notNull(),
+  rawSource: jsonb('raw_source').$type<unknown>().notNull(),
+  normalizedSource: jsonb('normalized_source').$type<NormalizedSource>().notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  customOrder: integer('custom_order').notNull().default(0),
+  deleted: boolean('deleted').notNull().default(false),
+  revision: text('revision').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex('user_sources_identity_idx').on(table.userId, table.sourceId), index('user_sources_user_enabled_idx').on(table.userId, table.enabled, table.deleted)])
+
+export const sourceImportPreviews = readerSchema.table('source_import_previews', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  sourceUrl: text('source_url').notNull(),
+  candidates: jsonb('candidates').$type<unknown[]>().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedCandidateIds: jsonb('consumed_candidate_ids').$type<string[]>().notNull().default([]),
+  consumedResult: jsonb('consumed_result').$type<{ imported: number } | null>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index('source_import_previews_user_expiry_idx').on(table.userId, table.expiresAt)])
+
 export const readerSettings = readerSchema.table('reader_settings', {
   userId: uuid('user_id').primaryKey(),
   theme: text('theme').$type<'system' | 'light' | 'dark'>().notNull().default('system'),
@@ -145,6 +169,8 @@ export const sourceRuntimeState = readerSchema.table('source_runtime_state', {
 }, (table) => [uniqueIndex('source_runtime_user_source_idx').on(table.userId, table.sourceId, table.sourceFingerprint), index('source_runtime_lease_idx').on(table.leaseUntil)])
 
 export type SourceRow = typeof sources.$inferSelect
+export type UserSourceRow = typeof userSources.$inferSelect
+export type SourceImportPreviewRow = typeof sourceImportPreviews.$inferSelect
 export type ReaderSettingsRow = typeof readerSettings.$inferSelect
 export type BookRow = typeof books.$inferSelect
 export type BookshelfRow = typeof bookshelf.$inferSelect

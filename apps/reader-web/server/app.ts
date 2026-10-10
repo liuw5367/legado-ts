@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { PostgresReaderRepository, type ReaderRepository } from './db/repository.ts'
+import { PostgresReaderRepository, SourceManagementError, type ReaderRepository } from './db/repository.ts'
 import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
+import { confirmImport, createImportPreview, listSourceActions, publicImportPreview } from './runtime/source-management.ts'
 import { serveReaderAsset } from './static.ts'
+import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema } from '../shared/source-management.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -41,10 +43,43 @@ app.get('/api/sources', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
   try {
-    return context.json({ sources: await dependencies.runtime.listSources() })
+    const sources = await dependencies.runtime.listSources(context.get('userId'))
+    return context.json({ sources: sources.map((source) => ({ sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled })) })
   } catch (error) {
     return handleError(context, error)
   }
+})
+
+app.get('/api/source-management', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const parsed = sourceManagementPageSchema.safeParse({ page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status') })
+  if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '书源列表参数无效' } }, 400)
+  try { return context.json(await dependencies.repository.listManagedSources(context.get('userId'), parsed.data)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/source-management/actions', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, sourceActionSchema)
+  if (body instanceof Response) return body
+  try { return context.json(await listSourceActions(dependencies.repository, context.get('userId'), body.action, body.items)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/source-management/import-preview', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, importPreviewRequestSchema)
+  if (body instanceof Response) return body
+  try { return context.json(publicImportPreview(await createImportPreview(dependencies.repository, context.get('userId'), body.url, context.req.raw.signal)), 201) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/source-management/import-confirm', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, importConfirmRequestSchema)
+  if (body instanceof Response) return body
+  try { return context.json({ previewId: body.previewId, ...(await confirmImport(dependencies.repository, context.get('userId'), body.previewId, body.candidateIds)) }) } catch (error) { return handleError(context, error) }
 })
 
 app.get('/api/settings', async (context) => {
@@ -75,7 +110,7 @@ app.post('/api/searches', async (context) => {
   const body = await parseBody(context, searchInputSchema)
   if (body instanceof Response) return body
   try {
-    const availableSources = await dependencies.runtime.listSources()
+    const availableSources = await dependencies.runtime.listSources(context.get('userId'))
     const requestedIds = body.sourceIds === undefined || body.sourceIds.length === 0 ? body.sourceId === undefined ? availableSources.map((item) => item.sourceId) : [body.sourceId] : body.sourceIds
     const selectedSources = availableSources.filter((item) => requestedIds.includes(item.sourceId))
     const source = selectedSources[0]
@@ -323,6 +358,10 @@ function handleError(context: Context<{ Variables: Variables }>, error: unknown)
 }
 
 function errorResponse(error: unknown): { body: { error: { code: string; message: string } }; status: 400 | 404 | 409 | 500 } {
+  if (error instanceof SourceManagementError) {
+    const status = error.code === 'source-not-found' ? 404 : error.code === 'preview-invalid' ? 400 : 409
+    return { body: { error: { code: error.code, message: error.message } }, status }
+  }
   if (error instanceof ReaderRuntimeError) {
     const status = error.code === 'not-found' ? 404 : error.code === 'invalid-input' ? 400 : error.code === 'source-busy' ? 409 : 500
     return { body: { error: { code: error.code, message: error.message } }, status }

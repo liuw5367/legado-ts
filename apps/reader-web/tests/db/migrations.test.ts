@@ -18,3 +18,14 @@ test('search precision is persisted as a migration-backed search option', async 
   assert.match(migration, /add column if not exists "precision" boolean not null default false/u)
   assert.match(journal, /"tag": "0004_search_precision"/u)
 })
+
+test('source management migration isolates account overrides and previews with RLS', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0005_source_management.sql'), 'utf8')
+  const journal = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8')
+  assert.match(migration, /create table if not exists "reader"\."user_sources"/u)
+  assert.match(migration, /constraint "user_sources_identity_unique" unique/u)
+  assert.match(migration, /create table if not exists "reader"\."source_import_previews"/u)
+  assert.match(migration, /user_sources_user_isolation/u)
+  assert.match(migration, /source_import_previews_user_isolation/u)
+  assert.match(journal, /"tag": "0005_source_management"/u)
+})

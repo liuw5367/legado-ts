@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, isNull, lt, or, sql } from 'drizzle-orm'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withReaderDb, withUser } from './client.ts'
-import { bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceRuntimeState, sources, tocSnapshots, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRow, type SourceRuntimeRow, type TocSnapshotRow } from './schema.ts'
+import { bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, sources, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
+import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type ThemeMode, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
 
@@ -24,10 +25,24 @@ export interface SourceRuntimeLease extends SourceRuntimeStateRecord {
   leaseToken: string
 }
 
+export class SourceManagementError extends Error {
+  public readonly code: 'source-conflict' | 'source-not-found' | 'preview-expired' | 'preview-invalid' | 'source-busy'
+  public constructor(code: SourceManagementError['code'], message: string) { super(message); this.code = code }
+}
+
 export interface ReaderRepository {
   upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource; enabled?: boolean; customOrder?: number }>): Promise<void>
   listSources(): Promise<StoredSourceRecord[]>
   getSource(sourceId: string): Promise<StoredSourceRecord | null>
+  listSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
+  listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
+  listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>>
+  getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null>
+  listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus }): Promise<SourceManagementPage>
+  applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }>
+  saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void>
+  getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null>
+  commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }>
   acquireSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, leaseMs: number): Promise<SourceRuntimeLease | null>
   saveSourceRuntimeState(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, expectedVersion: number, snapshot: RuntimeStateSnapshot): Promise<SourceRuntimeStateRecord | null>
   releaseSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string): Promise<void>
@@ -77,6 +92,153 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withReaderDb(async (database) => {
       const [row] = await database.select().from(sources).where(and(eq(sources.sourceId, sourceId), eq(sources.enabled, true))).limit(1)
       return row === undefined ? null : toSource(row)
+    })
+  }
+
+  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> {
+    return withUser(userId, async (transaction) => {
+      const [shared, overrides] = await Promise.all([
+        transaction.select().from(sources),
+        transaction.select().from(userSources).where(eq(userSources.userId, userId)),
+      ])
+      return mergeSourceRows(shared, overrides).filter((source) => source.enabled)
+    })
+  }
+
+  public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> {
+    return withUser(userId, async (transaction) => {
+      const [shared, overrides] = await Promise.all([transaction.select().from(sources), transaction.select().from(userSources).where(eq(userSources.userId, userId))])
+      return mergeSourceRows(shared, overrides)
+    })
+  }
+
+  public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> {
+    return withUser(userId, async (transaction) => {
+      const [shared, overrides] = await Promise.all([transaction.select().from(sources), transaction.select().from(userSources).where(eq(userSources.userId, userId))])
+      const values = new Map(shared.map((row) => [row.sourceId, { source: toSource(row), sourceRevision: sharedSourceRevision(row), deleted: false }]))
+      for (const row of overrides) values.set(row.sourceId, { source: toUserSource(row), sourceRevision: row.revision, deleted: row.deleted })
+      return [...values.values()]
+    })
+  }
+
+  public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> {
+    return withUser(userId, async (transaction) => {
+      const [sharedRow, override] = await Promise.all([
+        transaction.select().from(sources).where(eq(sources.sourceId, sourceId)).limit(1),
+        transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sourceId))).limit(1),
+      ])
+      const merged = mergeSourceRows(sharedRow, override)
+      const source = merged[0]
+      return source?.enabled === true ? source : null
+    })
+  }
+
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus }): Promise<SourceManagementPage> {
+    return withUser(userId, async (transaction) => {
+      const [shared, overrides] = await Promise.all([
+        transaction.select().from(sources),
+        transaction.select().from(userSources).where(eq(userSources.userId, userId)),
+      ])
+      const allRows = mergeManagedRows(shared, overrides)
+      const enabledCount = allRows.filter((source) => source.enabled).length
+      const rows = allRows
+        .filter((source) => {
+          const query = params.query.toLocaleLowerCase()
+          const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
+          return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
+      const offset = (params.page - 1) * params.pageSize
+      const page = rows.slice(offset, offset + params.pageSize)
+      return { sources: page, page: params.page, pageSize: params.pageSize, total: rows.length, enabledCount }
+    })
+  }
+
+  public async applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }> {
+    return withUser(userId, async (transaction) => {
+      const [shared, overrides] = await Promise.all([
+        transaction.select().from(sources).for('update'),
+        transaction.select().from(userSources).where(eq(userSources.userId, userId)).for('update'),
+      ])
+      const sharedById = new Map(shared.map((row) => [row.sourceId, row]))
+      const overrideById = new Map(overrides.map((row) => [row.sourceId, row]))
+      const seen = new Set<string>()
+      for (const item of items) {
+        if (seen.has(item.sourceId)) throw new SourceManagementError('source-conflict', '操作列表包含重复书源')
+        seen.add(item.sourceId)
+        const sharedRow = sharedById.get(item.sourceId)
+        const override = overrideById.get(item.sourceId)
+        const current = override === undefined ? sharedRow === undefined ? undefined : toSource(sharedRow) : override.deleted ? undefined : toUserSource(override)
+        if (current === undefined) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
+        const currentRevision = override?.revision ?? (sharedRow === undefined ? undefined : sharedSourceRevision(sharedRow))
+        if (currentRevision === undefined) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
+        if (currentRevision !== item.expectedSourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请刷新后重试：${item.sourceId}`)
+        const nextEnabled = action === 'enable'
+        if (action === 'delete') {
+          const runtimeRows = await transaction.select().from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, current.sourceId))).for('update')
+          if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${item.sourceId}`)
+          await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, current.sourceId)))
+        }
+        await transaction.insert(userSources).values({
+          userId,
+          sourceId: current.sourceId,
+          fingerprint: current.fingerprint,
+          rawSource: current.rawSource,
+          normalizedSource: current.normalizedSource,
+          enabled: action === 'delete' ? current.enabled : nextEnabled,
+          customOrder: readInteger(current.normalizedSource.customOrder, 0),
+          deleted: action === 'delete',
+          revision: randomUUID(),
+          updatedAt: new Date(),
+        }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: sql.raw('excluded."deleted"'), revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
+      }
+      return { affected: items.length }
+    })
+  }
+
+  public async saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void> {
+    await withUser(userId, async (transaction) => {
+      await transaction.delete(sourceImportPreviews).where(and(eq(sourceImportPreviews.userId, userId), lt(sourceImportPreviews.expiresAt, new Date())))
+      await transaction.insert(sourceImportPreviews).values({ id: preview.previewId, userId, sourceUrl, candidates: preview.candidates, expiresAt: new Date(preview.expiresAt) })
+    })
+  }
+
+  public async getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null> {
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.select().from(sourceImportPreviews).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId))).limit(1)
+      if (row === undefined || row.expiresAt.getTime() <= Date.now()) return null
+      return { previewId: row.id, expiresAt: row.expiresAt.toISOString(), candidates: row.candidates as ImportPreviewCandidate[], writableCount: (row.candidates as ImportPreviewCandidate[]).filter((candidate) => candidate.disposition !== undefined).length }
+    })
+  }
+
+  public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }> {
+    return withUser(userId, async (transaction) => {
+      const [previewRow] = await transaction.select().from(sourceImportPreviews).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId))).limit(1).for('update')
+      if (previewRow === undefined || previewRow.expiresAt.getTime() <= Date.now()) throw new SourceManagementError('preview-expired', '导入预览已过期，请重新获取')
+      const previousIds = previewRow.consumedCandidateIds
+      if (previousIds.length > 0) {
+        if (sameStringSet(previousIds, candidateIds)) return previewRow.consumedResult ?? { imported: 0 }
+        throw new SourceManagementError('preview-invalid', '导入预览已经确认过')
+      }
+      const candidates = (previewRow.candidates as ImportPreviewCandidate[]).filter((candidate) => candidateIds.includes(candidate.id))
+      if (candidates.length !== candidateIds.length || candidates.some((candidate) => candidate.disposition === undefined)) throw new SourceManagementError('preview-invalid', '确认列表包含不可导入的书源')
+      const [shared, overrides] = await Promise.all([transaction.select().from(sources).for('update'), transaction.select().from(userSources).where(eq(userSources.userId, userId)).for('update')])
+      const sharedById = new Map(shared.map((row) => [row.sourceId, row]))
+      const overrideById = new Map(overrides.map((row) => [row.sourceId, row]))
+      for (const candidate of candidates) {
+        const current = overrideById.get(candidate.sourceId) ?? sharedById.get(candidate.sourceId)
+        const currentRevision = overrideById.get(candidate.sourceId)?.revision ?? (current === undefined ? undefined : sharedSourceRevision(current))
+        if (candidate.sourceRevision === undefined ? currentRevision !== undefined : currentRevision !== candidate.sourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请重新获取预览：${candidate.name}`)
+        const currentSource = current === undefined ? undefined : toSource(current)
+        const normalizedSource = mergeImportedSource(currentSource, candidate.normalizedSource as NormalizedSource)
+        const runtimeRows = await transaction.select().from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId))).for('update')
+        if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${candidate.name}`)
+        if (currentSource !== undefined && currentSource.fingerprint !== candidate.fingerprint) await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId)))
+        await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, normalizedSource, enabled: currentSource?.enabled ?? true, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: randomUUID(), updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
+      }
+      const result = { imported: candidates.length }
+      await transaction.update(sourceImportPreviews).set({ consumedCandidateIds: candidateIds, consumedResult: result }).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId)))
+      return result
     })
   }
 
@@ -400,6 +562,8 @@ export class PostgresReaderRepository implements ReaderRepository {
 
 export class MemoryReaderRepository implements ReaderRepository {
   private readonly sourceMap = new Map<string, StoredSourceRecord>()
+  private readonly userSourceMap = new Map<string, { source: StoredSourceRecord; deleted: boolean; revision: string }>()
+  private readonly importPreviews = new Map<string, { userId: string; sourceUrl: string; preview: ImportPreview; consumedIds: string[]; result?: { imported: number } }>()
   private readonly runtimeStates = new Map<string, { snapshot: RuntimeStateSnapshot; version: number; leaseToken: string | null; leaseUntil: number | null }>()
   private readonly searches = new Map<string, SearchRunState>()
   private readonly books = new Map<string, { book: StoredBook; edition: StoredEdition }>()
@@ -414,6 +578,66 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async upsertSources(records: Array<{ sourceId: string; fingerprint: string; rawSource: unknown; normalizedSource: NormalizedSource; enabled?: boolean; customOrder?: number }>): Promise<void> { for (const record of records) this.sourceMap.set(record.sourceId, { sourceId: record.sourceId, name: record.normalizedSource.bookSourceName, ...(typeof record.normalizedSource.bookSourceGroup === 'string' ? { group: record.normalizedSource.bookSourceGroup } : {}), fingerprint: record.fingerprint, enabled: record.enabled ?? true, rawSource: record.rawSource, normalizedSource: record.normalizedSource }) }
   public async listSources(): Promise<StoredSourceRecord[]> { return [...this.sourceMap.values()].filter((source) => source.enabled) }
   public async getSource(sourceId: string): Promise<StoredSourceRecord | null> { const source = this.sourceMap.get(sourceId); return source?.enabled === true ? source : null }
+  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.effectiveSources(userId).filter((source) => source.enabled) }
+  public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.effectiveSources(userId) }
+  public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
+  public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { return this.effectiveSources(userId).find((source) => source.sourceId === sourceId && source.enabled) ?? null }
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus }): Promise<SourceManagementPage> {
+    const query = params.query.toLocaleLowerCase()
+    const allRows = this.effectiveSources(userId)
+    const enabledCount = allRows.filter((source) => source.enabled).length
+    const rows = allRows.filter((source) => {
+      const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
+      return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
+    }).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
+    const offset = (params.page - 1) * params.pageSize
+    return { sources: rows.slice(offset, offset + params.pageSize).map((source) => managedSummary(source, this.sourceRevision(userId, source.sourceId), this.userSourceMap.has(`${userId}:${source.sourceId}`) ? 'account' : 'shared')), page: params.page, pageSize: params.pageSize, total: rows.length, enabledCount }
+  }
+  public async applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }> {
+    const seen = new Set<string>()
+    const updates: Array<{ source: StoredSourceRecord; deleted: boolean }> = []
+    for (const item of items) {
+      if (seen.has(item.sourceId)) throw new SourceManagementError('source-conflict', '操作列表包含重复书源')
+      seen.add(item.sourceId)
+      const source = await this.getSourceForManagement(userId, item.sourceId)
+      if (source === undefined) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
+      if (this.sourceRevision(userId, item.sourceId) !== item.expectedSourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请刷新后重试：${item.sourceId}`)
+      if (action === 'delete' && this.runtimeEntriesForSource(userId, item.sourceId).some(([, state]) => state.leaseToken !== null && (state.leaseUntil ?? 0) > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${item.sourceId}`)
+      updates.push({ source, deleted: action === 'delete' })
+    }
+    for (const update of updates) {
+      if (update.deleted) for (const [key] of this.runtimeEntriesForSource(userId, update.source.sourceId)) this.runtimeStates.delete(key)
+      const next: StoredSourceRecord = { ...update.source, enabled: update.deleted ? update.source.enabled : action === 'enable' }
+      this.userSourceMap.set(`${userId}:${update.source.sourceId}`, { source: next, deleted: update.deleted, revision: randomUUID() })
+    }
+    return { affected: items.length }
+  }
+  public async saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void> { this.importPreviews.set(`${userId}:${preview.previewId}`, { userId, sourceUrl, preview, consumedIds: [] }) }
+  public async getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null> { const record = this.importPreviews.get(`${userId}:${previewId}`); return record === undefined || new Date(record.preview.expiresAt).getTime() <= Date.now() ? null : record.preview }
+  public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }> {
+    const record = this.importPreviews.get(`${userId}:${previewId}`)
+    if (record === undefined || new Date(record.preview.expiresAt).getTime() <= Date.now()) throw new SourceManagementError('preview-expired', '导入预览已过期，请重新获取')
+    if (record.consumedIds.length > 0) { if (sameStringSet(record.consumedIds, candidateIds)) return record.result ?? { imported: 0 }; throw new SourceManagementError('preview-invalid', '导入预览已经确认过') }
+    const candidates = record.preview.candidates.filter((candidate) => candidateIds.includes(candidate.id))
+    if (candidates.length !== candidateIds.length || candidates.some((candidate) => candidate.disposition === undefined)) throw new SourceManagementError('preview-invalid', '确认列表包含不可导入的书源')
+    for (const candidate of candidates) {
+      const currentRevision = this.userSourceMap.has(`${userId}:${candidate.sourceId}`) ? this.sourceRevision(userId, candidate.sourceId) : (this.sourceMap.has(candidate.sourceId) ? this.sourceRevision(userId, candidate.sourceId) : undefined)
+      if (candidate.sourceRevision === undefined ? currentRevision !== undefined : currentRevision !== candidate.sourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请重新获取预览：${candidate.name}`)
+      if (this.runtimeEntriesForSource(userId, candidate.sourceId).some(([, state]) => state.leaseToken !== null && (state.leaseUntil ?? 0) > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${candidate.name}`)
+    }
+    for (const candidate of candidates) {
+      const current = this.userSourceMap.get(`${userId}:${candidate.sourceId}`)?.source ?? this.sourceMap.get(candidate.sourceId)
+      if (current !== undefined && current.fingerprint !== candidate.fingerprint) for (const [key] of this.runtimeEntriesForSource(userId, candidate.sourceId)) this.runtimeStates.delete(key)
+      const normalizedSource = mergeImportedSource(current, candidate.normalizedSource as NormalizedSource)
+      this.userSourceMap.set(`${userId}:${candidate.sourceId}`, { source: { sourceId: candidate.sourceId, name: normalizedSource.bookSourceName, ...(typeof normalizedSource.bookSourceGroup === 'string' ? { group: normalizedSource.bookSourceGroup } : {}), fingerprint: candidate.fingerprint, enabled: current?.enabled ?? true, rawSource: candidate.rawSource, normalizedSource }, deleted: false, revision: randomUUID() })
+    }
+    record.consumedIds = [...candidateIds]; record.result = { imported: candidates.length }; return record.result
+  }
+  private effectiveSources(userId: string): StoredSourceRecord[] { const values = new Map(this.sourceMap); for (const [key, value] of this.userSourceMap) if (key.startsWith(`${userId}:`)) { if (value.deleted) values.delete(value.source.sourceId); else values.set(value.source.sourceId, value.source) } return [...values.values()] }
+  private allSourceStates(userId: string): Array<{ source: StoredSourceRecord; deleted: boolean }> { const values = new Map([...this.sourceMap.values()].map((source) => [source.sourceId, { source, deleted: false }])); for (const [key, value] of this.userSourceMap) if (key.startsWith(`${userId}:`)) values.set(value.source.sourceId, { source: value.source, deleted: value.deleted }); return [...values.values()] }
+  private getSourceForManagement(userId: string, sourceId: string): Promise<StoredSourceRecord | undefined> { const override = this.userSourceMap.get(`${userId}:${sourceId}`); if (override !== undefined) return Promise.resolve(override.deleted ? undefined : override.source); return Promise.resolve(this.sourceMap.get(sourceId)) }
+  private sourceRevision(userId: string, sourceId: string): string { const override = this.userSourceMap.get(`${userId}:${sourceId}`); return override?.revision ?? (this.sourceMap.has(sourceId) ? sharedSourceRevision(this.sourceMap.get(sourceId)!) : `shared:`) }
+  private runtimeEntriesForSource(userId: string, sourceId: string): Array<[string, { snapshot: RuntimeStateSnapshot; version: number; leaseToken: string | null; leaseUntil: number | null }]> { return [...this.runtimeStates.entries()].filter(([key]) => { const identity = JSON.parse(key) as unknown[]; return identity[0] === userId && identity[1] === sourceId }) }
   public async acquireSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, leaseMs: number): Promise<SourceRuntimeLease | null> { const key = runtimeStateKey(userId, sourceId, sourceFingerprint); const now = Date.now(); const current = this.runtimeStates.get(key); if (current !== undefined && current.leaseToken !== null && (current.leaseUntil ?? 0) > now) return null; const next = current ?? { snapshot: {}, version: 0, leaseToken: null, leaseUntil: null }; next.leaseToken = leaseToken; next.leaseUntil = now + Math.max(1_000, leaseMs); this.runtimeStates.set(key, next); return { sourceId, sourceFingerprint, snapshot: cloneRuntimeSnapshot(next.snapshot), version: next.version, leaseToken } }
   public async saveSourceRuntimeState(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, expectedVersion: number, snapshot: RuntimeStateSnapshot): Promise<SourceRuntimeStateRecord | null> { const key = runtimeStateKey(userId, sourceId, sourceFingerprint); const current = this.runtimeStates.get(key); if (current === undefined || current.leaseToken !== leaseToken || current.version !== expectedVersion) return null; const next = { snapshot: cloneRuntimeSnapshot(snapshot), version: current.version + 1, leaseToken: null, leaseUntil: null }; this.runtimeStates.set(key, next); return { sourceId, sourceFingerprint, snapshot: cloneRuntimeSnapshot(next.snapshot), version: next.version } }
   public async releaseSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string): Promise<void> { const current = this.runtimeStates.get(runtimeStateKey(userId, sourceId, sourceFingerprint)); if (current?.leaseToken !== leaseToken) return; current.leaseToken = null; current.leaseUntil = null }
@@ -447,6 +671,25 @@ function toRuntimeLease(row: SourceRuntimeRow, leaseToken: string): SourceRuntim
 function runtimeStateKey(userId: string, sourceId: string, sourceFingerprint: string): string { return JSON.stringify([userId, sourceId, sourceFingerprint]) }
 function cloneRuntimeSnapshot(snapshot: RuntimeStateSnapshot): RuntimeStateSnapshot { return structuredClone(snapshot) }
 function toSource(row: SourceRow): StoredSourceRecord { return { sourceId: row.sourceId, name: typeof row.normalizedSource.bookSourceName === 'string' ? row.normalizedSource.bookSourceName : row.sourceId, ...(typeof row.normalizedSource.bookSourceGroup === 'string' ? { group: row.normalizedSource.bookSourceGroup } : {}), fingerprint: row.fingerprint, enabled: row.enabled, rawSource: row.rawSource, normalizedSource: row.normalizedSource } }
+function toUserSource(row: UserSourceRow): StoredSourceRecord { return { sourceId: row.sourceId, name: typeof row.normalizedSource.bookSourceName === 'string' ? row.normalizedSource.bookSourceName : row.sourceId, ...(typeof row.normalizedSource.bookSourceGroup === 'string' ? { group: row.normalizedSource.bookSourceGroup } : {}), fingerprint: row.fingerprint, enabled: row.enabled, rawSource: row.rawSource, normalizedSource: row.normalizedSource } }
+function mergeSourceRows(shared: SourceRow[], overrides: UserSourceRow[]): StoredSourceRecord[] { const values = new Map(shared.map((row) => [row.sourceId, toSource(row)])); for (const row of overrides) { if (row.deleted) values.delete(row.sourceId); else values.set(row.sourceId, toUserSource(row)) } return [...values.values()] }
+function managedSummary(source: StoredSourceRecord, sourceRevision: string, origin: 'shared' | 'account'): ManagedSourceSummary { const time = readTimestamp(source.normalizedSource.lastUpdateTime); return { sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled, sourceRevision, origin, ...(time === undefined ? {} : { lastUpdateTime: time }) } }
+function mergeManagedRows(shared: SourceRow[], overrides: UserSourceRow[]): ManagedSourceSummary[] { const overrideMap = new Map(overrides.map((row) => [row.sourceId, row])); const values = new Map<string, ManagedSourceSummary>(); for (const row of shared) { const override = overrideMap.get(row.sourceId); if (override?.deleted === true) continue; const source = override === undefined ? toSource(row) : toUserSource(override); values.set(source.sourceId, managedSummary(source, override?.revision ?? sharedSourceRevision(row), override === undefined ? 'shared' : 'account')) } for (const row of overrides) if (!values.has(row.sourceId) && !row.deleted) { const source = toUserSource(row); values.set(source.sourceId, managedSummary(source, row.revision, 'account')) } return [...values.values()] }
+function sharedSourceRevision(row: { normalizedSource: unknown }): string { return `shared:${createHash('sha256').update(JSON.stringify(canonicalSource(row.normalizedSource))).digest('hex')}` }
+function canonicalSource(value: unknown): unknown { if (Array.isArray(value)) return value.map(canonicalSource); if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, nested]) => [key, canonicalSource(nested)])); return value }
+function readInteger(value: unknown, fallback: number): number { return typeof value === 'number' && Number.isSafeInteger(value) ? value : fallback }
+function readTimestamp(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined }
+function sameStringSet(left: string[], right: string[]): boolean { return left.length === right.length && left.every((value) => right.includes(value)) }
+function mergeImportedSource(local: StoredSourceRecord | undefined, remote: NormalizedSource): NormalizedSource {
+  if (local === undefined) return remote
+  const result = { ...remote } as Record<string, unknown>
+  const localValue = local.normalizedSource as Record<string, unknown>
+  for (const key of ['bookSourceName', 'bookSourceGroup', 'enabled', 'enabledExplore', 'customOrder', 'weight']) {
+    if (Object.prototype.hasOwnProperty.call(localValue, key)) result[key] = localValue[key]
+    else delete result[key]
+  }
+  return result as NormalizedSource
+}
 function defaultReaderSettings(userId: string): ReaderSettings { return { userId, ...DEFAULT_READER_SETTINGS, updatedAt: new Date().toISOString() } }
 function toSettings(row: ReaderSettingsRow): ReaderSettings { return { userId: row.userId, theme: row.theme as ThemeMode, fontSize: row.fontSize, lineHeight: row.lineHeightUnits / 100, updatedAt: row.updatedAt.toISOString() } }
 function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }

@@ -36,6 +36,13 @@
       "when": 1791538824320,
       "tag": "0004_search_precision",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791597400000,
+      "tag": "0005_source_management",
+      "breakpoints": false
     }
   ]
 }

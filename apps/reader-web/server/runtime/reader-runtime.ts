@@ -17,7 +17,7 @@ export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean }
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
 
 export interface ReaderRuntime {
-  listSources(): Promise<StoredSourceRecord[]>
+  listSources(userId?: string): Promise<StoredSourceRecord[]>
   runSearchBatch(userId: string, searchId: string, options?: SearchBatchOptions): Promise<SearchBatchResult>
   runSearchBatchStream(userId: string, searchId: string, listener: SearchSourceListener, options?: SearchBatchOptions): Promise<SearchBatchResult>
   cancelSearch(userId: string, searchId: string): Promise<SearchRunState | null>
@@ -31,7 +31,7 @@ const SOURCE_RUNTIME_LEASE_MS = 5 * 60 * 1000
 
 export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime {
   return {
-    listSources: async () => { await seedConfiguredSources(repository); return repository.listSources() },
+    listSources: async (userId) => { await seedConfiguredSources(repository); return userId === undefined ? repository.listSources() : repository.listSourcesForUser(userId) },
     runSearchBatch: (userId, searchId, options) => runSearchBatch(repository, userId, searchId, options),
     runSearchBatchStream: (userId, searchId, listener, options) => runSearchBatchStream(repository, userId, searchId, listener, options),
     cancelSearch: (userId, searchId) => cancelSearch(repository, userId, searchId),
@@ -97,7 +97,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
 async function runOneSource(repository: ReaderRepository, run: SearchRunState, state: SourceSearchState, signal: AbortSignal): Promise<{ state: SourceSearchState; additions: StoredCandidate[] }> {
   const startedAt = new Date().toISOString()
   let source: StoredSourceRecord
-  try { source = await requireSource(repository, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
+  try { source = await requireSource(repository, run.userId, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
   try {
     const result = await withPersistentSourceSession(repository, run.userId, source, (session) => session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(run.precision === true ? { acceptSearchFields: (fields) => acceptsPrecisionSearchFields(run.keyword, fields) } : {}), ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 })))
     const additions = (result.value?.items ?? []).map((candidate) => ({ sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate }))
@@ -141,7 +141,7 @@ async function createBookFromSearch(repository: ReaderRepository, userId: string
   if (bookId !== undefined && await repository.getBook(userId, bookId) === null) throw new ReaderRuntimeError('not-found', '目标书籍不存在')
   const stored = run.candidates[candidateIndex]
   if (stored === undefined) throw new ReaderRuntimeError('invalid-input', '搜索结果索引无效')
-  const source = await requireSource(repository, stored.sourceId)
+  const source = await requireSource(repository, userId, stored.sourceId)
   if (source.fingerprint !== stored.sourceFingerprint) throw new ReaderRuntimeError('configuration', '书源定义已更新，请重新搜索')
   return withPersistentSourceSession(repository, userId, source, async (session) => {
     const result = await session.run((ports) => loadBookDetails(ports, { source: source.normalizedSource, candidates: [stored.candidate], maxItems: 1 }))
@@ -156,7 +156,7 @@ async function createBookFromSearch(repository: ReaderRepository, userId: string
 async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<StoredToc> {
   const edition = await repository.getEdition(userId, bookId, editionKey)
   if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
-  const source = await requireSource(repository, edition.sourceId)
+  const source = await requireSource(repository, userId, edition.sourceId)
   if (!refresh) {
     const cached = await repository.getToc(userId, bookId, editionKey)
     if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
@@ -175,7 +175,7 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
 async function getOrLoadContent(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, refresh = false): Promise<StoredContent> {
   const edition = await repository.getEdition(userId, bookId, editionKey)
   if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
-  const source = await requireSource(repository, edition.sourceId)
+  const source = await requireSource(repository, userId, edition.sourceId)
   const toc = await repository.getToc(userId, bookId, editionKey)
   if (toc === null) throw new ReaderRuntimeError('not-found', '目录尚未加载')
   const chapterIndex = toc.chapters.findIndex((chapter) => chapterIdFor(chapter) === chapterId)
@@ -200,8 +200,8 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
   })
 }
 
-async function requireSource(repository: ReaderRepository, sourceId: string): Promise<StoredSourceRecord> {
-  const source = await repository.getSource(sourceId)
+async function requireSource(repository: ReaderRepository, userId: string, sourceId: string): Promise<StoredSourceRecord> {
+  const source = await repository.getSourceForUser(userId, sourceId)
   if (source === null) throw new ReaderRuntimeError('configuration', `书源不可用：${sourceId}`)
   return source
 }
