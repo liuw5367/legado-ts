@@ -25,7 +25,7 @@ The stack is `ui-sans-serif`, system UI, and `PingFang SC`/`Noto Sans SC` fallba
 
 ## 4. Component styling
 
-Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-pixel outline for secondary actions. Press feedback is a small downward transform, and focus uses a visible primary outline. Cards are reserved for forms, settings, source panels, and result rows. Inputs inherit the current surface and foreground tokens.
+Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-pixel outline for secondary actions. Press feedback is a small downward transform, and focus uses a visible primary outline. Cards are reserved for forms, settings, source panels, and result rows. Inputs inherit the current surface and foreground tokens. Binary search filters such as “精确” use a compact outlined toggle with the primary color and a quiet primary-tinted surface when selected.
 
 ## 5. Layout principles
 

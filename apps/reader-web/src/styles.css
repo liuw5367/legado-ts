@@ -141,10 +141,8 @@ a { color: inherit; }
 .search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .search-input { min-width: 0; }
 .search-options { display: flex; min-height: 40px; align-items: center; gap: 8px; }
-.check-inline { display: inline-flex; min-height: 40px; align-items: center; gap: 5px; color: var(--muted); font-size: 13px; }
 .cancel-button { flex: 0 0 auto; }
 .cancel-button-active { color: var(--danger) !important; background: var(--danger-surface) !important; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border)) !important; }
-.check-inline input { width: 16px; height: 16px; accent-color: var(--primary); }
 .text-button { width: fit-content; min-height: 36px; padding: 5px 0; border: 0; background: transparent; color: var(--primary); font-size: 13px; }
 .result-summary { min-height: 24px; color: var(--muted); font-size: 12px; }
 .result-list { display: flex; flex-direction: column; }
@@ -340,8 +338,7 @@ a { color: inherit; }
 .section-heading h2, .sheet-header h2 { font-size: 14px; }
 .search-row { display: flex; align-items: center; gap: 8px; }
 .search-row .input { min-width: 0; flex: 1; }
-.search-row .check-inline, .search-row > .button { flex-shrink: 0; }
-.search-row .check-inline { min-height: 44px; gap: 4px; font-size: 12px; white-space: nowrap; }
+.search-row > .button { flex-shrink: 0; }
 .result-detail-cover, .result-detail-title, .result-detail-intro { padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .result-detail-cover { align-self: flex-start; flex-shrink: 0; }
 .result-detail-title { font: inherit; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -410,3 +407,9 @@ a { color: inherit; }
 .result-intro .result-detail-intro { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; font-size: 12px; }
 .result-intro.expanded .result-detail-intro { display: block; }
 .auth-form h1 { font-size: 18px; }
+
+.precision-toggle { display: inline-flex; min-width: 64px; min-height: 44px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 4px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.precision-toggle[aria-pressed="true"] { border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); background: color-mix(in srgb, var(--primary) 12%, var(--card)); color: var(--primary); font-weight: 650; }
+.precision-toggle svg { width: 14px; height: 14px; stroke-width: 2; }
+.precision-toggle:active { transform: scale(.97); }
+.precision-toggle:disabled { cursor: wait; opacity: .55; }

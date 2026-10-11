@@ -325,8 +325,8 @@ export function ReaderPage() {
     finally { if (requestId === requestIdRef.current) setRefreshing(false) }
   }
   const returnTarget = pageReturnTarget(location.state, location.pathname, '/')
-  if (error.length > 0) return <section className="reader-error"><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button><PageBackButton /></div></section>
-  if (content === null) return <section className="reader-loading"><p className="muted">正在读取正文…</p><PageBackButton /></section>
+  if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
+  if (content === null) return <section className="reader-loading"><PageBackButton /><p className="muted">正在读取正文…</p></section>
   const dark = resolvedTheme === 'dark'
   const paged = settings.readingMode === 'paged'
   const pageCounter = pageLayout.pageCount > 0 ? pageLabel(pageIndex, pageLayout.pageCount) : '排版中…'
@@ -444,6 +444,7 @@ export function ReaderEntryPage() {
   const [searchParams] = useSearchParams()
   const requestedEditionKey = searchParams.get('editionKey') ?? ''
   const [error, setError] = useState('')
+  const [retryNonce, setRetryNonce] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -467,10 +468,10 @@ export function ReaderEntryPage() {
       } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : '无法打开阅读') }
     })()
     return () => { active = false; controller.abort() }
-  }, [bookId, navigate, requestedEditionKey, cache, location.state])
+  }, [bookId, navigate, requestedEditionKey, cache, location.state, retryNonce])
 
-  if (error.length > 0) return <section className="reader-error"><p className="error">{error}</p><PageBackButton /></section>
-  return <section className="reader-loading"><p className="muted">正在打开阅读…</p></section>
+  if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
+  return <section className="reader-loading"><PageBackButton /><p className="muted">正在打开阅读…</p></section>
 }
 
 function chapterLink(bookId: string, chapter: ApiChapter, editionKey: string): string { return `/books/${encodeURIComponent(bookId)}/read/${encodeURIComponent(chapter.chapterId)}?editionKey=${encodeURIComponent(editionKey)}` }

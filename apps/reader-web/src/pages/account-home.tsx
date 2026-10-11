@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { MoreMenu } from '../components/more-menu.tsx'
@@ -11,20 +11,48 @@ type View = 'bookshelf' | 'reading' | 'history'
 
 export function AccountHomePage() {
   const [home, setHome] = useState<ApiHome | null>(null)
+  const [loading, setLoading] = useState(true)
   const location = useLocation()
   const initialView = (location.state as { homeView?: View } | null)?.homeView
   const [view, setView] = useState<View>(initialView === 'reading' || initialView === 'history' ? initialView : 'bookshelf')
   const [message, setMessage] = useState('')
   const [removing, setRemoving] = useState<string>()
   const [deletingHistory, setDeletingHistory] = useState<string>()
+  const requestIdRef = useRef(0)
+  const controllerRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    let active = true
-    void apiFetch<ApiHome>('/api/home').then((result) => { if (active) setHome(result) }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '首页加载失败') })
-    return () => { active = false }
+  const loadHome = useCallback(async () => {
+    const requestId = ++requestIdRef.current
+    controllerRef.current?.abort()
+    const controller = new AbortController()
+    controllerRef.current = controller
+    setLoading(true)
+    setMessage('')
+    try {
+      const result = await apiFetch<ApiHome>('/api/home', { signal: controller.signal })
+      if (controller.signal.aborted || requestId !== requestIdRef.current) return
+      setHome(result)
+    } catch (error: unknown) {
+      if (controller.signal.aborted || requestId !== requestIdRef.current) return
+      setMessage(error instanceof Error ? error.message : '首页加载失败')
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false)
+        if (controllerRef.current === controller) controllerRef.current = null
+      }
+    }
   }, [])
 
-  async function refresh() { setHome(await apiFetch<ApiHome>('/api/home')) }
+  useEffect(() => {
+    void loadHome()
+    return () => {
+      requestIdRef.current += 1
+      controllerRef.current?.abort()
+      controllerRef.current = null
+    }
+  }, [loadHome])
+
+  async function refresh() { await loadHome() }
   async function removeBook(bookId: string) {
     setRemoving(bookId); setMessage('')
     try { await apiFetch(`/api/books/${encodeURIComponent(bookId)}/bookshelf`, { method: 'DELETE' }); await refresh() }
@@ -38,17 +66,20 @@ export function AccountHomePage() {
     finally { setDeletingHistory(undefined) }
   }
 
-  if (home === null) return <section className="page-stack page-narrow"><div className="loading-state"><p className="muted">正在读取你的阅读数据…</p>{message.length > 0 ? <p className="error">{message}</p> : null}</div></section>
-  const bookItems: BookItem[] = view === 'bookshelf' ? home.bookshelf : home.reading
+  const bookItems: BookItem[] = home === null ? [] : view === 'bookshelf' ? home.bookshelf : home.reading
+  const countLabel = home === null ? (loading ? '读取中…' : '暂时无法读取') : view === 'bookshelf' ? `${home.bookshelf.length} 本书` : view === 'reading' ? `${home.reading.length} 条记录` : `${home.searchHistory.length} 条搜索`
   return <section className="page-stack page-narrow">
-    <div className="page-heading compact-heading"><div><h1>我的阅读</h1><p className="muted">{view === 'bookshelf' ? `${home.bookshelf.length} 本书` : view === 'reading' ? `${home.reading.length} 条记录` : `${home.searchHistory.length} 条搜索`}</p></div><Link className="button small" to="/search">搜索书籍</Link></div>
+    <div className="page-heading compact-heading"><div><h1>我的阅读</h1><p className="muted">{countLabel}</p></div><Link className="button small" to="/search">搜索书籍</Link></div>
     <div className="segmented" role="tablist" aria-label="阅读数据视图">
-      <button className={view === 'bookshelf' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'bookshelf'} onClick={() => setView('bookshelf')}>书架 <span>{home.bookshelf.length}</span></button>
-      <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => setView('reading')}>阅读 <span>{home.reading.length}</span></button>
-      <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>搜索 <span>{home.searchHistory.length}</span></button>
+      <button className={view === 'bookshelf' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'bookshelf'} onClick={() => setView('bookshelf')}>书架 {home === null ? null : <span>{home.bookshelf.length}</span>}</button>
+      <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => setView('reading')}>阅读 {home === null ? null : <span>{home.reading.length}</span>}</button>
+      <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>搜索 {home === null ? null : <span>{home.searchHistory.length}</span>}</button>
     </div>
-    {message.length > 0 ? <p className="error compact-message" role="alert">{message}</p> : null}
-    {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList view={view} items={bookItems} showRemove={view === 'bookshelf'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
+    {loading && home === null ? <div className="loading-state"><p className="muted">正在读取你的阅读数据…</p></div> : home === null ? <div className="error-state"><p className="error" role="alert">{message || '首页加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
+      {loading ? <p className="loading-state muted" role="status">正在更新你的阅读数据…</p> : null}
+      {message.length > 0 ? <p className="error compact-message" role="alert">{message}</p> : null}
+      {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList view={view} items={bookItems} showRemove={view === 'bookshelf'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
+    </>}
   </section>
 }
 

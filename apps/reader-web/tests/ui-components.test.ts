@@ -13,7 +13,7 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
     const source = await readFile(resolve(sourceRoot, `components/ui/${component}.tsx`), 'utf8')
     assert.match(source, /export function/u)
   }
-  for (const component of ['book-cover', 'reader-layout', 'reader-settings-panel', 'ui/sheet']) {
+  for (const component of ['book-cover', 'reader-layout', 'reader-settings-panel', 'precision-toggle', 'ui/sheet']) {
     const source = await readFile(resolve(sourceRoot, `components/${component}.tsx`), 'utf8')
     assert.match(source, /export function/u)
   }
@@ -87,8 +87,14 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(styles, /@media \(max-width: 520px\) \{\s+\.source-management-row \{ grid-template-columns: 28px minmax\(0, 1fr\) auto; align-items: center; \}/u)
   assert.match(styles, /\.source-row-actions \{ grid-column: auto; justify-content: flex-end; \}/u)
   assert.match(searchPage, /precision/u)
+  assert.match(searchPage, /<PrecisionToggle/u)
   assert.match(searchPage, /cancel-button-active/u)
   assert.match(pageSources[6] ?? '', /cancel-button-active/u)
+  assert.match(pageSources[6] ?? '', /<PrecisionToggle/u)
+  assert.match(accountHome, /const \[loading, setLoading\]/u)
+  assert.match(accountHome, /正在读取你的阅读数据/u)
+  assert.match(accountHome, /loading && home === null/u)
+  assert.doesNotMatch(accountHome, /if \(home === null\) return/u)
   assert.doesNotMatch(searchPage, /\/api\/sources/u)
   assert.doesNotMatch(searchPage, /sourceIds/u)
 })
