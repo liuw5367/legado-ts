@@ -4,6 +4,39 @@
 
 应用组织书源和提交数据，package 解释规则并编排流程。已实现的命令行阅读器位于 `apps/reader-cli`，它在应用层调用本章工作流，提供搜索、详情、目录、正文、书架和阅读状态；安装与键位见 [`apps/reader-cli/README.md`](../../apps/reader-cli/README.md)。
 
+## 最小 Node 集成
+
+下面的示例使用 workspace 中的两个 package 导入本地 JSON 书源，创建 Node session 并执行一次搜索。真实搜索会按书源规则请求网络；应用应在所有路径结束后关闭 session。
+
+```ts
+import { readFile } from 'node:fs/promises'
+import { importSources, searchBooks } from '@legado/source-core'
+import { createNodeSourceSession } from '@legado/source-node'
+
+const text = await readFile('sources.json', 'utf8')
+const candidates = await importSources(text)
+const source = candidates.find((candidate) => candidate.status === 'ready')?.source
+if (source === undefined) throw new Error('没有可执行的书源')
+
+const session = createNodeSourceSession(source)
+try {
+  const result = await session.run((ports) => searchBooks(ports, {
+    source: session.source,
+    keyword: '示例关键词',
+  }))
+
+  if (result.status === 'success') {
+    console.log(result.value?.items)
+  } else {
+    console.error(result.status, result.diagnostics)
+  }
+} finally {
+  session.close()
+}
+```
+
+`importSources` 只负责解析、规范化和诊断；应用需要确认候选后自行保存。`searchBooks` 返回 `RuntimeResult`，合法无结果是 `empty`，取消和宿主缺失分别是 `cancelled` 与 `capability-missing`。需要自定义网络、Cookie 或 JavaScript 能力时，通过 `createNodeSourceSession` 的选项或直接实现 `WorkflowPorts` 注入宿主。package 不负责保存书架、阅读进度和用户凭据。
+
 ## 当前公开入口
 
 以下导出均来自 `@legado/source-core`：

@@ -4,6 +4,18 @@
 
 本地将 `apps/reader-web/.env.example` 复制为 `.env.local`，或通过 `READER_WEB_ENV_FILE` 指定环境文件。浏览器构建使用 `PUBLIC_SUPABASE_URL` 和 `PUBLIC_SUPABASE_PUBLISHABLE_KEY`；服务端认证使用 `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY` 和 `DATABASE_URL`。`SOURCE_RUNTIME_STATE_KEY` 只在服务端配置，使用至少 32 个字符的随机值，不能放进 `PUBLIC_*` 变量。
 
+| 变量 | 读取位置 | 用途 |
+| --- | --- | --- |
+| `PUBLIC_SUPABASE_URL` | 浏览器构建 | Supabase 项目 URL |
+| `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 浏览器构建 | 浏览器端 Supabase publishable key |
+| `SUPABASE_URL` | Hono 服务端 | 校验登录令牌的 Supabase URL |
+| `SUPABASE_PUBLISHABLE_KEY` | Hono 服务端 | 服务端 Supabase 客户端使用的 publishable key |
+| `DATABASE_URL` | Hono、Drizzle 迁移和测试 | PostgreSQL 连接串 |
+| `SOURCE_RUNTIME_STATE_KEY` | Hono 服务端 | 加密每个用户的书源 Cookie 和脚本变量，至少 32 个字符 |
+| `READER_WEB_ENV_FILE` | 开发脚本和测试 | 指定环境文件路径；未设置时读取 `apps/reader-web/.env.local` |
+
+数据库密码、Cookie、脚本变量和 `SOURCE_RUNTIME_STATE_KEY` 不应放入 `PUBLIC_*` 变量或提交到仓库。
+
 认证回调依赖 Supabase 的 Confirm signup、Reset password 模板。模板分别使用 `auth-email-templates/confirm-signup.html` 和 `auth-email-templates/reset-password.html`，将 `token_hash` 交给站内回调。生产环境配置 SMTP，并把部署域名加入 Site URL 和 Redirect URL 白名单。
 
 ## 本地启动

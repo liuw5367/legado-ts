@@ -1,83 +1,45 @@
-# Legado Reader Web
+# `@legado/reader-web`
 
-这是阅读器 Web SPA 的应用目录。前端使用 Rsbuild + React Router，基础控件按 `components.json` 的 shadcn 约定放在 `src/components/ui/`，API 使用 Hono Node Functions；认证由 Supabase Auth 处理。
+`@legado/reader-web` 是使用共享书源运行时的 Web 阅读器。浏览器端负责页面、账号和阅读交互，Hono API 在服务端调用 `@legado/source-core` 与 `@legado/source-node`；书源 Cookie、脚本变量和主要业务数据保存在服务端，浏览器只保存认证会话和阅读设置等前端状态。
+
+当前应用提供书源导入预览与确认、启用/禁用和删除、跨来源搜索、书籍来源版本、目录、正文、书架、阅读位置和阅读设置。订阅自动刷新、持久后台任务、旧版 Android API 兼容、完整书源编辑器、WebView、验证码和交互式登录仍未实现，状态见[共享运行时状态](../../docs/implementation/source-runtime-status.md)。
 
 ## 本地运行
 
-复制 `.env.example` 为 `apps/reader-web/.env.local`，填入 Supabase 的公开 URL、publishable key 和服务端 `DATABASE_URL`。API、Drizzle 迁移和 Drizzle 配置会自动读取这个文件；如果环境文件放在其他位置，可设置 `READER_WEB_ENV_FILE` 指向它。先执行数据库迁移：
+需要一个 Supabase 项目和 PostgreSQL 数据库。复制 `apps/reader-web/.env.example` 为 `.env.local`，填写公开 Supabase 配置、服务端数据库连接和运行状态密钥；变量用途、认证回调和安全边界见[开发与部署](docs/development-and-deployment.md)。
 
-```sh
+先执行数据库迁移：
+
+```bash
 pnpm --filter @legado/reader-web db:migrate
 ```
 
-新增迁移后重新执行一次 `db:migrate`，不要在每次 Web 部署时自动运行迁移。
+再分别启动 API 和前端：
 
-书源由用户在“书源管理”页面导入、启用或禁用；搜索、目录、正文和书源运行状态只读取当前 Supabase 用户自己的书源记录。Web 不会自动读取仓库中的 `fixtures/source/`，部署也不携带本地书源文件。用户的搜索、书架、目录缓存、阅读位置以及书源 Cookie/脚本变量按 Supabase 用户 ID 隔离。`SOURCE_RUNTIME_STATE_KEY` 至少使用 32 个字符的随机服务端密钥（例如 `openssl rand -base64 32` 的结果），用于 AES-256-GCM 加密书源运行状态；轮换该密钥会使旧 Cookie 和脚本变量失效。不要把数据库密码、Cookie 或运行状态密钥放入前端环境变量。
-
-阅读设置页提供跟随系统、浅色和夜间三种页面模式、滚动或分页阅读模式、字号、行距和正文上右下左四边距。设置保存在当前账号，书籍的每个书源版本也分别保存目录和阅读位置。搜索结果可以选择新建书籍，或追加到已有书籍作为新的来源版本。
-
-`/sources` 页面按当前账号管理书源，支持单项或多选启用、禁用和删除。导入支持单个 HTTP(S) 链接和返回多个书源的集合链接；服务端先生成候选预览，按 `bookSourceUrl`、内容和 `lastUpdateTime` 比较当前账号已有版本，用户确认后才以事务写入。旧版本、内容相同或无法安全判断版本的候选会留在“不会导入”区域。当前导入是一次性操作，不保存自动订阅。
-
-## 移动端页面
-
-业务页面以 320–430px 手机竖屏为主要布局目标，顶部和底部避让安全区域，导航和返回按钮采用同一套 Lucide 图标。书架与阅读记录直接进入正文，返回恢复首页原标签；书架菜单提供查看详情、查看目录和移出书架。首页搜索记录按关键词保留最近一次请求。
-
-搜索的精确选项与按钮位于同一行，搜索中按钮变为取消；Web 会自动继续请求仍有下一页的书源，列表显示本次搜索的全部结果，搜索中按约 5 秒更新一次已完成/总书源进度，完成时立即显示最终进度。结果按书名和作者合并，点击主区域打开详情，添加书架、查看目录和来源选择独立操作。书源管理显示全部筛选结果；换源页原地搜索，每项提供查看目录和切换书源。查看目录不会激活来源，切换按钮按该来源进度或首个可读章节进入正文。
-
-正文顶部和底部操作栏默认隐藏，点击正文切换显隐；顶部提供返回、章节标题和与书架一致的更多菜单，菜单包含书籍详情、翻页区域、查看原文和刷新内容，分页模式额外提供翻页区域。点击其他区域或按 Escape 会关闭菜单。滚动模式下底部提供上一章、章节字数、下一章；分页模式下中间显示当前页/总页数和章节字数，页面左侧、右侧和中间分别用于翻页、翻页和显示/隐藏操作栏，正文铺满阅读视口，只保留安全区域和设置的四边距。两种模式都提供目录、换源、设置和日夜模式快捷按钮。目录抽屉的操作区左侧显示“完整目录”入口，右侧提供倒序、到顶部、到底部和刷新目录数据；这些操作在同一行左右分布。目录刷新成功后更新共享内存缓存，失败时保留当前列表并提供重试。目录页选中章节使用与目录抽屉一致的较大对号。当前阅读章节正文只保留一条内存缓存，重新进入同一章时先显示缓存，再请求最新内容覆盖缓存。阅读设置在抽屉中按需打开，抽屉可点击外侧区域、关闭按钮或按 Escape 关闭；字号、行距和四边距保存成功不显示额外提示，失败仍显示错误。设置页顶部显示账号，下方提供修改密码、书源管理和阅读设置入口，阅读设置进入二级页面，底部提供淡红色退出登录按钮；字号、行距和四边距提供滑块以及减小、增大按钮。桌面端复用同一信息结构，提供宽度和键盘操作兼容。
-
-启动 API：
-
-```sh
+```bash
 pnpm --filter @legado/reader-web dev:api
-```
-
-另开终端启动前端：
-
-```sh
 pnpm --filter @legado/reader-web dev
 ```
 
-注册、邮箱验证和密码恢复需要 Supabase 项目配置邮件服务；本地 Supabase 可以使用 Mailpit。
+应用不会自动读取仓库中的 `fixtures/source/`；书源由当前账号在“书源管理”页面导入。数据库迁移是显式操作，启动和构建不会替代迁移。
 
-在 Supabase Auth 的 Confirm signup 和 Reset password 模板中分别使用 `auth-email-templates/confirm-signup.html` 与 `auth-email-templates/reset-password.html`。模板把 `token_hash` 交给站内回调验证；生产环境必须配置自定义 SMTP，并把本站地址加入 Redirect URL 白名单。
+## 文档
 
-## Vercel 部署
+- [Web 文档入口](docs/README.md)
+- [架构](docs/architecture.md)
+- [当前实现](docs/implementation.md)
+- [交互说明](docs/interaction.md)
+- [存储与缓存](docs/storage-and-cache.md)
+- [开发与部署](docs/development-and-deployment.md)
+- [视觉规范](DESIGN.md)
 
-Vercel 项目必须把仓库根目录作为 Project Root。根目录的 `vercel.json` 使用 Hono 适配器承载 API，构建命令会先生成 Rsbuild 静态资源，再复制到根目录 `public/`；该目录是构建产物，不应手动提交。
+## 检查与构建
 
-在 Vercel 的 Preview 和 Production 环境分别配置以下变量：
-
-| 变量 | 用途 |
-| --- | --- |
-| `PUBLIC_SUPABASE_URL` | 浏览器构建时使用的 Supabase URL |
-| `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 浏览器构建时使用的 Supabase publishable key |
-| `SUPABASE_URL` | Hono 函数校验登录令牌 |
-| `SUPABASE_PUBLISHABLE_KEY` | Hono 函数校验登录令牌 |
-| `DATABASE_URL` | Supabase Postgres 连接串 |
-| `SOURCE_RUNTIME_STATE_KEY` | 服务端加密每用户书源 Cookie/脚本变量的密钥，至少 32 个字符 |
-
-第一次部署前，在目标 Supabase 数据库执行迁移；Vercel 构建不会自动修改数据库：
-
-```sh
-pnpm --filter @legado/reader-web db:migrate
-```
-
-Supabase Auth 的 Site URL 和 Redirect URL 需要包含部署域名。注册确认和密码恢复回调分别使用 `/auth/confirm` 与 `/reset-password`，邮件模板仍按上面的 `auth-email-templates/` 文件配置。
-
-本地可以先验证与 Vercel 相同的静态产物准备步骤：
-
-```sh
-pnpm run build:web:vercel
-```
-
-该命令会生成 `public/index.html` 和 `public/static/`，并让 Vercel 函数携带前端产物。部署配置会把 `/api/*` 交给 Hono，把其他前端深链回退到 `index.html`。搜索流式响应启用 60 秒函数上限和请求取消支持；如书源响应可能超过此时长，需要后续把搜索任务拆为后台队列。
-
-## 检查
-
-```sh
+```bash
 pnpm --filter @legado/reader-web typecheck
 pnpm --filter @legado/reader-web build
 pnpm --filter @legado/reader-web test
 pnpm --filter @legado/reader-web test:db
 ```
+
+真实 PostgreSQL 集成测试需要显式提供独立的 `READER_WEB_TEST_DATABASE_URL`；未设置时不会读取项目的 `DATABASE_URL`。Vercel 的根目录、迁移顺序、静态产物和深链配置见[开发与部署](docs/development-and-deployment.md)。

@@ -2,6 +2,8 @@
 
 ## 目标
 
+项目把 Legado 书源的声明式规则、JavaScript 规则和阅读流程放在可复用的 TypeScript runtime 中，使终端程序和 Web 应用共享同一套行为。`source-core` 定义平台无关的规则与流程，`source-node` 提供 Node 能力，`reader-cli` 保存本地阅读体验，`reader-web` 提供账号隔离的在线阅读应用。
+
 建立独立的 TypeScript 书源运行时，使同一份书源能够由 Node 宿主和带服务端代理的应用使用。当前应用是 reader-cli 与 React Router + Hono 的 reader-web；SSR/Next.js、Edge 和其他框架仍属于候选接入，不因存在 Web SPA 就视为已支持。完整登记 `BookSource` 的声明式、JavaScript、发现、媒体、登录、交互等能力。复杂登录、验证码和站点专用 WebView 可以低优先级实施，但任何能力是否最终放弃都需要单独说明收益、架构代价和兼容影响，并由用户审核。
 
 兼容目标是“结果和失败语义一致”，包括：
