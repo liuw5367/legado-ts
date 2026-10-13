@@ -1,5 +1,7 @@
 # 书源检测流程
 
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
+
 ## 目的与边界
 
 书源检测是诊断书源当前可用性的独立流程，不等同于用户搜索，也不等同于导入校验。它使用一份不可变的 source snapshot，按阶段执行最小请求，记录每个阶段的结果和耗时，并在版本仍然有效时回写检查状态。
@@ -31,30 +33,7 @@ package 对外提供检测编排和结果模型；应用层提供 HTTP/浏览器
 
 ## 检测配置
 
-```ts
-export interface SourceCheckConfig {
-  /** Web 目标的单个 HTTP 请求超时时间；Android 没有对应的统一配置项。 */
-  requestTimeoutMs: number;
-  /** 单个书源的总预算；对应 Android 的 CheckSource.timeout。 */
-  sourceTimeoutMs: number;
-  /** 失败时是否把内存中的简短错误摘要交给应用；不代表直接更新 book_sources 备注。 */
-  writeErrorComment: boolean;
-  /** 是否检查域名、基础连接和 URL 可达性。 */
-  domain: boolean;
-  /** 是否用固定关键字验证搜索规则。 */
-  search: boolean;
-  /** 是否验证发现/分类入口和 exploreRule。 */
-  discovery: boolean;
-  /** 是否从搜索或发现结果验证详情规则；结果阶段名为 book-info。 */
-  info: boolean;
-  /** 是否验证目录规则；结果阶段名为 toc，文件型书源可跳过。 */
-  category: boolean;
-  /** 是否请求并验证正文规则；必须受超时和大小限制。 */
-  content: boolean;
-  /** 可选的检测关键字；省略时必须使用兼容 Android 的“我的”。 */
-  keyword?: string;
-}
-```
+Web/统一检测的 `SourceCheckConfig` 只是迁移目标；Android 的配置来自 `CheckSource`，当前 CLI 的实际默认值和持久化入口见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md)。
 
 `sourceTimeoutMs`、错误摘要和域名/搜索/发现/详情/目录/正文开关与 Android 的 `CheckSource` 配置对应；`requestTimeoutMs` 是 Web 目标新增的宿主约束。Android 的单书源总预算由 `CheckSource.timeout` 包围整个检测流程，域名探测另有固定的局部超时，普通 HTTP 请求仍使用 `AnalyzeUrl`/HTTP 客户端自身配置。`info` 和 `category` 是 Android 配置别名，核心结果统一使用 `book-info` 和 `toc`；适配器不能把两个名称作为两个独立阶段执行。`keyword` 省略时固定使用 `我的`，只有调用方明确传入非空关键字时才覆盖该值。Android 的 `wSourceComment` 只影响内存中的 source 对象，最终 detail 由检查状态保存；package 不直接更新 `book_sources` 的备注。配置属于检测任务，不应混入可导出的 `BookSource` JSON。
 
@@ -104,42 +83,13 @@ NEEDS_CHECK ──start──► RUNNING ──all stages pass──► PASSED
       └────────────── source edited ───────────────► STALE
 ```
 
-Android 状态模型、`sourceRevision/checkRevision` 的条件写入和旧结果防覆盖事实见[Android 书源校验状态](../upstream/android/rules/source-check-state.md)；CLI 当前写回见 [reader-cli 实现](../../apps/reader-cli/docs/implementation.md)。删除或重新导入书源时，旧检测任务即使晚到也不得恢复已删除的状态。
+Android 状态模型、`sourceRevision/checkRevision` 的条件写入和旧结果防覆盖事实见[Android 书源校验状态](../rules/source-check-state.md)；CLI 当前写回见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md)。删除或重新导入书源时，旧检测任务即使晚到也不得恢复已删除的状态。
 
-## 结果契约
+## 目标结果形状（归档索引）
 
-```ts
-export interface SourceCheckResult {
-  /** 本次检测会话标识。 */
-  sessionId: string;
-  /** 被检测的用户和书源。 */
-  userId: string;
-  /** 被检测的原始 bookSourceUrl/sourceId。 */
-  sourceId: string;
-  /** 开始检测时的书源版本。 */
-  sourceRevision: string;
-  /** 当前检测任务版本；用于拒绝迟到结果。 */
-  checkRevision: string;
-  /** 领域调用身份；同一调用的重试不改变。 */
-  operationId: string;
-  /** 最终状态或实时阶段状态，使用规范的大写状态。 */
-  status: SourceCheckStatus;
-  /** 每个阶段的结构化结果；跳过阶段也要有记录。字段以 Android 来源中的阶段语义为准。 */
-  stages: SourceCheckStageResult[];
-  /** 供列表展示的脱敏摘要。 */
-  summary: string;
-  /** 分阶段诊断；不得包含响应原文或秘密。 */
-  diagnostics: RuntimeDiagnostic[];
-  /** 已发生的状态写入和缓存失效等副作用。 */
-  effects: EffectRecord[];
-  /** 尚未由应用提交的检查状态变更。 */
-  changes: DomainChange[];
-  /** 请求、脚本和任务资源的最终清理状态。 */
-  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] };
-}
-```
+统一 `SourceCheckResult`/`OperationResult` 是历史目标，不能当作 source-core 导出；它的生命周期和效果记录见 [统一运行时接口设计](../../../archive/runtime-interface-design.md)，当前 CLI 状态映射见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md)。
 
-`SourceCheckResult` 是检测领域值；package 公开入口返回 `OperationResult<SourceCheckResult>` 属**目标设计**——当前 `@legado/source-core` **没有** `checkSources` / `check` 导出（见 [`@legado/source-core`](../../packages/source-core/README.md)、[reader-cli 实现](../../apps/reader-cli/docs/implementation.md) 与 [兼容性与验证](../compatibility/README.md)）。外层 `status` 使用运行时统一契约的小写状态，值内的 `status` 保留 Android 兼容的大写检查状态，adapter 负责两者映射，不能让调用方把两套状态混为同一字段。
+`SourceCheckResult` 是检测领域值；package 公开入口返回 `OperationResult<SourceCheckResult>` 属**目标设计**——当前 `@legado/source-core` **没有** `checkSources` / `check` 导出（见 [`@legado/source-core`](../../../../packages/source-core/README.md)、[reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [兼容性与验证](../../../compatibility/README.md)）。外层 `status` 使用运行时统一契约的小写状态，值内的 `status` 保留 Android 兼容的大写检查状态，adapter 负责两者映射，不能让调用方把两套状态混为同一字段。
 
 实时事件可以复用同一结果模型的增量版本，但客户端不能把 `RUNNING` 结果当作最终通过。阶段状态允许值为 `PASSED`、`FAILED`、`SKIPPED`、`UNSUPPORTED`；源最终状态允许值为 `NEEDS_CHECK`、`RUNNING`、`PASSED`、`FAILED`、`CANCELLED`、`STALE` 是项目目标映射，不是 Android 持久状态枚举。若兼容层输出小写状态，必须在 adapter 显式转换；WebSocket 或 SSE 只是应用传输方式，检测核心不应依赖某一种推送协议。
 
@@ -149,7 +99,7 @@ Android 检测接口会从当前书源快照启动会话，校验提交的 sourc
 
 Android 服务还会分别统计响应时间、域名错误、搜索/发现错误、详情/目录/正文错误，并可把失败书源按原因分组。失败书源的分组标签（如 `校验超时`、`js失效`、`网站失效`、`搜索失效`、`发现失效`、`域名失效`）与 `// Error: ` 错误注释只修改内存中的 source 对象（`CheckSourceService` 无 `bookSourceDao.update` 调用），随 `completeCheck` 的 detail 字符串持久化到 `book_source_check_states.detail` 字段，不更新 `book_sources` 行的分组或备注。package 应提供结构化 stage result，让应用自行决定列表分组、错误备注和通知方式。
 
-## 应用责任
+## 应用边界（迁移注记）
 
 - 从当前用户上下文读取允许检测的 sourceId，并在服务端再次授权。
 - 限制批量大小、并发数、请求体、响应体和单源总耗时，避免公共部署被书源拖垮。
@@ -165,7 +115,7 @@ Android 服务还会分别统计响应时间、域名错误、搜索/发现错�
 - 新版本书源提交后，旧检测结果不能回写；删除后不能重建状态。
 - 同一编排既能由 Node 运行，也能在受限 Edge 环境中通过 capability 检查明确拒绝不支持的执行器。
 
-## CLI 当前实现
+## CLI 对照（当前实现，唯一事实源见 app 文档）
 
 `apps/reader-cli/src/application.ts` 的 `ReaderApplication.checkSources` 接收一份固定的 source ID 选择快照，按应用并发上限执行 `source-check.ts`，每个已完成源通过 `ReaderStorage.saveSourceCheck` 写入 `source-state.json`。单源阶段按 Android 顺序执行：域名后先完成搜索候选的详情、目录、正文，再处理第一个有效发现分类及其候选。`⎋` 取消只中止当前任务；已完成的失败记录仍可由书源管理页的 `f` 动作重新选中，再用 `x` 批量禁用。未开始的源只作为本次会话的 `cancelled` 结果返回，不写入失败状态。
 

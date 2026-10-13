@@ -66,8 +66,8 @@
 | 卷节点空正文和非卷空正文回退 | 目标必须兼容 | `WebBook`、`JsSourceBookTest` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | JS 源返回值和字段归一化 | 目标必须兼容 | `JsSourceMarshallerTest`、`JsSourceEngineTest` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | `getContentBatch` 和 `contentBatch` | 声明存在时必须兼容 | `JsSourceConfig`、`BookContent.kt`、`JsSourceBook.kt`、`BatchContentContext.kt` | `loadChapterContentBatch` 已实现 JS/声明式入口、50 章切批、index/唯一 URL 识别、replaceRegex、逐章宿主回存和缺章兜底；core 与 QuickJS 定向测试通过，Android golden 待执行 |
-| 结构化段评摘要、详情和回复 | 声明存在时必须兼容 | `ReviewController`、`ReviewRuleParser`、`JsSourceReview` | 读取规格见[段评流程](../flows/review-flow.md)，runtime 未实现，待 fixture |
-| 旧式段评网页桥接 | 受支持的 `getDP/getZP` 链接必须兼容 | `ReviewController`、`HttpServer`、`ReviewWebApiContractTest` | 会话 nonce、2 小时 TTL、64 KiB 脚本上限、CSP/sandbox 和图片重写见[段评流程](../flows/review-flow.md)，runtime 未实现，待安全 fixture |
+| 结构化段评摘要、详情和回复 | 声明存在时必须兼容 | `ReviewController`、`ReviewRuleParser`、`JsSourceReview` | 读取规格见[段评流程](../upstream/android/flows/review-flow.md)，runtime 未实现，待 fixture |
+| 旧式段评网页桥接 | 受支持的 `getDP/getZP` 链接必须兼容 | `ReviewController`、`HttpServer`、`ReviewWebApiContractTest` | 会话 nonce、2 小时 TTL、64 KiB 脚本上限、CSP/sandbox 和图片重写见[段评流程](../upstream/android/flows/review-flow.md)，runtime 未实现，待安全 fixture |
 | WebView 真实页面行为 | 目标宿主能力 | WebView 相关流程 | 需 adapter 和 capability error |
 | 发现分类、`infoMap` 与发现列表 | 目标必须兼容 | `BookSourceExtensions`、`ExploreKind`、`WebBook.exploreBookAwait` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | 图片与封面解密 | 声明存在时必须兼容 | `ImageUtils`、`ContentRule.imageDecode`、`BookSource.coverDecodeJs` | `decodeImage` 已实现规则选择、QuickJS bytes 往返、封面流式输入兼容、错误和取消；下载/缓存由宿主负责，Android golden 待执行 |

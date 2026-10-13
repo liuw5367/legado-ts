@@ -1,4 +1,6 @@
-# 书籍详情流程
+# Android 书籍详情流程
+
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 
 ## 输入和缓存
 
@@ -28,7 +30,7 @@
 
 因此详情页可能同时完成书籍详情和目录页准备，目录流程必须先检查 `bookUrl == tocUrl && tocHtml`，避免重复请求。
 
-## 数据流、状态和提交边界
+## 数据流和提交边界（Android 与迁移注记）
 
 详情请求按以下顺序处理：
 
@@ -44,38 +46,7 @@ BookSource + Book + canReName
   -> 上层保存 Book
 ```
 
-`infoHtml` 和 `tocHtml` 是本次运行的临时响应，不属于书源导出数据。核心库应返回明确的 `BookInfoResult`，至少包含更新后的 `book`、是否使用缓存、最终响应 URL、是否准备了 `tocHtml` 和字段级诊断；持久化由 Node、SSR 或应用层决定。Android 直接修改传入的 `Book`，并在详情完成后由调用方保存，TypeScript 不能因此把数据库写入放进规则引擎。
-
-```ts
-export interface BookInfoResult {
-  /** 与运行时统一契约相同；空字段继续不等于流程失败。 */
-  status: OperationStatus
-  /** 本次领域操作身份；重试不改变。 */
-  operationId: string
-  /** 结果基于的书源版本。 */
-  sourceRevision: string
-  /** 详情字段更新后的书籍副本，不包含未提交的数据库状态。 */
-  book: Book
-  /** 是否直接使用了已有 infoHtml。 */
-  usedInfoCache: boolean
-  /** 详情请求或缓存的最终响应 URL。 */
-  finalUrl: string
-  /** 详情页同时准备的目录响应，未准备时为空。 */
-  tocHtml?: string
-  /** 实际改变的 Book 字段路径。 */
-  updatedFields: string[]
-  /** 字段级警告或流程错误诊断。 */
-  diagnostics: RuntimeDiagnostic[]
-  /** 尚未由应用提交的 Book 领域变更。 */
-  changes: DomainChange[]
-  /** 已发生的缓存、Cookie 或变量副作用。 */
-  effects: EffectRecord[]
-  /** 结果来源；事件中的 origin 应直接使用此值。 */
-  origin: 'cache' | 'network' | 'javascript'
-  /** 请求、脚本和解析资源的最终清理状态。 */
-  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
-}
-```
+`infoHtml` 和 `tocHtml` 是本次运行的临时响应，不属于书源导出数据。当前实现返回 `RuntimeResult<BookMetadata>`；详情工作流不写数据库，统一结果和提交目标分别见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 与 [运行时接口归档](../../../archive/runtime-interface-design.md)。
 
 状态转换为 `created -> loading -> parsing -> normalized -> completed`。缓存命中从 `created -> parsing`，请求失败、必需输入失败或文件源无下载地址进入 `failed`；取消可以从任意活动状态进入 `cancelled`，不得提交部分 Book 更新。提交应在所有字段处理完成后执行一次，字段处理中间值只存在于局部副本，避免详情失败时污染已有书籍。
 

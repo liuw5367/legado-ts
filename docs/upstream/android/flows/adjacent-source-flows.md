@@ -1,5 +1,6 @@
-# 与书源关联的媒体和交互流程
+# Android 与书源关联的媒体和交互流程
 
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 以下能力由 `BookSource` 字段驱动，但一部分执行入口位于 Android 阅读界面或图片加载器。完整移植时需要保留它们的书源语义；Web 应用只负责触发用户动作和展示结果。现状与目标设计在下文分开说明，未核实的字段不能推断为已有完整执行流程。
 
 ## 图片与封面解密
@@ -32,14 +33,18 @@ package 需要版本化的事件输入和执行结果协议，宿主注入允许
 
 `ReviewRule` 定义摘要、详情与回复读取规则，还保存点赞、点踩、发送评论、发送回复和删除地址。摘要、详情和回复的读取顺序、参数、游标和空结果见[段评流程](review-flow.md)。当前已核对的 `ReviewController` 与 `ReviewRuleParser` 主要执行读取与解析；仅凭写入字段存在，不能宣称 Android 已有相同的写入协议。因此，交互字段必须在导入、编辑和导出中保留，写入操作先继续追踪调用点和可观察行为。若原项目没有执行入口，Web 侧新增写入能力应标为目标设计，不能放入 Android 等价 golden。
 
-写入能力的目标规格至少应说明用户确认、认证身份、请求构造、重复提交、失败恢复和服务端响应；缺少可核实语义时不让 package 根据 URL 字段自行猜测 HTTP 方法或请求体。读取摘要、详情与回复仍按 [Android JavaScript 书源](../upstream/android/rules/javascript-source.md) 和 [Android 规则模型](../upstream/android/rules/source-schema.md) 验收。
+写入能力的目标规格至少应说明用户确认、认证身份、请求构造、重复提交、失败恢复和服务端响应；缺少可核实语义时不让 package 根据 URL 字段自行猜测 HTTP 方法或请求体。读取摘要、详情与回复仍按 [Android JavaScript 书源](../rules/javascript-source.md) 和 [Android 规则模型](../rules/source-schema.md) 验收。
 
 ## 扩展入口与生命周期
 
-公开入口统一见 [source-core API](../../packages/source-core/docs/api.md)。结果需区分 text、image-content、audio、video、file-links；content 字符串保留兼容输入，不能仅靠 URL 后缀猜类型。音视频附加内容分别为歌词/弹幕；图片正文仍可含多个图片引用，不强制简化为单 URL。
+公开入口统一见 [source-core API](../../../../packages/source-core/docs/api.md)。结果需区分 text、image-content、audio、video、file-links；content 字符串保留兼容输入，不能仅靠 URL 后缀猜类型。音视频附加内容分别为歌词/弹幕；图片正文仍可含多个图片引用，不强制简化为单 URL。
 
 decodeImage 无规则时原 bytes 返回，有规则则传 src/result/book，执行成功后才缓存；失败保持原缓存。文件下载先 resolveDownload，应用选择链接，再由宿主流式下载并验证最终目标与大小；不向网页暴露服务器文件路径。
 
 购买与事件调用绑定 operationId 和用户确认，执行前验证书籍/章节归属，执行后返回显式动作。外部写入没有可证明幂等性时不自动重试；未知执行结果保留为 unknown。取消后的导航不得生效，已经完成的购买请求不能声称撤回。
 
-字体、归档、加密工具也是脚本书源能力，已在 [宿主盘点](../compatibility/capabilities.md#宿主方法补充盘点) 登记。它们通过相应宿主执行并保留 bytes/文本边界；逐重载契约尚未完整时返回具体能力缺失，不能退回原文本或空文件并宣称成功。
+字体、归档、加密工具也是脚本书源能力，已在 [宿主盘点](../../../compatibility/capabilities.md#宿主方法补充盘点) 登记。它们通过相应宿主执行并保留 bytes/文本边界；逐重载契约尚未完整时返回具体能力缺失，不能退回原文本或空文件并宣称成功。
+
+## 取消与清理
+
+图片解密、付费动作和事件回调都必须绑定当前书源、书籍、章节及用户动作；取消或页面离开时停止尚未开始的脚本/请求，释放按钮占用、流对象和临时 scope。已经发出的外部写入不能伪称撤回，未知结果保留为 `unknown`；失败不能用空媒体、空评论或未解密 bytes 代替成功。

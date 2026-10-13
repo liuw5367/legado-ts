@@ -23,9 +23,9 @@
 | 使用 Web 阅读器 | [Web README](../apps/reader-web/README.md) → [开发与部署](../apps/reader-web/docs/development-and-deployment.md) |
 | 集成共享运行时 | [source-core 文档](../packages/source-core/README.md) → [source-node 文档](../packages/source-node/README.md) → [安全与部署](../packages/source-node/docs/security-and-deployment.md) |
 | 理解整体边界 | [架构](architecture/README.md) → [Android 规则来源](upstream/android/rules/README.md) → [兼容政策](contracts/compatibility-policy.md) |
-| 实现或修改书源 package | [Android 规则来源](upstream/android/rules/README.md) → [处理流程](flows/README.md) → 对应 package 文档 → [兼容性与验证](compatibility/README.md) |
+| 实现或修改书源 package | [Android 规则来源](upstream/android/rules/README.md) → [处理流程](upstream/android/flows/README.md) → 对应 package 文档 → [兼容性与验证](compatibility/README.md) |
 | 查看书源运行时状态 | [状态总览](compatibility/status.md) |
-| 导入、编辑或刷新书源 | [导入流程](flows/import-protocol.md) → [订阅流程](flows/source-subscriptions.md) |
+| 导入、编辑或刷新书源 | [导入流程](upstream/android/flows/import-protocol.md) → [订阅流程](upstream/android/flows/source-subscriptions.md) |
 | 对照 Android 页面行为 | [Android 功能对照](upstream/android/README.md) |
 | 审查兼容性和发布 | [能力清单](compatibility/capabilities.md) → [测试基线](compatibility/conformance-tests.md) → [证据矩阵](compatibility/evidence-matrix.md) → [维护文档](operations/package-maintenance.md) |
 | 查阅未实现的历史设计 | [归档](archive/README.md) |
@@ -40,7 +40,7 @@
 | `upstream` | Android 页面、规则来源和外部教程是什么 | [上游资料索引](upstream/README.md) |
 | `contracts` | 跨 package 的兼容承诺和变更门槛是什么 | [兼容政策](contracts/README.md) |
 | `architecture` | 各层怎样划分、当前仓库怎样协作 | [架构](architecture/README.md) |
-| `flows` | 书源处理按什么顺序运行、怎样提交结果 | [处理流程](flows/README.md) |
+| `flows` | 书源处理按什么顺序运行、怎样提交结果 | [处理流程](upstream/android/flows/README.md) |
 | `implementation` | 跨 package 的当前实现入口和应用接入路线是什么 | [当前实现](implementation/README.md) |
 | `compatibility` | 标准与实现有哪些差异、证据怎样验证、何时算完成 | [兼容性与验证](compatibility/README.md) |
 | `operations` | 怎样处理安全、部署、发布、版本和回退 | [运维与维护](operations/README.md) |

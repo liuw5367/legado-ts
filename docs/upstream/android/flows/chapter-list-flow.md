@@ -1,4 +1,6 @@
-# 章节目录流程
+# Android 章节目录流程
+
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 
 ## 入口
 
@@ -38,7 +40,7 @@
 
 章节字段规则也共享同一个可变 `chapter` 绑定：标题、原始 URL、更新时间投影和卷标状态完成后，后续 VIP/购买规则可以读取这些最新字段；JavaScript 规则对绑定的直接修改会在下一字段前合并。
 
-## 数据流、状态和持久化边界
+## 数据流和持久化边界（Android 与迁移注记）
 
 目录刷新接收 `BookSource + Book + tocUrl/tocHtml`，按以下阶段产生结果：
 
@@ -58,34 +60,7 @@
   -> 应用层 reconcile 旧章节元数据并在同一写锁内保存目录快照与书籍 patch
 ```
 
-当前 TypeScript 入口返回 `RuntimeResult<WorkflowPage<Chapter>>`；下面的 `ChapterListResult` 是 Android/统一门面目标形状，用来说明应用提交时需要补齐的领域信息，不是 `source-core` 的实际返回类型。
-
-```ts
-export interface ChapterListResult {
-  /** `success`、`empty`、`partial`、`failed`、`cancelled`、`stale` 或 `unknown`。 */
-  status: OperationStatus
-  /** 本次目录操作基于的书源版本。 */
-  sourceRevision: string
-  /** 去重、排序、编号和格式化后的完整章节列表。 */
-  chapters: BookChapter[]
-  /** 目录流程更新的书籍统计和当前章节标题。 */
-  book: Book
-  /** 参与处理的页面 URL，按输入调度和逻辑归并顺序记录；不承诺并发请求的物理完成顺序。 */
-  visitedUrls: string[]
-  /** 读取旧目录时使用的修订；提交时用于拒绝并发旧写。 */
-  tocRevision: string
-  /** 本次目录操作身份。 */
-  operationId: string
-  /** 页面、字段和持久化前诊断。 */
-  diagnostics: RuntimeDiagnostic[]
-  /** 尚未由应用提交的目录和 Book 领域变更。 */
-  changes: DomainChange[]
-  /** 已发生的缓存、Cookie 或变量副作用。 */
-  effects: EffectRecord[]
-  /** 并发请求、脚本和监听器的最终清理状态。 */
-  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
-}
-```
+当前 TypeScript 入口返回 `RuntimeResult<WorkflowPage<Chapter>>`；`ChapterListResult` 等统一门面属于历史目标，当前实现细节以 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [宿主端口](../../../../packages/source-core/docs/host-ports.md) 为准。
 
 核心状态为 `created -> page-loading -> page-parsing -> collecting -> ordered -> completed`，应用提交在返回后单独进行。分页失败或取消不提交不完整目录。单 URL 分支以后只跟随首个下一页；多 URL 分支只收集这一批返回的章节，不递归展开每页新 URL。FlowExtensions.mapAsync 按发送 deferred 的输入顺序 await，后页先完成也不提前合并。
 
@@ -101,7 +76,7 @@ export interface ChapterListResult {
 
 当 `readConfig.reverseToc=true` 时，最终结果再反转一次。多页目录还要先按当前实现收集页面结果，再执行上面的整体顺序处理，不能在每页解析时提前反转。
 
-真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。`loadTableOfContents` 不读取旧目录；CLI 成功后把旧快照和当前阅读投影传给 `reconcileTableOfContents`，再由应用在同一提交边界保存，当前缓存 token 见 [source-core 宿主端口](../../packages/source-core/docs/host-ports.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
+真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。`loadTableOfContents` 不读取旧目录；CLI 成功后把旧快照和当前阅读投影传给 `reconcileTableOfContents`，再由应用在同一提交边界保存，当前缓存 token 见 [source-core 宿主端口](../../../../packages/source-core/docs/host-ports.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
 
 CLI 将 `bookAfter` 与章节、统计 patch 绑定在同一 `TocSnapshot`。正文调用带 `editionKey` 时直接使用该版本；省略版本且章节 `bookUrl` 已被目录脚本改写时，应用会按同一版本快照的有效 `bookAfter.bookUrl` 解析书源，随后以该有效地址建立正文请求和缓存身份。
 

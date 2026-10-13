@@ -7,7 +7,7 @@
 - **Android 页面快照**：当前 TypeScript 仓库上级目录中的 Android 工程，提交 `32a87b253e7cc28273c3850de86242caac83f1fd`，扫描日期 2026-09-28。长期规则和源码引用基线仍是 `62003ce732a7e30602754d28996da7f98b9ea296`，由[维护文档](../../operations/package-maintenance.md)管理；两份提交的用途见[上游资料索引](../README.md)。
 - **主要源码范围**：`app/src/main/java/io/legado/app/ui`、`model`、`data`、`utils`，以及对应 `res/menu`、`res/values-zh/strings.xml` 和相关测试。
 - **证据等级**：正文中的源码事实来自静态代码和测试；没有真机运行证据的内容标为待验证，不把页面名称或旧文档描述当成实现事实。
-- **与流程文档的关系**：`docs/flows/` 记录书源运行时的通用处理流程；本目录记录 Android 页面如何调用这些流程、保存数据和处理交互。当前实现和跨端证据见[兼容性与验证](../../compatibility/README.md)。
+- **与流程文档的关系**：[Android 流程来源](flows/README.md)记录书源运行时的 Android 顺序和来源约束；本目录的页面文档记录 Android 页面如何调用这些流程、保存数据和处理交互。当前实现和跨端证据见[兼容性与验证](../../compatibility/README.md)。
 
 规则、字段和校验状态的 Android 来源已集中到 [规则主题](rules/README.md)；页面文档只说明页面调用和交互，不重复字段全表。
 
@@ -37,6 +37,16 @@
 | JavaScript 书源 | [javascript-source.md](rules/javascript-source.md) |
 | URL 与请求 | [url-request-rules.md](rules/url-request-rules.md) |
 | 校验状态 | [source-check-state.md](rules/source-check-state.md) |
+
+## 流程主题
+
+| 流程 | 文档 | 重点 |
+| --- | --- | --- |
+| 导入与订阅 | [import-protocol.md](flows/import-protocol.md)、[source-subscriptions.md](flows/source-subscriptions.md) | 输入分类、替换、RuleSub、静默更新和确认边界 |
+| 搜索与发现 | [search-flow.md](flows/search-flow.md)、[explore-flow.md](flows/explore-flow.md) | 规则解析、分类入口、分页、合并、空值和取消 |
+| 详情、目录与正文 | [book-info-flow.md](flows/book-info-flow.md)、[chapter-list-flow.md](flows/chapter-list-flow.md)、[content-flow.md](flows/content-flow.md) | 字段顺序、分页、去重、缓存、副内容和提交边界 |
+| 检测 | [source-check-flow.md](flows/source-check-flow.md) | 阶段门槛、三状态、版本条件写回和取消 |
+| 段评与交互 | [review-flow.md](flows/review-flow.md)、[adjacent-source-flows.md](flows/adjacent-source-flows.md) | 段评读取、媒体、付费和事件字段的来源与缺失能力 |
 
 ## 页面之间的主链路
 

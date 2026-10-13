@@ -1,5 +1,6 @@
-# 段评流程
+# Android 段评流程
 
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 段评（书评/章评）有三条兼容入口：声明式规则、JavaScript 结构化函数和旧式网页段评桥接。结构化入口读取段评统计、详情和回复，不把评论内容写入正文缓存；旧式入口返回隔离的浏览器页面和桥接会话，不伪装成 `ReviewPage`。书籍、章节和书源上下文必须固定在同一次请求中。
 
 ## JavaScript 函数配对与终态
@@ -49,3 +50,7 @@ JavaScript 源调用可选的 `getReviewReplies({ chapter, book, paraIndex, para
 成功打开后生成随机会话 `id` 和 `nonce`，会话绑定书籍 URL、章节索引、书源 key、frame origin 和页面内容，Android 兼容 TTL 为 2 小时，缓存最多保留 16 个会话。`legacyReviewPage?id&nonce` 只在会话有效且 nonce 匹配时返回页面，并注入受限桥接；页面响应使用 no-store、no-referrer 和 sandbox/CSP，不能把原始 HTML 直接塞进 `srcdoc`。
 
 页面通过桥接调用 `runLegacyReview`。宿主必须限制脚本非空且不超过 64 KiB，重新校验会话、书源 key 和书籍/章节上下文，再以 `book`、`chapter` 和结果上下文执行脚本；返回的 HTML 或带 `html` 字段的 JSON 仍要经过图片重写。会话过期、nonce 不匹配、书源变更和脚本错误都返回可诊断错误，不得降级为空结构化评论页。
+
+## 取消与清理
+
+结构化摘要、详情和回复请求都要绑定书源、书籍、章节和段索引；取消时停止当前页及后续分页，释放响应体、脚本 scope 和游标缓存，不再发布迟到的条目。已经返回的只读结果可以由应用保留，但不产生正文、章节或书籍写入。旧式网页会话在取消、过期、书源变更或 nonce 失败时立即失效，页面和桥接响应不得继续使用原始会话内容。

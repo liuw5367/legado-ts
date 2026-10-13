@@ -1,8 +1,9 @@
 # 书源订阅与刷新
 
-本章是 Web 目标设计。已有 Android 导入行为见 [导入协议](import-protocol.md)。链接返回 JSON 数组属于一次导入；保存链接并持续刷新是另一个显式操作，不把两者混称为订阅。`BookSource`、`RssSource` 和 `ReplaceRule` 的实体边界见[Android 实体边界](../upstream/android/rules/artifact-model.md)。
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
+本章是 Web 目标设计。已有 Android 导入行为见 [导入协议](import-protocol.md)。链接返回 JSON 数组属于一次导入；保存链接并持续刷新是另一个显式操作，不把两者混称为订阅。`BookSource`、`RssSource` 和 `ReplaceRule` 的实体边界见[Android 实体边界](../rules/artifact-model.md)。
 
-## 数据和职责
+## 项目订阅模型（迁移注记）
 
 | 字段 | 契约 |
 | --- | --- |
@@ -18,7 +19,7 @@
 
 应用拥有订阅记录、调度、确认和事务。package 的 `refreshSubscription` 接收订阅快照、当前本地 artifact 快照、`operationId`、`idempotencyKey` 和取消/预算上下文，下载后复用 `importSources`，返回 `SubscriptionRefreshPlan`；应用再把任务生命周期写入 `SubscriptionRefreshAttempt`。package 不会自行创建定时器、数据库任务或后台服务。URL 可一次提供多个源，sourceUrls 的外层限制仍然有效。
 
-刷新计划的最小结构为。任务级执行记录使用[书源管理与状态归档](../archive/source-management-and-state.md)中的目标边界；本节的 `SubscriptionRefreshPlan` 只表示比较和提交前的领域结果，避免重复定义任务状态：
+刷新计划的最小结构为。任务级执行记录使用[书源管理与状态归档](../../../archive/source-management-and-state.md)中的目标边界；本节的 `SubscriptionRefreshPlan` 只表示比较和提交前的领域结果，避免重复定义任务状态：
 
 ```ts
 interface SubscriptionRefreshPlan {
@@ -126,4 +127,8 @@ HTTP 304 只在存在对应成功 baseline 时表示 unchanged；没有 baseline
 `SUB-018`：同一订阅刷新失败、取消或出现非法成员时，旧 source snapshot、baseline、revision 和成功时间均保留；尝试时间和失败诊断可更新。
 `SUB-019`：本地名称等于 baseline 时远程改名可进入更新候选；本地名称已编辑时保留本地并报告差异；无 baseline 的新源保留当前名称，显式覆盖才采用远程名称。
 
-以上为设计案例，尚无运行断言；证据与实现状态遵循 [测试基线](../compatibility/conformance-tests.md)。
+以上为设计案例，尚无运行断言；证据与实现状态遵循 [测试基线](../../../compatibility/conformance-tests.md)。
+
+## 取消、失败与清理
+
+刷新取消、下载失败、解析失败或版本冲突时，Android 已采用的本地书源和订阅更新时间不能被半份远端结果覆盖；非静默刷新缓存的候选必须释放临时响应和脚本 scope。应用若保留失败诊断，只能更新 attempt/日志，不得递增成功 baseline。刷新任务完成后释放网络响应、JS 预请求上下文和比较快照；迟到的提交必须按订阅版本和逐源版本条件拒绝。

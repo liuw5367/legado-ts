@@ -51,7 +51,7 @@
 
 所有入口都返回 `RuntimeResult<T>`，状态为 `success`、`partial`、`empty`、`failed`、`cancelled` 或 `capability-missing`。应用必须按状态处理合法空结果、取消、未支持能力、缓存提交状态和版本冲突。`ReaderApplication.search`、`checkSources`、多源 fan-out、进度事件和页面提交不是 source-core 工作流。
 
-共享业务顺序和 Android 页面事实分别见 [`docs/flows`](../../../docs/flows/README.md) 与 [`docs/upstream/android/README.md`](../../../docs/upstream/android/README.md)；跨端证据和缺口见[兼容性与验证](../../../docs/compatibility/README.md)。
+Android 流程顺序和页面事实分别见 [`Android 流程来源`](../../../docs/upstream/android/flows/README.md) 与 [`Android 页面`](../../../docs/upstream/android/README.md)；跨端证据和缺口见[兼容性与验证](../../../docs/compatibility/README.md)。
 
 ## 相关测试
 

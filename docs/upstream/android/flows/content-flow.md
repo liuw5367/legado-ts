@@ -1,4 +1,6 @@
-# 章节正文流程
+# Android 章节正文流程
+
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 
 ## 入口和缓存
 
@@ -26,7 +28,7 @@ Android 的 `WebBook.getContentAwait` 只有在 `needSave=true` 且缓存 token 
 - `title` 在正文提取后执行，非空时覆盖章节标题；标题里包含图片 URL 时拆出 `imgUrl`，保留标题前缀或回退原章节标题；
 - 非卷章节正文最终为空抛出 `ContentEmptyException`；卷章节允许空正文。
 
-## 当前 source-core 的兼容边界
+## TypeScript 对照（当前实现，唯一事实源见 package 文档）
 
 声明式正文已按上述次序格式化，`ContentInput.adaptSpecialStyle` 默认启用并允许调用方关闭；正文资源元数据从归一化后的图片 URL 生成，标题结果单独返回 `title` 和 `imgUrl`。JS 书源 `mainJs.getContent` 保持 Android 的原始返回路径，不经过声明式正文格式化。
 
@@ -59,55 +61,9 @@ BookSource + Book + BookChapter + nextChapterUrl
 
 当前实现公开导出 `ContentIdentity`、`ContentSaveToken`、`ContentStore` 和 `StoredContentInput`；`loadStoredChapterContent` 使用它们完成 cache-first、条件提交和提交后重读。正文身份必须同时绑定 `sessionId`、`sourceId`、`bookUrl`、`chapterKey`、`resourceKind`、`sourceRevision`、`semanticVersion`、`tocRevision` 和 `chapterIndex`；保存 token 的 `identity`、`operationId`、`writeVersion` 和过期信息必须在同一原子边界校验。这样既不会把不同会话的缓存混用，也不会让旧目录的章节覆盖新目录。
 
-```ts
-export interface ContentOperationContext {
-  sessionId: string
-  identity: ContentIdentity
-  tocRevision: string
-  chapterIndex: number
-}
-```
+统一 `ContentOperationContext` 只是早期目标形状；当前身份、token 和存储端口以 [source-core 宿主端口](../../../../packages/source-core/docs/host-ports.md) 为准。
 
-当前 TypeScript 入口返回 `RuntimeResult<ChapterContent>`；下面的 `ContentResult` 是 Android/统一门面目标形状，实际 cache-first 调用请使用 `loadStoredChapterContent`，不是该接口的直接返回类型。
-
-```ts
-export interface ContentResult {
-  /** `success`、`empty`、`partial`、`failed`、`cancelled`、`stale` 或 `unknown`。 */
-  status: OperationStatus
-  /** 本次正文操作身份，用于丢弃迟到分页和保存回调。 */
-  operationId: string
-  /** 结果基于的书源版本。 */
-  sourceRevision: string
-  /** 领域内容种类，由书籍类型和流程确定，不根据 URL 后缀猜测；image-content/file-links 分别映射为 image/file resourceKind。 */
-  kind: 'text' | 'image-content' | 'audio' | 'video' | 'file-links'
-  /** 归一化后的正文、资源 URL 或文件链接；二进制实体由 ResourceStore 保存。 */
-  content: string
-  /** 章节标题、图片、歌词和弹幕等章节更新。 */
-  chapter: BookChapter
-  /** 书籍和章节身份。 */
-  book: Pick<Book, 'bookUrl' | 'origin'>
-  /** 是否从有效正文缓存返回。 */
-  cacheHit: boolean
-  /** 最终响应 URL；缓存命中时使用缓存记录中的响应 URL。 */
-  finalUrl: string
-  /** 本次正文访问过的分页 URL。 */
-  visitedUrls: string[]
-  /** 正文保存是否成功；needSave=false 时为 false。 */
-  saved: boolean
-  /** needSave=true 时的存储结算；不能只依赖 saved 判断未知提交。 */
-  saveResult?: StoreWriteResult
-  /** 音频歌词或视频弹幕，与正文资源地址分开；不存在时省略。 */
-  auxiliary?: { kind: 'lyrics' | 'danmaku'; content: string }
-  /** 分阶段诊断，保存失败不能伪装为规则失败。 */
-  diagnostics: RuntimeDiagnostic[]
-  /** 尚未由应用提交的正文、章节和资源变更。 */
-  changes: DomainChange[]
-  /** 已发生的请求、Cookie 和存储副作用。 */
-  effects: EffectRecord[]
-  /** 请求、分页、脚本和保存资源的最终清理状态。 */
-  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
-}
-```
+当前 TypeScript 入口返回 `RuntimeResult<ChapterContent>`；`ContentResult` 是统一门面目标形状，实际 cache-first 调用请使用 `loadStoredChapterContent`。当前类型和保存边界见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 与 [宿主端口](../../../../packages/source-core/docs/host-ports.md)。
 
 状态为 `created -> cache-check -> loading -> parsing -> paginating -> normalized -> validated -> saving/completed`。只有满足 Android 缓存读取条件的命中才直接 `completed`；needSave=false 跳过 cache read 和 saving，错误和取消不启动新保存；已完成提交如实记录，不能因后续取消否认已保存事件。文件源从详情返回下载链接，不强行进入 ContentResult。
 
@@ -119,7 +75,7 @@ export interface ContentResult {
 
 ### 正文缓存提交
 
-`loadStoredChapterContent` 在 `refresh` 未开启时按 ContentIdentity 读取缓存；命中有效记录直接返回，未命中才 reserve 新 ContentSaveToken。缓存记录必须同时包含正文、`finalUrl`、章节更新和歌词/弹幕附加数据，旧的只有字符串正文的记录按未命中处理。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。当前接口见 [source-core 宿主端口](../../packages/source-core/docs/host-ports.md)，统一提交目标见[运行时接口归档](../archive/runtime-interface-design.md)。
+`loadStoredChapterContent` 在 `refresh` 未开启时按 ContentIdentity 读取缓存；命中有效记录直接返回，未命中才 reserve 新 ContentSaveToken。缓存记录必须同时包含正文、`finalUrl`、章节更新和歌词/弹幕附加数据，旧的只有字符串正文的记录按未命中处理。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。当前接口见 [source-core 宿主端口](../../../../packages/source-core/docs/host-ports.md)，统一提交目标见[运行时接口归档](../../../archive/runtime-interface-design.md)。
 
 提交顺序固定为：
 

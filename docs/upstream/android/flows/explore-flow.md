@@ -1,5 +1,6 @@
-# 发现流程与分类规则
+# Android 发现流程与分类规则
 
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 发现入口由书源的 `exploreUrl` 定义。它有两个阶段：先把入口文本解释为可选分类，再由调用方选定分类 URL，调用书源获取书籍列表。发现列表与搜索列表复用字段解析，但入口、上下文和是否参与流程的条件不同。
 
 ## 分类入口
@@ -45,6 +46,6 @@ BookSource + 用户会话
 - 分类 URL 为空：保留该分类元数据，但拒绝直接获取列表。
 - 发现响应失败、列表规则失败或取消：沿用单书源列表流程的错误和清理约定，不能覆写较新分类的结果。
 
-至少用静态 JSON、普通文本、动态 JS、`infoMap`、`ruleExplore` 到 `ruleSearch` 回退、JS 源 `explore`、分类切换取消和用户会话隔离建立 fixture。`type` 为非 URL 的控件需分别证明原样保留与能力诊断。用例归属见 [一致性测试基线](../compatibility/conformance-tests.md)。
+至少用静态 JSON、普通文本、动态 JS、`infoMap`、`ruleExplore` 到 `ruleSearch` 回退、JS 源 `explore`、分类切换取消和用户会话隔离建立 fixture。`type` 为非 URL 的控件需分别证明原样保留与能力诊断。用例归属见 [一致性测试基线](../../../compatibility/conformance-tests.md)。
 
 Web 分类身份由源版本、分类位置及当前 infoMap 快照共同界定，不仅用显示 title。控件更新先产生新的 infoMap 再发起列表 operation；旧 operation 迟到结果只清理，不覆盖新分类。动态分类整个脚本失败时不虚构“其他分类仍可用”，只能保留上一次成功结果并明确 stale，或显示错误。分类与书籍结果分别缓存，未配置 exploreUrl 返回空分类且零网络请求。

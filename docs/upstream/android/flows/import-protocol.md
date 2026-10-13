@@ -1,4 +1,6 @@
-# 书源导入协议
+# Android 书源导入协议
+
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 
 ## 输入分类
 
@@ -15,7 +17,7 @@ JSON 对象带 `sourceUrls` 时表示外层远程书源 URL 列表。导入器�
 
 JSON 数组中的每一个对象都必须有非空 `bookSourceUrl`。单个 JSON 对象也必须有该字段；缺失时统一报告“不是书源”类错误。
 
-导入器对 `ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 和 `ruleReview` 都应接受对象形式以及持久化层可能出现的 JSON 字符串形式，再统一归一化为规则对象。Web 目标要求规则对象内部的未知字段不能在导入时静默丢弃，至少要进入 `unknownFields` 或原始字段保留区，供编辑器导出和兼容性诊断使用；Android 的 GSON 反序列化会直接丢弃未知字段。字段的默认值和是否允许空字符串以 [Android 书源数据模型](../upstream/android/rules/source-schema.md) 为上游依据。
+导入器对 `ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 和 `ruleReview` 都应接受对象形式以及持久化层可能出现的 JSON 字符串形式，再统一归一化为规则对象。Web 目标要求规则对象内部的未知字段不能在导入时静默丢弃，至少要进入 `unknownFields` 或原始字段保留区，供编辑器导出和兼容性诊断使用；Android 的 GSON 反序列化会直接丢弃未知字段。字段的默认值和是否允许空字符串以 [Android 书源数据模型](../rules/source-schema.md) 为上游依据。
 
 ## 导入候选与替换
 
@@ -29,58 +31,7 @@ JSON 数组中的每一个对象都必须有非空 `bookSourceUrl`。单个 JSON
 6. 与本地同 `bookSourceUrl` 的源按 `lastUpdateTime` 判断新增或更新；
 7. 用户确认后再写入。
 
-核心导入结果使用候选对象承载流程状态：
-
-```ts
-export type ImportOrigin = SourceOrigin
-
-export interface ImportReplacement {
-  /** 命中的导入替换规则身份。 */
-  ruleId: string
-  /** 是否实际应用了该规则。 */
-  applied: boolean
-  /** 应用失败时的稳定错误说明。 */
-  error?: string
-}
-
-export type ImportStage =
-  | 'input' | 'fetch' | 'parse' | 'normalize'
-  | 'replace' | 'conflict' | 'storage' | 'cancel'
-
-export interface ImportDiagnostic {
-  /** 诊断阶段，例如 parse、replace 或 conflict。 */
-  stage: ImportStage
-  /** 稳定错误编码。 */
-  code: string
-  /** 面向编辑器和测试的说明。 */
-  message: string
-}
-
-export interface ImportCandidate {
-  /** 稳定的输入顺序标识，供编辑器和批量保存引用。 */
-  id: string
-  /** 原始输入类型和位置，例如 json、remote-url、uri 或 javascript。 */
-  origin: ImportOrigin
-  /** 未经替换的原始文本，供回退和导出保留。 */
-  rawText: string
-  /** 解析并归一化后的书源对象，校验失败时为空。 */
-  source?: NormalizedSource
-  /** 未知字段和原始结构保留区；不能因没有表单控件而丢弃。 */
-  unknownFields: Record<string, unknown>
-  /** 按顺序记录命中的替换规则及前后差异摘要。 */
-  replacements: ImportReplacement[]
-  /** 输入、解析、字段、冲突和持久化前诊断。 */
-  diagnostics: ImportDiagnostic[]
-  /** 与本地同 URL 书源的比较结果。 */
-  localMatch?: 'new' | 'update' | 'same' | 'conflict'
-  /** 是否可以进入用户确认和保存阶段。 */
-  writable: boolean
-  /** 候选当前生命周期状态。 */
-  status: 'ready' | 'invalid' | 'cancelled' | 'persisted'
-  /** 候选级稳定错误；没有错误时为空。 */
-  error?: { code: string; message: string; canRetry: boolean }
-}
-```
+当前 core 的 `ImportCandidate`、诊断和未知字段保留见 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)；本页只保留 Android 导入顺序及与兼容 API 的差异。
 
 导入批次的整体结果还需要记录 `operationId`、输入顺序、候选数组、是否有可写候选和清理状态。候选 `cancelled` 表示读取、网络、脚本或临时资源尚未完成时被停止；它不能与 `invalid` 混用，也不能因为已有候选而把整批报告为 `persisted`。批量持久化仍由应用在确认后调用 Repository 完成。
 
@@ -92,15 +43,15 @@ export interface ImportCandidate {
 
 这里描述的是 package 推荐的导入协议，不应直接推断为 Android Web API 的完整保存语义。核心流程在 `persist` 前等待应用确认，并通过 `SourceRepository` 处理 userId、expectedSourceRevision、检查状态失效和缓存副作用；导入器本身不写数据库。
 
-现有 Android `/saveBookSource` 会对单个 JSON 做名称/URL 的最小校验后直接保存，`/saveBookSources` 会逐项解析并跳过无效成员后直接写入 DAO。兼容 adapter 必须保留这种行为并返回逐项结果，但新 Web 应用应使用预览、确认、CAS 和事务保存。JS source 的大小、读取时限、`openedSourceUrl` 和重命名清理也属于 adapter 入口约束，见 [Legado Web API 适配](../archive/legado-web-api-bridge.md)。
+现有 Android `/saveBookSource` 会对单个 JSON 做名称/URL 的最小校验后直接保存，`/saveBookSources` 会逐项解析并跳过无效成员后直接写入 DAO。兼容 adapter 必须保留这种行为并返回逐项结果，但新 Web 应用应使用预览、确认、CAS 和事务保存。JS source 的大小、读取时限、`openedSourceUrl` 和重命名清理也属于 adapter 入口约束，见 [Legado Web API 适配](../../../archive/legado-web-api-bridge.md)。
 
 ## 写入语义
 
-Android 应用的最终写入由 `SourceHelp.insertBookSource` 和 `BookSourceDao` 完成，同 URL 的数据库冲突策略是替换；`SourceHelp` 还可能拦截配置中的域名，并修正越界或重复的 `customOrder`。独立 package 不直接调用 Android helper：新 Web 应用应在应用层执行 `web-safe` 插入策略后调用[书源 Repository](../archive/source-management-and-state.md#6-插入策略与兼容实现事实)，兼容旧 API 时才选择 `android-compatible` 的直接 DAO 语义。两种入口的策略差异必须记录并测试。
+Android 应用的最终写入由 `SourceHelp.insertBookSource` 和 `BookSourceDao` 完成，同 URL 的数据库冲突策略是替换；`SourceHelp` 还可能拦截配置中的域名，并修正越界或重复的 `customOrder`。独立 package 不直接调用 Android helper：新 Web 应用应在应用层执行 `web-safe` 插入策略后调用[书源 Repository](../../../archive/source-management-and-state.md#6-插入策略与兼容实现事实)，兼容旧 API 时才选择 `android-compatible` 的直接 DAO 语义。两种入口的策略差异必须记录并测试。
 
 迁移库不应把导入和持久化绑在一起：核心返回 `ImportCandidate[]`，Node/应用层决定是否保存、如何确认更新和是否保留本地名称、分组、启用状态。
 
-保存成功后，若规则内容发生变化，必须重置或标记过期的书源检查状态，并使规则相关缓存失效（Android 的 `BookSourceDao.update` 在 `checkContent()` 变化时重置检查状态）。Web 目标要求仅改变用户排序或启用状态时不应误重置检查；Android 的 `bookSourceGroup` 属于 `checkContent()` 的一部分，修改分组仍会重置检查状态。删除还要清理变量、cookie 引用和检查记录，书籍/章节/阅读进度按应用策略单独处理。通用目标边界见 [书源管理与状态](../archive/source-management-and-state.md)，Web 当前实现见 [Web 存储](../../apps/reader-web/docs/storage-and-cache.md)。
+保存成功后，若规则内容发生变化，必须重置或标记过期的书源检查状态，并使规则相关缓存失效（Android 的 `BookSourceDao.update` 在 `checkContent()` 变化时重置检查状态）。Web 目标要求仅改变用户排序或启用状态时不应误重置检查；Android 的 `bookSourceGroup` 属于 `checkContent()` 的一部分，修改分组仍会重置检查状态。删除还要清理变量、cookie 引用和检查记录，书籍/章节/阅读进度按应用策略单独处理。通用目标边界见 [书源管理与状态](../../../archive/source-management-and-state.md)，Web 当前实现见 [Web 存储](../../../../apps/reader-web/docs/storage-and-cache.md)。
 
 比较本地版本时，以原始 `bookSourceUrl` 为身份；Android 使用 lastUpdateTime 参与比较，Web 同时比较内容，不因时间戳相同忽略变化。用户字段覆盖策略必须显式传入；sourceRevision 是独立保存版本。错误区分 `input`、`fetch`、`parse`、`normalize`、`replace`、`conflict`、`storage`。
 
@@ -114,4 +65,4 @@ JS 书源的顶层配置优先读取 `config`；当 `config` 不存在或缺少�
 
 导入器必须把脚本执行错误、缺少配置对象、缺少必备函数、配置字段类型错误区分开；不能将所有错误归为 JSON 格式错误。
 
-JS 源的 `mainJs` 必须保存完整脚本原文。声明式规则被剥离只影响执行配置对象，不代表这些文本可以丢失；当书源配置中存在 `mainJs` 时，导出器不得尝试从 `ruleSearch` 等剥离后的对象重新拼装脚本。`ruleReview` 与其他规则对象一样参与类型校验，但 JS 源的段评执行入口由脚本函数决定，详见 [Android JavaScript 书源](../upstream/android/rules/javascript-source.md)。
+JS 源的 `mainJs` 必须保存完整脚本原文。声明式规则被剥离只影响执行配置对象，不代表这些文本可以丢失；当书源配置中存在 `mainJs` 时，导出器不得尝试从 `ruleSearch` 等剥离后的对象重新拼装脚本。`ruleReview` 与其他规则对象一样参与类型校验，但 JS 源的段评执行入口由脚本函数决定，详见 [Android JavaScript 书源](../rules/javascript-source.md)。

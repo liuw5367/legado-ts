@@ -1,4 +1,6 @@
-# 搜索流程
+# Android 搜索流程
+
+> **来源与现状分层**：本页以固定 Android 源码、测试或行为记录为来源。文中带有 TypeScript、CLI、Web 或“目标设计”标记的段落只说明迁移边界和当前证据，不是 Android 事实，也不是可直接导入的统一 API。当前 core 的唯一事实源见 [source-core 工作流](../../../../packages/source-core/docs/workflows.md) 和 [codec 与订阅](../../../../packages/source-core/docs/codec-and-subscriptions.md)，应用事实见 [reader-cli 实现](../../../../apps/reader-cli/docs/implementation.md) 与 [reader-web 实现](../../../../apps/reader-web/docs/implementation.md)。
 
 ## 入口和分流
 
@@ -15,7 +17,7 @@
 2. 若 `bookUrlPattern` 与响应 URL 匹配，把整个响应当作详情页，直接执行详情规则；
 3. 否则使用 `ruleSearch` 的 `bookList` 获取元素列表；
 4. `bookList` 以 `-` 开头表示解析后反转，以 `+` 开头表示去掉控制前缀但不反转；
-5. 先解析每个元素的 `name`、`author`、`kind`；书名和作者分别经过 `formatBookName`/`formatBookAuthor` 清洗（规则见[Android 书源数据模型](../upstream/android/rules/source-schema.md#书名和作者清洗)）；
+5. 先解析每个元素的 `name`、`author`、`kind`；书名和作者分别经过 `formatBookName`/`formatBookAuthor` 清洗（规则见[Android 书源数据模型](../rules/source-schema.md#书名和作者清洗)）；
 6. 清洗后的书名为空丢弃；调用方提供 `acceptSearchFields` 时，先按已解析的书名、作者和分类过滤候选，再读取 `wordCount`、`lastChapter`、`intro`、`coverUrl` 和 `bookUrl` 等可选字段；作者、简介等字段按各自字段错误策略处理；
 7. 相对封面和详情 URL 按响应 URL 转绝对 URL；详情 URL 为空时回退响应 URL；
 8. 同书源内按 `SearchBook.bookUrl` 去重；
@@ -36,7 +38,7 @@
 
 同组中书名和作者都相同时合并来源，保留首次条目并向其 `origins` 加入其他书源。精确、分类、包含三组各自按来源数量降序，其他组不排序直接追加；最终按精确、分类、包含、其他顺序输出。精准搜索只允许名称、作者或分类包含关键字的结果进入流程；分类命中会进入第二组，精准搜索不应丢弃该结果。
 
-## TypeScript 当前聚合行为
+## TypeScript 对照（当前聚合，唯一事实源见 package/app 文档）
 
 `reader-cli` 负责多书源 fan-out、并发、进度和到达顺序；`source-core` 的 `groupSearchCandidates` 执行 Android 四组归并和匹配排序，CLI 再把核心分组映射成包含 `SourceEntry` 的页面数据：
 
@@ -49,88 +51,9 @@
 - `normalizeSearchTitle` / `normalizeSearchAuthor` 只供严格换源匹配等身份比较使用：标题做 NFKC、小写并移除空白/标点/符号，作者做 NFKC、小写并移除空白；它们不替代 Android 普通搜索的原始字符串分组。
 - `searchMoreSources` 仍额外要求规范化后的书名和作者都完整匹配，避免把普通搜索的分类/包含结果误当成换源候选。
 
-## 数据流和生命周期
+## 数据流和生命周期（迁移注记）
 
-搜索输入由带所有权的请求上下文构成，不能只传入一条 URL。下述 `SearchRequest` / `SearchResultSink` / `SearchSourceStatus`（含 `stale`、`storage-error`）是**目标设计**；当前实现入口为 `searchBooks`（接受 `SearchInput`，返回 `RuntimeResult`），状态和接入见 [`@legado/source-core`](../../packages/source-core/README.md) 与 [`@legado/source-node`](../../packages/source-node/README.md)，差异见 [兼容性与验证](../compatibility/README.md)：
-
-```ts
-export interface SearchRequest {
-  /** 当前 HTTP 或预览请求的身份，用于日志、变量和资源隔离。 */
-  requestId: string
-  /** 用于区分同一页面的重试、换页和新搜索。 */
-  searchId: string
-  /** 用户输入的关键字，传给书源 URL 或 JS 函数。 */
-  key: string
-  /** 从 1 开始的页码。 */
-  page: number
-  /** 已按搜索范围确定顺序的不可变书源快照。 */
-  sources: ReadonlyArray<{
-    source: BookSource
-    sourceRevision: string
-  }>
-  /** 是否启用名称、作者和分类的精准过滤。 */
-  precision: boolean
-  /** 取消本次搜索、请求和回调的信号。 */
-  signal?: AbortSignal
-}
-
-export interface SearchResultSink {
-  /** 在发布 source-success 前保存本次书源结果；不需要持久化时由上层提供内存实现。 */
-  save(items: SearchBook[], request: SearchRequest): Promise<void>
-}
-
-export type SearchSourceStatus =
-  | 'source-success'
-  | 'empty-result'
-  | 'source-error'
-  | 'cancelled'
-  | 'stale'
-  | 'capability-missing'
-  | 'storage-error'
-
-export interface SearchSourceResult {
-  sourceId: string
-  status: SearchSourceStatus
-  items: SearchBook[]
-  error?: { code: string; message: string; canRetry: boolean }
-  operationId: string
-}
-
-export interface SearchResult {
-  /** 最终合并结果的可判别状态；逐源状态保留在 sourceResults。 */
-  status: OperationStatus
-  searchId: string
-  operationId: string
-  /** 结果基于的书源快照版本；多源搜索可按 sourceResults 分别记录。 */
-  sourceRevision?: string
-  page: number
-  items: SearchBook[]
-  sourceResults: SearchSourceResult[]
-  isEmpty: boolean
-  hasMore: boolean
-  diagnostics: RuntimeDiagnostic[]
-  /** 尚未由应用提交的搜索结果变更。 */
-  changes: DomainChange[]
-  /** 已发生的搜索 sink、Cookie 或变量副作用。 */
-  effects: EffectRecord[]
-  cleanup: { status: 'complete' | 'partial' | 'failed'; pending: string[] }
-}
-
-export interface SearchEvent {
-  /** 与目标搜索事件约定一致；source-error 和 saved 都是正式事件。 */
-  type: 'start' | 'progress' | 'source-success' | 'source-error' | 'completed' | 'cancelled' | 'saved'
-  operationId: string
-  sequence: number
-  searchId: string
-  page: number
-  pageOwner: string
-  source?: SearchSourceResult
-  items?: SearchBook[]
-  isEmpty?: boolean
-  hasMore?: boolean
-  diagnostics?: RuntimeDiagnostic[]
-}
-```
+当前 core 入口为 `searchBooks(SearchInput)`，返回 `RuntimeResult`；`SearchRequest`、`SearchResultSink` 和统一事件信封属于历史目标，已归档到 [统一运行时接口设计](../../../archive/runtime-interface-design.md)。应用的多源 fan-out、续页和事件由 [reader-cli](../../../../apps/reader-cli/docs/implementation.md) 或 [reader-web](../../../../apps/reader-web/docs/implementation.md) 承担。
 
 处理阶段固定为：
 

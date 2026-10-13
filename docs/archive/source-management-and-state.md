@@ -314,6 +314,6 @@ Android 的 `SourceHelp.insertBookSource` 不是普通 DAO 保存的同义词。
 | `web-safe` | 新 Web 应用、编辑器、标准导入 | 先执行域名、字段和排序策略，再调用 Repository；拒绝项不产生写入 |
 | `android-compatible` | 复刻旧 `/saveBookSource(s)` 的 adapter | 保留 Android Controller 的最小名称/URL 校验和直接 DAO 写入；不伪称它等同 `SourceHelp` |
 
-兼容 API 的直接写入与新 Web 应用的安全策略可能产生不同结果，这是适配层的明确兼容选择。无论选择哪种模式，解析、规范化、版本检查、用户隔离和秘密处理仍遵循本文与[导入协议](../flows/import-protocol.md)。
+兼容 API 的直接写入与新 Web 应用的安全策略可能产生不同结果，这是适配层的明确兼容选择。无论选择哪种模式，解析、规范化、版本检查、用户隔离和秘密处理仍遵循本文与[导入协议](../upstream/android/flows/import-protocol.md)。
 
 Android 的 DAO 保存会在书源内容变化时重置 `BookSourceCheckState`；`SourceHelp` 删除书源时会清除源变量和相关运行缓存；JS 源改名会检查目标冲突、清理旧源并保留启用、分组、排序和权重等用户状态。`SourceHelp.insertBookSource` 通过 `Coroutine.async` 异步触发 `adjustSortNumber()`，仅在 `maxOrder>99999`、`minOrder<-99999` 或 `hasDuplicateOrder` 时把全部 `customOrder` 重排为索引（`SourceHelp.kt` L174-186）。JS 源保存路径 `JsSourceUpsert.preserveUserState` 除保留启用、分组、排序和权重外还保留 `respondTime`，分组仅在目标源分组空白时继承（`JsSourceUpsert.kt` L152-161）；`bookSourceUrl` 或 `exploreUrl` 变化会清 `exploreKindsCache`，`jsLib` 变化会移除 `SharedJsScope`（`JsSourceUpsert.kt` L65-73）。独立 package 需要保留这些可观察约束，但由 Repository 和 Host 分别承担，而不是复制 Android 全局单例。用户状态字段和远程更新优先级以[Android 字段所有权](../upstream/android/rules/source-field-ownership.md)为准。

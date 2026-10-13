@@ -135,4 +135,4 @@ decodeImage(ports: WorkflowPorts, input: ImageDecodeInput): Promise<RuntimeResul
 
 远程导入、订阅刷新和编辑均使用同一 codec；静态规则预览与生产流程使用同一解释器。执行层依赖端口，端口实现可以调用网络和存储，但不依赖 UI。公开类型仅含可序列化数据；DOM/脚本句柄留在调用内部。
 
-书源保存、删除和检测是完整的业务流程，不是 DTO 转换：保存需要用户确认、版本条件写入、规则变化后的检查失效和缓存清理；检测需要固定 source snapshot、阶段依赖、取消及旧结果防覆盖。通用目标见 [书源管理](../archive/source-management-and-state.md)，当前导入与保存见 [reader-web 实现](../../apps/reader-web/docs/implementation.md)，检测流程见 [书源校验流程](../flows/source-check-flow.md)。
+书源保存、删除和检测是完整的业务流程，不是 DTO 转换：保存需要用户确认、版本条件写入、规则变化后的检查失效和缓存清理；检测需要固定 source snapshot、阶段依赖、取消及旧结果防覆盖。通用目标见 [书源管理](../archive/source-management-and-state.md)，当前导入与保存见 [reader-web 实现](../../apps/reader-web/docs/implementation.md)，检测流程见 [书源校验流程](../upstream/android/flows/source-check-flow.md)。

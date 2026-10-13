@@ -383,7 +383,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | RESOURCE-003/kind-collision | 同一章节同时产生 text、image、audio 和 file 资源 | ContentIdentity.resourceKind 使四类资源使用不同 resourceKey；不能互相覆盖 |
 | SECURITY-003/cross-user-state | u1 的 Cookie、变量、任务和资源 key 被 u2 请求复用 | u2 不可读取或写入 u1 状态；不存在性不能通过错误差异泄露 |
 
-SUB-001 至 019 在 [订阅文档](../flows/source-subscriptions.md#验收)，DEP-001 至 007 在 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md#部署验收设计尚未执行) 定义，不复制另一份期望。
+SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscriptions.md#验收)，DEP-001 至 007 在 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md#部署验收设计尚未执行) 定义，不复制另一份期望。
 
 ## 覆盖完成的判定
 

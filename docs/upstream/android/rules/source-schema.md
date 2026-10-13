@@ -232,7 +232,7 @@ export interface SearchRule extends BookListRule {
 }
 ```
 
-`SearchRule` 和 `ExploreRule` 中的 `updateTime` 字段需要保留以兼容书源 JSON，但当前 Android `BookList` 列表解析不会读取或写入它；它不能按目录规则中的同名字段处理。目录流程的 `TocRule.updateTime` 才会写入章节的 `tag`，具体见[章节目录流程](../../../flows/chapter-list-flow.md)。
+`SearchRule` 和 `ExploreRule` 中的 `updateTime` 字段需要保留以兼容书源 JSON，但当前 Android `BookList` 列表解析不会读取或写入它；它不能按目录规则中的同名字段处理。目录流程的 `TocRule.updateTime` 才会写入章节的 `tag`，具体见[章节目录流程](../flows/chapter-list-flow.md)。
 
 `bookList` 的 `-`、`+` 前缀只属于流程控制，不是选择器语法。搜索流程中 `-` 会在列表解析完成后反转结果；目录流程的 `-` 语义不同，见目录文档，不能共用一条解释。
 
