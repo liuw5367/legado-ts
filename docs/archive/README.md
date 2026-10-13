@@ -10,5 +10,6 @@
 | [legado-web-api-bridge.md](legado-web-api-bridge.md) | HTTP/WebSocket API 适配层未实现 |
 | [job-and-execution.md](job-and-execution.md) | JobStore、租约与 Serverless worker 未实现 |
 | [source-editor.md](source-editor.md) | TypeScript 书源编辑器未实现；当前只有导入预览和管理 |
+| [runtime-interface-design.md](runtime-interface-design.md) | 统一 `RuntimeHost` / `OperationResult` 门面未实现，当前由分层端口承接 |
 
 现行事实入口见 [docs/README.md](../README.md)。历史文档只在讨论目标设计、兼容差异或后续决策时引用。

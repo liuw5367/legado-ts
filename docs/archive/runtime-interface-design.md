@@ -4,7 +4,7 @@
 
 ## 归档原因
 
-当前仓库已经实现 `RequestPlan`、`RuntimeResult`、`WorkflowPorts`、`ReadingPorts`、`ContentStore` 以及 Node 的 `SourceRuleHost`/`SourceRequestHost`，但没有把所有网络、解析、脚本、Cookie、变量、资源和应用存储统一成一个 `RuntimeHost`。旧设计把尚未实现的应用状态和宿主门面混在一起，继续放在 implementation 入口会让读者误以为已可调用。
+当前仓库已经实现 `RequestPlan`、`RuntimeResult`、`WorkflowPorts`、`ReadingPorts`、`ContentStore` 以及 Node 的 `SourceRuleHost`/`SourceRequestHost`，但没有把所有网络、解析、脚本、Cookie、变量、资源和应用存储统一成一个 `RuntimeHost`。旧设计把尚未实现的应用状态和宿主门面混在一起，若放在现行 package 入口会让读者误以为已可调用。
 
 ## 目标结果信封
 

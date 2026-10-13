@@ -39,7 +39,7 @@
 | `upstream` | Android 页面、规则来源和外部教程是什么 | [上游资料索引](upstream/README.md) |
 | `contracts` | 跨 package 的兼容承诺和变更门槛是什么 | [兼容政策](contracts/README.md) |
 | `architecture` | 各层怎样划分、当前仓库怎样协作 | [架构](architecture/README.md) |
-| `compatibility` | 标准与实现有哪些差异、证据怎样验证、何时算完成 | [兼容性与验证](compatibility/README.md) |
+| `compatibility` | 上游要求与实现有哪些差异、证据怎样验证、何时算完成 | [兼容性与验证](compatibility/README.md) |
 | `operations` | 怎样处理安全、部署、发布、版本和回退 | [运维与维护](operations/README.md) |
 | `archive` | 哪些目标尚未实现或已被现状取代 | [归档](archive/README.md) |
 
