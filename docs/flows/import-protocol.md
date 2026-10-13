@@ -15,7 +15,7 @@ JSON 对象带 `sourceUrls` 时表示外层远程书源 URL 列表。导入器�
 
 JSON 数组中的每一个对象都必须有非空 `bookSourceUrl`。单个 JSON 对象也必须有该字段；缺失时统一报告“不是书源”类错误。
 
-导入器对 `ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 和 `ruleReview` 都应接受对象形式以及持久化层可能出现的 JSON 字符串形式，再统一归一化为规则对象。Web 目标要求规则对象内部的未知字段不能在导入时静默丢弃，至少要进入 `unknownFields` 或原始字段保留区，供编辑器导出和兼容性诊断使用；Android 的 GSON 反序列化会直接丢弃未知字段。字段的默认值和是否允许空字符串以 [书源数据模型](../standard/source-schema.md) 为准。
+导入器对 `ruleExplore`、`ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 和 `ruleReview` 都应接受对象形式以及持久化层可能出现的 JSON 字符串形式，再统一归一化为规则对象。Web 目标要求规则对象内部的未知字段不能在导入时静默丢弃，至少要进入 `unknownFields` 或原始字段保留区，供编辑器导出和兼容性诊断使用；Android 的 GSON 反序列化会直接丢弃未知字段。字段的默认值和是否允许空字符串以 [Android 书源数据模型](../upstream/android/rules/source-schema.md) 为上游依据。
 
 ## 导入候选与替换
 
@@ -114,4 +114,4 @@ JS 书源的顶层配置优先读取 `config`；当 `config` 不存在或缺少�
 
 导入器必须把脚本执行错误、缺少配置对象、缺少必备函数、配置字段类型错误区分开；不能将所有错误归为 JSON 格式错误。
 
-JS 源的 `mainJs` 必须保存完整脚本原文。声明式规则被剥离只影响执行配置对象，不代表这些文本可以丢失；当书源配置中存在 `mainJs` 时，导出器不得尝试从 `ruleSearch` 等剥离后的对象重新拼装脚本。`ruleReview` 与其他规则对象一样参与类型校验，但 JS 源的段评执行入口由脚本函数决定，详见 [JavaScript 书源](../standard/javascript-source.md)。
+JS 源的 `mainJs` 必须保存完整脚本原文。声明式规则被剥离只影响执行配置对象，不代表这些文本可以丢失；当书源配置中存在 `mainJs` 时，导出器不得尝试从 `ruleSearch` 等剥离后的对象重新拼装脚本。`ruleReview` 与其他规则对象一样参与类型校验，但 JS 源的段评执行入口由脚本函数决定，详见 [Android JavaScript 书源](../upstream/android/rules/javascript-source.md)。

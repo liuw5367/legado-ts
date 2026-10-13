@@ -1,6 +1,6 @@
-# 书源数据模型
+# Android 书源数据模型
 
-本文件是迁移时的字段总表。字段注释同时说明 Android 持久化形态和 TypeScript 运行时形态，不能只按 TypeScript 类型推断默认值、空值和覆盖规则。
+本文件是 Android 书源字段、规则对象和领域输出的来源整理。字段注释同时记录 TypeScript 迁移时需要核对的投影，但这些注记不是 source-core 的 API 定义；当前实现以 package 文档为准。
 
 本章列出的 `BookSource`、规则对象、`ExploreKind`、`ExploreStyle`、`SearchBook`、`BookChapter`、`Book`、`BookReadConfig` 和段评对象的每个公开字段都必须保留字段注释。注释至少说明业务含义、输入/输出类型、默认值或空值、是否持久化、覆盖权限和所属流程；未列入结构化模型的字段进入未知字段保留区，不得因为没有表单控件而丢失。
 
@@ -150,7 +150,7 @@ export type NormalizedSource = Omit<
 
 （codec 已实现，见 `packages/source-core/src/codec/`）`BookSource` 是交换模型；`NormalizedSource` 将 rule 字段限制为已解析对象或 null。`RawSource` 包含原文 text、输入 kind、来源 location 与诊断。未修改原文可逐字导出，修改后只承诺结构与未知值保留。
 
-`BookSource` 不是全部书源数据。Android 的订阅实体 `RuleSub`、用户覆盖、source revision、检查状态、cookie/变量和缓存属于管理或运行时模型，不能塞进书源导出 JSON，也不能因未出现在本接口中而丢失。它们的所有权、保存和清理见 [书源状态与副作用](../archive/source-management-and-state.md)；检测状态见 [书源检测状态模型](source-check-state.md)。
+`BookSource` 不是全部书源数据。Android 的订阅实体 `RuleSub`、用户覆盖、source revision、检查状态、cookie/变量和缓存属于管理或运行时模型，不能塞进书源导出 JSON，也不能因未出现在本接口中而丢失。它们的 Android 所有权见[字段所有权](source-field-ownership.md)和[校验状态](source-check-state.md)；项目的统一管理目标见[书源管理与状态归档](../../../archive/source-management-and-state.md)。
 
 ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段为 null。ExploreStyle 默认值见字段注释；布局不影响规则结果。`ExploreStyle` 是 Android `FlexChildStyle`（`data/entities/rule/FlexChildStyle.kt`）的 TS 投影，字段名与默认值保持一致，跨端实现按能力解释，不承诺 Flexbox 行为。时间字段 time、latestChapterTime、lastCheckTime、durChapterTime、syncTime 使用毫秒；章节索引为零基，formatJs.index 为一基。非有限数值进入诊断，不能静默转成零。`Book.group`、`BookChapter.start/end` 与 `BookReadConfig.delTag` 在 Android 为 `Long`（`Book.kt` L508；`delTag` 为位掩码，实际值很小：hTag=2L/rubyTag=4L，L491-492）。下方模型使用 `Int64`：TS 内部对超出 `Number.MAX_SAFE_INTEGER` 的值使用 `bigint` 或十进制字符串，JSON 边界统一序列化为十进制字符串；能够证明值始终安全时才可使用 `number`。
 
@@ -232,7 +232,7 @@ export interface SearchRule extends BookListRule {
 }
 ```
 
-`SearchRule` 和 `ExploreRule` 中的 `updateTime` 字段需要保留以兼容书源 JSON，但当前 Android `BookList` 列表解析不会读取或写入它；它不能按目录规则中的同名字段处理。目录流程的 `TocRule.updateTime` 才会写入章节的 `tag`，具体见[章节目录流程](../flows/chapter-list-flow.md)。
+`SearchRule` 和 `ExploreRule` 中的 `updateTime` 字段需要保留以兼容书源 JSON，但当前 Android `BookList` 列表解析不会读取或写入它；它不能按目录规则中的同名字段处理。目录流程的 `TocRule.updateTime` 才会写入章节的 `tag`，具体见[章节目录流程](../../../flows/chapter-list-flow.md)。
 
 `bookList` 的 `-`、`+` 前缀只属于流程控制，不是选择器语法。搜索流程中 `-` 会在列表解析完成后反转结果；目录流程的 `-` 语义不同，见目录文档，不能共用一条解释。
 

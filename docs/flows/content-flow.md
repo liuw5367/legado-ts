@@ -119,7 +119,7 @@ export interface ContentResult {
 
 ### 正文缓存提交
 
-`loadStoredChapterContent` 在 `refresh` 未开启时按 ContentIdentity 读取缓存；命中有效记录直接返回，未命中才 reserve 新 ContentSaveToken。缓存记录必须同时包含正文、`finalUrl`、章节更新和歌词/弹幕附加数据，旧的只有字符串正文的记录按未命中处理。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。详情见 [状态契约](../standard/state-and-effects.md)。
+`loadStoredChapterContent` 在 `refresh` 未开启时按 ContentIdentity 读取缓存；命中有效记录直接返回，未命中才 reserve 新 ContentSaveToken。缓存记录必须同时包含正文、`finalUrl`、章节更新和歌词/弹幕附加数据，旧的只有字符串正文的记录按未命中处理。读取不能改变代次。token 同时绑定会话、源及语义版本、目录修订和 operation；文件目录名属于 adapter，不进入核心身份。当前接口见 [source-core 宿主端口](../../packages/source-core/docs/host-ports.md)，统一提交目标见[运行时接口归档](../archive/runtime-interface-design.md)。
 
 提交顺序固定为：
 

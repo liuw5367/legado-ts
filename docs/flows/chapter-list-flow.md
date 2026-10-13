@@ -101,7 +101,7 @@ export interface ChapterListResult {
 
 当 `readConfig.reverseToc=true` 时，最终结果再反转一次。多页目录还要先按当前实现收集页面结果，再执行上面的整体顺序处理，不能在每页解析时提前反转。
 
-真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。`loadTableOfContents` 不读取旧目录；CLI 成功后把旧快照和当前阅读投影传给 `reconcileTableOfContents`，再由应用在同一提交边界保存，见 [状态契约](../standard/state-and-effects.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
+真值表中的 P 假定没有重复章节；存在重复时必须按“前缀反转 → 去重 → reverseToc=false 再反转”的实际顺序计算，不能先去重后套表。`loadTableOfContents` 不读取旧目录；CLI 成功后把旧快照和当前阅读投影传给 `reconcileTableOfContents`，再由应用在同一提交边界保存，当前缓存 token 见 [source-core 宿主端口](../../packages/source-core/docs/host-ports.md)。`visitedUrls` 是逻辑归并结果：串行分支按完成顺序，多页并发分支按输入 URL 顺序；不能把网络响应的物理完成先后写入兼容结果。
 
 CLI 将 `bookAfter` 与章节、统计 patch 绑定在同一 `TocSnapshot`。正文调用带 `editionKey` 时直接使用该版本；省略版本且章节 `bookUrl` 已被目录脚本改写时，应用会按同一版本快照的有效 `bookAfter.bookUrl` 解析书源，随后以该有效地址建立正文请求和缓存身份。
 

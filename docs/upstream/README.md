@@ -7,6 +7,7 @@
 | 材料 | 本地入口 | 用途 | 可信边界 |
 | --- | --- | --- | --- |
 | Android 页面行为快照 | [Android 页面](android/README.md) | 对照页面入口、状态、请求顺序、持久化和交互 | 来自 2026-09-28 上级工程快照；静态源码和测试证据不能替代真机运行 |
+| Android 规则主题 | [Android 规则](android/README.md#规则主题) | 对照字段、规则语言、请求、JavaScript、实体和校验状态 | 主要来自长期规则基线；其中迁移注记只说明本项目如何核对，不证明 TypeScript 已完成兼容 |
 | Android 规则与源码基线 | [维护与迁移证据](../operations/package-maintenance.md) | 对照书源字段、规则、宿主方法和长期变更 | 固定 SHA 用于取证；上游更新后必须重新核对，不自动继承旧结论 |
 | 外部社区教程 | [Legado 书源规则说明](tutorials/legado-source-rules.md) | 查阅教程中的规则示例和术语 | 本地是抽取整理，不定义本仓契约，不代表授权或当前实现 |
 

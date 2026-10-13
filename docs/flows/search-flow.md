@@ -15,7 +15,7 @@
 2. 若 `bookUrlPattern` 与响应 URL 匹配，把整个响应当作详情页，直接执行详情规则；
 3. 否则使用 `ruleSearch` 的 `bookList` 获取元素列表；
 4. `bookList` 以 `-` 开头表示解析后反转，以 `+` 开头表示去掉控制前缀但不反转；
-5. 先解析每个元素的 `name`、`author`、`kind`；书名和作者分别经过 `formatBookName`/`formatBookAuthor` 清洗（规则见[书源数据模型](../standard/source-schema.md#书名和作者清洗)）；
+5. 先解析每个元素的 `name`、`author`、`kind`；书名和作者分别经过 `formatBookName`/`formatBookAuthor` 清洗（规则见[Android 书源数据模型](../upstream/android/rules/source-schema.md#书名和作者清洗)）；
 6. 清洗后的书名为空丢弃；调用方提供 `acceptSearchFields` 时，先按已解析的书名、作者和分类过滤候选，再读取 `wordCount`、`lastChapter`、`intro`、`coverUrl` 和 `bookUrl` 等可选字段；作者、简介等字段按各自字段错误策略处理；
 7. 相对封面和详情 URL 按响应 URL 转绝对 URL；详情 URL 为空时回退响应 URL；
 8. 同书源内按 `SearchBook.bookUrl` 去重；

@@ -104,7 +104,7 @@ NEEDS_CHECK ──start──► RUNNING ──all stages pass──► PASSED
       └────────────── source edited ───────────────► STALE
 ```
 
-状态模型、`sourceRevision/checkRevision` 的条件写入和旧结果防覆盖规则见[书源检测状态模型](../standard/source-check-state.md)。删除或重新导入书源时，旧检测任务即使晚到也不得恢复已删除的状态。
+Android 状态模型、`sourceRevision/checkRevision` 的条件写入和旧结果防覆盖事实见[Android 书源校验状态](../upstream/android/rules/source-check-state.md)；CLI 当前写回见 [reader-cli 实现](../../apps/reader-cli/docs/implementation.md)。删除或重新导入书源时，旧检测任务即使晚到也不得恢复已删除的状态。
 
 ## 结果契约
 
@@ -124,7 +124,7 @@ export interface SourceCheckResult {
   operationId: string;
   /** 最终状态或实时阶段状态，使用规范的大写状态。 */
   status: SourceCheckStatus;
-  /** 每个阶段的结构化结果；跳过阶段也要有记录。字段以[书源校验状态](../standard/source-check-state.md)的 `SourceCheckStageResult` 为准。 */
+  /** 每个阶段的结构化结果；跳过阶段也要有记录。字段以 Android 来源中的阶段语义为准。 */
   stages: SourceCheckStageResult[];
   /** 供列表展示的脱敏摘要。 */
   summary: string;
@@ -141,7 +141,7 @@ export interface SourceCheckResult {
 
 `SourceCheckResult` 是检测领域值；package 公开入口返回 `OperationResult<SourceCheckResult>` 属**目标设计**——当前 `@legado/source-core` **没有** `checkSources` / `check` 导出（见 [`@legado/source-core`](../../packages/source-core/README.md)、[reader-cli 实现](../../apps/reader-cli/docs/implementation.md) 与 [兼容性与验证](../compatibility/README.md)）。外层 `status` 使用运行时统一契约的小写状态，值内的 `status` 保留 Android 兼容的大写检查状态，adapter 负责两者映射，不能让调用方把两套状态混为同一字段。
 
-实时事件可以复用同一结果模型的增量版本，但客户端不能把 `RUNNING` 结果当作最终通过。阶段状态允许值为 `PASSED`、`FAILED`、`SKIPPED`、`UNSUPPORTED`；源最终状态允许值为 `NEEDS_CHECK`、`RUNNING`、`PASSED`、`FAILED`、`CANCELLED`、`STALE`。若兼容层输出小写状态，必须按[状态模型](../standard/source-check-state.md)的映射表转换；WebSocket 或 SSE 只是应用传输方式，检测核心不应依赖某一种推送协议。
+实时事件可以复用同一结果模型的增量版本，但客户端不能把 `RUNNING` 结果当作最终通过。阶段状态允许值为 `PASSED`、`FAILED`、`SKIPPED`、`UNSUPPORTED`；源最终状态允许值为 `NEEDS_CHECK`、`RUNNING`、`PASSED`、`FAILED`、`CANCELLED`、`STALE` 是项目目标映射，不是 Android 持久状态枚举。若兼容层输出小写状态，必须在 adapter 显式转换；WebSocket 或 SSE 只是应用传输方式，检测核心不应依赖某一种推送协议。
 
 ## Android 兼容语义
 

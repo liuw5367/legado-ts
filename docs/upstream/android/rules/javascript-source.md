@@ -1,6 +1,6 @@
-# JavaScript 书源
+# Android JavaScript 书源
 
-本章定义 JavaScript 书源的目标契约。函数签名、导入校验、宿主绑定与 capability error 均作为目标契约维护；接口示意和行为约定不代表 Android 当前实现已全部具备，实际行为以源码核对为准。
+本章整理 Android JavaScript 书源的函数、绑定、返回值和 scope 行为。接口示意用于描述上游输入输出，不代表 source-core/source-node 已实现全部 JavaScript 重载；当前支持范围见[兼容性与验证](../../../compatibility/README.md)和 Node 宿主文档。
 
 ## 配置和必备函数
 
@@ -56,7 +56,7 @@ export interface JsLoginFunctions {
 
 每次函数调用都创建新的调用 scope，绑定运行时 API、源对象和调用参数，再执行主脚本和函数表达式。源级共享 scope 如被宿主启用，必须显式声明共享键；默认迁移实现应按请求和调用隔离，防止 SSR 用户之间共享变量。
 
-规则和源脚本可见绑定包括 `java`、`source`、`sourceApi`、`baseUrl`、`cookie`、`cache`，以及 `key`、`page`、`book`、`chapter`、`chapters`、`result`、`nextChapterUrl` 等流程变量。绑定名称和对象角色是兼容契约，脚本可调用方法、返回值、异常和能力开关见 [source-core 宿主端口](../../packages/source-core/docs/host-ports.md)。
+规则和源脚本可见绑定包括 `java`、`source`、`sourceApi`、`baseUrl`、`cookie`、`cache`，以及 `key`、`page`、`book`、`chapter`、`chapters`、`result`、`nextChapterUrl` 等流程变量。绑定名称和对象角色是 Android 兼容事实；当前宿主能力见 [`source-core 宿主端口`](../../../../packages/source-core/docs/host-ports.md)。
 
 ## 返回值归一化
 
@@ -186,6 +186,6 @@ JS 源导入完成后，配置对象中的声明式规则会被剥离，`mainJs`
 
 不能使用宿主 `eval` 或 Node 全局对象执行不可信书源。`JavaScriptRuntime` 至少需要脚本超时、内存/递归限制、AbortSignal、允许的网络 API 和日志接口；浏览器和 SSR 的 Cookie、文件、进程能力默认不可见。
 
-规则内 JS、URL 插值、jsLib 和 loginCheckJs 同样需要这套执行能力，不只 mainJs 源需要。基础配置抽取和同步网络兼容在实施阶段 B 建立，主函数在 C 接入，不能全部推迟到 D。具体 Node 引擎、桥接限制和安全边界见 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md)。Java 类访问不能默认映射为 Node require；必须登记实际依赖并通过受控兼容方法提供，缺失时给出具体方法诊断。
+规则内 JS、URL 插值、jsLib 和 loginCheckJs 同样需要这套执行能力，不只 mainJs 源需要。Android 绑定和调用顺序以本文件和固定源码为准；Node 引擎、桥接限制和安全边界见 [source-node 安全与部署](../../../../packages/source-node/docs/security-and-deployment.md)。Java 类访问不能默认映射为 Node require；缺失时应给出具体方法诊断。
 
-主脚本顶层代码在每次函数调用重新执行，可能产生网络或缓存副作用；不能未经证据改成只初始化一次。持久 source/cache 操作与临时 scope 释放不同，见 [状态契约](state-and-effects.md)。数据跨引擎边界时必须序列化或受控复制，不暴露宿主对象原型和函数引用。
+主脚本顶层代码在每次函数调用重新执行，可能产生网络或缓存副作用；不能未经证据改成只初始化一次。持久 source/cache 操作与临时 scope 释放不同；项目的统一副作用目标见[运行时接口归档](../../../archive/runtime-interface-design.md)。数据跨引擎边界时必须序列化或受控复制，不暴露宿主对象原型和函数引用。

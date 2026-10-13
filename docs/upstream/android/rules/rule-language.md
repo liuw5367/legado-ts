@@ -1,6 +1,6 @@
-# 规则语言与解析器
+# Android 规则语言与解析器
 
-这是迁移的核心文档。规则字段都是字符串，但字符串不是单一语法：同一字段可能包含 HTML 选择器、XPath、JSONPath、正则、JavaScript、变量模板和替换表达式。TypeScript 实现必须先完成与当前行为一致的词法拆分，再调用相应解释器。
+这是 Android 规则语言的来源整理。规则字段都是字符串，但字符串不是单一语法：同一字段可能包含 HTML 选择器、XPath、JSONPath、正则、JavaScript、变量模板和替换表达式。TypeScript 实现的当前拆分、编译和诊断见 [`@legado/source-core`](../../../../packages/source-core/README.md)，不能把本文件的示意接口当作现行导出。
 
 ## 1. 规则执行上下文
 
@@ -217,7 +217,7 @@ URL 模式中，空字符串回退 `baseUrl`；非空字符串相对 `redirectUr
 
 规则 JS 当前可见绑定包括：`java`、`cookie`、`cache`、`source`、`book`、`result`、`baseUrl`、`chapter`、`chapters`、`title`、`src`、`nextChapterUrl`、`rssArticle`、`fromBookInfo`，以及批量场景的 `paraIndex`、`paraData`、`page`。
 
-`java` 绑定含 `openUrl`、`openVideoPlayer`、`startBrowser` 等 UI 跳转方法。宿主启用 `blockSourceNavigation` 且当前协程上下文携带 `SuppressSourceNavigation`（换源、批量检测等后台流程）时，这些跳转和 WebView 弹窗会被阻止；Android 当前行为是静默 `return`，JS 仅得到 `undefined`（`JsExtensions.kt` L1251/L390/L405），`policy-denied` 诊断是迁移设计，映射示例见 [统一接口归档](../archive/runtime-interface-design.md)。TypeScript 宿主应输出空结果或显式的策略拒绝，不能弹出书源网页或视频。
+`java` 绑定含 `openUrl`、`openVideoPlayer`、`startBrowser` 等 UI 跳转方法。宿主启用 `blockSourceNavigation` 且当前协程上下文携带 `SuppressSourceNavigation`（换源、批量检测等后台流程）时，这些跳转和 WebView 弹窗会被阻止；Android 当前行为是静默 `return`，JS 仅得到 `undefined`（`JsExtensions.kt` L1251/L390/L405）。TypeScript 的策略拒绝和缺失能力属于项目兼容差异，见[兼容性与验证](../../../compatibility/README.md)。
 
 脚本异常向上抛出；JSONPath 读取异常通常转为空值并记录；不平衡的规则括号会抛出解析错误；取消必须原样传播，不能被普通异常兜底吞掉。`@webjs` 必须在后台宿主执行，核心库没有浏览器时应返回明确的能力缺失错误。
 

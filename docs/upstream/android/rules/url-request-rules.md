@@ -1,4 +1,6 @@
-# URL 与请求规则
+# Android URL 与请求规则
+
+本文整理 Android `AnalyzeUrl`、请求选项、Cookie、登录头和重定向行为。Node 的当前安全限制和默认值见 [source-node 安全与部署](../../../../packages/source-node/docs/security-and-deployment.md)；本文件中的 TypeScript 对照只登记差异，不把目标策略写成 Android 已有能力。
 
 ## 1. 展开顺序
 
@@ -65,7 +67,7 @@ Android 在解析初始 URL 后把 `baseUrl` 更新为源站 origin，再执行 
 
 同一书源的普通请求共享按 `source.getKey()` 建立的记录。第一次请求立即通过；窗口内达到次数后，后续请求挂起到 `nextTime`，窗口重置时把时间设为当前时刻并重新计数。更新配置时只更新该书源的速率和共享记录，不为每个 URL 创建独立计数器；取消等待必须释放挂起请求。`ajaxAll(urls, true)` 和 `ajaxTestAll(urls, timeout, true)` 是 Android 明确的 bypass 路径，跳过书源限流但仍受宿主线程/并发上限约束；普通 `ajax`、`connect` 和未传 bypass 的批量请求仍走共享记录。书源编辑、导入覆盖或删除后必须清理该 source key 的记录。
 
-TypeScript `SourceRateLimiter` 已覆盖普通请求固定窗口、取消等待、`putConcurrent` 有效更新和 bypass；首次遇到非法非空配置时按 Android 首次请求放行的 fallback 处理，并通过 `SourceSession.diagnostics()` 报告配置问题。`SourceSession.close()` 及 `ReaderApplication.close()` 会释放限流等待；应用删除和 session 重建边界见[兼容性与验证](../compatibility/README.md)。
+TypeScript `SourceRateLimiter` 已覆盖普通请求固定窗口、取消等待、`putConcurrent` 有效更新和 bypass；首次遇到非法非空配置时按 Android 首次请求放行的 fallback 处理，并通过 `SourceSession.diagnostics()` 报告配置问题。`SourceSession.close()` 及 `ReaderApplication.close()` 会释放限流等待；应用删除和 session 重建边界见[兼容性与验证](../../../compatibility/README.md)。
 
 ## 3. 参数编码
 
@@ -144,7 +146,7 @@ TypeScript 的 JS bridge 子请求会跳过动态 `source.header`，只保留静
 
 HttpClient 返回解压后的 bytes、响应头、状态及最终 URL；核心通过字符集端口解码，然后按 Android 顺序执行 XML 声明补齐或 `bodyJs`。不能先由 fetch.text() 固定 UTF-8 再尝试恢复原字节。请求参数 charset 和响应 charset 是两个用途，不默认等同。正文 bytes 分支继续保留原 Android 十六进制规则输入，媒体二进制输出通过独立 DTO 表达。
 
-缺失/无效 timeout 在 URL 兼容层按原行为忽略，宿主最终仍必须有正的截止时间；这与“进入 HttpClient 的有效 timeout 必须合法”不冲突。重试次数服从源配置与宿主策略共同约束，POST 或上游写入不能因网络错误自动重复；被拒绝的重试报告 policy-denied 诊断，不伪称原客户端同等行为。跨域凭据和 SSRF 的策略差异见 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md)。
+缺失/无效 timeout 在 URL 兼容层按原行为忽略，宿主最终仍必须有正的截止时间；这与“进入 HttpClient 的有效 timeout 必须合法”不冲突。重试次数服从源配置与宿主策略共同约束，POST 或上游写入不能因网络错误自动重复；被拒绝的重试报告 policy-denied 诊断，不伪称原客户端同等行为。跨域凭据和 SSRF 的策略差异见 [source-node 安全与部署](../../../../packages/source-node/docs/security-and-deployment.md)。
 
 ## 7. 浏览器和 SSR 约束
 

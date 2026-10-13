@@ -9,6 +9,8 @@
 - **证据等级**：正文中的源码事实来自静态代码和测试；没有真机运行证据的内容标为待验证，不把页面名称或旧文档描述当成实现事实。
 - **与流程文档的关系**：`docs/flows/` 记录书源运行时的通用处理流程；本目录记录 Android 页面如何调用这些流程、保存数据和处理交互。当前实现和跨端证据见[兼容性与验证](../../compatibility/README.md)。
 
+规则、字段和校验状态的 Android 来源已集中到 [规则主题](rules/README.md)；页面文档只说明页面调用和交互，不重复字段全表。
+
 ## 页面文档
 
 | 页面 | 文档 | 重点 |
@@ -23,6 +25,18 @@
 | 书源诊断 | [source-diagnosis.md](pages/source-diagnosis.md) | 诊断输入、四类原始响应、日志、校验、超时和取消 |
 | 书架 | [bookshelf.md](pages/bookshelf.md) | 分组、排序、更新、导入、书架状态和批量操作 |
 | 发现 | [explore.md](pages/explore.md) | 发现源、分类、分页、筛选、结果和批量加入书架 |
+
+## 规则主题
+
+| 主题 | 文档 |
+| --- | --- |
+| 字段与领域输出 | [source-schema.md](rules/source-schema.md) |
+| 字段所有权与导入 | [source-field-ownership.md](rules/source-field-ownership.md) |
+| 实体与订阅类型 | [artifact-model.md](rules/artifact-model.md) |
+| 规则语言 | [rule-language.md](rules/rule-language.md) |
+| JavaScript 书源 | [javascript-source.md](rules/javascript-source.md) |
+| URL 与请求 | [url-request-rules.md](rules/url-request-rules.md) |
+| 校验状态 | [source-check-state.md](rules/source-check-state.md) |
 
 ## 页面之间的主链路
 

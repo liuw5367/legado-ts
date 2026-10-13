@@ -1,15 +1,13 @@
-# 书源规则标准
+# 标准与政策入口（历史路径）
 
-本目录定义 TypeScript 实现必须遵守的书源规则与 Android 行为标准。字段、规则、请求、JavaScript、能力、身份和副作用的语义只在这里维护；流程文档和实现文档引用这些内容，不另写一套规则。上游仓库与基线提交见[主 README 事实来源](../README.md#事实来源规则)。
+Android 规则标准已经按来源与责任拆分：
 
-- [书源数据模型](source-schema.md)：书源、规则对象、领域输出和字段注释。
-- [字段所有权与合并规则](source-field-ownership.md)：源配置、用户状态、订阅更新和导出回写。
-- [书源相关实体边界](artifact-model.md)：BookSource、RssSource、ReplaceRule 和订阅实体。
-- [规则语言与解析器](rule-language.md)：规则扫描、模式识别、求值和变量语义。
-- [URL 与请求规则](url-request-rules.md)：URL 展开、请求选项、响应字节和安全边界。
-- [JavaScript 书源](javascript-source.md)：函数约定、绑定、返回值和脚本 scope。
-- 能力登记、优先级、证据和待审核项目见 [兼容性与验证](../compatibility/README.md)。
-- [身份、状态与副作用](state-and-effects.md)：身份、版本、所有权、取消和提交语义。
-- [书源校验状态](source-check-state.md)：校验会话、阶段、结果和旧结果拒绝写回。
+- [Android 规则来源](../upstream/android/rules/source-schema.md)：字段和领域模型。
+- [Android 规则语言](../upstream/android/rules/rule-language.md)：规则模式、链和变量。
+- [Android JavaScript 书源](../upstream/android/rules/javascript-source.md)：函数、绑定和返回值。
+- [Android URL 与请求规则](../upstream/android/rules/url-request-rules.md)：展开、请求选项、Cookie 和重定向。
+- [Android 字段所有权](../upstream/android/rules/source-field-ownership.md)：导入、订阅和管理字段的 Android 行为。
+- [Android 实体边界](../upstream/android/rules/artifact-model.md)：BookSource、RssSource、ReplaceRule 和 RuleSub。
+- [Android 校验状态](../upstream/android/rules/source-check-state.md)：NEEDS_CHECK/PASSED/FAILED、revision 和迟到结果。
 
-当前代码入口与宿主端口契约在 [当前实现](../implementation/README.md)；实现与本标准的不一致见 [兼容性与验证](../compatibility/README.md)。本目录文档可同时包含“源码事实”“兼容要求”“目标设计”和“待验证”内容，具体状态以兼容性目录为准。
+跨 package 的项目政策见[兼容政策](../contracts/compatibility-policy.md)，当前 TypeScript 行为见 [`@legado/source-core`](../../packages/source-core/README.md) 与 [`@legado/source-node`](../../packages/source-node/README.md)，差异和证据见[兼容性与验证](../compatibility/README.md)。本目录保留为历史入口，后续新增标准不得继续放入这里。

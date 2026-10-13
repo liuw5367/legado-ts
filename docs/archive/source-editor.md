@@ -21,9 +21,9 @@
 | `voteUpUrl`、`voteDownUrl`、`postReviewUrl`、`postQuoteUrl`、`deleteUrl` | 当前表单未覆盖 | 导入导出保留，标记为交互或认证能力 |
 | 书源未知字段和完整 `mainJs` | 当前页面不能证明全部保留 | codec 原样保留，覆盖写入前显示差异 |
 
-段评字段的最终运行语义见 [JavaScript 书源](../standard/javascript-source.md) 和 [书源数据模型](../standard/source-schema.md)。表单的字段注释必须说明输入类型、空值含义、规则结果类型和所需宿主能力，不能只显示一个没有语义的字符串输入框。
+段评字段的最终 Android 语义见 [JavaScript 书源](../upstream/android/rules/javascript-source.md) 和 [书源数据模型](../upstream/android/rules/source-schema.md)。表单的字段注释必须说明输入类型、空值含义、规则结果类型和所需宿主能力，不能只显示一个没有语义的字符串输入框。
 
-字段覆盖必须以 [书源数据模型](../standard/source-schema.md) 为单一来源。表单元数据至少包含 `namespace`、`id`、输入类型、默认值、是否必需、空值含义、规则结果类型、所需 capability 和导入导出策略。当前没有编辑控件的字段使用 `preserve-only` 策略，编辑器显示其存在和原始值，保存时原样写回；未知字段也使用同样策略，不能因表单 schema 不认识而丢失。
+字段覆盖必须以 [书源数据模型](../upstream/android/rules/source-schema.md) 为单一来源。表单元数据至少包含 `namespace`、`id`、输入类型、默认值、是否必需、空值含义、规则结果类型、所需 capability 和导入导出策略。当前没有编辑控件的字段使用 `preserve-only` 策略，编辑器显示其存在和原始值，保存时原样写回；未知字段也使用同样策略，不能因表单 schema 不认识而丢失。
 
 ## 编辑会话和数据流
 

@@ -1,6 +1,6 @@
 # 书源订阅与刷新
 
-本章是 Web 目标设计。已有 Android 导入行为见 [导入协议](import-protocol.md)。链接返回 JSON 数组属于一次导入；保存链接并持续刷新是另一个显式操作，不把两者混称为订阅。`BookSource`、`RssSource` 和 `ReplaceRule` 的实体边界见[书源相关实体边界](../standard/artifact-model.md)。
+本章是 Web 目标设计。已有 Android 导入行为见 [导入协议](import-protocol.md)。链接返回 JSON 数组属于一次导入；保存链接并持续刷新是另一个显式操作，不把两者混称为订阅。`BookSource`、`RssSource` 和 `ReplaceRule` 的实体边界见[Android 实体边界](../upstream/android/rules/artifact-model.md)。
 
 ## 数据和职责
 
@@ -18,7 +18,7 @@
 
 应用拥有订阅记录、调度、确认和事务。package 的 `refreshSubscription` 接收订阅快照、当前本地 artifact 快照、`operationId`、`idempotencyKey` 和取消/预算上下文，下载后复用 `importSources`，返回 `SubscriptionRefreshPlan`；应用再把任务生命周期写入 `SubscriptionRefreshAttempt`。package 不会自行创建定时器、数据库任务或后台服务。URL 可一次提供多个源，sourceUrls 的外层限制仍然有效。
 
-刷新计划的最小结构为。任务级执行记录使用[实体模型](../standard/artifact-model.md)中的 `SubscriptionRefreshAttempt`；本节的 `SubscriptionRefreshPlan` 只表示比较和提交前的领域结果，避免重复定义任务状态：
+刷新计划的最小结构为。任务级执行记录使用[书源管理与状态归档](../archive/source-management-and-state.md)中的目标边界；本节的 `SubscriptionRefreshPlan` 只表示比较和提交前的领域结果，避免重复定义任务状态：
 
 ```ts
 interface SubscriptionRefreshPlan {

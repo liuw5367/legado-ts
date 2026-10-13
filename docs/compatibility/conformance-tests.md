@@ -222,7 +222,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 
 真实测试命令随 runtime 提交。书源解析运行时的兼容测试仍使用 `07-A`、`07-B` 等稳定任务 ID，但文档按主题维护：本文件负责 conformance 边界，[真实书源 fixture](source-fixtures.md) 负责语料和 manifest，[source-node 兼容性审计](../../packages/source-node/docs/compatibility-audit.md) 负责静态/在线报告。`07-A` 覆盖 schema、规则、请求、解析器、QuickJS、工作流和宿主能力的无公网 conformance；`07-B` 覆盖 `fixtures/source` 的集合导入与单个导入一致性。任务 11 保留跨模块集成、存储、编辑器和发布门禁，不再把书源文件回归测试混在其中。兼容案例须有 Android 证据、golden、TS 断言及相关清理断言；Web 新设计只要求对应设计证据与目标断言，不强迫虚构 Android golden。纯值转换无资源时标注清理不适用。未执行的案例一律 execution=not-run。
 
-覆盖审计按以下关系执行：`standard/source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`standard/rule-language.md` 和 `standard/url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`capabilities.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
+覆盖审计按以下关系执行：`upstream/android/rules/source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`upstream/android/rules/rule-language.md` 和 `upstream/android/rules/url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`capabilities.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
 
 ## 必须覆盖的规则样本
 
