@@ -18,7 +18,7 @@
 
 | 编号 | 类型 | 事项 | 当前状态 | 详细事实和证据 | 完成条件 |
 | --- | --- | --- | --- | --- | --- |
-| OPEN-01 | 宿主能力 | `@webjs`、WebView、资源嗅探和浏览器交互 | 未实现 | [兼容矩阵](evidence-matrix.md)；[宿主接口](../implementation/runtime-host-interfaces.md) | 宿主端口、权限边界、能力错误和 Android fixture 齐备 |
+| OPEN-01 | 宿主能力 | `@webjs`、WebView、资源嗅探和浏览器交互 | 未实现 | [兼容矩阵](evidence-matrix.md)；[宿主接口](../../packages/source-core/docs/host-ports.md) | 宿主端口、权限边界、能力错误和 Android fixture 齐备 |
 | OPEN-02 | 书源能力 | 结构化段评读取、旧式段评网页桥接和段评写入 | 未实现（仅字段识别与来源审计） | [段评流程](../flows/review-flow.md)；`CAP-REVIEW` | 公开读取工作流、网页桥接会话安全、分页和写入协议分别完成或明确返回能力缺失 |
 | OPEN-03 | 书源能力 | 付费动作、购买后刷新、书源事件和自定义按钮 | 未实现 | [媒体和交互流程](../flows/adjacent-source-flows.md) | 触发、认证、取消、重复点击和宿主 UI 动作有版本化契约 |
 | OPEN-04 | 宿主能力 | 验证码、复杂登录 UI 和多步骤登录 | 未实现 | [URL 与请求规则](../standard/url-request-rules.md)；WebView 入口 | 登录交互、凭据保存、清理和失败恢复完成应用与宿主验收 |

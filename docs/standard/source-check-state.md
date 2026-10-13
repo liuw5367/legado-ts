@@ -4,7 +4,7 @@
 
 书源校验是独立于普通搜索的诊断流程。它可以调用搜索、发现、详情、目录和正文，但结果不是一次普通业务请求的返回值。
 
-本文的版本名称以[运行时统一契约](../implementation/runtime-contracts.md)为准：`sourceRevision` 是源版本，`checkRevision` 是检测任务版本；二者都不等同于 `BookSource.lastUpdateTime`。
+本文的版本名称以[source-core 运行时契约](../../packages/source-core/docs/runtime-contracts.md)为准：`sourceRevision` 是源版本，`checkRevision` 是检测任务版本；二者都不等同于 `BookSource.lastUpdateTime`。
 
 ## 状态模型
 

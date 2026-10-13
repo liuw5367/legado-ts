@@ -30,7 +30,7 @@
 
 页面可见终态使用 `success`、`empty`、`partial`、`failed`、`cancelled` 和 `capability-missing`。空列表不能代替失败，宿主缺少能力不能伪装成空结果。路由切换清除旧页面消息；退出前先取消并等待活动流程、写队列和缓存索引，再释放实例锁。
 
-共享工作流的输入、输出和宿主端口见 [package 使用指南](../../../docs/implementation/package-usage.md)；CLI 特有的文件和页面行为以本目录其他文档为准。
+共享工作流的输入、输出和宿主端口见 [source-core 工作流](../../../packages/source-core/docs/workflows.md) 与 [宿主端口](../../../packages/source-core/docs/host-ports.md)；CLI 特有的文件和页面行为以本目录其他文档为准。
 
 ## 验证入口
 

@@ -21,7 +21,7 @@
 | --- | --- |
 | 使用终端阅读器 | [CLI README](../apps/reader-cli/README.md) → [CLI 文档](../apps/reader-cli/docs/README.md) |
 | 使用 Web 阅读器 | [Web README](../apps/reader-web/README.md) → [开发与部署](../apps/reader-web/docs/development-and-deployment.md) |
-| 集成共享运行时 | [package 使用指南](implementation/package-usage.md) → [运行边界](operations/runtime-security-and-deployment.md) |
+| 集成共享运行时 | [source-core 文档](../packages/source-core/README.md) → [跨包与应用接入](implementation/package-usage.md) → [运行边界](operations/runtime-security-and-deployment.md) |
 | 理解整体边界 | [架构](architecture/README.md) → [书源规则标准](standard/README.md) |
 | 实现或修改书源 package | [书源规则标准](standard/README.md) → [处理流程](flows/README.md) → [当前实现](implementation/README.md) → [兼容性与验证](compatibility/README.md) |
 | 查看书源运行时状态 | [状态总览](compatibility/status.md) |
@@ -72,7 +72,7 @@
 
 ## 事实来源规则
 
-字段和默认值以 [书源数据模型](standard/source-schema.md) 为准；字段所有权以 [字段所有权与合并规则](standard/source-field-ownership.md) 为准；实体边界以 [书源相关实体边界](standard/artifact-model.md) 为准；规则语义以 [规则语言](standard/rule-language.md) 为准；请求行为以 [URL 与请求规则](standard/url-request-rules.md) 为准；身份、版本和提交以 [状态与副作用](standard/state-and-effects.md) 为准；当前代码入口以 [package 使用指南](implementation/package-usage.md) 与 `packages/source-core/src/index.ts` 为准。流程和实现文档引用这些事实，不另建同名定义。
+字段和默认值以 [书源数据模型](standard/source-schema.md) 为准；字段所有权以 [字段所有权与合并规则](standard/source-field-ownership.md) 为准；实体边界以 [书源相关实体边界](standard/artifact-model.md) 为准；规则语义以 [规则语言](standard/rule-language.md) 为准；请求行为以 [URL 与请求规则](standard/url-request-rules.md) 为准；身份、版本和提交以 [状态与副作用](standard/state-and-effects.md) 为准；当前代码入口以 [source-core 文档](../packages/source-core/README.md)、[跨包与应用接入](implementation/package-usage.md) 与 `packages/source-core/src/index.ts` 为准。流程和实现文档引用这些事实，不另建同名定义。
 
 Android 上游仓库、两个基线提交及其用途见 [上游资料索引](upstream/README.md)；取证策略与长期基线维护见 [package 维护与迁移证据](operations/package-maintenance.md)。当前 Android 主要事实源是 `app/src/main/java/io/legado/app/model/analyzeRule/`、`app/src/main/java/io/legado/app/model/webBook/`、`app/src/main/java/io/legado/app/data/entities/` 和相关测试。`modules/web/` 是管理界面，不能替代运行时规则引擎。
 

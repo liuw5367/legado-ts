@@ -7,4 +7,4 @@
 - [任务执行与 Serverless 边界](../archive/job-and-execution.md)：JobStore、Node Worker、租约、幂等和长任务恢复。
 - [package 维护与迁移证据](package-maintenance.md)：源码基线、版本、发布、上游变更、许可记录和回退。
 
-应用调用方式见 [package 使用指南](../implementation/package-usage.md)；reader-cli 与 reader-web 的应用边界见各自 docs；未实施的存储与任务设计见 [归档](../archive/README.md)。
+应用调用方式见 [source-core 文档](../../packages/source-core/README.md) 和[跨包与应用接入](../implementation/package-usage.md)；reader-cli 与 reader-web 的应用边界见各自 docs；未实施的存储与任务设计见 [归档](../archive/README.md)。

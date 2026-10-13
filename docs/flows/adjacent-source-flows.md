@@ -36,7 +36,7 @@ package 需要版本化的事件输入和执行结果协议，宿主注入允许
 
 ## 扩展入口与生命周期
 
-公开入口统一见 [调用契约](../implementation/package-usage.md#当前公开入口)。结果需区分 text、image-content、audio、video、file-links；content 字符串保留兼容输入，不能仅靠 URL 后缀猜类型。音视频附加内容分别为歌词/弹幕；图片正文仍可含多个图片引用，不强制简化为单 URL。
+公开入口统一见 [source-core API](../../packages/source-core/docs/api.md)。结果需区分 text、image-content、audio、video、file-links；content 字符串保留兼容输入，不能仅靠 URL 后缀猜类型。音视频附加内容分别为歌词/弹幕；图片正文仍可含多个图片引用，不强制简化为单 URL。
 
 decodeImage 无规则时原 bytes 返回，有规则则传 src/result/book，执行成功后才缓存；失败保持原缓存。文件下载先 resolveDownload，应用选择链接，再由宿主流式下载并验证最终目标与大小；不向网页暴露服务器文件路径。
 

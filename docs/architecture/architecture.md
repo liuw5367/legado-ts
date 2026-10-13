@@ -31,7 +31,7 @@ apps/reader-web          Web 应用：React 页面、Hono API、用户数据 Rep
            -> @legado/source-core 规则解释、请求语义、候选归并和单源工作流
 ```
 
-- **source-core**：不依赖 Node 平台；`SourceRuleRuntime` 解释书源规则，`SourceRequestRuntime` 解释书源请求选项，搜索聚合函数处理跨源候选。核心还实现单源限流、可复用并发队列、分页策略、批量正文编排、最终正文 cache-first/条件提交编排、目录 reconcile 和图片解密流程；通过 `WorkflowPorts` / `ReadingPorts` 接收网络、脚本、并发额度与 `ContentStore` 等宿主能力；公开入口见 [package 使用指南](../implementation/package-usage.md)。
+- **source-core**：不依赖 Node 平台；`SourceRuleRuntime` 解释书源规则，`SourceRequestRuntime` 解释书源请求选项，搜索聚合函数处理跨源候选。核心还实现单源限流、可复用并发队列、分页策略、批量正文编排、最终正文 cache-first/条件提交编排、目录 reconcile 和图片解密流程；通过 `WorkflowPorts` / `ReadingPorts` 接收网络、脚本、并发额度与 `ContentStore` 等宿主能力；公开入口见 [source-core 文档](../../packages/source-core/README.md)。
 - **source-node**：实现网络、HTML/JSONPath/XPath 解析器、QuickJS、Cookie、字符集、加密、归档和字体；`SourceRuleHost` / `SourceRequestHost` 组合这些能力并委托给核心，也提供兼容性 CLI。`concurrency.ts` 仅为兼容旧导入路径转出 source-core 的队列实现。
 - **reader-cli**：负责来源选择与读取、跨源调度、并发额度、进度和取消、搜索历史、持久化及终端交互；调用核心归并候选，但不重新解释书源规则或归并条件。应用保存目录快照/书籍 patch，并提供按书籍绑定的最终正文 `ContentStore`；核心消费应用注入的并发额度，并维护书源级限流和单源分页/批量工作流。详细边界见 [CLI 架构](../../apps/reader-cli/docs/architecture.md)。
 - **reader-web**：负责账号范围、书源导入确认、数据库 Repository、SSE 搜索进度、书籍来源版本、目录/正文缓存和阅读位置；通过 Hono 调用 source-core/source-node，不在浏览器或 API 层复制规则解释。详细边界见 [Web 架构](../../apps/reader-web/docs/architecture.md)。
@@ -113,7 +113,7 @@ decodeImage(ports: WorkflowPorts, input: ImageDecodeInput): Promise<RuntimeResul
 
 批量正文由核心执行切批、规则、回存编排和单章兜底；调用方筛选缓存未命中章节，并通过回调实施版本校验和持久化。图片解密只处理输入 bytes 和书源脚本，不负责下载或缓存图片。
 
-`RuntimeResult` 至少包含 `status`、可选 `value`、`diagnostics` 和 `trace`。空列表或无匹配属于 `empty`；取消、能力缺失和部分成功必须使用可判别状态，不能只返回空值。历史目标设计中的 `effects` / `changes` / `cleanup` 信封尚未实现，见 [运行时统一契约](../implementation/runtime-contracts.md)。
+`RuntimeResult` 至少包含 `status`、可选 `value`、`diagnostics` 和 `trace`。空列表或无匹配属于 `empty`；取消、能力缺失和部分成功必须使用可判别状态，不能只返回空值。历史目标设计中的 `effects` / `changes` / `cleanup` 信封尚未实现，见 [统一接口归档](../archive/runtime-interface-design.md)。
 
 所有领域流程都遵循同一条边界：
 
@@ -129,7 +129,7 @@ decodeImage(ports: WorkflowPorts, input: ImageDecodeInput): Promise<RuntimeResul
   -> 应用自行提交持久化
 ```
 
-核心流程输出“结果加变更”，宿主或上层应用负责提交变更。每个阶段都要明确成功、空结果、可继续错误、终止错误、取消和清理行为；领域流程分别见发现、搜索、详情、目录和正文文档。应用调用顺序见 [独立 package 的调用契约](../implementation/package-usage.md)。
+核心流程输出“结果加变更”，宿主或上层应用负责提交变更。每个阶段都要明确成功、空结果、可继续错误、终止错误、取消和清理行为；领域流程分别见发现、搜索、详情、目录和正文文档。应用调用顺序见 [source-core 工作流](../../packages/source-core/docs/workflows.md) 和 [跨包与应用接入](../implementation/package-usage.md)。
 
 “结果加变更”用于领域对象；Cookie、source.putVariable、脚本 cache 和批量回存可能在执行期间即时生效，不能假设整次调用可回滚。它们通过同一受控宿主记录 effects，具体时机见 [状态与副作用](../standard/state-and-effects.md)。
 

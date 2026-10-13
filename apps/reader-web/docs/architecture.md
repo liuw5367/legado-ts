@@ -35,4 +35,4 @@ React Router 页面与组件
 
 `AccountLayout` 提供书架、搜索、书源和设置导航，`ReaderLayout` 承载阅读页面。书源选择、目录和阅读页通过 editionKey 区分同一本书的不同来源版本；查看其他来源目录不会立即切换活动来源，点击章节后才更新 edition。组件状态负责加载、空结果、取消和错误显示，数据提交统一经过 API。
 
-共享 package 的规则与请求契约见 [package 使用指南](../../../docs/implementation/package-usage.md)，Web 的路由和具体用户操作见 [交互说明](interaction.md)。
+共享 package 的规则与请求契约见 [source-core 文档](../../../packages/source-core/README.md)，Web 的路由和具体用户操作见 [交互说明](interaction.md)。

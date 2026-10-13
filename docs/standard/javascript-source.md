@@ -56,7 +56,7 @@ export interface JsLoginFunctions {
 
 每次函数调用都创建新的调用 scope，绑定运行时 API、源对象和调用参数，再执行主脚本和函数表达式。源级共享 scope 如被宿主启用，必须显式声明共享键；默认迁移实现应按请求和调用隔离，防止 SSR 用户之间共享变量。
 
-规则和源脚本可见绑定包括 `java`、`source`、`sourceApi`、`baseUrl`、`cookie`、`cache`，以及 `key`、`page`、`book`、`chapter`、`chapters`、`result`、`nextChapterUrl` 等流程变量。绑定名称和对象角色是兼容契约，脚本可调用方法、返回值、异常和能力开关见 [宿主接口](../implementation/runtime-host-interfaces.md#javascript-书源宿主-api)。
+规则和源脚本可见绑定包括 `java`、`source`、`sourceApi`、`baseUrl`、`cookie`、`cache`，以及 `key`、`page`、`book`、`chapter`、`chapters`、`result`、`nextChapterUrl` 等流程变量。绑定名称和对象角色是兼容契约，脚本可调用方法、返回值、异常和能力开关见 [source-core 宿主端口](../../packages/source-core/docs/host-ports.md)。
 
 ## 返回值归一化
 
