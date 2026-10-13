@@ -1,6 +1,6 @@
 # 当前实现
 
-本目录记录跨应用的实现导航。source-core 和 source-node 的当前实现分别维护在各自 package；与 [书源规则标准](../standard/README.md) 的不一致登记在 [兼容性与验证](../compatibility/README.md)。应用级实现分别在 [reader-cli](../../apps/reader-cli/docs/README.md) 和 [reader-web](../../apps/reader-web/docs/README.md)。
+本目录记录跨应用的实现导航。source-core 和 source-node 的当前实现分别维护在各自 package；与 [Android 规则来源](../upstream/android/rules/README.md) 的不一致登记在 [兼容政策](../contracts/compatibility-policy.md) 和 [兼容性与验证](../compatibility/README.md)。应用级实现分别在 [reader-cli](../../apps/reader-cli/docs/README.md) 和 [reader-web](../../apps/reader-web/docs/README.md)。
 
 - [@legado/source-core](../../packages/source-core/README.md)：当前导出、结果、宿主端口、codec、规则和工作流文档。
 - [@legado/source-node](../../packages/source-node/README.md)：Node session、宿主装配、安全限制、字体和兼容性审计。

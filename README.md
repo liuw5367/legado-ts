@@ -17,7 +17,7 @@ Legado TS 是一个以兼容 [Legado](https://github.com/LegadoTeam/legado) 书�
 | 单元 | 用途 | 入口 |
 | --- | --- | --- |
 | `@legado/source-core` | 平台无关的书源 codec、规则、请求和阅读工作流 | [source-core 文档](packages/source-core/README.md) |
-| `@legado/source-node` | Node 宿主适配和 `createNodeSourceSession` | [运行时架构](docs/architecture/README.md) |
+| `@legado/source-node` | Node 宿主适配和 `createNodeSourceSession` | [source-node 文档](packages/source-node/README.md) |
 | `@legado/reader-cli` | 终端阅读器、书架、本地阅读状态和书源管理 | [CLI README](apps/reader-cli/README.md) |
 | `@legado/reader-web` | Web 阅读器、账号、书源管理、目录和正文 | [Web README](apps/reader-web/README.md) |
 
@@ -47,7 +47,7 @@ LEGADO_READER_SOURCE=https://example.test/sources.json \
 - **集成书源运行时**：先看 [source-core 文档](packages/source-core/README.md) 的边界和 API，再看 [source-node 文档](packages/source-node/README.md) 中的 Node session 示例与安全边界。
 - **运行 Web 阅读器**：先阅读 [Web README](apps/reader-web/README.md)，再按 [开发与部署](apps/reader-web/docs/development-and-deployment.md) 配置 Supabase、数据库和服务端密钥。
 - **理解兼容范围**：查看 [运行时状态总览](docs/compatibility/status.md)、[能力清单](docs/compatibility/capabilities.md) 和 [已知差异](docs/compatibility/known-divergences.md)。
-- **研究规则和流程**：从 [共享文档库](docs/README.md) 进入标准、流程、架构、质量和运维主题。
+- **研究规则和流程**：从 [共享文档库](docs/README.md) 进入上游来源、流程、架构、兼容性和运维主题。
 
 ## 当前支持边界
 
@@ -62,7 +62,7 @@ pnpm typecheck
 pnpm test
 ```
 
-书源专项检查、静态兼容性审计和 Web 检查命令见各自的[质量文档](docs/quality/README.md)、[CLI 文档](apps/reader-cli/docs/README.md)和 [Web 文档](apps/reader-web/docs/README.md)。
+书源专项检查、静态兼容性审计和 Web 检查命令见[兼容性与验证](docs/compatibility/README.md)、[CLI 文档](apps/reader-cli/docs/README.md)和 [Web 文档](apps/reader-web/docs/README.md)。
 
 ## 许可证状态
 

@@ -187,11 +187,13 @@ export interface BookListRule {
 export interface ExploreRule extends BookListRule {
   /** 发现流程复用 BookListRule 字段，不增加额外字段。 */
 }
+```
 
 ### 书名和作者清洗
 
 搜索列表和详情字段在后续过滤或覆盖前都调用同一组 Android 兼容清洗函数：`formatBookName` 先删除 `\s+作\s*者.*` 或 `\s+\S+\s+著`，再去除首尾空白；`formatBookAuthor` 先删除 `^\s*作\s*者[:：\s]+` 或 `\s+著`，再去除首尾空白。清洗只作用于运行时得到的书名和作者，不改写规则原文；书名清洗为空时搜索项丢弃，详情清洗为空时不覆盖已有字段。
 
+```ts
 export interface ExploreKind {
   /** 分类标题；普通文本格式的 :: 左侧。 */
   title: string

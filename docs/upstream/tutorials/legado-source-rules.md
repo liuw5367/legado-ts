@@ -6,7 +6,7 @@
 > 原文地址: [The-tutorial-of-Legado · Rule/source](https://mgz0227.github.io/The-tutorial-of-Legado/Rule/source.html)  
 > 描述: 本说明是 [legado](https://github.com/gedoor/legado) 的规则说明，禁止其他未获得本人授权的第三方软件使用
 
-本文是外部社区教程的抽取整理，仅供查阅。本仓以 Android 源码为事实源的实现标准见 [书源规则标准](../../standard/README.md)；二者冲突时，实现兼容以 `standard/` 与 [兼容性与验证](../../compatibility/README.md) 为准。
+本文是外部社区教程的抽取整理，仅供查阅。本仓以 Android 源码为事实源的实现标准见 [Android 规则来源](../android/rules/README.md)；二者冲突时，实现兼容以 Android 规则来源与 [兼容政策](../../contracts/compatibility-policy.md) 为准，当前执行状态见 [兼容性与验证](../../compatibility/README.md)。
 
 ## 概况
 

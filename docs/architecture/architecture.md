@@ -97,7 +97,7 @@ Repository 是应用侧端口，不是规则解析器的内部全局状态。rea
 
 ## 统一处理流程
 
-以下边界描述 source-core 工作流的执行顺序；Android 调用关系仍以本页上方事实图和各流程文档中的“Android 实际”段落为准。
+以下边界描述 source-core 工作流的执行顺序；Android 调用顺序仍以本页上方事实图和 [Android 流程来源](../upstream/android/flows/README.md) 中各流程文档的“Android 实际”段落为准。
 
 每次工作流调用接受端口与输入：
 

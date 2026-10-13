@@ -20,7 +20,7 @@
 | `source_runtime_state` | 加密的 Cookie/变量快照、fingerprint、版本和五分钟租约 |
 | `reader_settings` | 当前账号的主题、阅读模式、字号、行距和正文上右下左四边距 |
 
-表定义位于 `server/db/schema.ts`，迁移位于 `server/db/migrations/`。共享书源字段和规则语义仍以根目录标准文档为准。
+表定义位于 `server/db/schema.ts`，迁移位于 `server/db/migrations/`。共享书源字段和规则语义以 [Android 规则来源](../../../docs/upstream/android/rules/README.md) 为上游依据，跨包执行取舍以 [兼容政策](../../../docs/contracts/compatibility-policy.md) 为准。
 
 ## 版本与身份
 

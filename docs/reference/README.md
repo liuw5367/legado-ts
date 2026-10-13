@@ -1,3 +1,3 @@
 # 外部参考资料（历史入口）
 
-外部教程已集中到[上游资料索引](../upstream/README.md)，本目录不再新增或复制教程正文。索引保留原作者、原文地址、原文更新时间和使用声明；当前规则契约与实现状态分别见[书源规则标准](../standard/README.md)和[兼容性与验证](../compatibility/README.md)。
+外部教程已集中到[上游资料索引](../upstream/README.md)，本目录不再新增或复制教程正文。索引保留原作者、原文地址、原文更新时间和使用声明；当前规则来源与实现状态分别见[Android 规则来源](../upstream/android/rules/README.md)、[兼容政策](../contracts/compatibility-policy.md)和[兼容性与验证](../compatibility/README.md)。

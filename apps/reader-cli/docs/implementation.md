@@ -39,4 +39,4 @@ pnpm --filter @legado/reader-cli build
 pnpm --filter @legado/reader-cli test
 ```
 
-这些命令验证当前 package 的构建和应用测试，不等同于 Android 兼容性已经全部完成；跨端证据见 [质量与验证](../../../docs/quality/README.md)。
+这些命令验证当前 package 的构建和应用测试，不等同于 Android 兼容性已经全部完成；跨端证据见 [兼容性与验证](../../../docs/compatibility/README.md)。
