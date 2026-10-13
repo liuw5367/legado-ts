@@ -1,6 +1,6 @@
 # 书源处理文档库
 
-这里记录 Legado TS 的共享书源规则、跨包架构、Android 对照、处理流程、质量证据和运行边界。各 package 的当前 API 与宿主细节以 `packages/*/README.md` 和其 `docs/` 为准；根目录 [README](../README.md) 负责项目介绍和最短启动路径；本目录负责需要跨 package 反复查阅的技术事实。
+这里记录 Legado TS 的共享书源规则、跨包架构、Android 对照、处理流程、兼容性证据和运行边界。各 package 的当前 API 与宿主细节以 `packages/*/README.md` 和其 `docs/` 为准；根目录 [README](../README.md) 负责项目介绍和最短启动路径；本目录负责需要跨 package 反复查阅的技术事实。
 
 仓库已包含四个可运行单元：`packages/source-core`（平台无关核心）、`packages/source-node`（Node 宿主）、`apps/reader-cli`（交互式终端阅读器）和 `apps/reader-web`（React + Hono Web 应用）。文档中的“目标必须兼容”是验收承诺；只有同时具备 Android 事实证据、脱敏 fixture、golden 输出和 TypeScript 自动断言，才能标记为已验证。
 
@@ -13,7 +13,7 @@
 | [`apps/reader-cli`](../apps/reader-cli) | `legado-reader` 交互式 CLI：书源加载、搜索、详情、目录、正文、书架、本地阅读状态和书源管理/检测 |
 | [`apps/reader-web`](../apps/reader-web) | React Router SPA、Hono API、Supabase Auth 和 Postgres/Drizzle 阅读应用：书源管理、搜索、来源版本、目录、正文、书架和阅读位置 |
 
-应用自身文档分别在 [`reader-cli docs`](../apps/reader-cli/docs/README.md) 和 [`reader-web docs`](../apps/reader-web/docs/README.md)，本库维护共享规则、流程、质量、兼容性和跨 package 运行边界。
+应用自身文档分别在 [`reader-cli docs`](../apps/reader-cli/docs/README.md) 和 [`reader-web docs`](../apps/reader-web/docs/README.md)，本库维护共享规则、流程、兼容性和跨 package 运行边界。
 
 ## 按任务进入
 
@@ -36,17 +36,14 @@
 
 | 分类 | 负责回答的问题 | 入口 |
 | --- | --- | --- |
-| `standard` | 旧的书源规则入口在哪里 | [历史规则入口](standard/README.md) |
 | `upstream` | Android 页面、规则来源和外部教程是什么 | [上游资料索引](upstream/README.md) |
 | `contracts` | 跨 package 的兼容承诺和变更门槛是什么 | [兼容政策](contracts/README.md) |
 | `architecture` | 各层怎样划分、当前仓库怎样协作 | [架构](architecture/README.md) |
-| `flows` | 书源处理按什么顺序运行、怎样提交结果 | [处理流程](upstream/android/flows/README.md) |
-| `implementation` | 跨 package 的当前实现入口和应用接入路线是什么 | [当前实现](implementation/README.md) |
 | `compatibility` | 标准与实现有哪些差异、证据怎样验证、何时算完成 | [兼容性与验证](compatibility/README.md) |
 | `operations` | 怎样处理安全、部署、发布、版本和回退 | [运维与维护](operations/README.md) |
 | `archive` | 哪些目标尚未实现或已被现状取代 | [归档](archive/README.md) |
 
-分类按读者要解决的问题确定。主题交叉时只保留一个事实来源：Android 页面、规则语义和外部教程属于 `upstream`，跨 package 兼容承诺属于 `contracts`，搜索如何调用规则属于 `flows`，跨 package 接入属于 `implementation`，具体当前 API 属于对应 package docs，不一致处登记在 `compatibility`，证据与执行状态也属于 `compatibility`。`standard` 只保留历史入口；分类 README 只做导航和边界说明，不复制长篇契约。
+分类按读者要解决的问题确定。主题交叉时只保留一个事实来源：Android 页面、规则语义和外部教程属于 `upstream`，处理顺序属于 `upstream/android/flows`，跨 package 兼容承诺属于 `contracts`，跨 package 接入和当前 API 属于对应 package/app docs，不一致处登记在 `compatibility`，证据与执行状态也属于 `compatibility`。分类 README 只做导航和边界说明，不复制长篇契约。
 
 ## 正文完整性规则
 
@@ -56,7 +53,7 @@
 - 提供对比实现、测试定位和排查入口；
 - 链接到一个已经在当前主题中以最小结构说明过的共享事实源。
 
-读者不打开引用目标时，也必须能够完成当前主题的实现或审查。目录 README 只负责导航；质量文档可以以证据索引为主，但 fixture 和断言仍须定义本地最小结构。
+读者不打开引用目标时，也必须能够完成当前主题的实现或审查。目录 README 只负责导航；兼容性文档可以以证据索引为主，但 fixture 和断言仍须定义本地最小结构。
 
 不同层的结果不能混用：source-core 工作流使用 `success`、合法空结果 `empty`、`partial`、`failed`、`cancelled` 和 `capability-missing`；应用或存储提交可以另外报告 `stale`、`unknown`、`storage-error` 等状态。具体领域可以增加阶段状态，但必须说明它与所属层结果的映射。
 
@@ -81,4 +78,4 @@ Android 上游仓库、两个基线提交及其用途见 [上游资料索引](up
 
 ## 新增文档规则
 
-新增文档时先判断它主要回答哪个问题，再放入唯一的主分类：上游 Android 页面、规则来源和外部教程放 `upstream`，跨 package 兼容政策放 `contracts`，完整处理顺序放 `flows`，跨 package 接入放 `implementation`，package 当前代码契约放对应 `packages/*/docs`，标准与实现的不一致以及验证证据放 `compatibility`，运行维护放 `operations`，架构协作放 `architecture`。`standard` 只作为历史兼容入口；未实现目标或已被现状取代的历史文档放 `archive`，当前待办放在 `docs/pending-work.md`，不要把它放入历史归档。新增教程、ADR 或运行手册时保留其文档类型，并从总 README 或分类 README 增加入口；不要为了凑编号把不同类型的内容放在一起。
+新增文档时先判断它主要回答哪个问题，再放入唯一的主分类：上游 Android 页面、规则来源和外部教程放 `upstream`，跨 package 兼容政策放 `contracts`，完整处理顺序放 `upstream/android/flows`，package/app 当前代码契约放对应 package 或 app docs，标准与实现的不一致以及验证证据放 `compatibility`，运行维护放 `operations`，架构协作放 `architecture`。未实现目标或已被现状取代的历史文档放 `archive`，当前待办放在 `docs/pending-work.md`，不要把它放入历史归档。新增教程、ADR 或运行手册时保留其文档类型，并从总 README 或分类 README 增加入口；不要为了凑编号把不同类型的内容放在一起。

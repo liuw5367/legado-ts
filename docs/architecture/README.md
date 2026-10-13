@@ -7,4 +7,4 @@
 - [reader-cli 应用架构](../../apps/reader-cli/docs/architecture.md)：终端 UI、本地存储和多源调度。
 - [reader-web 应用架构](../../apps/reader-web/docs/architecture.md)：React、Hono、Repository 和用户数据隔离。
 
-阅读完本目录后，按任务进入 [Android 规则来源](../upstream/android/rules/README.md)、[Android 流程来源](../upstream/android/flows/README.md) 或 [当前实现](../implementation/README.md)。
+阅读完本目录后，按任务进入 [Android 规则来源](../upstream/android/rules/README.md)、[Android 流程来源](../upstream/android/flows/README.md)、[source-core 文档](../../packages/source-core/README.md)、[source-node 文档](../../packages/source-node/README.md)、[CLI 文档](../../apps/reader-cli/docs/README.md) 或 [Web 文档](../../apps/reader-web/docs/README.md)。
