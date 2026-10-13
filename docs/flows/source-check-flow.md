@@ -139,7 +139,7 @@ export interface SourceCheckResult {
 }
 ```
 
-`SourceCheckResult` 是检测领域值；package 公开入口返回 `OperationResult<SourceCheckResult>` 属**目标设计**——当前 `@legado/source-core` **没有** `checkSources` / `check` 导出（见 [包使用](../implementation/package-usage.md) 与 [兼容性与验证](../compatibility/README.md)）。外层 `status` 使用运行时统一契约的小写状态，值内的 `status` 保留 Android 兼容的大写检查状态，adapter 负责两者映射，不能让调用方把两套状态混为同一字段。
+`SourceCheckResult` 是检测领域值；package 公开入口返回 `OperationResult<SourceCheckResult>` 属**目标设计**——当前 `@legado/source-core` **没有** `checkSources` / `check` 导出（见 [`@legado/source-core`](../../packages/source-core/README.md)、[reader-cli 实现](../../apps/reader-cli/docs/implementation.md) 与 [兼容性与验证](../compatibility/README.md)）。外层 `status` 使用运行时统一契约的小写状态，值内的 `status` 保留 Android 兼容的大写检查状态，adapter 负责两者映射，不能让调用方把两套状态混为同一字段。
 
 实时事件可以复用同一结果模型的增量版本，但客户端不能把 `RUNNING` 结果当作最终通过。阶段状态允许值为 `PASSED`、`FAILED`、`SKIPPED`、`UNSUPPORTED`；源最终状态允许值为 `NEEDS_CHECK`、`RUNNING`、`PASSED`、`FAILED`、`CANCELLED`、`STALE`。若兼容层输出小写状态，必须按[状态模型](../standard/source-check-state.md)的映射表转换；WebSocket 或 SSE 只是应用传输方式，检测核心不应依赖某一种推送协议。
 

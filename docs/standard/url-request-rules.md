@@ -144,7 +144,7 @@ TypeScript 的 JS bridge 子请求会跳过动态 `source.header`，只保留静
 
 HttpClient 返回解压后的 bytes、响应头、状态及最终 URL；核心通过字符集端口解码，然后按 Android 顺序执行 XML 声明补齐或 `bodyJs`。不能先由 fetch.text() 固定 UTF-8 再尝试恢复原字节。请求参数 charset 和响应 charset 是两个用途，不默认等同。正文 bytes 分支继续保留原 Android 十六进制规则输入，媒体二进制输出通过独立 DTO 表达。
 
-缺失/无效 timeout 在 URL 兼容层按原行为忽略，宿主最终仍必须有正的截止时间；这与“进入 HttpClient 的有效 timeout 必须合法”不冲突。重试次数服从源配置与宿主策略共同约束，POST 或上游写入不能因网络错误自动重复；被拒绝的重试报告 policy-denied 诊断，不伪称原客户端同等行为。跨域凭据和 SSRF 的策略差异见 [部署边界](../operations/runtime-security-and-deployment.md)。
+缺失/无效 timeout 在 URL 兼容层按原行为忽略，宿主最终仍必须有正的截止时间；这与“进入 HttpClient 的有效 timeout 必须合法”不冲突。重试次数服从源配置与宿主策略共同约束，POST 或上游写入不能因网络错误自动重复；被拒绝的重试报告 policy-denied 诊断，不伪称原客户端同等行为。跨域凭据和 SSRF 的策略差异见 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md)。
 
 ## 7. 浏览器和 SSR 约束
 

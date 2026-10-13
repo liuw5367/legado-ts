@@ -1,6 +1,6 @@
 # 真实书源兼容性审计
 
-审计在离线导入/解析测试之上运行，用于区分规则不支持与站点暂时不可访问。它不会把敏感请求配置或正文写入报告。
+审计在离线导入/解析测试之上运行，用于区分规则不支持与站点暂时不可访问。它不会把敏感请求配置或正文写入报告。实现入口位于 [`src/source-compatibility.ts`](../src/source-compatibility.ts) 与 [`src/source-compatibility-live.ts`](../src/source-compatibility-live.ts)，状态和证据归属见[兼容性与验证](../../../docs/compatibility/README.md)。
 
 ## 命令
 

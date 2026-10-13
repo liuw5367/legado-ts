@@ -30,6 +30,22 @@ interface OperationResult<T> {
 
 其中 `DomainChange` 计划表达资源身份、base revision、create/update/content-update/delete/user-override/invalidate 变化；`EffectRecord` 记录 Cookie、变量、缓存、正文或外部写入的 committed/rejected/unknown 结果。此信封尚未在 packages 导出，`stale`/`unknown` 仍属于存储或应用边界。
 
+旧的部署草案还提出过跨网络、脚本和分页共享的 `OperationBudget`：
+
+```ts
+interface OperationBudget {
+  deadlineMs: number
+  maxRequests: number
+  maxPages: number
+  maxResponseBytes: number
+  maxTotalBytes: number
+  maxScriptMemoryBytes: number
+  maxScriptTimeMs: number
+}
+```
+
+这组字段描述的是目标级统一策略，不是当前 source-node 的单一配置对象。当前实现把请求预算交给 `RequestBudget`，把 QuickJS 预算交给 `JavaScriptBudget`，分页上限由各 core workflow 接收；统一 deadline、效果记录和跨请求清理仍需真实调用点与应用提交责任后再决定。
+
 旧搜索设计还提出 `SearchRequest`、`SearchResultSink`/`Sink`、`SearchSourceStatus` 和 `CallContext`，用于多源调度、增量事件和统一取消。这些名称同样没有在 source-core 导出；当前使用 `SearchInput`、`WorkflowPorts`、`RuntimeResult` 和应用层的 `ReaderApplication`，不能按归档接口实现适配器。
 
 ## 目标宿主门面
@@ -42,6 +58,8 @@ interface OperationResult<T> {
 - 可选 `rateLimiter`、`logger` 和 `RuntimeCapabilities`。
 
 该目标允许把应用的用户隔离、资源版本和统一日志一次性注入，但会把当前已经分层的 `WorkflowPorts`、`ContentStore` 和 Node 宿主重新耦合。今后若要实现，应先给每个能力补真实调用点、权限/生命周期、清理、版本条件写入和 conformance fixture，再决定是否提供 adapter；不能直接把本文件的接口复制到 core。
+
+早期运行边界还比较过嵌入式 QuickJS、`isolated-vm` 和 Node `vm`。这些材料只说明隔离、内存/栈限制和句柄清理等评估方向；当前 Node 已采用 `quickjs-emscripten`，而 `node:vm` 不是不可信代码的安全边界。同步旧式 `java.ajax` 外观、Rhino 返回值对照和 Edge 执行器仍需单独验收，不能从当前 QuickJS 接入推导完整 Android JS 兼容。
 
 ## 目标变量和资源接口
 

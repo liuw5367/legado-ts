@@ -1,6 +1,6 @@
 # 字体映射与文字解码
 
-字体解码是 source-node 的宿主能力，用于把书源的反爬字体映射为文字。它不负责阅读器字体渲染，也不把字体文件作为领域结果保存。
+字体解码是 source-node 的宿主能力，用于把书源的反爬字体映射为文字。它不负责阅读器字体渲染，也不把字体文件作为领域结果保存。实现位于 [`NodeFontHost`](../src/font.ts)，平台无关的替换语义位于 [`source-core`](../../source-core/docs/rules-and-requests.md)。
 
 ## 当前实现
 
@@ -14,4 +14,4 @@
 
 ## 验证
 
-字体映射、Base64/bytes 一致性、过滤模式、多字节 Unicode、缓存命中和错误输入由 `packages/source-node/tests/font.test.ts` 覆盖。兼容性结论仍需 Android 对照样本；实现存在不代表所有字体格式都已支持。
+字体映射、Base64/bytes 一致性、过滤模式、多字节 Unicode、缓存命中和错误输入由 [`tests/font.test.ts`](../tests/font.test.ts) 覆盖。兼容性结论仍需 Android 对照样本；实现存在不代表所有字体格式都已支持。跨端状态见[兼容性与验证](../../../docs/compatibility/README.md)。

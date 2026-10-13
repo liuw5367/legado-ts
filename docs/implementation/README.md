@@ -1,14 +1,12 @@
 # 当前实现
 
-本目录记录跨应用的实现事实和迁移中的接入说明。source-core 的当前契约已经迁移到 [`@legado/source-core`](../../packages/source-core/README.md)；与 [书源规则标准](../standard/README.md) 的不一致登记在 [兼容性与验证](../compatibility/README.md)。应用级实现分别在 [reader-cli](../../apps/reader-cli/docs/README.md) 和 [reader-web](../../apps/reader-web/docs/README.md)。
+本目录记录跨应用的实现导航。source-core 和 source-node 的当前实现分别维护在各自 package；与 [书源规则标准](../standard/README.md) 的不一致登记在 [兼容性与验证](../compatibility/README.md)。应用级实现分别在 [reader-cli](../../apps/reader-cli/docs/README.md) 和 [reader-web](../../apps/reader-web/docs/README.md)。
 
 - [@legado/source-core](../../packages/source-core/README.md)：当前导出、结果、宿主端口、codec、规则和工作流文档。
+- [@legado/source-node](../../packages/source-node/README.md)：Node session、宿主装配、安全限制、字体和兼容性审计。
 - [兼容性与验证](../compatibility/README.md)：未实现能力、已知差异和 Android/TypeScript 一致性证据的现行入口。
 
-## 入口与契约
-
-- [跨包与应用接入](package-usage.md)：迁移期间保留的 Node 集成、应用边界和接入维护约定。
-- [字体映射与文字解码](font-decoding.md)：source-node 当前支持的字体解析和资源边界。
+跨包接入从 [source-core](../../packages/source-core/README.md) 和 [source-node](../../packages/source-node/README.md) 开始；应用的用户范围、持久化和交互责任只在各自 docs 中维护。
 
 ## 应用实现
 

@@ -50,9 +50,9 @@
   React Router SPA、Hono API、Supabase Auth、Postgres/Drizzle
 ```
 
-以下包名是历史职责视图，**当前仓库不存在**：`source-next`、`source-editor`、`source-artifacts`（见 [归档](../archive/README.md)）。框架适配器只转换请求和结果；reader-web 不拥有第二套规则层。Node 参考宿主已验证；Edge、SSR 和其他框架的适用能力按 [运行边界](../operations/runtime-security-and-deployment.md) 判断。完整 JS 兼容不能用“TypeScript 可构建”替代实际执行证明。
+以下包名是历史职责视图，**当前仓库不存在**：`source-next`、`source-editor`、`source-artifacts`（见 [归档](../archive/README.md)）。框架适配器只转换请求和结果；reader-web 不拥有第二套规则层。Node 参考宿主已验证；Edge、SSR 和其他框架的适用能力按 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md) 判断。完整 JS 兼容不能用“TypeScript 可构建”替代实际执行证明。
 
-完整能力的优先级和待审核项目见 [兼容性与验证](../compatibility/README.md)。公开入口与上层调用顺序见 [source-core 文档](../../packages/source-core/README.md) 和 [跨包与应用接入](../implementation/package-usage.md)。CLI 与 Web 的应用层文档分别描述书源选择、调用、结果保存、书架和阅读进度；共享 package 不持有这些应用数据。
+完整能力的优先级和待审核项目见 [兼容性与验证](../compatibility/README.md)。公开入口与上层调用顺序见 [source-core 文档](../../packages/source-core/README.md) 和 [source-node 文档](../../packages/source-node/README.md)。CLI 与 Web 的应用层文档分别描述书源选择、调用、结果保存、书架和阅读进度；共享 package 不持有这些应用数据。
 
 ## 能力归属
 

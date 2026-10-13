@@ -129,7 +129,7 @@ decodeImage(ports: WorkflowPorts, input: ImageDecodeInput): Promise<RuntimeResul
   -> 应用自行提交持久化
 ```
 
-核心流程输出“结果加变更”，宿主或上层应用负责提交变更。每个阶段都要明确成功、空结果、可继续错误、终止错误、取消和清理行为；领域流程分别见发现、搜索、详情、目录和正文文档。应用调用顺序见 [source-core 工作流](../../packages/source-core/docs/workflows.md) 和 [跨包与应用接入](../implementation/package-usage.md)。
+核心流程输出“结果加变更”，宿主或上层应用负责提交变更。每个阶段都要明确成功、空结果、可继续错误、终止错误、取消和清理行为；领域流程分别见发现、搜索、详情、目录和正文文档。应用调用顺序见 [source-core 工作流](../../packages/source-core/docs/workflows.md) 和 [source-node 接入](../../packages/source-node/README.md)。CLI 的来源管理、搜索和阅读状态见 [reader-cli 实现](../../apps/reader-cli/docs/implementation.md)，Web 的用户范围和持久化见 [reader-web 实现](../../apps/reader-web/docs/implementation.md)。
 
 “结果加变更”用于领域对象；Cookie、source.putVariable、脚本 cache 和批量回存可能在执行期间即时生效，不能假设整次调用可回滚。它们通过同一受控宿主记录 effects，具体时机见 [状态与副作用](../standard/state-and-effects.md)。
 

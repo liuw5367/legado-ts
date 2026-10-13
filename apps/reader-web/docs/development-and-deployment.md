@@ -67,4 +67,4 @@ Vercel Project Root 必须是仓库根目录。Preview 和 Production 都要配�
 
 浏览器只拿 publishable key 和脱敏 DTO。数据库密码、服务端密钥、Cookie、脚本变量和运行状态密钥只能在 Hono/Repository/Node runtime 使用。书源导入仅接受 HTTP(S) 地址，并限制响应、候选、重定向和处理时长。日志、SSE 和错误消息不能回显 Authorization、Cookie、密码或完整私有请求体。
 
-部署能力与共享 source-core 兼容性见 [运行边界](../../../docs/operations/runtime-security-and-deployment.md)；本文件只记录 reader-web 当前的本地和 Vercel 接入。
+Node 宿主安全边界与共享兼容性见 [source-node 安全与部署](../../../packages/source-node/docs/security-and-deployment.md)；本文件只记录 reader-web 当前的本地和 Vercel 接入。

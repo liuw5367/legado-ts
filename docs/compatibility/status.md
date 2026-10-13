@@ -22,7 +22,7 @@
 | OPEN-02 | 书源能力 | 结构化段评读取、旧式段评网页桥接和段评写入 | 未实现（仅字段识别与来源审计） | [段评流程](../flows/review-flow.md)；`CAP-REVIEW` | 公开读取工作流、网页桥接会话安全、分页和写入协议分别完成或明确返回能力缺失 |
 | OPEN-03 | 书源能力 | 付费动作、购买后刷新、书源事件和自定义按钮 | 未实现 | [媒体和交互流程](../flows/adjacent-source-flows.md) | 触发、认证、取消、重复点击和宿主 UI 动作有版本化契约 |
 | OPEN-04 | 宿主能力 | 验证码、复杂登录 UI 和多步骤登录 | 未实现 | [URL 与请求规则](../standard/url-request-rules.md)；WebView 入口 | 登录交互、凭据保存、清理和失败恢复完成应用与宿主验收 |
-| OPEN-05 | 应用入口 | 多源 `ReaderApplication.search`、书源全流程 `checkSources` | 应用已实现待验证；core 不提供该门面 | [包使用指南](../implementation/package-usage.md)；[校验流程](../flows/source-check-flow.md)；`apps/reader-cli/tests/source-check.test.ts` | 继续补齐 Android 同输入 golden，并在跨端验证后记录完成证据 |
+| OPEN-05 | 应用入口 | 多源 `ReaderApplication.search`、书源全流程 `checkSources` | 应用已实现待验证；core 不提供该门面 | [reader-cli 实现](../../apps/reader-cli/docs/implementation.md)；[校验流程](../flows/source-check-flow.md)；`apps/reader-cli/tests/source-check.test.ts` | 继续补齐 Android 同输入 golden，并在跨端验证后记录完成证据 |
 | OPEN-06 | 应用状态 | `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` | 未实现 | [架构边界](../architecture/goals-and-boundaries.md)；[归档设计](../archive/source-management-and-state.md) | 用户归属、版本冲突、凭据隔离、任务恢复和删除副作用有应用层契约 |
 | OPEN-07 | 请求差异 | Android 独立登录凭据头与同站注入 | 已实现待验证 | [差异登记](known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts` | Android 同输入 golden；应用 SecretStore 的保存、删除清理和登录 UI 仍不属于当前包 |
 | OPEN-08 | 生命周期差异 | `concurrentRate` 非法配置和源生命周期清理 | core/Node 已实现待验证；应用删除边界分层记录 | [差异登记](known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts` | Android 同输入 golden；各应用分别补齐源编辑、覆盖、删除和重建 session 的集成证据 |

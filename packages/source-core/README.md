@@ -13,7 +13,7 @@
 | 规则、变量和请求 | [规则与请求](docs/rules-and-requests.md) |
 | 搜索、阅读和缓存工作流 | [工作流](docs/workflows.md) |
 | Android 差异和验证状态 | [兼容性与验证](../../docs/compatibility/README.md) |
-| Node 集成 | 迁移期间见[跨包与应用接入](../../docs/implementation/package-usage.md)；Node 宿主文档在后续任务建立 |
+| Node 集成 | 见 [`@legado/source-node`](../source-node/README.md)；Node 宿主、安全和审计事实不在 core 重复维护 |
 
 ## 边界
 

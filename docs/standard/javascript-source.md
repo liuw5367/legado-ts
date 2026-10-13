@@ -186,6 +186,6 @@ JS 源导入完成后，配置对象中的声明式规则会被剥离，`mainJs`
 
 不能使用宿主 `eval` 或 Node 全局对象执行不可信书源。`JavaScriptRuntime` 至少需要脚本超时、内存/递归限制、AbortSignal、允许的网络 API 和日志接口；浏览器和 SSR 的 Cookie、文件、进程能力默认不可见。
 
-规则内 JS、URL 插值、jsLib 和 loginCheckJs 同样需要这套执行能力，不只 mainJs 源需要。基础配置抽取和同步网络兼容在实施阶段 B 建立，主函数在 C 接入，不能全部推迟到 D。具体候选引擎、同步桥接验收及尚未解决的 Rhino 互操作限制见 [运行边界](../operations/runtime-security-and-deployment.md)。Java 类访问不能默认映射为 Node require；必须登记实际依赖并通过受控兼容方法提供，缺失时给出具体方法诊断。
+规则内 JS、URL 插值、jsLib 和 loginCheckJs 同样需要这套执行能力，不只 mainJs 源需要。基础配置抽取和同步网络兼容在实施阶段 B 建立，主函数在 C 接入，不能全部推迟到 D。具体 Node 引擎、桥接限制和安全边界见 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md)。Java 类访问不能默认映射为 Node require；必须登记实际依赖并通过受控兼容方法提供，缺失时给出具体方法诊断。
 
 主脚本顶层代码在每次函数调用重新执行，可能产生网络或缓存副作用；不能未经证据改成只初始化一次。持久 source/cache 操作与临时 scope 释放不同，见 [状态契约](state-and-effects.md)。数据跨引擎边界时必须序列化或受控复制，不暴露宿主对象原型和函数引用。

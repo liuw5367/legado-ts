@@ -63,7 +63,7 @@
 | CAP-EDITOR | 16 | EDIT | Web 目标设计与现有 UI 证据分开；独立 TS 编辑器见 [归档](../archive/source-editor.md) |
 | CAP-STATE / CAP-SUBSCRIPTION | [状态与副作用](../standard/state-and-effects.md)、[订阅流程](../flows/source-subscriptions.md) | STATE、SUB | `refreshSubscription` 已实现 diff 计划；应用持久化仍为目标设计 |
 | CAP-ARTIFACT | [书源相关实体边界](../standard/artifact-model.md) | SUB、MODEL | BookSource 已纳入；RssSource/ReplaceRule 需独立 adapter 验收 |
-| CAP-HOST / CAP-DEPLOY | [宿主接口](../../packages/source-core/docs/host-ports.md)、[运行边界与部署](../operations/runtime-security-and-deployment.md) | HOST、DEP | 宿主端口已在 source-node 实现部分能力（`SourceRuleHost`/`SourceRequestHost`/QuickJS）；部署与统一 `RuntimeHost` 门面仍是目标契约 |
+| CAP-HOST / CAP-DEPLOY | [宿主接口](../../packages/source-core/docs/host-ports.md)、[source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md) | HOST、DEP | 宿主端口已在 source-node 实现部分能力（`SourceRuleHost`/`SourceRequestHost`/QuickJS）；部署与统一 `RuntimeHost` 门面仍是目标契约 |
 | CAP-JOB | [任务执行与 Serverless 边界](../archive/job-and-execution.md) | JOB、DEP | 目标契约，尚未实现执行器 |
 | CAP-ENCODE / CAP-ARCHIVE / CAP-FONT / CAP-CONCURRENCY | 下表及 11、20 | EXT | 加密/编码、归档、字体、并发宿主已在 source-node 实现（`NodeArchiveHost`/`NodeFontHost` 等）；逐重载契约与 Android 对照 fixture 未全量执行 |
 
@@ -89,7 +89,7 @@ SourceLock.singleFlight 让同批等待者在一次成功执行后跳过 action�
 
 ## 尚不能进入完整实现验收的项目
 
-- JS 引擎同步桥接、Rhino 互操作及部署：QuickJS 已接入；同步 `java.ajax` 外观与 Rhino 返回值逐项对照仍按[运行边界与部署验收](../operations/runtime-security-and-deployment.md)专项案例验证；未通过前不承诺完整 JS 兼容。
+- JS 引擎同步桥接、Rhino 互操作及部署：QuickJS 已接入；同步 `java.ajax` 外观与 Rhino 返回值逐项对照仍按 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md) 专项案例验证；未通过前不承诺完整 JS 兼容。
 - 编码/加密工厂返回对象、字体与归档逐重载：宿主已实现（`NodeFontHost` / `NodeArchiveHost` / 加密请求桥），对应 B/D 负责人补全原子案例与 Android 对照；当前登记不等于规格完成。
 - exploreScreen、RowUi 动态动作细节、段评写入：对应 D 负责人追踪调用点；无入口则保持字段保留，不擅自新增请求语义。
 - 设备与阅读器绑定的替代行为：应用需求尚未定义，保留 capability-missing；任何舍弃须用户审核。
