@@ -35,7 +35,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - core、source-node、reader-cli 构建与类型检查通过；分层专项 `pnpm run test:source` 为 110/110，当前完整套件 `pnpm run test` 为 459/459（需允许本机环回监听）。以上是 `ts-executed` 证据，不能替代 Android golden。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
-跨端用例状态和完成后的删除线记录统一维护在[书源运行时状态总览](../implementation/source-runtime-status.md)。本节继续维护 fixture 格式、断言和执行门槛；机器清单保留稳定 ID，不删除历史记录。
+跨端用例状态和完成后的删除线记录统一维护在[状态总览](status.md)。本节继续维护 fixture 格式、断言和执行门槛；机器清单保留稳定 ID，不删除历史记录。
 
 外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板。例如，`rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。
 
@@ -220,9 +220,9 @@ packages/source-editor/tests/  # 目标包，尚未存在
 
 fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、Token、密码、Authorization、私有请求体和真实账号做脱敏。golden 的比较应采用结构化比较，集合只有在契约声明无序时才允许排序，事件和网络记录必须按顺序比较。时间、随机数、堆栈、线程名和平台路径使用占位断言，不能写死到兼容结果中。
 
-真实测试命令随 runtime 提交。书源解析运行时的兼容测试仍使用 `07-A`、`07-B` 等稳定任务 ID，但文档按主题维护：本文件负责 conformance 边界，[真实书源 fixture](source-fixtures.md) 负责语料和 manifest，[兼容性审计](source-compatibility-audit.md) 负责静态/在线报告。`07-A` 覆盖 schema、规则、请求、解析器、QuickJS、工作流和宿主能力的无公网 conformance；`07-B` 覆盖 `fixtures/source` 的集合导入与单个导入一致性。任务 11 保留跨模块集成、存储、编辑器和发布门禁，不再把书源文件回归测试混在其中。兼容案例须有 Android 证据、golden、TS 断言及相关清理断言；Web 新设计只要求对应设计证据与目标断言，不强迫虚构 Android golden。纯值转换无资源时标注清理不适用。未执行的案例一律 execution=not-run。
+真实测试命令随 runtime 提交。书源解析运行时的兼容测试仍使用 `07-A`、`07-B` 等稳定任务 ID，但文档按主题维护：本文件负责 conformance 边界，[真实书源 fixture](source-fixtures.md) 负责语料和 manifest，[兼容性审计](../quality/source-compatibility-audit.md) 负责静态/在线报告。`07-A` 覆盖 schema、规则、请求、解析器、QuickJS、工作流和宿主能力的无公网 conformance；`07-B` 覆盖 `fixtures/source` 的集合导入与单个导入一致性。任务 11 保留跨模块集成、存储、编辑器和发布门禁，不再把书源文件回归测试混在其中。兼容案例须有 Android 证据、golden、TS 断言及相关清理断言；Web 新设计只要求对应设计证据与目标断言，不强迫虚构 Android golden。纯值转换无资源时标注清理不适用。未执行的案例一律 execution=not-run。
 
-覆盖审计按以下关系执行：`standard/source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`standard/rule-language.md` 和 `standard/url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`standard/capability-inventory.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
+覆盖审计按以下关系执行：`standard/source-schema.md` 的每个可执行字段至少映射一个 schema/import 用例；`standard/rule-language.md` 和 `standard/url-request-rules.md` 的每个模式、组合符号、选项和错误至少映射一个规则/URL 用例；发现、搜索、详情、目录、正文、JS、宿主和编辑器的每个状态、分支、输出和能力至少映射一个对应流程用例。`capabilities.md` 的每一行都要指向规格与测试 ID；没有测试设施的能力也要记录输入、预期结果和未验证原因。审计结果记录为表格，不以“已有某个测试文件”代替覆盖证明。
 
 ## 必须覆盖的规则样本
 

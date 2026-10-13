@@ -36,10 +36,10 @@ package 需要版本化的事件输入和执行结果协议，宿主注入允许
 
 ## 扩展入口与生命周期
 
-公开入口统一见 [调用契约](../implementation/package-usage.md#公共调用协议)。结果需区分 text、image-content、audio、video、file-links；content 字符串保留兼容输入，不能仅靠 URL 后缀猜类型。音视频附加内容分别为歌词/弹幕；图片正文仍可含多个图片引用，不强制简化为单 URL。
+公开入口统一见 [调用契约](../implementation/package-usage.md#当前公开入口)。结果需区分 text、image-content、audio、video、file-links；content 字符串保留兼容输入，不能仅靠 URL 后缀猜类型。音视频附加内容分别为歌词/弹幕；图片正文仍可含多个图片引用，不强制简化为单 URL。
 
 decodeImage 无规则时原 bytes 返回，有规则则传 src/result/book，执行成功后才缓存；失败保持原缓存。文件下载先 resolveDownload，应用选择链接，再由宿主流式下载并验证最终目标与大小；不向网页暴露服务器文件路径。
 
 购买与事件调用绑定 operationId 和用户确认，执行前验证书籍/章节归属，执行后返回显式动作。外部写入没有可证明幂等性时不自动重试；未知执行结果保留为 unknown。取消后的导航不得生效，已经完成的购买请求不能声称撤回。
 
-字体、归档、加密工具也是脚本书源能力，已在 [宿主盘点](../standard/capability-inventory.md#宿主方法补充盘点) 登记。它们通过相应宿主执行并保留 bytes/文本边界；逐重载契约尚未完整时返回具体能力缺失，不能退回原文本或空文件并宣称成功。
+字体、归档、加密工具也是脚本书源能力，已在 [宿主盘点](../compatibility/capabilities.md#宿主方法补充盘点) 登记。它们通过相应宿主执行并保留 bytes/文本边界；逐重载契约尚未完整时返回具体能力缺失，不能退回原文本或空文件并宣称成功。

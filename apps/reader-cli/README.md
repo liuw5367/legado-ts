@@ -38,7 +38,7 @@ pnpm build:binary --source-dir ./fixtures/source/single --outfile ./dist/legado-
 - 书源管理支持筛选、启用/禁用、优先级调整和按 Android 顺序执行的来源检测。
 - 本地保存书源状态、书架、阅读位置和正文缓存；正文缓存与用户状态分开管理。
 
-首版主要面向文本书源。音频、图片、视频、文件下载、复杂登录和 WebView 需要额外宿主能力，当前状态见[共享运行时状态](../../docs/implementation/source-runtime-status.md)。
+首版主要面向文本书源。音频、图片、视频、文件下载、复杂登录和 WebView 需要额外宿主能力，当前状态见[兼容性与验证](../../docs/compatibility/README.md)。
 
 ## 常用按键
 

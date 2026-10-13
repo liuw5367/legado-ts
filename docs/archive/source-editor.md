@@ -168,7 +168,7 @@ rawText
 
 用户可以把当前输入、字段规则和期望输出保存为 fixture。编辑器保存前运行静态诊断，CI 再运行 golden conformance；编辑器不能仅凭文本高亮宣称规则可用。
 
-编辑器生成的 fixture 必须带稳定 `id`、脱敏输入、规则字段路径、期望输出、Android 证据、TypeScript 断言和 capability 要求，并交给 [一致性测试基线](../quality/conformance-tests.md) 校验。保存前诊断、预览结果和导出结果不能互相替代：静态诊断通过不代表网络流程或脚本运行成功。
+编辑器生成的 fixture 必须带稳定 `id`、脱敏输入、规则字段路径、期望输出、Android 证据、TypeScript 断言和 capability 要求，并交给 [一致性测试基线](../compatibility/conformance-tests.md) 校验。保存前诊断、预览结果和导出结果不能互相替代：静态诊断通过不代表网络流程或脚本运行成功。
 
 ## 组件边界
 

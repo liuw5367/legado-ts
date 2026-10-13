@@ -24,10 +24,10 @@
 | 集成共享运行时 | [package 使用指南](implementation/package-usage.md) → [运行边界](operations/runtime-security-and-deployment.md) |
 | 理解整体边界 | [架构](architecture/README.md) → [书源规则标准](standard/README.md) |
 | 实现或修改书源 package | [书源规则标准](standard/README.md) → [处理流程](flows/README.md) → [当前实现](implementation/README.md) → [已知差异](divergence/README.md) |
-| 查看书源运行时状态 | [状态总览](implementation/source-runtime-status.md) |
+| 查看书源运行时状态 | [状态总览](compatibility/status.md) |
 | 导入、编辑或刷新书源 | [导入流程](flows/import-protocol.md) → [订阅流程](flows/source-subscriptions.md) |
 | 对照 Android 页面行为 | [Android 功能对照](android/README.md) |
-| 审查兼容性和发布 | [能力清单](standard/capability-inventory.md) → [测试基线](quality/conformance-tests.md) → [兼容矩阵](quality/compatibility-matrix.md) → [维护文档](operations/package-maintenance.md) |
+| 审查兼容性和发布 | [能力清单](compatibility/capabilities.md) → [测试基线](compatibility/conformance-tests.md) → [证据矩阵](compatibility/evidence-matrix.md) → [维护文档](operations/package-maintenance.md) |
 | 查阅未实现的历史设计 | [归档](archive/README.md) |
 | 查看后续待办 | [后续待办事项](pending-work.md) |
 | 查阅外部社区教程 | [外部参考资料](reference/README.md) |
@@ -70,15 +70,15 @@
 - **实施计划**：实现顺序、依赖和验收门槛，不代表功能已经存在。
 - **验证记录**：测试、部署或发布实际执行后的结果和限制。
 
-状态可以在同一篇文档中并存；运行能力的实现程度以[书源运行时状态总览](implementation/source-runtime-status.md)为准，兼容差异以[已知差异](divergence/README.md)为准，fixture 的执行字段以质量文档和机器清单为准。详细行为仍分别见对应主题文档。
+状态可以在同一篇文档中并存；运行能力的实现程度以[兼容性状态总览](compatibility/status.md)为准，兼容差异以[兼容性与验证](compatibility/README.md)为准，fixture 的执行字段以兼容性目录和机器清单为准。详细行为仍分别见对应主题文档。
 
 ## 事实来源规则
 
 字段和默认值以 [书源数据模型](standard/source-schema.md) 为准；字段所有权以 [字段所有权与合并规则](standard/source-field-ownership.md) 为准；实体边界以 [书源相关实体边界](standard/artifact-model.md) 为准；规则语义以 [规则语言](standard/rule-language.md) 为准；请求行为以 [URL 与请求规则](standard/url-request-rules.md) 为准；身份、版本和提交以 [状态与副作用](standard/state-and-effects.md) 为准；当前代码入口以 [package 使用指南](implementation/package-usage.md) 与 `packages/source-core/src/index.ts` 为准。流程和实现文档引用这些事实，不另建同名定义。
 
-Android 上游仓库为 [LegadoTeam/legado](https://github.com/LegadoTeam/legado)，长期规则和源码引用基线是提交 `62003ce732a7e30602754d28996da7f98b9ea296`。相对路径可拼接为 `https://github.com/LegadoTeam/legado/blob/62003ce732a7e30602754d28996da7f98b9ea296/<相对路径>`；日常浏览也可用 `blob/master/<相对路径>`。2026-09-28 页面行为扫描和 Android 测试使用上级工程提交 `32a87b253e7cc28273c3850de86242caac83f1fd`，两者用途不同，分别见 [Android 功能对照](android/README.md) 和 [兼容性测试矩阵](quality/compatibility-matrix.md)。取证策略与长期基线维护见 [package 维护与迁移证据](operations/package-maintenance.md)。当前 Android 主要事实源是 `app/src/main/java/io/legado/app/model/analyzeRule/`、`app/src/main/java/io/legado/app/model/webBook/`、`app/src/main/java/io/legado/app/data/entities/` 和相关测试。`modules/web/` 是管理界面，不能替代运行时规则引擎。
+Android 上游仓库、两个基线提交及其用途当前见 [Android 功能对照](android/README.md)；来源迁移完成后再切换到上游资料索引。取证策略与长期基线维护见 [package 维护与迁移证据](operations/package-maintenance.md)。当前 Android 主要事实源是 `app/src/main/java/io/legado/app/model/analyzeRule/`、`app/src/main/java/io/legado/app/model/webBook/`、`app/src/main/java/io/legado/app/data/entities/` 和相关测试。`modules/web/` 是管理界面，不能替代运行时规则引擎。
 
-当前文档已登记主要书源能力和处理流程，且仓库已有 source-core / source-node / reader-cli 实现与自动测试；扩展宿主逐重载、动态登录及部分能力仍有验收阻塞，见 [能力清单](standard/capability-inventory.md#尚不能进入完整实现验收的项目)。不得将“文档覆盖”或“存在实现”解释为“所有能力规格和兼容验证均完成”。
+当前文档已登记主要书源能力和处理流程，且仓库已有 source-core / source-node / reader-cli 实现与自动测试；扩展宿主逐重载、动态登录及部分能力仍有验收阻塞，见 [能力清单](compatibility/capabilities.md#尚不能进入完整实现验收的项目)。不得将“文档覆盖”或“存在实现”解释为“所有能力规格和兼容验证均完成”。
 
 ## 新增文档规则
 

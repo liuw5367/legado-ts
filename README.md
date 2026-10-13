@@ -46,14 +46,14 @@ LEGADO_READER_SOURCE=https://example.test/sources.json \
 
 - **集成书源运行时**：从 [package 使用指南](docs/implementation/package-usage.md) 的导入、创建 Node session 和搜索示例开始。
 - **运行 Web 阅读器**：先阅读 [Web README](apps/reader-web/README.md)，再按 [开发与部署](apps/reader-web/docs/development-and-deployment.md) 配置 Supabase、数据库和服务端密钥。
-- **理解兼容范围**：查看 [运行时状态总览](docs/implementation/source-runtime-status.md)、[能力清单](docs/standard/capability-inventory.md) 和 [已知差异](docs/divergence/known-divergences.md)。
+- **理解兼容范围**：查看 [运行时状态总览](docs/compatibility/status.md)、[能力清单](docs/compatibility/capabilities.md) 和 [已知差异](docs/compatibility/known-divergences.md)。
 - **研究规则和流程**：从 [共享文档库](docs/README.md) 进入标准、流程、架构、质量和运维主题。
 
 ## 当前支持边界
 
 文本书源的导入、规则求值、请求处理和四类阅读流程已经有 TypeScript 实现、Node 宿主和自动测试。WebView、复杂登录、验证码、付费动作、部分交互事件和结构化段评仍需要额外宿主协议或应用能力。
 
-“已有实现”与“已完成 Android 同输入兼容验证”是两个状态。跨端验证、能力缺失和有意保留的差异统一记录在[运行时状态总览](docs/implementation/source-runtime-status.md)和[已知差异](docs/divergence/known-divergences.md)，不要根据一次构建成功推断完整兼容。
+“已有实现”与“已完成 Android 同输入兼容验证”是两个状态。跨端验证、能力缺失和有意保留的差异统一记录在[运行时状态总览](docs/compatibility/status.md)和[已知差异](docs/compatibility/known-divergences.md)，不要根据一次构建成功推断完整兼容。
 
 ## 验证
 

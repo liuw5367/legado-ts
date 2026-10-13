@@ -2,7 +2,7 @@
 
 本文收敛 package 对外使用的版本、请求计划、结果、资源和错误命名。它优先于旧流程中的局部命名；兼容 Android 或旧 Web API 的别名只能在 adapter 边界转换。
 
-**当前实现**以 `RequestPlan` / `RequestBudget`（`runtime/contracts.ts`）与 `RuntimeResult`（`workflows/types.ts`）为准；下文「结果与错误」中的 `OperationResult`、`DomainChange`、`effects`/`cleanup` 属于**目标设计**，尚未在 `packages/` 导出，差异见 [已知差异](../divergence/known-divergences.md)。
+**当前实现**以 `RequestPlan` / `RequestBudget`（`runtime/contracts.ts`）与 `RuntimeResult`（`workflows/types.ts`）为准；下文「结果与错误」中的 `OperationResult`、`DomainChange`、`effects`/`cleanup` 属于**目标设计**，尚未在 `packages/` 导出，差异见 [兼容性与验证](../compatibility/README.md)。
 
 ## 规范命名
 

@@ -1,8 +1,8 @@
 # 当前实现
 
-本目录记录 TypeScript 仓库中已经存在的书源运行时入口、宿主契约和按主题整理的实现说明。公开 API 以 `packages/source-core/src/index.ts` 为准；与 [书源规则标准](../standard/README.md) 的不一致登记在 [已知差异](../divergence/known-divergences.md)。应用级实现分别在 [reader-cli](../../apps/reader-cli/docs/README.md) 和 [reader-web](../../apps/reader-web/docs/README.md)。
+本目录记录 TypeScript 仓库中已经存在的书源运行时入口、宿主契约和按主题整理的实现说明。公开 API 以 `packages/source-core/src/index.ts` 为准；与 [书源规则标准](../standard/README.md) 的不一致登记在 [兼容性与验证](../compatibility/README.md)。应用级实现分别在 [reader-cli](../../apps/reader-cli/docs/README.md) 和 [reader-web](../../apps/reader-web/docs/README.md)。
 
-- [书源运行时状态总览](source-runtime-status.md)：未实现能力、已知差异和 Android/TypeScript 一致性验证的唯一状态入口。
+- [兼容性与验证](../compatibility/README.md)：未实现能力、已知差异和 Android/TypeScript 一致性证据的现行入口。
 
 ## 入口与契约
 

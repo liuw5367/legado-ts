@@ -65,7 +65,7 @@ Android 在解析初始 URL 后把 `baseUrl` 更新为源站 origin，再执行 
 
 同一书源的普通请求共享按 `source.getKey()` 建立的记录。第一次请求立即通过；窗口内达到次数后，后续请求挂起到 `nextTime`，窗口重置时把时间设为当前时刻并重新计数。更新配置时只更新该书源的速率和共享记录，不为每个 URL 创建独立计数器；取消等待必须释放挂起请求。`ajaxAll(urls, true)` 和 `ajaxTestAll(urls, timeout, true)` 是 Android 明确的 bypass 路径，跳过书源限流但仍受宿主线程/并发上限约束；普通 `ajax`、`connect` 和未传 bypass 的批量请求仍走共享记录。书源编辑、导入覆盖或删除后必须清理该 source key 的记录。
 
-TypeScript `SourceRateLimiter` 已覆盖普通请求固定窗口、取消等待、`putConcurrent` 有效更新和 bypass；首次遇到非法非空配置时按 Android 首次请求放行的 fallback 处理，并通过 `SourceSession.diagnostics()` 报告配置问题。`SourceSession.close()` 及 `ReaderApplication.close()` 会释放限流等待；当前应用没有独立源编辑/删除 API，未来源管理层重建 session 时仍必须先关闭旧 session，见[已知差异](../divergence/known-divergences.md)。
+TypeScript `SourceRateLimiter` 已覆盖普通请求固定窗口、取消等待、`putConcurrent` 有效更新和 bypass；首次遇到非法非空配置时按 Android 首次请求放行的 fallback 处理，并通过 `SourceSession.diagnostics()` 报告配置问题。`SourceSession.close()` 及 `ReaderApplication.close()` 会释放限流等待；应用删除和 session 重建边界见[兼容性与验证](../compatibility/README.md)。
 
 ## 3. 参数编码
 

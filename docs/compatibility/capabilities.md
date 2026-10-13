@@ -2,26 +2,26 @@
 
 目标是完整移植 `BookSource` 的可观察行为。优先级表示实施顺序，不表示放弃。若某项收益低且显著增加架构成本，应先给出使用场景、原实现证据、替代方案和兼容损失，再由用户审核是否舍弃。未经审核的能力保留在清单中，未实现时必须返回能力状态和可识别的错误。
 
-本清单以 BookSource、规则实体、WebBook、AnalyzeRule/AnalyzeUrl、JsSourceBook 及其调用者为证据入口。字段登记不等于逐调用点验证；兼容结论以 [矩阵](../quality/compatibility-matrix.md) 和实际案例为准。下载多个 `BookSource` 的订阅属于书源导入范围；`RssSource` 与 `ReplaceRule` 是另一个实体体系，当前仅登记订阅 `type` 分支和兼容边界，独立 CRUD 是否纳入 package 必须单独审核，不能静默视为支持或放弃。
+本清单以 BookSource、规则实体、WebBook、AnalyzeRule/AnalyzeUrl、JsSourceBook 及其调用者为证据入口。字段登记不等于逐调用点验证；兼容结论以 [证据矩阵](evidence-matrix.md) 和实际案例为准。下载多个 `BookSource` 的订阅属于书源导入范围；`RssSource` 与 `ReplaceRule` 是另一个实体体系，当前仅登记订阅 `type` 分支和兼容边界，独立 CRUD 是否纳入 package 必须单独审核，不能静默视为支持或放弃。
 
 | 能力组 | 需要形成的行为规格 | 当前文档位置 | 优先级与待核对内容 |
 | --- | --- | --- | --- |
 | 导入、更新、导出 | JSON、JS、远程地址、替换、冲突、未知字段和原文保留 | [导入](../flows/import-protocol.md)、[编辑](../archive/source-editor.md) | 优先；核对更新后的缓存失效和版本身份 |
-| 书源字段与类型 | `BookSource`、规则对象、文本/音频/图片/文件/视频类型 | [模型](source-schema.md) | 优先；各类型从列表到消费结果的行为需分开验收 |
-| 规则语言 | CSS、XPath、JSONPath、正则、组合、变量、内嵌 JS、WebJS | [规则](rule-language.md) | 优先；WebJS 需浏览器宿主能力 |
-| URL 与请求 | 参数、页码、Body、Header、Cookie、重试、重定向、代理和 DNS | [URL](url-request-rules.md) | 优先；代理与 DNS 由宿主实现并验证 |
+| 书源字段与类型 | `BookSource`、规则对象、文本/音频/图片/文件/视频类型 | [模型](../standard/source-schema.md) | 优先；各类型从列表到消费结果的行为需分开验收 |
+| 规则语言 | CSS、XPath、JSONPath、正则、组合、变量、内嵌 JS、WebJS | [规则](../standard/rule-language.md) | 优先；WebJS 需浏览器宿主能力 |
+| URL 与请求 | 参数、页码、Body、Header、Cookie、重试、重定向、代理和 DNS | [URL](../standard/url-request-rules.md) | 优先；代理与 DNS 由宿主实现并验证 |
 | 搜索与发现 | 多源搜索、精准搜索、分类入口、筛选状态、发现列表 | [搜索](../flows/search-flow.md)、[发现](../flows/explore-flow.md) | 优先；`exploreScreen` 和分类交互需要继续核对 |
 | 详情与目录 | 字段覆盖、文件下载地址、目录刷新、分页、卷、VIP 和顺序 | [详情](../flows/book-info-flow.md)、[目录](../flows/chapter-list-flow.md) | 优先；文件类源需专门结果契约 |
 | 正文与批量 | 正文分页、清洗、替换、缓存、批量、元数据保存 | [正文](../flows/content-flow.md) | `loadChapterContent` 与 `loadChapterContentBatch` 已实现；持久化/token 由宿主提供；Android golden 待执行 |
-| JavaScript 书源 | 配置抽取、函数调用、返回值、同步兼容 API、变量和脚本 scope | [JS](javascript-source.md)、[宿主](../implementation/runtime-host-interfaces.md) | 优先；核对 `JsExtensions` 中未列出的实际书源依赖 |
-| 图片与封面解密 | `coverDecodeJs`、`imageDecode` 的字节/流输入、脚本输出与缓存 | [模型](source-schema.md) | `ImageUtils` 调用链已核对；`decodeImage` 已实现解密工作流，下载与缓存仍由宿主提供；Android golden 待跑 |
-| 付费与受限章节 | VIP/购买标识、`payAction`、授权状态、执行后刷新 | [目录](../flows/chapter-list-flow.md)、[模型](source-schema.md) | 后续规格；需核对用户触发、凭据和失败恢复 |
-| 段评读取与交互 | 结构化摘要、详情、回复，旧式段评页面桥接，以及点赞、发送和删除规则 | [段评流程](../flows/review-flow.md)、[JS](javascript-source.md)、[模型](source-schema.md) | 结构化读取和旧式页面桥接均有 Android 入口；写入目前只有字段证据，先核实执行入口 |
-| 登录与认证 | 静态 Header/Cookie、`loginCheckJs`、登录表单、验证码和动态登录 | [请求](url-request-rules.md)、[JS](javascript-source.md) | 静态能力优先；交互登录低优先级，保留完整目标 |
-| 浏览器行为 | WebView 请求、`@webjs:`、资源嗅探和页面脚本 | [请求](url-request-rules.md)、[宿主](../implementation/runtime-host-interfaces.md) | 后续宿主能力；不能把普通 HTTP 当成等价实现 |
-| 书源交互与事件 | `eventListener`、`customButton`、正文回调和宿主 UI 动作 | [模型](source-schema.md) | 后续规格；需核对 `SourceCallBack` 和调用方事件协议 |
+| JavaScript 书源 | 配置抽取、函数调用、返回值、同步兼容 API、变量和脚本 scope | [JS](../standard/javascript-source.md)、[宿主](../implementation/runtime-host-interfaces.md) | 优先；核对 `JsExtensions` 中未列出的实际书源依赖 |
+| 图片与封面解密 | `coverDecodeJs`、`imageDecode` 的字节/流输入、脚本输出与缓存 | [模型](../standard/source-schema.md) | `ImageUtils` 调用链已核对；`decodeImage` 已实现解密工作流，下载与缓存仍由宿主提供；Android golden 待跑 |
+| 付费与受限章节 | VIP/购买标识、`payAction`、授权状态、执行后刷新 | [目录](../flows/chapter-list-flow.md)、[模型](../standard/source-schema.md) | 后续规格；需核对用户触发、凭据和失败恢复 |
+| 段评读取与交互 | 结构化摘要、详情、回复，旧式段评页面桥接，以及点赞、发送和删除规则 | [段评流程](../flows/review-flow.md)、[JS](../standard/javascript-source.md)、[模型](../standard/source-schema.md) | 结构化读取和旧式页面桥接均有 Android 入口；写入目前只有字段证据，先核实执行入口 |
+| 登录与认证 | 静态 Header/Cookie、`loginCheckJs`、登录表单、验证码和动态登录 | [请求](../standard/url-request-rules.md)、[JS](../standard/javascript-source.md) | 静态能力优先；交互登录低优先级，保留完整目标 |
+| 浏览器行为 | WebView 请求、`@webjs:`、资源嗅探和页面脚本 | [请求](../standard/url-request-rules.md)、[宿主](../implementation/runtime-host-interfaces.md) | 后续宿主能力；不能把普通 HTTP 当成等价实现 |
+| 书源交互与事件 | `eventListener`、`customButton`、正文回调和宿主 UI 动作 | [模型](../standard/source-schema.md) | 后续规格；需核对 `SourceCallBack` 和调用方事件协议 |
 | 书源编辑与诊断 | 字段编辑、未知字段保留、规则预览、保存冲突、导入导出 | [编辑](../archive/source-editor.md) | 优先；所有能力字段至少可见、可保留、可诊断 |
-| 书源校验与健康状态 | 域名、搜索、发现、详情、目录、正文、会话、版本和结果写回 | [校验流程](../flows/source-check-flow.md)、[校验状态](source-check-state.md) | 优先；不能用一次搜索成功替代全流程校验 |
+| 书源校验与健康状态 | 域名、搜索、发现、详情、目录、正文、会话、版本和结果写回 | [校验流程](../flows/source-check-flow.md)、[校验状态](../standard/source-check-state.md) | 优先；不能用一次搜索成功替代全流程校验 |
 | 用户持久化与状态清理 | 用户归属、版本、源变量、Cookie、缓存、校验状态和删除副作用 | [管理状态目标](../archive/source-management-and-state.md)、[reader-web 存储](../../apps/reader-web/docs/storage-and-cache.md) | 优先；存储由应用适配器提供 |
 
 ## 处理规则
@@ -41,9 +41,9 @@
 
 现有能力索引中的“证据成熟度”仅作为历史摘要；更新某一行时应同时填入上述四项，避免把“已登记”“已实现”和“已执行”混为同一状态。
 
-未完成能力的状态、完成条件和删除线记录统一维护在[书源运行时状态总览](../implementation/source-runtime-status.md)。本清单继续维护能力定义、Android 事实和实现边界，不重复维护状态表。
+未完成能力的状态、完成条件和删除线记录统一维护在[状态总览](status.md)。本清单继续维护能力定义、Android 事实和实现边界，不重复维护状态表。
 
-图片解密、付费、事件回调、媒体结果和段评交互的已核对调用关系见 [与书源关联的媒体和交互流程](../flows/adjacent-source-flows.md)。下一轮审查应继续追踪未核实的调用点，并把对应测试加入 [一致性测试基线](../quality/conformance-tests.md)。书源编辑器的字段覆盖也应按本清单反查，确保能导入、显示、保留和导出尚未执行的能力字段。
+图片解密、付费、事件回调、媒体结果和段评交互的已核对调用关系见 [与书源关联的媒体和交互流程](../flows/adjacent-source-flows.md)。下一轮审查应继续追踪未核实的调用点，并把对应测试加入 [一致性测试基线](conformance-tests.md)。书源编辑器的字段覆盖也应按本清单反查，确保能导入、显示、保留和导出尚未执行的能力字段。
 
 ## 稳定能力索引
 
@@ -61,8 +61,8 @@
 | CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取有入口，段评写入仅字段证据 |
 | CAP-REVIEW | 段评流程的声明式摘要/详情/回复、JS 函数及旧式网页桥接 | JS-004、REVIEW-001、[段评流程](../flows/review-flow.md) | 结构化读取和旧式桥接规格已补；TypeScript 与宿主尚未实现，写入保持待核实 |
 | CAP-EDITOR | 16 | EDIT | Web 目标设计与现有 UI 证据分开；独立 TS 编辑器见 [归档](../archive/source-editor.md) |
-| CAP-STATE / CAP-SUBSCRIPTION | [状态与副作用](state-and-effects.md)、[订阅流程](../flows/source-subscriptions.md) | STATE、SUB | `refreshSubscription` 已实现 diff 计划；应用持久化仍为目标设计 |
-| CAP-ARTIFACT | [书源相关实体边界](artifact-model.md) | SUB、MODEL | BookSource 已纳入；RssSource/ReplaceRule 需独立 adapter 验收 |
+| CAP-STATE / CAP-SUBSCRIPTION | [状态与副作用](../standard/state-and-effects.md)、[订阅流程](../flows/source-subscriptions.md) | STATE、SUB | `refreshSubscription` 已实现 diff 计划；应用持久化仍为目标设计 |
+| CAP-ARTIFACT | [书源相关实体边界](../standard/artifact-model.md) | SUB、MODEL | BookSource 已纳入；RssSource/ReplaceRule 需独立 adapter 验收 |
 | CAP-HOST / CAP-DEPLOY | [宿主接口](../implementation/runtime-host-interfaces.md)、[运行边界与部署](../operations/runtime-security-and-deployment.md) | HOST、DEP | 宿主端口已在 source-node 实现部分能力（`SourceRuleHost`/`SourceRequestHost`/QuickJS）；部署与统一 `RuntimeHost` 门面仍是目标契约 |
 | CAP-JOB | [任务执行与 Serverless 边界](../archive/job-and-execution.md) | JOB、DEP | 目标契约，尚未实现执行器 |
 | CAP-ENCODE / CAP-ARCHIVE / CAP-FONT / CAP-CONCURRENCY | 下表及 11、20 | EXT | 加密/编码、归档、字体、并发宿主已在 source-node 实现（`NodeArchiveHost`/`NodeFontHost` 等）；逐重载契约与 Android 对照 fixture 未全量执行 |

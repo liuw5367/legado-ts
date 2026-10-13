@@ -8,8 +8,8 @@
 - [规则语言与解析器](rule-language.md)：规则扫描、模式识别、求值和变量语义。
 - [URL 与请求规则](url-request-rules.md)：URL 展开、请求选项、响应字节和安全边界。
 - [JavaScript 书源](javascript-source.md)：函数约定、绑定、返回值和脚本 scope。
-- [书源能力清单与审核决策](capability-inventory.md)：能力登记、优先级、证据和待审核项目。
+- 能力登记、优先级、证据和待审核项目见 [兼容性与验证](../compatibility/README.md)。
 - [身份、状态与副作用](state-and-effects.md)：身份、版本、所有权、取消和提交语义。
 - [书源校验状态](source-check-state.md)：校验会话、阶段、结果和旧结果拒绝写回。
 
-当前代码入口与宿主端口契约在 [当前实现](../implementation/README.md)；实现与本标准的不一致见 [已知差异](../divergence/known-divergences.md)。本目录文档可同时包含“源码事实”“兼容要求”“目标设计”和“待验证”内容，具体状态以正文和 [质量文档](../quality/README.md) 为准。
+当前代码入口与宿主端口契约在 [当前实现](../implementation/README.md)；实现与本标准的不一致见 [兼容性与验证](../compatibility/README.md)。本目录文档可同时包含“源码事实”“兼容要求”“目标设计”和“待验证”内容，具体状态以兼容性目录为准。

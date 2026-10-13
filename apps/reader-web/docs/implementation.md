@@ -40,7 +40,7 @@ API 将未登录、输入无效、资源不存在、来源忙、配置错误和�
 
 ## 当前非范围
 
-当前 Web 没有订阅自动刷新、持久 JobStore/Worker、完整书源编辑器、Android 旧 Web API/WebSocket 兼容和交互式 WebView 登录。相关目标与限制见根目录 [archive](../../../docs/archive/README.md) 和 [能力清单](../../../docs/standard/capability-inventory.md)，不能从当前 API 的存在推断这些能力已实现。
+当前 Web 没有订阅自动刷新、持久 JobStore/Worker、完整书源编辑器、Android 旧 Web API/WebSocket 兼容和交互式 WebView 登录。相关目标与限制见根目录 [archive](../../../docs/archive/README.md) 和 [能力清单](../../../docs/compatibility/capabilities.md)，不能从当前 API 的存在推断这些能力已实现。
 
 ## 验证
 

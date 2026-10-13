@@ -2,7 +2,7 @@
 
 `@legado/reader-web` 是使用共享书源运行时的 Web 阅读器。浏览器端负责页面、账号和阅读交互，Hono API 在服务端调用 `@legado/source-core` 与 `@legado/source-node`；书源 Cookie、脚本变量和主要业务数据保存在服务端，浏览器只保存认证会话和阅读设置等前端状态。
 
-当前应用提供书源导入预览与确认、启用/禁用和删除、跨来源搜索、书籍来源版本、目录、正文、书架、阅读位置和阅读设置。订阅自动刷新、持久后台任务、旧版 Android API 兼容、完整书源编辑器、WebView、验证码和交互式登录仍未实现，状态见[共享运行时状态](../../docs/implementation/source-runtime-status.md)。
+当前应用提供书源导入预览与确认、启用/禁用和删除、跨来源搜索、书籍来源版本、目录、正文、书架、阅读位置和阅读设置。订阅自动刷新、持久后台任务、旧版 Android API 兼容、完整书源编辑器、WebView、验证码和交互式登录仍未实现，状态见[兼容性与验证](../../docs/compatibility/README.md)。
 
 ## 本地运行
 

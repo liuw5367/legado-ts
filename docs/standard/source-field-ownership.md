@@ -100,4 +100,4 @@ export interface SourceSnapshot {
 
 ## 验收要求
 
-至少需要覆盖：远程更新保留用户状态、管理字段覆盖拒绝、rawText round-trip、未知字段保留、显式 null、版本冲突、源改名冲突和删除后状态清理。具体测试入口见[一致性测试基线](../quality/conformance-tests.md)。
+至少需要覆盖：远程更新保留用户状态、管理字段覆盖拒绝、rawText round-trip、未知字段保留、显式 null、版本冲突、源改名冲突和删除后状态清理。具体测试入口见[一致性测试基线](../compatibility/conformance-tests.md)。

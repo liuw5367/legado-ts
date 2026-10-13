@@ -1,6 +1,6 @@
 # TypeScript 宿主接口
 
-本章定义独立库的**目标端口**。核心负责规则与流程，宿主负责网络、解析器、脚本、状态与日志。以下名称作为目标契约维护；状态和副作用的单一事实源为 [身份、状态与副作用](../standard/state-and-effects.md)。流程层已落地的 `WorkflowPorts` / `ReadingPorts`、`ContentIdentity` / `ContentSaveToken` / `ContentStore` 及 Node 侧 `SourceRuleHost` / `SourceRequestHost` 以 [包使用与当前导出](package-usage.md) 为准；目标 `RuntimeHost` 仍未作为统一门面导出，差异见 [已知差异](../divergence/known-divergences.md)。
+本章定义独立库的**目标端口**。核心负责规则与流程，宿主负责网络、解析器、脚本、状态与日志。以下名称作为目标契约维护；状态和副作用的单一事实源为 [身份、状态与副作用](../standard/state-and-effects.md)。流程层已落地的 `WorkflowPorts` / `ReadingPorts`、`ContentIdentity` / `ContentSaveToken` / `ContentStore` 及 Node 侧 `SourceRuleHost` / `SourceRequestHost` 以 [包使用与当前导出](package-usage.md) 为准；目标 `RuntimeHost` 仍未作为统一门面导出，差异见 [兼容性与验证](../compatibility/README.md)。
 
 ## 请求和响应
 
@@ -376,7 +376,7 @@ export interface JavaApi {
 }
 ```
 
-绑定关系：java 是当前规则/JS 源提供的兼容外观，source/sourceApi 是书源配置与方法视图，cookie/cache 为会话隔离视图。book/chapter 是独立绑定，不能把 source 当成 Book。JavaApi 表是起始子集，完整继承方法及重载登记见 [能力清单](../standard/capability-inventory.md)。
+绑定关系：java 是当前规则/JS 源提供的兼容外观，source/sourceApi 是书源配置与方法视图，cookie/cache 为会话隔离视图。book/chapter 是独立绑定，不能把 source 当成 Book。JavaApi 表是起始子集，完整继承方法及重载登记见 [能力清单](../compatibility/capabilities.md)。
 
 脚本 API 错误分为参数/上下文错误、能力缺失和兼容返回错误。ajax/connect 的错误文本仍按原 API 返回给脚本，另记录 request 诊断；不擅自截断原脚本对该文本的处理。最终是否为正文成功由正文规则判断，不能宣称网络成功。cacheContent 歧义、非批量、关闭或旧 token 均不得误写其他章节。
 

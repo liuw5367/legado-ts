@@ -126,4 +126,4 @@ HTTP 304 只在存在对应成功 baseline 时表示 unchanged；没有 baseline
 `SUB-018`：同一订阅刷新失败、取消或出现非法成员时，旧 source snapshot、baseline、revision 和成功时间均保留；尝试时间和失败诊断可更新。
 `SUB-019`：本地名称等于 baseline 时远程改名可进入更新候选；本地名称已编辑时保留本地并报告差异；无 baseline 的新源保留当前名称，显式覆盖才采用远程名称。
 
-以上为设计案例，尚无运行断言；证据与实现状态遵循 [测试基线](../quality/conformance-tests.md)。
+以上为设计案例，尚无运行断言；证据与实现状态遵循 [测试基线](../compatibility/conformance-tests.md)。

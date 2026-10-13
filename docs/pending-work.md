@@ -30,8 +30,8 @@
 
 相关入口：
 
-- [书源运行时状态总览](implementation/source-runtime-status.md)
-- [能力清单](standard/capability-inventory.md)
-- [已知差异](divergence/known-divergences.md)
+- [书源运行时状态总览](compatibility/status.md)
+- [能力清单](compatibility/capabilities.md)
+- [已知差异](compatibility/known-divergences.md)
 - [reader-cli 实现方案](../apps/reader-cli/docs/implementation.md)
 - [reader-web 实现方案](../apps/reader-web/docs/implementation.md)

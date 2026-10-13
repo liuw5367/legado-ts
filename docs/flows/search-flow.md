@@ -51,7 +51,7 @@
 
 ## 数据流和生命周期
 
-搜索输入由带所有权的请求上下文构成，不能只传入一条 URL。下述 `SearchRequest` / `SearchResultSink` / `SearchSourceStatus`（含 `stale`、`storage-error`）是**目标设计**；当前实现入口为 `searchBooks`（接受 `SearchInput`，返回 `RuntimeResult`），状态词汇见 [包使用与当前导出](../implementation/package-usage.md)，差异见 [已知差异](../divergence/known-divergences.md)：
+搜索输入由带所有权的请求上下文构成，不能只传入一条 URL。下述 `SearchRequest` / `SearchResultSink` / `SearchSourceStatus`（含 `stale`、`storage-error`）是**目标设计**；当前实现入口为 `searchBooks`（接受 `SearchInput`，返回 `RuntimeResult`），状态词汇见 [包使用与当前导出](../implementation/package-usage.md)，差异见 [兼容性与验证](../compatibility/README.md)：
 
 ```ts
 export interface SearchRequest {
