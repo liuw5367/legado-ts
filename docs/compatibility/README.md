@@ -15,4 +15,4 @@
 
 状态总览只维护实现程度；能力清单不复制状态；差异登记不替代实现状态；证据矩阵不把源码存在误写成执行通过。`execution=not-run` 必须保留，Android 同输入 golden 未执行时不能称为跨端兼容。
 
-上游 Android 页面、规则和流程来源暂见 [Android 功能对照](../android/README.md)；来源迁移完成后由“上游资料索引”接管。当前 core 和 Node 的实现入口暂见 [当前实现](../implementation/README.md)；对应 package README 建立后再补充独立入口。
+上游 Android 页面、规则和流程来源见 [上游资料索引](../upstream/README.md)；当前 core 和 Node 的实现入口暂见 [当前实现](../implementation/README.md)，对应 package README 在后续任务建立。
