@@ -59,7 +59,7 @@
 
 读者不打开引用目标时，也必须能够完成当前主题的实现或审查。目录 README 只负责导航；质量文档可以以证据索引为主，但 fixture 和断言仍须定义本地最小结构。
 
-公开结果统一使用可判别终态：`success`、合法空结果 `empty`、`partial`、`failed`、`cancelled`、`stale` 和 `capability-missing`。具体领域可以增加阶段状态，但必须说明它与这些终态的映射。
+不同层的结果不能混用：source-core 工作流使用 `success`、合法空结果 `empty`、`partial`、`failed`、`cancelled` 和 `capability-missing`；应用或存储提交可以另外报告 `stale`、`unknown`、`storage-error` 等状态。具体领域可以增加阶段状态，但必须说明它与所属层结果的映射。
 
 ## 文档状态
 
@@ -70,7 +70,7 @@
 - **实施计划**：实现顺序、依赖和验收门槛，不代表功能已经存在。
 - **验证记录**：测试、部署或发布实际执行后的结果和限制。
 
-状态可以在同一篇文档中并存；未实现项、差异项和完成标记以[书源运行时状态总览](implementation/source-runtime-status.md)为准，详细行为、差异原因和测试证据仍分别见对应主题文档。标准与实现的不一致另见 [已知差异](divergence/README.md)。
+状态可以在同一篇文档中并存；运行能力的实现程度以[书源运行时状态总览](implementation/source-runtime-status.md)为准，兼容差异以[已知差异](divergence/README.md)为准，fixture 的执行字段以质量文档和机器清单为准。详细行为仍分别见对应主题文档。
 
 ## 事实来源规则
 
