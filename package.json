@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.27.0",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json && pnpm --filter @legado/source-node build && pnpm --filter @legado/reader-backup build && pnpm --filter @legado/reader-cli build",
+    "build": "tsc -p tsconfig.build.json && pnpm --filter @legado/reader-backup build && pnpm --filter @legado/source-node build && pnpm --filter @legado/reader-cli build",
     "build:web:vercel": "node scripts/build-reader-web-vercel.mjs",
     "build:binary": "pnpm build && bun scripts/build-reader-binary.ts",
     "test": "node --test packages/source-core/tests/*.test.ts packages/source-node/tests/*.test.ts packages/reader-backup/tests/*.test.ts apps/reader-cli/tests/*.test.ts",

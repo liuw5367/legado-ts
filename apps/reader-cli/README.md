@@ -37,6 +37,7 @@ pnpm build:binary --source-dir ./fixtures/source/single --outfile ./dist/legado-
 - 详情、目录和阅读页支持来源切换、目录筛选、正倒序、正文刷新和章节导航。
 - 书源管理支持筛选、启用/禁用、优先级调整和按 Android 顺序执行的来源检测。
 - 本地保存书源状态、书架、阅读位置和正文缓存；正文缓存与用户状态分开管理。
+- `backup export <zip>` 导出与 Web 共用的第一版用户数据 ZIP；`backup import <zip>` 会先完整校验，再在确认后按 `--only` 分类完整替换书架、阅读记录、搜索记录、书源或设置。备份不包含正文缓存、凭据和运行时状态；当前不迁移历史 CLI 数据。
 
 首版主要面向文本书源。音频、图片、视频、文件下载、复杂登录和 WebView 需要额外宿主能力，当前状态见[兼容性与验证](../../docs/compatibility/README.md)。
 
@@ -52,6 +53,8 @@ pnpm build:binary --source-dir ./fixtures/source/single --outfile ./dist/legado-
 | 书源管理 | 空格选择，`c` 检测，`x/e` 禁用或启用，`f` 选择本次失败项，`p` 调整优先级 |
 
 完整页面行为、导航规则和低尺寸终端处理见[交互设计](docs/interaction.md)；功能边界见[应用功能](docs/features.md)。
+
+备份 ZIP 使用 `packages/reader-backup` 定义的固定路径和 `sha256(sourceId + "\0" + bookUrl)` editionKey。导入前会检查书架、书籍、edition、阅读引用、书源指纹和设置值；选中书架时会替换完整书籍闭包，未选分类保留原值。
 
 ## 数据目录
 

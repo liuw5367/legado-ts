@@ -11,9 +11,10 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
-// Vercel 从干净 checkout 开始，不会有 workspace 包的 dist/。先生成 core 和
-// Node runtime 的产物，Hono 函数入口才能解析书源运行时及 QuickJS 依赖。
+// Vercel 从干净 checkout 开始，不会有 workspace 包的 dist/。先生成共享备份、
+// core 和 Node runtime 的产物，Hono 函数入口才能解析备份格式、书源运行时及 QuickJS 依赖。
 run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.build.json'])
+run('pnpm', ['--filter', '@legado/reader-backup', 'build'])
 run('pnpm', ['--filter', '@legado/source-node', 'build'])
 run('pnpm', ['--filter', '@legado/reader-web', 'build'])
 
