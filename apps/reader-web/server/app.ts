@@ -1,5 +1,5 @@
 import './env.ts'
-import { BACKUP_CATEGORIES, BACKUP_MAX_TOTAL_BYTES, sha256Bytes, type BackupCategory } from '@legado/reader-backup'
+import { BACKUP_CATEGORIES, BACKUP_MAX_TOTAL_BYTES, buildBackupPreview, sha256Bytes, type BackupCategory } from '@legado/reader-backup'
 import { getBookDetails } from './runtime/book-details.ts'
 import { createClient } from '@supabase/supabase-js'
 import { Hono, type Context } from 'hono'
@@ -9,7 +9,7 @@ import { BackupRestoreError, PostgresReaderRepository, SourceManagementError, ty
 import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
 import { confirmImport, createImportPreview, listSourceActions, publicImportPreview } from './runtime/source-management.ts'
 import { serveReaderAsset } from './static.ts'
-import { BackupValidationError, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
+import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
 import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 
 interface Variables { userId: string }
@@ -129,7 +129,8 @@ app.post('/api/backup/validate', async (context) => {
   if (rejected !== undefined) return rejected
   try {
     const archive = await validateWebBackup(dependencies.repository, context.get('userId'), await readBackupBody(context))
-    return context.json({ manifest: archive.manifest })
+    const current = await dependencies.repository.getBackupSnapshot(context.get('userId'))
+    return context.json({ manifest: archive.manifest, preview: buildBackupPreview(archive), currentCounts: countBackupSnapshot(current) })
   } catch (error) { return handleError(context, error) }
 })
 

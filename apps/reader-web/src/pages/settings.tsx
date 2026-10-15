@@ -33,7 +33,7 @@ export function SettingsPage() {
     if (selectedFile === undefined || categories.length === 0) return
     setBusy(true)
     setError(undefined)
-    void importBackup(selectedFile, categories).then(() => { setDialogOpen(false); setSelectedFile(undefined); setMessage('数据已恢复，请刷新页面查看最新内容。') }, (reason: unknown) => setError(reason instanceof Error ? reason.message : '备份导入失败')).finally(() => setBusy(false))
+    void importBackup(selectedFile, categories).then(() => { setDialogOpen(false); setSelectedFile(undefined); window.location.reload() }, (reason: unknown) => setError(reason instanceof Error ? reason.message : '备份导入失败')).finally(() => setBusy(false))
   }
   const exportData = (): void => {
     setBusy(true)

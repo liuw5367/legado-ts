@@ -23,7 +23,9 @@ export class ApiError extends Error {
   public constructor(code: string, message: string, status: number) { super(message); this.code = code; this.status = status }
 }
 
-export interface BackupPreview { manifest: { createdAt: string; producer: { name: string; version: string }; counts: Record<'bookshelf' | 'reading' | 'search' | 'sources' | 'settings', number> } }
+export type BackupCategory = 'bookshelf' | 'reading' | 'search' | 'sources' | 'settings'
+export interface BackupRecordCounts { bookshelf: number; reading: number; search: number; sources: number; settings: number }
+export interface BackupPreview { manifest: { createdAt: string; producer: { name: string; version: string }; counts: Record<BackupCategory, number> }; preview: { recordCounts: BackupRecordCounts; fileCounts: Record<BackupCategory, number> }; currentCounts: BackupRecordCounts }
 
 export interface StreamEvent { type: string; data: unknown }
 export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
