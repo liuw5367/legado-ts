@@ -140,7 +140,7 @@ async function parseSnapshot(archive: BackupArchive, userId: string, currentSett
     })
   })
   const searchData = readData<unknown>(archive, 'search-history.json', [])
-  if (!Array.isArray(searchData) || searchData.some((entry) => !isRecord(entry) || typeof entry.id !== 'string' || (entry.searchId !== undefined && typeof entry.searchId !== 'string') || typeof entry.keyword !== 'string' || (entry.sourceScope !== 'all' && (!Array.isArray(entry.sourceScope) || entry.sourceScope.some((sourceId) => typeof sourceId !== 'string'))) || !isIsoDateString(entry.startedAt) || (entry.completedAt !== undefined && !isIsoDateString(entry.completedAt)) || (entry.status !== undefined && typeof entry.status !== 'string') || !isRecord(entry.summary) || Object.values(entry.summary).some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) || !Array.isArray(entry.openedBookIds) || entry.openedBookIds.some((bookId) => typeof bookId !== 'string'))) throw new Error('搜索记录格式无效')
+  if (!isSearchHistoryData(searchData)) throw new Error('搜索记录格式无效')
   const searchHistory = (searchData as CliSearchHistoryEntry[]).map((entry) => toSearchHistory(entry))
   const webSettings = readData<Record<string, unknown>>(archive, 'reader-settings.json', {})
   const importedSettings = isRecord(webSettings.web) ? validateWebSettings(webSettings.web, userId) : currentSettings
@@ -222,6 +222,22 @@ function toCliKnownSource(edition: StoredEdition, book: StoredBook): CliKnownSou
 function toCliCandidate(candidate: StoredBookSourceCandidate): CliKnownSource { const value = candidate.candidate.candidate; return { editionKey: sharedEditionKey(candidate.sourceId, candidate.bookUrl), sourceId: candidate.sourceId, sourceFingerprint: candidate.sourceFingerprint, bookUrl: candidate.bookUrl, ...(value.name === undefined ? {} : { name: value.name }), ...(value.author === undefined ? {} : { author: value.author }), ...(value.intro === undefined ? {} : { intro: value.intro }), ...(value.coverUrl === undefined ? {} : { coverUrl: value.coverUrl }), ...(value.tocUrl === undefined ? {} : { tocUrl: value.tocUrl }), ...(value.lastChapter === undefined ? {} : { lastChapter: value.lastChapter }), ...(value.updateTime === undefined ? {} : { updateTime: value.updateTime }), ...(value.wordCount === undefined ? {} : { wordCount: value.wordCount }), ...(value.kind === undefined ? {} : { kind: value.kind }), ...(candidate.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: candidate.candidate.searchDurationMs }), ...(value.variable === undefined ? {} : { variable: value.variable }), rawFields: value.rawFields ?? {}, discoveredAt: candidate.updatedAt, matchKind: 'title-author' } }
 function toCliSearchHistory(item: SearchHistoryItem): CliSearchHistoryEntry { return { id: item.id, searchId: item.searchId, keyword: item.keyword, sourceScope: item.sourceIds.length === 0 ? 'all' : item.sourceIds, startedAt: item.createdAt, completedAt: item.updatedAt, status: item.status, summary: { searched: item.sourceIds.length, success: item.status === 'success' ? 1 : 0, empty: item.status === 'empty' ? 1 : 0, failed: item.status === 'failed' || item.status === 'partial' ? 1 : 0, capabilityMissing: item.status === 'capability-missing' ? 1 : 0, candidates: item.resultCount }, openedBookIds: [] } }
 function toSearchHistory(item: CliSearchHistoryEntry): SearchHistoryItem { return { id: item.id, searchId: item.searchId ?? item.id, keyword: item.keyword, sourceIds: item.sourceScope === 'all' ? [] : item.sourceScope, status: item.status ?? (item.summary.failed > 0 ? 'failed' : item.summary.empty > 0 ? 'empty' : 'success'), resultCount: item.summary.candidates, createdAt: item.startedAt, updatedAt: item.completedAt ?? item.startedAt } }
+function isSearchHistoryData(value: unknown): value is CliSearchHistoryEntry[] {
+  if (!Array.isArray(value)) return false
+  const ids = new Set<string>()
+  const searchIds = new Set<string>()
+  for (const raw of value) {
+    if (!isRecord(raw)) return false
+    const id = raw.id
+    const searchId = raw.searchId
+    const summary = raw.summary
+    if (typeof id !== 'string' || !isUuid(id) || ids.has(id) || (searchId !== undefined && (typeof searchId !== 'string' || !isUuid(searchId) || searchIds.has(searchId))) || typeof raw.keyword !== 'string' || (raw.sourceScope !== 'all' && (!Array.isArray(raw.sourceScope) || raw.sourceScope.some((sourceId) => typeof sourceId !== 'string'))) || !isIsoDateString(raw.startedAt) || (raw.completedAt !== undefined && !isIsoDateString(raw.completedAt)) || (raw.status !== undefined && typeof raw.status !== 'string') || !isRecord(summary) || !['searched', 'success', 'empty', 'failed', 'capabilityMissing', 'candidates'].every((key) => isNonNegativeSafeInteger(summary[key])) || !Array.isArray(raw.openedBookIds) || raw.openedBookIds.some((bookId) => typeof bookId !== 'string')) return false
+    ids.add(id)
+    if (searchId !== undefined) searchIds.add(searchId)
+  }
+  return true
+}
+function isNonNegativeSafeInteger(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 }
 function validateWebSettings(value: Record<string, unknown>, userId: string): ReaderSettings {
   const theme = value.theme
   const readingMode = value.readingMode

@@ -7,7 +7,7 @@ import type { ContentCacheRecord, ContentIdentity, ContentSaveToken, ContentStor
 import { CacheStore } from './cache-store.ts'
 import type { WorkflowCache } from './cache-store.ts'
 import { JsonStore } from './json-store.ts'
-import { normalizeReaderSettings } from './reader-settings.ts'
+import { isReaderHeaderSeparator, isReaderSettingValue, normalizeReaderSettings } from './reader-settings.ts'
 import {
   defaultStoragePaths,
   normalizeSearchName,
@@ -730,31 +730,22 @@ export async function validateReaderBackup(input: Uint8Array, categories: readon
   const archive = await readBackupZip(input)
   const selected = new Set(categories)
   if (selected.size === 0 || [...selected].some((category) => !(BACKUP_CATEGORIES as readonly string[]).includes(category))) throw new Error('至少选择一个有效的恢复分类')
+  for (const path of ['bookshelf.json', 'reading-history.json', 'search-history.json', 'sources.json', 'source-state.json', 'source-check-config.json', 'reader-settings.json']) if (!archive.files.has(path)) throw new Error(`备份缺少文件：${path}`)
   const data = <T>(path: string): T => unwrapStoredValue(parseJson<unknown>(archive, path)) as T
-  let books: Map<string, Set<string>> | undefined
-  if (selected.has('bookshelf')) {
-    const shelf = data<unknown>('bookshelf.json')
-    if (!Array.isArray(shelf) || shelf.some((item) => !isRecord(item) || typeof item.bookId !== 'string' || !isUuid(item.bookId) || !isIsoDateString(item.addedAt) || !isIsoDateString(item.updatedAt))) throw new Error('书架数据格式无效')
-    const shelfIds = new Set(shelf.map((item) => (item as Record<string, unknown>).bookId as string))
-    if (shelfIds.size !== shelf.length) throw new Error('书架包含重复书籍')
-    books = await readBackupBooks(archive)
-    for (const bookId of shelfIds) if (!books.has(bookId)) throw new Error(`书架缺少书籍数据：${bookId}`)
-  }
-  if (selected.has('reading')) {
-    const reading = validateReadingRecords(data('reading-history.json'))
-    if (books !== undefined) validateReadingDependencies(reading, books)
-  }
-  if (selected.has('search')) {
-    const search = data<unknown>('search-history.json')
-    if (!Array.isArray(search) || search.some((item) => !isRecord(item) || typeof item.id !== 'string' || typeof item.keyword !== 'string' || !isIsoDateString(item.startedAt) || (item.completedAt !== undefined && !isIsoDateString(item.completedAt)) || !Array.isArray(item.openedBookIds))) throw new Error('搜索记录格式无效')
-  }
-  if (selected.has('settings') && !isRecord(data<unknown>('reader-settings.json'))) throw new Error('阅读设置格式无效')
-  if (selected.has('sources')) {
-    const definitions = data<unknown>('sources.json')
-    if (!Array.isArray(definitions)) throw new Error('书源定义格式无效')
-    await validateSourceDefinitions(definitions)
-    if (!isRecord(data<unknown>('source-state.json')) || !isRecord(data<unknown>('source-check-config.json'))) throw new Error('书源状态格式无效')
-  }
+  const shelf = data<unknown>('bookshelf.json')
+  if (!Array.isArray(shelf) || shelf.some((item) => !isRecord(item) || typeof item.bookId !== 'string' || !isUuid(item.bookId) || !isIsoDateString(item.addedAt) || !isIsoDateString(item.updatedAt))) throw new Error('书架数据格式无效')
+  const shelfIds = new Set(shelf.map((item) => (item as Record<string, unknown>).bookId as string))
+  if (shelfIds.size !== shelf.length) throw new Error('书架包含重复书籍')
+  const books = await readBackupBooks(archive)
+  for (const bookId of shelfIds) if (!books.has(bookId)) throw new Error(`书架缺少书籍数据：${bookId}`)
+  const reading = validateReadingRecords(data('reading-history.json'))
+  validateReadingDependencies(reading, books)
+  validateSearchHistory(data('search-history.json'))
+  validateReaderSettings(data('reader-settings.json'))
+  const definitions = data<unknown>('sources.json')
+  if (!Array.isArray(definitions)) throw new Error('书源定义格式无效')
+  await validateSourceDefinitions(definitions)
+  if (!isRecord(data<unknown>('source-state.json')) || !isRecord(data<unknown>('source-check-config.json'))) throw new Error('书源状态格式无效')
   return archive
 }
 
@@ -762,6 +753,7 @@ async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<
   const books = new Map<string, Set<string>>()
   const documents = new Set<string>()
   const editionOwners = new Map<string, string>()
+  const activeEditions = new Map<string, string | undefined>()
   for (const file of archive.manifest.files.filter((item) => item.path.startsWith('books/'))) {
     const value = unwrapStoredValue(parseJson<unknown>(archive, file.path))
     const parts = file.path.split('/')
@@ -771,6 +763,8 @@ async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<
       if (!isRecord(value) || typeof value.bookId !== 'string' || value.bookId !== bookId || typeof value.name !== 'string' || !isIsoDateString(value.createdAt) || !isIsoDateString(value.updatedAt)) throw new Error(`书籍数据格式无效：${file.path}`)
       if (documents.has(bookId)) throw new Error(`书籍数据重复：${bookId}`)
       books.set(bookId, books.get(bookId) ?? new Set())
+      if (value.activeEditionKey !== undefined && typeof value.activeEditionKey !== 'string') throw new Error(`书籍数据格式无效：${file.path}`)
+      activeEditions.set(bookId, value.activeEditionKey as string | undefined)
       documents.add(bookId)
     } else if (file.path.endsWith('/sources.json')) {
       if (!Array.isArray(value)) throw new Error(`书籍书源数据格式无效：${file.path}`)
@@ -789,6 +783,8 @@ async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<
   for (const bookId of books.keys()) {
     if (!documents.has(bookId)) throw new Error(`书籍缺少 book.json：${bookId}`)
     if (books.get(bookId)?.size === 0) throw new Error(`书籍缺少版本：${bookId}`)
+    const activeEditionKey = activeEditions.get(bookId)
+    if (activeEditionKey !== undefined && !books.get(bookId)?.has(activeEditionKey)) throw new Error(`书籍活动版本不存在：${bookId}`)
   }
   return books
 }
@@ -838,7 +834,36 @@ function validateReadingRecords(value: unknown): ReadingRecord[] {
   return value as ReadingRecord[]
 }
 
+function validateSearchHistory(value: unknown): void {
+  if (!Array.isArray(value)) throw new Error('搜索记录格式无效')
+  const ids = new Set<string>()
+  const searchIds = new Set<string>()
+  for (const raw of value) {
+    if (!isRecord(raw)) throw new Error('搜索记录格式无效')
+    const id = raw.id
+    const searchId = raw.searchId
+    const summary = raw.summary
+    if (typeof id !== 'string' || !isUuid(id) || ids.has(id) || (searchId !== undefined && (typeof searchId !== 'string' || !isUuid(searchId) || searchIds.has(searchId))) || typeof raw.keyword !== 'string' || (raw.sourceScope !== 'all' && (!Array.isArray(raw.sourceScope) || raw.sourceScope.some((sourceId) => typeof sourceId !== 'string'))) || !isIsoDateString(raw.startedAt) || (raw.completedAt !== undefined && !isIsoDateString(raw.completedAt)) || (raw.status !== undefined && typeof raw.status !== 'string') || !isRecord(summary) || !['searched', 'success', 'empty', 'failed', 'capabilityMissing', 'candidates'].every((key) => isNonNegativeSafeInteger(summary[key])) || !Array.isArray(raw.openedBookIds) || raw.openedBookIds.some((bookId) => typeof bookId !== 'string')) throw new Error('搜索记录格式无效')
+    ids.add(id)
+    if (searchId !== undefined) searchIds.add(searchId)
+  }
+}
+
+function validateReaderSettings(value: unknown): void {
+  if (!isRecord(value)) throw new Error('阅读设置格式无效')
+  const namespace = 'cli' in value ? value.cli : 'web' in value ? undefined : value
+  if (namespace === undefined) {
+    if ('web' in value && !isRecord(value.web)) throw new Error('阅读设置格式无效')
+    return
+  }
+  if (!isRecord(namespace)) throw new Error('阅读设置格式无效')
+  for (const key of ['searchConcurrency', 'sourceSearchConcurrency', 'sourceCheckConcurrency']) if (key in namespace && !isReaderSettingValue(namespace[key] as number)) throw new Error('阅读设置格式无效')
+  for (const key of ['showReaderBookTitle', 'showReaderChapterTitle', 'showReaderChapterIndex', 'showReaderPageProgress', 'showReaderWordCount', 'showReaderStatus']) if (key in namespace && typeof namespace[key] !== 'boolean') throw new Error('阅读设置格式无效')
+  if ('readerHeaderSeparator' in namespace && !isReaderHeaderSeparator(namespace.readerHeaderSeparator)) throw new Error('阅读设置格式无效')
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function isNonNegativeSafeInteger(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 }
 
 function normalizeSourceCheckConfig(value: Partial<SourceCheckConfig>): SourceCheckConfig {
   const timeoutMs = typeof value.timeoutMs === 'number' && Number.isSafeInteger(value.timeoutMs) && value.timeoutMs > 0 ? value.timeoutMs : DEFAULT_SOURCE_CHECK_CONFIG.timeoutMs
