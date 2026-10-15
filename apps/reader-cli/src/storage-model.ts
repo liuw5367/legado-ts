@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { editionKey as backupEditionKey } from '@legado/reader-backup'
 import type { BookMetadata, Chapter, JsonObject, TocBookPatch } from '@legado/source-core'
 
 export interface SearchHistoryEntry {
@@ -197,7 +198,7 @@ export function defaultStoragePaths(_platform = process.platform, environment: N
 }
 
 export function editionKey(sourceId: string, bookUrl: string): string {
-  return sha256(`${sourceId}\u0000${bookUrl}`)
+  return backupEditionKey(sourceId, bookUrl)
 }
 
 export function chapterKey(input: { editionKey: string; tocRevision?: string; chapterUrl: string; index: number }): string {

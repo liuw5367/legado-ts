@@ -151,7 +151,7 @@ export function buildBackupPreview(archive: BackupArchive): BackupPreview {
   return {
     recordCounts: {
       bookshelf: bookshelf.length,
-      reading: reading.reduce((total, item) => total + (isRecord(item) && isRecord(item.positions) ? Object.keys(item.positions).length : 0), 0),
+      reading: reading.reduce<number>((total, item) => total + (isRecord(item) && isRecord(item.positions) ? Object.keys(item.positions).length : 0), 0),
       search: search.length,
       sources: sources.length,
       settings: archive.files.has('reader-settings.json') ? 1 : 0,
