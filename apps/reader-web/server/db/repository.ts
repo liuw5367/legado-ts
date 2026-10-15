@@ -2,7 +2,7 @@ import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
-import { editionKey as backupEditionKey, type BackupCategory } from '@legado/reader-backup'
+import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } from '@legado/reader-backup'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser } from './client.ts'
 import { bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
@@ -936,10 +936,13 @@ export class MemoryReaderRepository implements ReaderRepository {
       }
     }
     if (selected.has('search')) {
-      for (const [key, item] of nextHistory) if (key.startsWith(`${userId}:`) || this.searches.get(item.searchId)?.userId === userId) nextHistory.delete(key)
+      for (const [key, item] of nextHistory) if (key.startsWith(`${userId}:`) || nextSearches.get(item.searchId)?.userId === userId) nextHistory.delete(key)
+      for (const [searchId, item] of nextSearches) if (item.userId === userId) nextSearches.delete(searchId)
       for (const item of snapshot.searchHistory) {
-        nextHistory.set(`${userId}:${item.searchId}`, { ...item })
-        if (!nextSearches.has(item.searchId)) nextSearches.set(item.searchId, { id: item.searchId, userId, keyword: item.keyword, sourceId: item.sourceIds[0] ?? '', sourceIds: item.sourceIds, status: item.status as SearchRunState['status'], candidates: [], sourceStates: [], progress: { completed: 0, total: item.sourceIds.length }, version: 0, cancelled: false, createdAt: item.createdAt, updatedAt: item.updatedAt })
+        const existing = nextSearches.get(item.searchId)
+        const searchId = existing === undefined || existing.userId === userId ? item.searchId : randomUUID()
+        nextHistory.set(`${userId}:${searchId}`, { ...item, searchId })
+        nextSearches.set(searchId, { id: searchId, userId, keyword: item.keyword, sourceId: item.sourceIds[0] ?? '', sourceIds: item.sourceIds, status: item.status as SearchRunState['status'], candidates: [], sourceStates: [], progress: { completed: 0, total: item.sourceIds.length }, version: 0, cancelled: false, createdAt: item.createdAt, updatedAt: item.updatedAt })
       }
     }
     if (selected.has('sources')) {
@@ -1015,6 +1018,7 @@ function assertBackupSnapshotClosed(snapshot: ReaderBackupSnapshot, userId: stri
   }
   const bookIds = new Set<string>()
   const editionOwners = new Map<string, string>()
+  const candidateOwners = new Map<string, string>()
   for (const item of snapshot.books) {
     if (item.book.userId !== userId || bookIds.has(item.book.id) || item.editions.length === 0) throw new BackupRestoreError(`书籍数据无效：${item.book.id}`)
     bookIds.add(item.book.id)
@@ -1025,10 +1029,22 @@ function assertBackupSnapshotClosed(snapshot: ReaderBackupSnapshot, userId: stri
       editionOwners.set(edition.editionKey, item.book.id)
     }
     if (item.book.activeEditionKey !== undefined && !item.editions.some((edition) => edition.editionKey === item.book.activeEditionKey)) throw new BackupRestoreError(`书籍活动版本不存在：${item.book.id}`)
-    for (const candidate of item.candidates) if (candidate.userId !== userId || candidate.bookId !== item.book.id || candidate.candidate.sourceId !== candidate.sourceId || candidate.candidate.candidate.bookUrl !== candidate.bookUrl) throw new BackupRestoreError(`书籍候选数据无效：${item.book.id}`)
+    for (const candidate of item.candidates) {
+      if (candidate.userId !== userId || candidate.bookId !== item.book.id || candidate.sourceFingerprint.length === 0 || candidate.candidate.sourceId !== candidate.sourceId || candidate.candidate.sourceFingerprint !== candidate.sourceFingerprint || candidate.candidate.candidate.bookUrl !== candidate.bookUrl) throw new BackupRestoreError(`书籍候选数据无效：${item.book.id}`)
+      const candidateKey = backupEditionKey(candidate.sourceId, candidate.bookUrl)
+      if (editionOwners.has(candidateKey) || candidateOwners.has(candidateKey)) throw new BackupRestoreError(`书籍候选版本重复：${candidateKey}`)
+      candidateOwners.set(candidateKey, item.book.id)
+    }
   }
   for (const item of snapshot.bookshelf) if (!bookIds.has(item.bookId)) throw new BackupRestoreError(`书架缺少书籍：${item.bookId}`)
   for (const position of snapshot.positions) if (position.userId !== userId || !editionOwners.has(position.editionKey) || !snapshot.books.some((item) => item.book.id === position.bookId && item.editions.some((edition) => edition.editionKey === position.editionKey))) throw new BackupRestoreError(`阅读记录缺少书籍版本：${position.editionKey}`)
+  const historyIds = new Set<string>()
+  const searchIds = new Set<string>()
+  for (const item of snapshot.searchHistory) {
+    if (!isUuid(item.id) || historyIds.has(item.id) || !isUuid(item.searchId) || searchIds.has(item.searchId) || !isIsoDateString(item.createdAt) || !isIsoDateString(item.updatedAt)) throw new BackupRestoreError(`搜索记录数据无效：${item.id}`)
+    historyIds.add(item.id)
+    searchIds.add(item.searchId)
+  }
   if (snapshot.settings.userId !== userId) throw new BackupRestoreError('阅读设置用户不匹配')
 }
 

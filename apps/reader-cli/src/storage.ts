@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { chmod, cp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { BACKUP_CATEGORIES, categoryForPath, createBackupZip, editionKey as backupEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile } from '@legado/reader-backup'
 import { importSources, sourceDefinitionFingerprint } from '@legado/source-core'
@@ -113,6 +113,24 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+async function recoverDataRoot(dataRoot: string): Promise<void> {
+  const parent = dirname(dataRoot)
+  const prefix = `.${basename(dataRoot)}.rollback-`
+  const entries = await readdir(parent, { withFileTypes: true }).catch(() => [])
+  const rollbackPaths = entries.filter((entry) => entry.isDirectory() && entry.name.startsWith(prefix)).map((entry) => join(parent, entry.name))
+  const dataRootExists = await pathExists(dataRoot)
+  if (!dataRootExists && rollbackPaths.length > 0) {
+    const candidates = await Promise.all(rollbackPaths.map(async (path) => ({ path, modifiedAt: (await stat(path)).mtimeMs })))
+    candidates.sort((left, right) => right.modifiedAt - left.modifiedAt)
+    const recovery = candidates[0]
+    if (recovery !== undefined) {
+      await rename(recovery.path, dataRoot)
+      rollbackPaths.splice(rollbackPaths.indexOf(recovery.path), 1)
+    }
+  }
+  for (const path of rollbackPaths) await rm(path, { recursive: true, force: true })
+}
+
 export class ReaderStorage {
   public readonly paths: StoragePaths
   private readonly now: () => Date
@@ -130,6 +148,7 @@ export class ReaderStorage {
 
   public async initialize(): Promise<void> {
     if (this.lockInstance !== undefined) return
+    await recoverDataRoot(this.paths.dataRoot)
     await ensureDirectory(this.paths.dataRoot)
     await ensureDirectory(join(this.paths.dataRoot, 'books'))
     await ensureDirectory(this.paths.cacheRoot)

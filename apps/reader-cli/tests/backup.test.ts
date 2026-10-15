@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, rename, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -54,6 +54,32 @@ test('CLI 导出包含跨端用户文件，导入只覆盖选择的分类', asyn
     await first.close().catch(() => undefined)
     await second.close().catch(() => undefined)
     await third.close().catch(() => undefined)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('CLI 启动时恢复两个目录改名之间中断留下的 rollback 数据目录', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-reader-recovery-'))
+  const paths = { dataRoot: join(root, 'data'), cacheRoot: join(root, 'cache') }
+  const storage = new ReaderStorage({ paths })
+  const bookId = '4f1c6ad2-4ad7-4e0f-8b7d-0033cfb8c4d1'
+  try {
+    await storage.initialize()
+    await storage.upsertBook({ bookId, name: '待恢复的书', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
+    await storage.close()
+    const rollback = join(root, '.data.rollback-crash')
+    await rename(paths.dataRoot, rollback)
+    const recovered = new ReaderStorage({ paths })
+    try {
+      await recovered.initialize()
+      assert.equal((await recovered.getBook(bookId))?.name, '待恢复的书')
+      await assert.rejects(stat(rollback))
+    } finally {
+      await recovered.close().catch(() => undefined)
+    }
+    await assert.doesNotReject(() => readFile(join(paths.dataRoot, 'books', bookId, 'book.json')))
+  } finally {
+    await storage.close().catch(() => undefined)
     await rm(root, { recursive: true, force: true })
   }
 })

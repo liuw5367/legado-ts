@@ -79,6 +79,23 @@ test('书架完整替换会在未选择阅读记录且将产生孤儿时拒绝�
   assert.equal(book.book.name, '备份书')
 })
 
+test('Memory Repository 恢复搜索记录时不会接管其他用户的搜索运行态', async () => {
+  const repository = new MemoryReaderRepository()
+  const otherUser = '00000000-0000-0000-0000-000000000002'
+  const foreignSearch = await repository.createSearch(otherUser, { keyword: '其他用户', sourceId: 'source-other' })
+  const ownSearch = await repository.createSearch(userId, { keyword: '当前用户', sourceId: 'source-own' })
+  const snapshot = await repository.getBackupSnapshot(userId)
+  const history = snapshot.searchHistory[0]
+  assert.ok(history)
+  snapshot.searchHistory = [{ ...history, searchId: foreignSearch.id }]
+  await repository.restoreBackupSnapshot(userId, snapshot, ['search'])
+  const restored = (await repository.getBackupSnapshot(userId)).searchHistory[0]
+  assert.ok(restored)
+  assert.notEqual(restored.searchId, foreignSearch.id)
+  assert.equal((await repository.getSearch(otherUser, foreignSearch.id))?.id, foreignSearch.id)
+  assert.equal((await repository.getSearch(userId, ownSearch.id)), null)
+})
+
 async function saveSource(repository: MemoryReaderRepository, source: NonNullable<Awaited<ReturnType<typeof importSources>>[number]['source']>, fingerprint: string): Promise<void> {
   await repository.saveImportPreview(userId, { previewId: 'backup-source-preview', expiresAt: new Date(Date.now() + 60_000).toISOString(), writableCount: 1, candidates: [{ id: 'backup-source-candidate', sourceId: source.bookSourceUrl, name: source.bookSourceName, fingerprint, normalizedSource: source, rawSource: source, disposition: 'new', reason: '可导入' }] }, 'https://backup.example/source.json')
   await repository.commitImportPreview(userId, 'backup-source-preview', ['backup-source-candidate'])
