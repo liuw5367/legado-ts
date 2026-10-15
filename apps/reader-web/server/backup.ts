@@ -6,8 +6,8 @@ import type { ReaderBackupSnapshot, ReaderRepository } from './db/repository.ts'
 import type { ReaderSettings, StoredBook, StoredBookSourceCandidate, StoredEdition, SearchHistoryItem } from './domain/types.ts'
 
 interface StoredSourceDefinition { sourceId: string; fingerprint: string; rawText: string; deleted?: boolean }
-interface CliBookDocument { bookId: string; name: string; author?: string; intro?: string; coverUrl?: string; activeEditionKey?: string; metadataEditionKey?: string; createdAt: string; updatedAt: string }
-interface CliKnownSource { editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; tocUrl?: string; lastChapter?: string; updateTime?: string; wordCount?: string; kind?: string; searchDurationMs?: number; variable?: string; rawFields: JsonObject; discoveredAt: string; confirmedAt?: string; matchKind: 'selected' | 'title-author' | 'title-only' | 'user-confirmed' }
+interface CliBookDocument { bookId: string; name: string; author?: string; intro?: string; coverUrl?: string; tocUrl?: string; activeEditionKey?: string; metadataEditionKey?: string; createdAt: string; updatedAt: string }
+interface CliKnownSource { editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; tocUrl?: string; lastChapter?: string; updateTime?: string; wordCount?: string; kind?: string; searchDurationMs?: number; variable?: string; rawFields: JsonObject; discoveredAt: string; searchId?: string; confirmedAt?: string; matchKind: 'selected' | 'title-author' | 'title-only' | 'user-confirmed' }
 interface CliReadingPosition { editionKey: string; sourceId: string; bookUrl: string; chapterUrl: string; index: number; title: string; tocRevision?: string; paragraphIndex: number; offset: number; lastReadAt: string }
 interface CliReadingRecord { bookId: string; activeEditionKey?: string; lastReadAt?: string; lastOpenedAt?: string; positions: Record<string, CliReadingPosition>; updatedAt: string }
 interface CliSearchHistoryEntry { id: string; searchId?: string; keyword: string; sourceScope: 'all' | string[]; startedAt: string; completedAt?: string; status?: string; summary: { searched: number; success: number; empty: number; failed: number; capabilityMissing: number; candidates: number }; openedBookIds: string[] }
@@ -94,7 +94,7 @@ function snapshotToFiles(snapshot: ReaderBackupSnapshot): BackupFile[] {
   add('source-state.json', sourceState)
   add('source-check-config.json', {})
   for (const item of snapshot.books) {
-    add(`books/${item.book.id}/book.json`, toCliBook(item.book))
+    add(`books/${item.book.id}/book.json`, toCliBook(item.book, item.editions))
     add(`books/${item.book.id}/sources.json`, [...item.editions.map((edition) => toCliKnownSource(edition, item.book)), ...item.candidates.map((candidate) => toCliCandidate(candidate))])
   }
   return files
@@ -135,8 +135,8 @@ async function parseSnapshot(archive: BackupArchive, userId: string, currentSett
     if (record.activeEditionKey !== undefined && typeof record.activeEditionKey !== 'string') throw new Error(`阅读记录格式无效：${record.bookId}`)
     const positionKeys = new Set(Object.keys(record.positions))
     if (record.activeEditionKey !== undefined && !positionKeys.has(record.activeEditionKey)) throw new Error(`阅读记录当前版本不存在：${record.bookId}`)
-    return Object.values(record.positions).map((position) => {
-      if (!isRecord(position) || typeof position.editionKey !== 'string' || typeof position.sourceId !== 'string' || typeof position.bookUrl !== 'string' || position.editionKey !== sharedEditionKey(position.sourceId, position.bookUrl) || typeof position.chapterUrl !== 'string' || typeof position.index !== 'number' || !Number.isSafeInteger(position.index) || position.index < 0 || typeof position.title !== 'string' || typeof position.paragraphIndex !== 'number' || !Number.isSafeInteger(position.paragraphIndex) || position.paragraphIndex < 0 || typeof position.offset !== 'number' || !Number.isSafeInteger(position.offset) || position.offset < 0 || !isIsoDateString(position.lastReadAt)) throw new Error(`阅读位置格式无效：${record.bookId}`)
+    return Object.entries(record.positions).map(([positionKey, position]) => {
+      if (!isRecord(position) || positionKey !== position.editionKey || typeof position.editionKey !== 'string' || typeof position.sourceId !== 'string' || typeof position.bookUrl !== 'string' || position.editionKey !== sharedEditionKey(position.sourceId, position.bookUrl) || typeof position.chapterUrl !== 'string' || typeof position.index !== 'number' || !Number.isSafeInteger(position.index) || position.index < 0 || typeof position.title !== 'string' || typeof position.paragraphIndex !== 'number' || !Number.isSafeInteger(position.paragraphIndex) || position.paragraphIndex < 0 || typeof position.offset !== 'number' || !Number.isSafeInteger(position.offset) || position.offset < 0 || !isIsoDateString(position.lastReadAt)) throw new Error(`阅读位置格式无效：${record.bookId}`)
     const edition = editions.get(`${record.bookId}:${position.editionKey}`)
     if (edition === undefined) throw new Error(`阅读记录缺少书籍版本：${position.editionKey}`)
     return { userId, bookId: record.bookId, editionKey: position.editionKey, chapterId: chapterIdFor(position.chapterUrl, position.index), chapterUrl: position.chapterUrl, chapterIndex: position.index, title: position.title, ...(position.tocRevision === undefined ? {} : { tocRevision: position.tocRevision }), paragraphIndex: position.paragraphIndex, offset: position.offset, version: 0, lastReadAt: position.lastReadAt }
@@ -158,7 +158,7 @@ function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapsho
   const editionOwners = new Map<string, string>()
   const books = bookPaths.map((file) => {
     const book = readData<CliBookDocument>(archive, file.path, {} as CliBookDocument)
-    if (!isUuid(book.bookId) || file.path.split('/')[1] !== book.bookId || typeof book.name !== 'string' || !isIsoDateString(book.createdAt) || !isIsoDateString(book.updatedAt) || (book.activeEditionKey !== undefined && typeof book.activeEditionKey !== 'string')) throw new Error(`书籍数据无效：${file.path}`)
+    if (!isUuid(book.bookId) || file.path.split('/')[1] !== book.bookId || typeof book.name !== 'string' || !isIsoDateString(book.createdAt) || !isIsoDateString(book.updatedAt) || (book.tocUrl !== undefined && typeof book.tocUrl !== 'string') || (book.activeEditionKey !== undefined && typeof book.activeEditionKey !== 'string') || (book.metadataEditionKey !== undefined && typeof book.metadataEditionKey !== 'string')) throw new Error(`书籍数据无效：${file.path}`)
     if (seenBookIds.has(book.bookId)) throw new Error(`书籍数据重复：${book.bookId}`)
     seenBookIds.add(book.bookId)
     const sourcePath = `books/${book.bookId}/sources.json`
@@ -169,7 +169,7 @@ function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapsho
     const candidates: StoredBookSourceCandidate[] = []
     const seenEditions = new Set<string>()
     for (const item of sources) {
-      if (!isRecord(item) || !isUuid(book.bookId) || typeof item.editionKey !== 'string' || typeof item.sourceId !== 'string' || typeof item.sourceFingerprint !== 'string' || item.sourceFingerprint.length === 0 || typeof item.bookUrl !== 'string' || item.editionKey !== sharedEditionKey(item.sourceId, item.bookUrl) || !isIsoDateString(item.discoveredAt) || (item.confirmedAt !== undefined && !isIsoDateString(item.confirmedAt)) || (item.searchDurationMs !== undefined && (!Number.isSafeInteger(item.searchDurationMs) || item.searchDurationMs < 0)) || !['selected', 'title-author', 'title-only', 'user-confirmed'].includes(item.matchKind)) throw new Error(`书籍书源记录无效：${book.bookId}`)
+      if (!isRecord(item) || !isUuid(book.bookId) || typeof item.editionKey !== 'string' || typeof item.sourceId !== 'string' || typeof item.sourceFingerprint !== 'string' || item.sourceFingerprint.length === 0 || typeof item.bookUrl !== 'string' || item.editionKey !== sharedEditionKey(item.sourceId, item.bookUrl) || !isIsoDateString(item.discoveredAt) || (item.searchId !== undefined && !isUuid(item.searchId)) || (item.confirmedAt !== undefined && !isIsoDateString(item.confirmedAt)) || (item.searchDurationMs !== undefined && (!Number.isSafeInteger(item.searchDurationMs) || item.searchDurationMs < 0)) || !['selected', 'title-author', 'title-only', 'user-confirmed'].includes(item.matchKind)) throw new Error(`书籍书源记录无效：${book.bookId}`)
       if (seenEditions.has(item.editionKey)) throw new Error(`书籍版本重复：${item.editionKey}`)
       const owner = editionOwners.get(item.editionKey)
       if (owner !== undefined && owner !== book.bookId) throw new Error(`书籍版本重复：${item.editionKey}`)
@@ -190,6 +190,12 @@ function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapsho
       })
     }
     if (editions.length === 0) throw new Error(`书籍缺少版本：${book.bookId}`)
+    const metadataEditionKey = book.metadataEditionKey ?? book.activeEditionKey
+    if (metadataEditionKey !== undefined && !editions.some((edition) => edition.editionKey === metadataEditionKey)) throw new Error(`书籍元数据版本不存在：${book.bookId}`)
+    if (book.tocUrl !== undefined && metadataEditionKey !== undefined) {
+      const metadataEdition = editions.find((edition) => edition.editionKey === metadataEditionKey)
+      if (metadataEdition !== undefined && metadataEdition.metadata.tocUrl === undefined) metadataEdition.metadata = { ...metadataEdition.metadata, tocUrl: book.tocUrl }
+    }
     const storedBook: StoredBook = { id: book.bookId, userId, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt }
     if (storedBook.activeEditionKey !== undefined && !editions.some((edition) => edition.editionKey === storedBook.activeEditionKey)) throw new Error(`书籍活动版本不存在：${book.bookId}`)
     return { book: storedBook, editions, candidates }
@@ -217,7 +223,10 @@ function readingRecords(snapshot: ReaderBackupSnapshot): CliReadingRecord[] {
   return [...grouped.values()]
 }
 
-function toCliBook(book: StoredBook): CliBookDocument { return { bookId: book.id, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt } }
+function toCliBook(book: StoredBook, editions: readonly StoredEdition[]): CliBookDocument {
+  const activeEdition = editions.find((edition) => edition.editionKey === book.activeEditionKey)
+  return { bookId: book.id, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(activeEdition?.metadata.tocUrl === undefined ? {} : { tocUrl: activeEdition.metadata.tocUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey, metadataEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt }
+}
 function toCliKnownSource(edition: StoredEdition, book: StoredBook): CliKnownSource {
   const metadata = edition.metadata
   return { editionKey: sharedEditionKey(edition.sourceId, edition.bookUrl), sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, ...(metadata.name === undefined ? { name: book.name } : { name: metadata.name }), ...(metadata.author === undefined ? {} : { author: metadata.author }), ...(metadata.intro === undefined ? {} : { intro: metadata.intro }), ...(metadata.coverUrl === undefined ? {} : { coverUrl: metadata.coverUrl }), ...(metadata.tocUrl === undefined ? {} : { tocUrl: metadata.tocUrl }), ...(metadata.lastChapter === undefined ? {} : { lastChapter: metadata.lastChapter }), ...(metadata.updateTime === undefined ? {} : { updateTime: metadata.updateTime }), ...(metadata.wordCount === undefined ? {} : { wordCount: metadata.wordCount }), ...(metadata.kind === undefined ? {} : { kind: metadata.kind }), ...(metadata.searchDurationMs === undefined ? {} : { searchDurationMs: metadata.searchDurationMs }), ...(edition.variable === undefined ? {} : { variable: edition.variable }), rawFields: metadata.rawFields ?? {}, discoveredAt: book.updatedAt, matchKind: 'selected' }

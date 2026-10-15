@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { editionKey as sharedEditionKey } from '@legado/reader-backup'
+import { editionKey as sharedEditionKey, parseJson, readBackupZip } from '@legado/reader-backup'
 import { importSources, type BookMetadata } from '@legado/source-core'
 import { BackupValidationError, createWebBackup, restoreWebBackup, validateWebBackup } from '../server/backup.ts'
 import { MemoryReaderRepository } from '../server/db/repository.ts'
 
 const userId = '00000000-0000-0000-0000-000000000001'
 const sourceInput = { bookSourceUrl: 'https://backup.example/source', bookSourceName: '备份书源', bookSourceType: 0, searchUrl: 'https://backup.example/search?q={{key}}', ruleSearch: {}, ruleBookInfo: {}, ruleToc: {}, ruleContent: {} }
-const metadata: BookMetadata = { sourceId: sourceInput.bookSourceUrl, bookUrl: 'https://backup.example/book/1', name: '备份书', rawFields: {}, traceRef: 'backup-test', emptyFields: [], fieldErrors: {} }
+const metadata: BookMetadata = { sourceId: sourceInput.bookSourceUrl, bookUrl: 'https://backup.example/book/1', tocUrl: 'https://backup.example/book/1/toc', name: '备份书', rawFields: {}, traceRef: 'backup-test', emptyFields: [], fieldErrors: {} }
 
 test('web 端会把无效 ZIP 判定为可展示的备份校验错误', async () => {
   await assert.rejects(validateWebBackup(new MemoryReaderRepository(), userId, new Uint8Array([1, 2, 3])), (error: unknown) => error instanceof BackupValidationError && error.message.includes('ZIP'))
@@ -27,6 +27,10 @@ test('web 备份可完整恢复书源、书架、阅读、搜索和设置', asyn
   await origin.saveSettings(userId, { theme: 'dark', readingMode: 'paged', fontSize: 22 })
 
   const zip = await createWebBackup(origin, userId)
+  const archive = await readBackupZip(zip)
+  const bookDocument = parseJson<{ data: Record<string, unknown> }>(archive, `books/${book.book.id}/book.json`)
+  assert.equal(bookDocument.data.tocUrl, metadata.tocUrl)
+  assert.equal(bookDocument.data.metadataEditionKey, edition)
   const restored = new MemoryReaderRepository()
   const stale = await restored.createBook(userId, { candidate: { sourceId: 'https://stale.example/source', sourceFingerprint: 'stale-fp', candidate: { ...metadata, sourceId: 'https://stale.example/source', bookUrl: 'https://stale.example/book', name: '旧书' } }, metadata: { ...metadata, sourceId: 'https://stale.example/source', bookUrl: 'https://stale.example/book', name: '旧书' }, editionKey: sharedEditionKey('https://stale.example/source', 'https://stale.example/book'), sourceFingerprint: 'stale-fp' })
   await restoreWebBackup(restored, userId, zip, ['bookshelf', 'reading', 'search', 'sources', 'settings'])

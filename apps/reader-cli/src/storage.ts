@@ -780,7 +780,7 @@ async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<
     const bookId = parts[1]
     if (bookId === undefined || !isUuid(bookId)) throw new Error(`书籍路径无效：${file.path}`)
     if (file.path.endsWith('/book.json')) {
-      if (!isRecord(value) || typeof value.bookId !== 'string' || value.bookId !== bookId || typeof value.name !== 'string' || !isIsoDateString(value.createdAt) || !isIsoDateString(value.updatedAt)) throw new Error(`书籍数据格式无效：${file.path}`)
+      if (!isRecord(value) || typeof value.bookId !== 'string' || value.bookId !== bookId || typeof value.name !== 'string' || (value.tocUrl !== undefined && typeof value.tocUrl !== 'string') || (value.activeEditionKey !== undefined && typeof value.activeEditionKey !== 'string') || (value.metadataEditionKey !== undefined && typeof value.metadataEditionKey !== 'string') || !isIsoDateString(value.createdAt) || !isIsoDateString(value.updatedAt)) throw new Error(`书籍数据格式无效：${file.path}`)
       if (documents.has(bookId)) throw new Error(`书籍数据重复：${bookId}`)
       books.set(bookId, books.get(bookId) ?? new Set())
       if (value.activeEditionKey !== undefined && typeof value.activeEditionKey !== 'string') throw new Error(`书籍数据格式无效：${file.path}`)
@@ -790,7 +790,7 @@ async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<
       if (!Array.isArray(value)) throw new Error(`书籍书源数据格式无效：${file.path}`)
       const editions = books.get(bookId) ?? new Set<string>()
       for (const source of value) {
-        if (!isRecord(source) || typeof source.editionKey !== 'string' || typeof source.sourceId !== 'string' || typeof source.sourceFingerprint !== 'string' || typeof source.bookUrl !== 'string' || source.sourceFingerprint.length === 0 || source.editionKey !== backupEditionKey(source.sourceId, source.bookUrl) || !isIsoDateString(source.discoveredAt)) throw new Error(`书籍版本数据格式无效：${file.path}`)
+        if (!isRecord(source) || typeof source.editionKey !== 'string' || typeof source.sourceId !== 'string' || typeof source.sourceFingerprint !== 'string' || typeof source.bookUrl !== 'string' || source.sourceFingerprint.length === 0 || source.editionKey !== backupEditionKey(source.sourceId, source.bookUrl) || !isIsoDateString(source.discoveredAt) || (source.searchId !== undefined && (typeof source.searchId !== 'string' || !isUuid(source.searchId))) || (source.confirmedAt !== undefined && !isIsoDateString(source.confirmedAt)) || (source.searchDurationMs !== undefined && (!isNonNegativeSafeInteger(source.searchDurationMs))) || typeof source.matchKind !== 'string' || !['selected', 'title-author', 'title-only', 'user-confirmed'].includes(source.matchKind) || (source.rawFields !== undefined && !isRecord(source.rawFields))) throw new Error(`书籍版本数据格式无效：${file.path}`)
         if (editions.has(source.editionKey)) throw new Error(`书籍版本重复：${source.editionKey}`)
         const owner = editionOwners.get(source.editionKey)
         if (owner !== undefined && owner !== bookId) throw new Error(`书籍版本重复：${source.editionKey}`)
@@ -805,6 +805,8 @@ async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<
     if (books.get(bookId)?.size === 0) throw new Error(`书籍缺少版本：${bookId}`)
     const activeEditionKey = activeEditions.get(bookId)
     if (activeEditionKey !== undefined && !books.get(bookId)?.has(activeEditionKey)) throw new Error(`书籍活动版本不存在：${bookId}`)
+    const metadataEditionKey = (unwrapStoredValue(parseJson<unknown>(archive, `books/${bookId}/book.json`)) as Record<string, unknown>).metadataEditionKey
+    if (metadataEditionKey !== undefined && (typeof metadataEditionKey !== 'string' || !books.get(bookId)?.has(metadataEditionKey))) throw new Error(`书籍元数据版本不存在：${bookId}`)
   }
   return books
 }
