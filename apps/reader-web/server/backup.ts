@@ -66,15 +66,15 @@ async function parseSnapshot(archive: BackupArchive, userId: string, currentSett
   const sources: ReaderBackupSnapshot['sources'] = []
   const seenSourceIds = new Set<string>()
   for (const definition of sourceDefinitions) {
-    if (!isRecord(definition) || typeof definition.rawText !== 'string' || definition.rawText.length === 0 || typeof definition.sourceId !== 'string' || typeof definition.fingerprint !== 'string') throw new Error('书源定义无效')
+    if (!isRecord(definition) || typeof definition.rawText !== 'string' || definition.rawText.length === 0 || typeof definition.sourceId !== 'string' || typeof definition.fingerprint !== 'string' || definition.fingerprint.length === 0) throw new Error('书源定义无效')
     if (seenSourceIds.has(definition.sourceId)) throw new Error(`书源定义重复：${definition.sourceId}`)
     seenSourceIds.add(definition.sourceId)
-    const candidates = await importSources({ kind: 'text', text: definition.rawText }, { limits: { maxCandidates: 1, maxBytes: 4 * 1024 * 1024 } })
+    const candidates = await importSources({ kind: 'text', text: definition.rawText }, { limits: { maxCandidates: 1000, maxBytes: 4 * 1024 * 1024 } })
     const candidate = candidates.find((item) => item.source?.bookSourceUrl === definition.sourceId)
-    if (candidate?.source === undefined) throw new Error(`无法解析书源：${definition.sourceId}`)
+    const fingerprint = candidate?.sourceFingerprint ?? (candidate?.source === undefined ? undefined : sourceDefinitionFingerprint(candidate.source))
+    if (candidate?.source === undefined || fingerprint !== definition.fingerprint) throw new Error(`书源定义与 sourceId 或指纹不匹配：${definition.sourceId}`)
     const state = sourceState[definition.sourceId]
     const normalized = { ...candidate.source, ...(state?.enabled === undefined ? {} : { enabled: state.enabled }), ...(state?.enabledExplore === undefined ? {} : { enabledExplore: state.enabledExplore }), ...(state?.customOrder === undefined ? {} : { customOrder: state.customOrder }), ...(state?.weight === undefined ? {} : { weight: state.weight }) }
-    const fingerprint = definition.fingerprint || candidate.sourceFingerprint || sourceDefinitionFingerprint(normalized)
     const group = sourceField(normalized, 'bookSourceGroup')
     sources.push({ source: { sourceId: normalized.bookSourceUrl, name: normalized.bookSourceName, ...(typeof group === 'string' ? { group } : {}), fingerprint, enabled: normalized.enabled !== false, rawSource: definition.rawText, normalizedSource: normalized }, sourceRevision: randomUUID(), ...(definition.deleted === true || state?.deleted === true ? { deleted: true } : {}) })
   }
