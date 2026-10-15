@@ -420,8 +420,29 @@ async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: 
 async function readBackupBody(context: Context<{ Variables: Variables }>): Promise<Uint8Array> {
   const length = Number(context.req.header('Content-Length') ?? '')
   if (Number.isFinite(length) && length > BACKUP_MAX_TOTAL_BYTES) throw new BackupValidationError('备份请求超过大小限制')
-  const bytes = new Uint8Array(await context.req.raw.arrayBuffer())
-  if (bytes.byteLength === 0 || bytes.byteLength > BACKUP_MAX_TOTAL_BYTES) throw new BackupValidationError('备份请求超过大小限制')
+  const body = context.req.raw.body
+  if (body === null) throw new BackupValidationError('备份请求为空')
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      total += next.value.byteLength
+      if (total > BACKUP_MAX_TOTAL_BYTES) throw new BackupValidationError('备份请求超过大小限制')
+      chunks.push(next.value)
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined)
+    throw error
+  } finally {
+    reader.releaseLock()
+  }
+  if (total === 0) throw new BackupValidationError('备份请求为空')
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
   return bytes
 }
 
