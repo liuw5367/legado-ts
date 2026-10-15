@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { importSources, type BookMetadata } from '@legado/source-core'
 import { BackupValidationError, createWebBackup, restoreWebBackup, validateWebBackup } from '../server/backup.ts'
 import { MemoryReaderRepository } from '../server/db/repository.ts'
@@ -18,8 +19,9 @@ test('web 备份可完整恢复书源、书架、阅读、搜索和设置', asyn
   assert.ok(parsed?.source)
   const origin = new MemoryReaderRepository()
   await saveSource(origin, parsed.source, parsed.sourceFingerprint ?? '')
-  const book = await origin.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: parsed.sourceFingerprint ?? '', candidate: metadata }, metadata, editionKey: 'edition-1', sourceFingerprint: parsed.sourceFingerprint ?? '' })
-  await origin.savePosition(userId, { userId, bookId: book.book.id, editionKey: 'edition-1', chapterId: 'chapter-1', chapterUrl: 'https://backup.example/book/1/1', chapterIndex: 0, title: '第一章', paragraphIndex: 2, offset: 3, version: 1, lastReadAt: '2026-10-15T00:00:00.000Z' })
+  const edition = sharedEditionKey(metadata.sourceId, metadata.bookUrl)
+  const book = await origin.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: parsed.sourceFingerprint ?? '', candidate: metadata }, metadata, editionKey: edition, sourceFingerprint: parsed.sourceFingerprint ?? '' })
+  await origin.savePosition(userId, { userId, bookId: book.book.id, editionKey: edition, chapterId: 'chapter-1', chapterUrl: 'https://backup.example/book/1/1', chapterIndex: 0, title: '第一章', paragraphIndex: 2, offset: 3, version: 1, lastReadAt: '2026-10-15T00:00:00.000Z' })
   const search = await origin.createSearch(userId, { keyword: '备份书', sourceId: metadata.sourceId })
   await origin.updateSearch(userId, search.id, { status: 'success', candidates: [] })
   await origin.saveSettings(userId, { theme: 'dark', readingMode: 'paged', fontSize: 22 })
@@ -38,14 +40,16 @@ test('web 备份可完整恢复书源、书架、阅读、搜索和设置', asyn
 
 test('只恢复设置和搜索时不会改写书架或书籍数据', async () => {
   const source = new MemoryReaderRepository()
-  const book = await source.createBook(userId, { candidate: { sourceId: 'source-a', sourceFingerprint: 'fp-a', candidate: { ...metadata, sourceId: 'source-a' } }, metadata: { ...metadata, sourceId: 'source-a' }, editionKey: 'edition-a', sourceFingerprint: 'fp-a' })
+  const localEdition = sharedEditionKey('source-a', metadata.bookUrl)
+  const book = await source.createBook(userId, { candidate: { sourceId: 'source-a', sourceFingerprint: 'fp-a', candidate: { ...metadata, sourceId: 'source-a' } }, metadata: { ...metadata, sourceId: 'source-a' }, editionKey: localEdition, sourceFingerprint: 'fp-a' })
   await source.saveSettings(userId, { theme: 'dark' })
   const search = await source.createSearch(userId, { keyword: '导出搜索', sourceId: 'source-a' })
   await source.updateSearch(userId, search.id, { status: 'success', candidates: [] })
   const zip = await createWebBackup(source, userId)
 
   const target = new MemoryReaderRepository()
-  const localBook = await target.createBook(userId, { candidate: { sourceId: 'source-local', sourceFingerprint: 'fp-local', candidate: { ...metadata, sourceId: 'source-local', name: '本地书' } }, metadata: { ...metadata, sourceId: 'source-local', name: '本地书' }, editionKey: 'edition-local', sourceFingerprint: 'fp-local' })
+  const localTargetEdition = sharedEditionKey('source-local', metadata.bookUrl)
+  const localBook = await target.createBook(userId, { candidate: { sourceId: 'source-local', sourceFingerprint: 'fp-local', candidate: { ...metadata, sourceId: 'source-local', name: '本地书' } }, metadata: { ...metadata, sourceId: 'source-local', name: '本地书' }, editionKey: localTargetEdition, sourceFingerprint: 'fp-local' })
   const before = await target.getBackupSnapshot(userId)
   await restoreWebBackup(target, userId, zip, ['search', 'settings'])
   const after = await target.getBackupSnapshot(userId)

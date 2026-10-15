@@ -1,6 +1,7 @@
 import { bookIdentityKey, normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
 import { createHash, randomUUID } from 'node:crypto'
+import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '@legado/source-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, WorkflowStatus } from '@legado/source-core'
 import { NodeCookieStore, createNodeSourceSession } from '@legado/source-node'
@@ -167,7 +168,7 @@ async function createBookFromSearch(repository: ReaderRepository, userId: string
     if (metadata === undefined) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '没有读取到书籍详情'))
     if (targetBook !== null && !matchesBookTarget(targetBook, metadata)) throw new ReaderRuntimeError('invalid-input', '来源详情与目标书籍不匹配')
     const candidate: BookCreationInput['candidate'] = stored
-    const editionKey = digest(`${stored.sourceId}\u0000${metadata.bookUrl}\u0000${stored.sourceFingerprint}`)
+    const editionKey = sharedEditionKey(stored.sourceId, metadata.bookUrl)
     return repository.createBook(userId, { candidate, metadata: { ...metadata, ...(stored.searchDurationMs === undefined ? {} : { searchDurationMs: stored.searchDurationMs }) }, editionKey, sourceFingerprint: stored.sourceFingerprint, addToBookshelf, activateEdition, ...(bookId === undefined ? {} : { bookId }) })
   })
   // 重新读取已提交结果，与批次结束后的书架读取互补，覆盖两种完成顺序。
@@ -240,7 +241,7 @@ async function openBookSource(repository: ReaderRepository, userId: string, book
     const metadata = result.value?.items[0]
     if (metadata === undefined) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '没有读取到书籍详情'))
     if (!sameBookIdentity(book.name, book.author, metadata.name, metadata.author)) throw new ReaderRuntimeError('source-failed', '来源详情与书籍不匹配，请重新搜索')
-    const editionKey = digest(`${cached.sourceId}\u0000${metadata.bookUrl}\u0000${cached.sourceFingerprint}`)
+    const editionKey = sharedEditionKey(cached.sourceId, metadata.bookUrl)
     return repository.saveEdition(userId, bookId, { candidate: cached.candidate, metadata: { ...metadata, ...(cached.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: cached.candidate.searchDurationMs }) }, editionKey, sourceFingerprint: cached.sourceFingerprint })
   })
 }
