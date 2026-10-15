@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",
+    "@legado/reader-backup": "workspace:*",
     "@legado/source-core": "workspace:*",
     "@legado/source-node": "workspace:*",
     "@supabase/supabase-js": "^2.102.0",

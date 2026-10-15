@@ -10,6 +10,7 @@
     "types": ["node", "react", "react-dom"],
     "paths": {
       "@/*": ["./src/*"],
+      "@legado/reader-backup": ["../../packages/reader-backup/src/index.ts"],
       "@legado/source-core": ["../../packages/source-core/src/index.ts"],
       "@legado/source-node": ["../../packages/source-node/src/index.ts"]
     }

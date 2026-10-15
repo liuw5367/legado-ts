@@ -19,6 +19,7 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
+      "@legado/reader-backup": ["packages/reader-backup/src/index.ts"],
       "@legado/source-core": ["packages/source-core/src/index.ts"]
     }
   },

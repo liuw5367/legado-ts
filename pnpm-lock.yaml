@@ -75,6 +75,9 @@ importers:
 
   apps/reader-cli:
     dependencies:
+      '@legado/reader-backup':
+        specifier: workspace:*
+        version: link:../../packages/reader-backup
       '@legado/source-core':
         specifier: workspace:*
         version: link:../../packages/source-core
@@ -106,6 +109,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.0
         version: 1.19.17(hono@4.13.13)
+      '@legado/reader-backup':
+        specifier: workspace:*
+        version: link:../../packages/reader-backup
       '@legado/source-core':
         specifier: workspace:*
         version: link:../../packages/source-core
@@ -164,6 +170,8 @@ importers:
       tsx:
         specifier: ^4.19.0
         version: 4.23.15
+
+  packages/reader-backup: {}
 
   packages/source-core: {}
 
