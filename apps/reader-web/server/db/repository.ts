@@ -2,7 +2,7 @@ import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
-import type { BackupCategory } from '@legado/reader-backup'
+import { editionKey as backupEditionKey, type BackupCategory } from '@legado/reader-backup'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser } from './client.ts'
 import { bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
@@ -501,32 +501,46 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async restoreBackupSnapshot(userId: string, snapshot: ReaderBackupSnapshot, categories: readonly BackupCategory[]): Promise<void> {
     const selected = new Set(categories)
+    assertBackupSnapshotClosed(snapshot, userId)
+    if (selected.size === 0) throw new BackupRestoreError('至少选择一个恢复分类')
     await withUser(userId, async (transaction) => {
       const bookIdMap = new Map<string, string>()
-      if (selected.has('bookshelf') || selected.has('reading')) {
-        const currentBooks = await transaction.select({ id: books.id }).from(books).where(eq(books.userId, userId))
-        const existingBookIds = new Set(currentBooks.map((row) => row.id))
+      const currentBookRows = selected.has('bookshelf') || selected.has('reading') ? await transaction.select({ id: books.id, userId: books.userId }).from(books).where(eq(books.userId, userId)) : []
+      const existingBookIds = new Set(currentBookRows.map((row) => row.id))
+      if (selected.has('bookshelf') && !selected.has('reading')) {
+        const currentPositions = await transaction.select({ bookId: readingRecords.bookId, editionKey: readingRecords.editionKey }).from(readingRecords).where(eq(readingRecords.userId, userId))
+        const incomingEditions = new Set(snapshot.books.flatMap((item) => item.editions.map((edition) => `${item.book.id}\u0000${edition.editionKey}`)))
+        const missing = currentPositions.filter((position) => !incomingEditions.has(`${position.bookId}\u0000${position.editionKey}`))
+        if (missing.length > 0) throw new BackupRestoreError(`未选择阅读记录，但书架替换会使现有阅读记录失去依赖：${missing[0]?.bookId ?? ''}`)
+      }
+      if (selected.has('bookshelf')) {
+        const incomingIds = snapshot.books.map((item) => item.book.id)
+        const occupiedRows = incomingIds.length === 0 ? [] : await transaction.select({ id: books.id, userId: books.userId }).from(books).where(inArray(books.id, incomingIds))
+        const occupiedById = new Map(occupiedRows.map((row) => [row.id, row.userId]))
+        for (const item of snapshot.books) bookIdMap.set(item.book.id, occupiedById.get(item.book.id) === undefined || occupiedById.get(item.book.id) === userId ? item.book.id : randomUUID())
+      } else if (selected.has('reading')) {
+        for (const item of snapshot.books) if (existingBookIds.has(item.book.id)) bookIdMap.set(item.book.id, item.book.id)
+      }
+      if (selected.has('bookshelf')) {
+        if (selected.has('reading')) await transaction.delete(readingRecords).where(eq(readingRecords.userId, userId))
+        await transaction.delete(chapterContents).where(eq(chapterContents.userId, userId))
+        await transaction.delete(tocSnapshots).where(eq(tocSnapshots.userId, userId))
+        await transaction.delete(bookSourceCandidates).where(eq(bookSourceCandidates.userId, userId))
+        await transaction.delete(bookEditions).where(eq(bookEditions.userId, userId))
+        await transaction.delete(bookshelf).where(eq(bookshelf.userId, userId))
+        await transaction.delete(books).where(eq(books.userId, userId))
         for (const item of snapshot.books) {
-          if (selected.has('bookshelf')) {
-            const targetBookId = existingBookIds.has(item.book.id) ? item.book.id : randomUUID()
-            bookIdMap.set(item.book.id, targetBookId)
-            await transaction.insert(books).values({ id: targetBookId, userId, name: item.book.name, ...(item.book.author === undefined ? {} : { author: item.book.author }), ...(item.book.intro === undefined ? {} : { intro: item.book.intro }), ...(item.book.coverUrl === undefined ? {} : { coverUrl: item.book.coverUrl }), ...(item.book.activeEditionKey === undefined ? {} : { activeEditionKey: item.book.activeEditionKey }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) }).onConflictDoUpdate({ target: books.id, set: { name: item.book.name, author: item.book.author ?? null, intro: item.book.intro ?? null, coverUrl: item.book.coverUrl ?? null, activeEditionKey: item.book.activeEditionKey ?? null, updatedAt: new Date(item.book.updatedAt) } })
-            for (const edition of item.editions) {
-              await transaction.insert(bookEditions).values({ id: randomUUID(), userId, bookId: targetBookId, editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata: edition.metadata, ...(edition.variable === undefined ? {} : { variable: edition.variable }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) }).onConflictDoUpdate({ target: [bookEditions.userId, bookEditions.editionKey], set: { bookId: targetBookId, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata: edition.metadata, variable: edition.variable ?? null, updatedAt: new Date(item.book.updatedAt) } })
-            }
-            for (const candidate of item.candidates) {
-              await transaction.insert(bookSourceCandidates).values({ id: randomUUID(), userId, bookId: targetBookId, sourceId: candidate.sourceId, sourceFingerprint: candidate.sourceFingerprint, bookUrl: candidate.bookUrl, candidate: candidate.candidate, updatedAt: new Date(candidate.updatedAt) }).onConflictDoUpdate({ target: [bookSourceCandidates.userId, bookSourceCandidates.bookId, bookSourceCandidates.sourceId, bookSourceCandidates.sourceFingerprint, bookSourceCandidates.bookUrl], set: { candidate: candidate.candidate, updatedAt: new Date(candidate.updatedAt) } })
-            }
-          } else if (existingBookIds.has(item.book.id)) {
-            bookIdMap.set(item.book.id, item.book.id)
-          }
+          const targetBookId = bookIdMap.get(item.book.id)
+          if (targetBookId === undefined) throw new BackupRestoreError(`书籍映射失败：${item.book.id}`)
+          await transaction.insert(books).values({ id: targetBookId, userId, name: item.book.name, ...(item.book.author === undefined ? {} : { author: item.book.author }), ...(item.book.intro === undefined ? {} : { intro: item.book.intro }), ...(item.book.coverUrl === undefined ? {} : { coverUrl: item.book.coverUrl }), ...(item.book.activeEditionKey === undefined ? {} : { activeEditionKey: item.book.activeEditionKey }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
+          for (const edition of item.editions) await transaction.insert(bookEditions).values({ id: randomUUID(), userId, bookId: targetBookId, editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata: edition.metadata, ...(edition.variable === undefined ? {} : { variable: edition.variable }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
+          for (const candidate of item.candidates) await transaction.insert(bookSourceCandidates).values({ id: randomUUID(), userId, bookId: targetBookId, sourceId: candidate.sourceId, sourceFingerprint: candidate.sourceFingerprint, bookUrl: candidate.bookUrl, candidate: candidate.candidate, updatedAt: new Date(candidate.updatedAt) })
         }
       }
       if (selected.has('bookshelf')) {
-        await transaction.delete(bookshelf).where(eq(bookshelf.userId, userId))
         for (const item of snapshot.bookshelf) {
           const bookId = bookIdMap.get(item.bookId)
-          if (bookId === undefined) continue
+          if (bookId === undefined) throw new BackupRestoreError(`书架缺少书籍：${item.bookId}`)
           await transaction.insert(bookshelf).values({ userId, bookId, addedAt: new Date(item.addedAt) }).onConflictDoNothing({ target: [bookshelf.userId, bookshelf.bookId] })
         }
       }
@@ -539,7 +553,7 @@ export class PostgresReaderRepository implements ReaderRepository {
           const unavailable = [...new Set(snapshot.positions.map((position) => `${bookIdMap.get(position.bookId)}\u0000${position.editionKey}`))].filter((key) => !available.has(key))
           if (unavailable.length > 0) throw new BackupRestoreError('阅读记录依赖的书籍版本不存在，请同时选择书架')
         }
-        await transaction.delete(readingRecords).where(eq(readingRecords.userId, userId))
+        if (!selected.has('bookshelf')) await transaction.delete(readingRecords).where(eq(readingRecords.userId, userId))
         for (const position of snapshot.positions) {
           const bookId = bookIdMap.get(position.bookId)
           if (bookId === undefined) continue
@@ -554,6 +568,7 @@ export class PostgresReaderRepository implements ReaderRepository {
       }
       if (selected.has('sources')) {
         await transaction.delete(userSources).where(eq(userSources.userId, userId))
+        await transaction.delete(sourceRuntimeState).where(eq(sourceRuntimeState.userId, userId))
         for (const item of snapshot.sources) {
           const normalized = { ...item.source.normalizedSource, enabled: item.source.enabled }
           await transaction.insert(userSources).values({ userId, sourceId: item.source.sourceId, fingerprint: item.source.fingerprint, rawSource: item.source.rawSource, normalizedSource: normalized, enabled: item.source.enabled, customOrder: readInteger((normalized as Record<string, unknown>).customOrder, 0), deleted: item.deleted === true, revision: item.sourceRevision || randomUUID(), updatedAt: new Date() })
@@ -863,41 +878,90 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
   public async restoreBackupSnapshot(userId: string, snapshot: ReaderBackupSnapshot, categories: readonly BackupCategory[]): Promise<void> {
     const selected = new Set(categories)
+    if (selected.size === 0) throw new BackupRestoreError('至少选择一个恢复分类')
+    assertBackupSnapshotClosed(snapshot, userId)
     const bookIdMap = new Map<string, string>()
-    if (selected.has('bookshelf')) {
-      for (const item of snapshot.books) {
-        const existing = [...this.books.values()].find((value) => value.book.userId === userId && value.book.id === item.book.id)
-        const bookId = existing?.book.id ?? item.book.id
-        bookIdMap.set(item.book.id, bookId)
-        for (const edition of item.editions) this.books.set(`${userId}:${edition.editionKey}`, { book: { ...item.book, id: bookId, userId }, edition: { ...edition, bookId, userId } })
-        for (const candidate of item.candidates) this.sourceCandidates.set(`${userId}:${bookId}:${candidate.sourceId}:${candidate.sourceFingerprint}:${candidate.bookUrl}`, { ...candidate, userId, bookId })
-      }
-    } else if (selected.has('reading')) {
-      for (const item of snapshot.books) {
-        if ([...this.books.values()].some((value) => value.book.userId === userId && value.book.id === item.book.id)) bookIdMap.set(item.book.id, item.book.id)
-      }
+    const currentBookIds = new Set([...this.books.values()].filter((value) => value.book.userId === userId).map((value) => value.book.id))
+    const incomingEditions = new Set(snapshot.books.flatMap((item) => item.editions.map((edition) => `${item.book.id}\u0000${edition.editionKey}`)))
+    if (selected.has('bookshelf') && !selected.has('reading')) {
+      const missing = [...this.positions.values()].filter((position) => position.userId === userId && !incomingEditions.has(`${position.bookId}\u0000${position.editionKey}`))
+      if (missing.length > 0) throw new BackupRestoreError(`未选择阅读记录，但书架替换会使现有阅读记录失去依赖：${missing[0]?.bookId ?? ''}`)
+    }
+    if (selected.has('bookshelf')) for (const item of snapshot.books) bookIdMap.set(item.book.id, currentBookIds.has(item.book.id) ? item.book.id : item.book.id)
+    else if (selected.has('reading')) for (const item of snapshot.books) if (currentBookIds.has(item.book.id)) bookIdMap.set(item.book.id, item.book.id)
+    if (selected.has('reading')) {
       const missingBooks = [...new Set(snapshot.positions.map((position) => position.bookId))].filter((bookId) => !bookIdMap.has(bookId))
       if (missingBooks.length > 0) throw new BackupRestoreError(`阅读记录依赖的书籍不存在，请同时选择书架：${missingBooks.join('、')}`)
-      const missingEditions = [...new Set(snapshot.positions.filter((position) => bookIdMap.has(position.bookId)).map((position) => `${bookIdMap.get(position.bookId)}\u0000${position.editionKey}`))].filter((key) => ![...this.books.values()].some((value) => value.book.userId === userId && `${value.book.id}\u0000${value.edition.editionKey}` === key))
-      if (missingEditions.length > 0) throw new BackupRestoreError('阅读记录依赖的书籍版本不存在，请同时选择书架')
+      if (!selected.has('bookshelf')) {
+        const available = new Set([...this.books.values()].filter((value) => value.book.userId === userId).map((value) => `${value.book.id}\u0000${value.edition.editionKey}`))
+        const missingEditions = [...new Set(snapshot.positions.map((position) => `${position.bookId}\u0000${position.editionKey}`))].filter((key) => !available.has(key))
+        if (missingEditions.length > 0) throw new BackupRestoreError('阅读记录依赖的书籍版本不存在，请同时选择书架')
+      }
     }
+    const nextBooks = new Map(this.books)
+    const nextCandidates = new Map(this.sourceCandidates)
+    const nextShelf = new Map(this.shelf)
+    const nextPositions = new Map(this.positions)
+    const nextTocs = new Map(this.tocs)
+    const nextContents = new Map(this.contents)
+    const nextHistory = new Map(this.history)
+    const nextSearches = new Map(this.searches)
+    const nextSources = new Map(this.userSourceMap)
+    const nextSettings = new Map(this.settings)
+    const nextRuntimeStates = new Map(this.runtimeStates)
     if (selected.has('bookshelf')) {
-      for (const key of [...this.shelf.keys()]) if (key.startsWith(`${userId}:`)) this.shelf.delete(key)
-      for (const item of snapshot.bookshelf) { const bookId = bookIdMap.get(item.bookId); if (bookId !== undefined) this.shelf.set(`${userId}:${bookId}`, item.addedAt) }
+      for (const [key, value] of nextBooks) if (value.book.userId === userId) nextBooks.delete(key)
+      for (const [key, value] of nextCandidates) if (value.userId === userId) nextCandidates.delete(key)
+      for (const [key] of nextTocs) if (key.startsWith(`${userId}:`)) nextTocs.delete(key)
+      for (const [key] of nextContents) if (key.startsWith(`${userId}:`)) nextContents.delete(key)
+      for (const [key] of nextShelf) if (key.startsWith(`${userId}:`)) nextShelf.delete(key)
+      for (const item of snapshot.books) {
+        const bookId = bookIdMap.get(item.book.id)
+        if (bookId === undefined) throw new BackupRestoreError(`书籍映射失败：${item.book.id}`)
+        for (const edition of item.editions) nextBooks.set(`${userId}:${edition.editionKey}`, { book: { ...item.book, id: bookId, userId }, edition: { ...edition, bookId, userId } })
+        for (const candidate of item.candidates) nextCandidates.set(`${userId}:${bookId}:${candidate.sourceId}:${candidate.sourceFingerprint}:${candidate.bookUrl}`, { ...candidate, userId, bookId })
+      }
+    }
+    if (selected.has('bookshelf')) for (const item of snapshot.bookshelf) {
+      const bookId = bookIdMap.get(item.bookId)
+      if (bookId === undefined) throw new BackupRestoreError(`书架缺少书籍：${item.bookId}`)
+      nextShelf.set(`${userId}:${bookId}`, item.addedAt)
     }
     if (selected.has('reading')) {
-      for (const key of [...this.positions.keys()]) if (key.startsWith(`${userId}:`)) this.positions.delete(key)
-      for (const position of snapshot.positions) { const bookId = bookIdMap.get(position.bookId); if (bookId !== undefined) this.positions.set(`${userId}:${bookId}:${position.editionKey}`, { ...position, userId, bookId }) }
+      for (const [key, value] of nextPositions) if (value.userId === userId) nextPositions.delete(key)
+      for (const position of snapshot.positions) {
+        const bookId = bookIdMap.get(position.bookId)
+        if (bookId === undefined) throw new BackupRestoreError(`阅读记录缺少书籍：${position.bookId}`)
+        nextPositions.set(`${userId}:${bookId}:${position.editionKey}`, { ...position, userId, bookId })
+      }
     }
     if (selected.has('search')) {
-      for (const [key, item] of this.history) if (this.searches.get(item.searchId)?.userId === userId) this.history.delete(key)
-      for (const item of snapshot.searchHistory) { this.history.set(`${userId}:${item.searchId}`, { ...item }); if (!this.searches.has(item.searchId)) this.searches.set(item.searchId, { id: item.searchId, userId, keyword: item.keyword, sourceId: item.sourceIds[0] ?? '', sourceIds: item.sourceIds, status: item.status as SearchRunState['status'], candidates: [], sourceStates: [], progress: { completed: 0, total: item.sourceIds.length }, version: 0, cancelled: false, createdAt: item.createdAt, updatedAt: item.updatedAt }) }
+      for (const [key, item] of nextHistory) if (key.startsWith(`${userId}:`) || this.searches.get(item.searchId)?.userId === userId) nextHistory.delete(key)
+      for (const item of snapshot.searchHistory) {
+        nextHistory.set(`${userId}:${item.searchId}`, { ...item })
+        if (!nextSearches.has(item.searchId)) nextSearches.set(item.searchId, { id: item.searchId, userId, keyword: item.keyword, sourceId: item.sourceIds[0] ?? '', sourceIds: item.sourceIds, status: item.status as SearchRunState['status'], candidates: [], sourceStates: [], progress: { completed: 0, total: item.sourceIds.length }, version: 0, cancelled: false, createdAt: item.createdAt, updatedAt: item.updatedAt })
+      }
     }
     if (selected.has('sources')) {
-      for (const key of [...this.userSourceMap.keys()]) if (key.startsWith(`${userId}:`)) this.userSourceMap.delete(key)
-      for (const item of snapshot.sources) this.userSourceMap.set(`${userId}:${item.source.sourceId}`, { source: item.source, deleted: item.deleted === true, revision: item.sourceRevision || randomUUID() })
+      for (const key of [...nextSources.keys()]) if (key.startsWith(`${userId}:`)) nextSources.delete(key)
+      for (const item of snapshot.sources) nextSources.set(`${userId}:${item.source.sourceId}`, { source: item.source, deleted: item.deleted === true, revision: item.sourceRevision || randomUUID() })
+      for (const [key] of nextRuntimeStates) {
+        const identity = JSON.parse(key) as unknown[]
+        if (identity[0] === userId) nextRuntimeStates.delete(key)
+      }
     }
-    if (selected.has('settings')) this.settings.set(userId, { ...snapshot.settings })
+    if (selected.has('settings')) nextSettings.set(userId, { ...snapshot.settings })
+    this.books.clear(); for (const [key, value] of nextBooks) this.books.set(key, value)
+    this.sourceCandidates.clear(); for (const [key, value] of nextCandidates) this.sourceCandidates.set(key, value)
+    this.shelf.clear(); for (const [key, value] of nextShelf) this.shelf.set(key, value)
+    this.positions.clear(); for (const [key, value] of nextPositions) this.positions.set(key, value)
+    this.tocs.clear(); for (const [key, value] of nextTocs) this.tocs.set(key, value)
+    this.contents.clear(); for (const [key, value] of nextContents) this.contents.set(key, value)
+    this.searches.clear(); for (const [key, value] of nextSearches) this.searches.set(key, value)
+    this.history.clear(); for (const [key, value] of nextHistory) this.history.set(key, value)
+    this.userSourceMap.clear(); for (const [key, value] of nextSources) this.userSourceMap.set(key, value)
+    this.settings.clear(); for (const [key, value] of nextSettings) this.settings.set(key, value)
+    this.runtimeStates.clear(); for (const [key, value] of nextRuntimeStates) this.runtimeStates.set(key, value)
   }
   public async deleteSearchHistory(userId: string, historyId: string): Promise<boolean> { const item = [...this.history.entries()].find(([, value]) => value.id === historyId && this.searches.get(value.searchId)?.userId === userId); if (item === undefined) return false; for (const [key, value] of this.history) if (this.searches.get(value.searchId)?.userId === userId && normalizeIdentity(value.keyword) === normalizeIdentity(item[1].keyword)) this.history.delete(key); return true }
   public async listBooks(userId: string): Promise<Array<{ book: StoredBook; edition: StoredEdition }>> { return [...this.books.values()].filter((item) => item.book.userId === userId && item.book.activeEditionKey === item.edition.editionKey).sort((a, b) => b.book.updatedAt.localeCompare(a.book.updatedAt)) }
@@ -942,6 +1006,31 @@ function searchSummary(status: string, count: number): string { if (status === '
 function toToc(row: TocSnapshotRow): StoredToc { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceFingerprint: row.sourceFingerprint, revision: row.revision, chapters: row.chapters, bookPatch: row.bookPatch, ...(row.bookAfter === null || row.bookAfter === undefined ? {} : { bookAfter: row.bookAfter }), updatedAt: row.updatedAt.toISOString() } }
 function toContent(row: ChapterContentRow): StoredContent { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, chapterId: row.chapterId, tocRevision: row.tocRevision, sourceFingerprint: row.sourceFingerprint, content: row.content, updatedAt: row.updatedAt.toISOString() } }
 function toPosition(row: typeof readingRecords.$inferSelect): StoredPosition { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, chapterId: row.chapterId, chapterUrl: row.chapterUrl, chapterIndex: row.chapterIndex, title: row.title, ...(row.tocRevision === null ? {} : { tocRevision: row.tocRevision }), paragraphIndex: row.paragraphIndex, offset: row.offset, version: row.version, lastReadAt: row.lastReadAt.toISOString() } }
+
+function assertBackupSnapshotClosed(snapshot: ReaderBackupSnapshot, userId: string): void {
+  const sourceIds = new Set<string>()
+  for (const item of snapshot.sources) {
+    if (item.source.sourceId.length === 0 || sourceIds.has(item.source.sourceId)) throw new BackupRestoreError(`书源定义重复：${item.source.sourceId}`)
+    sourceIds.add(item.source.sourceId)
+  }
+  const bookIds = new Set<string>()
+  const editionOwners = new Map<string, string>()
+  for (const item of snapshot.books) {
+    if (item.book.userId !== userId || bookIds.has(item.book.id) || item.editions.length === 0) throw new BackupRestoreError(`书籍数据无效：${item.book.id}`)
+    bookIds.add(item.book.id)
+    for (const edition of item.editions) {
+      if (edition.userId !== userId || edition.bookId !== item.book.id || edition.editionKey !== backupEditionKey(edition.sourceId, edition.bookUrl)) throw new BackupRestoreError(`书籍版本数据无效：${item.book.id}`)
+      const owner = editionOwners.get(edition.editionKey)
+      if (owner !== undefined && owner !== item.book.id) throw new BackupRestoreError(`书籍版本重复：${edition.editionKey}`)
+      editionOwners.set(edition.editionKey, item.book.id)
+    }
+    if (item.book.activeEditionKey !== undefined && !item.editions.some((edition) => edition.editionKey === item.book.activeEditionKey)) throw new BackupRestoreError(`书籍活动版本不存在：${item.book.id}`)
+    for (const candidate of item.candidates) if (candidate.userId !== userId || candidate.bookId !== item.book.id || candidate.candidate.sourceId !== candidate.sourceId || candidate.candidate.candidate.bookUrl !== candidate.bookUrl) throw new BackupRestoreError(`书籍候选数据无效：${item.book.id}`)
+  }
+  for (const item of snapshot.bookshelf) if (!bookIds.has(item.bookId)) throw new BackupRestoreError(`书架缺少书籍：${item.bookId}`)
+  for (const position of snapshot.positions) if (position.userId !== userId || !editionOwners.has(position.editionKey) || !snapshot.books.some((item) => item.book.id === position.bookId && item.editions.some((edition) => edition.editionKey === position.editionKey))) throw new BackupRestoreError(`阅读记录缺少书籍版本：${position.editionKey}`)
+  if (snapshot.settings.userId !== userId) throw new BackupRestoreError('阅读设置用户不匹配')
+}
 
 export function createRepository(): ReaderRepository { return new PostgresReaderRepository() }
 

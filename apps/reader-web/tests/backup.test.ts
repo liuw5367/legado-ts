@@ -28,6 +28,7 @@ test('web 备份可完整恢复书源、书架、阅读、搜索和设置', asyn
 
   const zip = await createWebBackup(origin, userId)
   const restored = new MemoryReaderRepository()
+  const stale = await restored.createBook(userId, { candidate: { sourceId: 'https://stale.example/source', sourceFingerprint: 'stale-fp', candidate: { ...metadata, sourceId: 'https://stale.example/source', bookUrl: 'https://stale.example/book', name: '旧书' } }, metadata: { ...metadata, sourceId: 'https://stale.example/source', bookUrl: 'https://stale.example/book', name: '旧书' }, editionKey: sharedEditionKey('https://stale.example/source', 'https://stale.example/book'), sourceFingerprint: 'stale-fp' })
   await restoreWebBackup(restored, userId, zip, ['bookshelf', 'reading', 'search', 'sources', 'settings'])
   const snapshot = await restored.getBackupSnapshot(userId)
   assert.equal(snapshot.sources.length, 1)
@@ -36,6 +37,7 @@ test('web 备份可完整恢复书源、书架、阅读、搜索和设置', asyn
   assert.equal(snapshot.positions[0]?.offset, 3)
   assert.equal(snapshot.searchHistory[0]?.keyword, '备份书')
   assert.equal(snapshot.settings.theme, 'dark')
+  assert.equal(snapshot.books.some((item) => item.book.id === stale.book.id), false)
 })
 
 test('只恢复设置和搜索时不会改写书架或书籍数据', async () => {
@@ -59,6 +61,21 @@ test('只恢复设置和搜索时不会改写书架或书籍数据', async () =>
   assert.equal(after.books[0]?.book.id, localBook.book.id)
   assert.equal(after.books[0]?.book.name, '本地书')
   assert.equal(after.bookshelf[0]?.bookId, localBook.book.id)
+  assert.equal(book.book.name, '备份书')
+})
+
+test('书架完整替换会在未选择阅读记录且将产生孤儿时拒绝恢复', async () => {
+  const source = new MemoryReaderRepository()
+  const edition = sharedEditionKey('source-a', metadata.bookUrl)
+  const book = await source.createBook(userId, { candidate: { sourceId: 'source-a', sourceFingerprint: 'fp-a', candidate: { ...metadata, sourceId: 'source-a' } }, metadata: { ...metadata, sourceId: 'source-a' }, editionKey: edition, sourceFingerprint: 'fp-a' })
+  const zip = await createWebBackup(source, userId)
+  const target = new MemoryReaderRepository()
+  const localEdition = sharedEditionKey('source-local', metadata.bookUrl)
+  const local = await target.createBook(userId, { candidate: { sourceId: 'source-local', sourceFingerprint: 'fp-local', candidate: { ...metadata, sourceId: 'source-local', name: '本地书' } }, metadata: { ...metadata, sourceId: 'source-local', name: '本地书' }, editionKey: localEdition, sourceFingerprint: 'fp-local' })
+  await target.savePosition(userId, { userId, bookId: local.book.id, editionKey: localEdition, chapterId: 'local-chapter', chapterUrl: `${metadata.bookUrl}/local`, chapterIndex: 0, title: '本地章节', paragraphIndex: 0, offset: 0, version: 0 })
+  await assert.rejects(restoreWebBackup(target, userId, zip, ['bookshelf']), /孤儿|依赖/u)
+  assert.equal((await target.getBook(userId, local.book.id))?.name, '本地书')
+  assert.equal((await target.getPosition(userId, local.book.id, localEdition))?.chapterId, 'local-chapter')
   assert.equal(book.book.name, '备份书')
 })
 
