@@ -11,6 +11,12 @@ test('参数遵循命令行优先于环境变量', () => {
   assert.equal(parseReaderArgs(['--help'], {}).help, true)
 })
 
+test('备份命令支持按分类导入并显式确认', () => {
+  assert.deepEqual(parseReaderArgs(['backup', 'import', 'data.zip', '--categories', 'bookshelf,reading', '--yes']).backup, { action: 'import', path: 'data.zip', categories: ['bookshelf', 'reading'], yes: true })
+  assert.throws(() => parseReaderArgs(['backup', 'import', 'data.zip', '--categories', 'cache']), /只允许/u)
+  assert.throws(() => parseReaderArgs(['backup', 'export', 'data.zip', '--categories', 'bookshelf']), /不需要/u)
+})
+
 test('正文按终端宽度切行并保留段落锚点', () => {
   const layout = layoutContent('第一段内容\n\n第二段内容', 6)
   assert.deepEqual(layout.paragraphs, ['第一段内容', '第二段内容'])

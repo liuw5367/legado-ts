@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { BACKUP_CATEGORIES, categoryForPath, createBackupZip, jsonBytes, parseJson, readBackupZip, type BackupCategory, type BackupFile } from '@legado/reader-backup'
+import { importSources } from '@legado/source-core'
 import type { ContentCacheRecord, ContentIdentity, ContentSaveToken, ContentStore, ContentWriteInput, StoreWriteResult } from '@legado/source-core'
 import { CacheStore } from './cache-store.ts'
 import type { WorkflowCache } from './cache-store.ts'
@@ -26,6 +28,12 @@ import {
   type StoragePaths,
   type TocSnapshot,
 } from './storage-model.ts'
+
+export interface StoredSourceDefinition {
+  sourceId: string
+  fingerprint: string
+  rawText: string
+}
 
 export type {
   BookDocument,
@@ -121,6 +129,91 @@ export class ReaderStorage {
       const current = await this.jsonStore.readFile<Manifest>(path, { storageVersion: 1, createdAt: iso(this.now), lastSuccessfulStartAt: iso(this.now) })
       await this.jsonStore.writeFile(path, { ...current, lastSuccessfulStartAt: iso(this.now) })
       await this.cacheStore.initialize()
+    })
+  }
+
+  /** 返回可跨端恢复的用户文件；正文和请求缓存永远不会进入备份。 */
+  public async backupFiles(): Promise<BackupFile[]> {
+    return this.withWriteLock(async () => {
+      const files: BackupFile[] = []
+      const addJson = async (path: string, fallback: unknown): Promise<void> => {
+        const raw = await readFile(join(this.paths.dataRoot, path)).catch(() => undefined)
+        files.push({ path, data: raw === undefined ? jsonBytes({ schemaVersion: 1, revision: 0, updatedAt: iso(this.now), data: fallback }) : Uint8Array.from(raw), category: categoryForPath(path) })
+      }
+      await addJson('bookshelf.json', [])
+      await addJson('reading-history.json', [])
+      await addJson('search-history.json', [])
+      await addJson('reader-settings.json', normalizeReaderSettings(undefined))
+      await addJson('source-state.json', {})
+      await addJson('source-check-config.json', DEFAULT_SOURCE_CHECK_CONFIG)
+      const definitions = await this.getSourceDefinitions()
+      files.push({ path: 'sources.json', data: jsonBytes({ schemaVersion: 1, revision: 0, updatedAt: iso(this.now), data: definitions }), category: 'sources' })
+      const booksRoot = join(this.paths.dataRoot, 'books')
+      const bookDirectories = await readdir(booksRoot, { withFileTypes: true }).catch(() => [])
+      for (const entry of bookDirectories) {
+        if (!entry.isDirectory() || !isUuid(entry.name)) continue
+        for (const name of ['book.json', 'sources.json']) {
+          const relative = `books/${entry.name}/${name}`
+          const raw = await readFile(join(this.paths.dataRoot, relative)).catch(() => undefined)
+          if (raw !== undefined) files.push({ path: relative, data: Uint8Array.from(raw), category: 'bookshelf' })
+        }
+      }
+      return files
+    })
+  }
+
+  public async createBackupZip(producer: 'reader-cli' | 'reader-web' = 'reader-cli'): Promise<Uint8Array> {
+    return createBackupZip(await this.backupFiles(), { producer: { name: producer, version: '0.1.0' }, now: this.now() })
+  }
+
+  /** 在写锁内按分类完整替换 JSON 文件，未选分类保持原样。 */
+  public async restoreBackup(input: Uint8Array, categories: readonly BackupCategory[]): Promise<{ counts: Record<BackupCategory, number> }> {
+    const archive = await readBackupZip(input)
+    const selected = new Set(categories)
+    if (selected.size === 0 || [...selected].some((category) => !(BACKUP_CATEGORIES as readonly string[]).includes(category))) throw new Error('至少选择一个有效的恢复分类')
+    await validateBackupArchive(archive, selected)
+    return this.withWriteLock(async () => {
+      const readData = <T>(path: string, fallback: T): T => {
+        try {
+          const value = parseJson<unknown>(archive, path)
+          return unwrapStoredValue(value) as T
+        } catch (error) {
+          if (error instanceof Error && error.message.startsWith('备份缺少文件')) return fallback
+          throw error
+        }
+      }
+      const incomingReading = selected.has('reading') ? readData<ReadingRecord[]>('reading-history.json', []) : undefined
+      if (incomingReading !== undefined && !selected.has('bookshelf')) {
+        const bookIds = [...new Set(incomingReading.map((record) => record.bookId))]
+        for (const bookId of bookIds) {
+          try { await readFile(join(this.paths.dataRoot, 'books', safeUuid(bookId), 'book.json')) } catch { throw new Error(`阅读记录依赖的书籍不存在：${bookId}，请同时选择书架`) }
+        }
+      }
+      if (selected.has('bookshelf')) await this.jsonStore.writeFile(join(this.paths.dataRoot, 'bookshelf.json'), readData('bookshelf.json', []))
+      if (incomingReading !== undefined) await this.jsonStore.writeFile(join(this.paths.dataRoot, 'reading-history.json'), incomingReading)
+      if (selected.has('search')) await this.jsonStore.writeFile(join(this.paths.dataRoot, 'search-history.json'), readData('search-history.json', []))
+      if (selected.has('settings')) {
+        const incoming = readData<unknown>('reader-settings.json', {})
+        const settings = isRecord(incoming) && isRecord(incoming.web) && !isRecord(incoming.cli) ? await this.getReaderSettings() : normalizeReaderSettings((isRecord(incoming) && isRecord(incoming.cli) ? incoming.cli : incoming) as Partial<ReaderSettings>)
+        await this.jsonStore.writeFile(join(this.paths.dataRoot, 'reader-settings.json'), settings)
+      }
+      if (selected.has('sources')) {
+        await this.jsonStore.writeFile(join(this.paths.dataRoot, 'source-state.json'), readData('source-state.json', {}))
+        await this.jsonStore.writeFile(join(this.paths.dataRoot, 'source-check-config.json'), readData('source-check-config.json', DEFAULT_SOURCE_CHECK_CONFIG))
+      }
+      if (selected.has('bookshelf')) {
+        const incomingBooks = archive.manifest.files.filter((file) => file.path.startsWith('books/'))
+        for (const file of incomingBooks) {
+          const value = unwrapStoredValue(parseJson<unknown>(archive, file.path))
+          await this.jsonStore.writeFile(join(this.paths.dataRoot, file.path), value)
+        }
+      }
+      if (selected.has('sources')) {
+        const definitions = readData<StoredSourceDefinition[]>('sources.json', [])
+        const unique = [...new Map(definitions.map((item) => [`${item.sourceId}\u0000${item.fingerprint}`, item])).values()]
+        await this.jsonStore.writeFile(join(this.paths.dataRoot, 'sources.json'), unique)
+      }
+      return { counts: archive.manifest.counts }
     })
   }
 
@@ -393,6 +486,15 @@ export class ReaderStorage {
     return this.jsonStore.readFile<SourceStateFile>(join(this.paths.dataRoot, 'source-state.json'), {})
   }
 
+  public async getSourceDefinitions(): Promise<StoredSourceDefinition[]> {
+    return this.jsonStore.readFile<StoredSourceDefinition[]>(join(this.paths.dataRoot, 'sources.json'), [])
+  }
+
+  public async saveSourceDefinitions(definitions: readonly StoredSourceDefinition[]): Promise<void> {
+    const unique = [...new Map(definitions.map((item) => [`${item.sourceId}\u0000${item.fingerprint}`, item])).values()]
+    await this.withWriteLock(async () => this.jsonStore.writeFile(join(this.paths.dataRoot, 'sources.json'), unique))
+  }
+
   public async saveSourceStates(states: SourceStateFile): Promise<void> {
     await this.withWriteLock(async () => this.jsonStore.writeFile(join(this.paths.dataRoot, 'source-state.json'), states))
   }
@@ -571,6 +673,47 @@ function isUuid(value: string): boolean {
 function sourcePriority(source: KnownSource): number {
   return source.matchKind === 'user-confirmed' ? 3 : source.matchKind === 'selected' ? 2 : source.matchKind === 'title-author' ? 1 : 0
 }
+
+function unwrapStoredValue(value: unknown): unknown {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    if (record.schemaVersion === 1 && 'data' in record) return record.data
+  }
+  return value
+}
+
+async function validateBackupArchive(archive: Awaited<ReturnType<typeof readBackupZip>>, selected: Set<BackupCategory>): Promise<void> {
+  const data = <T>(path: string, fallback: T): T => {
+    try { return unwrapStoredValue(parseJson<unknown>(archive, path)) as T } catch (error) { if (error instanceof Error && error.message.startsWith('备份缺少文件')) return fallback; throw error }
+  }
+  if (selected.has('bookshelf')) {
+    const shelf = data<unknown>('bookshelf.json', [])
+    if (!Array.isArray(shelf) || shelf.some((item) => !isRecord(item) || typeof item.bookId !== 'string' || !isUuid(item.bookId))) throw new Error('书架数据格式无效')
+    for (const file of archive.manifest.files.filter((item) => item.path.startsWith('books/'))) {
+      const value = data<unknown>(file.path, undefined)
+      if (file.path.endsWith('/book.json')) {
+        if (!isRecord(value) || typeof value.bookId !== 'string') throw new Error(`书籍数据格式无效：${file.path}`)
+        safeUuid(value.bookId)
+        if (file.path.split('/')[1] !== value.bookId) throw new Error(`书籍路径与 ID 不一致：${file.path}`)
+      } else if (file.path.endsWith('/sources.json') && !Array.isArray(value)) throw new Error(`书籍书源数据格式无效：${file.path}`)
+    }
+  }
+  if (selected.has('reading') && !Array.isArray(data('reading-history.json', []))) throw new Error('阅读记录格式无效')
+  if (selected.has('search') && !Array.isArray(data('search-history.json', []))) throw new Error('搜索记录格式无效')
+  if (selected.has('settings') && !isRecord(data('reader-settings.json', {}))) throw new Error('阅读设置格式无效')
+  if (selected.has('sources')) {
+    const definitions = data<unknown>('sources.json', [])
+    if (!Array.isArray(definitions)) throw new Error('书源定义格式无效')
+    for (const item of definitions) {
+      if (!isRecord(item) || typeof item.sourceId !== 'string' || typeof item.fingerprint !== 'string' || typeof item.rawText !== 'string' || item.rawText.length === 0) throw new Error('书源定义格式无效')
+      const candidates = await importSources({ kind: 'text', text: item.rawText }, { limits: { maxCandidates: 1, maxBytes: 4 * 1024 * 1024 } })
+      if (!candidates.some((candidate) => candidate.source !== undefined)) throw new Error(`无法解析书源：${item.sourceId}`)
+    }
+    if (!isRecord(data('source-state.json', {})) || !isRecord(data('source-check-config.json', {}))) throw new Error('书源状态格式无效')
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 
 function normalizeSourceCheckConfig(value: Partial<SourceCheckConfig>): SourceCheckConfig {
   const timeoutMs = typeof value.timeoutMs === 'number' && Number.isSafeInteger(value.timeoutMs) && value.timeoutMs > 0 ? value.timeoutMs : DEFAULT_SOURCE_CHECK_CONFIG.timeoutMs

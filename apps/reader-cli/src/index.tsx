@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { render, Text } from 'ink'
 import { parseReaderArgs, cliHelp } from './config.ts'
+import { runBackupCommand } from './backup-command.ts'
 import { loadSourceCatalog } from './source-catalog.ts'
 import { ReaderStorage } from './storage.ts'
 import { ReaderApplication } from './application.ts'
@@ -21,6 +22,9 @@ export async function main(args: readonly string[] = process.argv.slice(2), envi
   }
   if (config.help) { process.stdout.write(cliHelp); return 0 }
   if (config.version) { process.stdout.write(`${version}\n`); return 0 }
+  if (config.backup !== undefined) {
+    try { return await runBackupCommand(config.backup) } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`); return 1 }
+  }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     process.stderr.write('legado-reader 需要交互式 TTY；--help 和 --version 可以在非 TTY 环境使用。\n')
     return 2

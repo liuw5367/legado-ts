@@ -45,7 +45,9 @@ export async function loadSourceCatalog(input: string | undefined, options: Sour
   const texts: Array<{ text: string; location: string }> = []
   let loadedFromCache = false
   if (location.length === 0) {
-    texts.push(...getEmbeddedSourceInputs())
+    const saved = storage === undefined ? [] : await storage.getSourceDefinitions()
+    if (saved.length > 0) texts.push(...saved.map((item) => ({ text: item.rawText, location: `backup:${item.sourceId}` })))
+    else texts.push(...getEmbeddedSourceInputs())
     if (texts.length === 0) return { entries: [], diagnostics: ['没有配置书源。请使用 --source 或 LEGADO_READER_SOURCE。'], sourceLocation: '', loadedFromCache: false }
   } else if (isHttpUrl(location)) {
     const reader = createImportReader(options.network ?? new NodeNetworkHost(), storage)
@@ -101,6 +103,7 @@ export async function loadSourceCatalog(input: string | undefined, options: Sour
   }
   const unique = [...new Map(entries.map((entry) => [entry.id, entry])).values()]
   markConflicts(unique)
+  if (storage !== undefined && unique.length > 0) await storage.saveSourceDefinitions(unique.map((entry) => ({ sourceId: entry.source.bookSourceUrl, fingerprint: entry.fingerprint, rawText: entry.candidate.rawText })))
   return { entries: unique.sort((left, right) => left.source.bookSourceName.localeCompare(right.source.bookSourceName, 'zh-Hans')), diagnostics, sourceLocation: location.length === 0 ? '内置书源' : location, loadedFromCache }
 }
 
