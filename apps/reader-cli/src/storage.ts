@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { BACKUP_CATEGORIES, categoryForPath, createBackupZip, jsonBytes, parseJson, readBackupZip, type BackupCategory, type BackupFile } from '@legado/reader-backup'
-import { importSources } from '@legado/source-core'
+import { importSources, sourceDefinitionFingerprint } from '@legado/source-core'
 import type { ContentCacheRecord, ContentIdentity, ContentSaveToken, ContentStore, ContentWriteInput, StoreWriteResult } from '@legado/source-core'
 import { CacheStore } from './cache-store.ts'
 import type { WorkflowCache } from './cache-store.ts'
@@ -186,7 +186,12 @@ export class ReaderStorage {
       if (incomingReading !== undefined && !selected.has('bookshelf')) {
         const bookIds = [...new Set(incomingReading.map((record) => record.bookId))]
         for (const bookId of bookIds) {
-          try { await readFile(join(this.paths.dataRoot, 'books', safeUuid(bookId), 'book.json')) } catch { throw new Error(`阅读记录依赖的书籍不存在：${bookId}，请同时选择书架`) }
+          const bookRoot = join(this.paths.dataRoot, 'books', safeUuid(bookId))
+          try { await readFile(join(bookRoot, 'book.json')) } catch { throw new Error(`阅读记录依赖的书籍不存在：${bookId}，请同时选择书架`) }
+          const knownSources = await this.jsonStore.readFile<KnownSource[]>(join(bookRoot, 'sources.json'), [])
+          const editionKeys = new Set(knownSources.map((source) => source.editionKey))
+          const record = incomingReading.find((item) => item.bookId === bookId)
+          if (record !== undefined && Object.values(record.positions).some((position) => !editionKeys.has(position.editionKey))) throw new Error(`阅读记录依赖的书籍版本不存在：${bookId}，请同时选择书架`)
         }
       }
       if (selected.has('bookshelf')) await this.jsonStore.writeFile(join(this.paths.dataRoot, 'bookshelf.json'), readData('bookshelf.json', []))
@@ -698,19 +703,32 @@ async function validateBackupArchive(archive: Awaited<ReturnType<typeof readBack
       } else if (file.path.endsWith('/sources.json') && !Array.isArray(value)) throw new Error(`书籍书源数据格式无效：${file.path}`)
     }
   }
-  if (selected.has('reading') && !Array.isArray(data('reading-history.json', []))) throw new Error('阅读记录格式无效')
+  if (selected.has('reading')) validateReadingRecords(data('reading-history.json', []))
   if (selected.has('search') && !Array.isArray(data('search-history.json', []))) throw new Error('搜索记录格式无效')
   if (selected.has('settings') && !isRecord(data('reader-settings.json', {}))) throw new Error('阅读设置格式无效')
   if (selected.has('sources')) {
     const definitions = data<unknown>('sources.json', [])
     if (!Array.isArray(definitions)) throw new Error('书源定义格式无效')
     for (const item of definitions) {
-      if (!isRecord(item) || typeof item.sourceId !== 'string' || typeof item.fingerprint !== 'string' || typeof item.rawText !== 'string' || item.rawText.length === 0) throw new Error('书源定义格式无效')
-      const candidates = await importSources({ kind: 'text', text: item.rawText }, { limits: { maxCandidates: 1, maxBytes: 4 * 1024 * 1024 } })
-      if (!candidates.some((candidate) => candidate.source !== undefined)) throw new Error(`无法解析书源：${item.sourceId}`)
+      if (!isRecord(item) || typeof item.sourceId !== 'string' || typeof item.fingerprint !== 'string' || item.fingerprint.length === 0 || typeof item.rawText !== 'string' || item.rawText.length === 0) throw new Error('书源定义格式无效')
+      const candidates = await importSources({ kind: 'text', text: item.rawText }, { limits: { maxCandidates: 1000, maxBytes: 4 * 1024 * 1024 } })
+      const candidate = candidates.find((value) => value.source?.bookSourceUrl === item.sourceId)
+      const fingerprint = candidate?.sourceFingerprint ?? (candidate?.source === undefined ? undefined : sourceDefinitionFingerprint(candidate.source))
+      if (candidate?.source === undefined || fingerprint !== item.fingerprint) throw new Error(`书源定义与 sourceId 或指纹不匹配：${item.sourceId}`)
     }
     if (!isRecord(data('source-state.json', {})) || !isRecord(data('source-check-config.json', {}))) throw new Error('书源状态格式无效')
   }
+}
+
+function validateReadingRecords(value: unknown): ReadingRecord[] {
+  if (!Array.isArray(value)) throw new Error('阅读记录格式无效')
+  for (const record of value) {
+    if (!isRecord(record) || typeof record.bookId !== 'string' || !isUuid(record.bookId) || typeof record.updatedAt !== 'string' || !isRecord(record.positions)) throw new Error('阅读记录格式无效')
+    for (const position of Object.values(record.positions)) {
+      if (!isRecord(position) || typeof position.editionKey !== 'string' || typeof position.sourceId !== 'string' || typeof position.bookUrl !== 'string' || typeof position.chapterUrl !== 'string' || typeof position.index !== 'number' || !Number.isSafeInteger(position.index) || position.index < 0 || typeof position.title !== 'string' || typeof position.paragraphIndex !== 'number' || !Number.isSafeInteger(position.paragraphIndex) || position.paragraphIndex < 0 || typeof position.offset !== 'number' || !Number.isSafeInteger(position.offset) || position.offset < 0 || typeof position.lastReadAt !== 'string') throw new Error('阅读位置格式无效')
+    }
+  }
+  return value as ReadingRecord[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }

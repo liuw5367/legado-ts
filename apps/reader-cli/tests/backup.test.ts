@@ -38,6 +38,8 @@ test('CLI 导出包含跨端用户文件，导入只覆盖选择的分类', asyn
     await third.initialize()
     await third.upsertBook({ bookId, name: '本地书籍', activeEditionKey: edition, createdAt: '2026-02-01T00:00:00.000Z', updatedAt: '2026-02-01T00:00:00.000Z' })
     await third.toggleBookshelf(bookId)
+    await assert.rejects(third.restoreBackup(zip, ['reading']), /书籍版本不存在/u)
+    await third.mergeKnownSources(bookId, [{ editionKey: edition, sourceId, sourceFingerprint: 'fp', bookUrl, rawFields: {}, discoveredAt: '2026-02-01T00:00:00.000Z', matchKind: 'selected' }])
     await third.restoreBackup(zip, ['reading'])
     assert.equal((await third.getBook(bookId))?.name, '本地书籍')
     assert.equal(await third.isOnBookshelf(bookId), true)
