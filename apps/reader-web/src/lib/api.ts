@@ -23,6 +23,8 @@ export class ApiError extends Error {
   public constructor(code: string, message: string, status: number) { super(message); this.code = code; this.status = status }
 }
 
+export interface BackupPreview { manifest: { createdAt: string; producer: { name: string; version: string }; counts: Record<'bookshelf' | 'reading' | 'search' | 'sources' | 'settings', number> } }
+
 export interface StreamEvent { type: string; data: unknown }
 export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
 export interface SearchSourceEventData { source?: { status?: string; candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
@@ -89,6 +91,50 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     throw new ApiError(typeof errorRecord?.code === 'string' ? errorRecord.code : 'request-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '请求失败', response.status)
   }
   return body as T
+}
+
+export async function validateBackup(file: File): Promise<BackupPreview> {
+  const response = await fetch('/api/backup/validate', { method: 'POST', headers: await binaryHeaders(), body: file })
+  const body = await readJson(response)
+  if (!response.ok) throw apiErrorFromResponse(response, body, '备份校验失败')
+  return body as BackupPreview
+}
+
+export async function importBackup(file: File, categories: readonly string[]): Promise<{ counts: BackupPreview['manifest']['counts'] }> {
+  const query = encodeURIComponent(categories.join(','))
+  const response = await fetch(`/api/backup/import?categories=${query}`, { method: 'POST', headers: await binaryHeaders(), body: file })
+  const body = await readJson(response)
+  if (!response.ok) throw apiErrorFromResponse(response, body, '备份导入失败')
+  return body as { counts: BackupPreview['manifest']['counts'] }
+}
+
+export async function downloadBackup(): Promise<Blob> {
+  const response = await fetch('/api/backup/export', { headers: await binaryHeaders('application/zip') })
+  if (!response.ok) throw apiErrorFromResponse(response, await readJson(response), '备份导出失败')
+  const bytes = await response.arrayBuffer()
+  const expectedBytes = Number(response.headers.get('X-Backup-Bytes') ?? '')
+  if (Number.isSafeInteger(expectedBytes) && expectedBytes !== bytes.byteLength) throw new ApiError('backup-integrity', '下载的备份大小校验失败', 502)
+  const expectedHash = response.headers.get('X-Backup-Sha256')
+  if (expectedHash !== null && expectedHash !== await sha256ArrayBuffer(bytes)) throw new ApiError('backup-integrity', '下载的备份校验失败', 502)
+  return new Blob([bytes], { type: 'application/zip' })
+}
+
+async function binaryHeaders(accept = 'application/json'): Promise<Headers> {
+  const session = await currentSession()
+  const headers = new Headers({ Accept: accept, 'Content-Type': 'application/zip' })
+  if (session?.access_token !== undefined) headers.set('Authorization', `Bearer ${session.access_token}`)
+  return headers
+}
+
+function apiErrorFromResponse(response: Response, body: unknown, fallback: string): ApiError {
+  const error = isRecord(body)?.error
+  const details = isRecord(error)
+  return new ApiError(typeof details?.code === 'string' ? details.code : 'request-failed', typeof details?.message === 'string' ? details.message : fallback, response.status)
+}
+
+async function sha256ArrayBuffer(value: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', value)
+  return [...new Uint8Array(digest)].map((item) => item.toString(16).padStart(2, '0')).join('')
 }
 
 export async function streamSearch(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal, options?: SearchStreamOptions): Promise<void> {
