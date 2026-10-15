@@ -39,6 +39,19 @@ export interface BackupArchive {
   files: Map<string, Uint8Array>
 }
 
+export interface BackupRecordCounts {
+  bookshelf: number
+  reading: number
+  search: number
+  sources: number
+  settings: number
+}
+
+export interface BackupPreview {
+  recordCounts: BackupRecordCounts
+  fileCounts: Record<BackupCategory, number>
+}
+
 export interface BackupLimits {
   maxEntries?: number
   maxFileBytes?: number
@@ -81,14 +94,20 @@ export async function readBackupZip(input: Uint8Array, limits: BackupLimits = {}
   }
   const manifestBytes = files.get('backup.json')
   if (manifestBytes === undefined) throw new Error('备份缺少 backup.json')
-  const manifest = parseManifest(manifestBytes)
+  const manifest = parseBackupManifest(manifestBytes)
   if (manifest.files.length > (limits.maxEntries ?? BACKUP_MAX_ENTRIES)) throw new Error('备份文件数量超过限制')
   if (manifest.files.length + 1 !== files.size) throw new Error('备份文件清单与 ZIP 内容不一致')
+  const descriptorPaths = new Set<string>()
   for (const descriptor of manifest.files) {
+    if (descriptorPaths.has(descriptor.path)) throw new Error('backup.json 文件清单包含重复路径：' + descriptor.path)
+    descriptorPaths.add(descriptor.path)
     const data = files.get(descriptor.path)
     if (data === undefined) throw new Error(`备份缺少文件：${descriptor.path}`)
     if (data.byteLength !== descriptor.bytes || sha256Bytes(data) !== descriptor.sha256) throw new Error(`备份文件校验失败：${descriptor.path}`)
   }
+  const archivePaths = new Set(files.keys())
+  archivePaths.delete('backup.json')
+  if (archivePaths.size !== descriptorPaths.size || [...archivePaths].some((path) => !descriptorPaths.has(path))) throw new Error('备份文件清单与 ZIP 内容不一致')
   return { manifest, files }
 }
 
@@ -108,6 +127,37 @@ export function parseJson<T>(archive: BackupArchive, path: string): T {
 
 export function sha256Bytes(value: Uint8Array): string {
   return createHash('sha256').update(value).digest('hex')
+}
+
+/** 第一版跨端书籍版本身份。fingerprint 只描述书源定义，不参与阅读进度身份。 */
+export function editionKey(sourceId: string, bookUrl: string): string {
+  return createHash('sha256').update(sourceId + '\u0000' + bookUrl).digest('hex')
+}
+
+export function isIsoDateString(value: unknown): value is string {
+  // 备份时间由当前实现统一写成带毫秒的 UTC ISO 8601 字符串。
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value) && Number.isFinite(Date.parse(value))
+}
+
+/**
+ * 从已通过 ZIP 完整性校验的归档计算 UI 预览数量。
+ * manifest.counts 是文件数量，recordCounts 才是用户看到的业务记录数量。
+ */
+export function buildBackupPreview(archive: BackupArchive): BackupPreview {
+  const bookshelf = previewArray(archive, 'bookshelf.json', '书架')
+  const reading = previewArray(archive, 'reading-history.json', '阅读记录')
+  const search = previewArray(archive, 'search-history.json', '搜索记录')
+  const sources = previewArray(archive, 'sources.json', '书源')
+  return {
+    recordCounts: {
+      bookshelf: bookshelf.length,
+      reading: reading.reduce((total, item) => total + (isRecord(item) && isRecord(item.positions) ? Object.keys(item.positions).length : 0), 0),
+      search: search.length,
+      sources: sources.length,
+      settings: archive.files.has('reader-settings.json') ? 1 : 0,
+    },
+    fileCounts: archive.manifest.counts,
+  }
 }
 
 export function categoryForPath(path: string): BackupCategory {
@@ -134,27 +184,48 @@ function validateFiles(files: readonly BackupFile[]): BackupFile[] {
   })
 }
 
-function parseManifest(data: Uint8Array): BackupManifest {
+export function parseBackupManifest(data: Uint8Array): BackupManifest {
   let value: unknown
   try { value = JSON.parse(decoder.decode(data)) as unknown } catch { throw new Error('backup.json 不是有效 JSON') }
   if (!isRecord(value) || value.format !== BACKUP_FORMAT || value.formatVersion !== BACKUP_FORMAT_VERSION || value.storageVersion !== 1 || !Array.isArray(value.files) || !isRecord(value.producer) || !isBackupProducer(value.producer.name) || typeof value.producer.version !== 'string') throw new Error('备份格式或版本不受支持')
+  if (!isIsoDateString(value.createdAt)) throw new Error('backup.json 创建时间无效')
   const files = value.files.map((item) => {
     if (!isRecord(item) || typeof item.path !== 'string' || typeof item.bytes !== 'number' || !Number.isSafeInteger(item.bytes) || item.bytes < 0 || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(item.sha256) || !isBackupCategory(item.category)) throw new Error('backup.json 文件清单无效')
     if (item.path === 'backup.json') throw new Error('backup.json 不能出现在自身文件清单中')
     if (categoryForPath(item.path) !== item.category) throw new Error(`backup.json 文件类别无效：${item.path}`)
     return { path: item.path, bytes: item.bytes, sha256: item.sha256, category: item.category }
   })
+  const descriptorPaths = new Set<string>()
+  for (const descriptor of files) {
+    if (descriptorPaths.has(descriptor.path)) throw new Error('backup.json 文件清单包含重复路径：' + descriptor.path)
+    descriptorPaths.add(descriptor.path)
+  }
   const counts = emptyCounts()
   for (const descriptor of files) counts[descriptor.category] += 1
   const rawCounts = value.counts
-  if (!isRecord(rawCounts) || BACKUP_CATEGORIES.some((category) => rawCounts[category] !== counts[category])) throw new Error('backup.json 统计信息无效')
-  return { format: BACKUP_FORMAT, formatVersion: BACKUP_FORMAT_VERSION, storageVersion: 1, createdAt: String(value.createdAt ?? ''), producer: { name: value.producer.name as BackupManifest['producer']['name'], version: value.producer.version }, counts, files }
+  if (!isRecord(rawCounts) || BACKUP_CATEGORIES.some((category) => {
+    const rawCount = rawCounts[category]
+    return typeof rawCount !== 'number' || rawCount !== counts[category] || !Number.isSafeInteger(rawCount) || rawCount < 0
+  })) throw new Error('backup.json 统计信息无效')
+  return { format: BACKUP_FORMAT, formatVersion: BACKUP_FORMAT_VERSION, storageVersion: 1, createdAt: value.createdAt, producer: { name: value.producer.name as BackupManifest['producer']['name'], version: value.producer.version }, counts, files }
 }
 
 function emptyCounts(): Record<BackupCategory, number> { return { bookshelf: 0, reading: 0, search: 0, sources: 0, settings: 0 } }
 function isBackupCategory(value: unknown): value is BackupCategory { return typeof value === 'string' && (BACKUP_CATEGORIES as readonly string[]).includes(value) }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function isBackupProducer(value: unknown): value is BackupManifest['producer']['name'] { return value === 'reader-cli' || value === 'reader-web' }
+
+function previewArray(archive: BackupArchive, path: string, label: string): unknown[] {
+  if (!archive.files.has(path)) return []
+  const value = unwrapPreviewValue(parseJson<unknown>(archive, path))
+  if (!Array.isArray(value)) throw new Error(label + '预览数据格式无效')
+  return value
+}
+
+function unwrapPreviewValue(value: unknown): unknown {
+  if (isRecord(value) && value.schemaVersion === 1 && 'data' in value) return value.data
+  return value
+}
 
 function writeStoredZip(files: readonly BackupFile[]): Uint8Array {
   const locals: Uint8Array[] = []
