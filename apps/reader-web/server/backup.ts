@@ -103,12 +103,12 @@ function snapshotToFiles(snapshot: ReaderBackupSnapshot): BackupFile[] {
 async function parseSnapshot(archive: BackupArchive, userId: string, currentSettings: ReaderSettings): Promise<ReaderBackupSnapshot> {
   for (const path of ['bookshelf.json', 'reading-history.json', 'search-history.json', 'sources.json', 'source-state.json', 'source-check-config.json', 'reader-settings.json']) if (!archive.files.has(path)) throw new Error(`备份缺少文件：${path}`)
   const sourceDefinitions = readData<StoredSourceDefinition[]>(archive, 'sources.json', [])
-  const sourceState = readData<Record<string, { fingerprint?: string; enabled?: boolean; deleted?: boolean; enabledExplore?: boolean; customOrder?: number; weight?: number }>>(archive, 'source-state.json', {})
+  const sourceState = readData<unknown>(archive, 'source-state.json', {})
   if (!Array.isArray(sourceDefinitions) || !isRecord(sourceState)) throw new Error('书源数据格式无效')
   const sources: ReaderBackupSnapshot['sources'] = []
   const seenSourceIds = new Set<string>()
   for (const definition of sourceDefinitions) {
-    if (!isRecord(definition) || typeof definition.rawText !== 'string' || definition.rawText.length === 0 || typeof definition.sourceId !== 'string' || typeof definition.fingerprint !== 'string' || definition.fingerprint.length === 0) throw new Error('书源定义无效')
+    if (!isRecord(definition) || typeof definition.rawText !== 'string' || definition.rawText.length === 0 || typeof definition.sourceId !== 'string' || typeof definition.fingerprint !== 'string' || definition.fingerprint.length === 0 || (definition.deleted !== undefined && typeof definition.deleted !== 'boolean')) throw new Error('书源定义无效')
     if (seenSourceIds.has(definition.sourceId)) throw new Error(`书源定义重复：${definition.sourceId}`)
     seenSourceIds.add(definition.sourceId)
     const candidates = await importSources({ kind: 'text', text: definition.rawText }, { limits: { maxCandidates: 1000, maxBytes: 4 * 1024 * 1024 } })
@@ -116,10 +116,13 @@ async function parseSnapshot(archive: BackupArchive, userId: string, currentSett
     const fingerprint = candidate?.sourceFingerprint ?? (candidate?.source === undefined ? undefined : sourceDefinitionFingerprint(candidate.source))
     if (candidate?.source === undefined || fingerprint !== definition.fingerprint) throw new Error(`书源定义与 sourceId 或指纹不匹配：${definition.sourceId}`)
     const state = sourceState[definition.sourceId]
+    validateSourceState(definition.sourceId, definition.fingerprint, state)
     const normalized = { ...candidate.source, ...(state?.enabled === undefined ? {} : { enabled: state.enabled }), ...(state?.enabledExplore === undefined ? {} : { enabledExplore: state.enabledExplore }), ...(state?.customOrder === undefined ? {} : { customOrder: state.customOrder }), ...(state?.weight === undefined ? {} : { weight: state.weight }) }
     const group = sourceField(normalized, 'bookSourceGroup')
     sources.push({ source: { sourceId: normalized.bookSourceUrl, name: normalized.bookSourceName, ...(typeof group === 'string' ? { group } : {}), fingerprint, enabled: normalized.enabled !== false, rawSource: definition.rawText, normalizedSource: normalized }, sourceRevision: randomUUID(), ...(definition.deleted === true || state?.deleted === true ? { deleted: true } : {}) })
   }
+  for (const [sourceId, state] of Object.entries(sourceState)) if (!seenSourceIds.has(sourceId)) validateSourceState(sourceId, undefined, state)
+  validateSourceCheckConfig(readData<unknown>(archive, 'source-check-config.json', {}))
   const books = parseBooks(archive, userId)
   const bookIds = new Set(books.map((item) => item.book.id))
   const editions = new Map(books.flatMap((item) => item.editions.map((edition) => [`${edition.bookId}:${edition.editionKey}`, edition])))
@@ -237,7 +240,16 @@ function isSearchHistoryData(value: unknown): value is CliSearchHistoryEntry[] {
   }
   return true
 }
+function validateSourceState(sourceId: string, expectedFingerprint: string | undefined, value: unknown): asserts value is { fingerprint?: string; enabled?: boolean; deleted?: boolean; enabledExplore?: boolean; customOrder?: number; weight?: number } | undefined {
+  if (value === undefined) return
+  if (!isRecord(value) || (value.fingerprint !== undefined && (typeof value.fingerprint !== 'string' || value.fingerprint.length === 0)) || (expectedFingerprint !== undefined && value.fingerprint !== undefined && value.fingerprint !== expectedFingerprint) || (value.enabled !== undefined && typeof value.enabled !== 'boolean') || (value.deleted !== undefined && typeof value.deleted !== 'boolean') || (value.enabledExplore !== undefined && typeof value.enabledExplore !== 'boolean') || (value.customOrder !== undefined && !isSafeInteger(value.customOrder)) || (value.weight !== undefined && !isSafeInteger(value.weight))) throw new Error(`书源状态格式无效：${sourceId}`)
+  if (value.searchHealth !== undefined && (!isRecord(value.searchHealth) || typeof value.searchHealth.fingerprint !== 'string' || value.searchHealth.fingerprint.length === 0 || !isNonNegativeSafeInteger(value.searchHealth.consecutiveFailures))) throw new Error(`书源状态格式无效：${sourceId}`)
+}
+function validateSourceCheckConfig(value: unknown): void {
+  if (!isRecord(value) || (value.timeoutMs !== undefined && (!isSafeInteger(value.timeoutMs) || value.timeoutMs <= 0)) || ['checkDomain', 'checkSearch', 'checkDiscovery', 'checkInfo', 'checkCategory', 'checkContent'].some((key) => value[key] !== undefined && typeof value[key] !== 'boolean') || (value.keyword !== undefined && typeof value.keyword !== 'string')) throw new Error('书源检测配置格式无效')
+}
 function isNonNegativeSafeInteger(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 }
+function isSafeInteger(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) }
 function validateWebSettings(value: Record<string, unknown>, userId: string): ReaderSettings {
   const theme = value.theme
   const readingMode = value.readingMode

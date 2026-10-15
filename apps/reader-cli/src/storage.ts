@@ -764,7 +764,8 @@ export async function validateReaderBackup(input: Uint8Array, categories: readon
   const definitions = data<unknown>('sources.json')
   if (!Array.isArray(definitions)) throw new Error('书源定义格式无效')
   await validateSourceDefinitions(definitions)
-  if (!isRecord(data<unknown>('source-state.json')) || !isRecord(data<unknown>('source-check-config.json'))) throw new Error('书源状态格式无效')
+  validateSourceStates(data<unknown>('source-state.json'), definitions as StoredSourceDefinition[])
+  validateSourceCheckConfig(data<unknown>('source-check-config.json'))
   return archive
 }
 
@@ -829,6 +830,19 @@ async function validateSourceDefinitions(value: unknown[]): Promise<void> {
   }
 }
 
+function validateSourceStates(value: unknown, definitions: readonly StoredSourceDefinition[]): void {
+  if (!isRecord(value)) throw new Error('书源状态格式无效')
+  const fingerprints = new Map(definitions.map((item) => [item.sourceId, item.fingerprint]))
+  for (const [sourceId, raw] of Object.entries(value)) {
+    if (!isRecord(raw) || typeof raw.fingerprint !== 'string' || raw.fingerprint.length === 0 || (fingerprints.has(sourceId) && raw.fingerprint !== fingerprints.get(sourceId)) || typeof raw.enabled !== 'boolean' || typeof raw.enabledExplore !== 'boolean' || !isSafeInteger(raw.customOrder) || !isSafeInteger(raw.weight) || !isRecord(raw.searchHealth) || typeof raw.searchHealth.fingerprint !== 'string' || raw.searchHealth.fingerprint.length === 0 || !isNonNegativeSafeInteger(raw.searchHealth.consecutiveFailures)) throw new Error(`书源状态格式无效：${sourceId}`)
+    if (raw.check !== undefined && !isRecord(raw.check)) throw new Error(`书源检测状态格式无效：${sourceId}`)
+  }
+}
+
+function validateSourceCheckConfig(value: unknown): void {
+  if (!isRecord(value) || (value.timeoutMs !== undefined && (!isSafeInteger(value.timeoutMs) || value.timeoutMs <= 0)) || ['checkDomain', 'checkSearch', 'checkDiscovery', 'checkInfo', 'checkCategory', 'checkContent'].some((key) => value[key] !== undefined && typeof value[key] !== 'boolean') || (value.keyword !== undefined && typeof value.keyword !== 'string')) throw new Error('书源检测配置格式无效')
+}
+
 function assertUniqueSourceIds(definitions: readonly StoredSourceDefinition[]): void {
   const seen = new Set<string>()
   for (const definition of definitions) {
@@ -883,6 +897,7 @@ function validateReaderSettings(value: unknown): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function isNonNegativeSafeInteger(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 }
+function isSafeInteger(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) }
 
 function normalizeSourceCheckConfig(value: Partial<SourceCheckConfig>): SourceCheckConfig {
   const timeoutMs = typeof value.timeoutMs === 'number' && Number.isSafeInteger(value.timeoutMs) && value.timeoutMs > 0 ? value.timeoutMs : DEFAULT_SOURCE_CHECK_CONFIG.timeoutMs
