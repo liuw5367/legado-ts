@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { createBackupZip, editionKey as sharedEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile } from '@legado/reader-backup'
+import { createBackupZip, editionKey as sharedEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile, type BackupRecordCounts } from '@legado/reader-backup'
 import { importSources, sourceDefinitionFingerprint, type NormalizedSource } from '@legado/source-core'
 import type { BookCandidate, JsonObject } from '@legado/source-core'
 import type { ReaderBackupSnapshot, ReaderRepository } from './db/repository.ts'
@@ -37,6 +37,10 @@ export async function restoreWebBackup(repository: ReaderRepository, userId: str
   return { counts: archive.manifest.counts }
 }
 
+export function countBackupSnapshot(snapshot: ReaderBackupSnapshot): BackupRecordCounts {
+  return { bookshelf: snapshot.bookshelf.length, reading: snapshot.positions.length, search: snapshot.searchHistory.length, sources: snapshot.sources.length, settings: 1 }
+}
+
 function validateSnapshotForExport(snapshot: ReaderBackupSnapshot, userId: string): void {
   const sourceIds = new Set<string>()
   for (const item of snapshot.sources) {
@@ -44,14 +48,24 @@ function validateSnapshotForExport(snapshot: ReaderBackupSnapshot, userId: strin
     sourceIds.add(item.source.sourceId)
   }
   const books = new Map<string, Set<string>>()
+  const editionOwners = new Map<string, string>()
   for (const item of snapshot.books) {
     if (item.book.userId !== userId || !isUuid(item.book.id) || !isIsoDateString(item.book.createdAt) || !isIsoDateString(item.book.updatedAt)) throw new Error(`书籍数据无效：${item.book.id}`)
     const editions = new Set<string>()
+    if (item.editions.length === 0) throw new Error(`书籍缺少版本：${item.book.id}`)
     for (const edition of item.editions) {
       if (edition.editionKey !== sharedEditionKey(edition.sourceId, edition.bookUrl) || edition.sourceFingerprint.length === 0 || editions.has(edition.editionKey)) throw new Error(`书籍版本数据无效：${item.book.id}`)
+      const owner = editionOwners.get(edition.editionKey)
+      if (owner !== undefined && owner !== item.book.id) throw new Error(`书籍版本重复：${edition.editionKey}`)
       editions.add(edition.editionKey)
+      editionOwners.set(edition.editionKey, item.book.id)
     }
-    for (const candidate of item.candidates) if (candidate.sourceFingerprint.length === 0 || candidate.candidate.sourceId !== candidate.sourceId || candidate.candidate.candidate.bookUrl !== candidate.bookUrl) throw new Error(`书籍候选数据无效：${item.book.id}`)
+    for (const candidate of item.candidates) {
+      if (candidate.sourceFingerprint.length === 0 || candidate.candidate.sourceId !== candidate.sourceId || candidate.candidate.candidate.bookUrl !== candidate.bookUrl) throw new Error(`书籍候选数据无效：${item.book.id}`)
+      const candidateKey = sharedEditionKey(candidate.sourceId, candidate.bookUrl)
+      if (editionOwners.has(candidateKey)) throw new Error(`书籍候选版本重复：${candidateKey}`)
+      editionOwners.set(candidateKey, item.book.id)
+    }
     if (item.book.activeEditionKey !== undefined && !editions.has(item.book.activeEditionKey)) throw new Error(`书籍活动版本不存在：${item.book.id}`)
     books.set(item.book.id, editions)
   }
@@ -138,6 +152,7 @@ async function parseSnapshot(archive: BackupArchive, userId: string, currentSett
 function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapshot['books'] {
   const bookPaths = archive.manifest.files.filter((file) => /^books\/[^/]+\/book\.json$/u.test(file.path))
   const seenBookIds = new Set<string>()
+  const editionOwners = new Map<string, string>()
   const books = bookPaths.map((file) => {
     const book = readData<CliBookDocument>(archive, file.path, {} as CliBookDocument)
     if (!isUuid(book.bookId) || file.path.split('/')[1] !== book.bookId || typeof book.name !== 'string' || !isIsoDateString(book.createdAt) || !isIsoDateString(book.updatedAt) || (book.activeEditionKey !== undefined && typeof book.activeEditionKey !== 'string')) throw new Error(`书籍数据无效：${file.path}`)
@@ -153,7 +168,10 @@ function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapsho
     for (const item of sources) {
       if (!isRecord(item) || !isUuid(book.bookId) || typeof item.editionKey !== 'string' || typeof item.sourceId !== 'string' || typeof item.sourceFingerprint !== 'string' || item.sourceFingerprint.length === 0 || typeof item.bookUrl !== 'string' || item.editionKey !== sharedEditionKey(item.sourceId, item.bookUrl) || !isIsoDateString(item.discoveredAt) || (item.confirmedAt !== undefined && !isIsoDateString(item.confirmedAt)) || (item.searchDurationMs !== undefined && (!Number.isSafeInteger(item.searchDurationMs) || item.searchDurationMs < 0)) || !['selected', 'title-author', 'title-only', 'user-confirmed'].includes(item.matchKind)) throw new Error(`书籍书源记录无效：${book.bookId}`)
       if (seenEditions.has(item.editionKey)) throw new Error(`书籍版本重复：${item.editionKey}`)
+      const owner = editionOwners.get(item.editionKey)
+      if (owner !== undefined && owner !== book.bookId) throw new Error(`书籍版本重复：${item.editionKey}`)
       seenEditions.add(item.editionKey)
+      editionOwners.set(item.editionKey, book.bookId)
       if (item.rawFields !== undefined && !isRecord(item.rawFields)) throw new Error(`书籍书源字段无效：${book.bookId}`)
       const metadata = { name: item.name ?? book.name, ...(item.author === undefined ? {} : { author: item.author }), ...(item.intro === undefined ? {} : { intro: item.intro }), ...(item.coverUrl === undefined ? {} : { coverUrl: item.coverUrl }), ...(item.kind === undefined ? {} : { kind: item.kind }), ...(item.wordCount === undefined ? {} : { wordCount: item.wordCount }), ...(item.lastChapter === undefined ? {} : { lastChapter: item.lastChapter }), ...(item.updateTime === undefined ? {} : { updateTime: item.updateTime }), bookUrl: item.bookUrl, ...(item.tocUrl === undefined ? {} : { tocUrl: item.tocUrl }), ...(item.variable === undefined ? {} : { variable: item.variable }), ...(item.searchDurationMs === undefined ? {} : { searchDurationMs: item.searchDurationMs }), rawFields: item.rawFields ?? {}, traceRef: `backup:${item.editionKey}` } as StoredEdition['metadata']
       if (item.matchKind === 'selected' || item.matchKind === 'user-confirmed') editions.push({ id: randomUUID(), userId, bookId: book.bookId, editionKey: item.editionKey, sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, bookUrl: item.bookUrl, metadata, ...(item.variable === undefined ? {} : { variable: item.variable }) })
@@ -168,8 +186,9 @@ function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapsho
         updatedAt: item.discoveredAt,
       })
     }
+    if (editions.length === 0) throw new Error(`书籍缺少版本：${book.bookId}`)
     const storedBook: StoredBook = { id: book.bookId, userId, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt }
-    if (storedBook.activeEditionKey !== undefined && !seenEditions.has(storedBook.activeEditionKey)) throw new Error(`书籍活动版本不存在：${book.bookId}`)
+    if (storedBook.activeEditionKey !== undefined && !editions.some((edition) => edition.editionKey === storedBook.activeEditionKey)) throw new Error(`书籍活动版本不存在：${book.bookId}`)
     return { book: storedBook, editions, candidates }
   })
   for (const file of archive.manifest.files.filter((item) => item.path.startsWith('books/'))) {

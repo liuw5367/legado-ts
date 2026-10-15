@@ -761,6 +761,7 @@ export async function validateReaderBackup(input: Uint8Array, categories: readon
 async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<string>>> {
   const books = new Map<string, Set<string>>()
   const documents = new Set<string>()
+  const editionOwners = new Map<string, string>()
   for (const file of archive.manifest.files.filter((item) => item.path.startsWith('books/'))) {
     const value = unwrapStoredValue(parseJson<unknown>(archive, file.path))
     const parts = file.path.split('/')
@@ -777,12 +778,18 @@ async function readBackupBooks(archive: BackupArchive): Promise<Map<string, Set<
       for (const source of value) {
         if (!isRecord(source) || typeof source.editionKey !== 'string' || typeof source.sourceId !== 'string' || typeof source.sourceFingerprint !== 'string' || typeof source.bookUrl !== 'string' || source.sourceFingerprint.length === 0 || source.editionKey !== backupEditionKey(source.sourceId, source.bookUrl) || !isIsoDateString(source.discoveredAt)) throw new Error(`书籍版本数据格式无效：${file.path}`)
         if (editions.has(source.editionKey)) throw new Error(`书籍版本重复：${source.editionKey}`)
+        const owner = editionOwners.get(source.editionKey)
+        if (owner !== undefined && owner !== bookId) throw new Error(`书籍版本重复：${source.editionKey}`)
         editions.add(source.editionKey)
+        editionOwners.set(source.editionKey, bookId)
       }
       books.set(bookId, editions)
     }
   }
-  for (const bookId of books.keys()) if (!documents.has(bookId)) throw new Error(`书籍缺少 book.json：${bookId}`)
+  for (const bookId of books.keys()) {
+    if (!documents.has(bookId)) throw new Error(`书籍缺少 book.json：${bookId}`)
+    if (books.get(bookId)?.size === 0) throw new Error(`书籍缺少版本：${bookId}`)
+  }
   return books
 }
 
