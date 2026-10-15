@@ -1,13 +1,15 @@
 import './env.ts'
+import { BACKUP_CATEGORIES, BACKUP_MAX_TOTAL_BYTES, sha256Bytes, type BackupCategory } from '@legado/reader-backup'
 import { getBookDetails } from './runtime/book-details.ts'
 import { createClient } from '@supabase/supabase-js'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { PostgresReaderRepository, SourceManagementError, type ReaderRepository } from './db/repository.ts'
+import { BackupRestoreError, PostgresReaderRepository, SourceManagementError, type ReaderRepository } from './db/repository.ts'
 import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
 import { confirmImport, createImportPreview, listSourceActions, publicImportPreview } from './runtime/source-management.ts'
 import { serveReaderAsset } from './static.ts'
+import { BackupValidationError, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
 import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 
 interface Variables { userId: string }
@@ -111,6 +113,36 @@ app.put('/api/settings', async (context) => {
   } catch (error) {
     return handleError(context, error)
   }
+})
+
+app.get('/api/backup/export', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    const bytes = await createWebBackup(dependencies.repository, context.get('userId'))
+    return new Response(Buffer.from(bytes), { status: 200, headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="legado-reader-backup.zip"', 'Cache-Control': 'no-store', 'X-Backup-Bytes': String(bytes.byteLength), 'X-Backup-Sha256': sha256Bytes(bytes) } })
+  } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/backup/validate', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    const archive = await validateWebBackup(dependencies.repository, context.get('userId'), await readBackupBody(context))
+    return context.json({ manifest: archive.manifest })
+  } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/backup/import', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const rawCategories = context.req.query('categories')?.split(',').map((item) => item.trim()).filter(Boolean) ?? [...BACKUP_CATEGORIES]
+  const categories = [...new Set(rawCategories)]
+  if (categories.length === 0 || categories.some((item) => !(BACKUP_CATEGORIES as readonly string[]).includes(item))) return context.json({ error: { code: 'invalid-input', message: '恢复分类无效' } }, 400)
+  try {
+    const result = await restoreWebBackup(dependencies.repository, context.get('userId'), await readBackupBody(context), categories as BackupCategory[])
+    return context.json(result)
+  } catch (error) { return handleError(context, error) }
 })
 
 app.post('/api/searches', async (context) => {
@@ -385,12 +417,22 @@ async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: 
   }
 }
 
+async function readBackupBody(context: Context<{ Variables: Variables }>): Promise<Uint8Array> {
+  const length = Number(context.req.header('Content-Length') ?? '')
+  if (Number.isFinite(length) && length > BACKUP_MAX_TOTAL_BYTES) throw new BackupValidationError('备份请求超过大小限制')
+  const bytes = new Uint8Array(await context.req.raw.arrayBuffer())
+  if (bytes.byteLength === 0 || bytes.byteLength > BACKUP_MAX_TOTAL_BYTES) throw new BackupValidationError('备份请求超过大小限制')
+  return bytes
+}
+
 function handleError(context: Context<{ Variables: Variables }>, error: unknown): Response {
   const response = errorResponse(error)
   return context.json(response.body, response.status)
 }
 
 function errorResponse(error: unknown): { body: { error: { code: string; message: string } }; status: 400 | 404 | 409 | 500 } {
+  if (error instanceof BackupValidationError) return { body: { error: { code: 'invalid-backup', message: error.message } }, status: 400 }
+  if (error instanceof BackupRestoreError) return { body: { error: { code: 'invalid-backup-selection', message: error.message } }, status: 400 }
   if (error instanceof SourceManagementError) {
     const status = error.code === 'source-not-found' ? 404 : error.code === 'preview-invalid' ? 400 : 409
     return { body: { error: { code: error.code, message: error.message } }, status }
