@@ -111,7 +111,8 @@ export function sha256Bytes(value: Uint8Array): string {
 }
 
 export function categoryForPath(path: string): BackupCategory {
-  if (path === 'bookshelf.json' || path.startsWith('books/')) return 'bookshelf'
+  if (path === 'bookshelf.json') return 'bookshelf'
+  if (/^books\/[^/]+\/(?:book|sources)\.json$/u.test(path)) return 'bookshelf'
   if (path === 'reading-history.json') return 'reading'
   if (path === 'search-history.json') return 'search'
   if (path === 'sources.json' || path === 'source-state.json' || path === 'source-check-config.json') return 'sources'

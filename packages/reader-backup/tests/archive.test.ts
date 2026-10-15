@@ -16,6 +16,7 @@ test('备份 ZIP 使用共享清单并校验每个文件', async () => {
 
 test('备份路径只能映射到定义好的用户数据类别', () => {
   assert.equal(categoryForPath('books/abc/book.json'), 'bookshelf')
+  assert.throws(() => categoryForPath('books/abc/cache.json'), /不属于定义好的用户数据|不属于用户数据/)
   assert.throws(() => categoryForPath('cache/content.json'), /不属于用户数据/)
 })
 
