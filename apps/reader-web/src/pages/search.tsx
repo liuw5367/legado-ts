@@ -5,6 +5,7 @@ import { candidateSelectionKey, selectedCandidateIndex } from '../lib/search-sel
 import { useBookSearch } from '../lib/use-book-search.ts'
 import { pageReturnState } from '../lib/page-navigation.ts'
 import { PageBackButton } from '../components/page-back-button.tsx'
+import { LoadingState } from '../components/loading-state.tsx'
 import { PrecisionToggle } from '../components/precision-toggle.tsx'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -94,8 +95,10 @@ export function SearchPage() {
     </form>
     {searchMessage.length > 0 ? <p className="muted compact-message" role="status">{searchMessage}</p> : null}
     {message.length > 0 ? <p className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</p> : null}
-    <div className="result-summary" aria-live="polite">{status === 'loading' ? <>正在搜索{progress === undefined ? '' : ` · 书源 ${progress.completed}/${progress.total}`}</> : status === 'done' ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
-    <div className="result-list">{groups.length === 0 && status === 'done' ? <div className="empty-state">{booksLoaded ? '没有找到匹配书籍。' : '正在读取已有书籍…'}</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedCandidateIndex(group.items, selectedByGroup[group.key])} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => { const item = candidates[index]; if (item !== undefined) setSelectedByGroup((current) => ({ ...current, [group.key]: candidateSelectionKey(item) })) }} onSave={(action) => void saveCandidate(group, action)} />)}</div>
+    {status === 'loading' ? <LoadingState message={'正在搜索书籍…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}`)} variant={groups.length === 0 ? 'content' : 'inline'} /> : null}
+    {groups.length === 0 && status === 'done' && !booksLoaded ? <LoadingState message="正在读取已有书籍…" /> : null}
+    <div className="result-summary" aria-live="polite">{status === 'done' && booksLoaded ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
+    <div className="result-list">{groups.length === 0 && status === 'done' && booksLoaded ? <div className="empty-state">没有找到匹配书籍。</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedCandidateIndex(group.items, selectedByGroup[group.key])} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => { const item = candidates[index]; if (item !== undefined) setSelectedByGroup((current) => ({ ...current, [group.key]: candidateSelectionKey(item) })) }} onSave={(action) => void saveCandidate(group, action)} />)}</div>
   </section>
 }
 

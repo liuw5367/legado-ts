@@ -27,6 +27,8 @@ The stack is `ui-sans-serif`, system UI, and `PingFang SC`/`Noto Sans SC` fallba
 
 Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-pixel outline for secondary actions. Press feedback is a small downward transform, and focus uses a visible primary outline. Cards are reserved for forms, settings, source panels, and result rows. Inputs inherit the current surface and foreground tokens. Binary search filters such as “精确” use a compact outlined toggle with the primary color and a quiet primary-tinted surface when selected.
 
+Loading states use a 28px ring with a 2px border, a primary-colored leading edge, and a 0.9s linear rotation. Supporting text is 14px with a 12px gap below the ring; an optional return action sits 20px below the text with a 44px minimum hit area. Center blocking states in the available content area, or the safe viewport for startup, authentication, and reading. Inline updates use a 16px ring beside 12px text and retain existing content. Do not add a card, shadow, or entrance animation. Disable rotation for `prefers-reduced-motion`. The inline HTML startup styles use the same dimensions and system theme until account settings become available.
+
 ## 5. Layout principles
 
 Pages use a single reading column capped at 680px, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped. Paginated reading reuses the same viewport width and lays out one non-scrollable page per column.

@@ -11,8 +11,23 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/pwa/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png" />
     <title>Legado Reader</title>
+    <style>
+      .boot-loading { --boot-background: #f6f3ed; --boot-muted: #70685e; --boot-primary: #76542e; --boot-border: #ded8ce; box-sizing: border-box; display: flex; min-height: 100vh; min-height: 100dvh; flex-direction: column; align-items: center; justify-content: center; padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px)); background: var(--boot-background); color: var(--boot-muted); font: 14px/1.6 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif; text-align: center; }
+      body { margin: 0; }
+      .boot-loading-status { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+      .boot-loading-spinner { box-sizing: border-box; width: 28px; height: 28px; border: 2px solid var(--boot-border); border-top-color: var(--boot-primary); border-radius: 50%; animation: boot-spin .9s linear infinite; }
+      .boot-loading p { margin: 0; }
+      .boot-loading noscript { margin-top: 20px; }
+      .boot-loading-refresh { min-height: 44px; margin-top: 20px; padding: 8px 14px; border: 1px solid var(--boot-border); border-radius: 6px; background: transparent; color: var(--boot-primary); font: inherit; cursor: pointer; }
+      .boot-loading-refresh:focus-visible { outline: 2px solid var(--boot-primary); outline-offset: 2px; }
+      .boot-loading-refresh:active { transform: scale(.97); }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-color-scheme: dark) { .boot-loading { --boot-background: #171513; --boot-muted: #b8afa4; --boot-primary: #d6aa72; --boot-border: #3c3832; color-scheme: dark; } }
+      @media (prefers-reduced-motion: reduce) { .boot-loading-spinner { animation: none; } }
+    </style>
+    <noscript><style>.boot-loading-status { display: none; }</style></noscript>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><main class="boot-loading"><div class="boot-loading-status" role="status"><span class="boot-loading-spinner" aria-hidden="true"></span><p>正在打开阅读器…</p></div><noscript>请启用 JavaScript 后使用阅读器。</noscript></main></div>
   </body>
 </html>

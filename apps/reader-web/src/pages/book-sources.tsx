@@ -4,6 +4,7 @@ import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
 import type { BookSourceItem, BookSourcesResponse } from '../../shared/book-sources.ts'
 import { PageBackButton } from '../components/page-back-button.tsx'
+import { LoadingState } from '../components/loading-state.tsx'
 import { PrecisionToggle } from '../components/precision-toggle.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
@@ -117,12 +118,13 @@ export function BookSourcesPage() {
   })
   const fallback = prefix + '/toc' + (book?.activeEditionKey ? '?editionKey=' + encodeURIComponent(book.activeEditionKey) : '')
   return <section className="page-stack page-narrow book-sources-page">
-    <div className="toc-heading"><PageBackButton fallback={fallback} /><div className="toc-heading-main"><h1>切换书源</h1><p className="muted">{book?.name ?? '书籍来源'}</p></div></div>
+    <div className="toc-heading">{data === null && error.length === 0 ? null : <PageBackButton fallback={fallback} />}<div className="toc-heading-main"><h1>切换书源</h1><p className="muted">{book?.name ?? '书籍来源'}</p></div></div>
     {error.length > 0 ? <p className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>重试列表</Button></p> : null}
-    {data === null ? error.length === 0 ? <p className="muted">正在读取可用书源…</p> : null : <>
+    {data === null ? error.length === 0 ? <LoadingState message="正在读取可用书源…" action={<PageBackButton fallback={fallback} />} /> : null : <>
       <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); void search(keyword, precision) }}><div className="search-row"><Input aria-label="搜索可用书源" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={status !== 'loading' && keyword.trim().length === 0} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div><p className="muted small">查看目录只预览；切换恢复该书源进度，无记录从首章开始。</p></form>
-      {message.length > 0 ? <p className="muted small" role="status">{message}</p> : null}{status === 'loading' && progress !== undefined ? <p className="muted small" role="status">书源 {progress.completed}/{progress.total}</p> : null}
-      <div className="book-source-list">{data.sources.length === 0 && results.length === 0 ? <div className="empty-state">{status === 'loading' ? '正在搜索…' : '没有可用书源，请搜索。'}</div> : null}{data.sources.map((source) => {
+      {message.length > 0 ? <p className="muted small" role="status">{message}</p> : null}
+      {status === 'loading' ? <LoadingState message={'正在搜索可用书源…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}`)} variant={data.sources.length === 0 && results.length === 0 ? 'content' : 'inline'} /> : null}
+      <div className="book-source-list">{data.sources.length === 0 && results.length === 0 && status !== 'loading' ? <div className="empty-state">没有可用书源，请搜索。</div> : null}{data.sources.map((source) => {
         const current = source.status === 'saved' && source.editionKey === data.activeEditionKey
         const key = source.status === 'saved' ? source.editionKey : source.candidateId
         return <article className={'book-source-row' + (current ? ' current' : '')} key={key}><div className="book-source-info"><strong>{source.name}</strong><p className="muted small" title={source.bookUrl}>{source.bookUrl}</p><span className="muted small">{current ? '当前使用' : source.status === 'saved' ? '已保存' : '已发现'}</span></div><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null} onClick={() => openSource(source, 'directory')}>查看目录</Button><Button size="sm" disabled={current || opening !== null} onClick={() => openSource(source, 'switch')}>{opening === key ? '加载中…' : current ? '当前使用' : '切换书源'}</Button></div></article>

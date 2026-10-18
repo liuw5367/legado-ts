@@ -1,37 +1,69 @@
-import { Navigate, Outlet, RouterProvider, createBrowserRouter, useLocation } from 'react-router-dom'
+import { lazy, type ReactNode } from 'react'
+import { Navigate, Outlet, RouterProvider, createBrowserRouter, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { AccountLayout } from './components/account-layout.tsx'
+import { LoadingState } from './components/loading-state.tsx'
+import { PageBackButton } from './components/page-back-button.tsx'
+import { PageLoadBoundary } from './components/page-load-boundary.tsx'
 import { ReaderLayout } from './components/reader-layout.tsx'
 import { useAuth } from './lib/auth-context.tsx'
-import { AccountHomePage } from './pages/account-home.tsx'
-import { AuthConfirmPage } from './pages/auth-confirm.tsx'
-import { ChangePasswordPage } from './pages/change-password.tsx'
-import { ForgotPasswordPage } from './pages/forgot-password.tsx'
-import { LoginPage } from './pages/login.tsx'
-import { RegisterPage } from './pages/register.tsx'
-import { ResetPasswordPage } from './pages/reset-password.tsx'
-import { SearchPage } from './pages/search.tsx'
-import { SourcesPage } from './pages/sources.tsx'
-import { SettingsPage } from './pages/settings.tsx'
-import { ReadingSettingsPage } from './pages/reading-settings.tsx'
-import { ReaderEntryPage, ReaderPage } from './pages/reader.tsx'
-import { BookSourcesPage } from './pages/book-sources.tsx'
-import { BookDetailsPage } from './pages/book-details.tsx'
-import { TocPage } from './pages/toc.tsx'
+
+const AccountHomePage = lazy(() => import('./pages/account-home.tsx').then((module) => ({ default: module.AccountHomePage })))
+const AuthConfirmPage = lazy(() => import('./pages/auth-confirm.tsx').then((module) => ({ default: module.AuthConfirmPage })))
+const ChangePasswordPage = lazy(() => import('./pages/change-password.tsx').then((module) => ({ default: module.ChangePasswordPage })))
+const ForgotPasswordPage = lazy(() => import('./pages/forgot-password.tsx').then((module) => ({ default: module.ForgotPasswordPage })))
+const LoginPage = lazy(() => import('./pages/login.tsx').then((module) => ({ default: module.LoginPage })))
+const RegisterPage = lazy(() => import('./pages/register.tsx').then((module) => ({ default: module.RegisterPage })))
+const ResetPasswordPage = lazy(() => import('./pages/reset-password.tsx').then((module) => ({ default: module.ResetPasswordPage })))
+const SearchPage = lazy(() => import('./pages/search.tsx').then((module) => ({ default: module.SearchPage })))
+const SourcesPage = lazy(() => import('./pages/sources.tsx').then((module) => ({ default: module.SourcesPage })))
+const SettingsPage = lazy(() => import('./pages/settings.tsx').then((module) => ({ default: module.SettingsPage })))
+const ReadingSettingsPage = lazy(() => import('./pages/reading-settings.tsx').then((module) => ({ default: module.ReadingSettingsPage })))
+const ReaderEntryPage = lazy(() => import('./pages/reader.tsx').then((module) => ({ default: module.ReaderEntryPage })))
+const ReaderPage = lazy(() => import('./pages/reader.tsx').then((module) => ({ default: module.ReaderPage })))
+const BookSourcesPage = lazy(() => import('./pages/book-sources.tsx').then((module) => ({ default: module.BookSourcesPage })))
+const BookDetailsPage = lazy(() => import('./pages/book-details.tsx').then((module) => ({ default: module.BookDetailsPage })))
+const TocPage = lazy(() => import('./pages/toc.tsx').then((module) => ({ default: module.TocPage })))
+
+function LazyPage({ children, viewport = false, backTo, bookToc = false, searchBack = false }: { children: ReactNode; viewport?: boolean; backTo?: string; bookToc?: boolean; searchBack?: boolean }) {
+  const { bookId = '' } = useParams()
+  const [params] = useSearchParams()
+  const targetBookId = params.get('bookId') ?? ''
+  const fallback = bookToc ? `/books/${encodeURIComponent(bookId)}/toc` : searchBack && targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : backTo
+  return <PageLoadBoundary variant={viewport ? 'viewport' : 'content'} action={fallback === undefined ? undefined : <PageBackButton fallback={fallback} />}>
+    {children}
+  </PageLoadBoundary>
+}
 
 function ProtectedRoute() {
   const { error, loading, session } = useAuth(); const location = useLocation()
-  if (loading) return <main className="app-main app-main-standalone"><p className="muted">正在读取登录状态…</p></main>
+  if (loading) return <main><LoadingState message="正在读取登录状态…" variant="viewport" /></main>
   if (error !== undefined) return <main className="app-main app-main-standalone"><section className="card"><h1>认证服务未配置</h1><p className="error">{error.message}</p><p className="muted">请配置 Supabase 的公开 URL 和 publishable key 后重试。</p></section></main>
   return session === null ? <Navigate to="/login" replace state={{ from: location.pathname + location.search + location.hash }} /> : <Outlet />
 }
 
 const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
-  { path: '/register', element: <RegisterPage /> },
-  { path: '/forgot-password', element: <ForgotPasswordPage /> },
-  { path: '/auth/confirm', element: <AuthConfirmPage /> },
-  { path: '/reset-password', element: <ResetPasswordPage /> },
-  { element: <ProtectedRoute />, children: [{ element: <AccountLayout />, children: [{ index: true, element: <AccountHomePage /> }, { path: '/search', element: <SearchPage /> }, { path: '/sources', element: <SourcesPage /> }, { path: '/books/:bookId/details', element: <BookDetailsPage /> }, { path: '/books/:bookId/toc', element: <TocPage /> }, { path: '/books/:bookId/sources', element: <BookSourcesPage /> }, { path: '/account/password', element: <ChangePasswordPage /> }, { path: '/account/settings', element: <SettingsPage /> }, { path: '/account/settings/reading', element: <ReadingSettingsPage /> }] }, { element: <ReaderLayout />, children: [{ path: '/books/:bookId/read', element: <ReaderEntryPage /> }, { path: '/books/:bookId/read/:chapterId', element: <ReaderPage /> }] }] },
+  { path: '/login', element: <LazyPage viewport><LoginPage /></LazyPage> },
+  { path: '/register', element: <LazyPage viewport><RegisterPage /></LazyPage> },
+  { path: '/forgot-password', element: <LazyPage viewport backTo="/login"><ForgotPasswordPage /></LazyPage> },
+  { path: '/auth/confirm', element: <LazyPage viewport><AuthConfirmPage /></LazyPage> },
+  { path: '/reset-password', element: <LazyPage viewport backTo="/login"><ResetPasswordPage /></LazyPage> },
+  { element: <ProtectedRoute />, children: [
+    { element: <AccountLayout />, children: [
+      { index: true, element: <LazyPage><AccountHomePage /></LazyPage> },
+      { path: '/search', element: <LazyPage searchBack><SearchPage /></LazyPage> },
+      { path: '/sources', element: <LazyPage backTo="/account/settings"><SourcesPage /></LazyPage> },
+      { path: '/books/:bookId/details', element: <LazyPage backTo="/"><BookDetailsPage /></LazyPage> },
+      { path: '/books/:bookId/toc', element: <LazyPage backTo="/"><TocPage /></LazyPage> },
+      { path: '/books/:bookId/sources', element: <LazyPage bookToc><BookSourcesPage /></LazyPage> },
+      { path: '/account/password', element: <LazyPage backTo="/account/settings"><ChangePasswordPage /></LazyPage> },
+      { path: '/account/settings', element: <LazyPage><SettingsPage /></LazyPage> },
+      { path: '/account/settings/reading', element: <LazyPage backTo="/account/settings"><ReadingSettingsPage /></LazyPage> },
+    ] },
+    { element: <ReaderLayout />, children: [
+      { path: '/books/:bookId/read', element: <LazyPage viewport backTo="/"><ReaderEntryPage /></LazyPage> },
+      { path: '/books/:bookId/read/:chapterId', element: <LazyPage viewport backTo="/"><ReaderPage /></LazyPage> },
+    ] },
+  ] },
   { path: '*', element: <Navigate to="/" replace /> },
 ])
 

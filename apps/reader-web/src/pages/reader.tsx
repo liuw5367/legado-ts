@@ -3,6 +3,7 @@ import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { MoreMenu } from '../components/more-menu.tsx'
 import { PageBackButton } from '../components/page-back-button.tsx'
+import { LoadingState } from '../components/loading-state.tsx'
 import { ReaderIcon } from '../components/reader-icon.tsx'
 import { browserUrl, chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
 import { pageReturnState, pageReturnTarget } from '../lib/page-navigation.ts'
@@ -326,7 +327,7 @@ export function ReaderPage() {
   }
   const returnTarget = pageReturnTarget(location.state, location.pathname, '/')
   if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
-  if (content === null) return <section className="reader-loading"><PageBackButton /><p className="muted">正在读取正文…</p></section>
+  if (content === null) return <LoadingState message="正在读取正文…" variant="viewport" action={<PageBackButton />} />
   const dark = resolvedTheme === 'dark'
   const paged = settings.readingMode === 'paged'
   const pageCounter = pageLayout.pageCount > 0 ? pageLabel(pageIndex, pageLayout.pageCount) : '排版中…'
@@ -471,7 +472,7 @@ export function ReaderEntryPage() {
   }, [bookId, navigate, requestedEditionKey, cache, location.state, retryNonce])
 
   if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
-  return <section className="reader-loading"><PageBackButton /><p className="muted">正在打开阅读…</p></section>
+  return <LoadingState message="正在打开阅读…" variant="viewport" action={<PageBackButton />} />
 }
 
 function chapterLink(bookId: string, chapter: ApiChapter, editionKey: string): string { return `/books/${encodeURIComponent(bookId)}/read/${encodeURIComponent(chapter.chapterId)}?editionKey=${encodeURIComponent(editionKey)}` }
