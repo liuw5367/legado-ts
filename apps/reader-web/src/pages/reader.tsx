@@ -327,7 +327,7 @@ export function ReaderPage() {
   }
   const returnTarget = pageReturnTarget(location.state, location.pathname, '/')
   if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
-  if (content === null) return <LoadingState message="正在读取正文…" variant="viewport" action={<PageBackButton />} />
+  if (content === null) return <LoadingState message="正在读取正文…" variant="viewport" action={<PageBackButton appearance="button" />} />
   const dark = resolvedTheme === 'dark'
   const paged = settings.readingMode === 'paged'
   const pageCounter = pageLayout.pageCount > 0 ? pageLabel(pageIndex, pageLayout.pageCount) : '排版中…'
@@ -472,7 +472,7 @@ export function ReaderEntryPage() {
   }, [bookId, navigate, requestedEditionKey, cache, location.state, retryNonce])
 
   if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
-  return <LoadingState message="正在打开阅读…" variant="viewport" action={<PageBackButton />} />
+  return <LoadingState message="正在打开阅读…" variant="viewport" action={<PageBackButton appearance="button" />} />
 }
 
 function chapterLink(bookId: string, chapter: ApiChapter, editionKey: string): string { return `/books/${encodeURIComponent(bookId)}/read/${encodeURIComponent(chapter.chapterId)}?editionKey=${encodeURIComponent(editionKey)}` }

@@ -29,7 +29,7 @@ function LazyPage({ children, viewport = false, backTo, bookToc = false, searchB
   const [params] = useSearchParams()
   const targetBookId = params.get('bookId') ?? ''
   const fallback = bookToc ? `/books/${encodeURIComponent(bookId)}/toc` : searchBack && targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : backTo
-  return <PageLoadBoundary variant={viewport ? 'viewport' : 'content'} action={fallback === undefined ? undefined : <PageBackButton fallback={fallback} />}>
+  return <PageLoadBoundary variant={viewport ? 'viewport' : 'content'} action={fallback === undefined ? undefined : <PageBackButton appearance="button" fallback={fallback} />}>
     {children}
   </PageLoadBoundary>
 }

@@ -104,8 +104,7 @@ a { color: inherit; }
 .loading-state-spinner { width: 28px; height: 28px; flex: 0 0 auto; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: loading-spin .9s linear infinite; }
 .loading-state-message { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .loading-state-action { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-.loading-state-action .button, .loading-state-action .back-link { min-height: 44px; }
-.loading-state-action .back-link:active { transform: scale(.97); }
+.loading-state-action .button { min-height: 44px; }
 .loading-state-inline { flex: 0 0 auto; padding: 8px 0; }
 .loading-state-inline .loading-state-status { flex-direction: row; gap: 8px; }
 .loading-state-inline .loading-state-spinner { width: 16px; height: 16px; }
