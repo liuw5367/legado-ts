@@ -83,7 +83,7 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(styles, /\.reader-content-paged \{/u)
   assert.match(styles, /column-width: var\(--reader-page-width, 100vw\)/u)
   assert.doesNotMatch(styles, /column-width: 100%/u)
-  assert.match(styles, /padding-top: calc\(var\(--reader-margin-top, 16px\) \+ var\(--safe-top\)\)/u)
+  assert.match(styles, /padding-top: var\(--reader-content-top\)/u)
   assert.match(styles, /--app-safe-bottom: calc\(var\(--safe-bottom\) \/ 2\)/u)
   assert.match(styles, /\.app-main \{ padding-bottom: calc\(88px \+ var\(--app-safe-bottom\)\)/u)
   assert.doesNotMatch(styles, /\.reader-content-paged \{[^}]*136px/su)

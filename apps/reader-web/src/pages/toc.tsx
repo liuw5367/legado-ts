@@ -82,7 +82,7 @@ export function TocPage() {
     const header = document.querySelector<HTMLElement>('.app-header')
     const measure = () => {
       const headerHeight = header?.getBoundingClientRect().height ?? 0
-      controls.style.top = 'calc(' + headerHeight + 'px + ' + (headerHeight > 0 ? '0px' : 'var(--safe-top) + 8px') + ')'
+      controls.style.setProperty('--toc-header-offset', `${headerHeight}px`)
       controls.parentElement?.style.setProperty('--toc-scroll-offset', `${controls.getBoundingClientRect().height + parseFloat(getComputedStyle(controls).top) + 8}px`)
     }
     const observer = new ResizeObserver(measure)

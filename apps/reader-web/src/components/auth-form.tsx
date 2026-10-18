@@ -4,8 +4,9 @@ import { Button } from './ui/button.tsx'
 import { Card } from './ui/card.tsx'
 import { Input } from './ui/input.tsx'
 
-export function AuthCard({ title, children, footer, backTo }: { title: string; children: ReactNode; footer?: ReactNode; backTo?: string }) {
-  return <div className="app-shell"><main className="app-main app-main-standalone"><Card>{backTo === undefined ? <h1>{title}</h1> : <div className="auth-card-heading"><PageBackButton fallback={backTo} /><h1>{title}</h1></div>}{children}{footer === undefined ? null : <div className="muted" style={{ marginTop: '1.25rem' }}>{footer}</div>}</Card></main></div>
+export function AuthCard({ title, children, footer, backTo, embedded = false }: { title: string; children: ReactNode; footer?: ReactNode; backTo?: string; /** 已有页面布局时仅渲染卡片，避免重复安全区和顶部留白。 */ embedded?: boolean }) {
+  const card = <Card>{backTo === undefined ? <h1>{title}</h1> : <div className="auth-card-heading"><PageBackButton fallback={backTo} /><h1>{title}</h1></div>}{children}{footer === undefined ? null : <div className="muted" style={{ marginTop: '1.25rem' }}>{footer}</div>}</Card>
+  return embedded ? card : <div className="app-shell"><main className="app-main app-main-standalone">{card}</main></div>
 }
 
 export function EmailPasswordFields({ submitLabel, onSubmit, includeCurrent = false }: { submitLabel: string; onSubmit: (values: { email: string; password: string; currentPassword?: string }) => Promise<void>; includeCurrent?: boolean }) {
