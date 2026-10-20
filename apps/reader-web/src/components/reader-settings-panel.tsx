@@ -1,8 +1,10 @@
+import { useId } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { stepSetting } from '../lib/setting-step.ts'
 import { ReadingModeSelect, ThemeModeSelect, useReaderSettings } from '../lib/settings-context.tsx'
 
 export function ReaderSettingsPanel() {
+  const marginTitle = useId()
   const { settings, saving, error, updateSettings } = useReaderSettings()
   async function save(patch: Parameters<typeof updateSettings>[0]) {
     try { await updateSettings(patch) }
@@ -13,7 +15,7 @@ export function ReaderSettingsPanel() {
     <div className="reader-setting-row"><div><strong>阅读模式</strong><p className="muted small">滚动浏览章节，或按屏幕分页阅读。</p></div><ReadingModeSelect /></div>
     <SettingRange label="字号" value={settings.fontSize} min={15} max={28} step={1} suffix="px" onChange={(value) => void save({ fontSize: value })} />
     <SettingRange label="行距" value={settings.lineHeight} min={1.4} max={2.6} step={0.1} onChange={(value) => void save({ lineHeight: value })} />
-    <div className="reader-setting-group" aria-labelledby="reader-margin-settings-title"><p id="reader-margin-settings-title" className="reader-setting-group-title muted small">正文边距</p>
+    <div className="reader-setting-group" aria-labelledby={marginTitle}><p id={marginTitle} className="reader-setting-group-title muted small">正文边距</p>
       <SettingRange label="上边距" value={settings.marginTop} min={0} max={64} step={1} suffix="px" onChange={(value) => void save({ marginTop: value })} />
       <SettingRange label="右边距" value={settings.marginRight} min={0} max={64} step={1} suffix="px" onChange={(value) => void save({ marginRight: value })} />
       <SettingRange label="下边距" value={settings.marginBottom} min={0} max={64} step={1} suffix="px" onChange={(value) => void save({ marginBottom: value })} />

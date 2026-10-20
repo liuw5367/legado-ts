@@ -7,7 +7,7 @@ interface LoadingStateProps {
 }
 
 export function LoadingState({ message, variant = 'content', action }: LoadingStateProps) {
-  return <div className={`loading-state loading-state-${variant}`}>
+  return <div data-page-loading={variant !== 'inline' ? 'true' : undefined} className={`loading-state loading-state-${variant}`}>
     <div className="loading-state-status" role="status">
       <span className="loading-state-spinner" aria-hidden="true" />
       <p className="loading-state-message">{message}</p>

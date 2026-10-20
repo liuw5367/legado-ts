@@ -8,16 +8,22 @@ interface SearchTransport {
 /** 流与服务端取消结算后才允许下一次；创建ID前取消也会补发取消。 */
 export class SearchOperation {
   private current: { controller: AbortController; id: string; cancelled: boolean; completed: boolean; cancelPromise?: Promise<unknown> } | undefined
+  private pendingCancellation: string | undefined
   private transport: SearchTransport
   constructor(transport: SearchTransport) { this.transport = transport }
   private settleCancel(run: NonNullable<SearchOperation['current']>) {
     if (run.id.length === 0) return Promise.resolve()
-    run.cancelPromise ??= this.transport.cancel(run.id)
+    run.cancelPromise ??= this.transport.cancel(run.id).catch((error: unknown) => {
+      this.pendingCancellation = run.id
+      throw error
+    })
     return run.cancelPromise
   }
+  get hasPendingCancellation() { return this.pendingCancellation !== undefined }
   get isRunning() { return this.current !== undefined }
   async start(keyword: string, precision: boolean, event: (value: StreamEvent) => void, created: (id: string) => void, sourceIds?: string[]) {
     if (this.current !== undefined) throw new Error('上一轮搜索尚未结束')
+    if (this.pendingCancellation !== undefined) throw new Error('上次取消未完成，请重试取消')
     const run = { controller: new AbortController(), id: '', cancelled: false, completed: false }
     this.current = run
     try {
@@ -35,7 +41,12 @@ export class SearchOperation {
   }
   async cancel() {
     const run = this.current
-    if (run === undefined || run.completed) return
+    if (run === undefined) {
+      const id = this.pendingCancellation
+      if (id !== undefined) { await this.transport.cancel(id); if (this.pendingCancellation === id) this.pendingCancellation = undefined }
+      return
+    }
+    if (run.completed) return
     run.cancelled = true; run.controller.abort()
     await this.settleCancel(run)
   }

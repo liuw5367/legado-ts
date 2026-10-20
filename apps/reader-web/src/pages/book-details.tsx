@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { usePageLoadEffect } from '../lib/use-page-resource.ts'
+import { useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
 import { BookCover } from '../components/book-cover.tsx'
@@ -21,14 +22,15 @@ export function BookDetailsPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [retry, setRetry] = useState(0)
-  useEffect(() => {
+  usePageLoadEffect((settle) => {
     const controller = new AbortController()
-    setData(cache.get(bookId, editionKey)?.details ?? null); setError('')
+    setData((previous) => previous ?? cache.get(bookId, editionKey)?.details ?? null); setError('')
     void apiFetch<BookDetailsResponse>('/api/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey), { signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setData(value) })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '详情加载失败') })
+      .finally(() => { if (!controller.signal.aborted) settle() })
     return () => controller.abort()
-  }, [bookId, editionKey, retry, cache])
+  }, [bookId, editionKey, retry], ['books', 'sources', `book:${bookId}`])
   async function updateShelf(add: boolean) {
     if (data === null || saving) return
     setSaving(true); setError('')

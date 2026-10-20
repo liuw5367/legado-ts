@@ -1,10 +1,9 @@
 import { lazy, type ReactNode } from 'react'
-import { Navigate, Outlet, RouterProvider, createBrowserRouter, useLocation, useParams, useSearchParams } from 'react-router-dom'
-import { AccountLayout } from './components/account-layout.tsx'
+import { Navigate, Outlet, Route, RouterProvider, createBrowserRouter, useLocation, useParams, useSearchParams } from 'react-router-dom'
+import { PageStack } from './components/page-stack.tsx'
 import { LoadingState } from './components/loading-state.tsx'
 import { PageBackButton } from './components/page-back-button.tsx'
 import { PageLoadBoundary } from './components/page-load-boundary.tsx'
-import { ReaderLayout } from './components/reader-layout.tsx'
 import { useAuth } from './lib/auth-context.tsx'
 
 const AccountHomePage = lazy(() => import('./pages/account-home.tsx').then((module) => ({ default: module.AccountHomePage })))
@@ -51,24 +50,23 @@ const router = createBrowserRouter([
   { path: '/auth/confirm', element: <LazyPage viewport><AuthConfirmPage /></LazyPage> },
   { path: '/reset-password', element: <LazyPage viewport backTo="/login"><ResetPasswordPage /></LazyPage> },
   { element: <ProtectedRoute />, children: [
-    { element: <AccountLayout />, children: [
-      { index: true, element: <LazyPage><AccountHomePage /></LazyPage> },
-      { path: '/search', element: <LazyPage searchBack><SearchPage /></LazyPage> },
-      { path: '/discover', element: <LazyPage><DiscoverPage /></LazyPage> },
-      { path: '/sources', element: <LazyPage backTo="/account/settings"><SourcesPage /></LazyPage> },
-      { path: '/books/:bookId/details', element: <LazyPage backTo="/"><BookDetailsPage /></LazyPage> },
-      { path: '/books/:bookId/toc', element: <LazyPage backTo="/"><TocPage /></LazyPage> },
-      { path: '/books/:bookId/sources', element: <LazyPage bookToc><BookSourcesPage /></LazyPage> },
-      { path: '/account/password', element: <LazyPage backTo="/account/settings"><ChangePasswordPage /></LazyPage> },
-      { path: '/account/settings', element: <LazyPage><SettingsPage /></LazyPage> },
-      { path: '/account/settings/about', element: <LazyPage backTo="/account/settings"><AboutAppPage /></LazyPage> },
-      { path: '/account/settings/general', element: <LazyPage backTo="/account/settings"><GeneralSettingsPage /></LazyPage> },
-      { path: '/account/settings/reading', element: <LazyPage backTo="/account/settings"><ReadingSettingsPage /></LazyPage> },
-    ] },
-    { element: <ReaderLayout />, children: [
-      { path: '/books/:bookId/read', element: <LazyPage viewport backTo="/"><ReaderEntryPage /></LazyPage> },
-      { path: '/books/:bookId/read/:chapterId', element: <LazyPage viewport backTo="/"><ReaderPage /></LazyPage> },
-    ] },
+    { path: '/*', element: <PageStack>
+      <Route path="/" element={<LazyPage><AccountHomePage /></LazyPage>} />
+      <Route path="/search" element={<LazyPage searchBack><SearchPage /></LazyPage>} />
+      <Route path="/discover" element={<LazyPage><DiscoverPage /></LazyPage>} />
+      <Route path="/sources" element={<LazyPage backTo="/account/settings"><SourcesPage /></LazyPage>} />
+      <Route path="/books/:bookId/details" element={<LazyPage backTo="/"><BookDetailsPage /></LazyPage>} />
+      <Route path="/books/:bookId/toc" element={<LazyPage backTo="/"><TocPage /></LazyPage>} />
+      <Route path="/books/:bookId/sources" element={<LazyPage bookToc><BookSourcesPage /></LazyPage>} />
+      <Route path="/account/password" element={<LazyPage backTo="/account/settings"><ChangePasswordPage /></LazyPage>} />
+      <Route path="/account/settings" element={<LazyPage><SettingsPage /></LazyPage>} />
+      <Route path="/account/settings/about" element={<LazyPage backTo="/account/settings"><AboutAppPage /></LazyPage>} />
+      <Route path="/account/settings/general" element={<LazyPage backTo="/account/settings"><GeneralSettingsPage /></LazyPage>} />
+      <Route path="/account/settings/reading" element={<LazyPage backTo="/account/settings"><ReadingSettingsPage /></LazyPage>} />
+      <Route path="/books/:bookId/read" element={<LazyPage viewport backTo="/"><ReaderEntryPage /></LazyPage>} />
+      <Route path="/books/:bookId/read/:chapterId" element={<LazyPage viewport backTo="/"><ReaderPage /></LazyPage>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </PageStack> },
   ] },
   { path: '*', element: <Navigate to="/" replace /> },
 ])

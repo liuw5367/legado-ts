@@ -1,3 +1,4 @@
+import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
@@ -37,7 +38,7 @@ export function BookSourcesPage() {
   const [pendingSwitch, setPendingSwitch] = useState<PendingSourceSwitch | null>(null)
   const [retry, setRetry] = useState(0)
   const controllerRef = useRef<AbortController | null>(null)
-  const { candidates, searchId, status, message, progress, search, replaceSearch, cancelAndWait, cancel } = useBookSearch()
+  const { candidates, searchId, status, message, progress, cancellationPending, search, replaceSearch, cancelAndWait, cancel } = useBookSearch()
   const prefix = '/books/' + encodeURIComponent(bookId)
   const managedSourceById = useMemo(() => new Map(managedSources.map((source) => [source.sourceId, source])), [managedSources])
   const accountDefaults = useMemo(() => new Map(selectOneSourcePerDomain(managedSources.filter((source) => source.enabled), compareSourceManagementOrder).map((source) => [sourceDomainInfo(source.sourceId).key, source])), [managedSources])
@@ -58,17 +59,23 @@ export function BookSourcesPage() {
 
   useEffect(() => {
     const controller = new AbortController(); controllerRef.current = controller
-    setBook(null); setData(null); setManagedSources([]); setError(''); setNotice(''); setOpening(null); setSwitchingSourceId(null); setPendingSwitch(null)
+    setOpening(null); setSwitchingSourceId(null); setPendingSwitch(null)
+    return () => controller.abort()
+  }, [])
+  usePageLoadEffect((settle) => {
+    const controller = new AbortController()
+    setError(''); setNotice('')
     void Promise.all([
       apiFetch<BookDetailsResponse>('/api' + prefix + '/details', { signal: controller.signal }),
       apiFetch<BookSourcesResponse>('/api' + prefix + '/sources', { signal: controller.signal }),
       apiFetch<SourceManagementPage>('/api/source-management?all=true', { signal: controller.signal }),
     ]).then(([details, sources, sourceManagement]) => {
       if (controller.signal.aborted) return
-      setBook(details.book); setData(sources); setManagedSources(sourceManagement.sources); setKeyword(details.book.name)
+      setBook(details.book); setData(sources); setManagedSources(sourceManagement.sources); setKeyword((previous) => previous || details.book.name)
     }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '书源加载失败') })
+      .finally(() => { if (!controller.signal.aborted) settle() })
     return () => controller.abort()
-  }, [prefix, retry])
+  }, [prefix, retry], ['books', 'sources', 'candidates', `book:${bookId}`])
 
   async function refreshSourceLists(signal?: AbortSignal) {
     const [sourceManagement, sources] = await Promise.all([
@@ -183,6 +190,7 @@ export function BookSourcesPage() {
   const ungroupedResults = results.filter(({ item }) => !groupedResultDomains.has(sourceDomainInfo(item.sourceId).key))
   const fallback = prefix + '/toc' + (book?.activeEditionKey ? '?editionKey=' + encodeURIComponent(book.activeEditionKey) : '')
   return <section className="page-stack page-narrow book-sources-page">
+    {cancellationPending ? <p className="error" role="alert">搜索取消尚未完成。<Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></p> : null}
     <div className="toc-heading">{data === null && error.length === 0 ? null : <PageBackButton fallback={fallback} />}<div className="toc-heading-main"><h1>切换书源</h1><p className="muted">{book?.name ?? '书籍来源'}</p></div></div>
     {error.length > 0 ? <p className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>重试列表</Button></p> : null}
     {data === null ? error.length === 0 ? <LoadingState message="正在读取可用书源…" action={<PageBackButton appearance="button" fallback={fallback} />} /> : null : <>

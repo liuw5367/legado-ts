@@ -130,6 +130,7 @@ const settings = {
   marginBottom: 16,
   marginLeft: 16,
   general: { bookshelfSort: 'addedAt' },
+  pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' },
   updatedAt: now(),
 }
 
@@ -155,19 +156,19 @@ async function readJson(request) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
-function session() {
+function session(second = false) {
   const expiresIn = 60 * 60
   return {
-    access_token: ACCESS_TOKEN,
+    access_token: second ? ACCESS_TOKEN + '-second' : ACCESS_TOKEN,
     token_type: 'bearer',
     expires_in: expiresIn,
     expires_at: Math.floor(Date.now() / 1000) + expiresIn,
-    refresh_token: REFRESH_TOKEN,
+    refresh_token: second ? REFRESH_TOKEN + '-second' : REFRESH_TOKEN,
     user: {
-      id: USER_ID,
+      id: second ? '22222222-2222-4222-8222-222222222222' : USER_ID,
       aud: 'authenticated',
       role: 'authenticated',
-      email: FIXTURE_EMAIL,
+      email: second ? 'reader2@example.test' : FIXTURE_EMAIL,
       email_confirmed_at: now(),
       app_metadata: { provider: 'email', providers: ['email'] },
       user_metadata: {},
@@ -377,20 +378,20 @@ async function handleAuth(request, response, url) {
   if (!url.pathname.startsWith('/auth/v1/')) return false
   if (request.method === 'POST' && url.pathname === '/auth/v1/token') {
     const body = await readJson(request)
-    if (url.searchParams.get('grant_type') === 'refresh_token' && body.refresh_token === REFRESH_TOKEN) {
-      json(response, session(), 200, cors)
+    if (url.searchParams.get('grant_type') === 'refresh_token' && [REFRESH_TOKEN, REFRESH_TOKEN + '-second'].includes(body.refresh_token)) {
+      json(response, session(body.refresh_token.endsWith('-second')), 200, cors)
       return true
     }
-    if (body.email !== FIXTURE_EMAIL || body.password !== FIXTURE_PASSWORD) {
+    if (![FIXTURE_EMAIL, 'reader2@example.test'].includes(body.email) || body.password !== FIXTURE_PASSWORD) {
       json(response, { code: 400, error_code: 'invalid_credentials', msg: '测试账号或密码不正确' }, 400, cors)
       return true
     }
-    json(response, session(), 200, cors)
+    json(response, session(body.email === 'reader2@example.test'), 200, cors)
     return true
   }
   if (request.method === 'GET' && url.pathname === '/auth/v1/user') {
-    if (request.headers.authorization !== `Bearer ${ACCESS_TOKEN}`) json(response, { message: '测试会话无效' }, 401, cors)
-    else json(response, session().user, 200, cors)
+    if (![ACCESS_TOKEN, ACCESS_TOKEN + '-second'].some((token) => request.headers.authorization === `Bearer ${token}`)) json(response, { message: '测试会话无效' }, 401, cors)
+    else json(response, session(request.headers.authorization === `Bearer ${ACCESS_TOKEN}-second`).user, 200, cors)
     return true
   }
   if (request.method === 'POST' && url.pathname === '/auth/v1/logout') { noContent(response, cors); return true }
@@ -399,6 +400,19 @@ async function handleAuth(request, response, url) {
 }
 
 async function handleApi(request, response, url) {
+  // 第二账号使用空账号数据，绝不读取或修改第一账号的书籍与书源。
+  if (request.headers.authorization === `Bearer ${ACCESS_TOKEN}-second`) {
+    const path = url.pathname
+    if (path === '/api/home') { json(response, { bookshelf: [], reading: [], searchHistory: [] }); return }
+    if (path === '/api/me') { json(response, { user: session(true).user }); return }
+    if (path === '/api/books') { json(response, { books: [] }); return }
+    if (path === '/api/sources' || path === '/api/source-management' || path === '/api/discovery/sources') { json(response, { sources: [] }); return }
+    if (path === '/api/settings') {
+      if (request.method === 'PUT') Object.assign(secondSettings, await readJson(request))
+      json(response, { settings: secondSettings }); return
+    }
+    json(response, { error: { code: 'not-found', message: '第二测试账号没有此资源' } }, 404); return
+  }
   if (request.headers.authorization !== `Bearer ${ACCESS_TOKEN}`) {
     json(response, { error: { code: 'unauthorized', message: '请使用页面验收账号登录' } }, 401)
     return
@@ -611,14 +625,39 @@ async function handleApi(request, response, url) {
   json(response, { error: { code: 'not-found', message: `页面验收 API 未实现：${method} ${safeRouteLabel(path)}` } }, 404)
 }
 
+// 只在本地模拟服务提供的验收控制面，不进入生产入口。
+const requestCounts = new Map()
+const faults = new Map()
+const secondSettings = { ...structuredClone(settings), userId: session(true).user.id }
+const initialState = structuredClone({ sources, books, editions, positions, bookshelf, settings })
+function resetFixture() {
+  sources.splice(0, sources.length, ...structuredClone(initialState.sources))
+  for (const [target, original] of [[books, initialState.books], [editions, initialState.editions], [positions, initialState.positions]]) { target.clear(); for (const [key, value] of structuredClone(original)) target.set(key, value) }
+  bookshelf.clear(); for (const id of initialState.bookshelf) bookshelf.add(id)
+  Object.assign(settings, structuredClone(initialState.settings)); Object.assign(secondSettings, structuredClone(initialState.settings), { userId: session(true).user.id })
+  searches.clear(); searchHistory.splice(0); refreshCounts.clear(); requestCounts.clear(); faults.clear(); searchSequence = 0; discoveryFailure = true; discoveryBookFailure = true
+}
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://${HOST}:${PORT}`)
+  if (url.pathname === '/__fixture/status') { json(response, { counts: Object.fromEntries(requestCounts) }); return }
+  if (url.pathname === '/__fixture/control' && request.method === 'POST') {
+    const control = await readJson(request)
+    if (control.reset) resetFixture()
+    if (typeof control.route === 'string') faults.set(control.route, { delay: Math.min(10000, Math.max(0, Number(control.delay) || 0)), failures: Math.min(10, Math.max(0, Number(control.failures) || 0)) })
+    json(response, { ok: true }); return
+  }
   if (url.pathname.startsWith('/auth/v1/')) {
     try { if (await handleAuth(request, response, url)) return }
     catch (error) { json(response, { message: error instanceof Error ? error.message : '测试认证请求失败' }, 400, corsHeaders(request.headers.origin ?? '')); return }
   }
   if (!url.pathname.startsWith('/api/')) { json(response, { message: '此端口只提供页面验收 API，请通过 http://localhost:3000 打开前端' }, 404); return }
   logRequest(request, url)
+  const route = `${request.method} ${url.pathname}`
+  requestCounts.set(route, (requestCounts.get(route) ?? 0) + 1)
+  const fault = faults.get(route)
+  if (fault?.delay) await new Promise((resolve) => setTimeout(resolve, fault.delay))
+  if (fault?.failures > 0) { fault.failures--; json(response, { error: { code: 'fixture-failure', message: '页面验收注入失败，可重试' } }, 503); return }
   try { await handleApi(request, response, url) }
   catch (error) { json(response, { error: { code: 'fixture-error', message: error instanceof Error ? error.message : '页面验收请求失败' } }, 400) }
 })

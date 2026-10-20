@@ -57,9 +57,10 @@ export class DiscoveryStore {
     this.choice = { version: 1, sourceId: source.sourceId, categoryId: this.state.categoryId }
     try { this.storage?.setItem(storageKey(this.userId), JSON.stringify(this.choice)) } catch { /* 保存偏好失败不影响浏览。 */ }
   }
-  public async initialize(sourceId?: string, categoryId?: string, refresh = false): Promise<void> {
-    const controller = this.begin()
+  public async initialize(sourceId?: string, categoryId?: string, refresh = false, restore = false): Promise<void> {
     const previous = this.state
+    if (restore && !refresh && previous.loaded && previous.error.length === 0 && (sourceId === undefined || sourceId === previous.source?.sourceId) && (categoryId === undefined || categoryId === previous.categoryId)) return
+    const controller = this.begin()
     const changingSelection = previous.source !== null && ((sourceId !== undefined && sourceId !== previous.source.sourceId) || (categoryId !== undefined && categoryId !== previous.categoryId))
     // 显式切源/分类后，旧结果不能在源列表查询失败时重新变成可操作状态。
     if (changingSelection) { this.scrollY = 0; this.update({ ...emptyState(), sources: previous.sources, loading: true }) }

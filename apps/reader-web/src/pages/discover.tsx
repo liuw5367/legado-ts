@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+import { usePageActivity, usePageLoadEffect, usePageVersion } from '../lib/use-page-resource.ts'
+import { useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import { ArrowLeftRight, Check, Search } from 'lucide-react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
@@ -12,6 +13,8 @@ import type { DiscoveryEntry } from '../lib/discovery-state.ts'
 import type { DiscoveryBookResult } from '../../shared/discovery.ts'
 
 export function DiscoverPage() {
+  const page = usePageActivity()
+  const sourceVersion = usePageVersion(['discovery'])
   const store = useDiscoveryStore()
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const [params, setParams] = useSearchParams()
@@ -21,28 +24,18 @@ export function DiscoverPage() {
   const location = useLocation()
   const [switcher, setSwitcher] = useState(false)
   const [filter, setFilter] = useState('')
-  useEffect(() => {
+  usePageLoadEffect((settle) => {
     let active = true
-    void store.initialize(sourceId, categoryId).then(() => {
+    void store.initialize(sourceId, categoryId, sourceVersion !== '0', true).then(() => {
       const selected = store.getSnapshot()
       // 只在本次选择结算后规范化 URL，避免旧分类状态把用户的新 tab 选择改回去。
       if (active && selected.loaded && selected.error.length === 0 && selected.source !== null && (sourceId !== selected.source.sourceId || (categoryId ?? '') !== selected.categoryId)) {
         setParams({ sourceId: selected.source.sourceId, ...(selected.categoryId.length === 0 ? {} : { categoryId: selected.categoryId }) }, { replace: true })
       }
+      if (active) settle()
     })
     return () => { active = false; store.suspend() }
-  }, [store, sourceId, categoryId, setParams])
-  useLayoutEffect(() => {
-    if (state.loading || !state.loaded) return
-    const target = store.scrollY
-    const frame = requestAnimationFrame(() => window.scrollTo(0, target))
-    return () => cancelAnimationFrame(frame)
-  }, [store, state.loading, state.loaded])
-  useEffect(() => {
-    const saveScroll = () => { store.scrollY = window.scrollY }
-    window.addEventListener('scroll', saveScroll, { passive: true })
-    return () => window.removeEventListener('scroll', saveScroll)
-  }, [store])
+  }, [sourceId, categoryId], ['discovery'])
   const matching = state.sources.filter((source) => `${source.name} ${source.group ?? ''}`.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()))
   const currentCategory = state.categories.find((category) => category.id === state.categoryId)
 
@@ -63,7 +56,7 @@ export function DiscoverPage() {
     if (next === undefined) return
     event.preventDefault()
     const category = state.categories[next]
-    if (category !== undefined) { selectCategory(category.id); document.getElementById('discovery-tab-' + category.id)?.focus() }
+    if (category !== undefined) { selectCategory(category.id); document.getElementById((page?.id ?? 'discovery') + '-tab-' + category.id)?.focus() }
   }
   async function openBook(entry: DiscoveryEntry) {
     showDetails(await store.openBook(entry))
@@ -77,8 +70,8 @@ export function DiscoverPage() {
       <div className="discovery-heading-title"><h1>发现</h1><span className="muted" title={state.source?.name}>{state.source?.name ?? '挑一本想读的书'}</span></div>
       <div className="discovery-actions"><Link className="button secondary small" to="/search" state={pageReturnState(location)}><Search aria-hidden="true" /><span>搜索</span></Link><Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => { setFilter(''); setSwitcher(true) }} disabled={state.sources.length === 0}><ArrowLeftRight aria-hidden="true" /><span>切换书源</span></Button></div>
     </header>
-    {state.categories.length > 0 ? <div className="discovery-tabs" role="tablist" aria-label="发现分类">{state.categories.map((category, index) => <button key={category.id} id={'discovery-tab-' + category.id} className="discovery-tab" type="button" role="tab" aria-selected={category.id === state.categoryId} aria-controls="discovery-books" tabIndex={category.id === state.categoryId ? 0 : -1} onClick={() => selectCategory(category.id)} onKeyDown={(event) => tabKey(event, index)} title={category.group === undefined ? category.title : `${category.group} · ${category.title}`}>{category.title}</button>)}</div> : null}
-    <div id="discovery-books" role={state.categories.length > 0 ? 'tabpanel' : undefined} aria-labelledby={currentCategory === undefined ? undefined : 'discovery-tab-' + currentCategory.id} aria-busy={state.loading || state.loadingMore}>
+    {state.categories.length > 0 ? <div className="discovery-tabs" role="tablist" aria-label="发现分类">{state.categories.map((category, index) => <button key={category.id} id={(page?.id ?? 'discovery') + '-tab-' + category.id} className="discovery-tab" type="button" role="tab" aria-selected={category.id === state.categoryId} aria-controls={`${page?.id ?? 'discovery'}-books`} tabIndex={category.id === state.categoryId ? 0 : -1} onClick={() => selectCategory(category.id)} onKeyDown={(event) => tabKey(event, index)} title={category.group === undefined ? category.title : `${category.group} · ${category.title}`}>{category.title}</button>)}</div> : null}
+    <div id={`${page?.id ?? 'discovery'}-books`} role={state.categories.length > 0 ? 'tabpanel' : undefined} aria-labelledby={currentCategory === undefined ? undefined : (page?.id ?? 'discovery') + '-tab-' + currentCategory.id} aria-busy={state.loading || state.loadingMore}>
       {currentCategory?.group ? <p className="muted small discovery-group">{currentCategory.group}</p> : null}
       {state.error.length > 0 ? <div className="discovery-feedback" role="alert"><p className="error">{state.error}</p><Button variant="secondary" size="sm" onClick={() => { void store.retry().then(showDetails) }}>重试</Button></div> : null}
       {state.loading ? <LoadingState message="正在读取发现…" variant={state.items.length > 0 ? 'inline' : 'content'} /> : null}
@@ -88,6 +81,6 @@ export function DiscoverPage() {
       {state.message.length > 0 && state.items.length > 0 ? <p className="muted small" role="status">{state.message}</p> : null}
       {state.nextCursor !== undefined ? <div className="discovery-pagination"><Button variant="secondary" disabled={state.loading || state.loadingMore || state.opening !== null} onClick={() => void store.loadMore()}>{state.loadingMore ? '正在加载…' : '加载更多'}</Button></div> : state.loaded && state.items.length > 0 ? <p className="muted small discovery-end">已显示全部书籍</p> : null}
     </div>
-    <Sheet open={switcher} onOpenChange={setSwitcher} title="切换发现书源"><div className="page-stack"><label className="sr-only" htmlFor="discovery-source-filter">筛选书源名称或分组</label><Input id="discovery-source-filter" value={filter} placeholder="书源名称或分组" onChange={(event) => setFilter(event.target.value)} /><div className="discovery-sources">{matching.map((source) => <button className="discovery-source" type="button" key={source.sourceId} aria-pressed={source.sourceId === state.source?.sourceId} onClick={() => selectSource(source.sourceId)}><span><strong>{source.name}</strong>{source.group ? <span className="muted small">{source.group}</span> : null}</span>{source.sourceId === state.source?.sourceId ? <Check aria-label="当前书源" /> : null}</button>)}{matching.length === 0 ? <p className="muted">没有匹配的书源。</p> : null}</div><Link className="link" to="/sources" state={pageReturnState(location)}>管理书源</Link></div></Sheet>
+    <Sheet open={switcher} onOpenChange={setSwitcher} title="切换发现书源"><div className="page-stack"><label className="sr-only" htmlFor={`${page?.id ?? 'discovery'}-filter`}>筛选书源名称或分组</label><Input id={`${page?.id ?? 'discovery'}-filter`} value={filter} placeholder="书源名称或分组" onChange={(event) => setFilter(event.target.value)} /><div className="discovery-sources">{matching.map((source) => <button className="discovery-source" type="button" key={source.sourceId} aria-pressed={source.sourceId === state.source?.sourceId} onClick={() => selectSource(source.sourceId)}><span><strong>{source.name}</strong>{source.group ? <span className="muted small">{source.group}</span> : null}</span>{source.sourceId === state.source?.sourceId ? <Check aria-label="当前书源" /> : null}</button>)}{matching.length === 0 ? <p className="muted">没有匹配的书源。</p> : null}</div><Link className="link" to="/sources" state={pageReturnState(location)}>管理书源</Link></div></Sheet>
   </section>
 }

@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { PageBackButton } from '../components/page-back-button.tsx'
 
@@ -6,11 +7,12 @@ const buildTime = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-
 const repositoryUrl = 'https://github.com/liuw5367/legado-ts'
 
 export function AboutAppPage() {
+  const titleId = useId()
   return <section className="page-stack page-narrow about-app-page">
     <div className="toc-heading"><PageBackButton fallback="/account/settings" /><div className="toc-heading-main"><h1>关于应用</h1></div></div>
-    <section className="about-app-brand" aria-labelledby="about-app-name">
+    <section className="about-app-brand" aria-labelledby={titleId}>
       <img className="about-app-logo" src="/static/pwa/icon-512.png" alt="" width="112" height="112" />
-      <h2 id="about-app-name">Legado Reader</h2>
+      <h2 id={titleId}>Legado Reader</h2>
       <p className="muted small">编译时间</p>
       <time className="about-app-build-time" dateTime={buildTimestamp}>{buildTime}</time>
     </section>

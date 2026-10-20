@@ -1,4 +1,5 @@
-import { ChevronLeft, CircleHelp, ExternalLink, Info, RefreshCw } from 'lucide-react'
+import { usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
+import { CircleHelp, ExternalLink, Info, RefreshCw } from 'lucide-react'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { MoreMenu } from '../components/more-menu.tsx'
@@ -6,9 +7,9 @@ import { PageBackButton } from '../components/page-back-button.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { ReaderIcon } from '../components/reader-icon.tsx'
 import { browserUrl, chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
-import { pageReturnState, pageReturnTarget } from '../lib/page-navigation.ts'
+import { pageReturnState } from '../lib/page-navigation.ts'
 import { anchorFromViewport, clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageIndexForAnchor, pageLabel, pageTapZoneBoundaryRange, resizePageTapZones, type PageLayout, type PageTapZoneBoundary, type ReaderAnchor, type ReaderPageAction } from '../lib/reader-pagination.ts'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ReaderSettingsPanel } from '../components/reader-settings-panel.tsx'
 import { Button } from '../components/ui/button.tsx'
@@ -21,12 +22,17 @@ type ReaderPanel = 'toc' | 'settings' | null
 type PageTapZoneDrag = { pointerId: number; boundary: PageTapZoneBoundary }
 
 export function ReaderPage() {
+  const navigation = usePageNavigation()
+  const visible = useRef(false)
   const { bookId = '', chapterId = '' } = useParams()
   const cache = useBookCache()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const editionKey = searchParams.get('editionKey') ?? ''
+  const positionIdentity = JSON.stringify([bookId, editionKey, chapterId])
+  const positionIdentityRef = useRef(positionIdentity)
+  positionIdentityRef.current = positionIdentity
   const { settings, resolvedTheme, updateSettings, saving: settingsSaving, error: settingsError } = useReaderSettings()
   const [controlsVisible, setControlsVisible] = useState(false)
   const [pageGuideVisible, setPageGuideVisible] = useState(false)
@@ -54,7 +60,6 @@ export function ReaderPage() {
   const pageGuidePreviewRef = useRef<HTMLDivElement>(null)
   const pageGuideDragRef = useRef<PageTapZoneDrag | null>(null)
   const latestPositionRef = useRef<ApiPosition | null>(null)
-  const positionWriteQueueRef = useRef(Promise.resolve())
   const positionVersionRef = useRef(-1)
   const latestAnchorRef = useRef<ReaderAnchor | null>(null)
   const paginationAnchorRef = useRef<ReaderAnchor | null>(null)
@@ -62,7 +67,7 @@ export function ReaderPage() {
   const requestIdRef = useRef(0)
   const liveToc = cache.get(bookId, editionKey)?.toc ?? toc
 
-  useEffect(() => {
+  usePageLoadEffect((settle) => {
     const requestId = ++requestIdRef.current
     const cachedContent = cache.getContent(bookId, editionKey, chapterId)
     setControlsVisible(false); setPageGuideVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0); setPaginationError('')
@@ -96,31 +101,41 @@ export function ReaderPage() {
         navigate('/books/' + encodeURIComponent(bookId) + '/read?editionKey=' + encodeURIComponent(editionKey), { replace: true, state: location.state })
       } else setError(reason instanceof Error ? reason.message : '正文加载失败')
     })
+      .finally(() => { if (active) settle() })
     return () => { active = false; controller.abort(); refreshController.current?.abort(); requestIdRef.current += 1 }
-  }, [bookId, chapterId, editionKey, retryNonce, cache])
+  }, [bookId, chapterId, editionKey, retryNonce], ['content'])
 
   async function persistPosition(input: { paragraphIndex: number; offset: number; version: number }): Promise<void> {
-    if (content === null || content.chapter.chapterId !== chapterId) return
-    const requestId = requestIdRef.current
+    if (content === null || content.chapter.chapterId !== chapterId || navigation === null) return
     const version = Math.max(input.version, positionVersionRef.current + 1)
     positionVersionRef.current = version
-    setPositionError('')
-    const write = async () => {
-      if (requestId !== requestIdRef.current) return
-      try {
-        const result = await apiFetch<{ position: ApiPosition }>(`/api/books/${encodeURIComponent(bookId)}/position`, { method: 'POST', body: JSON.stringify({ editionKey, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, title: content.chapter.title ?? `第 ${content.chapter.index + 1} 章`, tocRevision: liveToc?.revision, paragraphIndex: input.paragraphIndex, offset: input.offset, version }) })
-        if (requestId !== requestIdRef.current) return
-        positionVersionRef.current = Math.max(positionVersionRef.current, result.position.version)
-        latestPositionRef.current = result.position
-        latestAnchorRef.current = { paragraphIndex: result.position.paragraphIndex, offset: result.position.offset }
-        if (settings.readingMode === 'paged') paginationAnchorRef.current = latestAnchorRef.current
-        setPosition(result.position); cache.setPosition(bookId, editionKey, result.position)
-      } catch (reason) { if (requestId === requestIdRef.current) setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败') }
-    }
-    const request = positionWriteQueueRef.current.then(write, write)
-    positionWriteQueueRef.current = request.then(() => undefined, () => undefined)
-    await request
+    const identity = positionIdentity
+    const write = { bookId, editionKey, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, title: content.chapter.title ?? `第 ${content.chapter.index + 1} 章`, tocRevision: liveToc?.revision, paragraphIndex: input.paragraphIndex, offset: input.offset, version }
+    try {
+      const result = await navigation.positions.enqueue(write)
+      if (result === undefined || identity !== positionIdentityRef.current) return
+      positionVersionRef.current = Math.max(positionVersionRef.current, result.version)
+      latestPositionRef.current = result
+      setPosition(result); setPositionError('')
+    } catch (reason) { if (identity === positionIdentityRef.current) setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败') }
   }
+
+  // 布局清理在 DOM 隐藏前捕获最后锚点；保存任务由账号队列拥有。
+  useLayoutEffect(() => {
+    visible.current = true
+    setControlsVisible(false); setPanel(null); setPageGuideVisible(false)
+    if (settings.readingMode === 'scroll' && latestAnchorRef.current !== null && articleRef.current !== null) {
+      const paragraph = articleRef.current.querySelector<HTMLElement>(`[data-paragraph="${latestAnchorRef.current.paragraphIndex}"]`)
+      if (paragraph !== null) window.scrollTo({ top: window.scrollY + paragraph.getBoundingClientRect().top - 12, behavior: 'auto' })
+    }
+    return () => {
+      visible.current = false
+      refreshController.current?.abort()
+      const anchor = settings.readingMode === 'paged' ? anchorFromViewport(articleRef.current) : latestAnchorRef.current
+      if (anchor !== null && anchor !== undefined) { latestAnchorRef.current = anchor; paginationAnchorRef.current = anchor; void persistPosition({ ...anchor, version: positionVersionRef.current + 1 }) }
+      pageGuideRef.current?.close()
+    }
+  }, [bookId, chapterId, editionKey, content, settings.readingMode])
 
   useEffect(() => {
     latestPositionRef.current = position
@@ -187,10 +202,11 @@ export function ReaderPage() {
   useEffect(() => {
     const dialog = pageGuideRef.current
     if (dialog === null) return
-    if (pageGuideVisible && !dialog.open) {
+    if (pageGuideVisible && visible.current && !dialog.open) {
       dialog.showModal()
       dialog.querySelector<HTMLElement>('[data-page-guide-close]')?.focus()
     } else if (!pageGuideVisible && dialog.open) dialog.close()
+    return () => { if (dialog.open) dialog.close() }
   }, [pageGuideVisible])
 
   useEffect(() => () => { pageGuideDragRef.current = null }, [])
@@ -204,7 +220,7 @@ export function ReaderPage() {
     let measured = false
     let frame: number | undefined
     const measure = () => {
-      if (!active) return
+      if (!active || !visible.current) return
       const pageWidth = viewport.clientWidth
       if (pageWidth <= 0) {
         attempts += 1
@@ -397,7 +413,6 @@ export function ReaderPage() {
     } catch (reason) { if (!controller.signal.aborted && requestId === requestIdRef.current) setRefreshError(reason instanceof Error ? reason.message : '刷新失败') }
     finally { if (requestId === requestIdRef.current) setRefreshing(false) }
   }
-  const returnTarget = pageReturnTarget(location.state, location.pathname, '/')
   if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
   if (content === null) return <LoadingState message="正在读取正文…" variant="viewport" action={<PageBackButton appearance="button" />} />
   const dark = resolvedTheme === 'dark'
@@ -421,7 +436,7 @@ export function ReaderPage() {
       else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
     }
   }}>
-    <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
+    <header className="reader-topbar" hidden={!controlsVisible}><PageBackButton className="reader-back" /><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />书籍详情</Link>
       {paged ? <button className="more-menu-item" type="button" onClick={openPageGuide}><CircleHelp aria-hidden="true" />翻页区域</button> : null}
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原文地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />查看原文</a>}
@@ -484,7 +499,7 @@ export function ReaderPage() {
     </dialog> : null}
     {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><p className="error">{paginationError}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
     {refreshError.length > 0 ? <p className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></p> : null}
-    {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void persistPosition({ paragraphIndex: latestPositionRef.current?.paragraphIndex ?? 0, offset: latestPositionRef.current?.offset ?? 0, version: (latestPositionRef.current?.version ?? -1) + 1 })}>重试</button></p> : null}
+    {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void navigation?.positions.retry(bookId, editionKey).then((result) => { if (result !== undefined) { setPosition(result); setPositionError('') } }, (reason: unknown) => setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败'))}>重试</button></p> : null}
     <div className="reader-bottom-bar" hidden={!controlsVisible}>
       <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? `分页进度 ${pageCounter}，${wordCountLabel}` : '章节字数'}>{paged ? <><span>{pageCounter}</span><span className="reader-word-count-separator" aria-hidden="true">·</span><span>{wordCountLabel}</span></> : wordCountLabel}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">

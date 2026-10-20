@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Download, ChevronRight, LogOut, LockKeyhole, Upload } from 'lucide-react'
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -10,6 +11,7 @@ const ALL_BACKUP_CATEGORIES = BACKUP_CATEGORY_OPTIONS.map((item) => item.value)
 
 export function SettingsPage() {
   const { user, logout } = useAuth()
+  useEffect(() => () => { setDialogOpen(false); setSelectedFile(undefined); setPreview(undefined) }, [])
   const inputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | undefined>()
   const [preview, setPreview] = useState<BackupPreview | undefined>()

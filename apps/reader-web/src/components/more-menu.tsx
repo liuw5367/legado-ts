@@ -5,6 +5,7 @@ export function MoreMenu({ label, children }: { label: string; children: ReactNo
   const ref = useRef<HTMLDetailsElement>(null)
 
   useEffect(() => {
+    const element = ref.current
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) ref.current?.removeAttribute('open')
     }
@@ -18,6 +19,7 @@ export function MoreMenu({ label, children }: { label: string; children: ReactNo
     document.addEventListener('pointerdown', closeOnOutsidePointer)
     document.addEventListener('keydown', closeOnEscape)
     return () => {
+      element?.removeAttribute('open')
       document.removeEventListener('pointerdown', closeOnOutsidePointer)
       document.removeEventListener('keydown', closeOnEscape)
     }

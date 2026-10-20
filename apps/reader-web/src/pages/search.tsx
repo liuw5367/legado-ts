@@ -1,3 +1,4 @@
+import { usePageActivity, usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import { searchMatchRank } from '@legado/source-core'
 import type { SourceCacheWarning } from '../../shared/book-sources.ts'
@@ -26,6 +27,7 @@ interface CandidateGroup {
 }
 
 export function SearchPage() {
+  const page = usePageActivity()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -35,7 +37,7 @@ export function SearchPage() {
   const [booksLoaded, setBooksLoaded] = useState(false)
   const [precision, setPrecision] = useState(false)
   const [keyword, setKeyword] = useState(queryKeyword)
-  const { candidates, searchId, status, message: searchMessage, progress, search, replaceSearch, cancelAndWait, cancel } = useBookSearch()
+  const { candidates, searchId, status, message: searchMessage, progress, cancellationPending, search, replaceSearch, cancelAndWait, cancel } = useBookSearch()
   const [expandedKey, setExpandedKey] = useState<string>()
   const [selectedByGroup, setSelectedByGroup] = useState<Record<string, string>>({})
   const [message, setMessage] = useState('')
@@ -58,25 +60,28 @@ export function SearchPage() {
     return target === undefined ? all : all.filter((group) => target.author?.trim().length && target.author !== '作者未知' ? sameBookIdentity(target.name, target.author, group.name, group.author) : normalizeIdentity(target.name) === normalizeIdentity(group.name))
   }, [books, booksLoaded, candidates, targetBookId])
 
-  useEffect(() => {
+  usePageLoadEffect((settle) => {
     let active = true
     void apiFetch<{ books: Array<{ book: ApiBook }> }>('/api/books').then((result) => {
       if (active) { setBooks(result.books.map((item) => item.book)); setBooksLoaded(true) }
     }).catch((error: unknown) => {
       if (active) { setBooksLoaded(true); setMessageTone('error'); setMessage(error instanceof Error ? `已有书籍加载失败，仍可搜索：${error.message}` : '已有书籍加载失败，仍可搜索') }
     })
+      .finally(() => { if (active) settle() })
     return () => { active = false }
-  }, [])
-  useEffect(() => {
+  }, [], ['candidates'])
+  usePageLoadEffect((settle) => {
     let active = true
     void apiFetch<SourceManagementPage>('/api/source-management?all=true').then((result) => {
       if (active) { setManagedSources(result.sources); setSourceManagementError('') }
     }).catch((error: unknown) => {
       if (active) setSourceManagementError(error instanceof Error ? error.message : '书源列表加载失败')
     })
+      .finally(() => { if (active) settle() })
     return () => { active = false }
-  }, [])
-  useEffect(() => { setKeyword(queryKeyword) }, [queryKeyword])
+  }, [], ['sources'])
+  const previousQuery = useRef(queryKeyword)
+  useEffect(() => { if (previousQuery.current !== queryKeyword) { previousQuery.current = queryKeyword; setKeyword(queryKeyword) } }, [queryKeyword])
 
   async function saveCandidate(group: CandidateGroup, action: 'shelf' | 'directory' | 'details') {
     if (!booksLoaded || saveController.current !== null) return
@@ -92,6 +97,7 @@ export function SearchPage() {
       const created = await apiFetch<{ book: ApiBook; edition: { editionKey: string }; cacheWarning?: SourceCacheWarning }>('/api/books', { method: 'POST', signal: controller.signal, body: JSON.stringify({ searchId, candidateIndex: selectedIndex, candidateIdentity: { sourceId: result.sourceId, sourceFingerprint: result.sourceFingerprint, bookUrl: result.candidate.bookUrl }, addToBookshelf: action === 'shelf', activateEdition: action === 'shelf' || existingBook === undefined, ...(existingBook === undefined ? {} : { bookId: existingBook.id }) }) })
       if (controller.signal.aborted) return
       if (action !== 'shelf') {
+        if (page?.active === false) return
         navigate(`/books/${encodeURIComponent(created.book.id)}/${action === 'details' ? 'details' : 'toc'}?editionKey=${encodeURIComponent(created.edition.editionKey)}`, { state: pageReturnState(location) })
       } else {
         setBooks((current) => [...current.filter((book) => book.id !== created.book.id), created.book]); setMessageTone(created.cacheWarning === undefined ? 'success' : 'error'); setMessage(created.cacheWarning === undefined ? '已加入书架' : `书籍已保存，但${created.cacheWarning.message}`)
@@ -146,9 +152,10 @@ export function SearchPage() {
   }
 
   return <section className="page-stack page-narrow search-page">
+    {cancellationPending ? <p className="error" role="alert">搜索取消尚未完成。<Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></p> : null}
     <div className="page-heading compact-heading"><PageBackButton fallback={targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : '/discover'} /><div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者'}</p></div><Link className="button secondary small" to="/sources">管理书源</Link></div>
     <form className="search-panel" onSubmit={(event) => void submitSearch(event)}>
-      <div className="search-row"><label className="sr-only" htmlFor="search-keyword">关键词</label><Input className="search-input" id="search-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={saving !== null || (status !== 'loading' && keyword.trim().length === 0)} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div>
+      <div className="search-row"><label className="sr-only" htmlFor={`${page?.id ?? 'search'}-keyword`}>关键词</label><Input className="search-input" id={`${page?.id ?? 'search'}-keyword`} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={saving !== null || (status !== 'loading' && keyword.trim().length === 0)} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div>
 
     </form>
     {searchMessage.length > 0 ? <p className="muted compact-message" role="status">{searchMessage}</p> : null}

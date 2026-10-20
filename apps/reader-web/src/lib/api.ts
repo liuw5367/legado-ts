@@ -1,3 +1,4 @@
+import { mutationDomains, publishPageMutation } from './page-data.ts'
 import { currentSession } from './auth.ts'
 
 export interface ApiSource { sourceId: string; name: string; group?: string; fingerprint: string; enabled: boolean }
@@ -84,19 +85,25 @@ export class SseDecoder {
   private flushEvent(): StreamEvent | undefined { if (this.dataLines.length === 0) return undefined; const raw = this.dataLines.join('\n'); let data: unknown = raw; try { data = JSON.parse(raw) as unknown } catch { /* 保留文本事件 */ } const event = { type: this.eventType, data }; this.eventType = 'message'; this.dataLines = []; return event }
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}, expectedUserId?: string): Promise<T> {
   const session = await currentSession()
+  if (expectedUserId !== undefined && session?.user.id !== expectedUserId) throw new Error('账号已切换，请重新操作')
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
   if (init.body !== undefined) headers.set('Content-Type', 'application/json')
   if (session?.access_token !== undefined) headers.set('Authorization', `Bearer ${session.access_token}`)
-  const response = await fetch(path, { ...init, headers })
+  const method = (init.method ?? 'GET').toUpperCase()
+  // 已提交的写入必须结算，隐藏页的 AbortSignal 只阻止后续 UI/导航；不能把取消等同于服务端回滚。
+  const committedWrite = mutationDomains(path, method).length > 0
+  if (init.signal?.aborted) throw new DOMException('请求已取消', 'AbortError')
+  const response = await fetch(path, { ...init, headers, ...(committedWrite ? { signal: null } : {}) })
   const body = await readJson(response)
   if (!response.ok) {
     const error = isRecord(body)?.error
     const errorRecord = isRecord(error)
     throw new ApiError(typeof errorRecord?.code === 'string' ? errorRecord.code : 'request-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '请求失败', response.status)
   }
+  if (method !== 'GET' && method !== 'HEAD' && session !== null) publishPageMutation({ userId: session.user.id, path, method })
   return body as T
 }
 

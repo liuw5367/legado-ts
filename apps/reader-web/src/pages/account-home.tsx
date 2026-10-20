@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { usePageLoadEffect } from '../lib/use-page-resource.ts'
+import { useCallback, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
@@ -44,25 +45,24 @@ export function AccountHomePage() {
     }
   }, [])
 
-  useEffect(() => {
-    void loadHome()
+  usePageLoadEffect((settle) => {
+    void loadHome().then(settle)
     return () => {
       requestIdRef.current += 1
       controllerRef.current?.abort()
       controllerRef.current = null
     }
-  }, [loadHome])
+  }, [], ['home'])
 
-  async function refresh() { await loadHome() }
   async function removeBook(bookId: string) {
     setRemoving(bookId); setMessage('')
-    try { await apiFetch(`/api/books/${encodeURIComponent(bookId)}/bookshelf`, { method: 'DELETE' }); await refresh() }
+    try { await apiFetch(`/api/books/${encodeURIComponent(bookId)}/bookshelf`, { method: 'DELETE' }) }
     catch (error) { setMessage(error instanceof Error ? error.message : '移出书架失败') }
     finally { setRemoving(undefined) }
   }
   async function removeHistory(id: string) {
     setDeletingHistory(id); setMessage('')
-    try { await apiFetch(`/api/search-history/${encodeURIComponent(id)}`, { method: 'DELETE' }); await refresh() }
+    try { await apiFetch(`/api/search-history/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
     catch (error) { setMessage(error instanceof Error ? error.message : '删除搜索记录失败') }
     finally { setDeletingHistory(undefined) }
   }
