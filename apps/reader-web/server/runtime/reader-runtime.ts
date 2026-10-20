@@ -1,19 +1,15 @@
+import { ReaderRuntimeError, requireSource, withPersistentSourceSession } from './source-session.ts'
 import { bookIdentityKey, normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '@legado/source-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, WorkflowStatus } from '@legado/source-core'
-import { NodeCookieStore, createNodeSourceSession } from '@legado/source-node'
-import type { SourceSession } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
-import type { BookCreationInput, RuntimeStateSnapshot, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
+import type { BookCreationInput, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
 
-export class ReaderRuntimeError extends Error {
-  public readonly code: 'not-found' | 'invalid-input' | 'source-failed' | 'configuration' | 'source-busy'
-  public constructor(code: 'not-found' | 'invalid-input' | 'source-failed' | 'configuration' | 'source-busy', message: string) { super(message); this.code = code }
-}
+export { ReaderRuntimeError } from './source-session.ts'
 
 export interface SearchCandidateIdentity { sourceId: string; sourceFingerprint: string; bookUrl: string }
 export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean }
@@ -32,7 +28,6 @@ export interface ReaderRuntime {
 }
 
 const activeSearches = new Map<string, { operationId: string; controller: AbortController }>()
-const SOURCE_RUNTIME_LEASE_MS = 5 * 60 * 1000
 
 export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime {
   return {
@@ -291,53 +286,6 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
     if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
     return repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
   })
-}
-
-async function requireSource(repository: ReaderRepository, userId: string, sourceId: string): Promise<StoredSourceRecord> {
-  const source = await repository.getSourceForUser(userId, sourceId)
-  if (source === null) throw new ReaderRuntimeError('configuration', `书源不可用：${sourceId}`)
-  return source
-}
-
-async function withPersistentSourceSession<T>(repository: ReaderRepository, userId: string, source: StoredSourceRecord, operation: (session: SourceSession) => Promise<T>): Promise<T> {
-  const leaseToken = randomUUID()
-  const lease = await repository.acquireSourceRuntimeLease(userId, source.sourceId, source.fingerprint, leaseToken, SOURCE_RUNTIME_LEASE_MS)
-  if (lease === null) throw new ReaderRuntimeError('source-busy', '该书源正在被其他请求使用，请稍后重试')
-  let session: SourceSession | undefined
-  let result!: T
-  let primaryError: unknown
-  let stateSaved = false
-  try {
-    const cookieStore = lease.snapshot.cookies === undefined ? new NodeCookieStore() : NodeCookieStore.fromSerialized(lease.snapshot.cookies)
-    session = createNodeSourceSession(source.normalizedSource, { cookieStore, ...(lease.snapshot.variables === undefined ? {} : { initialVariables: lease.snapshot.variables }) })
-    try {
-      result = await operation(session)
-    } catch (error) {
-      primaryError = error
-    }
-    const snapshot = snapshotRuntimeState(session, cookieStore)
-    const saved = await repository.saveSourceRuntimeState(userId, source.sourceId, source.fingerprint, lease.leaseToken, lease.version, snapshot)
-    if (saved === null) throw new ReaderRuntimeError('source-busy', '书源运行状态已被其他请求更新，请稍后重试')
-    stateSaved = true
-  } catch (error) {
-    if (primaryError === undefined) primaryError = error
-  } finally {
-    session?.close()
-    if (!stateSaved) {
-      try {
-        await repository.releaseSourceRuntimeLease(userId, source.sourceId, source.fingerprint, lease.leaseToken)
-      } catch (releaseError) {
-        if (primaryError === undefined) primaryError = releaseError
-      }
-    }
-  }
-  if (primaryError !== undefined) throw primaryError
-  return result
-}
-
-function snapshotRuntimeState(session: SourceSession, cookieStore: NodeCookieStore): RuntimeStateSnapshot {
-  const variables = session.snapshotVariables()
-  return { cookies: cookieStore.serialize(), ...(Object.keys(variables).length === 0 ? {} : { variables: { ...variables } }) }
 }
 
 function digest(value: string): string { return createHash('sha256').update(value).digest('hex') }

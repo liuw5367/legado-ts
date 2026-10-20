@@ -33,6 +33,7 @@ const editions = new Map()
 const positions = new Map()
 const bookshelf = new Set()
 const searches = new Map()
+let discoveryFailure = true
 const searchHistory = []
 const refreshCounts = new Map()
 let searchSequence = 0
@@ -179,7 +180,7 @@ function corsHeaders(origin) {
   const allowed = origin === 'http://localhost:3000' || origin === 'http://127.0.0.1:3000'
   return {
     'Access-Control-Allow-Origin': allowed ? origin : 'null',
-    'Access-Control-Allow-Headers': 'apikey, authorization, content-type, x-client-info',
+    'Access-Control-Allow-Headers': 'apikey, authorization, content-type, x-client-info, x-supabase-api-version',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     Vary: 'Origin',
@@ -406,6 +407,38 @@ async function handleApi(request, response, url) {
 
   if (method === 'GET' && path === '/api/me') { json(response, { user: { id: USER_ID } }); return }
   if (method === 'GET' && path === '/api/home') { json(response, homeSnapshot()); return }
+  if (method === 'GET' && path === '/api/discovery/sources') {
+    json(response, { sources: sources.filter((source) => source.enabled).map(({ sourceId, name, group, fingerprint }) => ({ sourceId, name, group, fingerprint })) }); return
+  }
+  if (method === 'GET' && path === '/api/discovery/categories') {
+    const source = sources.find((item) => item.sourceId === url.searchParams.get('sourceId'))
+    if (source === undefined) { json(response, { error: { code: 'not-found', message: '书源不存在' } }, 404); return }
+    const dynamic = source === sources[3]
+    json(response, { source, categories: dynamic ? [] : ['热门', '新书', '完结', '玄幻', '都市', '科幻', '历史', '轻小说'].map((title, index) => ({ id: `category-${index}`, title })), ...(dynamic ? { message: '此书源使用动态发现分类，暂不支持，请切换书源或使用搜索。' } : {}) }); return
+  }
+  if (method === 'POST' && (path === '/api/discovery/page' || path === '/api/discovery/books')) {
+    const body = await readJson(request)
+    const source = sources.find((item) => item.sourceId === body.sourceId)
+    if (source === undefined) { json(response, { error: { code: 'not-found', message: '书源不存在' } }, 404); return }
+    const index = body.cursor?.index ?? 1
+    const fixtureCursor = (page) => ({ index: page, signature: `fixture-${source.fingerprint}-${body.categoryId}-${page}` })
+    const names = ['星海旅人', '长安夜行', '山河之间', '春日来信', '无人知晓的远方与漫长归途：一位旅人的星际见闻录', '旧城拾光', '雨落之前', '浮生小记', '人间烟火', '一叶知秋', '雪山来客', '群星之外']
+    const items = source === sources[1] ? [] : names.map((name, offset) => ({ sourceId: source.sourceId, bookUrl: `${source.sourceId}/discover/${body.categoryId}/${index}/${offset}`, name: index > 1 ? name + ' · 续篇' : name, author: ['林简', '江南客', '陈一'][offset % 3], intro: '在平凡生活与远方之间，寻找属于自己的故事。此处为本地页面验收数据。', kind: body.categoryId === 'category-1' ? '新书 · 连载' : '热门 · 完结', lastChapter: '最新章节：第三十章 归航', coverUrl: '' }))
+    if (path === '/api/discovery/page') {
+      if (source === sources[2] && index === 2 && discoveryFailure) { discoveryFailure = false; json(response, { error: { code: 'source-failed', message: '分页请求暂时失败，请重试' } }, 500); return }
+      json(response, { items, cursor: fixtureCursor(index), ...(items.length > 0 && index < 3 ? { nextCursor: fixtureCursor(index + 1) } : {}), status: items.length === 0 ? 'empty' : 'success' }); return
+    }
+    const selected = items.find((item) => item.bookUrl === body.bookUrl)
+    if (selected === undefined) { json(response, { error: { code: 'invalid-input', message: '列表已更新，请刷新后重试' } }, 400); return }
+    const existing = [...editions.values()].find((edition) => edition.bookUrl === selected.bookUrl)
+    const bookId = existing?.bookId ?? randomUUID()
+    const editionKey = existing?.editionKey ?? randomUUID()
+    if (existing === undefined) {
+      books.set(bookId, { ...initialBook, id: bookId, name: selected.name, author: selected.author, intro: selected.intro, activeEditionKey: editionKey })
+      editions.set(editionKey, { id: randomUUID(), userId: USER_ID, bookId, editionKey, sourceId: source.sourceId, sourceFingerprint: source.fingerprint, bookUrl: selected.bookUrl, metadata: { ...selected, tocUrl: '/toc' } })
+    }
+    json(response, { book: { id: bookId }, edition: { editionKey } }, 201); return
+  }
   if (method === 'GET' && path === '/api/sources') {
     json(response, { sources: sources.filter((source) => source.enabled).map(({ sourceId, name, group, fingerprint, enabled }) => ({ sourceId, name, group, fingerprint, enabled })) })
     return

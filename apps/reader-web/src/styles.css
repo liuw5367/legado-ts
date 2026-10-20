@@ -56,8 +56,9 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; }
-body { min-width: 320px; margin: 0; background: var(--background); color: var(--foreground); -webkit-font-smoothing: antialiased; }
+/* 窄视口还需扣除非覆盖式滚动条，固定 320px 下限会造成页面横向溢出。 */
+html { min-width: min(320px, 100%); }
+body { min-width: min(320px, 100%); margin: 0; background: var(--background); color: var(--foreground); -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
@@ -429,6 +430,30 @@ a { color: inherit; }
 .result-detail-title { font: inherit; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-detail-intro { width: 100%; font: inherit; line-height: inherit; }
 .result-detail-title:focus-visible, .result-detail-intro:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.discovery-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.discovery-heading-title { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.discovery-heading-title h1 { margin: 0; font-size: 18px; }
+.discovery-heading-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.discovery-actions { display: flex; flex-shrink: 0; gap: 6px; }
+.discovery-actions .button { min-height: 44px; padding-inline: 9px; gap: 5px; white-space: nowrap; }
+.discovery-actions svg { width: 16px; height: 16px; flex-shrink: 0; }
+.discovery-tabs { display: flex; min-width: 0; gap: 16px; overflow-x: auto; overscroll-behavior-x: contain; border-bottom: 1px solid var(--border); scrollbar-width: thin; }
+.discovery-tab { min-height: 44px; flex-shrink: 0; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: 14px; }
+.discovery-tab[aria-selected="true"] { border-bottom-color: var(--primary); color: var(--primary); font-weight: 650; }
+.discovery-tab:active, .discovery-source:active, .discovery-book:active { background: color-mix(in srgb, var(--primary) 7%, var(--background)); }
+.discovery-tabs:focus-within { outline-offset: 2px; }
+.discovery-book { width: 100%; border: 0; background: transparent; color: var(--foreground); text-align: left; }
+.discovery-book:disabled { cursor: wait; }
+.discovery-group { margin: 0 0 4px; }
+.discovery-opening { color: var(--primary); }
+.discovery-feedback { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.discovery-feedback p { min-width: 0; overflow-wrap: anywhere; }
+.discovery-pagination, .discovery-end { display: flex; justify-content: center; padding: 16px 0 8px; }
+.discovery-sources { display: flex; flex-direction: column; }
+.discovery-source { display: flex; min-height: 56px; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--foreground); text-align: left; }
+.discovery-source > span { display: flex; min-width: 0; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
+.discovery-source strong { font-size: 14px; font-weight: 600; }
+.discovery-source svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--primary); }
 .reader-topbar { grid-template-columns: 60px minmax(0, 1fr) auto; padding: var(--page-top-inset) max(12px, var(--safe-right)) 0 max(12px, var(--safe-left)); background: var(--background); }
 .reader-back { min-height: 44px; }
 .reader-tools { gap: 2px; }

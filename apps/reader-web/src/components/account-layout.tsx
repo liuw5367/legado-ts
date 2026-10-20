@@ -1,4 +1,4 @@
-import { LibraryBig, Search, Settings } from 'lucide-react'
+import { Compass, LibraryBig, Settings } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context.tsx'
 import { Button } from './ui/button.tsx'
@@ -7,13 +7,14 @@ export function AccountLayout() {
   const { user, logout } = useAuth()
   const location = useLocation()
   const showBottomNav = location.pathname !== '/account/password'
+  const discoveryActive = location.pathname === '/discover' || location.pathname === '/search'
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">跳到正文</a>
     <header className="app-header">
       <Link className="brand" to="/">Legado Reader</Link>
       <nav className="desktop-nav" aria-label="主导航">
         <NavLink className="nav-link" to="/" end>书架</NavLink>
-        <NavLink className="nav-link" to="/search">搜索</NavLink>
+        <Link className={`nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to="/discover">发现</Link>
         <NavLink className="nav-link" to="/account/settings">设置</NavLink>
       </nav>
       <div className="account-actions">
@@ -24,7 +25,7 @@ export function AccountLayout() {
     <main className={`app-main ${showBottomNav ? '' : 'app-main-standalone'}`} id="main-content"><Outlet /></main>
     {showBottomNav ? <nav className="bottom-nav" aria-label="移动端主导航">
       <NavLink className="bottom-nav-link" to="/" end><LibraryBig aria-hidden="true" /><span>书架</span></NavLink>
-      <NavLink className="bottom-nav-link" to="/search"><Search aria-hidden="true" /><span>搜索</span></NavLink>
+      <Link className={`bottom-nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to="/discover"><Compass aria-hidden="true" /><span>发现</span></Link>
       <NavLink className="bottom-nav-link" to="/account/settings"><Settings aria-hidden="true" /><span>设置</span></NavLink>
     </nav> : null}
   </div>

@@ -13,6 +13,8 @@ import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWeb
 import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 import { sourceDomainInfo } from '../shared/source-domain.ts'
 import type { ReaderSettingsPatch } from './domain/types.ts'
+import { discoveryBookSchema, discoveryPageSchema, discoverySourceSchema } from '../shared/discovery.ts'
+import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook } from './runtime/discovery.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -61,6 +63,39 @@ app.get('/api/source-management', async (context) => {
   const parsed = sourceManagementPageSchema.safeParse({ all: context.req.query('all'), page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status') })
   if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '书源列表参数无效' } }, 400)
   try { return context.json(await dependencies.repository.listManagedSources(context.get('userId'), parsed.data)) } catch (error) { return handleError(context, error) }
+})
+
+app.get('/api/discovery/sources', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try { return context.json(await listDiscoverySources(dependencies.repository, context.get('userId'))) } catch (error) { return handleError(context, error) }
+})
+
+app.get('/api/discovery/categories', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const parsed = discoverySourceSchema.safeParse({ sourceId: context.req.query('sourceId') })
+  if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '书源参数无效' } }, 400)
+  try { return context.json(await getDiscoveryCategories(dependencies.repository, context.get('userId'), parsed.data.sourceId)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/discovery/page', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, discoveryPageSchema)
+  if (body instanceof Response) return body
+  try { return context.json(await loadDiscoveryPage(dependencies.repository, context.get('userId'), body, context.req.raw.signal)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/discovery/books', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, discoveryBookSchema)
+  if (body instanceof Response) return body
+  try {
+    const { book, edition } = await openDiscoveryBook(dependencies.repository, context.get('userId'), body, context.req.raw.signal)
+    return context.json({ book: { id: book.id }, edition: { editionKey: edition.editionKey } }, 201)
+  } catch (error) { return handleError(context, error) }
 })
 
 app.post('/api/source-management/actions', async (context) => {

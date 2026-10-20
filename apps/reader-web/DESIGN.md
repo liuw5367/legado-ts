@@ -49,7 +49,7 @@ Light surfaces use a small neutral shadow only where a card needs separation. Da
 - Do preserve the same semantic tokens in every page.
 - Do use real empty, loading, and error copy from the product flow.
 - Do not add decorative gradients, oversized hero sections, or automatic page animations.
-- Do not hide source choice behind a modal when an inline panel is enough.
+- Keep source version choices inline on search and book source pages. Discovery uses a searchable Sheet for its explicit “切换书源” action, while the main page stays focused on one source's categories and books.
 
 ## 8. Responsive behavior
 

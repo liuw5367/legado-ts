@@ -39,6 +39,13 @@ test('book details and full source summaries reject unauthenticated requests', a
   }
 })
 
+test('all discovery endpoints reject unauthenticated requests', async () => {
+  for (const [method, path] of [['GET', '/api/discovery/sources'], ['GET', '/api/discovery/categories?sourceId=other-user'], ['POST', '/api/discovery/page'], ['POST', '/api/discovery/books']] as const) {
+    const response = await app.request('http://localhost' + path, { method })
+    assert.equal(response.status, 401)
+  }
+})
+
 test('unknown api endpoint returns json 404', async () => {
   const response = await app.request('http://localhost/api/unknown')
   assert.equal(response.status, 404)
