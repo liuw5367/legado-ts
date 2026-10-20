@@ -2,13 +2,13 @@ import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { compareSourceManagementOrder, compareSourceVersions, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, lt, max, or, sql } from 'drizzle-orm'
 import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } from '@legado/reader-backup'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser, type ReaderTransaction } from './client.ts'
 import { bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
-import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type ReadingMode, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type ThemeMode, type StoredToc } from '../domain/types.ts'
+import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
 
 export interface StoredSourceRecord extends SourceSummary {
@@ -67,7 +67,7 @@ export interface ReaderRepository {
   saveSourceRuntimeState(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, expectedVersion: number, snapshot: RuntimeStateSnapshot): Promise<SourceRuntimeStateRecord | null>
   releaseSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string): Promise<void>
   getSettings(userId: string): Promise<ReaderSettings>
-  saveSettings(userId: string, patch: { theme?: ReaderSettings['theme'] | undefined; readingMode?: ReadingMode | undefined; fontSize?: number | undefined; lineHeight?: number | undefined; marginTop?: number | undefined; marginRight?: number | undefined; marginBottom?: number | undefined; marginLeft?: number | undefined }): Promise<ReaderSettings>
+  saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings>
   createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState>
   getSearch(userId: string, searchId: string): Promise<SearchRunState | null>
   claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null>
@@ -302,23 +302,14 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async saveSettings(userId: string, patch: { theme?: ReaderSettings['theme'] | undefined; readingMode?: ReadingMode | undefined; fontSize?: number | undefined; lineHeight?: number | undefined; marginTop?: number | undefined; marginRight?: number | undefined; marginBottom?: number | undefined; marginLeft?: number | undefined }): Promise<ReaderSettings> {
+  public async saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings> {
     return withUser(userId, async (transaction) => {
-      const [current] = await transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
-      const values = {
-        userId,
-        theme: patch.theme ?? current?.theme ?? DEFAULT_READER_SETTINGS.theme,
-        readingMode: patch.readingMode ?? current?.readingMode ?? DEFAULT_READER_SETTINGS.readingMode,
-        fontSize: patch.fontSize ?? current?.fontSize ?? DEFAULT_READER_SETTINGS.fontSize,
-        lineHeightUnits: Math.round((patch.lineHeight ?? (current === undefined ? DEFAULT_READER_SETTINGS.lineHeight : current.lineHeightUnits / 100)) * 100),
-        marginTop: patch.marginTop ?? current?.marginTop ?? DEFAULT_READER_SETTINGS.marginTop,
-        marginRight: patch.marginRight ?? current?.marginRight ?? DEFAULT_READER_SETTINGS.marginRight,
-        marginBottom: patch.marginBottom ?? current?.marginBottom ?? DEFAULT_READER_SETTINGS.marginBottom,
-        marginLeft: patch.marginLeft ?? current?.marginLeft ?? DEFAULT_READER_SETTINGS.marginLeft,
-        updatedAt: new Date(),
-      }
-      const [row] = await transaction.insert(readerSettings).values(values).onConflictDoUpdate({ target: readerSettings.userId, set: { theme: values.theme, readingMode: values.readingMode, fontSize: values.fontSize, lineHeightUnits: values.lineHeightUnits, marginTop: values.marginTop, marginRight: values.marginRight, marginBottom: values.marginBottom, marginLeft: values.marginLeft, updatedAt: values.updatedAt } }).returning()
-      if (row === undefined) throw new Error('保存阅读设置失败')
+      const [currentRow] = await transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
+      const current = currentRow === undefined ? defaultReaderSettings(userId) : toSettings(currentRow)
+      const next = mergeReaderSettings(current, patch, new Date().toISOString())
+      const values = readerSettingsValues(userId, next, new Date(next.updatedAt))
+      const [row] = await transaction.insert(readerSettings).values(values).onConflictDoUpdate({ target: readerSettings.userId, set: { preferences: values.preferences, updatedAt: values.updatedAt } }).returning()
+      if (row === undefined) throw new Error('保存设置失败')
       return toSettings(row)
     })
   }
@@ -480,11 +471,27 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async getHome(userId: string): Promise<HomeSnapshot> {
     return withUser(userId, async (transaction) => {
-      const shelfRows = await transaction.select({ book: books, edition: bookEditions }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
+      const [settingsRow] = await transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
+      const settings = settingsRow === undefined ? defaultReaderSettings(userId) : toSettings(settingsRow)
+      const shelfRows = await transaction.select({ book: books, edition: bookEditions, addedAt: bookshelf.addedAt }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
+      let sortedShelfRows = shelfRows
+      if (settings.general.bookshelfSort === 'lastReadAt' && shelfRows.length > 0) {
+        const lastReadRows = await transaction.select({ bookId: readingRecords.bookId, lastReadAt: max(readingRecords.lastReadAt) }).from(readingRecords).where(and(eq(readingRecords.userId, userId), inArray(readingRecords.bookId, shelfRows.map((row) => row.book.id)))).groupBy(readingRecords.bookId)
+        const lastReadByBookId = new Map<string, Date>()
+        for (const row of lastReadRows) if (row.lastReadAt !== null) lastReadByBookId.set(row.bookId, row.lastReadAt)
+        sortedShelfRows = [...shelfRows].sort((left, right) => {
+          const leftReadAt = lastReadByBookId.get(left.book.id)
+          const rightReadAt = lastReadByBookId.get(right.book.id)
+          if (leftReadAt === undefined && rightReadAt !== undefined) return 1
+          if (rightReadAt === undefined && leftReadAt !== undefined) return -1
+          if (leftReadAt !== undefined && rightReadAt !== undefined && leftReadAt.getTime() !== rightReadAt.getTime()) return rightReadAt.getTime() - leftReadAt.getTime()
+          return right.addedAt.getTime() - left.addedAt.getTime() || left.book.id.localeCompare(right.book.id)
+        })
+      }
       const readingRows = await transaction.select({ book: books, edition: bookEditions, position: readingRecords }).from(readingRecords).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingRecords.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, readingRecords.bookId), eq(bookEditions.editionKey, readingRecords.editionKey))).where(eq(readingRecords.userId, userId)).orderBy(desc(readingRecords.lastReadAt)).limit(50)
       const historyRows = await transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))).orderBy(desc(searchHistory.createdAt), desc(searchHistory.id))
       const positions = new Map(readingRows.map((row) => [`${row.book.id}:${row.edition.editionKey}`, toPosition(row.position)]))
-      const shelf = shelfRows.map((row) => { const book = toBook(row.book); const edition = toEdition(row.edition); const position = positions.get(`${row.book.id}:${row.edition.editionKey}`); return position === undefined ? { book, edition } : { book, edition, position } })
+      const shelf = sortedShelfRows.map((row) => { const book = toBook(row.book); const edition = toEdition(row.edition); const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition } : { book, edition, position } })
       const seenReadingBooks = new Set<string>()
       const reading = readingRows.filter((row) => { if (seenReadingBooks.has(row.book.id)) return false; seenReadingBooks.add(row.book.id); return true }).map((row) => ({ book: toBook(row.book), edition: toEdition(row.edition), position: toPosition(row.position) }))
       return { bookshelf: shelf, reading, searchHistory: latestSearchHistory(historyRows.map(toHistory)).slice(0, 50) }
@@ -595,8 +602,8 @@ export class PostgresReaderRepository implements ReaderRepository {
         }
       }
       if (selected.has('settings')) {
-        const values = { userId, theme: snapshot.settings.theme, readingMode: snapshot.settings.readingMode, fontSize: snapshot.settings.fontSize, lineHeightUnits: Math.round(snapshot.settings.lineHeight * 100), marginTop: snapshot.settings.marginTop, marginRight: snapshot.settings.marginRight, marginBottom: snapshot.settings.marginBottom, marginLeft: snapshot.settings.marginLeft, updatedAt: new Date(snapshot.settings.updatedAt) }
-        await transaction.insert(readerSettings).values(values).onConflictDoUpdate({ target: readerSettings.userId, set: { theme: values.theme, readingMode: values.readingMode, fontSize: values.fontSize, lineHeightUnits: values.lineHeightUnits, marginTop: values.marginTop, marginRight: values.marginRight, marginBottom: values.marginBottom, marginLeft: values.marginLeft, updatedAt: values.updatedAt } })
+        const values = readerSettingsValues(userId, snapshot.settings, new Date(snapshot.settings.updatedAt))
+        await transaction.insert(readerSettings).values(values).onConflictDoUpdate({ target: readerSettings.userId, set: { preferences: values.preferences, updatedAt: values.updatedAt } })
       }
     })
   }
@@ -857,7 +864,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async saveSourceRuntimeState(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, expectedVersion: number, snapshot: RuntimeStateSnapshot): Promise<SourceRuntimeStateRecord | null> { const key = runtimeStateKey(userId, sourceId, sourceFingerprint); const current = this.runtimeStates.get(key); if (current === undefined || current.leaseToken !== leaseToken || current.version !== expectedVersion) return null; const next = { snapshot: cloneRuntimeSnapshot(snapshot), version: current.version + 1, leaseToken: null, leaseUntil: null }; this.runtimeStates.set(key, next); return { sourceId, sourceFingerprint, snapshot: cloneRuntimeSnapshot(next.snapshot), version: next.version } }
   public async releaseSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string): Promise<void> { const current = this.runtimeStates.get(runtimeStateKey(userId, sourceId, sourceFingerprint)); if (current?.leaseToken !== leaseToken) return; current.leaseToken = null; current.leaseUntil = null }
   public async getSettings(userId: string): Promise<ReaderSettings> { return this.settings.get(userId) ?? defaultReaderSettings(userId) }
-  public async saveSettings(userId: string, patch: { theme?: ReaderSettings['theme'] | undefined; readingMode?: ReadingMode | undefined; fontSize?: number | undefined; lineHeight?: number | undefined; marginTop?: number | undefined; marginRight?: number | undefined; marginBottom?: number | undefined; marginLeft?: number | undefined }): Promise<ReaderSettings> { const current = await this.getSettings(userId); const next: ReaderSettings = { ...current, ...(patch.theme === undefined ? {} : { theme: patch.theme }), ...(patch.readingMode === undefined ? {} : { readingMode: patch.readingMode }), ...(patch.fontSize === undefined ? {} : { fontSize: patch.fontSize }), ...(patch.lineHeight === undefined ? {} : { lineHeight: patch.lineHeight }), ...(patch.marginTop === undefined ? {} : { marginTop: patch.marginTop }), ...(patch.marginRight === undefined ? {} : { marginRight: patch.marginRight }), ...(patch.marginBottom === undefined ? {} : { marginBottom: patch.marginBottom }), ...(patch.marginLeft === undefined ? {} : { marginLeft: patch.marginLeft }), updatedAt: new Date().toISOString() }; this.settings.set(userId, next); return next }
+  public async saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings> { const next = mergeReaderSettings(await this.getSettings(userId), patch, new Date().toISOString()); this.settings.set(userId, next); return next }
   public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> { const now = new Date().toISOString(); const sourceIds = input.sourceIds === undefined || input.sourceIds.length === 0 ? [input.sourceId] : [...new Set(input.sourceIds)]; const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, status: 'pending', candidates: [], diagnostics: [] })); const search: SearchRunState = { id: randomUUID(), userId, keyword: input.keyword, sourceId: sourceIds[0] ?? input.sourceId, sourceIds, ...(input.precision === true ? { precision: true } : {}), ...(sourceFingerprint === undefined ? {} : { sourceFingerprint }), status: 'running', candidates: [], sourceStates, ...(input.cursor === undefined ? {} : { cursor: input.cursor }), progress: { completed: 0, total: sourceIds.length }, version: 0, cancelled: false, createdAt: now, updatedAt: now }; this.searches.set(search.id, search); this.history.set(`${userId}:${search.id}`, { id: randomUUID(), searchId: search.id, keyword: input.keyword, sourceIds, status: 'running', resultCount: 0, createdAt: now, updatedAt: now }); return search }
   public async getSearch(userId: string, searchId: string): Promise<SearchRunState | null> { const search = this.searches.get(searchId); return search?.userId === userId ? search : null }
   public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || current.operationId !== undefined) return null; return this.updateSearch(userId, searchId, { sourceStates, progress, operationId, status: 'running', cancelled: false }) }
@@ -889,7 +896,32 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async addToBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.set(`${userId}:${bookId}`, new Date().toISOString()) }
   public async removeFromBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.delete(`${userId}:${bookId}`) }
   public async isOnBookshelf(userId: string, bookId: string): Promise<boolean> { return this.shelf.has(`${userId}:${bookId}`) }
-  public async getHome(userId: string): Promise<HomeSnapshot> { const values = [...this.books.values()].filter((item) => item.book.userId === userId); const activeValues = values.filter((item) => item.book.activeEditionKey === item.edition.editionKey); const positions = [...this.positions.values()].filter((position) => position.userId === userId).sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt)); const seenReadingBooks = new Set<string>(); const reading = positions.map((position) => { const value = values.find((item) => item.book.id === position.bookId && item.edition.editionKey === position.editionKey); return value === undefined || seenReadingBooks.has(position.bookId) ? undefined : (seenReadingBooks.add(position.bookId), { book: value.book, edition: value.edition, position }) }).filter((item): item is { book: StoredBook; edition: StoredEdition; position: StoredPosition } => item !== undefined); const shelfValues = activeValues.filter((item) => this.shelf.has(`${userId}:${item.book.id}`)).sort((a, b) => (this.shelf.get(`${userId}:${b.book.id}`) ?? '').localeCompare(this.shelf.get(`${userId}:${a.book.id}`) ?? '')); const shelf = shelfValues.map((value) => { const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } }); return { bookshelf: shelf, reading, searchHistory: latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50) }
+  public async getHome(userId: string): Promise<HomeSnapshot> {
+    const values = [...this.books.values()].filter((item) => item.book.userId === userId)
+    const activeValues = values.filter((item) => item.book.activeEditionKey === item.edition.editionKey)
+    const positions = [...this.positions.values()].filter((position) => position.userId === userId).sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt))
+    const sortByReadingTime = (await this.getSettings(userId)).general.bookshelfSort === 'lastReadAt'
+    const seenReadingBooks = new Set<string>()
+    const reading = positions.map((position) => {
+      const value = values.find((item) => item.book.id === position.bookId && item.edition.editionKey === position.editionKey)
+      return value === undefined || seenReadingBooks.has(position.bookId) ? undefined : (seenReadingBooks.add(position.bookId), { book: value.book, edition: value.edition, position })
+    }).filter((item): item is { book: StoredBook; edition: StoredEdition; position: StoredPosition } => item !== undefined)
+    const lastReadByBook = new Map<string, string>()
+    for (const position of positions) if (!lastReadByBook.has(position.bookId)) lastReadByBook.set(position.bookId, position.lastReadAt)
+    const shelfValues = activeValues.filter((item) => this.shelf.has(`${userId}:${item.book.id}`)).sort((left, right) => {
+      const leftAddedAt = this.shelf.get(`${userId}:${left.book.id}`) ?? ''
+      const rightAddedAt = this.shelf.get(`${userId}:${right.book.id}`) ?? ''
+      if (sortByReadingTime) {
+        const leftReadAt = lastReadByBook.get(left.book.id)
+        const rightReadAt = lastReadByBook.get(right.book.id)
+        if (leftReadAt === undefined && rightReadAt !== undefined) return 1
+        if (rightReadAt === undefined && leftReadAt !== undefined) return -1
+        if (leftReadAt !== undefined && rightReadAt !== undefined && leftReadAt !== rightReadAt) return rightReadAt.localeCompare(leftReadAt)
+      }
+      return rightAddedAt.localeCompare(leftAddedAt) || left.book.id.localeCompare(right.book.id)
+    })
+    const shelf = shelfValues.map((value) => { const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } })
+    return { bookshelf: shelf, reading, searchHistory: latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50) }
   }
   public async getBackupSnapshot(userId: string): Promise<ReaderBackupSnapshot> {
     const books = new Map<string, ReaderBackupBook>()
@@ -1081,7 +1113,44 @@ function mergeImportedSource(local: StoredSourceRecord | undefined, remote: Norm
   return result as NormalizedSource
 }
 function defaultReaderSettings(userId: string): ReaderSettings { return { userId, ...DEFAULT_READER_SETTINGS, updatedAt: new Date().toISOString() } }
-function toSettings(row: ReaderSettingsRow): ReaderSettings { return { userId: row.userId, theme: row.theme as ThemeMode, readingMode: row.readingMode as ReadingMode, fontSize: row.fontSize, lineHeight: row.lineHeightUnits / 100, marginTop: row.marginTop, marginRight: row.marginRight, marginBottom: row.marginBottom, marginLeft: row.marginLeft, updatedAt: row.updatedAt.toISOString() } }
+function mergeReaderSettings(current: ReaderSettings, patch: ReaderSettingsPatch, updatedAt: string): ReaderSettings { return { ...current, ...patch, general: { ...current.general, ...patch.general }, updatedAt } }
+function readerSettingsValues(userId: string, settings: ReaderSettings, updatedAt: Date) {
+  const preferences: ReaderSettingsPreferences = {
+    schemaVersion: 1,
+    general: settings.general,
+    display: {
+      theme: settings.theme,
+      readingMode: settings.readingMode,
+      fontSize: settings.fontSize,
+      lineHeight: settings.lineHeight,
+      marginTop: settings.marginTop,
+      marginRight: settings.marginRight,
+      marginBottom: settings.marginBottom,
+      marginLeft: settings.marginLeft,
+    },
+  }
+  return { userId, preferences, updatedAt }
+}
+function toSettings(row: ReaderSettingsRow): ReaderSettings {
+  const preferences = settingsObject(row.preferences)
+  const general = settingsObject(preferences.general)
+  const display = settingsObject(preferences.display)
+  const bookshelfSort = general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort
+  return {
+    userId: row.userId,
+    theme: display.theme === 'system' || display.theme === 'light' || display.theme === 'dark' ? display.theme : DEFAULT_READER_SETTINGS.theme,
+    readingMode: display.readingMode === 'scroll' || display.readingMode === 'paged' ? display.readingMode : DEFAULT_READER_SETTINGS.readingMode,
+    fontSize: typeof display.fontSize === 'number' && Number.isInteger(display.fontSize) && display.fontSize >= 15 && display.fontSize <= 28 ? display.fontSize : DEFAULT_READER_SETTINGS.fontSize,
+    lineHeight: typeof display.lineHeight === 'number' && display.lineHeight >= 1.4 && display.lineHeight <= 2.6 ? display.lineHeight : DEFAULT_READER_SETTINGS.lineHeight,
+    marginTop: typeof display.marginTop === 'number' && Number.isInteger(display.marginTop) && display.marginTop >= 0 && display.marginTop <= 64 ? display.marginTop : DEFAULT_READER_SETTINGS.marginTop,
+    marginRight: typeof display.marginRight === 'number' && Number.isInteger(display.marginRight) && display.marginRight >= 0 && display.marginRight <= 64 ? display.marginRight : DEFAULT_READER_SETTINGS.marginRight,
+    marginBottom: typeof display.marginBottom === 'number' && Number.isInteger(display.marginBottom) && display.marginBottom >= 0 && display.marginBottom <= 64 ? display.marginBottom : DEFAULT_READER_SETTINGS.marginBottom,
+    marginLeft: typeof display.marginLeft === 'number' && Number.isInteger(display.marginLeft) && display.marginLeft >= 0 && display.marginLeft <= 64 ? display.marginLeft : DEFAULT_READER_SETTINGS.marginLeft,
+    general: { bookshelfSort },
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}
+function settingsObject(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function toEdition(row: BookEditionRow): StoredEdition { return { id: row.id, userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, bookUrl: row.bookUrl, metadata: row.metadata, ...(row.variable === null ? {} : { variable: row.variable }) } }
 function toSearch(row: SearchRunRow): SearchRunState { const sourceIds = row.sourceIds.length === 0 ? [row.sourceId] : row.sourceIds; return { id: row.id, userId: row.userId, keyword: row.keyword, sourceId: row.sourceId, sourceIds, ...(row.precision ? { precision: true } : {}), ...(row.sourceFingerprint === null ? {} : { sourceFingerprint: row.sourceFingerprint }), status: row.status as SearchRunState['status'], candidates: row.candidates, sourceStates: row.sourceStates, ...(row.cursor === null || row.cursor === undefined ? {} : { cursor: row.cursor }), ...(row.nextCursor === null || row.nextCursor === undefined ? {} : { nextCursor: row.nextCursor }), ...(row.operationId === null ? {} : { operationId: row.operationId }), progress: { completed: row.progressCompleted, total: row.progressTotal === 0 ? sourceIds.length : row.progressTotal }, version: row.version, cancelled: row.cancelled, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }

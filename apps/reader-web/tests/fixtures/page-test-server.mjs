@@ -127,6 +127,7 @@ const settings = {
   marginRight: 16,
   marginBottom: 16,
   marginLeft: 16,
+  general: { bookshelfSort: 'addedAt' },
   updatedAt: now(),
 }
 
@@ -429,7 +430,8 @@ async function handleApi(request, response, url) {
   }
   if (method === 'GET' && path === '/api/settings') { json(response, { settings }); return }
   if (method === 'PUT' && path === '/api/settings') {
-    Object.assign(settings, await readJson(request), { updatedAt: now() })
+    const patch = await readJson(request)
+    Object.assign(settings, patch, { general: { ...settings.general, ...patch.general }, updatedAt: now() })
     json(response, { settings })
     return
   }

@@ -18,9 +18,11 @@
 | `chapter_contents` | edition、toc revision、chapterId 和 sourceFingerprint 对应的正文 |
 | `reading_records` | 每个用户/书籍/edition 的章节、段落索引、偏移、版本和最近阅读时间 |
 | `source_runtime_state` | 加密的 Cookie/变量快照、fingerprint、版本和五分钟租约 |
-| `reader_settings` | 当前账号的主题、阅读模式、字号、行距和正文上右下左四边距 |
+| `reader_settings` | 当前账号的全部阅读与通用偏好；`preferences` JSONB 保存带版本号的完整设置文档 |
 
 表定义位于 `server/db/schema.ts`，迁移位于 `server/db/migrations/`。共享书源字段和规则语义以 [Android 规则来源](../../../docs/upstream/android/rules/README.md) 为上游依据，跨包执行取舍以 [兼容政策](../../../docs/contracts/compatibility-policy.md) 为准。
+
+`reader_settings.preferences` 是设置的唯一持久化文档，按 `general` 和 `display` 分组保存通用偏好与页面显示偏好；新增偏好在该 JSON 文档中扩展并由 API 逐项校验。`0009_reader_settings_json.sql` 删除旧列并以默认 JSON 初始化，现有账号的旧设置值会重置为默认值。
 
 ## 版本与身份
 

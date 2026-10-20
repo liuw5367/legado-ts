@@ -3,7 +3,7 @@ import { createBackupZip, editionKey as sharedEditionKey, isIsoDateString, jsonB
 import { importSources, sourceDefinitionFingerprint, type NormalizedSource } from '@legado/source-core'
 import type { BookCandidate, JsonObject } from '@legado/source-core'
 import type { ReaderBackupSnapshot, ReaderRepository } from './db/repository.ts'
-import type { ReaderSettings, StoredBook, StoredBookSourceCandidate, StoredEdition, SearchHistoryItem } from './domain/types.ts'
+import { DEFAULT_READER_SETTINGS, type ReaderSettings, type StoredBook, type StoredBookSourceCandidate, type StoredEdition, type SearchHistoryItem } from './domain/types.ts'
 
 interface StoredSourceDefinition { sourceId: string; fingerprint: string; rawText: string; deleted?: boolean }
 interface CliBookDocument { bookId: string; name: string; author?: string; intro?: string; coverUrl?: string; tocUrl?: string; activeEditionKey?: string; metadataEditionKey?: string; createdAt: string; updatedAt: string }
@@ -268,8 +268,10 @@ function validateWebSettings(value: Record<string, unknown>, userId: string): Re
   const marginRight = value.marginRight
   const marginBottom = value.marginBottom
   const marginLeft = value.marginLeft
+  const general = value.general === undefined ? DEFAULT_READER_SETTINGS.general : value.general
+  if (!isRecord(general) || (general.bookshelfSort !== undefined && general.bookshelfSort !== 'addedAt' && general.bookshelfSort !== 'lastReadAt')) throw new Error('通用设置格式无效')
   if ((theme !== 'system' && theme !== 'light' && theme !== 'dark') || (readingMode !== 'scroll' && readingMode !== 'paged') || !isIntegerInRange(fontSize, 15, 28) || typeof lineHeight !== 'number' || lineHeight < 1.4 || lineHeight > 2.6 || !isIntegerInRange(marginTop, 0, 64) || !isIntegerInRange(marginRight, 0, 64) || !isIntegerInRange(marginBottom, 0, 64) || !isIntegerInRange(marginLeft, 0, 64) || !isIsoDateString(value.updatedAt)) throw new Error('阅读设置格式无效')
-  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, updatedAt: value.updatedAt }
+  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, general: { bookshelfSort: general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort }, updatedAt: value.updatedAt }
 }
 function isIntegerInRange(value: unknown, min: number, max: number): value is number { return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max }
 function rawSourceText(rawSource: unknown, normalized: NormalizedSource): string { return typeof rawSource === 'string' ? rawSource : JSON.stringify(rawSource ?? normalized) }

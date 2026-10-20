@@ -12,6 +12,7 @@ const AboutAppPage = lazy(() => import('./pages/about-app.tsx').then((module) =>
 const AuthConfirmPage = lazy(() => import('./pages/auth-confirm.tsx').then((module) => ({ default: module.AuthConfirmPage })))
 const ChangePasswordPage = lazy(() => import('./pages/change-password.tsx').then((module) => ({ default: module.ChangePasswordPage })))
 const ForgotPasswordPage = lazy(() => import('./pages/forgot-password.tsx').then((module) => ({ default: module.ForgotPasswordPage })))
+const GeneralSettingsPage = lazy(() => import('./pages/general-settings.tsx').then((module) => ({ default: module.GeneralSettingsPage })))
 const LoginPage = lazy(() => import('./pages/login.tsx').then((module) => ({ default: module.LoginPage })))
 const RegisterPage = lazy(() => import('./pages/register.tsx').then((module) => ({ default: module.RegisterPage })))
 const ResetPasswordPage = lazy(() => import('./pages/reset-password.tsx').then((module) => ({ default: module.ResetPasswordPage })))
@@ -59,6 +60,7 @@ const router = createBrowserRouter([
       { path: '/account/password', element: <LazyPage backTo="/account/settings"><ChangePasswordPage /></LazyPage> },
       { path: '/account/settings', element: <LazyPage><SettingsPage /></LazyPage> },
       { path: '/account/settings/about', element: <LazyPage backTo="/account/settings"><AboutAppPage /></LazyPage> },
+      { path: '/account/settings/general', element: <LazyPage backTo="/account/settings"><GeneralSettingsPage /></LazyPage> },
       { path: '/account/settings/reading', element: <LazyPage backTo="/account/settings"><ReadingSettingsPage /></LazyPage> },
     ] },
     { element: <ReaderLayout />, children: [

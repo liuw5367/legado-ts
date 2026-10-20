@@ -1,6 +1,6 @@
 import { boolean, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, PageCursor, TocBookPatch } from '@legado/source-core'
-import type { ReadingMode, RuntimeStateSnapshot, SourceSearchState, StoredBookMetadata, StoredCandidate } from '../domain/types.ts'
+import { DEFAULT_READER_SETTINGS_PREFERENCES, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SourceSearchState, type StoredBookMetadata, type StoredCandidate } from '../domain/types.ts'
 
 export const readerSchema = pgSchema('reader')
 
@@ -40,14 +40,7 @@ export const sourceImportPreviews = readerSchema.table('source_import_previews',
 
 export const readerSettings = readerSchema.table('reader_settings', {
   userId: uuid('user_id').primaryKey(),
-  theme: text('theme').$type<'system' | 'light' | 'dark'>().notNull().default('system'),
-  readingMode: text('reading_mode').$type<ReadingMode>().notNull().default('scroll'),
-  fontSize: integer('font_size').notNull().default(18),
-  lineHeightUnits: integer('line_height_units').notNull().default(190),
-  marginTop: integer('margin_top').notNull().default(16),
-  marginRight: integer('margin_right').notNull().default(16),
-  marginBottom: integer('margin_bottom').notNull().default(16),
-  marginLeft: integer('margin_left').notNull().default(16),
+  preferences: jsonb('preferences').$type<ReaderSettingsPreferences>().notNull().default(DEFAULT_READER_SETTINGS_PREFERENCES),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

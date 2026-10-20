@@ -3,8 +3,9 @@ import { useAuth } from './auth-context.tsx'
 import { apiFetch, type ApiReadingMode, type ApiSettings, type ApiThemeMode } from './api.ts'
 import { Select } from '../components/ui/select.tsx'
 
-export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16 }
-type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>>
+export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { bookshelfSort: 'addedAt' } }
+type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>> & { general?: Partial<ApiSettings['general']> }
+type LocalSettingsSnapshot = Partial<ApiSettings> & { schemaVersion?: number }
 interface ReaderSettingsContextValue { settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; error?: string; updateSettings: (patch: SettingsPatch) => Promise<ApiSettings> }
 const ReaderSettingsContext = createContext<ReaderSettingsContextValue | undefined>(undefined)
 const storagePrefix = 'legado-reader-settings:'
@@ -37,7 +38,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       setSettings(result.settings)
       writeLocalSettings(userId, result.settings)
     }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : '阅读设置加载失败')
+      if (active) setError(reason instanceof Error ? reason.message : '设置加载失败')
     })
     return () => { active = false }
   }, [session, user?.id])
@@ -64,7 +65,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     saving,
     ...(error === undefined ? {} : { error }),
     updateSettings: async (patch) => {
-      const next: ApiSettings = { ...latestSettings.current, ...patch, updatedAt: new Date().toISOString() }
+      const next: ApiSettings = { ...latestSettings.current, ...patch, general: { ...latestSettings.current.general, ...patch.general }, updatedAt: new Date().toISOString() }
       const sequence = ++changeSequence.current
       latestSettings.current = next; setSettings(next)
       writeLocalSettings(user?.id, next)
@@ -82,7 +83,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
         return result.settings
       })
       saveQueue.current = request.then(() => undefined, () => undefined)
-      try { return await request } catch (reason) { if (activeUserId.current === user.id) setError(reason instanceof Error ? reason.message : '阅读设置保存失败'); throw reason } finally { pendingSaves.current -= 1; if (pendingSaves.current === 0) setSaving(false) }
+      try { return await request } catch (reason) { if (activeUserId.current === user.id) setError(reason instanceof Error ? reason.message : '设置保存失败'); throw reason } finally { pendingSaves.current -= 1; if (pendingSaves.current === 0) setSaving(false) }
     },
   }), [error, resolvedTheme, saving, session, settings, user?.id])
   return <ReaderSettingsContext.Provider value={value}>{children}</ReaderSettingsContext.Provider>
@@ -105,6 +106,15 @@ export function ReadingModeSelect({ className = '' }: { className?: string }) {
 }
 
 function resolveTheme(theme: ApiThemeMode): 'light' | 'dark' { return theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme }
-function readLocalSettings(userId: string | undefined): ApiSettings { const fallback: ApiSettings = { userId: userId ?? '', ...DEFAULT_SETTINGS, updatedAt: new Date(0).toISOString() }; try { const raw = window.localStorage.getItem(`${storagePrefix}${userId ?? 'anonymous'}`); if (raw === null) return fallback; const value = JSON.parse(raw) as Partial<ApiSettings>; return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(value.readingMode === 'scroll' || value.readingMode === 'paged' ? { readingMode: value.readingMode } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...readMargin('marginTop', value.marginTop), ...readMargin('marginRight', value.marginRight), ...readMargin('marginBottom', value.marginBottom), ...readMargin('marginLeft', value.marginLeft), ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) } } catch { return fallback } }
+function readLocalSettings(userId: string | undefined): ApiSettings {
+  const fallback: ApiSettings = { userId: userId ?? '', ...DEFAULT_SETTINGS, updatedAt: new Date(0).toISOString() }
+  try {
+    const raw = window.localStorage.getItem(`${storagePrefix}${userId ?? 'anonymous'}`)
+    if (raw === null) return fallback
+    const value = JSON.parse(raw) as LocalSettingsSnapshot
+    const bookshelfSort = value.general?.bookshelfSort === 'lastReadAt' || value.general?.bookshelfSort === 'addedAt' ? value.general.bookshelfSort : fallback.general.bookshelfSort
+    return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(value.readingMode === 'scroll' || value.readingMode === 'paged' ? { readingMode: value.readingMode } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...readMargin('marginTop', value.marginTop), ...readMargin('marginRight', value.marginRight), ...readMargin('marginBottom', value.marginBottom), ...readMargin('marginLeft', value.marginLeft), general: { bookshelfSort }, ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) }
+  } catch { return fallback }
+}
 function readMargin(key: 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft', value: unknown): Partial<ApiSettings> { return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 64 ? { [key]: value } : {} }
-function writeLocalSettings(userId: string | undefined, value: ApiSettings): void { try { window.localStorage.setItem(`${storagePrefix}${userId ?? 'anonymous'}`, JSON.stringify(value)) } catch { /* 私有浏览器模式可能禁用存储 */ } }
+function writeLocalSettings(userId: string | undefined, value: ApiSettings): void { try { window.localStorage.setItem(`${storagePrefix}${userId ?? 'anonymous'}`, JSON.stringify({ schemaVersion: 1, ...value })) } catch { /* 私有浏览器模式可能禁用存储 */ } }

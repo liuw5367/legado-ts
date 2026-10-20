@@ -172,9 +172,13 @@ export interface BookCreationInput {
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ReadingMode = 'scroll' | 'paged'
+export type BookshelfSortMode = 'addedAt' | 'lastReadAt'
 
-export interface ReaderSettings {
-  userId: string
+export interface GeneralSettings {
+  bookshelfSort: BookshelfSortMode
+}
+
+export interface DisplaySettings {
   theme: ThemeMode
   readingMode: ReadingMode
   fontSize: number
@@ -183,7 +187,22 @@ export interface ReaderSettings {
   marginRight: number
   marginBottom: number
   marginLeft: number
+}
+
+export interface ReaderSettingsPreferences {
+  schemaVersion: 1
+  general: GeneralSettings
+  display: DisplaySettings
+}
+
+export interface ReaderSettings extends DisplaySettings {
+  userId: string
+  general: GeneralSettings
   updatedAt: string
+}
+
+export type ReaderSettingsPatch = Partial<Pick<ReaderSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>> & {
+  general?: Partial<GeneralSettings>
 }
 
 export const DEFAULT_READER_SETTINGS = {
@@ -195,6 +214,22 @@ export const DEFAULT_READER_SETTINGS = {
   marginRight: 16,
   marginBottom: 16,
   marginLeft: 16,
+  general: { bookshelfSort: 'addedAt' as BookshelfSortMode },
+}
+
+export const DEFAULT_READER_SETTINGS_PREFERENCES: ReaderSettingsPreferences = {
+  schemaVersion: 1,
+  general: DEFAULT_READER_SETTINGS.general,
+  display: {
+    theme: DEFAULT_READER_SETTINGS.theme,
+    readingMode: DEFAULT_READER_SETTINGS.readingMode,
+    fontSize: DEFAULT_READER_SETTINGS.fontSize,
+    lineHeight: DEFAULT_READER_SETTINGS.lineHeight,
+    marginTop: DEFAULT_READER_SETTINGS.marginTop,
+    marginRight: DEFAULT_READER_SETTINGS.marginRight,
+    marginBottom: DEFAULT_READER_SETTINGS.marginBottom,
+    marginLeft: DEFAULT_READER_SETTINGS.marginLeft,
+  },
 }
 
 export interface RuntimeStateSnapshot {
