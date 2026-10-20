@@ -84,6 +84,13 @@ test('search cancellation before create returns settles server ID without starti
   assert.equal(streams, 0); assert.deepEqual(cancelled, ['id'])
 })
 
+test('search operation forwards explicit source IDs to the search creation request', async () => {
+  let received: string[] | undefined
+  const operation = new SearchOperation({ create: async (_keyword, _precision, sourceIds) => { received = sourceIds; return 'id' }, stream: async () => undefined, cancel: async () => undefined })
+  await operation.start('书', false, () => undefined, () => undefined, ['https://one.example/source', 'https://two.example/source'])
+  assert.deepEqual(received, ['https://one.example/source', 'https://two.example/source'])
+})
+
 test('search ignores late stream events and does not start a second operation while cancellation is pending', async () => {
   const end = deferred<void>(); const cancel = deferred<void>(); let events = 0
   let emit!: (value: { type: string; data: unknown }) => void

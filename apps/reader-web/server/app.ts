@@ -11,6 +11,7 @@ import { confirmImport, createImportPreview, listSourceActions, publicImportPrev
 import { serveReaderAsset } from './static.ts'
 import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
 import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
+import { sourceDomainInfo } from '../shared/source-domain.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -154,7 +155,9 @@ app.post('/api/searches', async (context) => {
   try {
     const availableSources = await dependencies.runtime.listSources(context.get('userId'))
     const requestedIds = body.sourceIds === undefined || body.sourceIds.length === 0 ? body.sourceId === undefined ? availableSources.map((item) => item.sourceId) : [body.sourceId] : body.sourceIds
+    if (new Set(requestedIds.map((sourceId) => sourceDomainInfo(sourceId).key)).size !== requestedIds.length) return context.json({ error: { code: 'invalid-input', message: '一次搜索每个域名只能使用一个书源版本' } }, 400)
     const selectedSources = availableSources.filter((item) => requestedIds.includes(item.sourceId))
+    if (selectedSources.length !== requestedIds.length) return context.json({ error: { code: 'source-not-found', message: '请求包含已禁用或不可用的书源' } }, 404)
     const source = selectedSources[0]
     if (source === undefined || source === null) return context.json({ error: { code: 'source-not-found', message: '没有可用书源' } }, 404)
     const search = await dependencies.repository.createSearch(context.get('userId'), { keyword: body.keyword, sourceId: source.sourceId, sourceIds: selectedSources.map((item) => item.sourceId), ...(body.precision === undefined ? {} : { precision: body.precision }) }, source.fingerprint)

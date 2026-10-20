@@ -1,7 +1,7 @@
 import type { SearchStreamOptions, StreamEvent } from './api.ts'
 
 interface SearchTransport {
-  create(keyword: string, precision: boolean): Promise<string>
+  create(keyword: string, precision: boolean, sourceIds?: string[]): Promise<string>
   stream(id: string, event: (value: StreamEvent) => void, signal: AbortSignal, options?: SearchStreamOptions): Promise<void>
   cancel(id: string): Promise<unknown>
 }
@@ -16,13 +16,13 @@ export class SearchOperation {
     return run.cancelPromise
   }
   get isRunning() { return this.current !== undefined }
-  async start(keyword: string, precision: boolean, event: (value: StreamEvent) => void, created: (id: string) => void) {
+  async start(keyword: string, precision: boolean, event: (value: StreamEvent) => void, created: (id: string) => void, sourceIds?: string[]) {
     if (this.current !== undefined) throw new Error('上一轮搜索尚未结束')
     const run = { controller: new AbortController(), id: '', cancelled: false, completed: false }
     this.current = run
     try {
       // 创建请求不中断，必须获得服务端ID，才能结算创建期间的取消请求。
-      run.id = await this.transport.create(keyword, precision)
+      run.id = await this.transport.create(keyword, precision, sourceIds)
       created(run.id)
       if (!run.cancelled) await this.transport.stream(run.id, (value) => { if (!run.cancelled && !run.completed) { if (value.type === 'done') run.completed = true; event(value) } }, run.controller.signal)
     } catch (reason) {

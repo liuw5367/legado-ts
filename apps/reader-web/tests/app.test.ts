@@ -19,7 +19,7 @@ test('SPA entrypoint is available when Vercel static files are not in the checko
 test('SPA deep links fall back to the entrypoint without intercepting API 404s', async () => {
   const page = await app.request('http://localhost/account/settings')
   assert.equal(page.status, 200)
-  assert.match(await page.text(), /<div id="root"><\/div>/u)
+  assert.match(await page.text(), /<div id="root"><main class="boot-loading">/u)
 
   const api = await app.request('http://localhost/api/unknown')
   assert.equal(api.status, 404)

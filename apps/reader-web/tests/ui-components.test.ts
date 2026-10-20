@@ -104,5 +104,5 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(accountHome, /loading && home === null/u)
   assert.doesNotMatch(accountHome, /if \(home === null\) return/u)
   assert.doesNotMatch(searchPage, /\/api\/sources/u)
-  assert.doesNotMatch(searchPage, /sourceIds/u)
+  assert.match(searchPage, /sourceIds/u)
 })
