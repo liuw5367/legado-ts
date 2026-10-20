@@ -210,18 +210,18 @@ async function cacheSearchSources(repository: ReaderRepository, userId: string, 
 async function listBookSources(repository: ReaderRepository, userId: string, bookId: string): Promise<BookSourcesResponse> {
   const book = await repository.getBook(userId, bookId)
   if (book === null) throw new ReaderRuntimeError('not-found', '书籍不存在')
-  const [editions, candidates, enabled] = await Promise.all([repository.listEditions(userId, bookId), repository.listBookSourceCandidates(userId, bookId), repository.listSourcesForUser(userId)])
-  const sources = new Map(enabled.map((source) => [source.sourceId, source]))
+  const [editions, candidates, sourceStates] = await Promise.all([repository.listEditions(userId, bookId), repository.listBookSourceCandidates(userId, bookId), repository.listSourceStatesForUser(userId)])
+  const sources = new Map(sourceStates.filter((state) => state.deleted !== true).map((state) => [state.source.sourceId, state.source]))
   const result = new Map<string, BookSourceItem>()
   for (const item of candidates) {
     const source = sources.get(item.sourceId)
     if (source?.fingerprint !== item.sourceFingerprint) continue
-    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, status: 'discovered', candidateId: item.id })
+    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id })
   }
   for (const edition of editions) {
     const source = sources.get(edition.sourceId)
     if (source?.fingerprint !== edition.sourceFingerprint) continue
-    result.set(JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl]), { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, status: 'saved', editionKey: edition.editionKey })
+    result.set(JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl]), { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey })
   }
   const items = [...result.values()].sort((left, right) => Number(right.status === 'saved' && right.editionKey === book.activeEditionKey) - Number(left.status === 'saved' && left.editionKey === book.activeEditionKey))
   return { sources: items, ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }) }

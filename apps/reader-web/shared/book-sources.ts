@@ -5,5 +5,6 @@ export type BookSourceItem = {
   sourceFingerprint: string
   name: string
   bookUrl: string
+  sourceEnabled: boolean
 } & ({ status: 'saved'; editionKey: string } | { status: 'discovered'; candidateId: string })
 export interface BookSourcesResponse { sources: BookSourceItem[]; activeEditionKey?: string }

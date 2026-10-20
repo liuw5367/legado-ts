@@ -182,7 +182,13 @@ test('detail mismatch and unavailable sources preserve the active edition', asyn
   for (const action of ['disable', 'enable', 'delete'] as const) {
     const state = (await repository.listSourceStatesForUser('user-a')).find((entry) => entry.source.sourceId === item.sourceId)!
     await repository.applySourceActions('user-a', action, [{ sourceId: item.sourceId, expectedSourceRevision: state.sourceRevision }])
-    assert.equal((await runtime.listBookSources('user-a', created.book.id)).sources.length, action === 'enable' ? 2 : 1)
+    const sources = (await runtime.listBookSources('user-a', created.book.id)).sources
+    assert.equal(sources.length, action === 'delete' ? 1 : 2)
+    if (action === 'disable') {
+      assert.equal(sources.find((source) => source.sourceId === item.sourceId)?.sourceEnabled, false)
+      await assert.rejects(runtime.openBookSource('user-a', created.book.id, item.candidateId), /不可用/u)
+    }
+    if (action === 'enable') assert.equal(sources.find((source) => source.sourceId === item.sourceId)?.sourceEnabled, true)
   }
 })
 test('cache failure is separate from successful shelving', async (t) => {

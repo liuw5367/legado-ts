@@ -325,6 +325,23 @@ a { color: inherit; }
 .book-source-search { display: flex; flex-direction: column; gap: 8px; }
 .book-source-search p { margin: 0; }
 .book-source-list { display: flex; flex-direction: column; }
+.book-source-domain { border-bottom: 1px solid var(--border); }
+.book-source-domain-details > summary { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; cursor: pointer; list-style: none; }
+.book-source-domain-details > summary::-webkit-details-marker { display: none; }
+.book-source-domain-summary::after { content: '⌄'; flex: 0 0 auto; color: var(--muted); }
+.book-source-domain-details[open] > .book-source-domain-summary::after { content: '⌃'; }
+.book-source-domain-summary > span:first-child { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.book-source-domain-summary > span:first-child strong { overflow-wrap: anywhere; }
+.book-source-domain-summary .badge { flex: 0 0 auto; }
+.book-source-domain-versions { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; }
+.book-source-version { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.book-source-version-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.book-source-version-header .book-source-info { flex: 1 1 auto; }
+.book-source-version-header .book-source-info > span { display: block; margin-top: 3px; }
+.book-sources-page .book-source-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.book-sources-page .book-source-actions .button { min-height: 44px; }
+.book-source-entry { padding-inline: 8px; }
+.book-source-unsearched { margin: 8px 0 0; }
 .book-source-row { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .book-source-row.current { color: var(--primary); }
 .book-source-row strong { font-size: 14px; }
@@ -447,6 +464,8 @@ a { color: inherit; }
 @media (max-width: 520px) {
   .source-management-row { grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; }
   .source-row-actions { grid-column: auto; justify-content: flex-end; }
+  .book-source-version-header { align-items: stretch; flex-direction: column; }
+  .book-source-version-header .book-source-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 }
 @media (max-width: 380px) {
   .reader-toc-utility-actions { flex-basis: 160px; }
