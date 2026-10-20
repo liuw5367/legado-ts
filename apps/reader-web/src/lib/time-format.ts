@@ -1,3 +1,5 @@
+import { isValidSourceRuleTime } from '../../shared/source-domain.ts'
+
 const SHANGHAI_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai',
   year: 'numeric',
@@ -16,4 +18,9 @@ export function formatShanghaiDateTime(value: string): string {
   const parts = SHANGHAI_TIME_FORMATTER.formatToParts(date)
   const values = new Map(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
   return `${values.get('year')}-${values.get('month')}-${values.get('day')} ${values.get('hour')}:${values.get('minute')}:${values.get('second')}`
+}
+
+export function formatSourceRuleDateTime(value: number | undefined): string {
+  if (!isValidSourceRuleTime(value)) return '未知'
+  return formatShanghaiDateTime(new Date(value).toISOString())
 }

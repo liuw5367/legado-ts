@@ -10,7 +10,7 @@ import { fallbackChapterForPosition } from '../src/lib/source-position.ts'
 
 async function setup() {
   const repository = new MemoryReaderRepository()
-  const definitions = ['a', 'b'].map((id) => ({ bookSourceUrl: `https://8.8.8.8/source-${id}`, bookSourceName: `来源${id}`, bookSourceType: 0, lastUpdateTime: 10, searchUrl: `/search-${id}`, ruleSearch: { bookList: 'article', name: 'h2@text', author: '.author@text', bookUrl: 'a@href' }, ruleBookInfo: { name: 'h1@text', author: '.author@text', tocUrl: 'a@href' } }))
+  const definitions = ['a', 'b'].map((id) => ({ bookSourceUrl: `https://${id === 'a' ? '8.8.8.8' : '8.8.4.4'}/source`, bookSourceName: `来源${id}`, bookSourceType: 0, lastUpdateTime: 10, searchUrl: `/search-${id}`, ruleSearch: { bookList: 'article', name: 'h2@text', author: '.author@text', bookUrl: 'a@href' }, ruleBookInfo: { name: 'h1@text', author: '.author@text', tocUrl: 'a@href' } }))
   const imported = await importSources({ kind: 'text', text: JSON.stringify(definitions) })
   const candidates = compareImportCandidates(imported, new Map())
   const previewId = randomUUID()

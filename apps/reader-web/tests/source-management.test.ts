@@ -8,7 +8,7 @@ import { createImportPreview, publicImportPreview } from '../server/runtime/sour
 
 const baseSource = { bookSourceUrl: 'https://source.example/books', bookSourceName: '示例书源', bookSourceType: 0, lastUpdateTime: 10, searchUrl: 'https://source.example/search?q={{key}}', ruleSearch: {}, ruleBookInfo: {}, ruleToc: {}, ruleContent: {} }
 
-async function candidates(source: Record<string, unknown>) { return importSources({ kind: 'text', text: JSON.stringify(source) }) }
+async function candidates(source: unknown) { return importSources({ kind: 'text', text: JSON.stringify(source) }) }
 
 test('import preview follows HTTP redirects through the real network host', async (t) => {
   for (const status of [301, 302, 303, 307, 308]) {
@@ -155,6 +155,47 @@ test('source updates preserve account management fields while replacing remote r
   assert.equal(saved.normalizedSource.weight, 9)
 })
 
+test('same-domain imports keep one default implementation and explicit switching disables its sibling', async () => {
+  const parsed = await candidates([
+    { ...baseSource, bookSourceUrl: 'https://same-domain.example/older', bookSourceName: '同名书源', lastUpdateTime: 100 },
+    { ...baseSource, bookSourceUrl: 'https://same-domain.example/newer', bookSourceName: '同名书源', lastUpdateTime: 200 },
+  ])
+  const repository = new MemoryReaderRepository()
+  const previewId = 'same-domain-import'
+  const importCandidates = compareImportCandidates(parsed, new Map())
+  await repository.saveImportPreview('user-a', { previewId, expiresAt: new Date(Date.now() + 60_000).toISOString(), candidates: importCandidates, writableCount: importCandidates.length }, 'https://same-domain.example/list.json')
+  await repository.commitImportPreview('user-a', previewId, importCandidates.map((candidate) => candidate.id))
+
+  const saved = await repository.listManagedSources('user-a', { page: 1, pageSize: 50, query: '', status: 'all', all: true })
+  assert.equal(saved.sources.length, 2)
+  assert.equal(saved.sources.filter((source) => source.enabled).length, 1)
+  assert.equal(saved.sources.find((source) => source.sourceId.endsWith('/newer'))?.enabled, true)
+  assert.equal((await repository.listSourcesForUser('user-a')).length, 1)
+  await assert.rejects(repository.applySourceActions('user-a', 'enable', saved.sources.map((source) => ({ sourceId: source.sourceId, expectedSourceRevision: source.sourceRevision }))), /同一域名只能启用一个/u)
+
+  const older = saved.sources.find((source) => source.sourceId.endsWith('/older'))!
+  await repository.applySourceActions('user-a', 'enable', [{ sourceId: older.sourceId, expectedSourceRevision: older.sourceRevision }])
+  const switched = await repository.listManagedSources('user-a', { page: 1, pageSize: 50, query: '', status: 'all', all: true })
+  assert.equal(switched.sources.find((source) => source.sourceId.endsWith('/older'))?.enabled, true)
+  assert.equal(switched.sources.find((source) => source.sourceId.endsWith('/newer'))?.enabled, false)
+  assert.deepEqual((await repository.listSourcesForUser('user-a')).map((source) => source.sourceId), [older.sourceId])
+})
+
+test('new source imports do not replace an already enabled same-domain implementation', async () => {
+  const existingParsed = await candidates({ ...baseSource, bookSourceUrl: 'https://active-domain.example/current', bookSourceName: '当前规则', lastUpdateTime: 100 })
+  const nextParsed = await candidates({ ...baseSource, bookSourceUrl: 'https://active-domain.example/alternate', bookSourceName: '候选规则', lastUpdateTime: 200 })
+  const existing = existingParsed[0]?.source
+  const next = nextParsed[0]?.source
+  assert.ok(existing); assert.ok(next)
+  const repository = new MemoryReaderRepository()
+  await saveNewSource(repository, 'user-a', existing, existingParsed[0]?.sourceFingerprint ?? '', 'active-domain-existing')
+  await saveNewSource(repository, 'user-a', next, nextParsed[0]?.sourceFingerprint ?? '', 'active-domain-next')
+  const states = await repository.listManagedSources('user-a', { page: 1, pageSize: 50, query: '', status: 'all', all: true })
+  assert.equal(states.sources.find((source) => source.sourceId === existing.bookSourceUrl)?.enabled, true)
+  assert.equal(states.sources.find((source) => source.sourceId === next.bookSourceUrl)?.enabled, false)
+  assert.deepEqual((await repository.listSourcesForUser('user-a')).map((source) => source.sourceId), [existing.bookSourceUrl])
+})
+
 async function saveNewSource(repository: MemoryReaderRepository, userId: string, source: NonNullable<Awaited<ReturnType<typeof candidates>>[number]['source']>, fingerprint: string, previewId: string): Promise<void> {
   await repository.saveImportPreview(userId, { previewId, expiresAt: new Date(Date.now() + 60_000).toISOString(), writableCount: 1, candidates: [{ id: `${previewId}-candidate`, sourceId: source.bookSourceUrl, name: source.bookSourceName, ...(typeof source.bookSourceGroup === 'string' ? { group: source.bookSourceGroup } : {}), fingerprint, normalizedSource: source, rawSource: source, disposition: 'new', reason: '可导入' }] }, `https://source.example/${previewId}.json`)
   await repository.commitImportPreview(userId, previewId, [`${previewId}-candidate`])
@@ -180,7 +221,7 @@ test('public import previews do not expose raw source configuration', () => {
 
 test('all source summaries bypass pagination while preserving filters and the default page contract', async () => {
   const repository = new MemoryReaderRepository()
-  const imported = await importSources({ kind: 'text', text: JSON.stringify(Array.from({ length: 65 }, (_, index) => ({ bookSourceUrl: 'https://all-source.test/' + index, bookSourceName: '全量书源' + String(index).padStart(2, '0'), bookSourceType: 0, searchUrl: '/search' }))) })
+  const imported = await importSources({ kind: 'text', text: JSON.stringify(Array.from({ length: 65 }, (_, index) => ({ bookSourceUrl: `https://all-source-${index}.test/source`, bookSourceName: '全量书源' + String(index).padStart(2, '0'), bookSourceType: 0, searchUrl: '/search' }))) })
   const candidates = compareImportCandidates(imported, new Map())
   const previewId = randomUUID()
   await repository.saveImportPreview('all-user', { previewId, expiresAt: new Date(Date.now() + 60000).toISOString(), candidates, writableCount: candidates.length }, 'https://all-source.test')
@@ -198,8 +239,8 @@ test('all source summaries bypass pagination while preserving filters and the de
 test('web source order is persisted, returned in summaries, and checked by revision', async () => {
   const repository = new MemoryReaderRepository()
   const imported = await importSources({ kind: 'text', text: JSON.stringify([
-    { ...baseSource, bookSourceUrl: 'https://order.example/a', bookSourceName: '甲' },
-    { ...baseSource, bookSourceUrl: 'https://order.example/b', bookSourceName: '乙' },
+    { ...baseSource, bookSourceUrl: 'https://order-a.example/source', bookSourceName: '甲' },
+    { ...baseSource, bookSourceUrl: 'https://order-b.example/source', bookSourceName: '乙' },
   ]) })
   const previewId = randomUUID()
   const candidates = compareImportCandidates(imported, new Map())

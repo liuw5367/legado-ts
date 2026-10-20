@@ -1,10 +1,11 @@
 import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
+import { compareSourceManagementOrder, compareSourceVersions, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
 import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } from '@legado/reader-backup'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
-import { withUser } from './client.ts'
+import { withUser, type ReaderTransaction } from './client.ts'
 import { bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type ReadingMode, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type ThemeMode, type StoredToc } from '../domain/types.ts'
@@ -100,7 +101,7 @@ export class PostgresReaderRepository implements ReaderRepository {
   public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> {
     return withUser(userId, async (transaction) => {
       const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false))).orderBy(asc(userSources.customOrder), asc(userSources.sourceId))
-      return rows.map(toUserSource)
+      return selectOneSourcePerDomain(rows, compareSourceManagementOrder).map(toUserSource)
     })
   }
 
@@ -152,12 +153,19 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }> {
     return withUser(userId, async (transaction) => {
+      await lockUserSourceMutations(transaction, userId)
       const overrides = await transaction.select().from(userSources).where(eq(userSources.userId, userId)).for('update')
       const overrideById = new Map(overrides.map((row) => [row.sourceId, row]))
       const seen = new Set<string>()
+      const enabledDomains = new Set<string>()
       for (const item of items) {
         if (seen.has(item.sourceId)) throw new SourceManagementError('source-conflict', '操作列表包含重复书源')
         seen.add(item.sourceId)
+        const domainKey = sourceDomainInfo(item.sourceId).key
+        if (action === 'enable') {
+          if (enabledDomains.has(domainKey)) throw new SourceManagementError('source-conflict', '同一域名只能启用一个书源版本')
+          enabledDomains.add(domainKey)
+        }
         const override = overrideById.get(item.sourceId)
         if (override === undefined || override.deleted) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
         const current = toUserSource(override)
@@ -167,6 +175,14 @@ export class PostgresReaderRepository implements ReaderRepository {
           const runtimeRows = await transaction.select().from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, current.sourceId))).for('update')
           if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${item.sourceId}`)
           await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, current.sourceId)))
+        }
+        if (action === 'enable') {
+          const selectedIds = new Set(items.map((entry) => entry.sourceId))
+          for (const sibling of overrides) {
+            if (sibling.deleted || !sibling.enabled || selectedIds.has(sibling.sourceId) || sourceDomainInfo(sibling.sourceId).key !== domainKey) continue
+            const updated = await transaction.update(userSources).set({ enabled: false, revision: randomUUID(), updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sibling.sourceId), eq(userSources.revision, sibling.revision))).returning({ sourceId: userSources.sourceId })
+            if (updated.length === 0) throw new SourceManagementError('source-conflict', `同域书源已更新，请刷新后重试：${sibling.sourceId}`)
+          }
         }
         await transaction.insert(userSources).values({
           userId,
@@ -187,6 +203,7 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }> {
     return withUser(userId, async (transaction) => {
+      await lockUserSourceMutations(transaction, userId)
       const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false))).for('update')
       const byId = new Map(rows.map((row) => [row.sourceId, row]))
       const seen = new Set<string>()
@@ -220,6 +237,7 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }> {
     return withUser(userId, async (transaction) => {
+      await lockUserSourceMutations(transaction, userId)
       const [previewRow] = await transaction.select().from(sourceImportPreviews).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId))).limit(1).for('update')
       if (previewRow === undefined || previewRow.expiresAt.getTime() <= Date.now()) throw new SourceManagementError('preview-expired', '导入预览已过期，请重新获取')
       const previousIds = previewRow.consumedCandidateIds
@@ -231,6 +249,7 @@ export class PostgresReaderRepository implements ReaderRepository {
       if (candidates.length !== candidateIds.length || candidates.some((candidate) => candidate.disposition === undefined)) throw new SourceManagementError('preview-invalid', '确认列表包含不可导入的书源')
       const overrides = await transaction.select().from(userSources).where(eq(userSources.userId, userId)).for('update')
       const overrideById = new Map(overrides.map((row) => [row.sourceId, row]))
+      const importEnabled = decideImportedSourceEnabled(candidates, new Map(overrides.map((row) => [row.sourceId, { enabled: row.enabled, deleted: row.deleted }])))
       for (const candidate of candidates) {
         const current = overrideById.get(candidate.sourceId)
         const currentRevision = current?.revision
@@ -240,7 +259,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         const runtimeRows = await transaction.select().from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId))).for('update')
         if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${candidate.name}`)
         if (currentSource !== undefined && currentSource.fingerprint !== candidate.fingerprint) await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId)))
-        await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, normalizedSource, enabled: currentSource?.enabled ?? true, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: randomUUID(), updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
+        await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, normalizedSource, enabled: importEnabled.get(candidate.id) ?? false, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: randomUUID(), updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
       }
       const result = { imported: candidates.length }
       await transaction.update(sourceImportPreviews).set({ consumedCandidateIds: candidateIds, consumedResult: result }).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId)))
@@ -504,6 +523,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     assertBackupSnapshotClosed(snapshot, userId)
     if (selected.size === 0) throw new BackupRestoreError('至少选择一个恢复分类')
     await withUser(userId, async (transaction) => {
+      if (selected.has('sources')) await lockUserSourceMutations(transaction, userId)
       const bookIdMap = new Map<string, string>()
       const currentBookRows = selected.has('bookshelf') || selected.has('reading') ? await transaction.select({ id: books.id, userId: books.userId }).from(books).where(eq(books.userId, userId)) : []
       const existingBookIds = new Set(currentBookRows.map((row) => row.id))
@@ -740,7 +760,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   private readonly sourceCandidates = new Map<string, StoredBookSourceCandidate>()
   private readonly settings = new Map<string, ReaderSettings>()
 
-  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.sortSources(this.allSources(userId).filter((source) => source.enabled)) }
+  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return selectOneSourcePerDomain(this.allSources(userId).filter((source) => source.enabled), compareStoredSourceManagementOrder) }
   public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.sortSources(this.allSources(userId)) }
   public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
   public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { return this.allSources(userId).find((source) => source.sourceId === sourceId && source.enabled) ?? null }
@@ -758,15 +778,30 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
   public async applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }> {
     const seen = new Set<string>()
+    const enabledDomains = new Set<string>()
     const updates: Array<{ source: StoredSourceRecord; deleted: boolean }> = []
     for (const item of items) {
       if (seen.has(item.sourceId)) throw new SourceManagementError('source-conflict', '操作列表包含重复书源')
       seen.add(item.sourceId)
+      const domainKey = sourceDomainInfo(item.sourceId).key
+      if (action === 'enable') {
+        if (enabledDomains.has(domainKey)) throw new SourceManagementError('source-conflict', '同一域名只能启用一个书源版本')
+        enabledDomains.add(domainKey)
+      }
       const source = await this.getSourceForManagement(userId, item.sourceId)
       if (source === undefined) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
       if (this.sourceRevision(userId, item.sourceId) !== item.expectedSourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请刷新后重试：${item.sourceId}`)
       if (action === 'delete' && this.runtimeEntriesForSource(userId, item.sourceId).some(([, state]) => state.leaseToken !== null && (state.leaseUntil ?? 0) > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${item.sourceId}`)
       updates.push({ source, deleted: action === 'delete' })
+    }
+    if (action === 'enable') {
+      const targetIds = new Set(items.map((item) => item.sourceId))
+      for (const sibling of this.allSources(userId)) {
+        if (!sibling.enabled || targetIds.has(sibling.sourceId) || !enabledDomains.has(sourceDomainInfo(sibling.sourceId).key)) continue
+        const key = `${userId}:${sibling.sourceId}`
+        const record = this.userSourceMap.get(key)
+        if (record !== undefined && !record.deleted) this.userSourceMap.set(key, { ...record, source: { ...record.source, enabled: false }, revision: randomUUID() })
+      }
     }
     for (const update of updates) {
       if (update.deleted) for (const [key] of this.runtimeEntriesForSource(userId, update.source.sourceId)) this.runtimeStates.delete(key)
@@ -798,6 +833,8 @@ export class MemoryReaderRepository implements ReaderRepository {
     if (record.consumedIds.length > 0) { if (sameStringSet(record.consumedIds, candidateIds)) return record.result ?? { imported: 0 }; throw new SourceManagementError('preview-invalid', '导入预览已经确认过') }
     const candidates = record.preview.candidates.filter((candidate) => candidateIds.includes(candidate.id))
     if (candidates.length !== candidateIds.length || candidates.some((candidate) => candidate.disposition === undefined)) throw new SourceManagementError('preview-invalid', '确认列表包含不可导入的书源')
+    const currentStates = new Map([...this.userSourceMap.entries()].filter(([key]) => key.startsWith(`${userId}:`)).map(([key, value]) => [key.slice(userId.length + 1), { enabled: value.source.enabled, deleted: value.deleted }]))
+    const importEnabled = decideImportedSourceEnabled(candidates, currentStates)
     for (const candidate of candidates) {
       const currentRevision = this.userSourceMap.has(`${userId}:${candidate.sourceId}`) ? this.sourceRevision(userId, candidate.sourceId) : undefined
       if (candidate.sourceRevision === undefined ? currentRevision !== undefined : currentRevision !== candidate.sourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请重新获取预览：${candidate.name}`)
@@ -807,7 +844,7 @@ export class MemoryReaderRepository implements ReaderRepository {
       const current = this.userSourceMap.get(`${userId}:${candidate.sourceId}`)?.source
       if (current !== undefined && current.fingerprint !== candidate.fingerprint) for (const [key] of this.runtimeEntriesForSource(userId, candidate.sourceId)) this.runtimeStates.delete(key)
       const normalizedSource = mergeImportedSource(current, candidate.normalizedSource as NormalizedSource)
-      this.userSourceMap.set(`${userId}:${candidate.sourceId}`, { source: { sourceId: candidate.sourceId, name: normalizedSource.bookSourceName, ...(typeof normalizedSource.bookSourceGroup === 'string' ? { group: normalizedSource.bookSourceGroup } : {}), fingerprint: candidate.fingerprint, enabled: current?.enabled ?? true, rawSource: candidate.rawSource, normalizedSource }, deleted: false, revision: randomUUID() })
+      this.userSourceMap.set(`${userId}:${candidate.sourceId}`, { source: { sourceId: candidate.sourceId, name: normalizedSource.bookSourceName, ...(typeof normalizedSource.bookSourceGroup === 'string' ? { group: normalizedSource.bookSourceGroup } : {}), fingerprint: candidate.fingerprint, enabled: importEnabled.get(candidate.id) ?? false, rawSource: candidate.rawSource, normalizedSource }, deleted: false, revision: randomUUID() })
     }
     record.consumedIds = [...candidateIds]; record.result = { imported: candidates.length }; return record.result
   }
@@ -980,6 +1017,50 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async savePosition(userId: string, position: Omit<StoredPosition, 'lastReadAt'> & { lastReadAt?: string }): Promise<StoredPosition> { const value = { ...position, userId, lastReadAt: position.lastReadAt ?? new Date().toISOString() }; this.positions.set(`${userId}:${position.bookId}:${position.editionKey}`, value); return value }
 }
 
+async function lockUserSourceMutations(transaction: ReaderTransaction, userId: string): Promise<void> {
+  // Domain membership spans multiple source rows, so serialize account-level source mutations without adding a schema constraint.
+  await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0::bigint))`)
+}
+/** Keep an existing source's setting; otherwise leave new siblings disabled beside an active source, or select the newest import. */
+function decideImportedSourceEnabled(candidates: readonly ImportPreviewCandidate[], currentById: ReadonlyMap<string, { enabled: boolean; deleted: boolean }>): Map<string, boolean> {
+  const activeDomains = new Set([...currentById.entries()].filter(([, state]) => !state.deleted && state.enabled).map(([sourceId]) => sourceDomainInfo(sourceId).key))
+  const enabledByCandidate = new Map(candidates.map((candidate) => [candidate.id, false]))
+  for (const candidate of candidates) {
+    const current = currentById.get(candidate.sourceId)
+    if (current !== undefined && !current.deleted) enabledByCandidate.set(candidate.id, current.enabled)
+  }
+
+  const sortByRuleTime = (left: ImportPreviewCandidate, right: ImportPreviewCandidate) => compareSourceVersions(
+    { sourceId: left.sourceId, name: left.name, ...(left.lastUpdateTime === undefined ? {} : { lastUpdateTime: left.lastUpdateTime }), customOrder: readInteger(left.normalizedSource.customOrder, 0) },
+    { sourceId: right.sourceId, name: right.name, ...(right.lastUpdateTime === undefined ? {} : { lastUpdateTime: right.lastUpdateTime }), customOrder: readInteger(right.normalizedSource.customOrder, 0) },
+  )
+  const restores = candidates.filter((candidate) => currentById.get(candidate.sourceId)?.deleted === true && currentById.get(candidate.sourceId)?.enabled === true).sort(sortByRuleTime)
+  for (const candidate of restores) {
+    const domainKey = sourceDomainInfo(candidate.sourceId).key
+    if (activeDomains.has(domainKey)) continue
+    enabledByCandidate.set(candidate.id, true)
+    activeDomains.add(domainKey)
+  }
+
+  const newByDomain = new Map<string, ImportPreviewCandidate[]>()
+  for (const candidate of candidates) {
+    if (currentById.has(candidate.sourceId)) continue
+    const domainKey = sourceDomainInfo(candidate.sourceId).key
+    const domainCandidates = newByDomain.get(domainKey) ?? []
+    domainCandidates.push(candidate)
+    newByDomain.set(domainKey, domainCandidates)
+  }
+  for (const [domainKey, domainCandidates] of newByDomain) {
+    if (activeDomains.has(domainKey)) continue
+    const [selected] = domainCandidates.sort(sortByRuleTime)
+    if (selected !== undefined) {
+      enabledByCandidate.set(selected.id, true)
+      activeDomains.add(domainKey)
+    }
+  }
+  return enabledByCandidate
+}
+function compareStoredSourceManagementOrder(left: StoredSourceRecord, right: StoredSourceRecord): number { return readInteger(left.normalizedSource.customOrder, 0) - readInteger(right.normalizedSource.customOrder, 0) || left.sourceId.localeCompare(right.sourceId) }
 function toRuntimeState(row: SourceRuntimeRow): SourceRuntimeStateRecord { return { sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, snapshot: decryptRuntimeState(row.encryptedState), version: row.version } }
 function toRuntimeLease(row: SourceRuntimeRow, leaseToken: string): SourceRuntimeLease { return { ...toRuntimeState(row), leaseToken } }
 function runtimeStateKey(userId: string, sourceId: string, sourceFingerprint: string): string { return JSON.stringify([userId, sourceId, sourceFingerprint]) }
