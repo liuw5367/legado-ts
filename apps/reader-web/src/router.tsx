@@ -8,6 +8,7 @@ import { ReaderLayout } from './components/reader-layout.tsx'
 import { useAuth } from './lib/auth-context.tsx'
 
 const AccountHomePage = lazy(() => import('./pages/account-home.tsx').then((module) => ({ default: module.AccountHomePage })))
+const AboutAppPage = lazy(() => import('./pages/about-app.tsx').then((module) => ({ default: module.AboutAppPage })))
 const AuthConfirmPage = lazy(() => import('./pages/auth-confirm.tsx').then((module) => ({ default: module.AuthConfirmPage })))
 const ChangePasswordPage = lazy(() => import('./pages/change-password.tsx').then((module) => ({ default: module.ChangePasswordPage })))
 const ForgotPasswordPage = lazy(() => import('./pages/forgot-password.tsx').then((module) => ({ default: module.ForgotPasswordPage })))
@@ -57,6 +58,7 @@ const router = createBrowserRouter([
       { path: '/books/:bookId/sources', element: <LazyPage bookToc><BookSourcesPage /></LazyPage> },
       { path: '/account/password', element: <LazyPage backTo="/account/settings"><ChangePasswordPage /></LazyPage> },
       { path: '/account/settings', element: <LazyPage><SettingsPage /></LazyPage> },
+      { path: '/account/settings/about', element: <LazyPage backTo="/account/settings"><AboutAppPage /></LazyPage> },
       { path: '/account/settings/reading', element: <LazyPage backTo="/account/settings"><ReadingSettingsPage /></LazyPage> },
     ] },
     { element: <ReaderLayout />, children: [

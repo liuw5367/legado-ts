@@ -64,6 +64,7 @@ export function SettingsPage() {
       <SettingsEntry to="/account/settings/reading" title="阅读设置" description="调整字号、行距、阅读模式和正文边距" />
       <SettingsEntry title="导入数据" description={busy ? '正在校验备份…' : '选择 ZIP 备份，恢复所选内容'} icon={<Upload aria-hidden="true" />} onClick={chooseBackup} disabled={busy} />
       <SettingsEntry title="导出数据" description={busy ? '正在导出…' : '下载书架、阅读记录、搜索记录、书源和设置'} icon={<Download aria-hidden="true" />} onClick={exportData} disabled={busy} />
+      <SettingsEntry to="/account/settings/about" title="关于应用" description="应用版本与项目地址" />
     </nav>
     <input ref={inputRef} className="sr-only" type="file" accept=".zip,application/zip" onChange={onFileChange} />
     {error === undefined ? null : <p className="error compact-message">{error}</p>}
