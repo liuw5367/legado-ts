@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './auth-context.tsx'
-import { apiFetch, type ApiPageTapZones, type ApiReadingMode, type ApiSettings, type ApiThemeMode } from './api.ts'
+import { apiFetch, DEFAULT_PAGE_TAP_ZONES, type ApiPageTapZones, type ApiReadingMode, type ApiSettings, type ApiThemeMode } from './api.ts'
 import { normalizePageTapZones } from './reader-pagination.ts'
 import { Select } from '../components/ui/select.tsx'
 
-export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { bookshelfSort: 'addedAt' }, pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' } }
+export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { bookshelfSort: 'addedAt' }, pageTapZones: DEFAULT_PAGE_TAP_ZONES }
 type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>> & { general?: Partial<ApiSettings['general']>; pageTapZones?: ApiPageTapZones }
 type UpdateSettingsOptions = { optimistic?: boolean }
 type LocalSettingsSnapshot = Partial<ApiSettings> & { schemaVersion?: number }
