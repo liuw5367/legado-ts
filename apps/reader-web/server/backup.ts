@@ -270,8 +270,16 @@ function validateWebSettings(value: Record<string, unknown>, userId: string): Re
   const marginLeft = value.marginLeft
   const general = value.general === undefined ? DEFAULT_READER_SETTINGS.general : value.general
   if (!isRecord(general) || (general.bookshelfSort !== undefined && general.bookshelfSort !== 'addedAt' && general.bookshelfSort !== 'lastReadAt')) throw new Error('通用设置格式无效')
+  const pageTapZones = readPageTapZones(value.pageTapZones)
   if ((theme !== 'system' && theme !== 'light' && theme !== 'dark') || (readingMode !== 'scroll' && readingMode !== 'paged') || !isIntegerInRange(fontSize, 15, 28) || typeof lineHeight !== 'number' || lineHeight < 1.4 || lineHeight > 2.6 || !isIntegerInRange(marginTop, 0, 64) || !isIntegerInRange(marginRight, 0, 64) || !isIntegerInRange(marginBottom, 0, 64) || !isIntegerInRange(marginLeft, 0, 64) || !isIsoDateString(value.updatedAt)) throw new Error('阅读设置格式无效')
-  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, general: { bookshelfSort: general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort }, updatedAt: value.updatedAt }
+  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, general: { bookshelfSort: general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort }, pageTapZones, updatedAt: value.updatedAt }
+}
+function readPageTapZones(value: unknown): ReaderSettings['pageTapZones'] {
+  if (value === undefined) return DEFAULT_READER_SETTINGS.pageTapZones
+  if (!isRecord(value)) throw new Error('翻页区域设置格式无效')
+  const { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction } = value
+  if (!isIntegerInRange(leftWidthPercent, 18, 64) || !isIntegerInRange(centerWidthPercent, 18, 64) || !isIntegerInRange(centerTopHeightPercent, 18, 64) || !isIntegerInRange(centerMiddleHeightPercent, 18, 64) || leftWidthPercent + centerWidthPercent > 82 || centerTopHeightPercent + centerMiddleHeightPercent > 82 || (centerTopAction !== 'previous' && centerTopAction !== 'next') || (centerBottomAction !== 'previous' && centerBottomAction !== 'next')) throw new Error('翻页区域设置格式无效')
+  return { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction }
 }
 function isIntegerInRange(value: unknown, min: number, max: number): value is number { return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max }
 function rawSourceText(rawSource: unknown, normalized: NormalizedSource): string { return typeof rawSource === 'string' ? rawSource : JSON.stringify(rawSource ?? normalized) }

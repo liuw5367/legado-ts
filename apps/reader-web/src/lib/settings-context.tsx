@@ -1,12 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './auth-context.tsx'
-import { apiFetch, type ApiReadingMode, type ApiSettings, type ApiThemeMode } from './api.ts'
+import { apiFetch, type ApiPageTapZones, type ApiReadingMode, type ApiSettings, type ApiThemeMode } from './api.ts'
+import { normalizePageTapZones } from './reader-pagination.ts'
 import { Select } from '../components/ui/select.tsx'
 
-export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { bookshelfSort: 'addedAt' } }
-type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>> & { general?: Partial<ApiSettings['general']> }
+export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { bookshelfSort: 'addedAt' }, pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' } }
+type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>> & { general?: Partial<ApiSettings['general']>; pageTapZones?: ApiPageTapZones }
+type UpdateSettingsOptions = { optimistic?: boolean }
 type LocalSettingsSnapshot = Partial<ApiSettings> & { schemaVersion?: number }
-interface ReaderSettingsContextValue { settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; error?: string; updateSettings: (patch: SettingsPatch) => Promise<ApiSettings> }
+interface ReaderSettingsContextValue { settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; error?: string; updateSettings: (patch: SettingsPatch, options?: UpdateSettingsOptions) => Promise<ApiSettings> }
 const ReaderSettingsContext = createContext<ReaderSettingsContextValue | undefined>(undefined)
 const storagePrefix = 'legado-reader-settings:'
 const themeColors: Record<'light' | 'dark', string> = { light: '#f6f3ed', dark: '#171513' }
@@ -64,11 +66,11 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     resolvedTheme,
     saving,
     ...(error === undefined ? {} : { error }),
-    updateSettings: async (patch) => {
+    updateSettings: async (patch, options = {}) => {
       const next: ApiSettings = { ...latestSettings.current, ...patch, general: { ...latestSettings.current.general, ...patch.general }, updatedAt: new Date().toISOString() }
       const sequence = ++changeSequence.current
-      latestSettings.current = next; setSettings(next)
-      writeLocalSettings(user?.id, next)
+      const optimistic = options.optimistic !== false || session === null || user?.id === undefined
+      if (optimistic) { latestSettings.current = next; setSettings(next); writeLocalSettings(user?.id, next) }
       if (session === null || user?.id === undefined) return next
       pendingSaves.current += 1; setSaving(true)
       const request = saveQueue.current.then(async () => {
@@ -113,7 +115,7 @@ function readLocalSettings(userId: string | undefined): ApiSettings {
     if (raw === null) return fallback
     const value = JSON.parse(raw) as LocalSettingsSnapshot
     const bookshelfSort = value.general?.bookshelfSort === 'lastReadAt' || value.general?.bookshelfSort === 'addedAt' ? value.general.bookshelfSort : fallback.general.bookshelfSort
-    return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(value.readingMode === 'scroll' || value.readingMode === 'paged' ? { readingMode: value.readingMode } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...readMargin('marginTop', value.marginTop), ...readMargin('marginRight', value.marginRight), ...readMargin('marginBottom', value.marginBottom), ...readMargin('marginLeft', value.marginLeft), general: { bookshelfSort }, ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) }
+    return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(value.readingMode === 'scroll' || value.readingMode === 'paged' ? { readingMode: value.readingMode } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...readMargin('marginTop', value.marginTop), ...readMargin('marginRight', value.marginRight), ...readMargin('marginBottom', value.marginBottom), ...readMargin('marginLeft', value.marginLeft), general: { bookshelfSort }, pageTapZones: normalizePageTapZones(value.pageTapZones), ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) }
   } catch { return fallback }
 }
 function readMargin(key: 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft', value: unknown): Partial<ApiSettings> { return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 64 ? { [key]: value } : {} }

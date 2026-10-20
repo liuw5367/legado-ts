@@ -7,17 +7,18 @@ import { LoadingState } from '../components/loading-state.tsx'
 import { ReaderIcon } from '../components/reader-icon.tsx'
 import { browserUrl, chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
 import { pageReturnState, pageReturnTarget } from '../lib/page-navigation.ts'
-import { anchorFromViewport, clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageIndexForAnchor, pageLabel, type PageLayout, type ReaderAnchor, type ReaderPageAction } from '../lib/reader-pagination.ts'
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { anchorFromViewport, clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageIndexForAnchor, pageLabel, pageTapZoneBoundaryRange, resizePageTapZones, type PageLayout, type PageTapZoneBoundary, type ReaderAnchor, type ReaderPageAction } from '../lib/reader-pagination.ts'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ReaderSettingsPanel } from '../components/reader-settings-panel.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Sheet } from '../components/ui/sheet.tsx'
-import { apiFetch, type ApiChapter, type ApiContent, type ApiPosition, type ApiToc } from '../lib/api.ts'
+import { apiFetch, type ApiChapter, type ApiContent, type ApiPageTapAction, type ApiPageTapZones, type ApiPosition, type ApiToc } from '../lib/api.ts'
 import { useReaderSettings } from '../lib/settings-context.tsx'
 import { safeResourceUrl, sanitizeChapterHtml } from '../lib/html-content.ts'
 
 type ReaderPanel = 'toc' | 'settings' | null
+type PageTapZoneDrag = { pointerId: number; boundary: PageTapZoneBoundary }
 
 export function ReaderPage() {
   const { bookId = '', chapterId = '' } = useParams()
@@ -29,6 +30,8 @@ export function ReaderPage() {
   const { settings, resolvedTheme, updateSettings, saving: settingsSaving, error: settingsError } = useReaderSettings()
   const [controlsVisible, setControlsVisible] = useState(false)
   const [pageGuideVisible, setPageGuideVisible] = useState(false)
+  const [pageGuideDraft, setPageGuideDraft] = useState<ApiPageTapZones>(settings.pageTapZones)
+  const [pageGuideError, setPageGuideError] = useState('')
   const [themeRetry, setThemeRetry] = useState<'light' | 'dark' | null>(null)
   const pointerStartRef = useRef<{ x: number; y: number; scrollY: number } | null>(null)
   const restoredPositionRef = useRef(false)
@@ -47,7 +50,9 @@ export function ReaderPage() {
   const [paginationError, setPaginationError] = useState('')
   const refreshController = useRef<AbortController | null>(null)
   const articleRef = useRef<HTMLElement>(null)
-  const pageGuideRef = useRef<HTMLButtonElement>(null)
+  const pageGuideRef = useRef<HTMLDialogElement>(null)
+  const pageGuidePreviewRef = useRef<HTMLDivElement>(null)
+  const pageGuideDragRef = useRef<PageTapZoneDrag | null>(null)
   const latestPositionRef = useRef<ApiPosition | null>(null)
   const positionWriteQueueRef = useRef(Promise.resolve())
   const positionVersionRef = useRef(-1)
@@ -180,8 +185,15 @@ export function ReaderPage() {
   }, [settings.readingMode])
 
   useEffect(() => {
-    if (pageGuideVisible) pageGuideRef.current?.focus()
+    const dialog = pageGuideRef.current
+    if (dialog === null) return
+    if (pageGuideVisible && !dialog.open) {
+      dialog.showModal()
+      dialog.querySelector<HTMLElement>('[data-page-guide-close]')?.focus()
+    } else if (!pageGuideVisible && dialog.open) dialog.close()
   }, [pageGuideVisible])
+
+  useEffect(() => () => { pageGuideDragRef.current = null }, [])
 
   useEffect(() => {
     const viewport = articleRef.current
@@ -287,9 +299,69 @@ export function ReaderPage() {
     else setControlsVisible((value) => !value)
   }
 
+  function openPageGuide() {
+    setPageGuideDraft(settings.pageTapZones)
+    setPageGuideError('')
+    setPageGuideVisible(true)
+  }
+
   function closePageGuide() {
+    if (settingsSaving) return
     setPageGuideVisible(false)
+    pageGuideDragRef.current = null
     window.requestAnimationFrame(() => articleRef.current?.focus({ preventScroll: true }))
+  }
+
+  async function savePageGuide() {
+    if (settingsSaving) return
+    setPageGuideError('')
+    try {
+      await updateSettings({ pageTapZones: pageGuideDraft }, { optimistic: false })
+      closePageGuide()
+    } catch (reason) {
+      setPageGuideError(reason instanceof Error ? reason.message : '翻页区域保存失败，请重试。')
+    }
+  }
+
+  function beginPageZoneDrag(event: ReactPointerEvent<HTMLButtonElement>, boundary: PageTapZoneBoundary) {
+    if (event.button !== 0) return
+    event.preventDefault()
+    pageGuideDragRef.current = { pointerId: event.pointerId, boundary }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  function movePageZoneDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = pageGuideDragRef.current
+    const bounds = pageGuidePreviewRef.current?.getBoundingClientRect()
+    if (drag === null || drag.pointerId !== event.pointerId || bounds === undefined) return
+    const vertical = drag.boundary === 'center-top' || drag.boundary === 'center-bottom'
+    const origin = vertical ? bounds.top : bounds.left
+    const length = vertical ? bounds.height : bounds.width
+    if (length <= 0) return
+    setPageGuideDraft((current) => resizePageTapZones(current, drag.boundary, ((vertical ? event.clientY : event.clientX) - origin) / length * 100))
+  }
+
+  function finishPageZoneDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (pageGuideDragRef.current?.pointerId === event.pointerId) pageGuideDragRef.current = null
+  }
+
+  function handlePageZoneKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, boundary: PageTapZoneBoundary) {
+    const vertical = boundary === 'center-top' || boundary === 'center-bottom'
+    const range = pageTapZoneBoundaryRange(pageGuideDraft, boundary)
+    let target: number | undefined
+    if (event.key === 'Home') target = range.min
+    else if (event.key === 'End') target = range.max
+    else if (vertical && event.key === 'ArrowUp') target = range.value - 1
+    else if (vertical && event.key === 'ArrowDown') target = range.value + 1
+    else if (!vertical && event.key === 'ArrowLeft') target = range.value - 1
+    else if (!vertical && event.key === 'ArrowRight') target = range.value + 1
+    if (target === undefined) return
+    event.preventDefault()
+    setPageGuideDraft((current) => resizePageTapZones(current, boundary, target ?? range.value))
+  }
+
+  function updateCenterPageAction(side: 'top' | 'bottom', action: ApiPageTapAction) {
+    setPageGuideDraft((current) => side === 'top' ? { ...current, centerTopAction: action } : { ...current, centerBottomAction: action })
   }
 
   async function refreshChapter() {
@@ -333,6 +405,11 @@ export function ReaderPage() {
   const pageCounter = pageLayout.pageCount > 0 ? pageLabel(pageIndex, pageLayout.pageCount) : '排版中…'
   const wordCountLabel = `${chapterCharacterCount(content.cleaned).toLocaleString('zh-CN')} 字`
   const readerStyle = { fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight, '--reader-margin-top': `${settings.marginTop}px`, '--reader-margin-right': `${settings.marginRight}px`, '--reader-margin-bottom': `${settings.marginBottom}px`, '--reader-margin-left': `${settings.marginLeft}px` } as CSSProperties
+  const pageZonePreviewStyle = { '--zone-left-width': `${pageGuideDraft.leftWidthPercent}%`, '--zone-center-width': `${pageGuideDraft.centerWidthPercent}%`, '--zone-top-height': `${pageGuideDraft.centerTopHeightPercent}%`, '--zone-middle-height': `${pageGuideDraft.centerMiddleHeightPercent}%` } as CSSProperties
+  const leftCenterRange = pageTapZoneBoundaryRange(pageGuideDraft, 'left-center')
+  const centerRightRange = pageTapZoneBoundaryRange(pageGuideDraft, 'center-right')
+  const centerTopRange = pageTapZoneBoundaryRange(pageGuideDraft, 'center-top')
+  const centerBottomRange = pageTapZoneBoundaryRange(pageGuideDraft, 'center-bottom')
   async function toggleTheme(target: 'light' | 'dark' = dark ? 'light' : 'dark') {
     setThemeRetry(null)
     try { await updateSettings({ theme: target }) } catch { setThemeRetry(target) }
@@ -340,13 +417,13 @@ export function ReaderPage() {
   const address = browserUrl(content.chapter.chapterUrl)
   return <section className={`reader-page${paged ? ' reader-page-paged' : ''}`} onKeyDown={(event) => {
     if (event.key === 'Escape') {
-      if (pageGuideVisible) closePageGuide()
+      if (pageGuideVisible) { event.preventDefault(); closePageGuide() }
       else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
     }
   }}>
     <header className="reader-topbar" hidden={!controlsVisible}><Link className="reader-back" to={returnTarget.to} state={returnTarget.state} replace aria-label="返回上一页"><ChevronLeft aria-hidden="true" /><span>返回</span></Link><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />书籍详情</Link>
-      {paged ? <button className="more-menu-item" type="button" onClick={() => setPageGuideVisible(true)}><CircleHelp aria-hidden="true" />翻页区域</button> : null}
+      {paged ? <button className="more-menu-item" type="button" onClick={openPageGuide}><CircleHelp aria-hidden="true" />翻页区域</button> : null}
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原文地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />查看原文</a>}
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新内容'}</button>
     </MoreMenu></div></header>
@@ -362,7 +439,7 @@ export function ReaderPage() {
         if (!tap) return
         if (paged && articleRef.current !== null) {
           const rect = articleRef.current.getBoundingClientRect()
-          const action = pageActionForTap(start, end, selectedText, event.clientX, rect.left, rect.width)
+          const action = pageActionForTap(start, end, selectedText, event.clientX, rect.left, rect.width, settings.pageTapZones, event.clientY, rect.top, rect.height)
           if (action !== null) handlePageAction(action)
         } else setControlsVisible((value) => !value)
       }}
@@ -379,13 +456,32 @@ export function ReaderPage() {
       }}>
       {content.contentType === 'html' ? htmlContent.length === 0 && additionalResources.length === 0 ? <p className="muted">本章暂无正文。</p> : <><div className="reader-html-content" data-paragraph={0} dangerouslySetInnerHTML={{ __html: htmlContent }} />{additionalResources.map((url, index) => <p className="reader-resource" data-paragraph={index + 1} key={url}><img src={url} alt="正文插图" loading="lazy" decoding="async" /></p>)}</> : paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{paragraph}</p>)}
     </article>
-    {paged && pageGuideVisible ? <button ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" type="button" aria-label="关闭翻页区域" onClick={closePageGuide}>
-      <span className="reader-page-guide-title">点击页面对应区域进行操作</span>
-      <span className="reader-page-guide-zone"><strong>上一页</strong><small>点击左侧</small></span>
-      <span className="reader-page-guide-zone reader-page-guide-zone-middle"><strong>显示 / 隐藏操作栏</strong><small>点击中间</small></span>
-      <span className="reader-page-guide-zone"><strong>下一页</strong><small>点击右侧</small></span>
-      <span className="reader-page-guide-dismiss">点击任意位置关闭说明</span>
-    </button> : null}
+    {paged ? <dialog ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" aria-labelledby="reader-page-guide-title" onCancel={(event) => { event.preventDefault(); closePageGuide() }}>
+      <div className="reader-page-guide-shell">
+        <header className="reader-page-guide-header"><div><span className="reader-page-guide-kicker">阅读操作</span><h2 id="reader-page-guide-title">翻页区域</h2><p>拖动分割线调整区域，点击中间栏切换操作栏。</p></div><button className="reader-page-guide-close" type="button" data-page-guide-close aria-label="关闭翻页区域设置" disabled={settingsSaving} onClick={closePageGuide}>×</button></header>
+        <div className="reader-page-guide-body">
+          <div className="reader-zone-preview">
+            <div className="reader-zone-layout" ref={pageGuidePreviewRef} style={pageZonePreviewStyle}>
+              <div className="reader-zone-cell reader-zone-side"><span aria-hidden="true">‹</span><strong>上一页</strong><small>{pageGuideDraft.leftWidthPercent}%</small></div>
+              <div className="reader-zone-center">
+                <div className="reader-zone-cell reader-zone-center-action"><small>上栏 · {pageGuideDraft.centerTopHeightPercent}%</small><strong>{pageGuideDraft.centerTopAction === 'previous' ? '上一页' : '下一页'}</strong></div>
+                <div className="reader-zone-cell reader-zone-center-toggle"><strong>显示 / 隐藏</strong><small>操作栏 · {pageGuideDraft.centerMiddleHeightPercent}%</small></div>
+                <div className="reader-zone-cell reader-zone-center-action"><small>下栏 · {100 - pageGuideDraft.centerTopHeightPercent - pageGuideDraft.centerMiddleHeightPercent}%</small><strong>{pageGuideDraft.centerBottomAction === 'previous' ? '上一页' : '下一页'}</strong></div>
+              </div>
+              <div className="reader-zone-cell reader-zone-side"><span aria-hidden="true">›</span><strong>下一页</strong><small>{100 - pageGuideDraft.leftWidthPercent - pageGuideDraft.centerWidthPercent}%</small></div>
+              <button className="reader-zone-separator reader-zone-separator-vertical reader-zone-separator-left" type="button" role="separator" aria-label="调整左侧区域宽度" aria-orientation="vertical" aria-valuemin={leftCenterRange.min} aria-valuemax={leftCenterRange.max} aria-valuenow={leftCenterRange.value} aria-valuetext={`${leftCenterRange.value}%`} onKeyDown={(event) => handlePageZoneKeyDown(event, 'left-center')} onPointerDown={(event) => beginPageZoneDrag(event, 'left-center')} onPointerMove={movePageZoneDrag} onPointerUp={finishPageZoneDrag} onPointerCancel={finishPageZoneDrag} onLostPointerCapture={() => { pageGuideDragRef.current = null }} />
+              <button className="reader-zone-separator reader-zone-separator-vertical reader-zone-separator-right" type="button" role="separator" aria-label="调整右侧区域宽度" aria-orientation="vertical" aria-valuemin={centerRightRange.min} aria-valuemax={centerRightRange.max} aria-valuenow={centerRightRange.value} aria-valuetext={`${centerRightRange.value}%`} onKeyDown={(event) => handlePageZoneKeyDown(event, 'center-right')} onPointerDown={(event) => beginPageZoneDrag(event, 'center-right')} onPointerMove={movePageZoneDrag} onPointerUp={finishPageZoneDrag} onPointerCancel={finishPageZoneDrag} onLostPointerCapture={() => { pageGuideDragRef.current = null }} />
+              <button className="reader-zone-separator reader-zone-separator-horizontal reader-zone-separator-top" type="button" role="separator" aria-label="调整上栏高度" aria-orientation="horizontal" aria-valuemin={centerTopRange.min} aria-valuemax={centerTopRange.max} aria-valuenow={centerTopRange.value} aria-valuetext={`${centerTopRange.value}%`} onKeyDown={(event) => handlePageZoneKeyDown(event, 'center-top')} onPointerDown={(event) => beginPageZoneDrag(event, 'center-top')} onPointerMove={movePageZoneDrag} onPointerUp={finishPageZoneDrag} onPointerCancel={finishPageZoneDrag} onLostPointerCapture={() => { pageGuideDragRef.current = null }} />
+              <button className="reader-zone-separator reader-zone-separator-horizontal reader-zone-separator-bottom" type="button" role="separator" aria-label="调整中栏高度" aria-orientation="horizontal" aria-valuemin={centerBottomRange.min} aria-valuemax={centerBottomRange.max} aria-valuenow={centerBottomRange.value} aria-valuetext={`${centerBottomRange.value}%`} onKeyDown={(event) => handlePageZoneKeyDown(event, 'center-bottom')} onPointerDown={(event) => beginPageZoneDrag(event, 'center-bottom')} onPointerMove={movePageZoneDrag} onPointerUp={finishPageZoneDrag} onPointerCancel={finishPageZoneDrag} onLostPointerCapture={() => { pageGuideDragRef.current = null }} />
+            </div>
+          </div>
+          <div className="reader-page-guide-actions"><label><span>上栏点击</span><select aria-label="上栏点击动作" value={pageGuideDraft.centerTopAction} onChange={(event) => updateCenterPageAction('top', event.target.value as ApiPageTapAction)}><option value="previous">上一页</option><option value="next">下一页</option></select></label><label><span>下栏点击</span><select aria-label="下栏点击动作" value={pageGuideDraft.centerBottomAction} onChange={(event) => updateCenterPageAction('bottom', event.target.value as ApiPageTapAction)}><option value="previous">上一页</option><option value="next">下一页</option></select></label></div>
+          <p className="reader-page-guide-hint">左 / 中 / 右：{pageGuideDraft.leftWidthPercent}% / {pageGuideDraft.centerWidthPercent}% / {100 - pageGuideDraft.leftWidthPercent - pageGuideDraft.centerWidthPercent}%；上 / 中 / 下：{pageGuideDraft.centerTopHeightPercent}% / {pageGuideDraft.centerMiddleHeightPercent}% / {100 - pageGuideDraft.centerTopHeightPercent - pageGuideDraft.centerMiddleHeightPercent}%。每个区域至少 18%，分割线也可用方向键微调。</p>
+          {pageGuideError.length > 0 ? <p className="error reader-page-guide-error" role="alert">{pageGuideError}</p> : null}
+        </div>
+        <footer className="reader-page-guide-footer"><Button variant="secondary" type="button" disabled={settingsSaving} onClick={closePageGuide}>关闭</Button><Button type="button" disabled={settingsSaving} onClick={() => void savePageGuide()}>{settingsSaving ? '保存中…' : '保存设置'}</Button></footer>
+      </div>
+    </dialog> : null}
     {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><p className="error">{paginationError}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
     {refreshError.length > 0 ? <p className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></p> : null}
     {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void persistPosition({ paragraphIndex: latestPositionRef.current?.paragraphIndex ?? 0, offset: latestPositionRef.current?.offset ?? 0, version: (latestPositionRef.current?.version ?? -1) + 1 })}>重试</button></p> : null}

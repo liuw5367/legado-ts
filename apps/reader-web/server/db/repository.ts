@@ -1118,6 +1118,7 @@ function readerSettingsValues(userId: string, settings: ReaderSettings, updatedA
   const preferences: ReaderSettingsPreferences = {
     schemaVersion: 1,
     general: settings.general,
+    pageTapZones: settings.pageTapZones,
     display: {
       theme: settings.theme,
       readingMode: settings.readingMode,
@@ -1147,8 +1148,17 @@ function toSettings(row: ReaderSettingsRow): ReaderSettings {
     marginBottom: typeof display.marginBottom === 'number' && Number.isInteger(display.marginBottom) && display.marginBottom >= 0 && display.marginBottom <= 64 ? display.marginBottom : DEFAULT_READER_SETTINGS.marginBottom,
     marginLeft: typeof display.marginLeft === 'number' && Number.isInteger(display.marginLeft) && display.marginLeft >= 0 && display.marginLeft <= 64 ? display.marginLeft : DEFAULT_READER_SETTINGS.marginLeft,
     general: { bookshelfSort },
+    pageTapZones: readPageTapZones(preferences.pageTapZones),
     updatedAt: row.updatedAt.toISOString(),
   }
+}
+function readPageTapZones(value: unknown): ReaderSettings['pageTapZones'] {
+  const zones = settingsObject(value)
+  const { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction } = zones
+  const validPercent = (part: unknown): part is number => typeof part === 'number' && Number.isInteger(part) && part >= 18 && part <= 64
+  const validAction = (part: unknown): part is 'previous' | 'next' => part === 'previous' || part === 'next'
+  if (!validPercent(leftWidthPercent) || !validPercent(centerWidthPercent) || !validPercent(centerTopHeightPercent) || !validPercent(centerMiddleHeightPercent) || leftWidthPercent + centerWidthPercent > 82 || centerTopHeightPercent + centerMiddleHeightPercent > 82 || !validAction(centerTopAction) || !validAction(centerBottomAction)) return DEFAULT_READER_SETTINGS.pageTapZones
+  return { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction }
 }
 function settingsObject(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }

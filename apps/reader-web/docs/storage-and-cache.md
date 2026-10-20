@@ -22,7 +22,7 @@
 
 表定义位于 `server/db/schema.ts`，迁移位于 `server/db/migrations/`。共享书源字段和规则语义以 [Android 规则来源](../../../docs/upstream/android/rules/README.md) 为上游依据，跨包执行取舍以 [兼容政策](../../../docs/contracts/compatibility-policy.md) 为准。
 
-`reader_settings.preferences` 是设置的唯一持久化文档，按 `general` 和 `display` 分组保存通用偏好与页面显示偏好；新增偏好在该 JSON 文档中扩展并由 API 逐项校验。`0009_reader_settings_json.sql` 删除旧列并以默认 JSON 初始化，现有账号的旧设置值会重置为默认值。
+`reader_settings.preferences` 是设置的唯一持久化文档，按 `general`、`display` 和 `pageTapZones` 保存通用偏好、页面显示偏好和分页点击区域比例/动作；新增偏好在该 JSON 文档中扩展并由 API 逐项校验。旧 JSON 文档缺少 `pageTapZones` 时读取默认比例，下一次保存时写回完整字段。`0009_reader_settings_json.sql` 删除旧列并以默认 JSON 初始化，现有账号的旧设置值会重置为默认值。
 
 ## 版本与身份
 

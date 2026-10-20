@@ -441,14 +441,59 @@ a { color: inherit; }
 .reader-content-paged > p, .reader-content-paged > .reader-resource { break-inside: auto; }
 .reader-content-paged .reader-html-content { break-inside: auto; }
 .reader-content-paged img { max-height: calc(100dvh - var(--reader-content-top) - var(--reader-margin-bottom, 16px) - var(--safe-bottom)); object-fit: contain; break-inside: avoid; }
-.reader-page-guide { position: fixed; top: 0; bottom: 0; left: 50%; z-index: 7; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; width: min(100%, 680px); padding: calc(72px + var(--safe-top)) max(16px, var(--safe-right)) calc(24px + var(--safe-bottom)) max(16px, var(--safe-left)); overflow: hidden; transform: translateX(-50%); border: 0; background: color-mix(in srgb, var(--background) 95%, transparent); color: var(--foreground); text-align: center; cursor: pointer; }
-.reader-page-guide-title { grid-column: 1 / -1; align-self: end; font-size: 15px; font-weight: 650; }
-.reader-page-guide-zone { display: flex; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px 8px; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border); border-radius: 8px; }
-.reader-page-guide-zone strong { font-size: 14px; font-weight: 650; }
-.reader-page-guide-zone small, .reader-page-guide-dismiss { color: var(--muted); font-size: 12px; line-height: 1.5; }
-.reader-page-guide-zone-middle { background: color-mix(in srgb, var(--primary) 10%, var(--card)); border-color: var(--primary); }
-.reader-page-guide-dismiss { grid-column: 1 / -1; align-self: start; }
-.reader-page-guide:active { background: color-mix(in srgb, var(--background) 90%, transparent); }
+.reader-page-guide { position: fixed; inset: 0; width: min(calc(100vw - 32px - var(--safe-left) - var(--safe-right)), 760px); max-width: none; max-height: min(calc(100dvh - 32px - var(--safe-top) - var(--safe-bottom)), 840px); margin: auto; padding: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 10px; background: var(--background); color: var(--foreground); box-shadow: 0 18px 56px rgb(36 33 29 / 24%); }
+.reader-page-guide::backdrop { background: rgb(24 21 17 / 52%); }
+.reader-page-guide-shell { display: grid; grid-template-rows: auto 1fr auto; min-height: 100%; }
+.reader-page-guide-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; }
+.reader-page-guide-kicker { color: var(--primary); font-size: 11px; font-weight: 700; }
+.reader-page-guide-header h2 { margin: 3px 0 0; font-size: 18px; font-weight: 700; }
+.reader-page-guide-header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.reader-page-guide-close { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--muted); font-size: 22px; line-height: 1; }
+.reader-page-guide-close:active { transform: scale(.96); }
+.reader-page-guide-close:disabled { cursor: wait; opacity: .55; }
+.reader-page-guide-body { padding: 0 20px 14px; }
+.reader-zone-preview { height: clamp(240px, 42dvh, 360px); border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.reader-zone-layout { position: relative; display: grid; width: 100%; height: 100%; grid-template-columns: var(--zone-left-width) var(--zone-center-width) minmax(0, 1fr); overflow: hidden; border-radius: inherit; }
+.reader-zone-cell { display: flex; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; text-align: center; }
+.reader-zone-side { background: color-mix(in srgb, var(--primary) 5%, var(--card)); }
+.reader-zone-side:first-child, .reader-zone-center { border-right: 1px solid var(--border); }
+.reader-zone-side > span { color: var(--primary); font-size: 21px; line-height: 1; }
+.reader-zone-side strong, .reader-zone-center-toggle strong { font-size: 12px; font-weight: 700; }
+.reader-zone-center-action strong { font-size: 11px; font-weight: 700; line-height: 1.1; }
+.reader-zone-cell small { color: var(--muted); font-size: 10px; line-height: 1.15; }
+.reader-zone-side > small { font-variant-numeric: tabular-nums; }
+.reader-zone-center { display: grid; min-width: 0; grid-template-rows: var(--zone-top-height) var(--zone-middle-height) minmax(0, 1fr); }
+.reader-zone-center-action { gap: 2px; padding: 2px 3px; background: color-mix(in srgb, var(--primary) 4%, var(--card)); }
+.reader-zone-center-action + .reader-zone-center-toggle, .reader-zone-center-toggle + .reader-zone-center-action { border-top: 1px solid var(--border); }
+.reader-zone-center-toggle { gap: 3px; background: color-mix(in srgb, var(--primary) 12%, var(--card)); }
+.reader-zone-center-toggle strong { max-width: 100%; line-height: 1.25; }
+.reader-zone-separator { position: absolute; z-index: 2; display: grid; place-items: center; min-width: 0; min-height: 0; padding: 0; border: 0; background: transparent; touch-action: none; }
+.reader-zone-separator::before { content: ""; display: block; border-radius: 4px; background: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--background) 88%, transparent); }
+.reader-zone-separator-vertical { top: 0; bottom: 0; width: 24px; cursor: col-resize; transform: translateX(-50%); }
+.reader-zone-separator-left { left: var(--zone-left-width); }
+.reader-zone-separator-right { left: calc(var(--zone-left-width) + var(--zone-center-width)); }
+.reader-zone-separator-vertical::before { width: 4px; height: 32px; }
+.reader-zone-separator-horizontal { left: var(--zone-left-width); width: var(--zone-center-width); height: 24px; cursor: row-resize; transform: translateY(-50%); }
+.reader-zone-separator-top { top: var(--zone-top-height); }
+.reader-zone-separator-bottom { top: calc(var(--zone-top-height) + var(--zone-middle-height)); }
+.reader-zone-separator-horizontal::before { width: 32px; height: 4px; }
+.reader-zone-separator:active::before { transform: scale(1.15); }
+.reader-zone-separator:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.reader-page-guide-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.reader-page-guide-actions label { display: flex; min-width: 0; flex-direction: column; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.reader-page-guide-actions select { width: 100%; min-width: 0; min-height: 40px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--foreground); font-size: 13px; }
+.reader-page-guide-hint { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.reader-page-guide-error { margin-top: 10px; padding: 8px 10px; font-size: 12px; }
+.reader-page-guide-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+.reader-page-guide-footer .button { min-width: 88px; }
+@media (max-width: 420px) {
+  .reader-page-guide { width: calc(100vw - 20px - var(--safe-left) - var(--safe-right)); max-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); }
+  .reader-page-guide-header { gap: 8px; padding: 14px 12px 12px; }
+  .reader-page-guide-body { padding: 0 12px 12px; }
+  .reader-page-guide-footer { padding: 10px 12px 12px; }
+  .reader-zone-preview { height: clamp(240px, 40dvh, 300px); }
+  .reader-zone-side strong, .reader-zone-center-toggle strong { font-size: 11px; }
+}
 .reader-pagination-error { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: calc(24px + var(--safe-top)) max(24px, var(--safe-right)) calc(24px + var(--safe-bottom)) max(24px, var(--safe-left)); text-align: center; background: var(--background); }
 .reader-pagination-error p { margin: 0; }
 .reader-page-paged > .reader-position-error { position: fixed; top: calc(48px + var(--page-top-inset)); right: max(16px, var(--safe-right)); left: max(16px, var(--safe-left)); z-index: 6; margin: 0; padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; }

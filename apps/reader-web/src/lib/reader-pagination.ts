@@ -1,4 +1,5 @@
 import { isReaderTap, type ReaderTapPoint } from './reader-interactions.ts'
+import { DEFAULT_PAGE_TAP_ZONES, type ApiPageTapZones } from './api.ts'
 
 export type ReaderPageAction = 'previous' | 'toggle-controls' | 'next'
 
@@ -10,6 +11,44 @@ export interface PageLayout {
 export interface ReaderAnchor {
   paragraphIndex: number
   offset: number
+}
+
+export type PageTapZoneBoundary = 'left-center' | 'center-right' | 'center-top' | 'center-bottom'
+
+export function normalizePageTapZones(value: unknown): ApiPageTapZones {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return DEFAULT_PAGE_TAP_ZONES
+  const zones = value as Record<string, unknown>
+  const { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction } = zones
+  if (!isZonePercent(leftWidthPercent) || !isZonePercent(centerWidthPercent) || !isZonePercent(centerTopHeightPercent) || !isZonePercent(centerMiddleHeightPercent) || leftWidthPercent + centerWidthPercent > 82 || centerTopHeightPercent + centerMiddleHeightPercent > 82 || !isPageTapAction(centerTopAction) || !isPageTapAction(centerBottomAction)) return DEFAULT_PAGE_TAP_ZONES
+  return { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction }
+}
+
+export function pageTapZoneBoundaryRange(zones: ApiPageTapZones, boundary: PageTapZoneBoundary): { value: number; min: number; max: number } {
+  if (boundary === 'left-center') {
+    const right = 100 - zones.leftWidthPercent - zones.centerWidthPercent
+    return { value: zones.leftWidthPercent, min: 18, max: 82 - right }
+  }
+  if (boundary === 'center-right') return { value: zones.leftWidthPercent + zones.centerWidthPercent, min: zones.leftWidthPercent + 18, max: 82 }
+  if (boundary === 'center-top') {
+    const bottom = 100 - zones.centerTopHeightPercent - zones.centerMiddleHeightPercent
+    return { value: zones.centerTopHeightPercent, min: 18, max: 82 - bottom }
+  }
+  return { value: zones.centerTopHeightPercent + zones.centerMiddleHeightPercent, min: zones.centerTopHeightPercent + 18, max: 82 }
+}
+
+export function resizePageTapZones(zones: ApiPageTapZones, boundary: PageTapZoneBoundary, targetPercent: number): ApiPageTapZones {
+  const range = pageTapZoneBoundaryRange(zones, boundary)
+  const value = Math.round(Math.min(range.max, Math.max(range.min, targetPercent)))
+  if (boundary === 'left-center') {
+    const right = 100 - zones.leftWidthPercent - zones.centerWidthPercent
+    return { ...zones, leftWidthPercent: value, centerWidthPercent: 100 - right - value }
+  }
+  if (boundary === 'center-right') return { ...zones, centerWidthPercent: value - zones.leftWidthPercent }
+  if (boundary === 'center-top') {
+    const bottom = 100 - zones.centerTopHeightPercent - zones.centerMiddleHeightPercent
+    return { ...zones, centerTopHeightPercent: value, centerMiddleHeightPercent: 100 - bottom - value }
+  }
+  return { ...zones, centerMiddleHeightPercent: value - zones.centerTopHeightPercent }
 }
 
 export function pageCountFromScrollWidth(scrollWidth: number, pageWidth: number): number {
@@ -27,14 +66,27 @@ export function pageLabel(pageIndex: number, pageCount: number): string {
   return `${clampPageIndex(pageIndex, count) + 1}/${count}`
 }
 
-export function pageActionForTap(start: ReaderTapPoint | null, end: ReaderTapPoint, selectedText: string, clientX: number, viewportLeft: number, viewportWidth: number): ReaderPageAction | null {
+export function pageActionForTap(start: ReaderTapPoint | null, end: ReaderTapPoint, selectedText: string, clientX: number, viewportLeft: number, viewportWidth: number, zones?: ApiPageTapZones, clientY = end.y, viewportTop = 0, viewportHeight = Number.POSITIVE_INFINITY): ReaderPageAction | null {
   if (!isReaderTap(start, end, selectedText) || !Number.isFinite(viewportWidth) || viewportWidth <= 0) return null
   const relativeX = clientX - viewportLeft
   if (relativeX < 0 || relativeX > viewportWidth) return null
-  if (relativeX < viewportWidth / 3) return 'previous'
-  if (relativeX >= viewportWidth * 2 / 3) return 'next'
-  return 'toggle-controls'
+  if (zones === undefined) {
+    if (relativeX < viewportWidth / 3) return 'previous'
+    if (relativeX >= viewportWidth * 2 / 3) return 'next'
+    return 'toggle-controls'
+  }
+  if (relativeX < viewportWidth * zones.leftWidthPercent / 100) return 'previous'
+  if (relativeX >= viewportWidth * (zones.leftWidthPercent + zones.centerWidthPercent) / 100) return 'next'
+  if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return null
+  const relativeY = (clientY - viewportTop) / viewportHeight * 100
+  if (relativeY < 0 || relativeY > 100) return null
+  if (relativeY < zones.centerTopHeightPercent) return zones.centerTopAction
+  if (relativeY < zones.centerTopHeightPercent + zones.centerMiddleHeightPercent) return 'toggle-controls'
+  return zones.centerBottomAction
 }
+
+function isZonePercent(value: unknown): value is number { return typeof value === 'number' && Number.isInteger(value) && value >= 18 && value <= 64 }
+function isPageTapAction(value: unknown): value is 'previous' | 'next' { return value === 'previous' || value === 'next' }
 
 export function pageIndexForElement(element: HTMLElement | null, viewport: HTMLElement | null, layout: PageLayout): number {
   if (element === null || viewport === null || layout.pageWidth <= 0 || layout.pageCount <= 0) return 0

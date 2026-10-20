@@ -12,6 +12,7 @@ import { serveReaderAsset } from './static.ts'
 import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
 import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 import { sourceDomainInfo } from '../shared/source-domain.ts'
+import type { ReaderSettingsPatch } from './domain/types.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -110,7 +111,7 @@ app.put('/api/settings', async (context) => {
   const body = await parseBody(context, settingsSchema)
   if (body instanceof Response) return body
   try {
-    return context.json({ settings: await dependencies.repository.saveSettings(context.get('userId'), body) })
+    return context.json({ settings: await dependencies.repository.saveSettings(context.get('userId'), body as ReaderSettingsPatch) })
   } catch (error) {
     return handleError(context, error)
   }
@@ -407,6 +408,7 @@ const searchInputSchema = z.object({ keyword: z.string().trim().min(1).max(200),
 const searchBatchSchema = z.object({ sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), nextPage: z.boolean().optional() }).default({})
 const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999), candidateIdentity: z.object({ sourceId: z.string().min(1).max(4000), sourceFingerprint: z.string().min(1).max(128), bookUrl: z.string().min(1).max(4000) }).optional(), bookId: z.string().uuid().optional(), addToBookshelf: z.boolean().optional(), activateEdition: z.boolean().optional() })
 const activeEditionSchema = z.object({ editionKey: z.string().min(1).max(128) })
+const pageTapZonesSchema = z.object({ leftWidthPercent: z.number().int().min(18).max(64), centerWidthPercent: z.number().int().min(18).max(64), centerTopHeightPercent: z.number().int().min(18).max(64), centerMiddleHeightPercent: z.number().int().min(18).max(64), centerTopAction: z.enum(['previous', 'next']), centerBottomAction: z.enum(['previous', 'next']) }).refine((value) => value.leftWidthPercent + value.centerWidthPercent <= 82 && value.centerTopHeightPercent + value.centerMiddleHeightPercent <= 82, { message: '每个翻页区域至少占 18%' })
 const settingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']).optional(),
   readingMode: z.enum(['scroll', 'paged']).optional(),
@@ -417,6 +419,7 @@ const settingsSchema = z.object({
   marginBottom: z.number().int().min(0).max(64).optional(),
   marginLeft: z.number().int().min(0).max(64).optional(),
   general: z.object({ bookshelfSort: z.enum(['addedAt', 'lastReadAt']).optional() }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个通用设置项' }).optional(),
+  pageTapZones: pageTapZonesSchema.optional(),
 }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个设置项' })
 const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })
 

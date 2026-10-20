@@ -4,8 +4,11 @@ export interface ApiSource { sourceId: string; name: string; group?: string; fin
 export type ApiThemeMode = 'system' | 'light' | 'dark'
 export type ApiReadingMode = 'scroll' | 'paged'
 export type ApiBookshelfSortMode = 'addedAt' | 'lastReadAt'
+export type ApiPageTapAction = 'previous' | 'next'
 export interface ApiGeneralSettings { bookshelfSort: ApiBookshelfSortMode }
-export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; marginTop: number; marginRight: number; marginBottom: number; marginLeft: number; general: ApiGeneralSettings; updatedAt: string }
+export interface ApiPageTapZones { leftWidthPercent: number; centerWidthPercent: number; centerTopHeightPercent: number; centerMiddleHeightPercent: number; centerTopAction: ApiPageTapAction; centerBottomAction: ApiPageTapAction }
+export const DEFAULT_PAGE_TAP_ZONES: ApiPageTapZones = { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' }
+export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; marginTop: number; marginRight: number; marginBottom: number; marginLeft: number; general: ApiGeneralSettings; pageTapZones: ApiPageTapZones; updatedAt: string }
 export interface ApiCandidate { sourceId: string; sourceFingerprint: string; searchDurationMs?: number; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string; updateTime?: string; wordCount?: string } }
 export interface ApiSearchProgress { completed: number; total: number }
 export interface ApiSearchSourceState { sourceId: string; status: string; nextCursor?: { index: number; token?: string } }

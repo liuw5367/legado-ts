@@ -178,6 +178,17 @@ export interface GeneralSettings {
   bookshelfSort: BookshelfSortMode
 }
 
+export type PageTapAction = 'previous' | 'next'
+
+export interface PageTapZones {
+  leftWidthPercent: number
+  centerWidthPercent: number
+  centerTopHeightPercent: number
+  centerMiddleHeightPercent: number
+  centerTopAction: PageTapAction
+  centerBottomAction: PageTapAction
+}
+
 export interface DisplaySettings {
   theme: ThemeMode
   readingMode: ReadingMode
@@ -193,16 +204,19 @@ export interface ReaderSettingsPreferences {
   schemaVersion: 1
   general: GeneralSettings
   display: DisplaySettings
+  pageTapZones: PageTapZones
 }
 
 export interface ReaderSettings extends DisplaySettings {
   userId: string
   general: GeneralSettings
+  pageTapZones: PageTapZones
   updatedAt: string
 }
 
 export type ReaderSettingsPatch = Partial<Pick<ReaderSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>> & {
   general?: Partial<GeneralSettings>
+  pageTapZones?: PageTapZones
 }
 
 export const DEFAULT_READER_SETTINGS = {
@@ -215,11 +229,13 @@ export const DEFAULT_READER_SETTINGS = {
   marginBottom: 16,
   marginLeft: 16,
   general: { bookshelfSort: 'addedAt' as BookshelfSortMode },
+  pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous' as PageTapAction, centerBottomAction: 'next' as PageTapAction },
 }
 
 export const DEFAULT_READER_SETTINGS_PREFERENCES: ReaderSettingsPreferences = {
   schemaVersion: 1,
   general: DEFAULT_READER_SETTINGS.general,
+  pageTapZones: DEFAULT_READER_SETTINGS.pageTapZones,
   display: {
     theme: DEFAULT_READER_SETTINGS.theme,
     readingMode: DEFAULT_READER_SETTINGS.readingMode,
