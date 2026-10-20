@@ -23,6 +23,8 @@ pnpm --filter @legado/reader-web dev
 
 应用不会自动读取仓库中的 `fixtures/source/`；书源由当前账号在“书源管理”页面导入。数据库迁移是显式操作，启动和构建不会替代迁移。
 
+无需连接真实 Supabase 或数据库即可进行页面手工验收：启动 `pnpm --filter @legado/reader-web dev:page-fixture`，再按[页面验收模拟服务](docs/page-test-fixture.md)启动前端并使用文档里的测试账号登录。模拟数据只保存在测试服务进程内。
+
 备份导入导出保留书架、阅读位置、搜索记录、书源定义与状态、当前 Web 阅读设置和恢复所需的书籍版本/候选数据。选中分类会完整替换对应账号数据，未选分类保持不变；校验或事务失败不会留下半套数据。当前固定为第一版格式，不提供历史 CLI 数据迁移。
 
 跨端 ZIP 使用 CLI 的固定路径和共同字段。Web 当前数据模型没有 `openedBookIds`、CLI 数值搜索摘要、阅读记录级 `lastOpenedAt`/独立更新时间、候选确认时间和 CLI 书源检测 health/check，因此导出时分别写空数组、保存可表达的状态/结果数/文本摘要、按现有 position 重建或使用空检测配置；这些字段不通过数据库迁移伪造恢复。
