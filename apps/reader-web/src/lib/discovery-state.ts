@@ -19,7 +19,7 @@ export interface DiscoveryState {
 interface Choice { version: 1; sourceId: string; categoryId: string }
 export type DiscoveryRequest = <T>(path: string, init?: RequestInit) => Promise<T>
 
-const emptyState = (): DiscoveryState => ({ sources: [], source: null, categories: [], categoryId: '', items: [], loadedCursors: [], loading: false, loadingMore: false, opening: null, loaded: false, error: '', message: '' })
+const emptyState = (): DiscoveryState => ({ sources: [], source: null, categories: [], categoryId: '', items: [], nextCursor: undefined, loadedCursors: [], loading: false, loadingMore: false, opening: null, loaded: false, error: '', message: '' })
 const cursorKey = (cursor: DiscoveryCursor) => JSON.stringify([cursor.index, cursor.token ?? null])
 const storageKey = (userId: string) => `legado.discovery.v1:${userId}`
 
@@ -37,6 +37,7 @@ export class DiscoveryStore {
   private userId: string
   private request: DiscoveryRequest
   private storage: Storage | undefined
+  private retryOperation: (() => Promise<DiscoveryBookResult | void>) | undefined
   public scrollY = 0
   public constructor(userId: string, request: DiscoveryRequest, storage?: Storage) {
     this.userId = userId; this.request = request; this.storage = storage
@@ -48,7 +49,7 @@ export class DiscoveryStore {
   public subscribe = (listener: () => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   public getSnapshot = () => this.state
   private update(patch: Partial<DiscoveryState>) { this.state = { ...this.state, ...patch }; for (const listener of this.listeners) listener() }
-  private begin() { this.controller?.abort(); const controller = new AbortController(); this.controller = controller; return controller }
+  private begin() { this.controller?.abort(); this.retryOperation = undefined; const controller = new AbortController(); this.controller = controller; return controller }
   public suspend() { this.controller?.abort(); this.controller = undefined; this.update({ loading: false, loadingMore: false, opening: null }) }
   private remember() {
     const source = this.state.source
@@ -59,7 +60,10 @@ export class DiscoveryStore {
   public async initialize(sourceId?: string, categoryId?: string, refresh = false): Promise<void> {
     const controller = this.begin()
     const previous = this.state
-    this.update({ loading: true, loadingMore: false, opening: null, error: '' })
+    const changingSelection = previous.source !== null && ((sourceId !== undefined && sourceId !== previous.source.sourceId) || (categoryId !== undefined && categoryId !== previous.categoryId))
+    // 显式切源/分类后，旧结果不能在源列表查询失败时重新变成可操作状态。
+    if (changingSelection) { this.scrollY = 0; this.update({ ...emptyState(), sources: previous.sources, loading: true }) }
+    else this.update({ loading: true, loadingMore: false, opening: null, error: '' })
     try {
       const { sources } = await this.request<{ sources: DiscoverySource[] }>('/api/discovery/sources', { signal: controller.signal })
       if (controller.signal.aborted) return
@@ -69,7 +73,7 @@ export class DiscoveryStore {
       const sameSource = previous.source?.sourceId === source.sourceId && previous.source.fingerprint === source.fingerprint
       const wantedCategory = categoryId ?? (sourceId === undefined || sourceId === this.choice?.sourceId ? this.choice?.categoryId : undefined)
       if (!refresh && sameSource && previous.loaded && (wantedCategory === undefined || previous.categoryId === wantedCategory)) {
-        this.update({ sources, loading: false }); return
+        this.update({ ...previous, sources, loading: false, loadingMore: false, opening: null, error: '' }); return
       }
       this.scrollY = 0
       this.update({ source, sources, categories: sameSource ? previous.categories : [], categoryId: '', items: [], nextCursor: undefined, loadedCursors: [], loaded: false, message: '' })
@@ -81,7 +85,12 @@ export class DiscoveryStore {
       if (category === undefined) { this.update({ loading: false, loaded: true }); return }
       const page = await this.queryPage(undefined, controller.signal)
       if (!controller.signal.aborted) this.acceptPage(page, false)
-    } catch (reason) { if (!controller.signal.aborted) this.update({ loading: false, error: reason instanceof Error ? reason.message : '发现加载失败' }) }
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        this.retryOperation = () => this.initialize(sourceId, categoryId, refresh)
+        this.update({ loading: false, error: reason instanceof Error ? reason.message : '发现加载失败' })
+      }
+    }
   }
   private pageInput(cursor?: DiscoveryCursor): DiscoveryPageInput {
     const source = this.state.source
@@ -111,7 +120,12 @@ export class DiscoveryStore {
     const controller = this.begin()
     this.update({ loadingMore: true, error: '' })
     try { const page = await this.queryPage(cursor, controller.signal); if (!controller.signal.aborted) this.acceptPage(page, true) }
-    catch (reason) { if (!controller.signal.aborted) this.update({ loadingMore: false, error: reason instanceof Error ? reason.message : '下一页加载失败' }) }
+    catch (reason) {
+      if (!controller.signal.aborted) {
+        this.retryOperation = () => this.loadMore()
+        this.update({ loadingMore: false, error: reason instanceof Error ? reason.message : '下一页加载失败' })
+      }
+    }
   }
   public async openBook(entry: DiscoveryEntry): Promise<DiscoveryBookResult | undefined> {
     if (this.state.loading || this.state.loadingMore || this.state.opening !== null) return
@@ -120,6 +134,13 @@ export class DiscoveryStore {
     try {
       const result = await this.request<DiscoveryBookResult>('/api/discovery/books', { method: 'POST', signal: controller.signal, body: JSON.stringify({ ...this.pageInput(entry.cursor), bookUrl: entry.book.bookUrl }) })
       if (!controller.signal.aborted) { this.update({ opening: null }); return result }
-    } catch (reason) { if (!controller.signal.aborted) this.update({ opening: null, error: reason instanceof Error ? reason.message : '书籍详情加载失败' }) }
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        this.retryOperation = () => this.openBook(entry)
+        this.update({ opening: null, error: reason instanceof Error ? reason.message : '书籍详情加载失败' })
+      }
+    }
   }
+  /** 重试具体失败的操作；详情成功返回导航目标，列表重试只更新当前状态。 */
+  public async retry(): Promise<DiscoveryBookResult | void> { return this.retryOperation?.() }
 }

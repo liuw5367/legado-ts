@@ -34,6 +34,7 @@ const positions = new Map()
 const bookshelf = new Set()
 const searches = new Map()
 let discoveryFailure = true
+let discoveryBookFailure = true
 const searchHistory = []
 const refreshCounts = new Map()
 let searchSequence = 0
@@ -428,6 +429,7 @@ async function handleApi(request, response, url) {
       if (source === sources[2] && index === 2 && discoveryFailure) { discoveryFailure = false; json(response, { error: { code: 'source-failed', message: '分页请求暂时失败，请重试' } }, 500); return }
       json(response, { items, cursor: fixtureCursor(index), ...(items.length > 0 && index < 3 ? { nextCursor: fixtureCursor(index + 1) } : {}), status: items.length === 0 ? 'empty' : 'success' }); return
     }
+    if (source === sources[4] && discoveryBookFailure) { discoveryBookFailure = false; json(response, { error: { code: 'source-failed', message: '书籍详情暂时失败，请重试' } }, 500); return }
     const selected = items.find((item) => item.bookUrl === body.bookUrl)
     if (selected === undefined) { json(response, { error: { code: 'invalid-input', message: '列表已更新，请刷新后重试' } }, 400); return }
     const existing = [...editions.values()].find((edition) => edition.bookUrl === selected.bookUrl)

@@ -102,7 +102,7 @@ test('open discovery book revalidates identity, persists details without a searc
 test('opening another discovered edition keeps the active edition and existing shelf membership', async (t) => {
   const { repository, input } = await setup()
   let selectedBook = '1'
-  t.mock.method(globalThis, 'fetch', async (url: URL | string) => new Response(new URL(String(url)).pathname.startsWith('/book-') ? detailHtml : listHtml(selectedBook).replace('目标书2', '目标书1')))
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => new Response(new URL(String(url)).pathname.startsWith('/book-') ? detailHtml.replace('简介', '来源' + selectedBook + '的简介') : listHtml(selectedBook).replace('目标书2', '目标书1')))
   const first = await openDiscoveryBook(repository, 'user-a', { ...input, bookUrl: 'https://8.8.8.8/book-1' })
   await repository.addToBookshelf('user-a', first.book.id)
   selectedBook = '2'
@@ -111,6 +111,8 @@ test('opening another discovered edition keeps the active edition and existing s
   assert.equal(second.book.activeEditionKey, first.edition.editionKey)
   assert.notEqual(second.edition.editionKey, first.edition.editionKey)
   assert.equal(await repository.isOnBookshelf('user-a', first.book.id), true)
+  assert.equal(second.edition.metadata.intro, '来源2的简介')
+  assert.equal((await repository.getBook('user-a', first.book.id))?.intro, '来源1的简介')
 })
 
 test('source failures and cancelled discovery release the runtime lease for subsequent requests', async (t) => {

@@ -95,6 +95,58 @@ test('switching sources resets category, page cursor and scroll', async () => {
   assert.equal(calls.filter(({ path }) => path === '/api/discovery/page').at(-1)?.body.cursor, undefined)
 })
 
+test('a failed source-list request during switching cannot leave old-source books actionable', async () => {
+  const { request } = fixture()
+  let fail = false
+  const store = new DiscoveryStore('user', async <T>(path: string, init?: RequestInit) => {
+    if (fail && path === '/api/discovery/sources') throw new Error('source list offline')
+    return request<T>(path, init)
+  })
+  await store.initialize(source.sourceId)
+  fail = true
+  await store.initialize(other.sourceId)
+  assert.equal(store.getSnapshot().source, null)
+  assert.deepEqual(store.getSnapshot().items, [])
+  assert.equal(store.getSnapshot().nextCursor, undefined)
+  assert.equal(store.getSnapshot().loaded, false)
+  assert.equal(store.getSnapshot().error, 'source list offline')
+  fail = false
+  await store.retry()
+  assert.equal(store.getSnapshot().source?.sourceId, other.sourceId)
+  assert.equal(store.getSnapshot().error, '')
+})
+
+test('retrying a failed detail request opens that book instead of advancing pagination', async () => {
+  const { request, calls } = fixture()
+  let fail = true
+  const store = new DiscoveryStore('user', async <T>(path: string, init?: RequestInit) => {
+    if (fail && path === '/api/discovery/books') { fail = false; throw new Error('detail offline') }
+    return request<T>(path, init)
+  })
+  await store.initialize()
+  const entry = store.getSnapshot().items[0]!
+  assert.equal(await store.openBook(entry), undefined)
+  assert.equal(store.getSnapshot().error, 'detail offline')
+  const result = await store.retry()
+  assert.equal(result?.book.id, 'book')
+  assert.equal(calls.filter(({ path }) => path === '/api/discovery/page').length, 1)
+  assert.equal(calls.at(-1)?.path, '/api/discovery/books')
+  assert.equal(calls.at(-1)?.body.bookUrl, entry.book.bookUrl)
+  assert.equal(store.getSnapshot().items.length, 2)
+})
+
+test('an empty refreshed source list clears an old next-page cursor', async () => {
+  const { request } = fixture()
+  let removed = false
+  const store = new DiscoveryStore('user', async <T>(path: string, init?: RequestInit) => path === '/api/discovery/sources' && removed ? { sources: [] } as T : request<T>(path, init))
+  await store.initialize()
+  removed = true
+  await store.initialize()
+  assert.equal(store.getSnapshot().source, null)
+  assert.deepEqual(store.getSnapshot().items, [])
+  assert.equal(store.getSnapshot().nextCursor, undefined)
+})
+
 test('opening a later-page book sends its original cursor and keeps the list for return', async () => {
   const { request, calls } = fixture({ load: async (body) => body.cursor === undefined ? page(1, ['一'], 2) : page(2, ['二']) })
   const store = new DiscoveryStore('user', request)

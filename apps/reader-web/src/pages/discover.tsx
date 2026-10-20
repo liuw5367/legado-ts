@@ -9,6 +9,7 @@ import { Sheet } from '../components/ui/sheet.tsx'
 import { useDiscoveryStore } from '../lib/discovery-context.tsx'
 import { pageReturnState } from '../lib/page-navigation.ts'
 import type { DiscoveryEntry } from '../lib/discovery-state.ts'
+import type { DiscoveryBookResult } from '../../shared/discovery.ts'
 
 export function DiscoverPage() {
   const store = useDiscoveryStore()
@@ -65,7 +66,9 @@ export function DiscoverPage() {
     if (category !== undefined) { selectCategory(category.id); document.getElementById('discovery-tab-' + category.id)?.focus() }
   }
   async function openBook(entry: DiscoveryEntry) {
-    const result = await store.openBook(entry)
+    showDetails(await store.openBook(entry))
+  }
+  function showDetails(result: DiscoveryBookResult | void) {
     if (result !== undefined) navigate(`/books/${encodeURIComponent(result.book.id)}/details?editionKey=${encodeURIComponent(result.edition.editionKey)}`, { state: pageReturnState(location) })
   }
 
@@ -77,7 +80,7 @@ export function DiscoverPage() {
     {state.categories.length > 0 ? <div className="discovery-tabs" role="tablist" aria-label="发现分类">{state.categories.map((category, index) => <button key={category.id} id={'discovery-tab-' + category.id} className="discovery-tab" type="button" role="tab" aria-selected={category.id === state.categoryId} aria-controls="discovery-books" tabIndex={category.id === state.categoryId ? 0 : -1} onClick={() => selectCategory(category.id)} onKeyDown={(event) => tabKey(event, index)} title={category.group === undefined ? category.title : `${category.group} · ${category.title}`}>{category.title}</button>)}</div> : null}
     <div id="discovery-books" role={state.categories.length > 0 ? 'tabpanel' : undefined} aria-labelledby={currentCategory === undefined ? undefined : 'discovery-tab-' + currentCategory.id} aria-busy={state.loading || state.loadingMore}>
       {currentCategory?.group ? <p className="muted small discovery-group">{currentCategory.group}</p> : null}
-      {state.error.length > 0 ? <div className="discovery-feedback" role="alert"><p className="error">{state.error}</p><Button variant="secondary" size="sm" onClick={() => void (state.items.length > 0 && state.nextCursor !== undefined ? store.loadMore() : store.initialize(sourceId, categoryId, true))}>重试</Button></div> : null}
+      {state.error.length > 0 ? <div className="discovery-feedback" role="alert"><p className="error">{state.error}</p><Button variant="secondary" size="sm" onClick={() => { void store.retry().then(showDetails) }}>重试</Button></div> : null}
       {state.loading ? <LoadingState message="正在读取发现…" variant={state.items.length > 0 ? 'inline' : 'content'} /> : null}
       {!state.loading && state.loaded && state.source === null ? <div className="empty-state"><p>暂无可用的发现书源</p><p className="muted small">导入并启用支持发现的书源后，即可浏览分类和榜单。</p><Link className="button secondary" to="/sources" state={pageReturnState(location)}>管理书源</Link></div> : null}
       {!state.loading && state.loaded && state.source !== null && state.items.length === 0 && state.error.length === 0 ? <p className="empty-state">{state.message || '这个分类暂时没有书籍。'}</p> : null}

@@ -167,6 +167,7 @@ export interface BookCreationInput {
   metadata: StoredBookMetadata
   bookId?: string
   addToBookshelf?: boolean
+  /** false 表示预览来源：只保存 edition，保留已有书籍元数据与活动来源；新书仍正常初始化。 */
   activateEdition?: boolean
 }
 
