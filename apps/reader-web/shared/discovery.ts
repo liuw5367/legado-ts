@@ -12,8 +12,10 @@ export const discoveryPageSchema = discoverySourceSchema.extend({
   cursor: cursorSchema.optional(),
 })
 export const discoveryBookSchema = discoveryPageSchema.extend({ bookUrl: z.string().min(1).max(16000) })
+export const discoveryControlSchema = discoveryPageSchema.extend({ value: z.string().max(16_384).optional() })
 export type DiscoveryPageInput = z.infer<typeof discoveryPageSchema>
 export type DiscoveryBookInput = z.infer<typeof discoveryBookSchema>
+export type DiscoveryControlInput = z.infer<typeof discoveryControlSchema>
 /** 服务端签发，绑定账号、书源版本及分类；客户端只原样回传。 */
 export type DiscoveryCursor = z.infer<typeof cursorSchema>
 
@@ -23,9 +25,12 @@ export interface DiscoveryCategory {
   title: string
   group?: string
   type?: string
+  /** 服务端执行 viewName 后的展示文本；原始脚本不会下发到浏览器。 */
+  label?: string
   action?: string
   chars?: Array<string | null>
   default?: string
+  value?: string
   viewName?: string
   style?: Record<string, unknown>
 }
@@ -54,3 +59,10 @@ export interface DiscoveryPage {
   message?: string
 }
 export interface DiscoveryBookResult { book: { id: string }; edition: { editionKey: string } }
+export interface DiscoveryControlResult {
+  categories: DiscoveryCategory[]
+  categoryId: string
+  value?: string
+  refreshed: boolean
+  message?: string
+}

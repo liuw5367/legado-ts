@@ -1,12 +1,13 @@
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageActivity, usePageLoadEffect, usePageVersion } from '../lib/use-page-resource.ts'
-import { useEffect, useId, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+import { useEffect, useId, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent } from 'react'
 import { ArrowLeftRight, Check, ChevronDown, ChevronUp, Search } from 'lucide-react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
+import { Select } from '../components/ui/select.tsx'
 import { Sheet } from '../components/ui/sheet.tsx'
 import { apiFetch } from '../lib/api.ts'
 import { useDiscoveryStore } from '../lib/discovery-context.tsx'
@@ -40,7 +41,9 @@ export function DiscoverPage() {
     return () => { active = false; store.suspend() }
   }, [sourceId, categoryId], ['discovery'])
   const matching = state.sources.filter((source) => `${source.name} ${source.group ?? ''}`.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()))
-  const currentCategory = state.categories.find((category) => category.id === state.categoryId)
+  const urlCategories = state.categories.filter((category) => (category.type ?? 'url') === 'url')
+  const controlCategories = state.categories.filter((category) => (category.type ?? 'url') !== 'url')
+  const currentCategory = urlCategories.find((category) => category.id === state.categoryId)
 
   function selectSource(next: string) {
     setSwitcher(false)
@@ -55,11 +58,11 @@ export function DiscoverPage() {
     setParams({ sourceId: state.source.sourceId, categoryId: next })
   }
   function tabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    const count = state.categories.length
+    const count = urlCategories.length
     const next = event.key === 'ArrowRight' ? (index + 1) % count : event.key === 'ArrowLeft' ? (index + count - 1) % count : event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : undefined
     if (next === undefined) return
     event.preventDefault()
-    const category = state.categories[next]
+    const category = urlCategories[next]
     if (category !== undefined) { selectCategory(category.id); document.getElementById((page?.id ?? 'discovery') + '-tab-' + category.id)?.focus() }
   }
   async function openBook(entry: DiscoveryEntry) {
@@ -71,8 +74,9 @@ export function DiscoverPage() {
 
   return <section className="page-stack discovery-page">
     <PageHeader title="发现" description={state.source?.name ?? '挑一本想读的书'} actions={<div className="discovery-actions"><Link className="button small page-action" to="/search" state={pageReturnState(location)}><Search aria-hidden="true" /><span>搜索</span></Link><Button className="page-action" size="sm" aria-haspopup="dialog" onClick={() => { setFilter(''); setSwitcher(true) }} disabled={state.sources.length === 0}><ArrowLeftRight aria-hidden="true" /><span>切换</span></Button></div>} />
-    {state.categories.length > 0 ? <div className="discovery-tabs" role="tablist" aria-label="发现分类">{state.categories.map((category, index) => <button key={category.id} id={(page?.id ?? 'discovery') + '-tab-' + category.id} className="discovery-tab" type="button" role="tab" aria-selected={category.id === state.categoryId} aria-controls={`${page?.id ?? 'discovery'}-books`} tabIndex={category.id === state.categoryId ? 0 : -1} onClick={() => selectCategory(category.id)} onKeyDown={(event) => tabKey(event, index)} title={category.group === undefined ? category.title : `${category.group} · ${category.title}`}>{category.title}</button>)}</div> : null}
-    <div className="discovery-content" id={`${page?.id ?? 'discovery'}-books`} role={state.categories.length > 0 ? 'tabpanel' : undefined} aria-labelledby={currentCategory === undefined ? undefined : (page?.id ?? 'discovery') + '-tab-' + currentCategory.id} aria-busy={state.loading || state.loadingMore}>
+    {controlCategories.length > 0 ? <div className="discovery-controls" aria-label="发现筛选条件">{controlCategories.map((category) => <DiscoveryControl key={category.id} category={category} pending={state.controlPending === category.id} disabled={state.loading || state.loadingMore || state.opening !== null || (state.controlPending !== null && state.controlPending !== category.id)} onChange={(value) => void store.updateControl(category.id, value)} />)}</div> : null}
+    {urlCategories.length > 0 ? <div className="discovery-tabs" role="tablist" aria-label="发现分类">{urlCategories.map((category, index) => <button key={category.id} id={(page?.id ?? 'discovery') + '-tab-' + category.id} className="discovery-tab" type="button" role="tab" aria-selected={category.id === state.categoryId} aria-controls={`${page?.id ?? 'discovery'}-books`} tabIndex={category.id === state.categoryId ? 0 : -1} onClick={() => selectCategory(category.id)} onKeyDown={(event) => tabKey(event, index)} title={category.group === undefined ? category.title : `${category.group} · ${category.title}`}>{category.label ?? category.title}</button>)}</div> : null}
+    <div className="discovery-content" id={`${page?.id ?? 'discovery'}-books`} role={urlCategories.length > 0 ? 'tabpanel' : undefined} aria-labelledby={currentCategory === undefined ? undefined : (page?.id ?? 'discovery') + '-tab-' + currentCategory.id} aria-busy={state.loading || state.loadingMore}>
       {currentCategory?.group ? <p className="muted small discovery-group">{currentCategory.group}</p> : null}
       {state.error.length > 0 ? <div className="discovery-feedback" role="alert"><p className="error">{state.error}</p><Button variant="secondary" size="sm" onClick={() => { void store.retry().then(showDetails) }}>重试</Button></div> : null}
       {state.loading ? <LoadingState message="正在读取发现…" variant={state.items.length > 0 ? 'inline' : 'content'} /> : null}
@@ -84,6 +88,42 @@ export function DiscoverPage() {
     </div>
     <Sheet className="discovery-source-switcher" open={switcher} onOpenChange={(open) => { setSwitcher(open); if (!open) setExpandedSourceId(null) }} title="切换发现书源"><div className="page-stack"><label className="sr-only" htmlFor={`${page?.id ?? 'discovery'}-filter`}>筛选书源名称或分组</label><Input id={`${page?.id ?? 'discovery'}-filter`} value={filter} placeholder="书源名称或分组" onChange={(event) => setFilter(event.target.value)} /><div className="discovery-sources">{matching.map((source) => <DiscoverySourceItem key={source.sourceId} source={source} current={source.sourceId === state.source?.sourceId} expanded={expandedSourceId === source.sourceId} onToggle={() => setExpandedSourceId((current) => current === source.sourceId ? null : source.sourceId)} onSelect={() => selectSource(source.sourceId)} />)}{matching.length === 0 ? <p className="muted">没有匹配的书源。</p> : null}</div><Link className="link" to="/sources" state={pageReturnState(location)}>管理书源</Link></div></Sheet>
   </section>
+}
+
+function DiscoveryControl({ category, pending, disabled, onChange }: { category: DiscoveryCategories['categories'][number]; pending: boolean; disabled: boolean; onChange: (value?: string) => void }) {
+  const title = category.label ?? category.title
+  const chars = category.chars?.filter((value): value is string => value !== null) ?? []
+  const value = category.value ?? category.default ?? chars[0] ?? ''
+  const style = discoveryControlStyle(category.style)
+  if (category.type === 'text') return <TextDiscoveryControl title={title} value={category.value ?? ''} style={style} disabled={disabled} pending={pending} onChange={onChange} />
+  if (category.type === 'select') return <label className="discovery-control discovery-control-select" style={style}><span className="discovery-control-label">{title}</span><Select value={value} disabled={disabled || pending || chars.length === 0} aria-label={title} onChange={(event) => onChange(event.target.value)}>{chars.map((item) => <option key={item} value={item}>{item}</option>)}</Select><ControlStatus pending={pending} /></label>
+  if (category.type === 'toggle') return <div className="discovery-control discovery-control-toggle" style={style}><Button variant="secondary" size="sm" disabled={disabled || pending || chars.length === 0} onClick={() => { const index = chars.indexOf(value); onChange(chars[(index + 1 + chars.length) % chars.length]) }}>{value.length > 0 ? `${value} ` : ''}{title}</Button><ControlStatus pending={pending} /></div>
+  if (category.type === 'button') return <div className="discovery-control discovery-control-button" style={style}><Button variant="secondary" size="sm" disabled={disabled || pending} onClick={() => onChange()}>{title}</Button><ControlStatus pending={pending} /></div>
+  return <span className="discovery-control discovery-control-unsupported" style={style}>{title}</span>
+}
+
+function ControlStatus({ pending }: { pending: boolean }) { return pending ? <span className="muted small" role="status">处理中…</span> : null }
+
+function TextDiscoveryControl({ title, value, style, disabled, pending, onChange }: { title: string; value: string; style?: CSSProperties | undefined; disabled: boolean; pending: boolean; onChange: (value?: string) => void }) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+  useEffect(() => {
+    if (draft === value || disabled || pending) return
+    const timer = window.setTimeout(() => onChange(draft), 600)
+    return () => window.clearTimeout(timer)
+  }, [disabled, draft, onChange, pending, value])
+  return <label className="discovery-control discovery-control-text" style={style}><span className="discovery-control-label">{title}</span><Input value={draft} disabled={disabled} aria-label={title} onChange={(event) => setDraft(event.target.value)} /><ControlStatus pending={pending} /></label>
+}
+
+function discoveryControlStyle(value: Record<string, unknown> | undefined): CSSProperties | undefined {
+  if (value === undefined) return undefined
+  const style: CSSProperties = {}
+  if (typeof value.layout_flexGrow === 'number' && Number.isFinite(value.layout_flexGrow)) style.flexGrow = value.layout_flexGrow
+  if (typeof value.layout_flexShrink === 'number' && Number.isFinite(value.layout_flexShrink)) style.flexShrink = value.layout_flexShrink
+  if (typeof value.layout_flexBasisPercent === 'number' && Number.isFinite(value.layout_flexBasisPercent) && value.layout_flexBasisPercent >= 0) style.flexBasis = `${value.layout_flexBasisPercent}%`
+  if (typeof value.layout_alignSelf === 'string' && ['flex_start', 'flex_end', 'center', 'baseline', 'stretch'].includes(value.layout_alignSelf)) style.alignSelf = value.layout_alignSelf === 'flex_start' ? 'flex-start' : value.layout_alignSelf === 'flex_end' ? 'flex-end' : value.layout_alignSelf
+  if (typeof value.layout_justifySelf === 'string' && ['flex_start', 'flex_end', 'center'].includes(value.layout_justifySelf)) style.justifySelf = value.layout_justifySelf === 'flex_start' ? 'start' : value.layout_justifySelf === 'flex_end' ? 'end' : 'center'
+  return Object.keys(style).length === 0 ? undefined : style
 }
 
 function DiscoverySourceItem({ source, current, expanded, onToggle, onSelect }: { source: DiscoverySource; current: boolean; expanded: boolean; onToggle: () => void; onSelect: () => void }) {

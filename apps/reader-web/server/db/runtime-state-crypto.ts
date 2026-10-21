@@ -78,7 +78,7 @@ export function normalizeSnapshot(value: unknown): RuntimeStateSnapshot {
       if (typeof item !== 'object' || item === null || Array.isArray(item)) throw new Error('invalid discovery category')
       const category = item as Record<string, unknown>
       if (typeof category.id !== 'string' || category.id.length === 0 || category.id.length > 200 || typeof category.title !== 'string' || category.title.length > 4096) throw new Error('invalid discovery category')
-      const optionalText = ['group', 'url', 'type', 'action', 'default', 'viewName'] as const
+      const optionalText = ['group', 'url', 'type', 'label', 'action', 'default', 'viewName'] as const
       for (const key of optionalText) if (category[key] !== undefined && (typeof category[key] !== 'string' || (category[key] as string).length > 16_384)) throw new Error('invalid discovery category value')
       if (category.chars !== undefined && (!Array.isArray(category.chars) || category.chars.length > 256 || category.chars.some((value) => value !== null && (typeof value !== 'string' || value.length > 4096)))) throw new Error('invalid discovery category chars')
       if (category.style !== undefined && (typeof category.style !== 'object' || category.style === null || Array.isArray(category.style))) throw new Error('invalid discovery category style')
@@ -88,6 +88,7 @@ export function normalizeSnapshot(value: unknown): RuntimeStateSnapshot {
         ...(category.group === undefined ? {} : { group: category.group as string }),
         ...(category.url === undefined ? {} : { url: category.url as string }),
         ...(category.type === undefined ? {} : { type: category.type as string }),
+        ...(category.label === undefined ? {} : { label: category.label as string }),
         ...(category.action === undefined ? {} : { action: category.action as string }),
         ...(category.chars === undefined ? {} : { chars: (category.chars as Array<string | null>).map((value) => value === null ? null : value) }),
         ...(category.default === undefined ? {} : { default: category.default as string }),

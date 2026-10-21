@@ -475,6 +475,12 @@ a { color: inherit; }
 .discovery-tab[aria-selected="true"] { border-bottom-color: var(--primary); color: var(--primary); font-weight: 650; }
 .discovery-tab:active, .discovery-book:active { background: color-mix(in srgb, var(--primary) 7%, var(--background)); }
 .discovery-tabs:focus-within { outline-offset: 2px; }
+.discovery-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.discovery-control { display: inline-flex; min-width: 0; align-items: center; gap: 6px; }
+.discovery-control-text, .discovery-control-select { flex: 1 1 180px; }
+.discovery-control-text input, .discovery-control-select select { min-width: 0; flex: 1; }
+.discovery-control-label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.discovery-control-unsupported { color: var(--muted); font-size: 12px; }
 .discovery-book { width: 100%; border: 0; background: transparent; color: var(--foreground); text-align: left; }
 .discovery-book:disabled { cursor: wait; }
 .discovery-group { margin: 0 0 4px; }

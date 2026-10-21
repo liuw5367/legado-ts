@@ -13,8 +13,8 @@ import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWeb
 import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 import { sourceDomainInfo } from '../shared/source-domain.ts'
 import type { ReaderSettingsPatch } from './domain/types.ts'
-import { discoveryBookSchema, discoveryPageSchema, discoverySourceSchema } from '../shared/discovery.ts'
-import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook } from './runtime/discovery.ts'
+import { discoveryBookSchema, discoveryControlSchema, discoveryPageSchema, discoverySourceSchema } from '../shared/discovery.ts'
+import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook, updateDiscoveryControl } from './runtime/discovery.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -85,6 +85,14 @@ app.post('/api/discovery/page', async (context) => {
   const body = await parseBody(context, discoveryPageSchema)
   if (body instanceof Response) return body
   try { return context.json(await loadDiscoveryPage(dependencies.repository, context.get('userId'), body, context.req.raw.signal)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/discovery/control', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, discoveryControlSchema)
+  if (body instanceof Response) return body
+  try { return context.json(await updateDiscoveryControl(dependencies.repository, context.get('userId'), body, context.req.raw.signal)) } catch (error) { return handleError(context, error) }
 })
 
 app.post('/api/discovery/books', async (context) => {

@@ -11,7 +11,7 @@ export interface PersistentSourceState {
   infoMap: Record<string, string>
   replaceInfoMap(value: unknown): void
   /** 已解析分类的不可变快照，避免分页请求重新执行动态分类脚本。 */
-  discovery?: NonNullable<RuntimeStateSnapshot['discovery']>
+  discovery?: NonNullable<RuntimeStateSnapshot['discovery']> | undefined
   replaceDiscovery(value: NonNullable<RuntimeStateSnapshot['discovery']>): void
 }
 

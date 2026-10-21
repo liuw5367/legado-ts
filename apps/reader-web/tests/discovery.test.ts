@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { importSources } from '@legado/source-core'
 import { MemoryReaderRepository, type StoredSourceRecord } from '../server/db/repository.ts'
 import { compareImportCandidates } from '../server/runtime/source-comparison.ts'
-import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook, parseDiscoveryCategories } from '../server/runtime/discovery.ts'
+import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook, parseDiscoveryCategories, updateDiscoveryControl } from '../server/runtime/discovery.ts'
 import { discoveryBookSchema, discoveryPageSchema } from '../shared/discovery.ts'
 
 process.env.SOURCE_RUNTIME_STATE_KEY = 'discovery-tests-existing-runtime-state-key'
@@ -57,6 +57,34 @@ test('dynamic discovery categories execute with a persistent infoMap and then re
   const page = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId })
   assert.equal(page.items[0]?.name, '目标书1')
   assert.match(calls[0]!, /dynamic\?count=1/u)
+})
+
+test('discovery controls validate values, execute actions and refresh the selected list without exposing scripts', async (t) => {
+  const { repository, source } = await setup({
+    exploreUrl: JSON.stringify([
+      { title: '关键词', type: 'text', viewName: "'筛选词'", action: 'infoMap.put("last", infoMap.get("关键词")); java.refreshExplore()' },
+      { title: '方向', type: 'toggle', chars: ['男', '女'], default: '男', action: 'java.refreshExplore()' },
+      { title: '刷新', type: 'button', action: 'java.refreshExplore()' },
+      { title: '榜单', url: '/control-list' },
+    ]),
+  })
+  const categories = await getDiscoveryCategories(repository, 'user-a', source.sourceId)
+  const text = categories.categories.find((item) => item.title === '关键词')
+  const toggle = categories.categories.find((item) => item.title === '方向')
+  const list = categories.categories.find((item) => item.title === '榜单')
+  assert.ok(text && toggle && list)
+  assert.equal('action' in text, false)
+  assert.equal(text.label, '筛选词')
+  assert.equal(toggle.value, '男')
+  await assert.rejects(updateDiscoveryControl(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: toggle.id, value: '无效' }), /选项无效/u)
+  const changed = await updateDiscoveryControl(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: text.id, value: 'abc' })
+  assert.equal(changed.refreshed, true)
+  assert.equal(changed.categories.find((item) => item.id === text.id)?.value, 'abc')
+  const calls: string[] = []
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => { calls.push(String(url)); return new Response(listHtml()) })
+  const page = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id })
+  assert.equal(page.items[0]?.name, '目标书1')
+  assert.match(calls[0]!, /control-list/u)
 })
 
 test('discovery lists only eligible account sources and never exposes category URLs', async () => {

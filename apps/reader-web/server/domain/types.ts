@@ -264,6 +264,7 @@ export interface RuntimeStateSnapshot {
       group?: string
       url?: string
       type?: string
+      label?: string
       action?: string
       chars?: Array<string | null>
       default?: string

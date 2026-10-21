@@ -40,6 +40,19 @@ export interface ExploreKindsResult {
   diagnostics: WorkflowDiagnostic[]
 }
 
+export interface ExploreActionResult {
+  infoMap: Record<string, string>
+  saveRequested: boolean
+  refreshRequested: boolean
+  diagnostics: WorkflowDiagnostic[]
+}
+
+export interface ExploreViewNameResult {
+  value: string
+  infoMap: Record<string, string>
+  diagnostics: WorkflowDiagnostic[]
+}
+
 /** 目录成功后脚本实际使用的书籍状态；仅由目录流程返回，应用可按书源版本持久化。 */
 export interface TocPage extends WorkflowPage<Chapter> {
   bookAfter?: BookMetadata

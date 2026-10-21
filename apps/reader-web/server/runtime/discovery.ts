@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { editionKey } from '@legado/reader-backup'
-import { discoverBooks, loadBookDetails, parseExploreKinds, type BookCandidate, type ExploreKind, type PageCursor, type SourceSession } from '@legado/source-core'
-import type { DiscoveryBookInput, DiscoveryCategories, DiscoveryCategory, DiscoveryCursor, DiscoveryPage, DiscoveryPageInput, DiscoverySource } from '../../shared/discovery.ts'
+import { discoverBooks, evaluateExploreViewName, executeExploreAction, loadBookDetails, parseExploreKinds, type BookCandidate, type ExploreKind, type PageCursor, type SourceSession } from '@legado/source-core'
+import type { DiscoveryBookInput, DiscoveryCategories, DiscoveryCategory, DiscoveryControlInput, DiscoveryControlResult, DiscoveryCursor, DiscoveryPage, DiscoveryPageInput, DiscoverySource } from '../../shared/discovery.ts'
 import { sameBookIdentity } from '../../shared/book-identity.ts'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
 import { configuredSecret } from '../db/runtime-state-crypto.ts'
@@ -40,6 +40,35 @@ function categoriesFromKinds(source: StoredSourceRecord, kinds: readonly Explore
     categories.push({ id: categoryId(source, index, category), ...category })
   }
   return categories
+}
+
+function publicCategory(category: Category, state?: PersistentSourceState): DiscoveryCategory {
+  const { url: _url, action: _action, viewName: _viewName, ...safe } = category
+  const value = state === undefined || category.type === undefined || category.type === 'url' ? undefined : state.infoMap[category.title]
+  return { ...safe, ...(value === undefined ? {} : { value }) }
+}
+
+function initializeControlValues(state: PersistentSourceState, categories: readonly Category[]): void {
+  for (const category of categories) {
+    if (category.type !== 'toggle' && category.type !== 'select') continue
+    if (state.infoMap[category.title] !== undefined) continue
+    const first = category.default ?? category.chars?.find((value): value is string => value !== null)
+    if (first !== undefined) state.infoMap[category.title] = first
+  }
+}
+
+async function resolveCategoryLabels(session: SourceSession, source: StoredSourceRecord, state: PersistentSourceState, categories: Category[], signal?: AbortSignal): Promise<void> {
+  for (const category of categories) {
+    const expression = category.viewName?.trim()
+    if (expression === undefined || expression.length === 0) continue
+    if (expression.length >= 3 && expression.length <= 19 && expression.startsWith("'") && expression.endsWith("'")) {
+      category.label = expression.slice(1, -1)
+      continue
+    }
+    const result = await session.run((ports) => evaluateExploreViewName(ports, source.normalizedSource, expression, { infoMap: state.infoMap, ...(signal === undefined ? {} : { signal }) }))
+    state.replaceInfoMap(result.infoMap)
+    category.label = result.value
+  }
 }
 
 export async function listDiscoverySources(repository: ReaderRepository, userId: string): Promise<{ sources: DiscoverySource[] }> {
@@ -95,6 +124,7 @@ export function parseDiscoveryCategories(source: StoredSourceRecord): { categori
 async function resolveDiscoveryCategories(source: StoredSourceRecord, session: SourceSession, state: PersistentSourceState, signal?: AbortSignal): Promise<{ categories: Category[]; message?: string }> {
   if (state.discovery !== undefined && state.discovery.fingerprint === source.fingerprint) {
     const categories = structuredClone(state.discovery.categories)
+    initializeControlValues(state, categories)
     return { categories, ...(categories.length === 0 ? { message: '此书源没有可用的发现分类。' } : {}) }
   }
   let categories: Category[]
@@ -109,6 +139,8 @@ async function resolveDiscoveryCategories(source: StoredSourceRecord, session: S
     if (diagnostic !== undefined) return { categories: [], message: diagnostic.message }
     categories = categoriesFromKinds(source, result.kinds)
   }
+  initializeControlValues(state, categories)
+  await resolveCategoryLabels(session, source, state, categories, signal)
   state.replaceDiscovery({ version: 1, fingerprint: source.fingerprint, categories: structuredClone(categories) })
   return { categories, ...(categories.length === 0 ? { message: '此书源没有可用的发现分类。' } : {}) }
 }
@@ -117,7 +149,42 @@ export async function getDiscoveryCategories(repository: ReaderRepository, userI
   const source = await discoverySource(repository, userId, sourceId)
   return withPersistentSourceSession(repository, userId, source, async (session, state) => {
     const result = await resolveDiscoveryCategories(source, session, state)
-    return { source: summary(source), categories: result.categories.map(({ url: _url, ...category }) => category), ...(result.message === undefined ? {} : { message: result.message }) }
+    return { source: summary(source), categories: result.categories.map((category) => publicCategory(category, state)), ...(result.message === undefined ? {} : { message: result.message }) }
+  })
+}
+
+export async function updateDiscoveryControl(repository: ReaderRepository, userId: string, input: DiscoveryControlInput, signal?: AbortSignal): Promise<DiscoveryControlResult> {
+  const { source } = await selection(repository, userId, input)
+  return withPersistentSourceSession(repository, userId, source, async (session, state) => {
+    const resolved = await resolveDiscoveryCategories(source, session, state, signal)
+    const category = resolved.categories.find((item) => item.id === input.categoryId)
+    if (category === undefined) throw new ReaderRuntimeError('invalid-input', resolved.message ?? '发现分类已失效，请重新选择')
+    const type = category.type ?? 'url'
+    if (type === 'url') throw new ReaderRuntimeError('invalid-input', '普通发现分类不需要控件操作')
+    const chars = category.chars?.filter((value): value is string => value !== null) ?? []
+    if (type === 'toggle' || type === 'select') {
+      if (input.value === undefined || !chars.includes(input.value)) throw new ReaderRuntimeError('invalid-input', '控件选项无效，请刷新后重试')
+      state.infoMap[category.title] = input.value
+    } else if (type === 'text') {
+      if (input.value === undefined) throw new ReaderRuntimeError('invalid-input', '文本控件缺少值')
+      state.infoMap[category.title] = input.value
+    } else if (type !== 'button') {
+      throw new ReaderRuntimeError('invalid-input', '暂不支持的发现控件类型')
+    }
+    if (category.action !== undefined && category.action.trim().length > 0) {
+      const action = await session.run((ports) => executeExploreAction(ports, source.normalizedSource, category.action!, { infoMap: state.infoMap, ...(signal === undefined ? {} : { signal }) }))
+      state.replaceInfoMap(action.infoMap)
+      const diagnostic = action.diagnostics[0]
+      if (diagnostic !== undefined) throw new ReaderRuntimeError('source-failed', diagnostic.message)
+      if (action.refreshRequested) state.discovery = undefined
+    }
+    if (state.discovery !== undefined) {
+      await resolveCategoryLabels(session, source, state, resolved.categories, signal)
+      state.replaceDiscovery({ version: 1, fingerprint: source.fingerprint, categories: structuredClone(resolved.categories) })
+    }
+    const next = state.discovery === undefined ? await resolveDiscoveryCategories(source, session, state, signal) : { categories: resolved.categories }
+    const value = state.infoMap[category.title]
+    return { categories: next.categories.map((item) => publicCategory(item, state)), categoryId: next.categories.find((item) => item.id === category.id)?.id ?? next.categories.find((item) => (item.type ?? 'url') === 'url')?.id ?? '', ...(value === undefined ? {} : { value }), refreshed: next.categories !== resolved.categories, ...(next.message === undefined ? {} : { message: next.message }) }
   })
 }
 

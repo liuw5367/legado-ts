@@ -5,7 +5,7 @@ import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { detailFields, evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { formatDetailIntro, formatIntro } from './html-format.ts'
 import { javascriptBookProjection } from './javascript-projection.ts'
-import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, ExploreKind, ExploreKindsResult, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
+import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, ExploreActionResult, ExploreKind, ExploreKindsResult, ExploreViewNameResult, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export async function parseExploreKinds(ports: WorkflowPorts, source: NormalizedSource, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreKindsResult> {
   const diagnostics: WorkflowDiagnostic[] = []
@@ -55,6 +55,70 @@ export async function parseExploreKinds(ports: WorkflowPorts, source: Normalized
     diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message: error instanceof Error ? error.message : '发现分类配置无效', retryable: false })
     return { kinds: [], infoMap, saveRequested, diagnostics }
   }
+}
+
+/** Execute an Android ExploreKind button/text action with a controlled host bridge. */
+export async function executeExploreAction(ports: WorkflowPorts, source: NormalizedSource, action: string, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreActionResult> {
+  const diagnostics: WorkflowDiagnostic[] = []
+  const infoMap: Record<string, string> = { ...(options.infoMap ?? {}) }
+  let saveRequested = false
+  let refreshRequested = false
+  if (action.trim().length === 0) return { infoMap, saveRequested, refreshRequested, diagnostics }
+  const result = await executeWorkflowJavaScript(ports, source, action, 'discover', 'search', [], {
+    bindings: { infoMap },
+    captureMutations: ['infoMap'],
+    workflowActions: {
+      saveInfoMap: async (_signal, input) => {
+        saveRequested = true
+        return input
+      },
+      refreshExplore: async () => {
+        refreshRequested = true
+        return true
+      },
+      reUiView: async () => {
+        refreshRequested = true
+        return true
+      },
+      upUiData: async (_signal, input) => input,
+    },
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  })
+  if (result.state === 'cancelled' || options.signal?.aborted === true) {
+    diagnostics.push({ code: 'cancelled', stage: 'discover', field: 'exploreAction', message: '发现控件动作已取消', retryable: false })
+    return { infoMap, saveRequested, refreshRequested, diagnostics }
+  }
+  if (result.state === 'capability-missing') {
+    diagnostics.push({ code: 'capability-missing', stage: 'discover', field: 'exploreAction', message: result.message ?? '发现控件动作需要 JavaScript 宿主', retryable: false })
+    return { infoMap, saveRequested, refreshRequested, diagnostics }
+  }
+  if (result.state !== 'value' && result.state !== 'empty') diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreAction', message: result.message ?? '发现控件动作执行失败', retryable: false })
+  const wrapper = result.value as { __legadoWorkflowBindings?: Record<string, unknown> } | null
+  const captured = wrapper?.__legadoWorkflowBindings?.infoMap
+  if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) {
+    for (const [key, value] of Object.entries(captured)) if (typeof value === 'string') infoMap[key] = value
+  }
+  return { infoMap, saveRequested, refreshRequested, diagnostics }
+}
+
+/** Evaluate an ExploreKind viewName expression in the same JavaScript host as actions. */
+export async function evaluateExploreViewName(ports: WorkflowPorts, source: NormalizedSource, expression: string, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreViewNameResult> {
+  const diagnostics: WorkflowDiagnostic[] = []
+  const infoMap: Record<string, string> = { ...(options.infoMap ?? {}) }
+  const result = await executeWorkflowJavaScript(ports, source, expression, 'discover', 'search', [], {
+    bindings: { infoMap },
+    captureMutations: ['infoMap'],
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  })
+  if (result.state === 'cancelled' || options.signal?.aborted === true) diagnostics.push({ code: 'cancelled', stage: 'discover', field: 'exploreViewName', message: '发现控件标题计算已取消', retryable: false })
+  else if (result.state === 'capability-missing') diagnostics.push({ code: 'capability-missing', stage: 'discover', field: 'exploreViewName', message: result.message ?? '发现控件标题需要 JavaScript 宿主', retryable: false })
+  else if (result.state !== 'value' && result.state !== 'empty') diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreViewName', message: result.message ?? '发现控件标题计算失败', retryable: false })
+  const wrapper = result.value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: Record<string, unknown> } | null
+  const raw = wrapper?.__legadoWorkflowValue ?? result.value
+  const value = textValue(raw).trim()
+  const captured = wrapper?.__legadoWorkflowBindings?.infoMap
+  if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) for (const [key, item] of Object.entries(captured)) if (typeof item === 'string') infoMap[key] = item
+  return { value: value.length === 0 ? (diagnostics.length === 0 ? 'null' : 'err') : value, infoMap, diagnostics }
 }
 
 function parseExploreKindText(text: string): ExploreKind[] {
