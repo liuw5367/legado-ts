@@ -14,7 +14,7 @@ export function AccountLayout({ children, reader = false }: { children?: ReactNo
     const target = new URL(event.currentTarget.href)
     if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && target.pathname === location.pathname && target.search === location.search) event.preventDefault()
   }
-  const showBottomNav = location.pathname !== '/account/password'
+  const showBottomNav = location.pathname === '/' || location.pathname === '/discover' || location.pathname === '/account/settings'
   const discoveryActive = location.pathname === '/discover' || location.pathname === '/search'
   return <div className={reader ? 'reader-shell' : 'app-shell'}>
     {!reader ? <><a className="skip-link" href="#main-content">跳到正文</a>
