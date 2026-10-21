@@ -32,8 +32,14 @@ test('me endpoint rejects missing auth without reading user data', async () => {
   assert.deepEqual(await response.json(), { error: { code: 'unauthenticated', message: '需要登录' } })
 })
 
-test('book details and full source summaries reject unauthenticated requests', async () => {
-  for (const path of ['/api/books/00000000-0000-0000-0000-000000000001/details', '/api/source-management?all=true']) {
+test('book details, source summaries, and review endpoints reject unauthenticated requests', async () => {
+  for (const path of [
+    '/api/books/00000000-0000-0000-0000-000000000001/details',
+    '/api/books/00000000-0000-0000-0000-000000000001/review/summary?editionKey=edition&chapterId=chapter',
+    '/api/books/00000000-0000-0000-0000-000000000001/review/detail?editionKey=edition&chapterId=chapter&paragraphIndex=1',
+    '/api/books/00000000-0000-0000-0000-000000000001/review/replies?editionKey=edition&chapterId=chapter&paragraphIndex=1&reviewId=review',
+    '/api/source-management?all=true',
+  ]) {
     const response = await app.request('http://localhost' + path)
     assert.equal(response.status, 401)
   }

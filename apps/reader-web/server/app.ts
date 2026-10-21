@@ -491,7 +491,7 @@ function reviewQuery(context: Context<{ Variables: Variables }>, replies: boolea
   const cursor = context.req.query('cursor')
   const paragraphIndex = rawIndex === undefined ? NaN : Number(rawIndex)
   const pageIndex = page === undefined ? 1 : Number(page)
-  if (editionKey === undefined || editionKey.length === 0 || chapterId === undefined || chapterId.length === 0 || !Number.isSafeInteger(paragraphIndex) || (paragraphIndex !== -1 && paragraphIndex <= 0) || !Number.isSafeInteger(pageIndex) || pageIndex < 1 || (replies && (reviewId === undefined || reviewId.length === 0))) return context.json({ error: { code: 'invalid-input', message: '段评参数无效' } }, 400)
+  if (editionKey === undefined || editionKey.length === 0 || chapterId === undefined || chapterId.length === 0 || !Number.isSafeInteger(paragraphIndex) || (paragraphIndex !== -1 && paragraphIndex <= 0) || !Number.isSafeInteger(pageIndex) || pageIndex < 1 || (replies && (reviewId === undefined || reviewId.length === 0)) || (cursor !== undefined && cursor.length > 8192)) return context.json({ error: { code: 'invalid-input', message: '段评参数无效' } }, 400)
   const result: ReviewQuery = { editionKey, chapterId, paragraphIndex }
   const paragraphData = context.req.query('paragraphData')
   if (paragraphData !== undefined) result.paragraphData = paragraphData

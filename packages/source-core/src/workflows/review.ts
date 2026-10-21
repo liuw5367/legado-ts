@@ -35,10 +35,7 @@ export async function loadReviewSummary(ports: WorkflowPorts, input: ReviewSumma
     if (result.state === 'failed') return failedReview('failed', result.message ?? '段评统计脚本执行失败', diagnostics, trace)
     const parsed = parseJsonLike(result.value)
     const items = parseSummaryArray(parsed)
-    if (items === undefined) {
-      diagnostics.push(reviewDiagnostic('rule-failed', 'getReviewSummary 返回格式错误'))
-      return failedReview('failed', 'getReviewSummary 返回格式错误', diagnostics, trace)
-    }
+    if (items === undefined) return emptyReview(diagnostics, trace)
     return { status: items.length === 0 ? 'empty' : 'success', value: items, diagnostics, trace }
   }
   const rule = reviewRules(input.source)
@@ -52,7 +49,7 @@ export async function loadReviewSummary(ports: WorkflowPorts, input: ReviewSumma
   const list = await evaluateReviewList(ports, input.source, listRule, response.content, response.url, { chapter: input.chapter, book: input.book }, diagnostics, trace, input.signal, 'summaryListRule')
   if (list === undefined) return reviewFromDiagnostics('summary', diagnostics, trace)
   const dataRule = reviewString(rule, 'summaryParagraphDataRule')
-  const items: ReviewSummaryItem[] = []
+  const items = new Map<number, ReviewSummaryItem>()
   for (let index = 0; index < list.length; index += 1) {
     const current = list[index]
     const bindings = reviewBindings(input.book, input.chapter)
@@ -62,10 +59,11 @@ export async function loadReviewSummary(ports: WorkflowPorts, input: ReviewSumma
       const paragraphData = dataRule === undefined
         ? String(paragraphIndex)
         : (await reviewField(ports, input.source, dataRule, current, response.url, bindings, diagnostics, trace, input.signal, `summaryParagraphDataRule:${index}`) ?? String(paragraphIndex))
-      items.push({ paragraphIndex, count, paragraphData })
+      items.set(paragraphIndex, { paragraphIndex, count, paragraphData })
     }
   }
-  return { status: items.length === 0 ? 'empty' : statusFromDiagnostics(diagnostics, items.length), value: items, diagnostics, trace }
+  const values = [...items.values()]
+  return { status: values.length === 0 ? 'empty' : statusFromDiagnostics(diagnostics, values.length), value: values, diagnostics, trace }
 }
 
 export async function loadReviewDetail(ports: WorkflowPorts, input: ReviewDetailInput): Promise<RuntimeResult<ReviewDetailPage>> {
@@ -78,13 +76,14 @@ export async function loadReviewDetail(ports: WorkflowPorts, input: ReviewDetail
     const result = await executeSourceFunction(ports, input.source, 'getReviewDetail', [input.chapter, input.book, input.paragraphIndex, paragraphData, page], reviewBindings(input.book, input.chapter), stage, 'content', trace, input.signal)
     if (result.state === 'cancelled') return cancelledReview(result.message ?? '段评详情已取消', diagnostics, trace)
     if (result.state === 'capability-missing') return failedReview('capability-missing', result.message ?? '段评 JavaScript 宿主不可用', diagnostics, trace)
-    if (result.state === 'missing-function' || result.state === 'empty') return emptyDetail(diagnostics, trace, page)
+    if (result.state === 'missing-function') return failedReview('capability-missing', 'getReviewDetail 函数未定义', diagnostics, trace, page)
+    if (result.state === 'empty') return emptyDetail(diagnostics, trace, page)
     if (result.state === 'failed') return failedReview('failed', result.message ?? '段评详情脚本执行失败', diagnostics, trace)
     const parsed = parseJsonLike(result.value)
     const parsedPage = parseReviewDetailPage(parsed, input.chapter.chapterUrl)
-    if (parsedPage === undefined) return failedReview('failed', 'getReviewDetail 返回格式错误', diagnostics, trace)
-    const nextCursor = parsedPage.nextPageUrl === undefined || parsedPage.items.length === 0 ? undefined : { index: page + 1, token: parsedPage.nextPageUrl }
-    return { status: parsedPage.items.length === 0 ? 'empty' : 'success', value: detailPageResult(page, parsedPage.items, nextCursor), diagnostics, trace }
+    if (parsedPage === undefined) return emptyDetail(diagnostics, trace, page)
+    const hasMore = parsedPage.nextPageUrl !== undefined && parsedPage.items.length > 0
+    return { status: parsedPage.items.length === 0 ? 'empty' : 'success', value: { ...detailPageResult(page, parsedPage.items), hasMore }, diagnostics, trace }
   }
   const rule = reviewRules(input.source)
   const listRule = reviewString(rule, 'detailListRule')
@@ -115,9 +114,9 @@ export async function loadReviewDetail(ports: WorkflowPorts, input: ReviewDetail
 export async function loadReviewReplies(ports: WorkflowPorts, input: ReviewRepliesInput): Promise<RuntimeResult<ReviewDetailPage>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
+  if (input.signal?.aborted === true) return cancelledReview('段评回复已取消', diagnostics, trace)
   const page = input.cursor?.index ?? 1
   const paragraphData = input.paragraphData?.trim() || String(input.paragraphIndex)
-  if (input.signal?.aborted === true) return cancelledReview('段评回复已取消', diagnostics, trace, page)
   if (typeof input.source.mainJs === 'string' && input.source.mainJs.trim().length > 0) {
     const result = await executeSourceFunction(ports, input.source, 'getReviewReplies', [input.chapter, input.book, input.paragraphIndex, paragraphData, input.reviewId, page], reviewBindings(input.book, input.chapter), stage, 'content', trace, input.signal)
     if (result.state === 'cancelled') return cancelledReview(result.message ?? '段评回复已取消', diagnostics, trace, page)
@@ -138,6 +137,7 @@ export async function loadReviewReplies(ports: WorkflowPorts, input: ReviewRepli
   const bindings = { ...reviewBindings(input.book, input.chapter), paraIndex: input.paragraphIndex, paraData: paragraphData, reviewId: input.reviewId, page }
   const response = await reviewPage(ports, input.source, urlRule, input, { chapter: input.chapter, book: input.book }, { page, paraIndex: input.paragraphIndex, paraData: paragraphData, reviewId: input.reviewId }, diagnostics, trace)
   if (response === undefined) return reviewFromDiagnostics('detail', diagnostics, trace, page)
+  if (response.content.trim().length === 0) return failedReview('failed', '段评回复内容为空', diagnostics, trace, page)
   const list = await evaluateReviewList(ports, input.source, listRule, response.content, response.url, bindings, diagnostics, trace, input.signal, 'replyListRule')
   if (list === undefined) return reviewFromDiagnostics('detail', diagnostics, trace, page)
   const items: ReviewDetailItem[] = []
@@ -145,6 +145,7 @@ export async function loadReviewReplies(ports: WorkflowPorts, input: ReviewRepli
     const item = await parseDeclarativeReviewItem(ports, input.source, rule, list[index], response.url, bindings, contentRule, true, diagnostics, trace, input.signal, index)
     if (item !== undefined) items.push(item)
   }
+  if (list.length > 0 && items.length === 0) return failedReview('failed', '段评回复解析为空', diagnostics, trace, page)
   return { status: items.length === 0 ? 'empty' : statusFromDiagnostics(diagnostics, items.length), value: detailPageResult(page, items, items.length === 0 ? undefined : { index: page + 1 }), diagnostics, trace }
 }
 
@@ -178,6 +179,7 @@ async function parseDeclarativeReviewItem(ports: WorkflowPorts, source: Normaliz
   if (name !== undefined) item.name = name
   const normalizedText = protocol === undefined ? content : protocol.text
   if (normalizedText !== undefined && normalizedText.length > 0) item.content = normalizedText
+  if (protocol !== undefined && normalizedText === undefined) item.content = ''
   if (protocol?.replyToName !== undefined) item.replyToName = protocol.replyToName
   if (protocol?.imageUrl !== undefined) item.imageUrl = resolveReviewUrl(protocol.imageUrl, baseUrl) ?? protocol.imageUrl
   if (protocol?.audioUrl !== undefined) item.audioUrl = resolveReviewUrl(protocol.audioUrl, baseUrl) ?? protocol.audioUrl
@@ -243,14 +245,16 @@ function parseJsonLike(value: unknown): unknown {
 
 function parseSummaryArray(value: unknown): ReviewSummaryItem[] | undefined {
   if (!Array.isArray(value)) return undefined
-  return value.flatMap((item) => {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) return []
+  const items = new Map<number, ReviewSummaryItem>()
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) continue
     const record = item as Record<string, unknown>
     const paragraphIndex = parseInteger(record.paraIndex)
     const count = parseInteger(record.count)
-    if (paragraphIndex === undefined || count === undefined || (paragraphIndex !== -1 && paragraphIndex <= 0) || count <= 0) return []
-    return [{ paragraphIndex, count, paragraphData: textValue(record.paraData ?? paragraphIndex) }]
-  })
+    if (paragraphIndex === undefined || count === undefined || (paragraphIndex !== -1 && paragraphIndex <= 0) || count <= 0) continue
+    items.set(paragraphIndex, { paragraphIndex, count, paragraphData: textValue(record.paraData ?? paragraphIndex) })
+  }
+  return [...items.values()]
 }
 
 function parseReviewDetailPage(value: unknown, baseUrl: string): { items: ReviewDetailItem[]; nextPageUrl?: string } | undefined {
@@ -267,18 +271,19 @@ function parseReplyArray(value: unknown, baseUrl: string): ReviewDetailItem[] | 
   return flattenReviewItems((value as Record<string, unknown>).items as unknown[], baseUrl)
 }
 
-function parseReviewItem(value: unknown, baseUrl: string): ReviewDetailItem | undefined {
+function parseReviewItem(value: unknown, baseUrl: string, includeReplies = true): ReviewDetailItem | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const record = value as Record<string, unknown>
   const rawContent = contentValue(record.content)
   if (rawContent === undefined || rawContent.trim().length === 0) return undefined
   const protocol = parseContentProtocol(rawContent, baseUrl)
-  const replies = Array.isArray(record.replies) ? flattenReviewItems(record.replies, baseUrl) : []
+  const replies = includeReplies && Array.isArray(record.replies) ? flattenReviewItems(record.replies, baseUrl) : []
   const item: ReviewDetailItem = { badges: stringArray(record.badge).flatMap(splitBadges), replies }
   const id = stringValue(record.id); if (id !== undefined) item.id = id
   const avatar = resolveReviewUrl(stringValue(record.avatar), baseUrl); if (avatar !== undefined) item.avatar = avatar
   const name = stringValue(record.name); if (name !== undefined) item.name = name
   const itemText = protocol?.text ?? (protocol === undefined ? rawContent : undefined); if (itemText !== undefined && itemText.length > 0) item.content = itemText
+  if (protocol !== undefined && itemText === undefined) item.content = ''
   if (protocol?.replyToName !== undefined) item.replyToName = protocol.replyToName
   if (protocol?.imageUrl !== undefined) item.imageUrl = protocol.imageUrl
   if (protocol?.audioUrl !== undefined) item.audioUrl = protocol.audioUrl
@@ -293,7 +298,7 @@ function flattenReviewItems(values: unknown[], baseUrl: string): ReviewDetailIte
   const stack = [...values].reverse()
   while (stack.length > 0) {
     const value = stack.pop()!
-    const item = parseReviewItem(value, baseUrl)
+    const item = parseReviewItem(value, baseUrl, false)
     if (item !== undefined) result.push(item)
     if (typeof value === 'object' && value !== null && !Array.isArray(value) && Array.isArray((value as Record<string, unknown>).replies)) stack.push(...((value as Record<string, unknown>).replies as unknown[]).slice().reverse())
   }
@@ -326,11 +331,17 @@ function parseContentProtocol(raw: string, baseUrl: string): { text?: string; re
 }
 
 function parseInteger(value: unknown): number | undefined {
-  const parsed = typeof value === 'number' ? value : typeof value === 'string' && /^-?\d+$/u.test(value.trim()) ? Number(value.trim()) : NaN
+  const numeric = typeof value === 'number' ? value : typeof value === 'string' && value.trim().length > 0 ? Number(value.trim()) : NaN
+  if (!Number.isFinite(numeric)) return undefined
+  const parsed = Math.trunc(numeric)
   return Number.isSafeInteger(parsed) ? parsed : undefined
 }
 
-function stringValue(value: unknown): string | undefined { return value === undefined || value === null ? undefined : typeof value === 'string' ? value : typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined }
+function stringValue(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  const result = typeof value === 'string' ? value.trim() : typeof value === 'number' || typeof value === 'boolean' ? String(value).trim() : undefined
+  return result === undefined || result.length === 0 ? undefined : result
+}
 function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.flatMap((item) => { const text = stringValue(item); return text === undefined ? [] : [text] }) : stringValue(value) === undefined ? [] : [stringValue(value)!] }
 function splitBadges(value: string): string[] { return value.split(/[|,，、]/u).map((item) => item.trim()).filter(Boolean) }
 function resolveReviewUrl(value: string | undefined, baseUrl: string): string | undefined { if (value === undefined || value.trim().length === 0) return undefined; try { return new URL(value, baseUrl).toString() } catch { return undefined } }

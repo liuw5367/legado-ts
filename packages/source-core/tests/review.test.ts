@@ -70,8 +70,28 @@ test('JavaScript 段评函数和 Android 内容协议被规范化', async () => 
   assert.deepEqual(summary.value, [{ paragraphIndex: -1, count: 1, paragraphData: 'all' }])
   assert.equal(detail.value?.items[0]?.audioUrl, 'https://source.test/a.mp3')
   assert.equal(detail.value?.items[0]?.replies[0]?.content, 'nested')
+  assert.equal(detail.value?.hasMore, true)
+  assert.equal(detail.value?.nextCursor, undefined)
   assert.equal(replies.value?.items[0]?.imageUrl, 'https://source.test/x.png')
   assert.deepEqual(calls.map((item) => item.name), ['getReviewSummary', 'getReviewDetail', 'getReviewReplies'])
+})
+
+test('段评统计按段索引覆盖重复项，详情函数缺失保留能力错误', async () => {
+  const source = { ...sourceBase, mainJs: 'function getReviewSummary() {}' } as NormalizedSource
+  const ports: WorkflowPorts = {
+    network: { request: async () => ({ url: source.bookSourceUrl, status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }) },
+    rules: {
+      evaluate: async () => ({ status: 'empty', value: null }),
+      executeSourceFunction: async (request) => request.name === 'getReviewSummary'
+        ? { status: 'success', exists: true, value: JSON.stringify([{ paraIndex: 2, count: 1, paraData: 'old' }, { paraIndex: 2, count: 4, paraData: 'new' }]) }
+        : { status: 'empty', exists: false, value: null },
+    },
+  }
+  const summary = await loadReviewSummary(ports, { source, book, chapter })
+  assert.deepEqual(summary.value, [{ paragraphIndex: 2, count: 4, paragraphData: 'new' }])
+  const detail = await loadReviewDetail(ports, { source, book, chapter, paragraphIndex: 2 })
+  assert.equal(detail.status, 'capability-missing')
+  assert.equal(detail.value, null)
 })
 
 test('支付动作和事件回调保留 Android 的结果与时间预算语义', async () => {

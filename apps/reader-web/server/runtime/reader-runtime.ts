@@ -1,11 +1,12 @@
 import { ReaderRuntimeError, requireSource, withPersistentSourceSession } from './source-session.ts'
 import { bookIdentityKey, normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { loadBookDetails, loadChapterContent, loadReviewDetail, loadReviewReplies, loadReviewSummary, loadTableOfContents, searchBooks } from '@legado/source-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, ReviewDetailPage, ReviewSummaryItem, WorkflowStatus } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
+import { configuredSecret } from '../db/runtime-state-crypto.ts'
 import type { BookCreationInput, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
 
@@ -31,6 +32,8 @@ export interface ReaderRuntime {
 }
 
 const activeSearches = new Map<string, { operationId: string; controller: AbortController }>()
+type ReviewCursor = { index: number; token?: string }
+type ReviewCursorScope = { kind: 'detail' | 'replies'; userId: string; bookId: string; editionKey: string; chapterId: string; sourceId: string; sourceFingerprint: string; paragraphIndex: number; paragraphData: string; reviewId: string | null }
 
 export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime {
   return {
@@ -305,21 +308,72 @@ async function getReviewSummary(repository: ReaderRepository, userId: string, bo
 
 async function getReviewDetail(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage> {
   const context = await getReviewContext(repository, userId, bookId, editionKey, chapterId)
+  const normalizedParagraphData = paragraphData?.trim() || String(paragraphIndex)
+  const scope = reviewCursorScope('detail', userId, bookId, editionKey, chapterId, context.source, paragraphIndex, normalizedParagraphData)
+  const verifiedCursor = isJavaScriptSource(context.source.normalizedSource) ? verifyJavaScriptReviewCursor(cursor) : verifyReviewCursor(scope, cursor)
   return withPersistentSourceSession(repository, userId, context.source, async (session) => {
-    const result = await session.run((ports) => loadReviewDetail(ports, { source: context.source.normalizedSource, book: context.edition.metadata, chapter: context.chapter, paragraphIndex, ...(paragraphData === undefined ? {} : { paragraphData }), ...(cursor === undefined ? {} : { cursor }) }))
+    const result = await session.run((ports) => loadReviewDetail(ports, { source: context.source.normalizedSource, book: context.edition.metadata, chapter: context.chapter, paragraphIndex, paragraphData: normalizedParagraphData, ...(verifiedCursor === undefined ? {} : { cursor: verifiedCursor }) }))
     if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '段评详情读取失败'))
-    return result.value
+    return isJavaScriptSource(context.source.normalizedSource) ? result.value : signReviewPageCursor(result.value, scope)
   })
 }
 
 async function getReviewReplies(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, reviewId: string, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage> {
   const context = await getReviewContext(repository, userId, bookId, editionKey, chapterId)
+  const normalizedParagraphData = paragraphData?.trim() || String(paragraphIndex)
+  if (cursor?.token !== undefined) throw new ReaderRuntimeError('invalid-input', '段评回复不接受分页游标')
   return withPersistentSourceSession(repository, userId, context.source, async (session) => {
-    const result = await session.run((ports) => loadReviewReplies(ports, { source: context.source.normalizedSource, book: context.edition.metadata, chapter: context.chapter, paragraphIndex, reviewId, ...(paragraphData === undefined ? {} : { paragraphData }), ...(cursor === undefined ? {} : { cursor }) }))
+    const result = await session.run((ports) => loadReviewReplies(ports, { source: context.source.normalizedSource, book: context.edition.metadata, chapter: context.chapter, paragraphIndex, reviewId, paragraphData: normalizedParagraphData, ...(cursor === undefined ? {} : { cursor }) }))
     if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '段评回复读取失败'))
     return result.value
   })
 }
+
+function reviewCursorScope(kind: ReviewCursorScope['kind'], userId: string, bookId: string, editionKey: string, chapterId: string, source: StoredSourceRecord, paragraphIndex: number, paragraphData: string, reviewId?: string): ReviewCursorScope {
+  return { kind, userId, bookId, editionKey, chapterId, sourceId: source.sourceId, sourceFingerprint: source.fingerprint, paragraphIndex, paragraphData, reviewId: reviewId ?? null }
+}
+
+function signReviewPageCursor(page: ReviewDetailPage, scope: ReviewCursorScope): ReviewDetailPage {
+  if (page.nextCursor === undefined || page.nextCursor.token === undefined) return page
+  return { ...page, nextCursor: { index: page.nextCursor.index, token: signReviewCursor(scope, page.nextCursor) } }
+}
+
+function signReviewCursor(scope: ReviewCursorScope, cursor: ReviewCursor): string {
+  const encoded = Buffer.from(JSON.stringify({ version: 1, scope, cursor }), 'utf8').toString('base64url')
+  const signature = createHmac('sha256', configuredSecret()).update(`review-v1.${encoded}`, 'utf8').digest('base64url')
+  return `${encoded}.${signature}`
+}
+
+function verifyReviewCursor(scope: ReviewCursorScope, cursor: ReviewCursor | undefined): ReviewCursor | undefined {
+  if (cursor === undefined) return undefined
+  if (!Number.isSafeInteger(cursor.index) || cursor.index < 1) throw new ReaderRuntimeError('invalid-input', '段评分页信息无效，请刷新列表')
+  if (cursor.index === 1 && cursor.token === undefined) return undefined
+  if (cursor.index === 1) throw new ReaderRuntimeError('invalid-input', '首段评页不能使用分页游标')
+  if (cursor.token === undefined) throw new ReaderRuntimeError('invalid-input', '段评分页信息无效，请刷新列表')
+  const parts = cursor.token.split('.')
+  if (parts.length !== 2 || parts[0]!.length === 0 || parts[1]!.length === 0) throw new ReaderRuntimeError('invalid-input', '段评分页信息无效，请刷新列表')
+  const expected = createHmac('sha256', configuredSecret()).update(`review-v1.${parts[0]}`, 'utf8').digest('base64url')
+  const received = Buffer.from(parts[1]!, 'base64url')
+  const expectedBytes = Buffer.from(expected, 'base64url')
+  if (received.length !== expectedBytes.length || !timingSafeEqual(received, expectedBytes)) throw new ReaderRuntimeError('invalid-input', '段评分页信息无效，请刷新列表')
+  try {
+    const payload = JSON.parse(Buffer.from(parts[0]!, 'base64url').toString('utf8')) as { version?: unknown; scope?: unknown; cursor?: unknown }
+    if (payload.version !== 1 || JSON.stringify(payload.scope) !== JSON.stringify(scope) || typeof payload.cursor !== 'object' || payload.cursor === null || Array.isArray(payload.cursor)) throw new Error('scope mismatch')
+    const signedCursor = payload.cursor as { index?: unknown; token?: unknown }
+    if (signedCursor.index !== cursor.index || !Number.isSafeInteger(signedCursor.index) || (signedCursor.token !== undefined && typeof signedCursor.token !== 'string')) throw new Error('cursor mismatch')
+    return { index: signedCursor.index as number, ...(signedCursor.token === undefined ? {} : { token: signedCursor.token }) }
+  } catch {
+    throw new ReaderRuntimeError('invalid-input', '段评分页信息无效，请刷新列表')
+  }
+}
+
+function verifyJavaScriptReviewCursor(cursor: ReviewCursor | undefined): ReviewCursor | undefined {
+  if (cursor !== undefined && (!Number.isSafeInteger(cursor.index) || cursor.index < 1)) throw new ReaderRuntimeError('invalid-input', '段评分页信息无效，请刷新列表')
+  if (cursor?.token !== undefined) throw new ReaderRuntimeError('invalid-input', 'JavaScript 段评不接受分页游标')
+  return cursor
+}
+
+function isJavaScriptSource(source: NormalizedSource): boolean { return typeof source.mainJs === 'string' && source.mainJs.trim().length > 0 }
 
 async function getReviewContext(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string): Promise<{ source: StoredSourceRecord; edition: StoredEdition; chapter: Chapter }> {
   const edition = await repository.getEdition(userId, bookId, editionKey)
