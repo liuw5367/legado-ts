@@ -71,17 +71,26 @@ test('switching categories ignores late results even when the transport does not
   let resolveOld!: (value: DiscoveryPage) => void
   let started!: () => void
   const start = new Promise<void>((resolve) => { started = resolve })
-  const { request } = fixture({ load: async (body) => {
+  const { request, calls } = fixture({ load: async (body) => {
     if (body.categoryId === 'source-a-popular') { started(); return new Promise<DiscoveryPage>((resolve) => { resolveOld = resolve }) }
     return page(1, ['新分类'])
   } })
   const store = new DiscoveryStore('user', request)
   const first = store.initialize(source.sourceId, 'source-a-popular')
   await start
-  await store.initialize(source.sourceId, 'source-a-new')
+  const callsBeforeSwitch = calls.length
+  const switching = store.initialize(source.sourceId, 'source-a-new')
+  assert.deepEqual(store.getSnapshot().categories.map(({ id }) => id), ['source-a-popular', 'source-a-new'])
+  assert.equal(store.getSnapshot().categoryId, 'source-a-new')
+  assert.equal(store.getSnapshot().loading, true)
+  assert.deepEqual(store.getSnapshot().items, [])
+  assert.deepEqual(calls.slice(callsBeforeSwitch).map(({ path }) => path), ['/api/discovery/page'])
+  await switching
   resolveOld(page(1, ['旧分类'])); await first
   assert.equal(store.getSnapshot().categoryId, 'source-a-new')
   assert.deepEqual(store.getSnapshot().items.map(({ book }) => book.name), ['新分类'])
+  assert.equal(calls.filter(({ path }) => path === '/api/discovery/sources').length, 1)
+  assert.equal(calls.filter(({ path }) => path.startsWith('/api/discovery/categories')).length, 1)
 })
 
 test('switching sources resets category, page cursor and scroll', async () => {

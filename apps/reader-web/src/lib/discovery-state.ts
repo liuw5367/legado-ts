@@ -61,6 +61,26 @@ export class DiscoveryStore {
     const previous = this.state
     if (restore && !refresh && previous.loaded && previous.error.length === 0 && (sourceId === undefined || sourceId === previous.source?.sourceId) && (categoryId === undefined || categoryId === previous.categoryId)) return
     const controller = this.begin()
+    const wantedSourceId = sourceId ?? this.choice?.sourceId
+    const wantedCategoryId = categoryId ?? (sourceId === undefined || sourceId === this.choice?.sourceId ? this.choice?.categoryId : undefined)
+    const cachedCategory = previous.categories.find((category) => category.id === wantedCategoryId)
+    const sameCachedSource = previous.source !== null && (wantedSourceId === undefined || wantedSourceId === previous.source.sourceId)
+    // 分类切换复用已加载的分类栏，只清空旧书目并请求新分类，避免标签栏随请求卸载。
+    if (!refresh && sameCachedSource && cachedCategory !== undefined && cachedCategory.id !== previous.categoryId) {
+      this.scrollY = 0
+      this.update({ source: previous.source, sources: previous.sources, categories: previous.categories, categoryId: cachedCategory.id, items: [], nextCursor: undefined, loadedCursors: [], loading: true, loadingMore: false, opening: null, loaded: false, error: '', message: '' })
+      this.remember()
+      try {
+        const page = await this.queryPage(undefined, controller.signal)
+        if (!controller.signal.aborted) this.acceptPage(page, false)
+      } catch (reason) {
+        if (!controller.signal.aborted) {
+          this.retryOperation = () => this.initialize(sourceId, categoryId, refresh)
+          this.update({ loading: false, error: reason instanceof Error ? reason.message : '发现加载失败' })
+        }
+      }
+      return
+    }
     const changingSelection = previous.source !== null && ((sourceId !== undefined && sourceId !== previous.source.sourceId) || (categoryId !== undefined && categoryId !== previous.categoryId))
     // 显式切源/分类后，旧结果不能在源列表查询失败时重新变成可操作状态。
     if (changingSelection) { this.scrollY = 0; this.update({ ...emptyState(), sources: previous.sources, loading: true }) }
