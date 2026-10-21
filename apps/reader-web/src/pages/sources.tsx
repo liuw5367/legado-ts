@@ -11,7 +11,7 @@ import { Select } from '../components/ui/select.tsx'
 import { SourceImportDialog } from '../components/source-import-dialog.tsx'
 import { apiFetch } from '../lib/api.ts'
 import { formatSourceRuleDateTime } from '../lib/time-format.ts'
-import { compareSourceManagementOrder, groupSourcesByDomain, sourceDomainInfo, type SourceDomainGroup } from '../../shared/source-domain.ts'
+import { groupSourcesByDomain, sourceDomainInfo, type SourceDomainGroup } from '../../shared/source-domain.ts'
 import type { ManagedSourceSummary, SourceManagementPage, SourceManagementStatus } from '../../shared/source-management.ts'
 
 export function SourcesPage() {
@@ -121,7 +121,6 @@ function SourceDomainRow({ group, busy, selected, onToggle, onToggleGroup, onAct
   const selectedCount = group.versions.filter(({ source }) => selected.has(source.sourceId)).length
   const groupSelected = selectedCount === group.versions.length
   const enabled = group.versions.filter(({ source }) => source.enabled)
-  const effective = [...enabled].sort((left, right) => compareSourceManagementOrder(left.source, right.source))[0]
   const latest = group.versions[0]?.source
 
   useEffect(() => {
@@ -132,7 +131,7 @@ function SourceDomainRow({ group, busy, selected, onToggle, onToggleGroup, onAct
     <div className="source-domain-header">
       <label className="source-management-check"><input ref={groupCheckRef} type="checkbox" checked={groupSelected} disabled={busy} onChange={(event) => onToggleGroup(group.versions.map(({ source }) => source), event.target.checked)} /><span className="sr-only">选择 {group.domain} 的全部实现</span></label>
       <details className="source-domain-details">
-        <summary className="source-domain-summary"><span className="source-domain-heading-main"><strong title={group.domain}>{group.domain}</strong><span className="muted small">{group.versions.length} 个实现 · 最新规则 {formatSourceRuleDateTime(latest?.lastUpdateTime)}</span></span>{enabled.length > 1 ? <span className="badge source-status source-domain-warning">{enabled.length} 个旧启用项</span> : effective === undefined ? <span className="badge source-status source-disabled">全部禁用</span> : <span className="badge source-status source-enabled">当前 {group.versions.find(({ source }) => source.sourceId === effective.source.sourceId)?.displayName}</span>}</summary>
+        <summary className="source-domain-summary"><span className="source-domain-heading-main"><strong title={group.domain}>{group.domain}</strong><span className="muted small">{group.versions.length} 个实现 · 最新规则 {formatSourceRuleDateTime(latest?.lastUpdateTime)}</span></span>{enabled.length > 1 ? <span className="badge source-status source-domain-warning">{enabled.length} 个旧启用项</span> : enabled.length === 0 ? <span className="badge source-status source-disabled">{group.versions.length === 1 ? '已禁用' : '全部禁用'}</span> : null}</summary>
         <div className="source-domain-versions">{group.versions.map(({ source, displayName }) => <SourceVersionRow key={source.sourceId} source={source} displayName={displayName} busy={busy} selected={selected.has(source.sourceId)} onToggle={(checked) => onToggle(source, checked)} onAction={(action) => onAction(source, action)} />)}</div>
       </details>
     </div>
@@ -140,5 +139,5 @@ function SourceDomainRow({ group, busy, selected, onToggle, onToggleGroup, onAct
 }
 
 function SourceVersionRow({ source, displayName, busy, selected, onToggle, onAction }: { source: ManagedSourceSummary; displayName: string; busy: boolean; selected: boolean; onToggle: (checked: boolean) => void; onAction: (action: 'enable' | 'disable' | 'delete') => void }) {
-  return <article className="source-management-row source-domain-version"><label className="source-management-check"><input type="checkbox" checked={selected} disabled={busy} onChange={(event) => onToggle(event.target.checked)} /><span className="sr-only">选择 {displayName}</span></label><div className="source-management-info"><span className="source-management-title"><strong title={displayName}>{displayName}</strong><span className={`badge source-status ${source.enabled ? 'source-enabled' : 'source-disabled'}`}>{source.enabled ? '已启用' : '已禁用'}</span></span><span className="muted small">{source.group ?? '未分组'} · 规则更新时间 {formatSourceRuleDateTime(source.lastUpdateTime)}</span><span className="source-url" title={source.sourceId}>{source.sourceId}</span></div><div className="source-row-actions"><Button size="sm" variant="secondary" type="button" disabled={busy} onClick={() => onAction(source.enabled ? 'disable' : 'enable')}>{source.enabled ? '禁用' : '设为默认'}</Button><Button size="sm" variant="secondary" type="button" disabled={busy} onClick={() => onAction('delete')}>删除</Button></div></article>
+  return <article className="source-management-row source-domain-version"><label className="source-management-check"><input type="checkbox" checked={selected} disabled={busy} onChange={(event) => onToggle(event.target.checked)} /><span className="sr-only">选择 {displayName}</span></label><div className="source-management-info"><span className="source-management-title"><strong title={displayName}>{displayName}</strong>{source.enabled ? null : <span className="badge source-status source-disabled">已禁用</span>}</span><span className="muted small">{source.group ?? '未分组'} · 规则更新时间 {formatSourceRuleDateTime(source.lastUpdateTime)}</span><span className="source-url" title={source.sourceId}>{source.sourceId}</span></div><div className="source-row-actions"><Button size="sm" variant="secondary" type="button" disabled={busy} onClick={() => onAction(source.enabled ? 'disable' : 'enable')}>{source.enabled ? '禁用' : '设为默认'}</Button><Button size="sm" variant="secondary" type="button" disabled={busy} onClick={() => onAction('delete')}>删除</Button></div></article>
 }

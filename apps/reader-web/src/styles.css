@@ -277,6 +277,7 @@ a { color: inherit; }
 .source-status::before { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor; content: ''; }
 .source-enabled { color: var(--success); background: var(--success-surface); border-color: color-mix(in srgb, var(--success) 55%, var(--border)); }
 .source-disabled { color: var(--foreground); background: color-mix(in srgb, var(--border) 55%, var(--card)); border-color: color-mix(in srgb, var(--foreground) 35%, var(--border)); }
+.sources-page .source-status.source-disabled { color: var(--danger); background: var(--danger-surface); border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); }
 .source-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .book-details-meta { display: grid; gap: 8px; margin: 0; }
 .book-details-meta > div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
