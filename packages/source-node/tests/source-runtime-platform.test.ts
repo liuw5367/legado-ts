@@ -62,6 +62,20 @@ test('Node 平台桥接可以注入浏览器、媒体和宿主动作能力', asy
   assert.deepEqual(calls, [{ capability: 'java.openUrl', input: ['https://example.test', 'text/html'], source: source.bookSourceUrl }])
 })
 
+test('Node 平台能力处理器可以明确消费 undefined 返回值', async () => {
+  const seen: unknown[] = []
+  const platform = new NodeSourceRuntimePlatform({
+    capabilities: {
+      'java.openUrl': (input) => { seen.push(input); return undefined },
+    },
+  })
+  const host = new SourceRuleHost({ platform })
+  const output = await host.evaluate({ source, stage: 'search', field: 'fixture', rule: '@js:java.openUrl("https://example.test"); "done"', content: '' })
+  assert.equal(output.status, 'success', output.message)
+  assert.equal(output.value, 'done')
+  assert.deepEqual(seen, [['https://example.test']])
+})
+
 test('Node SourceLock 跨执行等待、singleFlight 跳过和 tick LRU 遵循 Android 语义', async () => {
   const locks = new NodeSourceConcurrency()
   const first = await locks.acquire('singleFlight', 'fixture@same', 0, new AbortController().signal)

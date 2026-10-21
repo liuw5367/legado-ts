@@ -3,8 +3,8 @@ import { bookIdentityKey, normalizeIdentity, sameBookIdentity } from '../../shar
 import type { BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { editionKey as sharedEditionKey } from '@legado/reader-backup'
-import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '@legado/source-core'
-import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, WorkflowStatus } from '@legado/source-core'
+import { loadBookDetails, loadChapterContent, loadReviewDetail, loadReviewReplies, loadReviewSummary, loadTableOfContents, searchBooks } from '@legado/source-core'
+import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, ReviewDetailPage, ReviewSummaryItem, WorkflowStatus } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
 import type { BookCreationInput, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
@@ -25,6 +25,9 @@ export interface ReaderRuntime {
   openBookSource(userId: string, bookId: string, candidateId: string): Promise<StoredEdition>
   getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc>
   getOrLoadContent(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<StoredContent>
+  getReviewSummary(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ReviewSummaryItem[]>
+  getReviewDetail(userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage>
+  getReviewReplies(userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, reviewId: string, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage>
 }
 
 const activeSearches = new Map<string, { operationId: string; controller: AbortController }>()
@@ -40,6 +43,9 @@ export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime
     openBookSource: (userId, bookId, candidateId) => openBookSource(repository, userId, bookId, candidateId),
     getOrLoadToc: (userId, bookId, editionKey, refresh) => getOrLoadToc(repository, userId, bookId, editionKey, refresh),
     getOrLoadContent: (userId, bookId, editionKey, chapterId, refresh) => getOrLoadContent(repository, userId, bookId, editionKey, chapterId, refresh),
+    getReviewSummary: (userId, bookId, editionKey, chapterId) => getReviewSummary(repository, userId, bookId, editionKey, chapterId),
+    getReviewDetail: (userId, bookId, editionKey, chapterId, paragraphIndex, paragraphData, cursor) => getReviewDetail(repository, userId, bookId, editionKey, chapterId, paragraphIndex, paragraphData, cursor),
+    getReviewReplies: (userId, bookId, editionKey, chapterId, paragraphIndex, reviewId, paragraphData, cursor) => getReviewReplies(repository, userId, bookId, editionKey, chapterId, paragraphIndex, reviewId, paragraphData, cursor),
   }
 }
 
@@ -286,6 +292,44 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
     if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
     return repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
   })
+}
+
+async function getReviewSummary(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ReviewSummaryItem[]> {
+  const context = await getReviewContext(repository, userId, bookId, editionKey, chapterId)
+  return withPersistentSourceSession(repository, userId, context.source, async (session) => {
+    const result = await session.run((ports) => loadReviewSummary(ports, { source: context.source.normalizedSource, book: context.edition.metadata, chapter: context.chapter }))
+    if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '段评统计读取失败'))
+    return result.value
+  })
+}
+
+async function getReviewDetail(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage> {
+  const context = await getReviewContext(repository, userId, bookId, editionKey, chapterId)
+  return withPersistentSourceSession(repository, userId, context.source, async (session) => {
+    const result = await session.run((ports) => loadReviewDetail(ports, { source: context.source.normalizedSource, book: context.edition.metadata, chapter: context.chapter, paragraphIndex, ...(paragraphData === undefined ? {} : { paragraphData }), ...(cursor === undefined ? {} : { cursor }) }))
+    if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '段评详情读取失败'))
+    return result.value
+  })
+}
+
+async function getReviewReplies(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, reviewId: string, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage> {
+  const context = await getReviewContext(repository, userId, bookId, editionKey, chapterId)
+  return withPersistentSourceSession(repository, userId, context.source, async (session) => {
+    const result = await session.run((ports) => loadReviewReplies(ports, { source: context.source.normalizedSource, book: context.edition.metadata, chapter: context.chapter, paragraphIndex, reviewId, ...(paragraphData === undefined ? {} : { paragraphData }), ...(cursor === undefined ? {} : { cursor }) }))
+    if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '段评回复读取失败'))
+    return result.value
+  })
+}
+
+async function getReviewContext(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string): Promise<{ source: StoredSourceRecord; edition: StoredEdition; chapter: Chapter }> {
+  const edition = await repository.getEdition(userId, bookId, editionKey)
+  if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
+  const source = await requireSource(repository, userId, edition.sourceId)
+  const toc = await repository.getToc(userId, bookId, editionKey)
+  if (toc === null) throw new ReaderRuntimeError('not-found', '目录尚未加载')
+  const chapter = toc.chapters.find((item) => chapterIdFor(item) === chapterId)
+  if (chapter === undefined) throw new ReaderRuntimeError('not-found', '章节不存在')
+  return { source, edition, chapter }
 }
 
 function digest(value: string): string { return createHash('sha256').update(value).digest('hex') }

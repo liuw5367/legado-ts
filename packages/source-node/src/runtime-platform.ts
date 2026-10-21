@@ -13,6 +13,8 @@ export interface NodeSourceRuntimePlatformOptions {
   sourceNavigationContext?: unknown | ((context: SourceRuntimePlatformContext) => unknown)
   t2s?: (value: string) => string
   s2t?: (value: string) => string
+  /** Explicit handlers may intentionally return undefined (for example UI actions). */
+  capabilities?: Readonly<Record<string, (input: unknown, context: SourceRuntimePlatformContext) => unknown | Promise<unknown>>>
   /** Override selected capabilities while retaining the built-in pure ones. */
   invoke?: (capability: string, input: unknown, context: SourceRuntimePlatformContext) => unknown | Promise<unknown> | undefined
 }
@@ -108,6 +110,8 @@ export class NodeSourceRuntimePlatform implements SourceRuntimePlatform {
   }
 
   public invoke(capability: string, input: unknown, context: SourceRuntimePlatformContext): unknown | Promise<unknown> {
+    const handler = this.options.capabilities?.[capability]
+    if (handler !== undefined) return handler(input, context)
     const override = this.options.invoke?.(capability, input, context)
     if (override !== undefined) return override
     if (capability === 'java.t2s') return this.options.t2s?.(String(input ?? '')) ?? this.t2sConverter!.convert(String(input ?? ''))

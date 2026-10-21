@@ -2,7 +2,7 @@ import { PageHeader } from '../components/page-header.tsx'
 import { useId } from 'react'
 import { ExternalLink } from 'lucide-react'
 
-const buildTimestamp = process.env.BUILD_TIME
+const buildTimestamp = process.env.BUILD_TIME ?? new Date(0).toISOString()
 const buildTime = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(buildTimestamp))
 const repositoryUrl = 'https://github.com/liuw5367/legado-ts'
 

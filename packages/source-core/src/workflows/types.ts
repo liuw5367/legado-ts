@@ -186,7 +186,7 @@ export interface WorkflowRuleOutput {
 
 export type WorkflowJavaScriptStage = 'mainJs' | 'book' | 'chapter' | 'search' | 'content'
 
-export type SourceFunctionName = 'search' | 'explore' | 'getBookInfo' | 'getChapters' | 'getContent' | 'getContentBatch'
+export type SourceFunctionName = 'search' | 'explore' | 'getBookInfo' | 'getChapters' | 'getContent' | 'getContentBatch' | 'getReviewSummary' | 'getReviewDetail' | 'getReviewReplies'
 
 export type WorkflowAction = (signal: AbortSignal, input: unknown) => Promise<unknown>
 
@@ -392,6 +392,50 @@ export interface ContentResource {
   url: string
 }
 
+export interface ReviewSummaryItem {
+  paragraphIndex: number
+  count: number
+  paragraphData: string
+}
+
+export interface ReviewDetailItem {
+  id?: string
+  avatar?: string
+  name?: string
+  replyToName?: string
+  badges: string[]
+  content?: string
+  imageUrl?: string
+  audioUrl?: string
+  time?: string
+  likeCount?: number
+  replyCount?: number
+  replies: ReviewDetailItem[]
+}
+
+export interface ReviewDetailPage extends WorkflowPage<ReviewDetailItem> {
+  hasMore: boolean
+}
+
+export interface ReviewSummaryInput extends WorkflowOptions {
+  source: NormalizedSource
+  book: BookMetadata
+  chapter: ChapterIdentity & { title?: string; variable?: string; rawFields?: JsonObject }
+}
+
+export interface ReviewDetailInput extends WorkflowOptions {
+  source: NormalizedSource
+  book: BookMetadata
+  chapter: ChapterIdentity & { title?: string; variable?: string; rawFields?: JsonObject }
+  paragraphIndex: number
+  paragraphData?: string
+  cursor?: PageCursor
+}
+
+export interface ReviewRepliesInput extends ReviewDetailInput {
+  reviewId: string
+}
+
 export interface ChapterContent {
   chapter: ChapterIdentity & { variable?: string }
   contentType: 'text' | 'html'
@@ -425,6 +469,8 @@ export interface ContentInput extends WorkflowOptions {
   maxPages?: number
   maxBytes?: number
   maxOutputBytes?: number
+  /** Optional Android payAction hook for VIP chapters; callers decide whether to persist the purchase result. */
+  payAction?: string
 }
 
 export interface ChapterContentBatchItem {

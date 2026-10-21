@@ -395,6 +395,34 @@ app.get('/api/books/:bookId/toc', async (context) => {
   }
 })
 
+app.get('/api/books/:bookId/review/summary', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const editionKey = context.req.query('editionKey')
+  const chapterId = context.req.query('chapterId')
+  if (editionKey === undefined || editionKey.length === 0 || chapterId === undefined || chapterId.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey 或 chapterId' } }, 400)
+  try { return context.json({ summary: await dependencies.runtime.getReviewSummary(context.get('userId'), context.req.param('bookId'), editionKey, chapterId) }) }
+  catch (error) { return handleError(context, error) }
+})
+
+app.get('/api/books/:bookId/review/detail', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const query = reviewQuery(context, false)
+  if (query instanceof Response) return query
+  try { return context.json({ page: await dependencies.runtime.getReviewDetail(context.get('userId'), context.req.param('bookId'), query.editionKey, query.chapterId, query.paragraphIndex, query.paragraphData, query.cursor) }) }
+  catch (error) { return handleError(context, error) }
+})
+
+app.get('/api/books/:bookId/review/replies', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const query = reviewQuery(context, true)
+  if (query instanceof Response) return query
+  try { return context.json({ page: await dependencies.runtime.getReviewReplies(context.get('userId'), context.req.param('bookId'), query.editionKey, query.chapterId, query.paragraphIndex, query.reviewId!, query.paragraphData, query.cursor) }) }
+  catch (error) { return handleError(context, error) }
+})
+
 app.get('/api/books/:bookId/chapters/:chapterId', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -451,6 +479,27 @@ const searchInputSchema = z.object({ keyword: z.string().trim().min(1).max(200),
 const searchBatchSchema = z.object({ sourceIds: z.array(z.string().trim().min(1).max(500)).max(32).optional(), nextPage: z.boolean().optional() }).default({})
 const createBookSchema = z.object({ searchId: z.string().uuid(), candidateIndex: z.number().int().min(0).max(9999), candidateIdentity: z.object({ sourceId: z.string().min(1).max(4000), sourceFingerprint: z.string().min(1).max(128), bookUrl: z.string().min(1).max(4000) }).optional(), bookId: z.string().uuid().optional(), addToBookshelf: z.boolean().optional(), activateEdition: z.boolean().optional() })
 const activeEditionSchema = z.object({ editionKey: z.string().min(1).max(128) })
+
+type ReviewQuery = { editionKey: string; chapterId: string; paragraphIndex: number; paragraphData?: string; reviewId?: string; cursor?: { index: number; token?: string } }
+
+function reviewQuery(context: Context<{ Variables: Variables }>, replies: boolean): ReviewQuery | Response {
+  const editionKey = context.req.query('editionKey')
+  const chapterId = context.req.query('chapterId')
+  const rawIndex = context.req.query('paragraphIndex')
+  const reviewId = context.req.query('reviewId')
+  const page = context.req.query('page')
+  const cursor = context.req.query('cursor')
+  const paragraphIndex = rawIndex === undefined ? NaN : Number(rawIndex)
+  const pageIndex = page === undefined ? 1 : Number(page)
+  if (editionKey === undefined || editionKey.length === 0 || chapterId === undefined || chapterId.length === 0 || !Number.isSafeInteger(paragraphIndex) || (paragraphIndex !== -1 && paragraphIndex <= 0) || !Number.isSafeInteger(pageIndex) || pageIndex < 1 || (replies && (reviewId === undefined || reviewId.length === 0))) return context.json({ error: { code: 'invalid-input', message: '段评参数无效' } }, 400)
+  const result: ReviewQuery = { editionKey, chapterId, paragraphIndex }
+  const paragraphData = context.req.query('paragraphData')
+  if (paragraphData !== undefined) result.paragraphData = paragraphData
+  if (replies && reviewId !== undefined) result.reviewId = reviewId
+  if (cursor !== undefined) result.cursor = { index: pageIndex, token: cursor }
+  else if (pageIndex !== 1) result.cursor = { index: pageIndex }
+  return result
+}
 const pageTapZonesSchema = z.object({ leftWidthPercent: z.number().int().min(18).max(64), centerWidthPercent: z.number().int().min(18).max(64), centerTopHeightPercent: z.number().int().min(18).max(64), centerMiddleHeightPercent: z.number().int().min(18).max(64), centerTopAction: z.enum(['previous', 'next']), centerBottomAction: z.enum(['previous', 'next']) }).refine((value) => value.leftWidthPercent + value.centerWidthPercent <= 82 && value.centerTopHeightPercent + value.centerMiddleHeightPercent <= 82, { message: '每个翻页区域至少占 18%' })
 const settingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']).optional(),

@@ -844,6 +844,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       getChapters: ['book'],
       getContent: ['chapter', 'book', 'nextChapterUrl'],
       getContentBatch: ['chapters', 'book'],
+      getReviewSummary: ['chapter', 'book'],
+      getReviewDetail: ['chapter', 'book', 'paraIndex', 'paraData', 'page'],
+      getReviewReplies: ['chapter', 'book', 'paraIndex', 'paraData', 'reviewId', 'page'],
     }
     const parameters = names[request.name]
     const bindings: Readonly<Record<string, unknown>> = {
