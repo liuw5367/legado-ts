@@ -57,6 +57,7 @@ test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力'
 test('Android JsExtensions 和 BaseSource 方法清单全部注册到 JS 运行时', async () => {
   const javaNames = [
     'getSource', 'getTag', 'getSourceNavigationContext', 'getBatchContext', 'cacheContent', 'refreshBookInfo', 'refreshBookToc', 'refreshContent',
+    'copyText', 'clearTtsCache', 'searchBook', 'addBook', 'showPhoto', 'open',
     'ajax', 'ajaxAll', 'ajaxTestAll', 'connect', 'webView', 'webViewGetSource', 'webViewGetOverrideUrl', 'openVideoPlayer', 'startBrowser', 'startBrowserAwait',
     'getVerificationCode', 'importScript', 'cacheFile', 'getCookie', 'downloadFile', 'get', 'head', 'post', 'strToBytes', 'bytesToStr', 'base64Decode',
     'base64DecodeToByteArray', 'base64Encode', 'hexDecodeToByteArray', 'hexDecodeToString', 'hexEncodeToString', 'timeFormatUTC', 'timeFormat', 'encodeURI',
@@ -699,6 +700,25 @@ test('执行工作流脚本时同时保留 DTO 直接修改和 putVariable bridg
   })
   const methodValue = viaMethod.value as { __legadoWorkflowBindings: { chapter: { variable: string } } }
   assert.deepEqual(JSON.parse(methodValue.__legadoWorkflowBindings.chapter.variable), { direct: 'yes', method: 'yes' })
+})
+
+test('书籍/章节扩展对象提供 Android 常用变量与媒体更新方法', async () => {
+  const host = new SourceRuleHost()
+  const chapter = { title: '章节', variable: '{}' }
+  const actions: string[] = []
+  const output = await host.executeWorkflowJavaScript({
+    source,
+    stage: 'content',
+    code: "chapter.putLyric('歌词'); chapter.putDanmaku('弹幕'); chapter.putImgUrl('https://fixture.invalid/image'); chapter.update(); JSON.stringify([chapter.getVariable('lyric'), chapter.getVariable('danmaku'), chapter.imgUrl])",
+    bindings: { chapter },
+    captureMutations: ['chapter'],
+    workflowActions: { refreshContent: async () => { actions.push('refreshContent'); return undefined } },
+  })
+  assert.equal(output.status, 'success')
+  assert.deepEqual(JSON.parse(String((output.value as { __legadoWorkflowValue: string }).__legadoWorkflowValue)), ['歌词', '弹幕', 'https://fixture.invalid/image'])
+  assert.deepEqual(actions, ['refreshContent', 'refreshContent', 'refreshContent', 'refreshContent'])
+  const captured = (output.value as { __legadoWorkflowBindings: { chapter: { variable: string } } }).__legadoWorkflowBindings.chapter
+  assert.deepEqual(JSON.parse(captured.variable), { lyric: '歌词', danmaku: '弹幕' })
 })
 
 test('JS 源函数对 book 和 chapter 参数的直接修改会回写到工作流 DTO', async () => {

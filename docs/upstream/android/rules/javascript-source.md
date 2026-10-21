@@ -16,7 +16,7 @@ function getContent(chapter, book) {}
 
 文件源（`bookSourceType == 3`）要求 `search` 和 `getBookInfo`，不要求普通目录和正文函数。配置 `exploreUrl` 时必须同时提供 `explore(url, page)`。
 
-登录声明有两种互斥形式：`config.loginUi` 是静态登录表单配置时，脚本必须提供 `login(...)`；脚本提供 `loginUi(...)` 函数时，配置中不能再有 `loginUi`，并且必须同时提供 `loginAction(...)`。只有 `loginUi` 函数（缺少配对的 `loginAction`）或只有 `config.loginUi`（缺少配对的 `login` 函数）都属于导入错误；单独声明 `loginAction` 函数而无 `loginUi` 时不会报错，会静默通过导入；但该函数不会被登录流程调用——仅当 `loginUi` 为函数时配置才进入 v2 登录流程（`JsSourceConfig.kt` L146），`evalLoginUiV2`/`evalLoginActionV2` 才会触发。复杂登录 UI、验证码和多步骤认证可以后续实施；尚未提供对应宿主能力时必须报告 capability error，不能把不支持认证误报成普通书源成功。
+登录声明有两种互斥形式：`config.loginUi` 是静态登录表单配置时，脚本必须提供 `login(...)`；脚本提供 `loginUi(...)` 函数时，配置中不能再有 `loginUi`，并且必须同时提供 `loginAction(...)`。只有 `loginUi` 函数（缺少配对的 `loginAction`）或只有 `config.loginUi`（缺少配对的 `login` 函数）都属于导入错误；单独声明 `loginAction` 函数而无 `loginUi` 时不会报错，会静默通过导入；但该函数不会被登录流程调用——仅当 `loginUi` 为函数时配置才进入 v2 登录流程（`JsSourceConfig.kt` L146），`evalLoginUiV2`/`evalLoginActionV2` 才会触发。reader-web 已提供无浏览器的静态 RowUi、动态 loginUi/loginAction v2 和人工动作协议；复杂网页、验证码、多步骤页面跳转仍依赖浏览器宿主。尚未提供对应宿主能力时必须报告 capability error，不能把不支持认证误报成普通书源成功。
 
 普通 JS 源的函数契约可以抽象为：
 

@@ -15,6 +15,10 @@ import { sourceDomainInfo } from '../shared/source-domain.ts'
 import type { ReaderSettingsPatch } from './domain/types.ts'
 import { discoveryBookSchema, discoveryControlSchema, discoveryPageSchema, discoverySourceSchema } from '../shared/discovery.ts'
 import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook, updateDiscoveryControl } from './runtime/discovery.ts'
+import { getSourceLoginUi, submitSourceLogin } from './runtime/source-login.ts'
+import { sourceLoginActionSchema, sourceLoginUiSchema } from '../shared/source-login.ts'
+import { sourceCallbackSchema, sourcePayActionSchema } from '../shared/source-actions.ts'
+import { runSourceCallback, runSourcePayAction } from './runtime/source-actions.ts'
 
 interface Variables { userId: string }
 export const app = new Hono<{ Variables: Variables }>()
@@ -104,6 +108,41 @@ app.post('/api/discovery/books', async (context) => {
     const { book, edition } = await openDiscoveryBook(dependencies.repository, context.get('userId'), body, context.req.raw.signal)
     return context.json({ book: { id: book.id }, edition: { editionKey: edition.editionKey } }, 201)
   } catch (error) { return handleError(context, error) }
+})
+
+app.get('/api/sources/:sourceId/login/ui', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const parsed = sourceLoginUiSchema.safeParse({ sourceId: context.req.param('sourceId'), fingerprint: context.req.query('fingerprint') })
+  if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '登录书源参数无效' } }, 400)
+  try { return context.json(await getSourceLoginUi(dependencies.repository, context.get('userId'), parsed.data.sourceId, parsed.data.fingerprint, context.req.raw.signal)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/sources/:sourceId/login/action', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, sourceLoginActionSchema)
+  if (body instanceof Response) return body
+  if (body.sourceId !== context.req.param('sourceId')) return context.json({ error: { code: 'invalid-input', message: '登录书源标识不一致' } }, 400)
+  try { return context.json(await submitSourceLogin(dependencies.repository, context.get('userId'), body, context.req.raw.signal)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/sources/:sourceId/pay-action', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, sourcePayActionSchema)
+  if (body instanceof Response) return body
+  if (body.sourceId !== context.req.param('sourceId')) return context.json({ error: { code: 'invalid-input', message: '书源标识不一致' } }, 400)
+  try { return context.json(await runSourcePayAction(dependencies.repository, context.get('userId'), body, context.req.raw.signal)) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/sources/:sourceId/callback', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, sourceCallbackSchema)
+  if (body instanceof Response) return body
+  if (body.sourceId !== context.req.param('sourceId')) return context.json({ error: { code: 'invalid-input', message: '书源标识不一致' } }, 400)
+  try { return context.json(await runSourceCallback(dependencies.repository, context.get('userId'), body, context.req.raw.signal)) } catch (error) { return handleError(context, error) }
 })
 
 app.post('/api/source-management/actions', async (context) => {

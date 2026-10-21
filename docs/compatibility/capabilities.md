@@ -15,11 +15,11 @@
 | 正文与批量 | 正文分页、清洗、替换、缓存、批量、元数据保存 | [正文](../upstream/android/flows/content-flow.md) | `loadChapterContent` 与 `loadChapterContentBatch` 已实现；持久化/token 由宿主提供；Android golden 待执行 |
 | JavaScript 书源 | 配置抽取、函数调用、返回值、同步兼容 API、变量和脚本 scope | [JS](../upstream/android/rules/javascript-source.md)、[宿主](../../packages/source-core/docs/host-ports.md) | 优先；核对 `JsExtensions` 中未列出的实际书源依赖 |
 | 图片与封面解密 | `coverDecodeJs`、`imageDecode` 的字节/流输入、脚本输出与缓存 | [模型](../upstream/android/rules/source-schema.md) | `ImageUtils` 调用链已核对；`decodeImage` 已实现解密工作流，下载与缓存仍由宿主提供；Android golden 待跑 |
-| 付费与受限章节 | VIP/购买标识、`payAction`、授权状态、执行后刷新 | [目录](../upstream/android/flows/chapter-list-flow.md)、[模型](../upstream/android/rules/source-schema.md) | core 已提供用户调用的 `executePayAction`，支持 JS/`{{js}}` URL 和 URL/真值结果；购买后刷新与 Web 交互仍由应用接入 |
+| 付费与受限章节 | VIP/购买标识、`payAction`、授权状态、执行后刷新 | [目录](../upstream/android/flows/chapter-list-flow.md)、[模型](../upstream/android/rules/source-schema.md) | core 已提供用户调用的 `executePayAction`，支持 JS/`{{js}}` URL、URL/真值结果和刷新类 workflow action；reader-web 已接入人工触发与操作 ID 幂等，购买后实际刷新、浏览器打开和多实例持久幂等仍由应用/宿主接入 |
 | 段评读取与交互 | 结构化摘要、详情、回复，旧式段评页面桥接，以及点赞、发送和删除规则 | [段评流程](../upstream/android/flows/review-flow.md)、[JS](../upstream/android/rules/javascript-source.md)、[模型](../upstream/android/rules/source-schema.md) | 声明式/JS 读取已实现并接入 reader-web API；旧式页面桥接和写入目前保持明确缺口 |
-| 登录与认证 | 静态 Header/Cookie、`loginCheckJs`、登录表单、验证码和动态登录 | [请求](../upstream/android/rules/url-request-rules.md)、[JS](../upstream/android/rules/javascript-source.md) | 静态能力优先；交互登录低优先级，保留完整目标 |
+| 登录与认证 | 静态 Header/Cookie、`loginCheckJs`、登录表单、验证码和动态登录 | [请求](../upstream/android/rules/url-request-rules.md)、[JS](../upstream/android/rules/javascript-source.md) | 静态 Header/Cookie、静态 RowUi、动态 loginUi v2、人工 action 和加密 session 已接入 reader-web；真实网页登录、验证码和 Android golden 仍需宿主 |
 | 浏览器行为 | WebView 请求、`@webjs:`、资源嗅探和页面脚本 | [请求](../upstream/android/rules/url-request-rules.md)、[宿主](../../packages/source-core/docs/host-ports.md) | 后续宿主能力；不能把普通 HTTP 当成等价实现 |
-| 书源交互与事件 | `eventListener`、`customButton`、正文回调和宿主 UI 动作 | [模型](../upstream/android/rules/source-schema.md) | core 已提供 `executeSourceCallback` 和 Android 事件名/超时上下文；按钮去重、默认动作和宿主 UI 仍由应用接入 |
+| 书源交互与事件 | `eventListener`、`customButton`、正文回调和宿主 UI 动作 | [模型](../upstream/android/rules/source-schema.md) | core 已提供 `executeSourceCallback` 和 Android 事件名/超时上下文；reader-web 已接人工回调/payAction、源版本校验、结构化刷新动作和进程内 operationId 幂等；按钮默认动作、购买后刷新和多实例持久幂等仍由应用接入 |
 | 书源编辑与诊断 | 字段编辑、未知字段保留、规则预览、保存冲突、导入导出 | [编辑](../archive/source-editor.md) | 优先；所有能力字段至少可见、可保留、可诊断 |
 | 书源校验与健康状态 | 域名、搜索、发现、详情、目录、正文、会话、版本和结果写回 | [校验流程](../upstream/android/flows/source-check-flow.md)、[校验状态](../upstream/android/rules/source-check-state.md) | 优先；不能用一次搜索成功替代全流程校验 |
 | 用户持久化与状态清理 | 用户归属、版本、源变量、Cookie、缓存、校验状态和删除副作用 | [管理状态目标](../archive/source-management-and-state.md)、[reader-web 存储](../../apps/reader-web/docs/storage-and-cache.md) | 优先；存储由应用适配器提供 |
@@ -58,7 +58,7 @@
 | CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP | `searchBooks`/`discoverBooks`、动态分类和五类控件已有实现；InfoMap 保存和选择快照差异见 D31/D40；exploreScreen 仅保留，当前未发现 Android 执行入口 |
 | CAP-INFO / CAP-TOC / CAP-CONTENT | 07 至 09 | FLOW-004 至 012 | `loadBookDetails`/`loadTableOfContents`/`loadChapterContent`/`loadChapterContentBatch` 已实现；Node 批量测试通过，需跑 Android 对照 |
 | CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008 至 010 | QuickJS 宿主已接入规则内 JS；Rhino 逐返回值对照与引擎互操作未全量验收 |
-| CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取、`executePayAction` 和 `executeSourceCallback` 有 core 入口，购买刷新、段评写入和交互宿主仍缺 |
+| CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取、`executePayAction`、`executeSourceCallback`、reader-web 登录 API/页面和结构化动作已有入口；购买刷新、段评写入、真实网页交互和持久多实例幂等仍缺 |
 | CAP-REVIEW | 段评流程的声明式摘要/详情/回复、JS 函数及旧式网页桥接 | JS-004、REVIEW-001、`packages/source-core/tests/review.test.ts`、[段评流程](../upstream/android/flows/review-flow.md) | 声明式/JS 结构化读取与 reader-web API 已实现；旧式桥接、写入和 Android golden 仍待完成 |
 | CAP-EDITOR | 16 | EDIT | Web 目标设计与现有 UI 证据分开；独立 TS 编辑器见 [归档](../archive/source-editor.md) |
 | CAP-STATE / CAP-SUBSCRIPTION | [兼容政策](../contracts/compatibility-policy.md)、[订阅流程](../upstream/android/flows/source-subscriptions.md) | STATE、SUB | `refreshSubscription` 已实现 diff 计划；应用持久化仍为目标设计 |
@@ -92,5 +92,5 @@ Node QuickJS 通过 `NodeSourceConcurrency` 在同一 source session 的不同 e
 - 方法名、继承成员、重载和返回对象必须分开核验。本轮具体缺口见[差异登记 D18～D43](known-divergences.md#android-与教程重新核对2026-10-21)，涵盖解析器方言、对象成员、请求实例、跨请求状态和文件隔离；仅验证 `typeof method === 'function'` 不能关闭能力项。
 - QuickJS 的同步 bridge 已存在；JavaImporter、通用 Packages/JavaAdapter、Java String 身份和完整 JVM 互操作仍不等价。受控对象可单独实现，真实 JVM/Android 服务不能用 DTO 代替。
 - 文件、字体、加密及 zip/gzip 已有实现；RAR/7z 有可选 bsdtar/archiveCommand 路径，外部命令不可用时仍为能力缺失。下载请求语义、文件账号隔离及嵌套返回对象仍须分别验收。
-- 动态发现和五类控件已存在，但 InfoMap 保存、删除/TTL 和分页选择版本仍有差异。复杂登录、应用动作、旧式段评网页桥接和段评写入继续保留目标边界；不能根据字段存在自行推断 Android 写入流程。
+- 动态发现和五类控件已存在，但 InfoMap 保存、删除/TTL 和分页选择版本仍有差异。登录表单、应用动作和受控刷新已提供无浏览器路径；旧式段评网页桥接、验证码、真实网页交互和段评写入继续保留目标边界；不能根据字段存在自行推断 Android 写入流程。
 - 设备/配置已有 Node 替代值，getWebViewUA 已有默认值；替代值与真实设备或当前阅读配置不同，应用未注入不能写为宿主已验证。Android 同输入 golden 未运行的能力继续标记待验证。

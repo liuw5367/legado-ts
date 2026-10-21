@@ -19,7 +19,7 @@
 
 ## 未实现的能力
 
-- `ruleContent.subContent`、`imageDecode` 和 `contentBatch` 已有 source-core 工作流；图片/批量正文的 Android golden 尚未执行；`payAction` 尚未实现；
+- `ruleContent.subContent`、`imageDecode` 和 `contentBatch` 已有 source-core 工作流；图片/批量正文的 Android golden 尚未执行；`payAction` 已有 core 求值和 reader-web 人工触发入口，但购买后刷新/真实浏览器打开仍属于应用宿主边界；
 - Android `ajaxAll(..., true)` 等限流 bypass 重载和完整 Java/设备桥接没有对应的 Node 能力。
 
 ## 2. URL 选项

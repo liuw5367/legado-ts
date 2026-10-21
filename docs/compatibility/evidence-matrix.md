@@ -54,7 +54,7 @@
 | Cookie、普通 source header、已保存登录头和最终域名 | 目标必须兼容 | `AnalyzeUrl`、`BaseSource.getHeaderMap()`、登录头站点判断 | CookieJar、静态/动态 source header、`loginCheckJs` 和 `NetworkHost.getLoginHeaders(sourceId)` 已实现；core 按初始 URL 同站范围注入独立登录头，URL options 可覆盖，bridge 子请求沿用初始 URL规则；SecretStore 持久化、删除清理和 Android golden 仍待 fixture |
 | `@js` 改写 URL 后的 Android 登录头站点限制 | 目标必须兼容 | `AnalyzeUrl` 初始 URL 的登录头判断 | Android 与 TS 都只检查初始 URL；TS 由 `NetworkHost.getLoginHeaders(sourceId)` 提供凭据，core 默认精确主机名，Node/自定义宿主可提供 Public Suffix List 同站判断。URL 改写到跨站后仍沿用初始地址决定是否注入；SecretStore 持久化和 Android golden 仍待 fixture |
 | 默认 User-Agent | 目标必须兼容 | `BaseSource.getHeaderMap()`、`AppConfig.userAgent` | 核心从 `NetworkHost.defaultUserAgent` 接收平台默认值；Node 未显式配置时使用当前 Android 基线 `Chrome/153.0.0.0`，显式 `NodeNetworkOptions.defaultUserAgent` 和 source/URL Header 仍按优先级覆盖；Android golden 尚未执行 |
-| 复杂登录 UI、验证码和多步骤登录 | 低优先待实现 | `BookSource` 登录字段、WebView 流程 | 未实现 runtime，需登录交互规格 |
+| 复杂登录 UI、验证码和多步骤登录 | 目标宿主能力 | `BookSource` 登录字段、WebView 流程 | reader-web 已实现静态 RowUi、动态 loginUi v2、`key`/输入 action 防抖、按钮倒计时、人工 action、状态/版本校验和结构化纯动作；真实网页、验证码、浏览器跳转和 Android golden 仍需宿主 |
 | 搜索、详情、目录、正文流程 | 目标必须兼容 | `WebBook`、四类流程测试 | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | `preUpdateJs` 的 `refreshTocUrl()` / `reGetBook()` 与无详情字段规则回退 | 目标必须兼容 | `AnalyzeRule.kt`、`BookInfo.kt`、`WebBook.kt` | `source-core` 通过受限 workflow action 实现详情刷新、书名作者精确重搜、RuleData 变量回写及 book 回写；Node 集成用例已执行，Android golden 尚未执行；TS 助手预算 30 秒，Android 上限 30 分钟 |
 | 目录和正文分页、循环保护 | 目标必须兼容 | `BookChapterList`、`WebBook` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
@@ -71,7 +71,7 @@
 | WebView 真实页面行为 | 目标宿主能力 | WebView 相关流程 | 需 adapter 和 capability error |
 | 发现分类、`infoMap` 与发现列表 | 目标必须兼容 | `BookSourceExtensions`、`ExploreKind`、`WebBook.exploreBookAwait` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | 图片与封面解密 | 声明存在时必须兼容 | `ImageUtils`、`ContentRule.imageDecode`、`BookSource.coverDecodeJs` | `decodeImage` 已实现规则选择、QuickJS bytes 往返、封面流式输入兼容、错误和取消；下载/缓存由宿主负责，Android golden 待执行 |
-| 付费动作与购买后刷新 | 部分实现 | `ContentRule.payAction`、`ReadBookActivity.payAction` | `executePayAction` 已支持 JS 和 `{{js}}` URL、URL/真值结果；reader-web 尚未接购买后刷新和浏览器打开 |
+| 付费动作与购买后刷新 | 部分实现 | `ContentRule.payAction`、`ReadBookActivity.payAction` | `executePayAction` 已支持 JS 和 `{{js}}` URL、URL/真值结果；reader-web 提供人工触发 API、源版本校验、结构化刷新动作和进程内 operationId 幂等；购买后实际刷新、浏览器打开和多实例幂等仍缺 |
 | 段评写入、投票和删除 | 低优先待核实（写入流程为目标设计） | `ReviewRule` 有字段；已核对的 `ReviewController` 入口主要是读取 | 写入流程为 Web 目标设计（见 conformance-tests ACTION-002），不宣称 Android 等价 |
 | 书源事件和自定义按钮 | 目标宿主能力 | `SourceCallBack`、`BookSource.eventListener/customButton` | `executeSourceCallback` 已保留事件名、book/source 级超时和上下文；自定义按钮去重、默认动作和 UI 宿主仍待接入 |
 | 音频、图片、视频和文件结果 | 目标必须兼容 | `BookSource.bookSourceType`、`Book`、`BookChapter`、相关调用点 | 音视频声明式正文跳过文本格式化，`subContent` 歌词/弹幕已写入章节变量并返回辅助结果；图片解密由 `decodeImage` 执行，实际下载/缓存及文件下载由宿主负责 |

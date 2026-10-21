@@ -29,6 +29,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 
 - `fixture-manifest.test.ts` 实际读取并执行 import manifest 的 7 条记录，其中 `IMP-004/schema-completeness` 覆盖完整已知字段矩阵、六类规则组、未知字段和不可写诊断；`source-conformance.test.ts` 继续执行 conformance manifest 的 5 条历史记录。
 - `source-cross-runtime.test.ts` 读取 conformance manifest 中的 6 个离线 case 目录（`HTML-FLOW-001`、`JSON-FLOW-001`、`XPATH-CONTENT-001`、`JS-TOC-001`、`TOC-EDGE-001`、`CONTENT-EDGE-001`），使用真实 `SourceRuleHost`、`SourceRequestHost`、Node HTML/JSONPath/XPath 解析器和 QuickJS，覆盖搜索、详情、目录、正文、分页、去重、卷/VIP/购买、替换和失败轨迹；不访问公网。
+- `node scripts/compare-source-conformance.mjs` 会先执行上述 TypeScript fixture，再读取 Android runner 输出与各 case 的 `expected.json` 做稳定键序比较。Android 输出允许 `<id>.json`、`cases/<id>.json`、`<id>/result.json` 或 `<id>.golden.json` 四种脱敏路径；缺少输出明确报告为 `not-run`，加 `--require-android` 才会以退出码 2 阻断验证，不能用缺失输出伪造通过。
 - `source-host-flow.test.ts` 使用真实书源规则和离线响应覆盖 JSON/CSS/XPath/JavaScript/HTML，并额外断言正文网络失败不会伪造成成功；另从大型 collection 按结构索引回放 JSONPath 条件过滤和 `java.getElements` 书源。不会把完整 collection 输出到日志。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
@@ -149,7 +150,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `ACTION-002` | 段评写入 | 先核实 Android 是否存在执行入口；若只存在规则字段，测试保留与诊断，Web 新增写入流程另列目标设计测试，不宣称 Android 等价 |
 | `ACTION-003` | 书源事件 | `eventListener`、`callBackJs`、`customButton` 的事件上下文、取消和权限 |
 | `LOGIN-001` | 登录 | 静态 Header/Cookie、`loginCheckJs`、登录过期与重试边界 |
-| `LOGIN-002` | 登录 | 静态和动态登录 UI、验证码/多步骤流程的宿主能力与隔离 |
+| `LOGIN-002` | 登录 | 静态和动态登录 UI、`key`/state 重绘、动作事件、验证码/多步骤流程的宿主能力与隔离 |
 | `HOST-001` | Host | Http/HTML/XPath/JSONPath/JS/Cookie/Cache 端口的空值、错误和资源释放 |
 | `HOST-002` | Node | requestId、响应限制、来源白名单、错误到 HTTP DTO、Cookie 隔离和 abort |
 | `HOST-003` | Next | SSR 请求隔离、动态缓存键、客户端断开、模块级状态扫描和响应脱敏 |

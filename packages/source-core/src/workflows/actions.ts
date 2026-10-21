@@ -1,5 +1,5 @@
 import { executeWorkflowJavaScript, expandUrl, textValue } from './helpers.ts'
-import type { BookMetadata, ChapterIdentity, RuntimeResult, WorkflowDiagnostic, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
+import type { BookMetadata, ChapterIdentity, RuntimeResult, WorkflowAction, WorkflowDiagnostic, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export type SourceCallbackEvent =
   | 'clickAuthor' | 'longClickAuthor' | 'clickBookName' | 'longClickBookName'
@@ -13,6 +13,7 @@ export interface SourcePayActionInput {
   book: BookMetadata
   chapter: ChapterIdentity & { title?: string; variable?: string; rawFields?: Record<string, unknown> }
   payAction?: string
+  workflowActions?: Readonly<Record<string, WorkflowAction>>
   signal?: AbortSignal
 }
 
@@ -36,6 +37,7 @@ export async function executePayAction(ports: WorkflowPorts, input: SourcePayAct
     bindings: { book: input.book, chapter: input.chapter, title: input.chapter.title ?? '', baseUrl: input.chapter.url ?? input.chapter.chapterUrl, result: null, src: null },
     baseUrl: input.chapter.url ?? input.chapter.chapterUrl,
     javascriptBudget: { timeoutMs: 60_000 },
+    ...(input.workflowActions === undefined ? {} : { workflowActions: input.workflowActions }),
     ...(input.signal === undefined ? {} : { signal: input.signal }),
   })
   if (output.state === 'cancelled') return actionFailure('cancelled', output.message ?? '购买操作已取消', diagnostics, trace)
@@ -56,6 +58,7 @@ export interface SourceCallbackInput {
   chapter?: ChapterIdentity & { title?: string; variable?: string; rawFields?: Record<string, unknown> }
   /** Android uses 60 seconds for book events and 30 seconds for source events. */
   timeoutMs?: number
+  workflowActions?: Readonly<Record<string, WorkflowAction>>
   signal?: AbortSignal
 }
 
@@ -73,6 +76,7 @@ export async function executeSourceCallback(ports: WorkflowPorts, input: SourceC
   const output = await executeWorkflowJavaScript(ports, input.source, configured, 'detail', 'content', trace, {
     bindings: { event: input.event, result: input.result ?? null, book: input.book ?? null, chapter: input.chapter ?? null },
     javascriptBudget: { timeoutMs: Math.max(1, Math.min(60_000, timeoutMs)) },
+    ...(input.workflowActions === undefined ? {} : { workflowActions: input.workflowActions }),
     ...(input.signal === undefined ? {} : { signal: input.signal }),
   })
   if (output.state === 'cancelled') return actionFailure('cancelled', output.message ?? '书源回调已取消', diagnostics, trace)

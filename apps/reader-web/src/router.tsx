@@ -18,6 +18,7 @@ const ResetPasswordPage = lazy(() => import('./pages/reset-password.tsx').then((
 const SearchPage = lazy(() => import('./pages/search.tsx').then((module) => ({ default: module.SearchPage })))
 const DiscoverPage = lazy(() => import('./pages/discover.tsx').then((module) => ({ default: module.DiscoverPage })))
 const SourcesPage = lazy(() => import('./pages/sources.tsx').then((module) => ({ default: module.SourcesPage })))
+const SourceLoginPage = lazy(() => import('./pages/source-login.tsx').then((module) => ({ default: module.SourceLoginPage })))
 const SettingsPage = lazy(() => import('./pages/settings.tsx').then((module) => ({ default: module.SettingsPage })))
 const ReadingSettingsPage = lazy(() => import('./pages/reading-settings.tsx').then((module) => ({ default: module.ReadingSettingsPage })))
 const ReaderEntryPage = lazy(() => import('./pages/reader.tsx').then((module) => ({ default: module.ReaderEntryPage })))
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
       <Route path="/search" element={<LazyPage searchBack><SearchPage /></LazyPage>} />
       <Route path="/discover" element={<LazyPage><DiscoverPage /></LazyPage>} />
       <Route path="/sources" element={<LazyPage backTo="/account/settings"><SourcesPage /></LazyPage>} />
+      <Route path="/sources/:sourceId/login" element={<LazyPage backTo="/sources"><SourceLoginPage /></LazyPage>} />
       <Route path="/books/:bookId/details" element={<LazyPage backTo="/"><BookDetailsPage /></LazyPage>} />
       <Route path="/books/:bookId/toc" element={<LazyPage backTo="/"><TocPage /></LazyPage>} />
       <Route path="/books/:bookId/sources" element={<LazyPage bookToc><BookSourcesPage /></LazyPage>} />

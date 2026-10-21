@@ -156,7 +156,7 @@ ExploreKind 构造默认 title 为 `""`、type 为 `"url"`，其他可空字段�
 
 ### 登录表单 RowUi
 
-原实体 `data/entities/rule/RowUi.kt` 包含 name（显示名，默认空串）、type（text/password/button/label/toggle/select，默认 text）、action（动作）、chars（允许空成员的选项数组）、default（初值）、viewName（动态名称）、style（ExploreStyle，对应 Android `FlexChildStyle`）、key（提交键）、hint（提示）、value（值）、options（字符串列表）、countdown（倒计时整数）。除 name/type 外构造默认 null。原始 loginUi 完整保留；控件属于低优先级登录协议。countdown 单位和动态动作参数需要登录调用点对照后启用，不能仅从字段名推断。
+原实体 `data/entities/rule/RowUi.kt` 包含 name（显示名，默认空串）、type（text/password/button/label/toggle/select，默认 text）、action（动作）、chars（允许空成员的选项数组）、default（初值）、viewName（动态名称）、style（ExploreStyle，对应 Android `FlexChildStyle`）、key（提交键）、hint（提示）、value（值）、options（字符串列表）、countdown（倒计时整数）。除 name/type 外构造默认 null。原始 loginUi 完整保留。reader-web 已对常用静态/动态控件提供表单渲染、`key` 提交、输入 action 防抖和正倒计时冷却模拟；该冷却按 Web 秒级计时处理，`viewName/style` 布局和 Android 动态动作参数仍需同输入 golden 对照，不能把模拟行为写成 Android 完全等价。
 
 ## 2. 列表与搜索规则
 

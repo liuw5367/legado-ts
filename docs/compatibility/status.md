@@ -54,19 +54,19 @@
 | --- | --- | --- | --- | --- | --- |
 | OPEN-01 | 宿主能力 | `@webjs`、WebView、资源嗅探和浏览器交互 | 部分实现（core 已保留全部方法和可注入 platform；默认 Node 仍能力缺失） | [兼容矩阵](evidence-matrix.md)；[宿主接口](../../packages/source-core/docs/host-ports.md)；`source-runtime-platform.test.ts` | 真实浏览器/WebView/验证码执行器、Cookie 传递、暂停恢复和 Android fixture 齐备 |
 | OPEN-02 | 书源能力 | 结构化段评读取、旧式段评网页桥接和段评写入 | 部分实现（声明式/JS 摘要、详情、回复和 Web API 已实现；旧式网页桥接与写入仍未实现） | [段评流程](../upstream/android/flows/review-flow.md)；`CAP-REVIEW`；`review.test.ts` | 网页桥接会话安全和写入协议分别完成或明确返回能力缺失，并补 Android golden |
-| OPEN-03 | 书源能力 | 付费动作、购买后刷新、书源事件和自定义按钮 | 部分实现（core 已提供 payAction/callBackJs 执行入口；应用触发、购买后刷新和按钮去重仍待接入） | [媒体和交互流程](../upstream/android/flows/adjacent-source-flows.md)；`review.test.ts` | 触发、认证、取消、重复点击、默认动作和宿主 UI 动作有版本化契约 |
-| OPEN-04 | 宿主能力 | 验证码、复杂登录 UI 和多步骤登录 | 未实现 | [Android URL 与请求规则](../upstream/android/rules/url-request-rules.md)；WebView 入口 | 登录交互、凭据保存、清理和失败恢复完成应用与宿主验收 |
+| OPEN-03 | 书源能力 | 付费动作、购买后刷新、书源事件和自定义按钮 | 部分实现（core 已提供 payAction/callBackJs；reader-web 已提供人工触发 API、源版本校验、结构化结果和进程内 operationId 幂等保护） | [媒体和交互流程](../upstream/android/flows/adjacent-source-flows.md)；`review.test.ts`；`apps/reader-web/tests/source-actions.test.ts` | 购买后刷新、取消/失败 UI、多实例幂等和自定义按钮消费仍需应用接入；真实购买不在自动测试内 |
+| OPEN-04 | 宿主能力 | 验证码、复杂登录 UI 和多步骤登录 | 部分实现（静态 RowUi、动态 loginUi v2、state 重绘、表单 key、输入 action 防抖、按钮倒计时、人工 action 和动作事件已提供；浏览器/验证码能力仍缺） | [Android URL 与请求规则](../upstream/android/rules/url-request-rules.md)；WebView 入口；`apps/reader-web/tests/source-login.test.ts` | 登录交互、凭据保存、清理和失败恢复的 Web 表单路径已覆盖；真实网页登录、验证码和 Android golden 仍需宿主验收 |
 | OPEN-05 | 应用入口 | 多源 `ReaderApplication.search`、书源全流程 `checkSources` | 应用已实现待验证；core 不提供该门面 | [reader-cli 实现](../../apps/reader-cli/docs/implementation.md)；[校验流程](../upstream/android/flows/source-check-flow.md)；`apps/reader-cli/tests/source-check.test.ts` | 继续补齐 Android 同输入 golden，并在跨端验证后记录完成证据 |
 | OPEN-06 | 应用状态 | `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` | 未实现 | [架构边界](../architecture/goals-and-boundaries.md)；[归档设计](../archive/source-management-and-state.md) | 用户归属、版本冲突、凭据隔离、任务恢复和删除副作用有应用层契约 |
-| OPEN-07 | 请求差异 | Android 独立登录凭据头与同站注入 | 已实现待验证 | [差异登记](known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts` | Android 同输入 golden；应用 SecretStore 的保存、删除清理和登录 UI 仍不属于当前包 |
+| OPEN-07 | 请求差异 | Android 独立登录凭据头与同站注入 | 部分实现（请求注入和 reader-web 登录 UI/action 已接入；凭据响应脱敏） | [差异登记](known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts`、`apps/reader-web/tests/source-login.test.ts` | Android 同输入 golden；SecretStore 级删除清理、多实例恢复仍需应用契约 |
 | OPEN-08 | 生命周期差异 | `concurrentRate` 非法配置和源生命周期清理 | core/Node 已实现待验证；应用删除边界分层记录 | [差异登记](known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts` | Android 同输入 golden；各应用分别补齐源编辑、覆盖、删除和重建 session 的集成证据 |
 | OPEN-09 | JavaScript bridge | 平台方法和逐重载兼容 | 部分实现（core/Node 已注册全量 Android 方法名并补齐纯计算、网络、状态、文件、字体、归档、繁简、设备/配置和跨执行并发入口；真实交互平台仍缺） | [差异登记](known-divergences.md)，D14；[宿主方法盘点](capabilities.md#宿主方法补充盘点)；`source-runtime-platform.test.ts`、`source-rule-host.test.ts`、`source-file-host.test.ts` | 真实书源方法逐重载通过 Android/TS golden；WebView、浏览器、验证码、媒体仍需平台验收或保持明确差异 |
-| OPEN-10 | 跨端验证 | 已实现解析和工作流的 Android 同输入 golden | 已实现待验证 | [一致性测试基线](conformance-tests.md)；TypeScript 已执行 `HTML-FLOW-001`、`JSON-FLOW-001`、`XPATH-CONTENT-001`、`JS-TOC-001`、`TOC-EDGE-001`、`CONTENT-EDGE-001` | 同一脱敏 fixture 在 Android 和 TypeScript 两侧通过稳定输出比较；当前 Android 仍为 `not-run` |
+| OPEN-10 | 跨端验证 | 已实现解析和工作流的 Android 同输入 golden | 部分实现（新增 `scripts/compare-source-conformance.mjs`；TS fixture 会实际执行，Android 输出缺失明确报告 `not-run`） | [一致性测试基线](conformance-tests.md)；`node scripts/compare-source-conformance.mjs`；TypeScript 已执行六条离线 case | 同一脱敏 fixture 在 Android 和 TypeScript 两侧通过稳定输出比较；当前 Android runner/输出仍为 `not-run`，不得将比较命令的缺失输出记为通过 |
 | D1 | 接口差异 | 搜索与流程入口命名 | 有意保留 | [差异登记](known-divergences.md)，D1 | 入口统一，或文档完成迁移并通过包入口测试 |
 | D2 | 接口差异 | 端口与宿主门面命名 | 有意保留 | [差异登记](known-divergences.md)，D2 | 宿主门面和结果契约统一，或所有现行入口完成文档迁移 |
 | ~~D3~~ | 文档差异 | ~~能力清单中过时的“未实现”表述~~ | 已完成（2026-09-28，历史记录；本行不作为本轮验证证据） | [差异登记](known-divergences.md)，D3；兼容矩阵已区分真实未实现能力与已有实现待 golden 项 | 能力清单、矩阵和实现状态不再使用过时表述 |
 | D4 | 能力差异 | 尚未实现的公开能力 | 按 core、宿主和应用分别登记 | [差异登记](known-divergences.md)，D4 | 每项缺失能力都有独立状态、宿主边界和可识别错误 |
-| D5 | 请求差异 | Android 独立登录凭据头 | 已实现待验证 | [差异登记](known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts` | Android 同输入 golden；应用 SecretStore 的保存、删除清理和登录 UI 仍不属于当前包 |
+| D5 | 请求差异 | Android 独立登录凭据头 | 部分实现、待 Android 验证 | [差异登记](known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts`、`apps/reader-web/tests/source-login.test.ts` | Android 同输入 golden；SecretStore 级删除清理、多实例恢复仍不属于当前包 |
 | D6 | 请求差异 | 默认 User-Agent | 已实现待验证 | [差异登记](known-divergences.md)，D6；`source-session.test.ts`、`network.test.ts`、`source-request.test.ts` | Android 同输入 golden；Node 默认值与显式覆盖、source/URL Header 优先级已有测试 |
 | D7 | 生命周期差异 | `concurrentRate` 生命周期 | core/Node 已实现待验证 | [差异登记](known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts` | Android 同输入 golden；按应用边界补编辑、覆盖、删除和重建源测试 |
 | D8 | 安全差异 | HTTP、协议和本地地址限制 | 有意保留 | [差异登记](known-divergences.md)，D8 | 安全审查完成并明确兼容边界 |
@@ -75,7 +75,7 @@
 | D11 | 生命周期差异 | `subContent` 取消语义 | 差异待处理 | [差异登记](known-divergences.md)，D11 | 主正文、诊断和最终状态完成 Android 对照与取舍记录 |
 | D12 | 二进制差异 | 封面解密 InputStream 互操作 | 部分实现 | [差异登记](known-divergences.md)，D12 | 所需重载和 bytes 边界都有跨端 fixture |
 | D13 | 二进制差异 | 图片脚本执行预算 | 部分实现 | [差异登记](known-divergences.md)，D13 | 预算、取消、资源释放和大输入行为都有跨端 fixture |
-| D14 | JavaScript bridge | JavaScript bridge 逐重载覆盖 | 部分实现 | [差异登记](known-divergences.md)，D14 | 真实书源方法逐重载通过，未支持方法明确返回能力状态 |
+| D14 | JavaScript bridge | JavaScript bridge 逐重载覆盖 | 部分实现 | [差异登记](known-divergences.md)，D14；SourceLoginJsExtensions 纯动作入口、book/chapter 媒体更新和变量已有 Node 回归 | 真实书源方法逐重载通过；剪贴板、搜索/书架、图片/导航 UI 仅记录结构化动作，平台 UI、浏览器和 Android golden 仍待验证 |
 | D15 | 应用边界差异 | 目录统计标题的应用替换规则 | 有意保留 | [差异登记](known-divergences.md)，D15；`toc-reconcile.ts` | source-core 保持纯函数；应用提供标题替换规则快照或投影回调后再做跨端 fixture |
 | D16 | JS 源行为差异 | JS 源 URL 的公开身份与脚本可见形式 | 已实现待 Android golden | [差异登记](known-divergences.md)，D16；`javascript-projection.ts`、`discovery.ts`、`reading.ts`、`source-host-flow.test.ts` | 已有 Node 回归覆盖 raw bookUrl/tocUrl/baseUrl 与详情身份字段白名单；待同输入 Android runner/golden |
 | D17 | JS 源行为差异 | JS 详情 `updateTime` 扩展字段 | 有意保留 | [差异登记](known-divergences.md)，D17；`workflows.test.ts` | Android 当前 marshaller 不接收该字段；TypeScript 保留已有字段并按允许差异处理 |
@@ -105,6 +105,7 @@
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 差异待处理 | 差异登记 D41；69 项原回归通过仍有新缺口 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；回归覆盖 IPv6 host/port/origin | 无 base/非法输入、默认端口和完整 URL 属性仍待 Android golden |
 | D43 | 文件对象 | File 方法和即时状态 | 部分实现（第四阶段） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles，并每次刷新宿主元数据；`cache.delete` 会清理对应 `cacheFile` 映射；Node 文件回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
+| D44 | 应用交互 | 登录 UI/action、书源事件和付费动作的应用入口 | 部分实现（第六阶段） | 差异登记 D44；reader-web 已提供静态/动态登录 API 与页面、动作事件、payAction/callBackJs 人工触发、源版本校验和进程内幂等；密码/token 脱敏；`source-login.test.ts`、`source-actions.test.ts` | 购买后刷新、自定义按钮消费、多实例幂等、真实网页登录/验证码和 Android golden 仍待验证；真实远程动作不自动执行 |
 
 ## 完成时如何更新
 
