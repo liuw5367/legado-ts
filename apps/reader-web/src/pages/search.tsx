@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/page-header.tsx'
 import { usePageActivity, usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import { searchMatchRank } from '@legado/source-core'
@@ -6,7 +7,6 @@ import { candidateSelectionKey, selectedCandidateIndex } from '../lib/search-sel
 import { useBookSearch } from '../lib/use-book-search.ts'
 import { formatSourceRuleDateTime } from '../lib/time-format.ts'
 import { pageReturnState } from '../lib/page-navigation.ts'
-import { PageBackButton } from '../components/page-back-button.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { PrecisionToggle } from '../components/precision-toggle.tsx'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
@@ -153,7 +153,7 @@ export function SearchPage() {
 
   return <section className="page-stack page-narrow search-page">
     {cancellationPending ? <p className="error" role="alert">搜索取消尚未完成。<Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></p> : null}
-    <div className="page-heading compact-heading"><PageBackButton fallback={targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : '/discover'} /><div><h1>搜索书籍</h1><p className="muted">{status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者'}</p></div><Link className="button secondary small" to="/sources">管理书源</Link></div>
+    <PageHeader backTo={targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : "/discover"} title="搜索书籍" description={status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者'} actions={<Link className="button small page-action" to="/sources">管理书源</Link>} />
     <form className="search-panel" onSubmit={(event) => void submitSearch(event)}>
       <div className="search-row"><label className="sr-only" htmlFor={`${page?.id ?? 'search'}-keyword`}>关键词</label><Input className="search-input" id={`${page?.id ?? 'search'}-keyword`} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={saving !== null || (status !== 'loading' && keyword.trim().length === 0)} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div>
 
@@ -186,7 +186,11 @@ function SearchResult({ group, selectedIndex, expanded, disabled, saving, source
     candidateDomains.set(info.key, domain)
   }
 
-  return <article className="result-card">
+  return <article className="result-card" onClick={(event) => {
+    // 操作按钮和来源选择保持独立，卡片其余区域复用详情打开流程。
+    if (disabled || saving || !(event.target instanceof Element) || event.target.closest('button,a,input,select,label')) return
+    onSave('details')
+  }}>
     <button type="button" className="result-detail-cover" aria-label={"查看详情：" + group.name} disabled={disabled || saving} onClick={() => onSave('details')}><BookCover name={group.name} coverUrl={selected.item.candidate.coverUrl} size="result" /></button>
     <div className="result-card-body">
       <div className="result-card-heading">

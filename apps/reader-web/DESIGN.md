@@ -17,7 +17,7 @@ Legado Reader uses a quiet ink-on-paper direction for long reading sessions: war
 
 The system theme resolves to light or dark through `prefers-color-scheme`; an account setting can override it.
 
-Page titles use 18px, section headings 14px, and supporting text 12px. Short title and subtitle pairs sit on one row when space permits. Navigation, return, and reader controls share Lucide outline icons.
+Page titles use 18px, section headings 14px, and supporting text 12px. Ordinary pages and authentication cards use PageHeader: an optional back control, a flexible title and optional description stacked vertically, and optional actions on the right. Root tabs omit the back control. Reader overlays keep their dedicated toolbar. Navigation, return, and reader controls share Lucide outline icons.
 
 ## 3. Typography rules
 
@@ -25,9 +25,9 @@ The stack is `ui-sans-serif`, system UI, and `PingFang SC`/`Noto Sans SC` fallba
 
 ## 4. Component styling
 
-Page actions use the theme primary fill, content-based width, 10px horizontal padding, a 6px icon gap, 16px icons, 13px labels, and a minimum 44px hit height. Two-character actions include an icon. Icon-only actions have accessible names and title hints. Book detail actions follow shelf, directory, source switch, then reading order. The directory source select shrinks beside a non-wrapping action group; top and bottom scroll actions use icons only.
+Page actions use the theme primary fill, content-based width, 10px horizontal padding, a 6px icon gap, 16px icons, 13px labels, and a 36px control height. Text inputs and selects use the same 36px height, 13px font, 20px line height, and 10px horizontal padding. Book detail actions use a two-column, two-row grid with 44px buttons; reading uses primary fill and the other actions use the secondary outline. Two-character actions include an icon. Icon-only actions have accessible names and title hints. Book detail actions follow shelf, directory, source switch, then reading order. Detail covers are 84px by 112px; the adjacent metadata column distributes only available fields across at least that height, allowing long text to grow. The directory source select shrinks beside a non-wrapping action group; top and bottom scroll actions use icons only.
 
-Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-pixel outline for secondary actions. Press feedback is a small downward transform, and focus uses a visible primary outline. Cards are reserved for forms, settings, source panels, and result rows. Inputs inherit the current surface and foreground tokens. Binary search filters such as “精确” use a compact outlined toggle with the primary color and a quiet primary-tinted surface when selected.
+Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-pixel outline for secondary actions. Press feedback is a small downward transform, and interactive keyboard focus uses a visible primary outline. Page navigation still focuses/restores content for accessibility, while non-interactive page headings suppress the default outline. Cards are reserved for forms, settings, source panels, and result rows. Inputs inherit the current surface and foreground tokens. Binary search filters such as “精确” use a compact outlined toggle with the primary color and a quiet primary-tinted surface when selected.
 
 Loading states use a 28px ring with a 2px border, a primary-colored leading edge, and a 0.9s linear rotation. Supporting text is 14px with a 12px gap below the ring; an optional outlined secondary button labelled “返回页面”, without an arrow icon, sits 20px below the text with a 44px minimum hit area. Center blocking states in the available content area, or the safe viewport for startup, authentication, and reading. Inline updates use a 16px ring beside 12px text and retain existing content. Do not add a card, shadow, or entrance animation. Disable rotation for `prefers-reduced-motion`. The inline HTML startup styles use the same dimensions and system theme until account settings become available.
 
@@ -55,7 +55,7 @@ Light surfaces use a small neutral shadow only where a card needs separation. Da
 
 ## 8. Responsive behavior
 
-The supported narrow layout is 320px and up. Header secondary text hides below 720px, controls wrap, and range inputs become full width in the settings page. Interactive controls keep a 44px or larger hit area. Desktop uses the same structure with more breathing room, not a separate visual language.
+The supported narrow layout is 320px and up. Header secondary text hides below 720px, controls wrap, and range inputs become full width in the settings page. Ordinary form controls and buttons use a compact 36px height; book detail actions remain 44px. Desktop uses the same structure with more breathing room, not a separate visual language.
 
 ## 9. Agent prompt guide
 
@@ -75,3 +75,5 @@ Example prompts:
 1. Add a source detail panel using `var(--card)`, a `0.75rem` radius, a `1px solid var(--border)` outline, and a two-column layout that collapses below 720px.
 2. Add a reader control using `var(--foreground)` labels, `var(--muted)` helper copy, and a `var(--primary)` range accent. Keep the hit area at least 44px.
 3. Add an empty reading state with a dashed `var(--border)` outline, 2rem padding, and one direct action link in `var(--primary)`.
+
+Search result cards open details from non-interactive areas. Action buttons, source selectors and labels, and introduction expand/collapse controls retain their independent actions. A keyboard accessible detail button remains available.

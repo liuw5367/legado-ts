@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/page-header.tsx'
 import { useEffect } from 'react'
 import { Download, ChevronRight, LogOut, LockKeyhole, Upload } from 'lucide-react'
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
@@ -56,7 +57,7 @@ export function SettingsPage() {
   }
 
   return <section className="page-stack page-narrow settings-page">
-    <div className="compact-heading"><h1>设置</h1><p className="muted">应用偏好会跟随当前账号同步。</p></div>
+    <PageHeader title="设置" description="应用偏好会跟随当前账号同步。" />
     <section className="settings-account" aria-labelledby="account-settings-title">
       <div className="settings-account-info"><h2 id="account-settings-title">账号</h2><p>{user?.email ?? '当前账号'}</p><span className="muted small">当前登录账号</span></div>
       <div className="settings-account-actions"><Link className={buttonVariants({ variant: 'secondary', className: 'settings-account-action' })} to="/account/password"><LockKeyhole aria-hidden="true" />修改密码</Link><Button className="settings-account-action settings-logout-button" type="button" onClick={() => void logout()}><LogOut aria-hidden="true" />退出登录</Button></div>

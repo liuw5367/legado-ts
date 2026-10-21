@@ -1,5 +1,5 @@
+import { PageHeader } from '../components/page-header.tsx'
 import { useId } from 'react'
-import { PageBackButton } from '../components/page-back-button.tsx'
 import { Select } from '../components/ui/select.tsx'
 import { useReaderSettings } from '../lib/settings-context.tsx'
 import type { ApiBookshelfSortMode } from '../lib/api.ts'
@@ -9,7 +9,7 @@ export function GeneralSettingsPage() {
   const { settings, saving, error, updateSettings } = useReaderSettings()
 
   return <section className="page-stack page-narrow general-settings-page">
-    <div className="toc-heading"><PageBackButton fallback="/account/settings" /><div className="toc-heading-main"><h1>通用设置</h1><p className="muted">调整书架和应用的通用偏好。</p></div></div>
+    <PageHeader backTo="/account/settings" title="通用设置" description="调整书架和应用的通用偏好。" />
     <section className="settings-detail-section" aria-labelledby={titleId}>
       <h2 id={titleId}>书架</h2>
       <div className="reader-setting-row general-setting-row">
