@@ -55,7 +55,7 @@
 | CAP-SCHEMA | 02 的全部 BookSource/rule 字段、RowUi | IMP-005、EDIT-005 | 字段已核对；登录动态协议仍有待核实项 |
 | CAP-RULE | 04 的模式、链、变量、替换及转换 | SCH、VAR | `compileRule`/`evaluateRule` 已实现；golden 对照未全量运行 |
 | CAP-REQUEST | 05 请求/响应/Cookie/DNS/代理 | URL | `createRequestPlan` 已实现；部分选项待对照 |
-| CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP | `searchBooks`/`discoverBooks` 已实现；exploreScreen 仅保留 |
+| CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP | `searchBooks`/`discoverBooks`、动态分类和五类控件已有实现；InfoMap 保存和选择快照差异见 D31/D40；exploreScreen 仅保留，当前未发现 Android 执行入口 |
 | CAP-INFO / CAP-TOC / CAP-CONTENT | 07 至 09 | FLOW-004 至 012 | `loadBookDetails`/`loadTableOfContents`/`loadChapterContent`/`loadChapterContentBatch` 已实现；Node 批量测试通过，需跑 Android 对照 |
 | CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008 至 010 | QuickJS 宿主已接入规则内 JS；Rhino 逐返回值对照与引擎互操作未全量验收 |
 | CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取、`executePayAction` 和 `executeSourceCallback` 有 core 入口，购买刷新、段评写入和交互宿主仍缺 |
@@ -81,15 +81,16 @@
 | 归档 | unzipFile、un7zFile、unrarFile、unArchiveFile、getZipStringContent/getZipByteArrayContent、getRarStringContent/getRarByteArrayContent、get7zStringContent/get7zByteArrayContent | `NodeArchiveHost` 已实现 gzip/zip 的限制解包；RAR/7z 通过宿主 `bsdtar`/`archiveCommand` 执行并沿用路径、条目、输出和压缩比预算，命令缺失返回明确能力错误 |
 | 字体 | queryBase64TTF、queryTTF、replaceFont | `NodeFontHost` 与 `replaceFont` 桥已实现；获取字体 → 解析轮廓 → Unicode 映射 → 替换；当前仅 TrueType/sfnt cmap 0/4/6 与 glyf，WOFF/WOFF2/CFF 仍明确不支持 |
 | 并发 | singleFlight、lock、tick | `NodeSourceConcurrency` 在 session 内跨 QuickJS execution 共享等待队列、singleFlight 跳过、取消/超时、tick 溢出和 4096 LRU；跨进程/多实例锁仍由应用宿主决定 |
-| 浏览器/交互 | webView、webViewGetSource、webViewGetOverrideUrl、startBrowser、startBrowserAwait、showBrowser、getVerificationCode、openVideoPlayer、openUrl、getWebViewUA | 需要真实宿主协议；低优先级保留，不能以 fetch 等价替代 |
+| 浏览器/交互 | webView、webViewGetSource、webViewGetOverrideUrl、startBrowser、startBrowserAwait、showBrowser、getVerificationCode、openVideoPlayer、openUrl；纯值 getWebViewUA | 浏览器/交互需要真实宿主协议，不能以 fetch 等价替代；getWebViewUA 已提供可覆盖的默认字符串，不需要浏览器 |
 | 日志/设备/应用 | toast、longToast、log、logType、randomUUID、androidId、refreshBookInfo、refreshBookToc、refreshContent、getReadBookConfig、getReadBookConfigMap、getThemeMode、getThemeConfig、getThemeConfigMap | Node 平台提供受 seed 派生的非物理 deviceID、阅读/主题配置和 source 导航上下文；日志、刷新和 UI 动作由 `capabilities` 注入，未注入时明确诊断 |
 | 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、evalLoginUiV2/evalLoginActionV2（登录 UI/action 的宿主方法名） | Node session 已提供源级请求头、登录头/Cookie、登录信息、变量和键值的会话隔离；动态 loginUi 默认值按 Android 调用链执行并缓存；`putConcurrent` 更新源限流，编辑/覆盖/删除后清理 source key 仍属应用生命周期 |
 
 Node QuickJS 通过 `NodeSourceConcurrency` 在同一 source session 的不同 execution 之间共享 `singleFlight`/`lock` 等待和 `tick` LRU；它仍不是跨进程或跨实例分布式锁。多实例 Web 部署必须由应用宿主明确锁的范围，不能把 Android 进程内锁误称为分布式锁。
 
-## 尚不能进入完整实现验收的项目
+## 尚不能进入完整兼容验收的项目
 
-- JS 引擎同步桥接、Rhino 互操作及部署：QuickJS 已接入；同步 `java.ajax` 外观与 Rhino 返回值逐项对照仍按 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md) 专项案例验证；未通过前不承诺完整 JS 兼容。
-- 编码/加密工厂返回对象、字体、文件与 zip/gzip 归档：宿主已实现（`NodeSourceFileHost` / `NodeFontHost` / `NodeArchiveHost` / 加密请求桥），对应 B/D 负责人补全原子案例与 Android 对照；RAR/7z 和平台交互仍是能力缺失，当前登记不等于规格完成。
-- exploreScreen、RowUi 动态动作细节、段评写入：对应 D 负责人追踪调用点；无入口则保持字段保留，不擅自新增请求语义。
-- 设备与阅读器绑定的替代行为：应用需求尚未定义，保留 capability-missing；任何舍弃须用户审核。
+- 方法名、继承成员、重载和返回对象必须分开核验。本轮具体缺口见[差异登记 D18～D43](known-divergences.md#android-与教程重新核对2026-10-21)，涵盖解析器方言、对象成员、请求实例、跨请求状态和文件隔离；仅验证 `typeof method === 'function'` 不能关闭能力项。
+- QuickJS 的同步 bridge 已存在；JavaImporter、通用 Packages/JavaAdapter、Java String 身份和完整 JVM 互操作仍不等价。受控对象可单独实现，真实 JVM/Android 服务不能用 DTO 代替。
+- 文件、字体、加密及 zip/gzip 已有实现；RAR/7z 有可选 bsdtar/archiveCommand 路径，外部命令不可用时仍为能力缺失。下载请求语义、文件账号隔离及嵌套返回对象仍须分别验收。
+- 动态发现和五类控件已存在，但 InfoMap 保存、删除/TTL 和分页选择版本仍有差异。复杂登录、应用动作、旧式段评网页桥接和段评写入继续保留目标边界；不能根据字段存在自行推断 Android 写入流程。
+- 设备/配置已有 Node 替代值，getWebViewUA 已有默认值；替代值与真实设备或当前阅读配置不同，应用未注入不能写为宿主已验证。Android 同输入 golden 未运行的能力继续标记待验证。

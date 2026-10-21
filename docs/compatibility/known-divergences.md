@@ -25,3 +25,67 @@
 | D15 | 目录统计标题的应用替换规则 | Android `BookChapterList.updateBookTocInfo` 通过 `ContentProcessor.getTitleReplaceRules()` 和用户 `useReplaceRule` 计算 `durChapterTitle`/`latestChapterTitle` 的展示值 | source-core `reconcileTableOfContents` 只接收章节和书籍投影，使用原始 `Chapter.title` 生成 `TocBookPatch`；reader-cli 当前没有 Android 的应用替换规则数据库端口 | 目录统计字段可能保留原始标题，正文/目录章节本身不受影响 | 保持核心纯函数和应用边界；未来宿主提供标题投影回调或替换规则快照后再补跨端 fixture，不在 source-core 猜测用户数据库语义 |
 | D16 | JS 源 URL 的公开身份与脚本可见形式 | Android `JsSourceMarshaller` 保留 JS 返回的搜索 `bookUrl`、详情 `coverUrl/tocUrl` 和章节 `baseUrl` 原字符串；相对地址不会在 marshaller 中规范化，章节非卷 URL 再按 `book.tocUrl` 解析 | TypeScript 对外候选和 `chapterUrl` 继续使用绝对身份；`javascriptBookProjection`、`javascriptChapterProjection` 在 `getBookInfo`、`getChapters`、`getContent` 中恢复 Android 可见的 raw `bookUrl/tocUrl/baseUrl`，详情返回的 `bookUrl` 仍按 Android 白名单忽略 | 脚本观察到的地址字符串与持久化身份不同；书源若依赖相对 `tocUrl` 的 URL 解析，仍受 Android 的无效相对基准行为影响，TS 的 `chapterUrl` 仍提供可请求绝对地址 | 保留规范化候选身份，避免相对地址进入聚合、持久化和缓存 key；把 raw 字符串限制在脚本投影和 `rawFields`，并用 SourceRuleHost 回归覆盖。Android 同输入 golden 仍待 runner 执行 |
 | D17 | JS 详情 `updateTime` 字段 | 当前 Android `JsSourceMarshaller.mergeBookInfo` 的白名单没有 `updateTime`，返回值不会写入 `Book` | TypeScript 声明式详情和 JS 详情均保留 `updateTime`，供调用方展示或排序；该字段不参与书籍身份和目录请求 | 同一详情脚本在 Android 与 TypeScript 的附加字段集合不同；依赖该字段的 TS 调用方无法直接把结果当作 Android 字段集合 | 有意保留 TypeScript 扩展，按字段允许差异处理；已有工作流回归覆盖，未来若 Android 增加白名单再调整投影 |
+
+## Android 与教程重新核对（2026-10-21）
+
+本节以 TS `82ce5368eabcd267c418e7ab14d4dd71b2c90f6b`、外层 Android `32a87b253e7cc28273c3850de86242caac83f1fd` 为代码基线。核对时 Android 的 `app/src/main/java` 和 `app/src/main/assets/web/help/md` 没有未提交修改；父仓其他目录已有变更，未修改这些文件。本文中的 Android 路径均相对外层仓库，TS 路径相对本仓。
+
+教程来源有两层：[社区教程快照](../upstream/tutorials/legado-source-rules.md)（标注更新于 2024-02-27，SHA-256 `11247a43543981fd00d5309d07ecfc4f768b07b0a9586d8b735cac7e91e3493f`），以及 Android 内置 `app/src/main/assets/web/help/md/jsHelp.md`（`6de3df703fbe012671e23694c3cf7e2660babfab299486dca4fb228bc0b509a2`）、`ruleHelp.md`（`d5f4821f9b573bfe04d58f9b13cd605d7a2298b09af7a9b2a94b72619d06a0d3`）。采用本地完整快照，没有用网站最新版替换对照版本。教程与源码冲突时采用 Android 当前源码，并记录教程旧接口。
+
+结论：方法名登记和单端测试通过不能证明完整兼容。本轮发现了普通 HTML/JSON 规则、对象方法、状态恢复和下载请求的实际缺口；它们不能归因于没有真实 WebView。以下“已复现”只表示 TypeScript 侧最小输入已执行并观察到差异；Android 预期来自所列源码和教程，尚未运行同输入 golden。“源码确认”表示已核对两端控制流，尚未执行该项组合输入。
+
+### 新增差异事实
+
+| 编号 | Android/教程契约与证据 | 当前 TypeScript 行为及证据 | 影响、证据等级与处理方向 |
+| --- | --- | --- | --- |
+| D18 | `AnalyzeByJSoup.kt:127` 直接使用 Jsoup 选择器；教程搜索示例含 `p:eq(2)`、`p:eq(4)` | `packages/source-node/src/html.ts:22` 直接交给 css-select；`:eq`、`:lt`、`:matchesOwn`、`:containsOwn` 均报 `Unknown pseudo-class` | 已复现；搜索/发现列表可直接失败。应覆盖 Jsoup 选择器语义及组合位置，不能只在现有书源中查找后逐个替换 |
+| D19 | `AnalyzeByJSoup.kt:224` 使用 `Element.text()`、`ownText()`、`Elements.outerHtml()`，属性结果跳过空值并去重 | `html.ts:39` 使用 `textContent`，直接文本拼接保留原始空白；`html/all` 按节点输出，序列化与 Jsoup 不同 | 已复现 `<div>a <b>b</b><p>c</p><script>secret()</script> d</div>` 得到 `a bcsecret() d`。应对齐文本空白、块间隔、script/style、整组 HTML 和属性去重；HTML 修复算法的所有畸形输入尚未穷举 |
+| D20 | `AnalyzeByJSonPath.kt:18` 使用 Jayway JsonPath，包含其函数及过滤表达式体系 | `packages/source-node/src/jsonpath.ts:8` 使用 jsonpath-plus safe evaluator；`$.items.length()` 返回空，`=~ /.../i` 过滤报错 | 已复现；“支持 JSONPath”需要注明方言。应补函数、正则过滤和缺失/null/列表转换契约；不能启用任意 JS eval 解决差异 |
+| D21 | `AnalyzeRule.kt:544`、`AnalyzeByRegex.kt` 使用 Java/Kotlin 正则和 Matcher 替换 | `rules/pattern-guard.ts:88`、`source-runtime.ts:1234` 使用 ECMAScript RegExp/replace；Java 内联 flags、`\\Q…\\E`、占有量词、字符类交集及替换字符串转义不保证等价；无效正则还可能进入字面替换 | 源码确认；应逐语法登记可转换项，无法表达的 Java 语法明确诊断；安全长度/复杂度限制继续保留。与 D8、D13 的安全取舍分开 |
+| D22 | `AnalyzeUrl.kt:174,294` 的脚本可操作当前 `java.url`、`headerMap`；内置 jsHelp 的 AnalyzeUrl 节还列出 `initUrl/getHeaderMap/getStrResponse/getResponse` | `workflows/source-request.ts:424,543` 只按脚本返回文本改写 URL；规则宿主中的 `java` 没有 AnalyzeUrl 实例状态或重取响应方法 | 已复现教程的 `java.url=java.url+'tail'` 请求到 `/undefinedtail`，`java.headerMap.put` 报错。登录检测后重新认证并重取响应的路径也不完整；应提供有界、上下文专属的请求对象 |
+| D23 | `AnalyzeRule.kt:104,118,125,302,308,867,896,985,1010` 有 setContent/baseUrl/redirectUrl、getString 重载、setLocal/evalJS 和刷新助手；源码中显式 null 内容回退当前 content | `source-runtime.ts:1305,1336` 未暴露 setBaseUrl/setRedirectUrl/setLocal/java.evalJS/java.reGetBook/java.refreshTocUrl；`getString(rule,true)` 将布尔当内容；null 与 undefined 分派不同 | 方法存在性及布尔重载已复现；应按阶段恢复实际公开面，保留全局刷新助手兼容入口，区分 unescape 与 URL 标志，避免把非当前阶段能力伪装成可用 |
+| D24 | BaseSource 返回 Java Map，AnalyzeRule 返回 Java List/Jsoup Element/Elements；教程明确使用 `source.getLoginInfoMap().get(key)` | `source-runtime.ts:1295,1304` 返回普通对象和数组；Map 的 get/put/putAll 等、List 的 get/size 等不完整，节点仅实现 attr/text/ownText/html/select/toString | `.get(key)` 调用失败、List get/size 缺失已复现；应逐返回对象核对读取、修改、null 和链式返回。Jsoup 节点 `.html()` 本身也不能直接等同规则末段 `@html` 的外层 HTML 语义 |
+| D25 | `JsSourceEngine.kt:107` 的 `sourceApi` 与 `source` 初始都绑定 BaseSource；`BookSource.kt:122` 等还有 getSearchRule/getExploreRule/getBookInfoRule/getTocRule/getContentRule | `source-runtime.ts:1296` 把 sourceApi 设置为源 JSON，缺少源方法；source 也没有上述规则访问器 | 已复现 sourceApi 方法均为 undefined；旧式整源 JS 使用 sourceApi 会失败。应持有原始源兼容对象，避免主脚本声明旧版 `source` 配置时破坏 sourceApi |
+| D26 | `CacheManager.kt:60,78,108,119` 支持对象内存缓存、bytes、数值读取和 `get(key,onlyDisk)` | `source-runtime.ts:1317` 强制 `String(value)`，忽略 onlyDisk；getInt/getLong/getDouble/getFloat/getByteArray 未暴露；`MemorySourceScriptCache` 仅存字符串 | 缺失方法已复现；对象、bytes 与磁盘读取行为源码确认。应区分普通/内存/文件缓存和可序列化值，保留 TTL；JVM 任意对象跨请求持久化不在可等价范围 |
+| D27 | `CookieStore.kt:26,55,102,122,138` 有 getKey/replaceCookie/cookieToMap/mapToCookie/clear，并按二级域合并 Cookie；setWebCookie 操作真实 WebView | JS cookie 只有 getCookie/setCookie/removeCookie（`source-runtime.ts:1303`）；NodeCookieStore 使用 tough-cookie 的域、路径、过期模型 | 方法缺失已复现；域/路径差异须专门 golden。应补纯转换和会话操作；WebView Cookie 同步仍依赖浏览器。账号间共享 Android 全局 Cookie 的行为不应复制到多用户服务 |
+| D28 | BaseSource 源键值、源字符串变量、登录信息/登录头和 CacheManager 在 Android 可跨页面调用保存 | `source-node/src/source-session.ts:39` 将上述数据存在局部 Map；Web `source-session.ts:50,79` 每次新建 session，只恢复/保存 cookies、普通 variables、infoMap、discovery，未恢复源状态和脚本缓存 | 已复现同一 session 内可读，snapshotVariables 后重建 session 则源键值/源字符串变量为空、登录头/信息/cache 为 null。应扩展现有加密快照和恢复接口；不能要求所有应用请求共享一个进程内实例 |
+| D29 | Android 文件缓存处于单用户应用私有目录；多用户 Web 必须自行提供用户隔离 | `source-file-host.ts:79,174,198` 默认共享临时 root、按 URL 摘要命名；读/删不核对调用源；Web 创建 session 未传 fileRoot | 源码确认；在共享文件系统部署中，同 URL 或已知相对路径可跨账号/书源读取、覆盖或删除。应优先按账号、源身份和版本划分 root；不读取已有用户文件进行验证，不从共享旧目录自动迁移身份不明数据 |
+| D30 | `JsExtensions.kt:520,985` 的下载和远程归档经 AnalyzeUrl，使用请求参数和认证；`getZipStringContent` 无 charset 时自动探测 | `source-file-host.ts:211,245` 下载直接 createRequestPlan，未拆解 URL options/执行动态 URL、source header 和完整登录逻辑；归档文本默认 UTF-8；cacheFile 独立 metadata，不受 cache.delete(md5(url)) 控制 | 源码确认；受认证的脚本、字体或文件下载和 GBK 压缩文本可能失败，教程缓存失效方式也不同。应复用源请求语义和缓存身份，避免新增一条独立下载解释链 |
+| D31 | `utils/InfoMap.kt` 提供无参 get、MutableMap 全部方法及 save(time,need)/saveNow；ExploreKind 有完整 FlexChildStyle | `source-runtime.ts:1293` 缺无参 get/remove/clear/putAll/contains 等；`discovery.ts:24,73` 仅记 saveRequested=true，忽略 time/need，捕获状态按合并处理；Web 持续保存 infoMap，未区分仅当前视图状态；`discover.tsx:118` 未映射 wrapBefore | 缺失方法已复现，保存/删除/布局为源码确认；save(60,false)、saveNow 保存时机及 set({}) 删除旧键不完整。应拆分工作状态、保存状态和 TTL，并保留 Web 可表达的换行布局 |
+| D32 | `JsEncodeUtils.kt:213` 的旧 `aesEncodeToString` 实际调用 decryptStr；`:240` 的 aesEncodeToBase64ByteArray 返回 Base64 文本的 bytes | `source-runtime.ts:1355` 前者执行加密，后者返回字符串 | 已复现；应按实际 Android 行为保留已废弃 API 的历史契约，不能按方法名“纠正”上游；ArgsBase64 方法也必须逐项按源码核对，不能只按注释推断 |
+| D33 | JsEncodeUtils 工厂返回有状态 Hutool 对象，null key 可生成随机密钥；AsymmetricCrypto 支持输入重载和默认算法行为 | `source-runtime.ts:1346,1351` 工厂仅传 config，缺 setIv/getSecretKey 等成员；Node 只支持部分 CBC/ECB + PKCS5/7，null key 失败；RSA padding 只用正则分成 PKCS1 或 OAEP，其余 transformation 未严格解释；字符串 decrypt 固定 Base64 | null key、NoPadding、成员缺失已复现，其余源码确认。应提供有状态且有生命周期的工厂，精确解析算法/模式/padding、输入编码、OAEP 参数和 key 格式；算法不支持时禁止悄悄换算法 |
+| D34 | 教程 JavaImporter/MessageDigest/StringBuilder 示例、jsHelp 的 Packages/importClass/JavaAdapter，以及 Java String 包装行为由 Rhino/JVM 提供；Android 本身还有 ClassShutter 限制 | QuickJS 未提供 JavaImporter/Packages.java/org/io 等 Java 类体系，仅有 StrResponse 路径；该路径当前用箭头函数，`new StrResponse(...)` 失败；Java String 方法/真假值/length 与 JS 字符串不同 | 已复现 JavaImporter 和 Java 方法不存在、StrResponse 不可构造。按最大覆盖原则实现受控响应、常用 Java 类/导入机制/接口回调和 Java 来源字符串包装；直接 JS 字符串与 Java 来源对象分开。通用 JVM/Android 系统依赖逐成员列出，不能据此放弃可独立模拟的纯方法；当前尚未实现这些新增模拟 |
+| D35 | `QueryTTF.java:913,993` 还有 getGlyfById、unicodeToGlyph/glyphToUnicode/unicodeToGlyphId；`JsExtensions.kt:1075` 支持本地字体路径 | 当前字体对象只有 4 个查询方法（`source-runtime.ts:1359`）；本地读取已存在，但按路径正则识别，未匹配形态会作为 Base64；Node glyphByUnicode 通过缺省 glyphId=0 读取轮廓，Android 直接查询 unicodeToGlyph | 源码确认；应补公开查询、核对全部受控路径形态，并用缺失 Unicode 对照 null/轮廓结果。WOFF/WOFF2/CFF 当前不支持，但本轮没有证据证明 Android QueryTTF 支持，不能据此列为 Android 独有缺陷 |
+| D36 | `JsExtensions.kt:735` 使用 Java SimpleDateFormat，繁简转换由 ChineseUtils 决定；日期 locale 依设备 | `source-rule-host.ts:35` 仅替换部分日期 token；其他 token 可能原样输出；runtime-platform 使用不同繁简词库并有覆盖表 | 源码确认；应测试 D/w/W/F/k/K/z、无效 pattern、locale/时区、毫秒、引号及词库差异。精确语言词库等价目前未验证，不能只凭常见示例称已完全一致 |
+| D37 | androidId/阅读与主题配置依赖 Android 设备和当前阅读器 | Node 默认设备 seed 是 `legado-node:${process.cwd()}`，同工作目录值相同；默认配置 `{}`、主题模式 `'0'`，Web 未注入实际账号和阅读配置 | 源码确认；这是替代值而非真实 Android 设备/配置。按账号和书源注入稳定可重置标识、映射现有设置；保留 getWebViewUA 默认字符串实现，不把它列为未实现或真实浏览器依赖 |
+| D38 | Android 导入和 UrlOption 解析使用 GSON 宽松格式；AnalyzeUrl 先严格、失败后尝试宽松并提示 | `codec/import.ts:95`、`normalize.ts:76` 和 URL 参数解析使用 JSON.parse，没有对应宽松回退 | 源码确认；含单引号/未引号键等历史书源可能不能导入或展开参数。应实现受限数据语法解析与明确提示，禁止使用 eval/Function 解析书源配置 |
+| D39 | 声明式 jsLib 的共享作用域可保留库级可变状态（内置 ruleHelp 的 jsLib 节）；整源 JS 则每次重建作用域并重执行主脚本（jsHelp 运行环境节） | `source-runtime.ts:1375` 每次把库源码重新执行进新 QuickJS context；脚本文本缓存存在，声明式库对象状态不跨执行共享 | 源码确认；这与整源 JS 顶层变量重置是两种契约。优先实现可恢复库状态共享；非序列化对象评估受限会话 VM 和引用保留，覆盖嵌套桥接/并发/取消/清理后再确定范围。不再默认保留整组差异；JSON globals 恢复不能被描述为完整闭包/类实例恢复 |
+| D40 | 筛选后不同请求上下文的分页结果应相互隔离；旧规划要求签名绑定 infoMap 摘要和选择版本 | Web `runtime/discovery.ts:190` 签名仅含 userId/sourceId/fingerprint/categoryId/index/token；筛选状态、分类快照代次、解析后 URL 摘要未绑定，selection 只校验源 fingerprint | 源码确认；同一模板分类下修改筛选或刷新后，旧游标仍可能被接受并与新筛选混用。应绑定不可变选择快照并使旧请求失效；现有账号和源版本签名校验继续保留 |
+| D41 | 已登记未支持 API 应可区分能力缺失与书源自身语法错误 | 新发现的 Java 类、对象方法和不支持 crypto transformation 常表现为 undefined/普通 failed；方法名存在性测试不会检查返回类型或嵌套对象 | 已复现；应对已知不支持的能力给稳定诊断；未知脚本 TypeError 仍为脚本错误，不能把所有异常都归成 capability-missing。静态编译通过也不能称运行成功 |
+| D42 | `utils/JsURL.kt` 使用 java.net.URL；无 query 时 searchParams 为 null，参数名保留原形式、仅对值做 URLDecoder；host 支持 IPv6 | `source-runtime.ts:1365` 手工正则并按冒号切 host；无 query 返回 `{}`，同时解码参数名；相对地址还隐式使用当前页面为 base | 已复现 IPv6 `host` 变成 `[`、port 变成 `:1]:8080`，`a%20b=x+y` 的键变成 `a b`。应复用受控标准 URL 解析，再按 Android 投影 query、默认端口、无 base/非法输入和异常；不能以 URL 字符串可输出证明对象等价 |
+| D43 | `JsExtensions.getFile` 返回真实 java.io.File，方法如 getName/getPath/getAbsolutePath/length/lastModified/listFiles 可调用；exists 等在调用时读取文件状态 | `source-runtime.ts:1366` 仅包装少量方法，其余为 name/length 等 DTO 字段；exists/isFile/isDirectory 使用创建对象时快照 | 源码确认；`.length()`、`.getName()` 等失败，修改文件后旧对象可能读到过时状态。应提供受控只读 File 方法和即时状态；文件修改只通过明确允许的宿主方法，绝对路径元数据继续保留相对命名空间差异 |
+
+### 需要应用或真实平台的剩余项
+
+以下项目继续使用 OPEN-01～04 和 D4/D12～14，不因本轮重复盘点而另建状态编号。
+
+| 范围 | 当前可做的修复 | 当前边界 |
+| --- | --- | --- |
+| 静态登录表单、动态 loginUi v2、upLoginData/reLoginView、登录 action | core 已有部分求值和动作注册；Web 可实现表单、加密保存、步骤状态、取消、过期和人工提交 | 当前没有完整 Web 登录 API/UI；“无浏览器”不妨碍实现非网页表单登录，不能把整个登录组判为无法实现 |
+| 发现/登录/购买回调中的 SourceLoginJsExtensions 及其继承的 RssJsExtensions | 对书源可达的 copyText/searchBook/addBook/showPhoto/open、刷新动作、chapter.putLyric/putImgUrl/putDanmaku/update/getBigVariable 等逐项提供应用端口 | 不把独立 RSS/TTS 业务纳入 BookSource；同名方法只在 Android 实际有效上下文提供。当前缺少的应用动作仍应明确报告 |
+| payAction、eventListener、customButton | core 求值入口已有；应用可提供按钮、事件触发、成功后刷新和重复提交控制 | 真实付费/写入由用户明确操作触发；不在测试中调用真实站点购买。段评写入字段不等于 Android 已实现写入工作流 |
+| 结构化段评读取和旧式 getDP/getZP 网页 | 读取已有 core 和 Web API；Web 页面与旧网页桥接分别实现 | 浏览器页面桥接、写入会话、nonce/TTL 和写入规则仍缺；网页执行与普通 HTTP 不是等价关系 |
+| webView/webViewGetSource/webViewGetOverrideUrl、@webjs、webJs/sourceRegex、浏览器等待与验证码 | 保留可注入能力与可识别拒绝 | DOM、页面脚本、导航、资源嗅探、站点 Cookie/验证需真实浏览器；只增加几个假函数不能让这类书源兼容。默认修复规划不引入浏览器服务 |
+| proxy、RAR/7z、音视频播放、文件类书源消费 | DNS 定向已实现；RAR/7z 有可选 bsdtar；结果解析和实际消费分别验收 | Node 默认拒绝代理；SOCKS 支持、外部解包器部署和播放器需宿主。代理可实现，但须独立确认传输依赖；无解包命令时保持能力缺失 |
+| Java/Android 类、物理 androidId、Rhino 对象身份 | 常用 Java 类、导入、字符串、集合、字节/流与稳定设备替代值均优先受控模拟 | 纯 TypeScript/QuickJS 无法凭空产生真实 Activity、Android 系统服务和物理身份；这些具体成员保留真实宿主条件，其他纯接口继续实现 |
+| 多实例持久文件、跨进程锁、后台任务恢复 | 应用可使用现有持久存储与源租约定义范围 | 当前临时磁盘和 Node 进程锁不提供跨实例保证；不能把 Android 单进程语义描述成分布式能力 |
+
+### 覆盖范围与未证实事项
+
+本轮逐组检查了导入/字段、规则编译与解析器、URL/网络、声明式五类读取流程及批量、整源 JS、JS 继承公开面及返回对象、Cookie/cache/源状态、发现交互、登录、编码/加密、文件/归档、字体、并发、图片/媒体、段评、付费/事件以及 Web 会话装配。已有的分页、卷/VIP/购买标志、canReName、preUpdateJs、subContent、imageDecode、contentBatch 等入口继续保留“已实现待 Android golden”，没有因为本轮未找到新缺陷而改成完整兼容。
+
+以下不应误算为本轮必须新增功能：教程旧 `utf8ToGbk` 在当前 Android JsExtensions/JsEncodeUtils 中不存在；`exploreScreen` 在当前 Android 只见字段/配置比较，未发现执行入口；`serverID` 在本轮请求路径只见参数保存，未证明对应 Android 执行行为；独立 RssSource/ReplaceRule/TTS 不属于本轮 BookSource 运行时。它们保留来源注记；未来有实际可达入口证据时重新评估，不根据字段名字创造功能。
+
+跨端 manifest 当前有 11 条登记（5 条历史、6 条目录型 case），Android 全为 `not-run`。本轮仅执行了 TypeScript 最小探针、请求桩和 session 重建核验；既有规则宿主/平台/session 三组测试为 69/69 通过，仍未覆盖上表新缺口。Android JBR 21 可读且已验证可启动，默认 `java` 为 8；常规 SDK 路径未发现 API 36/build-tools 36.0.0。本轮没有启动 Gradle、安装 SDK、调用公网书源或执行真实账号动作。
+
+后续实施以逐签名契约为单位，记录参数类型/默认值/null、返回对象成员、状态作用域、异常/取消、Android 来源和同输入案例；不能再次用方法名总数或单端测试总数宣布全量完成。具体实施顺序保存在本地修复计划，长期事实仍以本节、状态总览和证据矩阵为准。

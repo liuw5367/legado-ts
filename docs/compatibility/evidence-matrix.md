@@ -105,3 +105,20 @@
 Android 证据也需要分级：测试文件是可执行行为证据，流程源码是可追踪行为证据，单纯类型或字段声明只能证明数据存在，不能证明完整运行时语义。TS 项只有在独立 fixture、golden 输出和自动断言都存在时，才能从“待 fixture”改为“已验证”。
 
 兼容性决策：当 TypeScript 解析器与 Jsoup、JsoupXpath、JsonPath 或 Rhino 结果不一致时，以 fixture 中固化的 Android 结果为准；若 Android 行为不稳定，先记录差异，再通过明确的版本能力标记处理，不能静默改变书源结果。
+
+## 2026-10-21 代码与教程核对证据
+
+本轮代码、教程 hash 和完整差异事实见[差异登记 D18～D43](known-divergences.md#android-与教程重新核对2026-10-21)。历史测试总数不是本轮执行结果；本轮没有新增已通过的 Android golden，也没有把现有 manifest 的 `android=not-run` 改为通过。
+
+| 案例范围 | evidence | spec | implementation | execution | priority |
+| --- | --- | --- | --- | --- | --- |
+| D18/D19/D20：Jsoup 选择器、HTML 文本和 JSONPath 函数/正则过滤 | Android source + TS 最小输入执行 | defined（表中列出的输入） | partial | TS 观察到失败/差异；Android not-run | required |
+| D22/D23：java.url/headerMap、getString 布尔重载和缺失成员 | Android source/内置帮助 + TS 请求桩/脚本执行 | defined（列出的成员和重载） | partial | TS 观察到错误请求或方法缺失；Android not-run | required |
+| D24～D28/D31/D32/D34：对象方法、重建 session、InfoMap、AES 返回类型和 StrResponse 构造 | Android source + TS 脚本/session 执行 | defined（具体差异输入） | partial | TS 观察到差异；Android not-run | required |
+| D29/D30/D35～D40：文件命名空间、下载、字体、工具、宿主配置、导入、库状态和游标签名 | source | 部分 defined；完整语言/平台等价仍 blocked | partial 或 absent，详见状态表 | 组合路径 not-run，不能写 pass | required/host |
+| D42/D43：URL 和 File 对象 | Android source + TS URL 最小输入执行；File 为源码确认 | defined（列出的成员） | partial | TS URL 观察到差异；File 组合路径及 Android not-run | required |
+| 既有规则宿主、平台、session 回归 | test-run | defined（已有测试） | 按测试范围 | TS 69/69 pass；不能覆盖上述新案例 | verify |
+
+本轮已执行命令：`node --test packages/source-node/tests/source-rule-host.test.ts packages/source-node/tests/source-runtime-platform.test.ts packages/source-node/tests/source-session.test.ts`。最小探针直接调用 SourceRuleRuntime/SourceRuleHost、使用固定 `.invalid` 地址和请求桩，没有访问公网、真实账户、购买或其他远程写入。探针属于差异发现证据，正式回归与共享 golden 要在对应修复时加入版本控制。
+
+环境只读核验：Android Studio JBR `21.0.4` 可以启动，默认 Java 为 `1.8.0_504`；常规 Android SDK 目录未发现 API 36/build-tools 36.0.0。本轮没有验证 Gradle 编译、SDK 下载和真实 WebView。后续 Android runner 必须使用独立 checkout，不能更改父仓已有工作树。
