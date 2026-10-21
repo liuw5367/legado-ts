@@ -21,6 +21,25 @@ export interface WorkflowPage<T> {
   nextCursor?: PageCursor
 }
 
+/** Android ExploreKind 的跨宿主表示；UI 只能根据 type 决定交互方式。 */
+export interface ExploreKind {
+  title: string
+  url?: string
+  type?: 'url' | 'text' | 'button' | 'toggle' | 'select' | string
+  action?: string
+  chars?: Array<string | null>
+  default?: string
+  viewName?: string
+  style?: JsonObject
+}
+
+export interface ExploreKindsResult {
+  kinds: ExploreKind[]
+  infoMap: Record<string, string>
+  saveRequested: boolean
+  diagnostics: WorkflowDiagnostic[]
+}
+
 /** 目录成功后脚本实际使用的书籍状态；仅由目录流程返回，应用可按书源版本持久化。 */
 export interface TocPage extends WorkflowPage<Chapter> {
   bookAfter?: BookMetadata
@@ -243,6 +262,8 @@ export interface WorkflowOptions {
   signal?: AbortSignal
   budget?: Partial<RequestBudget>
   maxItems?: number
+  /** Android 发现脚本和 URL 规则可读写的书源级控件状态。 */
+  infoMap?: Readonly<Record<string, string>>
   /** 目录后续页跳过 loginCheckJs；由流程入口标记首次实际网络请求。 */
   skipLoginCheck?: boolean
 }

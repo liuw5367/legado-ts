@@ -18,7 +18,17 @@ export type DiscoveryBookInput = z.infer<typeof discoveryBookSchema>
 export type DiscoveryCursor = z.infer<typeof cursorSchema>
 
 export interface DiscoverySource { sourceId: string; name: string; group?: string; fingerprint: string }
-export interface DiscoveryCategory { id: string; title: string; group?: string }
+export interface DiscoveryCategory {
+  id: string
+  title: string
+  group?: string
+  type?: string
+  action?: string
+  chars?: Array<string | null>
+  default?: string
+  viewName?: string
+  style?: Record<string, unknown>
+}
 export interface DiscoveryCategories {
   source: DiscoverySource
   categories: DiscoveryCategory[]

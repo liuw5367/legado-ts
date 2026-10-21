@@ -2,14 +2,88 @@ import type { JsonObject, NormalizedSource } from '../model/types.ts'
 import { compileSourcePattern } from '../rules/pattern-guard.ts'
 import type { SourcePatternError } from '../rules/pattern-guard.ts'
 import { resolveSourceRequestReference } from '../runtime/request-url.ts'
-import { detailFields, evaluateField, executeSourceFunction, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
+import { detailFields, evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { formatDetailIntro, formatIntro } from './html-format.ts'
 import { javascriptBookProjection } from './javascript-projection.ts'
-import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
+import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, ExploreKind, ExploreKindsResult, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
+
+export async function parseExploreKinds(ports: WorkflowPorts, source: NormalizedSource, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreKindsResult> {
+  const diagnostics: WorkflowDiagnostic[] = []
+  const configured = sourceString(source, 'exploreUrl')
+  const infoMap: Record<string, string> = { ...(options.infoMap ?? {}) }
+  let saveRequested = false
+  if (configured === undefined) return { kinds: [], infoMap, saveRequested, diagnostics }
+  const dynamic = configured.match(/^@js:([\s\S]*)$/iu) ?? configured.match(/^<js>([\s\S]*)<\/js>$/iu)
+  let text = configured
+  if (dynamic !== null) {
+    const result = await executeWorkflowJavaScript(ports, source, dynamic[1] ?? '', 'discover', 'search', [], {
+      bindings: { infoMap },
+      captureMutations: ['infoMap'],
+      workflowActions: {
+        saveInfoMap: async (_signal, input) => {
+          saveRequested = true
+          return input
+        },
+      },
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    })
+    if (result.state === 'cancelled' || options.signal?.aborted === true) {
+      diagnostics.push({ code: 'cancelled', stage: 'discover', field: 'exploreUrl', message: '发现分类脚本已取消', retryable: false })
+      return { kinds: [], infoMap, saveRequested, diagnostics }
+    }
+    if (result.state === 'capability-missing') {
+      diagnostics.push({ code: 'capability-missing', stage: 'discover', field: 'exploreUrl', message: result.message ?? '发现分类需要 JavaScript 宿主', retryable: false })
+      return { kinds: [], infoMap, saveRequested, diagnostics }
+    }
+    if (result.state !== 'value') {
+      diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message: result.message ?? '发现分类脚本执行失败', retryable: false })
+      return { kinds: [], infoMap, saveRequested, diagnostics }
+    }
+    const wrapper = result.value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: Record<string, unknown> } | null
+    const rawValue = wrapper?.__legadoWorkflowValue ?? result.value
+    // Rhino/Rhino-like hosts return JSONArray directly for scripts that return an
+    // array. Preserve JSON structure instead of flattening objects into lines.
+    text = Array.isArray(rawValue) ? JSON.stringify(rawValue) ?? '' : textValue(rawValue).trim()
+    const captured = wrapper?.__legadoWorkflowBindings?.infoMap
+    if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) {
+      for (const [key, value] of Object.entries(captured)) if (typeof value === 'string') infoMap[key] = value
+    }
+  }
+  try {
+    return { kinds: parseExploreKindText(text), infoMap, saveRequested, diagnostics }
+  } catch (error) {
+    diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message: error instanceof Error ? error.message : '发现分类配置无效', retryable: false })
+    return { kinds: [], infoMap, saveRequested, diagnostics }
+  }
+}
+
+function parseExploreKindText(text: string): ExploreKind[] {
+  const trimmed = text.trim()
+  if (trimmed.startsWith('[')) {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (!Array.isArray(parsed)) throw new Error('发现分类 JSON 必须是数组')
+    return parsed.flatMap((item): ExploreKind[] => {
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) return []
+      const row = item as Record<string, unknown>
+      if (typeof row.title !== 'string') return []
+      const kind: ExploreKind = { title: row.title }
+      for (const key of ['url', 'type', 'action', 'default', 'viewName'] as const) if (typeof row[key] === 'string') kind[key] = row[key] as never
+      if (Array.isArray(row.chars)) kind.chars = row.chars.map((value) => value === null || typeof value === 'string' ? value : String(value))
+      if (row.style !== null && typeof row.style === 'object' && !Array.isArray(row.style)) kind.style = jsonValue(row.style) as JsonObject
+      return [kind]
+    })
+  }
+  if (trimmed.length === 0) return []
+  return trimmed.split(/(?:&&|\r?\n)+/u).map((item) => {
+    const split = item.indexOf('::')
+    if (split < 0) return { title: item.trim() }
+    return { title: item.slice(0, split).trim(), url: item.slice(split + 2).trim() }
+  }).filter((item) => item.title.length > 0)
+}
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 1 }
-  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'explore', sourceString(input.source, 'exploreUrl'), cursor, input.signal, 'discover', input.maxItems)
+  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'explore', sourceString(input.source, 'exploreUrl'), cursor, input.signal, 'discover', input.maxItems, input.infoMap)
   const exploreListRule = ruleString(input.source, 'ruleExplore', 'bookList')
   const ruleGroup = exploreListRule?.trim() ? 'ruleExplore' : 'ruleSearch'
   return listWorkflow(
@@ -29,11 +103,11 @@ export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput)
 export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 1 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
   const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 1
-  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems, input.acceptSearchFields, input.acceptCandidate, input.shouldStop)
+  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems, input.infoMap, input.acceptSearchFields, input.acceptCandidate, input.shouldStop)
   return listWorkflow(ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword, 'ruleSearch')
 }
 
-async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSource, name: 'search' | 'explore', firstArg: string | undefined, cursor: { index: number; token?: string }, signal: AbortSignal | undefined, stage: 'search' | 'discover', maxItems?: number, acceptSearchFields?: (fields: SearchCandidateFields) => boolean, acceptCandidate?: (candidate: BookCandidate) => boolean, shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSource, name: 'search' | 'explore', firstArg: string | undefined, cursor: { index: number; token?: string }, signal: AbortSignal | undefined, stage: 'search' | 'discover', maxItems?: number, infoMap?: Readonly<Record<string, string>>, acceptSearchFields?: (fields: SearchCandidateFields) => boolean, acceptCandidate?: (candidate: BookCandidate) => boolean, shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const diagnostics: WorkflowDiagnostic[] = []
   const trace: WorkflowTraceEntry[] = []
   if (name === 'explore' && firstArg === undefined) {
@@ -41,7 +115,7 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
     return { status: 'failed', value: null, diagnostics, trace }
   }
   const args = name === 'search' ? [firstArg, cursor.index] : [firstArg, cursor.index]
-  const bindings = name === 'search' ? { key: firstArg, page: cursor.index } : { url: firstArg, page: cursor.index }
+  const bindings = name === 'search' ? { key: firstArg, page: cursor.index, ...(infoMap === undefined ? {} : { infoMap }) } : { url: firstArg, page: cursor.index, ...(infoMap === undefined ? {} : { infoMap }) }
   const result = await executeSourceFunction(ports, source, name, args, bindings, stage, 'search', trace, signal)
   if (result.state === 'cancelled' || signal?.aborted === true) {
     diagnostics.push({ code: 'cancelled', stage, message: 'JavaScript 书源工作流已取消', retryable: false })
@@ -170,6 +244,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
     return { status: 'failed', value: null, diagnostics, trace }
   }
   const keywordReplacements = keyword === undefined ? {} : { key: keyword, keyword }
+  const infoMapBindings = options.infoMap === undefined ? {} : { infoMap: options.infoMap }
   const acceptSearchFields = stage === 'search' && 'acceptSearchFields' in options ? options.acceptSearchFields : undefined
   const acceptCandidate = stage === 'search' && 'acceptCandidate' in options ? options.acceptCandidate : undefined
   const shouldStop = stage === 'search' && 'shouldStop' in options ? options.shouldStop : undefined
@@ -190,7 +265,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       stage,
       url,
       { page: String(pageCursor.index), pageIndex: String(pageCursor.index), 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements },
-      { page: pageCursor.index, pageIndex: pageCursor.index, 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements, ruleData },
+      { page: pageCursor.index, pageIndex: pageCursor.index, 'source.bookSourceUrl': source.bookSourceUrl, ...keywordReplacements, ...infoMapBindings, ruleData },
       options.signal,
     )
     if (expanded.url === undefined) {
@@ -221,7 +296,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   if (!detailPage) {
     const normalized = normalizeListRule(listRule)
     reverse = normalized.reverse
-    const list = await evaluateField(ports, source, stage, 'bookList', normalized.rule, content, undefined, trace, options.signal, { expect: 'nodes', bindings: { ruleData } })
+    const list = await evaluateField(ports, source, stage, 'bookList', normalized.rule, content, undefined, trace, options.signal, { expect: 'nodes', bindings: { ...infoMapBindings, ruleData } })
     if (list.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'bookList', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -250,7 +325,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
       originName: source.bookSourceName,
       type: androidBookType(undefined, source),
     }
-    const fieldContext = { baseUrl: page.url, redirectUrl: page.url, bindings: { ruleData: candidateRuleData, book: candidateRuleData }, captureBindings: ['book'] as const }
+    const fieldContext = { baseUrl: page.url, redirectUrl: page.url, bindings: { ...infoMapBindings, ruleData: candidateRuleData, book: candidateRuleData }, captureBindings: ['book'] as const }
     const identityFields = await extractFields(ports, source, stage, ruleGroup, rawItems[itemIndex], listFields.slice(0, 3), itemIndex, options.signal, diagnostics, trace, fieldContext)
     if (options.signal !== undefined && options.signal.aborted) {
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
@@ -344,7 +419,7 @@ async function listWorkflow(ports: WorkflowPorts, stage: 'discover' | 'search', 
   let nextCursor: { index: number; token?: string } | undefined
   if (!stopped && candidates.length > 0 && pageCursor.token === undefined && pageTemplateHasNext(url, pageCursor.index)) nextCursor = { index: pageCursor.index + 1 }
   if (!stopped && nextRule !== undefined) {
-    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { baseUrl: page.url, redirectUrl: page.url, bindings: { ruleData: listRuleData } })
+    const next = await evaluateField(ports, source, stage, 'nextPage', nextRule, content, undefined, trace, options.signal, { baseUrl: page.url, redirectUrl: page.url, bindings: { ...infoMapBindings, ruleData: listRuleData } })
     if (next.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage, field: 'nextPage', message: '工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
@@ -479,7 +554,7 @@ async function detailPageCandidate(ports: WorkflowPorts, source: NormalizedSourc
       baseUrl: page.url,
       redirectUrl: page.url,
       expect: 'nodes',
-      bindings: { ruleData: fallbackBook, book: fallbackBook },
+      bindings: { ...(options.infoMap === undefined ? {} : { infoMap: options.infoMap }), ruleData: fallbackBook, book: fallbackBook },
       captureBindings: ['book'],
     })
     if (init.state === 'cancelled') return { cancelled: true }

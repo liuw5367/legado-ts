@@ -40,6 +40,25 @@ test('categories parse JSON, grouping, text URLs and malformed/dynamic configura
   assert.deepEqual(parseDiscoveryCategories(withExplore('')).categories, [])
 })
 
+test('dynamic discovery categories execute with a persistent infoMap and then request the selected URL', async (t) => {
+  const { repository, source } = await setup({
+    exploreUrl: '@js:var count = Number(infoMap.get("count") || "0") + 1; infoMap.put("count", String(count)); infoMap.saveNow(); [{ title: "动态榜单", url: "/dynamic?count=" + count }]',
+  })
+  const categories = await getDiscoveryCategories(repository, 'user-a', source.sourceId)
+  assert.equal(categories.message, undefined)
+  assert.deepEqual(categories.categories.map(({ title, type }) => ({ title, type })), [{ title: '动态榜单', type: undefined }])
+  const categoryId = categories.categories[0]?.id
+  assert.ok(categoryId)
+  const calls: string[] = []
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    calls.push(String(url))
+    return new Response(listHtml())
+  })
+  const page = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId })
+  assert.equal(page.items[0]?.name, '目标书1')
+  assert.match(calls[0]!, /dynamic\?count=1/u)
+})
+
 test('discovery lists only eligible account sources and never exposes category URLs', async () => {
   const { repository, source } = await setup()
   assert.equal((await listDiscoverySources(repository, 'user-a')).sources.length, 1)

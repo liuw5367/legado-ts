@@ -58,6 +58,47 @@ export function normalizeSnapshot(value: unknown): RuntimeStateSnapshot {
     }
     output.variables = variables
   }
+  if (input.infoMap !== undefined) {
+    if (typeof input.infoMap !== 'object' || input.infoMap === null || Array.isArray(input.infoMap)) throw new Error('invalid infoMap')
+    const infoMap: Record<string, string> = {}
+    const entries = Object.entries(input.infoMap as Record<string, unknown>)
+    if (entries.length > 256) throw new Error('infoMap 条目过多')
+    for (const [name, value] of entries) {
+      if (name.length > 256 || typeof value !== 'string' || value.length > 16_384) throw new Error('invalid infoMap value')
+      infoMap[name] = value
+    }
+    output.infoMap = infoMap
+  }
+  if (input.discovery !== undefined) {
+    if (typeof input.discovery !== 'object' || input.discovery === null || Array.isArray(input.discovery)) throw new Error('invalid discovery snapshot')
+    const discovery = input.discovery as Record<string, unknown>
+    if (discovery.version !== 1 || typeof discovery.fingerprint !== 'string' || discovery.fingerprint.length === 0 || discovery.fingerprint.length > 200 || !Array.isArray(discovery.categories) || discovery.categories.length > 256) throw new Error('invalid discovery snapshot')
+    const categories: NonNullable<RuntimeStateSnapshot['discovery']>['categories'] = []
+    for (const item of discovery.categories) {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) throw new Error('invalid discovery category')
+      const category = item as Record<string, unknown>
+      if (typeof category.id !== 'string' || category.id.length === 0 || category.id.length > 200 || typeof category.title !== 'string' || category.title.length > 4096) throw new Error('invalid discovery category')
+      const optionalText = ['group', 'url', 'type', 'action', 'default', 'viewName'] as const
+      for (const key of optionalText) if (category[key] !== undefined && (typeof category[key] !== 'string' || (category[key] as string).length > 16_384)) throw new Error('invalid discovery category value')
+      if (category.chars !== undefined && (!Array.isArray(category.chars) || category.chars.length > 256 || category.chars.some((value) => value !== null && (typeof value !== 'string' || value.length > 4096)))) throw new Error('invalid discovery category chars')
+      if (category.style !== undefined && (typeof category.style !== 'object' || category.style === null || Array.isArray(category.style))) throw new Error('invalid discovery category style')
+      const normalized = {
+        id: category.id,
+        title: category.title,
+        ...(category.group === undefined ? {} : { group: category.group as string }),
+        ...(category.url === undefined ? {} : { url: category.url as string }),
+        ...(category.type === undefined ? {} : { type: category.type as string }),
+        ...(category.action === undefined ? {} : { action: category.action as string }),
+        ...(category.chars === undefined ? {} : { chars: (category.chars as Array<string | null>).map((value) => value === null ? null : value) }),
+        ...(category.default === undefined ? {} : { default: category.default as string }),
+        ...(category.viewName === undefined ? {} : { viewName: category.viewName as string }),
+        ...(category.style === undefined ? {} : { style: category.style as Record<string, unknown> }),
+      }
+      if (JSON.stringify(normalized).length > 64_000) throw new Error('discovery category too large')
+      categories.push(normalized)
+    }
+    output.discovery = { version: 1, fingerprint: discovery.fingerprint, categories }
+  }
   if (input.cache !== undefined) {
     if (typeof input.cache !== 'object' || input.cache === null || Array.isArray(input.cache)) throw new Error('invalid cache')
     const cache: NonNullable<RuntimeStateSnapshot['cache']> = {}

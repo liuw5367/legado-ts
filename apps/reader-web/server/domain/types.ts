@@ -252,6 +252,25 @@ export const DEFAULT_READER_SETTINGS_PREFERENCES: ReaderSettingsPreferences = {
 export interface RuntimeStateSnapshot {
   cookies?: string
   variables?: Record<string, string>
+  /** Android InfoMap 的书源级发现控件状态；按账号和书源版本隔离。 */
+  infoMap?: Record<string, string>
+  /** 已解析的发现分类；绑定源 fingerprint，避免分页重新执行动态分类脚本。 */
+  discovery?: {
+    version: 1
+    fingerprint: string
+    categories: Array<{
+      id: string
+      title: string
+      group?: string
+      url?: string
+      type?: string
+      action?: string
+      chars?: Array<string | null>
+      default?: string
+      viewName?: string
+      style?: Record<string, unknown>
+    }>
+  }
   cache?: Record<string, { value: string; expiresAt?: number }>
 }
 

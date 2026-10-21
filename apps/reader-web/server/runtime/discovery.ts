@@ -1,19 +1,45 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { editionKey } from '@legado/reader-backup'
-import { discoverBooks, loadBookDetails, type BookCandidate, type PageCursor, type SourceSession } from '@legado/source-core'
+import { discoverBooks, loadBookDetails, parseExploreKinds, type BookCandidate, type ExploreKind, type PageCursor, type SourceSession } from '@legado/source-core'
 import type { DiscoveryBookInput, DiscoveryCategories, DiscoveryCategory, DiscoveryCursor, DiscoveryPage, DiscoveryPageInput, DiscoverySource } from '../../shared/discovery.ts'
 import { sameBookIdentity } from '../../shared/book-identity.ts'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
 import { configuredSecret } from '../db/runtime-state-crypto.ts'
-import { ReaderRuntimeError, requireSource, withPersistentSourceSession } from './source-session.ts'
+import { ReaderRuntimeError, requireSource, withPersistentSourceSession, type PersistentSourceState } from './source-session.ts'
 
-interface Category extends DiscoveryCategory { url: string }
+interface Category extends DiscoveryCategory { url?: string }
 
 function available(source: StoredSourceRecord): boolean {
   return source.enabled && source.normalizedSource.enabledExplore !== false && typeof source.normalizedSource.exploreUrl === 'string' && source.normalizedSource.exploreUrl.trim().length > 0
 }
 function summary(source: StoredSourceRecord): DiscoverySource {
   return { sourceId: source.sourceId, name: source.name, fingerprint: source.fingerprint, ...(source.group === undefined ? {} : { group: source.group }) }
+}
+
+function dynamicExploreUrl(source: StoredSourceRecord): boolean {
+  const value = String(source.normalizedSource.exploreUrl ?? '').trim()
+  return /^@js:/iu.test(value) || /^<js>/iu.test(value)
+}
+
+function categoryId(source: StoredSourceRecord, index: number, category: Omit<Category, 'id'>): string {
+  // 分类脚本可能在每次请求时生成不同 URL；把已解析的分类内容纳入 ID，
+  // 这样旧页面不会把新的动态 URL 当成同一个分类继续执行。
+  return createHash('sha256').update(JSON.stringify([source.fingerprint, index, category])).digest('hex').slice(0, 24)
+}
+
+function categoriesFromKinds(source: StoredSourceRecord, kinds: readonly ExploreKind[]): Category[] {
+  const categories: Category[] = []
+  let group = ''
+  for (const [index, kind] of kinds.entries()) {
+    const title = kind.title.trim()
+    const type = kind.type ?? 'url'
+    const url = kind.url?.trim() ?? ''
+    if (title.length === 0) continue
+    if (type === 'url' && url.length === 0) { group = title; continue }
+    const category = { title, ...(group.length === 0 ? {} : { group }), ...(type === 'url' ? {} : { type }), ...(url.length === 0 ? {} : { url }), ...(kind.action === undefined ? {} : { action: kind.action }), ...(kind.chars === undefined ? {} : { chars: kind.chars }), ...(kind.default === undefined ? {} : { default: kind.default }), ...(kind.viewName === undefined ? {} : { viewName: kind.viewName }), ...(kind.style === undefined ? {} : { style: kind.style as Record<string, unknown> }) }
+    categories.push({ id: categoryId(source, index, category), ...category })
+  }
+  return categories
 }
 
 export async function listDiscoverySources(repository: ReaderRepository, userId: string): Promise<{ sources: DiscoverySource[] }> {
@@ -32,7 +58,7 @@ export function parseDiscoveryCategories(source: StoredSourceRecord): { categori
   const text = String(source.normalizedSource.exploreUrl ?? '').trim()
   const lower = text.toLowerCase()
   if (lower.startsWith('@js:') || lower.startsWith('<js>')) return { categories: [], message: '此书源使用动态发现分类，暂不支持，请切换书源或使用搜索。' }
-  let rows: Array<{ title: string; url?: string }> = []
+  let rows: Array<{ title: string; url?: string; type?: string; action?: string; chars?: Array<string | null>; default?: string; viewName?: string; style?: Record<string, unknown> }> = []
   if (text.startsWith('[')) {
     try {
       const value: unknown = JSON.parse(text)
@@ -40,7 +66,7 @@ export function parseDiscoveryCategories(source: StoredSourceRecord): { categori
       rows = value.flatMap((item: unknown) => {
         if (item === null || typeof item !== 'object') return []
         const row = item as Record<string, unknown>
-        return typeof row.title === 'string' ? [{ title: row.title, ...(typeof row.url === 'string' ? { url: row.url } : {}) }] : []
+        return typeof row.title === 'string' ? [{ title: row.title, ...(typeof row.url === 'string' ? { url: row.url } : {}), ...(typeof row.type === 'string' ? { type: row.type } : {}), ...(typeof row.action === 'string' ? { action: row.action } : {}), ...(Array.isArray(row.chars) ? { chars: row.chars.map((value) => value === null || typeof value === 'string' ? value : String(value)) } : {}), ...(typeof row.default === 'string' ? { default: row.default } : {}), ...(typeof row.viewName === 'string' ? { viewName: row.viewName } : {}), ...(row.style !== null && typeof row.style === 'object' && !Array.isArray(row.style) ? { style: row.style as Record<string, unknown> } : {}) }] : []
       })
     } catch { return { categories: [], message: '发现分类配置无效，请切换书源或使用搜索。' } }
   } else if (text.length > 0) {
@@ -57,18 +83,42 @@ export function parseDiscoveryCategories(source: StoredSourceRecord): { categori
   for (const [index, row] of rows.entries()) {
     const title = row.title.trim()
     const url = row.url?.trim() ?? ''
-    if (url.length === 0) { if (title.length > 0) group = title; continue }
+    const type = row.type ?? 'url'
+    if (url.length === 0 && type === 'url') { if (title.length > 0) group = title; continue }
     if (title.length === 0) continue
-    const id = createHash('sha256').update(JSON.stringify([source.fingerprint, index])).digest('hex').slice(0, 24)
-    categories.push({ id, title, url, ...(group.length === 0 ? {} : { group }) })
+    const category = { title, ...(group.length === 0 ? {} : { group }), ...(type === 'url' ? {} : { type }), ...(url.length === 0 ? {} : { url }), ...(row.action === undefined ? {} : { action: row.action }), ...(row.chars === undefined ? {} : { chars: row.chars }), ...(row.default === undefined ? {} : { default: row.default }), ...(row.viewName === undefined ? {} : { viewName: row.viewName }), ...(row.style === undefined ? {} : { style: row.style }) }
+    categories.push({ id: categoryId(source, index, category), ...category })
   }
   return { categories, ...(categories.length > 0 ? {} : { message: '此书源没有可用的发现分类。' }) }
 }
 
+async function resolveDiscoveryCategories(source: StoredSourceRecord, session: SourceSession, state: PersistentSourceState, signal?: AbortSignal): Promise<{ categories: Category[]; message?: string }> {
+  if (state.discovery !== undefined && state.discovery.fingerprint === source.fingerprint) {
+    const categories = structuredClone(state.discovery.categories)
+    return { categories, ...(categories.length === 0 ? { message: '此书源没有可用的发现分类。' } : {}) }
+  }
+  let categories: Category[]
+  if (!dynamicExploreUrl(source)) {
+    const result = parseDiscoveryCategories(source)
+    categories = result.categories
+    if (result.message !== undefined) return result
+  } else {
+    const result = await session.run((ports) => parseExploreKinds(ports, source.normalizedSource, { infoMap: state.infoMap, ...(signal === undefined ? {} : { signal }) }))
+    state.replaceInfoMap(result.infoMap)
+    const diagnostic = result.diagnostics[0]
+    if (diagnostic !== undefined) return { categories: [], message: diagnostic.message }
+    categories = categoriesFromKinds(source, result.kinds)
+  }
+  state.replaceDiscovery({ version: 1, fingerprint: source.fingerprint, categories: structuredClone(categories) })
+  return { categories, ...(categories.length === 0 ? { message: '此书源没有可用的发现分类。' } : {}) }
+}
+
 export async function getDiscoveryCategories(repository: ReaderRepository, userId: string, sourceId: string): Promise<DiscoveryCategories> {
   const source = await discoverySource(repository, userId, sourceId)
-  const result = parseDiscoveryCategories(source)
-  return { source: summary(source), categories: result.categories.map(({ url: _url, ...category }) => category), ...(result.message === undefined ? {} : { message: result.message }) }
+  return withPersistentSourceSession(repository, userId, source, async (session, state) => {
+    const result = await resolveDiscoveryCategories(source, session, state)
+    return { source: summary(source), categories: result.categories.map(({ url: _url, ...category }) => category), ...(result.message === undefined ? {} : { message: result.message }) }
+  })
 }
 
 function signature(userId: string, input: DiscoveryPageInput, cursor: { index: number; token?: string | undefined }): string {
@@ -87,14 +137,15 @@ function verifyCursor(userId: string, input: DiscoveryPageInput): void {
 async function selection(repository: ReaderRepository, userId: string, input: DiscoveryPageInput) {
   const source = await discoverySource(repository, userId, input.sourceId)
   if (source.fingerprint !== input.fingerprint) throw new ReaderRuntimeError('invalid-input', '书源已更新，请刷新发现页面')
-  const category = parseDiscoveryCategories(source).categories.find((item) => item.id === input.categoryId)
-  if (category === undefined) throw new ReaderRuntimeError('invalid-input', '发现分类已失效，请重新选择')
   verifyCursor(userId, input)
-  return { source, category }
+  return { source }
 }
-async function queryPage(session: SourceSession, source: StoredSourceRecord, category: Category, input: DiscoveryPageInput, signal?: AbortSignal) {
+async function queryPage(session: SourceSession, source: StoredSourceRecord, category: Category, input: DiscoveryPageInput, state: PersistentSourceState, signal?: AbortSignal) {
+  const categoryUrl = category.url
+  if (categoryUrl === undefined || categoryUrl.length === 0 || (category.type !== undefined && category.type !== 'url')) throw new ReaderRuntimeError('invalid-input', '此发现分类需要先完成控件操作')
   const result = await session.run((ports) => discoverBooks(ports, {
-    source: { ...source.normalizedSource, exploreUrl: category.url },
+    source: { ...source.normalizedSource, exploreUrl: categoryUrl },
+    infoMap: state.infoMap,
     ...(input.cursor === undefined ? {} : { cursor: { index: input.cursor.index, ...(input.cursor.token === undefined ? {} : { token: input.cursor.token }) } }),
     ...(signal === undefined ? {} : { signal }),
   }))
@@ -104,9 +155,12 @@ async function queryPage(session: SourceSession, source: StoredSourceRecord, cat
 }
 
 export async function loadDiscoveryPage(repository: ReaderRepository, userId: string, input: DiscoveryPageInput, signal?: AbortSignal): Promise<DiscoveryPage> {
-  const { source, category } = await selection(repository, userId, input)
-  return withPersistentSourceSession(repository, userId, source, async (session) => {
-    const { page, status, message } = await queryPage(session, source, category, input, signal)
+  const { source } = await selection(repository, userId, input)
+  return withPersistentSourceSession(repository, userId, source, async (session, state) => {
+    const resolved = await resolveDiscoveryCategories(source, session, state, signal)
+    const category = resolved.categories.find((item) => item.id === input.categoryId)
+    if (category === undefined) throw new ReaderRuntimeError('invalid-input', resolved.message ?? '发现分类已失效，请重新选择')
+    const { page, status, message } = await queryPage(session, source, category, input, state, signal)
     return {
       // infoPage/rawFields 仅保留在执行器内部，不向浏览器泄漏源页面及脚本变量。
       items: page.items.map(({ sourceId, bookUrl, name, author, intro, coverUrl, kind, lastChapter, wordCount }) => ({ sourceId, bookUrl, ...(name === undefined ? {} : { name }), ...(author === undefined ? {} : { author }), ...(intro === undefined ? {} : { intro }), ...(coverUrl === undefined ? {} : { coverUrl }), ...(kind === undefined ? {} : { kind }), ...(lastChapter === undefined ? {} : { lastChapter }), ...(wordCount === undefined ? {} : { wordCount }) })),
@@ -119,9 +173,12 @@ export async function loadDiscoveryPage(repository: ReaderRepository, userId: st
 }
 
 export async function openDiscoveryBook(repository: ReaderRepository, userId: string, input: DiscoveryBookInput, signal?: AbortSignal) {
-  const { source, category } = await selection(repository, userId, input)
-  return withPersistentSourceSession(repository, userId, source, async (session) => {
-    const { page } = await queryPage(session, source, category, input, signal)
+  const { source } = await selection(repository, userId, input)
+  return withPersistentSourceSession(repository, userId, source, async (session, state) => {
+    const resolved = await resolveDiscoveryCategories(source, session, state, signal)
+    const category = resolved.categories.find((item) => item.id === input.categoryId)
+    if (category === undefined) throw new ReaderRuntimeError('invalid-input', resolved.message ?? '发现分类已失效，请重新选择')
+    const { page } = await queryPage(session, source, category, input, state, signal)
     const candidate: BookCandidate | undefined = page.items.find((item) => item.bookUrl === input.bookUrl)
     if (candidate === undefined) throw new ReaderRuntimeError('invalid-input', '列表已更新，请刷新后重试')
     const details = await session.run((ports) => loadBookDetails(ports, { source: source.normalizedSource, candidates: [candidate], ...(signal === undefined ? {} : { signal }) }))
