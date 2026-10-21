@@ -214,6 +214,19 @@ export interface CryptoHost {
   createSign?(algorithm: string): SignCrypto
 }
 
+export interface SourceScriptCacheEntry {
+  value: string
+  /** 绝对 Unix 毫秒；缺省表示不过期。 */
+  expiresAt?: number
+}
+
+/** 可选的会话缓存快照；宿主可用它恢复跨请求的字符串缓存。 */
+export interface SourceScriptCacheSnapshot {
+  values?: Record<string, SourceScriptCacheEntry>
+  memory?: Record<string, string>
+  files?: Record<string, SourceScriptCacheEntry>
+}
+
 /** JavaScript 书源使用的会话缓存；saveTime 单位为秒，0 表示不过期。 */
 export interface SourceScriptCache {
   get(key: string, signal?: AbortSignal): string | undefined | Promise<string | undefined>
@@ -226,6 +239,10 @@ export interface SourceScriptCache {
   putFile(key: string, value: string, saveTime?: number, signal?: AbortSignal): void | Promise<void>
   /** 清空当前书源会话缓存；用于 Android source.refreshJSLib。 */
   clear?(): void | Promise<void>
+  /** 导出可安全持久化的字符串缓存；函数和宿主对象不会进入快照。 */
+  snapshot?(): SourceScriptCacheSnapshot
+  /** 恢复由同一宿主生成的缓存快照。 */
+  restore?(snapshot: SourceScriptCacheSnapshot): void
 }
 
 export type ArchiveFormat = 'gzip' | 'zip' | '7z' | 'rar'

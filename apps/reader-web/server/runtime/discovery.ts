@@ -157,6 +157,7 @@ export async function updateDiscoveryControl(repository: ReaderRepository, userI
   const { source } = await selection(repository, userId, input)
   return withPersistentSourceSession(repository, userId, source, async (session, state) => {
     const resolved = await resolveDiscoveryCategories(source, session, state, signal)
+    verifySelectionGeneration(state, input)
     const category = resolved.categories.find((item) => item.id === input.categoryId)
     if (category === undefined) throw new ReaderRuntimeError('invalid-input', resolved.message ?? '发现分类已失效，请重新选择')
     const type = category.type ?? 'url'
@@ -188,12 +189,13 @@ export async function updateDiscoveryControl(repository: ReaderRepository, userI
   })
 }
 
-function signature(userId: string, input: DiscoveryPageInput, cursor: { index: number; token?: string | undefined }): string {
+function signature(userId: string, input: DiscoveryPageInput, cursor: { index: number; token?: string | undefined; generation?: number | undefined }): string {
   // nextPage 规则可返回完整 URL，因此必须验证游标签名，不能直接执行客户端提供的 token。
-  return createHmac('sha256', configuredSecret()).update(JSON.stringify(['discovery-v1', userId, input.sourceId, input.fingerprint, input.categoryId, cursor.index, cursor.token ?? null])).digest('base64url')
+  return createHmac('sha256', configuredSecret()).update(JSON.stringify(['discovery-v2', userId, input.sourceId, input.fingerprint, input.categoryId, cursor.index, cursor.token ?? null, cursor.generation ?? null])).digest('base64url')
 }
-function signCursor(userId: string, input: DiscoveryPageInput, cursor: PageCursor): DiscoveryCursor {
-  return { index: cursor.index, ...(cursor.token === undefined ? {} : { token: cursor.token }), signature: signature(userId, input, cursor) }
+function signCursor(userId: string, input: DiscoveryPageInput, cursor: PageCursor, generation: number): DiscoveryCursor {
+  const signed = { index: cursor.index, ...(cursor.token === undefined ? {} : { token: cursor.token }), generation }
+  return { ...signed, signature: signature(userId, input, signed) }
 }
 function verifyCursor(userId: string, input: DiscoveryPageInput): void {
   if (input.cursor === undefined) return
@@ -206,6 +208,10 @@ async function selection(repository: ReaderRepository, userId: string, input: Di
   if (source.fingerprint !== input.fingerprint) throw new ReaderRuntimeError('invalid-input', '书源已更新，请刷新发现页面')
   verifyCursor(userId, input)
   return { source }
+}
+
+function verifySelectionGeneration(state: PersistentSourceState, input: DiscoveryPageInput): void {
+  if (input.cursor !== undefined && (input.cursor.generation === undefined || input.cursor.generation !== state.discoveryGeneration)) throw new ReaderRuntimeError('invalid-input', '发现筛选已更新，请刷新列表')
 }
 async function queryPage(session: SourceSession, source: StoredSourceRecord, category: Category, input: DiscoveryPageInput, state: PersistentSourceState, signal?: AbortSignal) {
   const categoryUrl = category.url
@@ -225,14 +231,15 @@ export async function loadDiscoveryPage(repository: ReaderRepository, userId: st
   const { source } = await selection(repository, userId, input)
   return withPersistentSourceSession(repository, userId, source, async (session, state) => {
     const resolved = await resolveDiscoveryCategories(source, session, state, signal)
+    verifySelectionGeneration(state, input)
     const category = resolved.categories.find((item) => item.id === input.categoryId)
     if (category === undefined) throw new ReaderRuntimeError('invalid-input', resolved.message ?? '发现分类已失效，请重新选择')
     const { page, status, message } = await queryPage(session, source, category, input, state, signal)
     return {
       // infoPage/rawFields 仅保留在执行器内部，不向浏览器泄漏源页面及脚本变量。
       items: page.items.map(({ sourceId, bookUrl, name, author, intro, coverUrl, kind, lastChapter, wordCount }) => ({ sourceId, bookUrl, ...(name === undefined ? {} : { name }), ...(author === undefined ? {} : { author }), ...(intro === undefined ? {} : { intro }), ...(coverUrl === undefined ? {} : { coverUrl }), ...(kind === undefined ? {} : { kind }), ...(lastChapter === undefined ? {} : { lastChapter }), ...(wordCount === undefined ? {} : { wordCount }) })),
-      cursor: signCursor(userId, input, page.cursor),
-      ...(page.nextCursor === undefined ? {} : { nextCursor: signCursor(userId, input, page.nextCursor) }),
+      cursor: signCursor(userId, input, page.cursor, state.discoveryGeneration),
+      ...(page.nextCursor === undefined ? {} : { nextCursor: signCursor(userId, input, page.nextCursor, state.discoveryGeneration) }),
       status,
       ...(message === undefined ? {} : { message }),
     }
@@ -243,6 +250,7 @@ export async function openDiscoveryBook(repository: ReaderRepository, userId: st
   const { source } = await selection(repository, userId, input)
   return withPersistentSourceSession(repository, userId, source, async (session, state) => {
     const resolved = await resolveDiscoveryCategories(source, session, state, signal)
+    verifySelectionGeneration(state, input)
     const category = resolved.categories.find((item) => item.id === input.categoryId)
     if (category === undefined) throw new ReaderRuntimeError('invalid-input', resolved.message ?? '发现分类已失效，请重新选择')
     const { page } = await queryPage(session, source, category, input, state, signal)

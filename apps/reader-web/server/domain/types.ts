@@ -252,12 +252,27 @@ export const DEFAULT_READER_SETTINGS_PREFERENCES: ReaderSettingsPreferences = {
 export interface RuntimeStateSnapshot {
   cookies?: string
   variables?: Record<string, string>
+  /** Node 源宿主的源键值、登录信息和脚本缓存；不包含 Cookie。 */
+  nodeRuntime?: {
+    version: 1
+    sourceVariables?: Record<string, string>
+    sourceValues?: Record<string, Record<string, string>>
+    loginHeaders?: Record<string, string>
+    loginInfos?: Record<string, string>
+    cache?: {
+      values?: Record<string, { value: string; expiresAt?: number }>
+      memory?: Record<string, string>
+      files?: Record<string, { value: string; expiresAt?: number }>
+    }
+  }
   /** Android InfoMap 的书源级发现控件状态；按账号和书源版本隔离。 */
   infoMap?: Record<string, string>
   /** 已解析的发现分类；绑定源 fingerprint，避免分页重新执行动态分类脚本。 */
   discovery?: {
     version: 1
     fingerprint: string
+    /** 分类或控件刷新后的单调代次；游标必须绑定当前代次。 */
+    generation?: number
     categories: Array<{
       id: string
       title: string

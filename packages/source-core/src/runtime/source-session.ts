@@ -1,5 +1,5 @@
 import type { NormalizedSource } from '../model/types.ts'
-import type { ClockHost, NetworkHost, SourceScriptCache } from './contracts.ts'
+import type { ClockHost, NetworkHost, SourceScriptCache, SourceScriptCacheEntry, SourceScriptCacheSnapshot } from './contracts.ts'
 import { SourceRateLimiter, systemClockHost, withSourceRateLimit } from './source-rate-limiter.ts'
 import type { SourceRateDiagnostic } from './source-rate-limiter.ts'
 import type { RequestObserver, WorkflowPorts } from '../workflows/types.ts'
@@ -44,7 +44,7 @@ export interface SourceSession {
   close(): void
 }
 
-interface CachedValue {
+interface CachedValue extends SourceScriptCacheEntry {
   value: string
   expiresAt?: number
 }
@@ -97,6 +97,21 @@ export class MemorySourceScriptCache implements SourceScriptCache {
     this.files.clear()
   }
 
+  public snapshot(): SourceScriptCacheSnapshot {
+    return {
+      ...(this.snapshotEntries(this.values).length === 0 ? {} : { values: Object.fromEntries(this.snapshotEntries(this.values).map(([key, value]) => [key, value])) }),
+      ...(this.memory.size === 0 ? {} : { memory: Object.fromEntries(this.memory) }),
+      ...(this.snapshotEntries(this.files).length === 0 ? {} : { files: Object.fromEntries(this.snapshotEntries(this.files).map(([key, value]) => [key, value])) }),
+    }
+  }
+
+  public restore(snapshot: SourceScriptCacheSnapshot): void {
+    this.clear()
+    this.restoreEntries(this.values, snapshot.values)
+    for (const [key, value] of Object.entries(snapshot.memory ?? {})) if (typeof value === 'string') this.memory.set(key, value)
+    this.restoreEntries(this.files, snapshot.files)
+  }
+
   private read(store: Map<string, CachedValue>, key: string): string | undefined {
     const entry = store.get(key)
     if (entry === undefined) return undefined
@@ -110,6 +125,26 @@ export class MemorySourceScriptCache implements SourceScriptCache {
   private write(store: Map<string, CachedValue>, key: string, value: string, saveTime: number): void {
     const expiresAt = Number.isFinite(saveTime) && saveTime !== 0 ? Date.now() + saveTime * 1000 : undefined
     store.set(key, { value, ...(expiresAt === undefined ? {} : { expiresAt }) })
+  }
+
+  private snapshotEntries(store: Map<string, CachedValue>): Array<[string, SourceScriptCacheEntry]> {
+    const entries: Array<[string, SourceScriptCacheEntry]> = []
+    for (const [key, entry] of store) {
+      if (entry.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
+        store.delete(key)
+        continue
+      }
+      entries.push([key, { value: entry.value, ...(entry.expiresAt === undefined ? {} : { expiresAt: entry.expiresAt }) }])
+    }
+    return entries
+  }
+
+  private restoreEntries(store: Map<string, CachedValue>, entries: Record<string, SourceScriptCacheEntry> | undefined): void {
+    for (const [key, entry] of Object.entries(entries ?? {})) {
+      if (typeof entry?.value !== 'string') continue
+      if (entry.expiresAt !== undefined && (!Number.isFinite(entry.expiresAt) || entry.expiresAt <= Date.now())) continue
+      store.set(key, { value: entry.value, ...(entry.expiresAt === undefined ? {} : { expiresAt: entry.expiresAt }) })
+    }
   }
 }
 

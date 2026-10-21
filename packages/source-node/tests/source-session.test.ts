@@ -61,6 +61,36 @@ test('Node 书源会话跨操作保留 source 变量和 jsLib 缓存，不同会
   assert.equal(urls.length, 2, '新会话重新加载远程 jsLib')
 })
 
+test('Node 会话快照恢复源键值、登录状态和字符串缓存', async () => {
+  const source = { ...baseSource, jsLib: '' } as NormalizedSource
+  const first = createNodeSourceSession(source)
+  await first.run((ports) => ports.rules.evaluate({
+    source: first.source,
+    stage: 'search',
+    field: 'snapshot',
+    rule: '@js:source.put("key", "value"); source.putVariable("variable"); source.putLoginHeader(JSON.stringify({Authorization:"Bearer saved"})); source.putLoginInfo(JSON.stringify({user:"alice"})); cache.put("saved", "cache-value"); "ok"',
+    content: '',
+  }))
+  const snapshot = first.snapshotRuntimeState()
+  assert.equal(snapshot.sourceValues?.[source.bookSourceUrl]?.key, 'value')
+  assert.equal(snapshot.sourceVariables?.[source.bookSourceUrl], 'variable')
+  assert.equal(snapshot.loginHeaders?.[source.bookSourceUrl], JSON.stringify({ Authorization: 'Bearer saved' }))
+  assert.equal(snapshot.loginInfos?.[source.bookSourceUrl], JSON.stringify({ user: 'alice' }))
+  assert.equal(snapshot.cache?.values?.saved?.value, 'cache-value')
+  first.close()
+
+  const restored = createNodeSourceSession(source, { initialRuntimeState: snapshot })
+  const result = await restored.run((ports) => ports.rules.evaluate({
+    source: restored.source,
+    stage: 'search',
+    field: 'snapshot',
+    rule: '@js:[source.get("key"), source.getVariable(), source.getLoginHeader(), source.getLoginInfo(), cache.get("saved")].join("|")',
+    content: '',
+  }))
+  assert.equal(result.value, 'value|variable|{"Authorization":"Bearer saved"}|{"user":"alice"}|cache-value')
+  restored.close()
+})
+
 test('Node 书源会话持有深拷贝并冻结的书源定义', () => {
   const input = { ...baseSource, extension: { label: 'initial' } } as NormalizedSource
   const session = createNodeSourceSession(input)

@@ -1,4 +1,6 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { RuntimeStateSnapshot } from '../domain/types.ts'
 
 const FORMAT_VERSION = 'v1'
@@ -41,6 +43,13 @@ export function configuredSecret(): string {
   return secret
 }
 
+/** 为书源文件 API 派生不可逆命名空间；路径中不暴露用户或书源标识。 */
+export function sourceFileRoot(userId: string, sourceId: string, fingerprint: string): string {
+  const root = process.env.SOURCE_FILE_ROOT?.trim() || join(tmpdir(), 'legado-source-cache')
+  const namespace = createHmac('sha256', configuredSecret()).update(JSON.stringify([userId, sourceId, fingerprint]), 'utf8').digest('hex').slice(0, 40)
+  return join(root, namespace)
+}
+
 export function normalizeSnapshot(value: unknown): RuntimeStateSnapshot {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('invalid snapshot')
   const input = value as Record<string, unknown>
@@ -57,6 +66,73 @@ export function normalizeSnapshot(value: unknown): RuntimeStateSnapshot {
       variables[name] = variable
     }
     output.variables = variables
+  }
+  if (input.nodeRuntime !== undefined) {
+    if (typeof input.nodeRuntime !== 'object' || input.nodeRuntime === null || Array.isArray(input.nodeRuntime)) throw new Error('invalid node runtime')
+    const node = input.nodeRuntime as Record<string, unknown>
+    if (node.version !== 1) throw new Error('invalid node runtime version')
+    const textMap = (value: unknown, label: string): Record<string, string> | undefined => {
+      if (value === undefined) return undefined
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`invalid ${label}`)
+      const entries = Object.entries(value as Record<string, unknown>)
+      if (entries.length > 256) throw new Error(`${label} 条目过多`)
+      const result: Record<string, string> = {}
+      for (const [key, item] of entries) {
+        if (key.length > 1024 || typeof item !== 'string' || item.length > 128 * 1024) throw new Error(`invalid ${label} value`)
+        result[key] = item
+      }
+      return result
+    }
+    const nestedMap = (value: unknown, label: string): Record<string, Record<string, string>> | undefined => {
+      if (value === undefined) return undefined
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`invalid ${label}`)
+      const result: Record<string, Record<string, string>> = {}
+      const entries = Object.entries(value as Record<string, unknown>)
+      if (entries.length > 16) throw new Error(`${label} source 条目过多`)
+      for (const [key, item] of entries) {
+        const normalized = textMap(item, label)
+        if (normalized !== undefined) result[key] = normalized
+      }
+      return result
+    }
+    const cacheValueMap = (value: unknown, label: string): Record<string, { value: string; expiresAt?: number }> | undefined => {
+      if (value === undefined) return undefined
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`invalid ${label}`)
+      const entries = Object.entries(value as Record<string, unknown>)
+      if (entries.length > 4096) throw new Error(`${label} 条目过多`)
+      const result: Record<string, { value: string; expiresAt?: number }> = {}
+      for (const [key, item] of entries) {
+        if (typeof item !== 'object' || item === null || Array.isArray(item) || typeof (item as Record<string, unknown>).value !== 'string') throw new Error(`invalid ${label} entry`)
+        const entry = item as Record<string, unknown>
+        if ((entry.value as string).length > 128 * 1024 || (entry.expiresAt !== undefined && (typeof entry.expiresAt !== 'number' || !Number.isFinite(entry.expiresAt)))) throw new Error(`invalid ${label} value`)
+        result[key] = { value: entry.value as string, ...(entry.expiresAt === undefined ? {} : { expiresAt: entry.expiresAt as number }) }
+      }
+      return result
+    }
+    const cache = node.cache
+    let normalizedCache: NonNullable<RuntimeStateSnapshot['nodeRuntime']>['cache']
+    if (cache !== undefined) {
+      if (typeof cache !== 'object' || cache === null || Array.isArray(cache)) throw new Error('invalid node cache')
+      const cacheRecord = cache as Record<string, unknown>
+      const values = cacheValueMap(cacheRecord.values, 'node cache values')
+      const memory = textMap(cacheRecord.memory, 'node cache memory')
+      const files = cacheValueMap(cacheRecord.files, 'node cache files')
+      normalizedCache = {}
+      if (values !== undefined) normalizedCache.values = values
+      if (memory !== undefined) normalizedCache.memory = memory
+      if (files !== undefined) normalizedCache.files = files
+    }
+    const nodeRuntime: NonNullable<RuntimeStateSnapshot['nodeRuntime']> = { version: 1 }
+    const sourceVariables = textMap(node.sourceVariables, 'node sourceVariables')
+    const sourceValues = nestedMap(node.sourceValues, 'node sourceValues')
+    const loginHeaders = textMap(node.loginHeaders, 'node loginHeaders')
+    const loginInfos = textMap(node.loginInfos, 'node loginInfos')
+    if (sourceVariables !== undefined) nodeRuntime.sourceVariables = sourceVariables
+    if (sourceValues !== undefined) nodeRuntime.sourceValues = sourceValues
+    if (loginHeaders !== undefined) nodeRuntime.loginHeaders = loginHeaders
+    if (loginInfos !== undefined) nodeRuntime.loginInfos = loginInfos
+    if (normalizedCache !== undefined) nodeRuntime.cache = normalizedCache
+    output.nodeRuntime = nodeRuntime
   }
   if (input.infoMap !== undefined) {
     if (typeof input.infoMap !== 'object' || input.infoMap === null || Array.isArray(input.infoMap)) throw new Error('invalid infoMap')
@@ -98,7 +174,8 @@ export function normalizeSnapshot(value: unknown): RuntimeStateSnapshot {
       if (JSON.stringify(normalized).length > 64_000) throw new Error('discovery category too large')
       categories.push(normalized)
     }
-    output.discovery = { version: 1, fingerprint: discovery.fingerprint, categories }
+    if (discovery.generation !== undefined && (typeof discovery.generation !== 'number' || !Number.isSafeInteger(discovery.generation) || discovery.generation < 0)) throw new Error('invalid discovery generation')
+    output.discovery = { version: 1, fingerprint: discovery.fingerprint, ...(discovery.generation === undefined ? {} : { generation: discovery.generation }), categories }
   }
   if (input.cache !== undefined) {
     if (typeof input.cache !== 'object' || input.cache === null || Array.isArray(input.cache)) throw new Error('invalid cache')

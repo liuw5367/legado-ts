@@ -211,3 +211,16 @@ test('discovery contracts reject missing identities, negative pages and unsigned
   assert.equal(discoveryPageSchema.safeParse({ ...input, cursor: { index: 2, token: '/arbitrary' } }).success, false)
   assert.equal(discoveryBookSchema.safeParse(input).success, false)
 })
+
+test('discovery rejects a cursor from before a control refresh', async (t) => {
+  const { repository, source } = await setup({
+    exploreUrl: JSON.stringify([{ title: '方向', type: 'toggle', chars: ['男', '女'], default: '男', action: 'java.refreshExplore()' }, { title: '榜单', url: '/control-list' }]),
+  })
+  t.mock.method(globalThis, 'fetch', async () => new Response(listHtml()))
+  const categories = await getDiscoveryCategories(repository, 'user-a', source.sourceId)
+  const control = categories.categories.find((item) => item.title === '方向')!
+  const list = categories.categories.find((item) => item.title === '榜单')!
+  const first = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id })
+  await updateDiscoveryControl(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: control.id, value: '女' })
+  await assert.rejects(loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id, cursor: first.cursor }), /筛选已更新/u)
+})

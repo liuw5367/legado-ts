@@ -22,6 +22,20 @@ test('runtime state normalization accepts only serializable string variables', (
   assert.throws(() => normalizeSnapshot({ variables: { token: 1 } }), /invalid variable/)
 })
 
+test('runtime state preserves the Node source namespace and discovery generation', () => {
+  const snapshot = {
+    nodeRuntime: {
+      version: 1 as const,
+      sourceValues: { 'https://source.invalid': { token: 'value' } },
+      loginHeaders: { 'https://source.invalid': '{"Authorization":"Bearer saved"}' },
+      cache: { values: { key: { value: 'cached', expiresAt: 10 } } },
+    },
+    discovery: { version: 1 as const, fingerprint: 'fp', generation: 3, categories: [] },
+  }
+  assert.deepEqual(decryptRuntimeState(encryptRuntimeState(snapshot, secret), secret), snapshot)
+  assert.throws(() => normalizeSnapshot({ nodeRuntime: { version: 2 } }), /invalid node runtime version/)
+})
+
 test('runtime state encryption rejects oversized source state', () => {
   assert.throws(() => encryptRuntimeState({ variables: { oversized: 'x'.repeat(MAX_RUNTIME_STATE_BYTES) } }, secret), /超过大小限制/)
 })
