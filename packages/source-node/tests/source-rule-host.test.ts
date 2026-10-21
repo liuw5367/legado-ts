@@ -77,6 +77,37 @@ test('Android JsExtensions 和 BaseSource 方法清单全部注册到 JS 运行�
   assert.deepEqual(Object.values(values.source), Array.from({ length: sourceNames.length }, () => 'function'))
 })
 
+test('JavaImporter、Packages、Map/List 和 Java String 常见用法可运行', async () => {
+  const host = new SourceRuleHost()
+  const code = `var importer = new JavaImporter(Packages.java.lang, Packages.java.security);
+    with (importer) {
+      var digest = MessageDigest.getInstance('MD5').digest(String('123').getBytes());
+      var map = new Packages.java.util.HashMap({ user: 'alice' });
+      map.put('role', 'reader');
+      var list = new Packages.java.util.ArrayList(['a']);
+      list.add('b');
+    var response = new Packages.io.legado.app.help.http.StrResponse('https://fixture.invalid', 'body');
+    JSON.stringify({ digest: [digest.length, digest[0]], text: String('Book').substring(1, 3).toString(), map: [map.get('user'), map.get('role'), map.size()], list: [list.get(1), list.size()], response: [response.url, response.body, response.code] });
+    }`
+  const result = await evaluate(host, `@js:${code}`, '')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), { digest: [16, 32], text: 'oo', map: ['alice', 'reader', 2], list: ['b', 2], response: ['https://fixture.invalid', 'body', 200] })
+})
+
+test('source Map 兼容方法、URL 查询参数重复值和 jsLib 全局状态可恢复', async () => {
+  const host = new SourceRuleHost()
+  const stateSource = { ...source, jsLib: 'var tutorialCounter = (typeof tutorialCounter === "undefined" ? 0 : tutorialCounter) + 1;' } as NormalizedSource
+  const first = await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:source.putLoginInfo(JSON.stringify({ user: "alice" })); var m = source.getLoginInfoMap(); JSON.stringify([m.get("user"), m.containsKey("user"), m.size(), java.toURL("https://a.test/p?q=1&q=2").searchParams.getAll("q")])', content: '' })
+  assert.equal(first.status, 'success')
+  assert.deepEqual(JSON.parse(String(first.value)), ['alice', true, 1, ['1', '2']])
+  const second = await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:tutorialCounter', content: '' })
+  assert.equal(second.value, 2)
+  const refreshed = await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:source.refreshJSLib(); "ok"', content: '' })
+  assert.equal(refreshed.value, 'ok')
+  const afterRefresh = await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:tutorialCounter', content: '' })
+  assert.equal(afterRefresh.value, 1)
+})
+
 test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', async () => {
   const host = new SourceRuleHost()
   const json = { data: [{ name: '我本无意成仙', path: '/book/1' }] }
@@ -498,6 +529,12 @@ test('JavaScript CacheManager bridge 支持普通、内存和文件缓存', asyn
 
   const overwritten = await evaluate(host, "@js:cache.putMemory('ttl', 'stale'); cache.put('ttl', 'fresh', 60); cache.getFromMemory('ttl')", '')
   assert.equal(overwritten.status, 'empty', '带过期时间的普通缓存会清除旧的永久内存副本')
+})
+
+test('CacheManager 保留对象、数字和 ByteArray 类型', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:cache.put("object", { id: 7 }); cache.put("bytes", Uint8Array.from([1, 2])); cache.put("number", 12.5); JSON.stringify([cache.get("object"), Array.from(cache.getByteArray("bytes")), cache.getDouble("number")])', '')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), [{ id: 7 }, [1, 2], 12.5])
 })
 
 test('书源 JS 可读取 Cookie、时间与 UUID，设备标识能力缺失时明确报错', async () => {

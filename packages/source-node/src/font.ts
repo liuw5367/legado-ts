@@ -278,6 +278,10 @@ class NodeFontMapping implements FontMapping {
     return glyphId >= 0 && glyphId < this.reader.glyphSignatures.length ? this.reader.glyphSignatures[glyphId] : undefined
   }
 
+  public glyphById(glyphId: number): string | undefined {
+    return glyphId >= 0 && glyphId < this.reader.glyphSignatures.length ? this.reader.glyphSignatures[glyphId] : undefined
+  }
+
   public unicodeByGlyph(glyph: string | undefined): number {
     return glyph === undefined ? 0 : this.glyphToUnicode.get(glyph) ?? 0
   }

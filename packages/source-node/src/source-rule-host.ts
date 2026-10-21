@@ -47,7 +47,13 @@ function formatJavaDate(time: number, pattern: string, offsetMs?: number): strin
   const offsetMinutes = Math.trunc((offsetMs ?? -date.getTimezoneOffset() * 60_000) / 60_000)
   const offset = `${offsetMinutes < 0 ? '-' : '+'}${String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, '0')}${String(Math.abs(offsetMinutes) % 60).padStart(2, '0')}`
   // 按 Java SimpleDateFormat 常用日期字段展开，单引号包围的文字原样保留。
-  return pattern.replace(/'([^']|'')*'|y+|M+|d+|H+|h+|m+|s+|S+|E+|a|Z|X+/gu, (token) => {
+  const dayOfYear = Math.floor((date.getTime() - (utc ? Date.UTC(year, 0, 1) : new Date(year, 0, 1).getTime())) / 86_400_000) + 1
+  const firstDayOfYear = utc ? new Date(Date.UTC(year, 0, 1)).getUTCDay() : new Date(year, 0, 1).getDay()
+  const firstDayOfMonth = utc ? new Date(Date.UTC(year, month - 1, 1)).getUTCDay() : new Date(year, month - 1, 1).getDay()
+  const weekOfYear = Math.floor((dayOfYear + firstDayOfYear - 1) / 7) + 1
+  const weekOfMonth = Math.floor((day + firstDayOfMonth - 1) / 7) + 1
+  const timezoneName = utc ? 'UTC' : new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(date).find((item) => item.type === 'timeZoneName')?.value ?? offset
+  return pattern.replace(/'([^']|'')*'|y+|M+|d+|D+|H+|k+|K+|h+|m+|s+|S+|E+|a|w+|W+|F+|z+|G+|Z|X+/gu, (token) => {
     if (token === "''") return "'"
     if (token.startsWith("'")) return token.slice(1, -1).replaceAll("''", "'")
     if (token[0] === 'y') return token.length === 2 ? String(year % 100).padStart(2, '0') : String(year).padStart(token.length, '0')
@@ -56,15 +62,23 @@ function formatJavaDate(time: number, pattern: string, offsetMs?: number): strin
       return new Intl.DateTimeFormat(undefined, { month: token.length === 3 ? 'short' : 'long', ...(utc ? { timeZone: 'UTC' } : {}) }).format(date)
     }
     if (token[0] === 'd') return token.length === 1 ? String(day) : String(day).padStart(token.length, '0')
+    if (token[0] === 'D') return token.length === 1 ? String(dayOfYear) : String(dayOfYear).padStart(token.length, '0')
     if (token[0] === 'H' || token[0] === 'h') {
       const value = token[0] === 'h' ? (hour % 12 || 12) : hour
       return token.length === 1 ? String(value) : String(value).padStart(token.length, '0')
     }
+    if (token[0] === 'k') { const value = hour === 0 ? 24 : hour; return token.length === 1 ? String(value) : String(value).padStart(token.length, '0') }
+    if (token[0] === 'K') { const value = hour % 12; return token.length === 1 ? String(value) : String(value).padStart(token.length, '0') }
     if (token[0] === 'm') return token.length === 1 ? String(minute) : String(minute).padStart(token.length, '0')
     if (token[0] === 's') return token.length === 1 ? String(second) : String(second).padStart(token.length, '0')
     if (token[0] === 'S') return String(millis).padStart(token.length, '0')
     if (token[0] === 'E') return new Intl.DateTimeFormat(undefined, { weekday: token.length >= 4 ? 'long' : 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2020, 5, 7 + weekday)))
     if (token === 'a') return hour < 12 ? 'AM' : 'PM'
+    if (token[0] === 'w') return token.length === 1 ? String(weekOfYear) : String(weekOfYear).padStart(token.length, '0')
+    if (token[0] === 'W') return token.length === 1 ? String(weekOfMonth) : String(weekOfMonth).padStart(token.length, '0')
+    if (token[0] === 'F') return String(Math.floor((day - 1) / 7) + 1)
+    if (token[0] === 'z') return timezoneName
+    if (token[0] === 'G') return token.length >= 4 ? 'AD' : 'AD'
     if (token === 'Z') return offset
     if (token[0] === 'X') {
       if (offsetMinutes === 0) return 'Z'

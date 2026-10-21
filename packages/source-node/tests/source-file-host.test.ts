@@ -28,6 +28,21 @@ test('Node 文件宿主限制相对路径并支持下载、读取和删除', asy
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Node 文件宿主提供 Android File 的元数据和 listFiles', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-file-list-test-'))
+  try {
+    const host = new NodeSourceFileHost({ root, network: { request: async () => ({ url: 'https://fixture.invalid', status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }) } })
+    const signal = new AbortController().signal
+    await writeFile(join(root, 'one.txt'), 'one', 'utf8')
+    await writeFile(join(root, 'two.txt'), 'two', 'utf8')
+    const files = await host.execute('listFiles', { path: '' }, signal, source) as Array<{ name: string; length: number; lastModified: number; isFile: boolean }>
+    assert.deepEqual(files.map((item) => item.name).sort(), ['one.txt', 'two.txt'])
+    assert.ok(files.every((item) => item.isFile && item.length === 3 && item.lastModified > 0))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 test('Node 文件宿主的缓存 API 重复命中时不重复请求', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-cache-test-'))
   let calls = 0

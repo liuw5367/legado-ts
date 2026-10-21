@@ -135,6 +135,12 @@ export class SourceRequestHost {
     return this.runtime.request(input)
   }
 
+  /** 供 java.downloadFile/cacheFile/字体/归档复用当前书源的认证、动态头和 URL 选项。 */
+  public async requestBytes(url: string, signal: AbortSignal, source: NormalizedSource): Promise<Uint8Array> {
+    const response = await this.runtime.requestRaw(source, url, { method: 'GET', followRedirects: true }, signal, undefined, 'detail', false, false, 'bridge')
+    return response.bytes
+  }
+
   /** source 随本次 JavaScript bridge 调用传入，避免并发书源共享可变上下文。 */
   public async requestFromBridge(input: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource): Promise<unknown> {
     const url = text(input.url)
@@ -146,6 +152,10 @@ export class SourceRequestHost {
     if (input.kind === 'cookie-remove') {
       // Android 按 URL 删除；清空整个 jar 会让同一会话里的其他书源丢凭据。
       await this.cookieStore.remove(new URL(url, source.bookSourceUrl).toString())
+      return true
+    }
+    if (input.kind === 'cookie-clear') {
+      await this.cookieStore.clear()
       return true
     }
     if (input.kind === 'token') throw new Error('书源 token bridge 不可用')

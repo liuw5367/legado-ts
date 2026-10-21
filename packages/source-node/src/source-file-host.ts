@@ -13,6 +13,8 @@ export interface NodeSourceFileHostOptions {
   /** 受控阅读缓存根目录；所有书源路径都只能落在此目录下。 */
   root?: string
   network: NetworkHost
+  /** 可选的源请求链；提供后下载会复用动态 header、登录头、Cookie 和 URL options。 */
+  requestBytes?: (url: string, signal: AbortSignal, source: NormalizedSource) => Promise<Uint8Array>
   encoding?: NodeCharsetCodec
   archive?: ArchiveHost
 }
@@ -70,6 +72,7 @@ function detectCharset(bytes: Uint8Array): string {
 export class NodeSourceFileHost implements SourceFileHost {
   private readonly root: string
   private readonly network: NetworkHost
+  private readonly requestBytes?: NodeSourceFileHostOptions['requestBytes']
   private readonly encoding: NodeCharsetCodec
   private readonly binaryEncoding: NodeEncodingHost
   private readonly archive: ArchiveHost
@@ -77,6 +80,7 @@ export class NodeSourceFileHost implements SourceFileHost {
   public constructor(options: NodeSourceFileHostOptions) {
     this.root = resolve(options.root ?? join(tmpdir(), 'legado-source-cache'))
     this.network = options.network
+    this.requestBytes = options.requestBytes
     this.encoding = options.encoding ?? new NodeCharsetCodec()
     this.binaryEncoding = new NodeEncodingHost()
     this.archive = options.archive ?? new NodeArchiveHost()
@@ -87,6 +91,7 @@ export class NodeSourceFileHost implements SourceFileHost {
     await mkdir(this.root, { recursive: true })
     await this.assertNoSymlink('')
     if (operation === 'getFile') return this.fileInfo(text(input.path))
+    if (operation === 'listFiles') return this.listFiles(text(input.path))
     if (operation === 'readFile') return this.readBytes(text(input.path))
     if (operation === 'readTxtFile') return this.readText(text(input.path), charsetOf(input.charset))
     if (operation === 'deleteFile') return this.deletePath(text(input.path))
@@ -122,10 +127,24 @@ export class NodeSourceFileHost implements SourceFileHost {
     await this.assertNoSymlink(target.relative)
     try {
       const value = await stat(target.absolute)
-      return { path: target.relative, absolutePath: target.relative, name: target.relative.split('/').at(-1) ?? '', length: value.isFile() ? value.size : 0, exists: true, isFile: value.isFile(), isDirectory: value.isDirectory() }
+      return { path: target.relative, absolutePath: target.relative, name: target.relative.split('/').at(-1) ?? '', length: value.isFile() ? value.size : 0, lastModified: value.mtimeMs, exists: true, isFile: value.isFile(), isDirectory: value.isDirectory() }
     } catch {
-      return { path: target.relative, absolutePath: target.relative, name: target.relative.split('/').at(-1) ?? '', length: 0, exists: false, isFile: false, isDirectory: false }
+      return { path: target.relative, absolutePath: target.relative, name: target.relative.split('/').at(-1) ?? '', length: 0, lastModified: 0, exists: false, isFile: false, isDirectory: false }
     }
+  }
+
+  private async listFiles(path: string): Promise<Array<Readonly<Record<string, unknown>>>> {
+    const target = this.absolute(path)
+    await this.assertNoSymlink(target.relative)
+    let names: string[]
+    try { names = await readdir(target.absolute) } catch { return [] }
+    const result: Array<Readonly<Record<string, unknown>>> = []
+    for (const name of names) {
+      const child = join(target.relative, name)
+      const childInfo = await this.fileInfo(child)
+      if (childInfo.exists === true) result.push(childInfo)
+    }
+    return result
   }
 
   private async readBytes(path: string): Promise<Uint8Array | null> {
@@ -209,6 +228,14 @@ export class NodeSourceFileHost implements SourceFileHost {
   }
 
   private async downloadTo(url: string, path: string, signal: AbortSignal, source: NormalizedSource): Promise<void> {
+    if (this.requestBytes !== undefined) {
+      const bytes = await this.requestBytes(url, signal, source)
+      const target = this.absolute(path)
+      await this.assertNoSymlink(target.relative)
+      await mkdir(join(target.absolute, '..'), { recursive: true })
+      await writeFile(target.absolute, Buffer.from(bytes))
+      return
+    }
     const plan = createRequestPlan({ url, baseUrl: source.bookSourceUrl, method: 'GET', responseType: 'bytes', followRedirects: true, budget: { timeoutMs: 30_000, maxRequests: 1, maxPages: 5, maxResponseBytes: 32 * 1024 * 1024, maxTotalBytes: 32 * 1024 * 1024, maxRequestBodyBytes: 0, maxRedirects: 5 }, execution: { useWebView: false } })
     if (plan.plan === undefined) throw new Error(plan.error?.message ?? '下载地址无效')
     plan.plan.budget.signal = signal
@@ -243,6 +270,7 @@ export class NodeSourceFileHost implements SourceFileHost {
   }
 
   private async downloadBytes(url: string, signal: AbortSignal, source: NormalizedSource): Promise<Uint8Array> {
+    if (this.requestBytes !== undefined) return this.requestBytes(url, signal, source)
     const plan = createRequestPlan({ url, baseUrl: source.bookSourceUrl, method: 'GET', responseType: 'bytes', followRedirects: true, budget: { timeoutMs: 30_000, maxRequests: 1, maxPages: 5, maxResponseBytes: 32 * 1024 * 1024, maxTotalBytes: 32 * 1024 * 1024, maxRequestBodyBytes: 0, maxRedirects: 5 }, execution: { useWebView: false } })
     if (plan.plan === undefined) throw new Error(plan.error?.message ?? '归档地址无效')
     plan.plan.budget.signal = signal

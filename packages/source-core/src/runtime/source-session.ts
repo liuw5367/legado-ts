@@ -59,6 +59,10 @@ export class MemorySourceScriptCache implements SourceScriptCache {
     return this.memory.get(key) ?? this.read(this.values, key)
   }
 
+  public getFromDisk(key: string): string | undefined {
+    return this.read(this.values, key)
+  }
+
   public put(key: string, value: string, saveTime = 0): void {
     this.write(this.values, key, value, saveTime)
     if (saveTime === 0) this.memory.set(key, value)

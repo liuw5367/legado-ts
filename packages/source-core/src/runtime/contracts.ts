@@ -230,6 +230,8 @@ export interface SourceScriptCacheSnapshot {
 /** JavaScript 书源使用的会话缓存；saveTime 单位为秒，0 表示不过期。 */
 export interface SourceScriptCache {
   get(key: string, signal?: AbortSignal): string | undefined | Promise<string | undefined>
+  /** 仅读取普通持久缓存，供 Android CacheManager.get(key, onlyDisk) 使用。 */
+  getFromDisk?(key: string, signal?: AbortSignal): string | undefined | Promise<string | undefined>
   put(key: string, value: string, saveTime?: number, signal?: AbortSignal): void | Promise<void>
   delete(key: string, signal?: AbortSignal): void | Promise<void>
   getFromMemory(key: string): string | undefined | Promise<string | undefined>
@@ -275,6 +277,8 @@ export interface FontMapping {
   glyphIdByUnicode(unicode: number): number
   /** 查询 Unicode 对应的轮廓签名；缺少轮廓时返回 undefined。 */
   glyphByUnicode(unicode: number): string | undefined
+  /** 查询 glyph id 对应的轮廓签名；宿主无法提供时返回 undefined。 */
+  glyphById?(glyphId: number): string | undefined
   /** 用轮廓签名反查 Unicode；未找到时返回 0。 */
   unicodeByGlyph(glyph: string | undefined): number
   /** Android 兼容的空白 Unicode 判断。 */

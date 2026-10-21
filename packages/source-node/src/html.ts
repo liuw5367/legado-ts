@@ -94,7 +94,8 @@ const blockElements = new Set(['address', 'article', 'aside', 'blockquote', 'br'
 /** Jsoup Element.text 的可移植子集：忽略 data 节点、规范空白并在块级元素间补分隔。 */
 function jsoupText(node: AnyNode): string {
   const chunks: string[] = []
-  const append = (value: string): void => { if (value.length > 0) chunks.push(normalizeWhitespace(value)) }
+  // 保留文本节点中的换行：规则替换依赖 `\\n`，块级元素之间再单独补空格。
+  const append = (value: string): void => { if (value.length > 0) chunks.push(value.replace(/[ \t\f\v\r]+/gu, ' ')) }
   const visit = (current: AnyNode): void => {
     if (isScriptOrStyle(current)) return
     if (isText(current)) { append(getText(current)); return }
@@ -103,7 +104,7 @@ function jsoupText(node: AnyNode): string {
     if (!isDocument(current) && isTag(current) && blockElements.has(current.name)) append(' ')
   }
   visit(node)
-  return chunks.join('').replace(/\s+/gu, ' ').trim()
+  return chunks.join('').replace(/[ \t\f\v\r]+/gu, ' ').trim()
 }
 
 function ownTextValue(node: AnyNode): string {
