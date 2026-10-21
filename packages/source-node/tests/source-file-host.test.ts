@@ -54,6 +54,9 @@ test('Node 文件宿主的缓存 API 重复命中时不重复请求', async () =
     assert.equal(await host.execute('cacheFile', { url: 'https://fixture.invalid/a.js' }, signal, source), 'cache')
     assert.equal(calls, 1)
     assert.match(String(await readFile(join(root, '888a5ce93739a872.js'))), /cache/u)
+    await host.invalidateCacheFile?.('888a5ce93739a872', signal, source)
+    assert.equal(await host.execute('cacheFile', { url: 'https://fixture.invalid/a.js' }, signal, source), 'cache')
+    assert.equal(calls, 2)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

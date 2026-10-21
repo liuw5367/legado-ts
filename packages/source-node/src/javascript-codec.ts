@@ -123,6 +123,21 @@ export const guestCodecSource = String.raw`(() => {
     for (const key of Object.keys(value)) freeze(value[key], seen)
     return Object.freeze(value)
   }
+  const freezeBindings = (value, mutableNames = []) => {
+    const mutable = new Set(mutableNames)
+    const seen = new Set()
+    const visit = (current, root = false) => {
+      if (current === null || (typeof current !== 'object' && typeof current !== 'function') || seen.has(current)) return current
+      if (current instanceof Uint8Array) return current
+      seen.add(current)
+      for (const key of Object.keys(current)) {
+        if (root && mutable.has(key)) continue
+        visit(current[key], false)
+      }
+      return Object.freeze(current)
+    }
+    return visit(value, true)
+  }
   const encode = (root) => {
     const references = new Map()
     let nextId = 0
@@ -154,4 +169,5 @@ export const guestCodecSource = String.raw`(() => {
   globalThis.__legadoDecode = decode
   globalThis.__legadoEncode = encode
   globalThis.__legadoFreeze = freeze
+  globalThis.__legadoFreezeBindings = freezeBindings
 })()`

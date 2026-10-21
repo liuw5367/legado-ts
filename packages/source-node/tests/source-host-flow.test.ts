@@ -607,6 +607,32 @@ test('loginCheckJs 收到可调用的 StrResponse 并用返回正文继续解析
   assert.equal(recovered.value?.items[0]?.name, '恢复书')
 })
 
+test('loginCheckJs 可以登录后通过 AnalyzeUrl 上下文重取响应', async () => {
+  const source = {
+    bookSourceUrl: 'https://login-refresh.test',
+    bookSourceName: 'Login Refresh',
+    searchUrl: '/search',
+    loginUrl: '<js>function login(){ source.putLoginHeader(JSON.stringify({ Authorization: "Bearer refreshed" })) }</js>',
+    loginCheckJs: 'if (result.code() === 401) { source.login(); java.getStrResponse(null, null, false) } else result',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
+  } as unknown as NormalizedSource
+  const plans: Array<{ url: string; authorization: string | undefined }> = []
+  let loginHeader: string | undefined
+  const network: NetworkHost = { getLoginHeaders: async () => loginHeader === undefined ? undefined : JSON.parse(loginHeader) as Record<string, string>, request: async (plan) => {
+    plans.push({ url: plan.url, authorization: plan.headers.Authorization })
+    if (plan.headers.Authorization !== 'Bearer refreshed') return { ...response(plan.url, 'login'), status: 401 }
+    return response(plan.url, '{"books":[{"name":"刷新书","url":"/book"}]}')
+  } }
+  const requestHost = new SourceRequestHost({ network, cookieStore: new NodeCookieStore() })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, currentSource) => requestHost.requestFromBridge(input, signal, currentSource), sourceState: { putLoginHeader: async (_currentSource, value) => { loginHeader = value } } })
+  requestHost.attachRuleHost(ruleHost)
+  const ports: WorkflowPorts = { network, rules: ruleHost, request: (input) => requestHost.request(input), decodeResponse: (input) => requestHost.decodeResponse(input) }
+  const result = await searchBooks(ports, { source, keyword: '刷新', maxItems: 3 })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items[0]?.name, '刷新书')
+  assert.deepEqual(plans.map((item) => item.authorization), [undefined, 'Bearer refreshed'])
+})
+
 test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章节标题', async () => {
   const source = {
     bookSourceUrl: 'https://format.test',

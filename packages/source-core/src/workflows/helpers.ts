@@ -460,6 +460,7 @@ async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, s
   }
   const responseBody = responseText(response, source, ports)
   const responseBinding = { url: response.url, status: response.status, code: response.status, message: '', body: responseBody, headers: response.headers }
+  const urlContext = { url: response.url, headerMap: {}, urlDirty: false }
   let output: WorkflowRuleOutput
   try {
     output = await ports.rules.executeWorkflowJavaScript({
@@ -469,9 +470,11 @@ async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, s
       content: responseBinding,
       bindings: {
         __strResponse: responseBinding,
+        __legadoUrlContext: urlContext,
         ...(requestContext?.book === undefined ? {} : { book: requestContext.book }),
         ...(requestContext?.chapter === undefined ? {} : { [internalChapterScopeBinding]: requestContext.chapter }),
       },
+      mutableBindings: ['__legadoUrlContext'],
       ...(signal === undefined ? {} : { signal }),
     })
   } catch {

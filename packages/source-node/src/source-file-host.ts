@@ -104,7 +104,7 @@ export class NodeSourceFileHost implements SourceFileHost {
       const format = operation.startsWith('getZip') ? 'zip' : operation.startsWith('getRar') ? 'rar' : '7z'
       const bytes = await this.archiveContent(text(input.url), text(input.path), format, signal, source)
       if (bytes === undefined) return ''
-      const charset = charsetOf(input.charset) ?? 'utf-8'
+      const charset = charsetOf(input.charset) ?? detectCharset(bytes)
       return this.encoding.decode(bytes, charset)
     }
     if (operation === 'getZipByteArrayContent' || operation === 'getRarByteArrayContent' || operation === 'get7zByteArrayContent') {
@@ -112,6 +112,20 @@ export class NodeSourceFileHost implements SourceFileHost {
       return this.archiveContent(text(input.url), text(input.path), format, signal, source)
     }
     throw new Error(`__LEGADO_CAPABILITY__runtime file.${operation} unavailable`)
+  }
+
+  /** CacheManager.delete(md5-16(url)) invalidates the Android cache mapping. */
+  public async invalidateCacheFile(key: string, signal: AbortSignal, _source: NormalizedSource): Promise<void> {
+    if (signal.aborted) throw new Error('__LEGADO_CANCELLED__')
+    const safeKey = safeRelative(key)
+    if (!/^[a-f\d]{16}$/iu.test(safeKey)) return
+    const metadata = this.absolute(`.legado-meta/${safeKey}.json`)
+    await this.assertNoSymlink(metadata.relative)
+    await rm(metadata.absolute, { force: true })
+    for (const name of await readdir(this.root).catch(() => [] as string[])) {
+      if (!name.startsWith(`${safeKey}.`)) continue
+      await rm(this.absolute(name).absolute, { force: true })
+    }
   }
 
   private absolute(value: string): { relative: string; absolute: string } {

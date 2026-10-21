@@ -214,7 +214,7 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
         : `__legadoEncode((() => {\n${input.code}\n})())`
       const source = [
         guestCodecSource,
-        `const bindings = __legadoFreeze(__legadoDecode(JSON.parse(${bindings})))`,
+        `const bindings = __legadoFreezeBindings(__legadoDecode(JSON.parse(${bindings})), ${JSON.stringify(input.mutableBindings ?? [])})`,
         `${bridgeWrapper('getVar', '__legadoGetVariable', 'variables')}\n${bridgeWrapper('setVar', '__legadoSetVariable', 'variables')}`,
         `${bridgeWrapper('request', '__legadoRequest', 'network')}`,
         `${bridgeWrapper('evaluateRule', '__legadoEvaluateRule', 'rule')}`,

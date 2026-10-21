@@ -67,7 +67,7 @@ test('书源请求宿主兼容 fixture 中常见的单引号 options 写法', as
 test('URL 的嵌入式 JavaScript 在任意位置执行并支持 @result', async () => {
   const urls: string[] = []
   const host = new SourceRequestHost({ network: { request: async (plan) => { urls.push(plan.url); return response(plan.url) } } })
-  host.attachRuleHost(new SourceRuleHost())
+  host.attachRuleHost(new SourceRuleHost({ request: (input, signal, currentSource) => host.requestFromBridge(input, signal, currentSource) }))
   await host.request({ source, url: 'https://fixture.invalid/search?q=<js>result + java.encodeURI("中文")</js>', stage: 'search', options: {} })
   assert.equal(urls[0], 'https://fixture.invalid/search?q=%E4%B8%AD%E6%96%87')
   await host.request({ source, url: 'https://fixture.invalid/search?prefix=<js>result</js>@result', stage: 'search', options: {} })
@@ -101,6 +101,25 @@ test('URL 请求选项执行 js/bodyJs、重试和十六进制响应类型', asy
   const hexHost = new SourceRequestHost({ network: { request: async (plan) => ({ ...response(plan.url), bytes: new Uint8Array([0, 255]) }) } })
   const binary = await hexHost.request({ source, url: '/binary,{"type":"hex"}', stage: 'search', options: {} })
   assert.equal(host.decodeResponse(binary), '00ff')
+})
+
+test('AnalyzeUrl 脚本可以修改 java.url/headerMap 并在上下文中重取 StrResponse', async () => {
+  const plans: Array<{ url: string; headers: Readonly<Record<string, string>> }> = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    plans.push({ url: plan.url, headers: plan.headers })
+    return { ...response(plan.url), bytes: new TextEncoder().encode(`body:${plan.url}`) }
+  } } })
+  host.attachRuleHost(new SourceRuleHost({ request: (input, signal, currentSource) => host.requestFromBridge(input, signal, currentSource) }))
+  const result = await host.request({
+    source,
+    url: `/signed,${JSON.stringify({ js: 'java.headerMap.put("X-Auth", "token"); java.url = java.url + "?signed=1"; java.getStrResponse(null, null, false).body' })}`,
+    stage: 'search',
+    options: {},
+  })
+  assert.equal(host.decodeResponse(result), 'body:https://fixture.invalid/signed?signed=1')
+  assert.deepEqual(plans.map((item) => item.url), ['https://fixture.invalid/signed?signed=1', 'https://fixture.invalid/signed?signed=1'])
+  assert.equal(plans[0]?.headers['X-Auth'], 'token')
+  assert.equal(plans[1]?.headers['X-Auth'], 'token')
 })
 
 test('URL 请求脚本携带书籍和内部章节变量作用域，但不暴露全局 chapter', async () => {

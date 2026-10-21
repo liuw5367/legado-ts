@@ -46,6 +46,8 @@ export interface JavaScriptExecutionInput {
   captureGlobals?: boolean
   /** 只读输入对象；执行器应深冻结其 guest 副本。 */
   bindings?: Readonly<Record<string, unknown>>
+  /** Named binding roots that must remain mutable for controlled host state adapters. */
+  mutableBindings?: readonly string[]
   /** 本次执行开始时的变量快照。 */
   variables?: Readonly<Record<string, unknown>>
   /** 本次执行的预算覆盖。 */

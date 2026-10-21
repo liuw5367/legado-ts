@@ -83,7 +83,7 @@
 | D19 | 规则解析 | HTML text/ownText/html/属性输出 | 部分实现（第二阶段） | D19；`html.ts` 增加 Jsoup 风格空白、块节点分隔和 script/style 排除；Node adapter 回归通过 | `text/ownText/textNodes` 常用语义已覆盖；HTML 修复算法、属性去重和 Android golden 仍待验证 |
 | D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现（第二阶段） | D20；`jsonpath.ts` 支持常用 `length/size/keys/min/max/avg/sum` 和安全正则筛选；Node adapter 回归通过 | 仍受 jsonpath-plus safe evaluator 方言边界约束；完整 Jayway 函数、null/缺失和嵌套集合仍待验证 |
 | D21 | 规则解析 | Java 正则与替换字符串 | 部分实现（第二阶段） | D21；`pattern-guard.ts` 支持内联 flags、`\\Q…\\E`、边界转义和占有量词降级，并对作用域 flags/字符类交集给出能力诊断；规则回归通过 | 未覆盖的 Java 语法、Matcher/替换字符串细节和 Android golden 仍待验证 |
-| D22 | 请求脚本 | AnalyzeUrl 对象修改与登录后重取 | 部分实现 | 差异登记 D22；TS 请求桩已复现 | java.url/headerMap 和上下文专属方法按预算执行 |
+| D22 | 请求脚本 | AnalyzeUrl 对象修改与登录后重取 | 部分实现（第四阶段） | `java.url`/`headerMap`、`getHeaderMap`、`initUrl`、受控 `getStrResponse/getResponse` 已接入 URL 脚本上下文；Node fixture 验证重取顺序和头部 | WebView 默认路径仍能力缺失；完整 loginCheckJs 人工登录重取、递归/取消/Android golden 仍待验证 |
 | D23 | JS bridge | AnalyzeRule 继承成员和重载 | 部分实现（第三阶段） | `source-runtime.ts` 已补 setBaseUrl/setRedirectUrl/setLocal/evalJS、刷新助手和 getString/getStringList 布尔重载；规则宿主回归通过 | 仍需补齐 AnalyzeUrl 专属上下文、null/内容重载全量 Android golden |
 | D24 | JS 对象 | Map/List/Jsoup 返回对象方法 | 部分实现（第三阶段） | 受控 `Map/List`、source 登录 Map、getStringList/getElements 返回对象和 Java String 方法已有教程式回归 | Jsoup 全部链式成员及完整公开对象清单仍待验证 |
 | D25 | JS 源 | sourceApi 与源规则访问器 | 部分实现（第三阶段） | `sourceApi` 与 source 兼容对象绑定，规则访问器和 Header/Login Map 已补；Node 回归通过 | 旧 source 配置全部字段和 Android golden 仍待验证 |
@@ -91,7 +91,7 @@
 | D27 | Cookie | CookieStore 公开面及域语义 | 部分实现（第三阶段） | cookie 已补 getKey/replaceCookie/cookieToMap/mapToCookie/clear；Node CookieStore 仍按 URL 隔离 | 二级域合并、WebView Cookie 同步和 Android golden 仍待验证 |
 | D28 | 应用状态 | Web 跨请求源状态与 cache 恢复 | 部分实现（第一阶段） | 差异登记 D28；Node 快照恢复和 Web 加密快照已覆盖源键值、登录信息、登录头与字符串缓存 | 删除/换版、账号隔离、恢复失败和自定义缓存宿主仍需验证 |
 | D29 | 文件隔离 | Web 默认共享文件目录 | 部分实现（第一阶段） | 差异登记 D29；Web 通过部署密钥派生账号/源/版本命名空间并注入 `fileRoot` | 跨命名空间读写删除拒绝及无持久磁盘部署仍需组合验证 |
-| D30 | 文件请求 | 下载认证/URL options/归档字符集/缓存失效 | 部分实现（第三阶段） | Node session 的文件/字体/归档下载复用 SourceRequestHost，继承动态 Header、登录头、Cookie 和重定向；独立 host 仍有受控 HTTP 回退 | 归档无 charset 自动探测和 Android cacheFile 失效身份仍待验证 |
+| D30 | 文件请求 | 下载认证/URL options/归档字符集/缓存失效 | 部分实现（第四阶段） | Node session 的文件/字体/归档下载复用 SourceRequestHost，继承动态 Header、登录头、Cookie 和重定向；归档 bytes 自动探测字符集；`cache.delete(md5Encode16(url))` 会同步失效 `cacheFile` 映射 | 受控 HTTP 仍不等于 WebView；真实 Android 归档/缓存 golden 仍待验证 |
 | D31 | 发现状态 | InfoMap 方法、保存时机和 TTL | 部分实现 | 差异登记 D31；方法已复现，保存语义源码确认 | 无参 get、删除、save(time,need)、saveNow 与布局分别验证 |
 | D32 | 加密重载 | 已废弃 AES API 的实际返回类型与行为 | 部分实现（第三阶段） | `aesEncodeToString` 对齐 Android 历史 decryptStr；`aesEncodeToBase64ByteArray` 返回 UTF-8 Base64 bytes；Node 加密回归通过 | 其余 DES/3DES 历史方法和 Android golden 仍待逐项固定 |
 | D33 | 加密对象 | 工厂状态、模式/padding/RSA 参数 | 部分实现 | 差异登记 D33；部分已复现 | 精确算法映射、同一工厂状态和支持范围逐签名验证 |
@@ -103,8 +103,8 @@
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（第三阶段） | jsLib 按源指纹恢复可序列化全局状态，`refreshJSLib` 清除状态并有跨执行回归；函数/闭包/宿主对象不进入快照 | 并发、取消、跨进程和非序列化对象生命周期仍需明确边界 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（第一阶段） | 差异登记 D40；游标签名加入发现代次，刷新后旧游标有回归测试 | 动态 URL/infoMap 摘要、迟到请求写回和多实例组合仍需验证 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 差异待处理 | 差异登记 D41；69 项原回归通过仍有新缺口 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
-| D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第三阶段） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值并按 Android 规则保留参数名；回归通过 | IPv6 authority、无 base/非法输入及完整 URL 属性仍待 Android golden |
-| D43 | 文件对象 | File 方法和即时状态 | 部分实现（第三阶段） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles，并每次刷新宿主元数据；Node 文件回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
+| D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；回归覆盖 IPv6 host/port/origin | 无 base/非法输入、默认端口和完整 URL 属性仍待 Android golden |
+| D43 | 文件对象 | File 方法和即时状态 | 部分实现（第四阶段） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles，并每次刷新宿主元数据；`cache.delete` 会清理对应 `cacheFile` 映射；Node 文件回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
 
 ## 完成时如何更新
 

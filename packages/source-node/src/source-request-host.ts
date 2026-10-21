@@ -158,6 +158,28 @@ export class SourceRequestHost {
       await this.cookieStore.clear()
       return true
     }
+    if (input.kind === 'url-context-response') {
+      const context = object(input.input) ?? {}
+      const contextUrl = text(context.url)
+      if (contextUrl.length === 0) throw new SourceRequestError('invalid-config', 'AnalyzeUrl 上下文缺少 URL')
+      const options = object(context.options) as SourceRequestOptions | undefined
+      const contextHeaders = object(context.headers)
+      const overrides: SourceRequestOptions = {
+        ...(options ?? {}),
+        ...(typeof context.method === 'string' ? { method: context.method } : {}),
+        ...(context.body === undefined ? {} : { body: context.body }),
+        ...(contextHeaders === undefined ? {} : { headers: Object.fromEntries(Object.entries(contextHeaders).map(([key, value]) => [key, text(value)])) }),
+        ...(context.useWebView === true ? { webView: true } : {}),
+        ...(typeof context.jsStr === 'string' && context.jsStr.length > 0 ? { webJs: context.jsStr } : {}),
+        ...(typeof context.sourceRegex === 'string' && context.sourceRegex.length > 0 ? { sourceRegex: context.sourceRegex } : {}),
+      }
+      const depth = this.bridgeDepth.getStore() ?? 0
+      if (depth >= maxBridgeDepth) throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
+      return this.bridgeDepth.run(depth + 1, async () => {
+        const response = await this.runtime.requestRaw(source, contextUrl, overrides, signal, undefined, input.stage ?? 'search', true, false, 'bridge', contextUrl)
+        return this.responseObject(response)
+      })
+    }
     if (input.kind === 'token') throw new Error('书源 token bridge 不可用')
     if (input.kind !== 'network' && input.kind !== 'network-all' && input.kind !== 'network-response') throw new Error(`未知书源 bridge: ${input.kind}`)
     const depth = this.bridgeDepth.getStore() ?? 0

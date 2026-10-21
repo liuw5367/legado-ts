@@ -108,6 +108,12 @@ test('source Map 兼容方法、URL 查询参数重复值和 jsLib 全局状态�
   assert.equal(afterRefresh.value, 1)
 })
 
+test('java.toURL 保留 IPv6 authority 和已编码查询参数名', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:JSON.stringify((() => { const url = java.toURL("https://[2001:db8::1]:8080/p?a%20b=x+y#frag"); return [url.host, url.hostname, url.port, url.origin, url.search, url.searchParams.get("a%20b"), url.searchParams.toString()]; })())', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['[2001:db8::1]:8080', '[2001:db8::1]', '8080', 'https://[2001:db8::1]:8080', '?a%20b=x+y', 'x y', 'a%20b=x+y'])
+})
+
 test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', async () => {
   const host = new SourceRuleHost()
   const json = { data: [{ name: '我本无意成仙', path: '/book/1' }] }

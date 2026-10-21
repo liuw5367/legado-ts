@@ -202,6 +202,8 @@ export interface WorkflowJavaScriptRequest {
   /** 当前脚本访问请求上下文时使用的最终响应 URL；缺省为 baseUrl。 */
   redirectUrl?: string
   bindings?: Readonly<Record<string, unknown>>
+  /** Bindings whose nested plain objects must remain mutable inside the guest realm. */
+  mutableBindings?: readonly string[]
   /** Return mutated bindings together with the script result when a hook mutates Java-side DTOs. */
   captureMutations?: readonly string[]
   /** Carry explicitly serializable guest globals between related script executions. */

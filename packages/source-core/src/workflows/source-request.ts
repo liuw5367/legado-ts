@@ -60,6 +60,8 @@ export interface RequestScriptContext {
   chapterScope?: unknown
   /** DTO bindings whose direct JavaScript field mutations must be returned to the caller. */
   captureBindings?: readonly string[]
+  /** Binding roots used by controlled AnalyzeUrl state adapters. */
+  mutableBindings?: readonly string[]
 }
 
 function text(value: unknown): string {
@@ -320,8 +322,13 @@ export class SourceRequestRuntime {
 
   public async request(input: WorkflowRequest): Promise<NetworkResponse> {
     // 书源随这次调用显式传递：宿主上没有「当前书源」字段，同一宿主并发不同书源不会串源。
+    const urlContext: Record<string, unknown> = { url: input.url, headerMap: {}, urlDirty: false }
+    const captureBindings = ['__legadoUrlContext']
+    if (input.book !== undefined) captureBindings.push('book')
     const scriptContext: RequestScriptContext = {
-      ...(input.book === undefined ? {} : { bindings: { book: input.book }, captureBindings: ['book'] }),
+      bindings: { ...(input.book === undefined ? {} : { book: input.book }), __legadoUrlContext: urlContext },
+      captureBindings,
+      mutableBindings: ['__legadoUrlContext'],
       ...(input.chapter === undefined ? {} : { chapterScope: input.chapter }),
     }
     const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source, scriptContext)
@@ -362,7 +369,7 @@ export class SourceRequestRuntime {
     source: NormalizedSource,
     content: string,
     signal: AbortSignal | undefined,
-    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[] },
+    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[] },
   ): Promise<unknown> {
     if (this.ruleHost === undefined) throw new SourceRequestError('capability-missing', '脚本执行需要 JavaScript 宿主', context.field)
     const scriptStage = context.scriptStage ?? (stage === 'detail' ? 'book' : 'search')
@@ -387,6 +394,7 @@ export class SourceRequestRuntime {
             },
           }),
           ...(context.captureBindings === undefined ? {} : { captureMutations: context.captureBindings }),
+          ...(context.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
           ...(signal === undefined ? {} : { signal }),
         })
       } else {
@@ -405,6 +413,7 @@ export class SourceRequestRuntime {
             },
           }),
           ...(context.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
+          ...(context.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
           ...(signal === undefined ? {} : { signal }),
         })
       }
@@ -427,7 +436,7 @@ export class SourceRequestRuntime {
     stage: WorkflowStage,
     source: NormalizedSource,
     signal?: AbortSignal,
-    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[] },
+    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[] },
   ): Promise<string> {
     const value = await this.runSourceScript(code, stage, source, result, signal, {
       evaluateField: context?.evaluateField ?? 'url',
@@ -437,12 +446,16 @@ export class SourceRequestRuntime {
       ...(context?.bindings === undefined ? {} : { bindings: context.bindings }),
       ...(context?.chapterScope === undefined ? {} : { chapterScope: context.chapterScope }),
       ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
+      ...(context?.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
     })
     return text(value)
   }
 
   public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary', loginHeaderUrl = rawUrl, scriptContext?: RequestScriptContext): Promise<NetworkResponse> {
-    const split = splitSourceRequestUrl(rawUrl)
+    const suppliedUrlContext = object(scriptContext?.bindings?.__legadoUrlContext)
+    const urlContext: Record<string, unknown> = suppliedUrlContext ?? { url: rawUrl, headerMap: {}, urlDirty: false }
+    const effectiveRawUrl = urlContext.urlDirty === true && typeof urlContext.url === 'string' ? urlContext.url : rawUrl
+    const split = splitSourceRequestUrl(effectiveRawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
       throw new SourceRequestError('capability-missing', '书源请求需要 WebView')
@@ -505,12 +518,12 @@ export class SourceRequestRuntime {
     const retry = Math.min(optionInteger(options.retry) ?? 0, 10)
     const serverId = optionInteger(options.serverID, 0)
     const webViewDelayTimeMs = optionInteger(options.webViewDelayTime, 0)
-    const makePlan = (url: string) => createRequestPlan({
+    const makePlan = (url: string, planHeaders: Readonly<Record<string, string>> | undefined = headers, planBody: string | Uint8Array | undefined = body) => createRequestPlan({
       url,
       baseUrl: source.bookSourceUrl,
       method,
-      ...(body === undefined ? {} : { body }),
-      ...(headers === undefined ? {} : { headers }),
+      ...(planBody === undefined ? {} : { body: planBody }),
+      ...(planHeaders === undefined ? {} : { headers: planHeaders }),
       ...(requestCharset === undefined ? {} : { requestCharset }),
       ...(responseCharsetHint === undefined ? {} : { responseCharset: responseCharsetHint }),
       ...(followRedirects === undefined ? {} : { followRedirects }),
@@ -538,11 +551,34 @@ export class SourceRequestRuntime {
     // AnalyzeUrl updates baseUrl to the target origin before applying URL options.
     // It keeps this same baseUrl for bodyJs, even after an option-js rewrite or redirect.
     const scriptBaseUrl = originBaseUrl(request.plan.url)
+    const currentHeaderMap = headerObject(urlContext.headerMap)
+    if (currentHeaderMap !== undefined) {
+      headers = mergeHeaders(headers, currentHeaderMap)
+      urlContext.headerMap = { ...headers }
+    } else urlContext.headerMap = { ...(request.plan.headers ?? {}) }
+    urlContext.url = request.plan.url
+    urlContext.baseUrl = scriptBaseUrl
+    urlContext.redirectUrl = request.plan.url
+    urlContext.method = method
+    urlContext.body = body
+    const nestedOptions: SourceRequestOptions = { ...options }
+    delete nestedOptions.js
+    delete nestedOptions.bodyJs
+    delete nestedOptions.webJs
+    urlContext.options = nestedOptions
+    const urlScriptContext: RequestScriptContext = {
+      ...(scriptContext ?? {}),
+      bindings: { ...(scriptContext?.bindings ?? {}), __legadoUrlContext: urlContext },
+      captureBindings: [...new Set([...(scriptContext?.captureBindings ?? []), '__legadoUrlContext'])],
+      mutableBindings: [...new Set([...(scriptContext?.mutableBindings ?? []), '__legadoUrlContext'])],
+    }
     if (typeof options.js === 'string' && options.js.trim().length > 0) {
       const planUrl = request.plan.url
-      const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: scriptBaseUrl, redirectUrl: planUrl, ...scriptContext })
-      const rewrittenUrl = resolveSourceRequestUrl(rewritten, source.bookSourceUrl, charset, queryEncoder)
-      request = makePlan(rewrittenUrl)
+      const rewritten = await this.evaluateUrlScript(options.js, planUrl, stage, source, signal, { evaluateField: 'url', field: 'url', baseUrl: scriptBaseUrl, redirectUrl: planUrl, ...urlScriptContext })
+      const contextUrl = urlContext.urlDirty === true && typeof urlContext.url === 'string' ? urlContext.url : rewritten
+      const rewrittenUrl = resolveSourceRequestUrl(contextUrl, source.bookSourceUrl, charset, queryEncoder)
+      const rewrittenHeaders = headerObject(urlContext.headerMap) ?? headers
+      request = makePlan(rewrittenUrl, rewrittenHeaders)
       if (request.plan === undefined) {
         throw new SourceRequestError(request.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', request.error?.message ?? '书源 URL 脚本生成了无效地址', 'url')
       }

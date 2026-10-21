@@ -153,6 +153,8 @@ export type SourceFileOperation =
 /** Android 相对缓存目录文件 API 的受控宿主端口。路径解析和归档预算由宿主负责。 */
 export interface SourceFileHost {
   execute: (operation: SourceFileOperation, input: Readonly<Record<string, unknown>>, signal: AbortSignal, source: NormalizedSource) => unknown | Promise<unknown>
+  /** Optional CacheManager.delete hook for Android cacheFile mappings. */
+  invalidateCacheFile?: (key: string, signal: AbortSignal, source: NormalizedSource) => void | Promise<void>
 }
 
 export interface SourceRuleRuntimeOptions {
@@ -398,6 +400,19 @@ const __legadoToURLCompat = java.toURL
 java.toURL = (value, base) => {
   const result = __legadoToURLCompat(value, base)
   if (result === null || typeof result !== "object") return result
+  const __legadoAuthorityMatch = new RegExp("^(?:([A-Za-z0-9_]+):)?//([^/?#]*)(?:[/?#]|$)", "u").exec(String(result.url ?? ""))
+  if (__legadoAuthorityMatch !== null) {
+    const __legadoProtocol = __legadoAuthorityMatch[1] == null ? "" : String(__legadoAuthorityMatch[1]) + ":"
+    const __legadoAuthority = __legadoAuthorityMatch[2] ?? ""
+    if (__legadoAuthority.startsWith("[")) {
+      const __legadoEnd = __legadoAuthority.indexOf("]")
+      result.hostname = __legadoEnd < 0 ? __legadoAuthority : __legadoAuthority.slice(0, __legadoEnd + 1)
+      result.host = __legadoAuthority
+      result.port = __legadoEnd >= 0 && __legadoAuthority[__legadoEnd + 1] === ":" ? __legadoAuthority.slice(__legadoEnd + 2) : ""
+      result.protocol = __legadoProtocol
+      result.origin = __legadoProtocol.length === 0 ? "" : __legadoProtocol + "//" + __legadoAuthority
+    }
+  }
   const query = String(result.query ?? "")
   const entries = []
   const decode = (item) => { try { return decodeURIComponent(String(item).replaceAll("+", " ")) } catch { return String(item) } }
@@ -411,13 +426,31 @@ java.toURL = (value, base) => {
   params.get = (key) => { const name = String(key); for (const entry of entries) if (entry[0] === name) return entry[1]; return null }
   params.getAll = (key) => entries.filter((entry) => entry[0] === String(key)).map((entry) => entry[1])
   params.has = (key) => entries.some((entry) => entry[0] === String(key))
-  const sync = () => { for (const key of Object.keys(params)) if (!["get", "getAll", "has", "set", "append", "delete", "toString"].includes(key)) delete params[key]; for (const entry of entries) params[entry[0]] = entry[1]; result.query = entries.map((entry) => encode(entry[0]) + "=" + encode(entry[1])).join("&"); result.search = result.query.length === 0 ? "" : "?" + result.query }
+  const sync = () => { for (const key of Object.keys(params)) if (!["get", "getAll", "has", "set", "append", "delete", "toString"].includes(key)) delete params[key]; for (const entry of entries) params[entry[0]] = entry[1]; result.query = entries.map((entry) => entry[0] + "=" + encode(entry[1])).join("&"); result.search = result.query.length === 0 ? "" : "?" + result.query }
   params.set = (key, item) => { const name = String(key); for (let index = entries.length - 1; index >= 0; index--) if (entries[index][0] === name) entries.splice(index, 1); entries.push([name, String(item)]); sync() }
   params.append = (key, item) => { entries.push([String(key), String(item)]); sync() }
   params.delete = (key) => { const name = String(key); for (let index = entries.length - 1; index >= 0; index--) if (entries[index][0] === name) entries.splice(index, 1); sync() }
-  params.toString = () => entries.map((entry) => encode(entry[0]) + "=" + encode(entry[1])).join("&")
+  params.toString = () => entries.map((entry) => entry[0] + "=" + encode(entry[1])).join("&")
   sync()
   return result
+}
+const __legadoUrlContext = bindings.__legadoUrlContext
+if (__legadoUrlContext !== null && typeof __legadoUrlContext === "object" && !Array.isArray(__legadoUrlContext)) {
+  const __legadoUrlMap = {}
+  const __legadoMapKey = (key) => String(key)
+  const __legadoSyncUrlMap = () => { for (const key of Object.keys(__legadoUrlMap)) delete __legadoUrlMap[key]; for (const [key, value] of Object.entries(__legadoUrlContext.headerMap ?? {})) __legadoUrlMap[key] = String(value ?? "") }
+  const __legadoUrlMapPut = (key, value) => { const name = __legadoMapKey(key); const previous = __legadoUrlContext.headerMap?.[name]; if (__legadoUrlContext.headerMap == null) __legadoUrlContext.headerMap = {}; __legadoUrlContext.headerMap[name] = String(value ?? ""); __legadoSyncUrlMap(); return previous }
+  const __legadoUrlMapRemove = (key) => { const name = __legadoMapKey(key); const previous = __legadoUrlContext.headerMap?.[name]; if (__legadoUrlContext.headerMap != null) delete __legadoUrlContext.headerMap[name]; __legadoSyncUrlMap(); return previous }
+  Object.defineProperties(__legadoUrlMap, { get: { value: (key) => __legadoUrlContext.headerMap?.[__legadoMapKey(key)] }, put: { value: __legadoUrlMapPut }, remove: { value: __legadoUrlMapRemove }, clear: { value: () => { __legadoUrlContext.headerMap = {}; __legadoSyncUrlMap() } }, containsKey: { value: (key) => Object.prototype.hasOwnProperty.call(__legadoUrlContext.headerMap ?? {}, __legadoMapKey(key)) }, size: { value: () => Object.keys(__legadoUrlContext.headerMap ?? {}).length }, isEmpty: { value: () => Object.keys(__legadoUrlContext.headerMap ?? {}).length === 0 }, keySet: { value: () => legadoList(Object.keys(__legadoUrlContext.headerMap ?? {})) } })
+  __legadoSyncUrlMap()
+  Object.defineProperties(java, { url: { configurable: true, get: () => String(__legadoUrlContext.url ?? ""), set: (value) => { __legadoUrlContext.url = String(value ?? ""); __legadoUrlContext.urlDirty = true } }, headerMap: { configurable: true, get: () => __legadoUrlMap } })
+  java.getHeaderMap = () => __legadoUrlMap
+  java.initUrl = () => { const value = request({ kind: "resolve-url", url: String(__legadoUrlContext.baseUrl ?? baseUrl ?? ""), value: String(__legadoUrlContext.url ?? "") }); __legadoUrlContext.url = String(value ?? __legadoUrlContext.url ?? ""); __legadoUrlContext.urlDirty = true; return __legadoUrlContext.url }
+  const __legadoStrResponse = (raw) => { const record = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {}; const target = String(record.url ?? __legadoUrlContext.url ?? ""); const response = new Packages.io.legado.app.help.http.StrResponse(target, String(record.body ?? raw ?? "")); response.url = target; response.status = Number(record.status ?? record.code ?? 200); response.code = response.status; response.headers = record.headers ?? {}; response.redirected = Boolean(record.redirected); response.message = String(record.message ?? record.statusMessage ?? ""); response.bytes = record.bytes; return response }
+  const __legadoUrlRequest = (kind, jsStr, sourceRegex, useWebView) => request({ kind: "url-context-response", input: { url: String(__legadoUrlContext.url ?? ""), headers: { ...(__legadoUrlContext.headerMap ?? {}) }, body: __legadoUrlContext.body, method: __legadoUrlContext.method, options: __legadoUrlContext.options, baseUrl: __legadoUrlContext.baseUrl, redirectUrl: __legadoUrlContext.redirectUrl, responseKind: kind, jsStr, sourceRegex, useWebView: useWebView !== false } })
+  java.getStrResponse = (jsStr, sourceRegex, useWebView) => __legadoStrResponse(__legadoUrlRequest("string", jsStr, sourceRegex, useWebView))
+  java.getResponse = () => __legadoUrlRequest("response")
+  java.getHeaderMap = () => __legadoUrlMap
 }
 globalThis.__legadoJavaPackages = { JavaImporter, Packages, JavaAdapter, MessageDigest: legadoMessageDigest, StringBuilder: legadoStringBuilder, Integer: legadoInteger, HashMap: legadoJavaUtil.HashMap, ArrayList: legadoJavaUtil.ArrayList, Pattern: legadoPattern, Base64: legadoBase64 }
 `
@@ -1041,6 +1074,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       mode: 'script',
       ...(request.workflowStage === undefined ? {} : { workflowStage: request.workflowStage }),
       ...(request.captureMutations === undefined ? {} : { captureBindings: request.captureMutations }),
+      ...(request.mutableBindings === undefined ? {} : { mutableBindings: request.mutableBindings }),
       ...(request.content === undefined ? {} : { content: request.content }),
       ...(request.baseUrl === undefined ? {} : { baseUrl: request.baseUrl }),
       ...(request.redirectUrl === undefined ? {} : { redirectUrl: request.redirectUrl }),
@@ -1476,7 +1510,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; workflowStage?: WorkflowStage; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind'] }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind'] }): Promise<WorkflowRuleOutput> {
     let bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
       ...(context?.bindings ?? {}),
@@ -1512,6 +1546,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'const reGetBook = () => runPreUpdateAction("reGetBook");',
       'globalThis.baseUrl = bindings.baseUrl;',
       'globalThis.redirectUrl = bindings.redirectUrl;',
+      'globalThis.__legadoUrlContext = bindings.__legadoUrlContext;',
       'for (const [name, value] of Object.entries(bindings)) { if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) || name.startsWith("__legado") || Object.prototype.hasOwnProperty.call(bindings.__legadoWorkflowGlobalState ?? {}, name) || ["bindings", "sourceData", "sourceKey", "sourceName", "baseUrl", "redirectUrl", "src", "key", "page", "url", "nextChapterUrl", "chapters", "index", "title", "gInt", "fromBookInfo", "isFromBookInfo", "infoMap", "book", "chapter", "source", "sourceApi", "java", "cookie", "cache", "result"].includes(name)) continue; try { Object.defineProperty(globalThis, name, { value, writable: true, enumerable: true, configurable: true }); } catch {} }',
       // Android ExploreKind 脚本通过 infoMap 保存控件状态；方法保持 Map 语义，保存动作交给宿主决定持久化范围。
       'const __legadoInfoMapValue = bindings.infoMap && typeof bindings.infoMap === "object" && !Array.isArray(bindings.infoMap) ? { ...bindings.infoMap } : {}; globalThis.infoMap = __legadoInfoMapValue; Object.defineProperties(globalThis.infoMap, { get: { value: (name) => globalThis.infoMap[String(name)] }, put: { value: (name, value) => { const key = String(name); const previous = globalThis.infoMap[key]; globalThis.infoMap[key] = String(value ?? ""); return previous; } }, set: { value: (value) => { if (value && typeof value === "object" && !Array.isArray(value)) { for (const key of Object.keys(globalThis.infoMap)) delete globalThis.infoMap[key]; for (const [key, item] of Object.entries(value)) globalThis.infoMap[key] = String(item ?? ""); } return globalThis.infoMap; } }, save: { value: (time, need) => request({ kind: "workflow-action", action: "saveInfoMap", input: { infoMap: { ...globalThis.infoMap }, time: time == null ? 0 : Number(time), need: need !== false } }) }, saveNow: { value: () => request({ kind: "workflow-action", action: "saveInfoMap", input: { infoMap: { ...globalThis.infoMap }, now: true, need: true } }) } });',
@@ -1546,7 +1581,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'globalThis.Packages.io.legado.app = globalThis.Packages.io.legado.app ?? {};',
       'globalThis.Packages.io.legado.app.help = globalThis.Packages.io.legado.app.help ?? {};',
       'globalThis.Packages.io.legado.app.help.http = globalThis.Packages.io.legado.app.help.http ?? {};',
-      'globalThis.Packages.io.legado.app.help.http.StrResponse = function(url, body) { this.url = String(url); this.status = 200; this.code = 200; this.headers = {}; this.body = String(body ?? ""); };',
+      'globalThis.Packages.io.legado.app.help.http.StrResponse = function(url, body) { if (!(this instanceof globalThis.Packages.io.legado.app.help.http.StrResponse)) return new globalThis.Packages.io.legado.app.help.http.StrResponse(url, body); this.url = String(url); this.status = 200; this.code = 200; this.headers = {}; this.body = String(body ?? ""); };',
       'const checkEnv = () => "default";',
       'const isVs = () => false;',
       'const legadoResolveJavaUrl = (value) => request({ kind: "resolve-url", url: String(redirectUrl ?? baseUrl ?? bindings.sourceKey ?? ""), value: String(value ?? "") });',
@@ -1620,6 +1655,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         bindings,
         ...(context?.javascriptBudget === undefined ? {} : { budget: context.javascriptBudget }),
         ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
+        ...(context?.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
         ...(context?.captureGlobals === true || jsLibStateKey !== undefined ? { captureGlobals: true } : {}),
         ...(signal === undefined ? {} : { signal }),
       }, {
@@ -1905,7 +1941,12 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return decodeSourceCacheValue(this.encoding, value)
     }
     if (request.kind === 'cache-put') return this.cache.put(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), Number(request.saveTime) || 0, signal)
-    if (request.kind === 'cache-delete') return this.cache.delete(textValue(request.key), signal)
+    if (request.kind === 'cache-delete') {
+      const key = textValue(request.key)
+      const result = await this.cache.delete(key, signal)
+      await this.file?.invalidateCacheFile?.(key, signal, source)
+      return result
+    }
     if (request.kind === 'cache-memory-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFromMemory(textValue(request.key)))
     if (request.kind === 'cache-memory-put') return this.cache.putMemory(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), signal)
     if (request.kind === 'cache-memory-delete') return this.cache.deleteMemory(textValue(request.key), signal)
