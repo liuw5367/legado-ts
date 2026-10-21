@@ -100,6 +100,8 @@ export class SourceRuleHost implements WorkflowRulePort {
       ...(options.file === undefined ? {} : { file: options.file }),
       webViewUA: options.webViewUA ?? (() => DEFAULT_ANDROID_USER_AGENT),
       ...(options.logger === undefined ? {} : { logger: options.logger }),
+      ...(options.platform === undefined ? {} : { platform: options.platform }),
+      ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
     })
   }

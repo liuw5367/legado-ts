@@ -29,6 +29,8 @@ export interface SourceSessionOptions {
   clock?: ClockHost
   initialVariables?: Readonly<Record<string, string>>
   cache?: SourceScriptCache
+  /** Host-owned resources shared by the operation ports. */
+  onClose?: () => void
 }
 
 export interface SourceSession {
@@ -144,6 +146,7 @@ export function createSourceSession(options: SourceSessionOptions): SourceSessio
       if (closed) return
       closed = true
       rateLimiter.close()
+      options.onClose?.()
     },
   }
 }

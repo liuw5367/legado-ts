@@ -16,10 +16,12 @@ createNodeSourceSession
        ├─ HTML / JSONPath / XPath adapter
        ├─ QuickJSJavaScriptHost
        ├─ NodeEncodingHost / NodeCryptoHost / NodeFontHost / NodeSourceFileHost
+       ├─ NodeSourceRuntimePlatform（设备、配置、转换和可注入宿主动作）
+       ├─ NodeSourceConcurrency（跨执行 SourceLock）
        └─ source-core SourceRuleRuntime
 ```
 
-`NodeSourceSessionOptions` 可替换网络、Cookie、字符集、脚本缓存、初始 source 变量、时钟、并发端口和文件根目录。没有传入 `cookieStore` 时，session 创建自己的 `NodeCookieStore`；没有传入网络时，`NodeNetworkHost` 使用同一个 Cookie store。请求 host 把当前书源通过每次 bridge 调用传入，避免并发书源共享可变的“当前 source”字段。登录 header、登录信息、source variable 和 source key/value 在 session 内按源 URL 隔离；动态 loginUi 默认值沿用 `BaseSource.getLoginInfoMap()` 的执行顺序。
+`NodeSourceSessionOptions` 可替换网络、Cookie、字符集、脚本缓存、初始 source 变量、时钟、并发端口、平台端口和文件根目录。没有传入 `cookieStore` 时，session 创建自己的 `NodeCookieStore`；没有传入网络时，`NodeNetworkHost` 使用同一个 Cookie store。请求 host 把当前书源通过每次 bridge 调用传入，避免并发书源共享可变的“当前 source”字段。登录 header、登录信息、source variable 和 source key/value 在 session 内按源 URL 隔离；动态 loginUi 默认值沿用 `BaseSource.getLoginInfoMap()` 的执行顺序。默认 `NodeSourceRuntimePlatform` 提供 t2s/s2t、稳定的宿主 deviceID、阅读/主题配置和 source 导航上下文；浏览器、WebView、验证码、媒体和 UI 动作通过 `platform` 注入，未注入时保留明确的 capability-missing。`NodeSourceConcurrency` 把 Android `singleFlight`、`lock` 和 `tick` 的等待、跳过、取消、溢出与 LRU 语义放在 session 之外的宿主端口中，避免同一源的不同脚本执行只看到局部锁。
 
 ## 请求与规则桥接
 
@@ -49,7 +51,7 @@ CLI 的 `readSourcePath` 只递归普通目录，跳过符号链接，默认最�
 
 `NodeFontHost` 当前支持 TrueType/sfnt 的 cmap 0/4/6、`glyf` 轮廓签名反查、Base64/bytes 输入和 `replaceFont` 的普通与 filter 模式；默认字体缓存最多 4 个映射、单次输入最多 16 MiB。WOFF、WOFF2、CFF、浏览器字体加载和渲染不在支持范围内。`NodeArchiveHost` 支持 gzip 与 zip，默认最多 64 个条目、单条目 8 MiB、总输出 32 MiB、压缩比 1000；RAR/7z 方法会返回明确能力错误，绝对路径、`.`、`..`、加密条目、zip64 和未知压缩方法会被拒绝。
 
-QuickJS 内的 `singleFlight`、`lock`、`tick` 只覆盖一次脚本执行的同步调用；source session 的限流窗口和 `putConcurrent` 跨操作共享，但没有 Android 源级的跨执行等待队列。WebView、浏览器、验证码、媒体播放器、设备身份、阅读器/主题配置和 t2s/s2t 仍需宿主端口，当前不静默降级。
+QuickJS 只负责同步调用动作；`singleFlight`、`lock`、`tick` 由 `NodeSourceConcurrency` 在脚本执行之间共享。WebView、浏览器、验证码、媒体播放器和 UI 刷新仍需要应用注入平台动作；默认 Node 平台不会把这些动作伪装成成功。设备身份是按宿主 seed 派生、可重置的非物理标识，不应单独用于 Android 设备鉴权。
 
 ## 生命周期与所有权
 

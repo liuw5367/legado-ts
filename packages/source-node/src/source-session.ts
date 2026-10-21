@@ -1,5 +1,5 @@
 import { createSourceSession } from '@legado/source-core'
-import type { ClockHost, ConcurrencyHost, NetworkHost, NormalizedSource, SourceRuntimeState, SourceScriptCache, SourceSession } from '@legado/source-core'
+import type { ClockHost, ConcurrencyHost, NetworkHost, NormalizedSource, SourceRuntimeConcurrency, SourceRuntimeState, SourceScriptCache, SourceSession } from '@legado/source-core'
 import { NodeCookieStore } from './cookies.ts'
 import { NodeCharsetCodec } from './charset.ts'
 import type { CookieStore, NodeNetworkOptions } from './types.ts'
@@ -7,6 +7,8 @@ import { NodeNetworkHost } from './http.ts'
 import { SourceRequestHost } from './source-request-host.ts'
 import { SourceRuleHost } from './source-rule-host.ts'
 import { NodeSourceFileHost } from './source-file-host.ts'
+import { NodeSourceConcurrency } from './source-concurrency.ts'
+import { NodeSourceRuntimePlatform } from './runtime-platform.ts'
 
 export interface NodeSourceSessionOptions {
   network?: NetworkHost
@@ -17,6 +19,10 @@ export interface NodeSourceSessionOptions {
   initialVariables?: Readonly<Record<string, string>>
   clock?: ClockHost
   concurrency?: ConcurrencyHost
+  /** Android SourceLock shared across operations in this source session. */
+  sourceConcurrency?: SourceRuntimeConcurrency
+  /** Application/platform bridge for Android JsExtensions outside pure core. */
+  platform?: import('@legado/source-core').SourceRuntimePlatform
   /** 书源相对文件路径所在的受控缓存目录；缺省为系统临时目录下的 legado-source-cache。 */
   fileRoot?: string
 }
@@ -30,6 +36,8 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
   const loginInfos = new Map<string, string>()
   const sourceVariables = new Map<string, string>()
   const sourceValues = new Map<string, Map<string, string>>()
+  const sourceConcurrency = options.sourceConcurrency ?? new NodeSourceConcurrency()
+  const platform = options.platform ?? new NodeSourceRuntimePlatform()
   const sourceState: SourceRuntimeState = {
     getVariable: (currentSource) => sourceVariables.get(currentSource.bookSourceUrl) ?? '',
     setVariable: (currentSource, value) => { if (value === null) sourceVariables.delete(currentSource.bookSourceUrl); else sourceVariables.set(currentSource.bookSourceUrl, value) },
@@ -114,6 +122,8 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
         cache,
         file,
         sourceState,
+        concurrency: sourceConcurrency,
+        platform,
       })
       request.attachRuleHost(rules)
       return {
@@ -125,5 +135,6 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
         ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
       }
     },
+    onClose: () => sourceConcurrency.close?.(),
   })
 }
