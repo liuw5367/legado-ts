@@ -47,6 +47,12 @@
 
 `decodeImage` 接受调用方已下载的 bytes、src、source、book、`isCover` 和可选 JavaScript budget；它只执行 `coverDecodeJs` 或 `imageDecode`，不下载图片，失败时不返回原密文。`nextChapterUrlFor` 只计算下一章地址，不触发网络。
 
+## 段评读取与书源交互
+
+`loadReviewSummary`、`loadReviewDetail` 和 `loadReviewReplies` 统一执行结构化段评规则或对应的整源 JavaScript 函数。它们保留段评原始 ID、作者、时间、点赞/回复计数、图片/音频内容和嵌套回复；声明式详情使用 `PageCursor` 继续分页，reader-web 会把详情游标绑定用户、书源版本、书籍、章节和段评上下文后签名。JavaScript 详情和回复按 Android 语义直接传入页码，不使用 URL 游标。规则没有命中或书源没有配置段评入口时返回 `empty`，脚本、请求和宿主能力错误保留在 `diagnostics`。
+
+`executePayAction` 和 `executeSourceCallback` 是应用触发的交互入口。前者执行 `payAction` 的 JavaScript 或 `{{js}}` URL，并把 URL、真值成功和空结果区分开；后者执行 `callBackJs`/`eventListener`，保留 Android 事件名以及书籍级和书源级超时。它们不直接打开浏览器、刷新正文、去重按钮或提交段评写入；这些动作由应用提供宿主 capability 并根据结果决定。
+
 ## 应用边界和结果
 
 所有入口都返回 `RuntimeResult<T>`，状态为 `success`、`partial`、`empty`、`failed`、`cancelled` 或 `capability-missing`。应用必须按状态处理合法空结果、取消、未支持能力、缓存提交状态和版本冲突。`ReaderApplication.search`、`checkSources`、多源 fan-out、进度事件和页面提交不是 source-core 工作流。

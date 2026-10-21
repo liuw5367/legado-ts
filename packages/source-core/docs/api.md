@@ -36,6 +36,8 @@
 | `loadStoredChapterContent` | 使用 `ContentStore` 做 cache-first 读取、条件写入和提交后重读 |
 | `loadChapterContentBatch` | 批量脚本与单章兜底；保存由调用方提供的 `cacheContent` 决定 |
 | `decodeImage` | 对调用方已经下载的图片或封面 bytes 执行解密脚本，不下载资源 |
+| `loadReviewSummary` / `loadReviewDetail` / `loadReviewReplies` | 读取结构化段评摘要、详情和回复，支持声明式规则、JS 函数、内容协议和分页 |
+| `executePayAction` / `executeSourceCallback` | 执行用户触发的付费动作和书源回调；返回 URL/真值/能力状态，宿主负责浏览器、刷新和 UI |
 | `nextChapterUrlFor` / `reconcileTableOfContents` | 章节导航和目录纯函数合并 |
 
 详见 [工作流](workflows.md)。多源调度、应用状态、书架和用户凭据属于 `apps/`，不由这些入口代办。
