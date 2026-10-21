@@ -43,6 +43,8 @@ export interface SourceRuleBridgeRequest {
   body?: unknown
   options?: unknown
   skipRateLimit?: boolean
+  /** Android ajaxTestAll 的逐项失败回退；普通 ajaxAll 失败应中止整个批次。 */
+  isTest?: boolean
   headers?: Readonly<Record<string, string>>
   value?: unknown
   charset?: unknown
@@ -56,6 +58,9 @@ export interface SourceRuleBridgeRequest {
   iv?: unknown
   algorithm?: unknown
   transformation?: unknown
+  operation?: unknown
+  inputEncoding?: unknown
+  outputEncoding?: unknown
   time?: unknown
   format?: unknown
   offsetMs?: unknown
@@ -188,6 +193,45 @@ function byteValue(value: unknown): Uint8Array {
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
   if (Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isInteger(item) && item >= 0 && item <= 255)) return Uint8Array.from(value)
   throw new Error('书源 bytes bridge 需要 ByteArray')
+}
+
+/** Android Base64 flags 的可移植子集：URL_SAFE、NO_PADDING、NO_WRAP、CRLF。 */
+function base64Flags(value: unknown): number {
+  const flags = Number(value ?? 0)
+  if (!Number.isInteger(flags) || flags < 0 || flags > 0x3f) throw new Error('invalid Base64 flags')
+  return flags
+}
+
+function base64EncodeWithFlags(encoding: EncodingHost, value: string | Uint8Array, flagsValue: unknown): string {
+  const flags = base64Flags(flagsValue)
+  let result = encoding.base64Encode(value)
+  if ((flags & 8) !== 0) result = result.replaceAll('+', '-').replaceAll('/', '_')
+  if ((flags & 1) !== 0) result = result.replace(/=+$/u, '')
+  if ((flags & 4) !== 0) {
+    const width = 76
+    result = result.replace(new RegExp(`.{1,${width}}`, 'gu'), (line) => `${line}\r\n`).replace(/\r\n$/u, '')
+  }
+  return result
+}
+
+function base64DecodeWithFlags(encoding: EncodingHost, value: unknown, flagsValue: unknown): Uint8Array {
+  const flags = base64Flags(flagsValue)
+  let input = textValue(value).replace(/[\r\n\t\s]/gu, '')
+  if ((flags & 8) !== 0) input = input.replaceAll('-', '+').replaceAll('_', '/')
+  if (input.length % 4 === 2) input += '=='
+  else if (input.length % 4 === 3) input += '='
+  return encoding.base64Decode(input)
+}
+
+function encodeFormUri(encoding: EncodingHost, value: unknown, charset: unknown): string {
+  const bytes = encoding.encode(textValue(value), textValue(charset) || 'UTF-8')
+  let result = ''
+  for (const byte of bytes) {
+    if ((byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a) || (byte >= 0x30 && byte <= 0x39) || byte === 0x2a || byte === 0x2d || byte === 0x2e || byte === 0x5f) result += String.fromCharCode(byte)
+    else if (byte === 0x20) result += '+'
+    else result += `%${byte.toString(16).toUpperCase().padStart(2, '0')}`
+  }
+  return result
 }
 
 type DigestAlgorithmName = 'md5' | 'sha1' | 'sha256' | 'sha512'
@@ -1144,6 +1188,26 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'const legadoJavaUrl = (value) => Array.isArray(value) ? String(value[0] ?? "") : String(value);',
       'const legadoJavaRequestOptions = (timeout) => ({ timeout: timeout == null ? 30000 : Number(timeout), followRedirects: false });',
       'Object.assign(java, { ajax: (value, callTimeout) => { try { if (value != null && typeof value === "object" && !Array.isArray(value)) return request(Object.assign({ kind: "network" }, value)); const urlValue = legadoJavaUrl(value); if (callTimeout != null && typeof callTimeout === "object" && !Array.isArray(callTimeout)) return request(Object.assign({ kind: "network", url: urlValue }, callTimeout)); const input = { kind: "network", url: urlValue, method: "GET" }; if (callTimeout != null) input.options = { timeout: Number(callTimeout) }; return request(input); } catch (error) { if (legadoJavaErrorMustPropagate(error)) throw error; return legadoJavaErrorText(error); } }, get: (value, headers, timeout) => { const urlValue = String(value); if (headers === undefined && timeout === undefined && !/^(?:https?:)?\\/\\//.test(urlValue)) return Object.prototype.hasOwnProperty.call(bindings, urlValue) ? bindings[urlValue] : getVar(urlValue); const headerMap = legadoJavaHeaders(headers); return legadoResponse(urlValue, request({ kind: "network-response", url: urlValue, method: "GET", headers: headerMap, options: legadoJavaRequestOptions(timeout) })); }, connect: (value, header, timeout) => { const urlValue = String(value); try { const headerMap = legadoJavaConnectHeaders(header); const input = { kind: "network-response", url: urlValue, method: "GET" }; if (headerMap !== undefined) input.headers = headerMap; if (timeout != null) input.options = { timeout: Number(timeout) }; return legadoResponse(urlValue, request(input)); } catch (error) { if (legadoJavaErrorMustPropagate(error)) throw error; return legadoResponse(urlValue, { url: urlValue, status: 200, code: 200, body: legadoJavaErrorText(error) }); } }, getString: (rule, content, isUrl) => { const value = legadoValueText(evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content })); if (!isUrl) return value; return value.trim().length === 0 ? String(baseUrl ?? "") : legadoResolveJavaUrl(value); }, getStringList: (rule, content, isUrl) => { const value = evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content }); const values = Array.isArray(value) ? value.map((item) => String(item ?? "")) : String(value ?? "").split("\\n"); if (!isUrl) return values.filter(Boolean); const result = []; for (const absolute of legadoResolveJavaUrls(values)) if (absolute && !result.includes(absolute)) result.push(absolute); return result; }, post: (value, body, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) })), head: (value, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) })) });',
+      // Jsoup Connection.Response/StrResponse 的可观察方法：网络 bridge 只传 DTO，
+      // 在 QuickJS 侧重新挂载方法，避免把 Node/Undici 对象泄露给书源。
+      'const legadoUtf8Bytes = (value) => { const encoded = encodeURIComponent(String(value)); const result = []; for (let index = 0; index < encoded.length;) { if (encoded[index] === "%") { result.push(parseInt(encoded.slice(index + 1, index + 3), 16)); index += 3; } else { result.push(encoded.charCodeAt(index)); index += 1; } } return Uint8Array.from(result); };',
+      'const legadoResponseCompat = (url, raw) => { const response = legadoResponse(url, raw); const record = raw != null && typeof raw === "object" && !Array.isArray(raw) ? raw : {}; const body = typeof raw === "string" ? raw : String(record.body ?? raw ?? ""); const status = Number(record.status ?? record.code ?? 200); const target = String(record.url ?? url); const headers = record.headers != null && typeof record.headers === "object" && !Array.isArray(record.headers) ? record.headers : {}; const bytes = record.bytes instanceof Uint8Array ? record.bytes : record.bodyBytes instanceof Uint8Array ? record.bodyBytes : legadoUtf8Bytes(body); const header = (name) => { const wanted = String(name).toLowerCase(); for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === wanted) return Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""); return ""; }; const contentType = header("content-type"); const charset = record.charset == null ? (/charset\\s*=\\s*[\\x22\\x27]?([^;\\x22\\x27\\s]+)/i.exec(contentType)?.[1] ?? null) : String(record.charset); const message = String(record.message ?? record.statusMessage ?? ""); const requestObject = { url: () => String(record.requestUrl ?? target), method: () => String(record.requestMethod ?? "GET"), headers: () => record.requestHeaders ?? {} }; const rawResponse = { request: () => requestObject, url: () => target, code: () => status, statusCode: () => status, message: () => message, headers: () => headers, header, isSuccessful: () => status >= 200 && status < 300 }; const responseHeaders = () => { const result = { ...headers }; Object.defineProperties(result, { get: { value: (name) => header(name) }, names: { value: () => Object.keys(headers) }, toMultimap: { value: () => ({ ...headers }) }, toString: { value: () => Object.entries(headers).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}\\n`).join("") } }); return result; }; response.headers = responseHeaders; response.header = header; response.bodyAsBytes = () => bytes; response.charset = () => charset; response.contentType = () => contentType; response.statusMessage = () => message; response.statusCode = () => status; response.message = () => message; response.raw = () => rawResponse; response.toString = () => `${status} ${message}`.trim(); return response; };',
+      'java.get = (value, headers, timeout) => { const urlValue = String(value); if (headers === undefined && timeout === undefined && !/^(?:https?:)?\\/\\//.test(urlValue)) return Object.prototype.hasOwnProperty.call(bindings, urlValue) ? bindings[urlValue] : getVar(urlValue); const headerMap = legadoJavaHeaders(headers); return legadoResponseCompat(urlValue, request({ kind: "network-response", url: urlValue, method: "GET", headers: headerMap, options: legadoJavaRequestOptions(timeout) })); };',
+      'java.connect = (value, header, timeout) => { const urlValue = String(value); try { const headerMap = legadoJavaConnectHeaders(header); const input = { kind: "network-response", url: urlValue, method: "GET" }; if (headerMap !== undefined) input.headers = headerMap; if (timeout != null) input.options = { timeout: Number(timeout) }; return legadoResponseCompat(urlValue, request(input)); } catch (error) { if (legadoJavaErrorMustPropagate(error)) throw error; return legadoResponseCompat(urlValue, { url: urlValue, status: 200, code: 200, body: legadoJavaErrorText(error), message: "OK" }); } };',
+      'java.post = (value, body, headers, timeout) => legadoResponseCompat(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) })); java.head = (value, headers, timeout) => legadoResponseCompat(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) }));',
+      'java.ajaxAll = (values, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponseCompat(urls[index] ?? "", raw)); };',
+      'java.ajaxTestAll = (values, timeout, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true, options: timeout === undefined ? undefined : { timeout: Number(timeout) } }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponseCompat(urls[index] ?? "", raw)); };',
+      'const legadoCryptoConfig = (transformation, key, iv) => ({ transformation: String(transformation), key, ...(iv === undefined || iv === null ? {} : { iv }) }); const legadoCryptoBase64 = (value) => ({ __legadoBase64: String(value) }); const legadoCrypto = (transformation, key, iv) => { const config = legadoCryptoConfig(transformation, key, iv); return { decrypt: (value) => request({ kind: "crypto-symmetric", operation: "decrypt", ...config, value, inputEncoding: typeof value === "string" ? "base64" : "bytes", outputEncoding: "bytes" }), decryptStr: (value, charset) => request({ kind: "crypto-symmetric", operation: "decrypt", ...config, value, inputEncoding: typeof value === "string" ? "base64" : "bytes", outputEncoding: "text", charset: charset === undefined ? "UTF-8" : String(charset) }), encrypt: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "bytes" }), encryptBase64: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "base64" }), encryptHex: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "hex" }) }; };',
+      'java.md5Encode = (value) => request({ kind: "md5", value: String(value) }); java.md5Encode16 = (value) => request({ kind: "md5-16", value: String(value) });',
+      'java.base64Encode = (value, flags) => request({ kind: "base64-encode", value: String(value), flags: flags === undefined ? 0 : Number(flags) }); java.base64Decode = (value, charsetOrFlags) => typeof charsetOrFlags === "number" ? request({ kind: "base64-decode-text", value, flags: Number(charsetOrFlags) }) : request({ kind: "base64-decode-text", value, charset: charsetOrFlags === undefined ? "UTF-8" : String(charsetOrFlags) }); java.base64DecodeToString = (value, charset) => request({ kind: "base64-decode-text", value, charset: charset === undefined ? "UTF-8" : String(charset) }); java.base64DecodeToByteArray = (value, flags) => value == null || String(value).trim().length === 0 ? null : request({ kind: "base64-decode-bytes", value, flags: flags === undefined ? 0 : Number(flags) });',
+      'java.encodeURI = (value, charset) => request({ kind: "encode-uri", value: String(value), charset: charset === undefined ? "UTF-8" : String(charset) });',
+      'java.createSymmetricCrypto = (transformation, key, iv) => legadoCrypto(transformation, key, iv);',
+      'const legadoCryptoDecrypt = (value, key, transformation, iv, outputEncoding) => request({ kind: "crypto-symmetric", operation: "decrypt", value, key, transformation, iv, inputEncoding: "base64", outputEncoding }); const legadoCryptoEncrypt = (value, key, transformation, iv, outputEncoding) => request({ kind: "crypto-symmetric", operation: "encrypt", value, key, transformation, iv, outputEncoding });',
+      'java.aesDecodeToByteArray = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "bytes"); java.aesDecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text"); java.aesBase64DecodeToByteArray = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "bytes"); java.aesBase64DecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text");',
+      'java.aesEncodeToByteArray = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "bytes"); java.aesEncodeToString = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "text"); java.aesEncodeToBase64ByteArray = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "base64"); java.aesEncodeToBase64String = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "base64");',
+      'java.aesDecodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoDecrypt(value, legadoCryptoBase64(key), `AES/${mode}/${padding}`, legadoCryptoBase64(iv), "text"); java.aesEncodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoEncrypt(value, legadoCryptoBase64(key), `AES/${mode}/${padding}`, legadoCryptoBase64(iv), "base64");',
+      'java.desDecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text"); java.desBase64DecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text"); java.desEncodeToString = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "text"); java.desEncodeToBase64String = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "base64");',
+      'java.tripleDESDecodeStr = (value, key, mode, padding, iv) => legadoCryptoDecrypt(value, key, `DESede/${mode}/${padding}`, iv, "text"); java.tripleDESDecodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoDecrypt(value, legadoCryptoBase64(key), `DESede/${mode}/${padding}`, iv, "text"); java.tripleDESEncodeBase64Str = (value, key, mode, padding, iv) => legadoCryptoEncrypt(value, key, `DESede/${mode}/${padding}`, iv, "base64"); java.tripleDESEncodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoEncrypt(value, legadoCryptoBase64(key), `DESede/${mode}/${padding}`, iv, "base64");',
     ].join('\n')
     const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
     const runSignal = signal ?? new AbortController().signal
@@ -1260,19 +1324,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'resolve-url') return resolveSourceUrl(request.url, request.value)
     if (request.kind === 'resolve-urls') return resolveSourceUrls(request.url, request.urls)
-    if (request.kind === 'base64-encode') return this.encoding.base64Encode(textValue(request.value))
+    if (request.kind === 'base64-encode') return base64EncodeWithFlags(this.encoding, textValue(request.value), request.flags)
     if (request.kind === 'base64-decode-bytes') {
-      if (request.flags !== undefined && Number(request.flags) !== 0) throw new Error('书源 Base64 flags 尚未支持')
-      return this.encoding.base64Decode(textValue(request.value))
+      return base64DecodeWithFlags(this.encoding, request.value, request.flags)
     }
     if (request.kind === 'encode-bytes') return this.encoding.encode(textValue(request.value), textValue(request.charset) || 'UTF-8')
     if (request.kind === 'decode-bytes') return this.encoding.decode(byteValue(request.value), textValue(request.charset) || 'UTF-8')
     if (request.kind === 'to-num-chapter') return toNumChapter(request.value)
-    if (request.kind === 'base64-decode-text') return new TextDecoder().decode(this.encoding.base64Decode(textValue(request.value)))
+    if (request.kind === 'base64-decode-text') return this.encoding.decode(base64DecodeWithFlags(this.encoding, request.value, request.flags), textValue(request.charset) || 'UTF-8')
     if (request.kind === 'hex-decode-bytes') return this.encoding.hexDecode(textValue(request.value))
     if (request.kind === 'hex-decode-text') return new TextDecoder().decode(this.encoding.hexDecode(textValue(request.value)))
     if (request.kind === 'hex-encode') return this.encoding.hexEncode(this.encoding.encode(textValue(request.value), 'UTF-8'))
     if (request.kind === 'md5') return this.crypto.digestHex(textValue(request.value), 'md5')
+    if (request.kind === 'md5-16') return this.crypto.digestHex(textValue(request.value), 'md5').slice(8, 24)
     if (request.kind === 'digest') return this.crypto.digestHex(textValue(request.value), digestAlgorithm(request.algorithm ?? request.transformation ?? 'sha256'))
     if (request.kind === 'digest-base64') return this.crypto.digestBase64(textValue(request.value), digestAlgorithm(request.algorithm ?? request.transformation ?? 'sha256'))
     if (request.kind === 'hmac-hex') return this.crypto.hmacHex(textValue(request.value), textValue(request.key), digestAlgorithm(request.algorithm ?? request.transformation ?? 'sha256'))
@@ -1281,6 +1345,30 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const key = this.encoding.encode(textValue(request.key), 'utf-8')
       const iv = this.encoding.encode(textValue(request.iv), 'utf-8')
       return this.crypto.createSymmetricCrypto(textValue(request.transformation), key, iv).decryptText(this.encoding.base64Decode(textValue(request.value)))
+    }
+    if (request.kind === 'encode-uri') return encodeFormUri(this.encoding, request.value, request.charset)
+    if (request.kind === 'crypto-symmetric') {
+      const operation = textValue(request.operation)
+      const transformation = textValue(request.transformation)
+      const keyValue = request.key
+      const ivValue = request.iv
+      const key = typeof keyValue === 'object' && keyValue !== null && !Array.isArray(keyValue) && '__legadoBase64' in keyValue
+        ? base64DecodeWithFlags(this.encoding, (keyValue as Record<string, unknown>).__legadoBase64, 0)
+        : typeof keyValue === 'string' ? this.encoding.encode(keyValue, 'UTF-8') : byteValue(keyValue)
+      const iv = ivValue === undefined || ivValue === null
+        ? undefined
+        : typeof ivValue === 'object' && !Array.isArray(ivValue) && '__legadoBase64' in (ivValue as object)
+          ? base64DecodeWithFlags(this.encoding, (ivValue as Record<string, unknown>).__legadoBase64, 0)
+          : typeof ivValue === 'string' ? this.encoding.encode(ivValue, 'UTF-8') : byteValue(ivValue)
+      const crypto = this.crypto.createSymmetricCrypto(transformation, key, iv)
+      if (operation === 'decrypt') {
+        const input = textValue(request.inputEncoding) === 'base64' ? base64DecodeWithFlags(this.encoding, request.value, 0) : textValue(request.inputEncoding) === 'hex' ? this.encoding.hexDecode(textValue(request.value)) : byteValue(request.value)
+        const bytes = crypto.decrypt(input)
+        return textValue(request.outputEncoding) === 'text' ? this.encoding.decode(bytes, textValue(request.charset) || 'UTF-8') : textValue(request.outputEncoding) === 'hex' ? this.encoding.hexEncode(bytes) : textValue(request.outputEncoding) === 'base64' ? this.encoding.base64Encode(bytes) : bytes
+      }
+      const input = typeof request.value === 'string' ? this.encoding.encode(request.value, textValue(request.charset) || 'UTF-8') : byteValue(request.value)
+      const bytes = crypto.encrypt(input)
+      return textValue(request.outputEncoding) === 'text' ? this.encoding.decode(bytes, textValue(request.charset) || 'UTF-8') : textValue(request.outputEncoding) === 'hex' ? this.encoding.hexEncode(bytes) : textValue(request.outputEncoding) === 'base64' ? this.encoding.base64Encode(bytes) : bytes
     }
     if (request.kind === 'font-replace') {
       const error = this.font.queryBase64TTF(textValue(request.errorBase64), { signal })

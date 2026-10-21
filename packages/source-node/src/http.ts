@@ -290,7 +290,14 @@ export class NodeNetworkHost implements NetworkHost {
       const bytes = await readBody(response, Math.min(plan.budget.maxResponseBytes, plan.budget.maxTotalBytes - totalBytes), signal)
       totalBytes += bytes.byteLength
       if (totalBytes > plan.budget.maxTotalBytes) throw new Error('total response byte budget exceeded')
-      return { url: currentUrl.toString(), status: response.status, headers: headersRecord, bytes, redirected }
+      return {
+        url: currentUrl.toString(),
+        status: response.status,
+        ...(response.statusText.length === 0 ? {} : { statusMessage: response.statusText }),
+        headers: headersRecord,
+        bytes,
+        redirected,
+      }
     }
     } finally {
       if (dispatcher !== undefined) await dispatcher.close()

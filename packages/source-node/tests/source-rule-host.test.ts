@@ -274,6 +274,31 @@ test('java.ajax 的第二参数是超时并把普通网络错误转成正文', a
   assert.match(String(connect.value), /^200\|true\|.*network unavailable/us)
 })
 
+test('网络响应桥接保留字节、字符集和 Headers/Raw 方法', async () => {
+  const host = new SourceRuleHost({ request: async (input) => ({
+    body: '中文',
+    status: 206,
+    statusMessage: 'Partial Content',
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', Location: 'https://b.test/' },
+    url: 'https://b.test/',
+    bytes: new TextEncoder().encode('中文'),
+    requestUrl: String(input.url),
+  }) })
+  const result = await evaluate(host, '@js:var response = java.get("https://a.test", {}); [response.bodyAsBytes().length, response.charset(), response.contentType(), response.headers().get("location"), response.raw().request().url(), response.statusMessage()].join("|")', '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, '6|utf-8|text/plain; charset=utf-8|https://b.test/|https://a.test|Partial Content')
+})
+
+test('ajaxTestAll 将单项失败转换为 Android 测试响应而不取消其他 URL', async () => {
+  const host = new SourceRuleHost({ request: async (input) => {
+    if (input.kind === 'network-all') return (input.urls ?? []).map((url) => String(url).endsWith('/bad') ? { body: 'connection refused', status: 200, code: 200, callTime: -4, url: String(url), headers: {}, error: true } : { body: 'ok', status: 200, code: 200, url: String(url), headers: {} })
+    return ''
+  } })
+  const result = await evaluate(host, '@js:java.ajaxTestAll(["https://a.test/good", "https://a.test/bad"]).map((item) => item.body()).join("|")', '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, 'ok|connection refused')
+})
+
 test('java.getString 和 java.getStringList 的 isUrl 使用重定向地址并去重', async () => {
   const host = new SourceRuleHost()
   const content = { url: '../chapter/1', missing: '', links: ['/a', '/a', 'chapter/2', 'javascript:void(0)'] }

@@ -74,6 +74,17 @@ function headerValue(value: string | readonly string[] | undefined): string | un
   return typeof value === 'string' ? value : value?.[0]
 }
 
+function bridgeTestErrorCode(error: unknown): number {
+  const message = error instanceof Error ? error.message : String(error)
+  const name = error instanceof Error ? error.name : ''
+  if (name === 'TimeoutError' || /timeout|timed out|abort/iu.test(message)) return -2
+  if (/ENOTFOUND|DNS|unknown host|name resolution/iu.test(message)) return -3
+  if (/ECONNREFUSED|connection refused/iu.test(message)) return -4
+  if (/ECONNRESET|socket|connection reset/iu.test(message)) return -5
+  if (/SSL|TLS|certificate|handshake/iu.test(message)) return -6
+  return -7
+}
+
 function bomCharset(bytes: Uint8Array): string | undefined {
   if (bytes.length >= 4 && bytes[0] === 0x00 && bytes[1] === 0x00 && bytes[2] === 0xfe && bytes[3] === 0xff) return 'utf-32be'
   if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xfe && bytes[2] === 0x00 && bytes[3] === 0x00) return 'utf-32le'
@@ -147,8 +158,14 @@ export class SourceRequestHost {
     if (input.kind === 'network-all') {
       const urls = Array.isArray(input.urls) ? input.urls.map((value) => text(value)).filter((value) => value.length > 0) : []
       return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url, batchSignal) => {
-        const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, undefined, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge')
-        return this.responseObject(response)
+        try {
+          const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, undefined, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge')
+          return this.responseObject(response)
+        } catch (error) {
+          const testMode = input.isTest === true || (object(input.options) !== undefined && Object.hasOwn(object(input.options)!, 'timeout'))
+          if (!testMode) throw error
+          return this.testErrorResponse(url, error)
+        }
       }))
     }
     const overrides: SourceRequestOptions = {
@@ -188,13 +205,34 @@ export class SourceRequestHost {
   }
 
   private responseObject(response: NetworkResponse): Readonly<Record<string, unknown>> {
+    const charset = responseCharset(response)
+    const contentType = headerValue(response.headers['content-type'])
     return {
       body: this.decode(response),
       status: response.status,
       code: response.status,
+      ...(response.statusMessage === undefined ? {} : { statusMessage: response.statusMessage, message: response.statusMessage }),
       headers: response.headers,
       url: response.url,
       redirected: response.redirected,
+      ...(charset === undefined ? {} : { charset }),
+      ...(contentType === undefined ? {} : { contentType }),
+    }
+  }
+
+  private testErrorResponse(url: string, error: unknown): Readonly<Record<string, unknown>> {
+    const body = error instanceof Error ? error.stack ?? error.message : String(error)
+    return {
+      body,
+      status: 200,
+      code: 200,
+      statusMessage: 'OK',
+      message: 'OK',
+      headers: {},
+      url,
+      redirected: false,
+      callTime: bridgeTestErrorCode(error),
+      error: true,
     }
   }
 }

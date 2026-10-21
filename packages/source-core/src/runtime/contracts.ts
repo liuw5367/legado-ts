@@ -106,6 +106,8 @@ export interface NetworkResponse {
   url: string
   /** HTTP 状态码；网络失败不得伪造为 200。 */
   status: number
+  /** HTTP reason phrase；传输宿主没有该字段时保持缺失。 */
+  statusMessage?: string
   /** 响应头；Set-Cookie 可保留为数组。 */
   headers: Readonly<Record<string, string | string[]>>
   /** 已解压的响应 bytes。 */
