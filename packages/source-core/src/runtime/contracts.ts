@@ -177,6 +177,10 @@ export interface SymmetricCrypto {
   decryptText(input: Uint8Array, charset?: string): string
   /** 文字按指定字符集编码后加密。 */
   encryptText(input: string, charset?: string): Uint8Array
+  /** Hutool SymmetricCrypto keeps the cipher object mutable within one JS execution. */
+  setIv?(iv: Uint8Array): SymmetricCrypto
+  getIv?(): Uint8Array | undefined
+  getSecretKey?(): Uint8Array
 }
 
 export type CryptoKeyInput = string | Uint8Array
@@ -208,7 +212,9 @@ export interface CryptoHost {
   /** 计算 HMAC 十六进制结果。 */
   hmacHex(input: string | Uint8Array, key: string | Uint8Array, algorithm?: DigestAlgorithm): string
   /** 创建带明确 transformation、key 和 iv 的对称加密对象。 */
-  createSymmetricCrypto(transformation: string, key: Uint8Array, iv?: Uint8Array): SymmetricCrypto
+  createSymmetricCrypto(transformation: string, key?: Uint8Array, iv?: Uint8Array): SymmetricCrypto
+  /** Generates the one key used by a null-key factory for the rest of this execution. */
+  generateSymmetricKey?(transformation: string): Uint8Array
   /** 可选的 Android 非对称加密和签名对象；未实现时 core 返回能力错误。 */
   createAsymmetricCrypto?(transformation: string): AsymmetricCrypto
   createSign?(algorithm: string): SignCrypto

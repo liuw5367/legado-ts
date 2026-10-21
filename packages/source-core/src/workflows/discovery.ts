@@ -6,13 +6,14 @@ import { detailFields, evaluateField, executeSourceFunction, executeWorkflowJava
 import { formatDetailIntro, formatIntro } from './html-format.ts'
 import { javascriptBookProjection } from './javascript-projection.ts'
 import { parseRelaxedJson } from '../codec/relaxed-json.ts'
-import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, ExploreActionResult, ExploreKind, ExploreKindsResult, ExploreViewNameResult, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
+import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, ExploreActionResult, ExploreKind, ExploreKindsResult, ExploreViewNameResult, InfoMapSaveRequest, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export async function parseExploreKinds(ports: WorkflowPorts, source: NormalizedSource, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreKindsResult> {
   const diagnostics: WorkflowDiagnostic[] = []
   const configured = sourceString(source, 'exploreUrl')
   const infoMap: Record<string, string> = { ...(options.infoMap ?? {}) }
   let saveRequested = false
+  const saveTracker = createInfoMapSaveTracker(infoMap)
   if (configured === undefined) return { kinds: [], infoMap, saveRequested, diagnostics }
   const dynamic = configured.match(/^@js:([\s\S]*)$/iu) ?? configured.match(/^<js>([\s\S]*)<\/js>$/iu)
   let text = configured
@@ -23,6 +24,7 @@ export async function parseExploreKinds(ports: WorkflowPorts, source: Normalized
       workflowActions: {
         saveInfoMap: async (_signal, input) => {
           saveRequested = true
+          saveTracker.capture(input)
           return input
         },
       },
@@ -30,15 +32,15 @@ export async function parseExploreKinds(ports: WorkflowPorts, source: Normalized
     })
     if (result.state === 'cancelled' || options.signal?.aborted === true) {
       diagnostics.push({ code: 'cancelled', stage: 'discover', field: 'exploreUrl', message: '发现分类脚本已取消', retryable: false })
-      return { kinds: [], infoMap, saveRequested, diagnostics }
+      return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
     }
     if (result.state === 'capability-missing') {
       diagnostics.push({ code: 'capability-missing', stage: 'discover', field: 'exploreUrl', message: result.message ?? '发现分类需要 JavaScript 宿主', retryable: false })
-      return { kinds: [], infoMap, saveRequested, diagnostics }
+      return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
     }
     if (result.state !== 'value') {
       diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message: result.message ?? '发现分类脚本执行失败', retryable: false })
-      return { kinds: [], infoMap, saveRequested, diagnostics }
+      return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
     }
     const wrapper = result.value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: Record<string, unknown> } | null
     const rawValue = wrapper?.__legadoWorkflowValue ?? result.value
@@ -51,10 +53,10 @@ export async function parseExploreKinds(ports: WorkflowPorts, source: Normalized
     }
   }
   try {
-    return { kinds: parseExploreKindText(text), infoMap, saveRequested, diagnostics }
+    return { kinds: parseExploreKindText(text), infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
   } catch (error) {
     diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message: error instanceof Error ? error.message : '发现分类配置无效', retryable: false })
-    return { kinds: [], infoMap, saveRequested, diagnostics }
+    return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
   }
 }
 
@@ -63,6 +65,7 @@ export async function executeExploreAction(ports: WorkflowPorts, source: Normali
   const diagnostics: WorkflowDiagnostic[] = []
   const infoMap: Record<string, string> = { ...(options.infoMap ?? {}) }
   let saveRequested = false
+  const saveTracker = createInfoMapSaveTracker(infoMap)
   let refreshRequested = false
   if (action.trim().length === 0) return { infoMap, saveRequested, refreshRequested, diagnostics }
   const result = await executeWorkflowJavaScript(ports, source, action, 'discover', 'search', [], {
@@ -71,6 +74,7 @@ export async function executeExploreAction(ports: WorkflowPorts, source: Normali
     workflowActions: {
       saveInfoMap: async (_signal, input) => {
         saveRequested = true
+        saveTracker.capture(input)
         return input
       },
       refreshExplore: async () => {
@@ -87,11 +91,11 @@ export async function executeExploreAction(ports: WorkflowPorts, source: Normali
   })
   if (result.state === 'cancelled' || options.signal?.aborted === true) {
     diagnostics.push({ code: 'cancelled', stage: 'discover', field: 'exploreAction', message: '发现控件动作已取消', retryable: false })
-    return { infoMap, saveRequested, refreshRequested, diagnostics }
+    return { infoMap, saveRequested, saveRequest: saveTracker.request, refreshRequested, diagnostics }
   }
   if (result.state === 'capability-missing') {
     diagnostics.push({ code: 'capability-missing', stage: 'discover', field: 'exploreAction', message: result.message ?? '发现控件动作需要 JavaScript 宿主', retryable: false })
-    return { infoMap, saveRequested, refreshRequested, diagnostics }
+    return { infoMap, saveRequested, saveRequest: saveTracker.request, refreshRequested, diagnostics }
   }
   if (result.state !== 'value' && result.state !== 'empty') diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreAction', message: result.message ?? '发现控件动作执行失败', retryable: false })
   const wrapper = result.value as { __legadoWorkflowBindings?: Record<string, unknown> } | null
@@ -99,16 +103,23 @@ export async function executeExploreAction(ports: WorkflowPorts, source: Normali
   if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) {
     for (const [key, value] of Object.entries(captured)) if (typeof value === 'string') infoMap[key] = value
   }
-  return { infoMap, saveRequested, refreshRequested, diagnostics }
+  return { infoMap, saveRequested, saveRequest: saveTracker.request, refreshRequested, diagnostics }
 }
 
 /** Evaluate an ExploreKind viewName expression in the same JavaScript host as actions. */
 export async function evaluateExploreViewName(ports: WorkflowPorts, source: NormalizedSource, expression: string, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreViewNameResult> {
   const diagnostics: WorkflowDiagnostic[] = []
   const infoMap: Record<string, string> = { ...(options.infoMap ?? {}) }
+  const saveTracker = createInfoMapSaveTracker(infoMap)
   const result = await executeWorkflowJavaScript(ports, source, expression, 'discover', 'search', [], {
     bindings: { infoMap },
     captureMutations: ['infoMap'],
+    workflowActions: {
+      saveInfoMap: async (_signal, input) => {
+        saveTracker.capture(input)
+        return input
+      },
+    },
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   })
   if (result.state === 'cancelled' || options.signal?.aborted === true) diagnostics.push({ code: 'cancelled', stage: 'discover', field: 'exploreViewName', message: '发现控件标题计算已取消', retryable: false })
@@ -119,7 +130,32 @@ export async function evaluateExploreViewName(ports: WorkflowPorts, source: Norm
   const value = textValue(raw).trim()
   const captured = wrapper?.__legadoWorkflowBindings?.infoMap
   if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) for (const [key, item] of Object.entries(captured)) if (typeof item === 'string') infoMap[key] = item
-  return { value: value.length === 0 ? (diagnostics.length === 0 ? 'null' : 'err') : value, infoMap, diagnostics }
+  return { value: value.length === 0 ? (diagnostics.length === 0 ? 'null' : 'err') : value, infoMap, saveRequest: saveTracker.request, diagnostics }
+}
+
+function createInfoMapSaveTracker(infoMap: Readonly<Record<string, string>>): { capture: (input: unknown) => void; readonly request?: InfoMapSaveRequest | undefined } {
+  let saveTime = 0
+  let needSave = false
+  let request: InfoMapSaveRequest | undefined
+  return {
+    capture(input) {
+      const record = typeof input === 'object' && input !== null && !Array.isArray(input) ? input as Record<string, unknown> : {}
+      const now = record.now === true
+      if (!now) {
+        const time = Number(record.time ?? 0)
+        saveTime = Number.isInteger(time) && time >= 0 ? time : 0
+        needSave = record.need !== false
+      } else {
+        needSave = true
+      }
+      const rawMap = record.infoMap
+      const current = typeof rawMap === 'object' && rawMap !== null && !Array.isArray(rawMap) ? rawMap as Record<string, unknown> : infoMap
+      const snapshot: Record<string, string> = {}
+      for (const [key, value] of Object.entries(current)) if (typeof value === 'string') snapshot[key] = value
+      request = { infoMap: snapshot, time: saveTime, need: needSave, now }
+    },
+    get request() { return request },
+  }
 }
 
 function parseExploreKindText(text: string): ExploreKind[] {

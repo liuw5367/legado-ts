@@ -92,9 +92,9 @@
 | D28 | 应用状态 | Web 跨请求源状态与 cache 恢复 | 部分实现（第一阶段） | 差异登记 D28；Node 快照恢复和 Web 加密快照已覆盖源键值、登录信息、登录头与字符串缓存 | 删除/换版、账号隔离、恢复失败和自定义缓存宿主仍需验证 |
 | D29 | 文件隔离 | Web 默认共享文件目录 | 部分实现（第一阶段） | 差异登记 D29；Web 通过部署密钥派生账号/源/版本命名空间并注入 `fileRoot` | 跨命名空间读写删除拒绝及无持久磁盘部署仍需组合验证 |
 | D30 | 文件请求 | 下载认证/URL options/归档字符集/缓存失效 | 部分实现（第四阶段） | Node session 的文件/字体/归档下载复用 SourceRequestHost，继承动态 Header、登录头、Cookie 和重定向；归档 bytes 自动探测字符集；`cache.delete(md5Encode16(url))` 会同步失效 `cacheFile` 映射 | 受控 HTTP 仍不等于 WebView；真实 Android 归档/缓存 golden 仍待验证 |
-| D31 | 发现状态 | InfoMap 方法、保存时机和 TTL | 部分实现 | 差异登记 D31；方法已复现，保存语义源码确认 | 无参 get、删除、save(time,need)、saveNow 与布局分别验证 |
-| D32 | 加密重载 | 已废弃 AES API 的实际返回类型与行为 | 部分实现（第三阶段） | `aesEncodeToString` 对齐 Android 历史 decryptStr；`aesEncodeToBase64ByteArray` 返回 UTF-8 Base64 bytes；Node 加密回归通过 | 其余 DES/3DES 历史方法和 Android golden 仍待逐项固定 |
-| D33 | 加密对象 | 工厂状态、模式/padding/RSA 参数 | 部分实现 | 差异登记 D33；部分已复现 | 精确算法映射、同一工厂状态和支持范围逐签名验证 |
+| D31 | 发现状态 | InfoMap 方法、保存时机和 TTL | 部分实现（第四阶段） | InfoMap 已补无参 get、putAll、containsValue、keys/values/entries、删除传播；Web 按 Android `save(time,need)`/`saveNow` 记录秒级 TTL，控件直接修改显式提交，`layout_wrapBefore` 已映射为 Web 换行 | 真实 Android golden、多实例保存竞争和所有 MutableMap 迭代器细节仍待验证 |
+| D32 | 加密重载 | 已废弃 AES API 的实际返回类型与行为 | 部分实现（第三/第五阶段） | `aesEncodeToString` 对齐 Android 历史 decryptStr；`aesEncodeToBase64ByteArray` 返回 UTF-8 Base64 bytes；Node 加密工厂覆盖 AES/DES/3DES 常用模式和 NoPadding | 其余 DES/3DES 历史方法和 Android golden 仍待逐项固定 |
+| D33 | 加密对象 | 工厂状态、模式/padding/RSA 参数 | 部分实现（第五阶段） | 工厂在脚本执行内保持 key/IV 状态，支持 `setIv/getIv/getSecretKey`、null key、常用对称模式和 RSA PKCS1/OAEP/NoPadding | GCM/CCM/SM、OAEP 全参数和 Android provider 行为仍待 golden |
 | D34 | JS 引擎 | StrResponse 构造、Java 类和字符串身份 | 部分实现（第三阶段） | `JavaImporter/Packages/JavaAdapter`、MessageDigest、StringBuilder、Map/List、Java String 和可构造 StrResponse 已补；教程脚本回归通过 | 通用 JVM、Android 系统类和完整 Rhino 对象身份仍需真实宿主或逐成员模拟 |
 | D35 | 字体对象 | 本地文件输入及 QueryTTF 公开对象 | 部分实现（第三阶段） | 字体对象补 getGlyfById/unicodeToGlyph/glyphToUnicode/unicodeToGlyphId；文件路径下载复用源请求链 | CFF/WOFF、缺失 glyph 和 Android golden 仍待验证 |
 | D36 | 工具函数 | 日期格式和繁简词库 | 部分实现（第三阶段） | Node 日期格式补 D/w/W/F/k/K/z/G 常用 token；现有 locale/UTC 回归继续通过 | SimpleDateFormat 全量 token、locale 和繁简词库完整差分仍待验证 |

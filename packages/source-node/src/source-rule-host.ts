@@ -33,6 +33,7 @@ export interface SourceRuleHostOptions extends Omit<SourceRuleRuntimeOptions, 'e
 
 function formatJavaDate(time: number, pattern: string, offsetMs?: number): string | null {
   if (!Number.isFinite(time) || !Number.isFinite(offsetMs ?? 0)) return null
+  if (pattern.length > 512) return null
   const date = new Date(time + (offsetMs ?? 0))
   if (Number.isNaN(date.getTime())) return null
   const utc = offsetMs !== undefined
@@ -52,12 +53,18 @@ function formatJavaDate(time: number, pattern: string, offsetMs?: number): strin
   const firstDayOfMonth = utc ? new Date(Date.UTC(year, month - 1, 1)).getUTCDay() : new Date(year, month - 1, 1).getDay()
   const weekOfYear = Math.floor((dayOfYear + firstDayOfYear - 1) / 7) + 1
   const weekOfMonth = Math.floor((day + firstDayOfMonth - 1) / 7) + 1
+  const dayOfWeek = weekday === 0 ? 7 : weekday
+  const isoWeekDate = new Date(date.getTime())
+  if (utc) isoWeekDate.setUTCDate(isoWeekDate.getUTCDate() + 4 - dayOfWeek)
+  else isoWeekDate.setDate(isoWeekDate.getDate() + 4 - dayOfWeek)
+  const weekYear = utc ? isoWeekDate.getUTCFullYear() : isoWeekDate.getFullYear()
   const timezoneName = utc ? 'UTC' : new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(date).find((item) => item.type === 'timeZoneName')?.value ?? offset
-  return pattern.replace(/'([^']|'')*'|y+|M+|d+|D+|H+|k+|K+|h+|m+|s+|S+|E+|a|w+|W+|F+|z+|G+|Z|X+/gu, (token) => {
+  return pattern.replace(/'([^']|'')*'|Y+|y+|M+|L+|d+|D+|H+|k+|K+|h+|m+|s+|S+|E+|u+|a|w+|W+|F+|z+|G+|Z|X+/gu, (token) => {
     if (token === "''") return "'"
     if (token.startsWith("'")) return token.slice(1, -1).replaceAll("''", "'")
+    if (token[0] === 'Y') return token.length === 2 ? String(weekYear % 100).padStart(2, '0') : String(weekYear).padStart(token.length, '0')
     if (token[0] === 'y') return token.length === 2 ? String(year % 100).padStart(2, '0') : String(year).padStart(token.length, '0')
-    if (token[0] === 'M') {
+    if (token[0] === 'M' || token[0] === 'L') {
       if (token.length <= 2) return token.length === 1 ? String(month) : String(month).padStart(2, '0')
       return new Intl.DateTimeFormat(undefined, { month: token.length === 3 ? 'short' : 'long', ...(utc ? { timeZone: 'UTC' } : {}) }).format(date)
     }
@@ -73,6 +80,7 @@ function formatJavaDate(time: number, pattern: string, offsetMs?: number): strin
     if (token[0] === 's') return token.length === 1 ? String(second) : String(second).padStart(token.length, '0')
     if (token[0] === 'S') return String(millis).padStart(token.length, '0')
     if (token[0] === 'E') return new Intl.DateTimeFormat(undefined, { weekday: token.length >= 4 ? 'long' : 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2020, 5, 7 + weekday)))
+    if (token[0] === 'u') return token.length === 1 ? String(dayOfWeek) : String(dayOfWeek).padStart(token.length, '0')
     if (token === 'a') return hour < 12 ? 'AM' : 'PM'
     if (token[0] === 'w') return token.length === 1 ? String(weekOfYear) : String(weekOfYear).padStart(token.length, '0')
     if (token[0] === 'W') return token.length === 1 ? String(weekOfMonth) : String(weekOfMonth).padStart(token.length, '0')

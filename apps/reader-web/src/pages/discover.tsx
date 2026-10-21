@@ -95,11 +95,16 @@ function DiscoveryControl({ category, pending, disabled, onChange }: { category:
   const chars = category.chars?.filter((value): value is string => value !== null) ?? []
   const value = category.value ?? category.default ?? chars[0] ?? ''
   const style = discoveryControlStyle(category.style)
-  if (category.type === 'text') return <TextDiscoveryControl title={title} value={category.value ?? ''} style={style} disabled={disabled} pending={pending} onChange={onChange} />
-  if (category.type === 'select') return <label className="discovery-control discovery-control-select" style={style}><span className="discovery-control-label">{title}</span><Select value={value} disabled={disabled || pending || chars.length === 0} aria-label={title} onChange={(event) => onChange(event.target.value)}>{chars.map((item) => <option key={item} value={item}>{item}</option>)}</Select><ControlStatus pending={pending} /></label>
-  if (category.type === 'toggle') return <div className="discovery-control discovery-control-toggle" style={style}><Button variant="secondary" size="sm" disabled={disabled || pending || chars.length === 0} onClick={() => { const index = chars.indexOf(value); onChange(chars[(index + 1 + chars.length) % chars.length]) }}>{value.length > 0 ? `${value} ` : ''}{title}</Button><ControlStatus pending={pending} /></div>
-  if (category.type === 'button') return <div className="discovery-control discovery-control-button" style={style}><Button variant="secondary" size="sm" disabled={disabled || pending} onClick={() => onChange()}>{title}</Button><ControlStatus pending={pending} /></div>
-  return <span className="discovery-control discovery-control-unsupported" style={style}>{title}</span>
+  const control = category.type === 'text'
+    ? <TextDiscoveryControl title={title} value={category.value ?? ''} style={style} disabled={disabled} pending={pending} onChange={onChange} />
+    : category.type === 'select'
+      ? <label className="discovery-control discovery-control-select" style={style}><span className="discovery-control-label">{title}</span><Select value={value} disabled={disabled || pending || chars.length === 0} aria-label={title} onChange={(event) => onChange(event.target.value)}>{chars.map((item) => <option key={item} value={item}>{item}</option>)}</Select><ControlStatus pending={pending} /></label>
+      : category.type === 'toggle'
+        ? <div className="discovery-control discovery-control-toggle" style={style}><Button variant="secondary" size="sm" disabled={disabled || pending || chars.length === 0} onClick={() => { const index = chars.indexOf(value); onChange(chars[(index + 1 + chars.length) % chars.length]) }}>{value.length > 0 ? `${value} ` : ''}{title}</Button><ControlStatus pending={pending} /></div>
+        : category.type === 'button'
+          ? <div className="discovery-control discovery-control-button" style={style}><Button variant="secondary" size="sm" disabled={disabled || pending} onClick={() => onChange()}>{title}</Button><ControlStatus pending={pending} /></div>
+          : <span className="discovery-control discovery-control-unsupported" style={style}>{title}</span>
+  return <>{category.style?.layout_wrapBefore === true ? <span className="discovery-control-wrap-before" aria-hidden="true" /> : null}{control}</>
 }
 
 function ControlStatus({ pending }: { pending: boolean }) { return pending ? <span className="muted small" role="status">处理中…</span> : null }

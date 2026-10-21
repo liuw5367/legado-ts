@@ -145,6 +145,11 @@ export function normalizeSnapshot(value: unknown): RuntimeStateSnapshot {
     }
     output.infoMap = infoMap
   }
+  const infoMapExpiresAt = input.infoMapExpiresAt
+  if (infoMapExpiresAt !== undefined) {
+    if (typeof infoMapExpiresAt !== 'number' || !Number.isSafeInteger(infoMapExpiresAt) || infoMapExpiresAt < 0) throw new Error('invalid infoMap expiry')
+    output.infoMapExpiresAt = infoMapExpiresAt
+  }
   if (input.discovery !== undefined) {
     if (typeof input.discovery !== 'object' || input.discovery === null || Array.isArray(input.discovery)) throw new Error('invalid discovery snapshot')
     const discovery = input.discovery as Record<string, unknown>

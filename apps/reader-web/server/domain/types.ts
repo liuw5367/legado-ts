@@ -267,6 +267,8 @@ export interface RuntimeStateSnapshot {
   }
   /** Android InfoMap 的书源级发现控件状态；按账号和书源版本隔离。 */
   infoMap?: Record<string, string>
+  /** Android InfoMap.save(time) 的绝对到期时间；缺省为不过期。 */
+  infoMapExpiresAt?: number
   /** 已解析的发现分类；绑定源 fingerprint，避免分页重新执行动态分类脚本。 */
   discovery?: {
     version: 1

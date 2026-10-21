@@ -471,6 +471,19 @@ test('对称加密支持 Android 常用简写、十六进制输入和双密钥 3
   assert.deepEqual(JSON.parse(String(result.value)), ['hello', 'hello'])
 })
 
+test('对称加密工厂保持随机 key 和 setIv 状态，并支持 CTR/NoPadding', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var cipher = java.createSymmetricCrypto('AES/CBC/PKCS5Padding', null, java.strToBytes('1234567890123456'));
+    var first = Array.from(cipher.getSecretKey().getEncoded());
+    var second = Array.from(cipher.getSecretKey().getEncoded());
+    var changed = cipher.setIv(java.strToBytes('6543210987654321')) === cipher;
+    var ctr = java.createSymmetricCrypto('AES/CTR/NoPadding', '1234567890123456', '1234567890123456');
+    var plain = Array.from(ctr.decrypt(ctr.encrypt('hello')));
+    JSON.stringify([first.length, JSON.stringify(first) === JSON.stringify(second), changed, plain]);`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [16, true, true, [104, 101, 108, 108, 111]])
+})
+
 test('java.getString 和 java.getStringList 的 isUrl 使用重定向地址并去重', async () => {
   const host = new SourceRuleHost()
   const content = { url: '../chapter/1', missing: '', links: ['/a', '/a', 'chapter/2', 'javascript:void(0)'] }
@@ -624,6 +637,12 @@ test('Node 时间格式桥接遵循 Java 毫秒字段与 UTC 偏移格式', asyn
   ])
 })
 
+test('Node 时间格式桥接支持 Android 常用周年份、星期序号和独立月份标记', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:java.timeFormatUTC(1577836800000, "YYYY-u-LLLL", 0)`, '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, '2020-3-January')
+})
+
 test('source、book、chapter 变量分别写入所属 DTO，通用读取遵循 chapter 优先级', async () => {
   const host = new SourceRuleHost()
   host.setVariable('bookName', '错误的来源书名')
@@ -757,6 +776,12 @@ test('规则宿主兼容真实书源中的 var result 和 Java 变量读取写�
   const page = await evaluate(host, '@js:java.get("page")', '')
   assert.equal(page.status, 'success')
   assert.equal(page.value, '2')
+})
+
+test('InfoMap 支持 Android MutableMap 的读取、批量写入和删除', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:infoMap.put("a", "1"); infoMap.putAll({ b: 2 }); JSON.stringify([infoMap.get(), infoMap.get("a"), infoMap.containsValue("2"), Array.from(infoMap.keys), Array.from(infoMap.values), Array.from(infoMap.entries), infoMap.remove("a"), infoMap.get("a")])', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [{ b: '2' }, '1', true, ['a', 'b'], ['1', '2'], [['a', '1'], ['b', '2']], '1', null])
 })
 
 test('规则宿主支持任意位置 @put、JSON 内嵌规则与非空分支 %%', async () => {

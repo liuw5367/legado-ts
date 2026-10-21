@@ -476,6 +476,7 @@ a { color: inherit; }
 .discovery-tab:active, .discovery-book:active { background: color-mix(in srgb, var(--primary) 7%, var(--background)); }
 .discovery-tabs:focus-within { outline-offset: 2px; }
 .discovery-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.discovery-control-wrap-before { flex: 0 0 100%; width: 0; height: 0; margin: 0; padding: 0; }
 .discovery-control { display: inline-flex; min-width: 0; align-items: center; gap: 6px; }
 .discovery-control-text, .discovery-control-select { flex: 1 1 180px; }
 .discovery-control-text input, .discovery-control-select select { min-width: 0; flex: 1; }

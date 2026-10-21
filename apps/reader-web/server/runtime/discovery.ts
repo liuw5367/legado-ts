@@ -67,6 +67,7 @@ async function resolveCategoryLabels(session: SourceSession, source: StoredSourc
     }
     const result = await session.run((ports) => evaluateExploreViewName(ports, source.normalizedSource, expression, { infoMap: state.infoMap, ...(signal === undefined ? {} : { signal }) }))
     state.replaceInfoMap(result.infoMap)
+    if (result.saveRequest !== undefined) state.applyInfoMapSave(result.saveRequest)
     category.label = result.value
   }
 }
@@ -135,6 +136,7 @@ async function resolveDiscoveryCategories(source: StoredSourceRecord, session: S
   } else {
     const result = await session.run((ports) => parseExploreKinds(ports, source.normalizedSource, { infoMap: state.infoMap, ...(signal === undefined ? {} : { signal }) }))
     state.replaceInfoMap(result.infoMap)
+    if (result.saveRequest !== undefined) state.applyInfoMapSave(result.saveRequest)
     const diagnostic = result.diagnostics[0]
     if (diagnostic !== undefined) return { categories: [], message: diagnostic.message }
     categories = categoriesFromKinds(source, result.kinds)
@@ -172,9 +174,13 @@ export async function updateDiscoveryControl(repository: ReaderRepository, userI
     } else if (type !== 'button') {
       throw new ReaderRuntimeError('invalid-input', '暂不支持的发现控件类型')
     }
+    // Direct UI control changes are the application equivalent of a committed
+    // Android InfoMap value, even when the control has no action script.
+    state.applyInfoMapSave({ infoMap: { ...state.infoMap }, time: 0, need: true, now: true })
     if (category.action !== undefined && category.action.trim().length > 0) {
       const action = await session.run((ports) => executeExploreAction(ports, source.normalizedSource, category.action!, { infoMap: state.infoMap, ...(signal === undefined ? {} : { signal }) }))
       state.replaceInfoMap(action.infoMap)
+      if (action.saveRequest !== undefined) state.applyInfoMapSave(action.saveRequest)
       const diagnostic = action.diagnostics[0]
       if (diagnostic !== undefined) throw new ReaderRuntimeError('source-failed', diagnostic.message)
       if (action.refreshRequested) state.discovery = undefined

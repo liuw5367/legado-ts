@@ -33,16 +33,27 @@ export interface ExploreKind {
   style?: JsonObject
 }
 
+/** Android InfoMap.save/saveNow request captured at the point the script called it. */
+export interface InfoMapSaveRequest {
+  infoMap: Record<string, string>
+  /** TTL in seconds; zero means no expiry. */
+  time: number
+  need: boolean
+  now: boolean
+}
+
 export interface ExploreKindsResult {
   kinds: ExploreKind[]
   infoMap: Record<string, string>
   saveRequested: boolean
+  saveRequest?: InfoMapSaveRequest | undefined
   diagnostics: WorkflowDiagnostic[]
 }
 
 export interface ExploreActionResult {
   infoMap: Record<string, string>
   saveRequested: boolean
+  saveRequest?: InfoMapSaveRequest | undefined
   refreshRequested: boolean
   diagnostics: WorkflowDiagnostic[]
 }
@@ -50,6 +61,7 @@ export interface ExploreActionResult {
 export interface ExploreViewNameResult {
   value: string
   infoMap: Record<string, string>
+  saveRequest?: InfoMapSaveRequest | undefined
   diagnostics: WorkflowDiagnostic[]
 }
 
