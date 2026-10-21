@@ -98,7 +98,7 @@ export function TocPage() {
   }, [currentToc !== null])
   const continueTarget = currentChapter === undefined ? chapters[0] : currentChapter
 
-  if (loading && currentToc === null) return <section className="page-stack page-narrow"><LoadingState message="正在读取目录…" action={<PageBackButton appearance="button" />} /></section>
+  if (loading && currentToc === null) return <section className="page-stack page-narrow"><LoadingState message="正在读取目录…" variant="viewport" action={<PageBackButton appearance="button" />} /></section>
   if (currentToc === null) return <section className="page-stack page-narrow"><PageBackButton /><div className="error-state"><p className="error">{error || '目录加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void load(false)}>重试</Button></div></div></section>
   return <section className="page-stack page-narrow toc-page">
     <div className="toc-controls" ref={controlsRef}><PageHeader backTo="/" title={book?.name ?? '书籍目录'} description={`${chapters.length} 章 · ${displaySource}`} actions={continueTarget === undefined ? null : <Link className="button small page-action" to={chapterLink(bookId, continueTarget, editionKey)} state={readingEntryState(location)}>{currentChapter === undefined ? '开始阅读' : '继续阅读'}</Link>} />

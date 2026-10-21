@@ -26,7 +26,7 @@ const BookSourcesPage = lazy(() => import('./pages/book-sources.tsx').then((modu
 const BookDetailsPage = lazy(() => import('./pages/book-details.tsx').then((module) => ({ default: module.BookDetailsPage })))
 const TocPage = lazy(() => import('./pages/toc.tsx').then((module) => ({ default: module.TocPage })))
 
-function LazyPage({ children, viewport = false, backTo, bookToc = false, searchBack = false }: { children: ReactNode; viewport?: boolean; backTo?: string; bookToc?: boolean; searchBack?: boolean }) {
+function LazyPage({ children, viewport = true, backTo, bookToc = false, searchBack = false }: { children: ReactNode; viewport?: boolean; backTo?: string; bookToc?: boolean; searchBack?: boolean }) {
   const { bookId = '' } = useParams()
   const [params] = useSearchParams()
   const targetBookId = params.get('bookId') ?? ''

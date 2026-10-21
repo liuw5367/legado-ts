@@ -102,9 +102,11 @@ a { color: inherit; }
 .app-main, .page-load-boundary { display: flex; flex-direction: column; }
 .page-load-boundary, .page-load-boundary > .page-stack { flex: 1; }
 .page-load-boundary-viewport { min-height: 100dvh; }
+.app-main .page-load-boundary-viewport { min-height: 0; }
+.page-load-boundary-viewport > .page-load-error { position: fixed; z-index: 11; inset: 0; min-height: 0; padding: 24px calc(24px + env(safe-area-inset-right, 0px)) 24px calc(24px + env(safe-area-inset-left, 0px)); background: var(--background); }
 .loading-state { display: flex; min-width: 0; flex-direction: column; align-items: center; justify-content: center; padding: 24px 12px; text-align: center; }
 .loading-state-content { flex: 1; min-height: min(240px, 50dvh); }
-.loading-state-viewport { flex: 1; min-height: 100dvh; padding: var(--page-top-inset) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px)); }
+.loading-state-viewport { position: fixed; z-index: 11; inset: 0; flex: 0 0 auto; min-height: 0; padding: 24px calc(24px + env(safe-area-inset-right, 0px)) 24px calc(24px + env(safe-area-inset-left, 0px)); background: var(--background); }
 .loading-state-status { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .loading-state-spinner { width: 28px; height: 28px; flex: 0 0 auto; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: loading-spin .9s linear infinite; }
 .loading-state-message { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }

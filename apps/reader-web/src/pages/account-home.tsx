@@ -78,7 +78,7 @@ export function AccountHomePage() {
       <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => setView('reading')}>阅读 {home === null ? null : <span>{home.reading.length}</span>}</button>
       <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>搜索 {home === null ? null : <span>{home.searchHistory.length}</span>}</button>
     </div>
-    {loading && home === null ? <LoadingState message="正在读取你的阅读数据…" /> : home === null ? <div className="error-state"><p className="error" role="alert">{message || '首页加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
+    {loading && home === null ? <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : home === null ? <div className="error-state"><p className="error" role="alert">{message || '首页加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
       {loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
       {message.length > 0 ? <p className="error compact-message" role="alert">{message}</p> : null}
       {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList view={view} items={bookItems} showRemove={view === 'bookshelf'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
