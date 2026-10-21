@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { editionKey } from '@legado/reader-backup'
-import { discoverBooks, evaluateExploreViewName, executeExploreAction, loadBookDetails, parseExploreKinds, type BookCandidate, type ExploreKind, type PageCursor, type SourceSession } from '@legado/source-core'
+import { discoverBooks, evaluateExploreViewName, executeExploreAction, loadBookDetails, parseExploreKinds, parseRelaxedJson, type BookCandidate, type ExploreKind, type PageCursor, type SourceSession } from '@legado/source-core'
 import type { DiscoveryBookInput, DiscoveryCategories, DiscoveryCategory, DiscoveryControlInput, DiscoveryControlResult, DiscoveryCursor, DiscoveryPage, DiscoveryPageInput, DiscoverySource } from '../../shared/discovery.ts'
 import { sameBookIdentity } from '../../shared/book-identity.ts'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
@@ -90,7 +90,7 @@ export function parseDiscoveryCategories(source: StoredSourceRecord): { categori
   let rows: Array<{ title: string; url?: string; type?: string; action?: string; chars?: Array<string | null>; default?: string; viewName?: string; style?: Record<string, unknown> }> = []
   if (text.startsWith('[')) {
     try {
-      const value: unknown = JSON.parse(text)
+      const value: unknown = parseRelaxedJson(text)
       if (!Array.isArray(value)) throw new Error('invalid categories')
       rows = value.flatMap((item: unknown) => {
         if (item === null || typeof item !== 'object') return []

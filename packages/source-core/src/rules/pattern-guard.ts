@@ -9,7 +9,7 @@
  * 命中守卫时调用方必须给出明确诊断，不能静默忽略。
  */
 
-export type SourcePatternErrorCode = 'pattern-too-long' | 'pattern-complexity' | 'invalid-pattern'
+export type SourcePatternErrorCode = 'pattern-too-long' | 'pattern-complexity' | 'invalid-pattern' | 'unsupported-pattern'
 
 export interface SourcePatternError {
   /** 稳定分类，调用方据此给出诊断。 */
@@ -20,6 +20,11 @@ export interface SourcePatternError {
 export interface SourcePatternOptions {
   /** 传给 RegExp 的标志；默认无标志，调用方按匹配语义显式传入。 */
   flags?: string
+}
+
+interface JavaPatternTranslation {
+  pattern: string
+  flags: string
 }
 
 /** 长度上限：语料最长 981，取 2048 留一倍余量。 */
@@ -64,11 +69,54 @@ function hasUnanchoredNesting(pattern: string): boolean {
 }
 
 export function compileSourcePattern(pattern: string, options: SourcePatternOptions = {}): { regex: RegExp } | { error: SourcePatternError } {
-  if (pattern.length > maxSourcePatternLength) return { error: { code: 'pattern-too-long', message: `书源正则超过长度上限（${maxSourcePatternLength} 字符）` } }
-  if (hasUnanchoredNesting(pattern)) return { error: { code: 'pattern-complexity', message: '书源正则存在未锚定的嵌套量词，可能造成灾难性回溯' } }
+  const translated = translateJavaPattern(pattern, options.flags ?? '')
+  if ('error' in translated) return { error: translated.error }
+  if (translated.pattern.length > maxSourcePatternLength) return { error: { code: 'pattern-too-long', message: `书源正则超过长度上限（${maxSourcePatternLength} 字符）` } }
+  if (hasUnanchoredNesting(translated.pattern)) return { error: { code: 'pattern-complexity', message: '书源正则存在未锚定的嵌套量词，可能造成灾难性回溯' } }
   try {
-    return { regex: new RegExp(pattern, options.flags ?? '') }
+    return { regex: new RegExp(translated.pattern, translated.flags) }
   } catch {
     return { error: { code: 'invalid-pattern', message: '书源正则无法编译' } }
   }
+}
+
+/**
+ * 转换 Java Pattern 中可安全表达的历史书源语法；不把未知语法降级成字面匹配。
+ * `\Q...\E` 和边界转义是等价转换，占有量词去掉 `+` 后只保留匹配集合，
+ * 仍受上面的长度/回溯守卫约束；字符类交集与作用域 flags 暂时返回明确诊断。
+ */
+function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternTranslation | { error: SourcePatternError } {
+  let flags = inputFlags
+  let source = pattern
+  const inline = /^\(\?([imsUdx-]+)\)/u.exec(source)
+  if (inline !== null) {
+    source = source.slice(inline[0].length)
+    for (const flag of inline[1]!) {
+      if (flag === '-') continue
+      if ('imsu'.includes(flag) && !flags.includes(flag)) flags += flag
+      if (!'imsu'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
+    }
+  }
+  if (/\(\?[imsUdx-]+:/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则作用域 flag 暂不支持' } }
+  if (/\[[^\]]*&&/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则字符类交集暂不支持' } }
+  source = source.replace(/\\R/gu, '(?:\\r\\n|[\\n\\r\\u2028\\u2029])').replace(/\\A/gu, '^').replace(/\\[zZ]/gu, '$')
+  let output = ''
+  for (let index = 0; index < source.length;) {
+    if (source.startsWith('\\Q', index)) {
+      const end = source.indexOf('\\E', index + 2)
+      if (end < 0) return { error: { code: 'invalid-pattern', message: 'Java 正则缺少 \\E 结束标记' } }
+      output += escapeRegexLiteral(source.slice(index + 2, end))
+      index = end + 2
+      continue
+    }
+    output += source[index]!
+    index += 1
+  }
+  // ECMAScript 没有占有量词；去除占有标记保留 Java 的匹配集合，复杂度由守卫控制。
+  output = output.replace(/(\*|\+|\?|\{\d+(?:,\d*)?\})\+/gu, '$1')
+  return { pattern: output, flags }
+}
+
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/gu, '\\$&')
 }

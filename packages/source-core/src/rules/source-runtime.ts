@@ -1240,9 +1240,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     // 源可控正则过长度上限或（对超长输入）命中嵌套量词时明确失败，不让病态配置拖垮求值。
     const compiled = compileSourcePattern(patternText, { flags: 'g' })
     if ('error' in compiled) {
-      if (compiled.error.code === 'invalid-pattern') {
-        return rule.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
-      }
+      if (compiled.error.code === 'invalid-pattern') return rule.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
       throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
     }
     if (!rule.replacement.firstMatchOnly) return text.replace(compiled.regex, replacement)

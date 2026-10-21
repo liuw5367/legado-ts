@@ -58,6 +58,16 @@ test('普通非法文本返回输入错误，不误报为 JavaScript 能力缺�
   assert.equal(candidates[0]?.error?.code, 'input-invalid-json')
 })
 
+test('导入接受受限宽松 JSON，但不执行表达式', async () => {
+  const text = `// source\n{bookSourceUrl:'https://relaxed.test', bookSourceName:'宽松', bookSourceGroup:'a\\d', ruleSearch:{bookList:'.book',},}`
+  const candidates = await importSources(text)
+  assert.equal(candidates[0]?.status, 'ready')
+  assert.equal(candidates[0]?.source?.bookSourceName, '宽松')
+  assert.equal(candidates[0]?.source?.bookSourceGroup, 'a\\d')
+  const dangerous = await importSources(`{bookSourceUrl:'https://bad.test', bookSourceName:(process.exit())}`)
+  assert.equal(dangerous[0]?.status, 'invalid')
+})
+
 test('未修改 JSON/JavaScript 候选逐字导出', async () => {
   const jsonText = `${JSON.stringify(source)}\n`
   const jsonCandidate = (await importSources(jsonText))[0]

@@ -1,4 +1,5 @@
 import { diagnostic } from '../diagnostics/diagnostics.ts'
+import { parseRelaxedJson } from './relaxed-json.ts'
 import type { ImportDiagnostic, JsonObject, JsonValue, NormalizedSource, RawSource } from '../model/types.ts'
 
 const ruleFields = ['ruleExplore', 'ruleSearch', 'ruleBookInfo', 'ruleToc', 'ruleContent', 'ruleReview'] as const
@@ -67,12 +68,8 @@ function parseRule(value: JsonValue, path: string, diagnostics: ImportDiagnostic
   // missing individual rules as unsupported/empty at the workflow boundary.
   if (isObject(value) || Array.isArray(value)) return clone(value)
   if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value) as JsonValue
-      if (isObject(parsed)) return parsed
-    } catch {
-      // 规则文本的求值属于阶段 02；此处只接受序列化规则对象。
-    }
+    const parsed = parseRelaxedJson(value) as JsonValue | undefined
+    if (parsed !== undefined && isObject(parsed)) return parsed
   }
   diagnostics.push(diagnostic('rule-invalid', 'normalize', '规则字段不是对象或有效的 JSON 对象字符串', { path }))
   return null

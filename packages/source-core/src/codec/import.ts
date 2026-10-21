@@ -3,6 +3,7 @@ import { extractStaticJavaScript } from './static-javascript.ts'
 import { normalizeSource } from './normalize.ts'
 import { createSourceUuid, sourceDefinitionFingerprint } from './identity.ts'
 import { diagnostic, primaryError, safeLocation } from '../diagnostics/diagnostics.ts'
+import { parseRelaxedJson } from './relaxed-json.ts'
 import type {
   ImportCandidate,
   ImportInput,
@@ -91,11 +92,8 @@ function applyReplacements(rawText: string, rules: ImportOptions['replacements']
 }
 
 function parseJson(text: string): { value?: JsonValue; error?: string } {
-  try {
-    return { value: JSON.parse(text.replace(/^\uFEFF/, '')) as JsonValue }
-  } catch {
-    return { error: '输入不是有效 JSON' }
-  }
+  const value = parseRelaxedJson(text)
+  return value === undefined ? { error: '输入不是有效 JSON' } : { value: value as JsonValue }
 }
 
 function replacementValue(text: string, kind: RawSource['kind']): JsonValue | undefined {

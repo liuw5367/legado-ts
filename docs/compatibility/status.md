@@ -79,10 +79,10 @@
 | D15 | 应用边界差异 | 目录统计标题的应用替换规则 | 有意保留 | [差异登记](known-divergences.md)，D15；`toc-reconcile.ts` | source-core 保持纯函数；应用提供标题替换规则快照或投影回调后再做跨端 fixture |
 | D16 | JS 源行为差异 | JS 源 URL 的公开身份与脚本可见形式 | 已实现待 Android golden | [差异登记](known-divergences.md)，D16；`javascript-projection.ts`、`discovery.ts`、`reading.ts`、`source-host-flow.test.ts` | 已有 Node 回归覆盖 raw bookUrl/tocUrl/baseUrl 与详情身份字段白名单；待同输入 Android runner/golden |
 | D17 | JS 源行为差异 | JS 详情 `updateTime` 扩展字段 | 有意保留 | [差异登记](known-divergences.md)，D17；`workflows.test.ts` | Android 当前 marshaller 不接收该字段；TypeScript 保留已有字段并按允许差异处理 |
-| D18 | 规则解析 | Jsoup 扩展选择器 | 差异待处理 | [重新核对](known-divergences.md#android-与教程重新核对2026-10-21)，D18；TS 已复现 | 选择器组合、节点顺序和空结果有 Android 同输入案例 |
-| D19 | 规则解析 | HTML text/ownText/html/属性输出 | 差异待处理 | 差异登记 D19；TS 已复现脚本文本混入 | 按 Jsoup 空白、块节点、HTML 聚合和去重语义验证 |
-| D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现 | 差异登记 D20；TS 已复现函数空值和过滤失败 | 函数、过滤、null/缺失、嵌套集合有可执行支持表 |
-| D21 | 规则解析 | Java 正则与替换字符串 | 部分实现 | 差异登记 D21；源码对比 | 可转换语法有差分测试，其余有明确能力诊断 |
+| D18 | 规则解析 | Jsoup 扩展选择器 | 部分实现（第二阶段） | [重新核对](known-divergences.md#android-与教程重新核对2026-10-21)，D18；`packages/source-node/tests/adapters.test.ts` 覆盖 `eq/lt/gt/containsOwn/matchesOwn` 及组合选择 | 已实现常用位置/文本伪类；完整 Jsoup 版本、畸形 HTML 和 Android golden 仍待验证 |
+| D19 | 规则解析 | HTML text/ownText/html/属性输出 | 部分实现（第二阶段） | D19；`html.ts` 增加 Jsoup 风格空白、块节点分隔和 script/style 排除；Node adapter 回归通过 | `text/ownText/textNodes` 常用语义已覆盖；HTML 修复算法、属性去重和 Android golden 仍待验证 |
+| D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现（第二阶段） | D20；`jsonpath.ts` 支持常用 `length/size/keys/min/max/avg/sum` 和安全正则筛选；Node adapter 回归通过 | 仍受 jsonpath-plus safe evaluator 方言边界约束；完整 Jayway 函数、null/缺失和嵌套集合仍待验证 |
+| D21 | 规则解析 | Java 正则与替换字符串 | 部分实现（第二阶段） | D21；`pattern-guard.ts` 支持内联 flags、`\\Q…\\E`、边界转义和占有量词降级，并对作用域 flags/字符类交集给出能力诊断；规则回归通过 | 未覆盖的 Java 语法、Matcher/替换字符串细节和 Android golden 仍待验证 |
 | D22 | 请求脚本 | AnalyzeUrl 对象修改与登录后重取 | 部分实现 | 差异登记 D22；TS 请求桩已复现 | java.url/headerMap 和上下文专属方法按预算执行 |
 | D23 | JS bridge | AnalyzeRule 继承成员和重载 | 部分实现 | 差异登记 D23；TS 已复现 | 布尔/null/内容重载、局部变量和刷新助手逐签名验证 |
 | D24 | JS 对象 | Map/List/Jsoup 返回对象方法 | 部分实现 | 差异登记 D24；TS 已复现 | 完整公开对象清单，成员和链式返回有契约案例 |
@@ -99,7 +99,7 @@
 | D35 | 字体对象 | 本地文件输入及 QueryTTF 公开对象 | 部分实现 | 差异登记 D35；源码确认 | 查询成员、缺失 Unicode、受控字体文件有跨端案例 |
 | D36 | 工具函数 | 日期格式和繁简词库 | 部分实现 | 差异登记 D36；源码确认未覆盖 token | 完整格式 token 表、locale/时区和词库差分证据 |
 | D37 | 宿主值 | 设备替代值和阅读/主题配置注入 | 部分实现 | 差异登记 D37；getWebViewUA 已有默认字符串 | 账号内稳定标识与真实应用设置映射；明确物理设备不等价 |
-| D38 | 导入/请求 | 历史宽松 JSON | 未实现 | 差异登记 D38；源码确认 | 受限数据语法、严格优先、明确提示及危险输入拒绝 |
+| D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第二阶段） | D38；`codec/relaxed-json.ts` 在严格 JSON 失败后受限解析注释、单引号、未引号键和尾逗号；导入、规则、URL options、发现分类回归通过 | 仅解析数据语法，不执行表达式；转义边界、GSON 其他宽松选项和 Android golden 仍待验证 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 差异待处理（优先实现或模拟） | 差异登记 D39；源码确认 | 可序列化状态恢复、刷新失效和账号隔离；非序列化对象按受限会话 VM 与生命周期验证 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（第一阶段） | 差异登记 D40；游标签名加入发现代次，刷新后旧游标有回归测试 | 动态 URL/infoMap 摘要、迟到请求写回和多实例组合仍需验证 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 差异待处理 | 差异登记 D41；69 项原回归通过仍有新缺口 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |

@@ -5,6 +5,7 @@ import { resolveSourceRequestReference } from '../runtime/request-url.ts'
 import { detailFields, evaluateField, executeSourceFunction, executeWorkflowJavaScript, expandUrl, expansionDiagnostic, expansionStatus, formatBookAuthor, formatBookName, formatWordCount, jsonValue, listFields, pageResult, requestPageResponse, ruleString, sourceNumber, sourceString, statusFromDiagnostics, textValue } from './helpers.ts'
 import { formatDetailIntro, formatIntro } from './html-format.ts'
 import { javascriptBookProjection } from './javascript-projection.ts'
+import { parseRelaxedJson } from '../codec/relaxed-json.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, ExploreActionResult, ExploreKind, ExploreKindsResult, ExploreViewNameResult, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export async function parseExploreKinds(ports: WorkflowPorts, source: NormalizedSource, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreKindsResult> {
@@ -124,7 +125,7 @@ export async function evaluateExploreViewName(ports: WorkflowPorts, source: Norm
 function parseExploreKindText(text: string): ExploreKind[] {
   const trimmed = text.trim()
   if (trimmed.startsWith('[')) {
-    const parsed: unknown = JSON.parse(trimmed)
+    const parsed: unknown = parseRelaxedJson(trimmed)
     if (!Array.isArray(parsed)) throw new Error('发现分类 JSON 必须是数组')
     return parsed.flatMap((item): ExploreKind[] => {
       if (item === null || typeof item !== 'object' || Array.isArray(item)) return []

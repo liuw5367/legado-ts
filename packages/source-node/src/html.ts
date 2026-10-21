@@ -1,6 +1,6 @@
 import { parseDocument } from 'htmlparser2'
 import { isDocument, isText, isTag, type AnyNode } from 'domhandler'
-import { getAttributeValue, getChildren, getText, textContent } from 'domutils'
+import { getAttributeValue, getChildren, getText } from 'domutils'
 import { selectAll } from 'css-select'
 import { render } from 'dom-serializer'
 import type { HtmlDocument, HtmlParser, ParserNode } from '@legado/source-core'
@@ -18,7 +18,7 @@ class HtmlDocumentView implements HtmlDocument {
   }
 
   public select(selector: string): ParserNode[] {
-    return selectAll(selector, this.root).map((node) => this.wrap(node))
+    return selectAll(selector, this.root, { pseudos: htmlPseudos }).map((node) => this.wrap(node))
   }
 
   public children(): ParserNode[] {
@@ -40,10 +40,10 @@ class HtmlDocumentView implements HtmlDocument {
       removeScriptAndStyle(copy)
       return render(copy, { xmlMode: this.xmlMode, encodeEntities: false })
     }
-    if (output === 'text') return textContent(value)
+    if (output === 'text') return jsoupText(value)
     const children = isDocument(value) || isTag(value) ? getChildren(value) : []
-    if (output === 'textNodes') return children.filter(isText).map((child) => trimAndroidWhitespace(getText(child))).filter(Boolean).join('\n')
-    return children.filter(isText).map((child) => getText(child)).filter(Boolean).join('')
+    if (output === 'textNodes') return children.filter((child) => isText(child) && !isScriptOrStyle(child.parent)).map((child) => trimAndroidWhitespace(normalizeWhitespace(getText(child)))).filter(Boolean).join('\n')
+    return children.filter((child) => isText(child) && !isScriptOrStyle(child.parent)).map((child) => trimAndroidWhitespace(normalizeWhitespace(getText(child)))).filter(Boolean).join('')
   }
 
   public child(node: ParserNode): HtmlDocument {
@@ -79,6 +79,63 @@ class HtmlDocumentView implements HtmlDocument {
 function trimAndroidWhitespace(value: string): string {
   // Android String.trim() removes code units <= U+0020 from both ends.
   return value.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '')
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/[\s\u00a0]+/gu, ' ')
+}
+
+function isScriptOrStyle(node: AnyNode | null | undefined): boolean {
+  return node !== null && node !== undefined && isTag(node) && (node.name === 'script' || node.name === 'style')
+}
+
+const blockElements = new Set(['address', 'article', 'aside', 'blockquote', 'br', 'dd', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul'])
+
+/** Jsoup Element.text 的可移植子集：忽略 data 节点、规范空白并在块级元素间补分隔。 */
+function jsoupText(node: AnyNode): string {
+  const chunks: string[] = []
+  const append = (value: string): void => { if (value.length > 0) chunks.push(normalizeWhitespace(value)) }
+  const visit = (current: AnyNode): void => {
+    if (isScriptOrStyle(current)) return
+    if (isText(current)) { append(getText(current)); return }
+    if (!isDocument(current) && isTag(current) && blockElements.has(current.name)) append(' ')
+    for (const child of getChildren(current)) visit(child)
+    if (!isDocument(current) && isTag(current) && blockElements.has(current.name)) append(' ')
+  }
+  visit(node)
+  return chunks.join('').replace(/\s+/gu, ' ').trim()
+}
+
+function ownTextValue(node: AnyNode): string {
+  if (!isDocument(node) && !isTag(node)) return ''
+  return getChildren(node).filter((child) => isText(child) && !isScriptOrStyle(child.parent)).map((child) => getText(child)).join('').replace(/[\s\u00a0]+/gu, ' ').trim()
+}
+
+function elementSiblingIndex(node: AnyNode): number {
+  const siblings = node.parent === null ? [] : getChildren(node.parent).filter(isTag)
+  return siblings.findIndex((item) => item === node)
+}
+
+function pseudoNumber(value: string | null | undefined): number {
+  const number = Number.parseInt(value ?? '', 10)
+  if (!Number.isSafeInteger(number)) throw new Error(`invalid pseudo index: ${value ?? ''}`)
+  return number
+}
+
+function pseudoRegex(value: string | null | undefined): RegExp {
+  const text = (value ?? '').trim()
+  const literal = /^\/(.*)\/([dgimsuvy]*)$/su.exec(text)
+  try { return literal === null ? new RegExp(text) : new RegExp(literal[1]!, literal[2]) } catch { throw new Error(`invalid pseudo regex: ${text}`) }
+}
+
+const htmlPseudos: Record<string, (element: AnyNode, value?: string | null) => boolean> = {
+  // Jsoup 的 eq/lt/gt 使用元素在同级元素中的 0 基索引，不使用筛选结果集合索引。
+  eq: (element, value) => { const index = elementSiblingIndex(element); const expected = pseudoNumber(value); return index === (expected < 0 ? index + 1 + expected : expected) },
+  lt: (element, value) => { const index = elementSiblingIndex(element); const expected = pseudoNumber(value); return index < (expected < 0 ? index + 1 + expected : expected) },
+  gt: (element, value) => { const index = elementSiblingIndex(element); const expected = pseudoNumber(value); return index > (expected < 0 ? index + 1 + expected : expected) },
+  containsown: (element, value) => ownTextValue(element).includes(value ?? ''),
+  matchesown: (element, value) => pseudoRegex(value).test(ownTextValue(element)),
+  matches: (element, value) => pseudoRegex(value).test(jsoupText(element)),
 }
 
 function removeScriptAndStyle(node: AnyNode): void {

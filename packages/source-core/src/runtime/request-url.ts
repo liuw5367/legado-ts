@@ -1,44 +1,13 @@
+import { parseRelaxedJson } from '../codec/relaxed-json.ts'
+
 export interface ParsedSourceRequestUrl {
   url: string
   options?: Readonly<Record<string, unknown>>
 }
 
-function relaxedJson(input: string): string {
-  let result = ''
-  let doubleQuoted = false
-  for (let index = 0; index < input.length; index += 1) {
-    const current = input[index]!
-    if (doubleQuoted) {
-      result += current
-      if (current === '\\' && input[index + 1] !== undefined) result += input[++index]!
-      else if (current === '"') doubleQuoted = false
-      continue
-    }
-    if (current === '"') { doubleQuoted = true; result += current; continue }
-    if (current !== "'") { result += current; continue }
-    let value = ''
-    for (index += 1; index < input.length; index += 1) {
-      const item = input[index]!
-      if (item === '\\') {
-        const next = input[index + 1]
-        if (next === "'") { value += "'"; index += 1 } else { value += item; if (next !== undefined) { value += next; index += 1 } }
-      } else if (item === "'") break
-      else value += item
-    }
-    result += JSON.stringify(value)
-  }
-  return result
-}
-
 function optionsObject(input: string): Readonly<Record<string, unknown>> | undefined {
-  for (const candidate of [input, relaxedJson(input)]) {
-    try {
-      const value: unknown = JSON.parse(candidate)
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) return value as Readonly<Record<string, unknown>>
-    } catch {
-      // The relaxed pass below handles Android book-source files using single quotes.
-    }
-  }
+  const value = parseRelaxedJson(input)
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) return value as Readonly<Record<string, unknown>>
   return undefined
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compileRule, evaluateRule, inspectRuleCapabilities, MemoryVariableView } from '../src/index.ts'
+import { compileRule, compileSourcePattern, evaluateRule, inspectRuleCapabilities, MemoryVariableView } from '../src/index.ts'
 import type { CompiledRule, NormalizedSource, RuleContext } from '../src/index.ts'
 
 const source = { bookSourceUrl: 'https://example.test', bookSourceName: 'Example' } as NormalizedSource
@@ -100,6 +100,19 @@ test('兼容书源中的替换正则、插值和宽松 @put 语法', () => {
     assert.deepEqual(result.diagnostics, [], rule)
     assert.ok(result.rule, rule)
   }
+})
+
+test('Java 正则的常见边界、引用块和占有量词进入受控转换', () => {
+  const quoted = compileSourcePattern(String.raw`\Q[a-z]+\E`, { flags: 'g' })
+  assert.ok('regex' in quoted)
+  assert.equal('regex' in quoted ? quoted.regex.test('[a-z]+') : false, true)
+  const inline = compileSourcePattern('(?i)^abc$', { flags: '' })
+  assert.ok('regex' in inline)
+  assert.equal('regex' in inline ? inline.regex.test('ABC') : false, true)
+  const possessive = compileSourcePattern('a++b', { flags: '' })
+  assert.ok('regex' in possessive)
+  const unsupported = compileSourcePattern('[a-z&&[^b]]', { flags: '' })
+  assert.equal('error' in unsupported ? unsupported.error.code : 'regex', 'unsupported-pattern')
 })
 
 test('非法规则、取消和预算耗尽均有可判别结果', () => {

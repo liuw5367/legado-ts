@@ -22,6 +22,16 @@ test('HTML adapter 的 html 输出保留当前元素并移除脚本和样式', (
   assert.equal(document.read(node, 'all'), '<div class="book"><a>A</a><script>bad()</script><style>.bad{}</style></div>')
 })
 
+test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
+  const document = new HtmlParserAdapter().parse('<main><p class="book">前<b>甲</b></p><p class="book">中<b>乙</b></p><p class="book">后<b>丙</b></p></main>')
+  assert.equal(document.select('p.book:eq(1) b')[0] !== undefined, true)
+  assert.equal(document.select('p.book:lt(2)').length, 2)
+  assert.equal(document.select('p.book:gt(1)').length, 1)
+  assert.equal(document.select('p:containsOwn(中)').length, 1)
+  assert.equal(document.select('p:matchesOwn(/^中/u)').length, 1)
+  assert.equal(document.read(document.select('main')[0]!, 'text'), '前甲 中乙 后丙')
+})
+
 test('HTML/XPath textNodes 去除每个文本节点首尾 ASCII 控制空白并忽略空白节点', () => {
   const html = new HtmlParserAdapter().parse('<div>  A \n <span>nested</span> \t B \r\n</div>')
   const htmlNode = html.select('div')[0]!
@@ -53,6 +63,14 @@ test('JSONPath adapter 支持书源常用的安全条件筛选', () => {
     parser.evaluate(value, '$.books[?(@.vip == false && @.score >= 3)].name'),
     ['免费'],
   )
+})
+
+test('JSONPath adapter 支持 Jayway 聚合函数和正则过滤的安全转换', () => {
+  const parser = new JsonPathParserAdapter()
+  const value = { items: [{ name: 'alpha', score: 2 }, { name: 'beta', score: 5 }, { name: '中文', score: 1 }] }
+  assert.deepEqual(parser.evaluate(value, '$.items.length()'), [3])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.name =~ /a.*/i)].name'), ['alpha', 'beta'])
+  assert.deepEqual(parser.evaluate(value, '$.items[*].score.sum()'), [8])
 })
 
 test('JSONPath adapter 不执行条件表达式中的原生构造器', () => {
