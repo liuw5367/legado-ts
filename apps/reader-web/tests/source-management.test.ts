@@ -10,6 +10,39 @@ const baseSource = { bookSourceUrl: 'https://source.example/books', bookSourceNa
 
 async function candidates(source: unknown) { return importSources({ kind: 'text', text: JSON.stringify(source) }) }
 
+test('import skips sources containing NUL without persisting their unsafe preview data', async (t) => {
+  const definitions = [
+    baseSource,
+    { ...baseSource, bookSourceComment: 'comment\u0000' },
+    { ...baseSource, bookSourceName: 'bad\u0000name', bookSourceGroup: 'bad\u0000group', exploreUrl: 'url\u0000' },
+    { ...baseSource, bookSourceUrl: 'https://nested.example', extra: [{ ['key\u0000']: 'value' }] },
+    { ...baseSource, bookSourceUrl: 'https://literal.example', bookSourceComment: 'literal \\u0000', bookSourceName: '正常中文📚' },
+  ]
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(definitions)))
+  const repository = new MemoryReaderRepository()
+  const preview = await createImportPreview(repository, 'user-a', 'https://8.8.8.8/sources.json')
+  assert.equal(preview.writableCount, 2)
+  const skipped = preview.candidates.filter((candidate) => candidate.skippedReason === 'invalid')
+  assert.equal(skipped.length, 3)
+  for (const candidate of skipped) {
+    assert.equal(candidate.disposition, undefined)
+    assert.equal(candidate.reason, '书源包含数据库不支持的空字符 U+0000，已跳过')
+    assert.deepEqual(candidate.rawSource, {})
+    assert.deepEqual(candidate.normalizedSource, {})
+  }
+  // JSON 转义会隐藏实际空字符，反序列化后检查所有字符串和对象键。
+  const assertSafe = (value: unknown): void => {
+    if (typeof value === 'string') assert.equal(value.includes('\u0000'), false)
+    else if (value !== null && typeof value === 'object') for (const [key, item] of Object.entries(value)) { assertSafe(key); assertSafe(item) }
+  }
+  assertSafe(JSON.parse(JSON.stringify(await repository.getImportPreview('user-a', preview.previewId))))
+  const selected = preview.candidates.filter((candidate) => candidate.disposition !== undefined)
+  assert.deepEqual(await repository.commitImportPreview('user-a', preview.previewId, selected.map((candidate) => candidate.id)), { imported: 2 })
+  const saved = await repository.listAllSourcesForUser('user-a')
+  assert.equal(saved.length, 2)
+  assert.equal(saved.find((source) => source.sourceId === 'https://literal.example')?.normalizedSource.bookSourceComment, 'literal \\u0000')
+})
+
 test('import preview follows HTTP redirects through the real network host', async (t) => {
   for (const status of [301, 302, 303, 307, 308]) {
     let calls = 0

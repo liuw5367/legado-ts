@@ -25,6 +25,17 @@ export function compareImportCandidates(candidates: ImportCandidate[], localById
   for (const candidate of candidates) {
     // 仅保留文字书源，其他媒体类型不进入预览或保存流程。
     if (candidate.source?.bookSourceType !== undefined && candidate.source.bookSourceType !== 0) continue
+    // PostgreSQL jsonb 不接受 U+0000；跳过记录也不能保留含空字符的原始规则或元数据。
+    if (containsNul(candidate.raw.parsed) || containsNul(candidate.source)) {
+      const skipped = toPreviewCandidate(candidate, undefined, 'invalid', '书源包含数据库不支持的空字符 U+0000，已跳过')
+      skipped.sourceId = `invalid:${candidate.id}`
+      skipped.name = skipped.name.split('\u0000').join('\\u0000')
+      if (skipped.group !== undefined) skipped.group = skipped.group.split('\u0000').join('\\u0000')
+      skipped.rawSource = {}
+      skipped.normalizedSource = {}
+      result.push(skipped)
+      continue
+    }
     if (candidate.source === undefined || !candidate.writable) {
       result.push(toPreviewCandidate(candidate, undefined, 'invalid', diagnosticMessage(candidate)))
       continue
@@ -105,6 +116,12 @@ function toPreviewCandidate(candidate: ImportCandidate, disposition: ImportPrevi
 }
 
 function diagnosticMessage(candidate: ImportCandidate): string { return candidate.error?.message ?? candidate.diagnostics[0]?.message ?? '书源格式无效' }
+
+function containsNul(value: unknown): boolean {
+  if (typeof value === 'string') return value.includes('\u0000')
+  if (value === null || typeof value !== 'object') return false
+  return Object.entries(value).some(([key, item]) => key.includes('\u0000') || containsNul(item))
+}
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
