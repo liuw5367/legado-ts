@@ -77,3 +77,5 @@ Example prompts:
 3. Add an empty reading state with a dashed `var(--border)` outline, 2rem padding, and one direct action link in `var(--primary)`.
 
 Search result cards open details from non-interactive areas. Action buttons, source selectors and labels, and introduction expand/collapse controls retain their independent actions. A keyboard accessible detail button remains available.
+
+Modal sheets and the reading zone editor clear the browser's initial control focus after opening. Closing still restores the triggering control, and keyboard navigation retains visible focus. The viewport requests a fixed initial scale with maximum-scale=1 and user-scalable=no; browsers may override these hints. On coarse touch pointers, text inputs and selects use 16px text to avoid focus-triggered viewport enlargement while retaining the normal control height.

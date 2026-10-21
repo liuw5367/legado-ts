@@ -592,3 +592,8 @@ a { color: inherit; }
 .book-details-heading p { margin: 0; }
 .book-details-actions .button { height: 44px; min-height: 44px; font-size: 14px; }
 .result-card { cursor: pointer; }
+
+/* 触屏输入控件保持16px字号，避免移动浏览器聚焦小字号输入框时放大视口。 */
+@media (hover: none) and (pointer: coarse) {
+  .field input, .field select, .input, .select, .general-setting-select .select, .theme-select select, .reader-page-guide-actions select { font-size: 16px; }
+}

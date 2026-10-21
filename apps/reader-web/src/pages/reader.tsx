@@ -204,7 +204,9 @@ export function ReaderPage() {
     if (dialog === null) return
     if (pageGuideVisible && visible.current && !dialog.open) {
       dialog.showModal()
-      dialog.querySelector<HTMLElement>('[data-page-guide-close]')?.focus()
+      // 原生 showModal 也会聚焦首个控件；打开时清除该焦点，避免关闭按钮出现焦点框。
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement && dialog.contains(focused)) focused.blur()
     } else if (!pageGuideVisible && dialog.open) dialog.close()
     return () => { if (dialog.open) dialog.close() }
   }, [pageGuideVisible])

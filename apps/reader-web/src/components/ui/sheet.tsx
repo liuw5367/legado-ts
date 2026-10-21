@@ -12,7 +12,9 @@ export function Sheet({ open, onOpenChange, title, children, side = 'bottom' }: 
     if (open && page?.active !== false && !dialog.open) {
       previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
       dialog.showModal()
-      dialog.querySelector<HTMLElement>('.sheet-close')?.focus()
+      // 原生 showModal 也会聚焦首个控件；打开时清除该焦点，避免关闭按钮出现焦点框。
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement && dialog.contains(focused)) focused.blur()
     }
     if (!open && dialog.open) dialog.close()
     return () => {
