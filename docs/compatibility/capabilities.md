@@ -65,7 +65,7 @@
 | CAP-ARTIFACT | [Android 实体边界](../upstream/android/rules/artifact-model.md) | SUB、MODEL | BookSource 已纳入；RssSource/ReplaceRule 需独立 adapter 验收 |
 | CAP-HOST / CAP-DEPLOY | [宿主接口](../../packages/source-core/docs/host-ports.md)、[source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md) | HOST、DEP | 宿主端口已在 source-node 实现部分能力（`SourceRuleHost`/`SourceRequestHost`/QuickJS）；部署与统一 `RuntimeHost` 门面仍是目标契约 |
 | CAP-JOB | [任务执行与 Serverless 边界](../archive/job-and-execution.md) | JOB、DEP | 目标契约，尚未实现执行器 |
-| CAP-ENCODE / CAP-ARCHIVE / CAP-FONT / CAP-CONCURRENCY | 下表及 11、20 | EXT | 加密/编码、归档、字体、并发宿主已在 source-node 实现（`NodeArchiveHost`/`NodeFontHost` 等）；逐重载契约与 Android 对照 fixture 未全量执行 |
+| CAP-ENCODE / CAP-ARCHIVE / CAP-FONT / CAP-CONCURRENCY | 下表及 11、20 | EXT | 编码、加密、字体、文件和 zip/gzip 归档宿主已在 source-node 实现；RAR/7z、平台交互和 Android 源级并发等待仍是明确差异；逐重载契约与 Android 对照 fixture 未全量执行 |
 
 ## 宿主方法补充盘点
 
@@ -73,23 +73,23 @@
 
 | 能力 | 方法族 | 处理要求与核实状态 |
 | --- | --- | --- |
-| 网络 | ajax、ajaxAll、ajaxTestAll、connect、get、head、post | 网络 get 与单参数键值 get 是不同重载；`ajaxAll/ajaxTestAll` 的 `skipRateLimit` 可绕过书源限流但不绕过宿主并发上限；返回 StrResponse/Connection.Response 不能混成同一未经适配对象 |
-| 编码 | strToBytes、bytesToStr、base64Decode、base64DecodeToByteArray、base64Encode、hexDecodeToByteArray、hexDecodeToString、hexEncodeToString、encodeURI | 保留 charset、flags、null 和 bytes 返回差异；逐重载 fixture 由阶段 B 完成 |
-| 加密 | md5Encode、md5Encode16、createSymmetricCrypto、createAsymmetricCrypto、createSign；aesDecodeToByteArray/aesDecodeToString/aesDecodeArgsBase64Str/aesBase64DecodeToByteArray/aesBase64DecodeToString；aesEncodeToByteArray/aesEncodeToString/aesEncodeToBase64ByteArray/aesEncodeToBase64String/aesEncodeArgsBase64Str；desDecodeToString/desBase64DecodeToString/desEncodeToString/desEncodeToBase64String；tripleDESDecodeStr/tripleDESDecodeArgsBase64Str/tripleDESEncodeBase64Str/tripleDESEncodeArgsBase64Str；digestHex/digestBase64Str/HMacHex/HMacBase64 | JsEncodeUtils 有实现；算法、padding、key/IV 编码及工厂返回方法尚需逐项契约，不假设 WebCrypto 同名即等价 |
-| 文本/时间 | timeFormatUTC、timeFormat、htmlFormat、t2s、s2t、toNumChapter、toURL | locale、时区、格式语法和 Unicode 需固定，宿主缺能力不能返回原文假成功 |
-| 文件/脚本 | importScript、cacheFile、downloadFile、getFile、readFile、readTxtFile、deleteFile、getTxtInFolder | 只允许宿主私有命名空间；返回 Java File 需适配，不暴露真实路径 |
-| 归档 | unzipFile、un7zFile、unrarFile、unArchiveFile、getZipStringContent/getZipByteArrayContent、getRarStringContent/getRarByteArrayContent、get7zStringContent/get7zByteArrayContent | `NodeArchiveHost` 已实现限制解包与路径/预算校验；下载/读取 → 限制解包 → 选择路径 → bytes/解码文本；不存在条目与损坏归档分开；逐方法 Android 对照待跑 |
-| 字体 | queryBase64TTF、queryTTF、replaceFont | `NodeFontHost` 与 `replaceFont` 桥已实现；获取字体 → 解析轮廓 → Unicode 映射 → 替换；不能用普通字符串替换冒充字体解码，逐对照待跑 |
-| 并发 | singleFlight、lock、tick | 默认等待 15000ms，允许 0 至 300000ms；名称非空且不超过 256；源身份隔离，详见下段 |
+| 网络 | ajax、ajaxAll、ajaxTestAll、connect、get、head、post | 网络 get 与单参数键值 get 是不同重载；`ajaxAll/ajaxTestAll` 的 `skipRateLimit` 可绕过书源限流但不绕过宿主并发上限，`ajaxTestAll` 始终携带 Android 测试模式；返回 StrResponse/Connection.Response 不能混成同一未经适配对象 |
+| 编码 | strToBytes、bytesToStr、base64Decode、base64DecodeToByteArray、base64Encode、hexDecodeToByteArray、hexDecodeToString、hexEncodeToString、encodeURI | core/Node 保留 charset、flags、null 和 bytes 返回差异；文件文本无显式 charset 时使用 BOM/`chardet`/UTF-8/GB18030 探测；逐重载 Android fixture 仍待执行 |
+| 加密 | md5Encode、md5Encode16、createSymmetricCrypto、createAsymmetricCrypto、createSign；aesDecodeToByteArray/aesDecodeToString/aesDecodeArgsBase64Str/aesBase64DecodeToByteArray/aesBase64DecodeToString；aesEncodeToByteArray/aesEncodeToString/aesEncodeToBase64ByteArray/aesEncodeToBase64String/aesEncodeArgsBase64Str；desDecodeToString/desBase64DecodeToString/desEncodeToString/desEncodeToBase64String；tripleDESDecodeStr/tripleDESDecodeArgsBase64Str/tripleDESEncodeBase64Str/tripleDESEncodeArgsBase64Str；digestHex/digestBase64Str/HMacHex/HMacBase64 | Node 实现 AES/DES/3DES 的常见 CBC/ECB PKCS5/PKCS7、RSA 工厂和 RSA 签名工厂；不支持的 transformation 明确失败，算法、padding、key/IV 编码仍需 Android 向量逐项核对 |
+| 文本/时间 | timeFormatUTC、timeFormat、htmlFormat、t2s、s2t、toNumChapter、toURL | `timeFormat`、`timeFormatUTC`、`htmlFormat`、`toNumChapter`、`toURL` 已接入；t2s/s2t 仍需词库宿主，缺能力不能返回原文假成功 |
+| 文件/脚本 | importScript、cacheFile、downloadFile、getFile、readFile、readTxtFile、deleteFile、getTxtInFolder | `NodeSourceFileHost` 使用受控 root、目录穿越/符号链接保护、下载预算和跨操作 cacheFile TTL；`File.absolutePath` 保持受控相对元数据，不暴露真实路径 |
+| 归档 | unzipFile、un7zFile、unrarFile、unArchiveFile、getZipStringContent/getZipByteArrayContent、getRarStringContent/getRarByteArrayContent、get7zStringContent/get7zByteArrayContent | `NodeArchiveHost` 已实现 gzip/zip 的限制解包与路径/预算校验；RAR/7z 方法仍返回明确能力错误，不能把 zip/gzip 覆盖全部归档；不存在条目与损坏归档分开 |
+| 字体 | queryBase64TTF、queryTTF、replaceFont | `NodeFontHost` 与 `replaceFont` 桥已实现；获取字体 → 解析轮廓 → Unicode 映射 → 替换；当前仅 TrueType/sfnt cmap 0/4/6 与 glyf，WOFF/WOFF2/CFF 仍明确不支持 |
+| 并发 | singleFlight、lock、tick | 单次 QuickJS 执行内提供名称/超时校验与递增 tick；跨执行/跨操作不共享等待队列，不能宣称等同 Android 源级并发；Node session 的 `putConcurrent` 仍共享源限流窗口 |
 | 浏览器/交互 | webView、webViewGetSource、webViewGetOverrideUrl、startBrowser、startBrowserAwait、showBrowser、getVerificationCode、openVideoPlayer、openUrl、getWebViewUA | 需要真实宿主协议；低优先级保留，不能以 fetch 等价替代 |
 | 日志/设备/应用 | toast、longToast、log、logType、randomUUID、androidId、refreshBookInfo、refreshBookToc、refreshContent、getReadBookConfig、getReadBookConfigMap、getThemeMode、getThemeConfig、getThemeConfigMap | 可映射宿主事件或受控配置；androidId 的 Web 替代语义未决定，缺能力明确诊断 |
-| 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、evalLoginUiV2/evalLoginActionV2（登录 UI/action 的宿主方法名） | 源配置对象继承 JsExtensions，不仅是 11 中少数 getter；`putConcurrent` 更新书源级限流，编辑/覆盖/删除后清理 source key 记录；按会话隔离持久状态 |
+| 源方法 | BaseSource 的 getHeaderMap、getLoginHeaderMap、getLoginInfoMap、setVariable/putVariable/getVariable、get/put、refreshExplore、refreshJSLib、putConcurrent、evalJS、evalLoginUiV2/evalLoginActionV2（登录 UI/action 的宿主方法名） | Node session 已提供源级请求头、登录头/Cookie、登录信息、变量和键值的会话隔离；动态 loginUi 默认值按 Android 调用链执行并缓存；`putConcurrent` 更新源限流，编辑/覆盖/删除后清理 source key 仍属应用生命周期 |
 
-SourceLock.singleFlight 让同批等待者在一次成功执行后跳过 action，并非给所有调用者返回相同 Promise 值；同线程重入直接跳过。lock 每个调用都执行 action。tick 返回递增前值，初次 0，达到 Int.MAX_VALUE 后归零，4096 项 LRU。Web 多实例范围必须由宿主说明，不能把 Android 进程内锁误称为分布式锁。
+当前 Node QuickJS 的 `singleFlight`/`lock` 只在一次脚本执行内同步校验并丢弃 action 返回值；不会等待另一个 QuickJS execution，也不共享 Android `SourceLock` 的 4096 项 LRU。`tick` 仍返回递增前值，初次 0，达到 Int.MAX_VALUE 后归零。Node session 的 `putConcurrent` 共享的是网络限流窗口，不等于上述锁语义。Web 多实例范围必须由宿主说明，不能把 Android 进程内锁误称为分布式锁。
 
 ## 尚不能进入完整实现验收的项目
 
 - JS 引擎同步桥接、Rhino 互操作及部署：QuickJS 已接入；同步 `java.ajax` 外观与 Rhino 返回值逐项对照仍按 [source-node 安全与部署](../../packages/source-node/docs/security-and-deployment.md) 专项案例验证；未通过前不承诺完整 JS 兼容。
-- 编码/加密工厂返回对象、字体与归档逐重载：宿主已实现（`NodeFontHost` / `NodeArchiveHost` / 加密请求桥），对应 B/D 负责人补全原子案例与 Android 对照；当前登记不等于规格完成。
+- 编码/加密工厂返回对象、字体、文件与 zip/gzip 归档：宿主已实现（`NodeSourceFileHost` / `NodeFontHost` / `NodeArchiveHost` / 加密请求桥），对应 B/D 负责人补全原子案例与 Android 对照；RAR/7z 和平台交互仍是能力缺失，当前登记不等于规格完成。
 - exploreScreen、RowUi 动态动作细节、段评写入：对应 D 负责人追踪调用点；无入口则保持字段保留，不擅自新增请求语义。
 - 设备与阅读器绑定的替代行为：应用需求尚未定义，保留 capability-missing；任何舍弃须用户审核。

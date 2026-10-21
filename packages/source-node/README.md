@@ -39,7 +39,7 @@ try {
 - `createNodeSourceSession`、`NodeSourceSessionOptions`：装配 core session 与 Node 宿主。
 - `NodeNetworkHost`、`NodeCookieStore`、`NodeCharsetCodec`、`NodeEncodingHost`、`NodeCryptoHost`：网络、Cookie、请求/响应字符集、编码和加密。
 - `HtmlParserAdapter`、`JsonPathParserAdapter`、`XPathParserAdapter`、`QuickJSJavaScriptHost`、`SourceRuleHost`、`SourceRequestHost`：规则执行和请求 bridge。
-- `NodeFontHost`、`NodeArchiveHost`、`KeyedConcurrencyHost`：字体、归档和并发能力。
+- `NodeFontHost`、`NodeArchiveHost`、`NodeSourceFileHost`、`KeyedConcurrencyHost`：字体、gzip/zip 归档、受控书源文件桥和并发能力；RAR/7z 与 WebView/浏览器交互会明确返回能力缺失。
 - `readSourcePath` 及来源目录限制：CLI 读取本地 `.json`/`.js` 书源。
 - `buildStaticCompatibilityReport`、`runLiveCompatibility` 及相关类型：兼容性审计工具。在线审计必须显式运行，不属于默认测试。
 

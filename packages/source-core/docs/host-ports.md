@@ -41,6 +41,14 @@
 
 完整接口仍以 [`runtime/contracts.ts`](../src/runtime/contracts.ts) 和 [`runtime/javascript.ts`](../src/runtime/javascript.ts) 为准；本页不复制每个字段。
 
+## 书源状态、登录和文件桥
+
+`SourceRuleRuntime` 的 `SourceRuntimeState` 是 Android `BaseSource` 状态面的宿主端口。它覆盖源级 header、登录 header/Cookie、登录信息、`source.get`/`put` 和 source variable；未注入持久实现时使用当前 runtime 会话内存。`getLoginInfoMap()` 会先读取已保存对象，再按 Android 规则从静态或动态 `loginUi` 推导默认字段并缓存；登录 UI/action 和 `evalJS` 通过同一个受预算 QuickJS context 执行。
+
+`SourceFileHost` 是 Android `JsExtensions` 文件面的受控端口，覆盖 `getFile`、读写/删除、脚本导入、下载、cacheFile、目录文本读取以及 zip/gzip/归档条目读取。宿主负责路径、符号链接、响应和解压预算；core 不接受任意本机绝对路径，也不把文件内容写入领域状态。未提供端口时，文件方法返回可识别的 `capability-missing`。RAR/7z、WebView、浏览器/验证码、设备身份、阅读器配置和繁简转换需要其他平台端口，不能用 Node HTTP 或原文回退伪造成功。
+
+`SourceRuntimeState` 与 `SourceFileHost` 的详细字段以 [`source-runtime.ts`](../src/rules/source-runtime.ts) 为准；Node 装配见 [`source-node host implementation`](../../source-node/docs/host-implementation.md)。
+
 ## 正文 ContentStore
 
 正文 cache-first 工作流使用 `ContentIdentity`、`ContentSaveToken` 和 `ContentStore`：

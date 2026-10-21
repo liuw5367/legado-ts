@@ -26,7 +26,7 @@
 | OPEN-06 | 应用状态 | `SourceApplicationService`、`SourceRepository`、`SecretStore`、`JobStore` | 未实现 | [架构边界](../architecture/goals-and-boundaries.md)；[归档设计](../archive/source-management-and-state.md) | 用户归属、版本冲突、凭据隔离、任务恢复和删除副作用有应用层契约 |
 | OPEN-07 | 请求差异 | Android 独立登录凭据头与同站注入 | 已实现待验证 | [差异登记](known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts` | Android 同输入 golden；应用 SecretStore 的保存、删除清理和登录 UI 仍不属于当前包 |
 | OPEN-08 | 生命周期差异 | `concurrentRate` 非法配置和源生命周期清理 | core/Node 已实现待验证；应用删除边界分层记录 | [差异登记](known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts` | Android 同输入 golden；各应用分别补齐源编辑、覆盖、删除和重建 session 的集成证据 |
-| OPEN-09 | JavaScript bridge | 平台方法和逐重载兼容 | 部分实现 | [差异登记](known-divergences.md)，D14；[宿主方法盘点](capabilities.md#宿主方法补充盘点) | 真实书源用到的方法逐重载通过，未支持方法返回明确能力状态 |
+| OPEN-09 | JavaScript bridge | 平台方法和逐重载兼容 | 部分实现（core/Node 已注册全量 Android 方法名并补齐纯计算、网络、状态、文件、字体和 RSA/签名入口；平台能力仍缺） | [差异登记](known-divergences.md)，D14；[宿主方法盘点](capabilities.md#宿主方法补充盘点)；`source-rule-host.test.ts`、`source-file-host.test.ts` | 真实书源方法逐重载通过 Android/TS golden；WebView、浏览器、验证码、媒体、设备配置、繁简、RAR/7z 与 Android 源级并发等待完成平台验收或保持明确差异 |
 | OPEN-10 | 跨端验证 | 已实现解析和工作流的 Android 同输入 golden | 已实现待验证 | [一致性测试基线](conformance-tests.md)；TypeScript 已执行 `HTML-FLOW-001`、`JSON-FLOW-001`、`XPATH-CONTENT-001`、`JS-TOC-001`、`TOC-EDGE-001`、`CONTENT-EDGE-001` | 同一脱敏 fixture 在 Android 和 TypeScript 两侧通过稳定输出比较；当前 Android 仍为 `not-run` |
 | D1 | 接口差异 | 搜索与流程入口命名 | 有意保留 | [差异登记](known-divergences.md)，D1 | 入口统一，或文档完成迁移并通过包入口测试 |
 | D2 | 接口差异 | 端口与宿主门面命名 | 有意保留 | [差异登记](known-divergences.md)，D2 | 宿主门面和结果契约统一，或所有现行入口完成文档迁移 |

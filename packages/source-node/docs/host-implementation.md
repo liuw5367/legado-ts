@@ -15,11 +15,11 @@ createNodeSourceSession
   └─ SourceRuleHost
        ├─ HTML / JSONPath / XPath adapter
        ├─ QuickJSJavaScriptHost
-       ├─ NodeEncodingHost / NodeCryptoHost / NodeFontHost
+       ├─ NodeEncodingHost / NodeCryptoHost / NodeFontHost / NodeSourceFileHost
        └─ source-core SourceRuleRuntime
 ```
 
-`NodeSourceSessionOptions` 可替换网络、Cookie、字符集、脚本缓存、初始 source 变量、时钟和并发端口。没有传入 `cookieStore` 时，session 创建自己的 `NodeCookieStore`；没有传入网络时，`NodeNetworkHost` 使用同一个 Cookie store。请求 host 把当前书源通过每次 bridge 调用传入，避免并发书源共享可变的“当前 source”字段。
+`NodeSourceSessionOptions` 可替换网络、Cookie、字符集、脚本缓存、初始 source 变量、时钟、并发端口和文件根目录。没有传入 `cookieStore` 时，session 创建自己的 `NodeCookieStore`；没有传入网络时，`NodeNetworkHost` 使用同一个 Cookie store。请求 host 把当前书源通过每次 bridge 调用传入，避免并发书源共享可变的“当前 source”字段。登录 header、登录信息、source variable 和 source key/value 在 session 内按源 URL 隔离；动态 loginUi 默认值沿用 `BaseSource.getLoginInfoMap()` 的执行顺序。
 
 ## 请求与规则桥接
 
@@ -45,7 +45,11 @@ core 当前请求计划默认值为 15 秒、32 次请求、16 页、单响应 4
 
 CLI 的 `readSourcePath` 只递归普通目录，跳过符号链接，默认最多读取 256 个 `.json`/`.js` 文件，每个文件最多 4 MiB。它只返回输入文本和诊断，不把文件内容写入运行时缓存。
 
-`NodeFontHost` 当前支持 TrueType/sfnt 的 cmap 0/4/6、`glyf` 轮廓签名反查、Base64/bytes 输入和 `replaceFont` 的普通与 filter 模式；默认字体缓存最多 4 个映射、单次输入最多 16 MiB。WOFF、WOFF2、CFF、浏览器字体加载和渲染不在支持范围内。`NodeArchiveHost` 支持 gzip 与 zip，默认最多 64 个条目、单条目 8 MiB、总输出 32 MiB、压缩比 1000；绝对路径、`.`、`..`、加密条目、zip64 和未知压缩方法会被拒绝。
+`NodeSourceFileHost` 实现 Android 文件桥的全部方法名：相对 root 的 `getFile`、bytes/文本读取、删除、脚本导入、下载、cacheFile、目录文本合并和归档条目读取。root 默认为系统临时目录下的 `legado-source-cache`，可由 `fileRoot` 覆盖；路径穿越、root 内符号链接和归档条目穿越都会拒绝。下载文件沿用 Android 的 root 下 MD5 文件名并返回带 `/` 的相对路径，URL options 中的 `type` 会优先决定扩展名；无扩展名时使用 `ext`。下载和归档读取沿用请求取消与 32 MiB 响应预算；cacheFile 的 TTL 写入受控元数据，因此 session 每次操作重建 file host 后仍能保持过期语义。`readTxtFile` 无显式字符集时按 BOM、`chardet`、有效 UTF-8 和 GB18030 回退探测。`getFile().absolutePath` 保持 root 内的相对元数据，不暴露 Node 实际磁盘路径。
+
+`NodeFontHost` 当前支持 TrueType/sfnt 的 cmap 0/4/6、`glyf` 轮廓签名反查、Base64/bytes 输入和 `replaceFont` 的普通与 filter 模式；默认字体缓存最多 4 个映射、单次输入最多 16 MiB。WOFF、WOFF2、CFF、浏览器字体加载和渲染不在支持范围内。`NodeArchiveHost` 支持 gzip 与 zip，默认最多 64 个条目、单条目 8 MiB、总输出 32 MiB、压缩比 1000；RAR/7z 方法会返回明确能力错误，绝对路径、`.`、`..`、加密条目、zip64 和未知压缩方法会被拒绝。
+
+QuickJS 内的 `singleFlight`、`lock`、`tick` 只覆盖一次脚本执行的同步调用；source session 的限流窗口和 `putConcurrent` 跨操作共享，但没有 Android 源级的跨执行等待队列。WebView、浏览器、验证码、媒体播放器、设备身份、阅读器/主题配置和 t2s/s2t 仍需宿主端口，当前不静默降级。
 
 ## 生命周期与所有权
 
