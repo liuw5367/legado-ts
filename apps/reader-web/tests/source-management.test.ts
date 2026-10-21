@@ -57,7 +57,7 @@ test('redirect import supports another public host and rejects invalid final res
   })
   assert.equal((await createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/start')).writableCount, 1)
   t.mock.restoreAll()
-  for (const finalResponse of [() => new Response('<html>login</html>'), () => new Response('unavailable', { status: 503 }), () => new Response('x'.repeat(4 * 1024 * 1024 + 1))]) {
+  for (const finalResponse of [() => new Response('<html>login</html>'), () => new Response('unavailable', { status: 503 }), () => new Response('x'.repeat(10 * 1024 * 1024 + 1))]) {
     calls = 0
     t.mock.method(globalThis, 'fetch', async () => ++calls === 1 ? new Response(null, { status: 302, headers: { location: '/final.json' } }) : finalResponse())
     const repository = new MemoryReaderRepository()
@@ -254,4 +254,28 @@ test('web source order is persisted, returned in summaries, and checked by revis
   assert.deepEqual(after.sources.map((source) => [source.name, source.customOrder]), [['乙', -1], ['甲', 20]])
   assert.deepEqual((await repository.listSourcesForUser('order-user')).map((source) => source.name), ['乙', '甲'])
   await assert.rejects(repository.applySourceOrder('order-user', [{ sourceId: first.sourceId, expectedSourceRevision: first.sourceRevision, customOrder: 0 }]), /已更新/u)
+})
+
+test('import preview accepts the 10 MiB boundary and rejects larger responses', async (t) => {
+  const limit = 10 * 1024 * 1024
+  const text = JSON.stringify([baseSource])
+  for (const size of [4 * 1024 * 1024 + 1, limit, limit + 1]) {
+    t.mock.method(globalThis, 'fetch', async () => new Response(text + ' '.repeat(size - Buffer.byteLength(text))))
+    const preview = await createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/sources.json')
+    assert.equal(preview.writableCount, size <= limit ? 1 : 0, JSON.stringify({ size, candidates: preview.candidates.map((candidate) => candidate.reason) }))
+    t.mock.restoreAll()
+  }
+})
+
+test('import preview filters non-text media before preview and commit', async (t) => {
+  const definitions = [undefined, 0, 1, 2, 3, 99].map((type, index) => ({ ...baseSource, bookSourceUrl: `https://media-${index}.example/books`, bookSourceType: type }))
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(definitions)))
+  const repository = new MemoryReaderRepository()
+  const preview = await createImportPreview(repository, 'user-a', 'https://8.8.8.8/sources.json')
+  assert.equal(preview.candidates.length, 2)
+  assert.equal(preview.writableCount, 2)
+  assert.deepEqual(preview.candidates.map((candidate) => candidate.sourceId), definitions.slice(0, 2).map((source) => source.bookSourceUrl))
+  const result = await repository.commitImportPreview('user-a', preview.previewId, preview.candidates.map((candidate) => candidate.id))
+  assert.equal(result.imported, 2)
+  assert.ok((await repository.listAllSourcesForUser('user-a')).every((source) => source.normalizedSource.bookSourceType === 0))
 })

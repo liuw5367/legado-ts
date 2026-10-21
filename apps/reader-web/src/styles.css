@@ -280,6 +280,8 @@ a { color: inherit; }
 .book-details-meta dt { color: var(--muted); }
 .book-details-meta dd { margin: 0; overflow-wrap: anywhere; }
 .source-import-form, .source-import-preview { padding-top: 4px; }
+.source-import-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.source-import-actions > .actions { justify-content: flex-end; margin-left: auto; }
 .source-import-preview { display: flex; flex-direction: column; gap: 12px; }
 .source-import-preview h3 { margin: 0 0 6px; font-size: 14px; }
 .source-import-list { display: flex; max-height: 220px; flex-direction: column; overflow: auto; border-top: 1px solid var(--border); }

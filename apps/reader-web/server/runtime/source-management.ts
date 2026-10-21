@@ -6,7 +6,7 @@ import type { ReaderRepository } from '../db/repository.ts'
 import { SourceManagementError } from '../db/repository.ts'
 import { compareImportCandidates } from './source-comparison.ts'
 
-const MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 const MAX_TOTAL_BYTES = 16 * 1024 * 1024
 const MAX_CANDIDATES = 1000
 const MAX_SOURCE_URLS = 32

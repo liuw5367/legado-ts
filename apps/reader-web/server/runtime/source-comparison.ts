@@ -23,13 +23,10 @@ export function compareImportCandidates(candidates: ImportCandidate[], localById
   const result: ImportPreviewCandidate[] = []
   const valid = new Map<string, Array<{ candidate: ImportCandidate; source: NormalizedSource }>>()
   for (const candidate of candidates) {
+    // 仅保留文字书源，其他媒体类型不进入预览或保存流程。
+    if (candidate.source?.bookSourceType !== undefined && candidate.source.bookSourceType !== 0) continue
     if (candidate.source === undefined || !candidate.writable) {
       result.push(toPreviewCandidate(candidate, undefined, 'invalid', diagnosticMessage(candidate)))
-      continue
-    }
-    const sourceType = candidate.source.bookSourceType
-    if (sourceType !== undefined && sourceType !== 0) {
-      result.push(toPreviewCandidate(candidate, undefined, 'unsupported', '仅支持正文书源'))
       continue
     }
     const values = valid.get(candidate.source.bookSourceUrl) ?? []

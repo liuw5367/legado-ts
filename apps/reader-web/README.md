@@ -21,7 +21,7 @@ pnpm --filter @legado/reader-web dev:api
 pnpm --filter @legado/reader-web dev
 ```
 
-应用不会自动读取仓库中的 `fixtures/source/`；书源由当前账号在“书源管理”页面导入。数据库迁移是显式操作，启动和构建不会替代迁移。
+应用不会自动读取仓库中的 `fixtures/source/`；书源由当前账号在“书源管理”页面导入。数据库迁移是显式操作，启动和构建不会替代迁移。远程书源加载的单次响应上限为 10 MiB；仅保留文字书源（`bookSourceType: 0`，缺省按文字处理），漫画、音频等其他类型会直接过滤，不进入预览或保存。
 
 无需连接真实 Supabase 或数据库即可进行页面手工验收：启动 `pnpm --filter @legado/reader-web dev:page-fixture`，再按[页面验收模拟服务](docs/page-test-fixture.md)启动前端并使用文档里的测试账号登录。模拟数据只保存在测试服务进程内。
 
