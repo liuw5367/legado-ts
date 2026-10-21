@@ -49,7 +49,7 @@ CLI 的 `readSourcePath` 只递归普通目录，跳过符号链接，默认最�
 
 `NodeSourceFileHost` 实现 Android 文件桥的全部方法名：相对 root 的 `getFile`、bytes/文本读取、删除、脚本导入、下载、cacheFile、目录文本合并和归档条目读取。root 默认为系统临时目录下的 `legado-source-cache`，可由 `fileRoot` 覆盖；路径穿越、root 内符号链接和归档条目穿越都会拒绝。下载文件沿用 Android 的 root 下 MD5 文件名并返回带 `/` 的相对路径，URL options 中的 `type` 会优先决定扩展名；无扩展名时使用 `ext`。下载和归档读取沿用请求取消与 32 MiB 响应预算；cacheFile 的 TTL 写入受控元数据，因此 session 每次操作重建 file host 后仍能保持过期语义。`readTxtFile` 无显式字符集时按 BOM、`chardet`、有效 UTF-8 和 GB18030 回退探测。`getFile().absolutePath` 保持 root 内的相对元数据，不暴露 Node 实际磁盘路径。
 
-`NodeFontHost` 当前支持 TrueType/sfnt 的 cmap 0/4/6、`glyf` 轮廓签名反查、Base64/bytes 输入和 `replaceFont` 的普通与 filter 模式；默认字体缓存最多 4 个映射、单次输入最多 16 MiB。WOFF、WOFF2、CFF、浏览器字体加载和渲染不在支持范围内。`NodeArchiveHost` 支持 gzip 与 zip，默认最多 64 个条目、单条目 8 MiB、总输出 32 MiB、压缩比 1000；RAR/7z 方法会返回明确能力错误，绝对路径、`.`、`..`、加密条目、zip64 和未知压缩方法会被拒绝。
+`NodeFontHost` 当前支持 TrueType/sfnt 的 cmap 0/4/6、`glyf` 轮廓签名反查、Base64/bytes 输入和 `replaceFont` 的普通与 filter 模式；默认字体缓存最多 4 个映射、单次输入最多 16 MiB。WOFF、WOFF2、CFF、浏览器字体加载和渲染不在支持范围内。`NodeArchiveHost` 支持 gzip、zip，并在宿主安装 `bsdtar`（或通过 `archiveCommand` 注入兼容命令）时支持 RAR/7z；所有格式共用最多 64 个条目、单条目 8 MiB、总输出 32 MiB 和压缩比 1000 的限制。外部解包只写入临时目录，遍历时拒绝符号链接、特殊文件和目录穿越；命令缺失或格式失败返回可识别的 `__LEGADO_CAPABILITY__runtime archive.*` 错误。绝对路径、`.`、`..`、加密条目、zip64 和未知压缩方法会被拒绝。
 
 QuickJS 只负责同步调用动作；`singleFlight`、`lock`、`tick` 由 `NodeSourceConcurrency` 在脚本执行之间共享。WebView、浏览器、验证码、媒体播放器和 UI 刷新仍需要应用注入平台动作；默认 Node 平台不会把这些动作伪装成成功。设备身份是按宿主 seed 派生、可重置的非物理标识，不应单独用于 Android 设备鉴权。
 

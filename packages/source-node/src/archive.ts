@@ -1,7 +1,19 @@
+import { execFile as execFileCallback } from 'node:child_process'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, relative } from 'node:path'
+import { promisify } from 'node:util'
 import { gunzipSync, inflateRawSync } from 'node:zlib'
 import type { ArchiveEntry, ArchiveFormat, ArchiveHost, ArchiveLimits } from '@legado/source-core'
 
+const execFile = promisify(execFileCallback)
+
 const defaults: ArchiveLimits = { maxEntries: 64, maxEntryBytes: 8 * 1024 * 1024, maxTotalBytes: 32 * 1024 * 1024, maxCompressionRatio: 1000 }
+
+export interface NodeArchiveHostOptions {
+  /** External extractor used for RAR/7z. `bsdtar` is the default command. */
+  archiveCommand?: string
+}
 
 function u16(bytes: Uint8Array, offset: number): number {
   return bytes[offset]! | (bytes[offset + 1]! << 8)
@@ -39,6 +51,40 @@ function inflateLimited(input: Uint8Array, maxOutputLength: number): Uint8Array 
     if (error instanceof RangeError) throw new Error('archive output exceeds byte budget')
     throw error
   }
+}
+
+function archiveCapabilityError(format: ArchiveFormat, message: string): Error {
+  return new Error(`__LEGADO_CAPABILITY__runtime archive.${format} ${message}`)
+}
+
+async function walkExtracted(root: string, limits: ArchiveLimits, compressedSize: number): Promise<ArchiveEntry[]> {
+  const result: ArchiveEntry[] = []
+  let total = 0
+  const visit = async (directory: string): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    for (const entry of entries) {
+      const absolute = join(directory, entry.name)
+      const relativePath = relative(root, absolute).replaceAll('\\', '/')
+      const path = safePath(relativePath)
+      if (path.length === 0) continue
+      if (entry.isSymbolicLink()) throw new Error('archive entry symlink is not allowed')
+      if (entry.isDirectory()) {
+        await visit(absolute)
+        continue
+      }
+      if (!entry.isFile()) throw new Error('archive special entries are not supported')
+      if (result.length >= limits.maxEntries) throw new Error('archive entry count exceeds budget')
+      const info = await stat(absolute)
+      if (info.size > limits.maxEntryBytes || total + info.size > limits.maxTotalBytes) throw new Error('archive output exceeds byte budget')
+      const data = Uint8Array.from(await readFile(absolute))
+      if (data.byteLength !== info.size) throw new Error('archive entry changed while extracting')
+      total += data.byteLength
+      result.push({ path, data })
+    }
+  }
+  await visit(root)
+  if (compressedSize === 0 ? total > 0 : total / compressedSize > limits.maxCompressionRatio) throw new Error('archive compression ratio exceeds budget')
+  return result
 }
 
 function findEndOfCentralDirectory(bytes: Uint8Array): number {
@@ -98,6 +144,12 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits): ArchiveEntry[] {
 }
 
 export class NodeArchiveHost implements ArchiveHost {
+  private readonly command: string
+
+  public constructor(options: NodeArchiveHostOptions = {}) {
+    this.command = options.archiveCommand ?? 'bsdtar'
+  }
+
   public async extract(input: Uint8Array, format: ArchiveFormat, partial: Partial<ArchiveLimits> = {}): Promise<ArchiveEntry[]> {
     const limits = { ...defaults, ...partial }
     if (!Number.isInteger(limits.maxEntries) || Object.values(limits).some((value) => !Number.isFinite(value) || value < 0)) throw new Error('archive limits are invalid')
@@ -114,6 +166,27 @@ export class NodeArchiveHost implements ArchiveHost {
       return [{ path: 'content', data }]
     }
     if (format === 'zip') return extractZip(input, limits)
-    throw new Error(`archive format is unsupported: ${format}`)
+    if (format === 'rar' || format === '7z') return this.extractExternal(input, format, limits)
+    throw archiveCapabilityError(format, 'unsupported')
+  }
+
+  private async extractExternal(input: Uint8Array, format: 'rar' | '7z', limits: ArchiveLimits): Promise<ArchiveEntry[]> {
+    const root = await mkdtemp(join(tmpdir(), 'legado-archive-'))
+    const archivePath = join(root, `input.${format}`)
+    const outputPath = join(root, 'output')
+    try {
+      await Promise.all([mkdir(outputPath), writeFile(archivePath, Buffer.from(input))])
+      try {
+        await execFile(this.command, ['-xf', archivePath, '-C', outputPath, '--no-same-owner', '--no-same-permissions'], { timeout: 30_000, maxBuffer: 1024 * 1024 })
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'ENOENT') throw archiveCapabilityError(format, `requires ${this.command}`)
+        const detail = error instanceof Error && error.message.length > 0 ? error.message.split('\n', 1)[0] ?? 'extract failed' : 'extract failed'
+        throw archiveCapabilityError(format, detail)
+      }
+      return await walkExtracted(outputPath, limits, input.byteLength)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   }
 }

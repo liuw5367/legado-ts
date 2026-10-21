@@ -100,3 +100,8 @@ test('Node 归档宿主通过 bsdtar 支持受预算的 7z 条目', async (conte
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('RAR/7z 缺少外部解包器时返回可识别的能力错误', async () => {
+  const host = new NodeArchiveHost({ archiveCommand: 'legado-archive-command-does-not-exist' })
+  await assert.rejects(() => host.extract(new Uint8Array([1, 2, 3]), 'rar'), /__LEGADO_CAPABILITY__runtime archive\.rar requires/u)
+})
