@@ -1,5 +1,5 @@
-import { createHash, createHmac, createCipheriv, createDecipheriv } from 'node:crypto'
-import type { CryptoHost, DigestAlgorithm, SymmetricCrypto } from '@legado/source-core'
+import { constants, createHash, createHmac, createCipheriv, createDecipheriv, createPrivateKey, createPublicKey, createSign, createVerify, privateDecrypt, privateEncrypt, publicDecrypt, publicEncrypt } from 'node:crypto'
+import type { AsymmetricCrypto, CryptoHost, CryptoKeyInput, DigestAlgorithm, SignCrypto, SymmetricCrypto } from '@legado/source-core'
 import { NodeEncodingHost } from './encoding.ts'
 
 function bufferOf(input: string | Uint8Array): Buffer {
@@ -11,12 +11,14 @@ function nodeAlgorithm(algorithm: DigestAlgorithm): string {
 }
 
 function cipherAlgorithm(transformation: string, key: Uint8Array): { algorithm: string; ivRequired: boolean } {
-  const parts = transformation.split('/')
+  const shorthand = /^(?:AES|DES|DESede|3DES)$/u.test(transformation) ? `${transformation}/ECB/PKCS5Padding` : transformation
+  const parts = shorthand.split('/')
   if (parts.length !== 3 || parts[2] !== 'PKCS5Padding' && parts[2] !== 'PKCS7Padding') throw new Error(`unsupported transformation: ${transformation}`)
   const mode = parts[1]!.toLowerCase()
   if (parts[0] === 'AES' && (mode === 'cbc' || mode === 'ecb') && [16, 24, 32].includes(key.byteLength)) return { algorithm: `aes-${key.byteLength * 8}-${mode}`, ivRequired: mode === 'cbc' }
   if ((parts[0] === 'DES' || parts[0] === 'DESede' || parts[0] === '3DES') && (mode === 'cbc' || mode === 'ecb')) {
     if (parts[0] === 'DES' && key.byteLength === 8) return { algorithm: `des-${mode}`, ivRequired: mode === 'cbc' }
+    if ((parts[0] === 'DESede' || parts[0] === '3DES') && key.byteLength === 16) return { algorithm: `des-ede-${mode}`, ivRequired: mode === 'cbc' }
     if ((parts[0] === 'DESede' || parts[0] === '3DES') && key.byteLength === 24) return { algorithm: `des-ede3-${mode}`, ivRequired: mode === 'cbc' }
   }
   throw new Error(`unsupported transformation: ${transformation}`)
@@ -57,6 +59,113 @@ class NodeSymmetricCrypto implements SymmetricCrypto {
   }
 }
 
+function keyBuffer(value: CryptoKeyInput): Buffer | string {
+  if (typeof value === 'string' && value.includes('-----BEGIN')) return value
+  return Buffer.from(value)
+}
+
+function rsaPadding(transformation: string): number {
+  return /PKCS1Padding|PKCS1/iu.test(transformation) ? constants.RSA_PKCS1_PADDING : constants.RSA_PKCS1_OAEP_PADDING
+}
+
+function nodeSignAlgorithm(algorithm: string): string {
+  const normalized = algorithm.replace(/\s+/gu, '')
+  const rsa = /^SHA(\d+)withRSA$/iu.exec(normalized)
+  if (rsa?.[1] !== undefined) return `RSA-SHA${rsa[1]}`
+  const ecdsa = /^SHA(\d+)withECDSA$/iu.exec(normalized)
+  if (ecdsa?.[1] !== undefined) return `SHA${ecdsa[1]}`
+  return algorithm
+}
+
+class NodeAsymmetricCrypto implements AsymmetricCrypto {
+  private privateKey: ReturnType<typeof createPrivateKey> | undefined
+  private publicKey: ReturnType<typeof createPublicKey> | undefined
+  private readonly transformation: string
+
+  public constructor(transformation: string) {
+    this.transformation = transformation
+    if (!/^RSA(?:\/|$)/iu.test(transformation)) throw new Error(`unsupported asymmetric transformation: ${transformation}`)
+  }
+
+  public setPrivateKey(key: CryptoKeyInput): AsymmetricCrypto {
+    this.privateKey = createPrivateKey(typeof key === 'string' && key.includes('-----BEGIN') ? key : { key: keyBuffer(key), format: 'der', type: 'pkcs8' })
+    return this
+  }
+
+  public setPublicKey(key: CryptoKeyInput): AsymmetricCrypto {
+    this.publicKey = createPublicKey(typeof key === 'string' && key.includes('-----BEGIN') ? key : { key: keyBuffer(key), format: 'der', type: 'spki' })
+    return this
+  }
+
+  public decrypt(input: Uint8Array, usePublicKey = true): Uint8Array {
+    if (usePublicKey) {
+      if (this.publicKey === undefined) throw new Error('public key is not set')
+      return Uint8Array.from(publicDecrypt({ key: this.publicKey, padding: rsaPadding(this.transformation) }, Buffer.from(input)))
+    }
+    if (this.privateKey === undefined) throw new Error('private key is not set')
+    return Uint8Array.from(privateDecrypt({ key: this.privateKey, padding: rsaPadding(this.transformation) }, Buffer.from(input)))
+  }
+
+  public encrypt(input: Uint8Array, usePublicKey = true): Uint8Array {
+    if (usePublicKey) {
+      if (this.publicKey === undefined) throw new Error('public key is not set')
+      return Uint8Array.from(publicEncrypt({ key: this.publicKey, padding: rsaPadding(this.transformation) }, Buffer.from(input)))
+    }
+    if (this.privateKey === undefined) throw new Error('private key is not set')
+    return Uint8Array.from(privateEncrypt({ key: this.privateKey, padding: rsaPadding(this.transformation) }, Buffer.from(input)))
+  }
+
+  public decryptText(input: Uint8Array, usePublicKey = true, charset = 'utf-8'): string {
+    return new NodeEncodingHost().decode(this.decrypt(input, usePublicKey), charset)
+  }
+
+  public encryptHex(input: Uint8Array, usePublicKey = true): string {
+    return Buffer.from(this.encrypt(input, usePublicKey)).toString('hex')
+  }
+
+  public encryptBase64(input: Uint8Array, usePublicKey = true): string {
+    return Buffer.from(this.encrypt(input, usePublicKey)).toString('base64')
+  }
+}
+
+class NodeSignCrypto implements SignCrypto {
+  private privateKey: ReturnType<typeof createPrivateKey> | undefined
+  private publicKey: ReturnType<typeof createPublicKey> | undefined
+  private readonly algorithm: string
+
+  public constructor(algorithm: string) {
+    this.algorithm = nodeSignAlgorithm(algorithm)
+  }
+
+  public setPrivateKey(key: CryptoKeyInput): SignCrypto {
+    this.privateKey = createPrivateKey(typeof key === 'string' && key.includes('-----BEGIN') ? key : { key: keyBuffer(key), format: 'der', type: 'pkcs8' })
+    return this
+  }
+
+  public setPublicKey(key: CryptoKeyInput): SignCrypto {
+    this.publicKey = createPublicKey(typeof key === 'string' && key.includes('-----BEGIN') ? key : { key: keyBuffer(key), format: 'der', type: 'spki' })
+    return this
+  }
+
+  public sign(input: Uint8Array): Uint8Array {
+    if (this.privateKey === undefined) throw new Error('private key is not set')
+    const signer = createSign(this.algorithm)
+    signer.update(Buffer.from(input))
+    return Uint8Array.from(signer.sign(this.privateKey))
+  }
+
+  public signHex(input: Uint8Array): string { return Buffer.from(this.sign(input)).toString('hex') }
+
+  public signBase64(input: Uint8Array): string { return Buffer.from(this.sign(input)).toString('base64') }
+
+  public verify(input: Uint8Array, signature: Uint8Array): boolean {
+    if (this.publicKey === undefined) throw new Error('public key is not set')
+    const verifier = createVerify(this.algorithm)
+    verifier.update(Buffer.from(input))
+    return verifier.verify(this.publicKey, Buffer.from(signature))
+  }
+}
+
 export class NodeCryptoHost implements CryptoHost {
   private readonly encoding: NodeEncodingHost
 
@@ -78,5 +187,13 @@ export class NodeCryptoHost implements CryptoHost {
 
   public createSymmetricCrypto(transformation: string, key: Uint8Array, iv?: Uint8Array): SymmetricCrypto {
     return new NodeSymmetricCrypto(transformation, key, iv, this.encoding)
+  }
+
+  public createAsymmetricCrypto(transformation: string): AsymmetricCrypto {
+    return new NodeAsymmetricCrypto(transformation)
+  }
+
+  public createSign(algorithm: string): SignCrypto {
+    return new NodeSignCrypto(algorithm)
   }
 }

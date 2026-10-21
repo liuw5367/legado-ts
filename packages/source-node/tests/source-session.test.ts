@@ -37,16 +37,16 @@ test('Node 书源会话跨操作保留 source 变量和 jsLib 缓存，不同会
   assert.equal((await evaluate('@js:cachedHelper()')).value, 'cached')
   assert.equal(urls.length, 1, '同一会话的后续操作复用远程 jsLib')
 
-  assert.equal((await evaluate("@js:source.put('sessionKey', 'session-value'); 'written'")).value, 'written')
-  assert.equal((await evaluate("@js:getVar('sessionKey', 'source')")).value, 'session-value')
-  assert.deepEqual(session.snapshotVariables(), { sessionKey: 'session-value' })
+  assert.equal((await evaluate("@js:source.put('sessionKey', 'session-value'); source.get('sessionKey')")).value, 'session-value')
+  assert.equal((await evaluate("@js:source.putVariable('session-variable'); source.getVariable()")).value, 'session-variable')
+  assert.deepEqual(session.snapshotVariables(), {})
 
   const isolated = createNodeSourceSession(baseSource, { network })
   const isolatedOutput = await isolated.run((ports) => ports.rules.evaluate({
     source: isolated.source,
     stage: 'search',
     field: 'sessionProbe',
-    rule: "@js:getVar('sessionKey', 'source')",
+    rule: "@js:source.get('sessionKey')",
     content: '',
   }))
   assert.equal(isolatedOutput.status, 'empty')
@@ -96,6 +96,28 @@ test('Node session preserves the independent login-header provider through the l
   const loginHeaders = await session.run(async (ports) => ports.network.getLoginHeaders?.(baseSource.bookSourceUrl))
   assert.deepEqual(loginHeaders, { Authorization: `Bearer ${baseSource.bookSourceUrl}` })
   assert.equal(await session.run(async (ports) => ports.network.isLoginHeaderSite?.(baseSource.bookSourceUrl, 'https://cdn.fixture.invalid/page')), false)
+})
+
+test('Node session 将 source.putLoginHeader 注入后续请求并跨操作保留', async () => {
+  const headers: Array<Readonly<Record<string, string>>> = []
+  const network: NetworkHost = {
+    request: async (plan) => {
+      headers.push(plan.headers)
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('ok'), redirected: false }
+    },
+  }
+  const session = createNodeSourceSession({ ...baseSource, jsLib: '' } as NormalizedSource, { network })
+  const set = await session.run((ports) => ports.rules.evaluate({ source: session.source, stage: 'search', field: 'login', rule: '@js:source.putLoginHeader(JSON.stringify({Authorization: "Bearer session"})); "ok"', content: '' }))
+  assert.equal(set.status, 'success')
+  await session.run((ports) => {
+    if (ports.request === undefined) throw new Error('request adapter missing')
+    return ports.request({ source: session.source, url: 'https://fixture.invalid/page', stage: 'search', options: {} })
+  })
+  await session.run((ports) => {
+    if (ports.request === undefined) throw new Error('request adapter missing')
+    return ports.request({ source: session.source, url: 'https://fixture.invalid/page2', stage: 'search', options: {} })
+  })
+  assert.deepEqual(headers.map((value) => value.Authorization), ['Bearer session', 'Bearer session'])
 })
 
 test('Node session reports invalid initial concurrentRate and closes its limiter lifecycle', async () => {

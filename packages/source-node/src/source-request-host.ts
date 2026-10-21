@@ -209,6 +209,7 @@ export class SourceRequestHost {
     const contentType = headerValue(response.headers['content-type'])
     return {
       body: this.decode(response),
+      bytes: response.bytes,
       status: response.status,
       code: response.status,
       ...(response.statusMessage === undefined ? {} : { statusMessage: response.statusMessage, message: response.statusMessage }),

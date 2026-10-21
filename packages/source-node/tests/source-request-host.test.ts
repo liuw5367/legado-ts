@@ -222,11 +222,11 @@ test('bridge 的 ajaxAll 和 response 请求复用完整网络响应并保持顺
   const signal = new AbortController().signal
   const all = await host.requestFromBridge({ kind: 'network-all', urls: ['https://fixture.invalid/one', 'https://fixture.invalid/two'] }, signal, source)
   assert.deepEqual(all, [
-    { body: 'body:https://fixture.invalid/one', status: 200, code: 200, headers: { Location: 'https://fixture.invalid/one' }, url: 'https://fixture.invalid/one', redirected: false },
-    { body: 'body:https://fixture.invalid/two', status: 204, code: 204, headers: { Location: 'https://fixture.invalid/two' }, url: 'https://fixture.invalid/two', redirected: false },
+    { body: 'body:https://fixture.invalid/one', bytes: new TextEncoder().encode('body:https://fixture.invalid/one'), status: 200, code: 200, headers: { Location: 'https://fixture.invalid/one' }, url: 'https://fixture.invalid/one', redirected: false },
+    { body: 'body:https://fixture.invalid/two', bytes: new TextEncoder().encode('body:https://fixture.invalid/two'), status: 204, code: 204, headers: { Location: 'https://fixture.invalid/two' }, url: 'https://fixture.invalid/two', redirected: false },
   ])
   const single = await host.requestFromBridge({ kind: 'network-response', url: 'https://fixture.invalid/one', options: {} }, signal, source)
-  assert.deepEqual(single, { body: 'body:https://fixture.invalid/one', status: 200, code: 200, headers: { Location: 'https://fixture.invalid/one' }, url: 'https://fixture.invalid/one', redirected: false })
+  assert.deepEqual(single, { body: 'body:https://fixture.invalid/one', bytes: new TextEncoder().encode('body:https://fixture.invalid/one'), status: 200, code: 200, headers: { Location: 'https://fixture.invalid/one' }, url: 'https://fixture.invalid/one', redirected: false })
   assert.deepEqual(started, ['https://fixture.invalid/one', 'https://fixture.invalid/two', 'https://fixture.invalid/one'])
   const skipped = await host.requestFromBridge({ kind: 'network-all', urls: ['https://fixture.invalid/three'], skipRateLimit: true }, signal, source)
   assert.equal(Array.isArray(skipped), true)

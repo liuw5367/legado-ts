@@ -21,6 +21,7 @@ import { HtmlParserAdapter } from './html.ts'
 import { QuickJSJavaScriptHost } from './javascript.ts'
 import { JsonPathParserAdapter } from './jsonpath.ts'
 import { XPathParserAdapter } from './xpath.ts'
+import { DEFAULT_ANDROID_USER_AGENT } from './http.ts'
 
 export type { SourceRuleBridgeRequest } from '@legado/source-core'
 
@@ -95,6 +96,10 @@ export class SourceRuleHost implements WorkflowRulePort {
       timeFormat: options.timeFormat ?? ((time) => formatJavaDate(time, 'yyyy/MM/dd HH:mm') ?? ''),
       timeFormatUTC: options.timeFormatUTC ?? ((time, format, offsetMs) => formatJavaDate(time, format, offsetMs)),
       randomUUID: options.randomUUID ?? randomUUID,
+      ...(options.sourceState === undefined ? {} : { sourceState: options.sourceState }),
+      ...(options.file === undefined ? {} : { file: options.file }),
+      webViewUA: options.webViewUA ?? (() => DEFAULT_ANDROID_USER_AGENT),
+      ...(options.logger === undefined ? {} : { logger: options.logger }),
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
     })
   }

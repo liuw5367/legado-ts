@@ -8,6 +8,7 @@ import type {
   CryptoHost,
   EncodingHost,
   FontHost,
+  FontMapping,
   HtmlDocument,
   HtmlParser,
   JsonPathParser,
@@ -30,6 +31,7 @@ import type {
   WorkflowStage,
 } from '../workflows/types.ts'
 import { internalChapterScopeBinding } from '../workflows/types.ts'
+import { formatChapterBody } from '../workflows/html-format.ts'
 
 export interface SourceRuleBridgeRequest {
   kind: string
@@ -53,6 +55,8 @@ export interface SourceRuleBridgeRequest {
   text?: unknown
   errorBase64?: unknown
   correctBase64?: unknown
+  errorFontId?: unknown
+  correctFontId?: unknown
   filter?: unknown
   key?: unknown
   iv?: unknown
@@ -61,6 +65,8 @@ export interface SourceRuleBridgeRequest {
   operation?: unknown
   inputEncoding?: unknown
   outputEncoding?: unknown
+  data?: unknown
+  signatureEncoding?: unknown
   time?: unknown
   format?: unknown
   offsetMs?: unknown
@@ -68,6 +74,54 @@ export interface SourceRuleBridgeRequest {
   expression?: unknown
   name?: string
   scope?: string
+  privateKey?: unknown
+  publicKey?: unknown
+  signature?: unknown
+  usePublicKey?: unknown
+  useCache?: unknown
+}
+
+/** Android BaseSource 登录状态和请求头的最小持久化端口。未提供时使用当前运行时会话内存。 */
+export interface SourceRuntimeState {
+  getHeaderMap?: (source: NormalizedSource, includeLoginHeader: boolean, signal: AbortSignal) => Readonly<Record<string, string>> | Promise<Readonly<Record<string, string>>>
+  /** BaseSource.getVariable/setVariable 对应的源级字符串。 */
+  getVariable?: (source: NormalizedSource, signal: AbortSignal) => string | null | undefined | Promise<string | null | undefined>
+  setVariable?: (source: NormalizedSource, value: string | null, signal: AbortSignal) => void | Promise<void>
+  /** BaseSource.get/put 对应的源级键值缓存。 */
+  getValue?: (source: NormalizedSource, key: string, signal: AbortSignal) => string | null | undefined | Promise<string | null | undefined>
+  putValue?: (source: NormalizedSource, key: string, value: string, signal: AbortSignal) => string | Promise<string>
+  getLoginHeader?: (source: NormalizedSource, signal: AbortSignal) => string | null | undefined | Promise<string | null | undefined>
+  putLoginHeader?: (source: NormalizedSource, value: string, signal: AbortSignal) => void | Promise<void>
+  removeLoginHeader?: (source: NormalizedSource, signal: AbortSignal) => void | Promise<void>
+  getLoginInfo?: (source: NormalizedSource, signal: AbortSignal) => string | null | undefined | Promise<string | null | undefined>
+  getLoginInfoMap?: (source: NormalizedSource, signal: AbortSignal) => Readonly<Record<string, string>> | undefined | Promise<Readonly<Record<string, string>> | undefined>
+  putLoginInfo?: (source: NormalizedSource, value: string, signal: AbortSignal) => boolean | Promise<boolean>
+  removeLoginInfo?: (source: NormalizedSource, signal: AbortSignal) => void | Promise<void>
+}
+
+export type SourceFileOperation =
+  | 'getFile'
+  | 'importScript'
+  | 'cacheFile'
+  | 'downloadFile'
+  | 'readFile'
+  | 'readTxtFile'
+  | 'deleteFile'
+  | 'unzipFile'
+  | 'un7zFile'
+  | 'unrarFile'
+  | 'unArchiveFile'
+  | 'getTxtInFolder'
+  | 'getZipStringContent'
+  | 'getRarStringContent'
+  | 'get7zStringContent'
+  | 'getZipByteArrayContent'
+  | 'getRarByteArrayContent'
+  | 'get7zByteArrayContent'
+
+/** Android 相对缓存目录文件 API 的受控宿主端口。路径解析和归档预算由宿主负责。 */
+export interface SourceFileHost {
+  execute: (operation: SourceFileOperation, input: Readonly<Record<string, unknown>>, signal: AbortSignal, source: NormalizedSource) => unknown | Promise<unknown>
 }
 
 export interface SourceRuleRuntimeOptions {
@@ -82,6 +136,14 @@ export interface SourceRuleRuntimeOptions {
   timeFormatUTC?: (time: number, format: string, offsetMs: number) => string | null
   /** 由宿主提供密码学随机 UUID。 */
   randomUUID?: () => string
+  /** Android BaseSource 登录信息、请求头和状态持久化端口。 */
+  sourceState?: SourceRuntimeState
+  /** Android 阅读缓存目录和归档 API 的受控宿主端口。 */
+  file?: SourceFileHost
+  /** 平台 User-Agent；未提供时 java.getWebViewUA 报能力错误。 */
+  webViewUA?: () => string
+  /** JavaScript 日志端口；不提供时 log 仍返回原值但不写宿主日志。 */
+  logger?: (level: 'toast' | 'longToast' | 'log' | 'logType', value: unknown) => void
   encoding: EncodingHost
   crypto: CryptoHost
   font: FontHost
@@ -169,6 +231,34 @@ function textValue(value: unknown): string {
   } catch {
     return ''
   }
+}
+
+function inlineJavaScript(value: unknown): string | undefined {
+  const text = textValue(value).trim()
+  if (text.length === 0) return undefined
+  const match = /^<js>([\s\S]*?)<\/js>$|^@js:([\s\S]*)$/iu.exec(text)
+  return match === null ? undefined : (match[1] ?? match[2] ?? '').trim()
+}
+
+function sourceHeaderObject(value: unknown): Record<string, string> {
+  if (typeof value === 'string') {
+    const parsed: unknown = JSON.parse(value)
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, textValue(item)]))
+    throw new Error('source header must be an object')
+  }
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, textValue(item)]))
+  throw new Error('source header must be an object')
+}
+
+function loginInfoDefaults(value: unknown): Record<string, string> | undefined {
+  let parsed: unknown = value
+  if (typeof value === 'string') {
+    try { parsed = JSON.parse(value) } catch { return undefined }
+  }
+  if (!Array.isArray(parsed)) return undefined
+  return Object.fromEntries(parsed
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item) && textValue(item.type) !== 'button' && textValue(item.name).length > 0)
+    .map((item) => [textValue(item.name), textValue(item.default)]))
 }
 
 /** Android NetworkUtils.getAbsoluteURL 的最小跨平台等价实现。 */
@@ -563,6 +653,16 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly timeFormat?: SourceRuleRuntimeOptions['timeFormat']
   private readonly timeFormatUTC?: SourceRuleRuntimeOptions['timeFormatUTC']
   private readonly randomUUID?: SourceRuleRuntimeOptions['randomUUID']
+  private readonly sourceState?: SourceRuleRuntimeOptions['sourceState']
+  private readonly file?: SourceRuleRuntimeOptions['file']
+  private readonly webViewUA?: SourceRuleRuntimeOptions['webViewUA']
+  private readonly logger?: SourceRuleRuntimeOptions['logger']
+  private readonly sessionLoginHeaders = new Map<string, string>()
+  private readonly sessionLoginInfo = new Map<string, string>()
+  private readonly sessionSourceVariables = new Map<string, string>()
+  private readonly sessionSourceValues = new Map<string, Map<string, string>>()
+  private readonly fontMappings = new Map<string, FontMapping>()
+  private nextFontId = 0
   private readonly maxSteps: number
   private readonly nodes = new Map<string, StoredNode>()
   private readonly captureRows = new WeakMap<object, string>()
@@ -584,6 +684,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     this.timeFormat = options.timeFormat
     this.timeFormatUTC = options.timeFormatUTC
     this.randomUUID = options.randomUUID
+    this.sourceState = options.sourceState
+    this.file = options.file
+    this.webViewUA = options.webViewUA
+    this.logger = options.logger
     this.maxSteps = options.maxSteps ?? 10000
   }
 
@@ -1143,10 +1247,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'const reGetBook = () => runPreUpdateAction("reGetBook");',
       'globalThis.baseUrl = bindings.baseUrl;',
       'globalThis.redirectUrl = bindings.redirectUrl;',
+      'for (const [name, value] of Object.entries(bindings)) { if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) || name.startsWith("__legado") || Object.prototype.hasOwnProperty.call(bindings.__legadoWorkflowGlobalState ?? {}, name) || ["bindings", "sourceData", "sourceKey", "sourceName", "baseUrl", "redirectUrl", "src", "key", "page", "url", "nextChapterUrl", "chapters", "index", "title", "gInt", "fromBookInfo", "isFromBookInfo", "infoMap", "book", "chapter", "source", "sourceApi", "java", "cookie", "cache", "result"].includes(name)) continue; try { Object.defineProperty(globalThis, name, { value, writable: true, enumerable: true, configurable: true }); } catch {} }',
       // Android ExploreKind 脚本通过 infoMap 保存控件状态；方法保持 Map 语义，保存动作交给宿主决定持久化范围。
       'const __legadoInfoMapValue = bindings.infoMap && typeof bindings.infoMap === "object" && !Array.isArray(bindings.infoMap) ? { ...bindings.infoMap } : {}; globalThis.infoMap = __legadoInfoMapValue; Object.defineProperties(globalThis.infoMap, { get: { value: (name) => globalThis.infoMap[String(name)] }, put: { value: (name, value) => { const key = String(name); const previous = globalThis.infoMap[key]; globalThis.infoMap[key] = String(value ?? ""); return previous; } }, set: { value: (value) => { if (value && typeof value === "object" && !Array.isArray(value)) { for (const key of Object.keys(globalThis.infoMap)) delete globalThis.infoMap[key]; for (const [key, item] of Object.entries(value)) globalThis.infoMap[key] = String(item ?? ""); } return globalThis.infoMap; } }, save: { value: (time, need) => request({ kind: "workflow-action", action: "saveInfoMap", input: { infoMap: { ...globalThis.infoMap }, time: time == null ? 0 : Number(time), need: need !== false } }) }, saveNow: { value: () => request({ kind: "workflow-action", action: "saveInfoMap", input: { infoMap: { ...globalThis.infoMap }, now: true, need: true } }) } });',
       'const sourceValue = bindings.sourceData ?? {};',
-      'globalThis.source = { ...sourceValue, key: bindings.sourceKey }; Object.defineProperties(globalThis.source, { getKey: { value: () => bindings.sourceKey }, get: { value: (name) => getVar(String(name), "source") ?? "" }, put: { value: (name, value) => { setVar(String(name), value, "source"); return value; } }, getVariable: { value: () => getVar("__source__", "source") ?? "" }, setVariable: { value: (value) => setVar("__source__", value, "source") }, putVariable: { value: (value) => setVar("__source__", value, "source") }, getLoginHeader: { value: () => request({ kind: "runtime-capability", capability: "source.getLoginHeader" }) }, getLoginHeaderMap: { value: () => request({ kind: "runtime-capability", capability: "source.getLoginHeaderMap" }) }, putLoginHeader: { value: () => request({ kind: "runtime-capability", capability: "source.putLoginHeader" }) }, removeLoginHeader: { value: () => request({ kind: "runtime-capability", capability: "source.removeLoginHeader" }) }, getLoginInfo: { value: () => request({ kind: "runtime-capability", capability: "source.getLoginInfo" }) }, getLoginInfoMap: { value: () => request({ kind: "runtime-capability", capability: "source.getLoginInfoMap" }) }, putLoginInfo: { value: () => request({ kind: "runtime-capability", capability: "source.putLoginInfo" }) }, putLoginInfoMap: { value: () => request({ kind: "runtime-capability", capability: "source.putLoginInfoMap" }) }, removeLoginInfo: { value: () => request({ kind: "runtime-capability", capability: "source.removeLoginInfo" }) }, putConcurrent: { value: (value) => { if (typeof __legadoSetConcurrentRate !== "function") throw new Error("__LEGADO_CAPABILITY__runtime source.putConcurrent unavailable"); return __legadoSetConcurrentRate(String(value)); } } });',
+      'globalThis.source = { ...sourceValue, key: bindings.sourceKey }; Object.defineProperties(globalThis.source, { getKey: { value: () => bindings.sourceKey }, get: { value: (name) => request({ kind: "source-state", operation: "getValue", name: String(name) }) }, put: { value: (name, value) => request({ kind: "source-state", operation: "putValue", name: String(name), value: String(value ?? "") }) }, getVariable: { value: () => request({ kind: "source-state", operation: "getVariable" }) ?? "" }, setVariable: { value: (value) => request({ kind: "source-state", operation: "setVariable", value: value == null ? null : String(value) }) }, putVariable: { value: (value) => request({ kind: "source-state", operation: "setVariable", value: value == null ? null : String(value) }) }, getHeaderMap: { value: (hasLoginHeader) => request({ kind: "source-state", operation: "getHeaderMap", value: hasLoginHeader === true }) }, getLoginHeader: { value: () => request({ kind: "source-state", operation: "getLoginHeader" }) }, getLoginHeaderMap: { value: () => { const value = request({ kind: "source-state", operation: "getLoginHeader" }); if (value == null || String(value).trim().length === 0) return null; try { return JSON.parse(String(value)); } catch { return null; } } }, putLoginHeader: { value: (value) => request({ kind: "source-state", operation: "putLoginHeader", value: String(value ?? "") }) }, removeLoginHeader: { value: () => request({ kind: "source-state", operation: "removeLoginHeader" }) }, getLoginInfo: { value: () => request({ kind: "source-state", operation: "getLoginInfo" }) }, getLoginInfoMap: { value: () => request({ kind: "source-state", operation: "getLoginInfoMap" }) }, putLoginInfo: { value: (value) => request({ kind: "source-state", operation: "putLoginInfo", value: String(value ?? "") }) }, putLoginInfoMap: { value: (value) => request({ kind: "source-state", operation: "putLoginInfo", value: JSON.stringify(value ?? {}) }) }, removeLoginInfo: { value: () => request({ kind: "source-state", operation: "removeLoginInfo" }) }, putConcurrent: { value: (value) => { if (typeof __legadoSetConcurrentRate !== "function") throw new Error("__LEGADO_CAPABILITY__runtime source.putConcurrent unavailable"); return __legadoSetConcurrentRate(String(value)); } } });',
       'globalThis.sourceApi = sourceValue;',
       'const bookValue = bindings.book ?? {};',
       'globalThis.book = { ...bookValue }; Object.defineProperties(globalThis.book, { getVariable: { value: (name) => getVar(String(name), "book") ?? "" }, putVariable: { value: (name, value) => { setVar(String(name), value, "book"); return true; } } });',
@@ -1157,9 +1262,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'const cookie = { getCookie: (url) => request({ kind: "cookie-get", url: String(url) }), setCookie: (url, value) => { request({ kind: "cookie-set", url: String(url), value: String(value) }); }, removeCookie: (url) => { request({ kind: "cookie-remove", url: String(url) }); } };',
       'let legadoContent = result; const legadoValueText = (value) => Array.isArray(value) ? value.map((item) => String(item ?? "")).join("\\n") : String(value ?? ""); const legadoNodeRead = (node, rule) => legadoValueText(evaluateRule(String(rule), { expect: "text", content: node })); const legadoNode = (node) => { if (node == null || typeof node !== "object" || node.__legadoNode !== "source-rule-node") return node; const value = { ...node }; Object.defineProperties(value, { attr: { value: (name) => legadoNodeRead(node, String(name)) }, text: { value: () => legadoNodeRead(node, "@text") }, ownText: { value: () => legadoNodeRead(node, "@ownText") }, html: { value: () => legadoNodeRead(node, "@html") }, select: { value: (rule) => legadoElements(evaluateRule(String(rule), { expect: "nodes", content: node })) }, toString: { value: () => legadoNodeRead(node, "@text") } }); return value; }; const legadoElements = (values) => { const list = (Array.isArray(values) ? values : values == null ? [] : [values]).map(legadoNode); Object.defineProperties(list, { toArray: { value: () => list.slice() }, attr: { value: (name) => list.length === 0 || typeof list[0].attr !== "function" ? "" : list[0].attr(name) }, text: { value: () => list.map((item) => typeof item.text === "function" ? item.text() : String(item ?? "")).filter(Boolean).join(" ") }, ownText: { value: () => list.map((item) => typeof item.ownText === "function" ? item.ownText() : String(item ?? "")).filter(Boolean).join(" ") }, html: { value: () => list.map((item) => typeof item.html === "function" ? item.html() : String(item ?? "")).join("\\n") }, select: { value: (rule) => { const selected = []; for (const item of list) { if (item != null && typeof item.select === "function") { const nested = item.select(rule); if (Array.isArray(nested)) selected.push(...nested); } } return legadoElements(selected); } } }); return list; }; const legadoResponse = (url, raw) => { const record = raw != null && typeof raw === "object" && !Array.isArray(raw) ? raw : {}; const body = typeof raw === "string" ? raw : String(record.body ?? raw ?? ""); const status = Number(record.status ?? record.code ?? 200); const target = String(record.url ?? url); const headers = record.headers ?? {}; const header = (name) => { const wanted = String(name).toLowerCase(); for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === wanted) return Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""); return ""; }; const request = { url: () => target }; const rawResponse = { request: () => request, url: () => target, code: () => status, message: () => String(record.message ?? "") }; return { body: () => body, code: () => status, statusCode: () => status, message: () => String(record.message ?? ""), headers: () => headers, header, url: () => target, isSuccessful: () => status >= 200 && status < 300, raw: () => rawResponse, toString: () => body }; };',
       'const java = { ajax: (value, method, body) => value != null && typeof value === "object" ? request(Object.assign({ kind: "network" }, value)) : method != null && typeof method === "object" ? request(Object.assign({ kind: "network", url: String(value) }, method)) : request({ kind: "network", url: String(value), method: method ?? "GET", body }), get: (value, options) => options !== undefined || /^(?:https?:)?\\/\\//.test(String(value)) ? legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "GET", options })) : Object.prototype.hasOwnProperty.call(bindings, String(value)) ? bindings[String(value)] : getVar(String(value)), connect: (value, options) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "GET", options })), put: (name, value) => { setVar(name, value); return value; }, cacheContent: (chapter, content) => request({ kind: "workflow-action", action: "cacheContent", input: { chapter, content } }), setContent: (content, baseUrl) => { legadoContent = content; if (baseUrl !== undefined && baseUrl !== null) { globalThis.baseUrl = String(baseUrl); globalThis.redirectUrl = String(baseUrl); } return java; }, getElement: (rule) => { const value = evaluateRule(String(rule), { expect: "nodes", content: legadoContent }); return Array.isArray(value) ? legadoElements(value) : legadoNode(value); }, getElements: (rule) => legadoElements(evaluateRule(String(rule), { expect: "nodes", content: legadoContent })), getString: (rule, content, isUrl) => legadoValueText(evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content })), getStringList: (rule, content, isUrl) => { const value = evaluateRule(String(rule), { expect: "text", content: content === undefined ? legadoContent : content }); return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : String(value ?? "").split("\\n").filter(Boolean); }, getWebViewUA: () => request({ kind: "runtime-capability", capability: "getWebViewUA" }), base64Encode: (value) => request({ kind: "base64-encode", value }), base64Decode: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToString: (value) => request({ kind: "base64-decode-text", value }), base64DecodeToByteArray: (value, flags) => value == null || String(value).trim().length === 0 ? null : request({ kind: "base64-decode-bytes", value, flags }), strToBytes: (value, charset) => request({ kind: "encode-bytes", value: String(value), charset: charset === undefined ? "UTF-8" : String(charset) }), bytesToStr: (value, charset) => request({ kind: "decode-bytes", value, charset: charset === undefined ? "UTF-8" : String(charset) }), toNumChapter: (value) => value == null ? null : request({ kind: "to-num-chapter", value }), hexDecodeToByteArray: (value) => request({ kind: "hex-decode-bytes", value }), hexDecodeToString: (value) => request({ kind: "hex-decode-text", value }), hexEncodeToString: (value) => request({ kind: "hex-encode", value }), md5Encode: (value) => request({ kind: "md5", value }), digestHex: (value, algorithm) => request({ kind: "digest", value, algorithm }), digestBase64Str: (value, algorithm) => request({ kind: "digest-base64", value, algorithm }), HMacHex: (value, algorithm, key) => request({ kind: "hmac-hex", value, algorithm, key }), HMacBase64: (value, algorithm, key) => request({ kind: "hmac-base64", value, algorithm, key }), encodeURI: (value) => encodeURI(String(value)), decodeURI: (value) => decodeURI(String(value)), aesBase64DecodeToString: (value, key, transformation, iv) => request({ kind: "aes-decode-text", value, key, transformation, iv }), replaceFont: (text, errorBase64, correctBase64, filter) => request({ kind: "font-replace", text, errorBase64, correctBase64, filter }), toast: () => undefined, longToast: () => undefined, log: () => undefined, timeFormat: (value) => String(value), timeFormatUTC: (time, format, offsetMs) => request({ kind: "time-format-utc", time: Number(time), format: String(format), offsetMs: Number(offsetMs) }), randomUUID: () => request({ kind: "random-uuid" }), getAppVariant: () => request({ kind: "runtime-capability", capability: "getAppVariant" }), androidId: () => request({ kind: "runtime-capability", capability: "androidId" }), deviceID: () => request({ kind: "runtime-capability", capability: "deviceID" }) };',
-      'Object.assign(java, { post: (value, body, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers, options: timeout === undefined ? undefined : { timeout: Number(timeout) } })), head: (value, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers, options: timeout === undefined ? undefined : { timeout: Number(timeout) } })), ajaxTestAll: (values, timeout, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true, options: timeout === undefined ? undefined : { timeout: Number(timeout) } }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponse(urls[index] ?? "", raw)); } });',
+      'Object.assign(java, { post: (value, body, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers, options: timeout === undefined ? undefined : { timeout: Number(timeout) } })), head: (value, headers, timeout) => legadoResponse(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers, options: timeout === undefined ? undefined : { timeout: Number(timeout) } })), ajaxTestAll: (values, timeout, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, isTest: true, skipRateLimit: skipRateLimit === true, options: timeout === undefined ? undefined : { timeout: Number(timeout) } }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponse(urls[index] ?? "", raw)); } });',
       'java.ajaxAll = (values, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponse(urls[index] ?? "", raw)); };',
-      'Object.assign(java, { t2s: () => request({ kind: "runtime-capability", capability: "java.t2s" }), s2t: () => request({ kind: "runtime-capability", capability: "java.s2t" }), webView: () => request({ kind: "runtime-capability", capability: "java.webView" }), webview: () => request({ kind: "runtime-capability", capability: "java.webview" }), webViewGetSource: () => request({ kind: "runtime-capability", capability: "java.webViewGetSource" }), webViewGetOverrideUrl: () => request({ kind: "runtime-capability", capability: "java.webViewGetOverrideUrl" }), startBrowser: () => request({ kind: "runtime-capability", capability: "java.startBrowser" }), startBrowserAwait: () => request({ kind: "runtime-capability", capability: "java.startBrowserAwait" }), showBrowser: () => request({ kind: "runtime-capability", capability: "java.showBrowser" }), getVerificationCode: () => request({ kind: "runtime-capability", capability: "java.getVerificationCode" }), openVideoPlayer: () => request({ kind: "runtime-capability", capability: "java.openVideoPlayer" }), openUrl: () => request({ kind: "runtime-capability", capability: "java.openUrl" }), refreshExplore: () => request({ kind: "workflow-action", action: "refreshExplore" }), reUiView: (deltaUp) => request({ kind: "workflow-action", action: "reUiView", input: deltaUp === true }), upUiData: (data) => request({ kind: "workflow-action", action: "upUiData", input: data }), upLoginData: (data) => request({ kind: "workflow-action", action: "upUiData", input: data }), reLoginView: (deltaUp) => request({ kind: "workflow-action", action: "reUiView", input: deltaUp === true }) });',
+      'Object.assign(java, { t2s: () => request({ kind: "runtime-capability", capability: "java.t2s" }), s2t: () => request({ kind: "runtime-capability", capability: "java.s2t" }), webView: () => request({ kind: "runtime-capability", capability: "java.webView" }), webview: () => request({ kind: "runtime-capability", capability: "java.webview" }), webViewGetSource: () => request({ kind: "runtime-capability", capability: "java.webViewGetSource" }), webViewGetOverrideUrl: () => request({ kind: "runtime-capability", capability: "java.webViewGetOverrideUrl" }), startBrowser: () => request({ kind: "runtime-capability", capability: "java.startBrowser" }), startBrowserAwait: () => request({ kind: "runtime-capability", capability: "java.startBrowserAwait" }), showBrowser: () => request({ kind: "runtime-capability", capability: "java.showBrowser" }), getVerificationCode: () => request({ kind: "runtime-capability", capability: "java.getVerificationCode" }), openVideoPlayer: () => request({ kind: "runtime-capability", capability: "java.openVideoPlayer" }), openUrl: () => request({ kind: "runtime-capability", capability: "java.openUrl" }), refreshExplore: () => { request({ kind: "workflow-action", action: "refreshExplore" }); }, reUiView: (deltaUp) => { request({ kind: "workflow-action", action: "reUiView", input: deltaUp === true }); }, upUiData: (data) => { request({ kind: "workflow-action", action: "upUiData", input: data }); }, upLoginData: (data) => { request({ kind: "workflow-action", action: "upUiData", input: data }); }, reLoginView: (deltaUp) => { request({ kind: "workflow-action", action: "reUiView", input: deltaUp === true }); } });',
       'const legadoCookie = (url, key) => { const cookieText = String(request({ kind: "cookie-get", url: String(url) }) ?? ""); if (key === undefined || key === null) return cookieText; for (const part of cookieText.split(";")) { const index = part.indexOf("="); if (index >= 0 && part.slice(0, index).trim() === String(key)) return part.slice(index + 1).trim(); } return ""; };',
       'java.getCookie = (url, key) => legadoCookie(url, key);',
       'java.timeFormat = (time) => request({ kind: "time-format", time: Number(time) });',
@@ -1196,18 +1301,32 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'java.connect = (value, header, timeout) => { const urlValue = String(value); try { const headerMap = legadoJavaConnectHeaders(header); const input = { kind: "network-response", url: urlValue, method: "GET" }; if (headerMap !== undefined) input.headers = headerMap; if (timeout != null) input.options = { timeout: Number(timeout) }; return legadoResponseCompat(urlValue, request(input)); } catch (error) { if (legadoJavaErrorMustPropagate(error)) throw error; return legadoResponseCompat(urlValue, { url: urlValue, status: 200, code: 200, body: legadoJavaErrorText(error), message: "OK" }); } };',
       'java.post = (value, body, headers, timeout) => legadoResponseCompat(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) })); java.head = (value, headers, timeout) => legadoResponseCompat(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) }));',
       'java.ajaxAll = (values, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponseCompat(urls[index] ?? "", raw)); };',
-      'java.ajaxTestAll = (values, timeout, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true, options: timeout === undefined ? undefined : { timeout: Number(timeout) } }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponseCompat(urls[index] ?? "", raw)); };',
-      'const legadoCryptoConfig = (transformation, key, iv) => ({ transformation: String(transformation), key, ...(iv === undefined || iv === null ? {} : { iv }) }); const legadoCryptoBase64 = (value) => ({ __legadoBase64: String(value) }); const legadoCrypto = (transformation, key, iv) => { const config = legadoCryptoConfig(transformation, key, iv); return { decrypt: (value) => request({ kind: "crypto-symmetric", operation: "decrypt", ...config, value, inputEncoding: typeof value === "string" ? "base64" : "bytes", outputEncoding: "bytes" }), decryptStr: (value, charset) => request({ kind: "crypto-symmetric", operation: "decrypt", ...config, value, inputEncoding: typeof value === "string" ? "base64" : "bytes", outputEncoding: "text", charset: charset === undefined ? "UTF-8" : String(charset) }), encrypt: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "bytes" }), encryptBase64: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "base64" }), encryptHex: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "hex" }) }; };',
+      'java.ajaxTestAll = (values, timeout, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, isTest: true, skipRateLimit: skipRateLimit === true, options: timeout === undefined ? undefined : { timeout: Number(timeout) } }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponseCompat(urls[index] ?? "", raw)); };',
+      'const legadoCryptoConfig = (transformation, key, iv) => ({ transformation: String(transformation), key, ...(iv === undefined || iv === null ? {} : { iv }) }); const legadoCryptoBase64 = (value) => ({ __legadoBase64: String(value) }); const legadoCryptoInput = (value) => typeof value === "string" ? (/^(?:[0-9a-f]{2})+$/iu.test(value) ? "hex" : "base64") : "bytes"; const legadoCrypto = (transformation, key, iv) => { const config = legadoCryptoConfig(transformation, key, iv); return { decrypt: (value) => request({ kind: "crypto-symmetric", operation: "decrypt", ...config, value, inputEncoding: legadoCryptoInput(value), outputEncoding: "bytes" }), decryptStr: (value, charset) => request({ kind: "crypto-symmetric", operation: "decrypt", ...config, value, inputEncoding: legadoCryptoInput(value), outputEncoding: "text", charset: charset === undefined ? "UTF-8" : String(charset) }), encrypt: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "bytes" }), encryptBase64: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "base64" }), encryptHex: (value) => request({ kind: "crypto-symmetric", operation: "encrypt", ...config, value, outputEncoding: "hex" }) }; };',
       'java.md5Encode = (value) => request({ kind: "md5", value: String(value) }); java.md5Encode16 = (value) => request({ kind: "md5-16", value: String(value) });',
-      'java.base64Encode = (value, flags) => request({ kind: "base64-encode", value: String(value), flags: flags === undefined ? 0 : Number(flags) }); java.base64Decode = (value, charsetOrFlags) => typeof charsetOrFlags === "number" ? request({ kind: "base64-decode-text", value, flags: Number(charsetOrFlags) }) : request({ kind: "base64-decode-text", value, charset: charsetOrFlags === undefined ? "UTF-8" : String(charsetOrFlags) }); java.base64DecodeToString = (value, charset) => request({ kind: "base64-decode-text", value, charset: charset === undefined ? "UTF-8" : String(charset) }); java.base64DecodeToByteArray = (value, flags) => value == null || String(value).trim().length === 0 ? null : request({ kind: "base64-decode-bytes", value, flags: flags === undefined ? 0 : Number(flags) });',
+      'java.base64Encode = (value, flags) => request({ kind: "base64-encode", value: String(value), flags: flags === undefined ? 2 : Number(flags) }); java.base64Decode = (value, charsetOrFlags) => typeof charsetOrFlags === "number" ? request({ kind: "base64-decode-text", value, flags: Number(charsetOrFlags) }) : request({ kind: "base64-decode-text", value, charset: charsetOrFlags === undefined ? "UTF-8" : String(charsetOrFlags) }); java.base64DecodeToString = (value, charset) => request({ kind: "base64-decode-text", value, charset: charset === undefined ? "UTF-8" : String(charset) }); java.base64DecodeToByteArray = (value, flags) => value == null || String(value).trim().length === 0 ? null : request({ kind: "base64-decode-bytes", value, flags: flags === undefined ? 0 : Number(flags) });',
       'java.encodeURI = (value, charset) => request({ kind: "encode-uri", value: String(value), charset: charset === undefined ? "UTF-8" : String(charset) });',
       'java.createSymmetricCrypto = (transformation, key, iv) => legadoCrypto(transformation, key, iv);',
-      'const legadoCryptoDecrypt = (value, key, transformation, iv, outputEncoding) => request({ kind: "crypto-symmetric", operation: "decrypt", value, key, transformation, iv, inputEncoding: "base64", outputEncoding }); const legadoCryptoEncrypt = (value, key, transformation, iv, outputEncoding) => request({ kind: "crypto-symmetric", operation: "encrypt", value, key, transformation, iv, outputEncoding });',
+      'const legadoAsymmetric = (transformation) => { let privateKey; let publicKey; const call = (operation, value, usePublicKey, outputEncoding, inputEncoding, charset) => request({ kind: "crypto-asymmetric", operation, transformation: String(transformation), value, privateKey, publicKey, usePublicKey: usePublicKey !== false, outputEncoding, inputEncoding, charset }); const api = { setPrivateKey: (value) => { privateKey = value; return api; }, setPublicKey: (value) => { publicKey = value; return api; }, decrypt: (value, usePublicKey) => call("decrypt", value, usePublicKey, "bytes", typeof value === "string" ? "base64" : "bytes"), decryptStr: (value, usePublicKey, charset) => call("decrypt", value, usePublicKey, "text", typeof value === "string" ? "base64" : "bytes", charset === undefined ? "UTF-8" : String(charset)), encrypt: (value, usePublicKey) => call("encrypt", value, usePublicKey, "bytes", "text"), encryptHex: (value, usePublicKey) => call("encrypt", value, usePublicKey, "hex", "text"), encryptBase64: (value, usePublicKey) => call("encrypt", value, usePublicKey, "base64", "text") }; return api; }; java.createAsymmetricCrypto = (transformation) => legadoAsymmetric(transformation);',
+      'const legadoSign = (algorithm) => { let privateKey; let publicKey; const call = (operation, value, outputEncoding, signature, signatureEncoding) => request({ kind: "crypto-sign", algorithm: String(algorithm), operation, value, privateKey, publicKey, outputEncoding, signature, signatureEncoding }); const api = { setPrivateKey: (value) => { privateKey = value; return api; }, setPublicKey: (value) => { publicKey = value; return api; }, sign: (value) => call("sign", value, "bytes"), signHex: (value) => call("sign", value, "hex"), signBase64: (value) => call("sign", value, "base64"), verify: (value, signature) => call("verify", value, undefined, signature, typeof signature === "string" ? "base64" : "bytes") }; return api; }; java.createSign = (algorithm) => legadoSign(algorithm);',
+      'const legadoCryptoDecrypt = (value, key, transformation, iv, outputEncoding) => request({ kind: "crypto-symmetric", operation: "decrypt", value, key, transformation, iv, inputEncoding: legadoCryptoInput(value), outputEncoding }); const legadoCryptoEncrypt = (value, key, transformation, iv, outputEncoding) => request({ kind: "crypto-symmetric", operation: "encrypt", value, key, transformation, iv, outputEncoding });',
       'java.aesDecodeToByteArray = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "bytes"); java.aesDecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text"); java.aesBase64DecodeToByteArray = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "bytes"); java.aesBase64DecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text");',
       'java.aesEncodeToByteArray = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "bytes"); java.aesEncodeToString = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "text"); java.aesEncodeToBase64ByteArray = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "base64"); java.aesEncodeToBase64String = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "base64");',
-      'java.aesDecodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoDecrypt(value, legadoCryptoBase64(key), `AES/${mode}/${padding}`, legadoCryptoBase64(iv), "text"); java.aesEncodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoEncrypt(value, legadoCryptoBase64(key), `AES/${mode}/${padding}`, legadoCryptoBase64(iv), "base64");',
+      'java.aesDecodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoDecrypt(value, legadoCryptoBase64(key), `AES/${mode}/${padding}`, legadoCryptoBase64(iv), "text"); java.aesEncodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoEncrypt(value, key, `AES/${mode}/${padding}`, iv, "base64");',
       'java.desDecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text"); java.desBase64DecodeToString = (value, key, transformation, iv) => legadoCryptoDecrypt(value, key, transformation, iv, "text"); java.desEncodeToString = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "text"); java.desEncodeToBase64String = (value, key, transformation, iv) => legadoCryptoEncrypt(value, key, transformation, iv, "base64");',
       'java.tripleDESDecodeStr = (value, key, mode, padding, iv) => legadoCryptoDecrypt(value, key, `DESede/${mode}/${padding}`, iv, "text"); java.tripleDESDecodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoDecrypt(value, legadoCryptoBase64(key), `DESede/${mode}/${padding}`, iv, "text"); java.tripleDESEncodeBase64Str = (value, key, mode, padding, iv) => legadoCryptoEncrypt(value, key, `DESede/${mode}/${padding}`, iv, "base64"); java.tripleDESEncodeArgsBase64Str = (value, key, mode, padding, iv) => legadoCryptoEncrypt(value, legadoCryptoBase64(key), `DESede/${mode}/${padding}`, iv, "base64");',
+      'const legadoFont = (value, useCache, inputEncoding) => { const id = request({ kind: "font-query", value, useCache, inputEncoding }); if (id == null) return null; const call = (operation, item) => request({ kind: "font-query-method", name: String(id), operation, value: item }); return { __legadoFontId: String(id), getGlyfIdByUnicode: (unicode) => call("glyphId", Number(unicode)), getGlyfByUnicode: (unicode) => call("glyph", Number(unicode)), getUnicodeByGlyf: (glyph) => call("unicode", glyph), isBlankUnicode: (unicode) => call("blank", Number(unicode)) }; }; java.queryBase64TTF = (value) => legadoFont(value, true, "base64"); java.queryTTF = (value, useCache) => legadoFont(value, useCache === undefined ? true : useCache, typeof value === "string" ? "auto" : "bytes"); java.replaceFont = (text, error, correct, filter) => request({ kind: "font-replace", text: String(text ?? ""), errorFontId: error && typeof error === "object" ? error.__legadoFontId : undefined, correctFontId: correct && typeof correct === "object" ? correct.__legadoFontId : undefined, errorBase64: typeof error === "string" ? error : undefined, correctBase64: typeof correct === "string" ? correct : undefined, filter: filter === true });',
+      'const __legadoSourceState = (operation, value) => request({ kind: "source-state", operation, value });',
+      'const __legadoInlineJs = (value) => { const text = String(value ?? "").trim(); const match = /^(?:<js>([\\s\\S]*?)<\\/js>|@js:([\\s\\S]*))$/iu.exec(text); return match == null ? null : String(match[1] ?? match[2] ?? "").trim(); }; const __legadoLoginUiV2 = (value) => { try { const parsed = JSON.parse(String(value ?? "")); return parsed != null && typeof parsed === "object" && Number(parsed.version) === 2; } catch { return false; } }; Object.defineProperties(source, { getSource: { value: () => source }, getTag: { value: () => String(sourceValue.bookSourceName ?? "") }, getLoginUiJs: { value: () => __legadoInlineJs(sourceValue.loginUi) }, isLoginUiV2: { value: () => __legadoLoginUiV2(sourceValue.loginUi) }, getLoginJs: { value: () => sourceValue.loginUrl == null ? null : __legadoInlineJs(sourceValue.loginUrl) ?? String(sourceValue.loginUrl) }, hasLoginForm: { value: () => sourceValue.loginUi != null && String(sourceValue.loginUi).trim().length > 0 && String(sourceValue.loginUi).replace(/\\s/gu, "") !== "[]" }, hasLogin: { value: () => Boolean((sourceValue.loginUrl != null && String(sourceValue.loginUrl).trim().length > 0) || (sourceValue.loginUi != null && String(sourceValue.loginUi).trim().length > 0 && String(sourceValue.loginUi).replace(/\\s/gu, "") !== "[]")) }, login: { value: () => { request({ kind: "source-login" }); } }, evalJS: { value: (code, extraBindings) => request({ kind: "source-eval-js", value: String(code ?? ""), input: extraBindings }) }, evalLoginUiV2: { value: (stateJson, book, chapter) => request({ kind: "source-login-ui", value: String(stateJson ?? ""), input: { book, chapter } }) }, evalLoginActionV2: { value: (action, stateJson, formJson, book, chapter) => request({ kind: "source-login-action", value: String(action ?? ""), data: String(stateJson ?? ""), input: { formJson: String(formJson ?? ""), book, chapter } }) }, refreshExplore: { value: () => { request({ kind: "workflow-action", action: "refreshExplore" }); } }, refreshJSLib: { value: () => { request({ kind: "cache-clear", scope: "jsLib" }); } } });',
+      'java.getSource = () => source; java.getTag = () => String(sourceValue.bookSourceName ?? ""); java.getSourceNavigationContext = () => request({ kind: "runtime-capability", capability: "getSourceNavigationContext" }); java.getBatchContext = () => Array.isArray(bindings.chapters) ? { book: globalThis.book, chapters: globalThis.chapters, saveContent: (chapter, content) => request({ kind: "workflow-action", action: "cacheContent", input: { chapter, content } }) } : null; java.getWebViewUA = () => request({ kind: "webview-ua" });',
+      'java.refreshBookInfo = () => request({ kind: "workflow-action", action: "refreshBookInfo" }); java.refreshBookToc = () => request({ kind: "workflow-action", action: "refreshBookToc" }); java.refreshContent = () => request({ kind: "workflow-action", action: "refreshContent" });',
+      'java.toast = (value) => request({ kind: "runtime-log", operation: "toast", value }); java.longToast = (value) => request({ kind: "runtime-log", operation: "longToast", value }); java.log = (value) => request({ kind: "runtime-log", operation: "log", value }); java.logType = (value) => request({ kind: "runtime-log", operation: "logType", value });',
+      'const legadoToURL = (value, base) => { const raw = String(value ?? ""); const resolved = request({ kind: "resolve-url", url: String(base ?? redirectUrl ?? baseUrl ?? bindings.sourceKey ?? ""), value: raw }); const text = String(resolved ?? raw); const match = /^(?:(\\w+):)?\\/\\/([^/?#]*)([^?#]*)?(?:\\?([^#]*))?(?:#(.*))?$/u.exec(text); const protocol = match?.[1] == null ? "" : `${match[1]}:`; const authority = match?.[2] ?? ""; const pathname = match?.[3] ?? ""; const query = match?.[4] ?? ""; const hash = match?.[5] == null ? "" : `#${match[5]}`; const hostParts = authority.split(":"); const hostname = hostParts[0] ?? ""; const port = hostParts.length > 1 ? hostParts.slice(1).join(":") : ""; const params = {}; for (const part of query.split("&")) { if (part.length === 0) continue; const index = part.indexOf("="); if (index < 0) continue; const name = part.slice(0, index); const item = part.slice(index + 1); const decodedName = decodeURIComponent(name.replaceAll("+", " ")); const decodedValue = decodeURIComponent(item.replaceAll("+", " ")); params[decodedName] = decodedValue; } const search = query.length === 0 ? "" : `?${query}`; const origin = protocol.length === 0 ? "" : `${protocol}//${hostname}${port.length > 0 ? `:${port}` : ""}`; return { url: text, href: text, protocol, host: hostname, hostname, port, pathname, search, query, hash, origin, searchParams: params, toString: () => text }; }; java.toURL = (value, base) => legadoToURL(value, base);',
+      'const legadoFileRequest = (operation, input) => request({ kind: "file", operation, ...(input ?? {}) }); const legadoFileObject = (path) => { const info = legadoFileRequest("getFile", { path: String(path ?? "") }); if (info == null || typeof info !== "object") return { path: String(path ?? ""), absolutePath: String(path ?? ""), exists: () => false, isFile: () => false, isDirectory: () => false, toString: () => String(path ?? "") }; const value = { ...info, path: info.path ?? String(path ?? ""), absolutePath: info.absolutePath ?? info.path ?? String(path ?? "") }; Object.defineProperties(value, { exists: { value: () => Boolean(info.exists) }, isFile: { value: () => Boolean(info.isFile) }, isDirectory: { value: () => Boolean(info.isDirectory) }, toString: { value: () => String(value.path) } }); return value; }; java.getFile = (path) => legadoFileObject(path); java.importScript = (path) => legadoFileRequest("importScript", { path: String(path ?? "") }); java.cacheFile = (url, saveTime) => legadoFileRequest("cacheFile", { url: String(url ?? ""), saveTime: Number(saveTime ?? 0) }); java.downloadFile = (value, url) => url === undefined ? legadoFileRequest("downloadFile", { url: String(value ?? "") }) : legadoFileRequest("downloadFile", { content: String(value ?? ""), url: String(url) }); java.readFile = (path) => legadoFileRequest("readFile", { path: String(path ?? "") }); java.readTxtFile = (path, charset) => legadoFileRequest("readTxtFile", { path: String(path ?? ""), charset: charset === undefined ? undefined : String(charset) }); java.deleteFile = (path) => legadoFileRequest("deleteFile", { path: String(path ?? "") }); java.unzipFile = (path) => legadoFileRequest("unzipFile", { path: String(path ?? "") }); java.un7zFile = (path) => legadoFileRequest("un7zFile", { path: String(path ?? "") }); java.unrarFile = (path) => legadoFileRequest("unrarFile", { path: String(path ?? "") }); java.unArchiveFile = (path) => legadoFileRequest("unArchiveFile", { path: String(path ?? "") }); java.getTxtInFolder = (path) => legadoFileRequest("getTxtInFolder", { path: String(path ?? "") });',
+      'java.getZipStringContent = (url, path, charset) => legadoFileRequest("getZipStringContent", { url: String(url ?? ""), path: String(path ?? ""), charset: charset === undefined ? undefined : String(charset) }); java.getRarStringContent = (url, path, charset) => legadoFileRequest("getRarStringContent", { url: String(url ?? ""), path: String(path ?? ""), charset: charset === undefined ? undefined : String(charset) }); java.get7zStringContent = (url, path, charset) => legadoFileRequest("get7zStringContent", { url: String(url ?? ""), path: String(path ?? ""), charset: charset === undefined ? undefined : String(charset) }); java.getZipByteArrayContent = (url, path) => legadoFileRequest("getZipByteArrayContent", { url: String(url ?? ""), path: String(path ?? "") }); java.getRarByteArrayContent = (url, path) => legadoFileRequest("getRarByteArrayContent", { url: String(url ?? ""), path: String(path ?? "") }); java.get7zByteArrayContent = (url, path) => legadoFileRequest("get7zByteArrayContent", { url: String(url ?? ""), path: String(path ?? "") });',
+      'java.htmlFormat = (value, redirect) => request({ kind: "html-format", value: String(value ?? ""), url: redirect === undefined || redirect === null ? "" : String(redirect) }); java.t2s = (value) => request({ kind: "runtime-capability", capability: "java.t2s" }); java.s2t = (value) => request({ kind: "runtime-capability", capability: "java.s2t" });',
+      'const __legadoLocks = new Map(); const __legadoFlights = new Map(); const __legadoTicks = new Map(); const legadoCheckLockName = (name) => { const key = String(name ?? ""); if (key.length === 0 || key.length > 256) throw new Error("name 不能为空且长度不能超过 256"); return key; }; const legadoCheckTimeout = (timeoutMs) => { const value = timeoutMs === undefined ? 15000 : Number(timeoutMs); if (!Number.isFinite(value) || value < 0 || value > 300000) throw new Error("timeoutMs 必须在 0..300000 之间"); return value; }; const legadoRunLock = (name, action, timeoutMs, single) => { const key = legadoCheckLockName(name); legadoCheckTimeout(timeoutMs); if (typeof action !== "function") throw new Error("lock action must be a function"); const locks = single ? __legadoFlights : __legadoLocks; if (locks.has(key)) { if (single) return undefined; throw new Error("lock 等待超时: " + key); } locks.set(key, true); try { action(); return undefined; } finally { locks.delete(key); } }; java.singleFlight = (name, action, timeoutMs) => legadoRunLock(name, action, timeoutMs, true); java.lock = (name, action, timeoutMs) => legadoRunLock(name, action, timeoutMs, false); java.tick = (name) => { const key = legadoCheckLockName(name); const value = Number(__legadoTicks.get(key) ?? 0); __legadoTicks.set(key, value === 2147483647 ? 0 : value + 1); return value; };',
+      'java.getReadBookConfig = () => request({ kind: "runtime-capability", capability: "getReadBookConfig" }); java.getReadBookConfigMap = () => request({ kind: "runtime-capability", capability: "getReadBookConfigMap" }); java.getThemeMode = () => request({ kind: "runtime-capability", capability: "getThemeMode" }); java.getThemeConfig = () => request({ kind: "runtime-capability", capability: "getThemeConfig" }); java.getThemeConfigMap = () => request({ kind: "runtime-capability", capability: "getThemeConfigMap" });',
     ].join('\n')
     const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
     const runSignal = signal ?? new AbortController().signal
@@ -1248,7 +1367,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             if (action === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${name} unavailable`)
             return action(bridgeSignal, actionRequest.input)
           }
-          return this.handleBridge(payload, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage))
+          return this.handleBridge(payload, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions)
         },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })
@@ -1319,7 +1438,33 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return scripts
   }
 
-  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage): Promise<unknown> {
+  private async clearSourceLibraries(source: NormalizedSource, signal: AbortSignal): Promise<void> {
+    const value = source.jsLib
+    if (typeof value !== 'string' || value.trim().length === 0) return
+    let remoteUrls: string[] | undefined
+    try {
+      const parsed: unknown = JSON.parse(value)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        remoteUrls = Object.values(parsed).map((item) => item === null || item === undefined ? '' : typeof item === 'object' ? JSON.stringify(item) ?? '' : String(item))
+      }
+    } catch {
+      return
+    }
+    if (remoteUrls === undefined) return
+    const fingerprint = sourceDefinitionFingerprint(source)
+    for (const remoteUrl of remoteUrls) {
+      let url: URL
+      try {
+        url = new URL(remoteUrl)
+      } catch {
+        continue
+      }
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+      await this.cache.delete(`jsLib:${fingerprint}:${url.toString()}`, signal)
+    }
+  }
+
+  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions']): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'resolve-url') return resolveSourceUrl(request.url, request.value)
@@ -1366,13 +1511,90 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         const bytes = crypto.decrypt(input)
         return textValue(request.outputEncoding) === 'text' ? this.encoding.decode(bytes, textValue(request.charset) || 'UTF-8') : textValue(request.outputEncoding) === 'hex' ? this.encoding.hexEncode(bytes) : textValue(request.outputEncoding) === 'base64' ? this.encoding.base64Encode(bytes) : bytes
       }
-      const input = typeof request.value === 'string' ? this.encoding.encode(request.value, textValue(request.charset) || 'UTF-8') : byteValue(request.value)
+      const inputEncoding = textValue(request.inputEncoding)
+      const input = typeof request.value === 'string'
+        ? inputEncoding === 'base64' ? this.encoding.base64Decode(textValue(request.value)) : inputEncoding === 'hex' ? this.encoding.hexDecode(textValue(request.value)) : this.encoding.encode(request.value, textValue(request.charset) || 'UTF-8')
+        : byteValue(request.value)
       const bytes = crypto.encrypt(input)
       return textValue(request.outputEncoding) === 'text' ? this.encoding.decode(bytes, textValue(request.charset) || 'UTF-8') : textValue(request.outputEncoding) === 'hex' ? this.encoding.hexEncode(bytes) : textValue(request.outputEncoding) === 'base64' ? this.encoding.base64Encode(bytes) : bytes
     }
+    if (request.kind === 'crypto-asymmetric') {
+      if (this.crypto.createAsymmetricCrypto === undefined) throw new Error('__LEGADO_CAPABILITY__runtime asymmetric crypto unavailable')
+      const crypto = this.crypto.createAsymmetricCrypto(textValue(request.transformation))
+      if (request.privateKey !== undefined) crypto.setPrivateKey(typeof request.privateKey === 'string' ? request.privateKey : byteValue(request.privateKey))
+      if (request.publicKey !== undefined) crypto.setPublicKey(typeof request.publicKey === 'string' ? request.publicKey : byteValue(request.publicKey))
+      const inputEncoding = textValue(request.inputEncoding)
+      const input = typeof request.value === 'string'
+        ? inputEncoding === 'base64' ? this.encoding.base64Decode(textValue(request.value)) : inputEncoding === 'hex' ? this.encoding.hexDecode(textValue(request.value)) : this.encoding.encode(request.value, textValue(request.charset) || 'UTF-8')
+        : byteValue(request.value)
+      const usePublicKey = request.usePublicKey !== false
+      const operation = textValue(request.operation)
+      if (operation === 'decrypt') {
+        const bytes = crypto.decrypt(input, usePublicKey)
+        return textValue(request.outputEncoding) === 'text' ? this.encoding.decode(bytes, textValue(request.charset) || 'UTF-8') : textValue(request.outputEncoding) === 'hex' ? this.encoding.hexEncode(bytes) : textValue(request.outputEncoding) === 'base64' ? this.encoding.base64Encode(bytes) : bytes
+      }
+      const bytes = crypto.encrypt(input, usePublicKey)
+      return textValue(request.outputEncoding) === 'text' ? this.encoding.decode(bytes, textValue(request.charset) || 'UTF-8') : textValue(request.outputEncoding) === 'hex' ? this.encoding.hexEncode(bytes) : textValue(request.outputEncoding) === 'base64' ? this.encoding.base64Encode(bytes) : bytes
+    }
+    if (request.kind === 'crypto-sign') {
+      if (this.crypto.createSign === undefined) throw new Error('__LEGADO_CAPABILITY__runtime sign crypto unavailable')
+      const signer = this.crypto.createSign(textValue(request.algorithm))
+      if (request.privateKey !== undefined) signer.setPrivateKey(typeof request.privateKey === 'string' ? request.privateKey : byteValue(request.privateKey))
+      if (request.publicKey !== undefined) signer.setPublicKey(typeof request.publicKey === 'string' ? request.publicKey : byteValue(request.publicKey))
+      const input = typeof request.value === 'string' ? this.encoding.encode(request.value, textValue(request.charset) || 'UTF-8') : byteValue(request.value)
+      if (textValue(request.operation) === 'verify') {
+        const signature = typeof request.signature === 'string'
+          ? textValue(request.signatureEncoding) === 'hex' ? this.encoding.hexDecode(request.signature) : this.encoding.base64Decode(request.signature)
+          : byteValue(request.signature)
+        return signer.verify(input, signature)
+      }
+      const signature = signer.sign(input)
+      return textValue(request.outputEncoding) === 'hex' ? this.encoding.hexEncode(signature) : textValue(request.outputEncoding) === 'base64' ? this.encoding.base64Encode(signature) : signature
+    }
+    if (request.kind === 'font-query') {
+      const useCache = request.useCache === undefined ? true : request.useCache === true
+      let value = request.value
+      if (typeof value === 'string' && textValue(request.inputEncoding) !== 'base64' && /^https?:\/\//iu.test(value.trim())) {
+        if (this.requestBridge === undefined) throw new Error('__LEGADO_CAPABILITY__runtime font URL loading unavailable')
+        const response = await this.requestBridge({ kind: 'network-response', url: value.trim(), method: 'GET', stage: workflowStage }, signal, source)
+        const record = typeof response === 'object' && response !== null && !Array.isArray(response) ? response as Record<string, unknown> : {}
+        value = record.bytes ?? record.bodyBytes ?? record.body
+      } else if (typeof value === 'string' && textValue(request.inputEncoding) !== 'base64' && this.file !== undefined && /(?:^[/\\]|(?:^|[/\\])(?:cache|temp|download)[/\\]|\.(?:ttf|otf|woff2?)$)/iu.test(value.trim())) {
+        value = await this.file.execute('readFile', { path: value.trim() }, signal, source)
+      }
+      const mapping = typeof value === 'string' && textValue(request.inputEncoding) === 'base64'
+        ? this.font.queryBase64TTF(value, { signal, useCache })
+        : typeof value === 'string'
+          ? this.font.queryBase64TTF(value, { signal, useCache })
+          : value === null || value === undefined
+            ? null
+            : this.font.queryTTF(byteValue(value), { signal, useCache })
+      if (mapping === null) return null
+      const id = `font-${this.nextFontId++}`
+      this.fontMappings.set(id, mapping)
+      return id
+    }
+    if (request.kind === 'font-query-method') {
+      const mapping = this.fontMappings.get(textValue(request.name))
+      if (mapping === undefined) throw new Error('__LEGADO_CAPABILITY__runtime font mapping unavailable')
+      const operation = textValue(request.operation)
+      if (operation === 'glyphId') return mapping.glyphIdByUnicode(Number(request.value))
+      if (operation === 'glyph') return mapping.glyphByUnicode(Number(request.value)) ?? null
+      if (operation === 'unicode') return mapping.unicodeByGlyph(request.value === undefined ? undefined : textValue(request.value))
+      if (operation === 'blank') return mapping.isBlankUnicode(Number(request.value))
+      throw new Error(`__LEGADO_CAPABILITY__runtime font.${operation} unavailable`)
+    }
     if (request.kind === 'font-replace') {
-      const error = this.font.queryBase64TTF(textValue(request.errorBase64), { signal })
-      const correct = this.font.queryBase64TTF(textValue(request.correctBase64), { signal })
+      const error = request.errorFontId !== undefined
+        ? this.fontMappings.get(textValue(request.errorFontId)) ?? null
+        : request.errorBase64 === undefined || request.errorBase64 === null
+          ? null
+          : this.font.queryBase64TTF(textValue(request.errorBase64), { signal })
+      const correct = request.correctFontId !== undefined
+        ? this.fontMappings.get(textValue(request.correctFontId)) ?? null
+        : request.correctBase64 === undefined || request.correctBase64 === null
+          ? null
+          : this.font.queryBase64TTF(textValue(request.correctBase64), { signal })
       return replaceFont(textValue(request.text), error, correct, request.filter === true)
     }
     if (request.kind === 'cache-get') return this.cache.get(textValue(request.key), signal)
@@ -1383,6 +1605,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (request.kind === 'cache-memory-delete') return this.cache.deleteMemory(textValue(request.key), signal)
     if (request.kind === 'cache-file-get') return this.cache.getFile(textValue(request.key))
     if (request.kind === 'cache-file-put') return this.cache.putFile(textValue(request.key), textValue(request.value), Number(request.saveTime) || 0, signal)
+    if (request.kind === 'cache-clear') {
+      if (request.scope === 'jsLib') return this.clearSourceLibraries(source, signal)
+      if (this.cache.clear === undefined) throw new Error('__LEGADO_CAPABILITY__runtime source.refreshJSLib unavailable')
+      return this.cache.clear()
+    }
     if (request.kind === 'time-format') {
       if (this.timeFormat === undefined) throw new Error('__LEGADO_CAPABILITY__runtime timeFormat unavailable')
       return this.timeFormat(Number(request.time))
@@ -1395,9 +1622,193 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       if (this.randomUUID === undefined) throw new Error('__LEGADO_CAPABILITY__runtime randomUUID unavailable')
       return this.randomUUID()
     }
+    if (request.kind === 'source-state') return this.handleSourceState(request, signal, source, workflowStage, currentBindings, workflowActions)
+    if (request.kind === 'file') {
+      if (this.file === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime file.${textValue(request.operation)} unavailable`)
+      const operation = textValue(request.operation) as SourceFileOperation
+      return this.file.execute(operation, { ...request, sourceKey: source.bookSourceUrl }, signal, source)
+    }
+    if (request.kind === 'runtime-log') {
+      const operation = textValue(request.operation) as 'toast' | 'longToast' | 'log' | 'logType'
+      this.logger?.(operation, request.value)
+      return operation === 'log' ? request.value : undefined
+    }
+    if (request.kind === 'webview-ua') {
+      if (this.webViewUA === undefined) throw new Error('__LEGADO_CAPABILITY__runtime getWebViewUA unavailable')
+      return this.webViewUA()
+    }
+    if (request.kind === 'html-format') return formatChapterBody(textValue(request.value), textValue(request.url)).content
+    if (request.kind === 'source-eval-js' || request.kind === 'source-login' || request.kind === 'source-login-ui' || request.kind === 'source-login-action') {
+      const loginJs = request.kind === 'source-eval-js' ? '' : inlineJavaScript(source.loginUrl) ?? (typeof source.loginUrl === 'string' ? source.loginUrl : '')
+      if (request.kind !== 'source-eval-js' && loginJs.trim().length === 0) {
+        if (request.kind === 'source-login') return undefined
+        throw new Error('登录 UI v2 缺少 loginUi/loginAction 脚本')
+      }
+      const extra = typeof request.input === 'object' && request.input !== null && !Array.isArray(request.input) ? request.input as Record<string, unknown> : {}
+      let code = request.kind === 'source-eval-js' ? textValue(request.value) : `${loginJs}\nif (typeof login !== "function") throw new Error("Function login not implements!!!"); login.apply(this);`
+      if (request.kind === 'source-login-ui') code = `${loginJs}\nif (typeof loginUi !== "function") throw new Error("Function loginUi not implements!!!"); loginUi(JSON.parse(String(__loginState)));`
+      if (request.kind === 'source-login-action') code = `${loginJs}\nif (typeof loginAction !== "function") throw new Error("Function loginAction not implements!!!"); loginAction(String(__loginAction), JSON.parse(String(__loginState)), JSON.parse(String(__loginForm)));`
+      const bindings: Record<string, unknown> = { ...currentBindings, ...(request.kind === 'source-eval-js' && typeof request.input === 'object' && request.input !== null && !Array.isArray(request.input) ? extra : {}) }
+      if (request.kind === 'source-login-ui') Object.assign(bindings, { __loginState: textValue(request.value), book: extra.book, chapter: extra.chapter })
+      if (request.kind === 'source-login-action') Object.assign(bindings, { __loginAction: textValue(request.value), __loginState: textValue(request.data), __loginForm: textValue((extra as { formJson?: unknown }).formJson), book: extra.book, chapter: extra.chapter })
+      const output = await this.runJavaScript(code, this.javascriptStage(workflowStage), source, '', signal, { bindings, mode: 'script', workflowStage, ...(workflowActions === undefined ? {} : { workflowActions }) })
+      if (output.status === 'empty') return undefined
+      if (output.status !== 'success') throw new SourceRuleError(output.status, output.message ?? '书源登录脚本执行失败')
+      return request.kind === 'source-login' ? undefined : output.value
+    }
     if (request.kind === 'runtime-capability') throw new Error(`__LEGADO_CAPABILITY__runtime ${textValue(request.capability)} unavailable`)
     if (this.requestBridge === undefined) throw new Error('__LEGADO_CAPABILITY__network 书源网络或宿主 bridge 不可用')
     return this.requestBridge({ ...request, stage: workflowStage }, signal, source)
+  }
+
+  private async handleSourceState(request: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>>, workflowActions?: WorkflowJavaScriptRequest['workflowActions']): Promise<unknown> {
+    const operation = textValue(request.operation)
+    if (operation === 'getHeaderMap') {
+      if (this.sourceState?.getHeaderMap !== undefined) return this.sourceState.getHeaderMap(source, request.value === true, signal)
+      const result: Record<string, string> = {}
+      const rawHeader = source.header
+      if (typeof rawHeader === 'string' && rawHeader.trim().length > 0) {
+        try {
+          let headerValue: unknown = rawHeader
+          const inline = inlineJavaScript(rawHeader)
+          if (inline !== undefined && currentBindings.__legadoHeaderEvaluation !== true) {
+            const output = await this.runJavaScript(inline, this.javascriptStage(workflowStage), source, '', signal, {
+              bindings: { ...currentBindings, __legadoHeaderEvaluation: true },
+              mode: 'script',
+              workflowStage,
+              ...(workflowActions === undefined ? {} : { workflowActions }),
+            })
+            if (output.status === 'empty') headerValue = ''
+            else if (output.status !== 'success') throw new SourceRuleError(output.status, output.message ?? '动态请求头执行失败')
+            else headerValue = output.value
+          }
+          Object.assign(result, sourceHeaderObject(headerValue))
+        } catch {
+          // Android logs invalid dynamic headers and continues with the default map.
+        }
+      } else if (typeof rawHeader === 'object' && rawHeader !== null && !Array.isArray(rawHeader)) {
+        for (const [key, value] of Object.entries(rawHeader)) result[key] = textValue(value)
+      }
+      if (!Object.keys(result).some((key) => key.toLowerCase() === 'user-agent') && this.webViewUA !== undefined) result['User-Agent'] = this.webViewUA()
+      if (request.value === true) {
+        const login = this.sourceState?.getLoginHeader !== undefined
+          ? await this.sourceState.getLoginHeader(source, signal)
+          : this.sessionLoginHeaders.get(source.bookSourceUrl)
+        if (login != null) {
+          try {
+            const parsed: unknown = JSON.parse(login)
+            if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) for (const [key, value] of Object.entries(parsed)) result[key] = textValue(value)
+          } catch {
+            // Ignore malformed persisted login headers just like Android's getLoginHeaderMap.
+          }
+        }
+      }
+      return result
+    }
+    if (operation === 'getVariable') {
+      if (this.sourceState?.getVariable !== undefined) return this.sourceState.getVariable(source, signal)
+      return this.sessionSourceVariables.get(source.bookSourceUrl) ?? ''
+    }
+    if (operation === 'setVariable') {
+      const value = request.value === null || request.value === undefined ? null : textValue(request.value)
+      if (this.sourceState?.setVariable !== undefined) await this.sourceState.setVariable(source, value, signal)
+      else if (value === null) this.sessionSourceVariables.delete(source.bookSourceUrl)
+      else this.sessionSourceVariables.set(source.bookSourceUrl, value)
+      return undefined
+    }
+    if (operation === 'getValue') {
+      const key = textValue(request.name)
+      if (this.sourceState?.getValue !== undefined) return this.sourceState.getValue(source, key, signal)
+      return this.sessionSourceValues.get(source.bookSourceUrl)?.get(key) ?? ''
+    }
+    if (operation === 'putValue') {
+      const key = textValue(request.name)
+      const value = textValue(request.value)
+      if (this.sourceState?.putValue !== undefined) return this.sourceState.putValue(source, key, value, signal)
+      let values = this.sessionSourceValues.get(source.bookSourceUrl)
+      if (values === undefined) {
+        values = new Map<string, string>()
+        this.sessionSourceValues.set(source.bookSourceUrl, values)
+      }
+      values.set(key, value)
+      return value
+    }
+    if (operation === 'getLoginHeader') {
+      if (this.sourceState?.getLoginHeader !== undefined) return this.sourceState.getLoginHeader(source, signal)
+      return this.sessionLoginHeaders.get(source.bookSourceUrl) ?? null
+    }
+    if (operation === 'putLoginHeader') {
+      const value = textValue(request.value)
+      if (this.sourceState?.putLoginHeader !== undefined) await this.sourceState.putLoginHeader(source, value, signal)
+      else this.sessionLoginHeaders.set(source.bookSourceUrl, value)
+      return undefined
+    }
+    if (operation === 'removeLoginHeader') {
+      if (this.sourceState?.removeLoginHeader !== undefined) await this.sourceState.removeLoginHeader(source, signal)
+      else this.sessionLoginHeaders.delete(source.bookSourceUrl)
+      return undefined
+    }
+    if (operation === 'getLoginInfo') {
+      if (this.sourceState?.getLoginInfo !== undefined) return this.sourceState.getLoginInfo(source, signal)
+      return this.sessionLoginInfo.get(source.bookSourceUrl) ?? null
+    }
+    if (operation === 'getLoginInfoMap') {
+      const delegated = this.sourceState?.getLoginInfoMap === undefined ? undefined : await this.sourceState.getLoginInfoMap(source, signal)
+      if (delegated !== undefined) return delegated
+      const raw = this.sourceState?.getLoginInfo !== undefined
+        ? await this.sourceState.getLoginInfo(source, signal)
+        : this.sessionLoginInfo.get(source.bookSourceUrl)
+      if (raw !== undefined && raw !== null) {
+        try {
+          const parsed: unknown = JSON.parse(raw)
+          return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, textValue(value)])) : {}
+        } catch {
+          return {}
+        }
+      }
+      const staticDefaults = loginInfoDefaults(source.loginUi)
+      if (staticDefaults !== undefined) {
+        if (Object.keys(staticDefaults).length > 0) {
+          const json = JSON.stringify(staticDefaults)
+          if (this.sourceState?.putLoginInfo !== undefined) await this.sourceState.putLoginInfo(source, json, signal)
+          else this.sessionLoginInfo.set(source.bookSourceUrl, json)
+        }
+        return staticDefaults
+      }
+      const loginUiJs = inlineJavaScript(source.loginUi)
+      if (loginUiJs !== undefined && currentBindings.__legadoLoginInfoEvaluation !== true) {
+        const loginJs = inlineJavaScript(source.loginUrl) ?? (typeof source.loginUrl === 'string' ? source.loginUrl : '')
+        const output = await this.runJavaScript(`${loginJs}\n${loginUiJs}`, this.javascriptStage(workflowStage), source, '', signal, {
+          bindings: { ...currentBindings, __legadoLoginInfoEvaluation: true, result: {}, book: null, chapter: null },
+          mode: 'script',
+          workflowStage,
+          ...(workflowActions === undefined ? {} : { workflowActions }),
+        })
+        if (output.status === 'success') {
+          const defaults = loginInfoDefaults(output.value)
+          if (defaults !== undefined) {
+            if (Object.keys(defaults).length === 0) return defaults
+            const json = JSON.stringify(defaults)
+            if (this.sourceState?.putLoginInfo !== undefined) await this.sourceState.putLoginInfo(source, json, signal)
+            else this.sessionLoginInfo.set(source.bookSourceUrl, json)
+            return defaults
+          }
+        }
+      }
+      return {}
+    }
+    if (operation === 'putLoginInfo') {
+      const value = textValue(request.value)
+      if (this.sourceState?.putLoginInfo !== undefined) return this.sourceState.putLoginInfo(source, value, signal)
+      this.sessionLoginInfo.set(source.bookSourceUrl, value)
+      return true
+    }
+    if (operation === 'removeLoginInfo') {
+      if (this.sourceState?.removeLoginInfo !== undefined) await this.sourceState.removeLoginInfo(source, signal)
+      else this.sessionLoginInfo.delete(source.bookSourceUrl)
+      return undefined
+    }
+    throw new Error(`__LEGADO_CAPABILITY__runtime source.${operation} unavailable`)
   }
 
   private remember(document: HtmlDocument, node: ParserNode): NodeRef {

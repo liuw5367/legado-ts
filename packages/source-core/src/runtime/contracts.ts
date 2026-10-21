@@ -179,6 +179,27 @@ export interface SymmetricCrypto {
   encryptText(input: string, charset?: string): Uint8Array
 }
 
+export type CryptoKeyInput = string | Uint8Array
+
+export interface AsymmetricCrypto {
+  setPrivateKey(key: CryptoKeyInput): AsymmetricCrypto
+  setPublicKey(key: CryptoKeyInput): AsymmetricCrypto
+  decrypt(input: Uint8Array, usePublicKey?: boolean): Uint8Array
+  encrypt(input: Uint8Array, usePublicKey?: boolean): Uint8Array
+  decryptText(input: Uint8Array, usePublicKey?: boolean, charset?: string): string
+  encryptHex(input: Uint8Array, usePublicKey?: boolean): string
+  encryptBase64(input: Uint8Array, usePublicKey?: boolean): string
+}
+
+export interface SignCrypto {
+  setPrivateKey(key: CryptoKeyInput): SignCrypto
+  setPublicKey(key: CryptoKeyInput): SignCrypto
+  sign(input: Uint8Array): Uint8Array
+  signHex(input: Uint8Array): string
+  signBase64(input: Uint8Array): string
+  verify(input: Uint8Array, signature: Uint8Array): boolean
+}
+
 export interface CryptoHost {
   /** 计算摘要十六进制结果。 */
   digestHex(input: string | Uint8Array, algorithm?: DigestAlgorithm): string
@@ -188,6 +209,9 @@ export interface CryptoHost {
   hmacHex(input: string | Uint8Array, key: string | Uint8Array, algorithm?: DigestAlgorithm): string
   /** 创建带明确 transformation、key 和 iv 的对称加密对象。 */
   createSymmetricCrypto(transformation: string, key: Uint8Array, iv?: Uint8Array): SymmetricCrypto
+  /** 可选的 Android 非对称加密和签名对象；未实现时 core 返回能力错误。 */
+  createAsymmetricCrypto?(transformation: string): AsymmetricCrypto
+  createSign?(algorithm: string): SignCrypto
 }
 
 /** JavaScript 书源使用的会话缓存；saveTime 单位为秒，0 表示不过期。 */
@@ -200,6 +224,8 @@ export interface SourceScriptCache {
   deleteMemory(key: string, signal?: AbortSignal): void | Promise<void>
   getFile(key: string): string | undefined | Promise<string | undefined>
   putFile(key: string, value: string, saveTime?: number, signal?: AbortSignal): void | Promise<void>
+  /** 清空当前书源会话缓存；用于 Android source.refreshJSLib。 */
+  clear?(): void | Promise<void>
 }
 
 export type ArchiveFormat = 'gzip' | 'zip' | '7z' | 'rar'

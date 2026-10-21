@@ -89,6 +89,12 @@ export class MemorySourceScriptCache implements SourceScriptCache {
     this.write(this.files, key, value, saveTime)
   }
 
+  public clear(): void {
+    this.values.clear()
+    this.memory.clear()
+    this.files.clear()
+  }
+
   private read(store: Map<string, CachedValue>, key: string): string | undefined {
     const entry = store.get(key)
     if (entry === undefined) return undefined

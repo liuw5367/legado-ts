@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { generateKeyPairSync } from 'node:crypto'
 import test from 'node:test'
 import type { NormalizedSource, WorkflowRuleRequest } from '../../source-core/src/index.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
@@ -51,6 +52,29 @@ test('HTML 规则的 text 选择器只匹配元素自身文本，html 返回外�
 test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力', async () => {
   const output = await evaluate(new SourceRuleHost(), '@js:source.putConcurrent("1/100")', '')
   assert.equal(output.status, 'capability-missing')
+})
+
+test('Android JsExtensions 和 BaseSource 方法清单全部注册到 JS 运行时', async () => {
+  const javaNames = [
+    'getSource', 'getTag', 'getSourceNavigationContext', 'getBatchContext', 'cacheContent', 'refreshBookInfo', 'refreshBookToc', 'refreshContent',
+    'ajax', 'ajaxAll', 'ajaxTestAll', 'connect', 'webView', 'webViewGetSource', 'webViewGetOverrideUrl', 'openVideoPlayer', 'startBrowser', 'startBrowserAwait',
+    'getVerificationCode', 'importScript', 'cacheFile', 'getCookie', 'downloadFile', 'get', 'head', 'post', 'strToBytes', 'bytesToStr', 'base64Decode',
+    'base64DecodeToByteArray', 'base64Encode', 'hexDecodeToByteArray', 'hexDecodeToString', 'hexEncodeToString', 'timeFormatUTC', 'timeFormat', 'encodeURI',
+    'htmlFormat', 't2s', 's2t', 'getWebViewUA', 'getFile', 'readFile', 'readTxtFile', 'deleteFile', 'unzipFile', 'un7zFile', 'unrarFile', 'unArchiveFile',
+    'getTxtInFolder', 'getZipStringContent', 'getRarStringContent', 'get7zStringContent', 'getZipByteArrayContent', 'getRarByteArrayContent', 'get7zByteArrayContent',
+    'queryBase64TTF', 'queryTTF', 'replaceFont', 'toNumChapter', 'toURL', 'toast', 'longToast', 'log', 'logType', 'randomUUID', 'androidId', 'openUrl', 'showBrowser',
+    'singleFlight', 'lock', 'tick', 'getReadBookConfig', 'getReadBookConfigMap', 'getThemeMode', 'getThemeConfig', 'getThemeConfigMap',
+    'md5Encode', 'md5Encode16', 'createSymmetricCrypto', 'createAsymmetricCrypto', 'createSign', 'aesDecodeToByteArray', 'aesDecodeToString', 'aesDecodeArgsBase64Str',
+    'aesBase64DecodeToByteArray', 'aesBase64DecodeToString', 'aesEncodeToByteArray', 'aesEncodeToString', 'aesEncodeToBase64ByteArray', 'aesEncodeToBase64String',
+    'aesEncodeArgsBase64Str', 'desDecodeToString', 'desBase64DecodeToString', 'desEncodeToString', 'desEncodeToBase64String', 'tripleDESDecodeStr',
+    'tripleDESDecodeArgsBase64Str', 'tripleDESEncodeBase64Str', 'tripleDESEncodeArgsBase64Str', 'digestHex', 'digestBase64Str', 'HMacHex', 'HMacBase64',
+  ]
+  const sourceNames = ['getKey', 'getSource', 'getTag', 'getLoginUiJs', 'isLoginUiV2', 'evalLoginUiV2', 'evalLoginActionV2', 'getLoginJs', 'hasLoginForm', 'hasLogin', 'login', 'getHeaderMap', 'getLoginHeader', 'getLoginHeaderMap', 'putLoginHeader', 'removeLoginHeader', 'getLoginInfo', 'getLoginInfoMap', 'putLoginInfo', 'putLoginInfoMap', 'removeLoginInfo', 'setVariable', 'putVariable', 'getVariable', 'put', 'get', 'refreshExplore', 'refreshJSLib', 'putConcurrent', 'evalJS']
+  const result = await evaluate(new SourceRuleHost(), `@js:JSON.stringify({java: Object.fromEntries(${JSON.stringify(javaNames)}.map((name) => [name, typeof java[name]])), source: Object.fromEntries(${JSON.stringify(sourceNames)}.map((name) => [name, typeof source[name]]))})`, '')
+  assert.equal(result.status, 'success')
+  const values = JSON.parse(String(result.value)) as { java: Record<string, string>; source: Record<string, string> }
+  assert.deepEqual(Object.values(values.java), Array.from({ length: javaNames.length }, () => 'function'))
+  assert.deepEqual(Object.values(values.source), Array.from({ length: sourceNames.length }, () => 'function'))
 })
 
 test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', async () => {
@@ -253,7 +277,7 @@ test('java.post、java.head 和 ajaxTestAll 保留 Android 请求形态', async 
   assert.deepEqual(calls, [
     { kind: 'network-response', url: 'https://a.test/post', method: 'POST', body: 'q=1', headers: { 'X-Test': 'yes' }, options: { timeout: 123, followRedirects: false }, stage: 'search' },
     { kind: 'network-response', url: 'https://a.test/head', method: 'HEAD', headers: { 'X-Test': 'yes' }, options: { timeout: 30000, followRedirects: false }, stage: 'search' },
-    { kind: 'network-all', urls: ['https://a.test/one', 'https://a.test/two'], skipRateLimit: true, options: { timeout: 456 }, stage: 'search' },
+    { kind: 'network-all', urls: ['https://a.test/one', 'https://a.test/two'], isTest: true, skipRateLimit: true, options: { timeout: 456 }, stage: 'search' },
   ])
 })
 
@@ -297,6 +321,117 @@ test('ajaxTestAll 将单项失败转换为 Android 测试响应而不取消其�
   const result = await evaluate(host, '@js:java.ajaxTestAll(["https://a.test/good", "https://a.test/bad"]).map((item) => item.body()).join("|")', '')
   assert.equal(result.status, 'success')
   assert.equal(result.value, 'ok|connection refused')
+})
+
+test('Android source 状态、文件入口和纯工具函数保持可调用', async () => {
+  const fileCalls: Array<{ operation: string; input: Readonly<Record<string, unknown>> }> = []
+  const host = new SourceRuleHost({ file: {
+    execute: async (operation, input) => {
+      fileCalls.push({ operation, input })
+      if (operation === 'getFile') return { path: String(input.path), exists: true, isFile: true, isDirectory: false }
+      if (operation === 'readFile') return new Uint8Array([1, 2, 3])
+      return `file:${operation}`
+    },
+  } })
+  const result = await evaluate(host, `@js:
+    source.putLoginHeader(JSON.stringify({Authorization: 'Bearer test'}));
+    var login = source.getLoginHeaderMap();
+    var file = java.getFile('cache/a.txt');
+    var locked = java.lock('one', function() { return java.tick('one'); });
+    var batch = java.getBatchContext();
+    var url = java.toURL('/book?q=a%20b&q=c', 'https://a.test/root');
+    JSON.stringify({tag: java.getTag(), header: source.getHeaderMap(true).Authorization, login: login.Authorization, bytes: Array.from(java.readFile('cache/a.txt')), exists: file.exists(), lockedIsUndefined: locked === undefined, batch: batch, query: url.searchParams.q});`, '')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    tag: 'fixture',
+    header: 'Bearer test',
+    login: 'Bearer test',
+    bytes: [1, 2, 3],
+    exists: true,
+    lockedIsUndefined: true,
+    batch: null,
+    query: 'c',
+  })
+  assert.deepEqual(fileCalls.map((item) => item.operation), ['getFile', 'readFile'])
+})
+
+test('source 动态请求头、源变量和登录脚本沿用 Android 调用链', async () => {
+  const host = new SourceRuleHost()
+  host.setVariable('token', 'dynamic')
+  const loginSource = {
+    ...source,
+    header: '@js:JSON.stringify({Authorization: "Bearer " + getVariable("token")})',
+    loginUrl: '@js:function login(){ return "logged"; } function loginUi(state){ return JSON.stringify({value: state.value}); } function loginAction(action, state, form){ return JSON.stringify({action: action, form: form.value, state: state.value}); }',
+    loginUi: JSON.stringify([{ name: '账号', type: 'text', default: 'guest' }]),
+  } as NormalizedSource
+  const result = await host.evaluate({ source: loginSource, stage: 'search', field: 'fixture', rule: '@js:source.setVariable("dynamic"); JSON.stringify([source.getHeaderMap(true).Authorization, source.getVariable(), source.login(), source.evalJS("1 + 2"), source.evalLoginUiV2(JSON.stringify({value: "state"})), source.evalLoginActionV2("submit", JSON.stringify({value: "state"}), JSON.stringify({value: "form"}))])', content: '' })
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [
+    'Bearer dynamic',
+    'dynamic',
+    null,
+    3,
+    JSON.stringify({ value: 'state' }),
+    JSON.stringify({ action: 'submit', form: 'form', state: 'state' }),
+  ])
+})
+
+test('动态 loginUi 会生成并持久化 Android 登录信息默认值', async () => {
+  const loginSource = {
+    bookSourceUrl: 'https://login-ui.test',
+    bookSourceName: 'login-ui',
+    loginUrl: '@js:function login() { return "ok"; }',
+    loginUi: '@js:JSON.stringify([{name: "user", type: "text", default: "guest"}, {name: "submit", type: "button", default: "ignored"}])',
+  } as unknown as NormalizedSource
+  const host = new SourceRuleHost()
+  const first = await host.evaluate({ source: loginSource, stage: 'search', field: 'loginUi', rule: '@js:JSON.stringify([source.getLoginInfoMap(), source.getLoginInfo()])', content: '' })
+  assert.equal(first.status, 'success')
+  assert.equal(first.value, '[{"user":"guest"},"{\\"user\\":\\"guest\\"}"]')
+  const second = await host.evaluate({ source: loginSource, stage: 'search', field: 'loginUi', rule: '@js:JSON.stringify(source.getLoginInfoMap())', content: '' })
+  assert.equal(second.status, 'success')
+  assert.equal(second.value, '{"user":"guest"}')
+})
+
+test('静态 loginUi 默认值按 Android 流程写入登录信息缓存', async () => {
+  const loginSource = {
+    bookSourceUrl: 'https://login-ui-static.test',
+    bookSourceName: 'login-ui-static',
+    loginUi: JSON.stringify([{ name: 'user', type: 'text', default: 'guest' }]),
+  } as unknown as NormalizedSource
+  const host = new SourceRuleHost()
+  const first = await host.evaluate({ source: loginSource, stage: 'search', field: 'loginUi', rule: '@js:JSON.stringify([source.getLoginInfoMap(), source.getLoginInfo()])', content: '' })
+  assert.equal(first.status, 'success')
+  assert.equal(first.value, '[{"user":"guest"},"{\\"user\\":\\"guest\\"}"]')
+  const second = await host.evaluate({ source: loginSource, stage: 'search', field: 'loginUi', rule: '@js:source.getLoginInfo()', content: '' })
+  assert.equal(second.value, '{"user":"guest"}')
+})
+
+test('Android 非对称加密与签名工厂可以往返 RSA 数据', async () => {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  })
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, `@js:
+    var encrypted = java.createAsymmetricCrypto("RSA/ECB/PKCS1Padding").setPublicKey(${JSON.stringify(publicKey)}).encryptBase64("hello");
+    var plain = java.createAsymmetricCrypto("RSA/ECB/PKCS1Padding").setPrivateKey(${JSON.stringify(privateKey)}).decryptStr(encrypted, false);
+    var signature = java.createSign("SHA256withRSA").setPrivateKey(${JSON.stringify(privateKey)}).signBase64("hello");
+    var verified = java.createSign("SHA256withRSA").setPublicKey(${JSON.stringify(publicKey)}).verify("hello", signature);
+    JSON.stringify([plain, verified]);`, '')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), ['hello', true])
+})
+
+test('对称加密支持 Android 常用简写、十六进制输入和双密钥 3DES', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var aes = java.createSymmetricCrypto('AES', '1234567890123456');
+    var aesHex = aes.encryptHex('hello');
+    var triple = java.createSymmetricCrypto('DESede', '1234567890123456');
+    var tripleBase64 = triple.encryptBase64('hello');
+    JSON.stringify([aes.decryptStr(aesHex), triple.decryptStr(tripleBase64)]);`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['hello', 'hello'])
 })
 
 test('java.getString 和 java.getStringList 的 isUrl 使用重定向地址并去重', async () => {
@@ -346,6 +481,11 @@ test('jsLib 支持行内库、远程缓存并按 Android 语义把映射值转�
   const mixed = await remote.evaluate({ source: mixedSource, stage: 'search', field: 'script', rule: '@js:remoteHelper()', content: '' })
   assert.equal(mixed.value, 'remote')
   assert.equal(calls.length, 2, '数字映射值按 Android Gson 规则转成字符串，其他 URL 仍然加载')
+
+  const refreshed = await remote.evaluate({ source: remoteSource, stage: 'search', field: 'script', rule: `@js:cache.put('keep', 'value'); source.refreshJSLib(); cache.get('keep')`, content: '' })
+  assert.equal(refreshed.value, 'value', 'refreshJSLib 不应清空普通缓存')
+  assert.equal((await remote.evaluate({ source: remoteSource, stage: 'search', field: 'script', rule: '@js:remoteHelper()', content: '' })).value, 'remote')
+  assert.equal(calls.length, 3, 'refreshJSLib 后远程 jsLib 应重新请求')
 })
 
 test('JavaScript CacheManager bridge 支持普通、内存和文件缓存', async () => {
@@ -374,21 +514,57 @@ test('书源 JS 可读取 Cookie、时间与 UUID，设备标识能力缺失时�
 
   const unsupported = await evaluate(host, '@js:java.androidId()', '')
   assert.equal(unsupported.status, 'capability-missing')
-  const missingWebView = await evaluate(host, '@js:java.getWebViewUA()', '')
-  assert.equal(missingWebView.status, 'capability-missing')
+  const userAgent = await evaluate(host, '@js:java.getWebViewUA()', '')
+  assert.equal(userAgent.status, 'success')
+  assert.match(String(userAgent.value), /^Mozilla\//u)
 })
 
-test('Android 状态、词库和交互 bridge 缺失时报告明确能力码', async () => {
+test('未实现的平台能力报告明确能力码，源登录状态可在会话内保存', async () => {
   for (const rule of [
     '@js:java.t2s("繁體")',
     '@js:java.s2t("简体")',
     '@js:java.webView(null, "https://fixture.invalid", null)',
-    '@js:source.putLoginHeader("{}")',
   ]) {
     const result = await evaluate(new SourceRuleHost(), rule, '')
     assert.equal(result.status, 'capability-missing', rule)
     assert.match(result.message ?? '', /不可用|unavailable/u)
   }
+  const state = await evaluate(new SourceRuleHost(), '@js:source.putLoginHeader("{}")', '')
+  assert.equal(state.status, 'empty')
+})
+
+test('java.htmlFormat 使用与正文相同的图片和相对地址规则', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:java.htmlFormat(${JSON.stringify('<p>正文</p><img src="/img/a.png">')}, "https://fixture.invalid/book/1")`, '')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value, '　　正文\n　　<img src="https://fixture.invalid/img/a.png">')
+
+  const oneArgument = await new SourceRuleHost().evaluate({
+    source,
+    stage: 'detail',
+    field: 'content',
+    rule: `@js:java.htmlFormat(${JSON.stringify('<p>正文</p><img src="/img/a.png">')})`,
+    content: '',
+    baseUrl: 'https://fixture.invalid/book/1',
+  })
+  assert.equal(oneArgument.status, 'success')
+  assert.equal(oneArgument.value, '　　正文\n　　<img src="/img/a.png">')
+})
+
+test('登录 UI v2 缺少登录脚本时返回明确错误', async () => {
+  const loginSource = {
+    bookSourceUrl: 'https://login-ui-missing.test',
+    bookSourceName: 'login-ui-missing',
+    loginUi: JSON.stringify({ version: 2, fields: [] }),
+  } as unknown as NormalizedSource
+  const result = await new SourceRuleHost().evaluate({
+    source: loginSource,
+    stage: 'search',
+    field: 'loginUi',
+    rule: '@js:source.evalLoginUiV2(JSON.stringify({}))',
+    content: '',
+  })
+  assert.equal(result.status, 'failed')
+  assert.match(result.message ?? '', /登录 UI v2 缺少/u)
 })
 
 test('Node 时间格式桥接遵循 Java 毫秒字段与 UTC 偏移格式', async () => {
@@ -415,16 +591,16 @@ test('source、book、chapter 变量分别写入所属 DTO，通用读取遵循 
     source,
     stage: 'detail',
     field: 'script',
-    rule: "@js:java.put('shared', 'chapter-2'); source.put('sourceOnly', 'source'); book.putVariable('bookOnly', 'book'); book.putVariable('__proto__', 'safe-value'); JSON.stringify([getVar('shared'), getVar('fallback'), getVar('bookOnly', 'book'), getVar('title'), getVar('bookName')])",
+    rule: "@js:java.put('shared', 'chapter-2'); source.put('sourceOnly', 'source'); book.putVariable('bookOnly', 'book'); book.putVariable('__proto__', 'safe-value'); JSON.stringify([getVar('shared'), getVar('fallback'), getVar('bookOnly', 'book'), getVar('title'), getVar('bookName'), source.get('sourceOnly')])",
     content: '',
     bindings: { book, chapter },
   })
   assert.equal(result.status, 'success')
-  assert.deepEqual(JSON.parse(String(result.value)), ['chapter-2', 'book', 'book', '章节名', '书名'])
+  assert.deepEqual(JSON.parse(String(result.value)), ['chapter-2', 'book', 'book', '章节名', '书名', 'source'])
   assert.deepEqual(JSON.parse(chapter.variable ?? '{}'), { shared: 'chapter-2', fallback: '' })
   assert.deepEqual(JSON.parse(book.variable ?? '{}'), JSON.parse('{"shared":"book","fallback":"book","bookOnly":"book","__proto__":"safe-value"}'))
   assert.equal(Object.getPrototypeOf(book), Object.prototype)
-  assert.deepEqual(host.snapshotVariables('source'), { bookName: '错误的来源书名', title: '错误的来源章节名', sourceOnly: 'source' })
+  assert.deepEqual(host.snapshotVariables('source'), { bookName: '错误的来源书名', title: '错误的来源章节名' })
 
   const rawSourceVariable = await evaluate(host, "@js:source.setVariable('{\"raw\":true}'); source.getVariable()", '')
   assert.equal(rawSourceVariable.value, '{"raw":true}')
