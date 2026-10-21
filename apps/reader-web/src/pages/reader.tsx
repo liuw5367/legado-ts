@@ -313,7 +313,12 @@ export function ReaderPage() {
 
   function handlePageAction(action: ReaderPageAction) {
     if (action === 'previous') turnPage(pageIndex - 1)
-    else if (action === 'next') turnPage(pageIndex + 1)
+    else if (action === 'next') {
+      // 排版完成且已到本章末页时，沿用章节导航流程加载下一章。
+      if (pageLayout.pageCount > 0 && pageIndex >= pageLayout.pageCount - 1 && next !== undefined) {
+        navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state })
+      } else turnPage(pageIndex + 1)
+    }
     else setControlsVisible((value) => !value)
   }
 
@@ -420,6 +425,9 @@ export function ReaderPage() {
   const dark = resolvedTheme === 'dark'
   const paged = settings.readingMode === 'paged'
   const pageCounter = pageLayout.pageCount > 0 ? pageLabel(pageIndex, pageLayout.pageCount) : '排版中…'
+  const bookDetails = cache.get(bookId, editionKey)?.details
+  const bookName = bookDetails?.edition.metadata?.name || bookDetails?.book.name || '阅读'
+  const chapterProgress = `${currentIndex < 0 ? '—' : currentIndex + 1}/${siblings.length || '—'}章`
   const wordCountLabel = `${chapterCharacterCount(content.cleaned).toLocaleString('zh-CN')} 字`
   const readerStyle = { fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight, '--reader-margin-top': `${settings.marginTop}px`, '--reader-margin-right': `${settings.marginRight}px`, '--reader-margin-bottom': `${settings.marginBottom}px`, '--reader-margin-left': `${settings.marginLeft}px` } as CSSProperties
   const pageZonePreviewStyle = { '--zone-left-width': `${pageGuideDraft.leftWidthPercent}%`, '--zone-center-width': `${pageGuideDraft.centerWidthPercent}%`, '--zone-top-height': `${pageGuideDraft.centerTopHeightPercent}%`, '--zone-middle-height': `${pageGuideDraft.centerMiddleHeightPercent}%` } as CSSProperties
@@ -438,6 +446,8 @@ export function ReaderPage() {
       else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
     }
   }}>
+    <div className="reader-status reader-status-top" aria-label="当前阅读书籍与章节"><span title={bookName}>{bookName}</span><span title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</span></div>
+    <div className="reader-status reader-status-bottom" aria-label="阅读进度"><span>{chapterProgress}</span><span>{paged ? `${pageCounter}${pageLayout.pageCount > 0 ? '页' : ''} ` : ''}{wordCountLabel}</span></div>
     <header className="reader-topbar" hidden={!controlsVisible}><PageBackButton className="reader-back" /><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={pageReturnState(location)}><Info aria-hidden="true" />书籍详情</Link>
       {paged ? <button className="more-menu-item" type="button" onClick={openPageGuide}><CircleHelp aria-hidden="true" />翻页区域</button> : null}
