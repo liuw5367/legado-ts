@@ -87,6 +87,6 @@
 
 以下不应误算为本轮必须新增功能：教程旧 `utf8ToGbk` 在当前 Android JsExtensions/JsEncodeUtils 中不存在；`exploreScreen` 在当前 Android 只见字段/配置比较，未发现执行入口；`serverID` 在本轮请求路径只见参数保存，未证明对应 Android 执行行为；独立 RssSource/ReplaceRule/TTS 不属于本轮 BookSource 运行时。它们保留来源注记；未来有实际可达入口证据时重新评估，不根据字段名字创造功能。
 
-跨端 manifest 当前有 11 条登记（5 条历史、6 条目录型 case），Android 全为 `not-run`。本轮仅执行了 TypeScript 最小探针、请求桩和 session 重建核验；既有规则宿主/平台/session 三组测试为 69/69 通过，仍未覆盖上表新缺口。Android JBR 21 可读且已验证可启动，默认 `java` 为 8；常规 SDK 路径未发现 API 36/build-tools 36.0.0。本轮没有启动 Gradle、安装 SDK、调用公网书源或执行真实账号动作。
+跨端 manifest 当前有 11 条登记（5 条历史、6 条目录型 case），Android 全为 `not-run`。2026-10-22 的 TypeScript 证据为 `pnpm test:source` 132/132、根全套 `SOURCE_RUNTIME_STATE_KEY=... pnpm test` 531/531、reader-web 137/137（均使用固定测试密钥）；`pnpm test:source:compare` 的 6 个离线 case 均完成 TypeScript 侧执行，但 Android 输出仍为 `not-run`。静态语料审计扫描 943 个候选源、20,231 条规则，其中 20,226 条可编译；剩余 5 条是 manifest 已登记的源文本错误/歧义规则，`source-fixtures.test.ts` 以稳定 hash 和诊断类型白名单约束，不能据此宣称 TypeScript 兼容性缺口。Android JBR 21 可读且已验证可启动，默认 `java` 为 8；常规 SDK 路径未发现 API 36/build-tools 36.0.0。本轮没有启动 Gradle、安装 SDK、调用公网书源或执行真实账号动作。
 
 后续实施以逐签名契约为单位，记录参数类型/默认值/null、返回对象成员、状态作用域、异常/取消、Android 来源和同输入案例；不能再次用方法名总数或单端测试总数宣布全量完成。具体实施顺序保存在本地修复计划，长期事实仍以本节、状态总览和证据矩阵为准。
