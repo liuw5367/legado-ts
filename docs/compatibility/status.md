@@ -84,7 +84,7 @@
 | D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现（第二阶段） | D20；`jsonpath.ts` 支持常用 `length/size/keys/min/max/avg/sum` 和安全正则筛选；Node adapter 回归通过 | 仍受 jsonpath-plus safe evaluator 方言边界约束；完整 Jayway 函数、null/缺失和嵌套集合仍待验证 |
 | D21 | 规则解析 | Java 正则与替换字符串 | 部分实现（第二阶段） | D21；`pattern-guard.ts` 支持内联 flags、`\\Q…\\E`、边界转义和占有量词降级，并对作用域 flags/字符类交集给出能力诊断；规则回归通过 | 未覆盖的 Java 语法、Matcher/替换字符串细节和 Android golden 仍待验证 |
 | D22 | 请求脚本 | AnalyzeUrl 对象修改与登录后重取 | 部分实现（第四阶段） | `java.url`/`headerMap`、`getHeaderMap`、`initUrl`、受控 `getStrResponse/getResponse` 已接入 URL 脚本上下文；Node fixture 验证重取顺序和头部 | WebView 默认路径仍能力缺失；完整 loginCheckJs 人工登录重取、递归/取消/Android golden 仍待验证 |
-| D23 | JS bridge | AnalyzeRule 继承成员和重载 | 部分实现（第三阶段） | `source-runtime.ts` 已补 setBaseUrl/setRedirectUrl/setLocal/evalJS、刷新助手和 getString/getStringList 布尔重载；规则宿主回归通过 | 仍需补齐 AnalyzeUrl 专属上下文、null/内容重载全量 Android golden |
+| D23 | JS bridge | AnalyzeRule 继承成员和重载 | 部分实现（第三阶段，重载语义已补齐） | `source-runtime.ts` 已补 setBaseUrl/setRedirectUrl/setLocal/evalJS、刷新助手、`getString(rule, boolean)`、`getString(rule, content, isUrl)`、`getStringList(rule, content, isUrl)`；`null` 内容回退当前上下文、HTML unescape、URL 解析/空值回退和列表去重均有 Node 回归 | AnalyzeUrl 专属上下文仍单列于 D22；Android golden、全部规则对象/列表重载仍待双端逐签名验证 |
 | D24 | JS 对象 | Map/List/Jsoup 返回对象方法 | 部分实现（第三阶段） | 受控 `Map/List`、source 登录 Map、getStringList/getElements 返回对象和 Java String 方法已有教程式回归 | Jsoup 全部链式成员及完整公开对象清单仍待验证 |
 | D25 | JS 源 | sourceApi 与源规则访问器 | 部分实现（第三阶段） | `sourceApi` 与 source 兼容对象绑定，规则访问器和 Header/Login Map 已补；Node 回归通过 | 旧 source 配置全部字段和 Android golden 仍待验证 |
 | D26 | 缓存 | 对象/二进制/数值和 onlyDisk | 部分实现（第三阶段） | CacheManager 保留 JSON 对象、ByteArray、数值读取和 `get(key, onlyDisk)` 端口；TTL/快照回归通过 | 任意 JVM 对象和跨宿主磁盘语义仍不等价 |

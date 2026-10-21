@@ -239,6 +239,13 @@ test('java.getString 和 java.getStringList 通过完整规则内核读取当前
   assert.deepEqual(htmlList.value, ['第一章', '第二章'])
 })
 
+test('java.getString 区分 unescape 重载并把 null 内容回退到当前上下文', async () => {
+  const host = new SourceRuleHost()
+  const escaped = await evaluate(host, "@js:JSON.stringify([java.getString('.title@text', false), java.getString('.title@text', true), java.getString('.title@text', null, false)])", '<h1 class="title">甲&amp;beta;</h1>')
+  assert.equal(escaped.status, 'success', escaped.message)
+  assert.deepEqual(JSON.parse(String(escaped.value)), ['甲&beta;', '甲β', '甲β'])
+})
+
 test('java.getElements 提供 Android 书源使用的节点链式 API', async () => {
   const host = new SourceRuleHost()
   const html = '<ul><li class="item"><a href="/one">第一章</a></li><li class="item"><a href="/two">第二章</a></li></ul>'
