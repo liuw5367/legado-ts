@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useCallback, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -70,7 +71,7 @@ export function AccountHomePage() {
   const bookItems: BookItem[] = home === null ? [] : view === 'bookshelf' ? home.bookshelf : home.reading
   const countLabel = home === null ? (loading ? '读取中…' : '暂时无法读取') : view === 'bookshelf' ? `${home.bookshelf.length} 本书` : view === 'reading' ? `${home.reading.length} 条记录` : `${home.searchHistory.length} 条搜索`
   return <section className="page-stack page-narrow">
-    <div className="page-heading compact-heading"><div><h1>我的阅读</h1><p className="muted">{countLabel}</p></div><Link className="button small" to="/search">搜索书籍</Link></div>
+    <div className="page-heading compact-heading"><div><h1>我的阅读</h1><p className="muted">{countLabel}</p></div><Link className="button small page-action" to="/search"><Search aria-hidden="true" /><span>搜索</span></Link></div>
     <div className="segmented" role="tablist" aria-label="阅读数据视图">
       <button className={view === 'bookshelf' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'bookshelf'} onClick={() => setView('bookshelf')}>书架 {home === null ? null : <span>{home.bookshelf.length}</span>}</button>
       <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => setView('reading')}>阅读 {home === null ? null : <span>{home.reading.length}</span>}</button>

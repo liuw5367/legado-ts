@@ -1,3 +1,4 @@
+import { Import } from 'lucide-react'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -104,7 +105,7 @@ export function SourcesPage() {
   }
 
   return <section className="page-stack page-narrow sources-page">
-    <div className="toc-heading"><div className="toc-heading-main"><PageBackButton fallback="/account/settings" /><h1>书源</h1><p className="muted">{data === null ? '按域名管理当前账号的书源实现。' : `共 ${groups.length} 个域名、${data.sources.length} 个实现，启用 ${enabledDomainCount} 个域名`}</p></div><Button size="sm" type="button" onClick={() => setImportOpen(true)}>导入</Button></div>
+    <div className="toc-heading source-management-heading"><div className="toc-heading-main"><PageBackButton fallback="/account/settings" /><h1>书源</h1><p className="muted">{data === null ? '按域名管理当前账号的书源实现。' : `共 ${groups.length} 个域名、${data.sources.length} 个实现，启用 ${enabledDomainCount} 个域名`}</p></div><Button size="sm" className="page-action" type="button" onClick={() => setImportOpen(true)}><Import aria-hidden="true" /><span>导入</span></Button></div>
     <div className="source-management-filters"><Input aria-label="搜索书源" placeholder="搜索名称、分组、域名或 URL" value={query} onChange={(event) => { setQuery(event.target.value); setSelected(new Map()) }} /><Select aria-label="筛选状态" value={status} onChange={(event) => { setStatus(event.target.value as SourceManagementStatus); setSelected(new Map()) }}><option value="all">全部</option><option value="enabled">启用</option><option value="disabled">禁用</option></Select></div>
     {message.length > 0 ? <p className="success" role="status">{message}</p> : null}{error.length > 0 ? <p className="error" role="alert">{error}<Button variant="secondary" size="sm" type="button" onClick={() => void load()}>重试</Button></p> : null}
     {selected.size > 0 ? <div className="source-bulk-bar"><span>已选 {selected.size} 个实现{enableConflict ? '，同域多选时不能批量启用' : ''}</span><div className="actions"><Button size="sm" type="button" disabled={acting || loading || enableConflict} onClick={() => void apply('enable')}>设为默认</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('disable')}>禁用</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('delete')}>删除</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => setSelected(new Map())}>清空</Button></div></div> : null}

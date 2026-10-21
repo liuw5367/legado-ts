@@ -25,6 +25,8 @@ The stack is `ui-sans-serif`, system UI, and `PingFang SC`/`Noto Sans SC` fallba
 
 ## 4. Component styling
 
+Page actions use the theme primary fill, content-based width, 10px horizontal padding, a 6px icon gap, 16px icons, 13px labels, and a minimum 44px hit height. Two-character actions include an icon. Icon-only actions have accessible names and title hints. Book detail actions follow shelf, directory, source switch, then reading order. The directory source select shrinks beside a non-wrapping action group; top and bottom scroll actions use icons only.
+
 Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-pixel outline for secondary actions. Press feedback is a small downward transform, and focus uses a visible primary outline. Cards are reserved for forms, settings, source panels, and result rows. Inputs inherit the current surface and foreground tokens. Binary search filters such as “精确” use a compact outlined toggle with the primary color and a quiet primary-tinted surface when selected.
 
 Loading states use a 28px ring with a 2px border, a primary-colored leading edge, and a 0.9s linear rotation. Supporting text is 14px with a 12px gap below the ring; an optional outlined secondary button labelled “返回页面”, without an arrow icon, sits 20px below the text with a 44px minimum hit area. Center blocking states in the available content area, or the safe viewport for startup, authentication, and reading. Inline updates use a 16px ring beside 12px text and retain existing content. Do not add a card, shadow, or entrance animation. Disable rotation for `prefers-reduced-motion`. The inline HTML startup styles use the same dimensions and system theme until account settings become available.
@@ -33,7 +35,7 @@ Loading states use a 28px ring with a 2px border, a primary-colored leading edge
 
 Pages use a single reading column capped at 680px, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped. Paginated reading reuses the same viewport width and lays out one non-scrollable page per column.
 
-The TOC heading, actions, and filter share one sticky area, below the desktop app header or at the top viewport edge on mobile. Its opaque background includes the top safe area and page spacing, so chapters never appear above it while scrolling. Narrow actions wrap without hiding the return button. Reader top and bottom bars are fixed overlays, hidden initially and toggled by a text tap. The bottom bar uses two rows: previous / character count or page fraction / next, then four icon shortcuts for TOC, sources, settings, and theme. Paginated reading maps the left, middle, and right thirds of the page to previous page, controls visibility, and next page; the page viewport does not expose manual scrolling. Safe area padding and permanent text end padding keep the last paragraph reachable. Toggling bars must not move text or scroll position.
+The TOC heading, actions, and filter share one sticky area, below the desktop app header or at the top viewport edge on mobile. Its opaque background includes the top safe area and page spacing, so chapters never appear above it while scrolling. The directory toolbar stays on one line by shrinking the source select without hiding the return button. Reader top and bottom bars are fixed overlays, hidden initially and toggled by a text tap. The bottom bar uses two rows: previous / character count or page fraction / next, then four icon shortcuts for TOC, sources, settings, and theme. Paginated reading maps the left, middle, and right thirds of the page to previous page, controls visibility, and next page; the page viewport does not expose manual scrolling. Safe area padding and permanent text end padding keep the last paragraph reachable. Toggling bars must not move text or scroll position.
 
 Use `viewport-fit=cover` and all four safe-area insets. Page containers and reader controls share `--page-top-gap: 24px`, added after the top safe area through `--page-top-inset`. Below a visible desktop app header, page containers add only this gap because the header already covers the safe area. Scroll and paginated reading add the account's top reading margin after the shared inset. Sticky and fixed headers use solid surfaces for legibility. Result and source rows constrain their text column with `min-width: 0`; long URLs truncate within that column while actions remain aligned. The selected chapter is bold in both TOC views.
 
@@ -49,7 +51,7 @@ Light surfaces use a small neutral shadow only where a card needs separation. Da
 - Do preserve the same semantic tokens in every page.
 - Do use real empty, loading, and error copy from the product flow.
 - Do not add decorative gradients, oversized hero sections, or automatic page animations.
-- Keep source version choices inline on search and book source pages. Discovery uses a searchable Sheet for its explicit “切换书源” action, while the main page stays focused on one source's categories and books.
+- Keep source version choices inline on search and book source pages. Discovery uses a searchable Sheet for its explicit “切换” action, while the main page stays focused on one source's categories and books.
 
 ## 8. Responsive behavior
 
