@@ -278,7 +278,12 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
     setOptionalText(candidate, 'updateTime', record.updateTime)
     setOptionalText(candidate, 'coverUrl', record.coverUrl, source.bookSourceUrl)
     setOptionalText(candidate, 'tocUrl', record.tocUrl, bookUrl)
-    setOptionalText(candidate, 'variable', record.variable)
+    const searchVariable = normalizeSearchVariable(record.variable)
+    if (!searchVariable.valid) {
+      diagnostics.push({ code: 'item-skipped', stage, field: 'variable', itemIndex, message: 'JS 书源结果的 variable 必须是字符串或基础类型', retryable: false })
+      continue
+    }
+    if (searchVariable.value !== undefined) candidate.variable = searchVariable.value
     try {
       if (acceptCandidate !== undefined && !acceptCandidate(candidate)) continue
       books.push(candidate)
@@ -298,7 +303,7 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
   return { status: statusFromDiagnostics(diagnostics, books.length), value, diagnostics, trace }
 }
 
-function setOptionalText(target: BookCandidate, key: 'intro' | 'kind' | 'wordCount' | 'lastChapter' | 'updateTime' | 'coverUrl' | 'tocUrl' | 'variable', value: unknown, baseUrl?: string): void {
+function setOptionalText(target: BookCandidate, key: 'intro' | 'kind' | 'wordCount' | 'lastChapter' | 'updateTime' | 'coverUrl' | 'tocUrl', value: unknown, baseUrl?: string): void {
   if (value === null || value === undefined) return
   const text = textValue(value)
   if (key === 'coverUrl' || key === 'tocUrl') {
@@ -944,10 +949,8 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     if (wordCount !== undefined) metadata.wordCount = wordCount
     if (lastChapter !== undefined) metadata.lastChapter = lastChapter
     if (updateTime !== undefined) metadata.updateTime = updateTime
-    if (typeof record?.variable === 'string') metadata.variable = record.variable
-    else if (typeof record?.variable === 'object' && record.variable !== null && !Array.isArray(record.variable)) {
-      try { metadata.variable = JSON.stringify(record.variable) } catch { /* 无法序列化的变量按 Android 忽略。 */ }
-    }
+    const detailVariable = normalizeDetailVariable(record?.variable)
+    if (detailVariable !== undefined) metadata.variable = detailVariable
     const coverUrl = primitiveText(record?.coverUrl)
     const tocUrl = primitiveText(record?.tocUrl)
     if (coverUrl !== undefined) metadata.coverUrl = coverUrl.length === 0 ? '' : resolveCandidateUrl(coverUrl, candidate.bookUrl) ?? coverUrl
@@ -970,6 +973,36 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
 
 function primitiveText(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
+}
+
+/** Android SearchBook.variable 是 Gson 的 String? 字段；对象/数组类型会令该候选反序列化失败。 */
+function normalizeSearchVariable(value: unknown): { valid: boolean; value?: string } {
+  if (value === null || value === undefined) return { valid: true }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return { valid: true, value: String(value) }
+  return { valid: false }
+}
+
+/**
+ * Android mergeVariable 只接受 JSON 对象（或包含 JSON 对象的字符串），并按 Map<String,String>
+ * 重新序列化；嵌套对象/数组会令整个变量更新被忽略，不能只保留可转换的字段。
+ */
+function normalizeDetailVariable(value: unknown): string | undefined {
+  let parsed: unknown = value
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed) as unknown } catch { return undefined }
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+  const normalized: Record<string, string | null> = Object.create(null) as Record<string, string | null>
+  for (const [key, item] of Object.entries(parsed as Record<string, unknown>)) {
+    if (item === null) {
+      normalized[key] = null
+    } else if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+      normalized[key] = String(item)
+    } else {
+      return undefined
+    }
+  }
+  return JSON.stringify(normalized)
 }
 
 const BOOK_TYPE_VIDEO = 4

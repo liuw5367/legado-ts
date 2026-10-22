@@ -1089,12 +1089,14 @@
       "divergences": [
         "D14",
         "D25",
-        "D39"
+        "D39",
+        "D46"
       ],
       "fixtures": [
         "JS-TOC-001",
         "JS-001",
-        "JS-004"
+        "JS-004",
+        "JS-009"
       ],
       "errorCodes": [
         "capability-missing",
@@ -1116,7 +1118,8 @@
           "fixtures": [
             "JS-TOC-001",
             "JS-001",
-            "JS-004"
+            "JS-004",
+            "JS-009"
           ],
           "errorCodes": [
             "capability-missing",
@@ -1138,7 +1141,8 @@
           "fixtures": [
             "JS-TOC-001",
             "JS-001",
-            "JS-004"
+            "JS-004",
+            "JS-009"
           ],
           "errorCodes": [
             "capability-missing",
@@ -1160,7 +1164,8 @@
           "fixtures": [
             "JS-TOC-001",
             "JS-001",
-            "JS-004"
+            "JS-004",
+            "JS-009"
           ],
           "errorCodes": [
             "capability-missing",
@@ -1182,7 +1187,8 @@
           "fixtures": [
             "JS-TOC-001",
             "JS-001",
-            "JS-004"
+            "JS-004",
+            "JS-009"
           ],
           "errorCodes": [
             "capability-missing",

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/index.ts'
+import { discoverBooks, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/index.ts'
 import type { NetworkHost, NetworkResponse, NormalizedSource, WorkflowPorts } from '../../source-core/src/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
 import { SourceRequestHost } from '../src/source-request-host.ts'
@@ -569,6 +569,49 @@ test('JavaScript 书源按 Android marshaller 保留 BookType 并规范化 downl
   assert.deepEqual(details.value?.items[0]?.downloadUrls, ['https://js-file-source.test/download/a', 'https://cdn.test/b'])
   assert.equal(details.diagnostics.some((diagnostic) => diagnostic.field === 'downloadUrls' && diagnostic.message === '下载链接为空'), true)
   assert.equal(details.value?.items[0]?.variable, '{"token":"ok"}')
+})
+
+test('JavaScript 书源变量按 Android marshaller 区分搜索字段与详情合并', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-variable.test',
+    bookSourceName: 'JS Variable',
+    exploreUrl: '/explore',
+    mainJs: [
+      'function search() { return [{ name: "字符串", bookUrl: "/string", variable: "raw" }, { name: "数字", bookUrl: "/number", variable: 7 }, { name: "布尔", bookUrl: "/boolean", variable: true }, { name: "空值", bookUrl: "/null", variable: null }, { name: "对象", bookUrl: "/object", variable: { bad: "skip" } }, { name: "数组", bookUrl: "/array", variable: ["skip"] }]; }',
+      'function explore() { return search(); }',
+      'function getBookInfo(book) { if (book.bookUrl.endsWith("/string")) return { variable: { token: "ok", count: 2, enabled: true, empty: null } }; if (book.bookUrl.endsWith("/number")) return { variable: "{\\"replaced\\":false,\\"count\\":3,\\"empty\\":null}" }; if (book.bookUrl.endsWith("/boolean")) return { variable: { nested: { bad: "skip" } } }; return { variable: ["invalid"] }; }',
+    ].join('\n'),
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+
+  const search = await searchBooks(ports, { source, keyword: '变量' })
+  assert.equal(search.status, 'partial')
+  assert.deepEqual(search.value?.items.map((item) => [item.name, item.variable]), [
+    ['字符串', 'raw'],
+    ['数字', '7'],
+    ['布尔', 'true'],
+    ['空值', undefined],
+  ])
+  assert.deepEqual(search.diagnostics.filter((item) => item.field === 'variable').map((item) => item.itemIndex), [4, 5])
+
+  const explore = await discoverBooks(ports, { source })
+  assert.equal(explore.status, 'partial')
+  assert.deepEqual(explore.value?.items.map((item) => [item.name, item.variable]), [
+    ['字符串', 'raw'],
+    ['数字', '7'],
+    ['布尔', 'true'],
+    ['空值', undefined],
+  ])
+  assert.deepEqual(explore.diagnostics.filter((item) => item.field === 'variable').map((item) => item.itemIndex), [4, 5])
+
+  const details = await loadBookDetails(ports, { source, candidates: search.value!.items })
+  assert.equal(details.status, 'success', JSON.stringify(details.diagnostics))
+  assert.deepEqual(details.value?.items.map((item) => [item.name, item.variable]), [
+    ['字符串', '{"token":"ok","count":"2","enabled":"true","empty":null}'],
+    ['数字', '{"replaced":"false","count":"3","empty":null}'],
+    ['布尔', 'true'],
+    ['空值', undefined],
+  ])
 })
 
 test('JS 书源重置详情、目录和正文类型时保留 Android 状态位', async () => {
