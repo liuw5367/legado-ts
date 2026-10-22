@@ -237,6 +237,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 - `&&` 拼接、`||` 首个成功、`%%` 按索引交错；
 - 选择器和 JSONPath 中含 `&&`/`||` 的平衡切分；
 - `@` 链、`text`、`textNodes`、`ownText`、`html`、`all` 和属性；
+- Java Element/Elements 的父子/兄弟、tag/id/class、`is`、`clone`、`remove`、属性修改及集合链式调用；
 - Jsoup 扩展位置/文本伪类、`:has/:not/:is`、文本 `:matches`、属性 Java 正则 `~=`, HTML/XML 大小写、无效选择器 `unsupported-selector`；
 - Jayway `length/size/keys/min/max/avg/sum`、正则筛选、`in/nin/size/empty/anyof/noneof`、原始值 `subsetof` 以及复杂集合 `unsupported-jsonpath` 诊断；
 - Java POSIX/Unicode 属性、`(?U)`、作用域 flags/字符类交集/字符转义的 `unsupported-pattern` 诊断；

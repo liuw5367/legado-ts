@@ -3,7 +3,7 @@ import { selectAll } from 'css-select'
 import fontoxpath from 'fontoxpath'
 import { parseDocument } from 'htmlparser2'
 import { render } from 'dom-serializer'
-import type { HtmlDocument, ParserNode, RuleValue, XPathParser } from '@legado/source-core'
+import type { HtmlDocument, ParserNode, ParserNodeInfo, ParserNodeMutation, RuleValue, XPathParser } from '@legado/source-core'
 
 const { evaluateXPath, ReturnType } = fontoxpath
 
@@ -15,6 +15,10 @@ type XmlNode = {
   parentNode?: XmlNode | null
   childNodes?: { length: number; item(index: number): XmlNode | null }
   attributes?: { length: number; item(index: number): { name: string; value: string } | null }
+  cloneNode?: (deep?: boolean) => XmlNode
+  removeChild?: (child: XmlNode) => XmlNode
+  setAttribute?: (name: string, value: string) => void
+  removeAttribute?: (name: string) => void
   toString?: () => string
 }
 
@@ -70,6 +74,54 @@ class XmlDocumentView implements HtmlDocument {
 
   public child(node: ParserNode): HtmlDocument {
     return new XmlDocumentView(this.node(node))
+  }
+
+  public describe(node: ParserNode): ParserNodeInfo {
+    const value = this.node(node)
+    const parent = value.parentNode ?? null
+    const elementSiblings = parent === null ? [] : childNodes(parent).filter((item) => item.nodeType === 1)
+    const siblingIndex = elementSiblings.indexOf(value)
+    const parents: ParserNode[] = []
+    let current = parent
+    while (current !== null) {
+      parents.push(this.wrap(current))
+      current = current.parentNode ?? null
+    }
+    const info: ParserNodeInfo = {
+      parent: parent === null ? null : this.wrap(parent),
+      parents,
+      children: childNodes(value).filter((item) => item.nodeType === 1).map((item) => this.wrap(item)),
+      previousSibling: siblingIndex > 0 ? this.wrap(elementSiblings[siblingIndex - 1]!) : null,
+      nextSibling: siblingIndex >= 0 && siblingIndex + 1 < elementSiblings.length ? this.wrap(elementSiblings[siblingIndex + 1]!) : null,
+    }
+    if (value.nodeType === 1) {
+      info.tagName = value.nodeName ?? ''
+      info.id = attributeValue(value, 'id') ?? ''
+      info.className = attributeValue(value, 'class') ?? ''
+      const attributes: Record<string, string> = {}
+      for (let index = 0; index < (value.attributes?.length ?? 0); index += 1) {
+        const attribute = value.attributes?.item(index)
+        if (attribute !== null && attribute !== undefined) attributes[attribute.name] = attribute.value
+      }
+      info.attributes = attributes
+    }
+    return info
+  }
+
+  public mutate(node: ParserNode, mutation: ParserNodeMutation): ParserNode | undefined {
+    const value = this.node(node)
+    if (mutation.operation === 'clone') {
+      const clone = value.cloneNode?.(true)
+      return clone === undefined ? undefined : this.wrap(clone)
+    }
+    if (mutation.operation === 'remove') {
+      value.parentNode?.removeChild?.(value)
+      return undefined
+    }
+    if (value.nodeType !== 1) return undefined
+    if (mutation.value === null || mutation.value === undefined) value.removeAttribute?.(mutation.name)
+    else value.setAttribute?.(mutation.name, mutation.value)
+    return undefined
   }
 
   public raw(node: ParserNode): XmlNode {

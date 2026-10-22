@@ -324,6 +324,25 @@ export interface ParserNode {
   readonly kind: 'element' | 'text' | 'document'
 }
 
+/** 供 JavaScript 书源读取的受控节点关系；不暴露 adapter 的原始 DOM 对象。 */
+export interface ParserNodeInfo {
+  tagName?: string
+  id?: string
+  className?: string
+  attributes?: Readonly<Record<string, string>>
+  parent?: ParserNode | null
+  parents?: readonly ParserNode[]
+  children?: readonly ParserNode[]
+  previousSibling?: ParserNode | null
+  nextSibling?: ParserNode | null
+}
+
+/** Element/Elements 允许的有限修改操作。值只使用可序列化 DTO。 */
+export type ParserNodeMutation =
+  | { operation: 'remove' }
+  | { operation: 'clone' }
+  | { operation: 'attr'; name: string; value?: string | null }
+
 /**
  * 解析器 adapter 的稳定错误分类。
  *
@@ -353,6 +372,10 @@ export interface HtmlDocument {
   read(node: ParserNode, output: 'text' | 'textNodes' | 'ownText' | 'html' | 'all'): string
   /** 以节点为根创建可继续选择的文档视图。 */
   child(node: ParserNode): HtmlDocument
+  /** 返回 Element/Elements 所需的关系和稳定属性；未实现时由运行时报告能力缺失。 */
+  describe?(node: ParserNode): ParserNodeInfo
+  /** 执行受控节点修改并返回克隆节点；删除/属性修改返回 undefined。 */
+  mutate?(node: ParserNode, mutation: ParserNodeMutation): ParserNode | undefined
 }
 
 export interface HtmlParser {

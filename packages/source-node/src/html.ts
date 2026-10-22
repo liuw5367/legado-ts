@@ -3,7 +3,7 @@ import { isDocument, isText, isTag, type AnyNode } from 'domhandler'
 import { getAttributeValue, getChildren, getText } from 'domutils'
 import { selectAll } from 'css-select'
 import { render } from 'dom-serializer'
-import { compileSourcePattern, ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode } from '@legado/source-core'
+import { compileSourcePattern, ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode, type ParserNodeInfo, type ParserNodeMutation } from '@legado/source-core'
 
 class HtmlDocumentView implements HtmlDocument {
   private readonly ids = new Map<string, AnyNode>()
@@ -55,6 +55,48 @@ class HtmlDocumentView implements HtmlDocument {
 
   public child(node: ParserNode): HtmlDocument {
     return new HtmlDocumentView(this.node(node), this.xmlMode)
+  }
+
+  public describe(node: ParserNode): ParserNodeInfo {
+    const value = this.node(node)
+    const parent = value.parent
+    const elementSiblings = parent === null ? [] : getChildren(parent).filter(isTag)
+    const siblingIndex = elementSiblings.indexOf(value as never)
+    const parents: ParserNode[] = []
+    let current = parent
+    while (current !== null && current !== undefined) {
+      parents.push(this.wrap(current))
+      current = current.parent
+    }
+    const info: ParserNodeInfo = {
+      parent: parent === null ? null : this.wrap(parent),
+      parents,
+      children: (isDocument(value) || isTag(value)) ? getChildren(value).filter(isTag).map((child) => this.wrap(child)) : [],
+      previousSibling: siblingIndex > 0 ? this.wrap(elementSiblings[siblingIndex - 1]!) : null,
+      nextSibling: siblingIndex >= 0 && siblingIndex + 1 < elementSiblings.length ? this.wrap(elementSiblings[siblingIndex + 1]!) : null,
+    }
+    if (isTag(value)) {
+      info.tagName = value.name
+      info.id = getAttributeValue(value, 'id') ?? ''
+      info.className = getAttributeValue(value, 'class') ?? ''
+      info.attributes = { ...(value.attribs ?? {}) }
+    }
+    return info
+  }
+
+  public mutate(node: ParserNode, mutation: ParserNodeMutation): ParserNode | undefined {
+    const value = this.node(node)
+    if (mutation.operation === 'clone') return this.wrap(value.cloneNode(true))
+    if (mutation.operation === 'remove') {
+      const parent = value.parent
+      if (parent !== null) parent.children = parent.children.filter((child) => child !== value)
+      return undefined
+    }
+    if (!isTag(value)) return undefined
+    const name = mutation.name
+    if (mutation.value === null || mutation.value === undefined) delete value.attribs[name]
+    else value.attribs[name] = mutation.value
+    return undefined
   }
 
   public raw(node: ParserNode): AnyNode {

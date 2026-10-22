@@ -118,6 +118,41 @@ test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', a
   })
 })
 
+test('Element/Elements 返回对象支持关系、视图方法和受控修改', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var element = java.getElements('div.card').first();
+    var children = element.children();
+    var sibling = element.nextElementSibling();
+    var clone = element.clone();
+    element.attr('data-state', 'ready');
+    JSON.stringify({ tag: element.tagName(), id: element.idName(), className: element.className(), has: element.hasAttr('data-state'), parent: element.parent().tagName(), child: children.first().text(), childCount: children.size(), sibling: sibling.text(), clone: clone.text(), matched: element.is('div.card') });`,
+    '<section><div class="card" id="one"><span>第一项</span></div><div class="card" id="two">第二项</div></section>')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    tag: 'div',
+    id: 'one',
+    className: 'card',
+    has: true,
+    parent: 'section',
+    child: '第一项',
+    childCount: 1,
+    sibling: '第二项',
+    clone: '第一项',
+    matched: true,
+  })
+})
+
+test('Element remove 和 Elements 属性视图会传播到后续规则', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var elements = java.getElements('li.item');
+    elements.attr('data-kind', 'chapter');
+    elements.get(0).remove();
+    JSON.stringify([elements.size(), elements.get(1).attr('data-kind'), elements.get(0).parent().children().size()]);`,
+    '<ul><li class="item">一</li><li class="item">二</li></ul>')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [2, 'chapter', 1])
+})
+
 test('JavaImporter 可加载教程中的 URL、Base64、DatatypeConverter 和 HMAC 类', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.String, Packages.javax.crypto.Mac, Packages.javax.crypto.spec.SecretKeySpec, Packages.java.net.URLEncoder, Packages.javax.xml.bind.DatatypeConverter, Packages.android.util.Base64);

@@ -566,6 +566,66 @@ if (__legadoUrlContext !== null && typeof __legadoUrlContext === "object" && !Ar
 globalThis.__legadoJavaPackages = { JavaImporter, Packages, JavaAdapter, MessageDigest: legadoMessageDigest, StringBuilder: legadoStringBuilder, Integer: legadoInteger, HashMap: legadoJavaUtil.HashMap, ArrayList: legadoJavaUtil.ArrayList, Pattern: legadoPattern, Base64: legadoBase64 }
 `
 
+/**
+ * Element/Elements 的受控对象图。节点关系通过 parser adapter 的 DTO 端口取得，
+ * 这样 JavaScript 只能看到稳定引用和允许的修改，不能持有 htmlparser2/xmldom 实例。
+ */
+const javaObjectGraphPrelude = String.raw`
+const __legadoNodeGraphInfo = (node) => request({ kind: "node-info", value: String(node?.id ?? "") }) ?? {}
+const __legadoNodeGraphMatch = (node, selector) => request({ kind: "node-match", value: { id: String(node?.id ?? ""), selector: String(selector ?? "") } }) === true
+const __legadoNodeGraph = (node) => {
+  if (node == null || typeof node !== "object" || node.__legadoNode !== "source-rule-node") return node
+  const read = (rule) => legadoValueText(evaluateRule(String(rule), { expect: "text", content: node }))
+  const value = { __legadoNode: node.__legadoNode, id: node.id }
+  const info = () => __legadoNodeGraphInfo(node)
+  const relation = (key) => { const item = info()[key]; return item == null ? null : __legadoNodeGraph(item) }
+  const relationList = (key) => (Array.isArray(info()[key]) ? info()[key] : []).map(__legadoNodeGraph)
+  Object.defineProperties(value, {
+    attr: { value: function(name, next) { if (arguments.length > 1) { request({ kind: "node-mutate", value: { id: node.id, mutation: { operation: "attr", name: String(name), value: next == null ? null : String(next) } } }); return value } return String(info().attributes?.[String(name)] ?? "") } },
+    hasAttr: { value: (name) => Object.prototype.hasOwnProperty.call(info().attributes ?? {}, String(name)) },
+    text: { value: () => read("@text") },
+    ownText: { value: () => read("@ownText") },
+    html: { value: () => read("@html") },
+    textNodes: { value: () => read("@textNodes") },
+    select: { value: (rule) => __legadoElementsGraph(evaluateRule(String(rule), { expect: "nodes", content: node })) },
+    parent: { value: () => relation("parent") },
+    parents: { value: () => __legadoElementsGraph(relationList("parents")) },
+    children: { value: () => __legadoElementsGraph(relationList("children")) },
+    nextElementSibling: { value: () => relation("nextSibling") },
+    previousElementSibling: { value: () => relation("previousSibling") },
+    tagName: { value: () => String(info().tagName ?? "") },
+    idName: { value: () => String(info().id ?? "") },
+    className: { value: () => String(info().className ?? "") },
+    is: { value: (selector) => __legadoNodeGraphMatch(node, selector) },
+    clone: { value: () => __legadoNodeGraph(request({ kind: "node-mutate", value: { id: node.id, mutation: { operation: "clone" } } })) },
+    remove: { value: () => { request({ kind: "node-mutate", value: { id: node.id, mutation: { operation: "remove" } } }); return value } },
+    toString: { value: () => read("@text") },
+  })
+  return value
+}
+const __legadoElementsGraph = (values) => {
+  const list = (Array.isArray(values) ? values : values == null ? [] : [values]).map(__legadoNodeGraph)
+  Object.defineProperties(list, {
+    toArray: { value: () => list.slice() },
+    get: { value: (index) => list[Number(index)] ?? null },
+    first: { value: () => list.length === 0 ? null : list[0] },
+    last: { value: () => list.length === 0 ? null : list[list.length - 1] },
+    size: { value: () => list.length },
+    isEmpty: { value: () => list.length === 0 },
+    attr: { value: function(name, next) { if (arguments.length > 1) { for (const item of list) if (item && typeof item.attr === "function") item.attr(name, next); return list } const first = list[0]; return first && typeof first.attr === "function" ? first.attr(name) : "" } },
+    text: { value: () => list.map((item) => item && typeof item.text === "function" ? item.text() : "").filter(Boolean).join(" ") },
+    ownText: { value: () => list.map((item) => item && typeof item.ownText === "function" ? item.ownText() : "").filter(Boolean).join(" ") },
+    html: { value: () => list.map((item) => item && typeof item.html === "function" ? item.html() : "").join("\\n") },
+    select: { value: (rule) => __legadoElementsGraph(list.flatMap((item) => item && typeof item.select === "function" ? item.select(rule) : [])) },
+    remove: { value: () => { for (const item of list) if (item && typeof item.remove === "function") item.remove(); return list } },
+    clone: { value: () => __legadoElementsGraph(list.map((item) => item && typeof item.clone === "function" ? item.clone() : item)) },
+  })
+  return list
+}
+java.getElement = (rule) => { const result = evaluateRule(String(rule), { expect: "nodes", content: legadoContent }); return Array.isArray(result) ? __legadoElementsGraph(result) : __legadoNodeGraph(result) }
+java.getElements = (rule) => __legadoElementsGraph(evaluateRule(String(rule), { expect: "nodes", content: legadoContent }))
+`
+
 interface SelectedNode {
   readonly document: HtmlDocument
   readonly node: ParserNode
@@ -1762,6 +1822,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'if (globalThis.book && typeof globalThis.book === "object") Object.defineProperties(globalThis.book, { putCustomVariable: { value: (value) => { setVar("custom", value, "book"); return true; } }, getCustomVariable: { value: () => getVar("custom", "book") ?? "" }, putBigVariable: { value: (name, value) => { setVar(String(name), value, "book"); return true; } }, getBigVariable: { value: (name) => getVar(String(name), "book") ?? "" } });',
       'if (globalThis.chapter && typeof globalThis.chapter === "object") Object.defineProperties(globalThis.chapter, { putImgUrl: { value: (value) => { globalThis.chapter.imgUrl = value == null ? null : String(value); return request({ kind: "workflow-action", action: "refreshContent", input: globalThis.chapter }); } }, putLyric: { value: (value) => { setVar("lyric", value, "chapter"); return request({ kind: "workflow-action", action: "refreshContent", input: globalThis.chapter }); } }, putDanmaku: { value: (value) => { setVar("danmaku", value, "chapter"); return request({ kind: "workflow-action", action: "refreshContent", input: globalThis.chapter }); } }, putBigVariable: { value: (name, value) => { setVar(String(name), value, "chapter"); return true; } }, getBigVariable: { value: (name) => getVar(String(name), "chapter") ?? "" }, update: { value: () => request({ kind: "workflow-action", action: "refreshContent", input: globalThis.chapter }) } });',
       javaCompatibilityPrelude,
+      javaObjectGraphPrelude,
     ].join('\n')
     const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
     const runSignal = signal ?? new AbortController().signal
@@ -1939,6 +2000,39 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
+    if (request.kind === 'node-info' || request.kind === 'node-mutate' || request.kind === 'node-match') {
+      const value = request.value
+      const nodeId = typeof value === 'string'
+        ? value
+        : typeof value === 'object' && value !== null && 'id' in value
+          ? textValue((value as Record<string, unknown>).id)
+          : textValue(request.name)
+      const stored = this.nodes.get(nodeId)
+      if (stored === undefined) throw new Error('__LEGADO_CAPABILITY__runtime parser node expired')
+      if (request.kind === 'node-match') {
+        const selector = typeof value === 'object' && value !== null ? textValue((value as Record<string, unknown>).selector) : ''
+        return stored.document.select(selector).some((candidate) => candidate.id === stored.node.id)
+      }
+      if (request.kind === 'node-info') {
+        const info = stored.document.describe?.(stored.node)
+        if (info === undefined) throw new Error('__LEGADO_CAPABILITY__runtime parser node relations unavailable')
+        const ref = (node: ParserNode | null | undefined): NodeRef | null | undefined => node === undefined || node === null ? node : this.remember(stored.document, node)
+        return {
+          ...info,
+          parent: ref(info.parent),
+          parents: info.parents?.map((node) => this.remember(stored.document, node)),
+          children: info.children?.map((node) => this.remember(stored.document, node)),
+          previousSibling: ref(info.previousSibling),
+          nextSibling: ref(info.nextSibling),
+        }
+      }
+      const mutation = typeof value === 'object' && value !== null && 'mutation' in value
+        ? (value as Record<string, unknown>).mutation
+        : request.input
+      if (typeof mutation !== 'object' || mutation === null) throw new Error('parser node mutation must be an object')
+      const result = stored.document.mutate?.(stored.node, mutation as Parameters<NonNullable<HtmlDocument['mutate']>>[1])
+      return result === undefined ? undefined : this.remember(stored.document, result)
+    }
     if (request.kind === 'resolve-url') return resolveSourceUrl(request.url, request.value)
     if (request.kind === 'resolve-urls') return resolveSourceUrls(request.url, request.urls)
     if (request.kind === 'pattern-compile') {
