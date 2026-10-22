@@ -1079,6 +1079,7 @@
         "packages/source-node/src/javascript.ts",
         "packages/source-node/src/source-rule-host.ts",
         "packages/source-core/src/workflows/discovery.ts",
+        "packages/source-core/src/workflows/reading.ts",
         "packages/source-core/src/workflows/types.ts"
       ],
       "implementation": "partial",

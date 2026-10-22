@@ -250,7 +250,7 @@ test('声明式目录按当前书源类型准备 book 工作副本', async () =>
     bookUrl: 'https://toc-type.test/book',
     tocUrl: 'https://toc-type.test/toc',
     name: '类型测试',
-    type: 8,
+    type: 1816,
     rawFields: {},
     emptyFields: [],
     fieldErrors: {},
@@ -260,9 +260,9 @@ test('声明式目录按当前书源类型准备 book 工作副本', async () =>
   const result = await loadTableOfContents(ports, { source, book })
 
   assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
-  assert.equal(result.value?.items[0]?.title, '32')
-  assert.equal(result.value?.bookAfter?.type, 32)
-  assert.equal(book.type, 8)
+  assert.equal(result.value?.items[0]?.title, '1840')
+  assert.equal(result.value?.bookAfter?.type, 1840)
+  assert.equal(book.type, 1816)
 })
 
 test('JavaScript 目录保留章节元数据投影', async () => {
@@ -569,6 +569,38 @@ test('JavaScript 书源按 Android marshaller 保留 BookType 并规范化 downl
   assert.deepEqual(details.value?.items[0]?.downloadUrls, ['https://js-file-source.test/download/a', 'https://cdn.test/b'])
   assert.equal(details.diagnostics.some((diagnostic) => diagnostic.field === 'downloadUrls' && diagnostic.message === '下载链接为空'), true)
   assert.equal(details.value?.items[0]?.variable, '{"token":"ok"}')
+})
+
+test('JS 书源重置详情、目录和正文类型时保留 Android 状态位', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-type-state.test',
+    bookSourceName: 'JS Type State',
+    bookSourceType: 3,
+    mainJs: [
+      'function getBookInfo(book) { if (book.type !== 1944) throw new Error("detail type state was lost"); return { downloadUrls: ["/download/book"] }; }',
+      'function getChapters(book) { if (book.type !== 1944) throw new Error("toc type state was lost"); return [{ title: "第一章", url: "/chapter/1" }]; }',
+      'function getContent(chapter, book) { if (book.type !== 1944) throw new Error("content type state was lost"); return "正文"; }',
+    ].join('\n'),
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+  const candidate = {
+    sourceId: source.bookSourceUrl,
+    bookUrl: 'https://js-type-state.test/book',
+    name: '状态书',
+    type: 1816,
+    rawFields: { bookUrl: 'https://js-type-state.test/book' },
+    traceRef: 'search:state',
+  }
+  const details = await loadBookDetails(ports, { source, candidates: [candidate] })
+  assert.equal(details.status, 'success', JSON.stringify(details.diagnostics))
+  assert.equal(details.value?.items[0]?.type, 1944)
+  const book = details.value!.items[0]!
+  const toc = await loadTableOfContents(ports, { source, book })
+  assert.equal(toc.status, 'success', JSON.stringify(toc.diagnostics))
+  assert.equal(toc.value?.bookAfter?.type, 1944)
+  const content = await loadChapterContent(ports, { source, book: toc.value!.bookAfter, chapter: toc.value!.items[0]! })
+  assert.equal(content.status, 'success', JSON.stringify(content.diagnostics))
+  assert.equal(content.value?.cleaned, '正文')
 })
 
 test('声明式正文规则可以读取 nextChapterUrl 绑定', async () => {

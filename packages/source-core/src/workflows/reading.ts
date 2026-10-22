@@ -21,7 +21,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   let book = cloneBookMetadata(input.book)
   // Android WebBook.getChapterList removes stale type bits and reapplies the
   // current BookSource type before evaluating declaration-based TOC rules.
-  book.type = androidBookType(undefined, input.source)
+  book.type = resetAndroidBookType(input.book, input.source)
   const preUpdateJs = ruleString(input.source, 'ruleToc', 'preUpdateJs')
   if (input.runPerJs === true && preUpdateJs !== undefined) {
     const actionOptions = (signal: AbortSignal) => ({ signal, ...(input.budget === undefined ? {} : { budget: input.budget }) })
@@ -236,7 +236,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
 async function javascriptTableOfContents(ports: ReadingPorts, input: TocInput, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[]): Promise<RuntimeResult<TocPage>> {
   const cursor = input.cursor ?? { index: 0 }
   const sourceBook = cloneBookMetadata(input.book)
-  const book = javascriptBookProjection(sourceBook, input.source, javascriptBookType(undefined, input.source), 'bookUrl')
+  const book = javascriptBookProjection(sourceBook, input.source, resetAndroidBookType(sourceBook, input.source, BOOK_TYPE_TEXT), 'bookUrl')
   const result = await executeSourceFunction(ports, input.source, 'getChapters', [book], { book }, 'detail', 'chapter', trace, input.signal)
   if (result.state === 'cancelled' || input.signal?.aborted === true) return cancelled('JS 目录工作流已取消', diagnostics, trace)
   if (result.state === 'capability-missing') {
@@ -1669,6 +1669,7 @@ const BOOK_TYPE_AUDIO = 32
 const BOOK_TYPE_IMAGE = 64
 const BOOK_TYPE_WEB_FILE = 128
 const BOOK_TYPE_LOCAL = 256
+const BOOK_TYPE_ALL = BOOK_TYPE_VIDEO | BOOK_TYPE_TEXT | BOOK_TYPE_AUDIO | BOOK_TYPE_IMAGE | BOOK_TYPE_WEB_FILE
 
 function resolvedBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
   return androidBookType(book, source)
@@ -1685,6 +1686,15 @@ function androidBookType(book: BookMetadata | undefined, source: NormalizedSourc
     case 4: return BOOK_TYPE_VIDEO
     default: return 0
   }
+}
+
+/** Android removeAllBookType() clears only source media bits and keeps state flags. */
+function resetAndroidBookType(book: BookMetadata | undefined, source: NormalizedSource, fallbackType = 0): number {
+  const existing = book?.type
+  const stateBits = typeof existing === 'number' && Number.isInteger(existing) && existing > 0
+    ? existing & ~BOOK_TYPE_ALL
+    : 0
+  return stateBits | (androidBookType(undefined, source) || fallbackType)
 }
 
 function javascriptBookType(book: BookMetadata | undefined, source: NormalizedSource): number {

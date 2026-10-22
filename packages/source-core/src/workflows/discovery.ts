@@ -888,7 +888,8 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     const candidate = input.candidates[itemIndex]!
     // Android getBookInfoAwait 进入脚本前会清掉旧位标记，再写回书源对应的 BookType。
     const sourceType = androidBookType(undefined, input.source)
-    const book = javascriptBookProjection(candidate, input.source, sourceType, 'empty')
+    const resetType = resetAndroidBookType(candidate, input.source)
+    const book = javascriptBookProjection(candidate, input.source, resetType, 'empty')
     const info = await executeSourceFunction(ports, input.source, 'getBookInfo', [book], { book }, 'detail', 'book', trace, input.signal)
     if (info.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage: 'detail', itemIndex, message: '详情脚本执行已取消', retryable: false })
@@ -918,7 +919,7 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     // bindings instead of letting an ignored detail key replace it.
     delete detailRawFields.bookUrl
     const returnedType = validBookType(record?.type)
-    const mergedType = returnedType ?? sourceType
+    const mergedType = returnedType ?? resetType
     const metadata: BookMetadata = {
       ...metadataCandidate,
       type: sourceNumber(input.source, 'bookSourceType') === 3 ? mergedType | sourceType : mergedType,
@@ -998,6 +999,15 @@ function androidBookType(book: BookCandidate | BookMetadata | undefined, source:
     case 4: return BOOK_TYPE_VIDEO
     default: return BOOK_TYPE_TEXT
   }
+}
+
+/** Android removeAllBookType() clears only source media bits and keeps state flags. */
+function resetAndroidBookType(book: BookCandidate | BookMetadata | undefined, source: NormalizedSource): number {
+  const existing = book?.type
+  const stateBits = typeof existing === 'number' && Number.isInteger(existing) && existing > 0
+    ? existing & ~BOOK_TYPE_ALL
+    : 0
+  return stateBits | androidBookType(undefined, source)
 }
 
 function normalizeDownloadUrls(value: unknown, baseUrl: string): string[] | undefined {
