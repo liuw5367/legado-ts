@@ -178,6 +178,34 @@ test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement
   })
 })
 
+test('Java Map/List/Set 支持教程常用的视图、计算和迭代器方法', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.util.HashMap, Packages.java.util.ArrayList, Packages.java.util.HashSet);
+    with (importer) {
+      var map = new HashMap({ a: 1, b: 2 });
+      var putIfAbsent = map.putIfAbsent('a', 9);
+      var computed = map.computeIfAbsent('c', function(key) { return key + '!'; });
+      var merged = map.merge('a', 3, function(left, right) { return left + right; });
+      var replaced = map.replace('b', 4);
+      var entry = map.entrySet().get(0);
+      entry.setValue(8);
+      var list = new ArrayList(['x', 'y']);
+      var iterator = list.listIterator();
+      var iterated = [iterator.next(), iterator.next(), iterator.previous(), iterator.nextIndex(), iterator.previousIndex()];
+      iterator.set('Y');
+      iterator.add('z');
+      var set = new HashSet(['x', 'y', 'z']);
+      set.removeAll(new HashSet(['z']));
+      JSON.stringify({ map: [putIfAbsent, computed, merged, replaced, map.get('a'), map.get('b'), map.get('c'), entry.getValue()], list: [iterated, list.toArray()], set: [set.contains('z'), set.containsAll(['x', 'y']), set.toArray()] });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    map: [1, 'c!', 4, 2, 8, 4, 'c!', 8],
+    list: [['x', 'y', 'y', 1, 0], ['x', 'z', 'Y']],
+    set: [false, true, ['x', 'y']],
+  })
+})
+
 test('Element/Elements 返回对象支持关系、视图方法和受控修改', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var element = java.getElements('div.card').first();
