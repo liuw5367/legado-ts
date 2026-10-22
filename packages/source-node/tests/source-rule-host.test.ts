@@ -300,6 +300,63 @@ test('Java Map 视图和 List.subList 保持父容器的实时读写传播', asy
   })
 })
 
+test('Java Arrays 和 Collections 常用重载保持固定大小与只读语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.util.Arrays, Packages.java.util.Collections, Packages.java.util.ArrayList);
+    with (importer) {
+      var array = [1, 3, 5, 7];
+      var fixed = Arrays.asList(array);
+      fixed.set(1, 4);
+      var fixedErrors = [];
+      try { fixed.add(8); } catch (error) { fixedErrors.push('add'); }
+      try { fixed.remove(0); } catch (error) { fixedErrors.push('remove'); }
+      var binary = Arrays.binarySearch(array, 0, array.length, 5);
+      Arrays.fill(array, 1, 3, 9);
+      var bytes = new Uint8Array([3, 1]);
+      var byteList = Arrays.asList(bytes);
+      byteList.set(1, 4);
+      Arrays.sort(bytes);
+      Arrays.fill(bytes, 0, 1, 9);
+      var copies = [Arrays.copyOf([1, 2], 4), Arrays.copyOfRange([1, 2], 1, 4)];
+      var list = new ArrayList([3, 1, 2]);
+      Collections.sort(list);
+      var sortedBinary = Collections.binarySearch(list, 2);
+      Collections.swap(list, 0, 2);
+      var extremes = [Collections.min(list), Collections.max(list)];
+      var replaced = Collections.replaceAll(list, 2, 8);
+      Collections.addAll(list, 5, 4);
+      var destination = new ArrayList([0, 0, 0, 0, 0]);
+      Collections.copy(destination, list);
+      var readOnly = Collections.unmodifiableList(list);
+      var readOnlyErrors = [];
+      try { readOnly.set(0, 10); } catch (error) { readOnlyErrors.push('set'); }
+      try { readOnly.clear(); } catch (error) { readOnlyErrors.push('clear'); }
+      var singleton = Collections.singletonList('only');
+      try { singleton.add('other'); } catch (error) { readOnlyErrors.push('singleton'); }
+      JSON.stringify({ array: array, fixed: fixed.toArray(), fixedErrors: fixedErrors, binary: binary, bytes: [Array.from(bytes), byteList.toArray()], copies: copies, list: list.toArray(), sortedBinary: sortedBinary, extremes: extremes, replaced: replaced, destination: destination.toArray(), frequency: Collections.frequency(list, 8), readOnly: readOnly.toArray(), readOnlyErrors: readOnlyErrors, copiesOf: Collections.nCopies(2, 'x').toArray(), text: Arrays.toString(array), deep: Arrays.deepToString([[1], [2, 3]]) });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    array: [1, 9, 9, 7],
+    fixed: [1, 9, 9, 7],
+    fixedErrors: ['add', 'remove'],
+    binary: 2,
+    bytes: [[9, 4], [9, 4]],
+    copies: [[1, 2, null, null], [2, null, null]],
+    list: [3, 8, 1, 5, 4],
+    sortedBinary: 1,
+    extremes: [1, 3],
+    replaced: true,
+    destination: [3, 8, 1, 5, 4],
+    frequency: 1,
+    readOnly: [3, 8, 1, 5, 4],
+    readOnlyErrors: ['set', 'clear', 'singleton'],
+    copiesOf: ['x', 'x'],
+    text: '[1, 9, 9, 7]',
+    deep: '[[1], [2, 3]]',
+  })
+})
+
 test('Element/Elements 返回对象支持关系、视图方法和受控修改', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var element = java.getElements('div.card').first();

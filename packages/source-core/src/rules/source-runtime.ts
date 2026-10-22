@@ -300,7 +300,7 @@ const legadoMap = (input) => {
 }
 const legadoListView = (read, writeAt, insertAt, removeAt, clearView, equals, removeByIndex = true) => {
   const target = []
-  const snapshot = () => { const value = read(); return Array.isArray(value) ? value.slice() : value?.toArray?.() ?? [] }
+  const snapshot = () => { const value = read(); return Array.isArray(value) ? value.slice() : typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(value) ? Array.from(value) : value?.toArray?.() ?? [] }
   const isIndex = (value) => typeof value === "number" && Number.isInteger(value)
   const indexOfValue = (value) => { const values = snapshot(); for (let index = 0; index < values.length; index++) if (equals ? equals(values[index], value) : Object.is(values[index], value)) return index; return -1 }
   const unsupported = () => { throw new Error("Unsupported collection view operation") }
@@ -772,8 +772,57 @@ const legadoDatatypeConverter = { printHexBinary: (value) => String(request({ ki
 const legadoUrlEncoder = { encode: (value, charset) => request({ kind: "encode-uri", value: String(value ?? ""), charset: charset === undefined ? "UTF-8" : String(charset) }) }
 const legadoAndroidBase64 = { DEFAULT: 0, NO_PADDING: 1, NO_WRAP: 2, CRLF: 4, URL_SAFE: 8, NO_CLOSE: 16, encodeToString: (value, flags) => request({ kind: "base64-encode", value, flags: Number(flags ?? 0) }), encode: (value, flags) => legadoJavaString(request({ kind: "base64-encode", value, flags: Number(flags ?? 0) })).getBytes("UTF-8"), decode: (value, flags) => request({ kind: "base64-decode-bytes", value, flags: Number(flags ?? 0) }) }
 const legadoJavaLang = { String: legadoJavaLangString, StringBuilder: legadoStringBuilder, Integer: legadoInteger, Long: legadoLong, Double: legadoNumber, Float: legadoNumber, Boolean: { parseBoolean: (value) => String(value).toLowerCase() === "true" }, Character: { isDigit: (value) => /\d/u.test(String(value)), isLetter: (value) => /\p{L}/u.test(String(value)), toLowerCase: (value) => String(value).toLowerCase(), toUpperCase: (value) => String(value).toUpperCase() }, Math: legadoJavaMath, CharSequence: legadoJavaLangString }
-const legadoJavaArrays = { asList: (value) => legadoList(value), toString: (value) => "[" + Array.from(value ?? []).join(", ") + "]", copyOf: (value, length) => Array.from(value ?? []).slice(0, Number(length)).concat(Array(Math.max(0, Number(length) - (value?.length ?? 0))).fill(null)), copyOfRange: (value, from, to) => Array.from(value ?? []).slice(Number(from), Number(to)), fill: (value, item) => { if (Array.isArray(value)) value.fill(item); return undefined }, sort: (value) => { if (Array.isArray(value)) value.sort(); return undefined } }
-const legadoJavaCollections = { sort: (list, comparator) => { if (Array.isArray(list)) list.sort(typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : undefined); return undefined }, reverse: (list) => { if (Array.isArray(list)) list.reverse(); return undefined }, shuffle: (list) => { if (Array.isArray(list)) for (let index = list.length - 1; index > 0; index -= 1) { const swap = Math.floor(Math.random() * (index + 1)); [list[index], list[swap]] = [list[swap], list[index]] }; return undefined }, singletonList: (value) => legadoList([value]), emptyList: () => legadoList([]) }
+const legadoJavaCollectionValues = (value) => {
+  if (Array.isArray(value)) return Array.from(value)
+  if (value !== null && value !== undefined && typeof value.toArray === "function") return Array.from(value.toArray() ?? [])
+  if (value !== null && value !== undefined && typeof value[Symbol.iterator] === "function") return Array.from(value)
+  return []
+}
+const legadoJavaArrayLike = (value) => Array.isArray(value) || typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(value)
+const legadoJavaListSize = (value) => Array.isArray(value) ? value.length : Number(value?.size?.() ?? 0)
+const legadoJavaListGet = (value, index) => { const position = Number(index); const size = legadoJavaListSize(value); if (!Number.isInteger(position) || position < 0 || position >= size) throw new RangeError("List index out of bounds"); return typeof value?.get === "function" ? value.get(position) : value[position] }
+const legadoJavaListSet = (value, index, item) => { const position = Number(index); const size = legadoJavaListSize(value); if (!Number.isInteger(position) || position < 0 || position >= size) throw new RangeError("List index out of bounds"); return typeof value?.set === "function" ? value.set(position, item) : (value[position] = item, undefined) }
+const legadoJavaListAdd = (value, item) => { if (typeof value?.add === "function") return value.add(item); if (Array.isArray(value)) { value.push(item); return true } throw new TypeError("Collection is not mutable") }
+const legadoJavaComparator = (comparator) => typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : (left, right) => left < right ? -1 : left > right ? 1 : 0
+const legadoJavaArrayBounds = (value, from, to) => { const length = value?.length ?? 0; const start = from === undefined ? 0 : Number(from); const end = to === undefined ? length : Number(to); if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > length) throw new RangeError("Array index out of bounds"); return [start, end] }
+const legadoJavaArrayText = (value, deep) => {
+  if (value === null || value === undefined) return "null"
+  if (!legadoJavaArrayLike(value)) return String(value)
+  return "[" + value.map((item) => deep && Array.isArray(item) ? legadoJavaArrayText(item, true) : item === null || item === undefined ? "null" : String(item)).join(", ") + "]"
+}
+const legadoJavaArrays = {
+  asList: (value) => { const source = legadoJavaArrayLike(value) ? value : Array.from(value ?? []); return legadoListView(() => source, (index, item) => { const previous = source[index]; source[index] = item; return previous }, undefined, undefined, undefined) },
+  toString: (value) => legadoJavaArrayText(value, false),
+  deepToString: (value) => legadoJavaArrayText(value, true),
+  equals: (left, right) => { const a = Array.from(left ?? []); const b = Array.from(right ?? []); return a.length === b.length && a.every((item, index) => Object.is(item, b[index])) },
+  deepEquals: (left, right) => { const equal = (a, b) => Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((item, index) => equal(item, b[index])) : Object.is(a, b); return equal(left, right) },
+  copyOf: (value, length) => { const size = Number(length); if (!Number.isInteger(size) || size < 0) throw new RangeError("negative array size"); return Array.from(value ?? []).slice(0, size).concat(Array(Math.max(0, size - (value?.length ?? 0))).fill(null)) },
+  copyOfRange: (value, from, to) => { const source = Array.from(value ?? []); const start = Number(from); const end = Number(to); if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || start > source.length) throw new RangeError("Array index out of bounds"); return source.slice(start, end).concat(Array(Math.max(0, end - Math.max(start, source.length))).fill(null)) },
+  fill: function(value, fromOrItem, toOrItem, maybeItem) { if (!legadoJavaArrayLike(value)) return undefined; const [from, to, item] = arguments.length >= 4 ? [...legadoJavaArrayBounds(value, fromOrItem, toOrItem), maybeItem] : [0, value.length, fromOrItem]; for (let index = from; index < to; index++) value[index] = item; return undefined },
+  sort: function(value, fromOrComparator, toOrComparator, maybeComparator) { if (!legadoJavaArrayLike(value)) return undefined; const range = typeof fromOrComparator === "number" ? legadoJavaArrayBounds(value, fromOrComparator, toOrComparator) : [0, value.length]; const comparator = arguments.length >= 4 ? maybeComparator : typeof fromOrComparator === "number" ? undefined : fromOrComparator; const sorted = Array.from(value.slice(range[0], range[1])).sort(legadoJavaComparator(comparator)); for (let index = 0; index < sorted.length; index++) value[range[0] + index] = sorted[index]; return undefined },
+  binarySearch: function(value, first, second, third, fourth) { const ranged = arguments.length >= 4; const range = ranged ? legadoJavaArrayBounds(value, first, second) : [0, value.length]; const key = ranged ? third : first; const comparator = ranged ? fourth : second; const compare = legadoJavaComparator(comparator); let low = range[0]; let high = range[1] - 1; while (low <= high) { const middle = (low + high) >> 1; const result = compare(value[middle], key); if (result < 0) low = middle + 1; else if (result > 0) high = middle - 1; else return middle } return -low - 1 },
+}
+const legadoJavaCollections = {
+  sort: (list, comparator) => { const values = legadoJavaCollectionValues(list).sort(legadoJavaComparator(comparator)); for (let index = 0; index < values.length; index++) legadoJavaListSet(list, index, values[index]); return undefined },
+  reverse: (list) => { for (let left = 0, right = legadoJavaListSize(list) - 1; left < right; left++, right--) { const value = legadoJavaListGet(list, left); legadoJavaListSet(list, left, legadoJavaListGet(list, right)); legadoJavaListSet(list, right, value) } return undefined },
+  shuffle: (list) => { for (let index = legadoJavaListSize(list) - 1; index > 0; index--) { const swap = Math.floor(Math.random() * (index + 1)); const value = legadoJavaListGet(list, index); legadoJavaListSet(list, index, legadoJavaListGet(list, swap)); legadoJavaListSet(list, swap, value) } return undefined },
+  swap: (list, left, right) => { const first = legadoJavaListGet(list, left); legadoJavaListSet(list, left, legadoJavaListGet(list, right)); legadoJavaListSet(list, right, first); return undefined },
+  max: (list, comparator) => { const values = legadoJavaCollectionValues(list); if (values.length === 0) throw new RangeError("No such element"); const compare = legadoJavaComparator(comparator); return values.slice(1).reduce((best, value) => compare(value, best) > 0 ? value : best, values[0]) },
+  min: (list, comparator) => { const values = legadoJavaCollectionValues(list); if (values.length === 0) throw new RangeError("No such element"); const compare = legadoJavaComparator(comparator); return values.slice(1).reduce((best, value) => compare(value, best) < 0 ? value : best, values[0]) },
+  binarySearch: (list, key, comparator) => legadoJavaArrays.binarySearch(legadoJavaCollectionValues(list), key, comparator),
+  unmodifiableList: (list) => legadoListView(() => legadoJavaCollectionValues(list), undefined, undefined, undefined, undefined),
+  singletonList: (value) => legadoJavaCollections.unmodifiableList([value]),
+  emptyList: () => legadoJavaCollections.unmodifiableList([]),
+  nCopies: (count, value) => { const size = Number(count); if (!Number.isInteger(size) || size < 0) throw new RangeError("Illegal collection size"); return legadoJavaCollections.unmodifiableList(Array(size).fill(value)) },
+  addAll: (list, ...items) => { for (const item of items) legadoJavaListAdd(list, item); return items.length > 0 },
+  fill: (list, value) => { for (let index = 0; index < legadoJavaListSize(list); index++) legadoJavaListSet(list, index, value); return undefined },
+  copy: (destination, source) => { const values = legadoJavaCollectionValues(source); if (legadoJavaListSize(destination) < values.length) throw new RangeError("Source does not fit in destination"); for (let index = 0; index < values.length; index++) legadoJavaListSet(destination, index, values[index]); return undefined },
+  frequency: (list, value) => legadoJavaCollectionValues(list).filter((item) => Object.is(item, value)).length,
+  replaceAll: (list, oldValue, newValue) => { let changed = false; for (let index = 0; index < legadoJavaListSize(list); index++) if (Object.is(legadoJavaListGet(list, index), oldValue)) { legadoJavaListSet(list, index, newValue); changed = true } return changed },
+  disjoint: (left, right) => { const values = legadoJavaCollectionValues(right); return legadoJavaCollectionValues(left).every((item) => !values.some((candidate) => Object.is(item, candidate))) },
+  indexOfSubList: (list, subList) => { const values = legadoJavaCollectionValues(list); const sub = legadoJavaCollectionValues(subList); if (sub.length === 0) return 0; for (let index = 0; index <= values.length - sub.length; index++) if (sub.every((item, offset) => Object.is(values[index + offset], item))) return index; return -1 },
+  lastIndexOfSubList: (list, subList) => { const values = legadoJavaCollectionValues(list); const sub = legadoJavaCollectionValues(subList); if (sub.length === 0) return values.length; for (let index = values.length - sub.length; index >= 0; index--) if (sub.every((item, offset) => Object.is(values[index + offset], item))) return index; return -1 },
+}
 const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, regex: { Pattern: legadoPattern, Matcher: legadoMatcher }, Base64: legadoBase64 }
 legadoJavaUtil.regex.Pattern = legadoPattern
 legadoJavaUtil.regex.Matcher = legadoMatcher
