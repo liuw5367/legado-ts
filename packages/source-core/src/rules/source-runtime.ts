@@ -790,12 +790,86 @@ const legadoJavaArrayText = (value, deep) => {
   if (!legadoJavaArrayLike(value)) return String(value)
   return "[" + value.map((item) => deep && Array.isArray(item) ? legadoJavaArrayText(item, true) : item === null || item === undefined ? "null" : String(item)).join(", ") + "]"
 }
+const legadoJavaReadOnlySet = (source) => {
+  const values = () => legadoJavaCollectionValues(source)
+  const unsupported = () => { throw new Error("Unsupported unmodifiable collection operation") }
+  return {
+    contains: (value) => values().some((item) => Object.is(item, value)),
+    containsAll: (items) => legadoJavaCollectionValues(items).every((item) => values().some((value) => Object.is(value, item))),
+    size: () => values().length,
+    isEmpty: () => values().length === 0,
+    toArray: () => values(),
+    iterator: () => { const snapshot = values(); let index = 0; return { hasNext: () => index < snapshot.length, next: () => { if (index >= snapshot.length) throw new RangeError("No such element"); return snapshot[index++] }, remove: unsupported } },
+    forEach: (callback) => { if (typeof callback === "function") values().forEach(callback); return undefined },
+    add: unsupported,
+    addAll: unsupported,
+    remove: unsupported,
+    removeAll: unsupported,
+    retainAll: unsupported,
+    clear: unsupported,
+    toString: () => "[" + values().map((value) => value === null || value === undefined ? "null" : String(value)).join(", ") + "]",
+  }
+}
+const legadoJavaReadOnlyMap = (source) => {
+  const unsupported = () => { throw new Error("Unsupported unmodifiable map operation") }
+  const get = (key) => typeof source?.get === "function" ? source.get(key) : Object.prototype.hasOwnProperty.call(source ?? {}, String(key)) ? source[String(key)] : null
+  const keys = () => typeof source?.keySet === "function" ? source.keySet() : Object.keys(source ?? {})
+  const values = () => typeof source?.values === "function" ? source.values() : Object.values(source ?? {})
+  const entries = () => {
+    if (typeof source?.entrySet === "function") return legadoJavaCollectionValues(source.entrySet()).map((entry) => { const key = typeof entry?.getKey === "function" ? entry.getKey() : entry?.[0]; return { getKey: () => key, getValue: () => get(key), setValue: unsupported } })
+    return Object.keys(source ?? {}).map((key) => ({ getKey: () => key, getValue: () => source[key], setValue: unsupported }))
+  }
+  return {
+    get,
+    getOrDefault: (key, fallback) => { const present = typeof source?.containsKey === "function" ? source.containsKey(key) : Object.prototype.hasOwnProperty.call(source ?? {}, String(key)); return present ? get(key) : fallback },
+    containsKey: (key) => typeof source?.containsKey === "function" ? source.containsKey(key) : Object.prototype.hasOwnProperty.call(source ?? {}, String(key)),
+    containsValue: (value) => typeof source?.containsValue === "function" ? source.containsValue(value) : values().some((item) => Object.is(item, value)),
+    size: () => typeof source?.size === "function" ? source.size() : Object.keys(source ?? {}).length,
+    isEmpty: () => (typeof source?.isEmpty === "function" ? source.isEmpty() : Object.keys(source ?? {}).length === 0),
+    keySet: () => legadoJavaReadOnlySet(keys()),
+    values: () => legadoJavaReadOnlySet(values()),
+    entrySet: () => legadoJavaReadOnlySet(entries()),
+    forEach: (callback) => { if (typeof callback === "function") for (const entry of entries()) callback(entry.getKey(), entry.getValue(), source) },
+    put: unsupported,
+    putIfAbsent: unsupported,
+    putAll: unsupported,
+    remove: unsupported,
+    replace: unsupported,
+    replaceAll: unsupported,
+    computeIfAbsent: unsupported,
+    computeIfPresent: unsupported,
+    merge: unsupported,
+    clear: unsupported,
+    toString: () => "{" + entries().map((entry) => String(entry.getKey()) + "=" + String(entry.getValue())).join(", ") + "}",
+  }
+}
+const legadoJavaMapBackedSet = (map) => {
+  if (typeof map?.size === "function" && map.size() !== 0) throw new Error("Map must be empty")
+  const set = {
+    add: (value) => { if (map.containsKey(value)) return false; map.put(value, true); return true },
+    addAll: (items) => { let changed = false; for (const value of legadoJavaCollectionValues(items)) changed = set.add(value) || changed; return changed },
+    contains: (value) => map.containsKey(value),
+    containsAll: (items) => legadoJavaCollectionValues(items).every((value) => set.contains(value)),
+    remove: (value) => map.containsKey(value) ? (map.remove(value), true) : false,
+    removeAll: (items) => { let changed = false; for (const value of legadoJavaCollectionValues(items)) changed = set.remove(value) || changed; return changed },
+    retainAll: (items) => { const keep = legadoJavaCollectionValues(items); let changed = false; for (const value of set.toArray()) if (!keep.some((item) => Object.is(item, value))) changed = set.remove(value) || changed; return changed },
+    clear: () => map.clear(),
+    size: () => map.size(),
+    isEmpty: () => map.isEmpty(),
+    toArray: () => legadoJavaCollectionValues(map.keySet()),
+    iterator: () => { const iterator = map.keySet().iterator(); return { hasNext: () => iterator.hasNext(), next: () => iterator.next(), remove: () => iterator.remove() } },
+    forEach: (callback) => { if (typeof callback === "function") set.toArray().forEach(callback); return undefined },
+    toString: () => "[" + set.toArray().join(", ") + "]",
+  }
+  return set
+}
 const legadoJavaArrays = {
   asList: (value) => { const source = legadoJavaArrayLike(value) ? value : Array.from(value ?? []); return legadoListView(() => source, (index, item) => { const previous = source[index]; source[index] = item; return previous }, undefined, undefined, undefined) },
   toString: (value) => legadoJavaArrayText(value, false),
   deepToString: (value) => legadoJavaArrayText(value, true),
   equals: (left, right) => { const a = Array.from(left ?? []); const b = Array.from(right ?? []); return a.length === b.length && a.every((item, index) => Object.is(item, b[index])) },
   deepEquals: (left, right) => { const equal = (a, b) => Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((item, index) => equal(item, b[index])) : Object.is(a, b); return equal(left, right) },
+  forEach: (value, callback) => { if (typeof callback === "function") legadoJavaCollectionValues(value).forEach(callback); return undefined },
   copyOf: (value, length) => { const size = Number(length); if (!Number.isInteger(size) || size < 0) throw new RangeError("negative array size"); return Array.from(value ?? []).slice(0, size).concat(Array(Math.max(0, size - (value?.length ?? 0))).fill(null)) },
   copyOfRange: (value, from, to) => { const source = Array.from(value ?? []); const start = Number(from); const end = Number(to); if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || start > source.length) throw new RangeError("Array index out of bounds"); return source.slice(start, end).concat(Array(Math.max(0, end - Math.max(start, source.length))).fill(null)) },
   fill: function(value, fromOrItem, toOrItem, maybeItem) { if (!legadoJavaArrayLike(value)) return undefined; const [from, to, item] = arguments.length >= 4 ? [...legadoJavaArrayBounds(value, fromOrItem, toOrItem), maybeItem] : [0, value.length, fromOrItem]; for (let index = from; index < to; index++) value[index] = item; return undefined },
@@ -811,8 +885,18 @@ const legadoJavaCollections = {
   min: (list, comparator) => { const values = legadoJavaCollectionValues(list); if (values.length === 0) throw new RangeError("No such element"); const compare = legadoJavaComparator(comparator); return values.slice(1).reduce((best, value) => compare(value, best) < 0 ? value : best, values[0]) },
   binarySearch: (list, key, comparator) => legadoJavaArrays.binarySearch(legadoJavaCollectionValues(list), key, comparator),
   unmodifiableList: (list) => legadoListView(() => legadoJavaCollectionValues(list), undefined, undefined, undefined, undefined),
+  unmodifiableSet: (set) => legadoJavaReadOnlySet(set),
+  unmodifiableMap: (map) => legadoJavaReadOnlyMap(map),
+  synchronizedList: (list) => list,
+  synchronizedSet: (set) => set,
+  synchronizedMap: (map) => map,
+  newSetFromMap: (map) => legadoJavaMapBackedSet(map),
   singletonList: (value) => legadoJavaCollections.unmodifiableList([value]),
+  singleton: (value) => legadoJavaCollections.unmodifiableSet(legadoSet([value])),
+  singletonMap: (key, value) => legadoJavaCollections.unmodifiableMap(legadoMap({ [String(key)]: value })),
   emptyList: () => legadoJavaCollections.unmodifiableList([]),
+  emptySet: () => legadoJavaCollections.unmodifiableSet(legadoSet([])),
+  emptyMap: () => legadoJavaCollections.unmodifiableMap(legadoMap()),
   nCopies: (count, value) => { const size = Number(count); if (!Number.isInteger(size) || size < 0) throw new RangeError("Illegal collection size"); return legadoJavaCollections.unmodifiableList(Array(size).fill(value)) },
   addAll: (list, ...items) => { for (const item of items) legadoJavaListAdd(list, item); return items.length > 0 },
   fill: (list, value) => { for (let index = 0; index < legadoJavaListSize(list); index++) legadoJavaListSet(list, index, value); return undefined },

@@ -302,7 +302,7 @@ test('Java Map 视图和 List.subList 保持父容器的实时读写传播', asy
 
 test('Java Arrays 和 Collections 常用重载保持固定大小与只读语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
-    var importer = new JavaImporter(Packages.java.util.Arrays, Packages.java.util.Collections, Packages.java.util.ArrayList);
+    var importer = new JavaImporter(Packages.java.util.Arrays, Packages.java.util.Collections, Packages.java.util.ArrayList, Packages.java.util.HashMap, Packages.java.util.HashSet);
     with (importer) {
       var array = [1, 3, 5, 7];
       var fixed = Arrays.asList(array);
@@ -333,7 +333,24 @@ test('Java Arrays 和 Collections 常用重载保持固定大小与只读语义'
       try { readOnly.clear(); } catch (error) { readOnlyErrors.push('clear'); }
       var singleton = Collections.singletonList('only');
       try { singleton.add('other'); } catch (error) { readOnlyErrors.push('singleton'); }
-      JSON.stringify({ array: array, fixed: fixed.toArray(), fixedErrors: fixedErrors, binary: binary, bytes: [Array.from(bytes), byteList.toArray()], copies: copies, list: list.toArray(), sortedBinary: sortedBinary, extremes: extremes, replaced: replaced, destination: destination.toArray(), frequency: Collections.frequency(list, 8), readOnly: readOnly.toArray(), readOnlyErrors: readOnlyErrors, copiesOf: Collections.nCopies(2, 'x').toArray(), text: Arrays.toString(array), deep: Arrays.deepToString([[1], [2, 3]]) });
+      var syncList = Collections.synchronizedList(list);
+      syncList.add(6);
+      var map = new HashMap({ a: 1 });
+      var readOnlyMap = Collections.unmodifiableMap(map);
+      var mapErrors = [];
+      try { readOnlyMap.put('b', 2); } catch (error) { mapErrors.push('put'); }
+      try { readOnlyMap.entrySet().iterator().next().setValue(2); } catch (error) { mapErrors.push('entry'); }
+      var set = new HashSet(['a', 'b']);
+      var readOnlySet = Collections.unmodifiableSet(set);
+      try { readOnlySet.remove('a'); } catch (error) { mapErrors.push('set'); }
+      var backing = new HashMap();
+      var mapSet = Collections.newSetFromMap(backing);
+      mapSet.add('x');
+      mapSet.add('y');
+      mapSet.remove('x');
+      var arraySum = 0;
+      Arrays.forEach([1, 2, 3], function(value) { arraySum += value; });
+      JSON.stringify({ array: array, fixed: fixed.toArray(), fixedErrors: fixedErrors, binary: binary, bytes: [Array.from(bytes), byteList.toArray()], copies: copies, list: list.toArray(), sortedBinary: sortedBinary, extremes: extremes, replaced: replaced, destination: destination.toArray(), frequency: Collections.frequency(list, 8), readOnly: readOnly.toArray(), readOnlyErrors: readOnlyErrors, copiesOf: Collections.nCopies(2, 'x').toArray(), text: Arrays.toString(array), deep: Arrays.deepToString([[1], [2, 3]]), map: [readOnlyMap.get('a'), readOnlyMap.size(), readOnlyMap.entrySet().iterator().next().getValue()], mapErrors: mapErrors, set: [readOnlySet.toArray(), mapSet.toArray(), backing.keySet().toArray()], singletonMap: [Collections.singletonMap('k', 'v').get('k'), Collections.emptyMap().isEmpty()], arraySum: arraySum });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
@@ -343,17 +360,22 @@ test('Java Arrays 和 Collections 常用重载保持固定大小与只读语义'
     binary: 2,
     bytes: [[9, 4], [9, 4]],
     copies: [[1, 2, null, null], [2, null, null]],
-    list: [3, 8, 1, 5, 4],
+    list: [3, 8, 1, 5, 4, 6],
     sortedBinary: 1,
     extremes: [1, 3],
     replaced: true,
     destination: [3, 8, 1, 5, 4],
     frequency: 1,
-    readOnly: [3, 8, 1, 5, 4],
+    readOnly: [3, 8, 1, 5, 4, 6],
     readOnlyErrors: ['set', 'clear', 'singleton'],
     copiesOf: ['x', 'x'],
     text: '[1, 9, 9, 7]',
     deep: '[[1], [2, 3]]',
+    map: [1, 1, 1],
+    mapErrors: ['put', 'entry', 'set'],
+    set: [['a', 'b'], ['y'], ['y']],
+    singletonMap: ['v', true],
+    arraySum: 6,
   })
 })
 
