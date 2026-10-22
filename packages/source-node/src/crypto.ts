@@ -179,6 +179,18 @@ function nodeSignAlgorithm(algorithm: string): string {
   return algorithm
 }
 
+function nodeSignDescriptor(algorithm: string): { algorithm: string; options?: { padding: number; saltLength: number } } {
+  const normalized = algorithm.replace(/\s+/gu, '')
+  const pss = /^SHA(\d+)withRSA(?:\/PSS|andMGF1)$/iu.exec(normalized)
+  if (pss?.[1] !== undefined) {
+    return {
+      algorithm: `RSA-SHA${pss[1]}`,
+      options: { padding: constants.RSA_PKCS1_PSS_PADDING, saltLength: constants.RSA_PSS_SALTLEN_DIGEST },
+    }
+  }
+  return { algorithm: nodeSignAlgorithm(algorithm) }
+}
+
 class NodeAsymmetricCrypto implements AsymmetricCrypto {
   private privateKey: ReturnType<typeof createPrivateKey> | undefined
   private publicKey: ReturnType<typeof createPublicKey> | undefined
@@ -237,9 +249,12 @@ class NodeSignCrypto implements SignCrypto {
   private privateKey: ReturnType<typeof createPrivateKey> | undefined
   private publicKey: ReturnType<typeof createPublicKey> | undefined
   private readonly algorithm: string
+  private readonly options: { padding: number; saltLength: number } | undefined
 
   public constructor(algorithm: string) {
-    this.algorithm = nodeSignAlgorithm(algorithm)
+    const descriptor = nodeSignDescriptor(algorithm)
+    this.algorithm = descriptor.algorithm
+    this.options = descriptor.options
   }
 
   public setPrivateKey(key: CryptoKeyInput): SignCrypto {
@@ -256,7 +271,7 @@ class NodeSignCrypto implements SignCrypto {
     if (this.privateKey === undefined) throw new Error('private key is not set')
     const signer = createSign(this.algorithm)
     signer.update(Buffer.from(input))
-    return Uint8Array.from(signer.sign(this.privateKey))
+    return Uint8Array.from(this.options === undefined ? signer.sign(this.privateKey) : signer.sign({ key: this.privateKey, ...this.options }))
   }
 
   public signHex(input: Uint8Array): string { return Buffer.from(this.sign(input)).toString('hex') }
@@ -267,7 +282,9 @@ class NodeSignCrypto implements SignCrypto {
     if (this.publicKey === undefined) throw new Error('public key is not set')
     const verifier = createVerify(this.algorithm)
     verifier.update(Buffer.from(input))
-    return verifier.verify(this.publicKey, Buffer.from(signature))
+    return this.options === undefined
+      ? verifier.verify(this.publicKey, Buffer.from(signature))
+      : verifier.verify({ key: this.publicKey, ...this.options }, Buffer.from(signature))
   }
 }
 

@@ -994,6 +994,21 @@ test('Android 非对称加密与签名工厂可以往返 RSA 数据', async () =
   assert.deepEqual(JSON.parse(String(result.value)), ['hello', true])
 })
 
+test('RSA-PSS 签名算法按 Java 常用别名使用摘要长度盐值', async () => {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  })
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var signature = java.createSign("SHA256withRSA/PSS").setPrivateKey(${JSON.stringify(privateKey)}).signBase64("hello");
+    var verified = java.createSign("SHA256withRSA/PSS").setPublicKey(${JSON.stringify(publicKey)}).verify("hello", signature);
+    var aliasVerified = java.createSign("SHA256withRSAandMGF1").setPublicKey(${JSON.stringify(publicKey)}).verify("hello", signature);
+    JSON.stringify([signature.length > 0, verified, aliasVerified]);`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [true, true, true])
+})
+
 test('对称加密支持 Android 常用简写、十六进制输入和双密钥 3DES', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var aes = java.createSymmetricCrypto('AES', '1234567890123456');
