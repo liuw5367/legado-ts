@@ -217,6 +217,15 @@ test('source Map 兼容方法、URL 查询参数重复值和 jsLib 全局状态�
   assert.equal(afterRefresh.value, 1)
 })
 
+test('jsLib 可序列化状态按规则宿主会话隔离，不因共享缓存而串源', async () => {
+  const cache = new MemorySourceScriptCache()
+  const stateSource = { ...source, jsLib: 'var isolatedCounter = (typeof isolatedCounter === "undefined" ? 0 : isolatedCounter) + 1;' } as NormalizedSource
+  const first = new SourceRuleHost({ cache })
+  const second = new SourceRuleHost({ cache })
+  assert.equal((await first.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:isolatedCounter', content: '' })).value, 1)
+  assert.equal((await second.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:isolatedCounter', content: '' })).value, 1)
+})
+
 test('java.toURL 保留 IPv6 authority 和已编码查询参数名', async () => {
   const result = await evaluate(new SourceRuleHost(), '@js:JSON.stringify((() => { const url = java.toURL("https://[2001:db8::1]:8080/p?a%20b=x+y#frag"); return [url.host, url.hostname, url.port, url.origin, url.search, url.searchParams.get("a%20b"), url.searchParams.toString()]; })())', '')
   assert.equal(result.status, 'success', result.message)

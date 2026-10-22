@@ -104,7 +104,7 @@
 | D36 | 工具函数 | 日期格式和繁简词库 | 部分实现（P11） | Node 日期格式补 D/w/W/F/k/K/z/G，按 locale weekInfo 处理周边界，支持引号转义、非法 token 守卫和可注入 locale/timeZone；固定 UTC/Asia/Shanghai 回归通过；未知格式返回空结果 | SimpleDateFormat 全量 token、Android locale/时区规则和繁简词库版本仍待 Android golden；空结果是受控差异，不等同 Android 异常文本 |
 | D37 | 宿主值 | 设备替代值和阅读/主题配置注入 | 部分实现（P11） | 差异登记 D37；getWebViewUA 已有默认字符串；`NodeSourceSessionOptions.platformOptions` 支持装配稳定 deviceSeed、阅读和主题配置 | 账号内稳定标识与真实应用设置映射；明确物理设备不等价 |
 | D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
-| D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（第三阶段） | jsLib 按源指纹恢复可序列化全局状态，`refreshJSLib` 清除状态并有跨执行回归；函数/闭包/宿主对象不进入快照 | 并发、取消、跨进程和非序列化对象生命周期仍需明确边界 |
+| D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12，受限会话状态） | jsLib 状态键绑定 Node session、源定义指纹；跨操作和显式快照仅恢复可序列化 DTO，`refreshJSLib` 只清当前 scope；共享缓存不会串 session；函数/闭包/宿主对象不进入快照 | QuickJS 真实共享 VM、并发重入、取消后的 handle 生命周期和 Android golden 仍未验证；整源 JS 继续每次重执行 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（第一阶段） | 差异登记 D40；游标签名加入发现代次，刷新后旧游标有回归测试 | 动态 URL/infoMap 摘要、迟到请求写回和多实例组合仍需验证 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 138/138、根全套 `pnpm test` 558/558；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；回归覆盖 IPv6 host/port/origin | 无 base/非法输入、默认端口和完整 URL 属性仍待 Android golden |

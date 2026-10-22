@@ -111,6 +111,19 @@ test('Node 会话快照恢复源键值、登录状态和字符串缓存', async 
   restored.close()
 })
 
+test('Node 会话快照仅恢复可序列化 jsLib 状态，闭包函数不会跨域伪造恢复', async () => {
+  const source = { ...baseSource, jsLib: 'var serializableCounter = (typeof serializableCounter === "undefined" ? 0 : serializableCounter) + 1; var closureValue = (() => { const hidden = 7; return () => hidden; })();' } as NormalizedSource
+  const first = createNodeSourceSession(source)
+  const firstValue = await first.run((ports) => ports.rules.evaluate({ source: first.source, stage: 'search', field: 'jsLib', rule: '@js:JSON.stringify([serializableCounter, typeof closureValue, closureValue()])', content: '' }))
+  assert.equal(firstValue.value, '[1,"function",7]')
+  const snapshot = first.snapshotRuntimeState()
+  first.close()
+  const restored = createNodeSourceSession(source, { initialRuntimeState: snapshot })
+  const restoredValue = await restored.run((ports) => ports.rules.evaluate({ source: restored.source, stage: 'search', field: 'jsLib', rule: '@js:JSON.stringify([serializableCounter, typeof closureValue, closureValue()])', content: '' }))
+  assert.equal(restoredValue.value, '[2,"function",7]')
+  restored.close()
+})
+
 test('Node 会话拒绝把带 sourceKey 的运行时快照恢复到另一书源', async () => {
   const first = createNodeSourceSession({ ...baseSource, jsLib: '' } as NormalizedSource)
   await first.run((ports) => ports.rules.evaluate({ source: first.source, stage: 'search', field: 'snapshot', rule: '@js:source.put("key", "source-a"); cache.put("saved", "a"); "ok"', content: '' }))

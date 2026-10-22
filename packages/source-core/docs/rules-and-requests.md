@@ -46,7 +46,7 @@ Default 模式只对纯文本、literal 和变量插值做安全处理；CSS、X
 
 ## SourceRuleRuntime 与 session
 
-`SourceRuleRuntime` 组合 parser、JavaScript、encoding、crypto、font 和 bridge port；它不持有全局 source 或用户状态。`createSourceSession` 在会话边界添加 source 级 `concurrentRate`、脚本缓存和 source 变量快照，每次 `run` 创建隔离工作流上下文，结束后合并变量差异，`close()` 释放限流等待。
+`SourceRuleRuntime` 组合 parser、JavaScript、encoding、crypto、font 和 bridge port；它不持有全局 source 或用户状态。`createSourceSession` 在会话边界添加 source 级 `concurrentRate`、脚本缓存和 source 变量快照，每次 `run` 创建隔离工作流上下文，结束后合并变量差异，`close()` 释放限流等待。Node 宿主为声明式 `jsLib` 提供绑定 session identity 的可序列化状态键；它只恢复 JSON/数字等 DTO，不能把 QuickJS 函数、闭包、宿主对象或句柄写入缓存，整源 JS 仍按调用重建作用域。
 
 应用编辑或删除书源时必须关闭旧 session；不允许以模块级单例共享 guest JavaScript、Cookie、变量或解析节点。
 

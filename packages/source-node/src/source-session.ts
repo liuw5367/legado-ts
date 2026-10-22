@@ -10,6 +10,7 @@ import { NodeSourceFileHost } from './source-file-host.ts'
 import { NodeSourceConcurrency } from './source-concurrency.ts'
 import { NodeSourceRuntimePlatform } from './runtime-platform.ts'
 import type { NodeSourceRuntimePlatformOptions } from './runtime-platform.ts'
+import { randomUUID } from 'node:crypto'
 
 export interface NodeSourceSessionOptions {
   network?: NetworkHost
@@ -36,6 +37,8 @@ export interface NodeSourceRuntimeSnapshot {
   version: 1
   /** New snapshots are bound to one source definition; older v1 snapshots may omit this field. */
   sourceKey?: string
+  /** Serializable jsLib state scope; omitted by older snapshots and regenerated for a new session. */
+  jsLibSessionId?: string
   sourceVariables?: Record<string, string>
   sourceValues?: Record<string, Record<string, string>>
   loginHeaders?: Record<string, string>
@@ -59,6 +62,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
   const sourceValues = new Map<string, Map<string, string>>()
   const sourceKey = source.bookSourceUrl
   const runtimeState = validRuntimeSnapshot(options.initialRuntimeState, sourceKey) ? options.initialRuntimeState : undefined
+  const jsLibSessionId = runtimeState?.jsLibSessionId ?? randomUUID()
   const initialValue = runtimeState?.sourceVariables?.[sourceKey]
   if (initialValue !== undefined) sourceVariables.set(sourceKey, initialValue)
   const initialValues = runtimeState?.sourceValues?.[sourceKey]
@@ -157,6 +161,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
         sourceState,
         concurrency: sourceConcurrency,
         platform,
+        jsLibSessionId,
       })
       request.attachRuleHost(rules)
       return {
@@ -177,6 +182,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
       return {
         version: 1,
         sourceKey,
+        jsLibSessionId,
         ...(sourceVariables.has(sourceKey) ? { sourceVariables: { [sourceKey]: sourceVariables.get(sourceKey)! } } : {}),
         ...(values !== undefined && values.size > 0 ? { sourceValues: { [sourceKey]: Object.fromEntries(values) } } : {}),
         ...(loginHeaders.has(sourceKey) ? { loginHeaders: { [sourceKey]: loginHeaders.get(sourceKey)! } } : {}),
@@ -188,5 +194,5 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
 }
 
 function validRuntimeSnapshot(value: NodeSourceRuntimeSnapshot | undefined, sourceKey: string): value is NodeSourceRuntimeSnapshot {
-  return value === undefined || (typeof value === 'object' && value !== null && value.version === 1 && (value.sourceKey === undefined || value.sourceKey === sourceKey))
+  return value === undefined || (typeof value === 'object' && value !== null && value.version === 1 && (value.sourceKey === undefined || value.sourceKey === sourceKey) && (value.jsLibSessionId === undefined || typeof value.jsLibSessionId === 'string'))
 }

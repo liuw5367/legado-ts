@@ -180,6 +180,7 @@ export class SourceRuleHost implements WorkflowRulePort {
       ...(options.logger === undefined ? {} : { logger: options.logger }),
       ...(options.platform === undefined ? {} : { platform: options.platform }),
       ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
+      jsLibSessionId: options.jsLibSessionId ?? randomUUID(),
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
     })
   }

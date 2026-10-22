@@ -186,6 +186,8 @@ export interface SourceRuleRuntimeOptions {
   platform?: SourceRuntimePlatform
   /** Cross-execution SourceLock implementation, scoped by the host to a source. */
   concurrency?: SourceRuntimeConcurrency
+  /** Session identity for serializable jsLib state; never use a URL or account secret as this value. */
+  jsLibSessionId?: string
   encoding: EncodingHost
   crypto: CryptoHost
   font: FontHost
@@ -1235,6 +1237,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly logger?: SourceRuleRuntimeOptions['logger']
   private readonly platform?: SourceRuleRuntimeOptions['platform']
   private readonly concurrency?: SourceRuleRuntimeOptions['concurrency']
+  private readonly jsLibSessionId: string
   private readonly sessionLoginHeaders = new Map<string, string>()
   private readonly sessionLoginInfo = new Map<string, string>()
   private readonly sessionSourceVariables = new Map<string, string>()
@@ -1269,6 +1272,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     this.logger = options.logger
     this.platform = options.platform
     this.concurrency = options.concurrency
+    this.jsLibSessionId = options.jsLibSessionId ?? 'runtime'
     this.maxSteps = options.maxSteps ?? 10000
   }
 
@@ -1930,7 +1934,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const runSignal = signal ?? new AbortController().signal
     try {
       const libraries = await this.loadSourceLibraries(source, runSignal, context?.workflowStage ?? this.workflowStageForJavaScript(stage), context?.requestObserver)
-      const jsLibStateKey = libraries.length > 0 ? `jsLibState:${sourceDefinitionFingerprint(source)}` : undefined
+      const jsLibStateKey = libraries.length > 0 ? `jsLibState:${this.jsLibSessionId}:${sourceDefinitionFingerprint(source)}` : undefined
       if (jsLibStateKey !== undefined) {
         const cachedState = decodeSourceCacheValue(this.encoding, await this.cache.get(jsLibStateKey, runSignal))
         const persisted = typeof cachedState === 'object' && cachedState !== null && !Array.isArray(cachedState) ? cachedState as Record<string, unknown> : {}
@@ -2078,7 +2082,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const value = source.jsLib
     if (typeof value !== 'string' || value.trim().length === 0) return
     const fingerprint = sourceDefinitionFingerprint(source)
-    const stateKey = `jsLibState:${fingerprint}`
+    const stateKey = `jsLibState:${this.jsLibSessionId}:${fingerprint}`
     this.clearedJsLibStates.add(stateKey)
     await this.cache.delete(stateKey, signal)
     let remoteUrls: string[] | undefined
