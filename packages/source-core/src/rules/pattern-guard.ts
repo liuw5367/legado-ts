@@ -82,8 +82,8 @@ export function compileSourcePattern(pattern: string, options: SourcePatternOpti
 
 /**
  * 转换 Java Pattern 中可安全表达的历史书源语法；不把未知语法降级成字面匹配。
- * `\Q...\E` 和边界转义是等价转换，占有量词去掉 `+` 后只保留匹配集合，
- * 仍受上面的长度/回溯守卫约束；字符类交集与作用域 flags 暂时返回明确诊断。
+ * `\Q...\E` 和边界转义是等价转换；占有量词和原子分组没有等价的
+ * ECMAScript 表达，必须返回明确诊断，不能静默放宽匹配语义。
  */
 function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternTranslation | { error: SourcePatternError } {
   let flags = inputFlags
@@ -91,18 +91,16 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     if (!'dgimsuvy'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `正则 flag ${flag} 暂不支持` } }
   }
   let source = pattern
-  const inline = /^\(\?([imsUdx-]+)\)/u.exec(source)
+  const inline = /^\(\?([imsUdx]*)(?:-([imsUdx]+))?\)/u.exec(source)
   if (inline !== null) {
     source = source.slice(inline[0].length)
-    for (const flag of inline[1]!) {
-      if (flag === '-') continue
-      if (flag === 'U') {
-        if (!flags.includes('u')) flags += 'u'
-        continue
-      }
-      if ('imsu'.includes(flag) && !flags.includes(flag)) flags += flag
-      if (!'imsu'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
+    const enabled = inline[1] ?? ''
+    const disabled = inline[2] ?? ''
+    for (const flag of `${enabled}${disabled}`) {
+      if (!'imsuU'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
     }
+    flags = applyInlineFlags(flags, enabled, true)
+    flags = applyInlineFlags(flags, disabled, false)
   }
   if (/\(\?[imsUdx-]+:/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则作用域 flag 暂不支持' } }
   if (/\[[^\]]*&&/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则字符类交集暂不支持' } }
@@ -124,9 +122,54 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     output += source[index]!
     index += 1
   }
-  // ECMAScript 没有占有量词；去除占有标记保留 Java 的匹配集合，复杂度由守卫控制。
-  output = output.replace(/(\*|\+|\?|\{\d+(?:,\d*)?\})\+/gu, '$1')
+  if (/\(\?>/u.test(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则原子分组暂不支持' } }
+  if (hasPossessiveQuantifier(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则占有量词暂不支持' } }
   return { pattern: output, flags }
+}
+
+function applyInlineFlags(current: string, flags: string, enable: boolean): string {
+  let result = current
+  for (const flag of flags) {
+    if (flag === 'U') {
+      if (enable && !result.includes('u')) result += 'u'
+      if (!enable) result = result.replace('u', '')
+      continue
+    }
+    if (enable && !result.includes(flag)) result += flag
+    if (!enable) result = result.replace(flag, '')
+  }
+  return result
+}
+
+function hasPossessiveQuantifier(pattern: string): boolean {
+  let escaped = false
+  let inClass = false
+  for (let index = 0; index < pattern.length; index += 1) {
+    const current = pattern[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (current === '\\') {
+      escaped = true
+      continue
+    }
+    if (current === '[') {
+      inClass = true
+      continue
+    }
+    if (current === ']' && inClass) {
+      inClass = false
+      continue
+    }
+    if (inClass) continue
+    if ('*+?'.includes(current) && pattern[index + 1] === '+') return true
+    if (current === '}') {
+      const start = pattern.lastIndexOf('{', index)
+      if (start >= 0 && pattern[index + 1] === '+' && /^\{\d+(?:,\d*)?\}$/u.test(pattern.slice(start, index + 1))) return true
+    }
+  }
+  return false
 }
 
 /** Java Pattern 的 POSIX/历史 Unicode 属性与 ECMAScript 属性转义的有限等价映射。 */
