@@ -2279,7 +2279,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return replaceFont(textValue(request.text), error, correct, request.filter === true)
     }
     if (request.kind === 'cache-get') {
-      const value = request.onlyDisk === true && this.cache.getFromDisk !== undefined ? await this.cache.getFromDisk(textValue(request.key), signal) : await this.cache.get(textValue(request.key), signal)
+      if (request.onlyDisk === true && this.cache.getFromDisk === undefined) throw new Error('__LEGADO_CAPABILITY__runtime cache.onlyDisk unavailable')
+      const value = request.onlyDisk === true
+        ? await this.cache.getFromDisk!(textValue(request.key), signal)
+        : await this.cache.get(textValue(request.key), signal)
       return decodeSourceCacheValue(this.encoding, value)
     }
     if (request.kind === 'cache-put') {

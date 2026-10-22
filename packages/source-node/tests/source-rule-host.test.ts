@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
 import test from 'node:test'
+import { MemorySourceScriptCache } from '../../source-core/src/index.ts'
 import type { NormalizedSource, WorkflowRuleRequest } from '../../source-core/src/index.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
 
@@ -698,6 +699,14 @@ test('JavaScript CacheManager bridge 支持普通、内存和文件缓存', asyn
 
   const overwritten = await evaluate(host, "@js:cache.putMemory('ttl', 'stale'); cache.put('ttl', 'fresh', 60); cache.getFromMemory('ttl')", '')
   assert.equal(overwritten.status, 'empty', '带过期时间的普通缓存会清除旧的永久内存副本')
+})
+
+test('CacheManager onlyDisk 在宿主没有磁盘端口时报告能力缺失', async () => {
+  const cache = new MemorySourceScriptCache()
+  Object.defineProperty(cache, 'getFromDisk', { value: undefined, configurable: true })
+  const host = new SourceRuleHost({ cache })
+  const result = await evaluate(host, '@js:cache.get("missing", true)', '')
+  assert.equal(result.status, 'capability-missing')
 })
 
 test('CacheManager 保留对象、数字和 ByteArray 类型', async () => {

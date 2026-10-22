@@ -281,6 +281,7 @@ export function createSourceSession(options: SourceSessionOptions): SourceSessio
   const rateLimiter = new SourceRateLimiter(source.concurrentRate, options.clock ?? systemClockHost)
   const network = options.network === undefined ? undefined : withSourceRateLimit(options.network, rateLimiter)
   let closed = false
+  let operationGeneration = 0
   const diagnostics = rateLimiter.initialDiagnostic === undefined ? [] : [rateLimiter.initialDiagnostic]
 
   return {
@@ -288,13 +289,15 @@ export function createSourceSession(options: SourceSessionOptions): SourceSessio
     diagnostics: () => diagnostics,
     async run<T>(operation: (ports: WorkflowPorts) => Promise<T>, runOptions: { requestObserver?: RequestObserver } = {}): Promise<T> {
       if (closed) throw new Error('source session is closed')
+      const generation = ++operationGeneration
       const before = new Map(sourceVariables)
       const ports = options.createPorts({ source, initialVariables: Object.fromEntries(before), cache, ...(network === undefined ? {} : { network }), updateConcurrentRate: (value) => rateLimiter.update(value), ...(runOptions.requestObserver === undefined ? {} : { requestObserver: runOptions.requestObserver }) })
       try {
         return await operation(ports)
       } finally {
         const after = ports.rules.snapshotVariables?.('source')
-        if (after !== undefined) mergeChanges(sourceVariables, before, after)
+        // close() 可能在脚本/请求仍在途时发生；旧操作的 finally 不能把迟到快照写回会话。
+        if (!closed && generation <= operationGeneration && after !== undefined) mergeChanges(sourceVariables, before, after)
       }
     },
     snapshotVariables: () => Object.fromEntries(sourceVariables),
@@ -318,6 +321,8 @@ function mergeChanges(target: Map<string, string>, before: Map<string, string>, 
   for (const name of names) {
     const previous = before.get(name)
     const next = after[name]
+    // 并发操作只提交自己开始时仍未被其他操作修改的键，避免晚到快照覆盖更新值。
+    if (target.get(name) !== previous) continue
     if (previous === next) continue
     if (next === undefined) target.delete(name)
     else target.set(name, next)

@@ -111,6 +111,31 @@ test('Node 会话快照恢复源键值、登录状态和字符串缓存', async 
   restored.close()
 })
 
+test('Node 会话拒绝把带 sourceKey 的运行时快照恢复到另一书源', async () => {
+  const first = createNodeSourceSession({ ...baseSource, jsLib: '' } as NormalizedSource)
+  await first.run((ports) => ports.rules.evaluate({ source: first.source, stage: 'search', field: 'snapshot', rule: '@js:source.put("key", "source-a"); cache.put("saved", "a"); "ok"', content: '' }))
+  const snapshot = first.snapshotRuntimeState()
+  first.close()
+  const other = createNodeSourceSession({ ...baseSource, bookSourceUrl: 'https://other.invalid', jsLib: '' } as NormalizedSource, { initialRuntimeState: snapshot })
+  const result = await other.run((ports) => ports.rules.evaluate({ source: other.source, stage: 'search', field: 'snapshot', rule: '@js:JSON.stringify([source.get("key"), cache.get("saved")])', content: '' }))
+  assert.deepEqual(JSON.parse(String(result.value)), ['', null])
+  other.close()
+})
+
+test('会话关闭后在途操作的变量快照不会迟到写回', async () => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  const session = createNodeSourceSession({ ...baseSource, jsLib: '' } as NormalizedSource)
+  const pending = session.run(async (ports) => {
+    await gate
+    return ports.rules.evaluate({ source: session.source, stage: 'search', field: 'late', rule: '@js:source.putVariable("late"); "ok"', content: '' })
+  })
+  session.close()
+  release()
+  await pending
+  assert.equal(session.snapshotVariables().late, undefined)
+})
+
 test('Node 书源会话持有深拷贝并冻结的书源定义', () => {
   const input = { ...baseSource, extension: { label: 'initial' } } as NormalizedSource
   const session = createNodeSourceSession(input)
