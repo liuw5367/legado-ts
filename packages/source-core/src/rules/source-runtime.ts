@@ -539,6 +539,7 @@ const legadoJavaString = (input) => {
     isBlank: { value: () => legadoJavaStrip(text, true, true).length === 0 },
     repeat: { value: (count) => { const times = Number(count); if (!Number.isInteger(times) || times < 0) throw new RangeError("Invalid repeat count"); if (text.length > 0 && text.length * times > 16 * 1024 * 1024) throw new RangeError("String repeat exceeds runtime limit"); return legadoJavaString(text.repeat(times)) } },
     contentEquals: { value: (other) => other !== null && other !== undefined && text === String(other) },
+    formatted: { value: (...args) => legadoJavaString(legadoJavaFormat(text, args)) },
     toLowerCase: { value: () => legadoJavaString(text.toLowerCase()) },
     toUpperCase: { value: () => legadoJavaString(text.toUpperCase()) },
     split: { value: (separator, limit) => legadoList(legadoJavaSplit(text, String(separator ?? ""), limit)) },
@@ -573,7 +574,148 @@ const legadoJavaLangString = function(value, charsetOrOffset, length) {
   }
   return legadoJavaString(value)
 }
-// 书源常见 String.format 只覆盖顺序的 %s 占位符；其他格式由受控能力错误表示，不猜测 Locale 规则。
+const legadoJavaLocaleValue = (language, country, variant) => {
+  const normalizedLanguage = String(language ?? "").toLowerCase()
+  const normalizedCountry = String(country ?? "").toUpperCase()
+  const normalizedVariant = String(variant ?? "")
+  const tag = [normalizedLanguage, normalizedCountry].filter(Boolean).join("-") + (normalizedVariant.length > 0 ? "-" + normalizedVariant : "")
+  return { __legadoLocale: tag, getLanguage: () => normalizedLanguage, getCountry: () => normalizedCountry, getVariant: () => normalizedVariant, toLanguageTag: () => tag, toString: () => tag.length === 0 ? "" : tag.replaceAll("-", "_") }
+}
+const legadoJavaLocale = function(language, country, variant) { return legadoJavaLocaleValue(language, country, variant) }
+Object.assign(legadoJavaLocale, {
+  ROOT: legadoJavaLocaleValue("", ""),
+  US: legadoJavaLocaleValue("en", "US"),
+  UK: legadoJavaLocaleValue("en", "GB"),
+  ENGLISH: legadoJavaLocaleValue("en", ""),
+  CHINA: legadoJavaLocaleValue("zh", "CN"),
+  CHINESE: legadoJavaLocaleValue("zh", ""),
+  getDefault: () => legadoJavaLocaleValue("en", "US"),
+  forLanguageTag: (tag) => { const parts = String(tag ?? "").replaceAll("_", "-").split("-"); return legadoJavaLocaleValue(parts[0] ?? "", parts[1] ?? "", parts.slice(2).join("-")) },
+})
+const legadoJavaFormatObjectText = (value) => value === null || value === undefined ? "null" : String(value)
+const legadoJavaFormatInteger = (value, conversion) => {
+  if (typeof value === "bigint") return { value, signedPrimitive: false }
+  if (value !== null && typeof value === "object" && typeof value.__legadoBigInteger === "bigint") return { value: value.__legadoBigInteger, signedPrimitive: false }
+  const number = Number(value?.valueOf?.() ?? value)
+  if (!Number.isFinite(number) || !Number.isInteger(number)) throw new RangeError("Illegal format argument")
+  const integer = BigInt(number)
+  if ((conversion === "x" || conversion === "X" || conversion === "o") && number < 0) return { value: BigInt.asUintN(32, integer), signedPrimitive: true }
+  return { value: integer, signedPrimitive: false }
+}
+const legadoJavaFormatPad = (value, width, flags) => {
+  if (width === undefined || value.length >= width) return value
+  const count = width - value.length
+  if (flags.includes("-")) return value + " ".repeat(count)
+  return " ".repeat(count) + value
+}
+const legadoJavaFormatNumeric = (body, negative, flags, width, prefix = "") => {
+  const parenthesized = negative && flags.includes("(")
+  const sign = parenthesized ? "" : negative ? "-" : flags.includes("+") ? "+" : flags.includes(" ") ? " " : ""
+  const suffix = parenthesized ? ")" : ""
+  const total = sign + prefix + body + suffix
+  if (width === undefined || total.length >= width) return total
+  const count = width - total.length
+  if (flags.includes("-")) return total + " ".repeat(count)
+  if (flags.includes("0")) return sign + prefix + "0".repeat(count) + body + suffix
+  return " ".repeat(count) + total
+}
+const legadoJavaFormatLocale = (locale) => {
+  const tag = String(locale && typeof locale === "object" ? locale.__legadoLocale ?? "" : locale ?? "").toLowerCase()
+  if (tag.startsWith("de") || tag.startsWith("es") || tag.startsWith("it") || tag.startsWith("pt")) return { decimal: ",", grouping: "." }
+  if (tag.startsWith("fr")) return { decimal: ",", grouping: "\u202f" }
+  return { decimal: ".", grouping: "," }
+}
+const legadoJavaFormat = (format, args, locale) => {
+  const text = String(format ?? "")
+  const localeInfo = legadoJavaFormatLocale(locale)
+  const sourceArgs = Array.isArray(args) ? args : []
+  let output = ""
+  let cursor = 0
+  let nextArgument = 0
+  let previousArgument = -1
+  const append = (value) => { output += value; if (output.length > 16 * 1024 * 1024) throw new RangeError("String.format exceeds runtime limit") }
+  while (cursor < text.length) {
+    if (text[cursor] !== "%") { append(text[cursor]); cursor += 1; continue }
+    const match = text.slice(cursor).match(/^%(?:(\d+)\$)?([-#+ 0,(<]*)(\d+)?(?:\.(\d+))?([tT][a-zA-Z]|[a-zA-Z%])/u)
+    if (match === null) throw new Error("Invalid String.format pattern")
+    const argumentIndex = match[1] === undefined ? undefined : Number(match[1]) - 1
+    const flags = match[2] ?? ""
+    const width = match[3] === undefined ? undefined : Number(match[3])
+    const precision = match[4] === undefined ? undefined : Number(match[4])
+    const conversion = match[5]
+    if (argumentIndex !== undefined && argumentIndex < 0) throw new Error("Invalid String.format argument index")
+    if (flags.includes("-") && flags.includes("0")) throw new Error("Invalid String.format flags")
+    if (conversion === "%") {
+      if (argumentIndex !== undefined || flags.length > 0 || width !== undefined || precision !== undefined) throw new Error("Invalid String.format percent conversion")
+      append("%"); cursor += match[0].length; continue
+    }
+    if (conversion === "n") {
+      if (argumentIndex !== undefined || flags.length > 0 || width !== undefined || precision !== undefined) throw new Error("Invalid String.format newline conversion")
+      append("\n"); cursor += match[0].length; continue
+    }
+    if (/^[tT]/u.test(conversion)) throw new Error("Unsupported String.format date conversion")
+    const selected = flags.includes("<") ? previousArgument : argumentIndex ?? nextArgument++
+    if (!Number.isInteger(selected) || selected < 0 || selected >= sourceArgs.length) throw new Error("Missing String.format argument")
+    previousArgument = selected
+    const value = sourceArgs[selected]
+    const upper = conversion === conversion.toUpperCase()
+    const kind = conversion.toLowerCase()
+    let rendered
+    if (kind === "s") {
+      rendered = legadoJavaFormatObjectText(value)
+      if (precision !== undefined) rendered = rendered.slice(0, precision)
+      if (upper) rendered = rendered.toUpperCase()
+      append(legadoJavaFormatPad(rendered, width, flags))
+    } else if (kind === "b") {
+      rendered = value === null || value === undefined ? "false" : typeof value === "boolean" ? String(value) : "true"
+      if (upper) rendered = rendered.toUpperCase()
+      append(legadoJavaFormatPad(rendered, width, flags))
+    } else if (kind === "h") {
+      if (value === null || value === undefined) rendered = "null"
+      else if (typeof value?.hashCode === "function") rendered = (Number(value.hashCode()) >>> 0).toString(16)
+      else { let hash = 0; for (const char of legadoJavaFormatObjectText(value)) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0; rendered = (hash >>> 0).toString(16) }
+      if (upper) rendered = rendered.toUpperCase()
+      append(legadoJavaFormatPad(rendered, width, flags))
+    } else if (kind === "c") {
+      const numeric = typeof value === "number" || typeof value === "bigint" ? Number(value) : undefined
+      if (numeric !== undefined) { if (!Number.isInteger(numeric) || numeric < 0 || numeric > 0x10ffff) throw new RangeError("Illegal format character"); rendered = String.fromCodePoint(numeric) } else { const source = legadoJavaFormatObjectText(value); if (source.length === 0) throw new RangeError("Illegal format character"); rendered = String.fromCodePoint(source.codePointAt(0)) }
+      if (upper) rendered = rendered.toUpperCase()
+      append(legadoJavaFormatPad(rendered, width, flags))
+    } else if (kind === "d" || kind === "o" || kind === "x") {
+      if (precision !== undefined || flags.includes("#") && kind === "d") throw new Error("Invalid String.format integer flags")
+      const integer = legadoJavaFormatInteger(value, kind)
+      const negative = !integer.signedPrimitive && integer.value < 0n
+      const magnitude = negative ? -integer.value : integer.value
+      const radix = kind === "d" ? 10 : kind === "o" ? 8 : 16
+      let body = magnitude.toString(radix)
+      if (flags.includes(",") && kind === "d") { const parts = []; for (let end = body.length; end > 0; end -= 3) parts.unshift(body.slice(Math.max(0, end - 3), end)); body = parts.join(localeInfo.grouping) }
+      if (upper) body = body.toUpperCase()
+      const prefix = flags.includes("#") ? kind === "x" ? upper ? "0X" : "0x" : kind === "o" ? "0" : "" : ""
+      append(legadoJavaFormatNumeric(body, negative, flags, width, prefix))
+    } else if (kind === "f" || kind === "e" || kind === "g") {
+      const number = Number(value?.valueOf?.() ?? value)
+      if (Number.isNaN(number)) rendered = upper ? "NAN" : "NaN"
+      else if (!Number.isFinite(number)) rendered = (number < 0 ? "-" : "") + (upper ? "INFINITY" : "Infinity")
+      else {
+        const negative = Object.is(number, -0) || number < 0
+        const absolute = Math.abs(number)
+        const digits = precision === undefined ? 6 : precision
+        if (kind === "f") rendered = absolute.toFixed(digits)
+        else if (kind === "e") rendered = absolute.toExponential(digits).replace(/e([+-])(\d)$/u, "e$10$2")
+        else rendered = absolute.toPrecision(digits).replace(/e([+-])(\d)$/u, "e$10$2")
+        if (localeInfo.decimal !== ".") rendered = rendered.replace(".", localeInfo.decimal)
+        if (kind === "f" && flags.includes(",")) { const decimalIndex = rendered.indexOf(localeInfo.decimal); const whole = decimalIndex < 0 ? rendered : rendered.slice(0, decimalIndex); const fraction = decimalIndex < 0 ? "" : rendered.slice(decimalIndex); const parts = []; for (let end = whole.length; end > 0; end -= 3) parts.unshift(whole.slice(Math.max(0, end - 3), end)); rendered = parts.join(localeInfo.grouping) + fraction }
+        if (upper) rendered = rendered.toUpperCase()
+        append(legadoJavaFormatNumeric(rendered, negative, flags, width))
+        cursor += match[0].length
+        continue
+      }
+      append(legadoJavaFormatPad(rendered, width, flags))
+    } else throw new Error("Unsupported String.format conversion: " + conversion)
+    cursor += match[0].length
+  }
+  return output
+}
 // Java 的字符数组重载按 UTF-16 char 连接；不能复用 byte[] 解码路径，否则数值会被当作 UTF-8 字节。
 const legadoJavaCharArrayText = (value, offset, length) => {
   if (value === null || value === undefined || typeof value.length !== "number") throw new RangeError("char array is required")
@@ -587,7 +729,7 @@ Object.assign(legadoJavaLangString, {
   valueOf: (value) => value === null || value === undefined ? legadoJavaString("null") : Array.isArray(value) ? legadoJavaString(legadoJavaCharArrayText(value)) : legadoJavaString(value),
   copyValueOf: (value, offset, length) => legadoJavaString(legadoJavaCharArrayText(value, offset, length)),
   join: (delimiter, values, ...rest) => { const separator = String(delimiter ?? "null"); const collection = values !== null && values !== undefined && typeof values !== "string" && (Array.isArray(values) || typeof values.toArray === "function" || typeof values[Symbol.iterator] === "function"); const items = rest.length > 0 ? [values, ...rest] : collection ? legadoJavaCollectionValues(values) : values === undefined ? [] : [values]; return legadoJavaString(items.map((item) => item === null || item === undefined ? "null" : String(item)).join(separator)) },
-  format: (format, ...args) => legadoJavaString(String(format ?? "").replace(/%s/gu, () => String(args.shift() ?? "null"))),
+  format: (formatOrLocale, ...args) => { const localeTag = formatOrLocale !== null && formatOrLocale !== undefined ? formatOrLocale.__legadoLocale : undefined; const locale = localeTag === undefined ? undefined : String(localeTag); const format = locale === undefined ? formatOrLocale : args.shift(); return legadoJavaString(legadoJavaFormat(format, args, locale)) },
 })
 const legadoStringBuilder = function(initial) {
   let value = initial === undefined ? "" : String(initial)
@@ -1080,7 +1222,7 @@ const legadoJavaCollections = {
   indexOfSubList: (list, subList) => { const values = legadoJavaCollectionValues(list); const sub = legadoJavaCollectionValues(subList); if (sub.length === 0) return 0; for (let index = 0; index <= values.length - sub.length; index++) if (sub.every((item, offset) => Object.is(values[index + offset], item))) return index; return -1 },
   lastIndexOfSubList: (list, subList) => { const values = legadoJavaCollectionValues(list); const sub = legadoJavaCollectionValues(subList); if (sub.length === 0) return values.length; for (let index = values.length - sub.length; index >= 0; index--) if (sub.every((item, offset) => Object.is(values[index + offset], item))) return index; return -1 },
 }
-const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, regex: { Pattern: legadoPattern, Matcher: legadoMatcher }, Base64: legadoBase64 }
+const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, Locale: legadoJavaLocale, regex: { Pattern: legadoPattern, Matcher: legadoMatcher }, Base64: legadoBase64 }
 const legadoJavaZip = { GZIPInputStream: legadoGzipInputStream, InflaterInputStream: legadoInflaterInputStream, ZipInputStream: legadoZipInputStream }
 const legadoJsoupParse = (input) => {
   const html = String(input ?? "")
@@ -1270,7 +1412,7 @@ if (__legadoUrlContext !== null && typeof __legadoUrlContext === "object" && !Ar
   java.getResponse = () => legadoResponseCompat(String(__legadoUrlContext.url ?? ""), __legadoUrlRequest("response"))
   java.getHeaderMap = () => __legadoUrlMap
 }
-globalThis.__legadoJavaPackages = { JavaImporter, Packages, JavaAdapter, MessageDigest: legadoMessageDigest, StringBuilder: legadoStringBuilder, Integer: legadoInteger, HashMap: legadoJavaUtil.HashMap, ArrayList: legadoJavaUtil.ArrayList, Pattern: legadoPattern, Matcher: legadoMatcher, Base64: legadoBase64 }
+globalThis.__legadoJavaPackages = { JavaImporter, Packages, JavaAdapter, MessageDigest: legadoMessageDigest, StringBuilder: legadoStringBuilder, Integer: legadoInteger, HashMap: legadoJavaUtil.HashMap, ArrayList: legadoJavaUtil.ArrayList, Pattern: legadoPattern, Matcher: legadoMatcher, Base64: legadoBase64, Locale: legadoJavaLocale }
 `
 
 /**

@@ -276,7 +276,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 - 精准搜索按书名、作者和分类命中，且分类命中进入分类结果组。
 - 段评摘要、详情、回复的函数配对、段落索引和分页返回值。
 
-`JS-005` 字符串扩展（2026-10-22）：书源式 fixture 已实际覆盖 Java String 的 UTF-16 code point 定位/计数/偏移、`getChars`、`lastIndexOf`、Unicode 空白裁剪、`repeat`、`contentEquals` 和 `String.join`；这些是 QuickJS 受控对象行为，`repeat` 受 16 MiB 输出预算限制，Android 同输入 golden 仍为 `not-run`。
+`JS-005` 字符串扩展（2026-10-22）：书源式 fixture 已实际覆盖 Java String 的 UTF-16 code point 定位/计数/偏移、`getChars`、`lastIndexOf`、Unicode 空白裁剪、`repeat`、`contentEquals`、`String.join`、`String.format/formatted` 的常用数值/字符串/定位格式和 Locale 常量；这些是 QuickJS 受控对象行为，`repeat`/`format` 受 16 MiB 输出预算限制，日期时间格式仍显式失败，Android 同输入 golden 仍为 `not-run`。
 
 ## 验证层级
 

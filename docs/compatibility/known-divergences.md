@@ -66,7 +66,7 @@
 | D43 | `JsExtensions.getFile` 返回真实 java.io.File，方法如 getName/getPath/getAbsolutePath/length/lastModified/listFiles 可调用；exists 等在调用时读取文件状态 | `source-runtime.ts` 的 File 包装已提供 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；P09 让 exists/isFile/isDirectory 和元数据方法每次从宿主桥接刷新；cache delete 会清理对应 `cacheFile` 映射 | 受控相对命名空间和只读方法已覆盖常见书源；写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
 | D44 | 应用交互 | Android 登录 UI/action、书源事件与付费动作需要应用层人工入口和状态反馈 | reader-web 已提供受保护的静态 RowUi/动态 loginUi v2 API 与页面，使用源版本指纹和持久 session；登录脚本触发的 `upUiData`、`reUiView`、`refreshExplore`、`saveInfoMap` 及 `copyText`/`clearTtsCache`/`searchBook`/`addBook`/`showPhoto`/`open` 返回不带输入值的结构化动作；`payAction`/`callBackJs` 有人工触发 API、书源版本校验和进程内十分钟 operationId 幂等保护；密码/token 不在响应中回显 | 纯表单登录、脚本动作、回调和桩支付可在无浏览器环境执行；多实例幂等、真实付费/站点登录、应用书架/阅读刷新和自定义按钮消费尚未完成，Android golden 仍为 `not-run` | 保留真实浏览器/验证码/远程购买为宿主边界；应用动作先返回可审计的结构化结果和能力错误，待业务页面接入持久幂等存储、刷新链和 Android 同输入 fixture |
 
-`D34` 字符串补充（2026-10-22）：QuickJS 的受控 Java String 已新增 `lastIndexOf`、UTF-16 code point 定位/计数/偏移、`getChars`、`contentEquals`、Unicode 空白 `isBlank/strip*`、`repeat` 和 `String.join`，书源式 `JS-005` 回归已通过；`repeat` 受 16 MiB 输出预算限制，Android golden 仍待执行。`String.lines/chars/codePoints/format` 等返回 Stream 或复杂格式化能力尚未实现，继续逐成员登记，不把受控对象宣称成完整 JVM。
+`D34` 字符串补充（2026-10-22）：QuickJS 的受控 Java String 已新增 `lastIndexOf`、UTF-16 code point 定位/计数/偏移、`getChars`、`contentEquals`、Unicode 空白 `isBlank/strip*`、`repeat`、`String.join`、`String.format/formatted` 常用数值/字符串/定位格式和 `Locale` 常量，书源式 `JS-005` 回归已通过；`repeat`/`format` 受 16 MiB 输出预算限制，日期时间格式和完整 Locale 规则仍显式失败，Android golden 仍待执行。`String.lines/chars/codePoints` 等返回 Stream 的能力尚未实现，继续逐成员登记，不把受控对象宣称成完整 JVM。
 
 ### 需要应用或真实平台的剩余项
 
@@ -93,6 +93,6 @@
 
 后续实施以逐签名契约为单位，记录参数类型/默认值/null、返回对象成员、状态作用域、异常/取消、Android 来源和同输入案例；不能再次用方法名总数或单端测试总数宣布全量完成。具体实施顺序保存在本地修复计划，长期事实仍以本节、状态总览和证据矩阵为准。
 
-2026-10-22 D34 更新后，方法清单为 27 个能力族、225 个成员（42 implemented、169 partial、14 simulated）；新增 Java String 成员已有 TS 书源式回归，但受控对象和 Android golden 仍分开记录。
+2026-10-22 D34 更新后，方法清单为 27 个能力族、229 个成员（42 implemented、171 partial、16 simulated）；新增 Java String/Locale 成员已有 TS 书源式回归，但受控对象和 Android golden 仍分开记录。
 
 2026-10-22 P13 已补齐逐 fixture TypeScript runner 和 Android 前置检查：六条跨运行时 fixture 均有实际 TS 输出并通过 expected 比较；Android 当前没有逐 fixture adapter，六条仍为 `not-run`，比较器使用 `--require-android` 时退出码为 2。该状态只说明跨端验证受阻，不把 Android 普通 JVM 单测或 Node 结果当作 golden。

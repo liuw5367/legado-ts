@@ -3631,7 +3631,11 @@
         "String.stripLeading",
         "String.stripTrailing",
         "String.repeat",
-        "String.join"
+        "String.join",
+        "String.format",
+        "String.formatted",
+        "Locale.ROOT/getDefault",
+        "Locale.forLanguageTag"
       ],
       "tsPaths": [
         "packages/source-core/src/rules/source-runtime.ts",
@@ -4047,6 +4051,74 @@
           "signature": "String.join(CharSequence,Iterable/CharSequence...)",
           "parameters": [],
           "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::023-string-format",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.format",
+          "signature": "String.format(Locale?,String,Object...)",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::024-string-formatted",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.formatted",
+          "signature": "String.formatted(Object...)",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::025-locale-root-default",
+          "owner": "Rhino/Java wrappers",
+          "name": "Locale.ROOT/getDefault",
+          "signature": "Locale.ROOT; Locale.getDefault()",
+          "parameters": [],
+          "returnType": "Locale",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::026-locale-for-language-tag",
+          "owner": "Rhino/Java wrappers",
+          "name": "Locale.forLanguageTag",
+          "signature": "Locale.forLanguageTag(String)",
+          "parameters": [],
+          "returnType": "Locale",
           "implementation": "simulated",
           "verification": "ts-passed",
           "feasibility": "simulatable",
@@ -5334,5 +5406,5 @@
       ]
     }
   ],
-  "memberCount": 225
+  "memberCount": 229
 }

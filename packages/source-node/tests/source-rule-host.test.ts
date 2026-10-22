@@ -341,6 +341,34 @@ test('Java String Unicode、字符数组和空白方法保持 UTF-16 语义', as
   assert.deepEqual(JSON.parse(String(invalid.value)), ['at', 'offset', 'repeat'])
 })
 
+test('Java String.format 和 Locale 覆盖书源常见的数值、字符串与定位格式', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String, Packages.java.util.Locale, Packages.java.math.BigInteger);
+    with (importer) {
+      var common = String.format('%05d/%-6s/%#08x/%.2f/%B/%c/%%', 12, '书', 31, 1.25, true, 65);
+      var positional = String.format(Locale.ROOT, '%2\\$s=%1\\$d/%<05d', 7, 'ok');
+      var locale = String.format(new Locale('de', 'DE'), '%,.2f', 1234.5);
+      var big = String.format('%032x', new BigInteger('1'));
+      var instance = new String('%.1f').formatted(1.25);
+      var hash = String.format('%h/%H', 'abc', 'abc');
+      JSON.stringify({ common: common, positional: positional, locale: locale, big: big, instance: instance, hash: hash, localeName: Locale.forLanguageTag('zh-CN').toString() });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    common: '00012/书     /0x00001f/1.25/TRUE/A/%',
+    positional: 'ok=7/00007',
+    locale: '1.234,50',
+    big: '00000000000000000000000000000001',
+    instance: '1.3',
+    hash: '17862/17862',
+    localeName: 'zh_CN',
+  })
+
+  const unsupported = await evaluate(new SourceRuleHost(), `@js:var importer = new JavaImporter(Packages.java.lang.String); with (importer) String.format('%tF', new Date())`, '')
+  assert.equal(unsupported.status, 'failed')
+  assert.match(unsupported.message ?? '', /Unsupported String\.format date conversion/u)
+})
+
 test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.StringBuilder, Packages.java.lang.Integer, Packages.java.util.regex.Pattern);
