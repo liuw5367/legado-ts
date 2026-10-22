@@ -265,14 +265,24 @@ export class NodeSourceFileHost implements SourceFileHost {
     const input = await this.readBytes(path)
     if (input === null) return ''
     const format = operation === 'un7zFile' ? '7z' : operation === 'unrarFile' ? 'rar' : extension(path) === 'gz' ? 'gzip' : extension(path) === 'zip' || operation === 'unzipFile' ? 'zip' : extension(path) === '7z' ? '7z' : 'rar'
-    const entries = await this.archive.extract(input, format, {}, signal)
     const name = path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? path
     const folder = `temp/${sourceKey(name)}`
-    for (const entry of entries) {
-      const target = this.absolute(join(folder, entry.path))
-      await this.assertNoSymlink(target.relative)
-      await mkdir(join(target.absolute, '..'), { recursive: true })
-      await writeFile(target.absolute, Buffer.from(entry.data))
+    try {
+      const entries = await this.archive.extract(input, format, {}, signal)
+      for (const entry of entries) {
+        if (signal.aborted) throw new Error('__LEGADO_CANCELLED__')
+        // Keep the archive entry's `..` segments visible to safeRelative;
+        // path.join would normalize them before the sandbox check.
+        const target = this.absolute(`${folder}/${entry.path.replaceAll('\\', '/')}`)
+        await this.assertNoSymlink(target.relative)
+        await mkdir(join(target.absolute, '..'), { recursive: true })
+        await writeFile(target.absolute, Buffer.from(entry.data))
+      }
+    } catch (error) {
+      // A failed/cancelled extraction must not leave a partially written
+      // directory that a later rule invocation could read as a valid archive.
+      await rm(this.absolute(folder).absolute, { recursive: true, force: true }).catch(() => undefined)
+      throw error
     }
     return folder
   }

@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { NetworkHost, NormalizedSource } from '@legado/source-core'
+import type { ArchiveHost, NetworkHost, NormalizedSource } from '@legado/source-core'
 import { NodeCharsetCodec } from '../src/charset.ts'
 import { NodeSourceFileHost } from '../src/source-file-host.ts'
 
@@ -106,6 +106,30 @@ test('Node 文件宿主的空目录路径遵循 Android 语义且不会删除缓
     await writeFile(join(root, 'keep.txt'), 'keep', 'utf8')
     assert.equal(await host.execute('getTxtInFolder', { path: '' }, signal, source), '')
     assert.equal(await readFile(join(root, 'keep.txt'), 'utf8'), 'keep')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Node 文件宿主在归档部分写入后失败或取消时清理临时目录', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-archive-cleanup-test-'))
+  const archive: ArchiveHost = { extract: async () => [
+    { path: 'ok.txt', data: new TextEncoder().encode('ok') },
+    { path: '../escape.txt', data: new TextEncoder().encode('escape') },
+  ] }
+  try {
+    const host = new NodeSourceFileHost({ root, archive, network: { request: async () => ({ url: 'https://fixture.invalid', status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }) } })
+    const signal = new AbortController().signal
+    await writeFile(join(root, 'broken.zip'), 'fixture', 'utf8')
+    await assert.rejects(() => host.execute('unzipFile', { path: 'broken.zip' }, signal, source), /非法路径/u)
+    assert.deepEqual(await readdir(join(root, 'temp')).catch(() => []), [])
+
+    const controller = new AbortController()
+    const cancelledArchive: ArchiveHost = { extract: async () => { controller.abort(); return [{ path: 'cancelled.txt', data: new TextEncoder().encode('cancelled') }] } }
+    const cancelledHost = new NodeSourceFileHost({ root, archive: cancelledArchive, network: { request: async () => ({ url: 'https://fixture.invalid', status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }) } })
+    await writeFile(join(root, 'cancelled.zip'), 'fixture', 'utf8')
+    await assert.rejects(() => cancelledHost.execute('unzipFile', { path: 'cancelled.zip' }, controller.signal, source), /__LEGADO_CANCELLED__/u)
+    assert.deepEqual(await readdir(join(root, 'temp')).catch(() => []), [])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
