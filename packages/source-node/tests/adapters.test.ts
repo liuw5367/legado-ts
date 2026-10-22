@@ -44,6 +44,22 @@ test('HTML adapter 支持 Jsoup 文本正则、属性正则和常见组合选择
   assert.equal(document.select('div:is(.content,.head)').length, 2)
 })
 
+test('HTML adapter 对齐 Jsoup ownText/textNodes 的 br、保留空白和脚本节点边界', () => {
+  const document = new HtmlParserAdapter().parse('<div>A<br>B<script> x\n y </script><textarea> a\n b </textarea><pre> p\n q </pre></div>')
+  const root = document.select('div')[0]!
+  assert.equal(document.read(root, 'ownText'), 'A B')
+
+  const script = document.select('script')[0]!
+  assert.equal(document.read(script, 'ownText'), 'x\n y')
+  assert.equal(document.read(script, 'textNodes'), 'x y')
+
+  const textarea = document.select('textarea')[0]!
+  assert.equal(document.read(textarea, 'ownText'), 'a\n b')
+
+  const pre = document.select('pre')[0]!
+  assert.equal(document.read(pre, 'ownText'), 'p\n q')
+})
+
 test('HTML adapter 的 XML 模式保留大小写并报告无效选择器', () => {
   const document = new HtmlParserAdapter().parse('<Root><Item ID="x">Hi</Item></Root>', 'xml')
   assert.equal(document.select('Item').length, 1)

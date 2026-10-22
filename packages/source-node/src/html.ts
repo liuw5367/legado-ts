@@ -1,5 +1,5 @@
 import { parseDocument } from 'htmlparser2'
-import { isDocument, isText, isTag, type AnyNode } from 'domhandler'
+import { isCDATA, isDocument, isText, isTag, type AnyNode } from 'domhandler'
 import { getAttributeValue, getChildren, getText } from 'domutils'
 import { selectAll } from 'css-select'
 import { render } from 'dom-serializer'
@@ -49,8 +49,8 @@ class HtmlDocumentView implements HtmlDocument {
     }
     if (output === 'text') return jsoupText(value)
     const children = isDocument(value) || isTag(value) ? getChildren(value) : []
-    if (output === 'textNodes') return children.filter((child) => isText(child) && !isScriptOrStyle(child.parent)).map((child) => trimAndroidWhitespace(normalizeWhitespace(getText(child)))).filter(Boolean).join('\n')
-    return children.filter((child) => isText(child) && !isScriptOrStyle(child.parent)).map((child) => trimAndroidWhitespace(normalizeWhitespace(getText(child)))).filter(Boolean).join('')
+    if (output === 'textNodes') return children.filter((child) => isText(child) || isCDATA(child)).map((child) => trimAndroidWhitespace(normalizeWhitespace(getText(child)))).filter(Boolean).join('\n')
+    return ownTextValue(value)
   }
 
   public child(node: ParserNode): HtmlDocument {
@@ -158,7 +158,25 @@ function jsoupText(node: AnyNode): string {
 
 function ownTextValue(node: AnyNode): string {
   if (!isDocument(node) && !isTag(node)) return ''
-  return getChildren(node).filter((child) => isText(child) && !isScriptOrStyle(child.parent)).map((child) => getText(child)).join('').replace(/[\s\u00a0]+/gu, ' ').trim()
+  let output = ''
+  for (const child of getChildren(node)) {
+    if (isText(child) || isCDATA(child)) {
+      const text = getText(child)
+      output += isCDATA(child) || preservesWhitespace(child.parent) ? text : normalizeWhitespace(text)
+      continue
+    }
+    if (isTag(child) && child.name === 'br' && !output.endsWith(' ')) output += ' '
+  }
+  return trimAndroidWhitespace(output)
+}
+
+function preservesWhitespace(node: AnyNode | null | undefined): boolean {
+  let current = node
+  for (let depth = 0; depth < 6 && current !== null && current !== undefined; depth += 1) {
+    if (isTag(current) && (current.name === 'pre' || current.name === 'textarea' || current.name === 'script')) return true
+    current = current.parent
+  }
+  return false
 }
 
 function elementSiblingIndex(node: AnyNode): number {
