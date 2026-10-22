@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { decryptRuntimeState, encryptRuntimeState, MAX_RUNTIME_STATE_BYTES, normalizeSnapshot } from '../server/db/runtime-state-crypto.ts'
+import { decryptRuntimeState, encryptRuntimeState, MAX_RUNTIME_STATE_BYTES, normalizeSnapshot, sourceFileRoot } from '../server/db/runtime-state-crypto.ts'
 
 const secret = 'test-runtime-state-secret-with-enough-length'
 
@@ -38,4 +38,28 @@ test('runtime state preserves the Node source namespace and discovery generation
 
 test('runtime state encryption rejects oversized source state', () => {
   assert.throws(() => encryptRuntimeState({ variables: { oversized: 'x'.repeat(MAX_RUNTIME_STATE_BYTES) } }, secret), /超过大小限制/)
+})
+
+test('source file roots are deterministic but isolated by user, source, fingerprint and deployment key', () => {
+  const previousRoot = process.env.SOURCE_FILE_ROOT
+  const previousKey = process.env.SOURCE_RUNTIME_STATE_KEY
+  try {
+    process.env.SOURCE_FILE_ROOT = '/private/tmp/legado-source-root'
+    process.env.SOURCE_RUNTIME_STATE_KEY = secret
+    const first = sourceFileRoot('user-a', 'https://source.example/a', 'fingerprint-a')
+    assert.equal(first, sourceFileRoot('user-a', 'https://source.example/a', 'fingerprint-a'))
+    assert.equal(first.startsWith('/private/tmp/legado-source-root/'), true)
+    assert.equal(first.includes('user-a'), false)
+    assert.equal(first.includes('source.example'), false)
+    assert.notEqual(first, sourceFileRoot('user-b', 'https://source.example/a', 'fingerprint-a'))
+    assert.notEqual(first, sourceFileRoot('user-a', 'https://source.example/b', 'fingerprint-a'))
+    assert.notEqual(first, sourceFileRoot('user-a', 'https://source.example/a', 'fingerprint-b'))
+    process.env.SOURCE_RUNTIME_STATE_KEY = `${secret}-rotated`
+    assert.notEqual(first, sourceFileRoot('user-a', 'https://source.example/a', 'fingerprint-a'))
+  } finally {
+    if (previousRoot === undefined) delete process.env.SOURCE_FILE_ROOT
+    else process.env.SOURCE_FILE_ROOT = previousRoot
+    if (previousKey === undefined) delete process.env.SOURCE_RUNTIME_STATE_KEY
+    else process.env.SOURCE_RUNTIME_STATE_KEY = previousKey
+  }
 })

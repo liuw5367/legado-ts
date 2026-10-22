@@ -8,6 +8,8 @@ import { compareImportCandidates } from '../server/runtime/source-comparison.ts'
 import { bookIdentityKey, sameBookIdentity } from '../shared/book-identity.ts'
 import { fallbackChapterForPosition } from '../src/lib/source-position.ts'
 
+process.env.SOURCE_RUNTIME_STATE_KEY = 'book-sources-tests-runtime-state-key-32-bytes'
+
 async function setup() {
   const repository = new MemoryReaderRepository()
   const definitions = ['a', 'b'].map((id) => ({ bookSourceUrl: `https://${id === 'a' ? '8.8.8.8' : '8.8.4.4'}/source`, bookSourceName: `来源${id}`, bookSourceType: 0, lastUpdateTime: 10, searchUrl: `/search-${id}`, ruleSearch: { bookList: 'article', name: 'h2@text', author: '.author@text', bookUrl: 'a@href' }, ruleBookInfo: { name: 'h1@text', author: '.author@text', tocUrl: 'a@href' } }))
