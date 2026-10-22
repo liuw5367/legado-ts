@@ -29,6 +29,18 @@ test('Node 文件宿主限制相对路径并支持下载、读取和删除', asy
   }
 })
 
+test('Node 文件宿主保留 Android downloadFile(content, url) 的十六进制重载', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-file-hex-test-'))
+  try {
+    const host = new NodeSourceFileHost({ root, network: { request: async () => ({ url: 'https://fixture.invalid', status: 200, headers: {}, bytes: new Uint8Array(), redirected: false }) } })
+    const signal = new AbortController().signal
+    const path = await host.execute('downloadFile', { content: 'E4B8ADE69687', url: 'https://fixture.invalid/content.txt' }, signal, source)
+    assert.equal(await host.execute('readTxtFile', { path }, signal, source), '中文')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('Node 文件宿主提供 Android File 的元数据和 listFiles', async () => {
   const root = await mkdtemp(join(tmpdir(), 'legado-file-list-test-'))
   try {

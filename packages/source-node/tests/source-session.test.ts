@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { searchBooks } from '@legado/source-core'
+import { MemorySourceScriptCache, searchBooks } from '@legado/source-core'
 import type { ClockHost, NetworkHost, NormalizedSource, WorkflowRuleOutput } from '@legado/source-core'
 import { DEFAULT_ANDROID_USER_AGENT, NodeCookieStore, createNodeSourceSession } from '../src/index.ts'
 
@@ -127,6 +127,38 @@ test('NodeCookieStore 可以序列化并恢复跨请求 Cookie', async () => {
   const restored = NodeCookieStore.fromSerialized(store.serialize())
   assert.equal(await restored.get('https://fixture.invalid/next'), 'sid=abc')
   assert.throws(() => NodeCookieStore.fromSerialized('{"invalid":true}'))
+})
+
+test('NodeCookieStore 模拟 Android 的 Cookie map、替换和有效域共享', async () => {
+  const store = new NodeCookieStore()
+  await store.set('https://reader.example.com/path', 'sid=abc; theme=dark')
+  assert.equal(await store.get('https://cdn.example.com/next'), 'sid=abc; theme=dark')
+  assert.equal(await store.getKey('https://cdn.example.com/next', 'sid'), 'abc')
+  assert.deepEqual(store.cookieToMap('sid=abc; empty=; literal=null; ignored'), { sid: 'abc', literal: 'null' })
+  assert.equal(store.mapToCookie({ sid: 'next', theme: 'light' }), 'sid=next; theme=light')
+  await store.replaceCookie('https://cdn.example.com/next', 'sid=next; token=xyz')
+  assert.equal(await store.get('https://reader.example.com/path'), 'sid=next; theme=dark; token=xyz')
+  await store.remove('https://reader.example.com/path')
+  assert.equal(await store.get('https://cdn.example.com/next'), undefined)
+})
+
+test('MemorySourceScriptCache 二进制缓存独立于字符串缓存且快照可恢复', () => {
+  const cache = new MemorySourceScriptCache()
+  cache.put('text', 'value')
+  cache.putByteArray?.('bytes', Uint8Array.from([0, 1, 255]))
+  const snapshot = cache.snapshot?.()
+  assert.equal(snapshot?.version, 1)
+  assert.equal(snapshot?.values?.text?.value, 'value')
+  assert.equal(snapshot?.bytes?.bytes?.value, 'AAH/')
+  const restored = new MemorySourceScriptCache()
+  restored.restore?.(snapshot!)
+  assert.equal(restored.get('text'), 'value')
+  assert.deepEqual(Array.from(restored.getByteArray?.('bytes') ?? []), [0, 1, 255])
+  restored.put('keep', 'newer')
+  restored.restore?.({ version: 2 } as never)
+  assert.equal(restored.get('keep'), 'newer')
+  restored.restore?.({ version: 1, values: 'corrupt' } as never)
+  assert.equal(restored.get('keep'), 'newer')
 })
 
 test('Node session preserves networkOptions defaultUserAgent through the source limiter wrapper', async () => {

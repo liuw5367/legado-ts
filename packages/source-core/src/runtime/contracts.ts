@@ -228,17 +228,25 @@ export interface SourceScriptCacheEntry {
 
 /** 可选的会话缓存快照；宿主可用它恢复跨请求的字符串缓存。 */
 export interface SourceScriptCacheSnapshot {
+  /** Snapshot schema; omitted by older hosts and treated as version 1. */
+  version?: 1
   values?: Record<string, SourceScriptCacheEntry>
   memory?: Record<string, string>
   files?: Record<string, SourceScriptCacheEntry>
+  /** ByteArray entries are kept separate from the string cache like Android ACache. */
+  bytes?: Record<string, SourceScriptCacheEntry>
 }
 
 /** JavaScript 书源使用的会话缓存；saveTime 单位为秒，0 表示不过期。 */
 export interface SourceScriptCache {
   get(key: string, signal?: AbortSignal): string | undefined | Promise<string | undefined>
+  /** Android CacheManager.getByteArray reads the binary ACache namespace. */
+  getByteArray?(key: string, signal?: AbortSignal): Uint8Array | undefined | Promise<Uint8Array | undefined>
   /** 仅读取普通持久缓存，供 Android CacheManager.get(key, onlyDisk) 使用。 */
   getFromDisk?(key: string, signal?: AbortSignal): string | undefined | Promise<string | undefined>
   put(key: string, value: string, saveTime?: number, signal?: AbortSignal): void | Promise<void>
+  /** Store a binary value without making it visible through CacheManager.get. */
+  putByteArray?(key: string, value: Uint8Array, saveTime?: number, signal?: AbortSignal): void | Promise<void>
   delete(key: string, signal?: AbortSignal): void | Promise<void>
   getFromMemory(key: string): string | undefined | Promise<string | undefined>
   putMemory(key: string, value: string, signal?: AbortSignal): void | Promise<void>

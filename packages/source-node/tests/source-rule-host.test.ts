@@ -626,9 +626,15 @@ test('JavaScript CacheManager bridge 支持普通、内存和文件缓存', asyn
 })
 
 test('CacheManager 保留对象、数字和 ByteArray 类型', async () => {
-  const result = await evaluate(new SourceRuleHost(), '@js:cache.put("object", { id: 7 }); cache.put("bytes", Uint8Array.from([1, 2])); cache.put("number", 12.5); JSON.stringify([cache.get("object"), Array.from(cache.getByteArray("bytes")), cache.getDouble("number")])', '')
+  const result = await evaluate(new SourceRuleHost(), '@js:cache.put("object", { id: 7 }); cache.put("bytes", Uint8Array.from([1, 2])); cache.put("number", 12.5); JSON.stringify([cache.get("object"), cache.get("bytes"), Array.from(cache.getByteArray("bytes")), cache.getDouble("number"), cache.getInt("missing")])', '')
   assert.equal(result.status, 'success')
-  assert.deepEqual(JSON.parse(String(result.value)), [{ id: 7 }, [1, 2], 12.5])
+  assert.deepEqual(JSON.parse(String(result.value)), [{ id: 7 }, null, [1, 2], 12.5, null])
+})
+
+test('CacheManager 对不可序列化对象返回稳定 cache-failed', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:var value = {}; value.self = value; cache.put("circular", value); "unreachable"', '')
+  assert.equal(result.status, 'failed')
+  assert.match(result.message ?? '', /cache-failed/u)
 })
 
 test('书源 JS 可读取 Cookie、时间与 UUID，设备标识能力缺失时明确报错', async () => {

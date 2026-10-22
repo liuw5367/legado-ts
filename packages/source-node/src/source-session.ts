@@ -52,7 +52,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
   const loginInfos = new Map<string, string>()
   const sourceVariables = new Map<string, string>()
   const sourceValues = new Map<string, Map<string, string>>()
-  const runtimeState = options.initialRuntimeState
+  const runtimeState = validRuntimeSnapshot(options.initialRuntimeState) ? options.initialRuntimeState : undefined
   const sourceKey = source.bookSourceUrl
   const initialValue = runtimeState?.sourceVariables?.[sourceKey]
   if (initialValue !== undefined) sourceVariables.set(sourceKey, initialValue)
@@ -175,8 +175,12 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
         ...(values !== undefined && values.size > 0 ? { sourceValues: { [sourceKey]: Object.fromEntries(values) } } : {}),
         ...(loginHeaders.has(sourceKey) ? { loginHeaders: { [sourceKey]: loginHeaders.get(sourceKey)! } } : {}),
         ...(loginInfos.has(sourceKey) ? { loginInfos: { [sourceKey]: loginInfos.get(sourceKey)! } } : {}),
-        ...(cacheSnapshot === undefined || (cacheSnapshot.values === undefined && cacheSnapshot.memory === undefined && cacheSnapshot.files === undefined) ? {} : { cache: cacheSnapshot }),
+        ...(cacheSnapshot === undefined || (cacheSnapshot.values === undefined && cacheSnapshot.memory === undefined && cacheSnapshot.files === undefined && cacheSnapshot.bytes === undefined) ? {} : { cache: cacheSnapshot }),
       }
     },
   })
+}
+
+function validRuntimeSnapshot(value: NodeSourceRuntimeSnapshot | undefined): value is NodeSourceRuntimeSnapshot {
+  return value === undefined || (typeof value === 'object' && value !== null && value.version === 1)
 }

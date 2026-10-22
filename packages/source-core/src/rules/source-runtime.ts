@@ -602,7 +602,7 @@ function encodeSourceCacheValue(encoding: EncodingHost, value: unknown): string 
     const serialized = JSON.stringify(value)
     return serialized === undefined ? textValue(value) : `${sourceCacheJsonPrefix}${serialized}`
   } catch {
-    return textValue(value)
+    throw new Error('__LEGADO_CACHE__cache-failed: value is not serializable')
   }
 }
 
@@ -677,7 +677,20 @@ function byteValue(value: unknown): Uint8Array {
   if (value instanceof Uint8Array) return value
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
   if (Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isInteger(item) && item >= 0 && item <= 255)) return Uint8Array.from(value)
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const entries = Object.entries(value).sort(([left], [right]) => Number(left) - Number(right))
+    if (entries.length > 0 && entries.every(([key, item], index) => key === String(index) && typeof item === 'number' && Number.isInteger(item) && item >= 0 && item <= 255)) return Uint8Array.from(entries.map(([, item]) => item as number))
+  }
   throw new Error('书源 bytes bridge 需要 ByteArray')
+}
+
+function isByteValue(value: unknown): boolean {
+  try {
+    byteValue(value)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function cryptoInputValue(value: unknown): string | Uint8Array {
@@ -1689,7 +1702,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'java.getAppVariant = () => request({ kind: "runtime-capability", capability: "getAppVariant" });',
       'java.androidId = () => request({ kind: "runtime-capability", capability: "androidId" });',
       'java.deviceID = () => request({ kind: "runtime-capability", capability: "deviceID" });',
-      'globalThis.cache = { get: (key, onlyDisk) => request({ kind: "cache-get", key: String(key), onlyDisk: onlyDisk === true }), put: (key, value, saveTime) => request({ kind: "cache-put", key: String(key), value, saveTime: Number(saveTime ?? 0) }), delete: (key) => request({ kind: "cache-delete", key: String(key) }), getFromMemory: (key) => request({ kind: "cache-memory-get", key: String(key) }), putMemory: (key, value) => request({ kind: "cache-memory-put", key: String(key), value }), deleteMemory: (key) => request({ kind: "cache-memory-delete", key: String(key) }), getFile: (key) => request({ kind: "cache-file-get", key: String(key) }), putFile: (key, value, saveTime) => request({ kind: "cache-file-put", key: String(key), value, saveTime: Number(saveTime ?? 0) }) }; Object.assign(globalThis.cache, { getInt: (key, fallback) => { const value = globalThis.cache.get(key); const number = Number(value); return Number.isFinite(number) ? Math.trunc(number) : Number(fallback ?? 0) }, getLong: (key, fallback) => { const value = globalThis.cache.get(key); const number = Number(value); return Number.isFinite(number) ? Math.trunc(number) : Number(fallback ?? 0) }, getDouble: (key, fallback) => { const value = globalThis.cache.get(key); const number = Number(value); return Number.isFinite(number) ? number : Number(fallback ?? 0) }, getFloat: (key, fallback) => { const value = globalThis.cache.get(key); const number = Number(value); return Number.isFinite(number) ? number : Number(fallback ?? 0) }, getByteArray: (key) => globalThis.cache.get(key) });',
+      'globalThis.cache = { get: (key, onlyDisk) => request({ kind: "cache-get", key: String(key), onlyDisk: onlyDisk === true }), put: (key, value, saveTime) => request({ kind: "cache-put", key: String(key), value, saveTime: Number(saveTime ?? 0) }), delete: (key) => request({ kind: "cache-delete", key: String(key) }), getFromMemory: (key) => request({ kind: "cache-memory-get", key: String(key) }), putMemory: (key, value) => request({ kind: "cache-memory-put", key: String(key), value }), deleteMemory: (key) => request({ kind: "cache-memory-delete", key: String(key) }), getFile: (key) => request({ kind: "cache-file-get", key: String(key) }), putFile: (key, value, saveTime) => request({ kind: "cache-file-put", key: String(key), value, saveTime: Number(saveTime ?? 0) }) }; Object.assign(globalThis.cache, { getInt: (key, fallback) => { const value = globalThis.cache.get(key); const number = value == null || typeof value === "string" && value.trim().length === 0 ? Number.NaN : Number(value); return Number.isFinite(number) ? Math.trunc(number) : fallback === undefined ? null : Number(fallback ?? 0) }, getLong: (key, fallback) => { const value = globalThis.cache.get(key); const number = value == null || typeof value === "string" && value.trim().length === 0 ? Number.NaN : Number(value); return Number.isFinite(number) ? Math.trunc(number) : fallback === undefined ? null : Number(fallback ?? 0) }, getDouble: (key, fallback) => { const value = globalThis.cache.get(key); const number = value == null || typeof value === "string" && value.trim().length === 0 ? Number.NaN : Number(value); return Number.isFinite(number) ? number : fallback === undefined ? null : Number(fallback ?? 0) }, getFloat: (key, fallback) => { const value = globalThis.cache.get(key); const number = value == null || typeof value === "string" && value.trim().length === 0 ? Number.NaN : Number(value); return Number.isFinite(number) ? number : fallback === undefined ? null : Number(fallback ?? 0) }, getByteArray: (key) => request({ kind: "cache-bytes-get", key: String(key) }) });',
       'const getToken = () => request({ kind: "token" });',
       'globalThis.Packages = globalThis.Packages ?? {};',
       'globalThis.Packages.io = globalThis.Packages.io ?? {};',
@@ -2070,7 +2083,12 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const value = request.onlyDisk === true && this.cache.getFromDisk !== undefined ? await this.cache.getFromDisk(textValue(request.key), signal) : await this.cache.get(textValue(request.key), signal)
       return decodeSourceCacheValue(this.encoding, value)
     }
-    if (request.kind === 'cache-put') return this.cache.put(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), Number(request.saveTime) || 0, signal)
+    if (request.kind === 'cache-put') {
+      const key = textValue(request.key)
+      const saveTime = Number(request.saveTime) || 0
+      if (this.cache.putByteArray !== undefined && isByteValue(request.value)) return this.cache.putByteArray(key, byteValue(request.value), saveTime, signal)
+      return this.cache.put(key, encodeSourceCacheValue(this.encoding, request.value), saveTime, signal)
+    }
     if (request.kind === 'cache-delete') {
       const key = textValue(request.key)
       const result = await this.cache.delete(key, signal)
@@ -2080,6 +2098,12 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (request.kind === 'cache-memory-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFromMemory(textValue(request.key)))
     if (request.kind === 'cache-memory-put') return this.cache.putMemory(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), signal)
     if (request.kind === 'cache-memory-delete') return this.cache.deleteMemory(textValue(request.key), signal)
+    if (request.kind === 'cache-bytes-get') {
+      if (this.cache.getByteArray !== undefined) return this.cache.getByteArray(textValue(request.key), signal)
+      const value = await this.cache.get(textValue(request.key), signal)
+      const decoded = decodeSourceCacheValue(this.encoding, value)
+      return decoded instanceof Uint8Array ? decoded : undefined
+    }
     if (request.kind === 'cache-file-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFile(textValue(request.key)))
     if (request.kind === 'cache-file-put') return this.cache.putFile(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), Number(request.saveTime) || 0, signal)
     if (request.kind === 'cache-clear') {
