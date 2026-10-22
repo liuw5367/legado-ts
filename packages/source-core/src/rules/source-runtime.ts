@@ -450,6 +450,60 @@ const legadoJavaSplit = (text, separator, limit) => {
   if (max === 0) while (values.length > 0 && values[values.length - 1] === "") values.pop()
   return values
 }
+const legadoJavaCodePoint = (text, index) => {
+  const code = text.charCodeAt(index)
+  if (code >= 0xd800 && code <= 0xdbff && index + 1 < text.length) {
+    const low = text.charCodeAt(index + 1)
+    if (low >= 0xdc00 && low <= 0xdfff) return { value: (code - 0xd800) * 0x400 + low - 0xdc00 + 0x10000, width: 2 }
+  }
+  return { value: code, width: 1 }
+}
+const legadoJavaStringIndex = (text, index, allowEnd = false) => {
+  const value = Number(index)
+  const maximum = allowEnd ? text.length : text.length - 1
+  if (!Number.isInteger(value) || value < 0 || value > maximum) throw new RangeError("String index out of bounds")
+  return value
+}
+const legadoJavaCodePointCount = (text, begin, end) => {
+  const start = Number(begin)
+  const finish = Number(end)
+  if (!Number.isInteger(start) || !Number.isInteger(finish) || start < 0 || finish < start || finish > text.length) throw new RangeError("String index out of bounds")
+  let count = 0
+  for (let index = start; index < finish; count += 1) index += legadoJavaCodePoint(text, index).width
+  return count
+}
+const legadoJavaOffsetByCodePoints = (text, index, offset) => {
+  let position = legadoJavaStringIndex(text, index, true)
+  let remaining = Number(offset)
+  if (!Number.isInteger(remaining)) throw new RangeError("Invalid code point offset")
+  if (remaining >= 0) {
+    while (remaining > 0) {
+      if (position >= text.length) throw new RangeError("String index out of bounds")
+      position += legadoJavaCodePoint(text, position).width
+      remaining -= 1
+    }
+    return position
+  }
+  while (remaining < 0) {
+    if (position <= 0) throw new RangeError("String index out of bounds")
+    position -= 1
+    const code = text.charCodeAt(position)
+    if (code >= 0xdc00 && code <= 0xdfff && position > 0) {
+      const high = text.charCodeAt(position - 1)
+      if (high >= 0xd800 && high <= 0xdbff) position -= 1
+    }
+    remaining += 1
+  }
+  return position
+}
+const legadoJavaWhitespace = (codePoint) => codePoint === 0x20 || codePoint >= 0x09 && codePoint <= 0x0d || codePoint >= 0x1c && codePoint <= 0x1f || codePoint === 0x1680 || codePoint >= 0x2000 && codePoint <= 0x2006 || codePoint >= 0x2008 && codePoint <= 0x200a || codePoint === 0x2028 || codePoint === 0x2029 || codePoint === 0x205f || codePoint === 0x3000
+const legadoJavaStrip = (text, leading, trailing) => {
+  let start = 0
+  let end = text.length
+  if (leading) while (start < end && legadoJavaWhitespace(legadoJavaCodePoint(text, start).value)) start += legadoJavaCodePoint(text, start).width
+  if (trailing) while (end > start) { const position = end - 1; const code = text.charCodeAt(position); const codePoint = code >= 0xdc00 && code <= 0xdfff && position > 0 && text.charCodeAt(position - 1) >= 0xd800 && text.charCodeAt(position - 1) <= 0xdbff ? { value: (text.charCodeAt(position - 1) - 0xd800) * 0x400 + code - 0xdc00 + 0x10000, width: 2 } : { value: code, width: 1 }; if (!legadoJavaWhitespace(codePoint.value)) break; end -= codePoint.width }
+  return text.slice(start, end)
+}
 const legadoJavaSubstring = (text, start, end) => {
   const from = Number(start)
   const to = end === undefined ? text.length : Number(end)
@@ -472,7 +526,19 @@ const legadoJavaString = (input) => {
     subSequence: { value: (start, end) => legadoJavaSubstring(text, start, end) },
     charAt: { value: (index) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= text.length) throw new RangeError("String index out of bounds"); return text.charAt(position) } },
     indexOf: { value: (part, start) => text.indexOf(String(part ?? ""), start === undefined ? 0 : Number(start)) },
+    lastIndexOf: { value: (part, start) => { const requested = start === undefined ? text.length : Number(start); if (!Number.isInteger(requested)) throw new RangeError("String index out of bounds"); if (requested < 0) return -1; const from = Math.min(text.length, requested); if (typeof part === "number") { const codePoint = Number(part); if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return -1; return text.lastIndexOf(String.fromCodePoint(codePoint), from) } return text.lastIndexOf(String(part ?? ""), from) } },
+    codePointAt: { value: (index) => legadoJavaCodePoint(text, legadoJavaStringIndex(text, index)).value },
+    codePointBefore: { value: (index) => { const position = legadoJavaStringIndex(text, index, true); if (position === 0) throw new RangeError("String index out of bounds"); const previous = position - 1; const low = text.charCodeAt(previous); if (low >= 0xdc00 && low <= 0xdfff && previous > 0) { const high = text.charCodeAt(previous - 1); if (high >= 0xd800 && high <= 0xdbff) return (high - 0xd800) * 0x400 + low - 0xdc00 + 0x10000 } return low } },
+    codePointCount: { value: (begin, end) => legadoJavaCodePointCount(text, begin, end) },
+    offsetByCodePoints: { value: (index, offset) => legadoJavaOffsetByCodePoints(text, index, offset) },
+    getChars: { value: (begin, end, destination, destinationBegin) => { const start = Number(begin); const finish = Number(end); const targetStart = Number(destinationBegin); if (!Number.isInteger(start) || !Number.isInteger(finish) || !Number.isInteger(targetStart) || start < 0 || finish < start || finish > text.length || targetStart < 0 || destination === null || destination === undefined || typeof destination.length !== "number" || targetStart + finish - start > destination.length) throw new RangeError("String char array range out of bounds"); const typed = typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(destination); for (let index = start; index < finish; index += 1) destination[targetStart + index - start] = typed ? text.charCodeAt(index) : text.charAt(index); return undefined } },
     trim: { value: () => legadoJavaString(text.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, "")) },
+    strip: { value: () => legadoJavaString(legadoJavaStrip(text, true, true)) },
+    stripLeading: { value: () => legadoJavaString(legadoJavaStrip(text, true, false)) },
+    stripTrailing: { value: () => legadoJavaString(legadoJavaStrip(text, false, true)) },
+    isBlank: { value: () => legadoJavaStrip(text, true, true).length === 0 },
+    repeat: { value: (count) => { const times = Number(count); if (!Number.isInteger(times) || times < 0) throw new RangeError("Invalid repeat count"); if (text.length > 0 && text.length * times > 16 * 1024 * 1024) throw new RangeError("String repeat exceeds runtime limit"); return legadoJavaString(text.repeat(times)) } },
+    contentEquals: { value: (other) => other !== null && other !== undefined && text === String(other) },
     toLowerCase: { value: () => legadoJavaString(text.toLowerCase()) },
     toUpperCase: { value: () => legadoJavaString(text.toUpperCase()) },
     split: { value: (separator, limit) => legadoList(legadoJavaSplit(text, String(separator ?? ""), limit)) },
@@ -520,6 +586,7 @@ const legadoJavaCharArrayText = (value, offset, length) => {
 Object.assign(legadoJavaLangString, {
   valueOf: (value) => value === null || value === undefined ? legadoJavaString("null") : Array.isArray(value) ? legadoJavaString(legadoJavaCharArrayText(value)) : legadoJavaString(value),
   copyValueOf: (value, offset, length) => legadoJavaString(legadoJavaCharArrayText(value, offset, length)),
+  join: (delimiter, values, ...rest) => { const separator = String(delimiter ?? "null"); const collection = values !== null && values !== undefined && typeof values !== "string" && (Array.isArray(values) || typeof values.toArray === "function" || typeof values[Symbol.iterator] === "function"); const items = rest.length > 0 ? [values, ...rest] : collection ? legadoJavaCollectionValues(values) : values === undefined ? [] : [values]; return legadoJavaString(items.map((item) => item === null || item === undefined ? "null" : String(item)).join(separator)) },
   format: (format, ...args) => legadoJavaString(String(format ?? "").replace(/%s/gu, () => String(args.shift() ?? "null"))),
 })
 const legadoStringBuilder = function(initial) {

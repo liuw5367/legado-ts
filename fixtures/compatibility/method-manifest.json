@@ -3618,7 +3618,20 @@
         "String.length",
         "String.split",
         "String.replace",
-        "String.getBytes"
+        "String.getBytes",
+        "String.lastIndexOf",
+        "String.codePointAt",
+        "String.codePointBefore",
+        "String.codePointCount",
+        "String.offsetByCodePoints",
+        "String.getChars",
+        "String.contentEquals",
+        "String.isBlank",
+        "String.strip",
+        "String.stripLeading",
+        "String.stripTrailing",
+        "String.repeat",
+        "String.join"
       ],
       "tsPaths": [
         "packages/source-core/src/rules/source-runtime.ts",
@@ -3820,6 +3833,228 @@
             "unsupported-java-class",
             "rule-failed"
           ]
+        },
+        {
+          "id": "java-collections-string::010-string-lastindexof",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.lastIndexOf",
+          "signature": "String.lastIndexOf(String/int,int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::011-string-codepointat",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.codePointAt",
+          "signature": "String.codePointAt(int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::012-string-codepointbefore",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.codePointBefore",
+          "signature": "String.codePointBefore(int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::013-string-codepointcount",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.codePointCount",
+          "signature": "String.codePointCount(int,int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::014-string-offsetbycodepoints",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.offsetByCodePoints",
+          "signature": "String.offsetByCodePoints(int,int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::015-string-getchars",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.getChars",
+          "signature": "String.getChars(int,int,char[],int)",
+          "parameters": [],
+          "returnType": "void",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::016-string-contentequals",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.contentEquals",
+          "signature": "String.contentEquals(CharSequence)",
+          "parameters": [],
+          "returnType": "boolean",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::017-string-isblank",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.isBlank",
+          "signature": "String.isBlank()",
+          "parameters": [],
+          "returnType": "boolean",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::018-string-strip",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.strip",
+          "signature": "String.strip()",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::019-string-stripleading",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.stripLeading",
+          "signature": "String.stripLeading()",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::020-string-striptrailing",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.stripTrailing",
+          "signature": "String.stripTrailing()",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::021-string-repeat",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.repeat",
+          "signature": "String.repeat(int)",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::022-string-join",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.join",
+          "signature": "String.join(CharSequence,Iterable/CharSequence...)",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
         }
       ]
     },
@@ -5099,5 +5334,5 @@
       ]
     }
   ],
-  "memberCount": 212
+  "memberCount": 225
 }

@@ -300,6 +300,47 @@ test('Java 字符串和整数重载保持 null、字符数组与 radix 解析语
   })
 })
 
+test('Java String Unicode、字符数组和空白方法保持 UTF-16 语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String, Packages.java.util.ArrayList);
+    with (importer) {
+      var text = new String('A😀\\u2003B');
+      var chars = ['?', '?', '?', '?', '?'];
+      text.getChars(1, 3, chars, 1);
+      var blank = new String('\\u2003\\u3000');
+      var list = new ArrayList(['a', null, 'c']);
+      JSON.stringify({
+        codePoints: [text.codePointAt(1), text.codePointBefore(3), text.codePointBefore(2), text.codePointCount(0, text.length()), text.offsetByCodePoints(1, 1), text.offsetByCodePoints(3, -1)],
+        chars: chars,
+        search: [text.lastIndexOf('B'), text.lastIndexOf(0x1f600)],
+        blank: [blank.isBlank(), new String('\\u2003 x\\u3000').strip().toString(), new String('\\u2003x').stripLeading().toString(), new String('x\\u3000').stripTrailing().toString()],
+        repeat: new String('ab').repeat(2).toString(),
+        equals: [text.contentEquals('A😀\\u2003B'), text.contentEquals(null)],
+        join: [String.join('-', ['a', 'b']), String.join('/', list), String.join('-', 'ab')]
+      });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    codePoints: [0x1f600, 0x1f600, 0xd83d, 4, 3, 1],
+    chars: ['?', '\ud83d', '\ude00', '?', '?'],
+    search: [4, 1],
+    blank: [true, 'x', 'x', 'x'],
+    repeat: 'abab',
+    equals: [true, false],
+    join: ['a-b', 'a/null/c', 'ab'],
+  })
+
+  const invalid = await evaluate(new SourceRuleHost(), `@js:
+    var text = new Packages.java.lang.String('😀');
+    var errors = [];
+    try { text.codePointAt(2); } catch (error) { errors.push('at'); }
+    try { text.offsetByCodePoints(0, -1); } catch (error) { errors.push('offset'); }
+    try { text.repeat(-1); } catch (error) { errors.push('repeat'); }
+    JSON.stringify(errors);`, '')
+  assert.equal(invalid.status, 'success', invalid.message)
+  assert.deepEqual(JSON.parse(String(invalid.value)), ['at', 'offset', 'repeat'])
+})
+
 test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.StringBuilder, Packages.java.lang.Integer, Packages.java.util.regex.Pattern);
