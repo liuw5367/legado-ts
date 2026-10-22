@@ -374,10 +374,37 @@ const legadoList = (input) => {
     clear: { value: () => { target.length = 0 } },
     iterator: { value: () => { let index = 0; let canRemove = false; return { hasNext: () => index < target.length, next: () => { if (index >= target.length) throw new RangeError("No such element"); canRemove = true; return target[index++] }, remove: () => { if (!canRemove) throw new Error("Illegal iterator state"); target.splice(--index, 1); canRemove = false } } } },
     listIterator: { value: (start) => { let cursor = start === undefined ? 0 : Number(start); let last = -1; if (!Number.isInteger(cursor) || cursor < 0 || cursor > target.length) throw new RangeError("List iterator index out of bounds"); const iterator = { hasNext: () => cursor < target.length, next: () => { if (cursor >= target.length) throw new RangeError("No such element"); last = cursor; return target[cursor++] }, hasPrevious: () => cursor > 0, previous: () => { if (cursor <= 0) throw new RangeError("No such element"); last = --cursor; return target[cursor] }, nextIndex: () => cursor, previousIndex: () => cursor - 1, remove: () => { if (last < 0) throw new Error("Illegal iterator state"); target.splice(last, 1); if (last < cursor) cursor -= 1; last = -1 }, set: (value) => { if (last < 0) throw new Error("Illegal iterator state"); target[last] = value }, add: (value) => { target.splice(cursor++, 0, value); last = -1 } }; return iterator } },
-    forEach: { value: (callback) => { if (typeof callback === "function") target.forEach(callback); return undefined } },
+    forEach: { value: (callback) => { if (typeof callback === "function") Array.prototype.forEach.call(target, callback); return undefined } },
     removeIf: { value: (predicate) => { if (typeof predicate !== "function") return false; const before = target.length; for (let index = target.length - 1; index >= 0; index -= 1) if (predicate(target[index], index, target)) target.splice(index, 1); return target.length !== before } },
     sort: { value: (comparator) => { target.sort(typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : undefined); return target } },
     toString: { value: () => "[" + target.map((value) => value === null || value === undefined ? "null" : String(value)).join(", ") + "]" },
+  })
+  return target
+}
+const legadoJavaOptional = (value, present) => ({ isPresent: () => present, isEmpty: () => !present, get: () => { if (!present) throw new RangeError("No such element") ; return value }, orElse: (fallback) => present ? value : fallback, orElseGet: (callback) => present ? value : callback(), ifPresent: (callback) => { if (present && typeof callback === "function") callback(value); return undefined }, toString: () => present ? "Optional[" + String(value) + "]" : "Optional.empty" })
+const legadoJavaStream = (input) => {
+  const target = legadoList(input)
+  const values = () => target.slice()
+  Object.defineProperties(target, {
+    count: { value: () => target.length },
+    forEachOrdered: { value: (callback) => { if (typeof callback === "function") target.forEach(callback); return undefined } },
+    map: { value: (callback) => { if (typeof callback !== "function") throw new TypeError("Stream mapper must be a function"); return legadoJavaStream(values().map(callback)) } },
+    filter: { value: (callback) => { if (typeof callback !== "function") throw new TypeError("Stream predicate must be a function"); return legadoJavaStream(values().filter(callback)) } },
+    flatMap: { value: (callback) => { if (typeof callback !== "function") throw new TypeError("Stream mapper must be a function"); const result = []; for (const value of values()) { const mapped = callback(value); if (mapped !== null && mapped !== undefined) result.push(...(Array.isArray(mapped) ? mapped : mapped.toArray?.() ?? [])) } return legadoJavaStream(result) } },
+    distinct: { value: () => legadoJavaStream(values().filter((value, index, all) => all.findIndex((candidate) => Object.is(candidate, value)) === index)) },
+    sorted: { value: (comparator) => { const result = values().sort(typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : undefined); return legadoJavaStream(result) } },
+    limit: { value: (count) => { const size = Number(count); if (!Number.isInteger(size) || size < 0) throw new RangeError("Stream limit out of bounds"); return legadoJavaStream(values().slice(0, size)) } },
+    skip: { value: (count) => { const size = Number(count); if (!Number.isInteger(size) || size < 0) throw new RangeError("Stream skip out of bounds"); return legadoJavaStream(values().slice(size)) } },
+    peek: { value: (callback) => { if (typeof callback !== "function") throw new TypeError("Stream peek must be a function"); target.forEach(callback); return target } },
+    findFirst: { value: () => legadoJavaOptional(target[0], target.length > 0) },
+    findAny: { value: () => legadoJavaOptional(target[0], target.length > 0) },
+    anyMatch: { value: (callback) => typeof callback === "function" && target.some(callback) },
+    allMatch: { value: (callback) => typeof callback === "function" && target.every(callback) },
+    noneMatch: { value: (callback) => typeof callback === "function" && target.every((value, index, all) => !callback(value, index, all)) },
+    min: { value: (comparator) => { if (target.length === 0) return legadoJavaOptional(undefined, false); const compare = typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : (left, right) => left < right ? -1 : left > right ? 1 : 0; return legadoJavaOptional(target.slice(1).reduce((best, value) => compare(value, best) < 0 ? value : best, target[0]), true) } },
+    max: { value: (comparator) => { if (target.length === 0) return legadoJavaOptional(undefined, false); const compare = typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : (left, right) => left < right ? -1 : left > right ? 1 : 0; return legadoJavaOptional(target.slice(1).reduce((best, value) => compare(value, best) > 0 ? value : best, target[0]), true) } },
+    reduce: { value: function(identityOrCallback, callback) { if (typeof identityOrCallback !== "function" && typeof callback === "function") return Array.prototype.reduce.call(target, callback, identityOrCallback); if (typeof identityOrCallback !== "function") throw new TypeError("Stream reducer must be a function"); return target.length === 0 ? legadoJavaOptional(undefined, false) : legadoJavaOptional(target.slice(1).reduce(identityOrCallback, target[0]), true) } },
+    toList: { value: () => legadoList(values()) },
   })
   return target
 }
@@ -496,6 +523,74 @@ const legadoJavaOffsetByCodePoints = (text, index, offset) => {
   }
   return position
 }
+const legadoJavaLines = (text) => {
+  if (text.length === 0) return []
+  const lines = text.split(/\r\n|[\n\r]/u)
+  if (text.endsWith("\n") || text.endsWith("\r")) lines.pop()
+  return lines.map((line) => legadoJavaString(line))
+}
+const legadoJavaLeadingWhitespaceEnd = (text) => {
+  let index = 0
+  while (index < text.length) {
+    const point = legadoJavaCodePoint(text, index)
+    if (!legadoJavaWhitespace(point.value)) break
+    index += point.width
+  }
+  return index
+}
+const legadoJavaRemoveLeadingWhitespace = (text, amount) => {
+  let index = 0
+  let remaining = amount
+  while (index < text.length && remaining > 0) {
+    const point = legadoJavaCodePoint(text, index)
+    if (!legadoJavaWhitespace(point.value)) break
+    index += point.width
+    remaining -= 1
+  }
+  return text.slice(index)
+}
+const legadoJavaIndent = (text, amount) => {
+  const value = Number(amount)
+  if (!Number.isInteger(value)) throw new RangeError("Invalid indentation")
+  const normalized = text.replace(/\r\n?|\n/gu, "\n")
+  const lines = normalized.split("\n")
+  if (normalized.endsWith("\n")) lines.pop()
+  if (value > 0 && (value > 16 * 1024 * 1024 || lines.length > Math.floor((16 * 1024 * 1024 - text.length) / value))) throw new RangeError("String indent exceeds runtime limit")
+  const prefix = value > 0 ? " ".repeat(value) : ""
+  const remove = value < 0 ? -value : 0
+  const result = lines.map((line) => value >= 0 ? prefix + line : legadoJavaRemoveLeadingWhitespace(line, remove))
+  return result.join("\n") + "\n"
+}
+const legadoJavaStripIndent = (text) => {
+  const normalized = text.replace(/\r\n?|\n/gu, "\n")
+  const hadTerminator = normalized.endsWith("\n")
+  const lines = normalized.split("\n")
+  if (hadTerminator) lines.pop()
+  const indents = lines.filter((line) => legadoJavaLeadingWhitespaceEnd(line) < line.length).map((line) => Array.from(line.slice(0, legadoJavaLeadingWhitespaceEnd(line))).length)
+  const minimum = indents.length === 0 ? 0 : Math.min(...indents)
+  const result = lines.map((line) => { const leading = legadoJavaLeadingWhitespaceEnd(line); return leading === line.length ? "" : legadoJavaRemoveLeadingWhitespace(line, minimum) })
+  return result.join("\n") + (hadTerminator ? "\n" : "")
+}
+const legadoJavaTranslateEscapes = (text) => {
+  const simple = { b: "\b", t: "\t", n: "\n", f: "\f", r: "\r", s: " ", '"': '"', "'": "'", "\\": "\\" }
+  let result = ""
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== "\\") { result += text[index]; continue }
+    if (index + 1 >= text.length) throw new Error("Invalid escape sequence")
+    const next = text[++index]
+    if (Object.prototype.hasOwnProperty.call(simple, next)) { result += simple[next]; continue }
+    if (next === "\n") continue
+    if (next === "\r") { if (text[index + 1] === "\n") index += 1; continue }
+    if (/^[0-7]$/u.test(next)) {
+      let digits = next
+      const maximum = next <= "3" ? 3 : 2
+      while (digits.length < maximum && index + 1 < text.length && /^[0-7]$/u.test(text[index + 1])) digits += text[++index]
+      result += String.fromCharCode(Number.parseInt(digits, 8)); continue
+    }
+    throw new Error("Invalid escape sequence: " + next)
+  }
+  return result
+}
 const legadoJavaWhitespace = (codePoint) => codePoint === 0x20 || codePoint >= 0x09 && codePoint <= 0x0d || codePoint >= 0x1c && codePoint <= 0x1f || codePoint === 0x1680 || codePoint >= 0x2000 && codePoint <= 0x2006 || codePoint >= 0x2008 && codePoint <= 0x200a || codePoint === 0x2028 || codePoint === 0x2029 || codePoint === 0x205f || codePoint === 0x3000
 const legadoJavaStrip = (text, leading, trailing) => {
   let start = 0
@@ -539,6 +634,14 @@ const legadoJavaString = (input) => {
     isBlank: { value: () => legadoJavaStrip(text, true, true).length === 0 },
     repeat: { value: (count) => { const times = Number(count); if (!Number.isInteger(times) || times < 0) throw new RangeError("Invalid repeat count"); if (text.length > 0 && text.length * times > 16 * 1024 * 1024) throw new RangeError("String repeat exceeds runtime limit"); return legadoJavaString(text.repeat(times)) } },
     contentEquals: { value: (other) => other !== null && other !== undefined && text === String(other) },
+    lines: { value: () => legadoJavaStream(legadoJavaLines(text)) },
+    chars: { value: () => legadoJavaStream(Array.from({ length: text.length }, (_, index) => text.charCodeAt(index))) },
+    codePoints: { value: () => { const points = []; for (let index = 0; index < text.length;) { const point = legadoJavaCodePoint(text, index); points.push(point.value); index += point.width } return legadoJavaStream(points) } },
+    indent: { value: (amount) => legadoJavaString(legadoJavaIndent(text, amount)) },
+    stripIndent: { value: () => legadoJavaString(legadoJavaStripIndent(text)) },
+    translateEscapes: { value: () => legadoJavaString(legadoJavaTranslateEscapes(text)) },
+    transform: { value: (callback) => { if (typeof callback !== "function") throw new TypeError("String.transform requires a function"); return callback(legadoJavaString(text)) } },
+    intern: { value: () => legadoJavaString(text) },
     formatted: { value: (...args) => legadoJavaString(legadoJavaFormat(text, args)) },
     toLowerCase: { value: () => legadoJavaString(text.toLowerCase()) },
     toUpperCase: { value: () => legadoJavaString(text.toUpperCase()) },

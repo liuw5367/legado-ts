@@ -3635,7 +3635,15 @@
         "String.format",
         "String.formatted",
         "Locale.ROOT/getDefault",
-        "Locale.forLanguageTag"
+        "Locale.forLanguageTag",
+        "String.lines",
+        "String.chars",
+        "String.codePoints",
+        "String.indent",
+        "String.stripIndent",
+        "String.translateEscapes",
+        "String.transform",
+        "String.intern"
       ],
       "tsPaths": [
         "packages/source-core/src/rules/source-runtime.ts",
@@ -4119,6 +4127,138 @@
           "signature": "Locale.forLanguageTag(String)",
           "parameters": [],
           "returnType": "Locale",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::027-string-lines",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.lines",
+          "signature": "String.lines()",
+          "parameters": [],
+          "returnType": "Stream<String>",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::028-string-chars",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.chars",
+          "signature": "String.chars()",
+          "parameters": [],
+          "returnType": "IntStream",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::029-string-codepoints",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.codePoints",
+          "signature": "String.codePoints()",
+          "parameters": [],
+          "returnType": "IntStream",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::030-string-indent",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.indent",
+          "signature": "String.indent(int)",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::031-string-stripindent",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.stripIndent",
+          "signature": "String.stripIndent()",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::032-string-translateescapes",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.translateEscapes",
+          "signature": "String.translateEscapes()",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::033-string-transform",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.transform",
+          "signature": "String.transform(Function<? super String,? extends R>)",
+          "parameters": [],
+          "returnType": "Object",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::034-string-intern",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.intern",
+          "signature": "String.intern()",
+          "parameters": [],
+          "returnType": "String",
           "implementation": "simulated",
           "verification": "ts-passed",
           "feasibility": "simulatable",
@@ -5406,5 +5546,5 @@
       ]
     }
   ],
-  "memberCount": 229
+  "memberCount": 237
 }

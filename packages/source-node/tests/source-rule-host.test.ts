@@ -369,6 +369,44 @@ test('Java String.format 和 Locale 覆盖书源常见的数值、字符串与�
   assert.match(unsupported.message ?? '', /Unsupported String\.format date conversion/u)
 })
 
+test('Java String lines/chars/codePoints 和纯文本变换提供受控 Stream 语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String);
+    with (importer) {
+      var text = new String(' A\\r\\n😀\\n');
+      var lines = text.lines();
+      var mapped = text.lines().map(function(value) { return value.toUpperCase().toString(); }).filter(function(value) { return value.length > 1; });
+      var observed = []; text.lines().forEach(function(value) { observed.push(value.toString()); });
+      var iterator = text.lines().iterator(); var first = iterator.next().toString();
+      var reduced = text.lines().map(function(value) { return value.toString(); }).reduce('', function(left, right) { return left + right; });
+      var sorted = text.lines().flatMap(function(value) { return [value, value]; }).distinct().sorted(function(left, right) { return right.toString().localeCompare(left.toString()); }).skip(0).limit(2);
+      var escaped = new String('a\\\\n\\\\141\\\\s\\\\\\\\').translateEscapes().toString();
+      JSON.stringify({ lines: [lines.toArray(), lines.count(), lines.findFirst().get()], chars: text.chars().toArray().slice(0, 4), points: text.codePoints().toArray(), mapped: [mapped.toArray(), mapped.count()], observed: observed, first: first, reduced: reduced, sorted: sorted.toArray().map(function(value) { return value.toString(); }), optionalEmpty: [new String('').lines().findFirst().isPresent(), new String('').lines().findFirst().orElse('none')], internedText: new String('same').intern().toString(), listSize: text.lines().toList().size(), indent: new String('a\\n b').indent(2).toString(), stripIndent: new String('\\n    a  \\n      b  \\n').stripIndent().toString(), escaped: escaped, transformed: new String('ok').transform(function(value) { return value.toUpperCase(); }).toString() });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    lines: [[' A', '😀'], 2, ' A'],
+    chars: [32, 65, 13, 10],
+    points: [32, 65, 13, 10, 0x1f600, 10],
+    mapped: [[' A', '😀'], 2],
+    observed: [' A', '😀'],
+    first: ' A',
+    reduced: ' A😀',
+    sorted: ['😀', ' A'],
+    optionalEmpty: [false, 'none'],
+    internedText: 'same',
+    listSize: 2,
+    indent: '  a\n   b\n',
+    stripIndent: '\na  \n  b  \n',
+    escaped: 'a\na \\',
+    transformed: 'OK',
+  })
+
+  const invalid = await evaluate(new SourceRuleHost(), `@js:var importer = new JavaImporter(Packages.java.lang.String); with (importer) new String('\\\\q').translateEscapes()`, '')
+  assert.equal(invalid.status, 'failed')
+  assert.match(invalid.message ?? '', /Invalid escape sequence/u)
+})
+
 test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.StringBuilder, Packages.java.lang.Integer, Packages.java.util.regex.Pattern);
