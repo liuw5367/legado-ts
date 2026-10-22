@@ -60,10 +60,10 @@ class XmlDocumentView implements HtmlDocument {
 
   public read(node: ParserNode, output: 'text' | 'textNodes' | 'ownText' | 'html' | 'all'): string {
     const value = this.node(node)
-    if (output === 'text') return value.textContent ?? value.nodeValue ?? ''
+    if (output === 'text') return normalizeXmlText(value.textContent ?? value.nodeValue ?? '')
     const children = childNodes(value)
-    if (output === 'textNodes') return children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => trimAndroidWhitespace(child.nodeValue ?? '')).filter(Boolean).join('\n')
-    if (output === 'ownText') return children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').filter(Boolean).join('')
+    if (output === 'textNodes') return children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => normalizeXmlText(child.nodeValue ?? '')).filter(Boolean).join('\n')
+    if (output === 'ownText') return normalizeXmlText(children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').join(''))
     if (output === 'html') return children.map((child) => child.toString?.() ?? '').join('')
     return value.toString?.() ?? ''
   }
@@ -101,15 +101,24 @@ function trimAndroidWhitespace(value: string): string {
   return value.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '')
 }
 
+function normalizeXmlText(value: string): string {
+  return trimAndroidWhitespace(value.replace(/[\s\u00a0]+/gu, ' '))
+}
+
 export class XPathParserAdapter implements XPathParser {
   public parse(input: string): XmlDocumentView {
     // Android's XPath parser uses Jsoup for HTML and XML only for an XML declaration.
     // Repair ordinary HTML first so unclosed tags, void elements, and unquoted
     // attributes do not make an otherwise useful XPath document disappear.
-    const source = /^\s*<\?xml\b/i.test(input)
-      ? input
-      : render(parseDocument(input), { xmlMode: true, encodeEntities: true })
-    return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(source, 'text/xml') as unknown as XmlNode)
+    let source = input
+    if (!/^\s*<\?xml\b/i.test(source)) {
+      if (source.endsWith('</td>')) source = `<tr>${source}</tr>`
+      if (source.endsWith('</tr>') || source.endsWith('</tbody>')) source = `<table>${source}</table>`
+    }
+    const normalized = /^\s*<\?xml\b/i.test(source)
+      ? source
+      : render(parseDocument(source), { xmlMode: true, encodeEntities: true })
+    return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(normalized, 'text/xml') as unknown as XmlNode)
   }
 
   public evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null {

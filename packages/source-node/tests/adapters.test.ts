@@ -32,6 +32,14 @@ test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
   assert.equal(document.read(document.select('main')[0]!, 'text'), '前甲 中乙 后丙')
 })
 
+test('HTML adapter 支持 Jsoup 文本正则、属性正则和常见组合选择器', () => {
+  const document = new HtmlParserAdapter().parse('<main><div class="content" data-x="abc"><a href="/one">One</a></div><div class="head" data-x="xbc"><a href="/two">Two</a></div><p>Three</p></main>')
+  assert.equal(document.select('div:matches(/One/)').length, 1)
+  assert.equal(document.select('[data-x~=(?i)^a]').length, 1)
+  assert.equal(document.select('main > div:has(a):not(.content)').length, 1)
+  assert.equal(document.select('div:is(.content,.head)').length, 2)
+})
+
 test('HTML adapter 的 XML 模式保留大小写并报告无效选择器', () => {
   const document = new HtmlParserAdapter().parse('<Root><Item ID="x">Hi</Item></Root>', 'xml')
   assert.equal(document.select('Item').length, 1)
@@ -151,6 +159,16 @@ test('XPath adapter 先修复常见 HTML，再返回可继续查询的节点', (
   assert.equal(result.length, 2)
   assert.equal(document.attr(result[0]!, 'href'), '/c/1')
   assert.equal(document.read(result[0]!, 'text'), '第一章')
+})
+
+test('XPath adapter 为表格片段补容器并规范 XML 文本空白', () => {
+  const parser = new XPathParserAdapter()
+  const document = parser.parse('<td>  A \n <b>B</b> \t C </td>')
+  const node = parser.evaluate(document, '//td') as ParserNode[]
+  assert.equal(node.length, 1)
+  assert.equal(document.read(node[0]!, 'text'), 'A B C')
+  assert.equal(document.read(node[0]!, 'ownText'), 'A C')
+  assert.equal(document.read(node[0]!, 'textNodes'), 'A\nC')
 })
 
 test('Cookie、字符集 adapter 保持会话和字节语义', async () => {

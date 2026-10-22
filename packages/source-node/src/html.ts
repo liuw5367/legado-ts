@@ -3,7 +3,7 @@ import { isDocument, isText, isTag, type AnyNode } from 'domhandler'
 import { getAttributeValue, getChildren, getText } from 'domutils'
 import { selectAll } from 'css-select'
 import { render } from 'dom-serializer'
-import { ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode } from '@legado/source-core'
+import { compileSourcePattern, ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode } from '@legado/source-core'
 
 class HtmlDocumentView implements HtmlDocument {
   private readonly ids = new Map<string, AnyNode>()
@@ -19,8 +19,10 @@ class HtmlDocumentView implements HtmlDocument {
 
   public select(selector: string): ParserNode[] {
     try {
-      return selectAll(selector, this.root, { xmlMode: this.xmlMode, pseudos: htmlPseudos }).map((node) => this.wrap(node))
+      const normalized = normalizeHtmlSelector(selector)
+      return selectAll(normalized.selector, this.root, { xmlMode: this.xmlMode, pseudos: normalized.pseudos }).map((node) => this.wrap(node))
     } catch (error) {
+      if (error instanceof ParserAdapterError) throw error
       const message = error instanceof Error ? error.message : String(error)
       throw new ParserAdapterError('unsupported-selector', `CSS 选择器不受支持：${message}`, { cause: error })
     }
@@ -142,6 +144,101 @@ const htmlPseudos: Record<string, (element: AnyNode, value?: string | null) => b
   containsown: (element, value) => ownTextValue(element).includes(value ?? ''),
   matchesown: (element, value) => pseudoRegex(value).test(ownTextValue(element)),
   matches: (element, value) => pseudoRegex(value).test(jsoupText(element)),
+  matchestext: (element, value) => pseudoRegex(value).test(jsoupText(element)),
+}
+
+interface NormalizedHtmlSelector {
+  selector: string
+  pseudos: Record<string, (element: AnyNode, value?: string | null) => boolean>
+}
+
+/** 将 Jsoup 的文本正则和属性正则转换成 css-select 可安全执行的自定义伪类。 */
+function normalizeHtmlSelector(selector: string): NormalizedHtmlSelector {
+  const dynamic: Record<string, (element: AnyNode, value?: string | null) => boolean> = {}
+  let output = ''
+  let index = 0
+  let sequence = 0
+  while (index < selector.length) {
+    if (selector.slice(index, index + 9).toLowerCase() === ':matches(') {
+      output += ':matchestext('
+      index += 9
+      continue
+    }
+    if (selector[index] === '[') {
+      const end = findSelectorBracketEnd(selector, index)
+      if (end !== undefined) {
+        const body = selector.slice(index + 1, end)
+        const attribute = /^\s*([A-Za-z_$][\w$:-]*)\s*~=\s*([\s\S]+?)\s*$/u.exec(body)
+        if (attribute !== null) {
+          const name = `legadoattrregex${sequence++}`
+          const attributeName = attribute[1]!
+          const regex = compileSelectorRegex(attribute[2]!)
+          dynamic[name] = (element) => {
+            if (!isTag(element)) return false
+            const value = getAttributeValue(element, attributeName)
+            if (value === undefined) return false
+            regex.lastIndex = 0
+            return regex.test(value)
+          }
+          output += `:${name}`
+          index = end + 1
+          continue
+        }
+        output += selector.slice(index, end + 1)
+        index = end + 1
+        continue
+      }
+    }
+    output += selector[index]!
+    index += 1
+  }
+  return { selector: output, pseudos: { ...htmlPseudos, ...dynamic } }
+}
+
+function findSelectorBracketEnd(selector: string, start: number): number | undefined {
+  let quote: 'single' | 'double' | null = null
+  let escaped = false
+  let nested = 0
+  for (let index = start + 1; index < selector.length; index += 1) {
+    const current = selector[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (current === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote !== null) {
+      if (current === quote) quote = null
+      continue
+    }
+    if (current === '"' || current === "'") {
+      quote = current === '"' ? 'double' : 'single'
+      continue
+    }
+    if (current === '[') {
+      nested += 1
+      continue
+    }
+    if (current === ']') {
+      if (nested > 0) nested -= 1
+      else return index
+    }
+  }
+  return undefined
+}
+
+function compileSelectorRegex(value: string): RegExp {
+  let source = value.trim()
+  const quoted = /^(?:"([\s\S]*)"|'([\s\S]*)')$/u.exec(source)
+  if (quoted !== null) source = quoted[1] ?? quoted[2] ?? ''
+  const literal = /^\/((?:\\.|[^/\\])*)\/([dgimsuvy]*)$/su.exec(source)
+  const compiled = literal === null
+    ? compileSourcePattern(source)
+    : compileSourcePattern(literal[1]!, { flags: literal[2] ?? '' })
+  if ('error' in compiled) throw new ParserAdapterError('unsupported-selector', `CSS 属性正则不受支持：${compiled.error.message}`)
+  return compiled.regex
 }
 
 function removeScriptAndStyle(node: AnyNode): void {

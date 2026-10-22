@@ -111,7 +111,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `EXP-005` | 发现列表 | JS 源 `explore(url, page)` 返回归一化、非法结果与取消 |
 | `EXP-006` | 发现生命周期 | 换分类、换页、旧请求迟到、分类 URL 为空和宿主能力缺失 |
 | `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`、`@CSS` 元素选择、字符串终端输出和模式前缀大小写不敏感 |
-| `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出 |
+| `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出、文本/属性正则选择器 |
 | `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
 | `SCH-004` | 规则 | `@XPath`、XML 声明、表格片段补容器、节点/字符串/空结果归一化 |
 | `SCH-005` | 规则 | `@Json`、自动 JSON、对象/数组/标量、嵌套插值和非法 JSONPath |
@@ -237,7 +237,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 - `&&` 拼接、`||` 首个成功、`%%` 按索引交错；
 - 选择器和 JSONPath 中含 `&&`/`||` 的平衡切分；
 - `@` 链、`text`、`textNodes`、`ownText`、`html`、`all` 和属性；
-- Jsoup 扩展位置/文本伪类、HTML/XML 大小写、无效选择器 `unsupported-selector`；
+- Jsoup 扩展位置/文本伪类、`:has/:not/:is`、文本 `:matches`、属性 Java 正则 `~=`, HTML/XML 大小写、无效选择器 `unsupported-selector`；
 - Jayway `length/size/keys/min/max/avg/sum`、正则筛选、`in/nin/size/empty/anyof/noneof`、原始值 `subsetof` 以及复杂集合 `unsupported-jsonpath` 诊断；
 - Java POSIX/Unicode 属性、`(?U)`、作用域 flags/字符类交集/字符转义的 `unsupported-pattern` 诊断；
 - 严格 JSON 优先、字符串外注释、单引号/未引号键/尾逗号和原型键不污染测试；
@@ -292,6 +292,8 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | IMP-008/js-name | JS config 仅 bookSourceUrl=A，必需函数齐全 | 缺名称配置错误，与 JSON 名称规则不同 |
 | SCH-001/prefix-case | HTML `<div class="book">A</div>`、JSON `{"book":"A"}`，分别比较 `@CSS:`/`@css:`、`@XPath:`/`@xPaTh:` 和 `@Json:`/`@JSON:` | 前缀大小写不影响模式识别；规范写法与混合大小写写法输出一致 |
 | SCH-002/text-nodes | `<div>A<b>B</b>C</div>`，`tag.div@textNodes` | 直接文本 `A\nC`，不包含 B；对照原测试确认实体细节 |
+| SCH-002/selector-extensions | `<div class="content" data-x="alpha"><a>One</a></div>`，分别使用 `div:has(a)`, `div:not(.missing)`, `div:is(.content,.other)`, `div:matches(/One/)`, `[data-x~=(?i)^alp]` | 五个选择器均按 Jsoup 兼容语义命中；非法 Java 正则返回 `unsupported-selector` |
+| SCH-004/table-fragment | `<td>A <b>B</b> C</td>`，分别执行 `@XPath://td`, `text`, `ownText`, `textNodes` | 片段自动补 `tr/table` 容器；结果分别保留 `A B C`、`A C`、`A\nC` |
 | SCH-003/nonmutating | 三个 a 的文本为 A/B/C，先排除索引 0，再读全部 | 首次 B/C，第二次仍 A/B/C |
 | SCH-006/bracket | `a[href="x\|\|y"]@text` | 属性中的组合符不切断 |
 | SCH-007/capture-zero | 输入 `abc123`，`:([a-z]+)(\\d+)`，另测可选捕获组未命中的情况 | 返回列表第 0 项为完整匹配，后续项为捕获组；缺失捕获组以空字符串保留；链式正则只使用前一阶段完整匹配文本 |
