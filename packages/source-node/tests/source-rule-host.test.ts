@@ -245,14 +245,20 @@ test('Java Map/List/Set 支持教程常用的视图、计算和迭代器方法',
       try { endIterator.remove(); endIterator.remove(); } catch (error) { invalid.push('iterator-remove'); }
       var set = new HashSet(['x', 'y', 'z']);
       set.removeAll(new HashSet(['z']));
-      JSON.stringify({ map: [putIfAbsent, computed, merged, replaced, map.get('a'), map.get('b'), map.get('c'), entry.getValue(), map.get('missing'), map.remove('missing'), map.replace('missing', 1)], callbacks: [replaceAllOrder, forEachOrder, callbackMap.get('a'), callbackMap.get('b')], list: [iterated, list.toArray(), invalid], set: [set.contains('z'), set.containsAll(['x', 'y']), set.toArray()] });
+      var setContainsAll = set.containsAll(['x', 'y']);
+      var setIterator = set.iterator();
+      var setValues = [setIterator.next(), setIterator.next()];
+      var setInvalid = [];
+      try { setIterator.next(); } catch (error) { setInvalid.push('iterator'); }
+      try { setIterator.remove(); setIterator.remove(); } catch (error) { setInvalid.push('iterator-remove'); }
+      JSON.stringify({ map: [putIfAbsent, computed, merged, replaced, map.get('a'), map.get('b'), map.get('c'), entry.getValue(), map.get('missing'), map.remove('missing'), map.replace('missing', 1)], callbacks: [replaceAllOrder, forEachOrder, callbackMap.get('a'), callbackMap.get('b')], list: [iterated, list.toArray(), invalid], set: [set.contains('z'), setContainsAll, set.toArray(), setValues, setInvalid] });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
     map: [1, 'c!', 4, 2, 8, 4, 'c!', 8, null, null, null],
     callbacks: [['a:1', 'b:2'], ['a:2', 'b:3'], 2, 3],
     list: [['x', 'y', 'y', 1, 0], ['x', 'z', 'Y'], ['remove', 'iterator', 'iterator-remove']],
-    set: [false, true, ['x', 'y']],
+    set: [false, true, ['x'], ['x', 'y'], ['iterator', 'iterator-remove']],
   })
 })
 

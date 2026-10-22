@@ -151,7 +151,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播和 `skipRateLimit` 绕过语义；Node `ajaxAll(..., true)` 与 `ajaxTestAll(..., timeout, true)` 已有 bridge/limiter 回归，Android golden 仍待执行 |
 | `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |
 | `JS-004` | 段评 | 声明式/JS 摘要索引、详情游标、回复分页展平、内容协议、函数配对/缺失终态和媒体基准地址 |
-| `JS-005` | 书源 JS bridge | Java String/StringBuilder/Pattern/Matcher 重载，命名组、匹配位置、region/reset 和 `$0/$1/$10/${name}`/`quoteReplacement` 替换，Java Map/List/Set 计算、批量修改、缺失键 null、回调参数顺序、迭代器异常和 ListIterator，`String.valueOf/copyValueOf` 字符数组与 null、Integer/Long/BigInteger radix 解析，JavaImporter/Packages、Base64/URLEncoder/DatatypeConverter、HMAC/SecretKeySpec、InputStream，`Packages...StrResponse` 构造对象的属性/方法双访问与跨执行 DTO 编码，以及 AnalyzeUrl 响应对象 |
+| `JS-005` | 书源 JS bridge | Java String/StringBuilder/Pattern/Matcher 重载，命名组、匹配位置、region/reset 和 `$0/$1/$10/${name}`/`quoteReplacement` 替换，Java Map/List/Set 计算、批量修改、缺失键 null、回调参数顺序、Set/List 迭代器异常和 ListIterator，`String.valueOf/copyValueOf` 字符数组与 null、Integer/Long/BigInteger radix 解析，JavaImporter/Packages、Base64/URLEncoder/DatatypeConverter、HMAC/SecretKeySpec、InputStream，`Packages...StrResponse` 构造对象的属性/方法双访问与跨执行 DTO 编码，以及 AnalyzeUrl 响应对象 |
 | `REVIEW-001` | 旧式段评 | `getDP/getZP` 页面打开、nonce 会话、CSP/sandbox 桥接、脚本上限、书源变更和图片重写 |
 | `MEDIA-001` | 媒体 | 文本、音频、图片、视频和文件类型从列表到详情的身份与结果类型 |
 | `MEDIA-002` | 图片 | 封面和正文图片 bytes 解密、失败回退、Cookie 和缓存隔离 |
