@@ -598,6 +598,35 @@ test('jsLib 可序列化状态按规则宿主会话隔离，不因共享缓存�
   assert.equal((await second.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:isolatedCounter', content: '' })).value, 1)
 })
 
+test('jsLib 共享状态在并发规则执行中按源会话串行提交', async () => {
+  const host = new SourceRuleHost()
+  const stateSource = { ...source, jsLib: 'var concurrentCounter = (typeof concurrentCounter === "undefined" ? 0 : concurrentCounter) + 1;' } as NormalizedSource
+  const outputs = await Promise.all(Array.from({ length: 8 }, () => host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:concurrentCounter', content: '' })))
+  assert.deepEqual(outputs.map((item) => item.value).sort((left, right) => Number(left) - Number(right)), [1, 2, 3, 4, 5, 6, 7, 8])
+  assert.equal((await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:concurrentCounter', content: '' })).value, 9)
+})
+
+test('jsLib 刷新后嵌套 evalJS 不会被外层旧快照覆盖', async () => {
+  const host = new SourceRuleHost()
+  const stateSource = { ...source, jsLib: 'var refreshCounter = (typeof refreshCounter === "undefined" ? 0 : refreshCounter) + 1;' } as NormalizedSource
+  const refreshed = await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:source.refreshJSLib(); source.evalJS("refreshCounter = 99"); "ok"', content: '' })
+  assert.equal(refreshed.value, 'ok')
+  assert.equal((await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:refreshCounter', content: '' })).value, 100)
+})
+
+test('jsLib 等待队列取消后会释放后续执行', async () => {
+  const host = new SourceRuleHost()
+  const stateSource = { ...source, jsLib: 'var cancelledCounter = (typeof cancelledCounter === "undefined" ? 0 : cancelledCounter) + 1;' } as NormalizedSource
+  const first = host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:Packages.java.lang.Thread.sleep(40); cancelledCounter', content: '' })
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  const controller = new AbortController()
+  const second = host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:cancelledCounter', content: '', signal: controller.signal })
+  controller.abort()
+  assert.equal((await second).status, 'cancelled')
+  assert.equal((await first).status, 'success')
+  assert.equal((await host.evaluate({ source: stateSource, stage: 'search', field: 'fixture', rule: '@js:cancelledCounter', content: '' })).value, 2)
+})
+
 test('java.toURL 保留 IPv6 authority 和已编码查询参数名', async () => {
   const result = await evaluate(new SourceRuleHost(), '@js:JSON.stringify((() => { const url = java.toURL("https://[2001:db8::1]:8080/p?a%20b=x+y#frag"); const noQuery = java.toURL("https://user:pass@example.test/p"); return [url.host, url.hostname, url.port, url.origin, url.search, url.searchParams.get("a%20b"), url.searchParams.toString(), noQuery.searchParams === null, noQuery.getProtocol(), noQuery.getHost(), noQuery.getPort(), noQuery.getDefaultPort(), noQuery.getPath(), noQuery.getFile(), noQuery.getQuery(), noQuery.getRef(), noQuery.getAuthority(), noQuery.getUserInfo()]; })())', '')
   assert.equal(result.status, 'success', result.message)

@@ -1781,7 +1781,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly sessionLoginInfo = new Map<string, string>()
   private readonly sessionSourceVariables = new Map<string, string>()
   private readonly sessionSourceValues = new Map<string, Map<string, string>>()
-  private readonly clearedJsLibStates = new Set<string>()
+  private readonly jsLibClearGenerations = new Map<string, number>()
+  private readonly jsLibStateQueues = new Map<string, Promise<void>>()
+  private readonly activeJsLibOwners = new WeakSet<object>()
   private readonly fontMappings = new Map<string, FontMapping>()
   private nextFontId = 0
   private readonly maxSteps: number
@@ -2322,6 +2324,39 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return output.status === 'success' ? output.value : undefined
   }
 
+  private async acquireJsLibStateLock(key: string, signal: AbortSignal): Promise<() => void> {
+    const previous = this.jsLibStateQueues.get(key)
+    let releaseGate!: () => void
+    const gate = new Promise<void>((resolve) => { releaseGate = resolve })
+    const queued = (previous ?? Promise.resolve()).then(() => gate)
+    this.jsLibStateQueues.set(key, queued)
+    let removeAbortListener: (() => void) | undefined
+    try {
+      if (previous !== undefined) {
+        const aborted = new Promise<never>((_resolve, reject) => {
+          const onAbort = () => reject(new Error('__LEGADO_CANCELLED__jsLib state wait cancelled'))
+          removeAbortListener = () => signal.removeEventListener('abort', onAbort)
+          signal.addEventListener('abort', onAbort, { once: true })
+        })
+        await Promise.race([previous, aborted])
+      }
+      if (signal.aborted) throw new Error('__LEGADO_CANCELLED__jsLib state wait cancelled')
+    } catch (error) {
+      removeAbortListener?.()
+      releaseGate()
+      if (this.jsLibStateQueues.get(key) === queued) this.jsLibStateQueues.delete(key)
+      throw error
+    }
+    removeAbortListener?.()
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      releaseGate()
+      if (this.jsLibStateQueues.get(key) === queued) this.jsLibStateQueues.delete(key)
+    }
+  }
+
   private async applyReplacement(value: unknown, rule: RuleAtom, state: EvaluationState, content: unknown): Promise<unknown> {
     if (rule.replacement === undefined) return value
     // Android 先对整条规则插值再按 `##` 切分，所以匹配串和替换串里的 {{}} 同样生效。
@@ -2341,7 +2376,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; requestBudget?: Partial<RequestBudget>; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; jsLibOwner?: object; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; requestBudget?: Partial<RequestBudget>; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver }): Promise<WorkflowRuleOutput> {
     const explicitBindings = context?.bindings ?? {}
     let bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
@@ -2473,10 +2508,25 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       javaObjectGraphPrelude,
     ].join('\n')
     const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
+    const jsLibOwner = context?.jsLibOwner ?? ruleState
     const runSignal = signal ?? new AbortController().signal
+    let jsLibStateRelease: (() => void) | undefined
+    let ownsJsLibStateLock = false
     try {
       const libraries = await this.loadSourceLibraries(source, runSignal, context?.workflowStage ?? this.workflowStageForJavaScript(stage), context?.requestObserver)
       const jsLibStateKey = libraries.length > 0 ? `jsLibState:${this.jsLibSessionId}:${sourceDefinitionFingerprint(source)}` : undefined
+      if (jsLibStateKey !== undefined && !this.activeJsLibOwners.has(jsLibOwner)) {
+        this.activeJsLibOwners.add(jsLibOwner)
+        ownsJsLibStateLock = true
+        try {
+          jsLibStateRelease = await this.acquireJsLibStateLock(jsLibStateKey, runSignal)
+        } catch (error) {
+          this.activeJsLibOwners.delete(jsLibOwner)
+          ownsJsLibStateLock = false
+          throw error
+        }
+      }
+      const jsLibClearGeneration = jsLibStateKey === undefined ? undefined : this.jsLibClearGenerations.get(jsLibStateKey) ?? 0
       if (jsLibStateKey !== undefined) {
         const cachedState = decodeSourceCacheValue(this.encoding, await this.cache.get(jsLibStateKey, runSignal))
         const persisted = typeof cachedState === 'object' && cachedState !== null && !Array.isArray(cachedState) ? cachedState as Record<string, unknown> : {}
@@ -2523,7 +2573,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             && ['network', 'network-all', 'network-response', 'url-context-response'].includes(String((payload as SourceRuleBridgeRequest).kind))
             ? { ...(payload as SourceRuleBridgeRequest), budget: { ...context.requestBudget, ...((payload as SourceRuleBridgeRequest).budget ?? {}) } }
             : payload
-          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver)
+          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState)
         },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })
@@ -2543,7 +2593,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
               // Functions and host objects are intentionally excluded from jsLib state.
             }
           }
-          if (!this.clearedJsLibStates.delete(jsLibStateKey)) await this.cache.put(jsLibStateKey, `${sourceCacheJsonPrefix}${JSON.stringify(state)}`, 0, runSignal)
+          if ((this.jsLibClearGenerations.get(jsLibStateKey) ?? 0) === jsLibClearGeneration) await this.cache.put(jsLibStateKey, `${sourceCacheJsonPrefix}${JSON.stringify(state)}`, 0, runSignal)
         }
         if (context?.captureGlobals !== true && context?.captureBindings === undefined) {
           value = wrapper.__legadoWorkflowValue
@@ -2562,6 +2612,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       if (error instanceof SourceRuleError) return { status: error.status, value: null, message: error.message }
       if (signal?.aborted === true) return { status: 'cancelled', value: null, message: 'JavaScript 宿主准备已取消' }
       return { status: 'failed', value: null, message: error instanceof Error ? error.message : 'JavaScript 宿主准备失败' }
+    } finally {
+      if (ownsJsLibStateLock) {
+        jsLibStateRelease?.()
+        this.activeJsLibOwners.delete(jsLibOwner)
+      }
     }
   }
 
@@ -2625,7 +2680,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (typeof value !== 'string' || value.trim().length === 0) return
     const fingerprint = sourceDefinitionFingerprint(source)
     const stateKey = `jsLibState:${this.jsLibSessionId}:${fingerprint}`
-    this.clearedJsLibStates.add(stateKey)
+    this.jsLibClearGenerations.set(stateKey, (this.jsLibClearGenerations.get(stateKey) ?? 0) + 1)
     await this.cache.delete(stateKey, signal)
     let remoteUrls: string[] | undefined
     try {
@@ -2649,7 +2704,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
   }
 
-  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver): Promise<unknown> {
+  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver, jsLibOwner?: object): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'node-info' || request.kind === 'node-mutate' || request.kind === 'node-match') {
@@ -2904,7 +2959,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       })
       return undefined
     }
-    if (request.kind === 'source-state') return this.handleSourceState(request, signal, source, workflowStage, currentBindings, workflowActions, requestObserver)
+    if (request.kind === 'source-state') return this.handleSourceState(request, signal, source, workflowStage, currentBindings, workflowActions, requestObserver, jsLibOwner)
     if (request.kind === 'file') {
       if (this.file === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime file.${textValue(request.operation)} unavailable`)
       const operation = textValue(request.operation) as SourceFileOperation
@@ -2943,7 +2998,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const bindings: Record<string, unknown> = { ...currentBindings, ...(request.kind === 'source-eval-js' && typeof request.input === 'object' && request.input !== null && !Array.isArray(request.input) ? extra : {}) }
       if (request.kind === 'source-login-ui') Object.assign(bindings, { __loginState: textValue(request.value), book: extra.book, chapter: extra.chapter })
       if (request.kind === 'source-login-action') Object.assign(bindings, { __loginAction: textValue(request.value), __loginState: textValue(request.data), __loginForm: textValue((extra as { formJson?: unknown }).formJson), book: extra.book, chapter: extra.chapter })
-      const output = await this.runJavaScript(code, this.javascriptStage(workflowStage), source, '', signal, { bindings, mode: 'script', workflowStage, ...(workflowActions === undefined ? {} : { workflowActions }), ...(requestObserver === undefined ? {} : { requestObserver }) })
+      const output = await this.runJavaScript(code, this.javascriptStage(workflowStage), source, '', signal, { bindings, mode: 'script', ...(jsLibOwner === undefined ? {} : { jsLibOwner }), workflowStage, ...(workflowActions === undefined ? {} : { workflowActions }), ...(requestObserver === undefined ? {} : { requestObserver }) })
       if (output.status === 'empty') return undefined
       if (output.status !== 'success') throw new SourceRuleError(output.status, output.message ?? '书源登录脚本执行失败')
       return request.kind === 'source-login' ? undefined : output.value
@@ -2956,7 +3011,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return this.requestBridge({ ...request, stage: workflowStage }, signal, source, requestObserver)
   }
 
-  private async handleSourceState(request: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>>, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver): Promise<unknown> {
+  private async handleSourceState(request: SourceRuleBridgeRequest, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>>, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver, jsLibOwner?: object): Promise<unknown> {
     const operation = textValue(request.operation)
     if (operation === 'getHeaderMap') {
       if (this.sourceState?.getHeaderMap !== undefined) return this.sourceState.getHeaderMap(source, request.value === true, signal)
@@ -2970,6 +3025,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             const output = await this.runJavaScript(inline, this.javascriptStage(workflowStage), source, '', signal, {
               bindings: { ...currentBindings, __legadoHeaderEvaluation: true },
               mode: 'script',
+              ...(jsLibOwner === undefined ? {} : { jsLibOwner }),
               workflowStage,
               ...(workflowActions === undefined ? {} : { workflowActions }),
               ...(requestObserver === undefined ? {} : { requestObserver }),
@@ -3077,6 +3133,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         const output = await this.runJavaScript(`${loginJs}\n${loginUiJs}`, this.javascriptStage(workflowStage), source, '', signal, {
           bindings: { ...currentBindings, __legadoLoginInfoEvaluation: true, result: {}, book: null, chapter: null },
           mode: 'script',
+          ...(jsLibOwner === undefined ? {} : { jsLibOwner }),
           workflowStage,
           ...(workflowActions === undefined ? {} : { workflowActions }),
           ...(requestObserver === undefined ? {} : { requestObserver }),
