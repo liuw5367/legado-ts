@@ -248,9 +248,25 @@ test('JSONPath adapter 对齐 Jayway 的标量 empty、空聚合和文本函数�
   assert.throws(() => parser.evaluate(value, '$.numbers.avg()'), /没有可聚合的数字/u)
   assert.throws(() => parser.evaluate(value, '$.numbers.stddev()'), /没有可聚合的数字/u)
   assert.throws(() => parser.evaluate(value, '$.numbers.sum()'), /没有可聚合的数字/u)
-  assert.deepEqual(parser.evaluate(value, '$.text.concat("!", 2, true, ["?"])'), ['!2true?'])
+  assert.deepEqual(parser.evaluate(value, '$.text.concat("!", 2, true, ["?"])'), ['!2?'])
   assert.deepEqual(parser.evaluate(value, '$.text.concat([{key:1}, [2, {flag:true}], null])'), ['{key=1}[2, {flag=true}]'])
   assert.deepEqual(parser.evaluate(value, '$.text.append(1)'), ['abc'])
+})
+
+test('JSONPath adapter 支持 Jayway 函数的路径参数和聚合参数', () => {
+  const parser = new JsonPathParserAdapter()
+  const value = { numbers: [1, 2, 3], extra: [4, 5], text: 'x', nested: { value: [6, 7] } }
+
+  assert.deepEqual(parser.evaluate(value, '$.text.concat($.extra)'), ['45'])
+  assert.deepEqual(parser.evaluate(value, '$.text.concat(@.extra)'), ['45'])
+  assert.deepEqual(parser.evaluate(value, '$.text.concat(@root.nested.value)'), ['67'])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.sum(4, 5)'), [15])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.avg(4, 5)'), [3])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.min(4, 5)'), [1])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.max(4, 5)'), [5])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.sum($.extra)'), [15])
+  assert.deepEqual(parser.evaluate(value, '$.text.sum(4, 5)'), [9])
+  assert.throws(() => parser.evaluate(value, '$.numbers.length($.extra)'), /length 不接受参数/u)
 })
 
 test('JSONPath adapter 不执行条件表达式中的原生构造器', () => {

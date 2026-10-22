@@ -32,7 +32,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `node scripts/compare-source-conformance.mjs` 会先执行上述 TypeScript fixture，再读取 Android runner 输出与各 case 的 `expected.json` 做稳定键序比较。Android 输出允许 `<id>.json`、`cases/<id>.json`、`<id>/result.json` 或 `<id>.golden.json` 四种脱敏路径；新 runner 外层协议由 `fixtures/conformance/runner-result.schema.json` 固定为 `schemaVersion/fixtureId/status/result`，并区分 `not-run`、`unsupported`、`runner-failed`、`invalid-output` 和真实 `fail`。缺少输出明确报告为 `not-run`，加 `--require-android` 才会以退出码 2 阻断验证，不能用缺失输出伪造通过。
 - `packages/source-core/tests/runtime-observations.test.ts` 覆盖请求成功、响应为空、网络失败、WebView 能力缺失、取消和非法 JS 候选行；`packages/source-node/tests/source-session.test.ts` 进一步验证 `mainJs` 的 bridge 网络请求会进入同一观测链。发现/搜索的 `RuntimeResult.observations` 只包含脱敏 URL、状态码、响应字节数、耗时、错误码和条目索引，不包含 Cookie、Authorization、token、密码、正文或脚本源码。
 - `source-host-flow.test.ts` 使用真实书源规则和离线响应覆盖 JSON/CSS/XPath/JavaScript/HTML，并额外断言正文网络失败不会伪造成成功；另从大型 collection 按结构索引回放 JSONPath 条件过滤和 `java.getElements` 书源。不会把完整 collection 输出到日志。
-- `packages/source-node/tests/adapters.test.ts` 的 HTML/XML CSS adapter case 覆盖 Jsoup `eq/lt/gt` 同级原始索引（含负数）边界，以及 `ownText/textNodes/text` 对 `br`、普通文本 NBSP/换行归一化、`pre/textarea` 保留空白和 script/style DataNode 排除的边界；JSONPath case 以 Android Jayway 3.0.0 源码探针为参照，覆盖混合数字/字符串集合等价、`null` 与缺失路径、`empty true/false` 的标量和 UndefinedNode 边界、空集合筛选，以及空聚合失败、`stddev/first/last/index/concat/append` 函数；这些是 TypeScript 侧实际回归，不替代 Android fixture golden。
+- `packages/source-node/tests/adapters.test.ts` 的 HTML/XML CSS adapter case 覆盖 Jsoup `eq/lt/gt` 同级原始索引（含负数）边界，以及 `ownText/textNodes/text` 对 `br`、普通文本 NBSP/换行归一化、`pre/textarea` 保留空白和 script/style DataNode 排除的边界；JSONPath case 以 Android Jayway 3.0.0 源码探针为参照，覆盖混合数字/字符串集合等价、`null` 与缺失路径、`empty true/false` 的标量和 UndefinedNode 边界、空集合筛选，以及空聚合失败、`stddev/first/last/index/concat/append` 函数和 `$`/`@`/`@root` 路径参数；这些是 TypeScript 侧实际回归，不替代 Android fixture golden。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
 - 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 179/179，`pnpm test` 为 621/621。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
@@ -251,7 +251,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 - `@` 链、`text`、`textNodes`、`ownText`、`html`、`all` 和属性；
 - Java Element/Elements 的父子/兄弟、tag/id/class、`is`、`clone`、`remove`、属性修改及集合链式调用；
 - Jsoup 扩展位置/文本伪类、`:has/:not/:is`、文本 `:matches`、属性 Java 正则 `~=`, HTML/XML 大小写、无效选择器 `unsupported-selector`；
-- Jayway `length/size/keys/min/max/avg/sum`、正则筛选、`in/nin/size/empty/anyof/noneof`、原始值 `subsetof`、集合右值的根/当前项路径以及复杂集合 `unsupported-jsonpath` 诊断；
+- Jayway `length/size/keys/min/max/avg/sum`、带路径/数值参数的 `concat` 与聚合、正则筛选、`in/nin/size/empty/anyof/noneof`、原始值 `subsetof`、集合右值的根/当前项路径以及复杂集合 `unsupported-jsonpath` 诊断；
 - Java POSIX/Unicode 属性、`(?U)` 常用预定义类、Unicode `\b/\B`、局部 i/m/s/x/d/U flags（含 `d` 的 LF-only 行终止符）、COMMENTS 空白/注释和字符类边界、简单原子占有量词和单原子原子组、字符类交集/字符转义以及复杂占有量词/原子组/局部 u（UNICODE_CASE）和 U+i 完整折叠的 `unsupported-pattern` 诊断；纯 Java 类族的 UTF-16、Long/BigInteger/BigDecimal、增量摘要、字节流和 Set/Collections；
 - 严格 JSON 优先、字符串外注释、单引号/未引号键/尾逗号和原型键不污染测试；
 - 正索引、负索引、范围、负步长、排除和越界；

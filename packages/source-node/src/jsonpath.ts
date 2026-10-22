@@ -10,7 +10,7 @@ export class JsonPathParserAdapter implements JsonPathParser {
         const name = functionCall[2]!
         if (jsonPathFunctionNames.has(name)) {
           const values = JSONPath({ path: functionCall[1]!, json: value as never, wrap: true, eval: 'safe', sandbox: jsonPathSandbox as never }) as unknown
-          const args = parseJsonPathArguments(functionCall[3]!)
+          const args = parseJsonPathArguments(value, functionCall[3]!)
           const result = applyJsonPathFunction(name, functionCall[1]!, values, args)
           return result === undefined ? [] : [result] as RuleValue
         }
@@ -156,7 +156,7 @@ function parseJsonPathLiteralArray(value: string): string[] | undefined {
   }
 }
 
-function parseJsonPathArguments(value: string): unknown[] {
+function parseJsonPathArguments(root: unknown, value: string): unknown[] {
   if (value.trim().length === 0) return []
   const parts: string[] = []
   let start = 0
@@ -181,10 +181,27 @@ function parseJsonPathArguments(value: string): unknown[] {
   }
   parts.push(value.slice(start).trim())
   return parts.map((part) => {
+    if (isFunctionPathArgument(part)) {
+      const path = normalizeFunctionPathArgument(part)
+      return JSONPath({ path, json: root as never, wrap: false, eval: 'safe', sandbox: jsonPathSandbox as never }) as unknown
+    }
+    // Jayway's parameter parser only treats strings, numbers and objects as
+    // JSON parameters. Bare booleans/null are ignored instead of becoming
+    // stringified values in concat or numeric arguments.
+    if (/^(?:true|false|null)$/u.test(part)) return undefined
     const parsed = parseRelaxedJson(part)
     if (parsed === undefined) throw new ParserAdapterError('unsupported-jsonpath', `JSONPath 函数参数无法解析：${part}`)
     return parsed
   })
+}
+
+function isFunctionPathArgument(value: string): boolean {
+  return /^(?:\$|@root|@)(?:\.|\[|$)/u.test(value)
+}
+
+function normalizeFunctionPathArgument(value: string): string {
+  if (value.startsWith('@root')) return `$${value.slice('@root'.length)}`
+  return value[0] === '@' ? `$${value.slice(1)}` : value
 }
 
 function isCollectionPath(path: string): boolean {
@@ -217,7 +234,20 @@ function applyJsonPathFunction(name: string, path: string, value: unknown, args:
   }
   if (name === 'append') {
     if (!Array.isArray(input)) return input
-    return [...input, ...args]
+    return [...input, ...args.filter((arg) => arg !== undefined)]
+  }
+  if (['sum', 'avg', 'min', 'max', 'stddev'].includes(name)) {
+    const numbers = [
+      ...(Array.isArray(input) ? input : []),
+      ...numberArguments(args),
+    ].filter((item): item is number => typeof item === 'number' && Number.isFinite(item))
+    if (numbers.length === 0) throw new Error(`${name} 没有可聚合的数字`)
+    if (name === 'sum') return numbers.reduce((total, item) => total + item, 0)
+    if (name === 'avg') return numbers.reduce((total, item) => total + item, 0) / numbers.length
+    if (name === 'min') return Math.min(...numbers)
+    if (name === 'max') return Math.max(...numbers)
+    const average = numbers.reduce((total, item) => total + item, 0) / numbers.length
+    return Math.sqrt(numbers.reduce((total, item) => total + item * item, 0) / numbers.length - average * average)
   }
   if (!Array.isArray(input)) throw new Error(`${name} 只能用于数组`)
   if (name === 'first') {
@@ -237,14 +267,20 @@ function applyJsonPathFunction(name: string, path: string, value: unknown, args:
     if (index < 0 || index >= input.length) throw new Error(`index 目标索引超出范围：${args[0]}`)
     return input[index]
   }
-  const numbers = input.filter((item): item is number => typeof item === 'number' && Number.isFinite(item))
-  if (numbers.length === 0) throw new Error(`${name} 没有可聚合的数字`)
-  if (name === 'sum') return numbers.reduce((total, item) => total + item, 0)
-  if (name === 'avg') return numbers.reduce((total, item) => total + item, 0) / numbers.length
-  if (name === 'min') return Math.min(...numbers)
-  if (name === 'max') return Math.max(...numbers)
-  const average = numbers.reduce((total, item) => total + item, 0) / numbers.length
-  return Math.sqrt(numbers.reduce((total, item) => total + item * item, 0) / numbers.length - average * average)
+  throw new Error(`${name} 只能用于数组`)
+}
+
+function numberArguments(args: unknown[]): number[] {
+  const values: number[] = []
+  const append = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) append(item)
+      return
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) values.push(value)
+  }
+  for (const arg of args) append(arg)
+  return values
 }
 
 function stringArguments(args: unknown[]): string[] {
