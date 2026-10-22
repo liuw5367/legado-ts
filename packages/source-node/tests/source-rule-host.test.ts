@@ -1160,6 +1160,35 @@ test('网络响应 Headers 对齐 OkHttp 的重复值、索引、映射和敏感
   })
 })
 
+test('网络响应 Headers 的日期方法按 OkHttp HTTP-date 格式解析并固定无时区格式为 UTC', async () => {
+  const host = new SourceRuleHost({ request: async (input) => ({
+    body: 'date-body',
+    status: 200,
+    headers: {
+      Date: 'Sun, 06 Nov 1994 08:49:37 GMT',
+      'X-Legacy': 'Sunday, 06-Nov-94 08:49:37 GMT',
+      'X-Asctime': 'Sun Nov  6 08:49:37 1994',
+      'X-Numeric': 'Sun, 06-11-1994 08:49:37 GMT',
+      'X-Dashed': 'Sun, 06-Nov-1994 08-49-37 GMT',
+      'X-Invalid': '1994-11-06',
+      'X-Trailing': 'Sun, 06 Nov 1994 08:49:37 GMT trailing',
+    },
+    url: String(input.url),
+  }) })
+  const result = await evaluate(host, '@js:var headers = java.get("https://a.test", {}).headers(); JSON.stringify({ standard: headers.getDate("date"), instant: headers.getInstant("date"), legacy: headers.getDate("x-legacy"), asctime: headers.getDate("x-asctime"), numeric: headers.getDate("x-numeric"), dashed: headers.getDate("x-dashed"), invalid: headers.getDate("x-invalid"), trailing: headers.getDate("x-trailing") })', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    standard: '1994-11-06T08:49:37.000Z',
+    instant: '1994-11-06T08:49:37.000Z',
+    legacy: '1994-11-06T08:49:37.000Z',
+    asctime: '1994-11-06T08:49:37.000Z',
+    numeric: '1994-11-06T08:49:37.000Z',
+    dashed: '1994-11-06T08:49:37.000Z',
+    invalid: null,
+    trailing: null,
+  })
+})
+
 test('AnalyzeUrl getResponse/getStrResponse 提供教程常用响应成员', async () => {
   const calls: unknown[] = []
   const host = new SourceRuleHost({ request: async (input) => {
