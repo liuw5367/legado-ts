@@ -97,8 +97,8 @@ export function compileSourcePattern(pattern: string, options: SourcePatternOpti
 
 /**
  * 转换 Java Pattern 中可安全表达的历史书源语法；不把未知语法降级成字面匹配。
- * `\Q...\E` 和边界转义是等价转换；简单原子上的占有量词可用同原子负向前瞻
- * 固定贪婪边界，复杂分组和原子分组没有等价的 ECMAScript 表达，必须返回明确诊断。
+ * `\Q...\E` 和边界转义是等价转换；简单原子上的占有量词和单原子原子组可用
+ * 同原子负向前瞻固定贪婪边界，复杂分组没有等价的 ECMAScript 表达，必须返回明确诊断。
  */
 function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternTranslation | { error: SourcePatternError } {
   let flags = inputFlags
@@ -149,7 +149,10 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     output += source[index]!
     index += 1
   }
-  if (/\(\?>/u.test(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则原子分组暂不支持' } }
+  const atomic = translateSimpleAtomicGroups(output)
+  if ('error' in atomic) return atomic
+  output = atomic.pattern
+  if (/\(\?>/u.test(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则复杂原子分组暂不支持' } }
   const possessive = translateJavaPossessiveQuantifiers(output)
   if ('error' in possessive) return possessive
   output = possessive.pattern
@@ -385,6 +388,61 @@ function stripJavaExtendedCharacterClass(raw: string): { pattern: string } | { e
     index += 1
   }
   return { pattern: `${output}]` }
+}
+
+function translateSimpleAtomicGroups(pattern: string): { pattern: string } | { error: SourcePatternError } {
+  let output = ''
+  let index = 0
+  while (index < pattern.length) {
+    if (pattern.startsWith('(?>', index)) {
+      const end = findGroupEnd(pattern, index + 3)
+      if (end < 0) return { error: { code: 'invalid-pattern', message: 'Java 正则原子分组括号不匹配' } }
+      const content = pattern.slice(index + 3, end)
+      const replacement = translateSimpleAtomicContent(content)
+      if (replacement !== undefined) {
+        output += replacement
+        index = end + 1
+        continue
+      }
+    }
+    if (pattern[index] === '\\') {
+      const end = readPatternEscapeEnd(pattern, index)
+      output += pattern.slice(index, end)
+      index = end
+      continue
+    }
+    if (pattern[index] === '[') {
+      const end = findCharacterClassEnd(pattern, index)
+      if (end < 0) return { error: { code: 'invalid-pattern', message: 'Java 正则字符类括号不匹配' } }
+      output += pattern.slice(index, end + 1)
+      index = end + 1
+      continue
+    }
+    output += pattern[index]!
+    index += 1
+  }
+  return { pattern: output }
+}
+
+function translateSimpleAtomicContent(content: string): string | undefined {
+  const atom = readSimplePatternAtom(content, 0)
+  if (atom === undefined) return undefined
+  if (atom.end === content.length) return atom.text
+  const quantifier = readGreedyQuantifier(content, atom.end)
+  if (quantifier === undefined || quantifier.end !== content.length) return undefined
+  return `${atom.text}${quantifier.quantifier}(?!${atom.text})`
+}
+
+function readGreedyQuantifier(pattern: string, index: number): { quantifier: string; end: number } | undefined {
+  const current = pattern[index]
+  if (current === '*' || current === '+' || current === '?') {
+    return pattern[index + 1] === '?' ? undefined : { quantifier: current, end: index + 1 }
+  }
+  if (current !== '{') return undefined
+  const close = pattern.indexOf('}', index + 1)
+  if (close < 0 || pattern[close + 1] === '?') return undefined
+  const quantifier = pattern.slice(index, close + 1)
+  return /^\{\d+(?:,\d*)?\}$/u.test(quantifier) ? { quantifier, end: close + 1 } : undefined
 }
 
 interface SimplePatternAtom {
