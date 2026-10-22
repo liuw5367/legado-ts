@@ -31,33 +31,37 @@ const androidRoot = resolve(options.android ?? defaultAndroid)
 const manifest = await readJson(join(fixturesRoot, 'manifest.json'))
 if (manifest.version !== 2 || !Array.isArray(manifest.fixtures)) throw new Error('conformance manifest version 必须为 2')
 
-let typescript = { status: 'skipped', output: '' }
+let typescript = { status: 'skipped', output: '', fixtures: [] }
 if (!options.skipTypescript) typescript = runTypescriptConformance()
 const cases = manifest.fixtures.filter((fixture) => typeof fixture.case === 'string' && fixture.typescript === 'source-cross-runtime.test.ts')
 const fixtures = []
 for (const fixture of cases) {
   const expectedPath = join(fixturesRoot, fixture.expected)
   const expected = await readJson(expectedPath)
+  const typescriptFixture = typescript.fixtures.find((item) => item.id === fixture.id)
+  const typescriptStatus = typescriptFixture?.status ?? typescript.status
+  const typescriptComparison = typescriptFixture?.comparison ?? (typescript.status === 'pass' ? 'pass' : 'not-run')
   const output = await findAndroidOutput(androidRoot, fixture.id)
   if (output.kind === 'missing') {
-    fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: 'not-run', comparison: 'not-run', expected: expectedPath })
+    fixtures.push({ id: fixture.id, typescript: typescriptStatus, typescriptComparison, android: 'not-run', comparison: typescriptComparison === 'fail' ? 'fail' : 'not-run', expected: expectedPath })
     continue
   }
   if (output.kind === 'invalid-json') {
-    fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: 'invalid-output', comparison: 'fail', output: output.path, error: output.error })
+    fixtures.push({ id: fixture.id, typescript: typescriptStatus, typescriptComparison, android: 'invalid-output', comparison: 'fail', output: output.path, error: output.error })
     continue
   }
   const normalized = normalizeAndroidOutput(fixture.id, output.value)
   if (normalized.error !== undefined) {
-    fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: 'invalid-output', comparison: 'fail', output: output.path, error: normalized.error })
+    fixtures.push({ id: fixture.id, typescript: typescriptStatus, typescriptComparison, android: 'invalid-output', comparison: 'fail', output: output.path, error: normalized.error })
     continue
   }
   if (normalized.status !== 'pass') {
-    fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: normalized.status, comparison: 'not-run', output: output.path })
+    fixtures.push({ id: fixture.id, typescript: typescriptStatus, typescriptComparison, android: normalized.status, comparison: typescriptComparison === 'fail' ? 'fail' : 'not-run', output: output.path })
     continue
   }
   const equal = stableJson(normalized.result) === stableJson(expected)
-  fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: equal ? 'pass' : 'fail', comparison: equal ? 'pass' : 'fail', output: output.path, ...(equal ? {} : { difference: { expected, actual: normalized.result } }) })
+  const comparisonPass = equal && typescriptComparison !== 'fail'
+  fixtures.push({ id: fixture.id, typescript: typescriptStatus, typescriptComparison, android: equal ? 'pass' : 'fail', comparison: comparisonPass ? 'pass' : 'fail', output: output.path, ...(equal ? {} : { difference: { expected, actual: normalized.result } }) })
 }
 
 const missing = fixtures.filter((item) => item.android === 'not-run').length
@@ -75,6 +79,7 @@ const report = {
     runnerFailed: fixtures.filter((item) => item.android === 'runner-failed').length,
     invalidOutput: fixtures.filter((item) => item.android === 'invalid-output').length,
     failed,
+    typescriptFailed: fixtures.filter((item) => item.typescriptComparison === 'fail').length,
     typescript: typescript.status,
     androidRoot,
   },
@@ -105,9 +110,14 @@ function parseArgs(args) {
 }
 
 function runTypescriptConformance() {
-  const command = spawnSync(process.execPath, ['--test', 'packages/source-node/tests/source-cross-runtime.test.ts'], { cwd: repositoryRoot, encoding: 'utf8' })
+  const command = spawnSync(process.execPath, ['scripts/run-source-conformance-typescript.mjs'], { cwd: repositoryRoot, encoding: 'utf8' })
   const output = `${command.stdout ?? ''}${command.stderr ?? ''}`
-  return { status: command.status === 0 ? 'pass' : 'fail', output: output.slice(-8_000) }
+  try {
+    const report = JSON.parse(command.stdout)
+    return { status: command.status === 0 && report.summary?.failed === 0 ? 'pass' : 'fail', fixtures: report.fixtures ?? [], output: output.slice(-8_000) }
+  } catch {
+    return { status: 'fail', fixtures: [], output: output.slice(-8_000) }
+  }
 }
 
 async function findAndroidOutput(root, id) {

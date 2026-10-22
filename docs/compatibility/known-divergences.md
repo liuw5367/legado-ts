@@ -90,3 +90,5 @@
 方法兼容 manifest 当前有 26 条方法族登记；独立 conformance manifest 仍有 11 条记录（5 条历史记录、6 条目录型 case），Android 全为 `not-run`。2026-10-22 的 TypeScript 证据为 `pnpm test:source` 138/138、根全套 `pnpm test` 558/558；`pnpm test:source:compare` 的 6 个离线 case 均完成 TypeScript 侧执行，但 Android 输出仍为 `not-run`。比较器和 runner 外层 schema 已具备，不能把协议可用写成 Android golden 已生成。发现/搜索的请求观测已在 `RuntimeResult.observations` 提供 TS 侧证据，仍需 Android 同输入对照。静态语料审计扫描 943 个候选源、20,231 条规则，其中 20,226 条可编译；剩余 5 条只有在路径、源名、字段、诊断码和规则 hash 全部匹配 manifest 白名单时才归为已知源文本错误，当前新增未编译规则或白名单过期均会使审计失败。Android JBR 21 可读且已验证可启动，默认 `java` 为 8；常规 SDK 路径未发现 API 36/build-tools 36.0.0。本轮没有启动 Gradle、安装 SDK、调用公网书源或执行真实账号动作。
 
 后续实施以逐签名契约为单位，记录参数类型/默认值/null、返回对象成员、状态作用域、异常/取消、Android 来源和同输入案例；不能再次用方法名总数或单端测试总数宣布全量完成。具体实施顺序保存在本地修复计划，长期事实仍以本节、状态总览和证据矩阵为准。
+
+2026-10-22 P13 已补齐逐 fixture TypeScript runner 和 Android 前置检查：六条跨运行时 fixture 均有实际 TS 输出并通过 expected 比较；Android 当前没有逐 fixture adapter，六条仍为 `not-run`，比较器使用 `--require-android` 时退出码为 2。该状态只说明跨端验证受阻，不把 Android 普通 JVM 单测或 Node 结果当作 golden。

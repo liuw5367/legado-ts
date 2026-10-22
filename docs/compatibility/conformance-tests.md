@@ -37,6 +37,13 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 138/138，`pnpm test` 为 558/558。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
+### 2026-10-22 P13 最终回归
+
+- `node scripts/run-source-conformance-typescript.mjs` 现在为六条 workflow fixture 分别写出 `schemaVersion=1` 的实际结果，再逐条与 `expected.json` 比较；本次 `6/6 pass`。它通过 `LEGADO_CONFORMANCE_OUTPUT_DIR` 与现有 `source-cross-runtime.test.ts` 共享真实规则宿主、请求宿主和离线响应，不复制 expected 作为结果。
+- `node scripts/compare-source-conformance.mjs` 会消费上述逐条 TS 结果，再比较 Android 输出；本次六条均为 `typescript=pass`、`android=not-run`、`comparison=not-run`。`--require-android` 仍以退出码 2 阻断，避免把缺失 golden 当成双端通过。
+- `node scripts/run-source-conformance-android.mjs` 是 Android 前置检查入口。本次检查到 Android 根目录有 `gradlew`，但没有 `local.properties`、逐 fixture adapter 或输出目录，因此明确返回 `status=not-run`、退出码 2。外层仓库已有的普通 JVM/Android 单测不能替代同输入 golden；该命令不下载 SDK、不修改父仓库、不生成伪结果。
+- `pnpm test:source:compat:static` 本次扫描 943 个候选源、20,231 条规则，20,226 条编译，5 条全部命中已登记源文本错误，`unexpectedUncompiledRules=0`、`staleKnownBrokenRules=0`。
+
 跨端用例状态和完成后的删除线记录统一维护在[状态总览](status.md)。本节继续维护 fixture 格式、断言和执行门槛；机器清单保留稳定 ID，不删除历史记录。
 
 外层 legado 仓库根目录（`typescript/` 的上一级）中的 `examples/rule-fixtures.json`、`examples/source-minimal.json` 和 `examples/source-js-minimal.js` 是脱敏的文档样例，不等同于 Android golden。它们不属于本子仓库，独立克隆 `typescript/` 时不会包含。这些样例是脱敏示意，不能直接作为 fixture 模板。例如，`rule-fixtures.json` 中的 `evidence` 字段是源码路径字符串且无 `spec`/`execution` 字段，与本章的枚举格式不同；在补齐 Android 实际输出和 TypeScript 断言前，不能用于宣称兼容。

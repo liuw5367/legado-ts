@@ -7,6 +7,7 @@ import test from 'node:test'
 
 const repositoryRoot = new URL('../../../', import.meta.url)
 const comparator = new URL('scripts/compare-source-conformance.mjs', repositoryRoot)
+const typescriptRunner = new URL('scripts/run-source-conformance-typescript.mjs', repositoryRoot)
 const fixturesRoot = new URL('fixtures/conformance/', repositoryRoot)
 
 async function expected(fixtureId: string): Promise<unknown> {
@@ -34,6 +35,19 @@ test('runner 结果 schema 固定外层字段和状态枚举', async () => {
   assert.equal(schema.properties.schemaVersion.const, 1)
   assert.deepEqual(schema.properties.status.enum, ['pass', 'unsupported', 'failed', 'runner-failed'])
   assert.deepEqual(schema.required, ['schemaVersion', 'fixtureId', 'status', 'result'])
+})
+
+test('TypeScript runner 为每条 workflow fixture 输出实际结果并逐条比较 expected', async () => {
+  const child = spawnSync(process.execPath, [typescriptRunner.pathname], { encoding: 'utf8' })
+  assert.equal(child.status, 0, `${child.stderr}\n${child.stdout}`)
+  const report = JSON.parse(child.stdout) as { fixtures: Array<{ id: string; status: string; comparison: string; result: unknown }>; summary: { total: number; passed: number } }
+  assert.equal(report.summary.total, 6)
+  assert.equal(report.summary.passed, 6)
+  for (const fixture of report.fixtures) {
+    assert.equal(fixture.status, 'pass', fixture.id)
+    assert.equal(fixture.comparison, 'pass', fixture.id)
+    assert.deepEqual(fixture.result, await expected(fixture.id))
+  }
 })
 
 test('比较器区分 pass、not-run、unsupported 和 runner-failed', async () => {

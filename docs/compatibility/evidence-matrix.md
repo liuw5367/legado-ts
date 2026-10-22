@@ -122,3 +122,9 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 本轮已执行命令：`node --test packages/source-node/tests/source-rule-host.test.ts packages/source-node/tests/source-runtime-platform.test.ts packages/source-node/tests/source-session.test.ts`。最小探针直接调用 SourceRuleRuntime/SourceRuleHost、使用固定 `.invalid` 地址和请求桩，没有访问公网、真实账户、购买或其他远程写入。探针属于差异发现证据，正式回归与共享 golden 要在对应修复时加入版本控制。
 
 环境只读核验：Android Studio JBR `21.0.4` 可以启动，默认 Java 为 `1.8.0_504`；常规 Android SDK 目录未发现 API 36/build-tools 36.0.0。本轮没有验证 Gradle 编译、SDK 下载和真实 WebView。后续 Android runner 必须使用独立 checkout，不能更改父仓已有工作树。
+
+## 2026-10-22 P13 最终执行证据
+
+`node scripts/run-source-conformance-typescript.mjs` 对六条跨运行时 fixture 逐条生成实际输出并完成 `6/6` expected 比较；`node scripts/compare-source-conformance.mjs` 记录六条 `typescript=pass`、`android=not-run`。`node scripts/run-source-conformance-android.mjs` 只完成前置检查：外层项目有 `gradlew`，但没有 `local.properties`、逐 fixture adapter 或输出目录，返回 `not-run`/退出码 2。因而本矩阵中所有 Android 同输入项仍保持 `execution=not-run`，没有把普通 Android 单测或 Node 结果提升为双端通过。
+
+同次静态语料审计为 943 个候选源、20,231 条规则、20,226 条编译成功、5 条已知源文本错误，`unexpectedUncompiledRules=0`、`staleKnownBrokenRules=0`。P13 新增的 runner、比较器和每条实际结果输出属于 TS 验证证据；Android adapter 仍是后续唯一阻塞的跨端执行项。

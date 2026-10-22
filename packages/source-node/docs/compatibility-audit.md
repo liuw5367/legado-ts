@@ -31,3 +31,14 @@ pnpm run test:source:compat:live -- --keyword "我本无意成仙" --report /pri
 ## 验收边界
 
 静态通过只代表规则可以导入和编译；在线通过也只代表指定时间、指定站点和指定宿主下的路径成功。Android 对照、跨部署环境和长期站点可用性仍需分别登记到兼容矩阵。
+
+## 2026-10-22 P13 回归记录
+
+最终回归同时保留实现、TypeScript 执行和 Android 前置条件三个结果：
+
+- `node scripts/run-source-conformance-typescript.mjs` 对六条离线 workflow fixture 逐条输出实际 `result`，六条均与各自 `expected.json` 一致（`6/6 pass`）。
+- `node scripts/compare-source-conformance.mjs` 发现六条 Android 输出均缺失，因此报告 `typescript=pass`、`android=not-run`、`comparison=not-run`；只有加 `--require-android` 才以退出码 2 阻断。
+- `node scripts/run-source-conformance-android.mjs` 检查到外层 Android 项目有 Gradle wrapper，但没有逐 fixture adapter、`local.properties` 或 golden 输出，返回 `status=not-run`，不把普通 Android 单测转换成跨端结果。
+- `pnpm test:source:compat:static` 的当前摘要为 943 个候选源、20,231 条规则、20,226 条编译成功、5 条已知源文本错误，意外未编译和过期白名单均为 0。
+
+因此 P13 的 TypeScript 实现与审计出口已完成；Android 同输入验证仍是明确受阻项，必须提供读取 `fixtures/conformance/manifest.json` 并写出 `runner-result.schema.json` 的 Android adapter 后才能将对应条目标为双端通过。

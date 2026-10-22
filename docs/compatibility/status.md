@@ -2,6 +2,15 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-10-22 P13 最终审核
+
+本轮剩余可修复和可模拟的书源规则/请求能力已完成代码与 TypeScript 回归，Android 逐 fixture 对照单独标为受阻：
+
+- TypeScript conformance runner：六条 workflow fixture 均逐条产生实际结果并通过 expected 比较（`6/6 pass`）。
+- 发现/搜索流程、静态 corpus 和现有全套回归均已纳入最终命令；静态语料为 943 个候选源、20,231 条规则、20,226 条编译成功，5 条已知源文本错误，意外失败与过期白名单均为 0。
+- Android preflight 检查到外层项目有 Gradle wrapper，但没有逐 fixture adapter、`local.properties` 或 golden 输出；`run-source-conformance-android.mjs` 返回 `not-run`/退出码 2，比较器的 `--require-android` 同样阻断。普通 Android JVM 单测仍只记为独立 `test-run` 证据。
+- 因此本轮状态不能统一写成“双端完成”：可修复项是 `TS 已通过`，有 Android 同输入输出的项目才可改为 `双端已通过`；真实 WebView、浏览器、验证码、Activity、物理设备身份、跨进程存储和远程写入继续按 `需真实宿主` 或 `验证受阻` 记录。
+
 ## 状态定义
 
 | 状态 | 含义 |

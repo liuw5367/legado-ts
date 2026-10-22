@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import test from 'node:test'
+import { join } from 'node:path'
 import { importSources, loadBookDetails, loadChapterContent, loadTableOfContents, searchBooks } from '../../source-core/src/index.ts'
 import type { BookMetadata, Chapter, NetworkHost, NetworkResponse, NormalizedSource, RuntimeResult, WorkflowPorts } from '../../source-core/src/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
@@ -8,6 +9,7 @@ import { SourceRequestHost } from '../src/source-request-host.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
 
 const conformanceRoot = new URL('../../../fixtures/conformance/', import.meta.url)
+const conformanceOutputDirectory = process.env.LEGADO_CONFORMANCE_OUTPUT_DIR
 
 interface ConformanceFixture {
   id: string
@@ -134,9 +136,10 @@ async function loadCase(fixture: ConformanceFixture): Promise<{ source: Normaliz
   return { source: imported[0]!.source!, input, expected, responses }
 }
 
-async function executeCase(fixture: ConformanceFixture): Promise<void> {
+async function executeCase(fixture: ConformanceFixture): Promise<Record<string, unknown>> {
   const { source, input, expected, responses } = await loadCase(fixture)
   const { ports, requests, activeRequests } = createPorts(responses)
+  const actual: Record<string, unknown> = { status: expected.status }
 
   if (fixture.id === 'HTML-FLOW-001' || fixture.id === 'JSON-FLOW-001') {
     const keyword = String(input.keyword)
@@ -144,60 +147,93 @@ async function executeCase(fixture: ConformanceFixture): Promise<void> {
     assertWorkflowResult(search, expected.status, `${fixture.id}/search`)
     const candidate = search.value?.items[0]
     assert.ok(candidate)
-    assert.deepEqual({ name: candidate.name, author: candidate.author, bookUrl: candidate.bookUrl }, expected.search)
+    const searchValue = { name: candidate.name, author: candidate.author, bookUrl: candidate.bookUrl }
+    assert.deepEqual(searchValue, expected.search)
+    actual.search = searchValue
 
     const details = await loadBookDetails(ports, { source, candidates: [candidate] })
     assertWorkflowResult(details, expected.status, `${fixture.id}/details`)
     const book = details.value?.items[0]
     assert.ok(book)
-    assert.deepEqual({ name: book.name, author: book.author, tocUrl: book.tocUrl }, expected.details)
+    const detailsValue = { name: book.name, author: book.author, tocUrl: book.tocUrl }
+    assert.deepEqual(detailsValue, expected.details)
+    actual.details = detailsValue
 
     const toc = await loadTableOfContents(ports, { source, book })
     assertWorkflowResult(toc, expected.status, `${fixture.id}/toc`)
-    assert.deepEqual(toc.value?.items.map((item) => ({ title: item.title, chapterUrl: item.chapterUrl, ...(item.isVip === true ? { isVip: true } : fixture.id === 'JSON-FLOW-001' ? { isVip: false } : {}) })), expected.toc)
+    const tocValue = toc.value?.items.map((item) => ({ title: item.title, chapterUrl: item.chapterUrl, ...(item.isVip === true ? { isVip: true } : fixture.id === 'JSON-FLOW-001' ? { isVip: false } : {}) }))
+    assert.deepEqual(tocValue, expected.toc)
+    actual.toc = tocValue
     const chapter = toc.value?.items[0]
     assert.ok(chapter)
 
     const content = await loadChapterContent(ports, { source, book, chapter, maxPages: 3 })
     assertWorkflowResult(content, expected.status, `${fixture.id}/content`)
     if (fixture.id === 'HTML-FLOW-001') {
-      assert.deepEqual({ contentType: content.value?.contentType, cleaned: content.value?.cleaned }, expected.content)
+      const contentValue = { contentType: content.value?.contentType, cleaned: content.value?.cleaned }
+      assert.deepEqual(contentValue, expected.content)
+      actual.content = contentValue
     } else {
-      assert.deepEqual({ contentType: content.value?.contentType, pages: content.value?.pages }, expected.content)
+      const contentValue = { contentType: content.value?.contentType, pages: content.value?.pages }
+      assert.deepEqual(contentValue, expected.content)
+      actual.content = contentValue
     }
   } else if (fixture.id === 'XPATH-CONTENT-001') {
     const content = await loadChapterContent(ports, { source, chapter: chapterFromInput(input.chapter) })
     assertWorkflowResult(content, expected.status, fixture.id)
-    assert.deepEqual({ contentType: content.value?.contentType, cleaned: content.value?.cleaned, pages: content.value?.pages }, expected.content)
+    const contentValue = { contentType: content.value?.contentType, cleaned: content.value?.cleaned, pages: content.value?.pages }
+    assert.deepEqual(contentValue, expected.content)
+    actual.content = contentValue
   } else if (fixture.id === 'JS-TOC-001') {
     const book = bookFromInput(input.book)
     const toc = await loadTableOfContents(ports, { source, book })
     assertWorkflowResult(toc, expected.status, `${fixture.id}/toc`)
-    assert.deepEqual(toc.value?.items.map((item) => ({ title: item.title, chapterUrl: item.chapterUrl, isVolume: item.isVolume, isVip: item.isVip, isPay: item.isPay })), expected.toc)
+    const tocValue = toc.value?.items.map((item) => ({ title: item.title, chapterUrl: item.chapterUrl, isVolume: item.isVolume, isVip: item.isVip, isPay: item.isPay }))
+    assert.deepEqual(tocValue, expected.toc)
+    actual.toc = tocValue
     const chapter = toc.value?.items[1]
     assert.ok(chapter)
     const content = await loadChapterContent(ports, { source, book, chapter, nextChapterUrl: String(input.nextChapterUrl) })
     assertWorkflowResult(content, expected.status, `${fixture.id}/content`)
-    assert.deepEqual({ contentType: content.value?.contentType, cleaned: content.value?.cleaned }, expected.content)
+    const contentValue = { contentType: content.value?.contentType, cleaned: content.value?.cleaned }
+    assert.deepEqual(contentValue, expected.content)
+    actual.content = contentValue
   } else if (fixture.id === 'TOC-EDGE-001') {
     const toc = await loadTableOfContents(ports, { source, book: bookFromInput(input.book), maxPages: 3 })
     assertWorkflowResult(toc, expected.status, fixture.id)
-    assert.deepEqual(toc.value?.items.map((item) => ({ title: item.title, chapterUrl: item.chapterUrl, isVolume: item.isVolume, isVip: item.isVip, isPay: item.isPay })), expected.toc)
+    const tocValue = toc.value?.items.map((item) => ({ title: item.title, chapterUrl: item.chapterUrl, isVolume: item.isVolume, isVip: item.isVip, isPay: item.isPay }))
+    assert.deepEqual(tocValue, expected.toc)
+    actual.toc = tocValue
     assert.ok(toc.diagnostics.some((item) => item.code === 'duplicate-item'))
   } else if (fixture.id === 'CONTENT-EDGE-001') {
     const content = await loadChapterContent(ports, { source, chapter: chapterFromInput(input.chapter), maxPages: Number(input.maxPages) })
     assertWorkflowResult(content, expected.status, fixture.id)
-    assert.deepEqual({ contentType: content.value?.contentType, pages: content.value?.pages, cleaned: content.value?.cleaned }, expected.content)
+    const contentValue = { contentType: content.value?.contentType, pages: content.value?.pages, cleaned: content.value?.cleaned }
+    assert.deepEqual(contentValue, expected.content)
+    actual.content = contentValue
     const expectedDiagnostic = expected.diagnostics?.[0]
     assert.ok(expectedDiagnostic)
     assert.ok(content.diagnostics.some((item) => item.message === expectedDiagnostic))
+    actual.diagnostics = content.diagnostics.filter((item) => expected.diagnostics?.includes(item.message)).map((item) => item.message)
   } else {
     assert.fail(`未注册 conformance case: ${fixture.id}`)
   }
 
   const observedRequests = expected.requests.some((value: string) => value.includes('?')) ? requests : requests.map((value) => value.split('?')[0])
   assert.deepEqual(observedRequests, expected.requests, `${fixture.id}/requests`)
+  actual.requests = observedRequests
   assert.equal(activeRequests(), 0, `${fixture.id} must close all network work before returning`)
+  return actual
+}
+
+async function writeCaseResult(fixture: ConformanceFixture, result: Record<string, unknown>, error?: unknown): Promise<void> {
+  if (conformanceOutputDirectory === undefined) return
+  await mkdir(conformanceOutputDirectory, { recursive: true })
+  const safeId = fixture.id.replaceAll('/', '__')
+  const payload = error === undefined
+    ? { schemaVersion: 1, fixtureId: fixture.id, status: 'pass', result }
+    : { schemaVersion: 1, fixtureId: fixture.id, status: 'failed', result: { code: 'assertion-failed', message: error instanceof Error ? error.message : String(error) } }
+  await writeFile(join(conformanceOutputDirectory, `${safeId}.json`), `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
 }
 
 test('跨规则书源 fixture 使用真实 Node 规则宿主和离线响应执行', async () => {
@@ -215,5 +251,13 @@ test('跨规则书源 fixture 使用真实 Node 规则宿主和离线响应执�
     'TOC-EDGE-001',
     'XPATH-CONTENT-001',
   ])
-  for (const fixture of fixtures) await executeCase(fixture)
+  for (const fixture of fixtures) {
+    try {
+      const result = await executeCase(fixture)
+      await writeCaseResult(fixture, result)
+    } catch (error) {
+      await writeCaseResult(fixture, {}, error)
+      throw error
+    }
+  }
 })
