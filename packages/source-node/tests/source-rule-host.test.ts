@@ -141,7 +141,6 @@ test('Java 字符串和整数重载保持 null、字符数组与 radix 解析语
   assert.deepEqual(JSON.parse(String(result.value)), {
     strings: ['null', 'ab', 'bc'],
     numbers: [255, '-9223372036854775808', '255'],
-    invalid: ['integer', 'long', 'range'],
     invalid: ['integer', 'long', 'range', 'chars'],
   })
 })
@@ -212,19 +211,31 @@ test('Java Map/List/Set 支持教程常用的视图、计算和迭代器方法',
       var replaced = map.replace('b', 4);
       var entry = map.entrySet().get(0);
       entry.setValue(8);
+      var callbackMap = new HashMap({ a: 1, b: 2 });
+      var replaceAllOrder = [];
+      callbackMap.replaceAll(function(key, value) { replaceAllOrder.push(key + ':' + value); return value + 1; });
+      var forEachOrder = [];
+      callbackMap.forEach(function(key, value) { forEachOrder.push(key + ':' + value); });
       var list = new ArrayList(['x', 'y']);
       var iterator = list.listIterator();
       var iterated = [iterator.next(), iterator.next(), iterator.previous(), iterator.nextIndex(), iterator.previousIndex()];
       iterator.set('Y');
       iterator.add('z');
+      var invalid = [];
+      try { list.remove(99); } catch (error) { invalid.push('remove'); }
+      var endIterator = new ArrayList(['only']).iterator();
+      endIterator.next();
+      try { endIterator.next(); } catch (error) { invalid.push('iterator'); }
+      try { endIterator.remove(); endIterator.remove(); } catch (error) { invalid.push('iterator-remove'); }
       var set = new HashSet(['x', 'y', 'z']);
       set.removeAll(new HashSet(['z']));
-      JSON.stringify({ map: [putIfAbsent, computed, merged, replaced, map.get('a'), map.get('b'), map.get('c'), entry.getValue()], list: [iterated, list.toArray()], set: [set.contains('z'), set.containsAll(['x', 'y']), set.toArray()] });
+      JSON.stringify({ map: [putIfAbsent, computed, merged, replaced, map.get('a'), map.get('b'), map.get('c'), entry.getValue(), map.get('missing'), map.remove('missing'), map.replace('missing', 1)], callbacks: [replaceAllOrder, forEachOrder, callbackMap.get('a'), callbackMap.get('b')], list: [iterated, list.toArray(), invalid], set: [set.contains('z'), set.containsAll(['x', 'y']), set.toArray()] });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
-    map: [1, 'c!', 4, 2, 8, 4, 'c!', 8],
-    list: [['x', 'y', 'y', 1, 0], ['x', 'z', 'Y']],
+    map: [1, 'c!', 4, 2, 8, 4, 'c!', 8, null, null, null],
+    callbacks: [['a:1', 'b:2'], ['a:2', 'b:3'], 2, 3],
+    list: [['x', 'y', 'y', 1, 0], ['x', 'z', 'Y'], ['remove', 'iterator', 'iterator-remove']],
     set: [false, true, ['x', 'y']],
   })
 })
