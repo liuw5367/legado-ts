@@ -767,6 +767,101 @@ const legadoJavaFormatLocale = (locale) => {
   if (tag.startsWith("fr")) return { decimal: ",", grouping: "\u202f" }
   return { decimal: ".", grouping: "," }
 }
+const legadoJavaFormatLocaleTag = (locale) => {
+  const value = String(locale && typeof locale === "object" ? locale.__legadoLocale ?? "" : locale ?? "en-US")
+  return value.replaceAll("_", "-") || "en-US"
+}
+const legadoJavaFormatDateValue = (value) => {
+  let time
+  if (value !== null && value !== undefined && typeof value.getTime === "function") time = Number(value.getTime())
+  else if (typeof value === "bigint") time = Number(value)
+  else if (value !== null && value !== undefined && typeof value.valueOf === "function") time = Number(value.valueOf())
+  else time = Number(value)
+  if (!Number.isFinite(time)) throw new RangeError("Illegal format date argument")
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) throw new RangeError("Illegal format date argument")
+  return date
+}
+const legadoJavaFormatDate = (value, conversion, locale) => {
+  const date = legadoJavaFormatDateValue(value)
+  const localeTag = legadoJavaFormatLocaleTag(locale)
+  const suffix = conversion[1]
+  const kind = suffix
+  const pad = (item, width) => String(item).padStart(width, "0")
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hour = date.getHours()
+  const minute = date.getMinutes()
+  const second = date.getSeconds()
+  const millis = date.getMilliseconds()
+  const weekday = date.getDay()
+  const dayOfYear = Math.floor((Date.UTC(year, month - 1, day) - Date.UTC(year, 0, 1)) / 86_400_000) + 1
+  const language = localeTag.toLowerCase().split("-")[0]
+  const dayNames = language === "zh" ? ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"] : ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+  const dayShortNames = language === "zh" ? ["周日", "周一", "周二", "周三", "周四", "周五", "周六"] : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  const monthNames = language === "zh" ? ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"] : ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+  const monthShortNames = language === "zh" ? monthNames : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const dayName = (format) => format === "long" ? dayNames[weekday] : dayShortNames[weekday]
+  const monthName = (format) => format === "long" ? monthNames[month - 1] : monthShortNames[month - 1]
+  const zoneOffsetMinutes = -date.getTimezoneOffset()
+  const zoneSign = zoneOffsetMinutes < 0 ? "-" : "+"
+  const zoneAbsolute = Math.abs(zoneOffsetMinutes)
+  const zone = zoneSign + pad(Math.floor(zoneAbsolute / 60), 2) + pad(zoneAbsolute % 60, 2)
+  const zoneName = "GMT" + zone
+  const hour12 = hour % 12 || 12
+  const am = hour < 12
+  const weekOfYear = (firstDay) => {
+    const firstWeekday = new Date(year, 0, 1).getDay()
+    return Math.floor((dayOfYear + 6 - ((firstWeekday - firstDay + 7) % 7)) / 7)
+  }
+  const isoWeekDate = new Date(year, month - 1, day + (4 - (weekday === 0 ? 7 : weekday)))
+  const isoYear = isoWeekDate.getFullYear()
+  const isoWeekStart = new Date(isoYear, 0, 4)
+  isoWeekStart.setDate(isoWeekStart.getDate() - (isoWeekStart.getDay() === 0 ? 6 : isoWeekStart.getDay() - 1))
+  const isoWeek = Math.floor((Date.UTC(isoWeekDate.getFullYear(), isoWeekDate.getMonth(), isoWeekDate.getDate()) - Date.UTC(isoWeekStart.getFullYear(), isoWeekStart.getMonth(), isoWeekStart.getDate())) / 604_800_000) + 1
+  const rendered = {
+    a: () => suffix === "A" ? dayName("long") : dayName("short"),
+    A: () => dayName("long"),
+    b: () => suffix === "B" ? monthName("long") : monthName("short"),
+    B: () => monthName("long"),
+    h: () => monthName("short"),
+    c: () => dayName("short") + " " + monthName("short") + " " + pad(day, 2) + " " + pad(hour, 2) + ":" + pad(minute, 2) + ":" + pad(second, 2) + " " + zoneName + " " + year,
+    C: () => pad(Math.floor(year / 100), 2),
+    d: () => pad(day, 2),
+    e: () => String(day),
+    H: () => pad(hour, 2),
+    I: () => pad(hour12, 2),
+    k: () => String(hour),
+    l: () => String(hour12),
+    M: () => pad(minute, 2),
+    S: () => pad(second, 2),
+    L: () => pad(millis, 3),
+    N: () => pad(millis, 3) + "000000",
+    p: () => am ? "am" : "pm",
+    Q: () => String(date.getTime()),
+    s: () => String(Math.trunc(date.getTime() / 1000)),
+    z: () => zone,
+    Z: () => zoneName,
+    Y: () => pad(year, 4),
+    y: () => pad(year % 100, 2),
+    G: () => String(isoYear),
+    g: () => pad(isoYear % 100, 2),
+    j: () => pad(dayOfYear, 3),
+    m: () => pad(month, 2),
+    U: () => pad(weekOfYear(0), 2),
+    V: () => pad(isoWeek, 2),
+    W: () => pad(weekOfYear(1), 2),
+    F: () => pad(year, 4) + "-" + pad(month, 2) + "-" + pad(day, 2),
+    D: () => pad(month, 2) + "/" + pad(day, 2) + "/" + pad(year % 100, 2),
+    R: () => pad(hour, 2) + ":" + pad(minute, 2),
+    T: () => pad(hour, 2) + ":" + pad(minute, 2) + ":" + pad(second, 2),
+    r: () => pad(hour12, 2) + ":" + pad(minute, 2) + ":" + pad(second, 2) + " " + (am ? "am" : "pm"),
+  }[kind]
+  if (rendered === undefined) throw new Error("Unsupported String.format date conversion: " + conversion)
+  const result = rendered()
+  return conversion[0] === "T" ? result.toUpperCase() : result
+}
 const legadoJavaFormat = (format, args, locale) => {
   const text = String(format ?? "")
   const localeInfo = legadoJavaFormatLocale(locale)
@@ -795,11 +890,16 @@ const legadoJavaFormat = (format, args, locale) => {
       if (argumentIndex !== undefined || flags.length > 0 || width !== undefined || precision !== undefined) throw new Error("Invalid String.format newline conversion")
       append("\n"); cursor += match[0].length; continue
     }
-    if (/^[tT]/u.test(conversion)) throw new Error("Unsupported String.format date conversion")
     const selected = flags.includes("<") ? previousArgument : argumentIndex ?? nextArgument++
     if (!Number.isInteger(selected) || selected < 0 || selected >= sourceArgs.length) throw new Error("Missing String.format argument")
     previousArgument = selected
     const value = sourceArgs[selected]
+    if (/^[tT]/u.test(conversion)) {
+      if (precision !== undefined || /[+# 0,(]/u.test(flags)) throw new Error("Invalid String.format date flags")
+      append(legadoJavaFormatPad(legadoJavaFormatDate(value, conversion, locale), width, flags))
+      cursor += match[0].length
+      continue
+    }
     const upper = conversion === conversion.toUpperCase()
     const kind = conversion.toLowerCase()
     let rendered

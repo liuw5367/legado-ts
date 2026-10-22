@@ -364,7 +364,39 @@ test('Java String.format 和 Locale 覆盖书源常见的数值、字符串与�
     localeName: 'zh_CN',
   })
 
-  const unsupported = await evaluate(new SourceRuleHost(), `@js:var importer = new JavaImporter(Packages.java.lang.String); with (importer) String.format('%tF', new Date())`, '')
+  const date = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String, Packages.java.util.Locale);
+    with (importer) {
+      var value = new Date(0);
+      JSON.stringify({
+        date: String.format(Locale.ROOT, '%1$tF %1$tT %1$tR', value),
+        fields: String.format('%tY/%<tm/%<td/%<tH/%<tM/%<tS/%<tL/%<tN/%<tj/%<tQ/%<ts', value),
+        names: String.format(Locale.US, '%tA %<tB %<tp', value),
+        upper: String.format('%TB/%<TA/%<Tp', value),
+        weeks: String.format('%tV/%<tG/%<tg/%<tU/%<tW', value),
+        numeric: String.format('%tF/%<tQ', 0)
+      });
+    }`, '')
+  assert.equal(date.status, 'success', date.message)
+  const local = new Date(0)
+  const pad = (value: number, width: number) => String(value).padStart(width, '0')
+  const dayOfYear = Math.floor((Date.UTC(local.getFullYear(), local.getMonth(), local.getDate()) - Date.UTC(local.getFullYear(), 0, 1)) / 86_400_000) + 1
+  const weekOfYear = (firstDay: number) => Math.floor((dayOfYear + 6 - ((new Date(local.getFullYear(), 0, 1).getDay() - firstDay + 7) % 7)) / 7)
+  const isoDate = new Date(local.getFullYear(), local.getMonth(), local.getDate() + (4 - (local.getDay() === 0 ? 7 : local.getDay())))
+  const isoYear = isoDate.getFullYear()
+  const isoStart = new Date(isoYear, 0, 4)
+  isoStart.setDate(isoStart.getDate() - (isoStart.getDay() === 0 ? 6 : isoStart.getDay() - 1))
+  const isoWeek = Math.floor((Date.UTC(isoDate.getFullYear(), isoDate.getMonth(), isoDate.getDate()) - Date.UTC(isoStart.getFullYear(), isoStart.getMonth(), isoStart.getDate())) / 604_800_000) + 1
+  assert.deepEqual(JSON.parse(String(date.value)), {
+    date: `${local.getFullYear()}-${pad(local.getMonth() + 1, 2)}-${pad(local.getDate(), 2)} ${pad(local.getHours(), 2)}:${pad(local.getMinutes(), 2)}:${pad(local.getSeconds(), 2)} ${pad(local.getHours(), 2)}:${pad(local.getMinutes(), 2)}`,
+    fields: `${local.getFullYear()}/${pad(local.getMonth() + 1, 2)}/${pad(local.getDate(), 2)}/${pad(local.getHours(), 2)}/${pad(local.getMinutes(), 2)}/${pad(local.getSeconds(), 2)}/${pad(local.getMilliseconds(), 3)}/${pad(local.getMilliseconds(), 3)}000000/${pad(dayOfYear, 3)}/0/0`,
+    names: `${new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(local)} ${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(local)} ${local.getHours() < 12 ? 'am' : 'pm'}`,
+    upper: `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(local).toUpperCase()}/${new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(local).toUpperCase()}/${local.getHours() < 12 ? 'AM' : 'PM'}`,
+    weeks: `${pad(isoWeek, 2)}/${isoYear}/${pad(isoYear % 100, 2)}/${pad(weekOfYear(0), 2)}/${pad(weekOfYear(1), 2)}`,
+    numeric: `${local.getFullYear()}-${pad(local.getMonth() + 1, 2)}-${pad(local.getDate(), 2)}/0`,
+  })
+
+  const unsupported = await evaluate(new SourceRuleHost(), `@js:var importer = new JavaImporter(Packages.java.lang.String); with (importer) String.format('%tX', new Date())`, '')
   assert.equal(unsupported.status, 'failed')
   assert.match(unsupported.message ?? '', /Unsupported String\.format date conversion/u)
 })
