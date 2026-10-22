@@ -165,6 +165,7 @@ export async function updateDiscoveryControl(repository: ReaderRepository, userI
     const type = category.type ?? 'url'
     if (type === 'url') throw new ReaderRuntimeError('invalid-input', '普通发现分类不需要控件操作')
     const chars = category.chars?.filter((value): value is string => value !== null) ?? []
+    const beforeDigest = stateDigest(state)
     if (type === 'toggle' || type === 'select') {
       if (input.value === undefined || !chars.includes(input.value)) throw new ReaderRuntimeError('invalid-input', '控件选项无效，请刷新后重试')
       state.infoMap[category.title] = input.value
@@ -185,6 +186,10 @@ export async function updateDiscoveryControl(repository: ReaderRepository, userI
       if (diagnostic !== undefined) throw new ReaderRuntimeError('source-failed', diagnostic.message)
       if (action.refreshRequested) state.discovery = undefined
     }
+    // A changed control value changes URL expansion and JS bindings even when
+    // the action omitted java.refreshExplore(). Rebuild the category snapshot
+    // so old pages/cursors cannot continue with a different filter.
+    if (state.discovery !== undefined && beforeDigest !== stateDigest(state)) state.discovery = undefined
     if (state.discovery !== undefined) {
       await resolveCategoryLabels(session, source, state, resolved.categories, signal)
       state.replaceDiscovery({ version: 1, fingerprint: source.fingerprint, categories: structuredClone(resolved.categories) })
@@ -195,12 +200,16 @@ export async function updateDiscoveryControl(repository: ReaderRepository, userI
   })
 }
 
-function signature(userId: string, input: DiscoveryPageInput, cursor: { index: number; token?: string | undefined; generation?: number | undefined }): string {
+function signature(userId: string, input: DiscoveryPageInput, cursor: { index: number; token?: string | undefined; generation?: number | undefined; stateDigest?: string | undefined }): string {
   // nextPage 规则可返回完整 URL，因此必须验证游标签名，不能直接执行客户端提供的 token。
-  return createHmac('sha256', configuredSecret()).update(JSON.stringify(['discovery-v2', userId, input.sourceId, input.fingerprint, input.categoryId, cursor.index, cursor.token ?? null, cursor.generation ?? null])).digest('base64url')
+  return createHmac('sha256', configuredSecret()).update(JSON.stringify(['discovery-v2', userId, input.sourceId, input.fingerprint, input.categoryId, cursor.index, cursor.token ?? null, cursor.generation ?? null, cursor.stateDigest ?? null])).digest('base64url')
 }
-function signCursor(userId: string, input: DiscoveryPageInput, cursor: PageCursor, generation: number): DiscoveryCursor {
-  const signed = { index: cursor.index, ...(cursor.token === undefined ? {} : { token: cursor.token }), generation }
+function stateDigest(state: PersistentSourceState): string {
+  const entries = Object.entries(state.infoMap).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+  return createHash('sha256').update(JSON.stringify(entries), 'utf8').digest('hex').slice(0, 32)
+}
+function signCursor(userId: string, input: DiscoveryPageInput, cursor: PageCursor, generation: number, digest: string): DiscoveryCursor {
+  const signed = { index: cursor.index, ...(cursor.token === undefined ? {} : { token: cursor.token }), generation, stateDigest: digest }
   return { ...signed, signature: signature(userId, input, signed) }
 }
 function verifyCursor(userId: string, input: DiscoveryPageInput): void {
@@ -217,7 +226,7 @@ async function selection(repository: ReaderRepository, userId: string, input: Di
 }
 
 function verifySelectionGeneration(state: PersistentSourceState, input: DiscoveryPageInput): void {
-  if (input.cursor !== undefined && (input.cursor.generation === undefined || input.cursor.generation !== state.discoveryGeneration)) throw new ReaderRuntimeError('invalid-input', '发现筛选已更新，请刷新列表')
+  if (input.cursor !== undefined && (input.cursor.generation === undefined || input.cursor.generation !== state.discoveryGeneration || input.cursor.stateDigest === undefined || input.cursor.stateDigest !== stateDigest(state))) throw new ReaderRuntimeError('invalid-input', '发现筛选已更新，请刷新列表')
 }
 async function queryPage(session: SourceSession, source: StoredSourceRecord, category: Category, input: DiscoveryPageInput, state: PersistentSourceState, signal?: AbortSignal) {
   const categoryUrl = category.url
@@ -244,8 +253,8 @@ export async function loadDiscoveryPage(repository: ReaderRepository, userId: st
     return {
       // infoPage/rawFields 仅保留在执行器内部，不向浏览器泄漏源页面及脚本变量。
       items: page.items.map(({ sourceId, bookUrl, name, author, intro, coverUrl, kind, lastChapter, wordCount }) => ({ sourceId, bookUrl, ...(name === undefined ? {} : { name }), ...(author === undefined ? {} : { author }), ...(intro === undefined ? {} : { intro }), ...(coverUrl === undefined ? {} : { coverUrl }), ...(kind === undefined ? {} : { kind }), ...(lastChapter === undefined ? {} : { lastChapter }), ...(wordCount === undefined ? {} : { wordCount }) })),
-      cursor: signCursor(userId, input, page.cursor, state.discoveryGeneration),
-      ...(page.nextCursor === undefined ? {} : { nextCursor: signCursor(userId, input, page.nextCursor, state.discoveryGeneration) }),
+      cursor: signCursor(userId, input, page.cursor, state.discoveryGeneration, stateDigest(state)),
+      ...(page.nextCursor === undefined ? {} : { nextCursor: signCursor(userId, input, page.nextCursor, state.discoveryGeneration, stateDigest(state)) }),
       status,
       ...(message === undefined ? {} : { message }),
     }

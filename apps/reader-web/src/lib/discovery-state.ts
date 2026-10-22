@@ -21,7 +21,7 @@ interface Choice { version: 1; sourceId: string; categoryId: string }
 export type DiscoveryRequest = <T>(path: string, init?: RequestInit) => Promise<T>
 
 const emptyState = (): DiscoveryState => ({ sources: [], source: null, categories: [], categoryId: '', items: [], nextCursor: undefined, loadedCursors: [], loading: false, loadingMore: false, controlPending: null, opening: null, loaded: false, error: '', message: '' })
-const cursorKey = (cursor: DiscoveryCursor) => JSON.stringify([cursor.index, cursor.token ?? null])
+const cursorKey = (cursor: DiscoveryCursor) => JSON.stringify([cursor.index, cursor.token ?? null, cursor.generation ?? null, cursor.stateDigest ?? null])
 const storageKey = (userId: string) => `legado.discovery.v1:${userId}`
 
 export function clearDiscoveryChoice(userId: string, storage?: Storage) {

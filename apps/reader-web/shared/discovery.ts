@@ -6,6 +6,8 @@ const cursorSchema = z.object({
   token: z.string().max(16000).optional(),
   /** 服务端发现分类/控件快照的代次；旧客户端可省略，服务端会拒绝旧游标。 */
   generation: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  /** 当前筛选值的不可逆摘要；游标不携带 infoMap 原文。 */
+  stateDigest: z.string().regex(/^[a-f\d]{32}$/u).optional(),
   signature: z.string().min(1).max(100),
 })
 export const discoveryPageSchema = discoverySourceSchema.extend({

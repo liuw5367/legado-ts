@@ -396,6 +396,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | CHECK-006/keyword-filter | `checkKeyWord` 分别为合法词、空串、含 `http`/`::`/`++`/`--` | 合法非空值优先；其他全部回退“我的” |
 | JS-004/summary-declarative | 声明式摘要索引不可解析、count=0、重复段索引 | 索引回退下标+1；只保留正 count；重复索引后值覆盖前值 |
 | JS-004/detail-cursor | 声明式详情第 1 页、后续页无 cursor、跨章节 cursor、JS 源后续页 | 第 1 页不接受 cursor；后续页校验上下文和页码；JS 源不使用 cursor；无效游标返回可诊断错误 |
+| API-009/discovery-filter-cursor | 发现分类首屏游标、携带控件值的 URL、无 action 控件更新、旧代次/旧 `infoMap` 摘要游标和敏感筛选值 | 游标签名绑定 source/user/category、发现代次和固定长度筛选摘要；控件值变化会刷新分类并拒绝旧游标；游标和签名不包含筛选原文 |
 | JS-004/replies | 声明式回复 body 为空、列表为空、列表非空但解析为空；JS 回复缺函数、返回空值或缺 items | 空 body/解析为空保留错误；合法空列表为空结果；JS 缺函数为空页并带能力诊断，缺 items 为格式错误；hasMore 按各自分支规则计算 |
 | JS-004/function-state | JS 只声明摘要、只声明详情、回复单独存在、函数声明但不是函数；运行时详情函数缺失或返回 null | 导入阶段按函数配对规则失败；详情缺失是 capability/脚本错误；详情空返回是合法空页；回复缺失是可诊断空页 |
 | JS-004/media-base | 声明式请求发生重定向，JS 返回相对头像/图片/音频，旧式页面返回 HEIF 图片 | 声明式按响应最终 URL，JS 按 `chapter.url`，旧式页面按书籍 URL 交给图片代理；三条路径不能共用错误基准 |

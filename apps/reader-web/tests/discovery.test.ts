@@ -109,6 +109,7 @@ test('discovery queries one page at a time and follows signed next-page URLs', a
   })
   const first = await loadDiscoveryPage(repository, 'user-a', input)
   assert.equal(first.cursor.index, 3)
+  assert.match(first.cursor.stateDigest ?? '', /^[a-f\d]{32}$/u)
   assert.equal(first.items[0]?.name, '目标书1')
   assert.equal('rawFields' in first.items[0]!, false)
   assert.equal(calls.length, 1)
@@ -223,4 +224,25 @@ test('discovery rejects a cursor from before a control refresh', async (t) => {
   const first = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id })
   await updateDiscoveryControl(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: control.id, value: '女' })
   await assert.rejects(loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id, cursor: first.cursor }), /筛选已更新/u)
+})
+
+test('discovery control changes without an action refresh the list and invalidate old filter cursors', async (t) => {
+  const { repository, source } = await setup({
+    exploreUrl: JSON.stringify([{ title: '关键词', type: 'text' }, { title: '榜单', url: '/filter?value={{infoMap["关键词"]}}' }]),
+  })
+  const calls: string[] = []
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => { calls.push(String(url)); return new Response(listHtml()) })
+  const categories = await getDiscoveryCategories(repository, 'user-a', source.sourceId)
+  const control = categories.categories.find((item) => item.title === '关键词')!
+  const list = categories.categories.find((item) => item.title === '榜单')!
+  const first = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id })
+  const changed = await updateDiscoveryControl(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: control.id, value: 'private-token' })
+  assert.equal(changed.refreshed, true)
+  assert.equal(changed.categories.find((item) => item.id === control.id)?.value, 'private-token')
+  await assert.rejects(loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id, cursor: first.cursor }), /筛选已更新/u)
+  const refreshed = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId: list.id })
+  assert.notEqual(refreshed.cursor.stateDigest, first.cursor.stateDigest)
+  assert.equal(calls.length, 2)
+  assert.match(calls[1]!, /filter\?value=private-token/u)
+  assert.equal(JSON.stringify(refreshed.cursor).includes('private-token'), false)
 })
