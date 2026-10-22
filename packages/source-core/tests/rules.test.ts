@@ -182,7 +182,7 @@ test('Java 正则 POSIX/Unicode 属性映射到受控 ECMAScript 属性转义', 
   assert.equal('error' in unsupportedFlag ? unsupportedFlag.error.code : 'regex', 'unsupported-pattern')
 })
 
-test('Java 正则作用域 flags 展开 i/m/s 并保留嵌套禁用语义', () => {
+test('Java 正则作用域 flags 展开 i/m/s/x/d 并保留嵌套禁用语义', () => {
   const scopedCase = compileSourcePattern('(?i:abc)-(?-i:DEF)', { flags: '' })
   assert.ok('regex' in scopedCase)
   assert.equal('regex' in scopedCase ? scopedCase.regex.test('AbC-DEF') : false, true)
@@ -239,7 +239,25 @@ test('Java 正则作用域 flags 展开 i/m/s 并保留嵌套禁用语义', () =
   assert.equal('regex' in disabled ? disabled.regex.test('a b c') : false, true)
   assert.equal('regex' in disabled ? disabled.regex.test('abc') : true, false)
 
-  const unsupportedScopedFlag = compileSourcePattern('(?d: a )', { flags: '' })
+  const unixLines = compileSourcePattern('(?d)^.+$', { flags: '' })
+  assert.ok('regex' in unixLines)
+  assert.equal('regex' in unixLines ? unixLines.regex.test('a\rx') : false, true)
+  assert.equal('regex' in unixLines ? unixLines.regex.test('a\nx') : true, false)
+
+  const scopedUnixLines = compileSourcePattern('a(?d:.)x', { flags: '' })
+  assert.ok('regex' in scopedUnixLines)
+  assert.equal('regex' in scopedUnixLines ? scopedUnixLines.regex.test('a\rx') : false, true)
+
+  const unixAnchor = compileSourcePattern('(?d:^x$)', { flags: 'm' })
+  assert.ok('regex' in unixAnchor)
+  assert.equal('regex' in unixAnchor ? unixAnchor.regex.test('a\rx') : true, false)
+  assert.equal('regex' in unixAnchor ? unixAnchor.regex.test('a\nx') : false, true)
+
+  const disabledUnixLines = compileSourcePattern('(?d)(?-d:^.+$)', { flags: '' })
+  assert.ok('regex' in disabledUnixLines)
+  assert.equal('regex' in disabledUnixLines ? disabledUnixLines.regex.test('a\rx') : true, false)
+
+  const unsupportedScopedFlag = compileSourcePattern('(?u: a )', { flags: '' })
   assert.equal('error' in unsupportedScopedFlag ? unsupportedScopedFlag.error.code : 'regex', 'unsupported-pattern')
 })
 

@@ -32,6 +32,7 @@ interface ScopedPatternMode {
   multiline: boolean
   dotAll: boolean
   extended: boolean
+  unixLines: boolean
 }
 
 interface ScopedFlagGroup {
@@ -112,18 +113,20 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     const enabled = inline[1] ?? ''
     const disabled = inline[2] ?? ''
     for (const flag of `${enabled}${disabled}`) {
-      if (!'imsuxU'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
+      if (!'imsuxUd'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
     }
     flags = applyInlineFlags(flags, enabled, true)
     flags = applyInlineFlags(flags, disabled, false)
     const extended = applyInlineExtended(false, enabled, true)
     const finalExtended = applyInlineExtended(extended, disabled, false)
-    const scoped = translateScopedFlags(source, flags, finalExtended)
+    const unixLines = applyInlineUnixLines(false, enabled, true)
+    const finalUnixLines = applyInlineUnixLines(unixLines, disabled, false)
+    const scoped = translateScopedFlags(source, flags, finalExtended, finalUnixLines)
     if ('error' in scoped) return scoped
     source = scoped.pattern
     flags = scoped.flags
   } else {
-    const scoped = translateScopedFlags(source, flags, false)
+    const scoped = translateScopedFlags(source, flags, false, false)
     if ('error' in scoped) return scoped
     source = scoped.pattern
     flags = scoped.flags
@@ -162,19 +165,20 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
 
 /**
  * Java 的 `(?im-s:...)` 是局部作用域，而 ECMAScript 只有整条正则的 flags。
- * 对常见的 i/m/s/x 做词法展开，保留 `(?-i:...)` 这类书源写法；不能安全展开的
- * d/u/U 作用域继续明确返回能力错误，避免把局部语义错误地扩大到整条正则。
+ * 对常见的 i/m/s/x/d 做词法展开，保留 `(?-i:...)` 这类书源写法；不能安全展开的
+ * u/U 作用域继续明确返回能力错误，避免把局部语义错误地扩大到整条正则。
  */
-function translateScopedFlags(source: string, inputFlags: string, initialExtended: boolean): { pattern: string; flags: string } | { error: SourcePatternError } {
+function translateScopedFlags(source: string, inputFlags: string, initialExtended: boolean, initialUnixLines: boolean): { pattern: string; flags: string } | { error: SourcePatternError } {
   const first = findScopedFlagGroup(source, 0)
-  if (first === undefined && !initialExtended) return { pattern: source, flags: inputFlags }
-  const unsupported = first === undefined ? undefined : `${first.enabled}${first.disabled}`.split('').find((flag) => !'imsx'.includes(flag))
+  if (first === undefined && !initialExtended && !initialUnixLines) return { pattern: source, flags: inputFlags }
+  const unsupported = first === undefined ? undefined : `${first.enabled}${first.disabled}`.split('').find((flag) => !'imsxd'.includes(flag))
   if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
   const mode: ScopedPatternMode = {
     ignoreCase: inputFlags.includes('i'),
     multiline: inputFlags.includes('m'),
     dotAll: inputFlags.includes('s'),
     extended: initialExtended,
+    unixLines: initialUnixLines,
   }
   const translated = translateScopedSegment(source, 0, source.length, mode, false)
   if ('error' in translated) return translated
@@ -231,7 +235,13 @@ function translateScopedSegment(source: string, start: number, end: number, mode
       continue
     }
     if (current === '^' && mode.multiline) {
-      output += '(?:^|(?<=[\\r\\n]))'
+      output += mode.unixLines ? '(?:^|(?<=\\n))' : '(?:^|(?<=[\\r\\n]))'
+      index += 1
+      continue
+    }
+    if (current === '$' && mode.unixLines) {
+      // Java UNIX_LINES 只把 LF 当作行终止符；过滤 ECMAScript 对 CR/Unicode 行终止符的额外匹配。
+      output += mode.multiline ? '(?:(?:$|(?=\\n))(?![\\r\\u2028\\u2029]))' : '$(?![\\r\\u2028\\u2029])'
       index += 1
       continue
     }
@@ -242,6 +252,11 @@ function translateScopedSegment(source: string, start: number, end: number, mode
     }
     if (current === '.' && mode.dotAll) {
       output += '[\\s\\S]'
+      index += 1
+      continue
+    }
+    if (current === '.' && mode.unixLines) {
+      output += '[^\\n]'
       index += 1
       continue
     }
@@ -329,7 +344,7 @@ function findGroupEnd(source: string, contentStart: number): number {
 }
 
 function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled: string): { mode: ScopedPatternMode } | { error: SourcePatternError } {
-  const unsupported = `${enabled}${disabled}`.split('').find((flag) => !'imsx'.includes(flag))
+  const unsupported = `${enabled}${disabled}`.split('').find((flag) => !'imsxd'.includes(flag))
   if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
   const next = { ...mode }
   for (const flag of enabled) {
@@ -337,12 +352,14 @@ function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled:
     if (flag === 'm') next.multiline = true
     if (flag === 's') next.dotAll = true
     if (flag === 'x') next.extended = true
+    if (flag === 'd') next.unixLines = true
   }
   for (const flag of disabled) {
     if (flag === 'i') next.ignoreCase = false
     if (flag === 'm') next.multiline = false
     if (flag === 's') next.dotAll = false
     if (flag === 'x') next.extended = false
+    if (flag === 'd') next.unixLines = false
   }
   return { mode: next }
 }
@@ -350,6 +367,12 @@ function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled:
 function applyInlineExtended(current: boolean, flags: string, enable: boolean): boolean {
   let result = current
   for (const flag of flags) if (flag === 'x') result = enable
+  return result
+}
+
+function applyInlineUnixLines(current: boolean, flags: string, enable: boolean): boolean {
+  let result = current
+  for (const flag of flags) if (flag === 'd') result = enable
   return result
 }
 
@@ -722,6 +745,7 @@ function applyInlineFlags(current: string, flags: string, enable: boolean): stri
   let result = current
   for (const flag of flags) {
     if (flag === 'x') continue
+    if (flag === 'd') continue
     if (flag === 'U') {
       if (enable && !result.includes('u')) result += 'u'
       if (!enable) result = result.replace('u', '')
