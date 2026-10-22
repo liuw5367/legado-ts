@@ -1172,9 +1172,9 @@ test('规则宿主兼容真实书源中的 var result 和 Java 变量读取写�
 })
 
 test('InfoMap 支持 Android MutableMap 的读取、批量写入和删除', async () => {
-  const result = await evaluate(new SourceRuleHost(), '@js:infoMap.put("a", "1"); infoMap.putAll({ b: 2 }); JSON.stringify([infoMap.get(), infoMap.get("a"), infoMap.containsValue("2"), Array.from(infoMap.keys), Array.from(infoMap.values), Array.from(infoMap.entries), infoMap.remove("a"), infoMap.get("a")])', '')
+  const result = await evaluate(new SourceRuleHost(), '@js:infoMap.put("a", "1"); infoMap.putAll({ b: 2 }); var initial = JSON.stringify(infoMap.get()); var initialValue = infoMap.get("a"); var initialContains = infoMap.containsValue("2"); var originalKeys = Array.from(infoMap.keys); var originalValues = Array.from(infoMap.values); var originalEntries = Array.from(infoMap.entries); var keys = infoMap.keys; var values = infoMap.values; var entries = infoMap.entries; infoMap.put("c", "3"); var live = [keys.toArray(), keys.length, values.toArray(), entries.toArray()]; var removedValue = values.remove("2"); var removedEntry = entries.remove(["c", "3"]); var importer = new JavaImporter(Packages.java.util.HashMap); with (importer) { infoMap.putAll(new HashMap({ d: 4 })); } var removedKey = infoMap.remove("a"); JSON.stringify([JSON.parse(initial), initialValue, initialContains, originalKeys, originalValues, originalEntries, live, removedValue, removedEntry, removedKey, infoMap.get()])', '')
   assert.equal(result.status, 'success', result.message)
-  assert.deepEqual(JSON.parse(String(result.value)), [{ b: '2' }, '1', true, ['a', 'b'], ['1', '2'], [['a', '1'], ['b', '2']], '1', null])
+  assert.deepEqual(JSON.parse(String(result.value)), [{ a: '1', b: '2' }, '1', true, ['a', 'b'], ['1', '2'], [['a', '1'], ['b', '2']], [['a', 'b', 'c'], 3, ['1', '2', '3'], [['a', '1'], ['b', '2'], ['c', '3']]], true, true, '1', { d: '4' }])
 })
 
 test('规则宿主支持任意位置 @put、JSON 内嵌规则与非空分支 %%', async () => {
