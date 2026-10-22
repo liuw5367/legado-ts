@@ -92,6 +92,34 @@ test('Node 加密宿主按 Android 约定保留 GCM authentication tag，并报�
   }
 })
 
+test('Node 加密宿主支持 GCM/CCM AAD 和可变 authentication tag 长度', () => {
+  const host = new NodeCryptoHost()
+  const key = new Uint8Array(16)
+  const iv = new Uint8Array(12)
+  const aad = new TextEncoder().encode('header')
+  const plain = new TextEncoder().encode('正文')
+  const encryptor = host.createSymmetricCrypto('AES/GCM/NoPadding', key, iv)
+  encryptor.setAAD!(aad).setAuthTagLength!(96)
+  const encrypted = encryptor.encrypt(plain)
+  assert.equal(encrypted.length, plain.length + 12)
+  const decryptor = host.createSymmetricCrypto('AES/GCM/NoPadding', key, iv)
+  decryptor.setAAD!(aad).setAuthTagLength!(96)
+  assert.deepEqual(decryptor.decrypt(encrypted), plain)
+  const wrongAad = host.createSymmetricCrypto('AES/GCM/NoPadding', key, iv)
+  wrongAad.setAAD!(new TextEncoder().encode('wrong')).setAuthTagLength!(96)
+  assert.throws(() => wrongAad.decrypt(encrypted), /auth|authenticate|bad decrypt/iu)
+  assert.throws(() => host.createSymmetricCrypto('AES/GCM/NoPadding', key, iv).setAuthTagLength!(40), /__LEGADO_CAPABILITY__runtime crypto\.provider/u)
+  if (getCiphers().includes('aes-128-ccm')) {
+    const ccmEncryptor = host.createSymmetricCrypto('AES/CCM/NoPadding', key, iv)
+    ccmEncryptor.setAAD!(aad).setAuthTagLength!(64)
+    const ccmEncrypted = ccmEncryptor.encrypt(plain)
+    assert.equal(ccmEncrypted.length, plain.length + 8)
+    const ccmDecryptor = host.createSymmetricCrypto('AES/CCM/NoPadding', key, iv)
+    ccmDecryptor.setAAD!(aad).setAuthTagLength!(64)
+    assert.deepEqual(ccmDecryptor.decrypt(ccmEncrypted), plain)
+  }
+})
+
 test('Node 压缩宿主限制 gzip 与 zip 输出', async () => {
   const host = new NodeArchiveHost()
   const gzip = await host.extract(Uint8Array.from(gzipSync(Buffer.from('hello'))), 'gzip')

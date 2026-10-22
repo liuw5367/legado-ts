@@ -66,6 +66,8 @@ export interface SourceRuleBridgeRequest {
   filter?: unknown
   key?: unknown
   iv?: unknown
+  aad?: unknown
+  authTagLength?: unknown
   algorithm?: unknown
   transformation?: unknown
   operation?: unknown
@@ -82,6 +84,9 @@ export interface SourceRuleBridgeRequest {
   scope?: string
   privateKey?: unknown
   publicKey?: unknown
+  oaepHash?: unknown
+  oaepMgfHash?: unknown
+  oaepLabel?: unknown
   signature?: unknown
   usePublicKey?: unknown
   useCache?: unknown
@@ -1424,6 +1429,11 @@ const legadoBufferedReader = function(reader) {
 }
 const legadoSecretKeySpec = function(value, algorithm) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); return { getEncoded: () => bytes, getKey: () => bytes, getAlgorithm: () => String(algorithm ?? ""), getFormat: () => "RAW", encoded: bytes } }
 const legadoIvParameterSpec = function(value, offset, length) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("IvParameterSpec range out of bounds"); const result = bytes.slice(start, start + count); return { getIV: () => result, getEncoded: () => result } }
+const legadoGcmParameterSpec = function(tLen, value) { const bits = Number(tLen); if (!Number.isInteger(bits) || bits < 32 || bits > 128 || bits % 8 !== 0) throw new RangeError("GCM tag length must be 32..128 bits"); const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); return { getTLen: () => bits, getIV: () => bytes, getEncoded: () => bytes } }
+const legadoMgf1ParameterSpec = function(digest) { const name = String(digest ?? "SHA-1"); return { getDigestAlgorithm: () => name, getAlgorithm: () => "MGF1" } }
+const legadoPSourceSpecified = function(value) { const bytes = value === undefined || value === null ? new Uint8Array() : value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value), charset: "UTF-8" }); return { getAlgorithm: () => "PSpecified", getValue: () => bytes } }
+const legadoPSource = { PSpecified: legadoPSourceSpecified }
+const legadoOaepParameterSpec = function(digest, mgfAlgorithm, mgfParameters, pSource) { return { getDigestAlgorithm: () => String(digest ?? "SHA-1"), getMGFAlgorithm: () => String(mgfAlgorithm ?? "MGF1"), getMGFParameters: () => mgfParameters, getPSource: () => pSource ?? legadoPSourceSpecified(new Uint8Array()) } }
 const legadoDesKeySpec = function(value, offset) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); const start = offset === undefined ? 0 : Number(offset); if (!Number.isInteger(start) || start < 0 || start + 8 > bytes.length) throw new RangeError("DESKeySpec range out of bounds"); const result = bytes.slice(start, start + 8); return { getKey: () => result } }
 const legadoSecretKeyFactory = { getInstance: (algorithm) => ({ generateSecret: (spec) => { const bytes = spec?.getKey?.() ?? spec?.getEncoded?.() ?? spec?.encoded; return { getEncoded: () => bytes, getAlgorithm: () => String(algorithm), getFormat: () => "RAW" } } }) }
 const legadoCipher = {
@@ -1432,16 +1442,25 @@ const legadoCipher = {
   getInstance: (transformation) => {
     let mode
     let key
+    let privateKey
+    let publicKey
+    let keyUsePublic
     let iv
+    let aadChunks = []
+    let authTagLength
+    let oaepHash
+    let oaepMgfHash
+    let oaepLabel
     let chunks = []
     const api = {
-      init: (nextMode, secret, parameters) => { mode = Number(nextMode); key = secret?.getEncoded?.() ?? secret?.encoded ?? secret; iv = parameters?.getIV?.() ?? parameters?.getEncoded?.() ?? parameters; chunks = []; return api },
+      init: (nextMode, secret, parameters) => { mode = Number(nextMode); privateKey = secret?.__legadoPrivateKey; publicKey = secret?.__legadoPublicKey; keyUsePublic = publicKey !== undefined ? true : privateKey !== undefined ? false : undefined; key = secret?.getEncoded?.() ?? secret?.encoded ?? secret; iv = parameters?.getIV?.() ?? parameters?.getEncoded?.() ?? (parameters instanceof Uint8Array || Array.isArray(parameters) || typeof parameters === "string" ? parameters : undefined); authTagLength = parameters?.getTLen?.(); const mgf = parameters?.getMGFParameters?.(); oaepHash = parameters?.getDigestAlgorithm?.(); oaepMgfHash = mgf?.getDigestAlgorithm?.(); const source = parameters?.getPSource?.(); oaepLabel = source?.getValue?.(); chunks = []; aadChunks = []; return api },
       update: (value) => { chunks.push(legadoBytesValue(value)); return new Uint8Array() },
-      doFinal: (value) => { if (value !== undefined) chunks.push(legadoBytesValue(value)); if (mode !== 1 && mode !== 2) throw new Error("Cipher is not initialized"); const result = request({ kind: "crypto-symmetric", operation: mode === 2 ? "decrypt" : "encrypt", transformation: String(transformation), key, iv, value: legadoConcatBytes(chunks), inputEncoding: "bytes", outputEncoding: "bytes" }); chunks = []; return result },
+      updateAAD: (value, offset, length) => { const bytes = legadoBytesValue(value); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("Cipher AAD range out of bounds"); aadChunks.push(bytes.slice(start, start + count)); return undefined },
+      doFinal: (value) => { if (value !== undefined) chunks.push(legadoBytesValue(value)); if (mode !== 1 && mode !== 2) throw new Error("Cipher is not initialized"); const transformationText = String(transformation); const asymmetric = /^RSA(?:\/|$)/iu.test(transformationText); const operation = mode === 2 ? "decrypt" : "encrypt"; const result = asymmetric ? request({ kind: "crypto-asymmetric", operation, transformation: transformationText, ...(privateKey === undefined ? (keyUsePublic === false ? { privateKey: key } : {}) : { privateKey }), ...(publicKey === undefined ? (keyUsePublic === false ? {} : { publicKey: key }) : { publicKey }), usePublicKey: keyUsePublic === undefined ? mode !== 2 : keyUsePublic, value: legadoConcatBytes(chunks), ...(oaepHash === undefined ? {} : { oaepHash }), ...(oaepMgfHash === undefined ? {} : { oaepMgfHash }), ...(oaepLabel === undefined ? {} : { oaepLabel }), inputEncoding: "bytes", outputEncoding: "bytes" }) : request({ kind: "crypto-symmetric", operation, transformation: transformationText, key, iv, value: legadoConcatBytes(chunks), ...(aadChunks.length === 0 ? {} : { aad: legadoConcatBytes(aadChunks) }), ...(authTagLength === undefined ? {} : { authTagLength }), inputEncoding: "bytes", outputEncoding: "bytes" }); chunks = []; aadChunks = []; return result },
       getAlgorithm: () => String(transformation),
       getIV: () => iv,
       getBlockSize: () => 0,
-      reset: () => { chunks = []; return api },
+      reset: () => { chunks = []; aadChunks = []; return api },
     }
     return api
   },
@@ -1653,6 +1672,10 @@ legadoName(legadoJavaZip.GZIPInputStream, "GZIPInputStream")
 legadoName(legadoJavaZip.InflaterInputStream, "InflaterInputStream")
 legadoName(legadoJavaZip.ZipInputStream, "ZipInputStream")
 legadoName(legadoIvParameterSpec, "IvParameterSpec")
+legadoName(legadoGcmParameterSpec, "GCMParameterSpec")
+legadoName(legadoMgf1ParameterSpec, "MGF1ParameterSpec")
+legadoName(legadoPSourceSpecified, "PSpecified")
+legadoName(legadoOaepParameterSpec, "OAEPParameterSpec")
 legadoName(legadoDesKeySpec, "DESKeySpec")
 legadoName(legadoSecretKeyFactory, "SecretKeyFactory")
 legadoName(legadoCipher, "Cipher")
@@ -1671,7 +1694,8 @@ legadoJavaUtil.UUID = legadoJavaUUID
 legadoName(legadoJavaUtil.UUID, "UUID")
 legadoName(legadoJavaSecurity.spec.PKCS8EncodedKeySpec, "PKCS8EncodedKeySpec")
 legadoName(legadoJavaSecurity.spec.X509EncodedKeySpec, "X509EncodedKeySpec")
-const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: { ...legadoJavaUtil, zip: legadoJavaZip }, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Cipher: legadoCipher, Mac: legadoMac, SecretKeyFactory: legadoSecretKeyFactory, spec: { SecretKeySpec: legadoSecretKeySpec, IvParameterSpec: legadoIvParameterSpec, DESKeySpec: legadoDesKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 }, text: { TextUtils: legadoAndroidTextUtils }, os: { Build: legadoAndroidBuild } }, org: { jsoup: { Jsoup: legadoJsoup, Connection: legadoJsoupConnection, nodes: legadoJsoupNodes } } }
+const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: { ...legadoJavaUtil, zip: legadoJavaZip }, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Cipher: legadoCipher, Mac: legadoMac, SecretKeyFactory: legadoSecretKeyFactory, spec: { SecretKeySpec: legadoSecretKeySpec, IvParameterSpec: legadoIvParameterSpec, GCMParameterSpec: legadoGcmParameterSpec, OAEPParameterSpec: legadoOaepParameterSpec, PSource: legadoPSource, DESKeySpec: legadoDesKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 }, text: { TextUtils: legadoAndroidTextUtils }, os: { Build: legadoAndroidBuild } }, org: { jsoup: { Jsoup: legadoJsoup, Connection: legadoJsoupConnection, nodes: legadoJsoupNodes } } }
+legadoPackages.java.security.spec.MGF1ParameterSpec = legadoMgf1ParameterSpec
 legadoName(legadoPackages.java.nio.charset.StandardCharsets, "StandardCharsets")
 legadoName(legadoPackages.java.net.URL, "URL")
 if (legadoExistingPackages && legadoExistingPackages.io) legadoPackages.io = legadoExistingPackages.io
@@ -3076,7 +3100,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       'java.post = (value, body, headers, timeout) => legadoResponseCompat(String(value), request({ kind: "network-response", url: String(value), method: "POST", body, headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) })); java.head = (value, headers, timeout) => legadoResponseCompat(String(value), request({ kind: "network-response", url: String(value), method: "HEAD", headers: legadoJavaHeaders(headers), options: legadoJavaRequestOptions(timeout) }));',
       'java.ajaxAll = (values, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, skipRateLimit: skipRateLimit === true }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponseCompat(urls[index] ?? "", raw)); };',
       'java.ajaxTestAll = (values, timeout, skipRateLimit) => { const urls = (Array.isArray(values) ? values : [values]).map((value) => String(value)); const batch = request({ kind: "network-all", urls, isTest: true, skipRateLimit: skipRateLimit === true, options: timeout === undefined ? undefined : { timeout: Number(timeout) } }); return (Array.isArray(batch) ? batch : []).map((raw, index) => legadoResponseCompat(urls[index] ?? "", raw)); };',
-      'const legadoCryptoConfig = (transformation, key, iv) => ({ transformation: String(transformation), key, ...(iv === undefined || iv === null ? {} : { iv }) }); const legadoCryptoBase64 = (value) => ({ __legadoBase64: String(value) }); const legadoCryptoInput = (value) => typeof value === "string" ? (/^(?:[0-9a-f]{2})+$/iu.test(value) ? "hex" : "base64") : "bytes"; const legadoSecretKey = (value) => ({ getEncoded: () => value, encoded: value, toString: () => java.base64Encode(value) }); const legadoCrypto = (transformation, key, iv) => { let currentKey = key; let currentIv = iv; if (currentKey === undefined || currentKey === null) currentKey = request({ kind: "crypto-key", transformation: String(transformation) }); const call = (operation, value, outputEncoding, charset) => request({ kind: "crypto-symmetric", operation, ...legadoCryptoConfig(transformation, currentKey, currentIv), value, inputEncoding: operation === "decrypt" ? legadoCryptoInput(value) : undefined, outputEncoding, ...(charset === undefined ? {} : { charset: String(charset) }) }); const api = { decrypt: (value) => call("decrypt", value, "bytes"), decryptStr: (value, charset) => call("decrypt", value, "text", charset === undefined ? "UTF-8" : charset), encrypt: (value) => call("encrypt", value, "bytes"), encryptBase64: (value) => call("encrypt", value, "base64"), encryptHex: (value) => call("encrypt", value, "hex"), setIv: (nextIv) => { currentIv = nextIv; return api; }, getIv: () => currentIv, getSecretKey: () => legadoSecretKey(currentKey) }; return api; };',
+      'const legadoCryptoConfig = (transformation, key, iv, aad, authTagLength) => ({ transformation: String(transformation), key, ...(iv === undefined || iv === null ? {} : { iv }), ...(aad === undefined ? {} : { aad }), ...(authTagLength === undefined ? {} : { authTagLength }) }); const legadoCryptoBase64 = (value) => ({ __legadoBase64: String(value) }); const legadoCryptoInput = (value) => typeof value === "string" ? (/^(?:[0-9a-f]{2})+$/iu.test(value) ? "hex" : "base64") : "bytes"; const legadoSecretKey = (value) => ({ getEncoded: () => value, encoded: value, toString: () => java.base64Encode(value) }); const legadoCrypto = (transformation, key, iv) => { let currentKey = key; let currentIv = iv; let currentAad; let currentAuthTagLength; if (currentKey === undefined || currentKey === null) currentKey = request({ kind: "crypto-key", transformation: String(transformation) }); const call = (operation, value, outputEncoding, charset) => request({ kind: "crypto-symmetric", operation, ...legadoCryptoConfig(transformation, currentKey, currentIv, currentAad, currentAuthTagLength), value, inputEncoding: operation === "decrypt" ? legadoCryptoInput(value) : undefined, outputEncoding, ...(charset === undefined ? {} : { charset: String(charset) }) }); const api = { decrypt: (value) => call("decrypt", value, "bytes"), decryptStr: (value, charset) => call("decrypt", value, "text", charset === undefined ? "UTF-8" : charset), encrypt: (value) => call("encrypt", value, "bytes"), encryptBase64: (value) => call("encrypt", value, "base64"), encryptHex: (value) => call("encrypt", value, "hex"), setIv: (nextIv) => { currentIv = nextIv; return api; }, setAAD: (nextAad) => { currentAad = nextAad; return api; }, setAuthTagLength: (bits) => { currentAuthTagLength = Number(bits); return api; }, getIv: () => currentIv, getSecretKey: () => legadoSecretKey(currentKey) }; return api; };',
       'java.md5Encode = (value) => request({ kind: "md5", value: String(value) }); java.md5Encode16 = (value) => request({ kind: "md5-16", value: String(value) });',
       'java.base64Encode = (value, flags) => request({ kind: "base64-encode", value: String(value), flags: flags === undefined ? 2 : Number(flags) }); java.base64Decode = (value, charsetOrFlags) => typeof charsetOrFlags === "number" ? request({ kind: "base64-decode-text", value, flags: Number(charsetOrFlags) }) : request({ kind: "base64-decode-text", value, charset: charsetOrFlags === undefined ? "UTF-8" : String(charsetOrFlags) }); java.base64DecodeToString = (value, charset) => request({ kind: "base64-decode-text", value, charset: charset === undefined ? "UTF-8" : String(charset) }); java.base64DecodeToByteArray = (value, flags) => value == null || String(value).trim().length === 0 ? null : request({ kind: "base64-decode-bytes", value, flags: flags === undefined ? 0 : Number(flags) });',
       'java.encodeURI = (value, charset) => request({ kind: "encode-uri", value: String(value), charset: charset === undefined ? "UTF-8" : String(charset) });',
@@ -3396,6 +3420,14 @@ export class SourceRuleRuntime implements WorkflowRulePort {
           ? base64DecodeWithFlags(this.encoding, (ivValue as Record<string, unknown>).__legadoBase64, 0)
           : typeof ivValue === 'string' ? this.encoding.encode(ivValue, 'UTF-8') : byteValue(ivValue)
       const crypto = this.crypto.createSymmetricCrypto(transformation, key, iv)
+      if (request.aad !== undefined) {
+        if (crypto.setAAD === undefined) throw new Error('__LEGADO_CAPABILITY__runtime crypto.aad unavailable')
+        crypto.setAAD(byteValue(request.aad))
+      }
+      if (request.authTagLength !== undefined) {
+        if (crypto.setAuthTagLength === undefined) throw new Error('__LEGADO_CAPABILITY__runtime crypto.tag-length unavailable')
+        crypto.setAuthTagLength(Number(request.authTagLength))
+      }
       if (operation === 'decrypt') {
         const input = textValue(request.inputEncoding) === 'base64' ? base64DecodeWithFlags(this.encoding, request.value, 0) : textValue(request.inputEncoding) === 'hex' ? this.encoding.hexDecode(textValue(request.value)) : byteValue(request.value)
         const bytes = crypto.decrypt(input)
@@ -3417,6 +3449,14 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const crypto = this.crypto.createAsymmetricCrypto(textValue(request.transformation))
       if (request.privateKey !== undefined) crypto.setPrivateKey(typeof request.privateKey === 'string' ? request.privateKey : byteValue(request.privateKey))
       if (request.publicKey !== undefined) crypto.setPublicKey(typeof request.publicKey === 'string' ? request.publicKey : byteValue(request.publicKey))
+      if (request.oaepHash !== undefined || request.oaepMgfHash !== undefined || request.oaepLabel !== undefined) {
+        if (crypto.setOaepParameters === undefined) throw new Error('__LEGADO_CAPABILITY__runtime crypto.oaep-parameters unavailable')
+        crypto.setOaepParameters(
+          request.oaepHash === undefined || request.oaepHash === null ? undefined : textValue(request.oaepHash),
+          request.oaepMgfHash === undefined || request.oaepMgfHash === null ? undefined : textValue(request.oaepMgfHash),
+          request.oaepLabel === undefined || request.oaepLabel === null ? undefined : byteValue(request.oaepLabel),
+        )
+      }
       const inputEncoding = textValue(request.inputEncoding)
       const input = typeof request.value === 'string'
         ? inputEncoding === 'base64' ? this.encoding.base64Decode(textValue(request.value)) : inputEncoding === 'hex' ? this.encoding.hexDecode(textValue(request.value)) : this.encoding.encode(request.value, textValue(request.charset) || 'UTF-8')

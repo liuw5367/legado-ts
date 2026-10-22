@@ -179,6 +179,10 @@ export interface SymmetricCrypto {
   encryptText(input: string, charset?: string): Uint8Array
   /** Hutool SymmetricCrypto keeps the cipher object mutable within one JS execution. */
   setIv?(iv: Uint8Array): SymmetricCrypto
+  /** Java Cipher/AEAD additional authenticated data for the current operation. */
+  setAAD?(aad: Uint8Array): SymmetricCrypto
+  /** Java GCM/CCM authentication tag length in bits. */
+  setAuthTagLength?(bits: number): SymmetricCrypto
   getIv?(): Uint8Array | undefined
   getSecretKey?(): Uint8Array
 }
@@ -188,6 +192,8 @@ export type CryptoKeyInput = string | Uint8Array
 export interface AsymmetricCrypto {
   setPrivateKey(key: CryptoKeyInput): AsymmetricCrypto
   setPublicKey(key: CryptoKeyInput): AsymmetricCrypto
+  /** Optional OAEP parameter override; providers may reject a distinct MGF1 digest. */
+  setOaepParameters?(hash?: string, mgfHash?: string, label?: Uint8Array): AsymmetricCrypto
   decrypt(input: Uint8Array, usePublicKey?: boolean): Uint8Array
   encrypt(input: Uint8Array, usePublicKey?: boolean): Uint8Array
   decryptText(input: Uint8Array, usePublicKey?: boolean, charset?: string): string

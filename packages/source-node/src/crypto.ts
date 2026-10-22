@@ -79,6 +79,8 @@ class NodeSymmetricCrypto implements SymmetricCrypto {
   private readonly key: Buffer
   private readonly secretKey: Buffer
   private iv: Buffer | null
+  private aad = Buffer.alloc(0)
+  private authTagLength: number
   private readonly encoding: NodeEncodingHost
 
   public constructor(transformation: string, key: Uint8Array | undefined, iv: Uint8Array | undefined, encoding: NodeEncodingHost) {
@@ -86,6 +88,7 @@ class NodeSymmetricCrypto implements SymmetricCrypto {
     this.descriptor = cipherAlgorithm(transformation, effectiveKey)
     this.key = Buffer.from(this.descriptor.keyBytes ?? effectiveKey)
     this.secretKey = Buffer.from(effectiveKey)
+    this.authTagLength = this.descriptor.authTagLength
     const parsedIv = this.descriptor.ivRequired ? Buffer.from(iv ?? (() => { throw new Error(`${transformation} requires iv`) })()) : null
     if (this.descriptor.ivRequired && parsedIv !== null && parsedIv.length === 0) throw new Error(`${this.descriptor.algorithm} iv must not be empty`)
     if (this.descriptor.ivRequired && parsedIv !== null && this.descriptor.authMode === 'ccm' && (parsedIv.length < 7 || parsedIv.length > 13)) throw new Error(`${this.descriptor.algorithm} CCM iv must be 7..13 bytes`)
@@ -96,18 +99,19 @@ class NodeSymmetricCrypto implements SymmetricCrypto {
 
   public decrypt(input: Uint8Array): Uint8Array {
     const encrypted = Buffer.from(input)
-    const tag = this.descriptor.authenticated ? encrypted.subarray(Math.max(0, encrypted.length - this.descriptor.authTagLength)) : undefined
-    const ciphertext = tag === undefined ? encrypted : encrypted.subarray(0, encrypted.length - this.descriptor.authTagLength)
-    if (tag !== undefined && encrypted.length < this.descriptor.authTagLength) throw new Error(`${this.descriptor.algorithm} ciphertext is missing authentication tag`)
+    const tag = this.descriptor.authenticated ? encrypted.subarray(Math.max(0, encrypted.length - this.authTagLength)) : undefined
+    const ciphertext = tag === undefined ? encrypted : encrypted.subarray(0, encrypted.length - this.authTagLength)
+    if (tag !== undefined && encrypted.length < this.authTagLength) throw new Error(`${this.descriptor.algorithm} ciphertext is missing authentication tag`)
     if (this.descriptor.authMode === 'ccm') {
-      const decipher = createDecipheriv(this.descriptor.algorithm as CipherCCMTypes, this.key, this.iv, { authTagLength: this.descriptor.authTagLength } as unknown as TransformOptions) as CipherCCM & DecipherCCM
+      const decipher = createDecipheriv(this.descriptor.algorithm as CipherCCMTypes, this.key, this.iv, { authTagLength: this.authTagLength } as unknown as TransformOptions) as CipherCCM & DecipherCCM
       decipher.setAuthTag(tag!)
-      decipher.setAAD(Buffer.alloc(0), { plaintextLength: ciphertext.length })
+      decipher.setAAD(this.aad, { plaintextLength: ciphertext.length })
       return Uint8Array.from(Buffer.concat([decipher.update(ciphertext), decipher.final()]))
     }
     if (this.descriptor.authMode === 'gcm') {
-      const decipher = createDecipheriv(this.descriptor.algorithm as CipherGCMTypes, this.key, this.iv, { authTagLength: this.descriptor.authTagLength } as unknown as TransformOptions) as DecipherGCM
+      const decipher = createDecipheriv(this.descriptor.algorithm as CipherGCMTypes, this.key, this.iv, { authTagLength: this.authTagLength } as unknown as TransformOptions) as DecipherGCM
       decipher.setAuthTag(tag!)
+      decipher.setAAD(this.aad)
       decipher.setAutoPadding(this.descriptor.autoPadding)
       return Uint8Array.from(Buffer.concat([decipher.update(ciphertext), decipher.final()]))
     }
@@ -118,13 +122,14 @@ class NodeSymmetricCrypto implements SymmetricCrypto {
 
   public encrypt(input: Uint8Array): Uint8Array {
     if (this.descriptor.authMode === 'ccm') {
-      const cipher = createCipheriv(this.descriptor.algorithm as CipherCCMTypes, this.key, this.iv, { authTagLength: this.descriptor.authTagLength } as unknown as TransformOptions) as CipherCCM
-      cipher.setAAD(Buffer.alloc(0), { plaintextLength: input.byteLength })
+      const cipher = createCipheriv(this.descriptor.algorithm as CipherCCMTypes, this.key, this.iv, { authTagLength: this.authTagLength } as unknown as TransformOptions) as CipherCCM
+      cipher.setAAD(this.aad, { plaintextLength: input.byteLength })
       const output = Buffer.concat([cipher.update(Buffer.from(input)), cipher.final()])
       return Uint8Array.from(Buffer.concat([output, cipher.getAuthTag()]))
     }
     if (this.descriptor.authMode === 'gcm') {
-      const cipher = createCipheriv(this.descriptor.algorithm as CipherGCMTypes, this.key, this.iv, { authTagLength: this.descriptor.authTagLength } as unknown as TransformOptions) as CipherGCM
+      const cipher = createCipheriv(this.descriptor.algorithm as CipherGCMTypes, this.key, this.iv, { authTagLength: this.authTagLength } as unknown as TransformOptions) as CipherGCM
+      cipher.setAAD(this.aad)
       cipher.setAutoPadding(this.descriptor.autoPadding)
       const output = Buffer.concat([cipher.update(Buffer.from(input)), cipher.final()])
       return Uint8Array.from(Buffer.concat([output, cipher.getAuthTag()]))
@@ -151,6 +156,22 @@ class NodeSymmetricCrypto implements SymmetricCrypto {
     return this
   }
 
+  public setAAD(aad: Uint8Array): SymmetricCrypto {
+    if (!this.descriptor.authenticated) throw unsupportedTransformation(this.descriptor.algorithm, 'aad')
+    this.aad = Buffer.from(aad)
+    return this
+  }
+
+  public setAuthTagLength(bits: number): SymmetricCrypto {
+    if (!this.descriptor.authenticated) throw unsupportedTransformation(this.descriptor.algorithm, 'tag-length')
+    if (!Number.isInteger(bits) || bits < 32 || bits > 128 || bits % 8 !== 0) throw new Error(`${this.descriptor.algorithm} authentication tag length must be 32..128 bits`)
+    const bytes = bits / 8
+    if (this.descriptor.authMode === 'ccm' && (bytes < 4 || bytes > 16 || bytes % 2 !== 0)) throw new Error(`${this.descriptor.algorithm} CCM authentication tag length is unsupported`)
+    if (this.descriptor.authMode === 'gcm' && ![4, 8, 12, 13, 14, 15, 16].includes(bytes)) throw unsupportedTransformation(this.descriptor.algorithm, 'provider')
+    this.authTagLength = bytes
+    return this
+  }
+
   public getIv(): Uint8Array | undefined { return this.iv === null ? undefined : Uint8Array.from(this.iv) }
 
   public getSecretKey(): Uint8Array { return Uint8Array.from(this.secretKey) }
@@ -161,11 +182,20 @@ function keyBuffer(value: CryptoKeyInput): Buffer | string {
   return Buffer.from(value)
 }
 
-function rsaOptions(transformation: string): { padding: number; oaepHash?: string } {
+function rsaHash(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined
+  const match = /^(?:SHA-?)?(\d+)$/iu.exec(value.replace(/\s+/gu, ''))
+  if (match?.[1] === undefined) throw new Error(`unsupported RSA OAEP digest: ${value}`)
+  return `sha${match[1]}`
+}
+
+function rsaOptions(transformation: string, parameters: { hash?: string; mgfHash?: string; label?: Uint8Array } = {}): { padding: number; oaepHash?: string; oaepLabel?: Buffer } {
   if (/NoPadding/iu.test(transformation)) return { padding: constants.RSA_NO_PADDING }
   if (/OAEP/iu.test(transformation)) {
-    const hash = /SHA-(\d+)/iu.exec(transformation)?.[1] ?? /SHA(\d+)/iu.exec(transformation)?.[1]
-    return { padding: constants.RSA_PKCS1_OAEP_PADDING, ...(hash === undefined ? {} : { oaepHash: `sha${hash}` }) }
+    const hash = rsaHash(parameters.hash) ?? rsaHash(/SHA-(\d+)/iu.exec(transformation)?.[1] ?? /SHA(\d+)/iu.exec(transformation)?.[1])
+    const mgfHash = rsaHash(parameters.mgfHash) ?? hash
+    if (hash !== undefined && mgfHash !== undefined && hash !== mgfHash) throw unsupportedTransformation(transformation, 'provider')
+    return { padding: constants.RSA_PKCS1_OAEP_PADDING, ...(hash === undefined ? {} : { oaepHash: hash }), ...(parameters.label === undefined ? {} : { oaepLabel: Buffer.from(parameters.label) }) }
   }
   return { padding: constants.RSA_PKCS1_PADDING }
 }
@@ -195,6 +225,9 @@ class NodeAsymmetricCrypto implements AsymmetricCrypto {
   private privateKey: ReturnType<typeof createPrivateKey> | undefined
   private publicKey: ReturnType<typeof createPublicKey> | undefined
   private readonly transformation: string
+  private oaepHash: string | undefined
+  private oaepMgfHash: string | undefined
+  private oaepLabel: Buffer | undefined
 
   public constructor(transformation: string) {
     this.transformation = transformation
@@ -214,22 +247,37 @@ class NodeAsymmetricCrypto implements AsymmetricCrypto {
     return this
   }
 
+  public setOaepParameters(hash?: string, mgfHash?: string, label?: Uint8Array): AsymmetricCrypto {
+    this.oaepHash = hash
+    this.oaepMgfHash = mgfHash
+    this.oaepLabel = label === undefined ? undefined : Buffer.from(label)
+    return this
+  }
+
+  private rsaParameters(): { hash?: string; mgfHash?: string; label?: Uint8Array } {
+    return {
+      ...(this.oaepHash === undefined ? {} : { hash: this.oaepHash }),
+      ...(this.oaepMgfHash === undefined ? {} : { mgfHash: this.oaepMgfHash }),
+      ...(this.oaepLabel === undefined ? {} : { label: this.oaepLabel }),
+    }
+  }
+
   public decrypt(input: Uint8Array, usePublicKey = true): Uint8Array {
     if (usePublicKey) {
       if (this.publicKey === undefined) throw new Error('public key is not set')
-      return Uint8Array.from(publicDecrypt({ key: this.publicKey, ...rsaOptions(this.transformation) }, Buffer.from(input)))
+      return Uint8Array.from(publicDecrypt({ key: this.publicKey, ...rsaOptions(this.transformation, this.rsaParameters()) }, Buffer.from(input)))
     }
     if (this.privateKey === undefined) throw new Error('private key is not set')
-    return Uint8Array.from(privateDecrypt({ key: this.privateKey, ...rsaOptions(this.transformation) }, Buffer.from(input)))
+    return Uint8Array.from(privateDecrypt({ key: this.privateKey, ...rsaOptions(this.transformation, this.rsaParameters()) }, Buffer.from(input)))
   }
 
   public encrypt(input: Uint8Array, usePublicKey = true): Uint8Array {
     if (usePublicKey) {
       if (this.publicKey === undefined) throw new Error('public key is not set')
-      return Uint8Array.from(publicEncrypt({ key: this.publicKey, ...rsaOptions(this.transformation) }, Buffer.from(input)))
+      return Uint8Array.from(publicEncrypt({ key: this.publicKey, ...rsaOptions(this.transformation, this.rsaParameters()) }, Buffer.from(input)))
     }
     if (this.privateKey === undefined) throw new Error('private key is not set')
-    return Uint8Array.from(privateEncrypt({ key: this.privateKey, ...rsaOptions(this.transformation) }, Buffer.from(input)))
+    return Uint8Array.from(privateEncrypt({ key: this.privateKey, ...rsaOptions(this.transformation, this.rsaParameters()) }, Buffer.from(input)))
   }
 
   public decryptText(input: Uint8Array, usePublicKey = true, charset = 'utf-8'): string {

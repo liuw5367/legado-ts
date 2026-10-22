@@ -1344,6 +1344,59 @@ test('Java Cipher、KeySpec、KeyFactory 和 Signature 复用 Node 加密端口'
   assert.deepEqual(JSON.parse(String(result.value)), ['hello', true, true])
 })
 
+test('Java Cipher 支持 GCMParameterSpec/updateAAD 和 OAEPParameterSpec 的同摘要 MGF1', async () => {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'der' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+  })
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang, Packages.java.security, Packages.java.security.spec, Packages.javax.crypto, Packages.javax.crypto.spec);
+    with (importer) {
+      var key = new SecretKeySpec(new Uint8Array(16), 'AES');
+      var gcmSpec = new GCMParameterSpec(96, new Uint8Array(12));
+      var gcm = Cipher.getInstance('AES/GCM/NoPadding');
+      gcm.init(Cipher.ENCRYPT_MODE, key, gcmSpec);
+      gcm.updateAAD(String('header').getBytes());
+      var gcmEncrypted = gcm.doFinal(String('正文').getBytes());
+      gcm.init(Cipher.DECRYPT_MODE, key, gcmSpec);
+      gcm.updateAAD(String('header').getBytes());
+      var gcmPlain = String(gcm.doFinal(gcmEncrypted));
+      var privateSpec = new PKCS8EncodedKeySpec(java.base64DecodeToByteArray('${privateKey.toString('base64')}'));
+      var publicSpec = new X509EncodedKeySpec(java.base64DecodeToByteArray('${publicKey.toString('base64')}'));
+      var factory = KeyFactory.getInstance('RSA');
+      var oaepSpec = new OAEPParameterSpec('SHA-256', 'MGF1', new MGF1ParameterSpec('SHA-256'), new PSource.PSpecified(new Uint8Array([1, 2, 3])));
+      var rsa = Cipher.getInstance('RSA/ECB/OAEPWithSHA-256AndMGF1Padding');
+      rsa.init(Cipher.ENCRYPT_MODE, factory.generatePublic(publicSpec), oaepSpec);
+      var rsaEncrypted = rsa.doFinal(String('hello').getBytes());
+      rsa.init(Cipher.DECRYPT_MODE, factory.generatePrivate(privateSpec), oaepSpec);
+      var rsaPlain = String(rsa.doFinal(rsaEncrypted));
+      JSON.stringify([gcmPlain, gcmEncrypted.length, rsaPlain, rsaEncrypted.length > 0]);
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['正文', 6 + 12, 'hello', true])
+})
+
+test('Java Cipher 对独立 OAEP MGF1 摘要报告 provider 能力缺口', async () => {
+  const { publicKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'der' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+  })
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang, Packages.java.security, Packages.java.security.spec, Packages.javax.crypto, Packages.javax.crypto.spec);
+    with (importer) {
+      var publicSpec = new X509EncodedKeySpec(java.base64DecodeToByteArray('${publicKey.toString('base64')}'));
+      var factory = KeyFactory.getInstance('RSA');
+      var oaepSpec = new OAEPParameterSpec('SHA-256', 'MGF1', new MGF1ParameterSpec('SHA-1'), new PSource.PSpecified(new Uint8Array()));
+      var rsa = Cipher.getInstance('RSA/ECB/OAEPWithSHA-256AndMGF1Padding');
+      rsa.init(Cipher.ENCRYPT_MODE, factory.generatePublic(publicSpec), oaepSpec);
+      rsa.doFinal(String('hello').getBytes());
+    }`, '')
+  assert.equal(result.status, 'capability-missing')
+  assert.match(result.message ?? '', /runtime/iu)
+})
+
 test('对称加密工厂保持随机 key 和 setIv 状态，并支持 CTR/NoPadding', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var cipher = java.createSymmetricCrypto('AES/CBC/PKCS5Padding', null, java.strToBytes('1234567890123456'));
