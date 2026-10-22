@@ -97,8 +97,8 @@ export function compileSourcePattern(pattern: string, options: SourcePatternOpti
 
 /**
  * 转换 Java Pattern 中可安全表达的历史书源语法；不把未知语法降级成字面匹配。
- * `\Q...\E` 和边界转义是等价转换；占有量词和原子分组没有等价的
- * ECMAScript 表达，必须返回明确诊断，不能静默放宽匹配语义。
+ * `\Q...\E` 和边界转义是等价转换；简单原子上的占有量词可用同原子负向前瞻
+ * 固定贪婪边界，复杂分组和原子分组没有等价的 ECMAScript 表达，必须返回明确诊断。
  */
 function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternTranslation | { error: SourcePatternError } {
   let flags = inputFlags
@@ -150,7 +150,10 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     index += 1
   }
   if (/\(\?>/u.test(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则原子分组暂不支持' } }
-  if (hasPossessiveQuantifier(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则占有量词暂不支持' } }
+  const possessive = translateJavaPossessiveQuantifiers(output)
+  if ('error' in possessive) return possessive
+  output = possessive.pattern
+  if (hasPossessiveQuantifier(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则复杂占有量词暂不支持' } }
   return { pattern: output, flags }
 }
 
@@ -382,6 +385,100 @@ function stripJavaExtendedCharacterClass(raw: string): { pattern: string } | { e
     index += 1
   }
   return { pattern: `${output}]` }
+}
+
+interface SimplePatternAtom {
+  text: string
+  end: number
+}
+
+function translateJavaPossessiveQuantifiers(pattern: string): { pattern: string } | { error: SourcePatternError } {
+  let output = ''
+  let index = 0
+  let lastAtom: SimplePatternAtom | undefined
+  while (index < pattern.length) {
+    if (pattern[index] === '\\' && isUnsafePossessiveEscape(pattern[index + 1])) {
+      const end = readPatternEscapeEnd(pattern, index)
+      output += pattern.slice(index, end)
+      index = end
+      lastAtom = undefined
+      continue
+    }
+    const atom = readSimplePatternAtom(pattern, index)
+    if (atom !== undefined) {
+      output += atom.text
+      lastAtom = atom
+      index = atom.end
+      continue
+    }
+    const quantifier = readPossessiveQuantifier(pattern, index)
+    if (quantifier !== undefined) {
+      if (lastAtom?.end === index) {
+        if (pattern[quantifier.end] !== undefined && '*+?{'.includes(pattern[quantifier.end]!)) {
+          return { error: { code: 'invalid-pattern', message: 'Java 正则占有量词后出现重复量词' } }
+        }
+        output += `${quantifier.quantifier}(?!${lastAtom.text})`
+        index = quantifier.end
+        lastAtom = undefined
+        continue
+      }
+      return { error: { code: 'unsupported-pattern', message: 'Java 正则复杂占有量词暂不支持' } }
+    }
+    output += pattern[index]!
+    index += 1
+    lastAtom = undefined
+  }
+  return { pattern: output }
+}
+
+function readSimplePatternAtom(pattern: string, index: number): SimplePatternAtom | undefined {
+  const current = pattern[index]
+  if (current === undefined) return undefined
+  if (current === '\\') {
+    if (isUnsafePossessiveEscape(pattern[index + 1])) return undefined
+    const end = readPatternEscapeEnd(pattern, index)
+    return { text: pattern.slice(index, end), end }
+  }
+  if (current === '[') {
+    const end = findCharacterClassEnd(pattern, index)
+    return end < 0 ? undefined : { text: pattern.slice(index, end + 1), end: end + 1 }
+  }
+  if (current === '.' || !/[\\^$*+?()[\]{}|]/u.test(current)) return { text: current, end: index + 1 }
+  return undefined
+}
+
+function isUnsafePossessiveEscape(marker: string | undefined): boolean {
+  return marker !== undefined && ('bBAGZzk'.includes(marker) || /\d/u.test(marker))
+}
+
+function readPatternEscapeEnd(pattern: string, index: number): number {
+  const marker = pattern[index + 1]
+  if (marker === undefined) return index + 1
+  if ((marker === 'p' || marker === 'P') && pattern[index + 2] === '{') {
+    const close = pattern.indexOf('}', index + 3)
+    return close >= 0 ? close + 1 : index + 2
+  }
+  if ((marker === 'x' || marker === 'u') && pattern[index + 2] === '{') {
+    const close = pattern.indexOf('}', index + 3)
+    return close >= 0 ? close + 1 : index + 2
+  }
+  if (marker === 'k' && pattern[index + 2] === '<') {
+    const close = pattern.indexOf('>', index + 3)
+    return close >= 0 ? close + 1 : index + 2
+  }
+  return index + 2
+}
+
+function readPossessiveQuantifier(pattern: string, index: number): { quantifier: string; end: number } | undefined {
+  const current = pattern[index]
+  if (current === '*' || current === '+' || current === '?') {
+    return pattern[index + 1] === '+' ? { quantifier: current, end: index + 2 } : undefined
+  }
+  if (current !== '{') return undefined
+  const close = pattern.indexOf('}', index + 1)
+  if (close < 0 || pattern[close + 1] !== '+') return undefined
+  const quantifier = pattern.slice(index, close + 1)
+  return /^\{\d+(?:,\d*)?\}$/u.test(quantifier) ? { quantifier, end: close + 2 } : undefined
 }
 
 function foldEscapedLiteral(source: string, index: number, end: number, ignoreCase: boolean): { text: string; next: number } {

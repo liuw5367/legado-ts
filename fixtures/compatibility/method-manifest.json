@@ -918,9 +918,9 @@
           "parameters": [],
           "returnType": "unknown",
           "implementation": "partial",
-          "verification": "ts-diff",
+          "verification": "ts-passed",
           "feasibility": "conditional",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "SCH-007",
             "JS-003"
