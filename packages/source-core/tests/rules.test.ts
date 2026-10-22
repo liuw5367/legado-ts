@@ -202,6 +202,11 @@ test('Java 正则 POSIX/Unicode 属性映射到受控 ECMAScript 属性转义', 
   assert.equal('error' in unicodeCase ? unicodeCase.error.code : 'regex', 'unsupported-pattern')
   const scopedUnicodeCase = compileSourcePattern('(?i:(?U:abc))', { flags: '' })
   assert.equal('error' in scopedUnicodeCase ? scopedUnicodeCase.error.code : 'regex', 'unsupported-pattern')
+  const unicodeCaseOnly = compileSourcePattern('(?u:abc)', { flags: '' })
+  assert.ok('regex' in unicodeCaseOnly)
+  assert.equal('regex' in unicodeCaseOnly ? unicodeCaseOnly.regex.test('abc') : false, true)
+  const scopedUnicodeCaseWithInsensitive = compileSourcePattern('(?i:(?u:abc))', { flags: '' })
+  assert.equal('error' in scopedUnicodeCaseWithInsensitive ? scopedUnicodeCaseWithInsensitive.error.code : 'regex', 'unsupported-pattern')
 
   const unsupported = compileSourcePattern(String.raw`\C`, { flags: '' })
   assert.equal('error' in unsupported ? unsupported.error.code : 'regex', 'unsupported-pattern')
@@ -284,8 +289,9 @@ test('Java 正则作用域 flags 展开 i/m/s/x/d 并保留嵌套禁用语义', 
   assert.ok('regex' in disabledUnixLines)
   assert.equal('regex' in disabledUnixLines ? disabledUnixLines.regex.test('a\rx') : true, false)
 
-  const unsupportedScopedFlag = compileSourcePattern('(?u: a )', { flags: '' })
-  assert.equal('error' in unsupportedScopedFlag ? unsupportedScopedFlag.error.code : 'regex', 'unsupported-pattern')
+  const unicodeCaseScope = compileSourcePattern('(?u: a )', { flags: '' })
+  assert.ok('regex' in unicodeCaseScope)
+  assert.equal('regex' in unicodeCaseScope ? unicodeCaseScope.regex.test(' a ') : false, true)
 })
 
 test('非法规则、取消和预算耗尽均有可判别结果', () => {

@@ -1100,7 +1100,8 @@ const legadoPattern = {
     if ((numericFlags & 2) !== 0) javaFlags += "i"
     if ((numericFlags & 8) !== 0) javaFlags += "m"
     if ((numericFlags & 32) !== 0) javaFlags += "s"
-    if ((numericFlags & 64) !== 0 || (numericFlags & 256) !== 0) javaFlags += "u"
+    if ((numericFlags & 256) !== 0) pattern = "(?U)" + String(pattern)
+    if ((numericFlags & 64) !== 0) pattern = "(?u)" + String(pattern)
     if ((numericFlags & 16) !== 0) pattern = legadoPattern.quote(patternText)
     const compiled = request({ kind: "pattern-compile", pattern: String(pattern), flags: javaFlags + "d" })
     const compiledFlags = String(compiled.flags ?? "")

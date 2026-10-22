@@ -485,6 +485,24 @@ test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', a
   })
 })
 
+test('Pattern 数值 Unicode flags 映射到 Java U/u 语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.util.regex.Pattern);
+    with (importer) {
+      var unicodeClasses = Pattern.compile('\\\\w+', Pattern.UNICODE_CHARACTER_CLASS).matcher('中文').find();
+      var unicodeCaseOnly = Pattern.compile('abc', Pattern.UNICODE_CASE).matcher('abc').find();
+      JSON.stringify([unicodeClasses, unicodeCaseOnly]);
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [true, true])
+
+  const unsupported = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.util.regex.Pattern);
+    with (importer) Pattern.compile('abc', Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);`, '')
+  assert.equal(unsupported.status, 'failed')
+  assert.match(unsupported.message ?? '', /unsupported|Unicode/u)
+})
+
 test('StringBuilder 支持字符数组、code point、范围和容量重载', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.StringBuilder);
