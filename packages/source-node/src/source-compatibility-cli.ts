@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { buildStaticCompatibilityReport, loadSourceFixtureCandidates } from './source-compatibility.ts'
+import { buildStaticCompatibilityReport, classifyKnownBrokenRules, loadKnownBrokenRules, loadSourceFixtureCandidates } from './source-compatibility.ts'
 import { runLiveCompatibility } from './source-compatibility-live.ts'
 
 interface CliOptions {
@@ -33,11 +33,11 @@ function options(argv: readonly string[]): CliOptions {
 
 const config = options(process.argv.slice(2))
 const candidates = await loadSourceFixtureCandidates()
-const staticReport = buildStaticCompatibilityReport(candidates, config.keyword)
+const staticReport = classifyKnownBrokenRules(buildStaticCompatibilityReport(candidates, config.keyword), await loadKnownBrokenRules())
 const report = config.mode === 'live'
   ? await runLiveCompatibility(candidates, staticReport, { keyword: config.keyword, ...(config.maxSources === undefined ? {} : { maxSources: config.maxSources }), ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) })
   : staticReport
 await mkdir(dirname(config.report), { recursive: true })
 await writeFile(config.report, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 console.log(JSON.stringify({ mode: config.mode, report: config.report, summary: report.summary }))
-if (config.mode === 'static' && (staticReport.summary.invalid > 0 || staticReport.summary.uncompiledRules > 0)) process.exitCode = 1
+if (config.mode === 'static' && (staticReport.summary.invalid > 0 || staticReport.summary.unexpectedUncompiledRules > 0 || staticReport.summary.staleKnownBrokenRules > 0)) process.exitCode = 1

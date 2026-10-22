@@ -11,6 +11,8 @@ pnpm run test:source:compat:live -- --keyword "我本无意成仙" --report /pri
 
 静态审计读取 `fixtures/source/collection` 和 `fixtures/source/single` 下的全部 JSON fixture，检查导入、声明规则编译、能力和请求形态，不访问公网。在线审计必须显式执行，按目标书名继续请求详情、目录和首章正文，并设置来源数与单源时间限制；它不属于默认 `pnpm test`。
 
+静态报告同时给出 `uncompiledRules`、`knownUncompiledRules`、`unexpectedUncompiledRules` 和 `staleKnownBrokenRules`。`fixtures/corpus/manifest.json` 中登记的规则文本错误只有在路径、源名、字段、诊断码和规则 hash 全部匹配时才计入 `knownUncompiledRules`；新增编译失败、白名单过期或规则被意外修好都会进入异常计数并使命令以非零退出。当前语料的 5 条 `unbalanced-rule` 已全部匹配白名单，因此静态审计命令可以成功退出，但这 5 条仍是源文本问题，不能当作 TypeScript 已支持该规则。
+
 ## 报告与状态
 
 报告仅保存文件/候选索引、脱敏 source hash、功能定义 fingerprint、主机名、阶段、诊断码和请求计数，不保存规则全文、正文、Cookie、Authorization、私有查询参数或脚本返回值。

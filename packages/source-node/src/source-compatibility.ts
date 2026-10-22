@@ -23,10 +23,26 @@ export interface SourceFixtureCandidate {
   readonly candidate: ImportCandidate
 }
 
+export interface KnownBrokenRule {
+  readonly path: string
+  readonly sourceName: string
+  readonly group: string
+  readonly field: string
+  readonly code: string
+  readonly ruleHash: string
+}
+
+export interface ClassifiedKnownBrokenRule extends KnownBrokenRule {
+  readonly status: 'matched' | 'missing' | 'mismatch'
+}
+
 export interface StaticRuleRecord {
   readonly group: string
   readonly field: string
+  readonly file: string
+  readonly sourceName: string
   readonly sourceHash: string
+  readonly ruleHash: string
   readonly capabilities: RuleCapability[]
   readonly compiled: boolean
   readonly diagnostics: string[]
@@ -61,6 +77,9 @@ export interface StaticCompatibilityReport {
     rules: number
     compiledRules: number
     uncompiledRules: number
+    knownUncompiledRules: number
+    unexpectedUncompiledRules: number
+    staleKnownBrokenRules: number
     parseableSources: number
     capabilityCounts: Readonly<Record<string, number>>
     diagnosticCounts: Readonly<Record<string, number>>
@@ -68,6 +87,7 @@ export interface StaticCompatibilityReport {
   }
   readonly sources: StaticSourceRecord[]
   readonly rules: StaticRuleRecord[]
+  readonly knownBrokenRules: ClassifiedKnownBrokenRule[]
 }
 
 export function sourceFixtureCandidateId(item: Pick<SourceFixtureCandidate, 'file' | 'index'>): string {
@@ -138,6 +158,40 @@ export async function loadSourceFixtureCandidates(root = new URL('../../../', im
   return result
 }
 
+export async function loadKnownBrokenRules(root = new URL('../../../', import.meta.url)): Promise<KnownBrokenRule[]> {
+  const input = await readFile(new URL('fixtures/corpus/manifest.json', root), 'utf8')
+  const manifest = JSON.parse(input) as { knownBrokenRules?: KnownBrokenRule[] }
+  return manifest.knownBrokenRules ?? []
+}
+
+function knownRuleKey(rule: Pick<KnownBrokenRule, 'path' | 'sourceName' | 'group' | 'field'>): string {
+  const path = rule.path.startsWith('fixtures/source/') ? rule.path.slice('fixtures/source/'.length) : rule.path
+  return `${path}\u0000${rule.sourceName}\u0000${rule.group}.${rule.field}`
+}
+
+export function classifyKnownBrokenRules(report: StaticCompatibilityReport, knownRules: readonly KnownBrokenRule[]): StaticCompatibilityReport {
+  const classified = knownRules.map((expected): ClassifiedKnownBrokenRule => {
+    const candidates = report.rules.filter((rule) => knownRuleKey({ path: rule.file, sourceName: rule.sourceName, group: rule.group, field: rule.field }) === knownRuleKey(expected))
+    if (candidates.length === 0) return { ...expected, status: 'missing' }
+    const match = candidates.find((rule) => rule.ruleHash === expected.ruleHash && !rule.compiled && rule.diagnostics.includes(expected.code))
+    return match === undefined ? { ...expected, status: 'mismatch' } : { ...expected, status: 'matched' }
+  })
+  const matchedKeys = new Set(classified.filter((rule) => rule.status === 'matched').map((rule) => `${knownRuleKey(rule)}\u0000${rule.ruleHash}`))
+  const unexpectedUncompiledRules = report.rules.filter((rule) => !rule.compiled && !matchedKeys.has(`${knownRuleKey({ path: rule.file, sourceName: rule.sourceName, group: rule.group, field: rule.field })}\u0000${rule.ruleHash}`)).length
+  const knownUncompiledRules = classified.filter((rule) => rule.status === 'matched').length
+  const staleKnownBrokenRules = classified.length - knownUncompiledRules
+  return {
+    ...report,
+    summary: {
+      ...report.summary,
+      knownUncompiledRules,
+      unexpectedUncompiledRules,
+      staleKnownBrokenRules,
+    },
+    knownBrokenRules: classified,
+  }
+}
+
 export function buildStaticCompatibilityReport(items: readonly SourceFixtureCandidate[], keyword = '我本无意成仙'): StaticCompatibilityReport {
   const rules: StaticRuleRecord[] = []
   const sources: StaticSourceRecord[] = []
@@ -156,7 +210,7 @@ export function buildStaticCompatibilityReport(items: readonly SourceFixtureCand
         for (const capability of inspectRuleCapabilities(result.rule)) capabilities.add(capability)
       }
       for (const diagnostic of result.diagnostics) compileDiagnostics[diagnostic.code] = (compileDiagnostics[diagnostic.code] ?? 0) + 1
-      rules.push({ group: entry.group, field: entry.field, sourceHash: hash, capabilities: result.rule === undefined ? [] : inspectRuleCapabilities(result.rule), compiled: result.rule !== undefined, diagnostics: result.diagnostics.map((diagnostic) => diagnostic.code) })
+      rules.push({ group: entry.group, field: entry.field, file: item.file, sourceName: source?.bookSourceName ?? '', sourceHash: hash, ruleHash: createHash('sha256').update(entry.value).digest('hex').slice(0, 16), capabilities: result.rule === undefined ? [] : inspectRuleCapabilities(result.rule), compiled: result.rule !== undefined, diagnostics: result.diagnostics.map((diagnostic) => diagnostic.code) })
     }
     sources.push({
       file: item.file,
@@ -187,6 +241,9 @@ export function buildStaticCompatibilityReport(items: readonly SourceFixtureCand
       rules: rules.length,
       compiledRules: rules.filter((rule) => rule.compiled).length,
       uncompiledRules: rules.filter((rule) => !rule.compiled).length,
+      knownUncompiledRules: 0,
+      unexpectedUncompiledRules: rules.filter((rule) => !rule.compiled).length,
+      staleKnownBrokenRules: 0,
       parseableSources: sources.filter((source) => source.parseable).length,
       capabilityCounts: count(rules.flatMap((rule) => rule.capabilities)),
       diagnosticCounts: count(rules.flatMap((rule) => rule.diagnostics)),
@@ -194,5 +251,6 @@ export function buildStaticCompatibilityReport(items: readonly SourceFixtureCand
     },
     sources,
     rules,
+    knownBrokenRules: [],
   }
 }

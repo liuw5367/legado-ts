@@ -22,7 +22,7 @@ export type { NodeSourceRuntimeSnapshot, NodeSourceSession, NodeSourceSessionOpt
 export type { NodeSourceFileHostOptions } from './source-file-host.ts'
 export { readSourcePath, SOURCE_DIRECTORY_MAX_FILES, SOURCE_FILE_MAX_BYTES } from './source-directory.ts'
 export type { SourceDirectoryInput, SourceDirectoryOptions, SourceDirectoryResult } from './source-directory.ts'
-export { buildStaticCompatibilityReport, listSourceFixtureFiles, loadSourceFixtureCandidates, sourceFixtureCandidateId } from './source-compatibility.ts'
+export { buildStaticCompatibilityReport, classifyKnownBrokenRules, listSourceFixtureFiles, loadKnownBrokenRules, loadSourceFixtureCandidates, sourceFixtureCandidateId } from './source-compatibility.ts'
 export { runLiveCompatibility } from './source-compatibility-live.ts'
 export type * from './source-rule-host.ts'
 export type * from './source-compatibility.ts'
