@@ -1,9 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["version", "baseline", "entries"],
+  "required": ["version", "baseline", "entries", "memberCount"],
   "properties": {
-    "version": { "const": 1 },
+    "version": { "const": 2 },
+    "memberCount": { "type": "integer", "minimum": 1 },
     "baseline": {
       "type": "object",
       "required": ["androidCommit", "tutorialSha256"],
@@ -18,7 +19,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "family", "scope", "androidOwner", "androidMethods", "tsPaths", "implementation", "verification", "feasibility", "decision", "divergences"],
+        "required": ["id", "family", "scope", "androidOwner", "androidMethods", "tsPaths", "implementation", "verification", "feasibility", "decision", "divergences", "members"],
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
           "family": { "type": "string", "minLength": 1 },
@@ -32,7 +33,30 @@
           "decision": { "enum": ["fix", "verify", "preserve", "host", "unknown", "out-of-scope"] },
           "divergences": { "type": "array", "items": { "type": "string", "pattern": "^D([0-9]+|OPEN-[0-9]+)$" } },
           "fixtures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-          "errorCodes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          "errorCodes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "members": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "owner", "name", "signature", "parameters", "returnType", "implementation", "verification", "feasibility", "decision", "fixtures", "errorCodes"],
+              "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "owner": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1 },
+                "signature": { "type": "string", "minLength": 1 },
+                "parameters": { "type": "array", "items": { "type": "object" } },
+                "returnType": { "type": "string", "minLength": 1 },
+                "implementation": { "enum": ["implemented", "simulated", "partial", "absent"] },
+                "verification": { "enum": ["unverified", "ts-passed", "ts-diff", "blocked"] },
+                "feasibility": { "enum": ["fixable", "simulatable", "conditional", "real-host", "unknown", "preserve"] },
+                "decision": { "enum": ["fix", "verify", "preserve", "host", "unknown", "out-of-scope"] },
+                "fixtures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "errorCodes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+              },
+              "additionalProperties": false
+            }
+          }
         },
         "additionalProperties": false
       }

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "baseline": {
     "androidCommit": "32a87b253e7cc28273c3850de86242caac83f1fd",
     "tutorialSha256": "11247a43543981fd00d5309d07ecfc4f768b07b0a9586d8b735cac7e91e3493f"
@@ -10,378 +10,4999 @@
       "family": "import",
       "scope": "source-runtime",
       "androidOwner": "BookSource/JsSourceConfig",
-      "androidMethods": ["sourceUrls", "config", "source", "mainJs", "unknown fields"],
-      "tsPaths": ["packages/source-core/src/codec/normalize.ts", "packages/source-core/src/codec/import.ts"],
+      "androidMethods": [
+        "sourceUrls",
+        "config",
+        "source",
+        "mainJs",
+        "unknown fields"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/codec/normalize.ts",
+        "packages/source-core/src/codec/import.ts"
+      ],
       "implementation": "implemented",
       "verification": "ts-passed",
       "feasibility": "fixable",
       "decision": "verify",
-      "divergences": ["D4"],
-      "fixtures": ["IMP-001", "IMP-004", "IMP-005"]
+      "divergences": [
+        "D4"
+      ],
+      "fixtures": [
+        "IMP-001",
+        "IMP-004",
+        "IMP-005"
+      ],
+      "members": [
+        {
+          "id": "import-schema::001-sourceurls",
+          "owner": "BookSource/JsSourceConfig",
+          "name": "sourceUrls",
+          "signature": "sourceUrls",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-001",
+            "IMP-004",
+            "IMP-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "import-schema::002-config",
+          "owner": "BookSource/JsSourceConfig",
+          "name": "config",
+          "signature": "config",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-001",
+            "IMP-004",
+            "IMP-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "import-schema::003-source",
+          "owner": "BookSource/JsSourceConfig",
+          "name": "source",
+          "signature": "source",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-001",
+            "IMP-004",
+            "IMP-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "import-schema::004-mainjs",
+          "owner": "BookSource/JsSourceConfig",
+          "name": "mainJs",
+          "signature": "mainJs",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-001",
+            "IMP-004",
+            "IMP-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "import-schema::005-unknown-fields",
+          "owner": "BookSource/JsSourceConfig",
+          "name": "unknown fields",
+          "signature": "unknown fields",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-001",
+            "IMP-004",
+            "IMP-005"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "parser-default-css",
       "family": "parser",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeByJSoup",
-      "androidMethods": ["class", "tag", "id", "text", "textNodes", "ownText", "html", "all", "eq", "lt", "gt", "containsOwn", "matchesOwn"],
-      "tsPaths": ["packages/source-node/src/html.ts", "packages/source-core/src/rules/compiler.ts", "packages/source-core/src/rules/evaluator.ts"],
+      "androidMethods": [
+        "class",
+        "tag",
+        "id",
+        "text",
+        "textNodes",
+        "ownText",
+        "html",
+        "all",
+        "eq",
+        "lt",
+        "gt",
+        "containsOwn",
+        "matchesOwn"
+      ],
+      "tsPaths": [
+        "packages/source-node/src/html.ts",
+        "packages/source-core/src/rules/compiler.ts",
+        "packages/source-core/src/rules/evaluator.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-diff",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D18", "D19"],
-      "fixtures": ["SCH-001", "SCH-002", "SCH-003"],
-      "errorCodes": ["unsupported-selector", "empty-page"]
+      "divergences": [
+        "D18",
+        "D19"
+      ],
+      "fixtures": [
+        "SCH-001",
+        "SCH-002",
+        "SCH-003"
+      ],
+      "errorCodes": [
+        "unsupported-selector",
+        "empty-page"
+      ],
+      "members": [
+        {
+          "id": "parser-default-css::001-class",
+          "owner": "AnalyzeByJSoup",
+          "name": "class",
+          "signature": "class",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::002-tag",
+          "owner": "AnalyzeByJSoup",
+          "name": "tag",
+          "signature": "tag",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::003-id",
+          "owner": "AnalyzeByJSoup",
+          "name": "id",
+          "signature": "id",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::004-text",
+          "owner": "AnalyzeByJSoup",
+          "name": "text",
+          "signature": "text",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::005-textnodes",
+          "owner": "AnalyzeByJSoup",
+          "name": "textNodes",
+          "signature": "textNodes",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::006-owntext",
+          "owner": "AnalyzeByJSoup",
+          "name": "ownText",
+          "signature": "ownText",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::007-html",
+          "owner": "AnalyzeByJSoup",
+          "name": "html",
+          "signature": "html",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::008-all",
+          "owner": "AnalyzeByJSoup",
+          "name": "all",
+          "signature": "all",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::009-eq",
+          "owner": "AnalyzeByJSoup",
+          "name": "eq",
+          "signature": "eq",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::010-lt",
+          "owner": "AnalyzeByJSoup",
+          "name": "lt",
+          "signature": "lt",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::011-gt",
+          "owner": "AnalyzeByJSoup",
+          "name": "gt",
+          "signature": "gt",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::012-containsown",
+          "owner": "AnalyzeByJSoup",
+          "name": "containsOwn",
+          "signature": "containsOwn",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        },
+        {
+          "id": "parser-default-css::013-matchesown",
+          "owner": "AnalyzeByJSoup",
+          "name": "matchesOwn",
+          "signature": "matchesOwn",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-001",
+            "SCH-002",
+            "SCH-003"
+          ],
+          "errorCodes": [
+            "unsupported-selector",
+            "empty-page"
+          ]
+        }
+      ]
     },
     {
       "id": "parser-xpath",
       "family": "parser",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeByXPath",
-      "androidMethods": ["getElements", "getStringList", "text()", "@attr", "XML fragment"],
-      "tsPaths": ["packages/source-node/src/xpath.ts", "packages/source-core/src/rules/evaluator.ts"],
+      "androidMethods": [
+        "getElements",
+        "getStringList",
+        "text()",
+        "@attr",
+        "XML fragment"
+      ],
+      "tsPaths": [
+        "packages/source-node/src/xpath.ts",
+        "packages/source-core/src/rules/evaluator.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "conditional",
       "decision": "verify",
-      "divergences": ["D19"],
-      "fixtures": ["XPATH-CONTENT-001", "SCH-004"]
+      "divergences": [
+        "D19"
+      ],
+      "fixtures": [
+        "XPATH-CONTENT-001",
+        "SCH-004"
+      ],
+      "members": [
+        {
+          "id": "parser-xpath::001-getelements",
+          "owner": "AnalyzeByXPath",
+          "name": "getElements",
+          "signature": "getElements",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "XPATH-CONTENT-001",
+            "SCH-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "parser-xpath::002-getstringlist",
+          "owner": "AnalyzeByXPath",
+          "name": "getStringList",
+          "signature": "getStringList",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "XPATH-CONTENT-001",
+            "SCH-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "parser-xpath::003-text",
+          "owner": "AnalyzeByXPath",
+          "name": "text()",
+          "signature": "text()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "XPATH-CONTENT-001",
+            "SCH-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "parser-xpath::004-attr",
+          "owner": "AnalyzeByXPath",
+          "name": "@attr",
+          "signature": "@attr",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "XPATH-CONTENT-001",
+            "SCH-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "parser-xpath::005-xml-fragment",
+          "owner": "AnalyzeByXPath",
+          "name": "XML fragment",
+          "signature": "XML fragment",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "XPATH-CONTENT-001",
+            "SCH-004"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "parser-jsonpath",
       "family": "parser",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeByJSonPath",
-      "androidMethods": ["read", "length()", "size()", "keys()", "min()", "max()", "avg()", "sum()", "filter"],
-      "tsPaths": ["packages/source-node/src/jsonpath.ts"],
+      "androidMethods": [
+        "read",
+        "length()",
+        "size()",
+        "keys()",
+        "min()",
+        "max()",
+        "avg()",
+        "sum()",
+        "filter"
+      ],
+      "tsPaths": [
+        "packages/source-node/src/jsonpath.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-diff",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D20"],
-      "fixtures": ["JSON-FLOW-001", "SCH-005"],
-      "errorCodes": ["unsupported-jsonpath", "rule-failed"]
+      "divergences": [
+        "D20"
+      ],
+      "fixtures": [
+        "JSON-FLOW-001",
+        "SCH-005"
+      ],
+      "errorCodes": [
+        "unsupported-jsonpath",
+        "rule-failed"
+      ],
+      "members": [
+        {
+          "id": "parser-jsonpath::001-read",
+          "owner": "AnalyzeByJSonPath",
+          "name": "read",
+          "signature": "read",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::002-length",
+          "owner": "AnalyzeByJSonPath",
+          "name": "length()",
+          "signature": "length()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::003-size",
+          "owner": "AnalyzeByJSonPath",
+          "name": "size()",
+          "signature": "size()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::004-keys",
+          "owner": "AnalyzeByJSonPath",
+          "name": "keys()",
+          "signature": "keys()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::005-min",
+          "owner": "AnalyzeByJSonPath",
+          "name": "min()",
+          "signature": "min()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::006-max",
+          "owner": "AnalyzeByJSonPath",
+          "name": "max()",
+          "signature": "max()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::007-avg",
+          "owner": "AnalyzeByJSonPath",
+          "name": "avg()",
+          "signature": "avg()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::008-sum",
+          "owner": "AnalyzeByJSonPath",
+          "name": "sum()",
+          "signature": "sum()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::009-filter",
+          "owner": "AnalyzeByJSonPath",
+          "name": "filter",
+          "signature": "filter",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "unsupported-jsonpath",
+            "rule-failed"
+          ]
+        }
+      ]
     },
     {
       "id": "parser-regex",
       "family": "parser",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeByRegex/Pattern/Matcher",
-      "androidMethods": ["find", "replace", "group", "inline flags", "quote", "possessive quantifier", "class intersection"],
-      "tsPaths": ["packages/source-core/src/rules/pattern-guard.ts", "packages/source-core/src/rules/evaluator.ts"],
+      "androidMethods": [
+        "find",
+        "replace",
+        "group",
+        "inline flags",
+        "quote",
+        "possessive quantifier",
+        "class intersection"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/rules/pattern-guard.ts",
+        "packages/source-core/src/rules/evaluator.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-diff",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D21"],
-      "fixtures": ["SCH-007", "JS-003"],
-      "errorCodes": ["unsupported-pattern", "invalid-config"]
+      "divergences": [
+        "D21"
+      ],
+      "fixtures": [
+        "SCH-007",
+        "JS-003"
+      ],
+      "errorCodes": [
+        "unsupported-pattern",
+        "invalid-config"
+      ],
+      "members": [
+        {
+          "id": "parser-regex::001-find",
+          "owner": "AnalyzeByRegex/Pattern/Matcher",
+          "name": "find",
+          "signature": "find",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-007",
+            "JS-003"
+          ],
+          "errorCodes": [
+            "unsupported-pattern",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "parser-regex::002-replace",
+          "owner": "AnalyzeByRegex/Pattern/Matcher",
+          "name": "replace",
+          "signature": "replace",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-007",
+            "JS-003"
+          ],
+          "errorCodes": [
+            "unsupported-pattern",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "parser-regex::003-group",
+          "owner": "AnalyzeByRegex/Pattern/Matcher",
+          "name": "group",
+          "signature": "group",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-007",
+            "JS-003"
+          ],
+          "errorCodes": [
+            "unsupported-pattern",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "parser-regex::004-inline-flags",
+          "owner": "AnalyzeByRegex/Pattern/Matcher",
+          "name": "inline flags",
+          "signature": "inline flags",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-007",
+            "JS-003"
+          ],
+          "errorCodes": [
+            "unsupported-pattern",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "parser-regex::005-quote",
+          "owner": "AnalyzeByRegex/Pattern/Matcher",
+          "name": "quote",
+          "signature": "quote",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-007",
+            "JS-003"
+          ],
+          "errorCodes": [
+            "unsupported-pattern",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "parser-regex::006-possessive-quantifier",
+          "owner": "AnalyzeByRegex/Pattern/Matcher",
+          "name": "possessive quantifier",
+          "signature": "possessive quantifier",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-007",
+            "JS-003"
+          ],
+          "errorCodes": [
+            "unsupported-pattern",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "parser-regex::007-class-intersection",
+          "owner": "AnalyzeByRegex/Pattern/Matcher",
+          "name": "class intersection",
+          "signature": "class intersection",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "SCH-007",
+            "JS-003"
+          ],
+          "errorCodes": [
+            "unsupported-pattern",
+            "invalid-config"
+          ]
+        }
+      ]
     },
     {
       "id": "relaxed-json",
       "family": "codec",
       "scope": "source-runtime",
       "androidOwner": "GSON",
-      "androidMethods": ["comments", "single quotes", "unquoted keys", "trailing comma"],
-      "tsPaths": ["packages/source-core/src/codec/relaxed-json.ts"],
+      "androidMethods": [
+        "comments",
+        "single quotes",
+        "unquoted keys",
+        "trailing comma"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/codec/relaxed-json.ts"
+      ],
       "implementation": "implemented",
       "verification": "ts-passed",
       "feasibility": "fixable",
       "decision": "verify",
-      "divergences": ["D38"],
-      "fixtures": ["IMP-005", "SCH-009"],
-      "errorCodes": ["invalid-config"]
+      "divergences": [
+        "D38"
+      ],
+      "fixtures": [
+        "IMP-005",
+        "SCH-009"
+      ],
+      "errorCodes": [
+        "invalid-config"
+      ],
+      "members": [
+        {
+          "id": "relaxed-json::001-comments",
+          "owner": "GSON",
+          "name": "comments",
+          "signature": "comments",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-005",
+            "SCH-009"
+          ],
+          "errorCodes": [
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "relaxed-json::002-single-quotes",
+          "owner": "GSON",
+          "name": "single quotes",
+          "signature": "single quotes",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-005",
+            "SCH-009"
+          ],
+          "errorCodes": [
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "relaxed-json::003-unquoted-keys",
+          "owner": "GSON",
+          "name": "unquoted keys",
+          "signature": "unquoted keys",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-005",
+            "SCH-009"
+          ],
+          "errorCodes": [
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "relaxed-json::004-trailing-comma",
+          "owner": "GSON",
+          "name": "trailing comma",
+          "signature": "trailing comma",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "IMP-005",
+            "SCH-009"
+          ],
+          "errorCodes": [
+            "invalid-config"
+          ]
+        }
+      ]
     },
     {
       "id": "source-javascript",
       "family": "javascript",
       "scope": "source-runtime",
       "androidOwner": "JsSourceEngine",
-      "androidMethods": ["mainJs", "search", "explore", "getBookInfo", "getChapters", "getContent", "getContentBatch", "login"],
-      "tsPaths": ["packages/source-core/src/runtime/javascript.ts", "packages/source-node/src/javascript.ts", "packages/source-node/src/source-rule-host.ts"],
+      "androidMethods": [
+        "mainJs",
+        "search",
+        "explore",
+        "getBookInfo",
+        "getChapters",
+        "getContent",
+        "getContentBatch",
+        "login"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/runtime/javascript.ts",
+        "packages/source-node/src/javascript.ts",
+        "packages/source-node/src/source-rule-host.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-passed",
       "feasibility": "conditional",
       "decision": "verify",
-      "divergences": ["D14", "D25", "D39"],
-      "fixtures": ["JS-TOC-001", "JS-001", "JS-004"],
-      "errorCodes": ["capability-missing", "rule-failed", "cancelled"]
+      "divergences": [
+        "D14",
+        "D25",
+        "D39"
+      ],
+      "fixtures": [
+        "JS-TOC-001",
+        "JS-001",
+        "JS-004"
+      ],
+      "errorCodes": [
+        "capability-missing",
+        "rule-failed",
+        "cancelled"
+      ],
+      "members": [
+        {
+          "id": "source-javascript::001-mainjs",
+          "owner": "JsSourceEngine",
+          "name": "mainJs",
+          "signature": "mainJs",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "source-javascript::002-search",
+          "owner": "JsSourceEngine",
+          "name": "search",
+          "signature": "search",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "source-javascript::003-explore",
+          "owner": "JsSourceEngine",
+          "name": "explore",
+          "signature": "explore",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "source-javascript::004-getbookinfo",
+          "owner": "JsSourceEngine",
+          "name": "getBookInfo",
+          "signature": "getBookInfo",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "source-javascript::005-getchapters",
+          "owner": "JsSourceEngine",
+          "name": "getChapters",
+          "signature": "getChapters",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "source-javascript::006-getcontent",
+          "owner": "JsSourceEngine",
+          "name": "getContent",
+          "signature": "getContent",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "source-javascript::007-getcontentbatch",
+          "owner": "JsSourceEngine",
+          "name": "getContentBatch",
+          "signature": "getContentBatch",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "source-javascript::008-login",
+          "owner": "JsSourceEngine",
+          "name": "login",
+          "signature": "login",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "verify",
+          "fixtures": [
+            "JS-TOC-001",
+            "JS-001",
+            "JS-004"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed",
+            "cancelled"
+          ]
+        }
+      ]
     },
     {
       "id": "analyze-rule-overloads",
       "family": "bridge",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeRule",
-      "androidMethods": ["setContent", "setBaseUrl", "setRedirectUrl", "setLocal", "evalJS", "getString", "getStringList", "getElements", "reGetBook", "refreshTocUrl"],
-      "tsPaths": ["packages/source-core/src/rules/source-runtime.ts", "packages/source-node/src/source-rule-host.ts"],
+      "androidMethods": [
+        "setContent",
+        "setBaseUrl",
+        "setRedirectUrl",
+        "setLocal",
+        "evalJS",
+        "getString",
+        "getStringList",
+        "getElements",
+        "reGetBook",
+        "refreshTocUrl"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/rules/source-runtime.ts",
+        "packages/source-node/src/source-rule-host.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-passed",
       "feasibility": "fixable",
       "decision": "verify",
-      "divergences": ["D23", "D24"],
-      "fixtures": ["JS-004", "SCH-002"],
-      "errorCodes": ["rule-failed", "capability-missing"]
+      "divergences": [
+        "D23",
+        "D24"
+      ],
+      "fixtures": [
+        "JS-004",
+        "SCH-002"
+      ],
+      "errorCodes": [
+        "rule-failed",
+        "capability-missing"
+      ],
+      "members": [
+        {
+          "id": "analyze-rule-overloads::001-setcontent",
+          "owner": "AnalyzeRule",
+          "name": "setContent",
+          "signature": "setContent",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::002-setbaseurl",
+          "owner": "AnalyzeRule",
+          "name": "setBaseUrl",
+          "signature": "setBaseUrl",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::003-setredirecturl",
+          "owner": "AnalyzeRule",
+          "name": "setRedirectUrl",
+          "signature": "setRedirectUrl",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::004-setlocal",
+          "owner": "AnalyzeRule",
+          "name": "setLocal",
+          "signature": "setLocal",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::005-evaljs",
+          "owner": "AnalyzeRule",
+          "name": "evalJS",
+          "signature": "evalJS",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::006-getstring",
+          "owner": "AnalyzeRule",
+          "name": "getString",
+          "signature": "getString",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::007-getstringlist",
+          "owner": "AnalyzeRule",
+          "name": "getStringList",
+          "signature": "getStringList",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::008-getelements",
+          "owner": "AnalyzeRule",
+          "name": "getElements",
+          "signature": "getElements",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::009-regetbook",
+          "owner": "AnalyzeRule",
+          "name": "reGetBook",
+          "signature": "reGetBook",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::010-refreshtocurl",
+          "owner": "AnalyzeRule",
+          "name": "refreshTocUrl",
+          "signature": "refreshTocUrl",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        }
+      ]
     },
     {
       "id": "analyze-url-context",
       "family": "request-script",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeUrl",
-      "androidMethods": ["url", "headerMap", "initUrl", "getHeaderMap", "getStrResponse", "getResponse", "bodyJs", "loginCheckJs"],
-      "tsPaths": ["packages/source-core/src/workflows/source-request.ts", "packages/source-core/src/runtime/request-url.ts"],
+      "androidMethods": [
+        "url",
+        "headerMap",
+        "initUrl",
+        "getHeaderMap",
+        "getStrResponse",
+        "getResponse",
+        "bodyJs",
+        "loginCheckJs"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/workflows/source-request.ts",
+        "packages/source-core/src/runtime/request-url.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-diff",
       "feasibility": "fixable",
       "decision": "fix",
-      "divergences": ["D9", "D22"],
-      "fixtures": ["URL-003", "URL-005", "JS-002"],
-      "errorCodes": ["rule-failed", "cancelled", "capability-missing"]
+      "divergences": [
+        "D9",
+        "D22"
+      ],
+      "fixtures": [
+        "URL-003",
+        "URL-005",
+        "JS-002"
+      ],
+      "errorCodes": [
+        "rule-failed",
+        "cancelled",
+        "capability-missing"
+      ],
+      "members": [
+        {
+          "id": "analyze-url-context::001-url",
+          "owner": "AnalyzeUrl",
+          "name": "url",
+          "signature": "url",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::002-headermap",
+          "owner": "AnalyzeUrl",
+          "name": "headerMap",
+          "signature": "headerMap",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::003-initurl",
+          "owner": "AnalyzeUrl",
+          "name": "initUrl",
+          "signature": "initUrl",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::004-getheadermap",
+          "owner": "AnalyzeUrl",
+          "name": "getHeaderMap",
+          "signature": "getHeaderMap",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::005-getstrresponse",
+          "owner": "AnalyzeUrl",
+          "name": "getStrResponse",
+          "signature": "getStrResponse",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::006-getresponse",
+          "owner": "AnalyzeUrl",
+          "name": "getResponse",
+          "signature": "getResponse",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::007-bodyjs",
+          "owner": "AnalyzeUrl",
+          "name": "bodyJs",
+          "signature": "bodyJs",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::008-logincheckjs",
+          "owner": "AnalyzeUrl",
+          "name": "loginCheckJs",
+          "signature": "loginCheckJs",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        }
+      ]
     },
     {
       "id": "network-basic",
       "family": "request",
       "scope": "source-runtime",
       "androidOwner": "JsExtensions/AnalyzeUrl",
-      "androidMethods": ["get", "post", "head", "connect", "ajax", "ajaxAll", "ajaxTestAll"],
-      "tsPaths": ["packages/source-core/src/workflows/source-request.ts", "packages/source-node/src/source-request-host.ts"],
+      "androidMethods": [
+        "get",
+        "post",
+        "head",
+        "connect",
+        "ajax",
+        "ajaxAll",
+        "ajaxTestAll"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/workflows/source-request.ts",
+        "packages/source-node/src/source-request-host.ts"
+      ],
       "implementation": "implemented",
       "verification": "ts-passed",
       "feasibility": "fixable",
       "decision": "verify",
-      "divergences": ["D14", "D22"],
-      "fixtures": ["URL-001", "URL-002", "JS-002"]
+      "divergences": [
+        "D14",
+        "D22"
+      ],
+      "fixtures": [
+        "URL-001",
+        "URL-002",
+        "JS-002"
+      ],
+      "members": [
+        {
+          "id": "network-basic::001-get",
+          "owner": "JsExtensions/AnalyzeUrl",
+          "name": "get",
+          "signature": "get",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-001",
+            "URL-002",
+            "JS-002"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-basic::002-post",
+          "owner": "JsExtensions/AnalyzeUrl",
+          "name": "post",
+          "signature": "post",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-001",
+            "URL-002",
+            "JS-002"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-basic::003-head",
+          "owner": "JsExtensions/AnalyzeUrl",
+          "name": "head",
+          "signature": "head",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-001",
+            "URL-002",
+            "JS-002"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-basic::004-connect",
+          "owner": "JsExtensions/AnalyzeUrl",
+          "name": "connect",
+          "signature": "connect",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-001",
+            "URL-002",
+            "JS-002"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-basic::005-ajax",
+          "owner": "JsExtensions/AnalyzeUrl",
+          "name": "ajax",
+          "signature": "ajax",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-001",
+            "URL-002",
+            "JS-002"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-basic::006-ajaxall",
+          "owner": "JsExtensions/AnalyzeUrl",
+          "name": "ajaxAll",
+          "signature": "ajaxAll",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-001",
+            "URL-002",
+            "JS-002"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-basic::007-ajaxtestall",
+          "owner": "JsExtensions/AnalyzeUrl",
+          "name": "ajaxTestAll",
+          "signature": "ajaxTestAll",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-001",
+            "URL-002",
+            "JS-002"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "network-options",
       "family": "request",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeUrl",
-      "androidMethods": ["method", "body", "headers", "charset", "timeout", "followRedirects", "retry", "dnsIp", "proxy", "type"],
-      "tsPaths": ["packages/source-core/src/runtime/request-plan.ts", "packages/source-core/src/workflows/source-request.ts"],
+      "androidMethods": [
+        "method",
+        "body",
+        "headers",
+        "charset",
+        "timeout",
+        "followRedirects",
+        "retry",
+        "dnsIp",
+        "proxy",
+        "type"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/runtime/request-plan.ts",
+        "packages/source-core/src/workflows/source-request.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-diff",
       "feasibility": "fixable",
       "decision": "fix",
-      "divergences": ["D8", "D22", "D30"],
-      "fixtures": ["URL-002", "URL-004", "URL-005", "URL-007"],
-      "errorCodes": ["invalid-config", "capability-missing", "cancelled"]
+      "divergences": [
+        "D8",
+        "D22",
+        "D30"
+      ],
+      "fixtures": [
+        "URL-002",
+        "URL-004",
+        "URL-005",
+        "URL-007"
+      ],
+      "errorCodes": [
+        "invalid-config",
+        "capability-missing",
+        "cancelled"
+      ],
+      "members": [
+        {
+          "id": "network-options::001-method",
+          "owner": "AnalyzeUrl",
+          "name": "method",
+          "signature": "method",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::002-body",
+          "owner": "AnalyzeUrl",
+          "name": "body",
+          "signature": "body",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::003-headers",
+          "owner": "AnalyzeUrl",
+          "name": "headers",
+          "signature": "headers",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::004-charset",
+          "owner": "AnalyzeUrl",
+          "name": "charset",
+          "signature": "charset",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::005-timeout",
+          "owner": "AnalyzeUrl",
+          "name": "timeout",
+          "signature": "timeout",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::006-followredirects",
+          "owner": "AnalyzeUrl",
+          "name": "followRedirects",
+          "signature": "followRedirects",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::007-retry",
+          "owner": "AnalyzeUrl",
+          "name": "retry",
+          "signature": "retry",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::008-dnsip",
+          "owner": "AnalyzeUrl",
+          "name": "dnsIp",
+          "signature": "dnsIp",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::009-proxy",
+          "owner": "AnalyzeUrl",
+          "name": "proxy",
+          "signature": "proxy",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        },
+        {
+          "id": "network-options::010-type",
+          "owner": "AnalyzeUrl",
+          "name": "type",
+          "signature": "type",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-002",
+            "URL-004",
+            "URL-005",
+            "URL-007"
+          ],
+          "errorCodes": [
+            "invalid-config",
+            "capability-missing",
+            "cancelled"
+          ]
+        }
+      ]
     },
     {
       "id": "network-login-cookie",
       "family": "request-state",
       "scope": "source-runtime",
       "androidOwner": "BaseSource/CookieStore",
-      "androidMethods": ["getLoginHeader", "getLoginHeaderMap", "putLoginHeader", "removeLoginHeader", "getCookie", "setCookie", "clear"],
-      "tsPaths": ["packages/source-core/src/workflows/source-request.ts", "packages/source-node/src/cookies.ts", "packages/source-node/src/source-session.ts"],
+      "androidMethods": [
+        "getLoginHeader",
+        "getLoginHeaderMap",
+        "putLoginHeader",
+        "removeLoginHeader",
+        "getCookie",
+        "setCookie",
+        "clear"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/workflows/source-request.ts",
+        "packages/source-node/src/cookies.ts",
+        "packages/source-node/src/source-session.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-diff",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D5", "D27", "D28"],
-      "fixtures": ["URL-003", "JS-005", "STATE-001"]
+      "divergences": [
+        "D5",
+        "D27",
+        "D28"
+      ],
+      "fixtures": [
+        "URL-003",
+        "JS-005",
+        "STATE-001"
+      ],
+      "members": [
+        {
+          "id": "network-login-cookie::001-getloginheader",
+          "owner": "BaseSource/CookieStore",
+          "name": "getLoginHeader",
+          "signature": "getLoginHeader",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "JS-005",
+            "STATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-login-cookie::002-getloginheadermap",
+          "owner": "BaseSource/CookieStore",
+          "name": "getLoginHeaderMap",
+          "signature": "getLoginHeaderMap",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "JS-005",
+            "STATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-login-cookie::003-putloginheader",
+          "owner": "BaseSource/CookieStore",
+          "name": "putLoginHeader",
+          "signature": "putLoginHeader",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "JS-005",
+            "STATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-login-cookie::004-removeloginheader",
+          "owner": "BaseSource/CookieStore",
+          "name": "removeLoginHeader",
+          "signature": "removeLoginHeader",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "JS-005",
+            "STATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-login-cookie::005-getcookie",
+          "owner": "BaseSource/CookieStore",
+          "name": "getCookie",
+          "signature": "getCookie",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "JS-005",
+            "STATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-login-cookie::006-setcookie",
+          "owner": "BaseSource/CookieStore",
+          "name": "setCookie",
+          "signature": "setCookie",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "JS-005",
+            "STATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "network-login-cookie::007-clear",
+          "owner": "BaseSource/CookieStore",
+          "name": "clear",
+          "signature": "clear",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "URL-003",
+            "JS-005",
+            "STATE-001"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "response-objects",
       "family": "response",
       "scope": "source-runtime",
       "androidOwner": "StrResponse/Connection.Response",
-      "androidMethods": ["body", "bytes", "status", "code", "headers", "url", "redirected", "errorBody", "callTime"],
-      "tsPaths": ["packages/source-core/src/runtime/contracts.ts", "packages/source-node/src/source-request-host.ts", "packages/source-core/src/rules/source-runtime.ts"],
+      "androidMethods": [
+        "body",
+        "bytes",
+        "status",
+        "code",
+        "headers",
+        "url",
+        "redirected",
+        "errorBody",
+        "callTime"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/runtime/contracts.ts",
+        "packages/source-node/src/source-request-host.ts",
+        "packages/source-core/src/rules/source-runtime.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "fixable",
       "decision": "verify",
-      "divergences": ["D14", "D24"],
-      "fixtures": ["URL-008", "JS-004"]
+      "divergences": [
+        "D14",
+        "D24"
+      ],
+      "fixtures": [
+        "URL-008",
+        "JS-004"
+      ],
+      "members": [
+        {
+          "id": "response-objects::001-body",
+          "owner": "StrResponse/Connection.Response",
+          "name": "body",
+          "signature": "body",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::002-bytes",
+          "owner": "StrResponse/Connection.Response",
+          "name": "bytes",
+          "signature": "bytes",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::003-status",
+          "owner": "StrResponse/Connection.Response",
+          "name": "status",
+          "signature": "status",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::004-code",
+          "owner": "StrResponse/Connection.Response",
+          "name": "code",
+          "signature": "code",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::005-headers",
+          "owner": "StrResponse/Connection.Response",
+          "name": "headers",
+          "signature": "headers",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::006-url",
+          "owner": "StrResponse/Connection.Response",
+          "name": "url",
+          "signature": "url",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::007-redirected",
+          "owner": "StrResponse/Connection.Response",
+          "name": "redirected",
+          "signature": "redirected",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::008-errorbody",
+          "owner": "StrResponse/Connection.Response",
+          "name": "errorBody",
+          "signature": "errorBody",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "response-objects::009-calltime",
+          "owner": "StrResponse/Connection.Response",
+          "name": "callTime",
+          "signature": "callTime",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-008",
+            "JS-004"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "rate-limit-cancel",
       "family": "lifecycle",
       "scope": "source-runtime",
       "androidOwner": "ConcurrentRateLimiter/Coroutine",
-      "androidMethods": ["concurrentRate", "skipRateLimit", "singleFlight", "lock", "tick", "cancel"],
-      "tsPaths": ["packages/source-core/src/runtime/source-rate-limiter.ts", "packages/source-core/src/runtime/concurrency.ts", "packages/source-core/src/runtime/source-session.ts"],
+      "androidMethods": [
+        "concurrentRate",
+        "skipRateLimit",
+        "singleFlight",
+        "lock",
+        "tick",
+        "cancel"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/runtime/source-rate-limiter.ts",
+        "packages/source-core/src/runtime/concurrency.ts",
+        "packages/source-core/src/runtime/source-session.ts"
+      ],
       "implementation": "implemented",
       "verification": "unverified",
       "feasibility": "fixable",
       "decision": "verify",
-      "divergences": ["D7", "D10", "D11", "D13"],
-      "fixtures": ["URL-004", "URL-007", "FLOW-CANCEL-001"]
+      "divergences": [
+        "D7",
+        "D10",
+        "D11",
+        "D13"
+      ],
+      "fixtures": [
+        "URL-004",
+        "URL-007",
+        "FLOW-CANCEL-001"
+      ],
+      "members": [
+        {
+          "id": "rate-limit-cancel::001-concurrentrate",
+          "owner": "ConcurrentRateLimiter/Coroutine",
+          "name": "concurrentRate",
+          "signature": "concurrentRate",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-004",
+            "URL-007",
+            "FLOW-CANCEL-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "rate-limit-cancel::002-skipratelimit",
+          "owner": "ConcurrentRateLimiter/Coroutine",
+          "name": "skipRateLimit",
+          "signature": "skipRateLimit",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-004",
+            "URL-007",
+            "FLOW-CANCEL-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "rate-limit-cancel::003-singleflight",
+          "owner": "ConcurrentRateLimiter/Coroutine",
+          "name": "singleFlight",
+          "signature": "singleFlight",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-004",
+            "URL-007",
+            "FLOW-CANCEL-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "rate-limit-cancel::004-lock",
+          "owner": "ConcurrentRateLimiter/Coroutine",
+          "name": "lock",
+          "signature": "lock",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-004",
+            "URL-007",
+            "FLOW-CANCEL-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "rate-limit-cancel::005-tick",
+          "owner": "ConcurrentRateLimiter/Coroutine",
+          "name": "tick",
+          "signature": "tick",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-004",
+            "URL-007",
+            "FLOW-CANCEL-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "rate-limit-cancel::006-cancel",
+          "owner": "ConcurrentRateLimiter/Coroutine",
+          "name": "cancel",
+          "signature": "cancel",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "URL-004",
+            "URL-007",
+            "FLOW-CANCEL-001"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "source-state",
       "family": "state",
       "scope": "source-runtime",
       "androidOwner": "BaseSource/JsSourceEngine",
-      "androidMethods": ["setVariable", "putVariable", "getVariable", "put", "get", "refreshJSLib", "jsLib"],
-      "tsPaths": ["packages/source-core/src/runtime/source-session.ts", "packages/source-core/src/rules/source-runtime.ts", "packages/source-node/src/source-session.ts"],
+      "androidMethods": [
+        "setVariable",
+        "putVariable",
+        "getVariable",
+        "put",
+        "get",
+        "refreshJSLib",
+        "jsLib"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/runtime/source-session.ts",
+        "packages/source-core/src/rules/source-runtime.ts",
+        "packages/source-node/src/source-session.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-passed",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D28", "D39", "D40"],
-      "fixtures": ["STATE-001", "STATE-002", "JS-006"]
+      "divergences": [
+        "D28",
+        "D39",
+        "D40"
+      ],
+      "fixtures": [
+        "STATE-001",
+        "STATE-002",
+        "JS-006"
+      ],
+      "members": [
+        {
+          "id": "source-state::001-setvariable",
+          "owner": "BaseSource/JsSourceEngine",
+          "name": "setVariable",
+          "signature": "setVariable",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-001",
+            "STATE-002",
+            "JS-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "source-state::002-putvariable",
+          "owner": "BaseSource/JsSourceEngine",
+          "name": "putVariable",
+          "signature": "putVariable",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-001",
+            "STATE-002",
+            "JS-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "source-state::003-getvariable",
+          "owner": "BaseSource/JsSourceEngine",
+          "name": "getVariable",
+          "signature": "getVariable",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-001",
+            "STATE-002",
+            "JS-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "source-state::004-put",
+          "owner": "BaseSource/JsSourceEngine",
+          "name": "put",
+          "signature": "put",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-001",
+            "STATE-002",
+            "JS-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "source-state::005-get",
+          "owner": "BaseSource/JsSourceEngine",
+          "name": "get",
+          "signature": "get",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-001",
+            "STATE-002",
+            "JS-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "source-state::006-refreshjslib",
+          "owner": "BaseSource/JsSourceEngine",
+          "name": "refreshJSLib",
+          "signature": "refreshJSLib",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-001",
+            "STATE-002",
+            "JS-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "source-state::007-jslib",
+          "owner": "BaseSource/JsSourceEngine",
+          "name": "jsLib",
+          "signature": "jsLib",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-001",
+            "STATE-002",
+            "JS-006"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "cache-info-map",
       "family": "state",
       "scope": "source-runtime",
       "androidOwner": "CacheManager/InfoMap",
-      "androidMethods": ["cache.get", "cache.put", "cache.delete", "cacheContent", "infoMap.get", "infoMap.set", "infoMap.save", "infoMap.saveNow"],
-      "tsPaths": ["packages/source-core/src/runtime/contracts.ts", "packages/source-core/src/workflows/types.ts", "packages/source-core/src/workflows/discovery.ts"],
+      "androidMethods": [
+        "cache.get",
+        "cache.put",
+        "cache.delete",
+        "cacheContent",
+        "infoMap.get",
+        "infoMap.set",
+        "infoMap.save",
+        "infoMap.saveNow"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/runtime/contracts.ts",
+        "packages/source-core/src/workflows/types.ts",
+        "packages/source-core/src/workflows/discovery.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-diff",
       "feasibility": "fixable",
       "decision": "fix",
-      "divergences": ["D26", "D31", "D40"],
-      "fixtures": ["STATE-003", "EXP-003", "FLOW-012"]
+      "divergences": [
+        "D26",
+        "D31",
+        "D40"
+      ],
+      "fixtures": [
+        "STATE-003",
+        "EXP-003",
+        "FLOW-012"
+      ],
+      "members": [
+        {
+          "id": "cache-info-map::001-cache-get",
+          "owner": "CacheManager/InfoMap",
+          "name": "cache.get",
+          "signature": "cache.get",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "cache-info-map::002-cache-put",
+          "owner": "CacheManager/InfoMap",
+          "name": "cache.put",
+          "signature": "cache.put",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "cache-info-map::003-cache-delete",
+          "owner": "CacheManager/InfoMap",
+          "name": "cache.delete",
+          "signature": "cache.delete",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "cache-info-map::004-cachecontent",
+          "owner": "CacheManager/InfoMap",
+          "name": "cacheContent",
+          "signature": "cacheContent",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "cache-info-map::005-infomap-get",
+          "owner": "CacheManager/InfoMap",
+          "name": "infoMap.get",
+          "signature": "infoMap.get",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "cache-info-map::006-infomap-set",
+          "owner": "CacheManager/InfoMap",
+          "name": "infoMap.set",
+          "signature": "infoMap.set",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "cache-info-map::007-infomap-save",
+          "owner": "CacheManager/InfoMap",
+          "name": "infoMap.save",
+          "signature": "infoMap.save",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "cache-info-map::008-infomap-savenow",
+          "owner": "CacheManager/InfoMap",
+          "name": "infoMap.saveNow",
+          "signature": "infoMap.saveNow",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-diff",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "STATE-003",
+            "EXP-003",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "file-archive",
       "family": "file",
       "scope": "source-runtime",
       "androidOwner": "JsExtensions/FileUtils/ArchiveUtils",
-      "androidMethods": ["getFile", "readFile", "readTxtFile", "deleteFile", "cacheFile", "downloadFile", "unzipFile", "un7zFile", "unrarFile", "unArchiveFile"],
-      "tsPaths": ["packages/source-node/src/source-file-host.ts", "packages/source-core/src/runtime/contracts.ts"],
+      "androidMethods": [
+        "getFile",
+        "readFile",
+        "readTxtFile",
+        "deleteFile",
+        "cacheFile",
+        "downloadFile",
+        "unzipFile",
+        "un7zFile",
+        "unrarFile",
+        "unArchiveFile"
+      ],
+      "tsPaths": [
+        "packages/source-node/src/source-file-host.ts",
+        "packages/source-core/src/runtime/contracts.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D29", "D30", "D43"],
-      "fixtures": ["FILE-001", "FILE-002", "FILE-003"],
-      "errorCodes": ["capability-missing", "invalid-config"]
+      "divergences": [
+        "D29",
+        "D30",
+        "D43"
+      ],
+      "fixtures": [
+        "FILE-001",
+        "FILE-002",
+        "FILE-003"
+      ],
+      "errorCodes": [
+        "capability-missing",
+        "invalid-config"
+      ],
+      "members": [
+        {
+          "id": "file-archive::001-getfile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "getFile",
+          "signature": "getFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::002-readfile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "readFile",
+          "signature": "readFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::003-readtxtfile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "readTxtFile",
+          "signature": "readTxtFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::004-deletefile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "deleteFile",
+          "signature": "deleteFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::005-cachefile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "cacheFile",
+          "signature": "cacheFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::006-downloadfile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "downloadFile",
+          "signature": "downloadFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::007-unzipfile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "unzipFile",
+          "signature": "unzipFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::008-un7zfile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "un7zFile",
+          "signature": "un7zFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::009-unrarfile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "unrarFile",
+          "signature": "unrarFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        },
+        {
+          "id": "file-archive::010-unarchivefile",
+          "owner": "JsExtensions/FileUtils/ArchiveUtils",
+          "name": "unArchiveFile",
+          "signature": "unArchiveFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FILE-001",
+            "FILE-002",
+            "FILE-003"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "invalid-config"
+          ]
+        }
+      ]
     },
     {
       "id": "discovery-workflow",
       "family": "workflow",
       "scope": "source-runtime",
       "androidOwner": "JsSourceEngine/ExploreKind",
-      "androidMethods": ["exploreUrl", "explore", "ExploreKind", "nextPageUrl", "ruleExplore", "ruleSearch"],
-      "tsPaths": ["packages/source-core/src/workflows/discovery.ts", "packages/source-core/src/workflows/types.ts"],
+      "androidMethods": [
+        "exploreUrl",
+        "explore",
+        "ExploreKind",
+        "nextPageUrl",
+        "ruleExplore",
+        "ruleSearch"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/workflows/discovery.ts",
+        "packages/source-core/src/workflows/types.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "fixable",
       "decision": "fix",
-      "divergences": ["D31", "D40"],
-      "fixtures": ["EXP-001", "EXP-004", "EXP-005", "EXP-006"]
+      "divergences": [
+        "D31",
+        "D40"
+      ],
+      "fixtures": [
+        "EXP-001",
+        "EXP-004",
+        "EXP-005",
+        "EXP-006"
+      ],
+      "members": [
+        {
+          "id": "discovery-workflow::001-exploreurl",
+          "owner": "JsSourceEngine/ExploreKind",
+          "name": "exploreUrl",
+          "signature": "exploreUrl",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "EXP-001",
+            "EXP-004",
+            "EXP-005",
+            "EXP-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "discovery-workflow::002-explore",
+          "owner": "JsSourceEngine/ExploreKind",
+          "name": "explore",
+          "signature": "explore",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "EXP-001",
+            "EXP-004",
+            "EXP-005",
+            "EXP-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "discovery-workflow::003-explorekind",
+          "owner": "JsSourceEngine/ExploreKind",
+          "name": "ExploreKind",
+          "signature": "ExploreKind",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "EXP-001",
+            "EXP-004",
+            "EXP-005",
+            "EXP-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "discovery-workflow::004-nextpageurl",
+          "owner": "JsSourceEngine/ExploreKind",
+          "name": "nextPageUrl",
+          "signature": "nextPageUrl",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "EXP-001",
+            "EXP-004",
+            "EXP-005",
+            "EXP-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "discovery-workflow::005-ruleexplore",
+          "owner": "JsSourceEngine/ExploreKind",
+          "name": "ruleExplore",
+          "signature": "ruleExplore",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "EXP-001",
+            "EXP-004",
+            "EXP-005",
+            "EXP-006"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "discovery-workflow::006-rulesearch",
+          "owner": "JsSourceEngine/ExploreKind",
+          "name": "ruleSearch",
+          "signature": "ruleSearch",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "EXP-001",
+            "EXP-004",
+            "EXP-005",
+            "EXP-006"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "search-toc-content",
       "family": "workflow",
       "scope": "source-runtime",
       "androidOwner": "Search/WebBook/BookContent",
-      "androidMethods": ["search", "getBookInfo", "getChapters", "getContent", "getContentBatch", "subContent", "replaceRegex", "cacheContent"],
-      "tsPaths": ["packages/source-core/src/workflows/discovery.ts", "packages/source-core/src/workflows/reading.ts", "packages/source-core/src/workflows/toc-reconcile.ts"],
+      "androidMethods": [
+        "search",
+        "getBookInfo",
+        "getChapters",
+        "getContent",
+        "getContentBatch",
+        "subContent",
+        "replaceRegex",
+        "cacheContent"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/workflows/discovery.ts",
+        "packages/source-core/src/workflows/reading.ts",
+        "packages/source-core/src/workflows/toc-reconcile.ts"
+      ],
       "implementation": "implemented",
       "verification": "ts-passed",
       "feasibility": "fixable",
       "decision": "verify",
-      "divergences": ["D11", "D15", "D16"],
-      "fixtures": ["FLOW-001", "FLOW-004", "FLOW-006", "FLOW-009", "FLOW-012"]
+      "divergences": [
+        "D11",
+        "D15",
+        "D16"
+      ],
+      "fixtures": [
+        "FLOW-001",
+        "FLOW-004",
+        "FLOW-006",
+        "FLOW-009",
+        "FLOW-012"
+      ],
+      "members": [
+        {
+          "id": "search-toc-content::001-search",
+          "owner": "Search/WebBook/BookContent",
+          "name": "search",
+          "signature": "search",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "search-toc-content::002-getbookinfo",
+          "owner": "Search/WebBook/BookContent",
+          "name": "getBookInfo",
+          "signature": "getBookInfo",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "search-toc-content::003-getchapters",
+          "owner": "Search/WebBook/BookContent",
+          "name": "getChapters",
+          "signature": "getChapters",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "search-toc-content::004-getcontent",
+          "owner": "Search/WebBook/BookContent",
+          "name": "getContent",
+          "signature": "getContent",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "search-toc-content::005-getcontentbatch",
+          "owner": "Search/WebBook/BookContent",
+          "name": "getContentBatch",
+          "signature": "getContentBatch",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "search-toc-content::006-subcontent",
+          "owner": "Search/WebBook/BookContent",
+          "name": "subContent",
+          "signature": "subContent",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "search-toc-content::007-replaceregex",
+          "owner": "Search/WebBook/BookContent",
+          "name": "replaceRegex",
+          "signature": "replaceRegex",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "search-toc-content::008-cachecontent",
+          "owner": "Search/WebBook/BookContent",
+          "name": "cacheContent",
+          "signature": "cacheContent",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "FLOW-001",
+            "FLOW-004",
+            "FLOW-006",
+            "FLOW-009",
+            "FLOW-012"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "java-collections-string",
       "family": "bridge",
       "scope": "source-runtime",
       "androidOwner": "Rhino/Java wrappers",
-      "androidMethods": ["Map.get", "Map.put", "Map.putAll", "List.get", "List.size", "String.length", "String.split", "String.replace", "String.getBytes"],
-      "tsPaths": ["packages/source-core/src/rules/source-runtime.ts", "packages/source-node/src/javascript.ts"],
+      "androidMethods": [
+        "Map.get",
+        "Map.put",
+        "Map.putAll",
+        "List.get",
+        "List.size",
+        "String.length",
+        "String.split",
+        "String.replace",
+        "String.getBytes"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/rules/source-runtime.ts",
+        "packages/source-node/src/javascript.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-passed",
       "feasibility": "simulatable",
       "decision": "fix",
-      "divergences": ["D24", "D34"],
-      "fixtures": ["JS-004", "JS-007"],
-      "errorCodes": ["unsupported-java-class", "rule-failed"]
+      "divergences": [
+        "D24",
+        "D34"
+      ],
+      "fixtures": [
+        "JS-004",
+        "JS-007"
+      ],
+      "errorCodes": [
+        "unsupported-java-class",
+        "rule-failed"
+      ],
+      "members": [
+        {
+          "id": "java-collections-string::001-map-get",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.get",
+          "signature": "Map.get",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::002-map-put",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.put",
+          "signature": "Map.put",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::003-map-putall",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.putAll",
+          "signature": "Map.putAll",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::004-list-get",
+          "owner": "Rhino/Java wrappers",
+          "name": "List.get",
+          "signature": "List.get",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::005-list-size",
+          "owner": "Rhino/Java wrappers",
+          "name": "List.size",
+          "signature": "List.size",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::006-string-length",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.length",
+          "signature": "String.length",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::007-string-split",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.split",
+          "signature": "String.split",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::008-string-replace",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.replace",
+          "signature": "String.replace",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::009-string-getbytes",
+          "owner": "Rhino/Java wrappers",
+          "name": "String.getBytes",
+          "signature": "String.getBytes",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        }
+      ]
     },
     {
       "id": "java-importer-classes",
       "family": "bridge",
       "scope": "source-runtime",
       "androidOwner": "JavaImporter/Packages/JavaAdapter",
-      "androidMethods": ["java.lang.String", "java.lang.StringBuilder", "java.security.MessageDigest", "java.util.HashMap", "java.util.ArrayList", "java.net.URL", "java.io.ByteArrayInputStream", "Pattern", "Matcher"],
-      "tsPaths": ["packages/source-core/src/rules/source-runtime.ts", "packages/source-node/src/source-rule-host.ts"],
+      "androidMethods": [
+        "java.lang.String",
+        "java.lang.StringBuilder",
+        "java.security.MessageDigest",
+        "java.util.HashMap",
+        "java.util.ArrayList",
+        "java.net.URL",
+        "java.io.ByteArrayInputStream",
+        "Pattern",
+        "Matcher"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/rules/source-runtime.ts",
+        "packages/source-node/src/source-rule-host.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "simulatable",
       "decision": "fix",
-      "divergences": ["D34"],
-      "fixtures": ["JS-008"],
-      "errorCodes": ["unsupported-java-class", "unsupported-java-interface"]
+      "divergences": [
+        "D34"
+      ],
+      "fixtures": [
+        "JS-008"
+      ],
+      "errorCodes": [
+        "unsupported-java-class",
+        "unsupported-java-interface"
+      ],
+      "members": [
+        {
+          "id": "java-importer-classes::001-java-lang-string",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "java.lang.String",
+          "signature": "java.lang.String",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::002-java-lang-stringbuilder",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "java.lang.StringBuilder",
+          "signature": "java.lang.StringBuilder",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::003-java-security-messagedigest",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "java.security.MessageDigest",
+          "signature": "java.security.MessageDigest",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::004-java-util-hashmap",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "java.util.HashMap",
+          "signature": "java.util.HashMap",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::005-java-util-arraylist",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "java.util.ArrayList",
+          "signature": "java.util.ArrayList",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::006-java-net-url",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "java.net.URL",
+          "signature": "java.net.URL",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::007-java-io-bytearrayinputstream",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "java.io.ByteArrayInputStream",
+          "signature": "java.io.ByteArrayInputStream",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::008-pattern",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "Pattern",
+          "signature": "Pattern",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::009-matcher",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "Matcher",
+          "signature": "Matcher",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "JS-008"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "unsupported-java-interface"
+          ]
+        }
+      ]
     },
     {
       "id": "crypto-encoding-date",
       "family": "extension",
       "scope": "source-runtime",
       "androidOwner": "JsExtensions/JsEncodeUtils",
-      "androidMethods": ["strToBytes", "bytesToStr", "base64Decode", "base64Encode", "hexDecodeToByteArray", "hexEncodeToString", "md5", "timeFormat", "timeFormatUTC", "encodeURI", "t2s", "s2t"],
-      "tsPaths": ["packages/source-node/src/crypto.ts", "packages/source-node/src/runtime-platform.ts", "packages/source-core/src/rules/source-runtime.ts"],
+      "androidMethods": [
+        "strToBytes",
+        "bytesToStr",
+        "base64Decode",
+        "base64Encode",
+        "hexDecodeToByteArray",
+        "hexEncodeToString",
+        "md5",
+        "timeFormat",
+        "timeFormatUTC",
+        "encodeURI",
+        "t2s",
+        "s2t"
+      ],
+      "tsPaths": [
+        "packages/source-node/src/crypto.ts",
+        "packages/source-node/src/runtime-platform.ts",
+        "packages/source-core/src/rules/source-runtime.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D32", "D33", "D36", "D38"],
-      "fixtures": ["CRYPTO-001", "CRYPTO-002", "DATE-001"]
+      "divergences": [
+        "D32",
+        "D33",
+        "D36",
+        "D38"
+      ],
+      "fixtures": [
+        "CRYPTO-001",
+        "CRYPTO-002",
+        "DATE-001"
+      ],
+      "members": [
+        {
+          "id": "crypto-encoding-date::001-strtobytes",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "strToBytes",
+          "signature": "strToBytes",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::002-bytestostr",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "bytesToStr",
+          "signature": "bytesToStr",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::003-base64decode",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "base64Decode",
+          "signature": "base64Decode",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::004-base64encode",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "base64Encode",
+          "signature": "base64Encode",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::005-hexdecodetobytearray",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "hexDecodeToByteArray",
+          "signature": "hexDecodeToByteArray",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::006-hexencodetostring",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "hexEncodeToString",
+          "signature": "hexEncodeToString",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::007-md5",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "md5",
+          "signature": "md5",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::008-timeformat",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "timeFormat",
+          "signature": "timeFormat",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::009-timeformatutc",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "timeFormatUTC",
+          "signature": "timeFormatUTC",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::010-encodeuri",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "encodeURI",
+          "signature": "encodeURI",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::011-t2s",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "t2s",
+          "signature": "t2s",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "crypto-encoding-date::012-s2t",
+          "owner": "JsExtensions/JsEncodeUtils",
+          "name": "s2t",
+          "signature": "s2t",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "CRYPTO-001",
+            "CRYPTO-002",
+            "DATE-001"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "font-query",
       "family": "font",
       "scope": "source-runtime",
       "androidOwner": "QueryTTF",
-      "androidMethods": ["queryBase64TTF", "queryTTF", "replaceFont", "getUnicodeByGlyf", "getGlyfByUnicode"],
-      "tsPaths": ["packages/source-node/src/font.ts", "packages/source-core/src/runtime/font.ts"],
+      "androidMethods": [
+        "queryBase64TTF",
+        "queryTTF",
+        "replaceFont",
+        "getUnicodeByGlyf",
+        "getGlyfByUnicode"
+      ],
+      "tsPaths": [
+        "packages/source-node/src/font.ts",
+        "packages/source-core/src/runtime/font.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "conditional",
       "decision": "fix",
-      "divergences": ["D35"],
-      "fixtures": ["FONT-001"],
-      "errorCodes": ["unsupported-font", "font-budget-exceeded"]
+      "divergences": [
+        "D35"
+      ],
+      "fixtures": [
+        "FONT-001"
+      ],
+      "errorCodes": [
+        "unsupported-font",
+        "font-budget-exceeded"
+      ],
+      "members": [
+        {
+          "id": "font-query::001-querybase64ttf",
+          "owner": "QueryTTF",
+          "name": "queryBase64TTF",
+          "signature": "queryBase64TTF",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FONT-001"
+          ],
+          "errorCodes": [
+            "unsupported-font",
+            "font-budget-exceeded"
+          ]
+        },
+        {
+          "id": "font-query::002-queryttf",
+          "owner": "QueryTTF",
+          "name": "queryTTF",
+          "signature": "queryTTF",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FONT-001"
+          ],
+          "errorCodes": [
+            "unsupported-font",
+            "font-budget-exceeded"
+          ]
+        },
+        {
+          "id": "font-query::003-replacefont",
+          "owner": "QueryTTF",
+          "name": "replaceFont",
+          "signature": "replaceFont",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FONT-001"
+          ],
+          "errorCodes": [
+            "unsupported-font",
+            "font-budget-exceeded"
+          ]
+        },
+        {
+          "id": "font-query::004-getunicodebyglyf",
+          "owner": "QueryTTF",
+          "name": "getUnicodeByGlyf",
+          "signature": "getUnicodeByGlyf",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FONT-001"
+          ],
+          "errorCodes": [
+            "unsupported-font",
+            "font-budget-exceeded"
+          ]
+        },
+        {
+          "id": "font-query::005-getglyfbyunicode",
+          "owner": "QueryTTF",
+          "name": "getGlyfByUnicode",
+          "signature": "getGlyfByUnicode",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "FONT-001"
+          ],
+          "errorCodes": [
+            "unsupported-font",
+            "font-budget-exceeded"
+          ]
+        }
+      ]
     },
     {
       "id": "url-file-wrapper",
       "family": "object",
       "scope": "source-runtime",
       "androidOwner": "JsURL/File",
-      "androidMethods": ["toURL", "searchParams", "host", "port", "pathname", "getName", "getPath", "getAbsolutePath", "exists", "isFile", "isDirectory", "listFiles"],
-      "tsPaths": ["packages/source-core/src/rules/source-runtime.ts", "packages/source-node/src/source-file-host.ts"],
+      "androidMethods": [
+        "toURL",
+        "searchParams",
+        "host",
+        "port",
+        "pathname",
+        "getName",
+        "getPath",
+        "getAbsolutePath",
+        "exists",
+        "isFile",
+        "isDirectory",
+        "listFiles"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/rules/source-runtime.ts",
+        "packages/source-node/src/source-file-host.ts"
+      ],
       "implementation": "partial",
       "verification": "unverified",
       "feasibility": "simulatable",
       "decision": "fix",
-      "divergences": ["D42", "D43"],
-      "fixtures": ["URL-009", "FILE-004"]
+      "divergences": [
+        "D42",
+        "D43"
+      ],
+      "fixtures": [
+        "URL-009",
+        "FILE-004"
+      ],
+      "members": [
+        {
+          "id": "url-file-wrapper::001-tourl",
+          "owner": "JsURL/File",
+          "name": "toURL",
+          "signature": "toURL",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::002-searchparams",
+          "owner": "JsURL/File",
+          "name": "searchParams",
+          "signature": "searchParams",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::003-host",
+          "owner": "JsURL/File",
+          "name": "host",
+          "signature": "host",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::004-port",
+          "owner": "JsURL/File",
+          "name": "port",
+          "signature": "port",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::005-pathname",
+          "owner": "JsURL/File",
+          "name": "pathname",
+          "signature": "pathname",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::006-getname",
+          "owner": "JsURL/File",
+          "name": "getName",
+          "signature": "getName",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::007-getpath",
+          "owner": "JsURL/File",
+          "name": "getPath",
+          "signature": "getPath",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::008-getabsolutepath",
+          "owner": "JsURL/File",
+          "name": "getAbsolutePath",
+          "signature": "getAbsolutePath",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::009-exists",
+          "owner": "JsURL/File",
+          "name": "exists",
+          "signature": "exists",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::010-isfile",
+          "owner": "JsURL/File",
+          "name": "isFile",
+          "signature": "isFile",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::011-isdirectory",
+          "owner": "JsURL/File",
+          "name": "isDirectory",
+          "signature": "isDirectory",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "url-file-wrapper::012-listfiles",
+          "owner": "JsURL/File",
+          "name": "listFiles",
+          "signature": "listFiles",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "unverified",
+          "feasibility": "simulatable",
+          "decision": "fix",
+          "fixtures": [
+            "URL-009",
+            "FILE-004"
+          ],
+          "errorCodes": []
+        }
+      ]
     },
     {
       "id": "host-webview-device",
       "family": "host",
       "scope": "host-boundary",
       "androidOwner": "WebView/Android system",
-      "androidMethods": ["webView", "webViewGetSource", "startBrowser", "getVerificationCode", "getWebViewUA", "androidId", "getReadBookConfigMap", "getThemeConfigMap"],
-      "tsPaths": ["packages/source-core/src/rules/source-runtime.ts", "packages/source-node/src/runtime-platform.ts", "packages/source-node/src/source-rule-host.ts"],
+      "androidMethods": [
+        "webView",
+        "webViewGetSource",
+        "startBrowser",
+        "getVerificationCode",
+        "getWebViewUA",
+        "androidId",
+        "getReadBookConfigMap",
+        "getThemeConfigMap"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/rules/source-runtime.ts",
+        "packages/source-node/src/runtime-platform.ts",
+        "packages/source-node/src/source-rule-host.ts"
+      ],
       "implementation": "simulated",
       "verification": "unverified",
       "feasibility": "real-host",
       "decision": "host",
-      "divergences": ["D6", "D14", "D37"],
-      "fixtures": ["HOST-001", "HOST-002"],
-      "errorCodes": ["capability-missing"]
+      "divergences": [
+        "D6",
+        "D14",
+        "D37"
+      ],
+      "fixtures": [
+        "HOST-001",
+        "HOST-002"
+      ],
+      "errorCodes": [
+        "capability-missing"
+      ],
+      "members": [
+        {
+          "id": "host-webview-device::001-webview",
+          "owner": "WebView/Android system",
+          "name": "webView",
+          "signature": "webView",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "host-webview-device::002-webviewgetsource",
+          "owner": "WebView/Android system",
+          "name": "webViewGetSource",
+          "signature": "webViewGetSource",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "host-webview-device::003-startbrowser",
+          "owner": "WebView/Android system",
+          "name": "startBrowser",
+          "signature": "startBrowser",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "host-webview-device::004-getverificationcode",
+          "owner": "WebView/Android system",
+          "name": "getVerificationCode",
+          "signature": "getVerificationCode",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "host-webview-device::005-getwebviewua",
+          "owner": "WebView/Android system",
+          "name": "getWebViewUA",
+          "signature": "getWebViewUA",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "host-webview-device::006-androidid",
+          "owner": "WebView/Android system",
+          "name": "androidId",
+          "signature": "androidId",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "host-webview-device::007-getreadbookconfigmap",
+          "owner": "WebView/Android system",
+          "name": "getReadBookConfigMap",
+          "signature": "getReadBookConfigMap",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "host-webview-device::008-getthemeconfigmap",
+          "owner": "WebView/Android system",
+          "name": "getThemeConfigMap",
+          "signature": "getThemeConfigMap",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "unverified",
+          "feasibility": "real-host",
+          "decision": "host",
+          "fixtures": [
+            "HOST-001",
+            "HOST-002"
+          ],
+          "errorCodes": [
+            "capability-missing"
+          ]
+        }
+      ]
     },
     {
       "id": "runtime-observation",
       "family": "diagnostics",
       "scope": "source-runtime",
       "androidOwner": "AnalyzeUrl/Workflow callbacks",
-      "androidMethods": ["request start", "response complete", "error", "cancel", "empty parse"],
-      "tsPaths": ["packages/source-core/src/workflows/types.ts", "packages/source-core/src/workflows/source-request.ts", "packages/source-core/src/workflows/discovery.ts"],
+      "androidMethods": [
+        "request start",
+        "response complete",
+        "error",
+        "cancel",
+        "empty parse"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/workflows/types.ts",
+        "packages/source-core/src/workflows/source-request.ts",
+        "packages/source-core/src/workflows/discovery.ts"
+      ],
       "implementation": "partial",
       "verification": "ts-passed",
       "feasibility": "fixable",
       "decision": "fix",
-      "divergences": ["D41"],
-      "fixtures": ["OBS-001", "OBS-002", "OBS-003"],
-      "errorCodes": ["request-failed", "capability-missing", "cancelled", "item-skipped"]
+      "divergences": [
+        "D41"
+      ],
+      "fixtures": [
+        "OBS-001",
+        "OBS-002",
+        "OBS-003"
+      ],
+      "errorCodes": [
+        "request-failed",
+        "capability-missing",
+        "cancelled",
+        "item-skipped"
+      ],
+      "members": [
+        {
+          "id": "runtime-observation::001-request-start",
+          "owner": "AnalyzeUrl/Workflow callbacks",
+          "name": "request start",
+          "signature": "request start",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "OBS-001",
+            "OBS-002",
+            "OBS-003"
+          ],
+          "errorCodes": [
+            "request-failed",
+            "capability-missing",
+            "cancelled",
+            "item-skipped"
+          ]
+        },
+        {
+          "id": "runtime-observation::002-response-complete",
+          "owner": "AnalyzeUrl/Workflow callbacks",
+          "name": "response complete",
+          "signature": "response complete",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "OBS-001",
+            "OBS-002",
+            "OBS-003"
+          ],
+          "errorCodes": [
+            "request-failed",
+            "capability-missing",
+            "cancelled",
+            "item-skipped"
+          ]
+        },
+        {
+          "id": "runtime-observation::003-error",
+          "owner": "AnalyzeUrl/Workflow callbacks",
+          "name": "error",
+          "signature": "error",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "OBS-001",
+            "OBS-002",
+            "OBS-003"
+          ],
+          "errorCodes": [
+            "request-failed",
+            "capability-missing",
+            "cancelled",
+            "item-skipped"
+          ]
+        },
+        {
+          "id": "runtime-observation::004-cancel",
+          "owner": "AnalyzeUrl/Workflow callbacks",
+          "name": "cancel",
+          "signature": "cancel",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "OBS-001",
+            "OBS-002",
+            "OBS-003"
+          ],
+          "errorCodes": [
+            "request-failed",
+            "capability-missing",
+            "cancelled",
+            "item-skipped"
+          ]
+        },
+        {
+          "id": "runtime-observation::005-empty-parse",
+          "owner": "AnalyzeUrl/Workflow callbacks",
+          "name": "empty parse",
+          "signature": "empty parse",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "fix",
+          "fixtures": [
+            "OBS-001",
+            "OBS-002",
+            "OBS-003"
+          ],
+          "errorCodes": [
+            "request-failed",
+            "capability-missing",
+            "cancelled",
+            "item-skipped"
+          ]
+        }
+      ]
     }
-  ]
+  ],
+  "memberCount": 207
 }

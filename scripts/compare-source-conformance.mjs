@@ -39,8 +39,12 @@ for (const fixture of cases) {
   const expectedPath = join(fixturesRoot, fixture.expected)
   const expected = await readJson(expectedPath)
   const output = await findAndroidOutput(androidRoot, fixture.id)
-  if (output === undefined) {
+  if (output.kind === 'missing') {
     fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: 'not-run', comparison: 'not-run', expected: expectedPath })
+    continue
+  }
+  if (output.kind === 'invalid-json') {
+    fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: 'invalid-output', comparison: 'fail', output: output.path, error: output.error })
     continue
   }
   const normalized = normalizeAndroidOutput(fixture.id, output.value)
@@ -58,7 +62,7 @@ for (const fixture of cases) {
 
 const missing = fixtures.filter((item) => item.android === 'not-run').length
 const failed = fixtures.filter((item) => item.comparison === 'fail').length
-const blocked = fixtures.filter((item) => !['pass', 'fail'].includes(item.android)).length
+const blocked = fixtures.filter((item) => ['not-run', 'unsupported', 'runner-failed'].includes(item.android)).length
 const report = {
   version: 1,
   fixtures,
@@ -116,9 +120,18 @@ async function findAndroidOutput(root, id) {
     join(root, `${id}.golden.json`),
   ]
   for (const path of candidates) {
-    try { await access(path); return { path, value: await readJson(path) } } catch { /* candidate absent */ }
+    try {
+      await access(path)
+    } catch {
+      continue
+    }
+    try {
+      return { kind: 'json', path, value: await readJson(path) }
+    } catch (error) {
+      return { kind: 'invalid-json', path, error: error instanceof Error ? error.message : String(error) }
+    }
   }
-  return undefined
+  return { kind: 'missing' }
 }
 
 function normalizeAndroidOutput(id, value) {

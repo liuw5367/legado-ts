@@ -103,3 +103,21 @@ test('比较器拒绝错 fixtureId，并保留旧版直接 expected JSON 兼容'
     await rm(legacyRoot, { recursive: true, force: true })
   }
 })
+
+test('比较器把已存在但损坏的 Android JSON 标记为 invalid-output', async () => {
+  const fixtureId = 'HTML-FLOW-001'
+  const root = await mkdtemp(join(tmpdir(), 'legado-conformance-invalid-'))
+  await mkdir(join(root, 'cases'))
+  await writeFile(join(root, 'cases', `${fixtureId}.json`), '{"schemaVersion":1,')
+  try {
+    const report = await runComparator(root)
+    assert.equal(report.code, 1)
+    const item = report.report.fixtures.find((entry: any) => entry.id === fixtureId)
+    assert.equal(item.android, 'invalid-output')
+    assert.equal(item.comparison, 'fail')
+    assert.equal(report.report.summary.invalidOutput, 1)
+    assert.equal(report.report.summary.blocked, 5)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
