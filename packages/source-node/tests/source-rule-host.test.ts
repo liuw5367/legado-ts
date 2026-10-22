@@ -604,6 +604,12 @@ test('java.toURL 保留 IPv6 authority 和已编码查询参数名', async () =>
   assert.deepEqual(JSON.parse(String(result.value)), ['[2001:db8::1]:8080', '[2001:db8::1]', '8080', 'https://[2001:db8::1]:8080', '?a%20b=x+y', 'x y', 'a%20b=x+y', true, 'https', 'example.test', -1, 443, '/p', '/p', null, null, 'example.test', 'user:pass'])
 })
 
+test('java.toURL 对无基址非法地址抛出可识别异常并提供 FTP 默认端口', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:JSON.stringify((() => { let message = ""; try { java.toURL("not a URL"); } catch (error) { message = String(error?.message ?? error); } const ftp = java.toURL("ftp://example.test/file"); return [message, ftp.getDefaultPort(), ftp.getPort()]; })())', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['Malformed URL', 21, -1])
+})
+
 test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', async () => {
   const host = new SourceRuleHost()
   const json = { data: [{ name: '我本无意成仙', path: '/book/1' }] }
