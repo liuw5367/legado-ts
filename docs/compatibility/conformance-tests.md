@@ -240,7 +240,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 - Java Element/Elements 的父子/兄弟、tag/id/class、`is`、`clone`、`remove`、属性修改及集合链式调用；
 - Jsoup 扩展位置/文本伪类、`:has/:not/:is`、文本 `:matches`、属性 Java 正则 `~=`, HTML/XML 大小写、无效选择器 `unsupported-selector`；
 - Jayway `length/size/keys/min/max/avg/sum`、正则筛选、`in/nin/size/empty/anyof/noneof`、原始值 `subsetof` 以及复杂集合 `unsupported-jsonpath` 诊断；
-- Java POSIX/Unicode 属性、`(?U)`、作用域 flags/字符类交集/字符转义的 `unsupported-pattern` 诊断；
+- Java POSIX/Unicode 属性、`(?U)`、作用域 flags/字符类交集/字符转义的 `unsupported-pattern` 诊断；纯 Java 类族的 UTF-16、Long/BigInteger/BigDecimal、增量摘要、字节流和 Set/Collections；
 - 严格 JSON 优先、字符串外注释、单引号/未引号键/尾逗号和原型键不污染测试；
 - 正索引、负索引、范围、负步长、排除和越界；
 - `:regex` 的完整匹配/捕获组列表、`$1`、`##match##replace` 的省略替换文本和首个替换；

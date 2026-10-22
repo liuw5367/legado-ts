@@ -264,7 +264,7 @@ const legadoMap = (input) => {
     containsValue: { value: (value) => Object.values(target).some((item) => Object.is(item, value)) },
     keySet: { value: () => legadoList(Object.keys(target)) },
     values: { value: () => legadoList(Object.values(target)) },
-    entrySet: { value: () => legadoList(Object.entries(target).map(([key, value]) => ({ getKey: () => key, getValue: () => value }))) },
+    entrySet: { value: () => legadoList(Object.entries(target).map(([key, value]) => ({ getKey: () => key, getValue: () => target[key], setValue: (next) => { const previous = target[key]; assign(key, next); return previous } }))) },
     size: { value: () => Object.keys(target).length },
     isEmpty: { value: () => Object.keys(target).length === 0 },
     forEach: { value: (callback) => { if (typeof callback === "function") for (const [key, value] of Object.entries(target)) callback(value, key, target) } },
@@ -290,6 +290,10 @@ const legadoList = (input) => {
     lastIndexOf: { value: (value) => target.lastIndexOf(value) },
     subList: { value: (from, to) => legadoList(target.slice(Number(from), Number(to))) },
     clear: { value: () => { target.length = 0 } },
+    iterator: { value: () => { let index = 0; return { hasNext: () => index < target.length, next: () => index < target.length ? target[index++] : null, remove: () => { if (index > 0) target.splice(--index, 1) } } } },
+    forEach: { value: (callback) => { if (typeof callback === "function") target.forEach(callback); return undefined } },
+    removeIf: { value: (predicate) => { if (typeof predicate !== "function") return false; const before = target.length; for (let index = target.length - 1; index >= 0; index -= 1) if (predicate(target[index], index, target)) target.splice(index, 1); return target.length !== before } },
+    sort: { value: (comparator) => { target.sort(typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : undefined); return target } },
   })
   return target
 }
@@ -342,7 +346,8 @@ const legadoJavaString = (input) => {
     compareTo: { value: (other) => { const value = String(other ?? ""); const length = Math.min(text.length, value.length); for (let index = 0; index < length; index++) { const difference = text.charCodeAt(index) - value.charCodeAt(index); if (difference !== 0) return difference } return text.length - value.length } },
     compareToIgnoreCase: { value: (other) => legadoJavaString(text.toLowerCase()).compareTo(String(other ?? "").toLowerCase()) },
     concat: { value: (other) => legadoJavaString(text + String(other ?? "")) },
-    toCharArray: { value: () => Array.from(text) },
+    // Java String.toCharArray 按 UTF-16 code unit 返回，不能使用按 Unicode code point 展开的 Array.from。
+    toCharArray: { value: () => Array.from({ length: text.length }, (_, index) => text.charAt(index)) },
     regionMatches: { value: function(ignoreCase, thisOffset, other, otherOffset, length) { let insensitive = ignoreCase; let from = thisOffset; let value = other; let offset = otherOffset; let count = length; if (arguments.length < 5) { insensitive = false; from = ignoreCase; value = thisOffset; offset = other; count = otherOffset } const left = text.slice(Number(from), Number(from) + Number(count)); const right = String(value ?? "").slice(Number(offset), Number(offset) + Number(count)); return insensitive === true ? left.toLowerCase() === right.toLowerCase() : left === right } },
     hashCode: { value: () => { let hash = 0; for (const char of text) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0; return hash } },
     toString: { value: () => text },
@@ -351,7 +356,25 @@ const legadoJavaString = (input) => {
   })
   return value
 }
-const legadoJavaLangString = function(value) { return legadoJavaString(value) }
+const legadoJavaLangString = function(value, charsetOrOffset, length) {
+  if (value instanceof Uint8Array || Array.isArray(value)) {
+    const bytes = value instanceof Uint8Array ? value : Uint8Array.from(value)
+    if (typeof charsetOrOffset === "number") {
+      const offset = Number(charsetOrOffset)
+      const count = length === undefined ? bytes.length - offset : Number(length)
+      if (!Number.isInteger(offset) || !Number.isInteger(count) || offset < 0 || count < 0 || offset + count > bytes.length) throw new RangeError("String byte range out of bounds")
+      return legadoJavaString(request({ kind: "decode-bytes", value: bytes.slice(offset, offset + count), charset: "UTF-8" }))
+    }
+    return legadoJavaString(request({ kind: "decode-bytes", value: bytes, charset: charsetOrOffset === undefined ? "UTF-8" : String(charsetOrOffset) }))
+  }
+  return legadoJavaString(value)
+}
+// 书源常见 String.format 只覆盖顺序的 %s 占位符；其他格式由受控能力错误表示，不猜测 Locale 规则。
+Object.assign(legadoJavaLangString, {
+  valueOf: (value) => legadoJavaString(value),
+  copyValueOf: (value) => legadoJavaString(value),
+  format: (format, ...args) => legadoJavaString(String(format ?? "").replace(/%s/gu, () => String(args.shift() ?? "null"))),
+})
 const legadoStringBuilder = function(initial) {
   let value = initial === undefined ? "" : String(initial)
   let capacity = Math.max(16, value.length)
@@ -374,7 +397,51 @@ const legadoStringBuilder = function(initial) {
 }
 const legadoInteger = { toHexString: (value) => (Number(value) >>> 0).toString(16), toString: (value, radix) => Math.trunc(Number(value)).toString(radix === undefined ? 10 : Number(radix)), parseInt: (value, radix) => Number.parseInt(String(value), radix === undefined ? 10 : Number(radix)), valueOf: (value) => Number(value), compare: (left, right) => Number(left) < Number(right) ? -1 : Number(left) > Number(right) ? 1 : 0, max: (left, right) => Math.max(Number(left), Number(right)), min: (left, right) => Math.min(Number(left), Number(right)) }
 const legadoNumber = { toHexString: (value) => Math.trunc(Number(value)).toString(16), toString: legadoInteger.toString, parseInt: legadoInteger.parseInt, valueOf: legadoInteger.valueOf, compare: legadoInteger.compare, max: legadoInteger.max, min: legadoInteger.min }
-const legadoDigest = (algorithm) => ({ digest: (value) => legadoBytesFromHex(request({ kind: "digest", value, algorithm: String(algorithm) })) })
+const legadoLong = { MIN_VALUE: -(2n ** 63n), MAX_VALUE: (2n ** 63n) - 1n, parseLong: (value, radix) => BigInt(String(value).trim()), toString: (value, radix) => BigInt(value).toString(radix === undefined ? 10 : Number(radix)), valueOf: (value) => BigInt(value), compare: (left, right) => BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0, max: (left, right) => BigInt(left) > BigInt(right) ? BigInt(left) : BigInt(right), min: (left, right) => BigInt(left) < BigInt(right) ? BigInt(left) : BigInt(right) }
+const legadoBigInteger = function(value, radix) {
+  let number
+  if (value && typeof value === "object" && typeof value.__legadoBigInteger === "bigint") number = value.__legadoBigInteger
+  else if (value instanceof Uint8Array || Array.isArray(value)) { let hex = Array.from(value instanceof Uint8Array ? value : Uint8Array.from(value)).map((item) => Number(item).toString(16).padStart(2, "0")).join(""); number = hex.length === 0 ? 0n : BigInt("0x" + hex); if (Number((value instanceof Uint8Array ? value : Uint8Array.from(value))[0] ?? 0) >= 128) number -= 1n << BigInt((value instanceof Uint8Array ? value : Uint8Array.from(value)).length * 8) }
+  else number = BigInt(String(value ?? "0").trim().replace(/^[+]/u, ""))
+  const api = { __legadoBigInteger: number, add: (other) => legadoBigInteger(number + BigInt(other?.__legadoBigInteger ?? other)), subtract: (other) => legadoBigInteger(number - BigInt(other?.__legadoBigInteger ?? other)), multiply: (other) => legadoBigInteger(number * BigInt(other?.__legadoBigInteger ?? other)), divide: (other) => legadoBigInteger(number / BigInt(other?.__legadoBigInteger ?? other)), remainder: (other) => legadoBigInteger(number % BigInt(other?.__legadoBigInteger ?? other)), mod: (other) => { const divisor = BigInt(other?.__legadoBigInteger ?? other); if (divisor <= 0n) throw new RangeError("BigInteger modulus must be positive"); return legadoBigInteger(number % divisor) }, compareTo: (other) => number < BigInt(other?.__legadoBigInteger ?? other) ? -1 : number > BigInt(other?.__legadoBigInteger ?? other) ? 1 : 0, negate: () => legadoBigInteger(-number), abs: () => legadoBigInteger(number < 0n ? -number : number), bitLength: () => (number < 0n ? (-number - 1n) : number).toString(2).length, intValue: () => Number(number), longValue: () => number, toString: (radix) => number.toString(radix === undefined ? 10 : Number(radix)), equals: (other) => other?.__legadoBigInteger === number, valueOf: () => number }
+  return api
+}
+const legadoBigDecimal = function(value, scale) {
+  const parse = String(value?.__legadoBigDecimal ?? value ?? "0").trim().match(/^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/u)
+  if (parse === null) throw new RangeError("invalid BigDecimal")
+  let coefficient = BigInt((parse[1] === "-" ? "-" : "") + parse[2] + (parse[3] ?? ""))
+  let decimalScale = (parse[3]?.length ?? 0) - Number(parse[4] ?? 0)
+  if (scale !== undefined) decimalScale = Number(scale)
+  if (!Number.isInteger(decimalScale)) throw new RangeError("invalid BigDecimal scale")
+  const api = {
+    __legadoBigDecimal: String(value?.__legadoBigDecimal ?? value ?? "0"),
+    add: (other) => decimalOperation(coefficient, decimalScale, other, 1), subtract: (other) => decimalOperation(coefficient, decimalScale, other, -1), multiply: (other) => { const right = decimalParts(other); return decimalFromParts(coefficient * right.coefficient, decimalScale + right.scale) },
+    divide: (other, roundingMode) => decimalDivide(coefficient, decimalScale, other, roundingMode), setScale: (nextScale, roundingMode) => decimalSetScale(coefficient, decimalScale, Number(nextScale), roundingMode), compareTo: (other) => { const right = decimalParts(other); const aligned = decimalAlign(coefficient, decimalScale, right.coefficient, right.scale); return aligned.left < aligned.right ? -1 : aligned.left > aligned.right ? 1 : 0 }, scale: () => decimalScale, unscaledValue: () => legadoBigInteger(coefficient), toPlainString: () => decimalToString(coefficient, decimalScale), toString: () => decimalToString(coefficient, decimalScale), valueOf: () => Number(coefficient) / 10 ** decimalScale,
+  }
+  return api
+}
+const decimalParts = (value) => { if (value && typeof value === "object" && typeof value.toPlainString === "function") { const text = value.toPlainString(); const parsed = String(text).match(/^(-?)(\d+)(?:\.(\d+))?$/u); if (parsed !== null) return { coefficient: BigInt((parsed[1] ?? "") + parsed[2] + (parsed[3] ?? "")), scale: parsed[3]?.length ?? 0 } } const text = String(value ?? "0"); const parsed = text.match(/^(-?)(\d+)(?:\.(\d+))?$/u); return parsed === null ? { coefficient: 0n, scale: 0 } : { coefficient: BigInt((parsed[1] ?? "") + parsed[2] + (parsed[3] ?? "")), scale: parsed[3]?.length ?? 0 } }
+const decimalToString = (coefficient, scale) => { const negative = coefficient < 0n; const digits = (negative ? -coefficient : coefficient).toString(); if (scale <= 0) return (negative ? "-" : "") + digits + "0".repeat(-scale); const padded = digits.padStart(scale + 1, "0"); const point = padded.length - scale; return (negative ? "-" : "") + padded.slice(0, point) + "." + padded.slice(point) }
+const decimalFromParts = (coefficient, scale) => legadoBigDecimal(decimalToString(coefficient, scale))
+const decimalAlign = (left, leftScale, right, rightScale) => leftScale === rightScale ? { left, right } : leftScale > rightScale ? { left, right: right * 10n ** BigInt(leftScale - rightScale) } : { left: left * 10n ** BigInt(rightScale - leftScale), right }
+const decimalOperation = (left, scale, other, sign) => { const right = decimalParts(other); const aligned = decimalAlign(left, scale, right.coefficient, right.scale); return decimalFromParts(aligned.left + BigInt(sign) * aligned.right, Math.max(scale, right.scale)) }
+const decimalSetScale = (coefficient, scale, nextScale, roundingMode) => { if (nextScale >= scale) return decimalFromParts(coefficient * 10n ** BigInt(nextScale - scale), nextScale); const divisor = 10n ** BigInt(scale - nextScale); let quotient = coefficient / divisor; const remainder = coefficient % divisor; const mode = Number(roundingMode ?? 4); if (remainder !== 0n && mode === 4 && (remainder < 0n ? -remainder : remainder) * 2n >= divisor) quotient += coefficient < 0n ? -1n : 1n; return decimalFromParts(quotient, nextScale) }
+const decimalDivide = (coefficient, scale, other, roundingMode) => { const right = decimalParts(other); if (right.coefficient === 0n) throw new RangeError("BigDecimal division by zero"); const targetScale = Math.max(0, scale + right.scale + 16); const numerator = coefficient * 10n ** BigInt(targetScale); const quotient = numerator / right.coefficient; return decimalSetScale(quotient, targetScale + scale - right.scale, Math.max(scale, right.scale), roundingMode) }
+const legadoSet = function(input) { const values = []; const add = (value) => { if (!values.some((item) => Object.is(item, value))) values.push(value); return true }; for (const value of Array.isArray(input) ? input : []) add(value); return { add, addAll: (items) => { let changed = false; for (const value of items ?? []) changed = add(value) || changed; return changed }, contains: (value) => values.some((item) => Object.is(item, value)), remove: (value) => { const index = values.findIndex((item) => Object.is(item, value)); if (index < 0) return false; values.splice(index, 1); return true }, size: () => values.length, isEmpty: () => values.length === 0, toArray: () => values.slice(), iterator: () => { let index = 0; return { hasNext: () => index < values.length, next: () => index < values.length ? values[index++] : null, remove: () => { if (index > 0) values.splice(--index, 1) } } }, forEach: (callback) => values.forEach(callback), toString: () => "[" + values.join(", ") + "]" } }
+const legadoJavaMath = { abs: (value) => Math.abs(Number(value)), max: (left, right) => Math.max(Number(left), Number(right)), min: (left, right) => Math.min(Number(left), Number(right)), round: (value) => Math.round(Number(value)), floor: (value) => Math.floor(Number(value)), ceil: (value) => Math.ceil(Number(value)), pow: (left, right) => Math.pow(Number(left), Number(right)), signum: (value) => Math.sign(Number(value)), toRadians: (value) => Number(value) * Math.PI / 180, toDegrees: (value) => Number(value) * 180 / Math.PI }
+const legadoBytesValue = (value) => value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" })
+const legadoConcatBytes = (parts) => { const total = parts.reduce((sum, item) => sum + item.length, 0); const result = new Uint8Array(total); let offset = 0; for (const item of parts) { result.set(item, offset); offset += item.length } return result }
+const legadoDigest = (algorithm) => {
+  let chunks = []
+  const api = {
+    update: (value, offset, length) => { const bytes = legadoBytesValue(value); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("MessageDigest update range out of bounds"); chunks.push(bytes.slice(start, start + count)); return api },
+    digest: (value) => { if (value !== undefined) api.update(value); const result = legadoBytesFromHex(request({ kind: "digest", value: legadoConcatBytes(chunks), algorithm: String(algorithm) })); chunks = []; return result },
+    reset: () => { chunks = []; return api },
+    getAlgorithm: () => String(algorithm),
+    getDigestLength: () => legadoBytesFromHex(request({ kind: "digest", value: new Uint8Array(), algorithm: String(algorithm) })).length,
+  }
+  return api
+}
 const legadoMessageDigest = { getInstance: (algorithm) => legadoDigest(algorithm) }
 const legadoPattern = {
   CASE_INSENSITIVE: 2,
@@ -432,30 +499,60 @@ const legadoByteArrayInputStream = function(input) {
   let mark = 0
   return { read: function(target, offset, length) { if (arguments.length === 0) return cursor < bytes.length ? bytes[cursor++] : -1; const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? target.length - start : Number(length); if ((!ArrayBuffer.isView(target) && !Array.isArray(target)) || !Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > target.length) throw new RangeError("invalid InputStream read range"); const available = Math.min(count, bytes.length - cursor); if (available <= 0) return -1; for (let index = 0; index < available; index++) target[start + index] = bytes[cursor + index]; cursor += available; return available }, readAllBytes: () => { const result = bytes.slice(cursor); cursor = bytes.length; return result }, available: () => bytes.length - cursor, skip: (count) => { const amount = Math.max(0, Math.min(bytes.length - cursor, Math.trunc(Number(count) || 0))); cursor += amount; return amount }, mark: () => { mark = cursor }, reset: () => { cursor = mark }, markSupported: () => true, close: () => undefined }
 }
+const legadoByteArrayOutputStream = function(initial) {
+  let chunks = []
+  const api = {
+    write: (value, offset, length) => { const bytes = legadoBytesValue(value); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("OutputStream write range out of bounds"); chunks.push(bytes.slice(start, start + count)); return undefined },
+    toByteArray: () => legadoConcatBytes(chunks),
+    size: () => chunks.reduce((sum, item) => sum + item.length, 0),
+    reset: () => { chunks = [] },
+    close: () => undefined,
+    flush: () => undefined,
+    toString: (charset) => request({ kind: "decode-bytes", value: api.toByteArray(), charset: charset === undefined ? "UTF-8" : String(charset) }),
+  }
+  if (initial !== undefined) api.write(initial)
+  return api
+}
+const legadoInputStreamReader = function(input, charset) {
+  const bytes = legadoBytesValue(input?.readAllBytes?.() ?? input)
+  const text = request({ kind: "decode-bytes", value: bytes, charset: charset === undefined ? "UTF-8" : String(charset) })
+  let cursor = 0
+  return { read: function(target, offset, length) { if (arguments.length === 0) return cursor < text.length ? text.charCodeAt(cursor++) : -1; const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? target.length - start : Number(length); if (!Array.isArray(target) && !ArrayBuffer.isView(target)) throw new TypeError("Reader target must be an array"); if (count === 0) return 0; const available = Math.min(count, text.length - cursor); if (available <= 0) return -1; for (let index = 0; index < available; index++) target[start + index] = text.charCodeAt(cursor + index); cursor += available; return available }, readAll: () => { const result = text.slice(cursor); cursor = text.length; return result }, close: () => undefined }
+}
+const legadoBufferedReader = function(reader) { return { readLine: () => { const chars = []; while (true) { const code = reader.read(); if (code < 0) return chars.length === 0 ? null : String.fromCharCode(...chars); if (code === 10) return String.fromCharCode(...chars); if (code !== 13) chars.push(code); if (chars.length >= 1048576) return String.fromCharCode(...chars) } }, read: (...args) => reader.read(...args), close: () => reader.close?.() } }
 const legadoSecretKeySpec = function(value, algorithm) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); return { getEncoded: () => bytes, getAlgorithm: () => String(algorithm ?? ""), getFormat: () => "RAW", encoded: bytes } }
-const legadoMac = { getInstance: (algorithm) => { let key; return { init: (secret) => { key = secret?.getEncoded?.() ?? secret?.encoded ?? secret; return undefined }, doFinal: (value) => { const hex = request({ kind: "hmac-hex", value: value instanceof Uint8Array ? value : legadoJavaString(value).getBytes(), key, algorithm: String(algorithm) }); return request({ kind: "hex-decode-bytes", value: hex }) }, reset: () => undefined, getAlgorithm: () => String(algorithm) } } }
+const legadoMac = { getInstance: (algorithm) => { let key; let chunks = []; const api = { init: (secret) => { key = secret?.getEncoded?.() ?? secret?.encoded ?? secret; chunks = []; return api }, update: (value, offset, length) => { const bytes = legadoBytesValue(value); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("Mac update range out of bounds"); chunks.push(bytes.slice(start, start + count)); return api }, doFinal: (value) => { if (value !== undefined) api.update(value); const hex = request({ kind: "hmac-hex", value: legadoConcatBytes(chunks), key, algorithm: String(algorithm) }); chunks = []; return request({ kind: "hex-decode-bytes", value: hex }) }, reset: () => { chunks = []; return api }, getAlgorithm: () => String(algorithm) }; return api } }
 const legadoDatatypeConverter = { printHexBinary: (value) => String(request({ kind: "hex-encode", value }) ?? "").toUpperCase(), parseHexBinary: (value) => request({ kind: "hex-decode-bytes", value: String(value ?? "") }) }
 const legadoUrlEncoder = { encode: (value, charset) => request({ kind: "encode-uri", value: String(value ?? ""), charset: charset === undefined ? "UTF-8" : String(charset) }) }
 const legadoAndroidBase64 = { DEFAULT: 0, NO_PADDING: 1, NO_WRAP: 2, CRLF: 4, URL_SAFE: 8, NO_CLOSE: 16, encodeToString: (value, flags) => request({ kind: "base64-encode", value, flags: Number(flags ?? 0) }), encode: (value, flags) => legadoJavaString(request({ kind: "base64-encode", value, flags: Number(flags ?? 0) })).getBytes("UTF-8"), decode: (value, flags) => request({ kind: "base64-decode-bytes", value, flags: Number(flags ?? 0) }) }
-const legadoJavaLang = { String: legadoJavaLangString, StringBuilder: legadoStringBuilder, Integer: legadoInteger, Long: legadoNumber, Double: legadoNumber, Boolean: { parseBoolean: (value) => String(value).toLowerCase() === "true" } }
-const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, Collections: { sort: (list) => { if (Array.isArray(list)) list.sort(); return list }, reverse: (list) => { if (Array.isArray(list)) list.reverse(); return list } }, regex: { Pattern: legadoPattern }, Base64: legadoBase64 }
+const legadoJavaLang = { String: legadoJavaLangString, StringBuilder: legadoStringBuilder, Integer: legadoInteger, Long: legadoLong, Double: legadoNumber, Float: legadoNumber, Boolean: { parseBoolean: (value) => String(value).toLowerCase() === "true" }, Character: { isDigit: (value) => /\d/u.test(String(value)), isLetter: (value) => /\p{L}/u.test(String(value)), toLowerCase: (value) => String(value).toLowerCase(), toUpperCase: (value) => String(value).toUpperCase() }, Math: legadoJavaMath, CharSequence: legadoJavaLangString }
+const legadoJavaArrays = { asList: (value) => legadoList(value), toString: (value) => "[" + Array.from(value ?? []).join(", ") + "]", copyOf: (value, length) => Array.from(value ?? []).slice(0, Number(length)).concat(Array(Math.max(0, Number(length) - (value?.length ?? 0))).fill(null)), copyOfRange: (value, from, to) => Array.from(value ?? []).slice(Number(from), Number(to)), fill: (value, item) => { if (Array.isArray(value)) value.fill(item); return undefined }, sort: (value) => { if (Array.isArray(value)) value.sort(); return undefined } }
+const legadoJavaCollections = { sort: (list, comparator) => { if (Array.isArray(list)) list.sort(typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : undefined); return undefined }, reverse: (list) => { if (Array.isArray(list)) list.reverse(); return undefined }, shuffle: (list) => { if (Array.isArray(list)) for (let index = list.length - 1; index > 0; index -= 1) { const swap = Math.floor(Math.random() * (index + 1)); [list[index], list[swap]] = [list[swap], list[index]] }; return undefined }, singletonList: (value) => legadoList([value]), emptyList: () => legadoList([]) }
+const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, regex: { Pattern: legadoPattern }, Base64: legadoBase64 }
 legadoJavaUtil.regex.Pattern = legadoPattern
+const legadoJavaIo = { ByteArrayInputStream: legadoByteArrayInputStream, ByteArrayOutputStream: legadoByteArrayOutputStream, InputStreamReader: legadoInputStreamReader, BufferedReader: legadoBufferedReader }
 const legadoJavaSecurity = { MessageDigest: legadoMessageDigest }
 const legadoStandardCharsets = { UTF_8: "UTF-8", UTF_16: "UTF-16", ISO_8859_1: "ISO-8859-1" }
 const legadoName = (value, name) => { try { Object.defineProperty(value, "__legadoName", { value: name, configurable: false, enumerable: false }); } catch {} return value }
 for (const [name, value] of Object.entries(legadoJavaLang)) legadoName(value, name)
 for (const [name, value] of Object.entries(legadoJavaUtil)) legadoName(value, name)
+for (const [name, value] of Object.entries(legadoJavaIo)) legadoName(value, name)
 legadoName(legadoJavaUtil.regex.Pattern, "Pattern")
 legadoName(legadoJavaSecurity.MessageDigest, "MessageDigest")
 legadoName(legadoBase64, "Base64")
 legadoName(legadoByteArrayInputStream, "ByteArrayInputStream")
+legadoName(legadoByteArrayOutputStream, "ByteArrayOutputStream")
+legadoName(legadoInputStreamReader, "InputStreamReader")
+legadoName(legadoBufferedReader, "BufferedReader")
+legadoName(legadoBigInteger, "BigInteger")
+legadoName(legadoBigDecimal, "BigDecimal")
 legadoName(legadoSecretKeySpec, "SecretKeySpec")
 legadoName(legadoMac, "Mac")
 legadoName(legadoDatatypeConverter, "DatatypeConverter")
 legadoName(legadoUrlEncoder, "URLEncoder")
 legadoName(legadoAndroidBase64, "Base64")
 const legadoExistingPackages = globalThis.Packages
-const legadoPackages = { java: { lang: legadoJavaLang, util: legadoJavaUtil, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: { ByteArrayInputStream: legadoByteArrayInputStream } }, javax: { crypto: { Mac: legadoMac, spec: { SecretKeySpec: legadoSecretKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 } } }
+const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: legadoJavaUtil, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Mac: legadoMac, spec: { SecretKeySpec: legadoSecretKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 } } }
 legadoName(legadoPackages.java.nio.charset.StandardCharsets, "StandardCharsets")
 legadoName(legadoPackages.java.net.URL, "URL")
 if (legadoExistingPackages && legadoExistingPackages.io) legadoPackages.io = legadoExistingPackages.io

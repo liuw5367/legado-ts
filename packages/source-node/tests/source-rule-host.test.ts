@@ -95,6 +95,33 @@ test('JavaImporter、Packages、Map/List 和 Java String 常见用法可运行',
   assert.deepEqual(JSON.parse(String(result.value)), { digest: [16, 32], text: 'oo', map: ['alice', 'reader', 2], list: ['b', 2], response: ['https://fixture.invalid', 'body', 200] })
 })
 
+test('纯 Java 类族保持 UTF-16、精确数值、增量摘要和字节流语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang, Packages.java.math, Packages.java.security, Packages.javax.crypto, Packages.javax.crypto.spec, Packages.javax.xml.bind, Packages.java.io);
+    with (importer) {
+      var chars = new String('😀').toCharArray();
+      var decoded = new String([0xE6, 0xB5, 0x8B], 'UTF-8').toString();
+      var integer = new BigInteger('9007199254740993').add(new BigInteger('7')).toString();
+      var decimal = new BigDecimal('1.20').add(new BigDecimal('2.3')).toPlainString();
+      var digest = MessageDigest.getInstance('SHA-256'); digest.update(new String('a').getBytes()); digest.update(new String('b').getBytes());
+      var mac = Mac.getInstance('HmacSHA256'); mac.init(new SecretKeySpec(new String('key').getBytes(), 'HmacSHA256')); mac.update(new String('a').getBytes()); mac.update(new String('b').getBytes());
+      var output = new ByteArrayOutputStream(); output.write([65, 66]); output.write([67], 0, 1);
+      var reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(new String('一\\n二').getBytes()), 'UTF-8'));
+      JSON.stringify({ chars: chars.join(','), decoded: decoded, integer: integer, decimal: decimal, digest: DatatypeConverter.printHexBinary(digest.digest()), mac: DatatypeConverter.printHexBinary(mac.doFinal()), bytes: Array.from(output.toByteArray()), lines: [reader.readLine(), reader.readLine(), reader.readLine()] });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    chars: '\ud83d,\ude00',
+    decoded: '测',
+    integer: '9007199254741000',
+    decimal: '3.50',
+    digest: 'FB8E20FC2E4C3F248C60C39BD652F3C1347298BB977B8B4D5903B85055620603',
+    mac: '5C1C0C948CBEF5AD7D191E46E5901FA0395F85F694FA4633F665A1A637017B65',
+    bytes: [65, 66, 67],
+    lines: ['一', '二', null],
+  })
+})
+
 test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.StringBuilder, Packages.java.lang.Integer, Packages.java.util.regex.Pattern);
