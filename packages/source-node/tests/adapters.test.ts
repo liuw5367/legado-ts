@@ -108,8 +108,8 @@ test('JSONPath adapter 转换 Jayway 过滤运算并拒绝无法安全降级的�
   assert.deepEqual(parser.evaluate(value, '$.items[?(@.value nin ["a"])].value'), ['b', 'c', 'empty', 'null', 'missing'])
   assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags size 1)].value'), ['a', 'b', 'c'])
   assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags anyof ["b","c"])].value'), ['b', 'c'])
-  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags noneof ["b","c"])].value'), ['a', 'empty', 'null', 'missing'])
-  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags empty true)].value'), ['empty', 'null', 'missing'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags noneof ["b","c"])].value'), ['a', 'empty'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags empty true)].value'), ['empty'])
   assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags subsetof ["a","b"])].value'), ['a', 'b', 'empty'])
   assert.throws(
     () => parser.evaluate(value, '$.items[?(@.tags subsetof [{"value":1}])].value'),
@@ -125,9 +125,40 @@ test('JSONPath adapter 转换 Jayway 过滤运算并拒绝无法安全降级的�
       { value: 'empty', tags: [] },
     ],
   }
-  assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof [1])].value'), ['number', 'duplicate-number', 'empty'])
-  assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof ["1"])].value'), ['string', 'empty'])
+  assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof [1])].value'), ['number', 'duplicate-number', 'string', 'mixed', 'empty'])
+  assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof ["1"])].value'), ['number', 'duplicate-number', 'string', 'mixed', 'empty'])
   assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof [1,"1"])].value'), ['number', 'duplicate-number', 'string', 'mixed', 'empty'])
+})
+
+test('JSONPath adapter 对齐 Jayway 的集合等价、空值和聚合函数语义', () => {
+  const parser = new JsonPathParserAdapter()
+  const value = {
+    items: [
+      { id: 'number', value: 1, tags: [1] },
+      { id: 'string', value: '1', tags: ['1'] },
+      { id: 'boolean', value: true, tags: [true] },
+      { id: 'empty', value: null, tags: [] },
+      { id: 'missing' },
+    ],
+    numbers: [1, '2', null],
+    text: 'abc',
+  }
+
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.value in [1])].id'), ['number', 'string'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags anyof [1])].id'), ['number', 'string'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags noneof [1])].id'), ['boolean', 'empty'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags subsetof [1])].id'), ['number', 'string', 'empty'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags empty true)].id'), ['empty'])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.sum()'), [1])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.stddev()'), [0])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.first()'), [1])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.last()'), [null])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.index(1)'), ['2'])
+  assert.deepEqual(parser.evaluate(value, '$.text.length()'), [null])
+  assert.throws(
+    () => parser.evaluate(value, '$.missing.length()'),
+    (error: unknown) => error instanceof Error && 'code' in error && error.code === 'unsupported-jsonpath',
+  )
 })
 
 test('JSONPath adapter 不执行条件表达式中的原生构造器', () => {
