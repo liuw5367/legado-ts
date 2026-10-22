@@ -269,7 +269,7 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
       diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
       return { status: 'failed', value: null, diagnostics, trace }
     }
-    const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name: formatBookName(nameValue), rawFields: jsonValue(record) as JsonObject, traceRef: `${stage}:${books.length}` }
+    const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name: formatBookName(nameValue), type: validBookType(record.type) ?? androidBookType(undefined, source), rawFields: jsonValue(record) as JsonObject, traceRef: `${stage}:${books.length}` }
     if (author.length > 0) candidate.author = formatBookAuthor(author)
     setOptionalText(candidate, 'intro', record.intro)
     setOptionalText(candidate, 'kind', record.kind)
@@ -887,7 +887,8 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     }
     const candidate = input.candidates[itemIndex]!
     // Android getBookInfoAwait 进入脚本前会清掉旧位标记，再写回书源对应的 BookType。
-    const book = javascriptBookProjection(candidate, input.source, androidBookType(undefined, input.source), 'empty')
+    const sourceType = androidBookType(undefined, input.source)
+    const book = javascriptBookProjection(candidate, input.source, sourceType, 'empty')
     const info = await executeSourceFunction(ports, input.source, 'getBookInfo', [book], { book }, 'detail', 'book', trace, input.signal)
     if (info.state === 'cancelled') {
       diagnostics.push({ code: 'cancelled', stage: 'detail', itemIndex, message: '详情脚本执行已取消', retryable: false })
@@ -916,8 +917,11 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     // them; preserve the search marshaller's original bookUrl for later JS
     // bindings instead of letting an ignored detail key replace it.
     delete detailRawFields.bookUrl
+    const returnedType = validBookType(record?.type)
+    const mergedType = returnedType ?? sourceType
     const metadata: BookMetadata = {
       ...metadataCandidate,
+      type: sourceNumber(input.source, 'bookSourceType') === 3 ? mergedType | sourceType : mergedType,
       rawFields: { ...candidate.rawFields, ...detailRawFields },
       emptyFields: [],
       fieldErrors: {},
@@ -947,6 +951,12 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     const tocUrl = primitiveText(record?.tocUrl)
     if (coverUrl !== undefined) metadata.coverUrl = coverUrl.length === 0 ? '' : resolveCandidateUrl(coverUrl, candidate.bookUrl) ?? coverUrl
     if (tocUrl !== undefined) metadata.tocUrl = resolveCandidateUrl(tocUrl, candidate.bookUrl) ?? tocUrl
+    const downloadUrls = normalizeDownloadUrls(record?.downloadUrls, candidate.bookUrl)
+    if (downloadUrls !== undefined) metadata.downloadUrls = downloadUrls
+    if (sourceNumber(input.source, 'bookSourceType') === 3 && (metadata.downloadUrls === undefined || metadata.downloadUrls.length === 0)) {
+      diagnostics.push({ code: 'rule-failed', stage: 'detail', field: 'downloadUrls', itemIndex, message: '下载链接为空', retryable: false })
+      continue
+    }
     if (metadata.tocUrl === undefined || metadata.tocUrl.length === 0) metadata.tocUrl = candidate.bookUrl
     items.push(metadata)
     trace.push({ stage: 'detail', event: 'candidate', target: `book:${itemIndex}`, itemIndex })
@@ -966,10 +976,21 @@ const BOOK_TYPE_TEXT = 8
 const BOOK_TYPE_AUDIO = 32
 const BOOK_TYPE_IMAGE = 64
 const BOOK_TYPE_WEB_FILE = 128
+const BOOK_TYPE_ALL = BOOK_TYPE_VIDEO | BOOK_TYPE_TEXT | BOOK_TYPE_AUDIO | BOOK_TYPE_IMAGE | BOOK_TYPE_WEB_FILE
 
-function androidBookType(book: BookMetadata | undefined, source: NormalizedSource): number {
-  const explicitType = book?.type
-  if (typeof explicitType === 'number' && Number.isInteger(explicitType) && explicitType > 0) return explicitType
+function validBookType(value: unknown): number | undefined {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^[-+]?\d+$/u.test(value)
+      ? Number(value)
+      : undefined
+  if (parsed === undefined || !Number.isSafeInteger(parsed) || parsed <= 0 || parsed > BOOK_TYPE_ALL || (parsed & ~BOOK_TYPE_ALL) !== 0) return undefined
+  return parsed
+}
+
+function androidBookType(book: BookCandidate | BookMetadata | undefined, source: NormalizedSource): number {
+  const explicitType = validBookType(book?.type)
+  if (explicitType !== undefined) return explicitType
   switch (sourceNumber(source, 'bookSourceType')) {
     case 1: return BOOK_TYPE_AUDIO
     case 2: return BOOK_TYPE_IMAGE
@@ -977,4 +998,17 @@ function androidBookType(book: BookMetadata | undefined, source: NormalizedSourc
     case 4: return BOOK_TYPE_VIDEO
     default: return BOOK_TYPE_TEXT
   }
+}
+
+function normalizeDownloadUrls(value: unknown, baseUrl: string): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const urls: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') return undefined
+    const text = item.trim()
+    if (text.length === 0 || /^javascript/iu.test(text)) continue
+    const resolved = resolveCandidateUrl(text, baseUrl)
+    if (resolved !== undefined && !urls.includes(resolved)) urls.push(resolved)
+  }
+  return urls
 }

@@ -80,6 +80,8 @@ export interface BookIdentity {
 export interface BookCandidate extends BookIdentity {
   name?: string
   author?: string
+  /** Android JS source marshaller 的 BookType 位标记。 */
+  type?: number
   intro?: string
   coverUrl?: string
   /** 书源搜索或详情规则返回的分类；来源未提供时保持缺失。 */
@@ -94,6 +96,8 @@ export interface BookCandidate extends BookIdentity {
   tocUrl?: string
   /** JavaScript 源通过 SearchBook.variable 传递的变量 JSON。 */
   variable?: string
+  /** JavaScript 详情返回的可下载地址；仅保留绝对、非 javascript 地址。 */
+  downloadUrls?: string[]
   /** SearchBook.infoHtml 的运行期对应物；详情完成后必须丢弃，不属于持久化字段。 */
   infoPage?: { body: string; requestUrl: string; responseUrl: string }
   rawFields: JsonObject

@@ -549,6 +549,28 @@ test('JavaScript 书源按 Android 函数流贯通搜索、详情、目录和章
   assert.deepEqual(requests, [])
 })
 
+test('JavaScript 书源按 Android marshaller 保留 BookType 并规范化 downloadUrls', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-file-source.test',
+    bookSourceName: 'JS File Source',
+    bookSourceType: 3,
+    mainJs: [
+      'function search() { return [{ name: "资源", bookUrl: "https://js-file-source.test/file", type: 64 }, { name: "回退", bookUrl: "https://js-file-source.test/fallback", type: 1 }]; }',
+      'function getBookInfo(book) { if (book.type !== 136) throw new Error("source type was not reset before getBookInfo"); if (book.bookUrl === "https://js-file-source.test/fallback") return { type: 1, downloadUrls: ["/ignored", 1] }; return { type: 64, downloadUrls: ["/download/a", "javascript:alert(1)", "https://cdn.test/b", "/download/a"], variable: { token: "ok" } }; }',
+    ].join('\n'),
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+  const search = await searchBooks(ports, { source, keyword: '资源' })
+  assert.equal(search.status, 'success')
+  assert.deepEqual(search.value?.items.map((item) => item.type), [64, 136])
+  const details = await loadBookDetails(ports, { source, candidates: search.value!.items })
+  assert.equal(details.status, 'partial')
+  assert.deepEqual(details.value?.items.map((item) => item.type), [200])
+  assert.deepEqual(details.value?.items[0]?.downloadUrls, ['https://js-file-source.test/download/a', 'https://cdn.test/b'])
+  assert.equal(details.diagnostics.some((diagnostic) => diagnostic.field === 'downloadUrls' && diagnostic.message === '下载链接为空'), true)
+  assert.equal(details.value?.items[0]?.variable, '{"token":"ok"}')
+})
+
 test('声明式正文规则可以读取 nextChapterUrl 绑定', async () => {
   const source = {
     bookSourceUrl: 'https://next-binding.test',
