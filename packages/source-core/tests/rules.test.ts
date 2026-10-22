@@ -153,8 +153,37 @@ test('Java 正则 POSIX/Unicode 属性映射到受控 ECMAScript 属性转义', 
   assert.equal('error' in unsupported ? unsupported.error.code : 'regex', 'unsupported-pattern')
   const unsupportedFlag = compileSourcePattern('abc', { flags: 'U' })
   assert.equal('error' in unsupportedFlag ? unsupportedFlag.error.code : 'regex', 'unsupported-pattern')
-  const scopedFlag = compileSourcePattern('(?i:abc)', { flags: '' })
-  assert.equal('error' in scopedFlag ? scopedFlag.error.code : 'regex', 'unsupported-pattern')
+})
+
+test('Java 正则作用域 flags 展开 i/m/s 并保留嵌套禁用语义', () => {
+  const scopedCase = compileSourcePattern('(?i:abc)-(?-i:DEF)', { flags: '' })
+  assert.ok('regex' in scopedCase)
+  assert.equal('regex' in scopedCase ? scopedCase.regex.test('AbC-DEF') : false, true)
+  assert.equal('regex' in scopedCase ? scopedCase.regex.test('AbC-def') : true, false)
+
+  const inheritedCase = compileSourcePattern('a(?-i:b)c', { flags: 'i' })
+  assert.ok('regex' in inheritedCase)
+  assert.equal('regex' in inheritedCase ? inheritedCase.regex.test('AbC') : false, true)
+  assert.equal('regex' in inheritedCase ? inheritedCase.regex.test('ABC') : true, false)
+
+  const scopedClass = compileSourcePattern('(?i:[a-z]+)', { flags: '' })
+  assert.ok('regex' in scopedClass)
+  assert.equal('regex' in scopedClass ? scopedClass.regex.test('AbZ') : false, true)
+
+  const scopedDot = compileSourcePattern('a(?s:.)b', { flags: '' })
+  assert.ok('regex' in scopedDot)
+  assert.equal('regex' in scopedDot ? scopedDot.regex.test('a\nb') : false, true)
+
+  const scopedAnchor = compileSourcePattern('(?m:^foo$)', { flags: '' })
+  assert.ok('regex' in scopedAnchor)
+  assert.equal('regex' in scopedAnchor ? scopedAnchor.regex.test('before\nfoo\nafter') : false, true)
+
+  const nested = compileSourcePattern('(?i:ab(?-i:CD)(?s:.))', { flags: '' })
+  assert.ok('regex' in nested)
+  assert.equal('regex' in nested ? nested.regex.test('ABCD\n') : false, true)
+
+  const unsupportedScoped = compileSourcePattern('(?x: a )', { flags: '' })
+  assert.equal('error' in unsupportedScoped ? unsupportedScoped.error.code : 'regex', 'unsupported-pattern')
 })
 
 test('非法规则、取消和预算耗尽均有可判别结果', () => {

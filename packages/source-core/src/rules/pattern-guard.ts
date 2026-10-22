@@ -27,6 +27,20 @@ interface JavaPatternTranslation {
   flags: string
 }
 
+interface ScopedPatternMode {
+  ignoreCase: boolean
+  multiline: boolean
+  dotAll: boolean
+}
+
+interface ScopedFlagGroup {
+  start: number
+  enabled: string
+  disabled: string
+  contentStart: number
+  end: number
+}
+
 /** 长度上限：语料最长 981，取 2048 留一倍余量。 */
 const maxSourcePatternLength = 2048
 /**
@@ -102,7 +116,10 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     flags = applyInlineFlags(flags, enabled, true)
     flags = applyInlineFlags(flags, disabled, false)
   }
-  if (/\(\?[imsUdx-]+:/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则作用域 flag 暂不支持' } }
+  const scoped = translateScopedFlags(source, flags)
+  if ('error' in scoped) return scoped
+  source = scoped.pattern
+  flags = scoped.flags
   source = source.replace(/\\R/gu, '(?:\\r\\n|[\\n\\r\\u2028\\u2029])').replace(/\\A/gu, '^').replace(/\\[zZ]/gu, '$')
   const intersections = translateJavaCharacterClassIntersections(source)
   if ('error' in intersections) return intersections
@@ -127,6 +144,248 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
   if (/\(\?>/u.test(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则原子分组暂不支持' } }
   if (hasPossessiveQuantifier(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则占有量词暂不支持' } }
   return { pattern: output, flags }
+}
+
+/**
+ * Java 的 `(?im-s:...)` 是局部作用域，而 ECMAScript 只有整条正则的 flags。
+ * 对常见的 i/m/s 做词法展开，保留 `(?-i:...)` 这类书源写法；不能安全展开的
+ * x/d/u/U 作用域继续明确返回能力错误，避免把局部语义错误地扩大到整条正则。
+ */
+function translateScopedFlags(source: string, inputFlags: string): { pattern: string; flags: string } | { error: SourcePatternError } {
+  const first = findScopedFlagGroup(source, 0)
+  if (first === undefined) return { pattern: source, flags: inputFlags }
+  const unsupported = `${first.enabled}${first.disabled}`.split('').find((flag) => !'ims'.includes(flag))
+  if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
+  const mode: ScopedPatternMode = {
+    ignoreCase: inputFlags.includes('i'),
+    multiline: inputFlags.includes('m'),
+    dotAll: inputFlags.includes('s'),
+  }
+  const translated = translateScopedSegment(source, 0, source.length, mode)
+  if ('error' in translated) return translated
+  return { pattern: translated.pattern, flags: inputFlags.replace(/[ims]/gu, '') }
+}
+
+function translateScopedSegment(source: string, start: number, end: number, mode: ScopedPatternMode): { pattern: string } | { error: SourcePatternError } {
+  let output = ''
+  let index = start
+  while (index < end) {
+    if (source.startsWith('\\Q', index)) {
+      const quoteEnd = source.indexOf('\\E', index + 2)
+      if (quoteEnd < 0 || quoteEnd >= end) return { error: { code: 'invalid-pattern', message: 'Java 正则缺少 \\E 结束标记' } }
+      const quoted = source.slice(index + 2, quoteEnd)
+      output += mode.ignoreCase ? foldQuotedLiteral(quoted) : source.slice(index, quoteEnd + 2)
+      index = quoteEnd + 2
+      continue
+    }
+    const scoped = findScopedFlagGroup(source, index)
+    if (scoped !== undefined && scoped.start === index && scoped.end < end) {
+      const nestedMode = applyScopedFlagMode(mode, scoped.enabled, scoped.disabled)
+      if ('error' in nestedMode) return nestedMode
+      const inner = translateScopedSegment(source, scoped.contentStart, scoped.end, nestedMode.mode)
+      if ('error' in inner) return inner
+      output += `(?:${inner.pattern})`
+      index = scoped.end + 1
+      continue
+    }
+    const current = source[index]!
+    if (current === '\\') {
+      const escaped = foldEscapedLiteral(source, index, end, mode.ignoreCase)
+      output += escaped.text
+      index = escaped.next
+      continue
+    }
+    if (current === '[') {
+      const classEnd = findCharacterClassEnd(source, index)
+      if (classEnd < 0 || classEnd >= end) return { error: { code: 'invalid-pattern', message: 'Java 正则字符类括号不匹配' } }
+      const raw = source.slice(index, classEnd + 1)
+      output += mode.ignoreCase ? foldCharacterClass(raw) : raw
+      index = classEnd + 1
+      continue
+    }
+    if (current === '^' && mode.multiline) {
+      output += '(?:^|(?<=[\\r\\n]))'
+      index += 1
+      continue
+    }
+    if (current === '$' && mode.multiline) {
+      output += '(?:$|(?=[\\r\\n]))'
+      index += 1
+      continue
+    }
+    if (current === '.' && mode.dotAll) {
+      output += '[\\s\\S]'
+      index += 1
+      continue
+    }
+    output += mode.ignoreCase ? foldPatternAtom(current) : current
+    index += 1
+  }
+  return { pattern: output }
+}
+
+function findScopedFlagGroup(source: string, start: number): ScopedFlagGroup | undefined {
+  let index = start
+  let quoted = false
+  while (index < source.length) {
+    if (source.startsWith('\\Q', index)) {
+      quoted = true
+      index += 2
+      continue
+    }
+    if (quoted) {
+      if (source.startsWith('\\E', index)) quoted = false
+      index += 1
+      continue
+    }
+    if (source[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (source[index] === '[') {
+      const classEnd = findCharacterClassEnd(source, index)
+      if (classEnd < 0) return undefined
+      index = classEnd + 1
+      continue
+    }
+    if (source[index] !== '(' || source[index + 1] !== '?') {
+      index += 1
+      continue
+    }
+    let cursor = index + 2
+    const enabledStart = cursor
+    while (cursor < source.length && /[A-Za-z]/u.test(source[cursor]!)) cursor += 1
+    const enabled = source.slice(enabledStart, cursor)
+    let disabled = ''
+    if (source[cursor] === '-') {
+      cursor += 1
+      const disabledStart = cursor
+      while (cursor < source.length && /[A-Za-z]/u.test(source[cursor]!)) cursor += 1
+      disabled = source.slice(disabledStart, cursor)
+    }
+    if ((enabled.length === 0 && disabled.length === 0) || source[cursor] !== ':') {
+      index += 2
+      continue
+    }
+    const contentStart = cursor + 1
+    const end = findGroupEnd(source, contentStart)
+    return end < 0 ? undefined : { start: index, enabled, disabled, contentStart, end }
+  }
+  return undefined
+}
+
+function findGroupEnd(source: string, contentStart: number): number {
+  let depth = 1
+  let index = contentStart
+  while (index < source.length) {
+    if (source.startsWith('\\Q', index)) {
+      const quoteEnd = source.indexOf('\\E', index + 2)
+      if (quoteEnd < 0) return -1
+      index = quoteEnd + 2
+      continue
+    }
+    if (source[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (source[index] === '[') {
+      const classEnd = findCharacterClassEnd(source, index)
+      if (classEnd < 0) return -1
+      index = classEnd + 1
+      continue
+    }
+    if (source[index] === '(') depth += 1
+    else if (source[index] === ')' && --depth === 0) return index
+    index += 1
+  }
+  return -1
+}
+
+function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled: string): { mode: ScopedPatternMode } | { error: SourcePatternError } {
+  const unsupported = `${enabled}${disabled}`.split('').find((flag) => !'ims'.includes(flag))
+  if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
+  const next = { ...mode }
+  for (const flag of enabled) {
+    if (flag === 'i') next.ignoreCase = true
+    if (flag === 'm') next.multiline = true
+    if (flag === 's') next.dotAll = true
+  }
+  for (const flag of disabled) {
+    if (flag === 'i') next.ignoreCase = false
+    if (flag === 'm') next.multiline = false
+    if (flag === 's') next.dotAll = false
+  }
+  return { mode: next }
+}
+
+function foldEscapedLiteral(source: string, index: number, end: number, ignoreCase: boolean): { text: string; next: number } {
+  if (!ignoreCase) return { text: source.slice(index, Math.min(end, index + 2)), next: Math.min(end, index + 2) }
+  const hex = /^\\x([0-9A-Fa-f]{2})/u.exec(source.slice(index, end))
+  const unicode = /^\\u([0-9A-Fa-f]{4})/u.exec(source.slice(index, end))
+  const match = hex ?? unicode
+  if (match === null) return { text: source.slice(index, Math.min(end, index + 2)), next: Math.min(end, index + 2) }
+  const value = String.fromCodePoint(Number.parseInt(match[1]!, 16))
+  return { text: foldPatternLiteral(value), next: index + match[0].length }
+}
+
+function foldQuotedLiteral(value: string): string {
+  return [...value].map((character) => foldPatternLiteral(character)).join('')
+}
+
+function foldPatternLiteral(value: string): string {
+  if (value.length !== 1) return escapeRegexLiteral(value)
+  const lower = value.toLowerCase()
+  const upper = value.toUpperCase()
+  if (lower === upper || lower.length !== 1 || upper.length !== 1) return escapeRegexLiteral(value)
+  if (lower === value && upper === value) return escapeRegexLiteral(value)
+  return `[${escapeRegexLiteral(lower)}${escapeRegexLiteral(upper)}]`
+}
+
+function foldPatternAtom(value: string): string {
+  return /[\\^$.*+?()[\]{}|]/u.test(value) ? value : foldPatternLiteral(value)
+}
+
+function foldCharacterClass(raw: string): string {
+  const body = raw.slice(1, -1)
+  const prefix = body.startsWith('^') ? '^' : ''
+  const value = prefix.length > 0 ? body.slice(1) : body
+  let output = prefix
+  for (let index = 0; index < value.length;) {
+    if (value[index] === '\\') {
+      output += value.slice(index, Math.min(value.length, index + 2))
+      index += 2
+      continue
+    }
+    if (value[index] === '[') {
+      const end = findCharacterClassEnd(value, index)
+      if (end >= 0) {
+        output += foldCharacterClass(value.slice(index, end + 1))
+        index = end + 1
+        continue
+      }
+    }
+    const first = value[index]!
+    const second = value[index + 1]
+    const third = value[index + 2]
+    if (isCaseLetter(first) && second === '-' && third !== undefined && isCaseLetter(third)) {
+      output += `${first}-${third}`
+      const firstLower = first.toLowerCase()
+      const thirdLower = third.toLowerCase()
+      const firstUpper = first.toUpperCase()
+      const thirdUpper = third.toUpperCase()
+      if (`${firstLower}-${thirdLower}` !== `${first}-${third}`) output += `${firstLower}-${thirdLower}`
+      if (`${firstUpper}-${thirdUpper}` !== `${first}-${third}` && `${firstUpper}-${thirdUpper}` !== `${firstLower}-${thirdLower}`) output += `${firstUpper}-${thirdUpper}`
+      index += 3
+      continue
+    }
+    output += isCaseLetter(first) ? `${first}${first === first.toLowerCase() ? first.toUpperCase() : first.toLowerCase()}` : first
+    index += 1
+  }
+  return `[${output}]`
+}
+
+function isCaseLetter(value: string): boolean {
+  return value.toLowerCase() !== value.toUpperCase() && value.length === 1
 }
 
 /**

@@ -470,7 +470,8 @@ test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', a
       var matcher = Pattern.compile('([a-z]+)(\\\\d+)').matcher('x12 y34');
       var first = matcher.find() ? [matcher.group(), matcher.group(1), matcher.start(1), matcher.end(1)] : null;
       var second = matcher.find() ? matcher.group() : null;
-      JSON.stringify({ split: [text.split('/').size(), text.split('/', -1).size()], replace: [text.replaceAll('/', '-').toString(), text.replaceFirst('/', '-').toString()], compare: [text.compareTo('a/b/'), text.matches('a/b/')], integer: [Integer.toString(-42), Integer.compare(1, 3), Integer.compare(3, 1)], builder: builder.toString(), pattern: [first, second, Pattern.quote('a+b')] });
+      var scoped = Pattern.compile('(?i:abc)-(?-i:DEF)');
+      JSON.stringify({ split: [text.split('/').size(), text.split('/', -1).size()], replace: [text.replaceAll('/', '-').toString(), text.replaceFirst('/', '-').toString()], compare: [text.compareTo('a/b/'), text.matches('a/b/')], integer: [Integer.toString(-42), Integer.compare(1, 3), Integer.compare(3, 1)], builder: builder.toString(), pattern: [first, second, Pattern.quote('a+b')], scoped: [scoped.matcher('AbC-DEF').find(), scoped.matcher('AbC-def').find()] });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
@@ -480,6 +481,7 @@ test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', a
     integer: ['-42', -1, 1],
     builder: '!cXa',
     pattern: [['x12', 'x', 0, 1], 'y34', '\\Qa+b\\E'],
+    scoped: [true, false],
   })
 })
 
