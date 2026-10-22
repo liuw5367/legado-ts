@@ -143,6 +143,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播和 `skipRateLimit` 绕过语义；Node `ajaxAll(..., true)` 与 `ajaxTestAll(..., timeout, true)` 已有 bridge/limiter 回归，Android golden 仍待执行 |
 | `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |
 | `JS-004` | 段评 | 声明式/JS 摘要索引、详情游标、回复分页展平、内容协议、函数配对/缺失终态和媒体基准地址 |
+| `JS-005` | 书源 JS bridge | Java String/StringBuilder/Pattern/Matcher 重载、JavaImporter/Packages、Base64/URLEncoder/DatatypeConverter、HMAC/SecretKeySpec、InputStream 与 AnalyzeUrl 响应对象 |
 | `REVIEW-001` | 旧式段评 | `getDP/getZP` 页面打开、nonce 会话、CSP/sandbox 桥接、脚本上限、书源变更和图片重写 |
 | `MEDIA-001` | 媒体 | 文本、音频、图片、视频和文件类型从列表到详情的身份与结果类型 |
 | `MEDIA-002` | 图片 | 封面和正文图片 bytes 解密、失败回退、Cookie 和缓存隔离 |
@@ -383,6 +384,9 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | JS-004/replies | 声明式回复 body 为空、列表为空、列表非空但解析为空；JS 回复缺函数、返回空值或缺 items | 空 body/解析为空保留错误；合法空列表为空结果；JS 缺函数为空页并带能力诊断，缺 items 为格式错误；hasMore 按各自分支规则计算 |
 | JS-004/function-state | JS 只声明摘要、只声明详情、回复单独存在、函数声明但不是函数；运行时详情函数缺失或返回 null | 导入阶段按函数配对规则失败；详情缺失是 capability/脚本错误；详情空返回是合法空页；回复缺失是可诊断空页 |
 | JS-004/media-base | 声明式请求发生重定向，JS 返回相对头像/图片/音频，旧式页面返回 HEIF 图片 | 声明式按响应最终 URL，JS 按 `chapter.url`，旧式页面按书籍 URL 交给图片代理；三条路径不能共用错误基准 |
+| JS-005/java-overloads | 教程式脚本同时调用 `String.split(regex, limit)`、`replaceAll/replaceFirst`、`StringBuilder`、`Pattern.matcher().find/group/start/end`、`Integer.toString/compare` | 结果与 Java 常用重载一致；受控 Pattern 不支持的语法返回 `unsupported-pattern`，不静默当普通字符串 |
+| JS-005/imported-classes | 通过 `JavaImporter(Packages...)` 加载 `URLEncoder`、`Base64`、`DatatypeConverter`、`Mac/SecretKeySpec`、`ByteArrayInputStream`，并调用 `Packages.java.util.Base64` | 纯编码、HMAC、字节读取和类名导入可运行；编码输入输出保持字节/字符串类型，受控类之外不宣称通用 JVM |
+| JS-005/url-response | AnalyzeUrl 脚本修改 `java.url/headerMap` 后调用 `getStrResponse/getResponse`，并读取 `bytes/bodyAsBytes/errorBody/callTime/raw` | 重取请求继承当前 URL、Header、认证链；响应方法来自受控 DTO 包装；WebView 专属路径和未验证 Android 行为必须带能力诊断 |
 | REVIEW-001/legacy-bridge | `src` 含 `getDP(1,2)` 或 `getZP(3)`，分别测试空 HTML、过期/错误 nonce、书源变更、>64 KiB 脚本和 HEIF 图片 | open 返回 id/nonce；页面只在 nonce 有效时返回并带 no-store/CSP/sandbox；run 重新校验源上下文、拒绝超长脚本并重写图片 |
 | URL-007/rate-window | `concurrentRate=2/1000`，同源三次请求，跨源一次，等待期间取消；另测首次非法配置 | 同源前两次立即通过，第三次等待窗口；异源不共享；跨窗口重置计数；取消不再启动请求；已有记录更新保留旧值，首次非法值按 Android fallback 并有诊断 |
 | URL-007/rate-bypass | `ajaxAll(urls,true)`、`ajaxTestAll(urls,timeout,true)`、普通 ajax/connect、源编辑覆盖和删除 | bypass 只跳过书源限流，不跳过宿主并发上限；普通请求仍限流；更新/删除后 source key 记录被清理 |

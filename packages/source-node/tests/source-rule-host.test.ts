@@ -95,6 +95,51 @@ test('JavaImporter、Packages、Map/List 和 Java String 常见用法可运行',
   assert.deepEqual(JSON.parse(String(result.value)), { digest: [16, 32], text: 'oo', map: ['alice', 'reader', 2], list: ['b', 2], response: ['https://fixture.invalid', 'body', 200] })
 })
 
+test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.StringBuilder, Packages.java.lang.Integer, Packages.java.util.regex.Pattern);
+    with (importer) {
+      var text = new String('a/b/');
+      var builder = new StringBuilder('abc');
+      builder.insert(1, 'X').deleteCharAt(2).append('!').reverse();
+      var matcher = Pattern.compile('([a-z]+)(\\\\d+)').matcher('x12 y34');
+      var first = matcher.find() ? [matcher.group(), matcher.group(1), matcher.start(1), matcher.end(1)] : null;
+      var second = matcher.find() ? matcher.group() : null;
+      JSON.stringify({ split: [text.split('/').size(), text.split('/', -1).size()], replace: [text.replaceAll('/', '-').toString(), text.replaceFirst('/', '-').toString()], compare: [text.compareTo('a/b/'), text.matches('a/b/')], integer: [Integer.toString(-42), Integer.compare(1, 3), Integer.compare(3, 1)], builder: builder.toString(), pattern: [first, second, Pattern.quote('a+b')] });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    split: [2, 3],
+    replace: ['a-b-', 'a-b/'],
+    compare: [0, true],
+    integer: ['-42', -1, 1],
+    builder: '!cXa',
+    pattern: [['x12', 'x', 0, 1], 'y34', '\\Qa+b\\E'],
+  })
+})
+
+test('JavaImporter 可加载教程中的 URL、Base64、DatatypeConverter 和 HMAC 类', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String, Packages.javax.crypto.Mac, Packages.javax.crypto.spec.SecretKeySpec, Packages.java.net.URLEncoder, Packages.javax.xml.bind.DatatypeConverter, Packages.android.util.Base64);
+    with (importer) {
+      var mac = Mac.getInstance('HmacSHA256');
+      mac.init(new SecretKeySpec(String('key').getBytes('UTF-8'), 'HmacSHA256'));
+      var signature = mac.doFinal(String('data').getBytes('UTF-8'));
+      var encoded = Base64.encodeToString(signature, Base64.NO_WRAP);
+      var javaEncoded = Packages.java.util.Base64.getEncoder().encode(signature);
+      var androidEncoded = Base64.encode(signature, Base64.NO_WRAP);
+      JSON.stringify([URLEncoder.encode('a b', 'UTF-8'), DatatypeConverter.printHexBinary(signature), Array.from(Base64.decode(encoded, Base64.DEFAULT)), Array.from(javaEncoded), Array.from(androidEncoded)]);
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [
+    'a+b',
+    '5031FE3D989C6D1537A013FA6E739DA23463FDAEC3B70137D828E36ACE221BD0',
+    [80, 49, 254, 61, 152, 156, 109, 21, 55, 160, 19, 250, 110, 115, 157, 162, 52, 99, 253, 174, 195, 183, 1, 55, 216, 40, 227, 106, 206, 34, 27, 208],
+    [85, 68, 72, 43, 80, 90, 105, 99, 98, 82, 85, 51, 111, 66, 80, 54, 98, 110, 79, 100, 111, 106, 82, 106, 47, 97, 55, 68, 116, 119, 69, 51, 50, 67, 106, 106, 97, 115, 52, 105, 71, 57, 65, 61],
+    [85, 68, 72, 43, 80, 90, 105, 99, 98, 82, 85, 51, 111, 66, 80, 54, 98, 110, 79, 100, 111, 106, 82, 106, 47, 97, 55, 68, 116, 119, 69, 51, 50, 67, 106, 106, 97, 115, 52, 105, 71, 57, 65, 61],
+  ])
+})
+
 test('source Map 兼容方法、URL 查询参数重复值和 jsLib 全局状态可恢复', async () => {
   const host = new SourceRuleHost()
   const stateSource = { ...source, jsLib: 'var tutorialCounter = (typeof tutorialCounter === "undefined" ? 0 : tutorialCounter) + 1;' } as NormalizedSource
@@ -356,6 +401,28 @@ test('网络响应桥接保留字节、字符集和 Headers/Raw 方法', async (
   const result = await evaluate(host, '@js:var response = java.get("https://a.test", {}); [response.bodyAsBytes().length, response.charset(), response.contentType(), response.headers().get("location"), response.raw().request().url(), response.statusMessage()].join("|")', '')
   assert.equal(result.status, 'success')
   assert.equal(result.value, '6|utf-8|text/plain; charset=utf-8|https://b.test/|https://a.test|Partial Content')
+})
+
+test('AnalyzeUrl getResponse/getStrResponse 提供教程常用响应成员', async () => {
+  const calls: unknown[] = []
+  const host = new SourceRuleHost({ request: async (input) => {
+    calls.push(input)
+    return { body: 'url-body', status: 418, message: "I'm a teapot", headers: { 'X-Test': 'yes' }, url: 'https://b.test/', bytes: new TextEncoder().encode('raw'), errorBody: 'teapot', callTime: 12, requestUrl: 'https://a.test/' }
+  } })
+  const result = await host.evaluate({
+    source,
+    stage: 'search',
+    field: 'fixture',
+    rule: '@js:var response = java.getResponse(); var stringResponse = java.getStrResponse(); JSON.stringify([response.body(), response.code(), response.headers().get("x-test"), Array.from(response.bodyAsBytes()), response.errorBody(), response.callTime(), response.raw().request().url(), stringResponse.toString()])',
+    content: '',
+    bindings: { __legadoUrlContext: { url: 'https://a.test/', headerMap: {} } },
+  })
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['url-body', 418, 'yes', [114, 97, 119], 'teapot', 12, 'https://a.test/', '418 I\'m a teapot'])
+  assert.deepEqual(calls, [
+    { kind: 'url-context-response', input: { url: 'https://a.test/', headers: {}, body: undefined, method: undefined, options: undefined, baseUrl: undefined, redirectUrl: undefined, responseKind: 'response', jsStr: undefined, sourceRegex: undefined, useWebView: true }, stage: 'search' },
+    { kind: 'url-context-response', input: { url: 'https://a.test/', headers: {}, body: undefined, method: undefined, options: undefined, baseUrl: undefined, redirectUrl: undefined, responseKind: 'string', jsStr: undefined, sourceRegex: undefined, useWebView: true }, stage: 'search' },
+  ])
 })
 
 test('ajaxTestAll 将单项失败转换为 Android 测试响应而不取消其他 URL', async () => {
