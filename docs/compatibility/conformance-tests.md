@@ -34,7 +34,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `source-host-flow.test.ts` 使用真实书源规则和离线响应覆盖 JSON/CSS/XPath/JavaScript/HTML，并额外断言正文网络失败不会伪造成成功；另从大型 collection 按结构索引回放 JSONPath 条件过滤和 `java.getElements` 书源。不会把完整 collection 输出到日志。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
-- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 138/138，`pnpm test` 为 558/558。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
+- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 147/147，`pnpm test` 为 576/576。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
 ### 2026-10-22 P13 最终回归
