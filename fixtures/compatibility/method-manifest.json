@@ -3824,6 +3824,101 @@
       ]
     },
     {
+      "id": "java-primitive-overloads",
+      "family": "bridge",
+      "scope": "source-runtime",
+      "androidOwner": "java.lang.String/Integer/Long/java.math.BigInteger",
+      "androidMethods": [
+        "String.valueOf",
+        "String.copyValueOf",
+        "Integer.parseInt",
+        "Long.parseLong",
+        "BigInteger(String,radix)"
+      ],
+      "tsPaths": [
+        "packages/source-core/src/rules/source-runtime.ts"
+      ],
+      "implementation": "partial",
+      "verification": "ts-passed",
+      "feasibility": "simulatable",
+      "decision": "verify",
+      "divergences": ["D34"],
+      "fixtures": ["JS-005"],
+      "errorCodes": ["rule-failed"],
+      "members": [
+        {
+          "id": "java-primitive-overloads::001-string-valueof",
+          "owner": "java.lang.String/Integer/Long/java.math.BigInteger",
+          "name": "String.valueOf",
+          "signature": "String.valueOf(Object/char[])",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": ["JS-005"],
+          "errorCodes": []
+        },
+        {
+          "id": "java-primitive-overloads::002-string-copyvalueof",
+          "owner": "java.lang.String/Integer/Long/java.math.BigInteger",
+          "name": "String.copyValueOf",
+          "signature": "String.copyValueOf(char[],int,int)",
+          "parameters": [],
+          "returnType": "String",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": ["JS-005"],
+          "errorCodes": []
+        },
+        {
+          "id": "java-primitive-overloads::003-integer-parseint",
+          "owner": "java.lang.String/Integer/Long/java.math.BigInteger",
+          "name": "Integer.parseInt",
+          "signature": "Integer.parseInt(String,int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": ["JS-005"],
+          "errorCodes": []
+        },
+        {
+          "id": "java-primitive-overloads::004-long-parselong",
+          "owner": "java.lang.String/Integer/Long/java.math.BigInteger",
+          "name": "Long.parseLong",
+          "signature": "Long.parseLong(String,int)",
+          "parameters": [],
+          "returnType": "long",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": ["JS-005"],
+          "errorCodes": []
+        },
+        {
+          "id": "java-primitive-overloads::005-biginteger-radix",
+          "owner": "java.lang.String/Integer/Long/java.math.BigInteger",
+          "name": "BigInteger(String,radix)",
+          "signature": "BigInteger(String,int)",
+          "parameters": [],
+          "returnType": "BigInteger",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": ["JS-005"],
+          "errorCodes": []
+        }
+      ]
+    },
+    {
       "id": "java-importer-classes",
       "family": "bridge",
       "scope": "source-runtime",
@@ -5004,5 +5099,5 @@
       ]
     }
   ],
-  "memberCount": 207
+  "memberCount": 212
 }

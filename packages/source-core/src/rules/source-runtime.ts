@@ -420,6 +420,7 @@ const legadoJavaString = (input) => {
     regionMatches: { value: function(ignoreCase, thisOffset, other, otherOffset, length) { let insensitive = ignoreCase; let from = thisOffset; let value = other; let offset = otherOffset; let count = length; if (arguments.length < 5) { insensitive = false; from = ignoreCase; value = thisOffset; offset = other; count = otherOffset } const left = text.slice(Number(from), Number(from) + Number(count)); const right = String(value ?? "").slice(Number(offset), Number(offset) + Number(count)); return insensitive === true ? left.toLowerCase() === right.toLowerCase() : left === right } },
     hashCode: { value: () => { let hash = 0; for (const char of text) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0; return hash } },
     toString: { value: () => text },
+    toJSON: { value: () => text },
     valueOf: { value: () => text },
     [Symbol.toPrimitive]: { value: () => text },
   })
@@ -439,9 +440,18 @@ const legadoJavaLangString = function(value, charsetOrOffset, length) {
   return legadoJavaString(value)
 }
 // 书源常见 String.format 只覆盖顺序的 %s 占位符；其他格式由受控能力错误表示，不猜测 Locale 规则。
+// Java 的字符数组重载按 UTF-16 char 连接；不能复用 byte[] 解码路径，否则数值会被当作 UTF-8 字节。
+const legadoJavaCharArrayText = (value, offset, length) => {
+  if (value === null || value === undefined || typeof value.length !== "number") throw new RangeError("char array is required")
+  const chars = Array.from(value)
+  const start = offset === undefined ? 0 : Number(offset)
+  const count = length === undefined ? chars.length - start : Number(length)
+  if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > chars.length) throw new RangeError("char array range out of bounds")
+  return chars.slice(start, start + count).map((item) => typeof item === "number" ? String.fromCharCode(item) : String(item)).join("")
+}
 Object.assign(legadoJavaLangString, {
-  valueOf: (value) => legadoJavaString(value),
-  copyValueOf: (value) => legadoJavaString(value),
+  valueOf: (value) => value === null || value === undefined ? legadoJavaString("null") : Array.isArray(value) ? legadoJavaString(legadoJavaCharArrayText(value)) : legadoJavaString(value),
+  copyValueOf: (value, offset, length) => legadoJavaString(legadoJavaCharArrayText(value, offset, length)),
   format: (format, ...args) => legadoJavaString(String(format ?? "").replace(/%s/gu, () => String(args.shift() ?? "null"))),
 })
 const legadoStringBuilder = function(initial) {
@@ -464,14 +474,37 @@ const legadoStringBuilder = function(initial) {
   }
   return target
 }
-const legadoInteger = { toHexString: (value) => (Number(value) >>> 0).toString(16), toString: (value, radix) => Math.trunc(Number(value)).toString(radix === undefined ? 10 : Number(radix)), parseInt: (value, radix) => Number.parseInt(String(value), radix === undefined ? 10 : Number(radix)), valueOf: (value) => Number(value), compare: (left, right) => Number(left) < Number(right) ? -1 : Number(left) > Number(right) ? 1 : 0, max: (left, right) => Math.max(Number(left), Number(right)), min: (left, right) => Math.min(Number(left), Number(right)) }
+// Java 的 radix 解析要求完整消费字符串，且只接受 2..36 的 ASCII 数字；Number.parseInt 会静默接受尾随字符。
+const legadoParseBigInt = (value, radix) => {
+  const base = radix === undefined ? 10 : Number(radix)
+  if (!Number.isInteger(base) || base < 2 || base > 36) throw new RangeError("radix out of range")
+  if (value === null || value === undefined) throw new RangeError("invalid integer")
+  const text = String(value)
+  if (text.length === 0) throw new RangeError("invalid integer")
+  let index = 0
+  let negative = false
+  if (text[index] === "+" || text[index] === "-") {
+    negative = text[index] === "-"
+    index += 1
+  }
+  if (index >= text.length) throw new RangeError("invalid integer")
+  let number = 0n
+  for (; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    const digit = code >= 48 && code <= 57 ? code - 48 : code >= 65 && code <= 90 ? code - 55 : code >= 97 && code <= 122 ? code - 87 : -1
+    if (digit < 0 || digit >= base) throw new RangeError("invalid integer")
+    number = number * BigInt(base) + BigInt(digit)
+  }
+  return negative ? -number : number
+}
+const legadoInteger = { toHexString: (value) => (Number(value) >>> 0).toString(16), toString: (value, radix) => Math.trunc(Number(value)).toString(radix === undefined ? 10 : Number(radix)), parseInt: (value, radix) => { const number = legadoParseBigInt(value, radix); if (number < -(2n ** 31n) || number > (2n ** 31n) - 1n) throw new RangeError("integer value out of range"); return Number(number) }, valueOf: (value) => Number(value), compare: (left, right) => Number(left) < Number(right) ? -1 : Number(left) > Number(right) ? 1 : 0, max: (left, right) => Math.max(Number(left), Number(right)), min: (left, right) => Math.min(Number(left), Number(right)) }
 const legadoNumber = { toHexString: (value) => Math.trunc(Number(value)).toString(16), toString: legadoInteger.toString, parseInt: legadoInteger.parseInt, valueOf: legadoInteger.valueOf, compare: legadoInteger.compare, max: legadoInteger.max, min: legadoInteger.min }
-const legadoLong = { MIN_VALUE: -(2n ** 63n), MAX_VALUE: (2n ** 63n) - 1n, parseLong: (value, radix) => BigInt(String(value).trim()), toString: (value, radix) => BigInt(value).toString(radix === undefined ? 10 : Number(radix)), valueOf: (value) => BigInt(value), compare: (left, right) => BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0, max: (left, right) => BigInt(left) > BigInt(right) ? BigInt(left) : BigInt(right), min: (left, right) => BigInt(left) < BigInt(right) ? BigInt(left) : BigInt(right) }
+const legadoLong = { MIN_VALUE: -(2n ** 63n), MAX_VALUE: (2n ** 63n) - 1n, parseLong: (value, radix) => { const number = legadoParseBigInt(value, radix); if (number < -(2n ** 63n) || number > (2n ** 63n) - 1n) throw new RangeError("long value out of range"); return number }, toString: (value, radix) => BigInt(value).toString(radix === undefined ? 10 : Number(radix)), valueOf: (value) => BigInt(value), compare: (left, right) => BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0, max: (left, right) => BigInt(left) > BigInt(right) ? BigInt(left) : BigInt(right), min: (left, right) => BigInt(left) < BigInt(right) ? BigInt(left) : BigInt(right) }
 const legadoBigInteger = function(value, radix) {
   let number
   if (value && typeof value === "object" && typeof value.__legadoBigInteger === "bigint") number = value.__legadoBigInteger
   else if (value instanceof Uint8Array || Array.isArray(value)) { let hex = Array.from(value instanceof Uint8Array ? value : Uint8Array.from(value)).map((item) => Number(item).toString(16).padStart(2, "0")).join(""); number = hex.length === 0 ? 0n : BigInt("0x" + hex); if (Number((value instanceof Uint8Array ? value : Uint8Array.from(value))[0] ?? 0) >= 128) number -= 1n << BigInt((value instanceof Uint8Array ? value : Uint8Array.from(value)).length * 8) }
-  else number = BigInt(String(value ?? "0").trim().replace(/^[+]/u, ""))
+  else number = radix === undefined ? BigInt(String(value ?? "0").trim().replace(/^[+]/u, "")) : legadoParseBigInt(value, radix)
   const api = { __legadoBigInteger: number, add: (other) => legadoBigInteger(number + BigInt(other?.__legadoBigInteger ?? other)), subtract: (other) => legadoBigInteger(number - BigInt(other?.__legadoBigInteger ?? other)), multiply: (other) => legadoBigInteger(number * BigInt(other?.__legadoBigInteger ?? other)), divide: (other) => legadoBigInteger(number / BigInt(other?.__legadoBigInteger ?? other)), remainder: (other) => legadoBigInteger(number % BigInt(other?.__legadoBigInteger ?? other)), mod: (other) => { const divisor = BigInt(other?.__legadoBigInteger ?? other); if (divisor <= 0n) throw new RangeError("BigInteger modulus must be positive"); return legadoBigInteger(number % divisor) }, compareTo: (other) => number < BigInt(other?.__legadoBigInteger ?? other) ? -1 : number > BigInt(other?.__legadoBigInteger ?? other) ? 1 : 0, negate: () => legadoBigInteger(-number), abs: () => legadoBigInteger(number < 0n ? -number : number), bitLength: () => (number < 0n ? (-number - 1n) : number).toString(2).length, intValue: () => Number(number), longValue: () => number, toString: (radix) => number.toString(radix === undefined ? 10 : Number(radix)), equals: (other) => other?.__legadoBigInteger === number, valueOf: () => number }
   return api
 }

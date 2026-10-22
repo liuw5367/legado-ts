@@ -123,6 +123,29 @@ test('纯 Java 类族保持 UTF-16、精确数值、增量摘要和字节流语�
   })
 })
 
+test('Java 字符串和整数重载保持 null、字符数组与 radix 解析语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.Integer, Packages.java.lang.Long, Packages.java.math.BigInteger);
+    with (importer) {
+      var integer = Integer.parseInt('ff', 16);
+      var long = Long.parseLong('-8000000000000000', 16);
+      var big = new BigInteger('ff', 16).toString();
+      var invalid = [];
+      try { Integer.parseInt('12x', 10); } catch (error) { invalid.push('integer'); }
+      try { Long.parseLong('fg', 16); } catch (error) { invalid.push('long'); }
+      try { Long.parseLong('9223372036854775808', 10); } catch (error) { invalid.push('range'); }
+      try { String.copyValueOf(['a'], 2, 1); } catch (error) { invalid.push('chars'); }
+      JSON.stringify({ strings: [String.valueOf(null), String.valueOf(['a', 'b']), String.copyValueOf(['a', 'b', 'c'], 1, 2)], numbers: [integer, long.toString(), big], invalid: invalid });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    strings: ['null', 'ab', 'bc'],
+    numbers: [255, '-9223372036854775808', '255'],
+    invalid: ['integer', 'long', 'range'],
+    invalid: ['integer', 'long', 'range', 'chars'],
+  })
+})
+
 test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.StringBuilder, Packages.java.lang.Integer, Packages.java.util.regex.Pattern);
