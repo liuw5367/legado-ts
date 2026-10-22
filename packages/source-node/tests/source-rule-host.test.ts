@@ -146,6 +146,38 @@ test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', a
   })
 })
 
+test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.util.regex.Pattern, Packages.java.util.regex.Matcher);
+    with (importer) {
+      var pattern = Pattern.compile('(?<word>[a-z]+)');
+      var matcher = pattern.matcher('aa bb');
+      var first = matcher.find() ? [matcher.group('word'), matcher.start('word'), matcher.end('word'), matcher.groupCount()] : null;
+      var second = matcher.find() ? matcher.group(0) : null;
+      var replaced = pattern.matcher('aa bb').replaceAll('$0-\${word}-$1');
+      var firstReplaced = pattern.matcher('aa bb').replaceFirst('$0-\${word}-$1');
+      var quoted = Matcher.quoteReplacement('$1\\\\x');
+      var positionsMatcher = Pattern.compile('(?:)').matcher('ab');
+      var positions = [];
+      while (positionsMatcher.find()) positions.push(positionsMatcher.start());
+      var regionMatcher = Pattern.compile('a').matcher('xaay').region(1, 3);
+      var region = regionMatcher.find() ? [regionMatcher.group(), regionMatcher.start(), regionMatcher.end(), regionMatcher.regionStart(), regionMatcher.regionEnd(), regionMatcher.replaceAll('z')] : null;
+      var ten = Pattern.compile('(a)(b)').matcher('ab').replaceAll('$10');
+      JSON.stringify({ first: first, second: second, replaced: replaced, firstReplaced: firstReplaced, quoted: quoted, positions: positions, region: region, ten: ten });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    first: ['aa', 0, 2, 1],
+    second: 'bb',
+    replaced: 'aa-aa-aa bb-bb-bb',
+    firstReplaced: 'aa-aa-aa bb',
+    quoted: '\\$1\\\\x',
+    positions: [0, 1, 2],
+    region: ['a', 1, 2, 1, 3, 'xzzy'],
+    ten: 'a0',
+  })
+})
+
 test('Element/Elements 返回对象支持关系、视图方法和受控修改', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var element = java.getElements('div.card').first();

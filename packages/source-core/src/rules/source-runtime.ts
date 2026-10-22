@@ -309,6 +309,59 @@ const legadoBytesFromHex = (value) => {
   return bytes
 }
 const legadoJavaRegex = (pattern, flags) => { const compiled = request({ kind: "pattern-compile", pattern: String(pattern), flags: String(flags ?? "") }); return new RegExp(String(compiled.source), String(compiled.flags ?? "")) }
+const legadoJavaReplacement = (replacement, match) => {
+  const text = String(replacement ?? "")
+  const groupCount = Math.max(0, match.length - 1)
+  let result = ""
+  for (let index = 0; index < text.length; index++) {
+    const current = text[index]
+    if (current === "\\") {
+      if (index + 1 >= text.length) throw new Error("Illegal group reference")
+      result += text[++index]
+      continue
+    }
+    if (current !== "$") {
+      result += current
+      continue
+    }
+    if (text[index + 1] === "{") {
+      const close = text.indexOf("}", index + 2)
+      if (close < 0 || close === index + 2) throw new Error("Illegal group reference")
+      const name = text.slice(index + 2, close)
+      if (match.groups === undefined || !Object.prototype.hasOwnProperty.call(match.groups, name)) throw new Error("No group with name <" + name + ">")
+      result += match.groups[name] ?? ""
+      index = close
+      continue
+    }
+    if (!/\d/u.test(text[index + 1] ?? "")) throw new Error("Illegal group reference")
+    let groupIndex = Number(text[++index])
+    let cursor = index + 1
+    while (cursor < text.length && /\d/u.test(text[cursor])) {
+      const candidate = groupIndex * 10 + Number(text[cursor])
+      if (candidate > groupCount) break
+      groupIndex = candidate
+      index = cursor
+      cursor += 1
+    }
+    if (groupIndex > groupCount) throw new Error("No group " + groupIndex)
+    result += match[groupIndex] ?? ""
+  }
+  return result
+}
+const legadoJavaReplace = (input, regex, replacement, replaceAll) => {
+  const flags = regex.flags.includes("g") ? regex.flags : regex.flags + "g"
+  const matcher = new RegExp(regex.source, flags)
+  let result = ""
+  let cursor = 0
+  let match
+  while ((match = matcher.exec(input)) !== null) {
+    result += input.slice(cursor, match.index) + legadoJavaReplacement(replacement, match)
+    cursor = match.index + match[0].length
+    if (!replaceAll) break
+    if (match[0].length === 0) matcher.lastIndex = Math.min(input.length, matcher.lastIndex + 1)
+  }
+  return result + input.slice(cursor)
+}
 const legadoJavaSplit = (text, separator, limit) => {
   const max = limit === undefined ? 0 : Number(limit)
   if (max === 1) return [text]
@@ -345,8 +398,8 @@ const legadoJavaString = (input) => {
     toUpperCase: { value: () => legadoJavaString(text.toUpperCase()) },
     split: { value: (separator, limit) => legadoList(legadoJavaSplit(text, String(separator ?? ""), limit)) },
     replace: { value: (from, to) => legadoJavaString(text.split(String(from ?? "")).join(String(to ?? ""))) },
-    replaceAll: { value: (pattern, replacement) => legadoJavaString(text.replace(legadoJavaRegex(pattern, "g"), String(replacement ?? ""))) },
-    replaceFirst: { value: (pattern, replacement) => legadoJavaString(text.replace(legadoJavaRegex(pattern), String(replacement ?? ""))) },
+    replaceAll: { value: (pattern, replacement) => legadoJavaString(legadoJavaReplace(text, legadoJavaRegex(pattern, "g"), replacement, true)) },
+    replaceFirst: { value: (pattern, replacement) => legadoJavaString(legadoJavaReplace(text, legadoJavaRegex(pattern), replacement, false)) },
     matches: { value: (pattern) => { const regex = legadoJavaRegex(pattern); const match = regex.exec(text); return match !== null && match[0] === text } },
     compareTo: { value: (other) => { const value = String(other ?? ""); const length = Math.min(text.length, value.length); for (let index = 0; index < length; index++) { const difference = text.charCodeAt(index) - value.charCodeAt(index); if (difference !== 0) return difference } return text.length - value.length } },
     compareToIgnoreCase: { value: (other) => legadoJavaString(text.toLowerCase()).compareTo(String(other ?? "").toLowerCase()) },
@@ -459,41 +512,126 @@ const legadoPattern = {
   quote: (pattern) => "\\Q" + String(pattern ?? "") + "\\E",
   compile: (pattern, flags) => {
     const numericFlags = Number(flags ?? 0)
+    const patternText = String(pattern ?? "")
     let javaFlags = ""
     if ((numericFlags & 2) !== 0) javaFlags += "i"
     if ((numericFlags & 8) !== 0) javaFlags += "m"
     if ((numericFlags & 32) !== 0) javaFlags += "s"
     if ((numericFlags & 64) !== 0 || (numericFlags & 256) !== 0) javaFlags += "u"
-    if ((numericFlags & 16) !== 0) pattern = legadoPattern.quote(pattern)
-    const compiled = request({ kind: "pattern-compile", pattern: String(pattern), flags: javaFlags })
-    const regex = new RegExp(String(compiled.source), String(compiled.flags ?? "") + "g")
-    return { matcher: (value) => {
+    if ((numericFlags & 16) !== 0) pattern = legadoPattern.quote(patternText)
+    const compiled = request({ kind: "pattern-compile", pattern: String(pattern), flags: javaFlags + "d" })
+    const compiledFlags = String(compiled.flags ?? "")
+    const makeRegex = (global) => new RegExp(String(compiled.source), compiledFlags + (global && !compiledFlags.includes("g") ? "g" : ""))
+    const countGroups = (source) => {
+      let count = 0
+      let escaped = false
+      let inClass = false
+      for (let index = 0; index < source.length; index++) {
+        const current = source[index]
+        if (escaped) { escaped = false; continue }
+        if (current === "\\") { escaped = true; continue }
+        if (current === "[") { inClass = true; continue }
+        if (current === "]") { inClass = false; continue }
+        if (current !== "(" || inClass) continue
+        if (source[index + 1] !== "?") { count += 1; continue }
+        if (source.startsWith("(?<", index) && source[index + 3] !== "=" && source[index + 3] !== "!") count += 1
+      }
+      return count
+    }
+    const patternGroupCount = countGroups(String(compiled.source))
+    const patternApi = {
+      pattern: () => patternText,
+      flags: () => numericFlags,
+      matcher: (value) => {
       const input = String(value ?? "")
+      const regex = makeRegex(true)
       let last = null
+      let lastOffset = 0
+      let regionStart = 0
+      let regionEnd = input.length
+      let advanceEmpty = false
       const groupBounds = (index) => {
         if (last === null) return [-1, -1]
-        const groupIndex = Number(index ?? 0)
-        const group = last[groupIndex]
+        const named = typeof index === "string" && index.length > 0
+        const groupIndex = named ? undefined : Number(index ?? 0)
+        const group = named ? last.groups?.[index] : last[groupIndex]
         if (group === undefined) return [-1, -1]
-        if (Array.isArray(last.indices) && Array.isArray(last.indices[groupIndex])) return last.indices[groupIndex]
-        if (groupIndex === 0) return [last.index, last.index + group.length]
+        const bounds = named ? last.indices?.groups?.[index] : last.indices?.[groupIndex]
+        if (Array.isArray(bounds)) return [bounds[0] + lastOffset, bounds[1] + lastOffset]
+        if (groupIndex === 0) return [last.index + lastOffset, last.index + lastOffset + group.length]
         const local = String(last[0]).indexOf(String(group))
-        return local < 0 ? [-1, -1] : [last.index + local, last.index + local + String(group).length]
+        return local < 0 ? [-1, -1] : [last.index + lastOffset + local, last.index + lastOffset + local + String(group).length]
       }
-      return {
-        find: () => { const match = regex.exec(input); if (match === null) return false; last = match; return true },
-        matches: () => { const match = new RegExp(regex.source, regex.flags.replace("g", "")).exec(input); return match !== null && match[0] === input },
-        lookingAt: () => { const match = new RegExp("^(?:" + regex.source + ")", regex.flags.replace("g", "")).exec(input); if (match === null) return false; last = match; return true },
-        group: (index) => last === null ? null : last[Number(index ?? 0)] ?? null,
-        groupCount: () => last === null ? 0 : Math.max(0, last.length - 1),
-        replaceAll: (replacement) => input.replace(new RegExp(regex.source, regex.flags.replace("g", "") + "g"), String(replacement ?? "")),
+      const clear = () => { last = null; lastOffset = 0; advanceEmpty = false; regex.lastIndex = regionStart }
+      const scopedText = () => input.slice(regionStart, regionEnd)
+      const scopedRegex = (prefix, suffix) => new RegExp(prefix + compiled.source + suffix, compiledFlags.replace("d", "") + (compiledFlags.includes("d") ? "d" : ""))
+      const replaceInRegion = (replacement, replaceAll) => {
+        const value = legadoJavaReplace(scopedText(), makeRegex(false), replacement, replaceAll)
+        return input.slice(0, regionStart) + value + input.slice(regionEnd)
+      }
+      const api = {
+        find: () => {
+          if (advanceEmpty) {
+            regex.lastIndex = Math.min(regionEnd + 1, regex.lastIndex + 1)
+            advanceEmpty = false
+          }
+          const match = regex.exec(input)
+          if (match === null || match.index + match[0].length > regionEnd) { last = null; return false }
+          last = match
+          lastOffset = 0
+          advanceEmpty = match[0].length === 0
+          return true
+        },
+        matches: () => {
+          const match = scopedRegex("^(?:", ")$").exec(scopedText())
+          if (match === null) { last = null; return false }
+          last = match
+          lastOffset = regionStart
+          return true
+        },
+        lookingAt: () => {
+          const match = scopedRegex("^(?:", ")").exec(scopedText())
+          if (match === null) { last = null; return false }
+          last = match
+          lastOffset = regionStart
+          return true
+        },
+        group: (index) => {
+          if (last === null) return null
+          if (typeof index === "string" && index.length > 0) {
+            if (last.groups === undefined || !Object.prototype.hasOwnProperty.call(last.groups, index)) throw new Error("No group with name <" + index + ">")
+            return last.groups[index] ?? null
+          }
+          const groupIndex = Number(index ?? 0)
+          if (!Number.isInteger(groupIndex) || groupIndex < 0 || groupIndex > patternGroupCount) throw new Error("No group " + groupIndex)
+          return last[groupIndex] ?? null
+        },
+        groupCount: () => patternGroupCount,
+        replaceAll: (replacement) => replaceInRegion(replacement, true),
+        replaceFirst: (replacement) => replaceInRegion(replacement, false),
         start: (index) => groupBounds(index)[0],
         end: (index) => groupBounds(index)[1],
-        reset: () => { regex.lastIndex = 0; last = null; return undefined },
+        region: (start, end) => {
+          const from = Number(start)
+          const to = Number(end)
+          if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > input.length) throw new RangeError("Matcher region out of bounds")
+          regionStart = from
+          regionEnd = to
+          clear()
+          return api
+        },
+        regionStart: () => regionStart,
+        regionEnd: () => regionEnd,
+        reset: () => { clear(); return api },
       }
-    } }
+      regex.lastIndex = regionStart
+      return api
+    },
+    }
+    return { ...patternApi, matches: (value) => patternApi.matcher(value).matches(), toString: () => patternText }
   }
 }
+const legadoMatcher = { quoteReplacement: (value) => String(value ?? "").replace(/[\\$]/gu, "\\$&") }
 const legadoBase64 = {
   getEncoder: () => { const flags = 2; const encoder = { encodeToString: (value) => request({ kind: "base64-encode", value, flags }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags })).getBytes("UTF-8"), withoutPadding: () => { const noPadding = 3; return { encodeToString: (value) => request({ kind: "base64-encode", value, flags: noPadding }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags: noPadding })).getBytes("UTF-8") } } }; return encoder },
   getDecoder: () => ({ decode: (value) => request({ kind: "base64-decode-bytes", value: String(value) }) }),
@@ -533,8 +671,9 @@ const legadoAndroidBase64 = { DEFAULT: 0, NO_PADDING: 1, NO_WRAP: 2, CRLF: 4, UR
 const legadoJavaLang = { String: legadoJavaLangString, StringBuilder: legadoStringBuilder, Integer: legadoInteger, Long: legadoLong, Double: legadoNumber, Float: legadoNumber, Boolean: { parseBoolean: (value) => String(value).toLowerCase() === "true" }, Character: { isDigit: (value) => /\d/u.test(String(value)), isLetter: (value) => /\p{L}/u.test(String(value)), toLowerCase: (value) => String(value).toLowerCase(), toUpperCase: (value) => String(value).toUpperCase() }, Math: legadoJavaMath, CharSequence: legadoJavaLangString }
 const legadoJavaArrays = { asList: (value) => legadoList(value), toString: (value) => "[" + Array.from(value ?? []).join(", ") + "]", copyOf: (value, length) => Array.from(value ?? []).slice(0, Number(length)).concat(Array(Math.max(0, Number(length) - (value?.length ?? 0))).fill(null)), copyOfRange: (value, from, to) => Array.from(value ?? []).slice(Number(from), Number(to)), fill: (value, item) => { if (Array.isArray(value)) value.fill(item); return undefined }, sort: (value) => { if (Array.isArray(value)) value.sort(); return undefined } }
 const legadoJavaCollections = { sort: (list, comparator) => { if (Array.isArray(list)) list.sort(typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : undefined); return undefined }, reverse: (list) => { if (Array.isArray(list)) list.reverse(); return undefined }, shuffle: (list) => { if (Array.isArray(list)) for (let index = list.length - 1; index > 0; index -= 1) { const swap = Math.floor(Math.random() * (index + 1)); [list[index], list[swap]] = [list[swap], list[index]] }; return undefined }, singletonList: (value) => legadoList([value]), emptyList: () => legadoList([]) }
-const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, regex: { Pattern: legadoPattern }, Base64: legadoBase64 }
+const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, regex: { Pattern: legadoPattern, Matcher: legadoMatcher }, Base64: legadoBase64 }
 legadoJavaUtil.regex.Pattern = legadoPattern
+legadoJavaUtil.regex.Matcher = legadoMatcher
 const legadoJavaIo = { ByteArrayInputStream: legadoByteArrayInputStream, ByteArrayOutputStream: legadoByteArrayOutputStream, InputStreamReader: legadoInputStreamReader, BufferedReader: legadoBufferedReader }
 const legadoJavaSecurity = { MessageDigest: legadoMessageDigest }
 const legadoStandardCharsets = { UTF_8: "UTF-8", UTF_16: "UTF-16", ISO_8859_1: "ISO-8859-1" }
@@ -543,6 +682,7 @@ for (const [name, value] of Object.entries(legadoJavaLang)) legadoName(value, na
 for (const [name, value] of Object.entries(legadoJavaUtil)) legadoName(value, name)
 for (const [name, value] of Object.entries(legadoJavaIo)) legadoName(value, name)
 legadoName(legadoJavaUtil.regex.Pattern, "Pattern")
+legadoName(legadoJavaUtil.regex.Matcher, "Matcher")
 legadoName(legadoJavaSecurity.MessageDigest, "MessageDigest")
 legadoName(legadoBase64, "Base64")
 legadoName(legadoByteArrayInputStream, "ByteArrayInputStream")
@@ -665,7 +805,7 @@ if (__legadoUrlContext !== null && typeof __legadoUrlContext === "object" && !Ar
   java.getResponse = () => legadoResponseCompat(String(__legadoUrlContext.url ?? ""), __legadoUrlRequest("response"))
   java.getHeaderMap = () => __legadoUrlMap
 }
-globalThis.__legadoJavaPackages = { JavaImporter, Packages, JavaAdapter, MessageDigest: legadoMessageDigest, StringBuilder: legadoStringBuilder, Integer: legadoInteger, HashMap: legadoJavaUtil.HashMap, ArrayList: legadoJavaUtil.ArrayList, Pattern: legadoPattern, Base64: legadoBase64 }
+globalThis.__legadoJavaPackages = { JavaImporter, Packages, JavaAdapter, MessageDigest: legadoMessageDigest, StringBuilder: legadoStringBuilder, Integer: legadoInteger, HashMap: legadoJavaUtil.HashMap, ArrayList: legadoJavaUtil.ArrayList, Pattern: legadoPattern, Matcher: legadoMatcher, Base64: legadoBase64 }
 `
 
 /**
