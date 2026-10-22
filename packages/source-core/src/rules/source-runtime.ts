@@ -256,14 +256,30 @@ const javaCompatibilityPrelude = String.raw`
 const legadoMap = (input) => {
   const target = Object.create(null)
   const assign = (key, value) => Object.defineProperty(target, String(key), { value, writable: true, enumerable: true, configurable: true })
-  if (input !== null && typeof input === "object" && !Array.isArray(input)) for (const [key, value] of Object.entries(input)) assign(key, value)
+  const inputEntries = () => {
+    if (input !== null && typeof input === "object" && typeof input.entrySet === "function") {
+      const entries = input.entrySet()
+      const iterator = entries?.iterator?.()
+      const result = []
+      if (iterator) while (iterator.hasNext()) {
+        const entry = iterator.next()
+        const key = typeof entry?.getKey === "function" ? entry.getKey() : entry?.key
+        const value = typeof entry?.getValue === "function" ? entry.getValue() : entry?.value
+        result.push([key, value])
+      }
+      return result
+    }
+    return input !== null && typeof input === "object" && !Array.isArray(input) ? Object.entries(input) : []
+  }
+  for (const [key, value] of inputEntries()) assign(key, value)
   const keyOf = (key) => String(key)
+  const mapEntry = (key) => ({ getKey: () => key, getValue: () => target[key], setValue: (next) => { const previous = target[key]; assign(key, next); return previous } })
   Object.defineProperties(target, {
     get: { value: (key) => { const name = keyOf(key); return Object.prototype.hasOwnProperty.call(target, name) ? target[name] : null } },
     getOrDefault: { value: (key, fallback) => { const name = keyOf(key); return Object.prototype.hasOwnProperty.call(target, name) ? target[name] : fallback } },
     put: { value: (key, value) => { const name = keyOf(key); const previous = Object.prototype.hasOwnProperty.call(target, name) ? target[name] : null; assign(name, value); return previous } },
     putIfAbsent: { value: (key, value) => { const name = keyOf(key); const exists = Object.prototype.hasOwnProperty.call(target, name); const previous = exists ? target[name] : null; if (!exists || previous === null) assign(name, value); return previous } },
-    putAll: { value: (value) => { if (value !== null && typeof value === "object" && !Array.isArray(value)) for (const [key, item] of Object.entries(value)) assign(key, item); return target } },
+    putAll: { value: (value) => { if (value !== null && typeof value === "object" && typeof value.entrySet === "function") { const entries = value.entrySet(); const iterator = entries?.iterator?.(); if (iterator) while (iterator.hasNext()) { const entry = iterator.next(); const key = typeof entry?.getKey === "function" ? entry.getKey() : entry?.key; const item = typeof entry?.getValue === "function" ? entry.getValue() : entry?.value; assign(key, item) } } else if (value !== null && typeof value === "object" && !Array.isArray(value)) for (const [key, item] of Object.entries(value)) assign(key, item); return target } },
     remove: { value: function(key, expected) { const name = keyOf(key); const exists = Object.prototype.hasOwnProperty.call(target, name); const previous = exists ? target[name] : null; if (arguments.length > 1) { if (!exists || !Object.is(previous, expected)) return false; delete target[name]; return true } delete target[name]; return previous } },
     replace: { value: function(key, oldOrValue, next) { const name = keyOf(key); const exists = Object.prototype.hasOwnProperty.call(target, name); const previous = exists ? target[name] : null; if (arguments.length > 2) { if (!exists || !Object.is(previous, oldOrValue)) return false; assign(name, next); return true } if (!exists) return previous; assign(name, oldOrValue); return previous } },
     replaceAll: { value: (callback) => { if (typeof callback !== "function") throw new TypeError("Map replaceAll callback must be a function"); for (const [key, value] of Object.entries(target)) assign(key, callback(key, value, target)); return undefined } },
@@ -273,36 +289,79 @@ const legadoMap = (input) => {
     clear: { value: () => { for (const key of Object.keys(target)) delete target[key] } },
     containsKey: { value: (key) => Object.prototype.hasOwnProperty.call(target, keyOf(key)) },
     containsValue: { value: (value) => Object.values(target).some((item) => Object.is(item, value)) },
-    keySet: { value: () => legadoList(Object.keys(target)) },
-    values: { value: () => legadoList(Object.values(target)) },
-    entrySet: { value: () => legadoList(Object.entries(target).map(([key, value]) => ({ getKey: () => key, getValue: () => target[key], setValue: (next) => { const previous = target[key]; assign(key, next); return previous } }))) },
+    keySet: { value: () => legadoListView(() => Object.keys(target), undefined, undefined, (index) => { const keys = Object.keys(target); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; delete target[key]; return key }, () => { for (const key of Object.keys(target)) delete target[key] }, undefined, false) },
+    values: { value: () => legadoListView(() => Object.keys(target).map((key) => target[key]), (index, value) => { const keys = Object.keys(target); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const previous = target[key]; assign(key, value); return previous }, undefined, (index) => { const keys = Object.keys(target); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const previous = target[key]; delete target[key]; return previous }, () => { for (const key of Object.keys(target)) delete target[key] }, undefined, false) },
+    entrySet: { value: () => legadoListView(() => Object.keys(target).map(mapEntry), undefined, undefined, (index) => { const keys = Object.keys(target); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const entry = mapEntry(key); delete target[key]; return entry }, () => { for (const key of Object.keys(target)) delete target[key] }, (left, right) => { const leftKey = typeof left?.getKey === "function" ? left.getKey() : left?.key; const rightKey = typeof right?.getKey === "function" ? right.getKey() : right?.key; if (leftKey === undefined || rightKey === undefined || String(leftKey) !== String(rightKey)) return false; const leftValue = typeof left?.getValue === "function" ? left.getValue() : left?.value; const rightValue = typeof right?.getValue === "function" ? right.getValue() : right?.value; return Object.is(leftValue, rightValue) }, false) },
     size: { value: () => Object.keys(target).length },
     isEmpty: { value: () => Object.keys(target).length === 0 },
     forEach: { value: (callback) => { if (typeof callback === "function") for (const [key, value] of Object.entries(target)) callback(key, value, target) } },
   })
   return target
 }
+const legadoListView = (read, writeAt, insertAt, removeAt, clearView, equals, removeByIndex = true) => {
+  const target = []
+  const snapshot = () => { const value = read(); return Array.isArray(value) ? value.slice() : value?.toArray?.() ?? [] }
+  const isIndex = (value) => typeof value === "number" && Number.isInteger(value)
+  const indexOfValue = (value) => { const values = snapshot(); for (let index = 0; index < values.length; index++) if (equals ? equals(values[index], value) : Object.is(values[index], value)) return index; return -1 }
+  const unsupported = () => { throw new Error("Unsupported collection view operation") }
+  const at = (index) => { const values = snapshot(); const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= values.length) throw new RangeError("List index out of bounds"); return values[position] }
+  const replace = (index, value) => { if (!writeAt) return unsupported(); return writeAt(Number(index), value) }
+  const insert = (index, value) => { if (!insertAt) return unsupported(); return insertAt(Number(index), value) }
+  const erase = (index) => { if (!removeAt) return unsupported(); return removeAt(Number(index)) }
+  Object.defineProperties(target, {
+    get: { value: at },
+    set: { value: (index, value) => { const previous = at(index); replace(index, value); return previous } },
+    size: { value: () => snapshot().length },
+    isEmpty: { value: () => snapshot().length === 0 },
+    contains: { value: (value) => indexOfValue(value) >= 0 },
+    indexOf: { value: indexOfValue },
+    toArray: { value: () => snapshot() },
+    add: { value: function(indexOrValue, value) { if (arguments.length > 1) { const index = Number(indexOrValue); const length = snapshot().length; if (!Number.isInteger(index) || index < 0 || index > length) throw new RangeError("List index out of bounds"); insert(index, value); return true } insert(snapshot().length, indexOrValue); return true } },
+    addAll: { value: (indexOrValues, values) => { const items = values !== undefined ? (values?.toArray?.() ?? values) : (indexOrValues?.toArray?.() ?? indexOrValues); if (!Array.isArray(items)) return false; const index = values !== undefined ? Number(indexOrValues) : snapshot().length; const length = snapshot().length; if (!Number.isInteger(index) || index < 0 || index > length) throw new RangeError("List index out of bounds"); for (let offset = 0; offset < items.length; offset++) insert(index + offset, items[offset]); return items.length > 0 } },
+    remove: { value: (value) => { const indexed = removeByIndex && isIndex(value); const index = indexed ? Number(value) : indexOfValue(value); if (index < 0 || index >= snapshot().length) { if (indexed) throw new RangeError("List index out of bounds"); return false } const removed = erase(index); return indexed ? removed : true } },
+    removeAt: { value: (index) => erase(Number(index)) },
+    containsAll: { value: (values) => { const items = values?.toArray?.() ?? values; return Array.isArray(items) && items.every((value) => indexOfValue(value) >= 0) } },
+    removeAll: { value: (values) => { const items = values?.toArray?.() ?? values; if (!Array.isArray(items)) return false; let changed = false; const current = snapshot(); for (let index = current.length - 1; index >= 0; index--) if (items.some((value) => equals ? equals(current[index], value) : Object.is(current[index], value))) { erase(index); changed = true } return changed } },
+    retainAll: { value: (values) => { const items = values?.toArray?.() ?? values; if (!Array.isArray(items)) return false; let changed = false; const current = snapshot(); for (let index = current.length - 1; index >= 0; index--) if (!items.some((value) => equals ? equals(value, current[index]) : Object.is(value, current[index]))) { erase(index); changed = true } return changed } },
+    lastIndexOf: { value: (value) => { const values = snapshot(); for (let index = values.length - 1; index >= 0; index--) if (equals ? equals(values[index], value) : Object.is(values[index], value)) return index; return -1 } },
+    subList: { value: (from, to) => { const start = Number(from); const end = Number(to); const length = snapshot().length; if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > length) throw new RangeError("List index out of bounds"); let viewLength = end - start; return legadoListView(() => snapshot().slice(start, start + viewLength), writeAt ? (index, value) => writeAt(start + index, value) : undefined, insertAt ? (index, value) => { insertAt(start + index, value); viewLength++; } : undefined, removeAt ? (index) => { const result = removeAt(start + index); viewLength--; return result } : undefined, removeAt ? () => { for (let index = viewLength - 1; index >= 0; index--) removeAt(start + index); viewLength = 0 } : undefined, equals, removeByIndex) } },
+    clear: { value: () => { if (clearView) return clearView(); for (let index = snapshot().length - 1; index >= 0; index--) erase(index) } },
+    iterator: { value: () => { let index = 0; let canRemove = false; return { hasNext: () => index < snapshot().length, next: () => { const values = snapshot(); if (index >= values.length) throw new RangeError("No such element"); canRemove = true; return values[index++] }, remove: () => { if (!canRemove) throw new Error("Illegal iterator state"); erase(--index); canRemove = false } } } },
+    listIterator: { value: (start) => { let cursor = start === undefined ? 0 : Number(start); let last = -1; if (!Number.isInteger(cursor) || cursor < 0 || cursor > snapshot().length) throw new RangeError("List iterator index out of bounds"); const iterator = { hasNext: () => cursor < snapshot().length, next: () => { const values = snapshot(); if (cursor >= values.length) throw new RangeError("No such element"); last = cursor; return values[cursor++] }, hasPrevious: () => cursor > 0, previous: () => { if (cursor <= 0) throw new RangeError("No such element"); last = --cursor; return snapshot()[cursor] }, nextIndex: () => cursor, previousIndex: () => cursor - 1, remove: () => { if (last < 0) throw new Error("Illegal iterator state"); erase(last); if (last < cursor) cursor--; last = -1 }, set: (value) => { if (last < 0) throw new Error("Illegal iterator state"); replace(last, value) }, add: (value) => { insert(cursor++, value); last = -1 } }; return iterator } },
+    forEach: { value: (callback) => { if (typeof callback === "function") snapshot().forEach(callback); return undefined } },
+    removeIf: { value: (predicate) => { if (typeof predicate !== "function") return false; let changed = false; for (let index = snapshot().length - 1; index >= 0; index--) if (predicate(snapshot()[index], index, target)) { erase(index); changed = true } return changed } },
+    sort: { value: (comparator) => { const values = snapshot().sort(typeof comparator === "function" ? comparator : comparator?.compare ? (left, right) => comparator.compare(left, right) : undefined); for (let index = 0; index < values.length; index++) replace(index, values[index]); return target } },
+    toString: { value: () => "[" + snapshot().map((value) => value === null || value === undefined ? "null" : String(value)).join(", ") + "]" },
+  })
+  const indexProperty = (property) => typeof property === "string" && /^(?:0|[1-9]\d*)$/.test(property)
+  return new Proxy(target, {
+    get: (object, property, receiver) => indexProperty(property) ? snapshot()[Number(property)] : property === "length" ? snapshot().length : Reflect.get(object, property, receiver),
+    set: (object, property, value, receiver) => { if (indexProperty(property)) { replace(Number(property), value); return true } return Reflect.set(object, property, value, receiver) },
+    ownKeys: (object) => [...Array.from({ length: snapshot().length }, (_, index) => String(index)), ...Reflect.ownKeys(object).filter((property) => property !== "length" && !indexProperty(property)), "length"],
+    getOwnPropertyDescriptor: (object, property) => indexProperty(property) && Number(property) < snapshot().length ? { configurable: true, enumerable: true, value: snapshot()[Number(property)], writable: false } : Reflect.getOwnPropertyDescriptor(object, property),
+  })
+}
 const legadoList = (input) => {
   const target = Array.isArray(input) ? input.slice() : input?.toArray?.() ?? []
   const itemsOf = (values) => Array.isArray(values) ? values : values?.toArray?.() ?? []
-  const isIndex = (value) => (typeof value === "number" || value instanceof Number) && Number.isInteger(Number(value))
+  const isIndex = (value) => typeof value === "number" && Number.isInteger(value)
   Object.defineProperties(target, {
     get: { value: (index) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= target.length) throw new RangeError("List index out of bounds"); return target[position] } },
     set: { value: (index, value) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= target.length) throw new RangeError("List index out of bounds"); const previous = target[position]; target[position] = value; return previous } },
     size: { value: () => target.length },
     isEmpty: { value: () => target.length === 0 },
     contains: { value: (value) => target.includes(value) },
-    indexOf: { value: (value) => target.indexOf(value) },
+    indexOf: { value: (value) => { for (let index = 0; index < target.length; index++) if (target[index] === value) return index; return -1 } },
     toArray: { value: () => target.slice() },
     add: { value: function(indexOrValue, value) { if (arguments.length > 1) { const index = Number(indexOrValue); if (!Number.isInteger(index) || index < 0 || index > target.length) throw new RangeError("List index out of bounds"); target.splice(index, 0, value); return true } target.push(indexOrValue); return true } },
     addAll: { value: (indexOrValues, values) => { const items = values !== undefined ? itemsOf(values) : itemsOf(indexOrValues); if (values !== undefined) { const index = Number(indexOrValues); if (!Number.isInteger(index) || index < 0 || index > target.length) throw new RangeError("List index out of bounds"); target.splice(index, 0, ...items) } else target.push(...items); return items.length > 0 } },
-    remove: { value: (value) => { if (isIndex(value)) { const index = Number(value); if (index < 0 || index >= target.length) throw new RangeError("List index out of bounds"); return target.splice(index, 1)[0] } const index = target.indexOf(value); return index < 0 ? false : (target.splice(index, 1), true) } },
+    remove: { value: (value) => { if (isIndex(value)) { const index = Number(value); if (index < 0 || index >= target.length) throw new RangeError("List index out of bounds"); return target.splice(index, 1)[0] } let index = -1; for (let position = 0; position < target.length; position++) if (target[position] === value) { index = position; break } return index < 0 ? false : (target.splice(index, 1), true) } },
     removeAt: { value: (index) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= target.length) throw new RangeError("List index out of bounds"); return target.splice(position, 1)[0] } },
     containsAll: { value: (values) => itemsOf(values).every((value) => target.includes(value)) },
     removeAll: { value: (values) => { const items = itemsOf(values); const before = target.length; for (let index = target.length - 1; index >= 0; index -= 1) if (items.includes(target[index])) target.splice(index, 1); return target.length !== before } },
     retainAll: { value: (values) => { const items = itemsOf(values); const before = target.length; for (let index = target.length - 1; index >= 0; index -= 1) if (!items.includes(target[index])) target.splice(index, 1); return target.length !== before } },
-    lastIndexOf: { value: (value) => target.lastIndexOf(value) },
-    subList: { value: (from, to) => legadoList(target.slice(Number(from), Number(to))) },
+    lastIndexOf: { value: (value) => { for (let index = target.length - 1; index >= 0; index--) if (target[index] === value) return index; return -1 } },
+    subList: { value: (from, to) => { const start = Number(from); const end = Number(to); if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > target.length) throw new RangeError("List index out of bounds"); let viewLength = end - start; return legadoListView(() => target.slice(start, start + viewLength), (index, value) => { target[start + index] = value; return value }, (index, value) => { target.splice(start + index, 0, value); viewLength++ }, (index) => { const result = target.splice(start + index, 1)[0]; viewLength--; return result }, () => { target.splice(start, viewLength); viewLength = 0 }) } },
     clear: { value: () => { target.length = 0 } },
     iterator: { value: () => { let index = 0; let canRemove = false; return { hasNext: () => index < target.length, next: () => { if (index >= target.length) throw new RangeError("No such element"); canRemove = true; return target[index++] }, remove: () => { if (!canRemove) throw new Error("Illegal iterator state"); target.splice(--index, 1); canRemove = false } } } },
     listIterator: { value: (start) => { let cursor = start === undefined ? 0 : Number(start); let last = -1; if (!Number.isInteger(cursor) || cursor < 0 || cursor > target.length) throw new RangeError("List iterator index out of bounds"); const iterator = { hasNext: () => cursor < target.length, next: () => { if (cursor >= target.length) throw new RangeError("No such element"); last = cursor; return target[cursor++] }, hasPrevious: () => cursor > 0, previous: () => { if (cursor <= 0) throw new RangeError("No such element"); last = --cursor; return target[cursor] }, nextIndex: () => cursor, previousIndex: () => cursor - 1, remove: () => { if (last < 0) throw new Error("Illegal iterator state"); target.splice(last, 1); if (last < cursor) cursor -= 1; last = -1 }, set: (value) => { if (last < 0) throw new Error("Illegal iterator state"); target[last] = value }, add: (value) => { target.splice(cursor++, 0, value); last = -1 } }; return iterator } },

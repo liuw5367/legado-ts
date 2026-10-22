@@ -262,6 +262,44 @@ test('Java Map/List/Set 支持教程常用的视图、计算和迭代器方法',
   })
 })
 
+test('Java Map 视图和 List.subList 保持父容器的实时读写传播', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.util.HashMap, Packages.java.util.ArrayList);
+    with (importer) {
+      var map = new HashMap({ a: 1, b: 2 });
+      var keys = map.keySet();
+      var values = map.values();
+      var entries = map.entrySet();
+      map.put('c', 3);
+      var before = [keys.toArray(), keys.length, keys[2], values.toArray(), entries.size()];
+      keys.remove('a');
+      values.set(0, 20);
+      var entry = entries.get(0);
+      entry.setValue(21);
+      var entryValue = entry.getValue();
+      entries.remove(entry);
+      var valueMap = new HashMap({ a: 2, b: 3 });
+      var removedValue = valueMap.values().remove(3);
+      var list = new ArrayList(['x', 'y', 'z']);
+      var sub = list.subList(1, 3);
+      sub.set(0, 'B');
+      sub.remove(1);
+      sub.add('D');
+      var copy = new HashMap(map);
+      copy.putAll(new HashMap({ d: 4 }));
+      JSON.stringify({ before: before, map: [map.size(), keys.toArray(), values.toArray(), entries.size()], entry: entryValue, valueMap: [removedValue, valueMap.size(), valueMap.get('b')], copy: [copy.size(), copy.get('c'), copy.get('d')], list: [list.toArray(), sub.toArray()] });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    before: [['a', 'b', 'c'], 3, 'c', [1, 2, 3], 3],
+    map: [1, ['c'], [3], 1],
+    entry: 21,
+    valueMap: [true, 1, null],
+    copy: [2, 3, 4],
+    list: [['x', 'B', 'D'], ['B', 'D']],
+  })
+})
+
 test('Element/Elements 返回对象支持关系、视图方法和受控修改', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var element = java.getElements('div.card').first();
