@@ -57,12 +57,13 @@ function archiveCapabilityError(format: ArchiveFormat, message: string): Error {
   return new Error(`__LEGADO_CAPABILITY__runtime archive.${format} ${message}`)
 }
 
-async function walkExtracted(root: string, limits: ArchiveLimits, compressedSize: number): Promise<ArchiveEntry[]> {
+async function walkExtracted(root: string, limits: ArchiveLimits, compressedSize: number, signal?: AbortSignal): Promise<ArchiveEntry[]> {
   const result: ArchiveEntry[] = []
   let total = 0
   const visit = async (directory: string): Promise<void> => {
     const entries = await readdir(directory, { withFileTypes: true })
     for (const entry of entries) {
+      if (signal?.aborted) throw new Error('__LEGADO_CANCELLED__')
       const absolute = join(directory, entry.name)
       const relativePath = relative(root, absolute).replaceAll('\\', '/')
       const path = safePath(relativePath)
@@ -93,7 +94,7 @@ function findEndOfCentralDirectory(bytes: Uint8Array): number {
   throw new Error('zip end of central directory is missing')
 }
 
-function extractZip(input: Uint8Array, limits: ArchiveLimits): ArchiveEntry[] {
+function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSignal): ArchiveEntry[] {
   const end = findEndOfCentralDirectory(input)
   ensureRange(input, end, 22, 'zip end of central directory is truncated')
   const count = u16(input, end + 10)
@@ -107,6 +108,7 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits): ArchiveEntry[] {
   let total = 0
   let entryCount = 0
   for (let index = 0; index < count; index++) {
+    if (signal?.aborted) throw new Error('__LEGADO_CANCELLED__')
     ensureRange(input, cursor, 46, 'zip central directory is truncated')
     if (u32(input, cursor) !== 0x02014b50) throw new Error('zip central directory is invalid')
     const flags = u16(input, cursor + 8)
@@ -150,7 +152,8 @@ export class NodeArchiveHost implements ArchiveHost {
     this.command = options.archiveCommand ?? 'bsdtar'
   }
 
-  public async extract(input: Uint8Array, format: ArchiveFormat, partial: Partial<ArchiveLimits> = {}): Promise<ArchiveEntry[]> {
+  public async extract(input: Uint8Array, format: ArchiveFormat, partial: Partial<ArchiveLimits> = {}, signal?: AbortSignal): Promise<ArchiveEntry[]> {
+    if (signal?.aborted) throw new Error('__LEGADO_CANCELLED__')
     const limits = { ...defaults, ...partial }
     if (!Number.isInteger(limits.maxEntries) || Object.values(limits).some((value) => !Number.isFinite(value) || value < 0)) throw new Error('archive limits are invalid')
     if (format === 'gzip') {
@@ -163,28 +166,30 @@ export class NodeArchiveHost implements ArchiveHost {
       }
       if (data.byteLength > limits.maxEntryBytes || data.byteLength > limits.maxTotalBytes) throw new Error('archive output exceeds byte budget')
       if (input.byteLength === 0 ? data.byteLength > 0 : data.byteLength / input.byteLength > limits.maxCompressionRatio) throw new Error('archive compression ratio exceeds budget')
+      if (signal?.aborted) throw new Error('__LEGADO_CANCELLED__')
       return [{ path: 'content', data }]
     }
-    if (format === 'zip') return extractZip(input, limits)
-    if (format === 'rar' || format === '7z') return this.extractExternal(input, format, limits)
+    if (format === 'zip') return extractZip(input, limits, signal)
+    if (format === 'rar' || format === '7z') return this.extractExternal(input, format, limits, signal)
     throw archiveCapabilityError(format, 'unsupported')
   }
 
-  private async extractExternal(input: Uint8Array, format: 'rar' | '7z', limits: ArchiveLimits): Promise<ArchiveEntry[]> {
+  private async extractExternal(input: Uint8Array, format: 'rar' | '7z', limits: ArchiveLimits, signal?: AbortSignal): Promise<ArchiveEntry[]> {
     const root = await mkdtemp(join(tmpdir(), 'legado-archive-'))
     const archivePath = join(root, `input.${format}`)
     const outputPath = join(root, 'output')
     try {
       await Promise.all([mkdir(outputPath), writeFile(archivePath, Buffer.from(input))])
       try {
-        await execFile(this.command, ['-xf', archivePath, '-C', outputPath, '--no-same-owner', '--no-same-permissions'], { timeout: 30_000, maxBuffer: 1024 * 1024 })
+        await execFile(this.command, ['-xf', archivePath, '-C', outputPath, '--no-same-owner', '--no-same-permissions'], { timeout: 30_000, maxBuffer: 1024 * 1024, ...(signal === undefined ? {} : { signal }) })
       } catch (error) {
+        if (signal?.aborted || (error as NodeJS.ErrnoException).name === 'AbortError') throw new Error('__LEGADO_CANCELLED__')
         const code = (error as NodeJS.ErrnoException).code
         if (code === 'ENOENT') throw archiveCapabilityError(format, `requires ${this.command}`)
         const detail = error instanceof Error && error.message.length > 0 ? error.message.split('\n', 1)[0] ?? 'extract failed' : 'extract failed'
         throw archiveCapabilityError(format, detail)
       }
-      return await walkExtracted(outputPath, limits, input.byteLength)
+      return await walkExtracted(outputPath, limits, input.byteLength, signal)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

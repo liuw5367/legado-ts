@@ -128,4 +128,6 @@ test('字体宿主强制输入预算、取消与非法字体错误', () => {
   controller.abort()
   assert.throws(() => host.queryTTF(bytes, { signal: controller.signal }), { name: 'AbortError' })
   assert.throws(() => host.queryTTF(Uint8Array.of(0, 1, 2)), /invalid TTF/)
+  assert.throws(() => host.queryTTF(Uint8Array.from([0x77, 0x4f, 0x46, 0x46, ...new Uint8Array(8)])), /__LEGADO_CAPABILITY__runtime font\.woff unsupported/u)
+  assert.throws(() => host.queryTTF(Uint8Array.from([0x4f, 0x54, 0x54, 0x4f, ...new Uint8Array(8)])), /__LEGADO_CAPABILITY__runtime font\.cff unsupported/u)
 })

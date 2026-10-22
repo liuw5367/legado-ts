@@ -12,6 +12,10 @@ function fail(message: string): never {
   throw new Error(`invalid TTF: ${message}`)
 }
 
+function unsupportedFontFormat(format: string): never {
+  throw new Error(`__LEGADO_CAPABILITY__runtime font.${format} unsupported`)
+}
+
 function ensureRange(bytes: Uint8Array, offset: number, length: number, message: string): void {
   if (!Number.isInteger(offset) || !Number.isInteger(length) || offset < 0 || length < 0 || offset > bytes.byteLength - length) fail(message)
 }
@@ -58,6 +62,10 @@ class TtfReader {
     this.bytes = bytes
     if (bytes.byteLength < 12) fail('header is truncated')
     const version = u32(bytes, 0)
+    if (version === 0x774f4646) unsupportedFontFormat('woff')
+    if (version === 0x774f4632) unsupportedFontFormat('woff2')
+    if (version === 0x4f54544f) unsupportedFontFormat('cff')
+    if (version === 0x74746366) unsupportedFontFormat('ttc')
     if (version !== 0x00010000 && version !== 0x74727565) fail('unsupported sfnt version')
     const numTables = u16(bytes, 4)
     ensureRange(bytes, 12, numTables * 16, 'table directory is truncated')
@@ -69,6 +77,7 @@ class TtfReader {
       ensureRange(bytes, offset, length, `${name} table is truncated`)
       this.tables.set(name, { offset, length })
     }
+    if (this.tables.has('CFF ') || this.tables.has('CFF2')) unsupportedFontFormat('cff')
     const head = this.table('head', 54)
     const maxp = this.table('maxp', 6)
     const loca = this.table('loca', 2)

@@ -99,7 +99,7 @@ export class NodeSourceFileHost implements SourceFileHost {
     if (operation === 'cacheFile') return this.cacheFile(text(input.url), Number(input.saveTime) || 0, signal, source)
     if (operation === 'importScript') return this.importScript(text(input.path), signal, source)
     if (operation === 'getTxtInFolder') return this.getTxtInFolder(text(input.path))
-    if (operation === 'unzipFile' || operation === 'un7zFile' || operation === 'unrarFile' || operation === 'unArchiveFile') return this.unpack(operation, text(input.path))
+    if (operation === 'unzipFile' || operation === 'un7zFile' || operation === 'unrarFile' || operation === 'unArchiveFile') return this.unpack(operation, text(input.path), signal)
     if (operation === 'getZipStringContent' || operation === 'getRarStringContent' || operation === 'get7zStringContent') {
       const format = operation.startsWith('getZip') ? 'zip' : operation.startsWith('getRar') ? 'rar' : '7z'
       const bytes = await this.archiveContent(text(input.url), text(input.path), format, signal, source)
@@ -260,12 +260,12 @@ export class NodeSourceFileHost implements SourceFileHost {
     await writeFile(target.absolute, Buffer.from(response.bytes))
   }
 
-  private async unpack(operation: SourceFileOperation, path: string): Promise<string> {
+  private async unpack(operation: SourceFileOperation, path: string, signal: AbortSignal): Promise<string> {
     if (path.length === 0) return ''
     const input = await this.readBytes(path)
     if (input === null) return ''
     const format = operation === 'un7zFile' ? '7z' : operation === 'unrarFile' ? 'rar' : extension(path) === 'gz' ? 'gzip' : extension(path) === 'zip' || operation === 'unzipFile' ? 'zip' : extension(path) === '7z' ? '7z' : 'rar'
-    const entries = await this.archive.extract(input, format)
+    const entries = await this.archive.extract(input, format, {}, signal)
     const name = path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? path
     const folder = `temp/${sourceKey(name)}`
     for (const entry of entries) {
@@ -279,7 +279,7 @@ export class NodeSourceFileHost implements SourceFileHost {
 
   private async archiveContent(urlOrHex: string, path: string, format: 'zip' | 'rar' | '7z', signal: AbortSignal, source: NormalizedSource): Promise<Uint8Array | undefined> {
     const bytes = /^https?:\/\//iu.test(urlOrHex) ? await this.downloadBytes(urlOrHex, signal, source) : this.binaryEncoding.hexDecode(urlOrHex)
-    const entries = await this.archive.extract(bytes, format)
+    const entries = await this.archive.extract(bytes, format, {}, signal)
     return entries.find((entry) => entry.path === safeRelative(path))?.data
   }
 

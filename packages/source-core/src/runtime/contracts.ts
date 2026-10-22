@@ -283,7 +283,7 @@ export interface ArchiveEntry {
 
 export interface ArchiveHost {
   /** 受预算解包；不支持或不安全的格式必须明确失败。 */
-  extract(input: Uint8Array, format: ArchiveFormat, limits?: Partial<ArchiveLimits>): Promise<ArchiveEntry[]>
+  extract(input: Uint8Array, format: ArchiveFormat, limits?: Partial<ArchiveLimits>, signal?: AbortSignal): Promise<ArchiveEntry[]>
 }
 
 export interface FontMapping {

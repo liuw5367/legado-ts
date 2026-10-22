@@ -559,6 +559,19 @@ test('对称加密工厂保持随机 key 和 setIv 状态，并支持 CTR/NoPadd
   assert.deepEqual(JSON.parse(String(result.value)), [16, true, true, [104, 101, 108, 108, 111]])
 })
 
+test('旧 AES 重载保留 Base64 文本、Base64 bytes 与 GCM tag 返回类型', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var key = '1234567890123456';
+    var iv = '1234567890123456';
+    var encoded = java.aesEncodeToBase64String('hello', key, 'AES/CBC/PKCS5Padding', iv);
+    var decoded = java.aesBase64DecodeToString(encoded, key, 'AES/CBC/PKCS5Padding', iv);
+    var encodedBytes = java.aesEncodeToBase64ByteArray('hello', key, 'AES/CBC/PKCS5Padding', iv);
+    var gcm = java.createSymmetricCrypto('AES/GCM/NoPadding', new Uint8Array(16), new Uint8Array(12));
+    JSON.stringify([typeof encoded, decoded, Array.isArray(Array.from(encodedBytes)), gcm.encrypt(new Uint8Array(16)).length]);`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['string', 'hello', true, 32])
+})
+
 test('java.getString 和 java.getStringList 的 isUrl 使用重定向地址并去重', async () => {
   const host = new SourceRuleHost()
   const content = { url: '../chapter/1', missing: '', links: ['/a', '/a', 'chapter/2', 'javascript:void(0)'] }
@@ -722,6 +735,12 @@ test('Node 时间格式桥接支持 Android 常用周年份、星期序号和独
   const result = await evaluate(new SourceRuleHost(), `@js:java.timeFormatUTC(1577836800000, "YYYY-u-LLLL", 0)`, '')
   assert.equal(result.status, 'success')
   assert.equal(result.value, '2020-3-January')
+})
+
+test('Node 时间格式桥接不把 SimpleDateFormat 未知字母静默当作字面量', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:java.timeFormatUTC(0, "yyyy-QQQ", 0)`, '')
+  assert.equal(result.status, 'empty')
+  assert.equal(result.value, null)
 })
 
 test('source、book、chapter 变量分别写入所属 DTO，通用读取遵循 chapter 优先级', async () => {

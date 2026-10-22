@@ -49,6 +49,22 @@ test('Node 加密宿主支持摘要、HMAC 与 AES 文本往返', () => {
   assert.equal(crypto.decryptText(encrypted), '中文')
 })
 
+test('Node 加密宿主按 Android 约定保留 GCM authentication tag，并报告 provider 缺口', () => {
+  const host = new NodeCryptoHost()
+  const key = new Uint8Array(16)
+  const iv = new Uint8Array(12)
+  const crypto = host.createSymmetricCrypto('AES/GCM/NoPadding', key, iv)
+  const encrypted = crypto.encrypt(new Uint8Array(16))
+  assert.equal(Buffer.from(encrypted).toString('hex'), '0388dace60b6a392f328c2b971b2fe78ab6e47d42cec13bdf53a67b21257bddf')
+  assert.deepEqual(crypto.decrypt(encrypted), new Uint8Array(16))
+  const tampered = Uint8Array.from(encrypted)
+  const lastByte = tampered.length - 1
+  tampered[lastByte] = tampered[lastByte]! ^ 1
+  assert.throws(() => crypto.decrypt(tampered), /auth|authenticate|bad decrypt/iu)
+  assert.throws(() => host.createSymmetricCrypto('AES/CCM/NoPadding', key, iv), /__LEGADO_CAPABILITY__runtime crypto\.provider/u)
+  assert.throws(() => host.createSymmetricCrypto('DES/CBC/PKCS5Padding', new TextEncoder().encode('12345678'), new Uint8Array(8)), /__LEGADO_CAPABILITY__runtime crypto\./u)
+})
+
 test('Node 压缩宿主限制 gzip 与 zip 输出', async () => {
   const host = new NodeArchiveHost()
   const gzip = await host.extract(Uint8Array.from(gzipSync(Buffer.from('hello'))), 'gzip')
@@ -63,6 +79,9 @@ test('Node 压缩宿主限制 gzip 与 zip 输出', async () => {
   await assert.rejects(host.extract(zipBytes.slice(0, -1), 'zip'), /end of central directory/)
   await assert.rejects(host.extract(Uint8Array.from(gzipSync(Buffer.from('hello'))), 'gzip', { maxEntryBytes: 2 }), /byte budget/)
   await assert.rejects(host.extract(Uint8Array.from(gzipSync(Buffer.from('a'.repeat(1000)))), 'gzip', { maxCompressionRatio: 10 }), /compression ratio/)
+  const cancelled = new AbortController()
+  cancelled.abort()
+  await assert.rejects(host.extract(zipBytes, 'zip', {}, cancelled.signal), /__LEGADO_CANCELLED__/u)
 })
 
 test('按 key 并发保持同 key 顺序并取消排队任务', async () => {

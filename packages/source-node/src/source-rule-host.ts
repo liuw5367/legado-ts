@@ -34,6 +34,17 @@ export interface SourceRuleHostOptions extends Omit<SourceRuleRuntimeOptions, 'e
 function formatJavaDate(time: number, pattern: string, offsetMs?: number): string | null {
   if (!Number.isFinite(time) || !Number.isFinite(offsetMs ?? 0)) return null
   if (pattern.length > 512) return null
+  let quoted = false
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index]!
+    if (character === "'") {
+      if (pattern[index + 1] === "'") { index += 1; continue }
+      quoted = !quoted
+      continue
+    }
+    if (!quoted && /[A-Za-z]/u.test(character) && !/[GyYuUMdDLwWDFEHhKkmsSaZzX]/u.test(character)) return null
+  }
+  if (quoted) return null
   const date = new Date(time + (offsetMs ?? 0))
   if (Number.isNaN(date.getTime())) return null
   const utc = offsetMs !== undefined
