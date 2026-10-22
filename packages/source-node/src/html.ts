@@ -49,7 +49,7 @@ class HtmlDocumentView implements HtmlDocument {
     }
     if (output === 'text') return jsoupText(value)
     const children = isDocument(value) || isTag(value) ? getChildren(value) : []
-    if (output === 'textNodes') return children.filter((child) => isText(child) || isCDATA(child)).map((child) => trimAndroidWhitespace(normalizeWhitespace(getText(child)))).filter(Boolean).join('\n')
+    if (output === 'textNodes') return children.filter((child) => (isText(child) || isCDATA(child)) && !isScriptOrStyle(child.parent)).map((child) => trimAndroidWhitespace(normalizeWhitespace(getText(child)))).filter(Boolean).join('\n')
     return ownTextValue(value)
   }
 
@@ -143,11 +143,13 @@ const blockElements = new Set(['address', 'article', 'aside', 'blockquote', 'br'
 /** Jsoup Element.text 的可移植子集：忽略 data 节点、规范空白并在块级元素间补分隔。 */
 function jsoupText(node: AnyNode): string {
   const chunks: string[] = []
-  // 保留文本节点中的换行：规则替换依赖 `\\n`，块级元素之间再单独补空格。
-  const append = (value: string): void => { if (value.length > 0) chunks.push(value.replace(/[ \t\f\v\r]+/gu, ' ')) }
+  const append = (value: string, preserve = false): void => { if (value.length > 0) chunks.push(preserve ? value : normalizeWhitespace(value)) }
   const visit = (current: AnyNode): void => {
     if (isScriptOrStyle(current)) return
-    if (isText(current)) { append(getText(current)); return }
+    if (isText(current) || isCDATA(current)) {
+      append(getText(current), isCDATA(current) || preservesWhitespace(current.parent))
+      return
+    }
     if (!isDocument(current) && isTag(current) && blockElements.has(current.name)) append(' ')
     for (const child of getChildren(current)) visit(child)
     if (!isDocument(current) && isTag(current) && blockElements.has(current.name)) append(' ')
@@ -161,6 +163,7 @@ function ownTextValue(node: AnyNode): string {
   let output = ''
   for (const child of getChildren(node)) {
     if (isText(child) || isCDATA(child)) {
+      if (isScriptOrStyle(child.parent)) continue
       const text = getText(child)
       output += isCDATA(child) || preservesWhitespace(child.parent) ? text : normalizeWhitespace(text)
       continue

@@ -1789,10 +1789,10 @@ test('## 替换段里的 {{}} 参与插值', async () => {
 
 test('源可控正则按形态守卫：未锚定的嵌套量词一律拒绝，语料写法放行', async () => {
   const host = new SourceRuleHost()
-  // 语料里有 4 条 `##` 匹配串合法使用「有字面量锚定」的嵌套量词（如 `(\n.*)+`），任何输入规模都放行。
+  // 语料里有 4 条 `##` 匹配串合法使用「有字面量锚定」的嵌套量词（如 `(\n.*)+`），任何输入规模都放行；普通 Jsoup 文本会先把换行归一化为空格，因此该模式不命中。
   const short = await evaluate(host, 'p@text##(\\n.*)+##', '<p>a\nb\nc</p>')
   assert.equal(short.status, 'success')
-  assert.equal(short.value, 'a')
+  assert.equal(short.value, 'a b c')
   const large = await evaluate(host, 'p@text##(\\n.*)+##', `<p>${'a\n'.repeat(40000)}</p>`)
   assert.notEqual(large.status, 'failed')
 

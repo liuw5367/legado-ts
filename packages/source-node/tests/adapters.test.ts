@@ -50,14 +50,22 @@ test('HTML adapter 对齐 Jsoup ownText/textNodes 的 br、保留空白和脚本
   assert.equal(document.read(root, 'ownText'), 'A B')
 
   const script = document.select('script')[0]!
-  assert.equal(document.read(script, 'ownText'), 'x\n y')
-  assert.equal(document.read(script, 'textNodes'), 'x y')
+  assert.equal(document.read(script, 'ownText'), '')
+  assert.equal(document.read(script, 'textNodes'), '')
 
   const textarea = document.select('textarea')[0]!
   assert.equal(document.read(textarea, 'ownText'), 'a\n b')
 
   const pre = document.select('pre')[0]!
   assert.equal(document.read(pre, 'ownText'), 'p\n q')
+})
+
+test('HTML adapter 按 Jsoup 归一化普通文本空白并保留 pre 空白', () => {
+  const document = new HtmlParserAdapter().parse('<div>A&nbsp;B\n C\r\nD</div><pre>A&nbsp;B\n C</pre>')
+  const div = document.select('div')[0]!
+  const pre = document.select('pre')[0]!
+  assert.equal(document.read(div, 'text'), 'A B C D')
+  assert.equal(document.read(pre, 'text'), 'A\u00a0B\n C')
 })
 
 test('HTML adapter 的 XML 模式保留大小写并报告无效选择器', () => {
