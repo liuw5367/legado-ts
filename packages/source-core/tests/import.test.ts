@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { exportSource, importSources, sameSourceDefinition } from '../src/index.ts'
+import { exportSource, importSources, normalizeRelaxedJson, parseRelaxedJson, sameSourceDefinition } from '../src/index.ts'
 
 const source = {
   bookSourceUrl: 'https://example.test/books',
@@ -66,6 +66,26 @@ test('导入接受受限宽松 JSON，但不执行表达式', async () => {
   assert.equal(candidates[0]?.source?.bookSourceGroup, 'a\\d')
   const dangerous = await importSources(`{bookSourceUrl:'https://bad.test', bookSourceName:(process.exit())}`)
   assert.equal(dangerous[0]?.status, 'invalid')
+})
+
+test('宽松 JSON 只在字符串外处理注释、尾逗号和单引号转义', () => {
+  const value = parseRelaxedJson(String.raw`{
+    // a comment with a comma,
+    text: 'a\'b // not a comment',
+    url: "https://example.test/a//b",
+    nested: [1, 2, /* inline */],
+  }`) as Record<string, unknown>
+  assert.deepEqual(value, {
+    text: "a'b // not a comment",
+    url: 'https://example.test/a//b',
+    nested: [1, 2],
+  })
+
+  const normalized = normalizeRelaxedJson('{__proto__:{polluted:true},constructor:{safe:true}}')
+  const parsed = JSON.parse(normalized) as Record<string, unknown>
+  assert.equal(Object.prototype.hasOwnProperty.call(Object.prototype, 'polluted'), false)
+  assert.deepEqual(parsed.__proto__, { polluted: true })
+  assert.deepEqual(parsed.constructor, { safe: true })
 })
 
 test('未修改 JSON/JavaScript 候选逐字导出', async () => {

@@ -115,6 +115,28 @@ test('Java 正则的常见边界、引用块和占有量词进入受控转换', 
   assert.equal('error' in unsupported ? unsupported.error.code : 'regex', 'unsupported-pattern')
 })
 
+test('Java 正则 POSIX/Unicode 属性映射到受控 ECMAScript 属性转义', () => {
+  const lower = compileSourcePattern(String.raw`\p{Lower}+`, { flags: '' })
+  assert.ok('regex' in lower)
+  assert.equal('regex' in lower ? lower.regex.test('abc') : false, true)
+  assert.equal('regex' in lower ? lower.regex.test('中文') : true, false)
+
+  const alpha = compileSourcePattern(String.raw`\p{Alpha}+`, { flags: '' })
+  assert.ok('regex' in alpha)
+  assert.equal('regex' in alpha ? alpha.regex.test('中文') : false, true)
+
+  const unicodeFlag = compileSourcePattern('(?U)\\p{javaWhitespace}+', { flags: '' })
+  assert.ok('regex' in unicodeFlag)
+  assert.equal('regex' in unicodeFlag ? unicodeFlag.regex.test('  ') : false, true)
+
+  const unsupported = compileSourcePattern(String.raw`\C`, { flags: '' })
+  assert.equal('error' in unsupported ? unsupported.error.code : 'regex', 'unsupported-pattern')
+  const unsupportedFlag = compileSourcePattern('abc', { flags: 'U' })
+  assert.equal('error' in unsupportedFlag ? unsupportedFlag.error.code : 'regex', 'unsupported-pattern')
+  const scopedFlag = compileSourcePattern('(?i:abc)', { flags: '' })
+  assert.equal('error' in scopedFlag ? scopedFlag.error.code : 'regex', 'unsupported-pattern')
+})
+
 test('非法规则、取消和预算耗尽均有可判别结果', () => {
   assert.equal(compileRule('tag.a[0').diagnostics[0]?.code, 'unbalanced-rule')
   const controller = new AbortController()

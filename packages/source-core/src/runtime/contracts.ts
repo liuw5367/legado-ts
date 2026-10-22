@@ -316,6 +316,24 @@ export interface ParserNode {
   readonly kind: 'element' | 'text' | 'document'
 }
 
+/**
+ * 解析器 adapter 的稳定错误分类。
+ *
+ * 书源规则运行时不能把不支持的 CSS/JSONPath 语法当成普通空结果；
+ * 宿主可以用这个错误码把“规则不兼容”和“页面确实没有匹配项”区分开。
+ */
+export type ParserErrorCode = 'unsupported-selector' | 'unsupported-jsonpath' | 'invalid-selector' | 'invalid-jsonpath'
+
+export class ParserAdapterError extends Error {
+  public readonly code: ParserErrorCode
+
+  public constructor(code: ParserErrorCode, message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'ParserAdapterError'
+    this.code = code
+  }
+}
+
 export interface HtmlDocument {
   /** 选择元素，不改变文档和已有节点。 */
   select(selector: string): ParserNode[]

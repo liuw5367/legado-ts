@@ -87,12 +87,19 @@ export function compileSourcePattern(pattern: string, options: SourcePatternOpti
  */
 function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternTranslation | { error: SourcePatternError } {
   let flags = inputFlags
+  for (const flag of flags) {
+    if (!'dgimsuvy'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `正则 flag ${flag} 暂不支持` } }
+  }
   let source = pattern
   const inline = /^\(\?([imsUdx-]+)\)/u.exec(source)
   if (inline !== null) {
     source = source.slice(inline[0].length)
     for (const flag of inline[1]!) {
       if (flag === '-') continue
+      if (flag === 'U') {
+        if (!flags.includes('u')) flags += 'u'
+        continue
+      }
       if ('imsu'.includes(flag) && !flags.includes(flag)) flags += flag
       if (!'imsu'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
     }
@@ -100,6 +107,11 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
   if (/\(\?[imsUdx-]+:/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则作用域 flag 暂不支持' } }
   if (/\[[^\]]*&&/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则字符类交集暂不支持' } }
   source = source.replace(/\\R/gu, '(?:\\r\\n|[\\n\\r\\u2028\\u2029])').replace(/\\A/gu, '^').replace(/\\[zZ]/gu, '$')
+  const properties = translateJavaUnicodeProperties(source)
+  if ('error' in properties) return properties
+  source = properties.pattern
+  if (properties.unicode && !flags.includes('u')) flags += 'u'
+  if (/\\(?:C|N\{)/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则字符转义暂不支持' } }
   let output = ''
   for (let index = 0; index < source.length;) {
     if (source.startsWith('\\Q', index)) {
@@ -115,6 +127,55 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
   // ECMAScript 没有占有量词；去除占有标记保留 Java 的匹配集合，复杂度由守卫控制。
   output = output.replace(/(\*|\+|\?|\{\d+(?:,\d*)?\})\+/gu, '$1')
   return { pattern: output, flags }
+}
+
+/** Java Pattern 的 POSIX/历史 Unicode 属性与 ECMAScript 属性转义的有限等价映射。 */
+function translateJavaUnicodeProperties(source: string): { pattern: string; unicode: boolean } | { error: SourcePatternError } {
+  const aliases: Record<string, string> = {
+    Lower: 'Lowercase_Letter',
+    Upper: 'Uppercase_Letter',
+    Alpha: 'Alphabetic',
+    Digit: 'Decimal_Number',
+    Alnum: '[\\p{Alphabetic}\\p{Decimal_Number}]',
+    Punct: 'Punctuation',
+    Space: 'White_Space',
+    Blank: '[\\t\\p{Space_Separator}]',
+    Cntrl: 'Control',
+    XDigit: '[0-9A-Fa-f]',
+    Graph: '[^\\p{White_Space}\\p{Control}\\p{Unassigned}]',
+    Print: '[^\\p{Control}\\p{Unassigned}]',
+    javaLowerCase: 'Lowercase_Letter',
+    javaUpperCase: 'Uppercase_Letter',
+    javaAlphabetic: 'Alphabetic',
+    javaDigit: 'Decimal_Number',
+    javaWhitespace: 'White_Space',
+    javaMirrored: 'Bidi_Mirrored',
+    IsAlphabetic: 'Alphabetic',
+    IsLowercase: 'Lowercase_Letter',
+    IsUppercase: 'Uppercase_Letter',
+    IsDigit: 'Decimal_Number',
+    IsWhite_Space: 'White_Space',
+    IsHan: 'Script=Han',
+  }
+  let unicode = false
+  let unsupported: string | undefined
+  const pattern = source.replace(/\\([pP])\{([^{}]+)\}/gu, (_match, kind: string, property: string) => {
+    let mapped = aliases[property] ?? (property.startsWith('In') ? `Script=${property.slice(2)}` : undefined)
+    if (mapped === undefined) {
+      try {
+        new RegExp(`\\p{${property}}`, 'u')
+        mapped = property
+      } catch {
+        unsupported = property
+        return _match
+      }
+    }
+    unicode = true
+    if (mapped.startsWith('[')) return kind === 'p' ? mapped : `[^${mapped.slice(1)}`
+    return `\\${kind}{${mapped}}`
+  })
+  if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java Unicode 属性 ${unsupported} 暂不支持` } }
+  return { pattern, unicode }
 }
 
 function escapeRegexLiteral(value: string): string {

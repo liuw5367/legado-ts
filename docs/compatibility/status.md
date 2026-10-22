@@ -83,10 +83,10 @@
 | D15 | 应用边界差异 | 目录统计标题的应用替换规则 | 有意保留 | [差异登记](known-divergences.md)，D15；`toc-reconcile.ts` | source-core 保持纯函数；应用提供标题替换规则快照或投影回调后再做跨端 fixture |
 | D16 | JS 源行为差异 | JS 源 URL 的公开身份与脚本可见形式 | 已实现待 Android golden | [差异登记](known-divergences.md)，D16；`javascript-projection.ts`、`discovery.ts`、`reading.ts`、`source-host-flow.test.ts` | 已有 Node 回归覆盖 raw bookUrl/tocUrl/baseUrl 与详情身份字段白名单；待同输入 Android runner/golden |
 | D17 | JS 源行为差异 | JS 详情 `updateTime` 扩展字段 | 有意保留 | [差异登记](known-divergences.md)，D17；`workflows.test.ts` | Android 当前 marshaller 不接收该字段；TypeScript 保留已有字段并按允许差异处理 |
-| D18 | 规则解析 | Jsoup 扩展选择器 | 部分实现（第二阶段） | [重新核对](known-divergences.md#android-与教程重新核对2026-10-21)，D18；`packages/source-node/tests/adapters.test.ts` 覆盖 `eq/lt/gt/containsOwn/matchesOwn` 及组合选择 | 已实现常用位置/文本伪类；完整 Jsoup 版本、畸形 HTML 和 Android golden 仍待验证 |
-| D19 | 规则解析 | HTML text/ownText/html/属性输出 | 部分实现（第二阶段） | D19；`html.ts` 增加 Jsoup 风格空白、块节点分隔和 script/style 排除；Node adapter 回归通过 | `text/ownText/textNodes` 常用语义已覆盖；HTML 修复算法、属性去重和 Android golden 仍待验证 |
-| D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现（第二阶段） | D20；`jsonpath.ts` 支持常用 `length/size/keys/min/max/avg/sum` 和安全正则筛选；Node adapter 回归通过 | 仍受 jsonpath-plus safe evaluator 方言边界约束；完整 Jayway 函数、null/缺失和嵌套集合仍待验证 |
-| D21 | 规则解析 | Java 正则与替换字符串 | 部分实现（第二阶段） | D21；`pattern-guard.ts` 支持内联 flags、`\\Q…\\E`、边界转义和占有量词降级，并对作用域 flags/字符类交集给出能力诊断；规则回归通过 | 未覆盖的 Java 语法、Matcher/替换字符串细节和 Android golden 仍待验证 |
+| D18 | 规则解析 | Jsoup 扩展选择器 | 部分实现（第三阶段 A） | [重新核对](known-divergences.md#android-与教程重新核对2026-10-21)，D18；`html.ts` 将 XML 模式传给 css-select，保留 `eq/lt/gt/containsOwn/matchesOwn`，无效选择器统一返回 `unsupported-selector`；`packages/source-node/tests/adapters.test.ts` 有回归 | 常用位置/文本伪类和 XML 大小写已补；完整 Jsoup 版本、畸形 HTML 和 Android golden 仍待验证 |
+| D19 | 规则解析 | HTML text/ownText/html/属性输出 | 部分实现（第三阶段 A） | D19；`html.ts` 保留 Jsoup 风格空白、块节点分隔、script/style 排除和 HTML/XML 序列化；Node adapter 回归通过 | `text/ownText/textNodes/html/all` 常用语义已覆盖；HTML 修复算法、属性去重和 Android golden 仍待验证 |
+| D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现（第三阶段 A） | D20；`jsonpath.ts` 支持聚合函数、正则筛选及 `in/nin/size/empty/anyof/noneof` 的安全转换；`subsetof` 和解析异常返回稳定 `unsupported-jsonpath`；Node adapter 回归通过 | 完整 Jayway 函数、null/缺失、确定/不确定路径和嵌套集合仍需 Android golden；不支持语法不再静默为空 |
+| D21 | 规则解析 | Java 正则与替换字符串 | 部分实现（第三阶段 A） | D21；`pattern-guard.ts` 支持内联 flags（含 `U`）、`\\Q…\\E`、边界转义、POSIX/Unicode 属性和占有量词降级；作用域 flags、字符类交集和字符转义给出 `unsupported-pattern`；规则回归通过 | 未覆盖的 Java 语法、Matcher/替换字符串细节和 Android golden 仍待验证；安全长度/复杂度限制继续保留 |
 | D22 | 请求脚本 | AnalyzeUrl 对象修改与登录后重取 | 部分实现（第四阶段） | `java.url`/`headerMap`、`getHeaderMap`、`initUrl`、受控 `getStrResponse/getResponse` 已接入 URL 脚本上下文；Node fixture 验证重取顺序和头部 | WebView 默认路径仍能力缺失；完整 loginCheckJs 人工登录重取、递归/取消/Android golden 仍待验证 |
 | D23 | JS bridge | AnalyzeRule 继承成员和重载 | 部分实现（第三阶段，重载语义已补齐） | `source-runtime.ts` 已补 setBaseUrl/setRedirectUrl/setLocal/evalJS、刷新助手、`getString(rule, boolean)`、`getString(rule, content, isUrl)`、`getStringList(rule, content, isUrl)`；`null` 内容回退当前上下文、HTML unescape、URL 解析/空值回退和列表去重均有 Node 回归 | AnalyzeUrl 专属上下文仍单列于 D22；Android golden、全部规则对象/列表重载仍待双端逐签名验证 |
 | D24 | JS 对象 | Map/List/Jsoup 返回对象方法 | 部分实现（第三阶段） | 受控 `Map/List`、source 登录 Map、getStringList/getElements 返回对象和 Java String 方法已有教程式回归 | Jsoup 全部链式成员及完整公开对象清单仍待验证 |
@@ -103,7 +103,7 @@
 | D35 | 字体对象 | 本地文件输入及 QueryTTF 公开对象 | 部分实现（第三阶段） | 字体对象补 getGlyfById/unicodeToGlyph/glyphToUnicode/unicodeToGlyphId；文件路径下载复用源请求链 | CFF/WOFF、缺失 glyph 和 Android golden 仍待验证 |
 | D36 | 工具函数 | 日期格式和繁简词库 | 部分实现（第三阶段） | Node 日期格式补 D/w/W/F/k/K/z/G 常用 token；现有 locale/UTC 回归继续通过 | SimpleDateFormat 全量 token、locale 和繁简词库完整差分仍待验证 |
 | D37 | 宿主值 | 设备替代值和阅读/主题配置注入 | 部分实现 | 差异登记 D37；getWebViewUA 已有默认字符串 | 账号内稳定标识与真实应用设置映射；明确物理设备不等价 |
-| D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第二阶段） | D38；`codec/relaxed-json.ts` 在严格 JSON 失败后受限解析注释、单引号、未引号键和尾逗号；导入、规则、URL options、发现分类回归通过 | 仅解析数据语法，不执行表达式；转义边界、GSON 其他宽松选项和 Android golden 仍待验证 |
+| D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退只处理字符串外注释、单引号、未引号键和尾逗号；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（第三阶段） | jsLib 按源指纹恢复可序列化全局状态，`refreshJSLib` 清除状态并有跨执行回归；函数/闭包/宿主对象不进入快照 | 并发、取消、跨进程和非序列化对象生命周期仍需明确边界 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（第一阶段） | 差异登记 D40；游标签名加入发现代次，刷新后旧游标有回归测试 | 动态 URL/infoMap 摘要、迟到请求写回和多实例组合仍需验证 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 差异待处理 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 132/132、根全套 531/531、reader-web 137/137，但仍需逐签名返回对象覆盖和 Android golden | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |

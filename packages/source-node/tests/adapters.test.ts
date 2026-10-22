@@ -32,6 +32,17 @@ test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
   assert.equal(document.read(document.select('main')[0]!, 'text'), '前甲 中乙 后丙')
 })
 
+test('HTML adapter 的 XML 模式保留大小写并报告无效选择器', () => {
+  const document = new HtmlParserAdapter().parse('<Root><Item ID="x">Hi</Item></Root>', 'xml')
+  assert.equal(document.select('Item').length, 1)
+  assert.equal(document.select('item').length, 0)
+  assert.equal(document.select('[ID="x"]').length, 1)
+  assert.throws(
+    () => document.select('Item['),
+    (error: unknown) => error instanceof Error && 'code' in error && error.code === 'unsupported-selector',
+  )
+})
+
 test('HTML/XPath textNodes 去除每个文本节点首尾 ASCII 控制空白并忽略空白节点', () => {
   const html = new HtmlParserAdapter().parse('<div>  A \n <span>nested</span> \t B \r\n</div>')
   const htmlNode = html.select('div')[0]!
@@ -71,6 +82,31 @@ test('JSONPath adapter 支持 Jayway 聚合函数和正则过滤的安全转换'
   assert.deepEqual(parser.evaluate(value, '$.items.length()'), [3])
   assert.deepEqual(parser.evaluate(value, '$.items[?(@.name =~ /a.*/i)].name'), ['alpha', 'beta'])
   assert.deepEqual(parser.evaluate(value, '$.items[*].score.sum()'), [8])
+})
+
+test('JSONPath adapter 转换 Jayway 过滤运算并拒绝无法安全降级的集合运算', () => {
+  const parser = new JsonPathParserAdapter()
+  const value = {
+    items: [
+      { value: 'a', tags: ['a'] },
+      { value: 'b', tags: ['b'] },
+      { value: 'c', tags: ['c'] },
+      { value: 'empty', tags: [] },
+      { value: 'null', tags: null },
+      { value: 'missing' },
+    ],
+  }
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.value in ["a","c"])].value'), ['a', 'c'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.value nin ["a"])].value'), ['b', 'c', 'empty', 'null', 'missing'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags size 1)].value'), ['a', 'b', 'c'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags anyof ["b","c"])].value'), ['b', 'c'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags noneof ["b","c"])].value'), ['a', 'empty', 'null', 'missing'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags empty true)].value'), ['empty', 'null', 'missing'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags subsetof ["a","b"])].value'), ['a', 'b', 'empty'])
+  assert.throws(
+    () => parser.evaluate(value, '$.items[?(@.tags subsetof [{"value":1}])].value'),
+    (error: unknown) => error instanceof Error && 'code' in error && error.code === 'unsupported-jsonpath',
+  )
 })
 
 test('JSONPath adapter 不执行条件表达式中的原生构造器', () => {

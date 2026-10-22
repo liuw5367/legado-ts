@@ -3,7 +3,7 @@ import { isDocument, isText, isTag, type AnyNode } from 'domhandler'
 import { getAttributeValue, getChildren, getText } from 'domutils'
 import { selectAll } from 'css-select'
 import { render } from 'dom-serializer'
-import type { HtmlDocument, HtmlParser, ParserNode } from '@legado/source-core'
+import { ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode } from '@legado/source-core'
 
 class HtmlDocumentView implements HtmlDocument {
   private readonly ids = new Map<string, AnyNode>()
@@ -18,7 +18,12 @@ class HtmlDocumentView implements HtmlDocument {
   }
 
   public select(selector: string): ParserNode[] {
-    return selectAll(selector, this.root, { pseudos: htmlPseudos }).map((node) => this.wrap(node))
+    try {
+      return selectAll(selector, this.root, { xmlMode: this.xmlMode, pseudos: htmlPseudos }).map((node) => this.wrap(node))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new ParserAdapterError('unsupported-selector', `CSS 选择器不受支持：${message}`, { cause: error })
+    }
   }
 
   public children(): ParserNode[] {
