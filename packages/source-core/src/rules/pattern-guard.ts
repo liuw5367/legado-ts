@@ -103,8 +103,10 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     flags = applyInlineFlags(flags, disabled, false)
   }
   if (/\(\?[imsUdx-]+:/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则作用域 flag 暂不支持' } }
-  if (/\[[^\]]*&&/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则字符类交集暂不支持' } }
   source = source.replace(/\\R/gu, '(?:\\r\\n|[\\n\\r\\u2028\\u2029])').replace(/\\A/gu, '^').replace(/\\[zZ]/gu, '$')
+  const intersections = translateJavaCharacterClassIntersections(source)
+  if ('error' in intersections) return intersections
+  source = intersections.pattern
   const properties = translateJavaUnicodeProperties(source)
   if ('error' in properties) return properties
   source = properties.pattern
@@ -125,6 +127,115 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
   if (/\(\?>/u.test(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则原子分组暂不支持' } }
   if (hasPossessiveQuantifier(output)) return { error: { code: 'unsupported-pattern', message: 'Java 正则占有量词暂不支持' } }
   return { pattern: output, flags }
+}
+
+/**
+ * 将 Java Pattern 的常见字符类交集转换成 ECMAScript 的 lookahead 组合。
+ *
+ * Java 允许 `[a-z&&[^bc]]`、`[a-z&&[def]]` 等集合运算，ECMAScript
+ * 没有对应的字符类运算符。把每个子类放进同一位置的 lookahead，再用
+ * `\\s\\S` 消费一个字符，可以保持交集/差集的匹配结果；遇到不能明确
+ * 分解的语法则保留能力诊断，避免静默扩大匹配范围。
+ */
+function translateJavaCharacterClassIntersections(source: string): { pattern: string } | { error: SourcePatternError } {
+  let output = ''
+  for (let index = 0; index < source.length;) {
+    if (source[index] === '\\') {
+      output += source.slice(index, index + 2)
+      index += 2
+      continue
+    }
+    if (source[index] !== '[') {
+      output += source[index]!
+      index += 1
+      continue
+    }
+    const end = findCharacterClassEnd(source, index)
+    if (end < 0) {
+      output += source.slice(index)
+      break
+    }
+    const raw = source.slice(index, end + 1)
+    const converted = convertCharacterClassIntersection(raw)
+    if ('error' in converted) return converted
+    output += converted.pattern
+    index = end + 1
+  }
+  return { pattern: output }
+}
+
+function findCharacterClassEnd(source: string, start: number): number {
+  let depth = 0
+  let escaped = false
+  for (let index = start; index < source.length; index += 1) {
+    const current = source[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (current === '\\') {
+      escaped = true
+      continue
+    }
+    if (current === '[') {
+      depth += 1
+      continue
+    }
+    if (current !== ']') continue
+    depth -= 1
+    if (depth === 0) return index
+  }
+  return -1
+}
+
+function convertCharacterClassIntersection(raw: string): { pattern: string } | { error: SourcePatternError } {
+  const body = raw.slice(1, -1)
+  const parts: string[] = []
+  let start = 0
+  let depth = 0
+  let escaped = false
+  for (let index = 0; index < body.length; index += 1) {
+    const current = body[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (current === '\\') {
+      escaped = true
+      continue
+    }
+    if (current === '[') {
+      depth += 1
+      continue
+    }
+    if (current === ']') {
+      if (depth === 0) return { error: { code: 'invalid-pattern', message: 'Java 正则字符类括号不匹配' } }
+      depth -= 1
+      continue
+    }
+    if (depth !== 0 || current !== '&' || body[index + 1] !== '&') continue
+    parts.push(body.slice(start, index))
+    start = index + 2
+    index += 1
+  }
+  if (depth !== 0) return { error: { code: 'invalid-pattern', message: 'Java 正则字符类括号不匹配' } }
+  if (parts.length === 0) return { pattern: raw }
+  parts.push(body.slice(start))
+  if (parts.some((part) => part.length === 0)) return { error: { code: 'unsupported-pattern', message: 'Java 正则字符类交集缺少集合项' } }
+  const classes: string[] = []
+  for (const [partIndex, part] of parts.entries()) {
+    if (partIndex === 0) {
+      classes.push(part.startsWith('[') && part.endsWith(']') ? part : `[${part}]`)
+      continue
+    }
+    if (!part.startsWith('[') || !part.endsWith(']') || findCharacterClassEnd(part, 0) !== part.length - 1) {
+      return { error: { code: 'unsupported-pattern', message: 'Java 正则字符类交集只支持嵌套集合语法' } }
+    }
+    const nested = convertCharacterClassIntersection(part)
+    if ('error' in nested) return nested
+    classes.push(nested.pattern)
+  }
+  return { pattern: `(?:${classes.map((item) => `(?=${item})`).join('')}[\\s\\S])` }
 }
 
 function applyInlineFlags(current: string, flags: string, enable: boolean): string {
