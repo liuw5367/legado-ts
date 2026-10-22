@@ -9,7 +9,7 @@
 | 导入、更新、导出 | JSON、JS、远程地址、替换、冲突、未知字段和原文保留 | [导入](../upstream/android/flows/import-protocol.md)、[编辑](../archive/source-editor.md) | 优先；核对更新后的缓存失效和版本身份 |
 | 书源字段与类型 | `BookSource`、规则对象、文本/音频/图片/文件/视频类型 | [模型](../upstream/android/rules/source-schema.md) | 优先；各类型从列表到消费结果的行为需分开验收 |
 | 规则语言 | CSS、XPath、JSONPath、正则、组合、变量、内嵌 JS、WebJS | [规则](../upstream/android/rules/rule-language.md) | 优先；WebJS 需浏览器宿主能力 |
-| URL 与请求 | 参数、页码、Body、Header、Cookie、重试、重定向、代理和 DNS | [URL](../upstream/android/rules/url-request-rules.md) | 优先；代理与 DNS 由宿主实现并验证 |
+| URL 与请求 | 参数、页码、Body、Header、Cookie、重试、重定向、代理和 DNS | [URL](../upstream/android/rules/url-request-rules.md) | 优先；Node 通过 `undici` 提供 HTTP/HTTPS/SOCKS/SOCKS5 代理和认证，代理/DNS 顺序、安全边界与 Android golden 继续验证 |
 | 搜索与发现 | 多源搜索、精准搜索、分类入口、筛选状态、发现列表 | [搜索](../upstream/android/flows/search-flow.md)、[发现](../upstream/android/flows/explore-flow.md) | 优先；`exploreScreen` 和分类交互需要继续核对 |
 | 详情与目录 | 字段覆盖、文件下载地址、目录刷新、分页、卷、VIP 和顺序 | [详情](../upstream/android/flows/book-info-flow.md)、[目录](../upstream/android/flows/chapter-list-flow.md) | 优先；文件类源需专门结果契约 |
 | 正文与批量 | 正文分页、清洗、替换、缓存、批量、元数据保存 | [正文](../upstream/android/flows/content-flow.md) | `loadChapterContent` 与 `loadChapterContentBatch` 已实现；持久化/token 由宿主提供；Android golden 待执行 |
@@ -54,7 +54,7 @@
 | CAP-IMPORT | 03 的 JSON/JS/远程/URI、替换及导出 | IMP、EDIT | `importSources`/`exportSource` 已实现（codec）；JSON 校验和外层 sourceUrls 已核对 |
 | CAP-SCHEMA | 02 的全部 BookSource/rule 字段、RowUi | IMP-005、EDIT-005 | 字段已核对；登录动态协议仍有待核实项 |
 | CAP-RULE | 04 的模式、链、变量、替换及转换 | SCH、VAR | `compileRule`/`evaluateRule` 已实现；golden 对照未全量运行 |
-| CAP-REQUEST | 05 请求/响应/Cookie/DNS/代理 | URL | `createRequestPlan` 已实现；部分选项待对照 |
+| CAP-REQUEST | 05 请求/响应/Cookie/DNS/代理 | URL、REQUEST-003、`packages/source-node/tests/network.test.ts` | `createRequestPlan`、Node HTTP/HTTPS/SOCKS/SOCKS5 代理、认证、重试/重定向和失败不直连已实现；代理 provider 与 Android 同输入仍待对照 |
 | CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP、OBS-001 至 004 | `searchBooks`/`discoverBooks`、动态分类和五类控件已有实现；声明式请求、`mainJs` bridge 子请求及 URL/header/body 脚本的嵌套请求均可返回脱敏请求阶段和跳过原因；InfoMap 保存和选择快照差异见 D31/D40；exploreScreen 仅保留，当前未发现 Android 执行入口 |
 | CAP-INFO / CAP-TOC / CAP-CONTENT | 07 至 09 | FLOW-004 至 012 | `loadBookDetails`/`loadTableOfContents`/`loadChapterContent`/`loadChapterContentBatch` 已实现；Node 批量测试通过，需跑 Android 对照 |
 | CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008 至 010 | QuickJS 宿主已接入规则内 JS；Rhino 逐返回值对照与引擎互操作未全量验收 |

@@ -5,7 +5,7 @@ import type { ConnectionOptions } from 'node:tls'
 import { SourceRequestError } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, RequestPlan } from '@legado/source-core'
 import iconv from 'iconv-lite'
-import { Agent } from 'undici'
+import { Agent, ProxyAgent } from 'undici'
 import { getPublicSuffix } from 'tough-cookie'
 import { NodeCookieStore } from './cookies.ts'
 import type { CookieStore, NodeNetworkOptions } from './types.ts'
@@ -57,6 +57,33 @@ function parseDnsIpAddresses(value: string): DnsAddress[] {
     if (family === 0) throw new Error('dnsIp must contain only IPv4 or IPv6 addresses')
     return { address, family }
   })
+}
+
+type RequestDispatcher = Agent | ProxyAgent
+
+function parseProxyUrl(proxy: string): URL {
+  let url: URL
+  try {
+    url = new URL(proxy)
+  } catch {
+    throw new SourceRequestError('invalid-config', '书源 proxy 不是有效的 URL', 'header')
+  }
+  if (!['http:', 'https:', 'socks:', 'socks5:'].includes(url.protocol)) {
+    throw new SourceRequestError('capability-missing', `Node 网络宿主不支持 ${url.protocol} 书源代理`, 'header')
+  }
+  if (url.hostname.length === 0 || (url.username.length > 0 && url.password.length === 0)) {
+    throw new SourceRequestError('invalid-config', '书源 proxy 必须包含有效主机和完整认证信息', 'header')
+  }
+  return url
+}
+
+function proxyDispatcher(url: URL, authorization?: string): ProxyAgent {
+  return new ProxyAgent({ uri: url.toString(), ...(authorization === undefined ? {} : { token: authorization }) })
+}
+
+function headerValue(headers: Readonly<Record<string, string>>, name: string): string | undefined {
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === name)
+  return entry?.[1]
 }
 
 function lookupFailure(message: string): NodeJS.ErrnoException {
@@ -227,12 +254,15 @@ export class NodeNetworkHost implements NetworkHost {
   }
 
   public async request(plan: RequestPlan): Promise<NetworkResponse> {
-    if (plan.execution.proxy !== undefined && plan.execution.proxy.trim().length > 0) {
-      throw new SourceRequestError('capability-missing', 'Node 网络宿主不支持书源代理')
-    }
+    const proxy = plan.execution.proxy?.trim()
+    const proxyUrl = proxy === undefined || proxy.length === 0 ? undefined : parseProxyUrl(proxy)
+    const proxyAuthorization = proxyUrl === undefined ? undefined : headerValue(plan.headers, 'proxy-authorization')
     const configuredDns = typeof plan.execution.dnsIp === 'string' && plan.execution.dnsIp.trim().length > 0 ? parseDnsIpAddresses(plan.execution.dnsIp) : undefined
+    if (proxyUrl !== undefined && configuredDns !== undefined) throw new SourceRequestError('invalid-config', 'dnsIp cannot be used together with a proxy', 'header')
     let currentUrl = await assertSafeUrl(plan.url, this.options, configuredDns)
-    const dispatcher = configuredDns === undefined ? undefined : new Agent({ connect: { lookup: scopedDnsLookup(currentUrl.hostname, configuredDns) } })
+    const dispatcher: RequestDispatcher | undefined = proxyUrl !== undefined
+      ? proxyDispatcher(proxyUrl, proxyAuthorization)
+      : configuredDns === undefined ? undefined : new Agent({ connect: { lookup: scopedDnsLookup(currentUrl.hostname, configuredDns) } })
     let currentMethod = plan.method
     let currentBody = plan.body
     let redirected = false
@@ -246,6 +276,7 @@ export class NodeNetworkHost implements NetworkHost {
       requestCount += 1
       const headers = new Headers(plan.headers)
       if (headers.get('user-agent') === null && this.defaultUserAgent !== undefined) headers.set('User-Agent', this.defaultUserAgent)
+      if (proxyUrl !== undefined && proxyAuthorization !== undefined) headers.delete('proxy-authorization')
       if (stripSensitiveHeaders) {
         headers.delete('authorization')
         headers.delete('proxy-authorization')

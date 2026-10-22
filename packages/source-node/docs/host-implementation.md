@@ -39,7 +39,7 @@ createNodeSourceSession
 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 ```
 
-调用方可以通过 `NodeNetworkOptions.defaultUserAgent` 覆盖它。默认协议为 HTTP/HTTPS；URL 中的用户名和密码会被拒绝。环回、私网、链路本地地址以及 DNS 解析到这些地址的目标默认拒绝，只有显式设置 `allowPrivateNetworks: true` 才放行。每次重定向都会重新检查地址；跨 origin 重定向会移除原请求的 Authorization、Proxy-Authorization 和 Cookie 头，然后只按新目标 URL 合并它自己的 Cookie store。书源要求代理时当前 Node 宿主返回 `capability-missing`，不会静默直连。
+调用方可以通过 `NodeNetworkOptions.defaultUserAgent` 覆盖它。默认协议为 HTTP/HTTPS；URL 中的用户名和密码会被拒绝。环回、私网、链路本地地址以及 DNS 解析到这些地址的目标默认拒绝，只有显式设置 `allowPrivateNetworks: true` 才放行。每次重定向都会重新检查地址；跨 origin 重定向会移除原请求的 Authorization、Proxy-Authorization 和 Cookie 头，然后只按新目标 URL 合并它自己的 Cookie store。书源 proxy 由 `undici.ProxyAgent` 提供 HTTP/HTTPS/SOCKS/SOCKS5 传输，代理 URL 认证和显式 `Proxy-Authorization` 会留在代理 dispatcher 中，不会静默回退直连；`dnsIp` 与 proxy 不能同时使用。
 
 core 当前请求计划默认值为 15 秒、32 次请求、16 页、单响应 4 MiB、总响应 16 MiB、请求体 1 MiB、5 次重定向；工作流可以在更小的范围内覆盖。Node 层还按实际读取的字节限制响应和总量，保存 `Set-Cookie`，并返回最终 URL、状态、头、字节和是否重定向。`cookieJar: false` 时不保存响应 Cookie；显式请求 Cookie 与 session Cookie 按名称合并，显式值优先。
 

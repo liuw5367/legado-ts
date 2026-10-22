@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
+import { createConnection, createServer as createNetServer } from 'node:net'
 import test from 'node:test'
 import { createRequestPlan, SourceRequestError } from '@legado/source-core'
 import { DEFAULT_ANDROID_USER_AGENT, NodeCookieStore, NodeNetworkHost } from '../src/index.ts'
+import { SourceRequestHost } from '../src/source-request-host.ts'
+import { SourceRuleHost } from '../src/source-rule-host.ts'
+import type { NormalizedSource } from '@legado/source-core'
 
 async function startServer(redirectTarget?: string): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const server = createServer((request, response) => {
@@ -49,6 +53,130 @@ async function startServer(redirectTarget?: string): Promise<{ baseUrl: string; 
   assert.ok(address && typeof address !== 'string')
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise<void>((resolve, reject) => server.close((error) => error === undefined ? resolve() : reject(error))),
+  }
+}
+
+async function startHttpProxy(): Promise<{ proxyUrl: string; requestCount: () => number; proxyAuthorizations: () => string[]; close: () => Promise<void> }> {
+  let requests = 0
+  const authorizations: string[] = []
+  const server = createServer((request, response) => {
+    requests += 1
+    const authorization = request.headers['proxy-authorization']
+    if (typeof authorization === 'string') authorizations.push(authorization)
+    if (request.url === undefined || !/^https?:\/\//u.test(request.url)) {
+      response.writeHead(400).end('proxy requires absolute target URL')
+      return
+    }
+    const target = new URL(request.url)
+    const headers = { ...request.headers, host: target.host }
+    delete headers['proxy-authorization']
+    const upstream = httpRequest(target, { method: request.method, headers }, (upstreamResponse) => {
+      response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers)
+      upstreamResponse.pipe(response)
+    })
+    upstream.once('error', (error) => response.destroy(error))
+    request.pipe(upstream)
+  })
+  server.on('connect', (request, client, head) => {
+    requests += 1
+    const authorization = request.headers['proxy-authorization']
+    if (typeof authorization === 'string') authorizations.push(authorization)
+    const [host, portText] = (request.url ?? '').split(':')
+    const port = Number(portText)
+    if (host === undefined || !Number.isInteger(port) || port <= 0) {
+      client.end('HTTP/1.1 400 Bad Request\r\n\r\n')
+      return
+    }
+    const upstream = createConnection(port, host)
+    upstream.once('connect', () => {
+      client.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+      if (head.length > 0) upstream.write(head)
+      client.pipe(upstream)
+      upstream.pipe(client)
+    })
+    upstream.once('error', (error) => client.destroy(error))
+    client.once('error', () => upstream.destroy())
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => resolve())
+  })
+  const address = server.address()
+  assert.ok(address && typeof address !== 'string')
+  return {
+    proxyUrl: `http://user:secret@127.0.0.1:${address.port}`,
+    requestCount: () => requests,
+    proxyAuthorizations: () => [...authorizations],
+    close: () => new Promise<void>((resolve, reject) => server.close((error) => error === undefined ? resolve() : reject(error))),
+  }
+}
+
+async function startSocks5Proxy(): Promise<{ proxyUrl: string; close: () => Promise<void> }> {
+  const server = createNetServer()
+  server.on('connection', (socket) => {
+    let buffer = Buffer.alloc(0)
+    let state: 'greeting' | 'connect' | 'pipe' = 'greeting'
+    const fail = () => socket.destroy()
+    const consume = () => {
+      if (state === 'greeting') {
+        if (buffer.length < 2) return
+        const methodsLength = buffer[1]!
+        if (buffer.length < 2 + methodsLength) return
+        const methods = buffer.subarray(2, 2 + methodsLength)
+        buffer = buffer.subarray(2 + methodsLength)
+        if (!methods.includes(0)) return fail()
+        socket.write(Buffer.from([5, 0]))
+        state = 'connect'
+      }
+      if (state === 'connect') {
+        if (buffer.length < 5) return
+        const addressType = buffer[3]!
+        let address: string
+        let offset: number
+        if (addressType === 1) {
+          if (buffer.length < 10) return
+          address = [...buffer.subarray(4, 8)].join('.')
+          offset = 8
+        } else if (addressType === 3) {
+          const length = buffer[4]!
+          if (buffer.length < 7 + length) return
+          address = buffer.subarray(5, 5 + length).toString('utf8')
+          offset = 5 + length
+        } else if (addressType === 4) {
+          if (buffer.length < 22) return
+          const words = []
+          for (let index = 0; index < 16; index += 2) words.push(buffer.readUInt16BE(4 + index).toString(16))
+          address = words.join(':')
+          offset = 20
+        } else return fail()
+        const port = buffer.readUInt16BE(offset)
+        buffer = buffer.subarray(offset + 2)
+        if (buffer.length > 0) return fail()
+        const upstream = createConnection(port, address)
+        upstream.once('connect', () => {
+          socket.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
+          state = 'pipe'
+          socket.pipe(upstream)
+          upstream.pipe(socket)
+        })
+        upstream.once('error', () => {
+          socket.write(Buffer.from([5, 5, 0, 1, 0, 0, 0, 0, 0, 0]))
+          socket.destroy()
+        })
+      }
+    }
+    socket.on('data', (chunk: Buffer) => { buffer = Buffer.concat([buffer, chunk]); consume() })
+    socket.once('error', () => socket.destroy())
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => resolve())
+  })
+  const address = server.address()
+  assert.ok(address && typeof address !== 'string')
+  return {
+    proxyUrl: `socks5://127.0.0.1:${address.port}`,
     close: () => new Promise<void>((resolve, reject) => server.close((error) => error === undefined ? resolve() : reject(error))),
   }
 }
@@ -124,13 +252,80 @@ test('Node 网络宿主按 Public Suffix List 隔离独立登录凭据头', () =
   assert.equal(host.isLoginHeaderSite('https://example.com.cn/source', 'https://evil.com.cn/page'), false)
 })
 
-test('Node 不支持代理时明确报 capability-missing，不会直连', async () => {
-  const result = createRequestPlan({ url: 'https://example.invalid/', execution: { proxy: 'http://user:secret@proxy.invalid:8080' } })
-  assert.ok(result.plan)
+test('Node 代理 URL 无效或协议不支持时明确报 capability/配置错误', async () => {
+  const invalid = createRequestPlan({ url: 'https://example.invalid/', execution: { proxy: 'not a proxy' } })
+  assert.ok(invalid.plan)
   await assert.rejects(
-    () => new NodeNetworkHost().request(result.plan!),
+    () => new NodeNetworkHost().request(invalid.plan!),
+    (error: unknown) => error instanceof SourceRequestError && error.code === 'invalid-config',
+  )
+  const unsupported = createRequestPlan({ url: 'https://example.invalid/', execution: { proxy: 'socks5h://proxy.invalid:1080' } })
+  assert.ok(unsupported.plan)
+  await assert.rejects(
+    () => new NodeNetworkHost().request(unsupported.plan!),
     (error: unknown) => error instanceof SourceRequestError && error.code === 'capability-missing',
   )
+})
+
+test('Node HTTP 代理转发请求、认证和重定向，代理不可用时不直连', async () => {
+  const target = await startServer()
+  const proxy = await startHttpProxy()
+  try {
+    const host = new NodeNetworkHost({ allowPrivateNetworks: true })
+    const proxied = createRequestPlan({ url: `${target.baseUrl}/redirect`, execution: { proxy: proxy.proxyUrl }, budget: { maxRedirects: 1, maxTotalBytes: 1024 } })
+    assert.ok(proxied.plan)
+    const response = await host.request(proxied.plan)
+    assert.equal(new TextDecoder().decode(response.bytes), 'payload')
+    assert.ok(proxy.requestCount() >= 1)
+    assert.deepEqual(proxy.proxyAuthorizations(), ['Basic dXNlcjpzZWNyZXQ=', 'Basic dXNlcjpzZWNyZXQ='])
+
+    const explicitAuth = createRequestPlan({ url: `${target.baseUrl}/payload`, headers: { 'Proxy-Authorization': 'Bearer header-token' }, execution: { proxy: proxy.proxyUrl.replace('user:secret@', '') }, budget: { maxTotalBytes: 1024 } })
+    assert.ok(explicitAuth.plan)
+    await host.request(explicitAuth.plan)
+    assert.equal(proxy.proxyAuthorizations().at(-1), 'Bearer header-token')
+
+    const unreachable = createRequestPlan({ url: `${target.baseUrl}/payload`, execution: { proxy: 'http://127.0.0.1:1' } })
+    assert.ok(unreachable.plan)
+    await assert.rejects(() => host.request(unreachable.plan!), /ECONNREFUSED|fetch failed/u)
+    assert.equal(new TextDecoder().decode((await host.request(plan(`${target.baseUrl}/payload`))).bytes), 'payload')
+  } finally {
+    await proxy.close()
+    await target.close()
+  }
+})
+
+test('Node SOCKS5 代理转发 HTTP 请求', async () => {
+  const target = await startServer()
+  const proxy = await startSocks5Proxy()
+  try {
+    const result = createRequestPlan({ url: `${target.baseUrl}/payload`, execution: { proxy: proxy.proxyUrl } })
+    assert.ok(result.plan)
+    const response = await new NodeNetworkHost({ allowPrivateNetworks: true }).request(result.plan)
+    assert.equal(new TextDecoder().decode(response.bytes), 'payload')
+  } finally {
+    await proxy.close()
+    await target.close()
+  }
+})
+
+test('source-core 请求工作流沿用 Node 代理、动态 bodyJs 和认证', async () => {
+  const target = await startServer()
+  const proxy = await startHttpProxy()
+  try {
+    const source = {
+      bookSourceUrl: target.baseUrl,
+      bookSourceName: 'proxy-fixture',
+      header: JSON.stringify({ proxy: proxy.proxyUrl }),
+    } as unknown as NormalizedSource
+    const requestHost = new SourceRequestHost({ network: new NodeNetworkHost({ allowPrivateNetworks: true }) })
+    requestHost.attachRuleHost(new SourceRuleHost())
+    const result = await requestHost.request({ source, url: '/payload,{"bodyJs":"result.toUpperCase()"}', stage: 'search', options: {} })
+    assert.equal(requestHost.decodeResponse(result), 'PAYLOAD')
+    assert.ok(proxy.requestCount() >= 1)
+  } finally {
+    await proxy.close()
+    await target.close()
+  }
 })
 
 test('CookieJar 关闭时不保存响应 Cookie，已有 Cookie 仍发送并与显式值按名称合并', async () => {

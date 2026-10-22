@@ -375,6 +375,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | MODEL-005/name-baseline | 本地名称分别等于 baseline、已被编辑、无 baseline，远端均改名 | 前者可随远端更新，中者保留本地并报告差异，后者保留当前名称；显式覆盖才采用远端 |
 | REQUEST-001/plan-hints | URL options 同时包含 bodyJs、dnsIp、proxy、webView、serverID | RequestPlan 保留执行提示；宿主不把代理/DNS/WebView 静默丢失或改写成普通 Header |
 | REQUEST-002/body-bytes | 非 UTF-8 body、bytes 响应、Content-Type 和 request/response charset 不一致 | 参数与响应分别按契约处理；原始 bytes 保留，不能先固定 UTF-8 |
+| REQUEST-003/proxy | Node source host 使用 HTTP 代理 URL 用户密码、显式 `Proxy-Authorization`、HTTPS/SOCKS/SOCKS5 协议、重定向和不可达代理；另测 proxy 与 `dnsIp` 冲突及私网目标 | 支持的代理协议通过 dispatcher 转发并沿用 Cookie/Header/bodyJs/retry/redirect；代理认证只发给代理；代理不可用直接失败且不直连；SOCKS provider、SSRF 和 Android 同输入差异保持可诊断 |
 | JOB-001/idempotency | 相同 userId/idempotencyKey 重复 enqueue | 只创建一个任务，重复请求返回同一任务身份 |
 | JOB-002/lease-race | 两个 worker 同时 claim；租约过期后再次 claim | 只有一个 worker 获得当前租约；过期任务可恢复且旧 worker 不能 complete |
 | JOB-003/unknown | 外部请求已发出，worker 在响应前崩溃 | 任务进入 unknown 或人工确认路径，不自动重复不可证明幂等的写入 |

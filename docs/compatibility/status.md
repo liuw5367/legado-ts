@@ -73,7 +73,7 @@
 | D5 | 请求差异 | Android 独立登录凭据头 | 部分实现、待 Android 验证 | [差异登记](known-divergences.md)，D5；`source-request.test.ts`、`source-session.test.ts`、`apps/reader-web/tests/source-login.test.ts` | Android 同输入 golden；SecretStore 级删除清理、多实例恢复仍不属于当前包 |
 | D6 | 请求差异 | 默认 User-Agent | 已实现待验证 | [差异登记](known-divergences.md)，D6；`source-session.test.ts`、`network.test.ts`、`source-request.test.ts` | Android 同输入 golden；Node 默认值与显式覆盖、source/URL Header 优先级已有测试 |
 | D7 | 生命周期差异 | `concurrentRate` 生命周期 | core/Node 已实现待验证 | [差异登记](known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts` | Android 同输入 golden；按应用边界补编辑、覆盖、删除和重建源测试 |
-| D8 | 安全差异 | HTTP、协议和本地地址限制 | 有意保留 | [差异登记](known-divergences.md)，D8 | 安全审查完成并明确兼容边界 |
+| D8 | 安全差异 | HTTP、协议、本地地址和代理限制 | 部分实现、待 Android 验证 | [差异登记](known-divergences.md)，D8；`packages/source-node/tests/network.test.ts` | HTTP/HTTPS/SOCKS/SOCKS5 代理、URL/显式认证、代理失败不直连、`dnsIp` 冲突和 SSRF 边界有 Node 回归；待 Android 同输入 golden，安全限制继续保留 |
 | D9 | 请求差异 | bridge 子请求的动态 Header 重入 | 差异待处理 | [差异登记](known-divergences.md)，D9 | 重入次数、请求顺序和有界策略有 Android 对照 |
 | D10 | 生命周期差异 | `preUpdateJs` 执行时限 | 差异待处理 | [差异登记](known-divergences.md)，D10 | 取消、超时和有界预算完成 Android 对照与取舍记录 |
 | D11 | 生命周期差异 | `subContent` 取消语义 | 差异待处理 | [差异登记](known-divergences.md)，D11 | 主正文、诊断和最终状态完成 Android 对照与取舍记录 |

@@ -9,7 +9,7 @@
 - 只允许 HTTP/HTTPS 和 GET/POST/HEAD；URL 凭据被拒绝。
 - 默认拒绝 localhost、回环、私网、链路本地地址以及 DNS 解析到这些地址的目标；`allowPrivateNetworks` 是显式的 Node 选项，不能从书源字段隐式开启。
 - 每次重定向都会再次检查地址。跨 origin 时清除原请求的 Authorization、Proxy-Authorization 和 Cookie，再按新目标 URL 读取它自己的 Cookie store，避免把源站登录材料带到新站点。
-- `proxy` 当前返回 `capability-missing`；`dnsIp` 只能作为受控解析地址使用，仍受私网检查约束。
+- `proxy` 支持 HTTP、HTTPS、SOCKS 和 SOCKS5 URL，可使用 URL 用户密码或显式 `Proxy-Authorization`；代理连接失败直接返回错误，不会静默直连。`dnsIp` 只能作为受控解析地址使用，并且不能与 proxy 同时设置，目标仍受私网检查约束。
 - 请求计划默认提供 15 秒超时、32 次请求、16 页、单响应 4 MiB、总响应 16 MiB、请求体 1 MiB和 5 次重定向。每次操作还可以通过 core budget 使用更小的限制；无效、非有限或非整数预算会被拒绝。
 - 响应、重定向响应和请求体都按字节预算读取；超限时终止读取。Cookie 按 session 隔离，`cookieJar: false` 阻止保存响应 `Set-Cookie`。
 
