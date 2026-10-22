@@ -650,6 +650,15 @@ test('旧 AES 重载保留 Base64 文本、Base64 bytes 与 GCM tag 返回类型
   assert.deepEqual(JSON.parse(String(result.value)), ['string', 'hello', true, 32])
 })
 
+test('规则桥接支持 provider 可用的 SM3、SM4 与 CCM 认证结果', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var sm4 = java.createSymmetricCrypto('SM4/ECB/NoPadding', new Uint8Array([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]));
+    var ccm = java.createSymmetricCrypto('AES/CCM/NoPadding', new Uint8Array(16), new Uint8Array(12));
+    JSON.stringify([java.digestHex('abc', 'SM3'), sm4.decrypt(sm4.encrypt(new Uint8Array([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]))).length, ccm.decrypt(ccm.encrypt(new Uint8Array(16))).length]);`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0', 16, 16])
+})
+
 test('java.getString 和 java.getStringList 的 isUrl 使用重定向地址并去重', async () => {
   const host = new SourceRuleHost()
   const content = { url: '../chapter/1', missing: '', links: ['/a', '/a', 'chapter/2', 'javascript:void(0)'] }

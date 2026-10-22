@@ -899,7 +899,7 @@ function encodeFormUri(encoding: EncodingHost, value: unknown, charset: unknown)
   return result
 }
 
-type DigestAlgorithmName = 'md5' | 'sha1' | 'sha256' | 'sha512'
+type DigestAlgorithmName = 'md5' | 'sha1' | 'sha256' | 'sha512' | 'sm3'
 
 function digestAlgorithm(value: unknown): DigestAlgorithmName {
   const normalized = textValue(value).toLowerCase().replace(/[^a-z0-9]/gu, '')
@@ -907,6 +907,7 @@ function digestAlgorithm(value: unknown): DigestAlgorithmName {
   if (normalized === 'sha1' || normalized === 'hmacsha1') return 'sha1'
   if (normalized === 'sha256' || normalized === 'hmacsha256') return 'sha256'
   if (normalized === 'sha512' || normalized === 'hmacsha512') return 'sha512'
+  if (normalized === 'sm3' || normalized === 'hmacsm3') return 'sm3'
   throw new Error(`unsupported digest algorithm: ${textValue(value)}`)
 }
 

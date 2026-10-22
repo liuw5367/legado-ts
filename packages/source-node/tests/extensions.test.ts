@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { getCiphers } from 'node:crypto'
 import { deflateRawSync, gzipSync } from 'node:zlib'
 import test from 'node:test'
 import { NodeArchiveHost, NodeCryptoHost, NodeEncodingHost, KeyedConcurrencyHost } from '../src/index.ts'
@@ -44,6 +45,7 @@ test('Node 加密宿主支持摘要、HMAC 与 AES 文本往返', () => {
   const host = new NodeCryptoHost()
   assert.equal(host.digestHex('abc', 'md5'), '900150983cd24fb0d6963f7d28e17f72')
   assert.equal(host.hmacHex('abc', 'key', 'sha256'), '9c196e32dc0175f86f4b1cb89289d6619de6bee699e4c378e68309ed97a1a6ab')
+  assert.equal(host.digestHex('abc', 'sm3'), '66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0')
   const crypto = host.createSymmetricCrypto('AES/CBC/PKCS5Padding', new TextEncoder().encode('1234567890123456'), new Uint8Array(16))
   const encrypted = crypto.encryptText('中文')
   assert.equal(crypto.decryptText(encrypted), '中文')
@@ -61,8 +63,33 @@ test('Node 加密宿主按 Android 约定保留 GCM authentication tag，并报�
   const lastByte = tampered.length - 1
   tampered[lastByte] = tampered[lastByte]! ^ 1
   assert.throws(() => crypto.decrypt(tampered), /auth|authenticate|bad decrypt/iu)
-  assert.throws(() => host.createSymmetricCrypto('AES/CCM/NoPadding', key, iv), /__LEGADO_CAPABILITY__runtime crypto\.provider/u)
-  assert.throws(() => host.createSymmetricCrypto('DES/CBC/PKCS5Padding', new TextEncoder().encode('12345678'), new Uint8Array(8)), /__LEGADO_CAPABILITY__runtime crypto\./u)
+  if (getCiphers().includes('aes-128-ccm')) {
+    const ccm = host.createSymmetricCrypto('AES/CCM/NoPadding', key, iv)
+    const ccmEncrypted = ccm.encrypt(new Uint8Array(16))
+    assert.equal(Buffer.from(ccmEncrypted).toString('hex'), '6ec75fb2e2b487461eddcbb8971192ba4d4fa3af0bf6d3454171306ffadd9afd')
+    assert.deepEqual(ccm.decrypt(ccmEncrypted), new Uint8Array(16))
+    const ccmTampered = Uint8Array.from(ccmEncrypted)
+    ccmTampered[ccmTampered.length - 1] = ccmTampered[ccmTampered.length - 1]! ^ 1
+    assert.throws(() => ccm.decrypt(ccmTampered), /auth|authenticate|bad decrypt/iu)
+  } else {
+    assert.throws(() => host.createSymmetricCrypto('AES/CCM/NoPadding', key, iv), /__LEGADO_CAPABILITY__runtime crypto\.provider/u)
+  }
+  const desKey = Uint8Array.from(Buffer.from('0123456789abcdef', 'hex'))
+  const desIv = Uint8Array.from(Buffer.from('1234567890abcdef', 'hex'))
+  if (getCiphers().includes('des-cbc') || getCiphers().includes('des-ede-cbc')) {
+    const des = host.createSymmetricCrypto('DES/CBC/PKCS5Padding', desKey, desIv)
+    assert.equal(Buffer.from(des.encrypt(new TextEncoder().encode('12345678'))).toString('hex'), 'c95f06a20fb4e48bd2d01d7c4b9f2f07')
+  } else {
+    assert.throws(() => host.createSymmetricCrypto('DES/CBC/PKCS5Padding', new TextEncoder().encode('12345678'), new Uint8Array(8)), /__LEGADO_CAPABILITY__runtime crypto\./u)
+  }
+  if (getCiphers().includes('sm4-ecb')) {
+    const sm4Key = Uint8Array.from(Buffer.from('0123456789abcdeffedcba9876543210', 'hex'))
+    const sm4 = host.createSymmetricCrypto('SM4/ECB/NoPadding', sm4Key)
+    assert.equal(Buffer.from(sm4.encrypt(sm4Key)).toString('hex'), '681edf34d206965e86b3e94f536e4246')
+    assert.deepEqual(sm4.decrypt(sm4.encrypt(sm4Key)), sm4Key)
+  } else {
+    assert.throws(() => host.createSymmetricCrypto('SM4/ECB/NoPadding', new Uint8Array(16)), /__LEGADO_CAPABILITY__runtime crypto\./u)
+  }
 })
 
 test('Node 压缩宿主限制 gzip 与 zip 输出', async () => {

@@ -166,7 +166,7 @@ export interface EncodingHost extends CharsetCodec {
   decodeUri(value: string): string
 }
 
-export type DigestAlgorithm = 'md5' | 'sha1' | 'sha256' | 'sha512'
+export type DigestAlgorithm = 'md5' | 'sha1' | 'sha256' | 'sha512' | 'sm3'
 
 export interface SymmetricCrypto {
   /** 解密 bytes，保留原始二进制边界。 */
