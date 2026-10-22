@@ -27,9 +27,9 @@
 
 未完成项、差异项和完成后的删除线记录统一维护在[状态总览](status.md)。本矩阵继续维护五维兼容证据；`implementation=absent/partial` 和 `execution=not-run` 的含义以状态总览为准。
 
-当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；2026-10-22 的 `pnpm test:source` 为 172/172，根全套 `pnpm test` 为 609/609。静态 corpus 审计覆盖 943 个候选源和 20,231 条规则，20,226 条编译成功，5 条仅按 manifest 的稳定 hash/诊断白名单归为已知源文本问题。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
+当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；2026-10-22 的 `pnpm test:source` 为 177/177，根全套 `pnpm test` 为 615/615。静态 corpus 审计覆盖 943 个候选源和 20,231 条规则，20,226 条编译成功，5 条仅按 manifest 的稳定 hash/诊断白名单归为已知源文本问题。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
 
-2026-10-22 D34 当前方法清单为 27 个能力族、252 个成员：46 个 `implemented`、168 个 `partial`、38 个 `simulated`。本轮新增的 Java IO 流构造器、范围读写、transfer、单字节输出和 CR/CRLF Reader 行语义已有 `source-rule-host.test.ts` 书源式回归；它们仍属于受控 QuickJS 对象，Android 同输入仍为 `not-run`。D14 的 JS 源 marshaller 另有 `source-host-flow.test.ts` 回归，覆盖 `BookType` 校验/回退、详情前类型重置、文件源按位合并、`downloadUrls` 过滤/相对地址/去重和文件源空下载失败；D45 继续覆盖详情、目录、正文和声明式目录重置时保留 Android 非媒体状态位；D46 新增搜索/发现 `variable` 的 Gson 字段类型校验、详情变量的 Map<String,String> 归一化和无效更新保留旧值；D47 新增 SearchBook 全字段形态校验和 Gson 整数文本边界；这四组行为尚未生成 Android 同输入 golden。
+2026-10-22 D34 当前方法清单为 27 个能力族、252 个成员：55 个 `implemented`、159 个 `partial`、38 个 `simulated`。本轮新增的 Java IO 流构造器、范围读写、transfer、单字节输出和 CR/CRLF Reader 行语义已有 `source-rule-host.test.ts` 书源式回归；它们仍属于受控 QuickJS 对象，Android 同输入仍为 `not-run`。D14 的 JS 源 marshaller 另有 `source-host-flow.test.ts` 回归，覆盖 `BookType` 校验/回退、详情前类型重置、文件源按位合并、`downloadUrls` 过滤/相对地址/去重和文件源空下载失败；D45 继续覆盖详情、目录、正文和声明式目录重置时保留 Android 非媒体状态位；D46 新增搜索/发现 `variable` 的 Gson 字段类型校验、详情变量的 Map<String,String> 归一化和无效更新保留旧值；D47 新增 SearchBook 全字段形态校验和 Gson 整数文本边界；这四组行为尚未生成 Android 同输入 golden。
 
 本次新增的 `HTML-FLOW-001`、`JSON-FLOW-001`、`XPATH-CONTENT-001`、`JS-TOC-001`、`TOC-EDGE-001`、`CONTENT-EDGE-001` 仍记录为 `android=not-run`；它们是 TypeScript 离线执行证据，不是 Android 兼容结论。
 
@@ -53,7 +53,7 @@
 | URL 页码、URL options、表单编码、URL JS 顺序和 XML 响应后处理 | 目标必须兼容 | `AnalyzeUrl`、`AnalyzeUrlNetworkOptionsTest` | `source-core` 请求运行时及测试覆盖页码、`@js` 先于 `{{}}`、origin `baseUrl`、未知 method 回退 GET、XML 补声明优先于 `bodyJs`；Android golden 尚未执行 |
 | `concurrentRate` 书源级限流 | 目标必须兼容 | `ConcurrentRateLimiter`、`AnalyzeUrl` | `SourceRateLimiter` 已支持普通请求固定窗口、取消、`putConcurrent` 更新及 `ajaxAll(..., true)` bridge 旁路；首次非法值按 Android 首次请求 fallback 并由 `SourceSession.diagnostics()` 报告，`SourceSession.close()`/`ReaderApplication.close()` 释放等待（`source-rate-limiter.test.ts`、`source-session.test.ts`）；Android golden 及未来源管理入口的编辑删除集成仍待执行 |
 | 高频 JavaScript bridge（章节数字、字节数组、摘要/HMAC） | 目标必须兼容 | `JsExtensions.toNumChapter`、`strToBytes/bytesToStr`、`JsEncodeUtils` | `source-core`/Node 已实现 `toNumChapter`、字符集字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64、t2s/s2t，并有 QuickJS 回归；WebView、浏览器交互和 Android golden 尚未执行 |
-| Cookie、普通 source header、已保存登录头和最终域名 | 目标必须兼容 | `AnalyzeUrl`、`BaseSource.getHeaderMap()`、登录头站点判断 | CookieJar、静态/动态 source header、`loginCheckJs` 和 `NetworkHost.getLoginHeaders(sourceId)` 已实现；core 按初始 URL 同站范围注入独立登录头，URL options 可覆盖，bridge 子请求沿用初始 URL规则；SecretStore 持久化、删除清理和 Android golden 仍待 fixture |
+| Cookie、普通 source header、已保存登录头和最终域名 | 目标必须兼容 | `AnalyzeUrl`、`BaseSource.getHeaderMap()`、登录头站点判断 | CookieJar、静态/动态 source header、`loginCheckJs` 和 `NetworkHost.getLoginHeaders(sourceId)` 已实现；core 按初始 URL 同站范围注入独立登录头，URL options 可覆盖，网络及文件/字体/归档 bridge 首层重算动态 source header、深层按 D9 有界跳过并沿用初始 URL 规则；SecretStore 持久化、删除清理和 Android golden 仍待 fixture |
 | `@js` 改写 URL 后的 Android 登录头站点限制 | 目标必须兼容 | `AnalyzeUrl` 初始 URL 的登录头判断 | Android 与 TS 都只检查初始 URL；TS 由 `NetworkHost.getLoginHeaders(sourceId)` 提供凭据，core 默认精确主机名，Node/自定义宿主可提供 Public Suffix List 同站判断。URL 改写到跨站后仍沿用初始地址决定是否注入；SecretStore 持久化和 Android golden 仍待 fixture |
 | 默认 User-Agent | 目标必须兼容 | `BaseSource.getHeaderMap()`、`AppConfig.userAgent` | 核心从 `NetworkHost.defaultUserAgent` 接收平台默认值；Node 未显式配置时使用当前 Android 基线 `Chrome/153.0.0.0`，显式 `NodeNetworkOptions.defaultUserAgent` 和 source/URL Header 仍按优先级覆盖；Android golden 尚未执行 |
 | 复杂登录 UI、验证码和多步骤登录 | 目标宿主能力 | `BookSource` 登录字段、WebView 流程 | reader-web 已实现静态 RowUi、动态 loginUi v2、`key`/输入 action 防抖、按钮倒计时、人工 action、状态/版本校验和结构化纯动作；真实网页、验证码、浏览器跳转和 Android golden 仍需宿主 |
@@ -119,7 +119,7 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 | D24～D28/D31/D32/D34：对象方法、重建 session、InfoMap、AES 返回类型和 StrResponse 构造 | Android source + TS 脚本/session 执行 | defined（具体差异输入） | partial | TS 观察到差异；Android not-run | required |
 | D29/D30/D35～D40：文件命名空间、下载、字体、工具、宿主配置、导入、库状态和游标签名 | source | 部分 defined；完整语言/平台等价仍 blocked | partial 或 absent，详见状态表 | 组合路径 not-run，不能写 pass | required/host |
 | D42/D43：URL 和 File 对象 | Android source + TS URL 最小输入执行；File 为源码确认 | defined（列出的成员） | partial | TS URL 观察到差异；File 组合路径及 Android not-run | required |
-| 既有规则宿主、平台、session 回归 | test-run | defined（已有测试） | 按测试范围 | `pnpm test:source` 172/172；根全套 `pnpm test` 609/609；不能覆盖 Android golden 或真实宿主 | verify |
+| 既有规则宿主、平台、session 回归 | test-run | defined（已有测试） | 按测试范围 | `pnpm test:source` 177/177；根全套 `pnpm test` 615/615；不能覆盖 Android golden 或真实宿主 | verify |
 
 本轮已执行命令：`node --test packages/source-node/tests/source-rule-host.test.ts packages/source-node/tests/source-runtime-platform.test.ts packages/source-node/tests/source-session.test.ts`。最小探针直接调用 SourceRuleRuntime/SourceRuleHost、使用固定 `.invalid` 地址和请求桩，没有访问公网、真实账户、购买或其他远程写入。探针属于差异发现证据，正式回归与共享 golden 要在对应修复时加入版本控制。
 

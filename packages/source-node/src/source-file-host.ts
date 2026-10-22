@@ -3,7 +3,7 @@ import { lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/pr
 import { join, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createRequestPlan, splitSourceRequestUrl } from '@legado/source-core'
-import type { ArchiveHost, NetworkHost, NormalizedSource, SourceFileHost, SourceFileOperation } from '@legado/source-core'
+import type { ArchiveHost, NetworkHost, NormalizedSource, RequestBudget, SourceFileHost, SourceFileOperation } from '@legado/source-core'
 import chardet from 'chardet'
 import { NodeArchiveHost } from './archive.ts'
 import { NodeCharsetCodec } from './charset.ts'
@@ -13,8 +13,8 @@ export interface NodeSourceFileHostOptions {
   /** 受控阅读缓存根目录；所有书源路径都只能落在此目录下。 */
   root?: string
   network: NetworkHost
-  /** 可选的源请求链；提供后下载会复用动态 header、登录头、Cookie 和 URL options。 */
-  requestBytes?: (url: string, signal: AbortSignal, source: NormalizedSource) => Promise<Uint8Array>
+  /** 可选的源请求链；提供后下载会复用动态 header、登录头、Cookie、URL options 和当前请求预算。 */
+  requestBytes?: (url: string, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>) => Promise<Uint8Array>
   encoding?: NodeCharsetCodec
   archive?: ArchiveHost
 }
@@ -95,21 +95,22 @@ export class NodeSourceFileHost implements SourceFileHost {
     if (operation === 'readFile') return this.readBytes(text(input.path))
     if (operation === 'readTxtFile') return this.readText(text(input.path), charsetOf(input.charset))
     if (operation === 'deleteFile') return this.deletePath(text(input.path))
-    if (operation === 'downloadFile') return this.downloadFile(input, signal, source)
-    if (operation === 'cacheFile') return this.cacheFile(text(input.url), Number(input.saveTime) || 0, signal, source)
-    if (operation === 'importScript') return this.importScript(text(input.path), signal, source)
+    const budget = input.budget as Partial<RequestBudget> | undefined
+    if (operation === 'downloadFile') return this.downloadFile(input, signal, source, budget)
+    if (operation === 'cacheFile') return this.cacheFile(text(input.url), Number(input.saveTime) || 0, signal, source, budget)
+    if (operation === 'importScript') return this.importScript(text(input.path), signal, source, budget)
     if (operation === 'getTxtInFolder') return this.getTxtInFolder(text(input.path))
     if (operation === 'unzipFile' || operation === 'un7zFile' || operation === 'unrarFile' || operation === 'unArchiveFile') return this.unpack(operation, text(input.path), signal)
     if (operation === 'getZipStringContent' || operation === 'getRarStringContent' || operation === 'get7zStringContent') {
       const format = operation.startsWith('getZip') ? 'zip' : operation.startsWith('getRar') ? 'rar' : '7z'
-      const bytes = await this.archiveContent(text(input.url), text(input.path), format, signal, source)
+      const bytes = await this.archiveContent(text(input.url), text(input.path), format, signal, source, budget)
       if (bytes === undefined) return ''
       const charset = charsetOf(input.charset) ?? detectCharset(bytes)
       return this.encoding.decode(bytes, charset)
     }
     if (operation === 'getZipByteArrayContent' || operation === 'getRarByteArrayContent' || operation === 'get7zByteArrayContent') {
       const format = operation.startsWith('getZip') ? 'zip' : operation.startsWith('getRar') ? 'rar' : '7z'
-      return this.archiveContent(text(input.url), text(input.path), format, signal, source)
+      return this.archiveContent(text(input.url), text(input.path), format, signal, source, budget)
     }
     throw new Error(`__LEGADO_CAPABILITY__runtime file.${operation} unavailable`)
   }
@@ -184,14 +185,14 @@ export class NodeSourceFileHost implements SourceFileHost {
     try { await rm(target.absolute, { recursive: true, force: true }); return true } catch { return false }
   }
 
-  private async importScript(path: string, signal: AbortSignal, source: NormalizedSource): Promise<string> {
+  private async importScript(path: string, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<string> {
     const value = path.trim()
-    const result = /^https?:\/\//iu.test(value) ? await this.cacheFile(value, 0, signal, source) : await this.readText(value, undefined)
+    const result = /^https?:\/\//iu.test(value) ? await this.cacheFile(value, 0, signal, source, budget) : await this.readText(value, undefined)
     if (result.trim().length === 0) throw new Error(`${path} 内容获取失败或者为空`)
     return result
   }
 
-  private async cacheFile(url: string, saveTime: number, signal: AbortSignal, source: NormalizedSource): Promise<string> {
+  private async cacheFile(url: string, saveTime: number, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<string> {
     const key = sourceKey(url)
     const path = `${key}.${extension(url)}`
     const target = this.absolute(path)
@@ -218,14 +219,14 @@ export class NodeSourceFileHost implements SourceFileHost {
     } catch {
       // cache miss
     }
-    await this.downloadTo(url, path, signal, source)
+    await this.downloadTo(url, path, signal, source, budget)
     const expiresAt = saveTime > 0 ? Date.now() + saveTime * 1000 : 0
     await mkdir(join(metadata.absolute, '..'), { recursive: true })
     await writeFile(metadata.absolute, JSON.stringify({ expiresAt }), 'utf8')
     return this.readText(path, undefined)
   }
 
-  private async downloadFile(input: Readonly<Record<string, unknown>>, signal: AbortSignal, source: NormalizedSource): Promise<string> {
+  private async downloadFile(input: Readonly<Record<string, unknown>>, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<string> {
     const url = text(input.url)
     const path = `${sourceKey(url)}.${extension(url)}`
     const content = input.content
@@ -237,20 +238,20 @@ export class NodeSourceFileHost implements SourceFileHost {
       await writeFile(target.absolute, Buffer.from(bytes))
       return `/${path}`
     }
-    await this.downloadTo(url, path, signal, source)
+    await this.downloadTo(url, path, signal, source, budget)
     return `/${path}`
   }
 
-  private async downloadTo(url: string, path: string, signal: AbortSignal, source: NormalizedSource): Promise<void> {
+  private async downloadTo(url: string, path: string, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<void> {
     if (this.requestBytes !== undefined) {
-      const bytes = await this.requestBytes(url, signal, source)
+      const bytes = await this.requestBytes(url, signal, source, budget)
       const target = this.absolute(path)
       await this.assertNoSymlink(target.relative)
       await mkdir(join(target.absolute, '..'), { recursive: true })
       await writeFile(target.absolute, Buffer.from(bytes))
       return
     }
-    const plan = createRequestPlan({ url, baseUrl: source.bookSourceUrl, method: 'GET', responseType: 'bytes', followRedirects: true, budget: { timeoutMs: 30_000, maxRequests: 1, maxPages: 5, maxResponseBytes: 32 * 1024 * 1024, maxTotalBytes: 32 * 1024 * 1024, maxRequestBodyBytes: 0, maxRedirects: 5 }, execution: { useWebView: false } })
+    const plan = createRequestPlan({ url, baseUrl: source.bookSourceUrl, method: 'GET', responseType: 'bytes', followRedirects: true, budget: { timeoutMs: 30_000, maxRequests: 1, maxPages: 5, maxResponseBytes: 32 * 1024 * 1024, maxTotalBytes: 32 * 1024 * 1024, maxRequestBodyBytes: 0, maxRedirects: 5, ...(budget ?? {}) }, execution: { useWebView: false } })
     if (plan.plan === undefined) throw new Error(plan.error?.message ?? '下载地址无效')
     plan.plan.budget.signal = signal
     const response = await this.network.request(plan.plan)
@@ -287,15 +288,15 @@ export class NodeSourceFileHost implements SourceFileHost {
     return folder
   }
 
-  private async archiveContent(urlOrHex: string, path: string, format: 'zip' | 'rar' | '7z', signal: AbortSignal, source: NormalizedSource): Promise<Uint8Array | undefined> {
-    const bytes = /^https?:\/\//iu.test(urlOrHex) ? await this.downloadBytes(urlOrHex, signal, source) : this.binaryEncoding.hexDecode(urlOrHex)
+  private async archiveContent(urlOrHex: string, path: string, format: 'zip' | 'rar' | '7z', signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<Uint8Array | undefined> {
+    const bytes = /^https?:\/\//iu.test(urlOrHex) ? await this.downloadBytes(urlOrHex, signal, source, budget) : this.binaryEncoding.hexDecode(urlOrHex)
     const entries = await this.archive.extract(bytes, format, {}, signal)
     return entries.find((entry) => entry.path === safeRelative(path))?.data
   }
 
-  private async downloadBytes(url: string, signal: AbortSignal, source: NormalizedSource): Promise<Uint8Array> {
-    if (this.requestBytes !== undefined) return this.requestBytes(url, signal, source)
-    const plan = createRequestPlan({ url, baseUrl: source.bookSourceUrl, method: 'GET', responseType: 'bytes', followRedirects: true, budget: { timeoutMs: 30_000, maxRequests: 1, maxPages: 5, maxResponseBytes: 32 * 1024 * 1024, maxTotalBytes: 32 * 1024 * 1024, maxRequestBodyBytes: 0, maxRedirects: 5 }, execution: { useWebView: false } })
+  private async downloadBytes(url: string, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<Uint8Array> {
+    if (this.requestBytes !== undefined) return this.requestBytes(url, signal, source, budget)
+    const plan = createRequestPlan({ url, baseUrl: source.bookSourceUrl, method: 'GET', responseType: 'bytes', followRedirects: true, budget: { timeoutMs: 30_000, maxRequests: 1, maxPages: 5, maxResponseBytes: 32 * 1024 * 1024, maxTotalBytes: 32 * 1024 * 1024, maxRequestBodyBytes: 0, maxRedirects: 5, ...(budget ?? {}) }, execution: { useWebView: false } })
     if (plan.plan === undefined) throw new Error(plan.error?.message ?? '归档地址无效')
     plan.plan.budget.signal = signal
     return (await this.network.request(plan.plan)).bytes

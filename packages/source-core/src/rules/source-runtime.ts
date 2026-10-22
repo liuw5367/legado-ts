@@ -157,7 +157,7 @@ export type SourceFileOperation =
   | 'getRarByteArrayContent'
   | 'get7zByteArrayContent'
 
-/** Android 相对缓存目录文件 API 的受控宿主端口。路径解析和归档预算由宿主负责。 */
+/** Android 相对缓存目录文件 API 的受控宿主端口。路径解析和归档预算由宿主负责；请求型操作可从 input.budget 继承当前脚本请求预算。 */
 export interface SourceFileHost {
   execute: (operation: SourceFileOperation, input: Readonly<Record<string, unknown>>, signal: AbortSignal, source: NormalizedSource) => unknown | Promise<unknown>
   /** Optional CacheManager.delete hook for Android cacheFile mappings. */
@@ -3072,10 +3072,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             return action(bridgeSignal, actionRequest.input)
           }
           const bridged = typeof payload === 'object' && payload !== null && context?.requestBudget !== undefined
-            && ['network', 'network-all', 'network-response', 'url-context-response'].includes(String((payload as SourceRuleBridgeRequest).kind))
+            && ['network', 'network-all', 'network-response', 'url-context-response', 'file'].includes(String((payload as SourceRuleBridgeRequest).kind))
             ? { ...(payload as SourceRuleBridgeRequest), budget: { ...context.requestBudget, ...((payload as SourceRuleBridgeRequest).budget ?? {}) } }
             : payload
-          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState)
+          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState, context?.requestBudget)
         },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })
@@ -3206,7 +3206,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
   }
 
-  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver, jsLibOwner?: object): Promise<unknown> {
+  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver, jsLibOwner?: object, requestBudget?: Partial<RequestBudget>): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'node-info' || request.kind === 'node-mutate' || request.kind === 'node-match') {
@@ -3350,7 +3350,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       let value = request.value
       if (typeof value === 'string' && textValue(request.inputEncoding) !== 'base64' && /^https?:\/\//iu.test(value.trim())) {
         if (this.requestBridge === undefined) throw new Error('__LEGADO_CAPABILITY__runtime font URL loading unavailable')
-        const response = await this.requestBridge({ kind: 'network-response', url: value.trim(), method: 'GET', stage: workflowStage }, signal, source, requestObserver)
+        const response = await this.requestBridge({ kind: 'network-response', url: value.trim(), method: 'GET', stage: workflowStage, ...(requestBudget === undefined ? {} : { budget: requestBudget }) }, signal, source, requestObserver)
         const record = typeof response === 'object' && response !== null && !Array.isArray(response) ? response as Record<string, unknown> : {}
         value = record.bytes ?? record.bodyBytes ?? record.body
       } else if (typeof value === 'string' && textValue(request.inputEncoding) !== 'base64' && this.file !== undefined && /(?:^[/\\]|(?:^|[/\\])(?:cache|temp|download)[/\\]|\.(?:ttf|otf|woff2?)$)/iu.test(value.trim())) {

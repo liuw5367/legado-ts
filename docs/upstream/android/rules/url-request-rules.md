@@ -128,7 +128,7 @@ Android 会把单独保存的登录凭据头按书源同站二级域名附加；
 
 Android `BaseSource.getHeaderMap()` 会在 source header 未提供 User-Agent 时填入 `AppConfig.userAgent`。TypeScript 核心通过 `NetworkHost.defaultUserAgent` 接受平台配置；Node `NodeNetworkHost` 未显式配置时使用当前 Android 基线 User-Agent（`Chrome/153.0.0.0`），`NodeNetworkOptions.defaultUserAgent` 可显式覆盖它。无效 source header 在 Android 会记录日志、忽略该值并继续请求；TypeScript 也忽略无效 JSON 或脚本返回值，随后应用宿主默认 User-Agent。宿主缺少执行动态 Header 所需的 JS 能力时仍返回 `capability-missing`。
 
-TypeScript 的 JS bridge 子请求会跳过动态 `source.header`，只保留静态 source header，避免 Header 脚本再次调用 `java.ajax` 时形成递归。该保护属于 TS 当前限制；不要据此声称与 Android 嵌套请求的 Header 重入行为相同。
+TypeScript 的 JS bridge 首层子请求会重新执行动态 `source.header`，与 Android `AnalyzeUrl` 创建子请求时重新调用 `BaseSource.getHeaderMap()` 的常见路径一致；`java.downloadFile`、`cacheFile`、字体和归档 URL 通过 `requestBytes` 复用同一规则。同一 bridge 链的更深层请求标记为 `nested`，跳过动态脚本但继续合并静态 source header。Node 将 bridge 深度限制为 3 层，并让子请求共享 deadline、取消信号和请求 owner，避免 Header 脚本通过网络或文件 URL 无限递归。这个“一次重入、深层截断”是受控宿主模拟；Android golden、其他宿主和无限重入行为仍不能直接宣称等价。
 
 `followRedirects=false` 时，普通请求返回 3xx，不进入 WebView；开启时使用最终 URL 作为 redirectUrl。书源流程使用最终 URL 解析相对资源，同时保留初始 URL 用于去重和分页循环判断。
 

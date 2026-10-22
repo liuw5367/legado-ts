@@ -151,7 +151,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
     createPorts: ({ initialVariables, cache, network: limitedNetwork, updateConcurrentRate, requestObserver }) => {
       const requestNetwork = loginAwareNetwork(limitedNetwork ?? network)
       const request = new SourceRequestHost({ network: requestNetwork, cookieStore, encoding, ...(requestObserver === undefined ? {} : { requestObserver }) })
-      const file = new NodeSourceFileHost({ network: requestNetwork, encoding, requestBytes: (url, signal, currentSource) => request.requestBytes(url, signal, currentSource), ...(options.fileRoot === undefined ? {} : { root: options.fileRoot }) })
+      const file = new NodeSourceFileHost({ network: requestNetwork, encoding, requestBytes: (url, signal, currentSource, budget) => request.requestBytes(url, signal, currentSource, undefined, budget), ...(options.fileRoot === undefined ? {} : { root: options.fileRoot }) })
       const rules = new SourceRuleHost({
         request: (input, signal, currentSource, requestObserver) => request.requestFromBridge(input, signal, currentSource, requestObserver),
         setConcurrentRate: updateConcurrentRate,

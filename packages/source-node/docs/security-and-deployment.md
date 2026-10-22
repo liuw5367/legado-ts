@@ -13,7 +13,7 @@
 - 请求计划默认提供 15 秒超时、32 次请求、16 页、单响应 4 MiB、总响应 16 MiB、请求体 1 MiB和 5 次重定向。每次操作还可以通过 core budget 使用更小的限制；无效、非有限或非整数预算会被拒绝。
 - 响应、重定向响应和请求体都按字节预算读取；超限时终止读取。Cookie 按 session 隔离，`cookieJar: false` 阻止保存响应 `Set-Cookie`。
 
-QuickJS 使用独立 runtime，不执行 Node `eval`、`Function` 或 `node:vm`。当前默认单次预算为 1000 ms、16 MiB 内存、1 MiB 栈、512 KiB 输入、1 MiB 输出和 32 次 bridge 调用；取消、超时、序列化失败和预算超限都会形成可判别诊断，并释放 context。请求 bridge 的嵌套深度最多 3 层，`network-all` 最多 8 路并发；动态 source header 在嵌套请求中被跳过。这些是当前防护，不代表任意脚本都能安全访问任意宿主对象。
+QuickJS 使用独立 runtime，不执行 Node `eval`、`Function` 或 `node:vm`。当前默认单次预算为 1000 ms、16 MiB 内存、1 MiB 栈、512 KiB 输入、1 MiB 输出和 32 次 bridge 调用；取消、超时、序列化失败和预算超限都会形成可判别诊断，并释放 context。请求 bridge 的嵌套深度最多 3 层，`network-all` 最多 8 路并发；首层网络及 `requestBytes` bridge 会按 Android 请求链重新计算动态 source header，更深层请求跳过动态脚本但保留静态 header。这样只模拟一次动态 Header 重入，并切断 `header -> java.ajax/downloadFile` 无限递归；这些限制不代表任意脚本都能安全访问任意宿主对象。
 
 core 的 `compileSourcePattern` 还在规则编译前执行静态形态守卫：模式长度上限为 2048 个字符，未锚定的嵌套量词会被拒绝，非法模式返回稳定诊断。它减少正则资源耗尽风险，但不能替代脚本中断或整个请求预算。
 

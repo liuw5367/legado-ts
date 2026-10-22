@@ -83,7 +83,7 @@
 | D6 | 请求差异 | 默认 User-Agent | 已实现待验证 | [差异登记](known-divergences.md)，D6；`source-session.test.ts`、`network.test.ts`、`source-request.test.ts` | Android 同输入 golden；Node 默认值与显式覆盖、source/URL Header 优先级已有测试 |
 | D7 | 生命周期差异 | `concurrentRate` 生命周期 | core/Node 已实现待验证 | [差异登记](known-divergences.md)，D7；`source-rate-limiter.test.ts`、`source-session.test.ts`、`application.test.ts` | Android 同输入 golden；按应用边界补编辑、覆盖、删除和重建源测试 |
 | D8 | 安全差异 | HTTP、协议、本地地址和代理限制 | 部分实现、待 Android 验证 | [差异登记](known-divergences.md)，D8；`packages/source-node/tests/network.test.ts` | HTTP/HTTPS/SOCKS/SOCKS5 代理、URL/显式认证、代理失败不直连、`dnsIp` 冲突和 SSRF 边界有 Node 回归；待 Android 同输入 golden，安全限制继续保留 |
-| D9 | 请求差异 | bridge 子请求的动态 Header 重入 | 差异待处理 | [差异登记](known-divergences.md)，D9 | 重入次数、请求顺序和有界策略有 Android 对照 |
+| D9 | 请求差异 | bridge 子请求的动态 Header 重入 | 已修正（Node 有界模拟） | [差异登记](known-divergences.md)，D9 | 首层网络、AnalyzeUrl、批量、响应及文件/字体/归档 bridge 重算动态头，深层跳过并共享 deadline/取消和最大深度；Android golden 与非 Node 宿主仍待验证 |
 | D10 | 生命周期差异 | `preUpdateJs` 执行时限 | 有意保留差异（P07） | [差异登记](known-divergences.md)，D10；`source-request.test.ts`、`source-request-host.test.ts` | 请求链共享 30 秒默认绝对 deadline，显式值最多 30 分钟；JS action 仍保留 TS 30 秒安全上限，Android 30 分钟仅作为未验证差异 |
 | D11 | 生命周期差异 | `subContent` 取消语义 | 差异待处理 | [差异登记](known-divergences.md)，D11 | 主正文、诊断和最终状态完成 Android 对照与取舍记录 |
 | D12 | 二进制差异 | 封面解密 InputStream 互操作 | 部分实现 | [差异登记](known-divergences.md)，D12 | 所需重载和 bytes 边界都有跨端 fixture |
@@ -115,7 +115,7 @@
 | D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12/P20，受限会话状态） | jsLib 状态键绑定 Node session、源定义指纹；跨操作和显式快照仅恢复可序列化 DTO，`refreshJSLib` 只清当前 scope；同一 session/source/jsLib 的并发执行按状态键串行提交，清理代次阻止外层旧快照覆盖嵌套刷新后的新状态；共享缓存不会串 session；函数/闭包/宿主对象不进入快照 | QuickJS 真实共享 VM、取消后的 handle 生命周期和 Android golden 仍未验证；整源 JS 继续每次重执行，函数/闭包状态仍以重新加载和可序列化状态模拟 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（P18） | 差异登记 D40；游标签名同时绑定发现代次和 `infoMap` 的 128 位不可逆摘要，筛选值变化（包括没有 action 的控件）会使分类快照失效并刷新列表；游标不携带筛选原文，旧游标和摘要篡改在请求执行前拒绝；`discovery.test.ts` 覆盖旧代次、旧摘要和敏感筛选值不出现在游标中 | 迟到请求写回、跨实例 CAS/租约组合和 Android golden 仍需验证 |
-| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 172/172，根全套 609/609，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增 Java/Android 运行时类路径均有书源式回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
+| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 177/177，根全套 615/615，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增 Java/Android 运行时类路径均有书源式回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段 A） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；无 query 时保持 `searchParams === null`，并补齐 Java URL 常用 getter；无 base 时按 Android `URL(url)` 解析，显式 base 才做相对地址合并，非法解析统一为 `Malformed URL`，HTTP/HTTPS/FTP 默认端口已补齐；回归覆盖 IPv6 host/port/origin、无 query、getter、非法输入和 FTP 默认端口 | Android golden、非 HTTP 协议完整 handler 属性、URL 编码/异常对象细节仍待验证 |
 | D43 | 文件对象 | File 方法和即时状态 | 部分实现（P09） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；exists/isFile/isDirectory 与元数据方法每次刷新宿主状态；`cache.delete` 会清理对应 `cacheFile` 映射；Node 文件回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
 | D44 | 应用交互 | 登录 UI/action、书源事件和付费动作的应用入口 | 部分实现（第六阶段） | 差异登记 D44；reader-web 已提供静态/动态登录 API 与页面、动作事件、payAction/callBackJs 人工触发、源版本校验和进程内幂等；密码/token 脱敏；`source-login.test.ts`、`source-actions.test.ts` | 购买后刷新、自定义按钮消费、多实例幂等、真实网页登录/验证码和 Android golden 仍待验证；真实远程动作不自动执行 |
@@ -123,7 +123,7 @@
 | D46 | JS 源行为差异 | JS 源 `variable` 在搜索/发现与详情合并中的 Gson 类型语义 | 已实现待 Android golden | [差异登记](known-divergences.md)，D46；`discovery.ts`、`source-host-flow.test.ts`；搜索/发现只接受 Android `String?` 可读的字符串/数字/布尔，数组或对象跳过候选；详情只接受对象或对象 JSON 字符串，并按 `Map<String,String>` 归一化，嵌套对象/数组和非法 JSON 保留旧值 | 同输入 Android golden；继续确认 Gson 版本对极端数值和 null map value 的差异 |
 | D47 | JS 源行为差异 | JS 搜索/发现返回值按 Android `SearchBook` Gson 字段类型反序列化 | 已实现待 Android golden | [差异登记](known-divergences.md)，D47；`discovery.ts`、`source-host-flow.test.ts`；已声明字符串字段接受 Gson 可转换的 primitive/null，整数/长整数接受 Gson 可精确转换的数值文本；对象、数组、布尔数值和溢出值按字段记录 `item-skipped` 并跳过整条候选，未知字段仍忽略 | 同输入 Android golden；Gson 版本对超大 Long、特殊数值文本和 Kotlin 非空字段为 null 的边界仍待验证 |
 
-2026-10-22 D34 更新后的机器清单统计：27 个能力族、252 个成员；成员实现状态为 46 个 `implemented`、168 个 `partial`、38 个 `simulated`。本次新增和修正的 String/StringBuilder、Locale、Stream 视图、文本变换和 Java IO 流重载均有 TS 书源式回归，但 `simulated` 只表示受控 QuickJS 对象，不等同完整 JVM，Android 同输入仍按 `not-run` 记录。
+2026-10-22 D34 更新后的机器清单统计：27 个能力族、252 个成员；成员实现状态为 55 个 `implemented`、159 个 `partial`、38 个 `simulated`。本次新增和修正的 String/StringBuilder、Locale、Stream 视图、文本变换和 Java IO 流重载均有 TS 书源式回归，但 `simulated` 只表示受控 QuickJS 对象，不等同完整 JVM，Android 同输入仍按 `not-run` 记录。
 
 ## 完成时如何更新
 

@@ -681,7 +681,8 @@ export class SourceRequestRuntime {
     const script = /^<js>([\s\S]*?)<\/js>$/i.exec(trimmed)?.[1]
       ?? (/^@js:([\s\S]*)$/i.exec(trimmed)?.[1])
     if (script !== undefined) {
-      // bridge 子请求不再执行动态 header，避免 header→java.ajax→同一 header 的异步递归；静态头仍合并。
+      // Host 将首层 bridge 作为 Android AnalyzeUrl 的一次重入；更深层 bridge
+      // 标记为 nested，跳过动态脚本以保留有界递归保护。静态头仍合并。
       if (nested) return undefined
       // 头脚本不携带请求 URL 上下文，stage 固定为 search，与基线 Node 门面一致。
       let value: unknown

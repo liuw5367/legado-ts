@@ -35,7 +35,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `packages/source-node/tests/adapters.test.ts` 的 HTML/XML CSS adapter case 覆盖 Jsoup `eq/lt/gt` 同级原始索引（含负数）边界，以及 `ownText/textNodes/text` 对 `br`、普通文本 NBSP/换行归一化、`pre/textarea` 保留空白和 script/style DataNode 排除的边界；JSONPath case 以 Android Jayway 3.0.0 源码探针为参照，覆盖混合数字/字符串集合等价、`null` 与缺失路径、`empty true/false` 的标量和 UndefinedNode 边界、空集合筛选，以及空聚合失败、`stddev/first/last/index/concat/append` 函数；这些是 TypeScript 侧实际回归，不替代 Android fixture golden。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
-- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 172/172，`pnpm test` 为 609/609。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
+- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 177/177，`pnpm test` 为 615/615。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
 ### 2026-10-22 P13 最终回归
@@ -148,7 +148,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `FLOW-011` | 正文 | save token、旧请求覆盖保护、保存失败、取消、章节元数据和保存事件 |
 | `FLOW-012` | 批量 | contentBatch/getContentBatch、章节对象识别、重复 URL 歧义、串行回存、漏存兜底；source-core 与 QuickJS Node 定向测试已覆盖，Android golden 未执行 |
 | `JS-001` | JS | 每次调用 scope、绑定对象、共享 scope 显式开关、toJSON/getter/循环引用 |
-| `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播和 `skipRateLimit` 绕过语义；Node `ajaxAll(..., true)` 与 `ajaxTestAll(..., timeout, true)` 已有 bridge/limiter 回归，Android golden 仍待执行 |
+| `JS-002` | JS | `ajax`、`ajaxAll`、`ajaxTestAll`、`connect` 的请求描述、错误兼容文本、取消传播、`skipRateLimit` 绕过语义和 source header 重入；Node 首层网络及文件/字体/归档 bridge 重算动态 header、深层跳过并共享 deadline/取消，Android golden 仍待执行 |
 | `JS-003` | JS | `cacheContent` 仅批量可用、版本 token、回调乱序、保存计数和关闭上下文 |
 | `JS-004` | 段评 | 声明式/JS 摘要索引、详情游标、回复分页展平、内容协议、函数配对/缺失终态和媒体基准地址 |
 | `JS-005` | 书源 JS bridge | Java String/StringBuilder/Pattern/Matcher 重载，StringBuilder 构造器容量、字符数组 append/insert、`appendCodePoint`、code point 范围、`getChars`、`substring/subSequence`、容量管理，命名组、匹配位置、region/reset 和 `$0/$1/$10/${name}`/`quoteReplacement` 替换，Java Map/List/Set 计算、批量修改、缺失键 null、回调参数顺序、Set/List 迭代器异常和 ListIterator，Map 的 `keySet/values/entrySet` 实时视图、entry `setValue`、Map `putAll`/构造和 List `subList` 父子传播，`Arrays.asList/copyOf/fill/sort/binarySearch`、`Collections.swap/max/min/unmodifiableList/copy/frequency`，`String.valueOf/copyValueOf` 字符数组与 null、Integer/Long/BigInteger radix 解析，`Packages.java.lang.System/Thread`、`Packages.java.util.UUID` 的数组复制、属性、UUID 和可取消 sleep，`java.util.zip.GZIPInputStream/InflaterInputStream/ZipInputStream`（受限 stored/deflate 条目读取）、`javax.crypto.Cipher/SecretKeyFactory`、`java.security.KeyFactory/Signature/KeySpec`、`android.text.TextUtils`、`android.os.Build`、`org.jsoup.Jsoup.parse` 的受控解压/加密/节点路径，JavaImporter/Packages、Base64/URLEncoder/DatatypeConverter、HMAC/SecretKeySpec、ByteArrayInputStream 的偏移/长度构造、`readNBytes/skipNBytes/transferTo`、ByteArrayOutputStream 的单字节 `write(int)`/`writeBytes/writeTo`、InputStreamReader 字符数组读取与 BufferedReader 的 CR/CRLF/`lines`、`Packages...StrResponse` 构造对象的属性/方法双访问与跨执行 DTO 编码，以及 AnalyzeUrl 响应对象 |
@@ -342,6 +342,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | FLOW-013/event-taxonomy | 多源 A 成功、B 解析失败、A sink 保存完成 | 依次只能使用 `source-success`/`source-error`/`saved` 等统一事件；`partial` 是结果状态，不作为事件类型；completed 只发布一次 |
 | JS-001/serialization | 返回带 toJSON 的对象；另例循环对象 | 调用 toJSON 的结果被使用；循环对象序列化失败 |
 | JS-002/sync-network | 脚本 `java.ajax(u).length`，u 延迟返回 abc | 得到 3 而非 Promise 属性；取消等待后不恢复脚本 |
+| JS-002/source-header-reentry | source header 为动态脚本且自身调用 `java.ajax(child)` 或 `java.downloadFile(file)`；另测带 URL options 的 bridge、首层批量请求和完整响应 | Android 每个 AnalyzeUrl 都会再次执行动态 header；Node 首层网络及 `requestBytes` bridge 重算并把动态头传给子请求，再入层跳过以阻断无限递归；子请求与父请求共享绝对 deadline 和 AbortSignal，达到 bridge 深度上限返回可识别错误 |
 | JS-003/late-save | 批量上下文关闭后回调 cacheContent | 拒绝写入，原缓存不变 |
 | EDIT-002/preview-clean | rawText=baseText，预览成功或失败 | dirty 仍 false；诊断/预览状态可改变 |
 | EDIT-004/conflict | 编辑基于 v1，外部先保存 v2，再提交 v1 | conflict，保留草稿及 v2，不静默覆盖 |

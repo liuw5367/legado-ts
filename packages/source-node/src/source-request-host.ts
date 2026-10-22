@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { SourceRequestError, SourceRequestRuntime } from '@legado/source-core'
-import type { NetworkHost, NetworkResponse, NormalizedSource, RequestObserver, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
+import type { NetworkHost, NetworkResponse, NormalizedSource, RequestBudget, RequestObserver, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
 import chardet from 'chardet'
 import { NodeCharsetCodec } from './charset.ts'
 import { NodeCookieStore } from './cookies.ts'
@@ -135,10 +135,16 @@ export class SourceRequestHost {
     return this.runtime.request(input)
   }
 
-  /** 供 java.downloadFile/cacheFile/字体/归档复用当前书源的认证、动态头和 URL 选项。 */
-  public async requestBytes(url: string, signal: AbortSignal, source: NormalizedSource, requestObserver?: RequestObserver): Promise<Uint8Array> {
-    const response = await this.runtime.requestRaw(source, url, { method: 'GET', followRedirects: true }, signal, undefined, 'detail', false, false, 'bridge', url, undefined, requestObserver)
-    return response.bytes
+  /** 供 java.downloadFile/cacheFile/字体/归档复用当前书源的认证、动态头、URL 选项和请求预算。 */
+  public async requestBytes(url: string, signal: AbortSignal, source: NormalizedSource, requestObserver?: RequestObserver, budget?: Partial<RequestBudget>): Promise<Uint8Array> {
+    const depth = this.bridgeDepth.getStore() ?? 0
+    if (depth >= maxBridgeDepth) throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
+    return this.bridgeDepth.run(depth + 1, async () => {
+      // Android 的文件、字体和归档 URL 同样通过 AnalyzeUrl 创建请求；首层 bridge
+      // 重算动态 header，再入层跳过脚本，避免 header -> downloadFile 无限递归。
+      const response = await this.runtime.requestRaw(source, url, { method: 'GET', followRedirects: true }, signal, budget, 'detail', depth > 0, false, 'bridge', url, undefined, requestObserver)
+      return response.bytes
+    })
   }
 
   /** source 随本次 JavaScript bridge 调用传入，避免并发书源共享可变上下文。 */
@@ -176,7 +182,7 @@ export class SourceRequestHost {
       const depth = this.bridgeDepth.getStore() ?? 0
       if (depth >= maxBridgeDepth) throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
       return this.bridgeDepth.run(depth + 1, async () => {
-        const response = await this.runtime.requestRaw(source, contextUrl, overrides, signal, input.budget, input.stage ?? 'search', true, false, 'bridge', contextUrl, undefined, requestObserver)
+        const response = await this.runtime.requestRaw(source, contextUrl, overrides, signal, input.budget, input.stage ?? 'search', depth > 0, false, 'bridge', contextUrl, undefined, requestObserver)
         return this.responseObject(response)
       })
     }
@@ -191,7 +197,7 @@ export class SourceRequestHost {
       const urls = Array.isArray(input.urls) ? input.urls.map((value) => text(value)).filter((value) => value.length > 0) : []
       return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url, batchSignal) => {
         try {
-          const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, input.budget, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
+          const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, input.budget, input.stage ?? 'search', depth > 0, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
           return this.responseObject(response)
         } catch (error) {
           const testMode = input.isTest === true || (object(input.options) !== undefined && Object.hasOwn(object(input.options)!, 'timeout'))
@@ -207,8 +213,9 @@ export class SourceRequestHost {
       ...(input.headers === undefined ? {} : { headers: input.headers }),
     }
     return this.bridgeDepth.run(depth + 1, async () => {
-      // nested：子请求跳过动态 source header，只保留静态头，切断 header 脚本自递归。
-      const response = await this.runtime.requestRaw(source, url, overrides, signal, input.budget, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
+      // Android 的 AnalyzeUrl 每次都会重新计算 source header；首层 bridge 保留这一语义，
+      // 再入层跳过动态 header，避免 header -> java.ajax 无限递归。
+      const response = await this.runtime.requestRaw(source, url, overrides, signal, input.budget, input.stage ?? 'search', depth > 0, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
       return input.kind === 'network-response' ? this.responseObject(response) : this.decode(response)
     })
   }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { NetworkHost, NetworkResponse, NormalizedSource } from '../../source-core/src/index.ts'
+import type { NetworkHost, NetworkResponse, NormalizedSource, RequestBudget } from '../../source-core/src/index.ts'
 import { NodeCookieStore } from '../src/cookies.ts'
 import { NodeCharsetCodec } from '../src/charset.ts'
 import { SourceRequestHost } from '../src/source-request-host.ts'
@@ -120,6 +120,25 @@ test('AnalyzeUrl 脚本可以修改 java.url/headerMap 并在上下文中重取 
   assert.deepEqual(plans.map((item) => item.url), ['https://fixture.invalid/signed?signed=1', 'https://fixture.invalid/signed?signed=1'])
   assert.equal(plans[0]?.headers['X-Auth'], 'token')
   assert.equal(plans[1]?.headers['X-Auth'], 'token')
+})
+
+test('AnalyzeUrl 上下文 bridge 首层重算动态 source header', async () => {
+  const plans: Array<{ url: string; token: string | undefined }> = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    plans.push({ url: plan.url, token: plan.headers['X-Token'] })
+    return { ...response(plan.url), bytes: new TextEncoder().encode(`body:${plan.url}`) }
+  } } })
+  host.attachRuleHost(new SourceRuleHost({ request: (input, signal, currentSource) => host.requestFromBridge(input, signal, currentSource) }))
+  const dynamicSource = { ...source, header: '@js:0; ({"X-Token":"dynamic"})' } as unknown as NormalizedSource
+  const result = await host.request({
+    source: dynamicSource,
+    url: `/signed,${JSON.stringify({ js: 'java.url = java.url; java.getStrResponse(null, null, false).body' })}`,
+    stage: 'search',
+    options: {},
+  })
+  assert.equal(host.decodeResponse(result), 'body:https://fixture.invalid/signed')
+  assert.equal(plans.length, 2)
+  assert.ok(plans.every((plan) => plan.token === 'dynamic'), JSON.stringify(plans))
 })
 
 test('URL 请求脚本携带书籍和内部章节变量作用域，但不暴露全局 chapter', async () => {
@@ -252,6 +271,25 @@ test('bridge 的 ajaxAll 和 response 请求复用完整网络响应并保持顺
   assert.equal(skipFlags.at(-1), true)
 })
 
+test('首层 bridge 的 ajaxAll 和 response 也重算动态 source header', async () => {
+  const plans: Array<{ url: string; token: string | undefined }> = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    plans.push({ url: plan.url, token: plan.headers['X-Token'] })
+    return response(plan.url)
+  } } })
+  host.attachRuleHost(new SourceRuleHost({ request: (input, signal, currentSource) => host.requestFromBridge(input, signal, currentSource) }))
+  const dynamicSource = { ...source, header: '@js:0; ({"X-Token":"dynamic"})' } as unknown as NormalizedSource
+  const signal = new AbortController().signal
+  await host.requestFromBridge({ kind: 'network-all', urls: ['https://fixture.invalid/one', 'https://fixture.invalid/two'] }, signal, dynamicSource)
+  await host.requestFromBridge({ kind: 'network-response', url: 'https://fixture.invalid/three', options: {} }, signal, dynamicSource)
+  assert.deepEqual(plans.slice(0, 2).map((plan) => plan.url).sort(), [
+    'https://fixture.invalid/one',
+    'https://fixture.invalid/two',
+  ])
+  assert.equal(plans[2]?.url, 'https://fixture.invalid/three')
+  assert.ok(plans.every((plan) => plan.token === 'dynamic'), JSON.stringify(plans))
+})
+
 test('bridge 子请求继承当前工作流阶段', async () => {
   const observations: Array<{ stage: string; kind?: string }> = []
   const host = new SourceRequestHost({
@@ -338,12 +376,12 @@ test('正文 webJs 提示在没有 WebView 宿主时显式失败', async () => {
   assert.equal(new TextDecoder().decode(ok.bytes), 'ok')
 })
 
-test('动态 header 经 bridge 子请求不重算自身，嵌套深度受限', async () => {
-  const calls: string[] = []
+test('动态 header 在首层 bridge 重算，深层跳过并受限', async () => {
+  const calls: Array<{ url: string; token: string | undefined }> = []
   const host = new SourceRequestHost({
     network: {
       request: async (plan) => {
-        calls.push(plan.url)
+        calls.push({ url: plan.url, token: plan.headers['X-Token'] })
         return response(plan.url)
       },
     },
@@ -358,12 +396,21 @@ test('动态 header 经 bridge 子请求不重算自身，嵌套深度受限', a
   } as unknown as NormalizedSource
   const parent = await host.request({ source: dynamicHeader, url: '/parent', stage: 'search', options: {} })
   assert.equal(new TextDecoder().decode(parent.bytes), 'ok')
-  // 子请求 + 父请求各一次；nested 跳过动态 header，不会自递归。
-  assert.deepEqual(calls.sort(), ['https://fixture.invalid/child', 'https://fixture.invalid/parent'])
+  // Android 每个 AnalyzeUrl 都会计算动态 header；TS 只允许首层 bridge 重算，
+  // 再入层跳过动态脚本，因此同一个 child 会出现一次带头请求和一次无头请求。
+  assert.deepEqual(calls.map((item) => item.url).sort(), [
+    'https://fixture.invalid/child',
+    'https://fixture.invalid/child',
+    'https://fixture.invalid/parent',
+  ])
+  const childTokens = calls.filter((item) => item.url.endsWith('/child')).map((item) => item.token)
+  assert.equal(childTokens.filter((token) => token === 't').length, 1)
+  assert.equal(childTokens.filter((token) => token === undefined).length, 1)
+  assert.equal(calls.find((item) => item.url.endsWith('/parent'))?.token, 't')
   assert.equal(parent.headers['content-type'], 'text/plain; charset=utf-8')
 
   // 静态 header 在子请求上仍会合并。
-  calls.length = 0
+  const staticCalls: string[] = []
   const staticHeader = {
     bookSourceUrl: 'https://fixture.invalid',
     bookSourceName: 'fixture',
@@ -372,7 +419,7 @@ test('动态 header 经 bridge 子请求不重算自身，嵌套深度受限', a
   const host2 = new SourceRequestHost({
     network: {
       request: async (plan) => {
-        calls.push(JSON.stringify(plan.headers))
+        staticCalls.push(JSON.stringify(plan.headers))
         return response(plan.url)
       },
     },
@@ -381,8 +428,73 @@ test('动态 header 经 bridge 子请求不重算自身，嵌套深度受限', a
   host2.attachRuleHost(ruleHost2)
   await host2.request({ source: staticHeader, url: '/parent2', stage: 'search', options: {} })
   // 父请求含静态头；若曾发出子请求则深度/嵌套语义异常（此处无脚本，应只有 1 次网络调用）。
-  assert.equal(calls.length, 1)
-  assert.match(calls[0] ?? '', /X-Static/)
+  assert.equal(staticCalls.length, 1)
+  assert.match(staticCalls[0] ?? '', /X-Static/)
+})
+
+test('文件 bridge 首层重算动态 source header，深层跳过并共享保护', async () => {
+  const calls: Array<{ url: string; token: string | undefined }> = []
+  const deadlines: number[] = []
+  let fileRequests = 0
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    calls.push({ url: plan.url, token: plan.headers['X-Token'] })
+    deadlines.push(plan.budget.deadlineMs ?? -1)
+    return response(plan.url)
+  } } })
+  const file = {
+    execute: async (operation: string, input: Readonly<Record<string, unknown>>, signal: AbortSignal, currentSource: NormalizedSource) => {
+      if (operation !== 'downloadFile') throw new Error(`unexpected file operation: ${operation}`)
+      fileRequests += 1
+      if (fileRequests > 4) throw new Error('unbounded file bridge')
+      await host.requestBytes(String(input.url ?? ''), signal, currentSource, undefined, input.budget as Partial<RequestBudget> | undefined)
+      return '/downloaded.bin'
+    },
+  }
+  const ruleHost = new SourceRuleHost({
+    request: (input, signal, requestSource) => host.requestFromBridge(input, signal, requestSource),
+    file,
+  })
+  host.attachRuleHost(ruleHost)
+  const dynamicSource = { ...source, header: '@js:java.downloadFile("https://fixture.invalid/file.bin"); ({"X-Token":"dynamic"})' } as unknown as NormalizedSource
+  const deadline = Date.now() + 12_000
+  const result = await host.request({ source: dynamicSource, url: '/parent', stage: 'search', options: { budget: { deadlineMs: deadline } } })
+  assert.equal(new TextDecoder().decode(result.bytes), 'ok')
+  assert.equal(fileRequests, 2)
+  assert.deepEqual(new Set(deadlines), new Set([deadline]))
+  assert.deepEqual(calls.map((call) => call.url).sort(), [
+    'https://fixture.invalid/file.bin',
+    'https://fixture.invalid/file.bin',
+    'https://fixture.invalid/parent',
+  ])
+  assert.equal(calls.filter((call) => call.url.endsWith('/file.bin') && call.token === 'dynamic').length, 1)
+  assert.equal(calls.filter((call) => call.url.endsWith('/file.bin') && call.token === undefined).length, 1)
+  assert.equal(calls.find((call) => call.url.endsWith('/parent'))?.token, 'dynamic')
+})
+
+test('字体 URL bridge 首层重算动态 source header，并继承请求预算', async () => {
+  const calls: Array<{ url: string; token: string | undefined }> = []
+  const deadlines: number[] = []
+  const host = new SourceRequestHost({ network: { request: async (plan) => {
+    calls.push({ url: plan.url, token: plan.headers['X-Token'] })
+    deadlines.push(plan.budget.deadlineMs ?? -1)
+    return response(plan.url)
+  } } })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, requestSource) => host.requestFromBridge(input, signal, requestSource) })
+  host.attachRuleHost(ruleHost)
+  // fixture 返回的不是字体，脚本捕获解析错误；网络请求仍应走完整 font-query bridge。
+  const dynamicSource = { ...source, header: '@js:try { java.queryTTF("https://fixture.invalid/font.ttf") } catch (error) {} ; ({"X-Token":"dynamic"})' } as unknown as NormalizedSource
+  const deadline = Date.now() + 12_000
+  const result = await host.request({ source: dynamicSource, url: '/parent', stage: 'search', options: { budget: { deadlineMs: deadline } } })
+  assert.equal(new TextDecoder().decode(result.bytes), 'ok')
+  assert.deepEqual(new Set(deadlines), new Set([deadline]))
+  assert.deepEqual(calls.map((call) => call.url).sort(), [
+    'https://fixture.invalid/font.ttf',
+    'https://fixture.invalid/font.ttf',
+    'https://fixture.invalid/parent',
+  ])
+  assert.equal(calls.filter((call) => call.url.endsWith('/font.ttf') && call.token === 'dynamic').length, 1)
+  assert.equal(calls.filter((call) => call.url.endsWith('/font.ttf') && call.token === undefined).length, 1)
+  assert.equal(calls.find((call) => call.url.endsWith('/parent'))?.token, 'dynamic')
 })
 
 test('请求脚本的 bridge 子请求继承同一绝对 deadline', async () => {
@@ -400,9 +512,8 @@ test('请求脚本的 bridge 子请求继承同一绝对 deadline', async () => 
   const deadline = Date.now() + 12_000
   const dynamicHeader = { ...source, header: '@js:java.ajax("https://fixture.invalid/child"); ({"X-Token":"t"})' } as unknown as NormalizedSource
   await host.request({ source: dynamicHeader, url: '/parent', stage: 'search', options: { budget: { deadlineMs: deadline } } })
-  assert.equal(deadlines.length, 2)
-  assert.equal(deadlines[0], deadlines[1])
-  assert.equal(deadlines[1], deadline)
+  assert.equal(deadlines.length, 3)
+  assert.deepEqual(new Set(deadlines), new Set([deadline]))
 })
 
 test('bridge 网络子请求超过深度上限时拒绝', async () => {

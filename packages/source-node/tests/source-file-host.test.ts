@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { ArchiveHost, NetworkHost, NormalizedSource } from '@legado/source-core'
+import type { ArchiveHost, NetworkHost, NormalizedSource, RequestBudget } from '@legado/source-core'
 import { NodeCharsetCodec } from '../src/charset.ts'
 import { NodeSourceFileHost } from '../src/source-file-host.ts'
 
@@ -69,6 +69,30 @@ test('Node 文件宿主的缓存 API 重复命中时不重复请求', async () =
     await host.invalidateCacheFile?.('888a5ce93739a872', signal, source)
     assert.equal(await host.execute('cacheFile', { url: 'https://fixture.invalid/a.js' }, signal, source), 'cache')
     assert.equal(calls, 2)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Node 文件宿主把脚本请求预算传给下载、缓存和远程归档', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-file-budget-test-'))
+  const budgets: Array<Partial<RequestBudget> | undefined> = []
+  const archive: ArchiveHost = { extract: async () => [{ path: 'entry.txt', data: new TextEncoder().encode('archive') }] }
+  try {
+    const host = new NodeSourceFileHost({
+      root,
+      archive,
+      network: { request: async (plan) => ({ url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('network'), redirected: false }) },
+      requestBytes: async (_url, _signal, _source, budget) => { budgets.push(budget); return new TextEncoder().encode('remote') },
+    })
+    const signal = new AbortController().signal
+    const budget = { deadlineMs: Date.now() + 12_000, maxResponseBytes: 1024 }
+    await host.execute('downloadFile', { url: 'https://fixture.invalid/file.bin', budget }, signal, source)
+    await host.execute('cacheFile', { url: 'https://fixture.invalid/cache.txt', budget }, signal, source)
+    const bytes = await host.execute('getZipByteArrayContent', { url: 'https://fixture.invalid/archive.zip', path: 'entry.txt', budget }, signal, source)
+    assert.equal(new TextDecoder().decode(bytes as Uint8Array), 'archive')
+    assert.equal(budgets.length, 3)
+    assert.ok(budgets.every((item) => item?.deadlineMs === budget.deadlineMs && item.maxResponseBytes === budget.maxResponseBytes))
   } finally {
     await rm(root, { recursive: true, force: true })
   }
