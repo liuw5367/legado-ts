@@ -527,7 +527,22 @@ test('Android source 状态、文件入口和纯工具函数保持可调用', as
     batch: null,
     query: 'c',
   })
-  assert.deepEqual(fileCalls.map((item) => item.operation), ['getFile', 'readFile'])
+  assert.deepEqual(fileCalls.map((item) => item.operation), ['getFile', 'readFile', 'getFile'])
+})
+
+test('File.exists/isFile/isDirectory 每次读取宿主最新元数据', async () => {
+  let reads = 0
+  const host = new SourceRuleHost({ file: {
+    execute: async (operation) => {
+      if (operation !== 'getFile') return undefined
+      reads += 1
+      return { path: 'cache/live.txt', exists: reads <= 3, isFile: reads <= 3, isDirectory: false }
+    },
+  } })
+  const result = await evaluate(host, '@js:var file = java.getFile("cache/live.txt"); JSON.stringify([file.exists(), file.isFile(), file.exists(), file.isDirectory()])', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [true, true, false, false])
+  assert.equal(reads, 5)
 })
 
 test('source 动态请求头、源变量和登录脚本沿用 Android 调用链', async () => {

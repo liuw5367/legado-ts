@@ -108,7 +108,7 @@
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（第一阶段） | 差异登记 D40；游标签名加入发现代次，刷新后旧游标有回归测试 | 动态 URL/infoMap 摘要、迟到请求写回和多实例组合仍需验证 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 138/138、根全套 `pnpm test` 558/558；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；回归覆盖 IPv6 host/port/origin | 无 base/非法输入、默认端口和完整 URL 属性仍待 Android golden |
-| D43 | 文件对象 | File 方法和即时状态 | 部分实现（第四阶段） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles，并每次刷新宿主元数据；`cache.delete` 会清理对应 `cacheFile` 映射；Node 文件回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
+| D43 | 文件对象 | File 方法和即时状态 | 部分实现（P09） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；exists/isFile/isDirectory 与元数据方法每次刷新宿主状态；`cache.delete` 会清理对应 `cacheFile` 映射；Node 文件回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
 | D44 | 应用交互 | 登录 UI/action、书源事件和付费动作的应用入口 | 部分实现（第六阶段） | 差异登记 D44；reader-web 已提供静态/动态登录 API 与页面、动作事件、payAction/callBackJs 人工触发、源版本校验和进程内幂等；密码/token 脱敏；`source-login.test.ts`、`source-actions.test.ts` | 购买后刷新、自定义按钮消费、多实例幂等、真实网页登录/验证码和 Android golden 仍待验证；真实远程动作不自动执行 |
 
 ## 完成时如何更新
