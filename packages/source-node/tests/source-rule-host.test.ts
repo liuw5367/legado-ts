@@ -477,6 +477,45 @@ test('StringBuilder 支持字符数组、code point、范围和容量重载', as
   })
 })
 
+test('Java 字节流与 Reader 补齐构造器、单字节写入、范围读取和换行语义', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.io, Packages.java.lang.String);
+    with (importer) {
+      var input = new ByteArrayInputStream([10, 20, 30, 40], 1, 2);
+      var first = input.read();
+      var target = [0, 0, 0];
+      var count = input.read(target);
+      var emptyRead = input.readNBytes(target, 0, 0);
+      var skipped = input.skip(10);
+      var clamped = new ByteArrayInputStream([1, 2, 3], 1, 8).readAllBytes();
+      var transferred = new ByteArrayOutputStream(0);
+      var transferInput = new ByteArrayInputStream([50, 51]);
+      var transferCount = transferInput.transferTo(transferred);
+      var output = new ByteArrayOutputStream();
+      output.write(321); output.write([66, 67]); output.writeBytes([68]);
+      var copied = new ByteArrayOutputStream(); output.writeTo(copied);
+      var reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(new String('一\\r二\\r\\n三\\n四').getBytes()), 'UTF-8'));
+      var lines = [reader.readLine(), reader.readLine(), reader.readLine(), reader.readLine(), reader.readLine()];
+      var readChars = [0, 0]; var reader2 = new InputStreamReader(new ByteArrayInputStream(new String('ab').getBytes()));
+      var readCount = reader2.read(readChars, 0, 2); var readerSkip = reader2.skip(1);
+      JSON.stringify({ first: first, target: target, count: count, emptyRead: emptyRead, skipped: skipped, available: input.available(), clamped: Array.from(clamped), transfer: [transferCount, Array.from(transferred.toByteArray())], output: [Array.from(output.toByteArray()), Array.from(copied.toByteArray()), output.toString('UTF-8'), output.size()], lines: lines, chars: [readCount, readChars, readerSkip, reader2.ready()] });
+    }`, '')
+  assert.equal(result.status, 'success', String(result.message ?? result.value))
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    first: 20,
+    target: [30, 0, 0],
+    count: 1,
+    emptyRead: 0,
+    skipped: 0,
+    available: 0,
+    clamped: [2, 3],
+    transfer: [2, [50, 51]],
+    output: [[65, 66, 67, 68], [65, 66, 67, 68], 'ABCD', 4],
+    lines: ['一', '二', '三', '四', null],
+    chars: [2, [97, 98], 0, false],
+  })
+})
+
 test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.util.regex.Pattern, Packages.java.util.regex.Matcher);

@@ -244,15 +244,41 @@ const inputStreamResultPrelude = String.raw`if (bindings.__legadoResultInputKind
       __cursor = __bytes.length
       return __remaining
     },
+    readNBytes: function(target, offset, length) {
+      if (arguments.length === 0) return this.readAllBytes()
+      const __start = offset === undefined ? 0 : Number(offset)
+      const __count = length === undefined ? target.length - __start : Number(length)
+      if ((!ArrayBuffer.isView(target) && !Array.isArray(target)) || !Number.isInteger(__start) || !Number.isInteger(__count) || __start < 0 || __count < 0 || __start + __count > target.length) throw new RangeError("invalid InputStream read range")
+      if (__count === 0) return 0
+      const __available = Math.min(__count, __bytes.length - __cursor)
+      if (__available <= 0) return 0
+      for (let __index = 0; __index < __available; __index++) target[__start + __index] = __bytes[__cursor + __index]
+      __cursor += __available
+      return __available
+    },
     available: function() { return __bytes.length - __cursor },
     skip: function(count) {
       const __count = Math.max(0, Math.min(__bytes.length - __cursor, Math.trunc(Number(count) || 0)))
       __cursor += __count
       return __count
     },
+    skipNBytes: function(count) {
+      const __count = Number(count)
+      if (!Number.isInteger(__count) || __count < 0) throw new RangeError("skipNBytes count must be non-negative")
+      if (__count > __bytes.length - __cursor) { __cursor = __bytes.length; throw new Error("EOF while skipping bytes") }
+      __cursor += __count
+    },
+    transferTo: function(output) {
+      if (output === null || typeof output?.write !== "function") throw new TypeError("OutputStream is required")
+      const __remaining = __bytes.length - __cursor
+      if (__remaining > 0) output.write(__bytes, __cursor, __remaining)
+      __cursor = __bytes.length
+      return __remaining
+    },
     mark: function() { __mark = __cursor },
     reset: function() { __cursor = __mark },
     markSupported: function() { return true },
+    close: function() {},
   }
 }`
 
@@ -939,7 +965,7 @@ const decimalSetScale = (coefficient, scale, nextScale, roundingMode) => { if (n
 const decimalDivide = (coefficient, scale, other, roundingMode) => { const right = decimalParts(other); if (right.coefficient === 0n) throw new RangeError("BigDecimal division by zero"); const targetScale = Math.max(0, scale + right.scale + 16); const numerator = coefficient * 10n ** BigInt(targetScale); const quotient = numerator / right.coefficient; return decimalSetScale(quotient, targetScale + scale - right.scale, Math.max(scale, right.scale), roundingMode) }
 const legadoSet = function(input) { const values = []; const itemsOf = (items) => Array.isArray(items) ? items : items?.toArray?.() ?? []; const add = (value) => { if (values.some((item) => Object.is(item, value))) return false; values.push(value); return true }; for (const value of itemsOf(input)) add(value); return { add, addAll: (items) => { let changed = false; for (const value of itemsOf(items)) changed = add(value) || changed; return changed }, contains: (value) => values.some((item) => Object.is(item, value)), containsAll: (items) => itemsOf(items).every((item) => values.some((value) => Object.is(value, item))), remove: (value) => { const index = values.findIndex((item) => Object.is(item, value)); if (index < 0) return false; values.splice(index, 1); return true }, removeAll: (items) => { const candidates = itemsOf(items); const before = values.length; for (let index = values.length - 1; index >= 0; index -= 1) if (candidates.some((item) => Object.is(item, values[index]))) values.splice(index, 1); return values.length !== before }, retainAll: (items) => { const candidates = itemsOf(items); const before = values.length; for (let index = values.length - 1; index >= 0; index -= 1) if (!candidates.some((item) => Object.is(item, values[index]))) values.splice(index, 1); return values.length !== before }, clear: () => { values.length = 0 }, size: () => values.length, isEmpty: () => values.length === 0, toArray: () => values.slice(), iterator: () => { let index = 0; let canRemove = false; return { hasNext: () => index < values.length, next: () => { if (index >= values.length) throw new RangeError("No such element"); canRemove = true; return values[index++] }, remove: () => { if (!canRemove) throw new Error("Illegal iterator state"); values.splice(--index, 1); canRemove = false } } }, forEach: (callback) => values.forEach(callback), toString: () => "[" + values.map((value) => value === null || value === undefined ? "null" : String(value)).join(", ") + "]" } }
 const legadoJavaMath = { abs: (value) => Math.abs(Number(value)), max: (left, right) => Math.max(Number(left), Number(right)), min: (left, right) => Math.min(Number(left), Number(right)), round: (value) => Math.round(Number(value)), floor: (value) => Math.floor(Number(value)), ceil: (value) => Math.ceil(Number(value)), pow: (left, right) => Math.pow(Number(left), Number(right)), signum: (value) => Math.sign(Number(value)), toRadians: (value) => Number(value) * Math.PI / 180, toDegrees: (value) => Number(value) * 180 / Math.PI }
-const legadoBytesValue = (value) => value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" })
+const legadoBytesValue = (value) => value instanceof Uint8Array ? value : ArrayBuffer.isView(value) ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : value instanceof ArrayBuffer ? new Uint8Array(value) : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" })
 const legadoConcatBytes = (parts) => { const total = parts.reduce((sum, item) => sum + item.length, 0); const result = new Uint8Array(total); let offset = 0; for (const item of parts) { result.set(item, offset); offset += item.length } return result }
 const legadoDigest = (algorithm) => {
   let chunks = []
@@ -1088,13 +1114,66 @@ const legadoBase64 = {
   getEncoder: () => { const flags = 2; const encoder = { encodeToString: (value) => request({ kind: "base64-encode", value, flags }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags })).getBytes("UTF-8"), withoutPadding: () => { const noPadding = 3; return { encodeToString: (value) => request({ kind: "base64-encode", value, flags: noPadding }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags: noPadding })).getBytes("UTF-8") } } }; return encoder },
   getDecoder: () => ({ decode: (value) => request({ kind: "base64-decode-bytes", value: String(value) }) }),
 }
-const legadoByteArrayInputStream = function(input) {
-  const bytes = input instanceof Uint8Array ? input : Array.isArray(input) ? Uint8Array.from(input) : request({ kind: "encode-bytes", value: String(input ?? ""), charset: "UTF-8" })
-  let cursor = 0
-  let mark = 0
-  return { read: function(target, offset, length) { if (arguments.length === 0) return cursor < bytes.length ? bytes[cursor++] : -1; const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? target.length - start : Number(length); if ((!ArrayBuffer.isView(target) && !Array.isArray(target)) || !Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > target.length) throw new RangeError("invalid InputStream read range"); const available = Math.min(count, bytes.length - cursor); if (available <= 0) return -1; for (let index = 0; index < available; index++) target[start + index] = bytes[cursor + index]; cursor += available; return available }, readAllBytes: () => { const result = bytes.slice(cursor); cursor = bytes.length; return result }, available: () => bytes.length - cursor, skip: (count) => { const amount = Math.max(0, Math.min(bytes.length - cursor, Math.trunc(Number(count) || 0))); cursor += amount; return amount }, mark: () => { mark = cursor }, reset: () => { cursor = mark }, markSupported: () => true, close: () => undefined }
+const legadoByteArrayInputStream = function(input, offset, length) {
+  const bytes = legadoBytesValue(input)
+  const start = offset === undefined ? 0 : Number(offset)
+  const requested = length === undefined ? bytes.length - start : Number(length)
+  if (!Number.isInteger(start) || !Number.isInteger(requested) || start < 0 || requested < 0 || start > bytes.length) throw new RangeError("ByteArrayInputStream range out of bounds")
+  const end = Math.min(bytes.length, start + requested)
+  let cursor = start
+  let mark = start
+  const targetLength = (target) => target !== null && target !== undefined && (Array.isArray(target) || ArrayBuffer.isView(target)) ? target.length : -1
+  const readInto = (target, targetOffset, count, eofValue) => {
+    const size = targetLength(target)
+    const outputOffset = targetOffset === undefined ? 0 : Number(targetOffset)
+    const outputCount = count === undefined ? size - outputOffset : Number(count)
+    if (size < 0 || !Number.isInteger(outputOffset) || !Number.isInteger(outputCount) || outputOffset < 0 || outputCount < 0 || outputOffset + outputCount > size) throw new RangeError("invalid InputStream read range")
+    if (outputCount === 0) return 0
+    const available = Math.min(outputCount, end - cursor)
+    if (available <= 0) return eofValue
+    for (let index = 0; index < available; index++) target[outputOffset + index] = bytes[cursor + index]
+    cursor += available
+    return available
+  }
+  const readAllBytes = () => { const result = bytes.slice(cursor, end); cursor = end; return result }
+  const api = {
+    read: function(target, targetOffset, count) {
+      if (arguments.length === 0) return cursor < end ? bytes[cursor++] : -1
+      return readInto(target, targetOffset, count, -1)
+    },
+    readNBytes: function(target, targetOffset, count) {
+      if (arguments.length === 0) return readAllBytes()
+      return readInto(target, targetOffset, count, 0)
+    },
+    readAllBytes,
+    available: () => end - cursor,
+    skip: (count) => { const amount = Math.max(0, Math.min(end - cursor, Math.trunc(Number(count) || 0))); cursor += amount; return amount },
+    skipNBytes: (count) => { const amount = Number(count); if (!Number.isInteger(amount) || amount < 0) throw new RangeError("skipNBytes count must be non-negative"); if (amount > end - cursor) { cursor = end; throw new Error("EOF while skipping bytes") } cursor += amount; return undefined },
+    transferTo: (output) => { if (output === null || typeof output?.write !== "function") throw new TypeError("OutputStream is required"); const remaining = end - cursor; if (remaining > 0) output.write(bytes, cursor, remaining); cursor = end; return remaining },
+    mark: () => { mark = cursor },
+    reset: () => { cursor = mark },
+    markSupported: () => true,
+    close: () => undefined,
+  }
+  return api
 }
-const legadoCompressedInputStream = (input, kind) => { const bytes = request({ kind, value: legadoBytesValue(input?.readAllBytes?.() ?? input) }); const delegate = legadoByteArrayInputStream(bytes); return { read: (...args) => delegate.read(...args), readAllBytes: () => delegate.readAllBytes(), available: () => delegate.available(), skip: (count) => delegate.skip(count), mark: () => delegate.mark(), reset: () => delegate.reset(), markSupported: () => delegate.markSupported(), close: () => delegate.close() } }
+const legadoCompressedInputStream = (input, kind) => {
+  const bytes = request({ kind, value: legadoBytesValue(input?.readAllBytes?.() ?? input) })
+  const delegate = legadoByteArrayInputStream(bytes)
+  return {
+    read: (...args) => delegate.read(...args),
+    readNBytes: (...args) => delegate.readNBytes(...args),
+    readAllBytes: () => delegate.readAllBytes(),
+    available: () => delegate.available(),
+    skip: (count) => delegate.skip(count),
+    skipNBytes: (count) => delegate.skipNBytes(count),
+    transferTo: (output) => delegate.transferTo(output),
+    mark: () => delegate.mark(),
+    reset: () => delegate.reset(),
+    markSupported: () => delegate.markSupported(),
+    close: () => delegate.close(),
+  }
+}
 const legadoGzipInputStream = function(input) { return legadoCompressedInputStream(input, "gzip-decode") }
 const legadoInflaterInputStream = function(input) { return legadoCompressedInputStream(input, "inflate-decode") }
 const legadoZipInputStream = function(input) {
@@ -1130,9 +1209,12 @@ const legadoZipInputStream = function(input) {
     getNextEntry: nextEntry,
     closeEntry: () => { ensureOpen(); delegate?.close?.(); delegate = undefined; return undefined },
     read: (...args) => { ensureOpen(); return delegate === undefined ? -1 : delegate.read(...args) },
+    readNBytes: (...args) => { ensureOpen(); return delegate === undefined ? args.length === 0 ? new Uint8Array() : 0 : delegate.readNBytes(...args) },
     readAllBytes: () => { ensureOpen(); return delegate === undefined ? new Uint8Array() : delegate.readAllBytes() },
     available: () => { ensureOpen(); return delegate?.available?.() ?? 0 },
     skip: (count) => { ensureOpen(); return delegate?.skip?.(count) ?? 0 },
+    skipNBytes: (count) => { ensureOpen(); return delegate?.skipNBytes?.(count) ?? (Number(count) === 0 ? undefined : (() => { throw new Error("EOF while skipping bytes") })()) },
+    transferTo: (output) => { ensureOpen(); return delegate?.transferTo?.(output) ?? 0 },
     mark: () => undefined,
     reset: () => { throw new Error("ZipInputStream does not support mark/reset") },
     markSupported: () => false,
@@ -1140,26 +1222,106 @@ const legadoZipInputStream = function(input) {
   }
 }
 const legadoByteArrayOutputStream = function(initial) {
+  const capacity = initial === undefined ? 32 : Number(initial)
+  if (!Number.isInteger(capacity) || capacity < 0) throw new RangeError("ByteArrayOutputStream size must be non-negative")
   let chunks = []
+  let total = 0
+  const append = (bytes) => { if (total + bytes.length > 16 * 1024 * 1024) throw new RangeError("ByteArrayOutputStream exceeds runtime limit"); if (bytes.length > 0) { chunks.push(bytes.slice()); total += bytes.length } }
+  const bytesFromCharset = (charset) => charset === undefined || charset === null ? "UTF-8" : typeof charset === "object" && typeof charset.name === "function" ? String(charset.name()) : String(charset)
   const api = {
-    write: (value, offset, length) => { const bytes = legadoBytesValue(value); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("OutputStream write range out of bounds"); chunks.push(bytes.slice(start, start + count)); return undefined },
+    write: function(value, offset, length) {
+      if (typeof value === "number" && arguments.length === 1) { append(Uint8Array.of(Number(value) & 255)); return undefined }
+      const bytes = legadoBytesValue(value)
+      const start = offset === undefined ? 0 : Number(offset)
+      const count = length === undefined ? bytes.length - start : Number(length)
+      if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("OutputStream write range out of bounds")
+      append(bytes.slice(start, start + count))
+      return undefined
+    },
+    writeBytes: (value) => { api.write(value); return undefined },
+    writeTo: (output) => { if (output === null || typeof output?.write !== "function") throw new TypeError("OutputStream is required"); output.write(api.toByteArray()); return undefined },
     toByteArray: () => legadoConcatBytes(chunks),
-    size: () => chunks.reduce((sum, item) => sum + item.length, 0),
-    reset: () => { chunks = [] },
+    size: () => total,
+    reset: () => { chunks = []; total = 0 },
     close: () => undefined,
     flush: () => undefined,
-    toString: (charset) => request({ kind: "decode-bytes", value: api.toByteArray(), charset: charset === undefined ? "UTF-8" : String(charset) }),
+    toString: (charset) => request({ kind: "decode-bytes", value: api.toByteArray(), charset: bytesFromCharset(charset) }),
   }
-  if (initial !== undefined) api.write(initial)
   return api
 }
+const legadoReaderCharset = (charset) => charset === undefined || charset === null ? "UTF-8" : typeof charset === "object" && typeof charset.name === "function" ? String(charset.name()) : String(charset)
+const legadoCharsToString = (chars) => { let result = ""; for (let index = 0; index < chars.length; index += 8192) result += String.fromCharCode(...chars.slice(index, index + 8192)); return result }
 const legadoInputStreamReader = function(input, charset) {
   const bytes = legadoBytesValue(input?.readAllBytes?.() ?? input)
-  const text = request({ kind: "decode-bytes", value: bytes, charset: charset === undefined ? "UTF-8" : String(charset) })
+  const text = request({ kind: "decode-bytes", value: bytes, charset: legadoReaderCharset(charset) })
   let cursor = 0
-  return { read: function(target, offset, length) { if (arguments.length === 0) return cursor < text.length ? text.charCodeAt(cursor++) : -1; const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? target.length - start : Number(length); if (!Array.isArray(target) && !ArrayBuffer.isView(target)) throw new TypeError("Reader target must be an array"); if (count === 0) return 0; const available = Math.min(count, text.length - cursor); if (available <= 0) return -1; for (let index = 0; index < available; index++) target[start + index] = text.charCodeAt(cursor + index); cursor += available; return available }, readAll: () => { const result = text.slice(cursor); cursor = text.length; return result }, close: () => undefined }
+  let closed = false
+  const ensureOpen = () => { if (closed) throw new Error("Reader is closed") }
+  const readInto = (target, targetOffset, count, eofValue) => {
+    const size = target !== null && target !== undefined && (Array.isArray(target) || ArrayBuffer.isView(target)) ? target.length : -1
+    const start = targetOffset === undefined ? 0 : Number(targetOffset)
+    const amount = count === undefined ? size - start : Number(count)
+    if (size < 0 || !Number.isInteger(start) || !Number.isInteger(amount) || start < 0 || amount < 0 || start + amount > size) throw new RangeError("Reader read range out of bounds")
+    if (amount === 0) return 0
+    const available = Math.min(amount, text.length - cursor)
+    if (available <= 0) return eofValue
+    for (let index = 0; index < available; index++) target[start + index] = text.charCodeAt(cursor + index)
+    cursor += available
+    return available
+  }
+  const api = {
+    read: function(target, targetOffset, count) { ensureOpen(); if (arguments.length === 0) return cursor < text.length ? text.charCodeAt(cursor++) : -1; return readInto(target, targetOffset, count, -1) },
+    readAll: () => { ensureOpen(); const result = text.slice(cursor); cursor = text.length; return result },
+    skip: (count) => { ensureOpen(); const amount = Math.max(0, Math.min(text.length - cursor, Math.trunc(Number(count) || 0))); cursor += amount; return amount },
+    ready: () => { ensureOpen(); return cursor < text.length },
+    markSupported: () => false,
+    mark: () => { throw new Error("InputStreamReader does not support mark/reset") },
+    reset: () => { throw new Error("InputStreamReader does not support mark/reset") },
+    close: () => { if (!closed) { closed = true; input?.close?.() } },
+  }
+  return api
 }
-const legadoBufferedReader = function(reader) { return { readLine: () => { const chars = []; while (true) { const code = reader.read(); if (code < 0) return chars.length === 0 ? null : String.fromCharCode(...chars); if (code === 10) return String.fromCharCode(...chars); if (code !== 13) chars.push(code); if (chars.length >= 1048576) return String.fromCharCode(...chars) } }, read: (...args) => reader.read(...args), close: () => reader.close?.() } }
+const legadoBufferedReader = function(reader) {
+  let pendingCode
+  let closed = false
+  const ensureOpen = () => { if (closed) throw new Error("BufferedReader is closed") }
+  const nextCode = () => { if (pendingCode !== undefined) { const code = pendingCode; pendingCode = undefined; return code } return reader.read() }
+  const readLine = () => {
+    ensureOpen()
+    const chars = []
+    while (true) {
+      const code = nextCode()
+      if (code < 0) return chars.length === 0 ? null : legadoCharsToString(chars)
+      if (code === 10) return legadoCharsToString(chars)
+      if (code === 13) { const next = nextCode(); if (next >= 0 && next !== 10) pendingCode = next; return legadoCharsToString(chars) }
+      chars.push(code)
+      if (chars.length >= 1048576) return legadoCharsToString(chars)
+    }
+  }
+  const api = {
+    readLine,
+    read: function(target, targetOffset, count) {
+      ensureOpen()
+      if (arguments.length === 0) return nextCode()
+      const size = target !== null && target !== undefined && (Array.isArray(target) || ArrayBuffer.isView(target)) ? target.length : -1
+      const start = targetOffset === undefined ? 0 : Number(targetOffset)
+      const amount = count === undefined ? size - start : Number(count)
+      if (size < 0 || !Number.isInteger(start) || !Number.isInteger(amount) || start < 0 || amount < 0 || start + amount > size) throw new RangeError("BufferedReader read range out of bounds")
+      if (amount === 0) return 0
+      let index = 0
+      while (index < amount) { const code = nextCode(); if (code < 0) break; target[start + index] = code; index += 1 }
+      return index === 0 ? -1 : index
+    },
+    skip: (count) => { ensureOpen(); const amount = Math.max(0, Math.trunc(Number(count) || 0)); let skipped = 0; while (skipped < amount && nextCode() >= 0) skipped += 1; return skipped },
+    ready: () => { ensureOpen(); return pendingCode !== undefined || reader.ready?.() === true },
+    markSupported: () => reader.markSupported?.() === true,
+    mark: (limit) => { ensureOpen(); if (pendingCode !== undefined) throw new Error("BufferedReader pending line terminator cannot be marked"); reader.mark?.(limit) },
+    reset: () => { ensureOpen(); pendingCode = undefined; if (typeof reader.reset !== "function") throw new Error("BufferedReader does not support reset"); return reader.reset() },
+    lines: () => { const values = []; let line; while ((line = readLine()) !== null) values.push(line); return legadoList(values) },
+    close: () => { if (!closed) { closed = true; reader.close?.() } },
+  }
+  return api
+}
 const legadoSecretKeySpec = function(value, algorithm) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); return { getEncoded: () => bytes, getKey: () => bytes, getAlgorithm: () => String(algorithm ?? ""), getFormat: () => "RAW", encoded: bytes } }
 const legadoIvParameterSpec = function(value, offset, length) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("IvParameterSpec range out of bounds"); const result = bytes.slice(start, start + count); return { getIV: () => result, getEncoded: () => result } }
 const legadoDesKeySpec = function(value, offset) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); const start = offset === undefined ? 0 : Number(offset); if (!Number.isInteger(start) || start < 0 || start + 8 > bytes.length) throw new RangeError("DESKeySpec range out of bounds"); const result = bytes.slice(start, start + 8); return { getKey: () => result } }

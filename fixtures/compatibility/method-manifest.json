@@ -4378,7 +4378,11 @@
         "StringBuilder.codePointCount/offsetByCodePoints",
         "StringBuilder.getChars",
         "StringBuilder.substring/subSequence",
-        "StringBuilder.capacity/ensureCapacity/trimToSize"
+        "StringBuilder.capacity/ensureCapacity/trimToSize",
+        "ByteArrayInputStream(byte[],int,int)/readNBytes/skipNBytes/transferTo",
+        "ByteArrayOutputStream.write(int)/writeBytes/writeTo",
+        "InputStreamReader.read/skip/ready",
+        "BufferedReader.readLine/read/skip/lines"
       ],
       "tsPaths": [
         "packages/source-core/src/rules/source-runtime.ts",
@@ -4757,6 +4761,78 @@
           "signature": "int capacity(); void ensureCapacity(int); void trimToSize()",
           "parameters": [],
           "returnType": "int/void",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::021-bytearrayinputstream-overloads",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "ByteArrayInputStream(byte[],int,int)/readNBytes/skipNBytes/transferTo",
+          "signature": "ByteArrayInputStream(byte[],int,int); int readNBytes(byte[],int,int); void skipNBytes(long); long transferTo(OutputStream)",
+          "parameters": [],
+          "returnType": "ByteArrayInputStream/int/void/long",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::022-bytearrayoutputstream-overloads",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "ByteArrayOutputStream.write(int)/writeBytes/writeTo",
+          "signature": "void write(int); void writeBytes(byte[]); void writeTo(OutputStream)",
+          "parameters": [],
+          "returnType": "void",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::023-inputstreamreader-overloads",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "InputStreamReader.read/skip/ready",
+          "signature": "int read(char[],int,int); long skip(long); boolean ready()",
+          "parameters": [],
+          "returnType": "int/long/boolean",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::024-bufferedreader-overloads",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "BufferedReader.readLine/read/skip/lines",
+          "signature": "String readLine(); int read(char[],int,int); long skip(long); Stream<String> lines()",
+          "parameters": [],
+          "returnType": "String/int/long/Stream",
           "implementation": "simulated",
           "verification": "ts-passed",
           "feasibility": "simulatable",
@@ -5743,5 +5819,5 @@
       ]
     }
   ],
-  "memberCount": 248
+  "memberCount": 252
 }
