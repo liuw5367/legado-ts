@@ -96,6 +96,22 @@ test('JavaImporter、Packages、Map/List 和 Java String 常见用法可运行',
   assert.deepEqual(JSON.parse(String(result.value)), { digest: [16, 32], text: 'oo', map: ['alice', 'reader', 2], list: ['b', 2], response: ['https://fixture.invalid', 'body', 200] })
 })
 
+test('Packages StrResponse 构造对象同时支持 Android 方法和属性序列化', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, `@js:
+    var response = Packages.io.legado.app.help.http.StrResponse('https://fixture.invalid/book', 'body');
+    JSON.stringify({ methods: [response.url(), response.body(), response.code(), response.headers().names(), response.raw().request().url(), response.callTime(), response.errorBody(), response.toString()], properties: [response.url, response.body, response.code, response.status] });`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    methods: ['https://fixture.invalid/book', 'body', 200, [], 'https://fixture.invalid/book', 0, null, '200 OK'],
+    properties: ['https://fixture.invalid/book', 'body', 200, 200],
+  })
+
+  const returned = await evaluate(host, `@js:Packages.io.legado.app.help.http.StrResponse('https://fixture.invalid/returned', 'returned')`, '')
+  assert.equal(returned.status, 'success', returned.message)
+  assert.deepEqual(returned.value, { url: 'https://fixture.invalid/returned', body: 'returned', status: 200, code: 200, headers: {} })
+})
+
 test('纯 Java 类族保持 UTF-16、精确数值、增量摘要和字节流语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang, Packages.java.math, Packages.java.security, Packages.javax.crypto, Packages.javax.crypto.spec, Packages.javax.xml.bind, Packages.java.io);

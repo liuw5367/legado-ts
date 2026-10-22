@@ -36,6 +36,24 @@ export function encodeJavaScriptValue(value: unknown): string {
     if (existingId !== undefined) return { t: 'ref', v: existingId }
     const id = String(nextId++)
     seen.set(object, id)
+    if ((current as { __legadoResponseType?: unknown }).__legadoResponseType === 'StrResponse') {
+      const response = current as Record<string, unknown>
+      const read = (name: string, fallback: unknown) => {
+        const item = response[name]
+        if (typeof item === 'function') return item()
+        return item === undefined ? fallback : item
+      }
+      const dto: Record<string, unknown> = {
+        url: read('url', ''),
+        body: read('body', null),
+        status: read('status', read('code', 200)),
+        code: read('code', read('status', 200)),
+        headers: read('headers', {}),
+      }
+      const properties: Record<string, EncodedValue> = {}
+      for (const [key, item] of Object.entries(dto)) Object.defineProperty(properties, key, { value: encode(item), enumerable: true, writable: true, configurable: true })
+      return { t: 'object', id, v: properties }
+    }
     if (Array.isArray(current)) return { t: 'array', id, v: current.map((item) => encode(item)) }
     const properties: Record<string, EncodedValue> = {}
     for (const key of Object.keys(current)) Object.defineProperty(properties, key, { value: encode((current as Record<string, unknown>)[key]), enumerable: true, writable: true, configurable: true })
@@ -159,6 +177,23 @@ export const guestCodecSource = String.raw`(() => {
       if (references.has(value)) return { t: 'ref', v: references.get(value) }
       const id = String(nextId++)
       references.set(value, id)
+      if (value.__legadoResponseType === 'StrResponse') {
+        const read = (name, fallback) => {
+          const item = value[name]
+          if (typeof item === 'function') return item()
+          return item === undefined ? fallback : item
+        }
+        const dto = {
+          url: read('url', ''),
+          body: read('body', null),
+          status: read('status', read('code', 200)),
+          code: read('code', read('status', 200)),
+          headers: read('headers', {}),
+        }
+        const result = {}
+        for (const key of Object.keys(dto)) Object.defineProperty(result, key, { value: visit(dto[key]), enumerable: true, writable: true, configurable: true })
+        return { t: 'object', id, v: result }
+      }
       if (Array.isArray(value)) return { t: 'array', id, v: value.map(visit) }
       const result = {}
       for (const key of Object.keys(value)) Object.defineProperty(result, key, { value: visit(value[key]), enumerable: true, writable: true, configurable: true })
