@@ -192,6 +192,26 @@ test('Node session preserves networkOptions defaultUserAgent through the source 
   assert.equal(defaultUserAgent, 'platform-UA')
 })
 
+test('Node session 可以用 platformOptions 装配稳定设备值和阅读配置', async () => {
+  const session = createNodeSourceSession({ ...baseSource, jsLib: '' } as NormalizedSource, {
+    platformOptions: { deviceSeed: 'platform-options-test', appVariant: 'fixture', readBookConfig: { reverseToc: true }, themeMode: 'dark' },
+  })
+  const result = await session.run((ports) => ports.rules.evaluate({
+    source: session.source,
+    stage: 'search',
+    field: 'platform',
+    rule: '@js:JSON.stringify([java.androidId(), java.deviceID(), java.getAppVariant(), java.getReadBookConfigMap().reverseToc, java.getThemeMode()])',
+    content: '',
+  }))
+  assert.equal(result.status, 'success', result.message)
+  const values = JSON.parse(String(result.value)) as unknown[]
+  assert.equal(values[0], values[1])
+  assert.equal(values[2], 'fixture')
+  assert.equal(values[3], true)
+  assert.equal(values[4], 'dark')
+  session.close()
+})
+
 test('Node session uses the Android baseline User-Agent when no override is supplied', async () => {
   const session = createNodeSourceSession(baseSource)
   const defaultUserAgent = await session.run(async (ports) => ports.network.defaultUserAgent)

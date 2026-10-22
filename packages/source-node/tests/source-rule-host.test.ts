@@ -838,6 +838,22 @@ test('Node 时间格式桥接不把 SimpleDateFormat 未知字母静默当作字
   assert.equal(result.value, null)
 })
 
+test('Node 日期格式处理引号、locale、时区和周年份边界', async () => {
+  const host = new SourceRuleHost({ locale: 'en-US', timeZone: 'Asia/Shanghai' })
+  const result = await evaluate(host, `@js:JSON.stringify([
+    java.timeFormatUTC(Date.UTC(2018, 11, 31), "YYYY-w 'at' HH 'o''clock'", 0),
+    java.timeFormatUTC(0, "MMMM EEEE", 0),
+    java.timeFormat(0),
+    java.timeFormatUTC(0, "XXXX", 0)
+  ])`, '')
+  assert.equal(result.status, 'success', result.message)
+  const values = JSON.parse(String(result.value)) as string[]
+  assert.equal(values[0], '2019-1 at 00 o\'clock')
+  assert.equal(values[1], 'January Thursday')
+  assert.equal(values[2], '1970/01/01 08:00')
+  assert.equal(values[3], null)
+})
+
 test('source、book、chapter 变量分别写入所属 DTO，通用读取遵循 chapter 优先级', async () => {
   const host = new SourceRuleHost()
   host.setVariable('bookName', '错误的来源书名')

@@ -9,6 +9,7 @@ import { SourceRuleHost } from './source-rule-host.ts'
 import { NodeSourceFileHost } from './source-file-host.ts'
 import { NodeSourceConcurrency } from './source-concurrency.ts'
 import { NodeSourceRuntimePlatform } from './runtime-platform.ts'
+import type { NodeSourceRuntimePlatformOptions } from './runtime-platform.ts'
 
 export interface NodeSourceSessionOptions {
   network?: NetworkHost
@@ -23,6 +24,8 @@ export interface NodeSourceSessionOptions {
   sourceConcurrency?: SourceRuntimeConcurrency
   /** Application/platform bridge for Android JsExtensions outside pure core. */
   platform?: import('@legado/source-core').SourceRuntimePlatform
+  /** Convenience options for the built-in Node platform bridge; ignored when platform is supplied. */
+  platformOptions?: NodeSourceRuntimePlatformOptions
   /** 书源相对文件路径所在的受控缓存目录；缺省为系统临时目录下的 legado-source-cache。 */
   fileRoot?: string
   /** 从 Web/宿主恢复的源级字符串、登录和缓存状态。 */
@@ -63,7 +66,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
   const restoredLoginHeaders = runtimeState?.loginHeaders?.[sourceKey]
   const restoredLoginInfos = runtimeState?.loginInfos?.[sourceKey]
   const sourceConcurrency = options.sourceConcurrency ?? new NodeSourceConcurrency()
-  const platform = options.platform ?? new NodeSourceRuntimePlatform()
+  const platform = options.platform ?? new NodeSourceRuntimePlatform(options.platformOptions)
   if (restoredLoginHeaders !== undefined) loginHeaders.set(sourceKey, restoredLoginHeaders)
   if (restoredLoginInfos !== undefined) loginInfos.set(sourceKey, restoredLoginInfos)
   const cache = options.cache ?? new MemorySourceScriptCache()
