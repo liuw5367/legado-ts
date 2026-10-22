@@ -32,6 +32,7 @@ test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
   assert.equal(document.select('p.book:gt(-1)').length, 3)
   assert.equal(document.select('p:containsOwn(中)').length, 1)
   assert.equal(document.select('p:matchesOwn(/^中/u)').length, 1)
+  assert.equal(document.select('p:matchesOwn((?i)^前$)').length, 1)
   assert.equal(document.read(document.select('main')[0]!, 'text'), '前甲 中乙 后丙')
 })
 

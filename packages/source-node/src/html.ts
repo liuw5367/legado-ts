@@ -173,9 +173,15 @@ function pseudoNumber(value: string | null | undefined): number {
 }
 
 function pseudoRegex(value: string | null | undefined): RegExp {
-  const text = (value ?? '').trim()
-  const literal = /^\/(.*)\/([dgimsuvy]*)$/su.exec(text)
-  try { return literal === null ? new RegExp(text) : new RegExp(literal[1]!, literal[2]) } catch { throw new Error(`invalid pseudo regex: ${text}`) }
+  let source = (value ?? '').trim()
+  const quoted = /^(?:"([\s\S]*)"|'([\s\S]*)')$/u.exec(source)
+  if (quoted !== null) source = quoted[1] ?? quoted[2] ?? ''
+  const literal = /^\/((?:\\.|[^/\\])*)\/([dgimsuvy]*)$/su.exec(source)
+  const compiled = literal === null
+    ? compileSourcePattern(source)
+    : compileSourcePattern(literal[1]!, { flags: literal[2] ?? '' })
+  if ('error' in compiled) throw new ParserAdapterError('unsupported-selector', `CSS 文本正则不受支持：${compiled.error.message}`)
+  return compiled.regex
 }
 
 const htmlPseudos: Record<string, (element: AnyNode, value?: string | null) => boolean> = {
