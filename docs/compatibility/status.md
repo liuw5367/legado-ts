@@ -16,6 +16,8 @@
 
 ## 实现、验证和可行性分别记录
 
+本轮逐方法族的机器清单位于 [`fixtures/compatibility/method-manifest.json`](../../fixtures/compatibility/method-manifest.json)，其结构由同目录 `schema.json` 和 `packages/source-core/tests/compatibility-manifest.test.ts` 校验。清单只登记书源 runtime、请求处理和真实宿主边界；reader-web/reader-cli 页面交互不属于 Android 书源兼容证据。
+
 上表及“当前状态”列是历史汇总标签，不能用一个标签同时推断实现程度、是否验证和能否修复。尤其是“未实现”不等于“无法实现”，“已实现”不等于“与 Android 等价”，“未验证”也不等于“无法确定接口契约”。后续逐签名记录必须分开填写下列维度；复核中尚未证明的内容不能自动归为可修复。
 
 | 维度 | 状态 | 判定规则 |
