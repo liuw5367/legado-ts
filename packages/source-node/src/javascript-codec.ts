@@ -26,7 +26,12 @@ export function encodeJavaScriptValue(value: unknown): string {
       return current
     }
     if (typeof current === 'bigint') return { t: 'bigint', v: current.toString() }
-    if (typeof current === 'function' || typeof current === 'symbol') throw new JavaScriptSerializationError(`unsupported value type: ${typeof current}`)
+    if (typeof current === 'function') {
+      const callable = current as (() => unknown) & { __legadoCallableResponse?: unknown; __legadoCallableValue?: unknown }
+      if (callable.__legadoCallableResponse === true) return encode(callable.__legadoCallableValue)
+      throw new JavaScriptSerializationError('unsupported value type: function')
+    }
+    if (typeof current === 'symbol') throw new JavaScriptSerializationError('unsupported value type: symbol')
     if (current instanceof Date) return { t: 'date', v: current.toISOString() }
     if (current instanceof Uint8Array) return { t: 'bytes', v: Array.from(current) }
     if (current instanceof ArrayBuffer) return { t: 'bytes', v: Array.from(new Uint8Array(current)) }
@@ -170,7 +175,11 @@ export const guestCodecSource = String.raw`(() => {
         return value
       }
       if (typeof value === 'bigint') return { t: 'bigint', v: value.toString() }
-      if (typeof value === 'function' || typeof value === 'symbol') throw new Error('__LEGADO_SERIALIZATION__ unsupported value type')
+      if (typeof value === 'function') {
+        if (value.__legadoCallableResponse === true) return visit(value.__legadoCallableValue)
+        throw new Error('__LEGADO_SERIALIZATION__ unsupported value type')
+      }
+      if (typeof value === 'symbol') throw new Error('__LEGADO_SERIALIZATION__ unsupported value type')
       if (value instanceof Date) return { t: 'date', v: value.toISOString() }
       if (value instanceof Uint8Array) return { t: 'bytes', v: Array.from(value) }
       if (value instanceof Map || value instanceof Set) throw new Error('__LEGADO_SERIALIZATION__ Map and Set values are not supported')

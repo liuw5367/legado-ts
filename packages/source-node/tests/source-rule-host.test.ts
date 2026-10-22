@@ -1075,6 +1075,39 @@ test('网络响应桥接保留字节、字符集和 Headers/Raw 方法', async (
   assert.equal(result.value, '6|utf-8|text/plain; charset=utf-8|https://b.test/|https://a.test|Partial Content')
 })
 
+test('网络响应 Headers 对齐 OkHttp 的重复值、索引、映射和敏感头脱敏', async () => {
+  const host = new SourceRuleHost({ request: async (input) => ({
+    body: 'headers-body',
+    status: 206,
+    statusMessage: 'Partial Content',
+    headers: {
+      'X-Test': ['first', 'second'],
+      Authorization: 'secret',
+      Zed: 'last',
+    },
+    url: String(input.url),
+    requestUrl: String(input.url),
+    requestHeaders: { 'X-Test': ['request-first', 'request-second'] },
+  }) })
+  const result = await evaluate(host, '@js:var response = java.get("https://a.test", {}); var headers = response.headers(); var raw = response.raw(); JSON.stringify({ status: response.status, get: headers.get("x-test"), header: response.header("x-test"), absent: headers.get("missing"), values: headers.values("X-TEST"), names: headers.names().toArray(), size: headers.size(), first: [headers.name(0), headers.value(0)], multimap: headers.toMultimap(), byteCount: headers.byteCount(), text: headers.toString(), rawHeaders: raw.headers().get("x-test"), requestHeaders: raw.request().headers().get("x-test") })', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    status: 206,
+    get: 'second',
+    header: 'first,second',
+    absent: null,
+    values: ['first', 'second'],
+    names: ['Authorization', 'X-Test', 'Zed'],
+    size: 4,
+    first: ['X-Test', 'first'],
+    multimap: { authorization: ['secret'], 'x-test': ['first', 'second'], zed: ['last'] },
+    byteCount: 57,
+    text: 'X-Test: first\nX-Test: second\nAuthorization: ██\nZed: last\n',
+    rawHeaders: 'second',
+    requestHeaders: 'request-second',
+  })
+})
+
 test('AnalyzeUrl getResponse/getStrResponse 提供教程常用响应成员', async () => {
   const calls: unknown[] = []
   const host = new SourceRuleHost({ request: async (input) => {
@@ -1085,12 +1118,12 @@ test('AnalyzeUrl getResponse/getStrResponse 提供教程常用响应成员', asy
     source,
     stage: 'search',
     field: 'fixture',
-    rule: '@js:var response = java.getResponse(); var stringResponse = java.getStrResponse(); JSON.stringify([response.body(), response.code(), response.headers().get("x-test"), Array.from(response.bodyAsBytes()), response.errorBody(), response.callTime(), response.raw().request().url(), stringResponse.toString()])',
+    rule: '@js:var response = java.getResponse(); var stringResponse = java.getStrResponse(); JSON.stringify([response.body(), response.code(), response.headers().get("x-test"), Array.from(response.bodyAsBytes()), response.errorBody(), response.callTime(), response.raw().request().url(), stringResponse.body(), stringResponse.code(), stringResponse.headers().get("x-test"), stringResponse.url(), stringResponse.callTime(), stringResponse.raw().headers().get("x-test"), stringResponse.body, stringResponse.toString()])',
     content: '',
     bindings: { __legadoUrlContext: { url: 'https://a.test/', headerMap: {} } },
   })
   assert.equal(result.status, 'success', result.message)
-  assert.deepEqual(JSON.parse(String(result.value)), ['url-body', 418, 'yes', [114, 97, 119], 'teapot', 12, 'https://a.test/', '418 I\'m a teapot'])
+  assert.deepEqual(JSON.parse(String(result.value)), ['url-body', 418, 'yes', [114, 97, 119], 'teapot', 12, 'https://a.test/', 'url-body', 418, 'yes', 'https://b.test/', 12, 'yes', 'url-body', '418 I\'m a teapot'])
   assert.deepEqual(calls, [
     { kind: 'url-context-response', input: { url: 'https://a.test/', headers: {}, body: undefined, method: undefined, options: undefined, baseUrl: undefined, redirectUrl: undefined, responseKind: 'response', jsStr: undefined, sourceRegex: undefined, useWebView: true }, stage: 'search' },
     { kind: 'url-context-response', input: { url: 'https://a.test/', headers: {}, body: undefined, method: undefined, options: undefined, baseUrl: undefined, redirectUrl: undefined, responseKind: 'string', jsStr: undefined, sourceRegex: undefined, useWebView: true }, stage: 'search' },
