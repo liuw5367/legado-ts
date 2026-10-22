@@ -180,9 +180,10 @@ function pseudoRegex(value: string | null | undefined): RegExp {
 
 const htmlPseudos: Record<string, (element: AnyNode, value?: string | null) => boolean> = {
   // Jsoup 的 eq/lt/gt 使用元素在同级元素中的 0 基索引，不使用筛选结果集合索引。
-  eq: (element, value) => { const index = elementSiblingIndex(element); const expected = pseudoNumber(value); return index === (expected < 0 ? index + 1 + expected : expected) },
-  lt: (element, value) => { const index = elementSiblingIndex(element); const expected = pseudoNumber(value); return index < (expected < 0 ? index + 1 + expected : expected) },
-  gt: (element, value) => { const index = elementSiblingIndex(element); const expected = pseudoNumber(value); return index > (expected < 0 ? index + 1 + expected : expected) },
+  // Jsoup 不把负数转换为“倒数索引”；负数只会产生自然的空/全匹配结果。
+  eq: (element, value) => elementSiblingIndex(element) === pseudoNumber(value),
+  lt: (element, value) => elementSiblingIndex(element) < pseudoNumber(value),
+  gt: (element, value) => elementSiblingIndex(element) > pseudoNumber(value),
   containsown: (element, value) => ownTextValue(element).includes(value ?? ''),
   matchesown: (element, value) => pseudoRegex(value).test(ownTextValue(element)),
   matches: (element, value) => pseudoRegex(value).test(jsoupText(element)),

@@ -190,9 +190,10 @@ function xmlPseudoRegex(value: string | null | undefined): RegExp {
 }
 
 const xmlPseudos: Record<string, (element: XmlNode, value?: string | null) => boolean> = {
-  legadoeq: (element, value) => { const index = xmlSiblingIndex(element); const expected = xmlPseudoNumber(value); return index === (expected < 0 ? index + 1 + expected : expected) },
-  legadolt: (element, value) => { const index = xmlSiblingIndex(element); const expected = xmlPseudoNumber(value); return index < (expected < 0 ? index + 1 + expected : expected) },
-  legadogt: (element, value) => { const index = xmlSiblingIndex(element); const expected = xmlPseudoNumber(value); return index > (expected < 0 ? index + 1 + expected : expected) },
+  // 与 Jsoup Evaluator.Index* 一致：负数不表示从末尾倒数。
+  legadoeq: (element, value) => xmlSiblingIndex(element) === xmlPseudoNumber(value),
+  legadolt: (element, value) => xmlSiblingIndex(element) < xmlPseudoNumber(value),
+  legadogt: (element, value) => xmlSiblingIndex(element) > xmlPseudoNumber(value),
   legadocontainsown: (element, value) => {
     const own = childNodes(element).filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').join('')
     return normalizeXmlText(own).includes(value ?? '')
