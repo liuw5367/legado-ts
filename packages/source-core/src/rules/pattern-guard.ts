@@ -31,6 +31,7 @@ interface ScopedPatternMode {
   ignoreCase: boolean
   multiline: boolean
   dotAll: boolean
+  extended: boolean
 }
 
 interface ScopedFlagGroup {
@@ -111,15 +112,22 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     const enabled = inline[1] ?? ''
     const disabled = inline[2] ?? ''
     for (const flag of `${enabled}${disabled}`) {
-      if (!'imsuU'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
+      if (!'imsuxU'.includes(flag)) return { error: { code: 'unsupported-pattern', message: `Java 正则内联 flag ${flag} 暂不支持` } }
     }
     flags = applyInlineFlags(flags, enabled, true)
     flags = applyInlineFlags(flags, disabled, false)
+    const extended = applyInlineExtended(false, enabled, true)
+    const finalExtended = applyInlineExtended(extended, disabled, false)
+    const scoped = translateScopedFlags(source, flags, finalExtended)
+    if ('error' in scoped) return scoped
+    source = scoped.pattern
+    flags = scoped.flags
+  } else {
+    const scoped = translateScopedFlags(source, flags, false)
+    if ('error' in scoped) return scoped
+    source = scoped.pattern
+    flags = scoped.flags
   }
-  const scoped = translateScopedFlags(source, flags)
-  if ('error' in scoped) return scoped
-  source = scoped.pattern
-  flags = scoped.flags
   source = source.replace(/\\R/gu, '(?:\\r\\n|[\\n\\r\\u2028\\u2029])').replace(/\\A/gu, '^').replace(/\\[zZ]/gu, '$')
   const intersections = translateJavaCharacterClassIntersections(source)
   if ('error' in intersections) return intersections
@@ -148,25 +156,26 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
 
 /**
  * Java 的 `(?im-s:...)` 是局部作用域，而 ECMAScript 只有整条正则的 flags。
- * 对常见的 i/m/s 做词法展开，保留 `(?-i:...)` 这类书源写法；不能安全展开的
- * x/d/u/U 作用域继续明确返回能力错误，避免把局部语义错误地扩大到整条正则。
+ * 对常见的 i/m/s/x 做词法展开，保留 `(?-i:...)` 这类书源写法；不能安全展开的
+ * d/u/U 作用域继续明确返回能力错误，避免把局部语义错误地扩大到整条正则。
  */
-function translateScopedFlags(source: string, inputFlags: string): { pattern: string; flags: string } | { error: SourcePatternError } {
+function translateScopedFlags(source: string, inputFlags: string, initialExtended: boolean): { pattern: string; flags: string } | { error: SourcePatternError } {
   const first = findScopedFlagGroup(source, 0)
-  if (first === undefined) return { pattern: source, flags: inputFlags }
-  const unsupported = `${first.enabled}${first.disabled}`.split('').find((flag) => !'ims'.includes(flag))
+  if (first === undefined && !initialExtended) return { pattern: source, flags: inputFlags }
+  const unsupported = first === undefined ? undefined : `${first.enabled}${first.disabled}`.split('').find((flag) => !'imsx'.includes(flag))
   if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
   const mode: ScopedPatternMode = {
     ignoreCase: inputFlags.includes('i'),
     multiline: inputFlags.includes('m'),
     dotAll: inputFlags.includes('s'),
+    extended: initialExtended,
   }
-  const translated = translateScopedSegment(source, 0, source.length, mode)
+  const translated = translateScopedSegment(source, 0, source.length, mode, false)
   if ('error' in translated) return translated
   return { pattern: translated.pattern, flags: inputFlags.replace(/[ims]/gu, '') }
 }
 
-function translateScopedSegment(source: string, start: number, end: number, mode: ScopedPatternMode): { pattern: string } | { error: SourcePatternError } {
+function translateScopedSegment(source: string, start: number, end: number, mode: ScopedPatternMode, groupContent: boolean): { pattern: string } | { error: SourcePatternError } {
   let output = ''
   let index = start
   while (index < end) {
@@ -182,7 +191,7 @@ function translateScopedSegment(source: string, start: number, end: number, mode
     if (scoped !== undefined && scoped.start === index && scoped.end < end) {
       const nestedMode = applyScopedFlagMode(mode, scoped.enabled, scoped.disabled)
       if ('error' in nestedMode) return nestedMode
-      const inner = translateScopedSegment(source, scoped.contentStart, scoped.end, nestedMode.mode)
+      const inner = translateScopedSegment(source, scoped.contentStart, scoped.end, nestedMode.mode, true)
       if ('error' in inner) return inner
       output += `(?:${inner.pattern})`
       index = scoped.end + 1
@@ -199,8 +208,20 @@ function translateScopedSegment(source: string, start: number, end: number, mode
       const classEnd = findCharacterClassEnd(source, index)
       if (classEnd < 0 || classEnd >= end) return { error: { code: 'invalid-pattern', message: 'Java 正则字符类括号不匹配' } }
       const raw = source.slice(index, classEnd + 1)
-      output += mode.ignoreCase ? foldCharacterClass(raw) : raw
+      const normalizedClass = mode.extended ? stripJavaExtendedCharacterClass(raw) : { pattern: raw }
+      if ('error' in normalizedClass) return normalizedClass
+      const classPattern = normalizedClass.pattern
+      output += mode.ignoreCase ? foldCharacterClass(classPattern) : classPattern
       index = classEnd + 1
+      continue
+    }
+    if (mode.extended && isJavaPatternWhitespace(current)) {
+      index += 1
+      continue
+    }
+    if (mode.extended && current === '#') {
+      while (index < end && source[index] !== '\n' && source[index] !== '\r') index += 1
+      if (groupContent && index >= end) return { error: { code: 'invalid-pattern', message: 'Java 正则 COMMENTS 注释吞掉了分组结束符' } }
       continue
     }
     if (current === '^' && mode.multiline) {
@@ -302,20 +323,65 @@ function findGroupEnd(source: string, contentStart: number): number {
 }
 
 function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled: string): { mode: ScopedPatternMode } | { error: SourcePatternError } {
-  const unsupported = `${enabled}${disabled}`.split('').find((flag) => !'ims'.includes(flag))
+  const unsupported = `${enabled}${disabled}`.split('').find((flag) => !'imsx'.includes(flag))
   if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
   const next = { ...mode }
   for (const flag of enabled) {
     if (flag === 'i') next.ignoreCase = true
     if (flag === 'm') next.multiline = true
     if (flag === 's') next.dotAll = true
+    if (flag === 'x') next.extended = true
   }
   for (const flag of disabled) {
     if (flag === 'i') next.ignoreCase = false
     if (flag === 'm') next.multiline = false
     if (flag === 's') next.dotAll = false
+    if (flag === 'x') next.extended = false
   }
   return { mode: next }
+}
+
+function applyInlineExtended(current: boolean, flags: string, enable: boolean): boolean {
+  let result = current
+  for (const flag of flags) if (flag === 'x') result = enable
+  return result
+}
+
+function isJavaPatternWhitespace(value: string): boolean {
+  return /[ \t\n\x0B\f\r]/u.test(value)
+}
+
+function stripJavaExtendedCharacterClass(raw: string): { pattern: string } | { error: SourcePatternError } {
+  let output = '['
+  for (let index = 1; index < raw.length - 1;) {
+    const current = raw[index]!
+    if (current === '\\') {
+      output += raw.slice(index, Math.min(raw.length - 1, index + 2))
+      index += 2
+      continue
+    }
+    if (current === '[') {
+      const end = findCharacterClassEnd(raw, index)
+      if (end < 0 || end >= raw.length - 1) return { error: { code: 'invalid-pattern', message: 'Java 正则字符类括号不匹配' } }
+      const nested = stripJavaExtendedCharacterClass(raw.slice(index, end + 1))
+      if ('error' in nested) return nested
+      output += nested.pattern
+      index = end + 1
+      continue
+    }
+    if (isJavaPatternWhitespace(current)) {
+      index += 1
+      continue
+    }
+    if (current === '#') {
+      while (index < raw.length - 1 && raw[index] !== '\n' && raw[index] !== '\r') index += 1
+      if (index >= raw.length - 1) return { error: { code: 'invalid-pattern', message: 'Java 正则 COMMENTS 注释吞掉了字符类结束符' } }
+      continue
+    }
+    output += current
+    index += 1
+  }
+  return { pattern: `${output}]` }
 }
 
 function foldEscapedLiteral(source: string, index: number, end: number, ignoreCase: boolean): { text: string; next: number } {
@@ -500,6 +566,7 @@ function convertCharacterClassIntersection(raw: string): { pattern: string } | {
 function applyInlineFlags(current: string, flags: string, enable: boolean): string {
   let result = current
   for (const flag of flags) {
+    if (flag === 'x') continue
     if (flag === 'U') {
       if (enable && !result.includes('u')) result += 'u'
       if (!enable) result = result.replace('u', '')

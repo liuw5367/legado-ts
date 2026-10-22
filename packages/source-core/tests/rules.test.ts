@@ -182,8 +182,38 @@ test('Java 正则作用域 flags 展开 i/m/s 并保留嵌套禁用语义', () =
   assert.ok('regex' in nested)
   assert.equal('regex' in nested ? nested.regex.test('ABCD\n') : false, true)
 
-  const unsupportedScoped = compileSourcePattern('(?x: a )', { flags: '' })
-  assert.equal('error' in unsupportedScoped ? unsupportedScoped.error.code : 'regex', 'unsupported-pattern')
+  const unsupportedScoped = compileSourcePattern('(?x:^ a $)', { flags: '' })
+  assert.equal('error' in unsupportedScoped ? unsupportedScoped.error.code : 'regex', 'regex')
+  assert.equal('regex' in unsupportedScoped ? unsupportedScoped.regex.test('a') : false, true)
+  assert.equal('regex' in unsupportedScoped ? unsupportedScoped.regex.test(' a ') : true, false)
+
+  const comments = compileSourcePattern('(?x:a # ignored\n b)', { flags: '' })
+  assert.ok('regex' in comments)
+  assert.equal('regex' in comments ? comments.regex.test('ab') : false, true)
+  const swallowedGroup = compileSourcePattern('(?x:a# ignored)', { flags: '' })
+  assert.equal('error' in swallowedGroup ? swallowedGroup.error.code : 'regex', 'invalid-pattern')
+
+  const globalComments = compileSourcePattern('(?x)^ a # ignored\n b $', { flags: '' })
+  assert.ok('regex' in globalComments)
+  assert.equal('regex' in globalComments ? globalComments.regex.test('ab') : false, true)
+
+  const classComments = compileSourcePattern('(?x:[a # ignored\n b])', { flags: '' })
+  assert.ok('regex' in classComments)
+  assert.equal('regex' in classComments ? classComments.regex.test('a') : false, true)
+  assert.equal('regex' in classComments ? classComments.regex.test('b') : false, true)
+  assert.equal('regex' in classComments ? classComments.regex.test(' ') : true, false)
+
+  const escaped = compileSourcePattern('(?x:a\\ b\\#c)', { flags: '' })
+  assert.ok('regex' in escaped)
+  assert.equal('regex' in escaped ? escaped.regex.test('a b#c') : false, true)
+
+  const disabled = compileSourcePattern('(?x:a(?-x: b )c)', { flags: '' })
+  assert.ok('regex' in disabled)
+  assert.equal('regex' in disabled ? disabled.regex.test('a b c') : false, true)
+  assert.equal('regex' in disabled ? disabled.regex.test('abc') : true, false)
+
+  const unsupportedScopedFlag = compileSourcePattern('(?d: a )', { flags: '' })
+  assert.equal('error' in unsupportedScopedFlag ? unsupportedScopedFlag.error.code : 'regex', 'unsupported-pattern')
 })
 
 test('非法规则、取消和预算耗尽均有可判别结果', () => {
