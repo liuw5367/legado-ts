@@ -3,6 +3,7 @@ import { selectAll } from 'css-select'
 import fontoxpath from 'fontoxpath'
 import { parseDocument } from 'htmlparser2'
 import { render } from 'dom-serializer'
+import { compileSourcePattern, ParserAdapterError } from '@legado/source-core'
 import type { HtmlDocument, ParserNode, ParserNodeInfo, ParserNodeMutation, RuleValue, XPathParser } from '@legado/source-core'
 
 const { evaluateXPath, ReturnType } = fontoxpath
@@ -46,7 +47,14 @@ class XmlDocumentView implements HtmlDocument {
   }
 
   public select(selector: string): ParserNode[] {
-    return selectAll<XmlNode, XmlNode>(selector, this.root, { adapter: cssAdapter }).map((node) => this.wrap(node))
+    try {
+      const normalized = normalizeXmlSelector(selector)
+      return selectAll<XmlNode, XmlNode>(normalized.selector, this.root, { adapter: cssAdapter, xmlMode: true, pseudos: normalized.pseudos }).map((node) => this.wrap(node))
+    } catch (error) {
+      if (error instanceof ParserAdapterError) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      throw new ParserAdapterError('unsupported-selector', `XML CSS 选择器不受支持：${message}`, { cause: error })
+    }
   }
 
   public children(): ParserNode[] {
@@ -157,6 +165,114 @@ function normalizeXmlText(value: string): string {
   return trimAndroidWhitespace(value.replace(/[\s\u00a0]+/gu, ' '))
 }
 
+function xmlSiblingIndex(node: XmlNode): number {
+  const parent = node.parentNode
+  if (parent === null || parent === undefined) return -1
+  return childNodes(parent).filter((item) => item.nodeType === 1).indexOf(node)
+}
+
+function xmlPseudoNumber(value: string | null | undefined): number {
+  const number = Number.parseInt(value ?? '', 10)
+  if (!Number.isSafeInteger(number)) throw new Error(`invalid pseudo index: ${value ?? ''}`)
+  return number
+}
+
+function xmlPseudoRegex(value: string | null | undefined): RegExp {
+  let source = (value ?? '').trim()
+  const quoted = /^(?:"([\s\S]*)"|'([\s\S]*)')$/u.exec(source)
+  if (quoted !== null) source = quoted[1] ?? quoted[2] ?? ''
+  const literal = /^\/((?:\\.|[^/\\])*)\/([dgimsuvy]*)$/su.exec(source)
+  const compiled = literal === null
+    ? compileSourcePattern(source)
+    : compileSourcePattern(literal[1]!, { flags: literal[2] ?? '' })
+  if ('error' in compiled) throw new ParserAdapterError('unsupported-selector', `XML CSS 文本正则不受支持：${compiled.error.message}`)
+  return compiled.regex
+}
+
+const xmlPseudos: Record<string, (element: XmlNode, value?: string | null) => boolean> = {
+  legadoeq: (element, value) => { const index = xmlSiblingIndex(element); const expected = xmlPseudoNumber(value); return index === (expected < 0 ? index + 1 + expected : expected) },
+  legadolt: (element, value) => { const index = xmlSiblingIndex(element); const expected = xmlPseudoNumber(value); return index < (expected < 0 ? index + 1 + expected : expected) },
+  legadogt: (element, value) => { const index = xmlSiblingIndex(element); const expected = xmlPseudoNumber(value); return index > (expected < 0 ? index + 1 + expected : expected) },
+  legadocontainsown: (element, value) => {
+    const own = childNodes(element).filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').join('')
+    return normalizeXmlText(own).includes(value ?? '')
+  },
+  legadomatchesown: (element, value) => {
+    const own = childNodes(element).filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').join('')
+    return xmlPseudoRegex(value).test(normalizeXmlText(own))
+  },
+  legadomatches: (element, value) => xmlPseudoRegex(value).test(normalizeXmlText(element.textContent ?? '')),
+}
+
+interface NormalizedXmlSelector {
+  selector: string
+  pseudos: Record<string, (element: XmlNode, value?: string | null) => boolean>
+}
+
+function normalizeXmlSelector(selector: string): NormalizedXmlSelector {
+  const dynamic: Record<string, (element: XmlNode, value?: string | null) => boolean> = {}
+  let output = ''
+  let index = 0
+  let sequence = 0
+  while (index < selector.length) {
+    const pseudo = /^:(containsown|matchesown|matches|eq|lt|gt)\(/iu.exec(selector.slice(index))
+    if (pseudo !== null) {
+      output += `:legado${pseudo[1]!.toLowerCase()}(`
+      index += pseudo[0].length
+      continue
+    }
+    if (selector[index] === '[') {
+      const end = findXmlSelectorBracketEnd(selector, index)
+      if (end !== undefined) {
+        const body = selector.slice(index + 1, end)
+        const attribute = /^\s*([A-Za-z_$][\w$:-]*)\s*~=\s*([\s\S]+?)\s*$/u.exec(body)
+        if (attribute !== null) {
+          const name = `legadoxmlattrregex${sequence++}`
+          const attributeName = attribute[1]!
+          const regex = xmlPseudoRegex(attribute[2]!)
+          dynamic[name] = (element) => {
+            const value = attributeValue(element, attributeName)
+            if (value === undefined) return false
+            regex.lastIndex = 0
+            return regex.test(value)
+          }
+          output += `:${name}`
+          index = end + 1
+          continue
+        }
+        output += selector.slice(index, end + 1)
+        index = end + 1
+        continue
+      }
+    }
+    output += selector[index]!
+    index += 1
+  }
+  return { selector: output, pseudos: { ...xmlPseudos, ...dynamic } }
+}
+
+function findXmlSelectorBracketEnd(selector: string, start: number): number | undefined {
+  let quote: 'single' | 'double' | null = null
+  let escaped = false
+  let nested = 0
+  for (let index = start + 1; index < selector.length; index += 1) {
+    const current = selector[index]!
+    if (escaped) { escaped = false; continue }
+    if (current === '\\') { escaped = true; continue }
+    if (quote !== null) {
+      if (current === quote) quote = null
+      continue
+    }
+    if (current === '"' || current === "'") { quote = current === '"' ? 'double' : 'single'; continue }
+    if (current === '[') { nested += 1; continue }
+    if (current === ']') {
+      if (nested > 0) nested -= 1
+      else return index
+    }
+  }
+  return undefined
+}
+
 export class XPathParserAdapter implements XPathParser {
   public parse(input: string): XmlDocumentView {
     // Android's XPath parser uses Jsoup for HTML and XML only for an XML declaration.
@@ -212,7 +328,7 @@ function childNodes(value: XmlNode): XmlNode[] {
 function attributeValue(node: XmlNode, name: string): string | undefined {
   for (let index = 0; index < (node.attributes?.length ?? 0); index += 1) {
     const attribute = node.attributes?.item(index)
-    if (attribute?.name.toLowerCase() === name.toLowerCase()) return attribute.value
+    if (attribute?.name === name) return attribute.value
   }
   return undefined
 }

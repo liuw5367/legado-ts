@@ -121,7 +121,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`、`@CSS` 元素选择、字符串终端输出和模式前缀大小写不敏感 |
 | `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出、文本/属性正则选择器 |
 | `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
-| `SCH-004` | 规则 | `@XPath`、XML 声明、表格片段补容器、节点/字符串/空结果归一化 |
+| `SCH-004` | 规则 | `@XPath`、XML 声明、大小写敏感 CSS/属性、`eq/containsOwn/matchesOwn` 伪类、表格片段补容器、节点/字符串/空结果归一化 |
 | `SCH-005` | 规则 | `@Json`、自动 JSON、对象/数组/标量、嵌套插值和非法 JSONPath |
 | `SCH-006` | 规则 | `&&`、`\|\|`、`%%` 在括号、引号、JSONPath、CSS 属性和代码中的平衡切分 |
 | `SCH-007` | 规则 | 全规则 Regex、`$1` 捕获组、`##match##replace`、首个替换和非法正则回退 |

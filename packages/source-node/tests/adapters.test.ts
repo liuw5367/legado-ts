@@ -183,6 +183,26 @@ test('XPath adapter 返回 XML 节点结果', () => {
   assert.equal(document.children().length, 1)
 })
 
+test('XPath XML 属性名保持大小写敏感', () => {
+  const parser = new XPathParserAdapter()
+  const document = parser.parse('<?xml version="1.0"?><root><item ID="upper" id="lower">A</item></root>')
+  const node = (parser.evaluate(document, '//item') as ParserNode[])[0]!
+  assert.equal(document.attr(node, 'ID'), 'upper')
+  assert.equal(document.attr(node, 'id'), 'lower')
+  assert.equal(document.select('[ID="upper"]').length, 1)
+  assert.equal(document.select('[id="lower"]').length, 1)
+  assert.equal(document.select('[id="upper"]').length, 0)
+})
+
+test('XPath XML 文档的 CSS 选择器保留 Jsoup 常用位置和文本伪类', () => {
+  const parser = new XPathParserAdapter()
+  const document = parser.parse('<?xml version="1.0"?><root><item>A<b>甲</b></item><item>B<b>乙</b></item></root>')
+  assert.equal(document.select('item:eq(1)').length, 1)
+  assert.equal(document.select('item:containsOwn(B)').length, 1)
+  assert.equal(document.select('item:matchesOwn(/^B/u)').length, 1)
+  assert.equal(document.select('item:matches(/乙/)').length, 1)
+})
+
 test('XPath adapter 先修复常见 HTML，再返回可继续查询的节点', () => {
   const parser = new XPathParserAdapter()
   const document = parser.parse('<ul><li class=chapter href=/c/1><a>第一章</a><img src=x><li class=chapter href=/c/2>第二章</ul>')
