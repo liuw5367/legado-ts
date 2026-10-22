@@ -86,6 +86,15 @@ test('宽松 JSON 只在字符串外处理注释、尾逗号和单引号转义',
   assert.equal(Object.prototype.hasOwnProperty.call(Object.prototype, 'polluted'), false)
   assert.deepEqual(parsed.__proto__, { polluted: true })
   assert.deepEqual(parsed.constructor, { safe: true })
+
+  const textWithSyntax = parseRelaxedJson(String.raw`{
+    text: "literal ,} {raw: value} // keep",
+    nested: '{notAKey: 1,}',
+  }`) as Record<string, unknown>
+  assert.deepEqual(textWithSyntax, {
+    text: 'literal ,} {raw: value} // keep',
+    nested: '{notAKey: 1,}',
+  })
 })
 
 test('未修改 JSON/JavaScript 候选逐字导出', async () => {

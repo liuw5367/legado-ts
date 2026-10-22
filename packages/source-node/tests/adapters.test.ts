@@ -107,6 +107,19 @@ test('JSONPath adapter 转换 Jayway 过滤运算并拒绝无法安全降级的�
     () => parser.evaluate(value, '$.items[?(@.tags subsetof [{"value":1}])].value'),
     (error: unknown) => error instanceof Error && 'code' in error && error.code === 'unsupported-jsonpath',
   )
+
+  const typed = {
+    items: [
+      { value: 'number', tags: [1] },
+      { value: 'duplicate-number', tags: [1, 1] },
+      { value: 'string', tags: ['1'] },
+      { value: 'mixed', tags: [1, '1'] },
+      { value: 'empty', tags: [] },
+    ],
+  }
+  assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof [1])].value'), ['number', 'duplicate-number', 'empty'])
+  assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof ["1"])].value'), ['string', 'empty'])
+  assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof [1,"1"])].value'), ['number', 'duplicate-number', 'string', 'mixed', 'empty'])
 })
 
 test('JSONPath adapter 不执行条件表达式中的原生构造器', () => {

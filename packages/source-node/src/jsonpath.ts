@@ -7,12 +7,12 @@ export class JsonPathParserAdapter implements JsonPathParser {
       const normalized = normalizeJaywayExpression(expression)
       const functionCall = /^(.*)\.(length|size|keys|min|max|avg|sum)\(\)$/su.exec(normalized)
       if (functionCall !== null) {
-        const values = JSONPath({ path: functionCall[1]!, json: value as never, wrap: true, eval: 'safe' }) as unknown
+        const values = JSONPath({ path: functionCall[1]!, json: value as never, wrap: true, eval: 'safe', sandbox: jsonPathSandbox as never }) as unknown
         return [applyJsonPathFunction(functionCall[2]!, values)] as RuleValue
       }
       // Android's Jayway JsonPath evaluates filter predicates. jsonpath-plus' safe
       // evaluator provides the same expression subset without enabling native JS.
-      const result = JSONPath({ path: normalized, json: value as never, wrap: true, eval: 'safe' }) as unknown
+      const result = JSONPath({ path: normalized, json: value as never, wrap: true, eval: 'safe', sandbox: jsonPathSandbox as never }) as unknown
       return result === undefined ? [] : result as RuleValue
     } catch (error) {
       if (error instanceof ParserAdapterError) throw error
@@ -20,6 +20,13 @@ export class JsonPathParserAdapter implements JsonPathParser {
       throw new ParserAdapterError('unsupported-jsonpath', `JSONPath 规则不受支持：${message}`, { cause: error })
     }
   }
+}
+
+const jsonPathSandbox = {
+  __legadoSubsetof(left: unknown, right: unknown): boolean {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false
+    return left.every((item) => right.some((candidate) => candidate === item))
+  },
 }
 
 /** 将 Jayway 的正则匹配运算转换为 safe evaluator 支持的 RegExp.test 调用。 */
@@ -73,21 +80,13 @@ function normalizeJaywayFilterOperators(expression: string): string {
   return output
 }
 
-/** 对小型原始值集合展开所有子集，避免把任意回调函数暴露给 safe evaluator。 */
+/** 将有限原始值集合交给受控 sandbox，保留 Jayway 的集合/类型语义。 */
 function subsetExpression(left: string, right: string): string | undefined {
   const items = parseJsonPathLiteralArray(right)
-  if (items === undefined || items.length > 8) return undefined
+  if (items === undefined) return undefined
   const values = items.map((item) => JSON.parse(item) as unknown)
   if (values.some((item) => item === null || typeof item === 'object' || typeof item === 'function')) return undefined
-  const separator = '\u0000'
-  if (values.some((item) => typeof item === 'string' && item.includes(separator))) return undefined
-  const combinations: string[] = []
-  for (let mask = 0; mask < 2 ** values.length; mask += 1) {
-    const selected = values.filter((_item, index) => (mask & (1 << index)) !== 0).map(String).sort()
-    const key = JSON.stringify(selected.join(separator))
-    combinations.push(`(${left}.length == ${selected.length} && ${left}.slice().sort().join(${JSON.stringify(separator)}) == ${key})`)
-  }
-  return `(${left} != null && (${combinations.join(' || ')}))`
+  return `__legadoSubsetof(${left},${right})`
 }
 
 function parseJsonPathLiteralArray(value: string): string[] | undefined {

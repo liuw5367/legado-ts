@@ -16,7 +16,7 @@
 
 ## 实现、验证和可行性分别记录
 
-本轮逐方法族的机器清单位于 [`fixtures/compatibility/method-manifest.json`](../../fixtures/compatibility/method-manifest.json)，其结构由同目录 `schema.json` 和 `packages/source-core/tests/compatibility-manifest.test.ts` 校验。清单只登记书源 runtime、请求处理和真实宿主边界；reader-web/reader-cli 页面交互不属于 Android 书源兼容证据。
+本轮逐方法族的机器清单位于 [`fixtures/compatibility/method-manifest.json`](../../fixtures/compatibility/method-manifest.json)，当前 version 2 清单包含 `memberCount` 和逐成员状态；其结构由同目录 `schema.json` 和 `packages/source-core/tests/compatibility-manifest.test.ts` 校验。清单只登记书源 runtime、请求处理和真实宿主边界；reader-web/reader-cli 页面交互不属于 Android 书源兼容证据。
 
 `discoverBooks`/`searchBooks` 现在可在 `RuntimeResult.observations` 返回脱敏的请求与跳过轨迹，阶段包括 `planned`、`requested`、`response-received`、`parsed-empty`、`success`、`failed`、`capability-missing`、`cancelled` 和 `skipped`。声明式主请求、`mainJs` 的 `java.ajax`/`java.get` 等 bridge 子请求、URL/header/body 脚本的嵌套请求都沿同一调用链传递观测器；每个真实网络请求单独记录，避免把 JS 书源误报为“没有请求”。它只回答请求是否发出、响应是否收到和规则结果处于哪一阶段，不改变页面展示，也不把 Android golden 缺失标为通过；回归入口为 `packages/source-core/tests/runtime-observations.test.ts` 和 `packages/source-node/tests/source-session.test.ts`。
 
@@ -85,7 +85,7 @@
 | D17 | JS 源行为差异 | JS 详情 `updateTime` 扩展字段 | 有意保留 | [差异登记](known-divergences.md)，D17；`workflows.test.ts` | Android 当前 marshaller 不接收该字段；TypeScript 保留已有字段并按允许差异处理 |
 | D18 | 规则解析 | Jsoup 扩展选择器 | 部分实现（第三阶段 A） | [重新核对](known-divergences.md#android-与教程重新核对2026-10-21)，D18；`html.ts` 将 XML 模式传给 css-select，保留 `eq/lt/gt/containsOwn/matchesOwn`，无效选择器统一返回 `unsupported-selector`；`packages/source-node/tests/adapters.test.ts` 有回归 | 常用位置/文本伪类和 XML 大小写已补；完整 Jsoup 版本、畸形 HTML 和 Android golden 仍待验证 |
 | D19 | 规则解析 | HTML text/ownText/html/属性输出 | 部分实现（第三阶段 A） | D19；`html.ts` 保留 Jsoup 风格空白、块节点分隔、script/style 排除和 HTML/XML 序列化；Node adapter 回归通过 | `text/ownText/textNodes/html/all` 常用语义已覆盖；HTML 修复算法、属性去重和 Android golden 仍待验证 |
-| D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现（第三阶段 A） | D20；`jsonpath.ts` 支持聚合函数、正则筛选及 `in/nin/size/empty/anyof/noneof` 的安全转换；`subsetof` 和解析异常返回稳定 `unsupported-jsonpath`；Node adapter 回归通过 | 完整 Jayway 函数、null/缺失、确定/不确定路径和嵌套集合仍需 Android golden；不支持语法不再静默为空 |
+| D20 | 规则解析 | Jayway JSONPath 方言 | 部分实现（第三阶段 A） | D20；`jsonpath.ts` 支持聚合函数、正则筛选及 `in/nin/size/empty/anyof/noneof` 的安全转换；原始值 `subsetof` 使用受控 sandbox 保留类型和重复元素的集合语义，复杂集合和解析异常返回稳定 `unsupported-jsonpath`；Node adapter 回归通过 | 完整 Jayway 函数、null/缺失、确定/不确定路径和嵌套集合仍需 Android golden；不支持语法不再静默为空 |
 | D21 | 规则解析 | Java 正则、String/Matcher 重载与替换语义 | 部分实现（第三阶段 A + 3B） | D21；`pattern-guard.ts` 负责 Java Pattern 转换和安全诊断；QuickJS bridge 已补 Java String 的 split/limit、replaceAll/replaceFirst、matches/compareTo/regionMatches，StringBuilder、Pattern/Matcher、Integer/Number 与 Base64 受控对象；66 条 Node 书源式回归通过 | 作用域 flags、字符类交集、部分字符转义、Matcher 替换字符串细节和 Android golden 仍待验证；安全长度/复杂度限制继续保留 |
 | D22 | 请求脚本 | AnalyzeUrl 对象修改、响应包装与登录后重取 | 部分实现（第四阶段） | `java.url`/`headerMap`、`getHeaderMap`、`initUrl`、受控 `getStrResponse/getResponse` 已接入 URL 脚本上下文；响应对象补 `bytes/bodyAsBytes/errorBody/callTime/raw/headers` 等教程常用成员；Node fixture 验证重取顺序和头部 | WebView 默认路径仍能力缺失；完整 loginCheckJs 人工登录重取、递归/取消/Android golden 仍待验证 |
 | D23 | JS bridge | AnalyzeRule 继承成员和重载 | 部分实现（第三阶段，重载语义已补齐） | `source-runtime.ts` 已补 setContent/baseUrl/redirectUrl、setLocal/evalJS、刷新助手、`getString(rule, boolean)`、`getString(rule, content, isUrl)`、`getStringList(rule, content, isUrl)`；null 内容回退、null setContent 诊断、HTML unescape、URL 解析/空值回退和列表去重均有 Node 回归 | AnalyzeUrl 专属上下文仍单列于 D22；Android golden、全部规则对象/列表重载仍待双端逐签名验证 |
@@ -103,7 +103,7 @@
 | D35 | 字体对象 | 本地文件输入及 QueryTTF 公开对象 | 部分实现（第三阶段，3D 已补格式诊断） | 字体对象补 getGlyfById/unicodeToGlyph/glyphToUnicode/unicodeToGlyphId；文件路径下载复用源请求链；TTF/TrueType sfnt 正常解析，WOFF/WOFF2/CFF/TTC 与非法 glyph 输入分成 capability/invalid 诊断 | CFF/WOFF 实体解析、缺失 glyph 的 Android 返回值和 golden 仍待验证；当前不把格式错误降级成空字体 |
 | D36 | 工具函数 | 日期格式和繁简词库 | 部分实现（第三阶段，3D 已补非法格式守卫） | Node 日期格式补 D/w/W/F/k/K/z/G 常用 token；固定 UTC/locale 回归继续通过；未知 SimpleDateFormat 字母不再静默输出字面量，而是返回空结果 | SimpleDateFormat 全量 token、设备 locale/时区、引号和繁简词库版本仍待 Android golden；空结果是受控差异，不等同 Android 异常文本 |
 | D37 | 宿主值 | 设备替代值和阅读/主题配置注入 | 部分实现 | 差异登记 D37；getWebViewUA 已有默认字符串 | 账号内稳定标识与真实应用设置映射；明确物理设备不等价 |
-| D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退只处理字符串外注释、单引号、未引号键和尾逗号；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
+| D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（第三阶段） | jsLib 按源指纹恢复可序列化全局状态，`refreshJSLib` 清除状态并有跨执行回归；函数/闭包/宿主对象不进入快照 | 并发、取消、跨进程和非序列化对象生命周期仍需明确边界 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（第一阶段） | 差异登记 D40；游标签名加入发现代次，刷新后旧游标有回归测试 | 动态 URL/infoMap 摘要、迟到请求写回和多实例组合仍需验证 |
 | D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 138/138、根全套 `pnpm test` 558/558；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |

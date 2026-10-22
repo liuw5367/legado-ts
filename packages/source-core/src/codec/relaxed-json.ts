@@ -18,14 +18,17 @@ export function normalizeRelaxedJson(input: string): string {
     const next = input[index + 1]
     if (quote === 'double') {
       result += current
-      if (escaped) escaped = false
+      if (escaped) {
+        if (!isJsonEscape(current)) result += `\\${current}`
+        escaped = false
+      }
       else if (current === '\\') escaped = true
       else if (current === '"') quote = null
       continue
     }
     if (quote === 'single') {
       if (escaped) {
-        result += current === '"' ? '\\"' : current === '\\' || current === "'" ? current : `\\${current}`
+        result += current === '"' ? '\\"' : current === '\\' || current === "'" ? current : isJsonEscape(current) ? `\\${current}` : `\\\\${current}`
         escaped = false
       } else if (current === '\\') {
         escaped = true
@@ -54,9 +57,58 @@ export function normalizeRelaxedJson(input: string): string {
     }
     result += current
   }
-  result = result.replace(/([{,]\s*)([A-Za-z_$][\w$-]*)\s*:/gu, '$1"$2":')
-  result = result.replace(/,\s*([}\]])/gu, '$1')
-  // 单引号字符串里的未知反斜杠不是 JSON 转义；补成字面反斜杠，避免 c\\d 变成非法 JSON。
-  result = result.replace(/\\(?!["\\/bfnrtu])/gu, '\\\\')
-  return result
+
+  // 只在字符串外处理未加引号的键和尾逗号，避免修改字符串中的 `{x: 1}`、`,}` 等文本。
+  let normalized = ''
+  quote = null
+  escaped = false
+  for (let index = 0; index < result.length; index += 1) {
+    const current = result[index]!
+    const next = result[index + 1]
+    if (quote === 'double') {
+      normalized += current
+      if (escaped) escaped = false
+      else if (current === '\\') escaped = true
+      else if (current === '"') quote = null
+      continue
+    }
+    if (current === '"') {
+      quote = 'double'
+      normalized += current
+      continue
+    }
+    if (current === ',' && next !== undefined) {
+      let lookahead = index + 1
+      while (/\s/u.test(result[lookahead] ?? '')) lookahead += 1
+      if (result[lookahead] === '}' || result[lookahead] === ']') {
+        index = lookahead - 1
+        continue
+      }
+    }
+    if (isIdentifierStart(current)) {
+      let end = index + 1
+      while (isIdentifierPart(result[end] ?? '')) end += 1
+      let lookahead = end
+      while (/\s/u.test(result[lookahead] ?? '')) lookahead += 1
+      if (result[lookahead] === ':') {
+        normalized += JSON.stringify(result.slice(index, end))
+        index = end - 1
+        continue
+      }
+    }
+    normalized += current
+  }
+  return normalized
+}
+
+function isJsonEscape(value: string | undefined): boolean {
+  return value !== undefined && /["\\/bfnrtu]/u.test(value)
+}
+
+function isIdentifierStart(value: string | undefined): boolean {
+  return value !== undefined && /[$_\p{L}]/u.test(value)
+}
+
+function isIdentifierPart(value: string | undefined): boolean {
+  return value !== undefined && /[-_$\u200c\u200d\p{L}\p{N}]/u.test(value)
 }
