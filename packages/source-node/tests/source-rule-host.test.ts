@@ -451,6 +451,32 @@ test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', a
   })
 })
 
+test('StringBuilder 支持字符数组、code point、范围和容量重载', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.StringBuilder);
+    with (importer) {
+      var builder = new StringBuilder(2);
+      builder.append([65, 66, 67], 1, 2).appendCodePoint(0x1f600);
+      var chars = ['', '', '']; builder.getChars(1, 3, chars, 0);
+      var original = builder.toString();
+      var ranges = [builder.codePointAt(2), builder.codePointBefore(4), builder.codePointCount(0, 4), builder.offsetByCodePoints(0, 2), builder.substring(1, 3), builder.subSequence(0, 2)];
+      builder.insert(1, 'X'); var setResult = builder.setCharAt(0, 'Z'); builder.replace(1, 2, 'Y');
+      var capacity = [builder.capacity(), builder.ensureCapacity(10), builder.capacity()]; builder.trimToSize();
+      var zeroBuilder = new StringBuilder(); zeroBuilder.setLength(2);
+      JSON.stringify({ original: original, chars: chars, ranges: ranges, updated: builder.toString(), setResult: setResult === undefined, capacity: capacity.concat(builder.capacity()), zeroes: zeroBuilder.toString() });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    original: 'BC😀',
+    chars: ['C', '\ud83d', ''],
+    ranges: [0x1f600, 0x1f600, 3, 2, 'C\ud83d', 'BC'],
+    updated: 'ZYC😀',
+    setResult: true,
+    capacity: [6, null, 14, 5],
+    zeroes: '\u0000\u0000',
+  })
+})
+
 test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.util.regex.Pattern, Packages.java.util.regex.Matcher);

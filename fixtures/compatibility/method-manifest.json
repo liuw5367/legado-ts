@@ -4367,7 +4367,18 @@
         "java.net.URL",
         "java.io.ByteArrayInputStream",
         "Pattern",
-        "Matcher"
+        "Matcher",
+        "StringBuilder(int/String)",
+        "StringBuilder.append(char[],int,int)",
+        "StringBuilder.appendCodePoint",
+        "StringBuilder.insert(int,char[],int,int)",
+        "StringBuilder.setCharAt",
+        "StringBuilder.replace",
+        "StringBuilder.codePointAt/codePointBefore",
+        "StringBuilder.codePointCount/offsetByCodePoints",
+        "StringBuilder.getChars",
+        "StringBuilder.substring/subSequence",
+        "StringBuilder.capacity/ensureCapacity/trimToSize"
       ],
       "tsPaths": [
         "packages/source-core/src/rules/source-runtime.ts",
@@ -4557,6 +4568,204 @@
           "errorCodes": [
             "unsupported-java-class",
             "unsupported-java-interface"
+          ]
+        },
+        {
+          "id": "java-importer-classes::010-stringbuilder-constructor",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder(int/String)",
+          "signature": "StringBuilder(); StringBuilder(int); StringBuilder(String)",
+          "parameters": [],
+          "returnType": "StringBuilder",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::011-stringbuilder-append-char-array",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.append(char[],int,int)",
+          "signature": "StringBuilder.append(char[],int,int)",
+          "parameters": [],
+          "returnType": "StringBuilder",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::012-stringbuilder-append-codepoint",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.appendCodePoint",
+          "signature": "StringBuilder.appendCodePoint(int)",
+          "parameters": [],
+          "returnType": "StringBuilder",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::013-stringbuilder-insert-char-array",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.insert(int,char[],int,int)",
+          "signature": "StringBuilder.insert(int,char[],int,int)",
+          "parameters": [],
+          "returnType": "StringBuilder",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::014-stringbuilder-setcharat",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.setCharAt",
+          "signature": "void setCharAt(int,char)",
+          "parameters": [],
+          "returnType": "void",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::015-stringbuilder-replace",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.replace",
+          "signature": "StringBuilder.replace(int,int,String)",
+          "parameters": [],
+          "returnType": "StringBuilder",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::016-stringbuilder-codepoint",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.codePointAt/codePointBefore",
+          "signature": "int codePointAt(int); int codePointBefore(int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::017-stringbuilder-codepoint-range",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.codePointCount/offsetByCodePoints",
+          "signature": "int codePointCount(int,int); int offsetByCodePoints(int,int)",
+          "parameters": [],
+          "returnType": "int",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::018-stringbuilder-getchars",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.getChars",
+          "signature": "void getChars(int,int,char[],int)",
+          "parameters": [],
+          "returnType": "void",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::019-stringbuilder-substring",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.substring/subSequence",
+          "signature": "String substring(int,int); CharSequence subSequence(int,int)",
+          "parameters": [],
+          "returnType": "String/CharSequence",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::020-stringbuilder-capacity",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "StringBuilder.capacity/ensureCapacity/trimToSize",
+          "signature": "int capacity(); void ensureCapacity(int); void trimToSize()",
+          "parameters": [],
+          "returnType": "int/void",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-005"
+          ],
+          "errorCodes": [
+            "rule-failed"
           ]
         }
       ]
@@ -5534,5 +5743,5 @@
       ]
     }
   ],
-  "memberCount": 237
+  "memberCount": 248
 }

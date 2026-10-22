@@ -848,21 +848,36 @@ Object.assign(legadoJavaLangString, {
   format: (formatOrLocale, ...args) => { const localeTag = formatOrLocale !== null && formatOrLocale !== undefined ? formatOrLocale.__legadoLocale : undefined; const locale = localeTag === undefined ? undefined : String(localeTag); const format = locale === undefined ? formatOrLocale : args.shift(); return legadoJavaString(legadoJavaFormat(format, args, locale)) },
 })
 const legadoStringBuilder = function(initial) {
-  let value = initial === undefined ? "" : String(initial)
-  let capacity = Math.max(16, value.length)
+  let value = typeof initial === "number" ? "" : initial === undefined ? "" : String(initial)
+  let capacity = typeof initial === "number" ? Number(initial) : initial === undefined ? 16 : value.length + 16
+  if (!Number.isInteger(capacity) || capacity < 0) throw new RangeError("StringBuilder capacity out of bounds")
+  const budget = 16 * 1024 * 1024
+  const textOf = (item, offset, length) => Array.isArray(item) || (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(item)) ? legadoJavaCharArrayText(item, offset, length) : item === null || item === undefined ? "null" : String(item)
+  const update = (next) => { if (next.length > budget) throw new RangeError("StringBuilder exceeds runtime limit"); if (next.length > capacity) capacity = Math.max(next.length, capacity * 2 + 2); value = next; return target }
   const target = {
-    append: (item) => { value += String(item ?? "null"); capacity = Math.max(capacity, value.length); return target },
-    insert: (index, item) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position > value.length) throw new RangeError("StringBuilder index out of bounds"); value = value.slice(0, position) + String(item ?? "null") + value.slice(position); capacity = Math.max(capacity, value.length); return target },
-    delete: (start, end) => { const from = Number(start); const to = Number(end); if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > value.length) throw new RangeError("StringBuilder index out of bounds"); value = value.slice(0, from) + value.slice(to); return target },
+    append: function(item, offset, length) { return update(value + textOf(item, offset, length)) },
+    appendCodePoint: (codePoint) => { const point = Number(codePoint); if (!Number.isInteger(point) || point < 0 || point > 0x10ffff) throw new RangeError("StringBuilder code point out of bounds"); return update(value + String.fromCodePoint(point)) },
+    insert: (index, item, offset, length) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position > value.length) throw new RangeError("StringBuilder index out of bounds"); return update(value.slice(0, position) + textOf(item, offset, length) + value.slice(position)) },
+    delete: (start, end) => { const from = Number(start); const to = Number(end); if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > value.length) throw new RangeError("StringBuilder index out of bounds"); return update(value.slice(0, from) + value.slice(to)) },
     deleteCharAt: (index) => target.delete(index, Number(index) + 1),
-    charAt: (index) => value.charAt(Number(index)),
+    replace: (start, end, replacement) => { const from = Number(start); const to = Number(end); if (replacement === null || replacement === undefined || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > value.length) throw new RangeError("StringBuilder replacement out of bounds"); return update(value.slice(0, from) + String(replacement) + value.slice(to)) },
+    charAt: (index) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= value.length) throw new RangeError("StringBuilder index out of bounds"); return value.charAt(position) },
+    setCharAt: (index, character) => { const position = Number(index); if (character === null || character === undefined || !Number.isInteger(position) || position < 0 || position >= value.length) throw new RangeError("StringBuilder index out of bounds"); const replacement = String(character); if (replacement.length === 0) throw new RangeError("StringBuilder character is required"); update(value.slice(0, position) + replacement.charAt(0) + value.slice(position + 1)); return undefined },
+    codePointAt: (index) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= value.length) throw new RangeError("StringBuilder index out of bounds"); return legadoJavaCodePoint(value, position).value },
+    codePointBefore: (index) => { const position = Number(index); if (!Number.isInteger(position) || position <= 0 || position > value.length) throw new RangeError("StringBuilder index out of bounds"); const previous = position - 1; const low = value.charCodeAt(previous); if (low >= 0xdc00 && low <= 0xdfff && previous > 0) { const high = value.charCodeAt(previous - 1); if (high >= 0xd800 && high <= 0xdbff) return (high - 0xd800) * 0x400 + low - 0xdc00 + 0x10000 } return low },
+    codePointCount: (begin, end) => legadoJavaCodePointCount(value, begin, end),
+    offsetByCodePoints: (index, offset) => legadoJavaOffsetByCodePoints(value, index, offset),
+    getChars: (begin, end, destination, destinationBegin) => { const start = Number(begin); const finish = Number(end); const targetStart = Number(destinationBegin); if (!Number.isInteger(start) || !Number.isInteger(finish) || !Number.isInteger(targetStart) || start < 0 || finish < start || finish > value.length || targetStart < 0 || destination === null || destination === undefined || typeof destination.length !== "number" || targetStart + finish - start > destination.length) throw new RangeError("StringBuilder char array range out of bounds"); const typed = typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(destination); for (let index = start; index < finish; index += 1) destination[targetStart + index - start] = typed ? value.charCodeAt(index) : value.charAt(index); return undefined },
+    substring: (start, end) => { const from = Number(start); const to = end === undefined ? value.length : Number(end); if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > value.length) throw new RangeError("StringBuilder index out of bounds"); return value.slice(from, to) },
+    subSequence: (start, end) => target.substring(start, end),
     indexOf: (part, start) => value.indexOf(String(part ?? "null"), start === undefined ? 0 : Number(start)),
     lastIndexOf: (part, start) => value.lastIndexOf(String(part ?? "null"), start === undefined ? value.length : Number(start)),
     reverse: () => { value = Array.from(value).reverse().join(""); return target },
     length: () => value.length,
     capacity: () => capacity,
-    ensureCapacity: (minimum) => { capacity = Math.max(capacity, Number(minimum) || 0); return undefined },
-    setLength: (length) => { const next = Number(length); if (!Number.isInteger(next) || next < 0) throw new RangeError("StringBuilder length out of bounds"); value = next <= value.length ? value.slice(0, next) : value + "\u0000".repeat(next - value.length); capacity = Math.max(capacity, next); return undefined },
+    ensureCapacity: (minimum) => { const requested = Number(minimum); if (!Number.isInteger(requested) || requested < 0) throw new RangeError("StringBuilder capacity out of bounds"); if (requested > capacity) capacity = Math.max(requested, capacity * 2 + 2); return undefined },
+    trimToSize: () => { capacity = value.length; return undefined },
+    setLength: (length) => { const next = Number(length); if (!Number.isInteger(next) || next < 0) throw new RangeError("StringBuilder length out of bounds"); return update(next <= value.length ? value.slice(0, next) : value + "\u0000".repeat(next - value.length)) && undefined },
     toString: () => value,
   }
   return target
