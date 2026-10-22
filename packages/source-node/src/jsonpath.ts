@@ -97,21 +97,23 @@ function normalizeJaywayExpression(expression: string): string {
  */
 function normalizeJaywayFilterOperators(expression: string): string {
   let output = expression
-  const path = String.raw`(?:@(?:\.[A-Za-z_$][\w$]*|\[['"][^'"\]]+['"])*)`
+  const pathTail = String.raw`(?:\.[A-Za-z_$][\w$]*|\[['"][^'"\]]+['"])*`
+  const path = String.raw`(?:@${pathTail})`
+  const operandPath = String.raw`(?:@root${pathTail}|@${pathTail}|\$${pathTail})(?=\s|[),\]&|])`
   const item = String.raw`(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|-?\d+(?:\.\d+)?|true|false|null)`
   const literal = String.raw`\[\s*(?:${item}(?:\s*,\s*${item})*)?\s*\]`
-  const scalar = new RegExp(`(${path})\\s+(in|nin)\\s+(${literal})`, 'gu')
-  output = output.replace(scalar, (_match, left: string, operator: string, right: string) => `__legado${operator === 'in' ? 'In' : 'Nin'}(${left},${right})`)
+  const scalar = new RegExp(`(${path})\\s+(in|nin)\\s+(${literal}|${operandPath})`, 'gu')
+  output = output.replace(scalar, (_match, left: string, operator: string, right: string) => `__legado${operator === 'in' ? 'In' : 'Nin'}(${left},${normalizeRootPath(right)})`)
 
   const size = new RegExp(`(${path})\\s+size\\s+(-?\\d+)`, 'gu')
   output = output.replace(size, '__legadoSize($1,$2)')
   const empty = new RegExp(`(${path})\\s+empty\\s+(true|false)`, 'gu')
   output = output.replace(empty, (_match, left: string, expected: string) => expected === 'true' ? `__legadoEmpty(${left})` : `__legadoNotEmpty(${left})`)
 
-  const collection = new RegExp(`(${path})\\s+(anyof|noneof)\\s+(${literal})`, 'gu')
-  output = output.replace(collection, (_match, left: string, operator: string, right: string) => `__legado${operator === 'anyof' ? 'Anyof' : 'Noneof'}(${left},${right})`)
+  const collection = new RegExp(`(${path})\\s+(anyof|noneof)\\s+(${literal}|${operandPath})`, 'gu')
+  output = output.replace(collection, (_match, left: string, operator: string, right: string) => `__legado${operator === 'anyof' ? 'Anyof' : 'Noneof'}(${left},${normalizeRootPath(right)})`)
 
-  const subset = new RegExp(`(${path})\\s+subsetof\\s+(${literal})`, 'gu')
+  const subset = new RegExp(`(${path})\\s+subsetof\\s+(${literal}|${operandPath})`, 'gu')
   output = output.replace(subset, (_match, left: string, right: string) => {
     const expression = subsetExpression(left, right)
     if (expression === undefined) throw new ParserAdapterError('unsupported-jsonpath', 'JSONPath subsetof 集合运算仅支持有限原始值集合')
@@ -119,16 +121,30 @@ function normalizeJaywayFilterOperators(expression: string): string {
   })
   if (/\s+subsetof\s+/u.test(output)) throw new ParserAdapterError('unsupported-jsonpath', 'JSONPath subsetof 集合运算暂不支持')
   if (/\s+(?:in|nin|size|empty|anyof|noneof)\s+/u.test(output)) throw new ParserAdapterError('unsupported-jsonpath', 'JSONPath 过滤运算无法安全转换')
-  return output
+  return normalizeRootPathReferences(output)
 }
 
 /** 将有限原始值集合交给受控 sandbox，保留 Jayway 的集合/类型语义。 */
 function subsetExpression(left: string, right: string): string | undefined {
+  if (isPathOperand(right)) return `__legadoSubsetof(${left},${normalizeRootPath(right)})`
   const items = parseJsonPathLiteralArray(right)
   if (items === undefined) return undefined
   const values = items.map((item) => JSON.parse(item) as unknown)
   if (values.some((item) => item === null || typeof item === 'object' || typeof item === 'function')) return undefined
   return `__legadoSubsetof(${left},${right})`
+}
+
+function isPathOperand(value: string): boolean {
+  return /^(?:@root|@|\$)(?:\.[A-Za-z_$][\w$]*|\[['"][^'"\]]+['"])*$/u.test(value)
+}
+
+function normalizeRootPath(value: string): string {
+  return value.startsWith('$') ? `@root${value.slice(1)}` : value
+}
+
+/** safe evaluator 不暴露 Jayway 的 `$` 变量，使用 jsonpath-plus 的 `@root` 等价入口。 */
+function normalizeRootPathReferences(expression: string): string {
+  return expression.replace(/([,(=!<>+\-*/%&|?:\s])\$(?=(?:\.|\[['"]))/gu, '$1@root')
 }
 
 function parseJsonPathLiteralArray(value: string): string[] | undefined {

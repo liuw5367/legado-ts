@@ -35,7 +35,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `packages/source-node/tests/adapters.test.ts` 的 HTML/XML CSS adapter case 覆盖 Jsoup `eq/lt/gt` 同级原始索引（含负数）边界，以及 `ownText/textNodes/text` 对 `br`、普通文本 NBSP/换行归一化、`pre/textarea` 保留空白和 script/style DataNode 排除的边界；JSONPath case 以 Android Jayway 3.0.0 源码探针为参照，覆盖混合数字/字符串集合等价、`null` 与缺失路径、`empty true/false` 的标量和 UndefinedNode 边界、空集合筛选，以及空聚合失败、`stddev/first/last/index/concat/append` 函数；这些是 TypeScript 侧实际回归，不替代 Android fixture golden。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
-- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 179/179，`pnpm test` 为 620/620。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
+- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 179/179，`pnpm test` 为 621/621。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
 ### 2026-10-22 P13 最终回归
@@ -251,7 +251,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 - `@` 链、`text`、`textNodes`、`ownText`、`html`、`all` 和属性；
 - Java Element/Elements 的父子/兄弟、tag/id/class、`is`、`clone`、`remove`、属性修改及集合链式调用；
 - Jsoup 扩展位置/文本伪类、`:has/:not/:is`、文本 `:matches`、属性 Java 正则 `~=`, HTML/XML 大小写、无效选择器 `unsupported-selector`；
-- Jayway `length/size/keys/min/max/avg/sum`、正则筛选、`in/nin/size/empty/anyof/noneof`、原始值 `subsetof` 以及复杂集合 `unsupported-jsonpath` 诊断；
+- Jayway `length/size/keys/min/max/avg/sum`、正则筛选、`in/nin/size/empty/anyof/noneof`、原始值 `subsetof`、集合右值的根/当前项路径以及复杂集合 `unsupported-jsonpath` 诊断；
 - Java POSIX/Unicode 属性、`(?U)`、局部 i/m/s flags、字符类交集/字符转义和局部 x/d/u/U flags 的 `unsupported-pattern` 诊断；纯 Java 类族的 UTF-16、Long/BigInteger/BigDecimal、增量摘要、字节流和 Set/Collections；
 - 严格 JSON 优先、字符串外注释、单引号/未引号键/尾逗号和原型键不污染测试；
 - 正索引、负索引、范围、负步长、排除和越界；

@@ -762,9 +762,9 @@
           "parameters": [],
           "returnType": "unknown",
           "implementation": "partial",
-          "verification": "ts-diff",
+          "verification": "ts-passed",
           "feasibility": "conditional",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "JSON-FLOW-001",
             "SCH-005"

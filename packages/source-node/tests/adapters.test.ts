@@ -168,6 +168,31 @@ test('JSONPath adapter 转换 Jayway 过滤运算并拒绝无法安全降级的�
   assert.deepEqual(parser.evaluate(typed, '$.items[?(@.tags subsetof [1,"1"])].value'), ['number', 'duplicate-number', 'string', 'mixed', 'empty'])
 })
 
+test('JSONPath adapter 支持集合运算的根路径和当前项路径', () => {
+  const parser = new JsonPathParserAdapter()
+  const value = {
+    allowed: ['a', 'b'],
+    needle: 'b',
+    items: [
+      { id: 'anyof-root', tag: 'b', tags: ['a'], other: ['x'] },
+      { id: 'subsetof-root', tag: 'a', tags: ['a', 'b'], other: ['a'] },
+      { id: 'noneof-root', tag: 'c', tags: ['c'], other: ['z'] },
+      { id: 'anyof-peer', tag: 'x', tags: ['x'], other: ['x'] },
+    ],
+  }
+
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags anyof $.allowed)].id'), ['anyof-root', 'subsetof-root'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags subsetof @root.allowed)].id'), ['anyof-root', 'subsetof-root'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags noneof $.allowed)].id'), ['noneof-root', 'anyof-peer'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tag in $.allowed)].id'), ['anyof-root', 'subsetof-root'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tag == $.needle)].id'), ['anyof-root'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.tags anyof @.other)].id'), ['subsetof-root', 'anyof-peer'])
+  assert.throws(
+    () => parser.evaluate(value, '$.items[?(@.tags anyof @rooted)].id'),
+    (error: unknown) => error instanceof Error && 'code' in error && error.code === 'unsupported-jsonpath',
+  )
+})
+
 test('JSONPath adapter 对齐 Jayway 的集合等价、空值和聚合函数语义', () => {
   const parser = new JsonPathParserAdapter()
   const value = {
