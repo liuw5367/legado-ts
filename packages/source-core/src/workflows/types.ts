@@ -232,6 +232,8 @@ export interface WorkflowRuleRequest {
   captureBindings?: readonly string[]
   /** 当前规则脚本发起的 bridge 请求观测器；由工作流或请求宿主按调用链传递。 */
   requestObserver?: RequestObserver
+  /** 当前请求脚本链共享的 HTTP 预算；仅由请求运行时透传给 bridge 子请求。 */
+  requestBudget?: Partial<RequestBudget>
 }
 
 export interface WorkflowRuleOutput {
@@ -271,6 +273,8 @@ export interface WorkflowJavaScriptRequest {
   javascriptBudget?: Partial<JavaScriptBudget>
   /** 当前脚本发起的 bridge 请求观测器；每个真实请求生成独立 RuntimeObservation。 */
   requestObserver?: RequestObserver
+  /** 当前请求脚本链共享的 HTTP 预算；子请求不得重新开始独立的 deadline。 */
+  requestBudget?: Partial<RequestBudget>
   signal?: AbortSignal
 }
 
@@ -299,6 +303,8 @@ export interface SourceFunctionRequest {
   workflowStage?: WorkflowStage
   /** 当前源函数发起的 bridge 请求观测器。 */
   requestObserver?: RequestObserver
+  /** 当前请求脚本链共享的 HTTP 预算；子请求不得重新开始独立的 deadline。 */
+  requestBudget?: Partial<RequestBudget>
   signal?: AbortSignal
 }
 

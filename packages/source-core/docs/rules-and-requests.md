@@ -39,7 +39,7 @@ Default 模式只对纯文本、literal 和变量插值做安全处理；CSS、X
 - URL options 的方法、body、charset、responseCharset、retry、timeout、followRedirects、webView、proxy、dnsIp 和 sourceRegex 先经过受控解析；
 - source header、宿主默认 User-Agent、独立登录凭据和 URL options Header 按 Android 兼容顺序合并，显式 URL Header 可以覆盖；
 - Cookie、Content-Type charset、JSON/XML/form body 和响应重定向由 runtime 处理，NetworkHost 只执行已经形成的计划；
-- `bodyJs`、规则脚本和 bridge 子请求沿用当前操作的 signal、stage、book 和响应最终 URL；动态 Header 的递归重入按当前 TS 策略限制；
+- `bodyJs`、规则脚本和 bridge 子请求沿用当前操作的 signal、stage、book 和响应最终 URL；请求入口为整条脚本请求链生成默认 30 秒绝对 deadline（显式值最多 30 分钟），子请求继承该 deadline；动态 Header 的递归重入按当前 TS 策略限制；
 - HTTP/解析/脚本错误映射为 `SourceRequestError`，错误码为 `invalid-config`、`capability-missing`、`cancelled` 或 `rule-failed`。
 
 源码事实以 [`source-request.ts`](../src/workflows/source-request.ts) 和请求测试为准；不要从历史统一 `HttpClient`/`RuntimeHost` 示例推导当前字段。

@@ -22,3 +22,12 @@ test('请求计划拒绝 WebView 静默降级和不支持的方法', () => {
   assert.equal(createRequestPlan({ url: 'https://example.test', execution: { useWebView: true } }).error?.code, 'webview-required')
   assert.equal(createRequestPlan({ url: 'https://example.test', method: 'PATCH' }).error?.code, 'invalid-method')
 })
+
+test('请求计划为一次操作生成 30 秒默认截止时间并限制最长窗口', () => {
+  const now = Date.now()
+  const result = createRequestPlan({ url: 'https://example.test' })
+  assert.ok(result.plan?.budget.deadlineMs)
+  assert.ok(result.plan.budget.deadlineMs! >= now + 29_000)
+  assert.ok(result.plan.budget.deadlineMs! <= Date.now() + 30_000)
+  assert.equal(createRequestPlan({ url: 'https://example.test', budget: { deadlineMs: Date.now() + 30 * 60 * 1000 + 1 } }).error?.code, 'invalid-budget')
+})

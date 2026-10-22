@@ -1,7 +1,7 @@
 import type { RequestBudget, RequestPlan, RequestPlanInput, RequestPlanResult } from './contracts.ts'
 
 const defaultBudget: RequestBudget = {
-  timeoutMs: 15000,
+  timeoutMs: 30000,
   maxRequests: 32,
   maxPages: 16,
   maxResponseBytes: 4 * 1024 * 1024,
@@ -9,6 +9,8 @@ const defaultBudget: RequestBudget = {
   maxRequestBodyBytes: 1024 * 1024,
   maxRedirects: 5,
 }
+
+const maxDeadlineWindowMs = 30 * 60 * 1000
 
 function requestBodyBytes(body: string | Uint8Array | undefined): number {
   if (body === undefined) return 0
@@ -25,9 +27,9 @@ export function createRequestPlan(input: RequestPlanInput): RequestPlanResult {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return { error: { code: 'invalid-url', message: '请求只允许 HTTP(S) 协议' } }
   const method = (input.method ?? 'GET').toUpperCase()
   if (method !== 'GET' && method !== 'POST' && method !== 'HEAD') return { error: { code: 'invalid-method', message: '请求方法不在允许集合内' } }
-  const budget = { ...defaultBudget, ...input.budget }
+  const budget = { ...defaultBudget, deadlineMs: Date.now() + 30_000, ...input.budget }
   const numericLimits = [budget.timeoutMs, budget.maxRequests, budget.maxPages, budget.maxResponseBytes, budget.maxTotalBytes, budget.maxRequestBodyBytes, budget.maxRedirects]
-  if (numericLimits.some((value) => !Number.isFinite(value) || value < 0) || numericLimits.some((value) => !Number.isInteger(value)) || (budget.deadlineMs !== undefined && (!Number.isFinite(budget.deadlineMs) || budget.deadlineMs < 0 || !Number.isInteger(budget.deadlineMs)))) return { error: { code: 'invalid-budget', message: '请求预算必须是有限的非负整数' } }
+  if (numericLimits.some((value) => !Number.isFinite(value) || value < 0) || numericLimits.some((value) => !Number.isInteger(value)) || (budget.deadlineMs !== undefined && (!Number.isFinite(budget.deadlineMs) || budget.deadlineMs < 0 || !Number.isInteger(budget.deadlineMs) || budget.deadlineMs > Date.now() + maxDeadlineWindowMs))) return { error: { code: 'invalid-budget', message: '请求预算必须是有限的非负整数，截止时间不能超过 30 分钟' } }
   if (requestBodyBytes(input.body) > budget.maxRequestBodyBytes) return { error: { code: 'request-body-too-large', message: '请求体超过字节预算' } }
   const execution = { useWebView: false, ...input.execution }
   if (execution.useWebView) return { error: { code: 'webview-required', message: '该请求要求 WebView，普通 Node HTTP 宿主不能静默执行' } }

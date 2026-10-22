@@ -385,6 +385,26 @@ test('动态 header 经 bridge 子请求不重算自身，嵌套深度受限', a
   assert.match(calls[0] ?? '', /X-Static/)
 })
 
+test('请求脚本的 bridge 子请求继承同一绝对 deadline', async () => {
+  const deadlines: number[] = []
+  const host = new SourceRequestHost({
+    network: {
+      request: async (plan) => {
+        deadlines.push(plan.budget.deadlineMs ?? -1)
+        return response(plan.url)
+      },
+    },
+  })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, requestSource, observer) => host.requestFromBridge(input, signal, requestSource, observer) })
+  host.attachRuleHost(ruleHost)
+  const deadline = Date.now() + 12_000
+  const dynamicHeader = { ...source, header: '@js:java.ajax("https://fixture.invalid/child"); ({"X-Token":"t"})' } as unknown as NormalizedSource
+  await host.request({ source: dynamicHeader, url: '/parent', stage: 'search', options: { budget: { deadlineMs: deadline } } })
+  assert.equal(deadlines.length, 2)
+  assert.equal(deadlines[0], deadlines[1])
+  assert.equal(deadlines[1], deadline)
+})
+
 test('bridge 网络子请求超过深度上限时拒绝', async () => {
   const calls: string[] = []
   const host = new SourceRequestHost({

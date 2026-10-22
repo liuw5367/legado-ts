@@ -14,6 +14,7 @@ import type {
   JsonPathParser,
   ParserNode,
   SourceScriptCache,
+  RequestBudget,
   XPathParser,
 } from '../runtime/contracts.ts'
 import type { JavaScriptHost, JavaScriptVariableScope } from '../runtime/javascript.ts'
@@ -45,6 +46,8 @@ export interface SourceRuleBridgeRequest {
   method?: string
   body?: unknown
   options?: unknown
+  /** 当前脚本请求链共享的 HTTP 预算；由请求宿主注入到 bridge 子请求。 */
+  budget?: Partial<RequestBudget>
   skipRateLimit?: boolean
   /** Android ajaxTestAll 的逐项失败回退；普通 ajaxAll 失败应中止整个批次。 */
   isTest?: boolean
@@ -1364,6 +1367,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       ...(request.globalState === undefined ? {} : { globalState: request.globalState }),
       ...(request.workflowActions === undefined ? {} : { workflowActions: request.workflowActions }),
       ...(request.javascriptBudget === undefined ? {} : { javascriptBudget: request.javascriptBudget }),
+      ...(request.requestBudget === undefined ? {} : { requestBudget: request.requestBudget }),
       ...(request.requestObserver === undefined ? {} : { requestObserver: request.requestObserver }),
     })
   }
@@ -1401,7 +1405,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       `typeof ${request.name} === 'function' ? { __legadoSourceFunctionExists: true, value: ${call} } : { __legadoSourceFunctionExists: false }`,
     ].join('\n')
     const captureBindings = parameters.filter((name) => Object.hasOwn(bindings, name))
-    const output = await this.runJavaScript(code, request.stage, request.source, '', request.signal, { bindings, mode: 'script', captureBindings, ...(request.workflowStage === undefined ? {} : { workflowStage: request.workflowStage }), ...(request.workflowActions === undefined ? {} : { workflowActions: request.workflowActions }), ...(request.requestObserver === undefined ? {} : { requestObserver: request.requestObserver }) })
+    const output = await this.runJavaScript(code, request.stage, request.source, '', request.signal, { bindings, mode: 'script', captureBindings, ...(request.workflowStage === undefined ? {} : { workflowStage: request.workflowStage }), ...(request.workflowActions === undefined ? {} : { workflowActions: request.workflowActions }), ...(request.requestBudget === undefined ? {} : { requestBudget: request.requestBudget }), ...(request.requestObserver === undefined ? {} : { requestObserver: request.requestObserver }) })
     if (output.status !== 'success') return { ...output, exists: false }
     let value = output.value
     if (captureBindings.length > 0) {
@@ -1792,7 +1796,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return first[0].replace(firstPattern, replacement)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; requestBudget?: Partial<RequestBudget>; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver }): Promise<WorkflowRuleOutput> {
     const explicitBindings = context?.bindings ?? {}
     let bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
@@ -1968,7 +1972,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             if (action === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${name} unavailable`)
             return action(bridgeSignal, actionRequest.input)
           }
-          return this.handleBridge(payload, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver)
+          const bridged = typeof payload === 'object' && payload !== null && context?.requestBudget !== undefined
+            && ['network', 'network-all', 'network-response', 'url-context-response'].includes(String((payload as SourceRuleBridgeRequest).kind))
+            ? { ...(payload as SourceRuleBridgeRequest), budget: { ...context.requestBudget, ...((payload as SourceRuleBridgeRequest).budget ?? {}) } }
+            : payload
+          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver)
         },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })

@@ -176,7 +176,7 @@ export class SourceRequestHost {
       const depth = this.bridgeDepth.getStore() ?? 0
       if (depth >= maxBridgeDepth) throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
       return this.bridgeDepth.run(depth + 1, async () => {
-        const response = await this.runtime.requestRaw(source, contextUrl, overrides, signal, undefined, input.stage ?? 'search', true, false, 'bridge', contextUrl, undefined, requestObserver)
+        const response = await this.runtime.requestRaw(source, contextUrl, overrides, signal, input.budget, input.stage ?? 'search', true, false, 'bridge', contextUrl, undefined, requestObserver)
         return this.responseObject(response)
       })
     }
@@ -191,7 +191,7 @@ export class SourceRequestHost {
       const urls = Array.isArray(input.urls) ? input.urls.map((value) => text(value)).filter((value) => value.length > 0) : []
       return this.bridgeDepth.run(depth + 1, async () => mapConcurrent(urls, maxAjaxAllConcurrency, signal, async (url, batchSignal) => {
         try {
-          const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, undefined, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
+          const response = await this.runtime.requestRaw(source, url, options ?? {}, batchSignal, input.budget, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
           return this.responseObject(response)
         } catch (error) {
           const testMode = input.isTest === true || (object(input.options) !== undefined && Object.hasOwn(object(input.options)!, 'timeout'))
@@ -208,7 +208,7 @@ export class SourceRequestHost {
     }
     return this.bridgeDepth.run(depth + 1, async () => {
       // nested：子请求跳过动态 source header，只保留静态头，切断 header 脚本自递归。
-      const response = await this.runtime.requestRaw(source, url, overrides, signal, undefined, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
+      const response = await this.runtime.requestRaw(source, url, overrides, signal, input.budget, input.stage ?? 'search', true, input.skipRateLimit === true, 'bridge', url, undefined, requestObserver)
       return input.kind === 'network-response' ? this.responseObject(response) : this.decode(response)
     })
   }

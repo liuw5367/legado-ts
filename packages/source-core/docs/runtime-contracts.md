@@ -22,7 +22,7 @@
 - `useWebView`、`webJs`、`sourceRegex`、DNS、代理、Cookie、serverId、限流旁路等 `RequestExecutionHints`；
 - `RequestBudget` 的 `timeoutMs`、`deadlineMs`、请求数、页数、单响应/总响应/请求体字节数和重定向上限。
 
-默认预算在 [`request-plan.ts`](../src/runtime/request-plan.ts) 中定义。非法 URL、方法、预算、超大请求体和要求 WebView 的请求返回 `RequestPlanResult.error`；普通 Node HTTP 不得静默执行 `useWebView`。
+默认预算在 [`request-plan.ts`](../src/runtime/request-plan.ts) 中定义：单请求超时和一次工作流请求链的默认绝对 deadline 均为 30 秒，显式 deadline 最长 30 分钟。非法 URL、方法、预算、超大请求体和要求 WebView 的请求返回 `RequestPlanResult.error`；普通 Node HTTP 不得静默执行 `useWebView`。URL/header/body/bridge 子请求由请求入口透传同一 deadline，不因嵌套重置总时限。
 
 宿主返回 [`NetworkResponse`](../src/runtime/contracts.ts) 时必须保留最终 URL、状态码、响应头、解压后的 bytes 和 `redirected`。网络失败不能伪造 200，也不能把超过预算的部分响应当作成功。
 

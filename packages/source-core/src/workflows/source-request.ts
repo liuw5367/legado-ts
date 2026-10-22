@@ -1,6 +1,6 @@
 import { createRequestPlan } from '../runtime/request-plan.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
-import type { CharsetCodec, NetworkHost, NetworkResponse } from '../runtime/contracts.ts'
+import type { CharsetCodec, NetworkHost, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
 import type { NormalizedSource } from '../model/types.ts'
 import { internalChapterScopeBinding } from './types.ts'
 import type { RequestObserver, WorkflowRequest, WorkflowRuleOutput, WorkflowRulePort, WorkflowStage } from './types.ts'
@@ -24,6 +24,8 @@ export class SourceRequestError extends Error {
     if (field !== undefined) this.field = field
   }
 }
+
+const defaultRequestDeadlineMs = 30_000
 
 export interface SourceRequestOptions {
   method?: string
@@ -64,6 +66,8 @@ export interface RequestScriptContext {
   mutableBindings?: readonly string[]
   /** 当前请求调用链的观测器，供 URL/body/header 脚本继续传递给 bridge。 */
   requestObserver?: RequestObserver
+  /** 当前请求调用链共享的预算；bridge 子请求必须继承而不能重置。 */
+  requestBudget?: Partial<RequestBudget>
 }
 
 function text(value: unknown): string {
@@ -323,6 +327,12 @@ export class SourceRequestRuntime {
   }
 
   public async request(input: WorkflowRequest): Promise<NetworkResponse> {
+    // 一个工作流请求及其 URL/header/body/bridge 子请求共享同一个截止时间。
+    // 若调用方没有显式预算，在这里一次性生成默认 30 秒 deadline，避免每次嵌套请求重新计时。
+    const requestBudget: Partial<RequestBudget> = {
+      ...(input.options.budget ?? {}),
+      ...(input.options.budget?.deadlineMs === undefined ? { deadlineMs: Date.now() + defaultRequestDeadlineMs } : {}),
+    }
     // 书源随这次调用显式传递：宿主上没有「当前书源」字段，同一宿主并发不同书源不会串源。
     const urlContext: Record<string, unknown> = { url: input.url, headerMap: {}, urlDirty: false }
     const captureBindings = ['__legadoUrlContext']
@@ -333,13 +343,14 @@ export class SourceRequestRuntime {
       mutableBindings: ['__legadoUrlContext'],
       ...(this.requestObserver === undefined ? {} : { requestObserver: this.requestObserver }),
       ...(input.chapter === undefined ? {} : { chapterScope: input.chapter }),
+      requestBudget,
     }
     const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source, scriptContext)
     const overrides: SourceRequestOptions = {
       ...(input.execution?.webJs === undefined ? {} : { webJs: input.execution.webJs }),
       ...(input.execution?.sourceRegex === undefined ? {} : { sourceRegex: input.execution.sourceRegex }),
     }
-    return this.requestRaw(input.source, resolved, overrides, input.options.signal, input.options.budget, input.stage, false, false, 'primary', input.url, scriptContext)
+    return this.requestRaw(input.source, resolved, overrides, input.options.signal, requestBudget, input.stage, false, false, 'primary', input.url, scriptContext)
   }
 
   public decodeResponse(response: NetworkResponse): string {
@@ -372,7 +383,7 @@ export class SourceRequestRuntime {
     source: NormalizedSource,
     content: string,
     signal: AbortSignal | undefined,
-    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[]; requestObserver?: RequestObserver },
+    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[]; requestObserver?: RequestObserver; requestBudget?: Partial<RequestBudget> },
   ): Promise<unknown> {
     if (this.ruleHost === undefined) throw new SourceRequestError('capability-missing', '脚本执行需要 JavaScript 宿主', context.field)
     const scriptStage = context.scriptStage ?? (stage === 'detail' ? 'book' : 'search')
@@ -399,6 +410,7 @@ export class SourceRequestRuntime {
           ...(context.captureBindings === undefined ? {} : { captureMutations: context.captureBindings }),
           ...(context.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
           ...(context.requestObserver === undefined ? {} : { requestObserver: context.requestObserver }),
+          ...(context.requestBudget === undefined ? {} : { requestBudget: context.requestBudget }),
           ...(signal === undefined ? {} : { signal }),
         })
       } else {
@@ -419,6 +431,7 @@ export class SourceRequestRuntime {
           ...(context.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
           ...(context.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
           ...(context.requestObserver === undefined ? {} : { requestObserver: context.requestObserver }),
+          ...(context.requestBudget === undefined ? {} : { requestBudget: context.requestBudget }),
           ...(signal === undefined ? {} : { signal }),
         })
       }
@@ -441,7 +454,7 @@ export class SourceRequestRuntime {
     stage: WorkflowStage,
     source: NormalizedSource,
     signal?: AbortSignal,
-    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[] },
+    context?: { evaluateField?: string; field?: string; baseUrl?: string; redirectUrl?: string; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[]; requestBudget?: Partial<RequestBudget> },
   ): Promise<string> {
     const value = await this.runSourceScript(code, stage, source, result, signal, {
       evaluateField: context?.evaluateField ?? 'url',
@@ -452,6 +465,7 @@ export class SourceRequestRuntime {
       ...(context?.chapterScope === undefined ? {} : { chapterScope: context.chapterScope }),
       ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
       ...(context?.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
+      ...(context?.requestBudget === undefined ? {} : { requestBudget: context.requestBudget }),
     })
     return text(value)
   }
@@ -459,6 +473,7 @@ export class SourceRequestRuntime {
   public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary', loginHeaderUrl = rawUrl, scriptContext?: RequestScriptContext, requestObserver?: RequestObserver): Promise<NetworkResponse> {
     const effectiveScriptContext: RequestScriptContext = {
       ...(scriptContext ?? {}),
+      ...(budget === undefined || scriptContext?.requestBudget !== undefined ? {} : { requestBudget: budget }),
       ...(requestObserver !== undefined ? { requestObserver } : this.requestObserver === undefined ? {} : { requestObserver: this.requestObserver }),
     }
     const suppliedUrlContext = object(effectiveScriptContext.bindings?.__legadoUrlContext)
