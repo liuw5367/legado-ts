@@ -50,13 +50,22 @@ export function normalizeRelaxedJson(input: string): string {
     }
     if (current === '/' && next === '*') {
       index += 2
-      while (index < input.length && !(input[index] === '*' && input[index + 1] === '/')) index += 1
-      index += 1
+      let closed = false
+      while (index < input.length) {
+        if (input[index] === '*' && input[index + 1] === '/') {
+          index += 1
+          closed = true
+          break
+        }
+        index += 1
+      }
+      if (!closed) throw new SyntaxError('宽松 JSON 包含未闭合块注释')
       result += ' '
       continue
     }
     result += current
   }
+  if (quote !== null) throw new SyntaxError('宽松 JSON 包含未闭合字符串')
 
   // 只在字符串外处理未加引号的键和尾逗号，避免修改字符串中的 `{x: 1}`、`,}` 等文本。
   let normalized = ''
@@ -98,6 +107,7 @@ export function normalizeRelaxedJson(input: string): string {
     }
     normalized += current
   }
+  if (quote !== null) throw new SyntaxError('宽松 JSON 包含未闭合字符串')
   return normalized
 }
 

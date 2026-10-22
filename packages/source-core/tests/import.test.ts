@@ -97,6 +97,14 @@ test('宽松 JSON 只在字符串外处理注释、尾逗号和单引号转义',
   })
 })
 
+test('宽松 JSON 拒绝未闭合块注释和字符串，但保留行注释到文本末尾', () => {
+  assert.equal(parseRelaxedJson('1/* 未闭合'), undefined)
+  assert.equal(parseRelaxedJson('{value:1}/* 未闭合'), undefined)
+  assert.equal(parseRelaxedJson('{value:"未闭合}'), undefined)
+  assert.throws(() => normalizeRelaxedJson('1/* 未闭合'), /未闭合块注释/u)
+  assert.equal(parseRelaxedJson('1// 文本末尾的行注释'), 1)
+})
+
 test('未修改 JSON/JavaScript 候选逐字导出', async () => {
   const jsonText = `${JSON.stringify(source)}\n`
   const jsonCandidate = (await importSources(jsonText))[0]

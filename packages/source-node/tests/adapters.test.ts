@@ -161,6 +161,35 @@ test('JSONPath adapter 对齐 Jayway 的集合等价、空值和聚合函数语�
   )
 })
 
+test('JSONPath adapter 对齐 Jayway 的标量 empty、空聚合和文本函数边界', () => {
+  const parser = new JsonPathParserAdapter()
+  const value = {
+    items: [
+      { id: 'null', value: null },
+      { id: 'false', value: false },
+      { id: 'number', value: 3 },
+      { id: 'empty-string', value: '' },
+      { id: 'text', value: 'abc' },
+      { id: 'empty-array', value: [] },
+      { id: 'empty-object', value: {} },
+      { id: 'array', value: [1] },
+      { id: 'object', value: { key: 1 } },
+      { id: 'missing' },
+    ],
+    numbers: [],
+    text: 'abc',
+  }
+
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.value empty true)].id'), ['empty-string', 'empty-array', 'empty-object'])
+  assert.deepEqual(parser.evaluate(value, '$.items[?(@.value empty false)].id'), ['null', 'false', 'number', 'text', 'array', 'object'])
+  assert.throws(() => parser.evaluate(value, '$.numbers.avg()'), /没有可聚合的数字/u)
+  assert.throws(() => parser.evaluate(value, '$.numbers.stddev()'), /没有可聚合的数字/u)
+  assert.throws(() => parser.evaluate(value, '$.numbers.sum()'), /没有可聚合的数字/u)
+  assert.deepEqual(parser.evaluate(value, '$.text.concat("!", 2, true, ["?"])'), ['!2true?'])
+  assert.deepEqual(parser.evaluate(value, '$.text.concat([{key:1}, [2, {flag:true}], null])'), ['{key=1}[2, {flag=true}]'])
+  assert.deepEqual(parser.evaluate(value, '$.text.append(1)'), ['abc'])
+})
+
 test('JSONPath adapter 不执行条件表达式中的原生构造器', () => {
   const parser = new JsonPathParserAdapter()
 

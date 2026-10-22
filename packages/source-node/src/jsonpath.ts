@@ -47,8 +47,13 @@ const jsonPathSandbox = {
     return left.every((item) => right.some((candidate) => jsonPathEquals(item, candidate)))
   },
   __legadoEmpty(value: unknown): boolean {
+    // Jayway 3.0 的 EmptyEvaluator 只把空字符串、空数组和空对象判为 true；缺失路径和标量均为 false。
     if (typeof value === 'string' || Array.isArray(value)) return value.length === 0
-    return value !== null && typeof value === 'object' && Object.keys(value).length === 0
+    if (value !== null && typeof value === 'object') return Object.keys(value).length === 0
+    return false
+  },
+  __legadoNotEmpty(value: unknown): boolean {
+    return value !== undefined && !jsonPathSandbox.__legadoEmpty(value)
   },
   __legadoSize(value: unknown, expected: number): boolean {
     if (typeof value === 'string' || Array.isArray(value)) return value.length === expected
@@ -101,7 +106,7 @@ function normalizeJaywayFilterOperators(expression: string): string {
   const size = new RegExp(`(${path})\\s+size\\s+(-?\\d+)`, 'gu')
   output = output.replace(size, '__legadoSize($1,$2)')
   const empty = new RegExp(`(${path})\\s+empty\\s+(true|false)`, 'gu')
-  output = output.replace(empty, (_match, left: string, expected: string) => expected === 'true' ? `__legadoEmpty(${left})` : `!__legadoEmpty(${left})`)
+  output = output.replace(empty, (_match, left: string, expected: string) => expected === 'true' ? `__legadoEmpty(${left})` : `__legadoNotEmpty(${left})`)
 
   const collection = new RegExp(`(${path})\\s+(anyof|noneof)\\s+(${literal})`, 'gu')
   output = output.replace(collection, (_match, left: string, operator: string, right: string) => `__legado${operator === 'anyof' ? 'Anyof' : 'Noneof'}(${left},${right})`)
@@ -191,11 +196,11 @@ function applyJsonPathFunction(name: string, path: string, value: unknown, args:
     return input !== null && typeof input === 'object' && !Array.isArray(input) ? Object.keys(input) : null
   }
   if (name === 'concat') {
-    if (!Array.isArray(input)) return ''
-    return [...input, ...args].filter((item): item is string => typeof item === 'string').join('')
+    const values = Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string') : []
+    return [...values, ...stringArguments(args)].join('')
   }
   if (name === 'append') {
-    if (!Array.isArray(input)) throw new Error('append 只能用于数组')
+    if (!Array.isArray(input)) return input
     return [...input, ...args]
   }
   if (!Array.isArray(input)) throw new Error(`${name} 只能用于数组`)
@@ -224,4 +229,31 @@ function applyJsonPathFunction(name: string, path: string, value: unknown, args:
   if (name === 'max') return Math.max(...numbers)
   const average = numbers.reduce((total, item) => total + item, 0) / numbers.length
   return Math.sqrt(numbers.reduce((total, item) => total + item * item, 0) / numbers.length - average * average)
+}
+
+function stringArguments(args: unknown[]): string[] {
+  const values: string[] = []
+  const append = (value: unknown): void => {
+    if (value === null || value === undefined) return
+    values.push(typeof value === 'object' ? javaJsonPathString(value) : String(value))
+  }
+  for (const arg of args) {
+    if (Array.isArray(arg)) {
+      for (const item of arg) append(item)
+    } else {
+      append(arg)
+    }
+  }
+  return values
+}
+
+function javaJsonPathString(value: object): string {
+  if (Array.isArray(value)) return `[${value.map((item) => item === null ? 'null' : javaJsonPathStringValue(item)).join(', ')}]`
+  return `{${Object.entries(value).map(([key, item]) => `${key}=${javaJsonPathStringValue(item)}`).join(', ')}}`
+}
+
+function javaJsonPathStringValue(value: unknown): string {
+  if (value === null || value === undefined) return String(value)
+  if (typeof value === 'object') return javaJsonPathString(value)
+  return String(value)
 }

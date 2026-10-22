@@ -114,7 +114,7 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 
 | 案例范围 | evidence | spec | implementation | execution | priority |
 | --- | --- | --- | --- | --- | --- |
-| D18/D19/D20：Jsoup 选择器、HTML 文本和 JSONPath 函数/正则过滤 | Android source + TS 最小输入执行 | defined（表中列出的输入） | partial | TS 观察到失败/差异；Android not-run | required |
+| D18/D19/D20：Jsoup 选择器、HTML 文本和 JSONPath 函数/正则过滤 | Android source + TS 最小输入执行 | defined（表中列出的输入） | partial | TS 观察到失败/差异；D20 已补 Jayway `empty`/空聚合/文本函数边界；Android not-run | required |
 | D22/D23：java.url/headerMap、getString 布尔重载和缺失成员 | Android source/内置帮助 + TS 请求桩/脚本执行 | defined（列出的成员和重载） | D22 partial；D23 overload semantics implemented | D23 的 `unescape` 布尔重载、`content`/`isUrl` 位置、null 内容回退、HTML 解码、URL 解析和 list 去重已有 TS 回归；Android golden not-run；AnalyzeUrl 缺失成员仍归 D22 | required |
 | D24～D28/D31/D32/D34：对象方法、重建 session、InfoMap、AES 返回类型和 StrResponse 构造 | Android source + TS 脚本/session 执行 | defined（具体差异输入） | partial | TS 观察到差异；Android not-run | required |
 | D29/D30/D35～D40：文件命名空间、下载、字体、工具、宿主配置、导入、库状态和游标签名 | source | 部分 defined；完整语言/平台等价仍 blocked | partial 或 absent，详见状态表 | 组合路径 not-run，不能写 pass | required/host |
