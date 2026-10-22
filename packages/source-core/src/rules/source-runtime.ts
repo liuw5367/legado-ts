@@ -13,6 +13,7 @@ import type {
   HtmlParser,
   JsonPathParser,
   ParserNode,
+  ArchiveEntry,
   SourceScriptCache,
   RequestBudget,
   XPathParser,
@@ -174,6 +175,8 @@ export interface SourceRuleRuntimeOptions {
   compression?: {
     gzipDecode?: (value: Uint8Array, signal: AbortSignal) => Uint8Array | Promise<Uint8Array>
     inflateDecode?: (value: Uint8Array, signal: AbortSignal) => Uint8Array | Promise<Uint8Array>
+    /** Decode a bounded ZIP into entries for the synchronous-looking Java ZipInputStream facade. */
+    zipDecode?: (value: Uint8Array, signal: AbortSignal) => readonly ArchiveEntry[] | Promise<readonly ArchiveEntry[]>
   }
   /** 平台对齐 Android JavaScriptInterface 的时间格式。 */
   timeFormat?: (time: number) => string
@@ -754,6 +757,48 @@ const legadoByteArrayInputStream = function(input) {
 const legadoCompressedInputStream = (input, kind) => { const bytes = request({ kind, value: legadoBytesValue(input?.readAllBytes?.() ?? input) }); const delegate = legadoByteArrayInputStream(bytes); return { read: (...args) => delegate.read(...args), readAllBytes: () => delegate.readAllBytes(), available: () => delegate.available(), skip: (count) => delegate.skip(count), mark: () => delegate.mark(), reset: () => delegate.reset(), markSupported: () => delegate.markSupported(), close: () => delegate.close() } }
 const legadoGzipInputStream = function(input) { return legadoCompressedInputStream(input, "gzip-decode") }
 const legadoInflaterInputStream = function(input) { return legadoCompressedInputStream(input, "inflate-decode") }
+const legadoZipInputStream = function(input) {
+  const entries = request({ kind: "zip-decode", value: legadoBytesValue(input?.readAllBytes?.() ?? input) })
+  if (!Array.isArray(entries)) throw new Error("Invalid ZIP decoder result")
+  let index = -1
+  let current
+  let delegate
+  let closed = false
+  const entryObject = (value) => {
+    const path = String(value?.path ?? "")
+    return {
+      getName: () => path,
+      getSize: () => value?.size === undefined ? Number(value?.data?.length ?? -1) : Number(value.size),
+      getCompressedSize: () => value?.compressedSize === undefined ? -1 : Number(value.compressedSize),
+      getCrc: () => value?.crc === undefined ? -1 : Number(value.crc),
+      getMethod: () => value?.method === undefined ? -1 : Number(value.method),
+      getComment: () => value?.comment === undefined ? null : String(value.comment),
+      isDirectory: () => path.endsWith("/"),
+      toString: () => path,
+    }
+  }
+  const ensureOpen = () => { if (closed) throw new Error("ZipInputStream is closed") }
+  const nextEntry = () => {
+    ensureOpen()
+    delegate?.close?.()
+    index += 1
+    current = index < entries.length ? entries[index] : undefined
+    delegate = current === undefined ? undefined : legadoByteArrayInputStream(legadoBytesValue(current.data))
+    return current === undefined ? null : entryObject(current)
+  }
+  return {
+    getNextEntry: nextEntry,
+    closeEntry: () => { ensureOpen(); delegate?.close?.(); delegate = undefined; return undefined },
+    read: (...args) => { ensureOpen(); return delegate === undefined ? -1 : delegate.read(...args) },
+    readAllBytes: () => { ensureOpen(); return delegate === undefined ? new Uint8Array() : delegate.readAllBytes() },
+    available: () => { ensureOpen(); return delegate?.available?.() ?? 0 },
+    skip: (count) => { ensureOpen(); return delegate?.skip?.(count) ?? 0 },
+    mark: () => undefined,
+    reset: () => { throw new Error("ZipInputStream does not support mark/reset") },
+    markSupported: () => false,
+    close: () => { closed = true; delegate?.close?.(); delegate = undefined; current = undefined },
+  }
+}
 const legadoByteArrayOutputStream = function(initial) {
   let chunks = []
   const api = {
@@ -969,7 +1014,7 @@ const legadoJavaCollections = {
   lastIndexOfSubList: (list, subList) => { const values = legadoJavaCollectionValues(list); const sub = legadoJavaCollectionValues(subList); if (sub.length === 0) return values.length; for (let index = values.length - sub.length; index >= 0; index--) if (sub.every((item, offset) => Object.is(values[index + offset], item))) return index; return -1 },
 }
 const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, regex: { Pattern: legadoPattern, Matcher: legadoMatcher }, Base64: legadoBase64 }
-const legadoJavaZip = { GZIPInputStream: legadoGzipInputStream, InflaterInputStream: legadoInflaterInputStream, ZipInputStream: function() { throw new Error("__LEGADO_CAPABILITY__runtime java.util.zip.ZipInputStream unavailable") } }
+const legadoJavaZip = { GZIPInputStream: legadoGzipInputStream, InflaterInputStream: legadoInflaterInputStream, ZipInputStream: legadoZipInputStream }
 const legadoJsoupParse = (input) => {
   const html = String(input ?? "")
   const select = (selector) => { const previous = legadoContent; try { legadoContent = html; return java.getElements(String(selector ?? "")) } finally { legadoContent = previous } }
@@ -2651,6 +2696,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (request.kind === 'gzip-decode' || request.kind === 'inflate-decode') {
       const decoder = request.kind === 'gzip-decode' ? this.compression?.gzipDecode : this.compression?.inflateDecode
       if (decoder === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${request.kind} unavailable`)
+      return decoder(byteValue(request.value), signal)
+    }
+    if (request.kind === 'zip-decode') {
+      const decoder = this.compression?.zipDecode
+      if (decoder === undefined) throw new Error('__LEGADO_CAPABILITY__runtime zip-decode unavailable')
       return decoder(byteValue(request.value), signal)
     }
     if (request.kind === 'encode-bytes') return this.encoding.encode(textValue(request.value), textValue(request.charset) || 'UTF-8')

@@ -94,7 +94,7 @@ function findEndOfCentralDirectory(bytes: Uint8Array): number {
   throw new Error('zip end of central directory is missing')
 }
 
-function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSignal): ArchiveEntry[] {
+function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSignal, includeDirectories = false): ArchiveEntry[] {
   const end = findEndOfCentralDirectory(input)
   ensureRange(input, end, 22, 'zip end of central directory is truncated')
   const count = u16(input, end + 10)
@@ -122,10 +122,12 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSign
     const localOffset = u32(input, cursor + 42)
     ensureRange(input, cursor + 46, nameLength + extraLength + commentLength, 'zip central directory is truncated')
     const name = new TextDecoder('utf-8', { fatal: false }).decode(input.slice(cursor + 46, cursor + 46 + nameLength))
+    const comment = new TextDecoder('utf-8', { fatal: false }).decode(input.slice(cursor + 46 + nameLength + extraLength, cursor + 46 + nameLength + extraLength + commentLength))
     cursor += 46 + nameLength + extraLength + commentLength
     if ((flags & 1) !== 0) throw new Error('encrypted zip entries are not supported')
     const path = safePath(name)
-    if (path === '' || name.endsWith('/')) continue
+    const directory = name.endsWith('/')
+    if (path === '' || (directory && !includeDirectories)) continue
     entryCount += 1
     if (entryCount > limits.maxEntries) throw new Error('archive entry count exceeds budget')
     if (uncompressedSize > limits.maxEntryBytes || total + uncompressedSize > limits.maxTotalBytes) throw new Error('archive output exceeds byte budget')
@@ -137,12 +139,17 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSign
     const dataStart = localOffset + 30 + localNameLength + localExtraLength
     ensureRange(input, dataStart, compressedSize, 'zip entry data is truncated')
     const compressed = input.slice(dataStart, dataStart + compressedSize)
-    const data = method === 0 ? Uint8Array.from(compressed) : method === 8 ? inflateLimited(compressed, limits.maxEntryBytes) : (() => { throw new Error(`zip compression method is unsupported: ${method}`) })()
+    const data = directory ? new Uint8Array() : method === 0 ? Uint8Array.from(compressed) : method === 8 ? inflateLimited(compressed, limits.maxEntryBytes) : (() => { throw new Error(`zip compression method is unsupported: ${method}`) })()
     if (data.byteLength !== uncompressedSize || crc32(data) !== expectedCrc) throw new Error('zip entry integrity check failed')
     total += data.byteLength
-    result.push({ path, data })
+    result.push({ path: directory ? `${path}/` : path, data, compressedSize, size: uncompressedSize, crc: expectedCrc, method, ...(comment.length === 0 ? {} : { comment }) })
   }
   return result
+}
+
+/** Java ZipInputStream 使用的同步解析入口；预算与普通 Node 归档宿主保持一致。 */
+export function decodeZipEntries(input: Uint8Array, signal?: AbortSignal): ArchiveEntry[] {
+  return extractZip(input, defaults, signal, true)
 }
 
 export class NodeArchiveHost implements ArchiveHost {

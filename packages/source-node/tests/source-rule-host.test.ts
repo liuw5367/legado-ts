@@ -1,12 +1,70 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
 import test from 'node:test'
-import { gzipSync } from 'node:zlib'
+import { deflateRawSync, gzipSync } from 'node:zlib'
 import { MemorySourceScriptCache } from '../../source-core/src/index.ts'
 import type { NormalizedSource, WorkflowRuleRequest } from '../../source-core/src/index.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
 
 const source = { bookSourceUrl: 'https://fixture.invalid', bookSourceName: 'fixture' } as NormalizedSource
+
+function crc32(input: Uint8Array): number {
+  let crc = 0xffffffff
+  for (const value of input) {
+    crc ^= value
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function createZip(entries: readonly { name: string; data: Uint8Array; method: 0 | 8; comment?: string }[]): Uint8Array {
+  const local: Buffer[] = []
+  const central: Buffer[] = []
+  let offset = 0
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, 'utf8')
+    const comment = Buffer.from(entry.comment ?? '', 'utf8')
+    const data = Buffer.from(entry.data)
+    const compressed = entry.method === 8 ? deflateRawSync(data) : data
+    const checksum = crc32(data)
+    const localHeader = Buffer.alloc(30 + name.length + compressed.length)
+    localHeader.writeUInt32LE(0x04034b50, 0)
+    localHeader.writeUInt16LE(20, 4)
+    localHeader.writeUInt16LE(entry.method, 8)
+    localHeader.writeUInt32LE(checksum, 14)
+    localHeader.writeUInt32LE(compressed.length, 18)
+    localHeader.writeUInt32LE(data.length, 22)
+    localHeader.writeUInt16LE(name.length, 26)
+    name.copy(localHeader, 30)
+    compressed.copy(localHeader, 30 + name.length)
+    local.push(localHeader)
+
+    const centralHeader = Buffer.alloc(46 + name.length + comment.length)
+    centralHeader.writeUInt32LE(0x02014b50, 0)
+    centralHeader.writeUInt16LE(20, 4)
+    centralHeader.writeUInt16LE(20, 6)
+    centralHeader.writeUInt16LE(entry.method, 10)
+    centralHeader.writeUInt32LE(checksum, 16)
+    centralHeader.writeUInt32LE(compressed.length, 20)
+    centralHeader.writeUInt32LE(data.length, 24)
+    centralHeader.writeUInt16LE(name.length, 28)
+    centralHeader.writeUInt16LE(comment.length, 32)
+    centralHeader.writeUInt32LE(offset, 42)
+    name.copy(centralHeader, 46)
+    comment.copy(centralHeader, 46 + name.length)
+    central.push(centralHeader)
+    offset += localHeader.length
+  }
+  const localBytes = Buffer.concat(local)
+  const centralBytes = Buffer.concat(central)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(entries.length, 8)
+  end.writeUInt16LE(entries.length, 10)
+  end.writeUInt32LE(centralBytes.length, 12)
+  end.writeUInt32LE(localBytes.length, 16)
+  return Uint8Array.from(Buffer.concat([localBytes, centralBytes, end]))
+}
 
 async function evaluate(host: SourceRuleHost, rule: string, content: unknown, stage: WorkflowRuleRequest['stage'] = 'search') {
   return host.evaluate({ source, stage, field: 'fixture', rule, content })
@@ -142,6 +200,39 @@ test('Java/Android 包别名、TextUtils、Build 和 GZIPInputStream 可消费�
     jsoup: 'A B',
     available: 0,
   })
+})
+
+test('Java ZipInputStream 可按条目顺序读取 stored/deflate 内容并暴露 ZipEntry 元数据', async () => {
+  const zip = createZip([
+    { name: 'folder/', data: new Uint8Array(), method: 0, comment: '目录' },
+    { name: 'plain.txt', data: Buffer.from('普通条目', 'utf8'), method: 0 },
+    { name: 'compressed.txt', data: Buffer.from('压缩条目', 'utf8'), method: 8 },
+  ])
+  const encoded = Buffer.from(zip).toString('base64')
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var input = new Packages.java.util.zip.ZipInputStream(new Packages.java.io.ByteArrayInputStream(Packages.java.util.Base64.getDecoder().decode('${encoded}')));
+    var buffer = new Packages.java.lang.String('        ').getBytes();
+    var entries = [];
+    var entry;
+    while ((entry = input.getNextEntry()) !== null) {
+      var output = new Packages.java.io.ByteArrayOutputStream();
+      var count = input.read(buffer);
+      while (count > 0) { output.write(buffer, 0, count); count = input.read(buffer); }
+      entries.push([entry.getName(), entry.getMethod(), entry.getSize(), entry.getCompressedSize(), entry.getCrc(), entry.getComment(), entry.isDirectory(), output.toString('UTF-8')]);
+      input.closeEntry();
+    }
+    input.close();
+    JSON.stringify(entries);`, '')
+  assert.equal(result.status, 'success', result.message)
+  const entries = JSON.parse(String(result.value)) as unknown[]
+  assert.equal(entries.length, 3)
+  assert.deepEqual(entries.map((entry) => (entry as unknown[]).slice(0, 2)), [['folder/', 0], ['plain.txt', 0], ['compressed.txt', 8]])
+  assert.deepEqual(entries.map((entry) => (entry as unknown[])[7]), ['', '普通条目', '压缩条目'])
+  assert.deepEqual((entries as unknown[][]).map((entry) => entry[5]), ['目录', null, null])
+  assert.deepEqual((entries as unknown[][]).map((entry) => entry[6]), [true, false, false])
+  assert.equal((entries[0] as unknown[])[2], 0)
+  assert.ok((entries[1] as unknown[])[2] as number > 0)
+  assert.ok((entries[2] as unknown[])[3] as number > 0)
 })
 
 test('Packages StrResponse 构造对象同时支持 Android 方法和属性序列化', async () => {

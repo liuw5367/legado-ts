@@ -18,6 +18,7 @@ import { gunzipSync, inflateSync } from 'node:zlib'
 import { NodeCryptoHost } from './crypto.ts'
 import { NodeEncodingHost } from './encoding.ts'
 import { NodeFontHost } from './font.ts'
+import { decodeZipEntries } from './archive.ts'
 import { HtmlParserAdapter } from './html.ts'
 import { QuickJSJavaScriptHost } from './javascript.ts'
 import { JsonPathParserAdapter } from './jsonpath.ts'
@@ -172,6 +173,7 @@ export class SourceRuleHost implements WorkflowRulePort {
       compression: options.compression ?? {
         gzipDecode: (value) => Uint8Array.from(gunzipSync(Buffer.from(value), { maxOutputLength: 16 * 1024 * 1024 })),
         inflateDecode: (value) => Uint8Array.from(inflateSync(Buffer.from(value), { maxOutputLength: 16 * 1024 * 1024 })),
+        zipDecode: (value, signal) => decodeZipEntries(value, signal),
       },
       timeFormat: options.timeFormat ?? ((time) => {
         const offset = options.timeZone === undefined ? undefined : timeZoneOffsetMs(time, options.timeZone)

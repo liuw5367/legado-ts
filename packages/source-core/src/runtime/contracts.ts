@@ -279,6 +279,16 @@ export interface ArchiveEntry {
   path: string
   /** 条目内容。 */
   data: Uint8Array
+  /** ZIP 条目的压缩后字节数；非 ZIP 或宿主无法提供时省略。 */
+  compressedSize?: number
+  /** ZIP 条目的未压缩字节数；非 ZIP 或宿主无法提供时省略。 */
+  size?: number
+  /** ZIP 条目的 CRC-32；非 ZIP 或宿主无法提供时省略。 */
+  crc?: number
+  /** ZIP 压缩方法编号，0 表示 stored，8 表示 deflate。 */
+  method?: number
+  /** ZIP 条目注释；非 ZIP 或宿主无法提供时省略。 */
+  comment?: string
 }
 
 export interface ArchiveHost {
