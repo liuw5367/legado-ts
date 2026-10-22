@@ -33,6 +33,7 @@ interface ScopedPatternMode {
   dotAll: boolean
   extended: boolean
   unixLines: boolean
+  unicodeClasses: boolean
 }
 
 interface ScopedFlagGroup {
@@ -121,12 +122,14 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
     const finalExtended = applyInlineExtended(extended, disabled, false)
     const unixLines = applyInlineUnixLines(false, enabled, true)
     const finalUnixLines = applyInlineUnixLines(unixLines, disabled, false)
-    const scoped = translateScopedFlags(source, flags, finalExtended, finalUnixLines)
+    const unicodeClasses = applyInlineUnicodeClasses(false, enabled, true)
+    const finalUnicodeClasses = applyInlineUnicodeClasses(unicodeClasses, disabled, false)
+    const scoped = translateScopedFlags(source, flags, finalExtended, finalUnixLines, finalUnicodeClasses)
     if ('error' in scoped) return scoped
     source = scoped.pattern
     flags = scoped.flags
   } else {
-    const scoped = translateScopedFlags(source, flags, false, false)
+    const scoped = translateScopedFlags(source, flags, false, false, false)
     if ('error' in scoped) return scoped
     source = scoped.pattern
     flags = scoped.flags
@@ -138,7 +141,7 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
   const properties = translateJavaUnicodeProperties(source)
   if ('error' in properties) return properties
   source = properties.pattern
-  if (properties.unicode && !flags.includes('u')) flags += 'u'
+  if (properties.unicode && !flags.includes('u') && !flags.includes('v')) flags += 'u'
   if (/\\(?:C|N\{)/u.test(source)) return { error: { code: 'unsupported-pattern', message: 'Java 正则字符转义暂不支持' } }
   let output = ''
   for (let index = 0; index < source.length;) {
@@ -165,28 +168,34 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
 
 /**
  * Java 的 `(?im-s:...)` 是局部作用域，而 ECMAScript 只有整条正则的 flags。
- * 对常见的 i/m/s/x/d 做词法展开，保留 `(?-i:...)` 这类书源写法；不能安全展开的
- * u/U 作用域继续明确返回能力错误，避免把局部语义错误地扩大到整条正则。
+ * 对常见的 i/m/s/x/d/U 做词法展开，保留 `(?-i:...)` 这类书源写法；不能安全展开的
+ * u 作用域继续明确返回能力错误，避免把局部语义错误地扩大到整条正则。
  */
-function translateScopedFlags(source: string, inputFlags: string, initialExtended: boolean, initialUnixLines: boolean): { pattern: string; flags: string } | { error: SourcePatternError } {
+function translateScopedFlags(source: string, inputFlags: string, initialExtended: boolean, initialUnixLines: boolean, initialUnicodeClasses: boolean): { pattern: string; flags: string } | { error: SourcePatternError } {
   const first = findScopedFlagGroup(source, 0)
-  if (first === undefined && !initialExtended && !initialUnixLines) return { pattern: source, flags: inputFlags }
-  const unsupported = first === undefined ? undefined : `${first.enabled}${first.disabled}`.split('').find((flag) => !'imsxd'.includes(flag))
+  const hasBoundaryEscape = source.includes('\\b') || source.includes('\\B')
+  if (first === undefined && !initialExtended && !initialUnixLines && !initialUnicodeClasses && !hasBoundaryEscape) return { pattern: source, flags: inputFlags }
+  const unsupported = first === undefined ? undefined : `${first.enabled}${first.disabled}`.split('').find((flag) => !'imsxdU'.includes(flag))
   if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
+  if (initialUnicodeClasses && inputFlags.includes('i')) return { error: { code: 'unsupported-pattern', message: 'Java 正则 U 与 i 联用的 Unicode 大小写折叠暂不支持' } }
   const mode: ScopedPatternMode = {
     ignoreCase: inputFlags.includes('i'),
     multiline: inputFlags.includes('m'),
     dotAll: inputFlags.includes('s'),
     extended: initialExtended,
     unixLines: initialUnixLines,
+    unicodeClasses: initialUnicodeClasses,
   }
   const translated = translateScopedSegment(source, 0, source.length, mode, false)
   if ('error' in translated) return translated
-  return { pattern: translated.pattern, flags: inputFlags.replace(/[ims]/gu, '') }
+  let flags = inputFlags.replace(/[ims]/gu, '')
+  if (translated.unicode && !flags.includes('u') && !flags.includes('v')) flags += 'u'
+  return { pattern: translated.pattern, flags }
 }
 
-function translateScopedSegment(source: string, start: number, end: number, mode: ScopedPatternMode, groupContent: boolean): { pattern: string } | { error: SourcePatternError } {
+function translateScopedSegment(source: string, start: number, end: number, mode: ScopedPatternMode, groupContent: boolean): { pattern: string; unicode: boolean } | { error: SourcePatternError } {
   let output = ''
+  let unicode = false
   let index = start
   while (index < end) {
     if (source.startsWith('\\Q', index)) {
@@ -204,11 +213,19 @@ function translateScopedSegment(source: string, start: number, end: number, mode
       const inner = translateScopedSegment(source, scoped.contentStart, scoped.end, nestedMode.mode, true)
       if ('error' in inner) return inner
       output += `(?:${inner.pattern})`
+      unicode ||= inner.unicode
       index = scoped.end + 1
       continue
     }
     const current = source[index]!
     if (current === '\\') {
+      const unicodeEscape = translateUnicodeEscape(source, index, mode)
+      if (unicodeEscape !== undefined) {
+        output += unicodeEscape.pattern
+        unicode ||= unicodeEscape.unicode
+        index += 2
+        continue
+      }
       const escaped = foldEscapedLiteral(source, index, end, mode.ignoreCase)
       output += escaped.text
       index = escaped.next
@@ -263,7 +280,29 @@ function translateScopedSegment(source: string, start: number, end: number, mode
     output += mode.ignoreCase ? foldPatternAtom(current) : current
     index += 1
   }
-  return { pattern: output }
+  return { pattern: output, unicode }
+}
+
+const unicodeWordBody = String.raw`\p{Alphabetic}\p{Mark}\p{Decimal_Number}\p{Connector_Punctuation}\p{Join_Control}`
+const unicodeWordClass = `[${unicodeWordBody}]`
+
+/** Java 的边界匹配器使用 Unicode word 集合；U flag 还会把常用预定义类切换到 Unicode。 */
+function translateUnicodeEscape(source: string, index: number, mode: ScopedPatternMode): { pattern: string; unicode: boolean } | undefined {
+  const marker = source[index + 1]
+  if (marker === 'b') {
+    return { pattern: `(?:(?<!${unicodeWordClass})(?=${unicodeWordClass})|(?<=${unicodeWordClass})(?!${unicodeWordClass}))`, unicode: true }
+  }
+  if (marker === 'B') {
+    return { pattern: `(?:(?<!${unicodeWordClass})(?!${unicodeWordClass})|(?<=${unicodeWordClass})(?=${unicodeWordClass}))`, unicode: true }
+  }
+  if (!mode.unicodeClasses) return undefined
+  if (marker === 'w') return { pattern: unicodeWordClass, unicode: true }
+  if (marker === 'W') return { pattern: `[^${unicodeWordBody}]`, unicode: true }
+  if (marker === 'd') return { pattern: String.raw`\p{Decimal_Number}`, unicode: true }
+  if (marker === 'D') return { pattern: String.raw`\P{Decimal_Number}`, unicode: true }
+  if (marker === 's') return { pattern: String.raw`\p{White_Space}`, unicode: true }
+  if (marker === 'S') return { pattern: String.raw`\P{White_Space}`, unicode: true }
+  return undefined
 }
 
 function findScopedFlagGroup(source: string, start: number): ScopedFlagGroup | undefined {
@@ -344,7 +383,7 @@ function findGroupEnd(source: string, contentStart: number): number {
 }
 
 function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled: string): { mode: ScopedPatternMode } | { error: SourcePatternError } {
-  const unsupported = `${enabled}${disabled}`.split('').find((flag) => !'imsxd'.includes(flag))
+  const unsupported = `${enabled}${disabled}`.split('').find((flag) => !'imsxdU'.includes(flag))
   if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
   const next = { ...mode }
   for (const flag of enabled) {
@@ -353,6 +392,7 @@ function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled:
     if (flag === 's') next.dotAll = true
     if (flag === 'x') next.extended = true
     if (flag === 'd') next.unixLines = true
+    if (flag === 'U') next.unicodeClasses = true
   }
   for (const flag of disabled) {
     if (flag === 'i') next.ignoreCase = false
@@ -360,7 +400,9 @@ function applyScopedFlagMode(mode: ScopedPatternMode, enabled: string, disabled:
     if (flag === 's') next.dotAll = false
     if (flag === 'x') next.extended = false
     if (flag === 'd') next.unixLines = false
+    if (flag === 'U') next.unicodeClasses = false
   }
+  if (next.unicodeClasses && next.ignoreCase) return { error: { code: 'unsupported-pattern', message: 'Java 正则 U 与 i 联用的 Unicode 大小写折叠暂不支持' } }
   return { mode: next }
 }
 
@@ -373,6 +415,12 @@ function applyInlineExtended(current: boolean, flags: string, enable: boolean): 
 function applyInlineUnixLines(current: boolean, flags: string, enable: boolean): boolean {
   let result = current
   for (const flag of flags) if (flag === 'd') result = enable
+  return result
+}
+
+function applyInlineUnicodeClasses(current: boolean, flags: string, enable: boolean): boolean {
+  let result = current
+  for (const flag of flags) if (flag === 'U') result = enable
   return result
 }
 
@@ -746,11 +794,7 @@ function applyInlineFlags(current: string, flags: string, enable: boolean): stri
   for (const flag of flags) {
     if (flag === 'x') continue
     if (flag === 'd') continue
-    if (flag === 'U') {
-      if (enable && !result.includes('u')) result += 'u'
-      if (!enable) result = result.replace('u', '')
-      continue
-    }
+    if (flag === 'U') continue
     if (enable && !result.includes(flag)) result += flag
     if (!enable) result = result.replace(flag, '')
   }
