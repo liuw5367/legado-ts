@@ -85,6 +85,7 @@ export interface SourceRuleBridgeRequest {
   usePublicKey?: unknown
   useCache?: unknown
   timeoutMs?: unknown
+  nanos?: unknown
   single?: unknown
   token?: unknown
   pattern?: unknown
@@ -169,6 +170,11 @@ export interface SourceRuleRuntimeOptions {
   setConcurrentRate?: (value: string) => void
   /** 书源 JS 的 CacheManager 端口，默认是仅当前会话可见的内存缓存。 */
   cache?: SourceScriptCache
+  /** Java byte-stream compression entry points; the core never imports a platform zlib implementation. */
+  compression?: {
+    gzipDecode?: (value: Uint8Array, signal: AbortSignal) => Uint8Array | Promise<Uint8Array>
+    inflateDecode?: (value: Uint8Array, signal: AbortSignal) => Uint8Array | Promise<Uint8Array>
+  }
   /** 平台对齐 Android JavaScriptInterface 的时间格式。 */
   timeFormat?: (time: number) => string
   timeFormatUTC?: (time: number, format: string, offsetMs: number) => string | null
@@ -745,6 +751,9 @@ const legadoByteArrayInputStream = function(input) {
   let mark = 0
   return { read: function(target, offset, length) { if (arguments.length === 0) return cursor < bytes.length ? bytes[cursor++] : -1; const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? target.length - start : Number(length); if ((!ArrayBuffer.isView(target) && !Array.isArray(target)) || !Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > target.length) throw new RangeError("invalid InputStream read range"); const available = Math.min(count, bytes.length - cursor); if (available <= 0) return -1; for (let index = 0; index < available; index++) target[start + index] = bytes[cursor + index]; cursor += available; return available }, readAllBytes: () => { const result = bytes.slice(cursor); cursor = bytes.length; return result }, available: () => bytes.length - cursor, skip: (count) => { const amount = Math.max(0, Math.min(bytes.length - cursor, Math.trunc(Number(count) || 0))); cursor += amount; return amount }, mark: () => { mark = cursor }, reset: () => { cursor = mark }, markSupported: () => true, close: () => undefined }
 }
+const legadoCompressedInputStream = (input, kind) => { const bytes = request({ kind, value: legadoBytesValue(input?.readAllBytes?.() ?? input) }); const delegate = legadoByteArrayInputStream(bytes); return { read: (...args) => delegate.read(...args), readAllBytes: () => delegate.readAllBytes(), available: () => delegate.available(), skip: (count) => delegate.skip(count), mark: () => delegate.mark(), reset: () => delegate.reset(), markSupported: () => delegate.markSupported(), close: () => delegate.close() } }
+const legadoGzipInputStream = function(input) { return legadoCompressedInputStream(input, "gzip-decode") }
+const legadoInflaterInputStream = function(input) { return legadoCompressedInputStream(input, "inflate-decode") }
 const legadoByteArrayOutputStream = function(initial) {
   let chunks = []
   const api = {
@@ -766,12 +775,64 @@ const legadoInputStreamReader = function(input, charset) {
   return { read: function(target, offset, length) { if (arguments.length === 0) return cursor < text.length ? text.charCodeAt(cursor++) : -1; const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? target.length - start : Number(length); if (!Array.isArray(target) && !ArrayBuffer.isView(target)) throw new TypeError("Reader target must be an array"); if (count === 0) return 0; const available = Math.min(count, text.length - cursor); if (available <= 0) return -1; for (let index = 0; index < available; index++) target[start + index] = text.charCodeAt(cursor + index); cursor += available; return available }, readAll: () => { const result = text.slice(cursor); cursor = text.length; return result }, close: () => undefined }
 }
 const legadoBufferedReader = function(reader) { return { readLine: () => { const chars = []; while (true) { const code = reader.read(); if (code < 0) return chars.length === 0 ? null : String.fromCharCode(...chars); if (code === 10) return String.fromCharCode(...chars); if (code !== 13) chars.push(code); if (chars.length >= 1048576) return String.fromCharCode(...chars) } }, read: (...args) => reader.read(...args), close: () => reader.close?.() } }
-const legadoSecretKeySpec = function(value, algorithm) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); return { getEncoded: () => bytes, getAlgorithm: () => String(algorithm ?? ""), getFormat: () => "RAW", encoded: bytes } }
+const legadoSecretKeySpec = function(value, algorithm) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); return { getEncoded: () => bytes, getKey: () => bytes, getAlgorithm: () => String(algorithm ?? ""), getFormat: () => "RAW", encoded: bytes } }
+const legadoIvParameterSpec = function(value, offset, length) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("IvParameterSpec range out of bounds"); const result = bytes.slice(start, start + count); return { getIV: () => result, getEncoded: () => result } }
+const legadoDesKeySpec = function(value, offset) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }); const start = offset === undefined ? 0 : Number(offset); if (!Number.isInteger(start) || start < 0 || start + 8 > bytes.length) throw new RangeError("DESKeySpec range out of bounds"); const result = bytes.slice(start, start + 8); return { getKey: () => result } }
+const legadoSecretKeyFactory = { getInstance: (algorithm) => ({ generateSecret: (spec) => { const bytes = spec?.getKey?.() ?? spec?.getEncoded?.() ?? spec?.encoded; return { getEncoded: () => bytes, getAlgorithm: () => String(algorithm), getFormat: () => "RAW" } } }) }
+const legadoCipher = {
+  ENCRYPT_MODE: 1,
+  DECRYPT_MODE: 2,
+  getInstance: (transformation) => {
+    let mode
+    let key
+    let iv
+    let chunks = []
+    const api = {
+      init: (nextMode, secret, parameters) => { mode = Number(nextMode); key = secret?.getEncoded?.() ?? secret?.encoded ?? secret; iv = parameters?.getIV?.() ?? parameters?.getEncoded?.() ?? parameters; chunks = []; return api },
+      update: (value) => { chunks.push(legadoBytesValue(value)); return new Uint8Array() },
+      doFinal: (value) => { if (value !== undefined) chunks.push(legadoBytesValue(value)); if (mode !== 1 && mode !== 2) throw new Error("Cipher is not initialized"); const result = request({ kind: "crypto-symmetric", operation: mode === 2 ? "decrypt" : "encrypt", transformation: String(transformation), key, iv, value: legadoConcatBytes(chunks), inputEncoding: "bytes", outputEncoding: "bytes" }); chunks = []; return result },
+      getAlgorithm: () => String(transformation),
+      getIV: () => iv,
+      getBlockSize: () => 0,
+      reset: () => { chunks = []; return api },
+    }
+    return api
+  },
+}
 const legadoMac = { getInstance: (algorithm) => { let key; let chunks = []; const api = { init: (secret) => { key = secret?.getEncoded?.() ?? secret?.encoded ?? secret; chunks = []; return api }, update: (value, offset, length) => { const bytes = legadoBytesValue(value); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("Mac update range out of bounds"); chunks.push(bytes.slice(start, start + count)); return api }, doFinal: (value) => { if (value !== undefined) api.update(value); const hex = request({ kind: "hmac-hex", value: legadoConcatBytes(chunks), key, algorithm: String(algorithm) }); chunks = []; return request({ kind: "hex-decode-bytes", value: hex }) }, reset: () => { chunks = []; return api }, getAlgorithm: () => String(algorithm) }; return api } }
 const legadoDatatypeConverter = { printHexBinary: (value) => String(request({ kind: "hex-encode", value }) ?? "").toUpperCase(), parseHexBinary: (value) => request({ kind: "hex-decode-bytes", value: String(value ?? "") }) }
+const legadoEncodedKeySpec = function(value, offset, length) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "base64-decode-bytes", value: String(value ?? "") }); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("EncodedKeySpec range out of bounds"); const result = bytes.slice(start, start + count); return { getEncoded: () => result } }
+const legadoKeyFactory = { getInstance: (algorithm) => ({ generatePrivate: (spec) => ({ getEncoded: () => spec?.getEncoded?.(), __legadoPrivateKey: spec?.getEncoded?.(), getAlgorithm: () => String(algorithm) }), generatePublic: (spec) => ({ getEncoded: () => spec?.getEncoded?.(), __legadoPublicKey: spec?.getEncoded?.(), getAlgorithm: () => String(algorithm) }) }) }
+const legadoSignature = { getInstance: (algorithm) => { let privateKey; let publicKey; let chunks = []; const api = { initSign: (key) => { privateKey = key?.getEncoded?.() ?? key?.__legadoPrivateKey ?? key; chunks = []; return api }, initVerify: (key) => { publicKey = key?.getEncoded?.() ?? key?.__legadoPublicKey ?? key; chunks = []; return api }, update: (value) => { chunks.push(legadoBytesValue(value)); return api }, sign: () => { const result = request({ kind: "crypto-sign", operation: "sign", algorithm: String(algorithm), privateKey, value: legadoConcatBytes(chunks), outputEncoding: "bytes" }); chunks = []; return result }, verify: (value) => { const result = request({ kind: "crypto-sign", operation: "verify", algorithm: String(algorithm), publicKey, value: legadoConcatBytes(chunks), signature: legadoBytesValue(value) }); chunks = []; return result }, getAlgorithm: () => String(algorithm), reset: () => { chunks = []; return api } }; return api } }
 const legadoUrlEncoder = { encode: (value, charset) => request({ kind: "encode-uri", value: String(value ?? ""), charset: charset === undefined ? "UTF-8" : String(charset) }) }
 const legadoAndroidBase64 = { DEFAULT: 0, NO_PADDING: 1, NO_WRAP: 2, CRLF: 4, URL_SAFE: 8, NO_CLOSE: 16, encodeToString: (value, flags) => request({ kind: "base64-encode", value, flags: Number(flags ?? 0) }), encode: (value, flags) => legadoJavaString(request({ kind: "base64-encode", value, flags: Number(flags ?? 0) })).getBytes("UTF-8"), decode: (value, flags) => request({ kind: "base64-decode-bytes", value, flags: Number(flags ?? 0) }) }
-const legadoJavaLang = { String: legadoJavaLangString, StringBuilder: legadoStringBuilder, Integer: legadoInteger, Long: legadoLong, Double: legadoNumber, Float: legadoNumber, Boolean: { parseBoolean: (value) => String(value).toLowerCase() === "true" }, Character: { isDigit: (value) => /\d/u.test(String(value)), isLetter: (value) => /\p{L}/u.test(String(value)), toLowerCase: (value) => String(value).toLowerCase(), toUpperCase: (value) => String(value).toUpperCase() }, Math: legadoJavaMath, CharSequence: legadoJavaLangString }
+const legadoJavaSystemProperties = { "file.encoding": "UTF-8", "file.separator": "/", "line.separator": "\n", "path.separator": ":" }
+let legadoJavaNanoTime = Date.now() * 1000000
+const legadoJavaSystemStream = (operation) => {
+  const write = (value, newline) => request({ kind: "runtime-log", operation, value: String(value === undefined ? "" : value) + (newline ? "\n" : "") })
+  return { print: (value) => write(value, false), println: (value) => write(value, true), append: (value) => write(value, false), flush: () => undefined, close: () => undefined }
+}
+const legadoJavaSystem = {
+  currentTimeMillis: () => Date.now(),
+  nanoTime: () => { const now = Date.now() * 1000000; legadoJavaNanoTime = Math.max(legadoJavaNanoTime + 1, now); return legadoJavaNanoTime },
+  lineSeparator: () => "\n",
+  getProperty: (key, fallback) => Object.prototype.hasOwnProperty.call(legadoJavaSystemProperties, String(key)) ? legadoJavaSystemProperties[String(key)] : fallback === undefined ? null : String(fallback),
+  setProperty: (key, value) => { const name = String(key); const previous = Object.prototype.hasOwnProperty.call(legadoJavaSystemProperties, name) ? legadoJavaSystemProperties[name] : null; legadoJavaSystemProperties[name] = String(value); return previous },
+  clearProperty: (key) => { const name = String(key); const previous = Object.prototype.hasOwnProperty.call(legadoJavaSystemProperties, name) ? legadoJavaSystemProperties[name] : null; delete legadoJavaSystemProperties[name]; return previous },
+  arraycopy: (source, sourcePosition, destination, destinationPosition, length) => { const from = Number(sourcePosition); const to = Number(destinationPosition); const count = Number(length); if ((!Array.isArray(source) && !(typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(source))) || (!Array.isArray(destination) && !(typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(destination))) || !Number.isInteger(from) || !Number.isInteger(to) || !Number.isInteger(count) || from < 0 || to < 0 || count < 0 || from + count > source.length || to + count > destination.length) throw new RangeError("arraycopy range out of bounds"); const values = Array.from(source).slice(from, from + count); for (let index = 0; index < values.length; index++) destination[to + index] = values[index] },
+  gc: () => undefined,
+  runFinalization: () => undefined,
+  exit: () => { throw new Error("__LEGADO_CAPABILITY__runtime System.exit unavailable") },
+  out: legadoJavaSystemStream("log"),
+  err: legadoJavaSystemStream("logType"),
+}
+const legadoJavaUUIDText = (value) => { const text = String(value ?? ""); if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(text)) throw new Error("Invalid UUID string"); return text.toLowerCase() }
+const legadoJavaUUIDValue = (value) => { const text = legadoJavaUUIDText(value); return { toString: () => text, toJSON: () => text, valueOf: () => text, equals: (other) => other !== null && other !== undefined && String(other?.toString?.() ?? other).toLowerCase() === text, hashCode: () => { const hex = text.replaceAll("-", ""); let hash = 0; for (let index = 0; index < 4; index++) hash ^= Number.parseInt(hex.slice(index * 8, index * 8 + 8), 16); return hash | 0 }, version: () => Number.parseInt(text[14] ?? "0", 16), variant: () => 2 } }
+const legadoJavaUUID = { randomUUID: () => legadoJavaUUIDValue(request({ kind: "random-uuid" })), fromString: (value) => legadoJavaUUIDValue(value) }
+const legadoJavaThread = { sleep: (millis, nanos) => { const value = Number(millis); const extra = nanos === undefined ? 0 : Number(nanos); if (!Number.isInteger(value) || value < 0 || !Number.isInteger(extra) || extra < 0 || extra > 999999) throw new RangeError("Illegal sleep time"); if (value === 0 && extra === 0) return undefined; return request({ kind: "runtime-sleep", time: value, nanos: extra }) }, yield: () => undefined, currentThread: () => ({ getName: () => "main", getId: () => 1, isAlive: () => true, isDaemon: () => false, isInterrupted: () => false }) }
+const legadoAndroidTextUtils = { isEmpty: (value) => value === null || value === undefined || String(value).length === 0, equals: (left, right) => left === right || left !== null && left !== undefined && right !== null && right !== undefined && String(left) === String(right), isDigitsOnly: (value) => /^\d*$/u.test(String(value ?? "")) }
+const legadoAndroidBuild = { MODEL: "legado-node", MANUFACTURER: "legado-node", BRAND: "legado-node", DEVICE: "legado-node", PRODUCT: "legado-node", VERSION: { RELEASE: "0", SDK_INT: 0 } }
+const legadoJavaLang = { String: legadoJavaLangString, StringBuilder: legadoStringBuilder, Integer: legadoInteger, Long: legadoLong, Double: legadoNumber, Float: legadoNumber, Boolean: { parseBoolean: (value) => String(value).toLowerCase() === "true" }, Character: { isDigit: (value) => /\d/u.test(String(value)), isLetter: (value) => /\p{L}/u.test(String(value)), toLowerCase: (value) => String(value).toLowerCase(), toUpperCase: (value) => String(value).toUpperCase() }, Math: legadoJavaMath, CharSequence: legadoJavaLangString, System: legadoJavaSystem, Thread: legadoJavaThread }
 const legadoJavaCollectionValues = (value) => {
   if (Array.isArray(value)) return Array.from(value)
   if (value !== null && value !== undefined && typeof value.toArray === "function") return Array.from(value.toArray() ?? [])
@@ -908,10 +969,19 @@ const legadoJavaCollections = {
   lastIndexOfSubList: (list, subList) => { const values = legadoJavaCollectionValues(list); const sub = legadoJavaCollectionValues(subList); if (sub.length === 0) return values.length; for (let index = values.length - sub.length; index >= 0; index--) if (sub.every((item, offset) => Object.is(values[index + offset], item))) return index; return -1 },
 }
 const legadoJavaUtil = { HashMap: function(initial) { return legadoMap(initial) }, LinkedHashMap: function(initial) { return legadoMap(initial) }, ArrayList: function(initial) { return legadoList(initial) }, HashSet: function(initial) { return legadoSet(initial) }, LinkedHashSet: function(initial) { return legadoSet(initial) }, Arrays: legadoJavaArrays, Collections: legadoJavaCollections, regex: { Pattern: legadoPattern, Matcher: legadoMatcher }, Base64: legadoBase64 }
+const legadoJavaZip = { GZIPInputStream: legadoGzipInputStream, InflaterInputStream: legadoInflaterInputStream, ZipInputStream: function() { throw new Error("__LEGADO_CAPABILITY__runtime java.util.zip.ZipInputStream unavailable") } }
+const legadoJsoupParse = (input) => {
+  const html = String(input ?? "")
+  const select = (selector) => { const previous = legadoContent; try { legadoContent = html; return java.getElements(String(selector ?? "")) } finally { legadoContent = previous } }
+  return { select, text: () => String(java.getString("@text", html) ?? ""), html: () => String(java.getString("@html", html) ?? ""), body: () => select("body")[0] ?? null, head: () => select("head")[0] ?? null, title: () => String(java.getString("title@text", html) ?? ""), toString: () => html }
+}
+const legadoJsoup = { parse: legadoJsoupParse }
+const legadoJsoupConnection = { Method: { GET: "GET", POST: "POST", PUT: "PUT", DELETE: "DELETE", HEAD: "HEAD", PATCH: "PATCH" } }
+const legadoJsoupNodes = { Element: function(value) { return value } }
 legadoJavaUtil.regex.Pattern = legadoPattern
 legadoJavaUtil.regex.Matcher = legadoMatcher
 const legadoJavaIo = { ByteArrayInputStream: legadoByteArrayInputStream, ByteArrayOutputStream: legadoByteArrayOutputStream, InputStreamReader: legadoInputStreamReader, BufferedReader: legadoBufferedReader }
-const legadoJavaSecurity = { MessageDigest: legadoMessageDigest }
+const legadoJavaSecurity = { MessageDigest: legadoMessageDigest, Signature: legadoSignature, KeyFactory: legadoKeyFactory, spec: { PKCS8EncodedKeySpec: legadoEncodedKeySpec, X509EncodedKeySpec: legadoEncodedKeySpec }, interfaces: {} }
 const legadoStandardCharsets = { UTF_8: "UTF-8", UTF_16: "UTF-16", ISO_8859_1: "ISO-8859-1" }
 const legadoName = (value, name) => { try { Object.defineProperty(value, "__legadoName", { value: name, configurable: false, enumerable: false }); } catch {} return value }
 for (const [name, value] of Object.entries(legadoJavaLang)) legadoName(value, name)
@@ -927,17 +997,46 @@ legadoName(legadoInputStreamReader, "InputStreamReader")
 legadoName(legadoBufferedReader, "BufferedReader")
 legadoName(legadoBigInteger, "BigInteger")
 legadoName(legadoBigDecimal, "BigDecimal")
+legadoName(legadoJavaUUID, "UUID")
+legadoName(legadoJavaSystem, "System")
+legadoName(legadoJavaThread, "Thread")
+legadoName(legadoAndroidTextUtils, "TextUtils")
+legadoName(legadoAndroidBuild, "Build")
+legadoName(legadoJavaZip.GZIPInputStream, "GZIPInputStream")
+legadoName(legadoJavaZip.InflaterInputStream, "InflaterInputStream")
+legadoName(legadoJavaZip.ZipInputStream, "ZipInputStream")
+legadoName(legadoIvParameterSpec, "IvParameterSpec")
+legadoName(legadoDesKeySpec, "DESKeySpec")
+legadoName(legadoSecretKeyFactory, "SecretKeyFactory")
+legadoName(legadoCipher, "Cipher")
+legadoName(legadoEncodedKeySpec, "PKCS8EncodedKeySpec")
+legadoName(legadoKeyFactory, "KeyFactory")
+legadoName(legadoSignature, "Signature")
+legadoName(legadoJsoup, "Jsoup")
+legadoName(legadoJsoupNodes.Element, "Element")
 legadoName(legadoSecretKeySpec, "SecretKeySpec")
 legadoName(legadoMac, "Mac")
 legadoName(legadoDatatypeConverter, "DatatypeConverter")
 legadoName(legadoUrlEncoder, "URLEncoder")
 legadoName(legadoAndroidBase64, "Base64")
 const legadoExistingPackages = globalThis.Packages
-const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: legadoJavaUtil, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Mac: legadoMac, spec: { SecretKeySpec: legadoSecretKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 } } }
+legadoJavaUtil.UUID = legadoJavaUUID
+legadoName(legadoJavaUtil.UUID, "UUID")
+legadoName(legadoJavaSecurity.spec.PKCS8EncodedKeySpec, "PKCS8EncodedKeySpec")
+legadoName(legadoJavaSecurity.spec.X509EncodedKeySpec, "X509EncodedKeySpec")
+const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: { ...legadoJavaUtil, zip: legadoJavaZip }, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Cipher: legadoCipher, Mac: legadoMac, SecretKeyFactory: legadoSecretKeyFactory, spec: { SecretKeySpec: legadoSecretKeySpec, IvParameterSpec: legadoIvParameterSpec, DESKeySpec: legadoDesKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 }, text: { TextUtils: legadoAndroidTextUtils }, os: { Build: legadoAndroidBuild } }, org: { jsoup: { Jsoup: legadoJsoup, Connection: legadoJsoupConnection, nodes: legadoJsoupNodes } } }
 legadoName(legadoPackages.java.nio.charset.StandardCharsets, "StandardCharsets")
 legadoName(legadoPackages.java.net.URL, "URL")
 if (legadoExistingPackages && legadoExistingPackages.io) legadoPackages.io = legadoExistingPackages.io
 globalThis.Packages = legadoPackages
+globalThis.org = legadoPackages.org
+globalThis.javax = legadoPackages.javax
+globalThis.android = legadoPackages.android
+java.lang = legadoPackages.java.lang
+java.util = legadoPackages.java.util
+java.security = legadoPackages.java.security
+java.io = legadoPackages.java.io
+java.net = legadoPackages.java.net
 globalThis.JavaImporter = function(...packages) {
   const scope = {}
   const importItem = (item) => { if (item === null || (typeof item !== "object" && typeof item !== "function")) return; const name = item.__legadoName; if (name !== undefined) scope[name] = item; else Object.assign(scope, item) }
@@ -1619,6 +1718,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private readonly requestBridge?: SourceRuleRuntimeOptions['request']
   private readonly setConcurrentRate?: SourceRuleRuntimeOptions['setConcurrentRate']
   private readonly cache: SourceScriptCache
+  private readonly compression?: SourceRuleRuntimeOptions['compression']
   private readonly timeFormat?: SourceRuleRuntimeOptions['timeFormat']
   private readonly timeFormatUTC?: SourceRuleRuntimeOptions['timeFormatUTC']
   private readonly randomUUID?: SourceRuleRuntimeOptions['randomUUID']
@@ -1654,6 +1754,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     this.requestBridge = options.request
     this.setConcurrentRate = options.setConcurrentRate
     this.cache = options.cache ?? new MemorySourceScriptCache()
+    this.compression = options.compression
     this.timeFormat = options.timeFormat
     this.timeFormatUTC = options.timeFormatUTC
     this.randomUUID = options.randomUUID
@@ -2547,6 +2648,11 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (request.kind === 'base64-decode-bytes') {
       return base64DecodeWithFlags(this.encoding, request.value, request.flags)
     }
+    if (request.kind === 'gzip-decode' || request.kind === 'inflate-decode') {
+      const decoder = request.kind === 'gzip-decode' ? this.compression?.gzipDecode : this.compression?.inflateDecode
+      if (decoder === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${request.kind} unavailable`)
+      return decoder(byteValue(request.value), signal)
+    }
     if (request.kind === 'encode-bytes') return this.encoding.encode(textValue(request.value), textValue(request.charset) || 'UTF-8')
     if (request.kind === 'decode-bytes') return this.encoding.decode(byteValue(request.value), textValue(request.charset) || 'UTF-8')
     if (request.kind === 'to-num-chapter') return toNumChapter(request.value)
@@ -2722,6 +2828,28 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (request.kind === 'random-uuid') {
       if (this.randomUUID === undefined) throw new Error('__LEGADO_CAPABILITY__runtime randomUUID unavailable')
       return this.randomUUID()
+    }
+    if (request.kind === 'runtime-sleep') {
+      const millis = Number(request.time)
+      const nanos = Number(request.nanos ?? 0)
+      if (!Number.isInteger(millis) || millis < 0 || !Number.isInteger(nanos) || nanos < 0 || nanos > 999999) throw new RangeError('Illegal sleep time')
+      if (signal.aborted) throw new Error('__LEGADO_CANCELLED__')
+      const delay = millis + nanos / 1000000
+      if (delay === 0) return undefined
+      await new Promise<void>((resolve, reject) => {
+        let settled = false
+        const finish = (error?: Error) => {
+          if (settled) return
+          settled = true
+          signal.removeEventListener('abort', onAbort)
+          if (error === undefined) resolve()
+          else reject(error)
+        }
+        const timer = setTimeout(() => finish(), delay)
+        const onAbort = () => { clearTimeout(timer); finish(new Error('__LEGADO_CANCELLED__')) }
+        signal.addEventListener('abort', onAbort, { once: true })
+      })
+      return undefined
     }
     if (request.kind === 'source-state') return this.handleSourceState(request, signal, source, workflowStage, currentBindings, workflowActions, requestObserver)
     if (request.kind === 'file') {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
 import test from 'node:test'
+import { gzipSync } from 'node:zlib'
 import { MemorySourceScriptCache } from '../../source-core/src/index.ts'
 import type { NormalizedSource, WorkflowRuleRequest } from '../../source-core/src/index.ts'
 import { SourceRuleHost } from '../src/source-rule-host.ts'
@@ -94,6 +95,53 @@ test('JavaImporter、Packages、Map/List 和 Java String 常见用法可运行',
   const result = await evaluate(host, `@js:${code}`, '')
   assert.equal(result.status, 'success')
   assert.deepEqual(JSON.parse(String(result.value)), { digest: [16, 32], text: 'oo', map: ['alice', 'reader', 2], list: ['b', 2], response: ['https://fixture.invalid', 'body', 200] })
+})
+
+test('Packages Java System、UUID 和 Thread 提供可闭环的时间、数组、随机值与休眠语义', async () => {
+  const host = new SourceRuleHost({ randomUUID: () => '01234567-89ab-4cde-8123-456789abcdef' })
+  const result = await evaluate(host, `@js:
+    var importer = new JavaImporter(Packages.java.lang.System, Packages.java.lang.Thread, Packages.java.util.UUID);
+    with (importer) {
+      var values = [0, 0, 0, 0];
+      System.arraycopy([1, 2, 3], 0, values, 1, 3);
+      var uuid = UUID.randomUUID();
+      var parsed = UUID.fromString('01234567-89ab-4cde-8123-456789abcdef');
+      var property = [System.setProperty('fixture', 'value'), System.getProperty('fixture'), System.clearProperty('fixture'), System.getProperty('fixture'), System.getProperty('missing', 'fallback')];
+      Thread.sleep(1);
+      JSON.stringify({ values: values, uuid: [String(uuid), uuid.toString(), uuid.version(), uuid.variant(), uuid.equals(parsed)], time: [System.currentTimeMillis() > 0, System.nanoTime() > 0], property: property, thread: [Thread.currentThread().getName(), Thread.currentThread().getId()] });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    values: [0, 1, 2, 3],
+    uuid: ['01234567-89ab-4cde-8123-456789abcdef', '01234567-89ab-4cde-8123-456789abcdef', 4, 2, true],
+    time: [true, true],
+    property: [null, 'value', 'value', null, 'fallback'],
+    thread: ['main', 1],
+  })
+})
+
+test('Java/Android 包别名、TextUtils、Build 和 GZIPInputStream 可消费真实书源写法', async () => {
+  const encoded = Buffer.from(gzipSync(Buffer.from('压缩正文', 'utf8'))).toString('base64')
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang, Packages.java.io, Packages.java.util, Packages.java.util.zip, Packages.android.text);
+    with (importer) {
+      var input = new GZIPInputStream(new ByteArrayInputStream(Base64.getDecoder().decode('${encoded}')));
+      var buffer = new java.lang.String('        ').getBytes();
+      var output = new ByteArrayOutputStream();
+      var count = input.read(buffer);
+      while (count > 0) { output.write(buffer, 0, count); count = input.read(buffer); }
+      JSON.stringify({ alias: new java.lang.String('ok').toString(), text: output.toString('UTF-8'), empty: [TextUtils.isEmpty(null), TextUtils.isEmpty(''), TextUtils.isEmpty('x')], digits: [TextUtils.isDigitsOnly('123'), TextUtils.isDigitsOnly('12a')], build: [Packages.android.os.Build.MODEL, Packages.android.os.Build.MANUFACTURER], jsoup: org.jsoup.Jsoup.parse('<ul><li>A</li><li>B</li></ul>').select('li').text(), available: input.available() });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    alias: 'ok',
+    text: '压缩正文',
+    empty: [true, true, false],
+    digits: [true, false],
+    build: ['legado-node', 'legado-node'],
+    jsoup: 'A B',
+    available: 0,
+  })
 })
 
 test('Packages StrResponse 构造对象同时支持 Android 方法和属性序列化', async () => {
@@ -864,6 +912,37 @@ test('对称加密支持 Android 常用简写、十六进制输入和双密钥 3
     JSON.stringify([aes.decryptStr(aesHex), triple.decryptStr(tripleBase64)]);`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), ['hello', 'hello'])
+})
+
+test('Java Cipher、KeySpec、KeyFactory 和 Signature 复用 Node 加密端口', async () => {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'der' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+  })
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang, Packages.java.util, Packages.java.security, Packages.java.security.spec, Packages.javax.crypto, Packages.javax.crypto.spec);
+    with (importer) {
+      var key = new SecretKeySpec(String('1234567890123456').getBytes(), 'AES');
+      var iv = new IvParameterSpec(String('abcdefghijklmnop').getBytes());
+      var cipher = Cipher.getInstance('AES/CBC/PKCS5Padding');
+      cipher.init(Cipher.ENCRYPT_MODE, key, iv);
+      var encrypted = cipher.doFinal(String('hello').getBytes());
+      cipher.init(Cipher.DECRYPT_MODE, key, iv);
+      var plain = String(cipher.doFinal(encrypted));
+      var privateSpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode('${privateKey.toString('base64')}'));
+      var publicSpec = new X509EncodedKeySpec(Base64.getDecoder().decode('${publicKey.toString('base64')}'));
+      var factory = KeyFactory.getInstance('RSA');
+      var signature = Signature.getInstance('SHA256withRSA');
+      signature.initSign(factory.generatePrivate(privateSpec));
+      signature.update(String('hello').getBytes());
+      var signed = signature.sign();
+      signature.initVerify(factory.generatePublic(publicSpec));
+      signature.update(String('hello').getBytes());
+      JSON.stringify([plain, signature.verify(signed), encrypted.length > 0]);
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), ['hello', true, true])
 })
 
 test('对称加密工厂保持随机 key 和 setIv 状态，并支持 CTR/NoPadding', async () => {
