@@ -90,6 +90,16 @@ test('HTML/XPath textNodes 去除每个文本节点首尾 ASCII 控制空白并�
   assert.equal(xml.read(xmlNode[0]!, 'textNodes'), 'A\nB')
 })
 
+test('XPath XML 文档解析 xmlns 前缀并保留标准函数求值', () => {
+  const xpath = new XPathParserAdapter()
+  const xml = xpath.parse('<?xml version="1.0"?><feed xmlns:atom="urn:atom"><atom:entry id="1"><atom:title>第一章</atom:title></atom:entry></feed>')
+  const entries = xpath.evaluate(xml, '//atom:entry') as ParserNode[]
+  assert.equal(entries.length, 1)
+  assert.equal(xpath.evaluate(xml, 'count(//atom:entry)'), 1)
+  assert.equal(xpath.evaluate(xml, 'string(//atom:title)'), '第一章')
+  assert.equal(xml.attr(entries[0]!, 'id'), '1')
+})
+
 test('JSONPath adapter 保留列表和空选择', () => {
   const parser = new JsonPathParserAdapter()
   assert.deepEqual(parser.evaluate({ books: [{ name: 'A' }, { name: 'B' }] }, '$.books[*].name'), ['A', 'B'])

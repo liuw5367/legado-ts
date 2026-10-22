@@ -140,6 +140,27 @@ class XmlDocumentView implements HtmlDocument {
     return this.root
   }
 
+  public namespaceResolver(): (prefix: string) => string | null {
+    const namespaces = new Map<string, string | null>([['xml', 'http://www.w3.org/XML/1998/namespace']])
+    const chain: XmlNode[] = []
+    let current: XmlNode | null | undefined = this.root
+    if (current?.nodeType === 9) current = childNodes(current).find((node) => node.nodeType === 1) ?? current
+    while (current !== null && current !== undefined) {
+      chain.push(current)
+      current = current.parentNode
+    }
+    chain.reverse()
+    for (const node of chain) {
+      for (let index = 0; index < (node.attributes?.length ?? 0); index += 1) {
+        const attribute = node.attributes?.item(index)
+        if (attribute === null || attribute === undefined) continue
+        if (attribute.name === 'xmlns') namespaces.set('', attribute.value || null)
+        else if (attribute.name.startsWith('xmlns:')) namespaces.set(attribute.name.slice(6), attribute.value || null)
+      }
+    }
+    return (prefix: string) => namespaces.get(prefix) ?? null
+  }
+
   public wrap(value: XmlNode): ParserNode {
     const existing = this.reverse.get(value)
     if (existing !== undefined) return { id: existing, kind: value.nodeType === 3 ? 'text' : value.nodeType === 9 ? 'document' : 'element' }
@@ -292,7 +313,7 @@ export class XPathParserAdapter implements XPathParser {
 
   public evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null {
     if (!(document instanceof XmlDocumentView)) throw new Error('XPath requires an XML document created by XPathParserAdapter.parse')
-    const result = evaluateXPath(expression, document.context(), undefined, undefined, ReturnType.ALL_RESULTS) as unknown[]
+    const result = evaluateXPath(expression, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
     if (result.every(isXmlNode)) return result.map((item) => document.wrap(item))
     if (result.length === 1) return normalizeXPathValue(result[0])
     return result.map(normalizeXPathValue)
