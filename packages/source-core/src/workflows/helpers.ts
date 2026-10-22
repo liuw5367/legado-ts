@@ -365,7 +365,10 @@ export interface WorkflowPageResponse {
 }
 
 export async function requestPageResponse(ports: WorkflowPorts, source: NormalizedSource, url: string, stage: WorkflowStage, options: WorkflowOptions, diagnostics: WorkflowDiagnostic[], trace: WorkflowTraceEntry[], execution?: { webJs?: string; sourceRegex?: string }, requestContext?: Pick<WorkflowRequest, 'book' | 'chapter'>): Promise<WorkflowPageResponse | undefined> {
+  const observationCollector = ports.runtimeObservationCollector
+  const observation = observationCollector?.begin({ sourceId: source.bookSourceUrl, stage, target: url })
   if (options.signal?.aborted === true) {
+    if (observation !== undefined) observationCollector?.markCancelled(observation, 0)
     diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
     return undefined
   }
@@ -381,8 +384,11 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
       ...(requestContext?.chapter === undefined ? {} : { chapter: requestContext.chapter }),
     }
     let response: NetworkResponse
-    if (ports.request !== undefined) response = await ports.request(requestInput)
-    else {
+    if (ports.request !== undefined) {
+      if (observation !== undefined) observationCollector?.markRequested(observation, { requestId: observation.id, attempt: 0 })
+      response = await ports.request(requestInput)
+      if (observation !== undefined) observationCollector?.markResponse(observation, response)
+    } else {
       // 只有网络宿主声明的字符集能力才可委托；非 UTF-8 缺能力时明确失败，不用 UTF-8 冒充。
       const encodeCharset = ports.network.encodeCharset?.bind(ports.network)
       const encoding: CharsetCodec = {
@@ -399,11 +405,14 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
         rules: ports.rules,
         encoding,
         decodeResponse: (value) => responseText(value, source, ports),
-        ...(ports.requestObserver === undefined ? {} : { requestObserver: ports.requestObserver }),
+        ...(observation === undefined
+          ? (ports.requestObserver === undefined ? {} : { requestObserver: ports.requestObserver })
+          : { requestObserver: observationCollector!.observerFor(observation, ports.requestObserver) }),
       })
       response = await runtime.request(requestInput)
     }
     if (options.signal !== undefined && options.signal.aborted) {
+      if (observation !== undefined) observationCollector?.markCancelled(observation)
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
@@ -411,17 +420,23 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
     const checked = options.skipLoginCheck === true
       ? response
       : await applyLoginCheck(ports, source, stage, response, options.signal, diagnostics, requestContext)
-    if (checked === undefined) return undefined
+    if (checked === undefined) {
+      const diagnostic = diagnostics.at(-1)
+      if (observation !== undefined) observationCollector?.markError(observation, { code: diagnostic?.code ?? 'rule-failed', retryable: diagnostic?.retryable ?? false })
+      return undefined
+    }
     response = checked
     // Android 在重试耗尽后仍把有响应的正文交给规则解析；状态码保留在 NetworkResponse 和请求观察中。
     return { content: responseText(response, source, ports), url: response.url }
   } catch (error) {
     if (options.signal !== undefined && options.signal.aborted) {
+      if (observation !== undefined) observationCollector?.markCancelled(observation)
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
     // 结构化请求错误是确定性失败：直接映射诊断，不伪装成 500 也不标记可重试。
     if (error instanceof SourceRequestError) {
+      if (observation !== undefined) observationCollector?.markError(observation, { code: error.code, retryable: false })
       diagnostics.push({
         code: error.code,
         stage,
@@ -444,9 +459,14 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
       const errorResponse: NetworkResponse = { url: errorUrl, status: 500, headers: {}, bytes: new TextEncoder().encode(errorText), redirected: false }
       const recovered = await applyLoginCheck(ports, source, stage, errorResponse, options.signal, diagnostics, requestContext)
       if (recovered !== undefined && recovered.status !== 500) return { content: responseText(recovered, source, ports), url: recovered.url }
-      if (recovered === undefined) return undefined
+      if (recovered === undefined) {
+        if (observation !== undefined) observationCollector?.markError(observation, { code: 'rule-failed', retryable: false })
+        return undefined
+      }
     }
-    diagnostics.push({ code: isWebViewError(error) ? 'capability-missing' : 'request-failed', stage, message: isWebViewError(error) ? '书源请求需要 WebView，当前 Node 宿主不支持' : '书源请求失败', retryable: !isWebViewError(error) })
+    const code = isWebViewError(error) ? 'capability-missing' : 'request-failed'
+    if (observation !== undefined) observationCollector?.markError(observation, { code, retryable: code !== 'capability-missing' })
+    diagnostics.push({ code, stage, message: isWebViewError(error) ? '书源请求需要 WebView，当前 Node 宿主不支持' : '书源请求失败', retryable: code !== 'capability-missing' })
     return undefined
   }
 }
@@ -548,7 +568,8 @@ export async function executeSourceFunction(ports: WorkflowPorts, source: Normal
   trace.push({ stage, event: 'rule', target: name })
   if (ports.rules.executeSourceFunction === undefined) return { state: 'capability-missing', message: 'JavaScript 源函数宿主不可用' }
   try {
-    const output = await ports.rules.executeSourceFunction({ source, name, args, bindings, stage: jsStage, workflowStage: stage, ...(workflowActions === undefined ? {} : { workflowActions }), ...(signal === undefined ? {} : { signal }) })
+    const requestObserver = ports.runtimeObservationCollector?.observerForRequest({ sourceId: source.bookSourceUrl, stage, target: `javascript:${name}` }, ports.requestObserver)
+    const output = await ports.rules.executeSourceFunction({ source, name, args, bindings, stage: jsStage, workflowStage: stage, ...(workflowActions === undefined ? {} : { workflowActions }), ...(requestObserver === undefined ? {} : { requestObserver }), ...(signal === undefined ? {} : { signal }) })
     if (signal?.aborted === true || output.status === 'cancelled') return { state: 'cancelled', ...(output.message === undefined ? {} : { message: output.message }) }
     if (output.status === 'capability-missing') return { state: 'capability-missing', ...(output.message === undefined ? {} : { message: output.message }) }
     if (output.status === 'failed') return { state: 'failed', message: output.message ?? `${name} 执行失败` }
@@ -565,7 +586,8 @@ export async function executeWorkflowJavaScript(ports: WorkflowPorts, source: No
   trace.push({ stage, event: 'rule', target: 'javascript' })
   if (ports.rules.executeWorkflowJavaScript === undefined) return { state: 'capability-missing', message: 'JavaScript 脚本宿主不可用' }
   try {
-  const output = await ports.rules.executeWorkflowJavaScript({ source, code, stage: jsStage, workflowStage: stage, ...(options.content === undefined ? {} : { content: options.content }), ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }), ...(options.bindings === undefined ? {} : { bindings: options.bindings }), ...(options.captureMutations === undefined ? {} : { captureMutations: options.captureMutations }), ...(options.captureGlobals === undefined ? {} : { captureGlobals: options.captureGlobals }), ...(options.globalState === undefined ? {} : { globalState: options.globalState }), ...(options.workflowActions === undefined ? {} : { workflowActions: options.workflowActions }), ...(options.javascriptBudget === undefined ? {} : { javascriptBudget: options.javascriptBudget }), ...(options.signal === undefined ? {} : { signal: options.signal }) })
+    const requestObserver = ports.runtimeObservationCollector?.observerForRequest({ sourceId: source.bookSourceUrl, stage, target: `javascript:${jsStage}` }, ports.requestObserver)
+  const output = await ports.rules.executeWorkflowJavaScript({ source, code, stage: jsStage, workflowStage: stage, ...(options.content === undefined ? {} : { content: options.content }), ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }), ...(options.bindings === undefined ? {} : { bindings: options.bindings }), ...(options.captureMutations === undefined ? {} : { captureMutations: options.captureMutations }), ...(options.captureGlobals === undefined ? {} : { captureGlobals: options.captureGlobals }), ...(options.globalState === undefined ? {} : { globalState: options.globalState }), ...(options.workflowActions === undefined ? {} : { workflowActions: options.workflowActions }), ...(options.javascriptBudget === undefined ? {} : { javascriptBudget: options.javascriptBudget }), ...(requestObserver === undefined ? {} : { requestObserver }), ...(options.signal === undefined ? {} : { signal: options.signal }) })
     if (options.signal?.aborted === true || output.status === 'cancelled') return { state: 'cancelled', ...(output.message === undefined ? {} : { message: output.message }) }
     if (output.status === 'capability-missing') return { state: 'capability-missing', ...(output.message === undefined ? {} : { message: output.message }) }
     if (output.status === 'failed') return { state: 'failed', message: output.message ?? 'JavaScript 脚本执行失败' }

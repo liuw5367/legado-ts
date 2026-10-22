@@ -62,6 +62,8 @@ export interface RequestScriptContext {
   captureBindings?: readonly string[]
   /** Binding roots used by controlled AnalyzeUrl state adapters. */
   mutableBindings?: readonly string[]
+  /** 当前请求调用链的观测器，供 URL/body/header 脚本继续传递给 bridge。 */
+  requestObserver?: RequestObserver
 }
 
 function text(value: unknown): string {
@@ -329,6 +331,7 @@ export class SourceRequestRuntime {
       bindings: { ...(input.book === undefined ? {} : { book: input.book }), __legadoUrlContext: urlContext },
       captureBindings,
       mutableBindings: ['__legadoUrlContext'],
+      ...(this.requestObserver === undefined ? {} : { requestObserver: this.requestObserver }),
       ...(input.chapter === undefined ? {} : { chapterScope: input.chapter }),
     }
     const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source, scriptContext)
@@ -369,7 +372,7 @@ export class SourceRequestRuntime {
     source: NormalizedSource,
     content: string,
     signal: AbortSignal | undefined,
-    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[] },
+    context: { evaluateField: string; field: string; baseUrl?: string; redirectUrl?: string; scriptStage?: 'search' | 'book' | 'mainJs' | 'chapter' | 'content'; bindings?: Readonly<Record<string, unknown>>; chapterScope?: unknown; captureBindings?: readonly string[]; mutableBindings?: readonly string[]; requestObserver?: RequestObserver },
   ): Promise<unknown> {
     if (this.ruleHost === undefined) throw new SourceRequestError('capability-missing', '脚本执行需要 JavaScript 宿主', context.field)
     const scriptStage = context.scriptStage ?? (stage === 'detail' ? 'book' : 'search')
@@ -395,6 +398,7 @@ export class SourceRequestRuntime {
           }),
           ...(context.captureBindings === undefined ? {} : { captureMutations: context.captureBindings }),
           ...(context.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
+          ...(context.requestObserver === undefined ? {} : { requestObserver: context.requestObserver }),
           ...(signal === undefined ? {} : { signal }),
         })
       } else {
@@ -414,6 +418,7 @@ export class SourceRequestRuntime {
           }),
           ...(context.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
           ...(context.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
+          ...(context.requestObserver === undefined ? {} : { requestObserver: context.requestObserver }),
           ...(signal === undefined ? {} : { signal }),
         })
       }
@@ -451,8 +456,12 @@ export class SourceRequestRuntime {
     return text(value)
   }
 
-  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary', loginHeaderUrl = rawUrl, scriptContext?: RequestScriptContext): Promise<NetworkResponse> {
-    const suppliedUrlContext = object(scriptContext?.bindings?.__legadoUrlContext)
+  public async requestRaw(source: NormalizedSource, rawUrl: string, overrides: SourceRequestOptions = {}, signal?: AbortSignal, budget?: WorkflowRequest['options']['budget'], stage: WorkflowStage = 'search', nested = false, skipRateLimit = false, kind: 'primary' | 'bridge' = 'primary', loginHeaderUrl = rawUrl, scriptContext?: RequestScriptContext, requestObserver?: RequestObserver): Promise<NetworkResponse> {
+    const effectiveScriptContext: RequestScriptContext = {
+      ...(scriptContext ?? {}),
+      ...(requestObserver !== undefined ? { requestObserver } : this.requestObserver === undefined ? {} : { requestObserver: this.requestObserver }),
+    }
+    const suppliedUrlContext = object(effectiveScriptContext.bindings?.__legadoUrlContext)
     const urlContext: Record<string, unknown> = suppliedUrlContext ?? { url: rawUrl, headerMap: {}, urlDirty: false }
     const effectiveRawUrl = urlContext.urlDirty === true && typeof urlContext.url === 'string' ? urlContext.url : rawUrl
     const split = splitSourceRequestUrl(effectiveRawUrl)
@@ -463,7 +472,7 @@ export class SourceRequestRuntime {
     const requestedMethod = typeof options.method === 'string' ? options.method.toUpperCase() : 'GET'
     // AnalyzeUrl maps every method except POST and HEAD to GET.
     const method = requestedMethod === 'POST' || requestedMethod === 'HEAD' ? requestedMethod : 'GET'
-    const sourceHeaders = await this.sourceHeaders(source, signal, nested, scriptContext)
+    const sourceHeaders = await this.sourceHeaders(source, signal, nested, effectiveScriptContext)
     const defaultHeaders = getHeader(sourceHeaders, 'user-agent') === undefined && this.network.defaultUserAgent !== undefined
       ? { 'User-Agent': this.network.defaultUserAgent }
       : undefined
@@ -567,10 +576,10 @@ export class SourceRequestRuntime {
     delete nestedOptions.webJs
     urlContext.options = nestedOptions
     const urlScriptContext: RequestScriptContext = {
-      ...(scriptContext ?? {}),
-      bindings: { ...(scriptContext?.bindings ?? {}), __legadoUrlContext: urlContext },
-      captureBindings: [...new Set([...(scriptContext?.captureBindings ?? []), '__legadoUrlContext'])],
-      mutableBindings: [...new Set([...(scriptContext?.mutableBindings ?? []), '__legadoUrlContext'])],
+      ...effectiveScriptContext,
+      bindings: { ...(effectiveScriptContext.bindings ?? {}), __legadoUrlContext: urlContext },
+      captureBindings: [...new Set([...(effectiveScriptContext.captureBindings ?? []), '__legadoUrlContext'])],
+      mutableBindings: [...new Set([...(effectiveScriptContext.mutableBindings ?? []), '__legadoUrlContext'])],
     }
     if (typeof options.js === 'string' && options.js.trim().length > 0) {
       const planUrl = request.plan.url
@@ -596,12 +605,12 @@ export class SourceRequestRuntime {
         plan: request.plan,
         startedAt: Date.now(),
       }
-      this.notifyStart(observation)
+      this.notifyStart(observation, requestObserver)
       try {
         response = await this.network.request(request.plan)
-        this.notifyComplete({ ...observation, response, durationMs: Date.now() - observation.startedAt })
+        this.notifyComplete({ ...observation, response, durationMs: Date.now() - observation.startedAt }, requestObserver)
       } catch (error) {
-        this.notifyError({ ...observation, error, durationMs: Date.now() - observation.startedAt })
+        this.notifyError({ ...observation, error, durationMs: Date.now() - observation.startedAt }, requestObserver)
         throw error
       }
       const successful = response.status >= 200 && response.status < 300
@@ -625,7 +634,7 @@ export class SourceRequestRuntime {
           field: 'bodyJs',
           baseUrl: scriptBaseUrl,
           redirectUrl: result.url,
-          ...scriptContext,
+          ...effectiveScriptContext,
         })
         result = { ...result, bytes: new TextEncoder().encode(transformed), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
       }
@@ -633,16 +642,19 @@ export class SourceRequestRuntime {
     return result
   }
 
-  private notifyStart(event: Parameters<NonNullable<RequestObserver['onStart']>>[0]): void {
+  private notifyStart(event: Parameters<NonNullable<RequestObserver['onStart']>>[0], observer?: RequestObserver): void {
     try { this.requestObserver?.onStart?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
+    if (observer !== undefined && observer !== this.requestObserver) try { observer.onStart?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
   }
 
-  private notifyComplete(event: Parameters<NonNullable<RequestObserver['onComplete']>>[0]): void {
+  private notifyComplete(event: Parameters<NonNullable<RequestObserver['onComplete']>>[0], observer?: RequestObserver): void {
     try { this.requestObserver?.onComplete?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
+    if (observer !== undefined && observer !== this.requestObserver) try { observer.onComplete?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
   }
 
-  private notifyError(event: Parameters<NonNullable<RequestObserver['onError']>>[0]): void {
+  private notifyError(event: Parameters<NonNullable<RequestObserver['onError']>>[0], observer?: RequestObserver): void {
     try { this.requestObserver?.onError?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
+    if (observer !== undefined && observer !== this.requestObserver) try { observer.onError?.(event) } catch { /* 调试观察器不能改变主请求。 */ }
   }
 
   private async sourceHeaders(source: NormalizedSource, signal?: AbortSignal, nested = false, scriptContext?: RequestScriptContext): Promise<Readonly<Record<string, string>> | undefined> {

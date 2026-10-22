@@ -55,7 +55,7 @@
 | CAP-SCHEMA | 02 的全部 BookSource/rule 字段、RowUi | IMP-005、EDIT-005 | 字段已核对；登录动态协议仍有待核实项 |
 | CAP-RULE | 04 的模式、链、变量、替换及转换 | SCH、VAR | `compileRule`/`evaluateRule` 已实现；golden 对照未全量运行 |
 | CAP-REQUEST | 05 请求/响应/Cookie/DNS/代理 | URL | `createRequestPlan` 已实现；部分选项待对照 |
-| CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP | `searchBooks`/`discoverBooks`、动态分类和五类控件已有实现；InfoMap 保存和选择快照差异见 D31/D40；exploreScreen 仅保留，当前未发现 Android 执行入口 |
+| CAP-SEARCH / CAP-EXPLORE | 06、17 | FLOW-001 至 003、EXP、OBS-001 至 004 | `searchBooks`/`discoverBooks`、动态分类和五类控件已有实现；声明式请求、`mainJs` bridge 子请求及 URL/header/body 脚本的嵌套请求均可返回脱敏请求阶段和跳过原因；InfoMap 保存和选择快照差异见 D31/D40；exploreScreen 仅保留，当前未发现 Android 执行入口 |
 | CAP-INFO / CAP-TOC / CAP-CONTENT | 07 至 09 | FLOW-004 至 012 | `loadBookDetails`/`loadTableOfContents`/`loadChapterContent`/`loadChapterContentBatch` 已实现；Node 批量测试通过，需跑 Android 对照 |
 | CAP-JS | 10、11 的规则内 JS 和整源 JS | JS、IMP-008 至 010 | QuickJS 宿主已接入规则内 JS；Rhino 逐返回值对照与引擎互操作未全量验收 |
 | CAP-MEDIA / CAP-ACTION / CAP-LOGIN | 20、10 | MEDIA、ACTION、LOGIN | 混合：读取、`executePayAction`、`executeSourceCallback`、reader-web 登录 API/页面和结构化动作已有入口；购买刷新、段评写入、真实网页交互和持久多实例幂等仍缺 |

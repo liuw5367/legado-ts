@@ -18,6 +18,8 @@
 
 本轮逐方法族的机器清单位于 [`fixtures/compatibility/method-manifest.json`](../../fixtures/compatibility/method-manifest.json)，其结构由同目录 `schema.json` 和 `packages/source-core/tests/compatibility-manifest.test.ts` 校验。清单只登记书源 runtime、请求处理和真实宿主边界；reader-web/reader-cli 页面交互不属于 Android 书源兼容证据。
 
+`discoverBooks`/`searchBooks` 现在可在 `RuntimeResult.observations` 返回脱敏的请求与跳过轨迹，阶段包括 `planned`、`requested`、`response-received`、`parsed-empty`、`success`、`failed`、`capability-missing`、`cancelled` 和 `skipped`。声明式主请求、`mainJs` 的 `java.ajax`/`java.get` 等 bridge 子请求、URL/header/body 脚本的嵌套请求都沿同一调用链传递观测器；每个真实网络请求单独记录，避免把 JS 书源误报为“没有请求”。它只回答请求是否发出、响应是否收到和规则结果处于哪一阶段，不改变页面展示，也不把 Android golden 缺失标为通过；回归入口为 `packages/source-core/tests/runtime-observations.test.ts` 和 `packages/source-node/tests/source-session.test.ts`。
+
 上表及“当前状态”列是历史汇总标签，不能用一个标签同时推断实现程度、是否验证和能否修复。尤其是“未实现”不等于“无法实现”，“已实现”不等于“与 Android 等价”，“未验证”也不等于“无法确定接口契约”。后续逐签名记录必须分开填写下列维度；复核中尚未证明的内容不能自动归为可修复。
 
 | 维度 | 状态 | 判定规则 |

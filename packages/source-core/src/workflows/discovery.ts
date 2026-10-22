@@ -6,6 +6,7 @@ import { detailFields, evaluateField, executeSourceFunction, executeWorkflowJava
 import { formatDetailIntro, formatIntro } from './html-format.ts'
 import { javascriptBookProjection } from './javascript-projection.ts'
 import { parseRelaxedJson } from '../codec/relaxed-json.ts'
+import { attachRuntimeObservations, observationScope } from './observations.ts'
 import type { BookCandidate, BookMetadata, DetailInput, DiscoveryInput, ExploreActionResult, ExploreKind, ExploreKindsResult, ExploreViewNameResult, InfoMapSaveRequest, RuntimeResult, SearchCandidateFields, SearchInput, WorkflowDiagnostic, WorkflowPage, WorkflowPorts, WorkflowTraceEntry } from './types.ts'
 
 export async function parseExploreKinds(ports: WorkflowPorts, source: NormalizedSource, options: { infoMap?: Readonly<Record<string, string>>; signal?: AbortSignal } = {}): Promise<ExploreKindsResult> {
@@ -183,29 +184,37 @@ function parseExploreKindText(text: string): ExploreKind[] {
 }
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
+  const scope = observationScope(ports)
   const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 1 }
-  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'explore', sourceString(input.source, 'exploreUrl'), cursor, input.signal, 'discover', input.maxItems, input.infoMap)
-  const exploreListRule = ruleString(input.source, 'ruleExplore', 'bookList')
-  const ruleGroup = exploreListRule?.trim() ? 'ruleExplore' : 'ruleSearch'
-  return listWorkflow(
-    ports,
-    'discover',
-    input.source,
-    sourceString(input.source, 'exploreUrl'),
-    exploreListRule?.trim() ? exploreListRule : ruleString(input.source, 'ruleSearch', 'bookList'),
-    ruleString(input.source, ruleGroup, 'nextPage'),
-    cursor,
-    input,
-    undefined,
-    ruleGroup,
-  )
+  const result = sourceString(input.source, 'mainJs') !== undefined
+    ? await javascriptListWorkflow(scope.ports, input.source, 'explore', sourceString(input.source, 'exploreUrl'), cursor, input.signal, 'discover', input.maxItems, input.infoMap)
+    : await (() => {
+      const exploreListRule = ruleString(input.source, 'ruleExplore', 'bookList')
+      const ruleGroup = exploreListRule?.trim() ? 'ruleExplore' : 'ruleSearch'
+      return listWorkflow(
+        scope.ports,
+        'discover',
+        input.source,
+        sourceString(input.source, 'exploreUrl'),
+        exploreListRule?.trim() ? exploreListRule : ruleString(input.source, 'ruleSearch', 'bookList'),
+        ruleString(input.source, ruleGroup, 'nextPage'),
+        cursor,
+        input,
+        undefined,
+        ruleGroup,
+      )
+    })()
+  return attachRuntimeObservations(result, scope.collector, input.source.bookSourceUrl)
 }
 
 export async function searchBooks(ports: WorkflowPorts, input: SearchInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
-  if (input.keyword.length === 0) return { status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 1 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }
+  const scope = observationScope(ports)
+  if (input.keyword.length === 0) return attachRuntimeObservations({ status: 'empty', value: { items: [], cursor: input.cursor ?? { index: 1 } }, diagnostics: [{ code: 'invalid-input', stage: 'search', message: '搜索关键词为空', retryable: false }], trace: [] }, scope.collector, input.source.bookSourceUrl)
   const page = input.cursor?.index ?? sourceNumber(input.source, 'searchPageStart') ?? 1
-  if (sourceString(input.source, 'mainJs') !== undefined) return javascriptListWorkflow(ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems, input.infoMap, input.acceptSearchFields, input.acceptCandidate, input.shouldStop)
-  return listWorkflow(ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword, 'ruleSearch')
+  const result = sourceString(input.source, 'mainJs') !== undefined
+    ? await javascriptListWorkflow(scope.ports, input.source, 'search', input.keyword, input.cursor ?? { index: page }, input.signal, 'search', input.maxItems, input.infoMap, input.acceptSearchFields, input.acceptCandidate, input.shouldStop)
+    : await listWorkflow(scope.ports, 'search', input.source, sourceString(input.source, 'searchUrl'), ruleString(input.source, 'ruleSearch', 'bookList'), ruleString(input.source, 'ruleSearch', 'nextPage'), input.cursor ?? { index: page }, input, input.keyword, 'ruleSearch')
+  return attachRuntimeObservations(result, scope.collector, input.source.bookSourceUrl)
 }
 
 async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSource, name: 'search' | 'explore', firstArg: string | undefined, cursor: { index: number; token?: string }, signal: AbortSignal | undefined, stage: 'search' | 'discover', maxItems?: number, infoMap?: Readonly<Record<string, string>>, acceptSearchFields?: (fields: SearchCandidateFields) => boolean, acceptCandidate?: (candidate: BookCandidate) => boolean, shouldStop?: (candidate: BookCandidate, acceptedCount: number) => boolean): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {

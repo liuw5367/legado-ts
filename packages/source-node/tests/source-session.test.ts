@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { searchBooks } from '@legado/source-core'
 import type { ClockHost, NetworkHost, NormalizedSource, WorkflowRuleOutput } from '@legado/source-core'
 import { DEFAULT_ANDROID_USER_AGENT, NodeCookieStore, createNodeSourceSession } from '../src/index.ts'
 
@@ -59,6 +60,25 @@ test('Node 书源会话跨操作保留 source 变量和 jsLib 缓存，不同会
     content: '',
   }))).value, 'cached')
   assert.equal(urls.length, 2, '新会话重新加载远程 jsLib')
+})
+
+test('mainJs bridge 请求进入发现工作流观测，而不是只显示为无请求', async () => {
+  const urls: string[] = []
+  const source = { ...baseSource, jsLib: '', mainJs: 'function search(key, page) { java.ajax("https://fixture.invalid/bridge?token=secret"); return [{name:"bridge书", bookUrl:"/book"}]; }' } as NormalizedSource
+  const session = createNodeSourceSession(source, {
+    network: {
+      request: async (plan) => {
+        urls.push(plan.url)
+        return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode('ok'), redirected: false }
+      },
+    },
+  })
+  const result = await session.run((ports) => searchBooks(ports, { source: session.source, keyword: 'bridge' }))
+  assert.equal(result.status, 'success')
+  assert.deepEqual(urls, ['https://fixture.invalid/bridge?token=secret'])
+  assert.deepEqual(result.observations?.map((item) => item.phase), ['planned', 'requested', 'response-received', 'success'])
+  assert.equal(result.observations?.[0]?.target, 'https://fixture.invalid/bridge?token=%5Bredacted%5D')
+  session.close()
 })
 
 test('Node 会话快照恢复源键值、登录状态和字符串缓存', async () => {

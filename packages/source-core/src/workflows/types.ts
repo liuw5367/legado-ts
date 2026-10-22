@@ -163,11 +163,53 @@ export interface RequestObserver {
   onError?(event: RequestObservationError): void
 }
 
+export type RuntimeObservationPhase = 'planned' | 'not-started' | 'requested' | 'response-received' | 'parsed-empty' | 'success' | 'failed' | 'capability-missing' | 'cancelled' | 'skipped'
+
+/** 一次书源请求或候选跳过的可脱敏运行期证据；不包含请求头、正文和脚本源码。 */
+export interface RuntimeObservation {
+  id: string
+  requestId?: string
+  sourceId: string
+  stage: WorkflowStage
+  phase: RuntimeObservationPhase
+  target: string
+  attempt?: number
+  startedAt: number
+  durationMs?: number
+  statusCode?: number
+  responseBytes?: number
+  errorCode?: string
+  retryable?: boolean
+  itemIndex?: number
+}
+
+export interface RuntimeObservationHandle {
+  readonly id: string
+}
+
+/** Workflow 内部使用的观察收集端口；宿主可通过 RuntimeResult.observations 读取快照。 */
+export interface RuntimeObservationCollector {
+  begin(input: { sourceId: string; stage: WorkflowStage; target: string; itemIndex?: number }): RuntimeObservationHandle
+  markRequested(handle: RuntimeObservationHandle, input: { requestId?: string; attempt?: number; startedAt?: number }): void
+  markResponse(handle: RuntimeObservationHandle, response: NetworkResponse, durationMs?: number): void
+  markError(handle: RuntimeObservationHandle, input: { code: string; retryable: boolean; durationMs?: number }): void
+  markCancelled(handle: RuntimeObservationHandle, durationMs?: number): void
+  recordNotStarted(input: { sourceId: string; stage: WorkflowStage; target: string; itemIndex?: number; errorCode?: string }): void
+  recordSkipped(input: { sourceId: string; stage: WorkflowStage; target: string; itemIndex?: number }): void
+  finalize(status: WorkflowStatus, itemCount: number): void
+  observerFor(handle: RuntimeObservationHandle, upstream?: RequestObserver): RequestObserver
+  /** 为脚本/bridge 请求按真实网络事件创建独立观测条目。 */
+  observerForRequest(input: { sourceId: string; stage: WorkflowStage; target?: string }, upstream?: RequestObserver): RequestObserver
+  snapshot(): readonly RuntimeObservation[]
+}
+
 export interface RuntimeResult<T> {
   status: WorkflowStatus
   value: T | null
   diagnostics: WorkflowDiagnostic[]
   trace: WorkflowTraceEntry[]
+  /** 发现/搜索等工作流的脱敏请求和跳过轨迹；未启用观察时省略。 */
+  observations?: readonly RuntimeObservation[]
 }
 
 export interface WorkflowRuleRequest {
@@ -188,6 +230,8 @@ export interface WorkflowRuleRequest {
   bindings?: Readonly<Record<string, unknown>>
   /** JavaScript 规则片段需要回写的 DTO 绑定；目录字段使用 chapter 保持渐进可见性。 */
   captureBindings?: readonly string[]
+  /** 当前规则脚本发起的 bridge 请求观测器；由工作流或请求宿主按调用链传递。 */
+  requestObserver?: RequestObserver
 }
 
 export interface WorkflowRuleOutput {
@@ -225,6 +269,8 @@ export interface WorkflowJavaScriptRequest {
   workflowActions?: Readonly<Record<string, WorkflowAction>>
   /** JavaScript execution limits for this hook; separate from HTTP request budgets. */
   javascriptBudget?: Partial<JavaScriptBudget>
+  /** 当前脚本发起的 bridge 请求观测器；每个真实请求生成独立 RuntimeObservation。 */
+  requestObserver?: RequestObserver
   signal?: AbortSignal
 }
 
@@ -251,6 +297,8 @@ export interface SourceFunctionRequest {
   stage: WorkflowJavaScriptStage
   /** Core workflow stage used for request observations and bridge policy. */
   workflowStage?: WorkflowStage
+  /** 当前源函数发起的 bridge 请求观测器。 */
+  requestObserver?: RequestObserver
   signal?: AbortSignal
 }
 
@@ -283,6 +331,8 @@ export interface WorkflowPorts {
   concurrency?: ConcurrencyHost
   /** Optional request evidence hook; observer failures are isolated from the workflow. */
   requestObserver?: RequestObserver
+  /** Workflow-owned observation collector; hosts normally leave this unset. */
+  runtimeObservationCollector?: RuntimeObservationCollector
 }
 
 export interface WorkflowOptions {

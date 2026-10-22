@@ -124,7 +124,7 @@ function sourceSession(): SourceSession {
   }
   let requestHost: SourceRequestHost
   const ruleHost = new SourceRuleHost({
-    request: (input, signal, source) => requestHost.requestFromBridge(input, signal, source),
+    request: (input, signal, source, requestObserver) => requestHost.requestFromBridge(input, signal, source, requestObserver),
   })
   requestHost = new SourceRequestHost({ network, cookieStore })
   requestHost.attachRuleHost(ruleHost)
