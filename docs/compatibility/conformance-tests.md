@@ -156,6 +156,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `JS-008` | JS 源 BookType 状态位 | 详情、目录和正文脚本入口执行 Android `removeAllBookType()` 等价重置：清除媒体位、保留 local/archive/notShelf/updateError；声明式目录也保留状态位；Node `source-host-flow.test.ts` 已通过，Android golden 仍为 `not-run` |
 | `JS-009` | JS 源 variable marshaller | 搜索/发现按 Gson `String?` 读取 variable，详情按 `Map<String,String>` 合并并归一化；Node `source-host-flow.test.ts` 已通过，Android golden 仍为 `not-run` |
 | `JS-010` | JS 源 SearchBook 字段形态 | 搜索/发现候选先按 Android Gson `SearchBook` 的字符串、Int、Long 字段形态校验；对象/数组、布尔数值、非数值文本和溢出值跳过整条候选，未知字段忽略；Node `source-host-flow.test.ts` 已通过，Android golden 仍为 `not-run` |
+| `JS-011` | JavaImporter OkHttp/Hutool facade | 通过 `JavaImporter(Packages.okhttp3, Packages.cn.hutool.core.codec, Packages.cn.hutool.core.util, Packages.cn.hutool.crypto.digest)` 构造 `MediaType`、`RequestBody`、`Request.Builder`、`OkHttpClient` 请求，读取响应 body/bytes/headers/status，并执行 Hutool Base64、摘要、字符串/十六进制和 gzip 工具；Node `source-rule-host.test.ts` 已通过，Android golden 仍为 `not-run`；未覆盖完整 OkHttp dispatcher/websocket/拦截器和通用 JVM 类 |
 | `REVIEW-001` | 旧式段评 | `getDP/getZP` 页面打开、nonce 会话、CSP/sandbox 桥接、脚本上限、书源变更和图片重写 |
 | `MEDIA-001` | 媒体 | 文本、音频、图片、视频和文件类型从列表到详情的身份与结果类型 |
 | `MEDIA-002` | 图片 | 封面和正文图片 bytes 解密、失败回退、Cookie 和缓存隔离 |

@@ -179,6 +179,8 @@ export interface SourceRuleRuntimeOptions {
   /** Java byte-stream compression entry points; the core never imports a platform zlib implementation. */
   compression?: {
     gzipDecode?: (value: Uint8Array, signal: AbortSignal) => Uint8Array | Promise<Uint8Array>
+    /** Encode a bounded byte array for Hutool ZipUtil.gzip compatibility. */
+    gzipEncode?: (value: Uint8Array, signal: AbortSignal) => Uint8Array | Promise<Uint8Array>
     inflateDecode?: (value: Uint8Array, signal: AbortSignal) => Uint8Array | Promise<Uint8Array>
     /** Decode a bounded ZIP into entries for the synchronous-looking Java ZipInputStream facade. */
     zipDecode?: (value: Uint8Array, signal: AbortSignal) => readonly ArchiveEntry[] | Promise<readonly ArchiveEntry[]>
@@ -1690,12 +1692,125 @@ legadoName(legadoMac, "Mac")
 legadoName(legadoDatatypeConverter, "DatatypeConverter")
 legadoName(legadoUrlEncoder, "URLEncoder")
 legadoName(legadoAndroidBase64, "Base64")
+const legadoHutoolBase64 = {
+  encode: (value) => request({ kind: "base64-encode", value: value instanceof Uint8Array || value instanceof ArrayBuffer ? value : String(value ?? ""), flags: 2 }),
+  decode: (value) => request({ kind: "base64-decode-bytes", value: String(value ?? ""), flags: 0 }),
+  decodeStr: (value, charset) => request({ kind: "base64-decode-text", value: String(value ?? ""), charset: charset === undefined ? "UTF-8" : String(charset), flags: 0 }),
+  isBase64: (value) => { try { request({ kind: "base64-decode-bytes", value: String(value ?? ""), flags: 0 }); return true } catch { return false } },
+}
+const legadoHutoolStrUtil = {
+  reverse: (value) => Array.from(String(value ?? "")).reverse().join(""),
+  isBlank: (value) => value == null || String(value).trim().length === 0,
+  isNotBlank: (value) => value != null && String(value).trim().length > 0,
+}
+const legadoHutoolHexUtil = {
+  encodeHexStr: (value) => request({ kind: "hex-encode", value }),
+  decodeHex: (value) => request({ kind: "hex-decode-bytes", value: String(value ?? "") }),
+  isHexNumber: (value) => /^[0-9a-f]+$/iu.test(String(value ?? "")),
+}
+const legadoHutoolDigest = (algorithm, value) => request({ kind: "digest", value, algorithm })
+const legadoHutoolDigestBytes = (algorithm, value) => request({ kind: "hex-decode-bytes", value: legadoHutoolDigest(algorithm, value) })
+const legadoHutoolDigestUtil = {
+  md5Hex: (value) => legadoHutoolDigest("MD5", value),
+  sha1Hex: (value) => legadoHutoolDigest("SHA-1", value),
+  sha256Hex: (value) => legadoHutoolDigest("SHA-256", value),
+  sha512Hex: (value) => legadoHutoolDigest("SHA-512", value),
+  md5: (value) => legadoHutoolDigestBytes("MD5", value),
+  sha1: (value) => legadoHutoolDigestBytes("SHA-1", value),
+  sha256: (value) => legadoHutoolDigestBytes("SHA-256", value),
+  digestHex: (algorithm, value) => legadoHutoolDigest(algorithm, value),
+  digest: (algorithm, value) => legadoHutoolDigestBytes(algorithm, value),
+  digester: (algorithm) => ({ digestHex: (value) => legadoHutoolDigest(algorithm, value), digest: (value) => legadoHutoolDigestBytes(algorithm, value) }),
+}
+const legadoHutoolZipUtil = {
+  gzip: (value) => request({ kind: "gzip-encode", value: value instanceof Uint8Array || value instanceof ArrayBuffer ? value : request({ kind: "encode-bytes", value: String(value ?? ""), charset: "UTF-8" }) }),
+}
+const legadoOkHttpMediaType = function(value) { const type = String(value ?? ""); return { type, toString: () => type } }
+legadoOkHttpMediaType.parse = (value) => legadoOkHttpMediaType(value)
+const legadoOkHttpRequestBody = function(value, mediaType) {
+  const raw = value == null ? "" : value
+  const bytes = () => raw instanceof Uint8Array || raw instanceof ArrayBuffer ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw)) : request({ kind: "encode-bytes", value: String(raw), charset: "UTF-8" })
+  const body = { __legadoOkHttpBody: true, value: raw, mediaType: mediaType ?? null, contentType: () => mediaType ?? null, contentLength: () => bytes().byteLength, bytes, string: () => raw instanceof Uint8Array || raw instanceof ArrayBuffer ? request({ kind: "decode-bytes", value: bytes(), charset: "UTF-8" }) : String(raw) }
+  return body
+}
+const legadoOkHttpHeaders = (value) => legadoResponseHeaders(value)
+const legadoOkHttpHeaderMap = (value) => {
+  const source = value && typeof value === "object" ? value : {}
+  const result = {}
+  for (const [name, item] of Object.entries(source)) result[String(name)] = Array.isArray(item) ? item.map((entry) => String(entry ?? "")).join(",") : String(item ?? "")
+  return result
+}
+const legadoOkHttpRequestBuilder = function() {
+  let target = ""
+  let method = "GET"
+  let body = null
+  const headers = {}
+  const findHeader = (name) => Object.keys(headers).find((key) => key.toLowerCase() === String(name).toLowerCase())
+  const builder = {
+    url: (value) => { target = String(value ?? ""); return builder },
+    get: () => { method = "GET"; body = null; return builder },
+    head: () => { method = "HEAD"; body = null; return builder },
+    post: (value) => { method = "POST"; body = value; return builder },
+    put: (value) => { method = "PUT"; body = value; return builder },
+    delete: (value) => { method = "DELETE"; body = value ?? null; return builder },
+    method: (value, valueBody) => { method = String(value ?? "GET").toUpperCase(); body = valueBody ?? null; return builder },
+    header: (name, value) => { const previous = findHeader(name); if (previous !== undefined && previous !== String(name)) delete headers[previous]; headers[String(name)] = String(value ?? ""); return builder },
+    addHeader: (name, value) => { const key = findHeader(name) ?? String(name); if (Object.prototype.hasOwnProperty.call(headers, key)) headers[key] = Array.isArray(headers[key]) ? [...headers[key], String(value ?? "")] : [headers[key], String(value ?? "")]; else headers[key] = String(value ?? ""); return builder },
+    removeHeader: (name) => { const key = findHeader(name); if (key !== undefined) delete headers[key]; return builder },
+    build: () => {
+      if (target.trim().length === 0) throw new Error("OkHttp Request URL is missing")
+      const request = { url: () => target, method: () => method, headers: () => legadoOkHttpHeaders(headers), body: () => body, __legadoUrl: target, __legadoMethod: method, __legadoHeaders: headers, __legadoBody: body }
+      return request
+    },
+  }
+  return builder
+}
+const legadoOkHttpResponse = (raw, requestValue) => {
+  const response = raw && typeof raw === "object" ? raw : legadoResponseCompat(String(requestValue?.__legadoUrl ?? ""), raw)
+  const getBody = () => typeof response.body === "function" ? response.body() : response.body
+  const getBytes = () => typeof response.bodyAsBytes === "function" ? response.bodyAsBytes() : response.bytes instanceof Uint8Array ? response.bytes : request({ kind: "encode-bytes", value: String(getBody() ?? ""), charset: "UTF-8" })
+  const getHeaders = () => typeof response.headers === "function" ? response.headers() : legadoOkHttpHeaders(response.headers)
+  const code = () => typeof response.code === "function" ? Number(response.code()) : Number(response.status ?? response.code ?? 200)
+  const message = () => typeof response.message === "function" ? String(response.message() ?? "") : String(response.message ?? response.statusMessage ?? "")
+  const body = { string: () => String(getBody() ?? ""), bytes: getBytes, contentLength: () => getBytes().byteLength, contentType: () => { const value = getHeaders()?.get?.("content-type"); return value == null ? null : legadoOkHttpMediaType(value) }, close: () => undefined }
+  return { request: () => requestValue, body: () => body, code, message, headers: getHeaders, isSuccessful: () => code() >= 200 && code() < 300, close: () => undefined, cacheResponse: () => null, networkResponse: () => null, priorResponse: () => null, toString: () => (String(code()) + " " + message()).trim() }
+}
+const legadoOkHttpClient = function() {
+  return {
+    newCall: (requestValue) => ({ execute: () => {
+      const target = String(requestValue?.__legadoUrl ?? requestValue?.url?.() ?? "")
+      const method = String(requestValue?.__legadoMethod ?? requestValue?.method?.() ?? "GET").toUpperCase()
+      const headers = legadoOkHttpHeaderMap(requestValue?.__legadoHeaders ?? requestValue?.headers?.())
+      const bodyObject = requestValue?.__legadoBody?.__legadoOkHttpBody === true ? requestValue.__legadoBody : null
+      const bodyValue = bodyObject === null ? requestValue?.__legadoBody : bodyObject.value
+      const hasContentType = Object.keys(headers).some((name) => name.toLowerCase() === "content-type")
+      if (bodyObject !== null && bodyObject.mediaType !== null && bodyObject.mediaType !== undefined && !hasContentType) {
+        headers["Content-Type"] = String(bodyObject.mediaType?.toString?.() ?? bodyObject.mediaType?.type ?? bodyObject.mediaType)
+      }
+      const raw = method === "POST" ? java.post(target, bodyValue, headers) : method === "HEAD" ? java.head(target, headers) : method === "GET" ? java.get(target, headers) : java.ajax({ url: target, method, headers, body: bodyValue })
+      return legadoOkHttpResponse(raw, requestValue)
+    } }),
+  }
+}
+const legadoOkHttpPackage = { MediaType: legadoOkHttpMediaType, RequestBody: { create: function(value, mediaType) { return value && typeof value === "object" && value.type !== undefined ? legadoOkHttpRequestBody(mediaType, value) : legadoOkHttpRequestBody(value, mediaType) } }, Request: { Builder: legadoOkHttpRequestBuilder }, OkHttpClient: legadoOkHttpClient, Headers: { of: (value) => legadoOkHttpHeaders(value) } }
+legadoName(legadoHutoolBase64, "Base64")
+legadoName(legadoHutoolStrUtil, "StrUtil")
+legadoName(legadoHutoolHexUtil, "HexUtil")
+legadoName(legadoHutoolDigestUtil, "DigestUtil")
+legadoName(legadoHutoolZipUtil, "ZipUtil")
+legadoName(legadoOkHttpMediaType, "MediaType")
+legadoName(legadoOkHttpRequestBody, "RequestBody")
+legadoName(legadoOkHttpRequestBuilder, "Builder")
+legadoName(legadoOkHttpClient, "OkHttpClient")
+legadoName(legadoOkHttpPackage.RequestBody, "RequestBody")
+legadoName(legadoOkHttpPackage.Request, "Request")
+legadoName(legadoOkHttpPackage.Headers, "Headers")
 const legadoExistingPackages = globalThis.Packages
 legadoJavaUtil.UUID = legadoJavaUUID
 legadoName(legadoJavaUtil.UUID, "UUID")
 legadoName(legadoJavaSecurity.spec.PKCS8EncodedKeySpec, "PKCS8EncodedKeySpec")
 legadoName(legadoJavaSecurity.spec.X509EncodedKeySpec, "X509EncodedKeySpec")
-const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: { ...legadoJavaUtil, zip: legadoJavaZip }, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Cipher: legadoCipher, Mac: legadoMac, SecretKeyFactory: legadoSecretKeyFactory, spec: { SecretKeySpec: legadoSecretKeySpec, IvParameterSpec: legadoIvParameterSpec, GCMParameterSpec: legadoGcmParameterSpec, OAEPParameterSpec: legadoOaepParameterSpec, PSource: legadoPSource, DESKeySpec: legadoDesKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 }, text: { TextUtils: legadoAndroidTextUtils }, os: { Build: legadoAndroidBuild } }, org: { jsoup: { Jsoup: legadoJsoup, Connection: legadoJsoupConnection, nodes: legadoJsoupNodes } } }
+const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: { ...legadoJavaUtil, zip: legadoJavaZip }, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Cipher: legadoCipher, Mac: legadoMac, SecretKeyFactory: legadoSecretKeyFactory, spec: { SecretKeySpec: legadoSecretKeySpec, IvParameterSpec: legadoIvParameterSpec, GCMParameterSpec: legadoGcmParameterSpec, OAEPParameterSpec: legadoOaepParameterSpec, PSource: legadoPSource, DESKeySpec: legadoDesKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 }, text: { TextUtils: legadoAndroidTextUtils }, os: { Build: legadoAndroidBuild } }, org: { jsoup: { Jsoup: legadoJsoup, Connection: legadoJsoupConnection, nodes: legadoJsoupNodes } }, okhttp3: legadoOkHttpPackage, cn: { hutool: { core: { codec: { Base64: legadoHutoolBase64 }, util: { StrUtil: legadoHutoolStrUtil, HexUtil: legadoHutoolHexUtil, ZipUtil: legadoHutoolZipUtil } }, crypto: { digest: { DigestUtil: legadoHutoolDigestUtil } } } } }
 legadoPackages.java.security.spec.MGF1ParameterSpec = legadoMgf1ParameterSpec
 legadoName(legadoPackages.java.nio.charset.StandardCharsets, "StandardCharsets")
 legadoName(legadoPackages.java.net.URL, "URL")
@@ -3378,10 +3493,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (request.kind === 'base64-decode-bytes') {
       return base64DecodeWithFlags(this.encoding, request.value, request.flags)
     }
-    if (request.kind === 'gzip-decode' || request.kind === 'inflate-decode') {
-      const decoder = request.kind === 'gzip-decode' ? this.compression?.gzipDecode : this.compression?.inflateDecode
-      if (decoder === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${request.kind} unavailable`)
-      return decoder(byteValue(request.value), signal)
+    if (request.kind === 'gzip-decode' || request.kind === 'gzip-encode' || request.kind === 'inflate-decode') {
+      const codec = request.kind === 'gzip-decode' ? this.compression?.gzipDecode : request.kind === 'gzip-encode' ? this.compression?.gzipEncode : this.compression?.inflateDecode
+      if (codec === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${request.kind} unavailable`)
+      return codec(byteValue(request.value), signal)
     }
     if (request.kind === 'zip-decode') {
       const decoder = this.compression?.zipDecode

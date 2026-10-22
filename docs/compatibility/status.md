@@ -11,6 +11,12 @@
 - Android preflight 检查到外层项目有 Gradle wrapper，但没有逐 fixture adapter、`local.properties` 或 golden 输出；`run-source-conformance-android.mjs` 返回 `not-run`/退出码 2，比较器的 `--require-android` 同样阻断。普通 Android JVM 单测仍只记为独立 `test-run` 证据。
 - 因此本轮状态不能统一写成“双端完成”：可修复项是 `TS 已通过`，有 Android 同输入输出的项目才可改为 `双端已通过`；真实 WebView、浏览器、验证码、Activity、物理设备身份、跨进程存储和远程写入继续按 `需真实宿主` 或 `验证受阻` 记录。
 
+## 2026-10-22 P31：JavaImporter 常见网络与 Hutool facade
+
+本轮继续处理会让真实书源脚本在请求前直接失败的类导入缺口。QuickJS 现在按受控范围提供 `Packages.okhttp3` 的 `MediaType`、`RequestBody`、`Request.Builder`、`OkHttpClient/Call/Response`，以及 `cn.hutool` 常见的 `Base64`、`StrUtil`、`HexUtil`、`ZipUtil.gzip` 和 `DigestUtil`。OkHttp facade 不绕过现有请求预算、动态 Header、Cookie、重定向和取消链，而是把 Builder 物化为已有 `java.get/java.post/java.head/java.ajax` bridge；响应 body、bytes、headers、status 和 request 也沿用受控 DTO。
+
+`packages/source-node/tests/source-rule-host.test.ts` 的 `JS-011` 书源式回归验证了 POST body/重复 Header、响应对象、Base64、摘要、字符串/十六进制工具和 gzip 编码；当前 TypeScript 证据为通过，Android 同输入 golden 仍为 `not-run`。方法 manifest 已从 252 个成员扩展到 258 个，新增 6 个成员均标记为 `simulated / ts-passed / simulatable / verify`。这一步只承诺常见 facade 的明确成员，不把它扩大为通用 JVM、完整 OkHttp 或完整 Hutool。
+
 ## 状态定义
 
 | 状态 | 含义 |

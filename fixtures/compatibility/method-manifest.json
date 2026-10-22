@@ -4396,7 +4396,13 @@
         "ByteArrayInputStream(byte[],int,int)/readNBytes/skipNBytes/transferTo",
         "ByteArrayOutputStream.write(int)/writeBytes/writeTo",
         "InputStreamReader.read/skip/ready",
-        "BufferedReader.readLine/read/skip/lines"
+        "BufferedReader.readLine/read/skip/lines",
+        "okhttp3.MediaType/RequestBody",
+        "okhttp3.Request.Builder",
+        "okhttp3.OkHttpClient/Call/Response",
+        "cn.hutool.core.codec.Base64",
+        "cn.hutool.core.util.StrUtil/HexUtil/ZipUtil",
+        "cn.hutool.crypto.digest.DigestUtil"
       ],
       "tsPaths": [
         "packages/source-core/src/rules/source-runtime.ts",
@@ -4855,6 +4861,120 @@
             "JS-005"
           ],
           "errorCodes": [
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::025-okhttp3-media-requestbody",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "okhttp3.MediaType/RequestBody",
+          "signature": "MediaType.parse(String); RequestBody.create(Object,MediaType)",
+          "parameters": [],
+          "returnType": "MediaType/RequestBody",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-011"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::026-okhttp3-request-builder",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "okhttp3.Request.Builder",
+          "signature": "Builder.url(String).get/post/delete/method; addHeader/header; build()",
+          "parameters": [],
+          "returnType": "Request.Builder",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-011"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::027-okhttp3-client-response",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "okhttp3.OkHttpClient/Call/Response",
+          "signature": "OkHttpClient.newCall(Request).execute(); Response.body/code/headers/message/isSuccessful",
+          "parameters": [],
+          "returnType": "OkHttpClient/Call/Response",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-011"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::028-hutool-base64",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "cn.hutool.core.codec.Base64",
+          "signature": "Base64.encode/decode/decodeStr",
+          "parameters": [],
+          "returnType": "String/byte[]",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-011"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::029-hutool-core-utils",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "cn.hutool.core.util.StrUtil/HexUtil/ZipUtil",
+          "signature": "reverse/isBlank; encodeHexStr/decodeHex; gzip",
+          "parameters": [],
+          "returnType": "String/byte[]",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-011"
+          ],
+          "errorCodes": [
+            "capability-missing",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-importer-classes::030-hutool-digest",
+          "owner": "JavaImporter/Packages/JavaAdapter",
+          "name": "cn.hutool.crypto.digest.DigestUtil",
+          "signature": "md5Hex/sha1Hex/sha256Hex/sha512Hex/digestHex/digester",
+          "parameters": [],
+          "returnType": "String/byte[]",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-011"
+          ],
+          "errorCodes": [
+            "capability-missing",
             "rule-failed"
           ]
         }
@@ -5833,5 +5953,5 @@
       ]
     }
   ],
-  "memberCount": 252
+  "memberCount": 258
 }

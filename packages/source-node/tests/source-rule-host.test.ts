@@ -155,6 +155,53 @@ test('JavaImporter、Packages、Map/List 和 Java String 常见用法可运行',
   assert.deepEqual(JSON.parse(String(result.value)), { digest: [16, 32], text: 'oo', map: ['alice', 'reader', 2], list: ['b', 2], response: ['https://fixture.invalid', 'body', 200] })
 })
 
+test('JavaImporter 提供受控 OkHttp 和 Hutool 请求/编码 facade', async () => {
+  const calls: unknown[] = []
+  const host = new SourceRuleHost({ request: async (input) => {
+    calls.push(input)
+    if (input.kind === 'network-response') return {
+      body: '{"ok":true}',
+      status: 201,
+      message: 'Created',
+      headers: { 'Content-Type': 'application/json', 'X-Reply': 'yes' },
+      url: String(input.url),
+      bytes: new TextEncoder().encode('{"ok":true}'),
+    }
+    throw new Error(`unexpected bridge request: ${input.kind}`)
+  } })
+  const result = await evaluate(host, `@js:
+    var importer = new JavaImporter(Packages.okhttp3, Packages.cn.hutool.core.codec, Packages.cn.hutool.core.util, Packages.cn.hutool.crypto.digest);
+    with (importer) {
+      var mediaType = MediaType.parse('application/json');
+      var requestBody = RequestBody.create('{"name":"book"}', mediaType);
+      var requestValue = new Request.Builder().url('https://fixture.invalid/api').post(requestBody).addHeader('X-Test', 'one').addHeader('X-Test', 'two').build();
+      var response = new OkHttpClient().newCall(requestValue).execute();
+      JSON.stringify({
+        request: [requestValue.url(), requestValue.method(), requestValue.headers().get('x-test'), requestValue.body().string(), requestValue.body().contentType().toString()],
+        response: [response.code(), response.message(), response.body().string(), Array.from(response.body().bytes()), response.headers().get('x-reply'), response.isSuccessful()],
+        tools: [Base64.encode('hello'), Array.from(Base64.decode('aGVsbG8=')), StrUtil.reverse('书源'), HexUtil.encodeHexStr('ok'), DigestUtil.md5Hex('123')],
+        gzip: Array.from(ZipUtil.gzip('zip')).length > 0
+      });
+    }`, '')
+  assert.equal(result.status, 'success', JSON.stringify(result))
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    request: ['https://fixture.invalid/api', 'POST', 'two', '{"name":"book"}', 'application/json'],
+    response: [201, 'Created', '{"ok":true}', [123, 34, 111, 107, 34, 58, 116, 114, 117, 101, 125], 'yes', true],
+    tools: ['aGVsbG8=', [104, 101, 108, 108, 111], '源书', '6f6b', '202cb962ac59075b964b07152d234b70'],
+    gzip: true,
+  })
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0], {
+    kind: 'network-response',
+    url: 'https://fixture.invalid/api',
+    method: 'POST',
+    body: '{"name":"book"}',
+    headers: { 'X-Test': 'one,two', 'Content-Type': 'application/json' },
+    options: { timeout: 30000, followRedirects: false },
+    stage: 'search',
+  })
+})
+
 test('Packages Java System、UUID 和 Thread 提供可闭环的时间、数组、随机值与休眠语义', async () => {
   const host = new SourceRuleHost({ randomUUID: () => '01234567-89ab-4cde-8123-456789abcdef' })
   const result = await evaluate(host, `@js:

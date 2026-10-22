@@ -14,7 +14,7 @@ import type {
   NormalizedSource,
 } from '@legado/source-core'
 import { randomUUID } from 'node:crypto'
-import { gunzipSync, inflateSync } from 'node:zlib'
+import { gzipSync, gunzipSync, inflateSync } from 'node:zlib'
 import { NodeCryptoHost } from './crypto.ts'
 import { NodeEncodingHost } from './encoding.ts'
 import { NodeFontHost } from './font.ts'
@@ -171,6 +171,7 @@ export class SourceRuleHost implements WorkflowRulePort {
       ...(options.initialVariables === undefined ? {} : { initialVariables: options.initialVariables }),
       ...(options.cache === undefined ? {} : { cache: options.cache }),
       compression: options.compression ?? {
+        gzipEncode: (value) => Uint8Array.from(gzipSync(Buffer.from(value), { level: 9, maxOutputLength: 16 * 1024 * 1024 })),
         gzipDecode: (value) => Uint8Array.from(gunzipSync(Buffer.from(value), { maxOutputLength: 16 * 1024 * 1024 })),
         inflateDecode: (value) => Uint8Array.from(inflateSync(Buffer.from(value), { maxOutputLength: 16 * 1024 * 1024 })),
         zipDecode: (value, signal) => decodeZipEntries(value, signal),

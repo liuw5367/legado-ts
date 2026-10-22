@@ -90,7 +90,7 @@ Node QuickJS 通过 `NodeSourceConcurrency` 在同一 source session 的不同 e
 ## 尚不能进入完整兼容验收的项目
 
 - 方法名、继承成员、重载和返回对象必须分开核验。本轮具体缺口见[差异登记 D18～D43](known-divergences.md#android-与教程重新核对2026-10-21)，涵盖解析器方言、对象成员、请求实例、跨请求状态和文件隔离；仅验证 `typeof method === 'function'` 不能关闭能力项。
-- QuickJS 的同步 bridge 已存在；JavaImporter、通用 Packages/JavaAdapter、Java String 身份和完整 JVM 互操作仍不等价。受控对象可单独实现，真实 JVM/Android 服务不能用 DTO 代替。
+- QuickJS 的同步 bridge 已存在；JavaImporter、通用 Packages/JavaAdapter、Java String 身份和完整 JVM 互操作仍不等价。受控对象可单独实现，真实 JVM/Android 服务不能用 DTO 代替。常见书源依赖的 `Packages.okhttp3`（MediaType/RequestBody/Request.Builder/OkHttpClient/Response）和 `cn.hutool` 的 Base64、摘要、字符串/十六进制、gzip 入口已按 `JS-011` 提供受控模拟，并复用既有请求 bridge；完整 OkHttp/Hutool 重载和 JVM 对象身份仍不在 core 承诺内。
 - 文件、字体、加密及 zip/gzip 已有实现；RAR/7z 有可选 bsdtar/archiveCommand 路径，外部命令不可用时仍为能力缺失。下载请求语义、文件账号隔离及嵌套返回对象仍须分别验收。
 - 动态发现和五类控件已存在，但 InfoMap 保存、删除/TTL 和分页选择版本仍有差异。登录表单、应用动作和受控刷新已提供无浏览器路径；旧式段评网页桥接、验证码、真实网页交互和段评写入继续保留目标边界；不能根据字段存在自行推断 Android 写入流程。
 - 设备/配置已有 Node 替代值，getWebViewUA 已有默认值；替代值与真实设备或当前阅读配置不同，应用未注入不能写为宿主已验证。Android 同输入 golden 未运行的能力继续标记待验证。
