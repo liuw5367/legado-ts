@@ -35,7 +35,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `packages/source-node/tests/adapters.test.ts` 的 JSONPath adapter case 以 Android Jayway 3.0.0 源码探针为参照，覆盖混合数字/字符串集合等价、`null` 与缺失路径、空集合筛选，以及 `stddev/first/last/index/concat/append` 函数；这些是 TypeScript 侧实际回归，不替代 Android fixture golden。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
-- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 157/157，`pnpm test` 为 589/589。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
+- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 166/166，`pnpm test` 为 599/599。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
 ### 2026-10-22 P13 最终回归
@@ -276,7 +276,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 - 精准搜索按书名、作者和分类命中，且分类命中进入分类结果组。
 - 段评摘要、详情、回复的函数配对、段落索引和分页返回值。
 
-`JS-005` 字符串扩展（2026-10-22）：书源式 fixture 已实际覆盖 Java String 的 UTF-16 code point 定位/计数/偏移、`getChars`、`lastIndexOf`、Unicode 空白裁剪、`repeat`、`contentEquals`、`String.join`、`String.format/formatted` 的常用数值/字符串/定位格式和 Locale 常量，以及 `lines/chars/codePoints` 的受控流视图、有限 `map/filter/findFirst/toArray/count` pipeline、`indent/stripIndent/translateEscapes/transform` 文本变换；这些是 QuickJS 受控对象行为，`repeat`/`format` 受 16 MiB 输出预算限制，流视图是 eager 数组封装而不是完整惰性/并行 Java Stream，`translateEscapes` 和 `transform` 的回调/转义范围也有限，日期时间格式仍显式失败，Android 同输入 golden 仍为 `not-run`。
+`JS-005` 字符串扩展（2026-10-22）：书源式 fixture 已实际覆盖 Java String 的 `length/split/replace/getBytes` 常用重载、null 与偏移边界、空目标替换、UTF-16 `hashCode/regionMatches`、code point 定位/计数/偏移、`getChars`、`lastIndexOf`、Unicode 空白裁剪、`repeat`、`contentEquals`、`String.join`、`String.format/formatted` 的常用数值/字符串/定位格式和 Locale 常量，以及 `lines/chars/codePoints` 的受控流视图、有限 `map/filter/findFirst/toArray/count` pipeline、`indent/stripIndent/translateEscapes/transform` 文本变换；这些是 QuickJS 受控对象行为，`repeat`/`format`/`replace` 受 16 MiB 输出预算限制，流视图是 eager 数组封装而不是完整惰性/并行 Java Stream，`translateEscapes` 和 `transform` 的回调/转义范围也有限，日期时间格式仍显式失败，Android 同输入 golden 仍为 `not-run`。
 
 ## 验证层级
 

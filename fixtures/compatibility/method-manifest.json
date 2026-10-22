@@ -3770,59 +3770,49 @@
           "id": "java-collections-string::006-string-length",
           "owner": "Rhino/Java wrappers",
           "name": "String.length",
-          "signature": "String.length",
+          "signature": "String.length()",
           "parameters": [],
-          "returnType": "unknown",
-          "implementation": "partial",
+          "returnType": "int",
+          "implementation": "implemented",
           "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
-            "JS-004",
-            "JS-007"
+            "JS-005"
           ],
-          "errorCodes": [
-            "unsupported-java-class",
-            "rule-failed"
-          ]
+          "errorCodes": []
         },
         {
           "id": "java-collections-string::007-string-split",
           "owner": "Rhino/Java wrappers",
           "name": "String.split",
-          "signature": "String.split",
+          "signature": "String.split(String,int)",
           "parameters": [],
-          "returnType": "unknown",
-          "implementation": "partial",
+          "returnType": "String[]",
+          "implementation": "implemented",
           "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
-            "JS-004",
-            "JS-007"
+            "JS-005"
           ],
-          "errorCodes": [
-            "unsupported-java-class",
-            "rule-failed"
-          ]
+          "errorCodes": []
         },
         {
           "id": "java-collections-string::008-string-replace",
           "owner": "Rhino/Java wrappers",
           "name": "String.replace",
-          "signature": "String.replace",
+          "signature": "String.replace(CharSequence,CharSequence)",
           "parameters": [],
-          "returnType": "unknown",
-          "implementation": "partial",
+          "returnType": "String",
+          "implementation": "implemented",
           "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
-            "JS-004",
-            "JS-007"
+            "JS-005"
           ],
           "errorCodes": [
-            "unsupported-java-class",
             "rule-failed"
           ]
         },
@@ -3830,19 +3820,17 @@
           "id": "java-collections-string::009-string-getbytes",
           "owner": "Rhino/Java wrappers",
           "name": "String.getBytes",
-          "signature": "String.getBytes",
+          "signature": "String.getBytes(Charset/String?)",
           "parameters": [],
-          "returnType": "unknown",
-          "implementation": "partial",
+          "returnType": "byte[]",
+          "implementation": "implemented",
           "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
-            "JS-004",
-            "JS-007"
+            "JS-005"
           ],
           "errorCodes": [
-            "unsupported-java-class",
             "rule-failed"
           ]
         },

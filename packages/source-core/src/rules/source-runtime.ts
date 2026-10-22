@@ -605,6 +605,19 @@ const legadoJavaSubstring = (text, start, end) => {
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to > text.length || from > to) throw new RangeError("String index out of bounds")
   return legadoJavaString(text.slice(from, to))
 }
+const legadoJavaStringHashCode = (text) => { let hash = 0; for (let index = 0; index < text.length; index += 1) hash = ((hash * 31) + text.charCodeAt(index)) | 0; return hash }
+const legadoJavaRegionMatches = (text, ignoreCase, thisOffset, other, otherOffset, length) => {
+  if (other === null || other === undefined) return false
+  const leftOffset = Number(thisOffset)
+  const rightOffset = Number(otherOffset)
+  const count = Number(length)
+  if (!Number.isInteger(leftOffset) || !Number.isInteger(rightOffset) || !Number.isInteger(count) || leftOffset < 0 || rightOffset < 0 || count < 0 || leftOffset + count > text.length) return false
+  const value = String(other)
+  if (rightOffset + count > value.length) return false
+  const left = text.slice(leftOffset, leftOffset + count)
+  const right = value.slice(rightOffset, rightOffset + count)
+  return ignoreCase === true ? left.toLowerCase() === right.toLowerCase() : left === right
+}
 const legadoJavaString = (input) => {
   const text = String(input ?? "")
   const value = {}
@@ -612,15 +625,15 @@ const legadoJavaString = (input) => {
     getBytes: { value: (charset) => request({ kind: "encode-bytes", value: text, charset: charset === undefined ? "UTF-8" : String(charset) }) },
     length: { value: () => text.length },
     isEmpty: { value: () => text.length === 0 },
-    equals: { value: (other) => text === String(other ?? "") },
-    equalsIgnoreCase: { value: (other) => text.toLowerCase() === String(other ?? "").toLowerCase() },
+    equals: { value: (other) => other !== null && other !== undefined && text === String(other) },
+    equalsIgnoreCase: { value: (other) => other !== null && other !== undefined && text.toLowerCase() === String(other).toLowerCase() },
     contains: { value: (part) => text.includes(String(part ?? "")) },
-    startsWith: { value: (part) => text.startsWith(String(part ?? "")) },
-    endsWith: { value: (part) => text.endsWith(String(part ?? "")) },
+    startsWith: { value: (part, offset) => part !== null && part !== undefined && text.startsWith(String(part), offset === undefined ? 0 : Math.max(0, Number(offset))) },
+    endsWith: { value: (part) => part !== null && part !== undefined && text.endsWith(String(part)) },
     substring: { value: (start, end) => legadoJavaSubstring(text, start, end) },
     subSequence: { value: (start, end) => legadoJavaSubstring(text, start, end) },
     charAt: { value: (index) => { const position = Number(index); if (!Number.isInteger(position) || position < 0 || position >= text.length) throw new RangeError("String index out of bounds"); return text.charAt(position) } },
-    indexOf: { value: (part, start) => text.indexOf(String(part ?? ""), start === undefined ? 0 : Number(start)) },
+    indexOf: { value: (part, start) => { const from = start === undefined ? 0 : Number(start); if (!Number.isInteger(from)) throw new RangeError("String index out of bounds"); const position = Math.max(0, from); if (typeof part === "number") { if (!Number.isInteger(part) || part < 0 || part > 0x10ffff) return -1; return text.indexOf(String.fromCodePoint(part), position) } return part === null || part === undefined ? -1 : text.indexOf(String(part), position) } },
     lastIndexOf: { value: (part, start) => { const requested = start === undefined ? text.length : Number(start); if (!Number.isInteger(requested)) throw new RangeError("String index out of bounds"); if (requested < 0) return -1; const from = Math.min(text.length, requested); if (typeof part === "number") { const codePoint = Number(part); if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return -1; return text.lastIndexOf(String.fromCodePoint(codePoint), from) } return text.lastIndexOf(String(part ?? ""), from) } },
     codePointAt: { value: (index) => legadoJavaCodePoint(text, legadoJavaStringIndex(text, index)).value },
     codePointBefore: { value: (index) => { const position = legadoJavaStringIndex(text, index, true); if (position === 0) throw new RangeError("String index out of bounds"); const previous = position - 1; const low = text.charCodeAt(previous); if (low >= 0xdc00 && low <= 0xdfff && previous > 0) { const high = text.charCodeAt(previous - 1); if (high >= 0xd800 && high <= 0xdbff) return (high - 0xd800) * 0x400 + low - 0xdc00 + 0x10000 } return low } },
@@ -646,7 +659,7 @@ const legadoJavaString = (input) => {
     toLowerCase: { value: () => legadoJavaString(text.toLowerCase()) },
     toUpperCase: { value: () => legadoJavaString(text.toUpperCase()) },
     split: { value: (separator, limit) => legadoList(legadoJavaSplit(text, String(separator ?? ""), limit)) },
-    replace: { value: (from, to) => legadoJavaString(text.split(String(from ?? "")).join(String(to ?? ""))) },
+    replace: { value: (from, to) => { if (from === null || from === undefined || to === null || to === undefined) throw new TypeError("String replacement must not be null"); const source = String(from); const replacement = String(to); const result = source.length === 0 ? replacement + Array.from({ length: text.length }, (_, index) => text.charAt(index)).join(replacement) + replacement : text.split(source).join(replacement); if (result.length > 16 * 1024 * 1024) throw new RangeError("String replace exceeds runtime limit"); return legadoJavaString(result) } },
     replaceAll: { value: (pattern, replacement) => legadoJavaString(legadoJavaReplace(text, legadoJavaRegex(pattern, "g"), replacement, true)) },
     replaceFirst: { value: (pattern, replacement) => legadoJavaString(legadoJavaReplace(text, legadoJavaRegex(pattern), replacement, false)) },
     matches: { value: (pattern) => { const regex = legadoJavaRegex(pattern); const match = regex.exec(text); return match !== null && match[0] === text } },
@@ -655,8 +668,8 @@ const legadoJavaString = (input) => {
     concat: { value: (other) => legadoJavaString(text + String(other ?? "")) },
     // Java String.toCharArray 按 UTF-16 code unit 返回，不能使用按 Unicode code point 展开的 Array.from。
     toCharArray: { value: () => Array.from({ length: text.length }, (_, index) => text.charAt(index)) },
-    regionMatches: { value: function(ignoreCase, thisOffset, other, otherOffset, length) { let insensitive = ignoreCase; let from = thisOffset; let value = other; let offset = otherOffset; let count = length; if (arguments.length < 5) { insensitive = false; from = ignoreCase; value = thisOffset; offset = other; count = otherOffset } const left = text.slice(Number(from), Number(from) + Number(count)); const right = String(value ?? "").slice(Number(offset), Number(offset) + Number(count)); return insensitive === true ? left.toLowerCase() === right.toLowerCase() : left === right } },
-    hashCode: { value: () => { let hash = 0; for (const char of text) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0; return hash } },
+    regionMatches: { value: function(ignoreCase, thisOffset, other, otherOffset, length) { if (arguments.length < 5) return legadoJavaRegionMatches(text, false, ignoreCase, thisOffset, other, otherOffset); return legadoJavaRegionMatches(text, ignoreCase, thisOffset, other, otherOffset, length) } },
+    hashCode: { value: () => legadoJavaStringHashCode(text) },
     toString: { value: () => text },
     toJSON: { value: () => text },
     valueOf: { value: () => text },

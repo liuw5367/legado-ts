@@ -407,6 +407,27 @@ test('Java String lines/chars/codePoints 和纯文本变换提供受控 Stream �
   assert.match(invalid.message ?? '', /Invalid escape sequence/u)
 })
 
+test('Java String 基础方法遵循 null、偏移、空目标和 UTF-16 边界', async () => {
+  const result = await evaluate(new SourceRuleHost(), `@js:
+    var importer = new JavaImporter(Packages.java.lang.String);
+    with (importer) {
+      var text = new String('a😀a');
+      var split = new String('a,,b,');
+      JSON.stringify({ length: text.length(), equals: [text.equals(null), new String('').equals(null), new String('A').equalsIgnoreCase('a')], starts: [text.startsWith('😀', 1), text.startsWith('a', -1), text.endsWith('a'), text.endsWith(null)], replace: [text.replace('a', '-').toString(), text.replace('', '|').toString()], split: [split.split(',', 0).toArray(), split.split(',', -1).toArray()].map(function(values) { return values.map(function(value) { return value.toString(); }); }), region: [text.regionMatches(1, '😀a', 0, 3), text.regionMatches(true, 1, '😀A', 0, 3)], hash: text.hashCode(), bytes: Array.from(new String('一').getBytes('UTF-8')) });
+    }`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    length: 4,
+    equals: [false, false, true],
+    starts: [true, true, true, false],
+    replace: ['-😀-', '|a|\ud83d|\ude00|a|'],
+    split: [['a', '', 'b'], ['a', '', 'b', '']],
+    region: [true, true],
+    hash: 57849693,
+    bytes: [228, 184, 128],
+  })
+})
+
 test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang.String, Packages.java.lang.StringBuilder, Packages.java.lang.Integer, Packages.java.util.regex.Pattern);
