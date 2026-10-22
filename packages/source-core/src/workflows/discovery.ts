@@ -254,6 +254,11 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
     if (maxItems !== undefined && books.length >= Math.max(0, maxItems)) break
     if (typeof row !== 'object' || row === null || Array.isArray(row)) continue
     const record = row as Record<string, unknown>
+    const invalidField = invalidSearchBookField(record)
+    if (invalidField !== undefined) {
+      diagnostics.push({ code: 'item-skipped', stage, field: invalidField, itemIndex, message: `JS 书源结果的 ${invalidField} 类型无法按 SearchBook 反序列化`, retryable: false })
+      continue
+    }
     const nameValue = primitiveText(record.name)?.trim() ?? ''
     const rawBookUrl = primitiveText(record.bookUrl)?.trim()
     const bookUrl = rawBookUrl === undefined || rawBookUrl.length === 0 ? undefined : resolveCandidateUrl(rawBookUrl, source.bookSourceUrl)
@@ -975,6 +980,69 @@ function primitiveText(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
 }
 
+const SEARCH_BOOK_TEXT_FIELDS = [
+  'bookUrl',
+  'origin',
+  'originName',
+  'name',
+  'author',
+  'kind',
+  'coverUrl',
+  'intro',
+  'wordCount',
+  'latestChapterTitle',
+  'tocUrl',
+  'variable',
+  'chapterWordCountText',
+] as const
+
+const SEARCH_BOOK_INT_FIELDS = ['type', 'originOrder', 'chapterWordCount', 'respondTime'] as const
+const SEARCH_BOOK_LONG_FIELDS = ['time'] as const
+const GSON_INT_MIN = -(2n ** 31n)
+const GSON_INT_MAX = (2n ** 31n) - 1n
+const GSON_LONG_MIN = -(2n ** 63n)
+const GSON_LONG_MAX = (2n ** 63n) - 1n
+
+/** Android Gson 的 SearchBook 先按字段类型反序列化；未知字段忽略，但已声明字段的对象/数组会令整条候选失败。 */
+function invalidSearchBookField(record: Record<string, unknown>): string | undefined {
+  for (const field of SEARCH_BOOK_TEXT_FIELDS) {
+    const value = record[field]
+    if (value !== null && value !== undefined && primitiveText(value) === undefined) return field
+  }
+  for (const field of SEARCH_BOOK_INT_FIELDS) {
+    const value = record[field]
+    if (value !== null && value !== undefined && !gsonIntegral(value, GSON_INT_MIN, GSON_INT_MAX)) return field
+  }
+  for (const field of SEARCH_BOOK_LONG_FIELDS) {
+    const value = record[field]
+    if (value !== null && value !== undefined && !gsonIntegral(value, GSON_LONG_MIN, GSON_LONG_MAX)) return field
+  }
+  return undefined
+}
+
+/** Gson nextInt/nextLong 接受整数文本和能精确转换为整数的十进制/指数文本；对象、数组、布尔和溢出值会失败。 */
+function gsonIntegral(value: unknown, min: bigint, max: bigint): boolean {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || !Number.isInteger(value)) return false
+    const numeric = Number(value)
+    return numeric >= Number(min) && numeric <= Number(max)
+  }
+  if (typeof value !== 'string') return false
+  const text = value.trim()
+  // 仅允许 Gson/Java Double.parseDouble 可读的十进制整数、 小数和指数形式；表达式、十六进制和空文本不是数值字段。
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(text)) return false
+  if (/^[+-]?\d+$/u.test(text)) {
+    try {
+      const integer = BigInt(text)
+      return integer >= min && integer <= max
+    } catch {
+      return false
+    }
+  }
+  const numeric = Number(text)
+  return Number.isFinite(numeric) && Number.isInteger(numeric) && numeric >= Number(min) && numeric <= Number(max)
+}
+
 /** Android SearchBook.variable 是 Gson 的 String? 字段；对象/数组类型会令该候选反序列化失败。 */
 function normalizeSearchVariable(value: unknown): { valid: boolean; value?: string } {
   if (value === null || value === undefined) return { valid: true }
@@ -1013,11 +1081,8 @@ const BOOK_TYPE_WEB_FILE = 128
 const BOOK_TYPE_ALL = BOOK_TYPE_VIDEO | BOOK_TYPE_TEXT | BOOK_TYPE_AUDIO | BOOK_TYPE_IMAGE | BOOK_TYPE_WEB_FILE
 
 function validBookType(value: unknown): number | undefined {
-  const parsed = typeof value === 'number'
-    ? value
-    : typeof value === 'string' && /^[-+]?\d+$/u.test(value)
-      ? Number(value)
-      : undefined
+  if (!gsonIntegral(value, GSON_INT_MIN, GSON_INT_MAX)) return undefined
+  const parsed = typeof value === 'number' ? value : Number(value)
   if (parsed === undefined || !Number.isSafeInteger(parsed) || parsed <= 0 || parsed > BOOK_TYPE_ALL || (parsed & ~BOOK_TYPE_ALL) !== 0) return undefined
   return parsed
 }

@@ -1090,13 +1090,15 @@
         "D14",
         "D25",
         "D39",
-        "D46"
+        "D46",
+        "D47"
       ],
       "fixtures": [
         "JS-TOC-001",
         "JS-001",
         "JS-004",
-        "JS-009"
+        "JS-009",
+        "JS-010"
       ],
       "errorCodes": [
         "capability-missing",
@@ -1119,7 +1121,8 @@
             "JS-TOC-001",
             "JS-001",
             "JS-004",
-            "JS-009"
+            "JS-009",
+            "JS-010"
           ],
           "errorCodes": [
             "capability-missing",
@@ -1142,7 +1145,8 @@
             "JS-TOC-001",
             "JS-001",
             "JS-004",
-            "JS-009"
+            "JS-009",
+            "JS-010"
           ],
           "errorCodes": [
             "capability-missing",
@@ -1165,7 +1169,8 @@
             "JS-TOC-001",
             "JS-001",
             "JS-004",
-            "JS-009"
+            "JS-009",
+            "JS-010"
           ],
           "errorCodes": [
             "capability-missing",

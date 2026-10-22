@@ -614,6 +614,35 @@ test('JavaScript 书源变量按 Android marshaller 区分搜索字段与详情�
   ])
 })
 
+test('JavaScript 书源搜索与发现按 SearchBook Gson 字段形态跳过无效候选', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-search-book-shape.test',
+    bookSourceName: 'JS SearchBook Shape',
+    exploreUrl: '/explore',
+    mainJs: [
+      'function valid() { return { name: "有效", bookUrl: "/valid", author: true, kind: null, coverUrl: 7, intro: false, wordCount: "100", latestChapterTitle: 3, tocUrl: "/toc", time: "1700000000.0", type: "4.0", originOrder: "2e0", chapterWordCount: 10, respondTime: 20, chapterWordCountText: true, unknown: { keep: true }, lastChapter: { ignored: true } }; }',
+      'function search() { return [valid(), { name: "origin 对象", bookUrl: "/origin-object", origin: {} }, { name: "originName 数组", bookUrl: "/origin-name-array", originName: [] }, { name: "作者对象", bookUrl: "/author-object", author: {} }, { name: "类型数组", bookUrl: "/type-array", type: [] }, { name: "时间布尔", bookUrl: "/time-boolean", time: true }, { name: "Long 溢出", bookUrl: "/time-overflow", time: "9223372036854775808" }, { name: "计数文本", bookUrl: "/count-text", chapterWordCount: "not-a-number" }, { name: "计数小数", bookUrl: "/count-fraction", chapterWordCount: "1.5" }, { name: "简介数组", bookUrl: "/intro-array", intro: [] }, { name: "封面对象", bookUrl: "/cover-object", coverUrl: {} }, { name: "目录对象", bookUrl: "/toc-object", tocUrl: {} }, { name: "变量数组", bookUrl: "/variable-array", variable: [] }, { name: "章节字数对象", bookUrl: "/chapter-count-text-object", chapterWordCountText: {} }, { name: "类型对象", bookUrl: "/kind-object", kind: {} }, { name: "字数数组", bookUrl: "/word-count-array", wordCount: [] }, { name: "最新章节对象", bookUrl: "/latest-object", latestChapterTitle: {} }, { name: "排序序号数组", bookUrl: "/origin-order-array", originOrder: [] }, { name: "响应时间布尔", bookUrl: "/respond-time-bool", respondTime: true }, { name: "Int 溢出", bookUrl: "/respond-time-overflow", respondTime: "2147483648" }, { name: {}, bookUrl: "/name-object" }, { name: "地址对象", bookUrl: {} }]; }',
+      'function explore() { return search(); }',
+    ].join('\n'),
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+
+  const expectedInvalidFields = ['origin', 'originName', 'author', 'type', 'time', 'time', 'chapterWordCount', 'chapterWordCount', 'intro', 'coverUrl', 'tocUrl', 'variable', 'chapterWordCountText', 'kind', 'wordCount', 'latestChapterTitle', 'originOrder', 'respondTime', 'respondTime', 'name', 'bookUrl']
+  const search = await searchBooks(ports, { source, keyword: '字段' })
+  assert.equal(search.status, 'partial', JSON.stringify(search.diagnostics))
+  assert.equal(search.value?.items.length, 1)
+  assert.equal(search.value?.items[0]?.name, '有效')
+  assert.equal(search.value?.items[0]?.type, 4)
+  assert.deepEqual(search.diagnostics.filter((item) => item.field !== undefined).map((item) => item.field), expectedInvalidFields)
+  assert.deepEqual(search.value?.items[0]?.rawFields.unknown, { keep: true })
+
+  const explore = await discoverBooks(ports, { source })
+  assert.equal(explore.status, 'partial', JSON.stringify(explore.diagnostics))
+  assert.equal(explore.value?.items.length, 1)
+  assert.equal(explore.value?.items[0]?.name, '有效')
+  assert.deepEqual(explore.diagnostics.filter((item) => item.field !== undefined).map((item) => item.field), expectedInvalidFields)
+})
+
 test('JS 书源重置详情、目录和正文类型时保留 Android 状态位', async () => {
   const source = {
     bookSourceUrl: 'https://js-type-state.test',

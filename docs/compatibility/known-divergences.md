@@ -74,6 +74,8 @@
 
 `D46` JS 源变量 marshaller 补充（2026-10-22）：Android `parseSearchBooks` 将 `SearchBook.variable` 当作 Gson `String?` 字段读取，因此字符串、数字和布尔值转为字符串保留，数组或对象使该条候选反序列化失败并跳过；TypeScript 的 JS 搜索/发现路径现在按此处理并记录 `item-skipped`。Android `mergeBookInfo` 的 `variable` 则只接受对象或对象 JSON 字符串，使用 `Map<String,String>` 解析后清空旧 map、按字符串值（null 保留为 null）重新序列化；非法 JSON、标量、数组和嵌套对象/数组整体忽略。TypeScript 详情路径已按相同规则归一化并在无效更新时保留旧变量，`source-host-flow.test.ts` 覆盖搜索字段类型、详情对象/字符串、数字/布尔/null 和无效嵌套值。当前只有 Android 源码证据和 Node 书源式回归，Android 同输入 golden 仍为 `not-run`；Gson 极端数值和跨版本边界继续待验证。
 
+`D47` JS 源 `SearchBook` 字段形态补充（2026-10-22）：Android `JsSourceMarshaller.parseSearchBooks` 先使用 Gson 将每个对象反序列化为 `SearchBook`，未知字段会被忽略；已声明的字符串字段允许 JSON string/number/boolean/null，`Int`/`Long` 字段允许 Gson 可精确转成整数的数值和十进制/指数文本，对象、数组、布尔数值、非数值文本和范围溢出会使当前条目被跳过。TypeScript 的 JS `search`/`explore` 入口现在在候选投影前按同一组 `SearchBook` 字段检查，记录具体字段的 `item-skipped`，并继续忽略未知扩展字段；`validBookType` 同步接受 Gson 可读取的整数文本（如 `"4.0"`）。`source-host-flow.test.ts` 的 `JS-010` 覆盖所有声明字段类别、未知字段和 search/explore 双入口。当前为 Android 源码证据和 Node 书源式回归，Android golden 仍为 `not-run`；不同 Gson 版本对超大 Long、特殊数值文本和 Kotlin 非空字段为 null 的边界继续待验证。
+
 ### 需要应用或真实平台的剩余项
 
 以下项目继续使用 OPEN-01～04 和 D4/D12～14，不因本轮重复盘点而另建状态编号。
@@ -95,7 +97,7 @@
 
 以下不应误算为本轮必须新增功能：教程旧 `utf8ToGbk` 在当前 Android JsExtensions/JsEncodeUtils 中不存在；`exploreScreen` 在当前 Android 只见字段/配置比较，未发现执行入口；`serverID` 在本轮请求路径只见参数保存，未证明对应 Android 执行行为；独立 RssSource/ReplaceRule/TTS 不属于本轮 BookSource 运行时。它们保留来源注记；未来有实际可达入口证据时重新评估，不根据字段名字创造功能。
 
-方法兼容 manifest 当前有 27 条方法族登记；独立 conformance manifest 仍有 11 条记录（5 条历史记录、6 条目录型 case），Android 全为 `not-run`。2026-10-22 的 TypeScript 证据为 `pnpm test:source` 171/171、根全套 604/604；`pnpm test:source:compare` 的 6 个离线 case 均完成 TypeScript 侧执行，但 Android 输出仍为 `not-run`。比较器和 runner 外层 schema 已具备，不能把协议可用写成 Android golden 已生成。发现/搜索的请求观测已在 `RuntimeResult.observations` 提供 TS 侧证据，仍需 Android 同输入对照。静态语料审计扫描 943 个候选源、20,231 条规则，其中 20,226 条可编译；剩余 5 条只有在路径、源名、字段、诊断码和规则 hash 全部匹配 manifest 白名单时才归为已知源文本错误，当前新增未编译规则或白名单过期均会使审计失败。Android JBR 21 可读且已验证可启动，默认 `java` 为 8；常规 SDK 路径未发现 API 36/build-tools 36.0.0。本轮没有启动 Gradle、安装 SDK、调用公网书源或执行真实账号动作。2026-10-22 D34 当前方法清单为 252 个成员（46 implemented、168 partial、38 simulated），新增 IO 流重载仍为受控对象并待 Android 同输入验证。
+方法兼容 manifest 当前有 27 条方法族登记；独立 conformance manifest 仍有 11 条记录（5 条历史记录、6 条目录型 case），Android 全为 `not-run`。2026-10-22 的 TypeScript 证据为 `pnpm test:source` 172/172、根全套 605/605；`pnpm test:source:compare` 的 6 个离线 case 均完成 TypeScript 侧执行，但 Android 输出仍为 `not-run`。比较器和 runner 外层 schema 已具备，不能把协议可用写成 Android golden 已生成。发现/搜索的请求观测已在 `RuntimeResult.observations` 提供 TS 侧证据，仍需 Android 同输入对照。静态语料审计扫描 943 个候选源、20,231 条规则，其中 20,226 条可编译；剩余 5 条只有在路径、源名、字段、诊断码和规则 hash 全部匹配 manifest 白名单时才归为已知源文本错误，当前新增未编译规则或白名单过期均会使审计失败。Android JBR 21 可读且已验证可启动，默认 `java` 为 8；常规 SDK 路径未发现 API 36/build-tools 36.0.0。本轮没有启动 Gradle、安装 SDK、调用公网书源或执行真实账号动作。2026-10-22 D34 当前方法清单为 252 个成员（46 implemented、168 partial、38 simulated），新增 IO 流重载仍为受控对象并待 Android 同输入验证。
 
 后续实施以逐签名契约为单位，记录参数类型/默认值/null、返回对象成员、状态作用域、异常/取消、Android 来源和同输入案例；不能再次用方法名总数或单端测试总数宣布全量完成。具体实施顺序保存在本地修复计划，长期事实仍以本节、状态总览和证据矩阵为准。
 

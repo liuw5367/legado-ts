@@ -35,7 +35,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 - `packages/source-node/tests/adapters.test.ts` 的 JSONPath adapter case 以 Android Jayway 3.0.0 源码探针为参照，覆盖混合数字/字符串集合等价、`null` 与缺失路径、空集合筛选，以及 `stddev/first/last/index/concat/append` 函数；这些是 TypeScript 侧实际回归，不替代 Android fixture golden。
 - `package-entry.test.ts` 在构建后从 `@legado/source-core`、`@legado/source-node` 包入口检查公开运行时导出；`source-file-flow.test.ts` 明确属于真实源选择与工作流交接桩测试，规则求值由上述离线宿主测试负责。
 - `source-rule-host.test.ts` 还实际执行了 Android 高频 bridge：`toNumChapter`、UTF-8/GBK 字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64，以及繁简、WebView、浏览器交互和登录状态的显式 `capability-missing`；规则宿主、请求宿主和会话定向集合共 60/60 通过。
-- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 171/171，`pnpm test` 为 604/604。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
+- 该段是 2026-10-08 历史快照：当时 core、source-node、reader-cli 构建与类型检查通过，分层专项为 110/110、完整套件为 459/459。当前证据以 2026-10-22 记录为准：`pnpm test:source` 为 172/172，`pnpm test` 为 605/605。上述均为 `ts-executed` 证据，不能替代 Android golden；六条跨端 fixture 的 Android 输出仍为 `not-run`。
 - Android 外层仓库在当前 commit `32a87b253e7cc28273c3850de86242caac83f1fd` 的只读归档副本中，使用隔离的 JDK 21、API 36 SDK 和 `unitTests.returnDefaultValues=true` 实际运行 `:app:testAppDebugUnitTest`：共 1,948 个测试、399 个测试类，1,948/1,948 通过；书源专项 `AnalyzeByJSoupDomTest`、`AnalyzeRuleElementsNormalizationTest`、`JsSourceBookTest`、`JsSourceTocWriteBackSentinelTest`、`JsSourceEngineTest`、`JsSourceDispatchSentinelTest`、`JsSourceAuthorGuideTest`、`BatchContentContextTest`、`BookSourcePartBatchResolveTest`、`SearchPaginationContractTest` 共 48/48 通过。该结果是 Android test-run 证据，不是同一 manifest 输入在两端逐条产出的 golden；未覆盖的 fixture 仍保持 `execution=not-run`。临时归档与 SDK 不属于本仓库提交，也没有修改外层 Android 工作树。
 
 ### 2026-10-22 P13 最终回归
@@ -155,6 +155,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `JS-006` | JS 源 marshaller | 搜索/发现合法与非法 `type` 的回退、详情脚本前的书源类型重置、文件源合法类型按位合并、`downloadUrls` 字符串数组校验、空值和 `javascript` 过滤、相对 URL 解析、首次去重、非法数组整体忽略及文件源空下载地址失败；Node `source-host-flow.test.ts` 已通过，Android golden 仍为 `not-run` |
 | `JS-008` | JS 源 BookType 状态位 | 详情、目录和正文脚本入口执行 Android `removeAllBookType()` 等价重置：清除媒体位、保留 local/archive/notShelf/updateError；声明式目录也保留状态位；Node `source-host-flow.test.ts` 已通过，Android golden 仍为 `not-run` |
 | `JS-009` | JS 源 variable marshaller | 搜索/发现按 Gson `String?` 读取 variable，详情按 `Map<String,String>` 合并并归一化；Node `source-host-flow.test.ts` 已通过，Android golden 仍为 `not-run` |
+| `JS-010` | JS 源 SearchBook 字段形态 | 搜索/发现候选先按 Android Gson `SearchBook` 的字符串、Int、Long 字段形态校验；对象/数组、布尔数值、非数值文本和溢出值跳过整条候选，未知字段忽略；Node `source-host-flow.test.ts` 已通过，Android golden 仍为 `not-run` |
 | `REVIEW-001` | 旧式段评 | `getDP/getZP` 页面打开、nonce 会话、CSP/sandbox 桥接、脚本上限、书源变更和图片重写 |
 | `MEDIA-001` | 媒体 | 文本、音频、图片、视频和文件类型从列表到详情的身份与结果类型 |
 | `MEDIA-002` | 图片 | 封面和正文图片 bytes 解密、失败回退、Cookie 和缓存隔离 |
@@ -405,6 +406,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | JS-006/source-marshaller | JS `search`/`explore` 返回一个合法 type、一个未知位 type；文件源 `getBookInfo` 观察传入 source type，返回合法 type、`downloadUrls` 相对/绝对/重复/`javascript` 地址；另返回含非字符串成员的地址数组 | 合法类型保留，未知位回退书源类型；详情前类型重置，文件源详情类型按位合并；地址按 Android 规则解析、过滤和去重，非法数组不覆盖已有字段；文件源最终没有下载地址时详情条目失败并保留诊断；当前 Node 书源式回归通过，Android 同输入 golden 未运行 |
 | JS-008/book-type-state | 书籍先带 `text|updateError|local|archive|notShelf` 状态，文件型书源依次执行 JS `getBookInfo`、`getChapters`、`getContent`；另执行声明式音频目录并读取 `book.type` | 每个 Android 重置入口只移除媒体位并补当前书源类型：文件型得到 `text|webFile|updateError|local|archive|notShelf`，音频得到 `audio|updateError|local|archive|notShelf`；脚本和 `bookAfter` 观察到相同状态位，原始输入对象不被直接改写；当前 Node 书源式回归通过，Android 同输入 golden 未运行 |
 | JS-009/variable-marshaller | JS `search` 返回 variable 为字符串、数字、布尔、null、对象和数组的候选；详情分别返回对象、对象 JSON 字符串、嵌套对象和数组，并为搜索候选预置旧变量 | 搜索/发现保留字符串、数字/布尔转字符串和 null 缺省；对象/数组候选整体跳过。详情对合法对象或 JSON 字符串清空旧 map 并按 `Map<String,String>` 将 primitive 转为字符串、保留 null 后序列化；非法 JSON、标量、嵌套对象/数组忽略且保留旧变量；当前 Node 书源式回归通过，Android 同输入 golden 未运行 |
+| JS-010/search-book-shape | JS `search`/`explore` 返回一条包含全部声明字段的有效候选、未知对象字段，以及 origin/originName/name/bookUrl/author/kind/coverUrl/intro/wordCount/latestChapterTitle/tocUrl/variable/chapterWordCountText 的对象/数组形态和 type/time/originOrder/chapterWordCount/respondTime 的错误形态；另覆盖 `type="4.0"`、`time="1700000000.0"` | 有效 primitive/null 字段按 Gson 语义保留，整数/长整数十进制或指数文本只有在能精确转整数且未溢出时接受；已声明字段形态错误记录字段级 `item-skipped` 并跳过整条候选，未知字段继续忽略；Node `source-host-flow.test.ts` 的 search/explore 回归通过，Android 同输入 golden 未运行 |
 | JS-005/archive-cleanup | 归档条目在写入临时目录中途触发路径错误、取消或外部解包失败 | 保留归档原始路径进行沙箱检查；失败/取消不留下部分 `temp/<hash>`，成功目录仍交由 `getTxtInFolder` 消费 |
 | JS-004/replies | 声明式回复 body 为空、列表为空、列表非空但解析为空；JS 回复缺函数、返回空值或缺 items | 空 body/解析为空保留错误；合法空列表为空结果；JS 缺函数为空页并带能力诊断，缺 items 为格式错误；hasMore 按各自分支规则计算 |
 | JS-004/function-state | JS 只声明摘要、只声明详情、回复单独存在、函数声明但不是函数；运行时详情函数缺失或返回 null | 导入阶段按函数配对规则失败；详情缺失是 capability/脚本错误；详情空返回是合法空页；回复缺失是可诊断空页 |
