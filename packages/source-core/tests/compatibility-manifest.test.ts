@@ -36,6 +36,7 @@ interface CompatibilityEntry {
 
 interface CompatibilityManifest {
   version: number
+  memberCount: number
   baseline: { androidCommit: string; tutorialSha256: string }
   entries: CompatibilityEntry[]
 }
