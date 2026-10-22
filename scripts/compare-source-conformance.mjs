@@ -20,8 +20,9 @@ if (options.help) {
   --help                 显示帮助
 
 Android runner 输出约定：每个 fixture 可写为 <id>.json、cases/<id>.json、
-<id>/result.json 或 <id>.golden.json；文件内容可以直接是 expected JSON，
-也可以是 {"id":"...","result":<expected JSON>} 包装对象。`)
+<id>/result.json 或 <id>.golden.json；新协议使用
+{"schemaVersion":1,"fixtureId":"...","status":"pass","result":<JSON>}，
+旧版直接 expected JSON 仍仅作为迁移兼容。`)
   process.exit(0)
 }
 
@@ -42,22 +43,42 @@ for (const fixture of cases) {
     fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: 'not-run', comparison: 'not-run', expected: expectedPath })
     continue
   }
-  const actual = unwrapOutput(output.value)
-  const equal = stableJson(actual) === stableJson(expected)
-  fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: equal ? 'pass' : 'fail', comparison: equal ? 'pass' : 'fail', output: output.path, ...(equal ? {} : { difference: { expected, actual } }) })
+  const normalized = normalizeAndroidOutput(fixture.id, output.value)
+  if (normalized.error !== undefined) {
+    fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: 'invalid-output', comparison: 'fail', output: output.path, error: normalized.error })
+    continue
+  }
+  if (normalized.status !== 'pass') {
+    fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: normalized.status, comparison: 'not-run', output: output.path })
+    continue
+  }
+  const equal = stableJson(normalized.result) === stableJson(expected)
+  fixtures.push({ id: fixture.id, typescript: typescript.status === 'pass' ? 'pass' : typescript.status, android: equal ? 'pass' : 'fail', comparison: equal ? 'pass' : 'fail', output: output.path, ...(equal ? {} : { difference: { expected, actual: normalized.result } }) })
 }
 
 const missing = fixtures.filter((item) => item.android === 'not-run').length
 const failed = fixtures.filter((item) => item.comparison === 'fail').length
+const blocked = fixtures.filter((item) => !['pass', 'fail'].includes(item.android)).length
 const report = {
   version: 1,
   fixtures,
-  summary: { total: fixtures.length, passed: fixtures.length - missing - failed, missing, failed, typescript: typescript.status, androidRoot },
+  summary: {
+    total: fixtures.length,
+    passed: fixtures.filter((item) => item.comparison === 'pass').length,
+    missing,
+    blocked,
+    unsupported: fixtures.filter((item) => item.android === 'unsupported').length,
+    runnerFailed: fixtures.filter((item) => item.android === 'runner-failed').length,
+    invalidOutput: fixtures.filter((item) => item.android === 'invalid-output').length,
+    failed,
+    typescript: typescript.status,
+    androidRoot,
+  },
 }
 console.log(JSON.stringify(report, null, 2))
 if (typescript.status === 'fail') process.exit(1)
 if (failed > 0) process.exit(1)
-if (missing > 0 && options.requireAndroid) process.exit(2)
+if (blocked > 0 && options.requireAndroid) process.exit(2)
 
 function parseArgs(args) {
   const result = { help: false, requireAndroid: false, skipTypescript: false }
@@ -100,13 +121,21 @@ async function findAndroidOutput(root, id) {
   return undefined
 }
 
-function unwrapOutput(value) {
-  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-    const record = value
-    if (Object.hasOwn(record, 'result') && (Object.hasOwn(record, 'id') || Object.hasOwn(record, 'fixtureId'))) return record.result
-    if (Object.hasOwn(record, 'output') && (Object.hasOwn(record, 'id') || Object.hasOwn(record, 'fixtureId'))) return record.output
+function normalizeAndroidOutput(id, value) {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, 'schemaVersion')) {
+    const unknownKeys = Object.keys(value).filter((key) => !['schemaVersion', 'fixtureId', 'status', 'result'].includes(key))
+    if (unknownKeys.length > 0) return { error: `runner 输出包含未知字段: ${unknownKeys.join(',')}` }
+    if (value.schemaVersion !== 1) return { error: `schemaVersion 必须为 1: ${String(value.schemaVersion)}` }
+    if (value.fixtureId !== id) return { error: `fixtureId 不匹配: expected=${id}, actual=${String(value.fixtureId)}` }
+    if (!['pass', 'unsupported', 'failed', 'runner-failed'].includes(value.status)) return { error: `runner status 无效: ${String(value.status)}` }
+    if (!Object.hasOwn(value, 'result')) return { error: 'runner result 缺失' }
+    return { status: value.status, result: value.result }
   }
-  return value
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    if (Object.hasOwn(value, 'result') && (Object.hasOwn(value, 'id') || Object.hasOwn(value, 'fixtureId'))) return { status: 'pass', result: value.result }
+    if (Object.hasOwn(value, 'output') && (Object.hasOwn(value, 'id') || Object.hasOwn(value, 'fixtureId'))) return { status: 'pass', result: value.output }
+  }
+  return { status: 'pass', result: value }
 }
 
 function stableJson(value) {
