@@ -532,16 +532,19 @@ test('Java String/StringBuilder/Pattern 重载保持教程中的 Java 语义', a
   })
 })
 
-test('Pattern 数值 Unicode flags 映射到 Java U/u 语义', async () => {
+test('Pattern 数值 flags 映射到 Java 语义', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.util.regex.Pattern);
     with (importer) {
       var unicodeClasses = Pattern.compile('\\\\w+', Pattern.UNICODE_CHARACTER_CLASS).matcher('中文').find();
       var unicodeCaseOnly = Pattern.compile('abc', Pattern.UNICODE_CASE).matcher('abc').find();
-      JSON.stringify([unicodeClasses, unicodeCaseOnly]);
+      var comments = Pattern.compile('a  # ignored\\nb', Pattern.COMMENTS).matcher('ab').find();
+      var unixLines = Pattern.compile('^.$', Pattern.MULTILINE | Pattern.UNIX_LINES).matcher('a\\r').find();
+      var regularLines = Pattern.compile('^.$', Pattern.MULTILINE).matcher('a\\r').find();
+      JSON.stringify([unicodeClasses, unicodeCaseOnly, comments, unixLines, regularLines]);
     }`, '')
   assert.equal(result.status, 'success', result.message)
-  assert.deepEqual(JSON.parse(String(result.value)), [true, true])
+  assert.deepEqual(JSON.parse(String(result.value)), [true, true, true, false, true])
 
   const unsupported = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.util.regex.Pattern);

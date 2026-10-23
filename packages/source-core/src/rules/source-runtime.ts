@@ -1087,11 +1087,12 @@ const legadoDigest = (algorithm) => {
 }
 const legadoMessageDigest = { getInstance: (algorithm) => legadoDigest(algorithm) }
 const legadoPattern = {
+  UNIX_LINES: 1,
   CASE_INSENSITIVE: 2,
+  COMMENTS: 4,
   MULTILINE: 8,
   DOTALL: 32,
   UNICODE_CASE: 64,
-  COMMENTS: 4,
   LITERAL: 16,
   UNICODE_CHARACTER_CLASS: 256,
   quote: (pattern) => "\\Q" + String(pattern ?? "") + "\\E",
@@ -1102,10 +1103,13 @@ const legadoPattern = {
     if ((numericFlags & 2) !== 0) javaFlags += "i"
     if ((numericFlags & 8) !== 0) javaFlags += "m"
     if ((numericFlags & 32) !== 0) javaFlags += "s"
-    if ((numericFlags & 256) !== 0) pattern = "(?U)" + String(pattern)
-    if ((numericFlags & 64) !== 0) pattern = "(?u)" + String(pattern)
-    if ((numericFlags & 16) !== 0) pattern = legadoPattern.quote(patternText)
-    const compiled = request({ kind: "pattern-compile", pattern: String(pattern), flags: javaFlags + "d" })
+    let prefix = ""
+    if ((numericFlags & 1) !== 0) prefix += "d"
+    if ((numericFlags & 4) !== 0) prefix += "x"
+    if ((numericFlags & 256) !== 0) prefix += "U"
+    if ((numericFlags & 64) !== 0) prefix += "u"
+    const patternSource = (prefix.length === 0 ? "" : "(?" + prefix + ")") + ((numericFlags & 16) !== 0 ? legadoPattern.quote(patternText) : patternText)
+    const compiled = request({ kind: "pattern-compile", pattern: patternSource, flags: javaFlags + "d" })
     const compiledFlags = String(compiled.flags ?? "")
     const makeRegex = (global) => new RegExp(String(compiled.source), compiledFlags + (global && !compiledFlags.includes("g") ? "g" : ""))
     const countGroups = (source) => {
