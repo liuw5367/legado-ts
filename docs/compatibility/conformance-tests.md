@@ -119,7 +119,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `EXP-005` | 发现列表 | JS 源 `explore(url, page)` 返回归一化、非法结果与取消 |
 | `EXP-006` | 发现生命周期 | 换分类、换页、旧请求迟到、分类 URL 为空和宿主能力缺失 |
 | `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`（含 `class.foo bar` 多 class 简写、含 `:` 等字符的字面 class/id 和 XML 声明大小写）、`@CSS` 元素选择、字符串终端输出和模式前缀大小写不敏感 |
-| `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出、文本/属性正则选择器 |
+| `SCH-002` | 规则 | `@` 链（选择器方括号、伪类参数和引号中的 `@` 不切分）、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出、文本/属性正则选择器 |
 | `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
 | `SCH-004` | 规则 | `@XPath`、XML 声明、大小写敏感 CSS/属性、`eq/containsOwn/matchesOwn` 伪类、表格片段补容器、节点/字符串/空结果归一化 |
 | `SCH-005` | 规则 | `@Json`、自动 JSON、对象/数组/标量、嵌套插值和非法 JSONPath |
@@ -308,6 +308,7 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | IMP-008/js-name | JS config 仅 bookSourceUrl=A，必需函数齐全 | 缺名称配置错误，与 JSON 名称规则不同 |
 | SCH-001/prefix-case | HTML `<div class="book">A</div>`、JSON `{"book":"A"}`，分别比较 `@CSS:`/`@css:`、`@XPath:`/`@xPaTh:` 和 `@Json:`/`@JSON:` | 前缀大小写不影响模式识别；规范写法与混合大小写写法输出一致 |
 | SCH-002/text-nodes | `<div>A<b>B</b>C</div>`，`tag.div@textNodes` | 直接文本 `A\nC`，不包含 B；对照原测试确认实体细节 |
+| SCH-002/at-balanced | `<a href="@">含@内容</a>`，`a[href="@"]@text` 和 `a:contains(@)@text` | `@` 只在顶层选择器链切分，两个规则均返回 `含@内容`；不完整 CSS 选择器不得被静默执行 |
 | SCH-002/selector-extensions | `<div class="content" data-x="alpha"><a>One</a></div>`，分别使用 `div:has(a)`, `div:not(.missing)`, `div:is(.content,.other)`, `div:matches(/One/)`, `[data-x~=(?i)^alp]` | 五个选择器均按 Jsoup 兼容语义命中；非法 Java 正则返回 `unsupported-selector` |
 | SCH-004/table-fragment | `<td>A <b>B</b> C</td>`，分别执行 `@XPath://td`, `text`, `ownText`, `textNodes` | 片段自动补 `tr/table` 容器；结果分别保留 `A B C`、`A C`、`A\nC` |
 | SCH-003/nonmutating | 三个 a 的文本为 A/B/C，先排除索引 0，再读全部 | 首次 B/C，第二次仍 A/B/C |

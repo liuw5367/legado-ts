@@ -2417,7 +2417,51 @@ function normalizeSelector(selector: string): string {
 }
 
 function splitSelectorChain(selector: string): string[] {
-  return selector.split('@').map((item) => item.trim()).filter(Boolean)
+  // Android RuleAnalyzer 只在选择器顶层切分 @；属性、伪类参数和引号中的 @ 属于当前选择器。
+  const parts: string[] = []
+  let start = 0
+  let squareDepth = 0
+  let parenthesisDepth = 0
+  let quote: 'single' | 'double' | undefined
+  for (let index = 0; index < selector.length; index += 1) {
+    const current = selector[index]!
+    if (quote !== undefined) {
+      if (current === quote) quote = undefined
+      continue
+    }
+    if (current === "'" || current === '"') {
+      quote = current === "'" ? 'single' : 'double'
+      continue
+    }
+    if (current === '\\') {
+      index += 1
+      continue
+    }
+    if (current === '[') {
+      squareDepth += 1
+      continue
+    }
+    if (current === ']' && squareDepth > 0) {
+      squareDepth -= 1
+      continue
+    }
+    if (current === '(') {
+      parenthesisDepth += 1
+      continue
+    }
+    if (current === ')' && parenthesisDepth > 0) {
+      parenthesisDepth -= 1
+      continue
+    }
+    if (current === '@' && squareDepth === 0 && parenthesisDepth === 0) {
+      const part = selector.slice(start, index).trim()
+      if (part.length > 0) parts.push(part)
+      start = index + 1
+    }
+  }
+  const tail = selector.slice(start).trim()
+  if (tail.length > 0) parts.push(tail)
+  return parts
 }
 
 interface PositionSelection {

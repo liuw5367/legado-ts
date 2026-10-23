@@ -127,6 +127,18 @@ test('legacy class/id 选择器按 Android 字面值匹配 CSS 标识符', async
   assert.deepEqual(idResult.value, ['编号'])
 })
 
+test('CSS 选择器链不会切断属性值和伪类参数中的 @', async () => {
+  const host = new SourceRuleHost()
+  const html = '<div><a href="@">含@内容</a><a>其他</a></div>'
+  const attribute = await evaluate(host, 'a[href="@"]@text', html)
+  assert.equal(attribute.status, 'success')
+  assert.deepEqual(attribute.value, ['含@内容'])
+
+  const pseudo = await evaluate(host, 'a:contains(@)@text', html)
+  assert.equal(pseudo.status, 'success')
+  assert.deepEqual(pseudo.value, ['含@内容'])
+})
+
 test('带 XML 声明的默认规则保持 Android XML 大小写语义', async () => {
   const host = new SourceRuleHost()
   const xml = '<?xml version="1.0"?><Root><Item ID="upper">大写</Item><item id="lower">小写</item></Root>'

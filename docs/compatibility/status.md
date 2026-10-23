@@ -147,6 +147,10 @@ Android `AnalyzeByJSoup.parse` 对以 `<?xml` 开头的正文使用 XML parser�
 
 Java `Pattern.quote` 遇到输入中的 `\\E` 时必须先结束当前引用、转义字面量 `\\E`，再重新开始引用；此前 QuickJS bridge 直接拼接 `\\Q...\\E`，会让 `Pattern.quote('a\\\\E+b')` 过早结束引用并改变匹配结果。现在 bridge 按 Java 语义把每个嵌入式 `\\E` 展开为 `\\E\\\\E\\Q`，并新增 `Pattern.compile(Pattern.quote(...)).matcher(...).matches()` 书源式回归；构建后 `source-rule-host` **114/114** 通过。D21 的复杂 Java Pattern、完整 replacement 边界和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
 
+## 2026-10-23 P55：CSS 选择器链的 `@` 平衡切分
+
+Android `RuleAnalyzer.splitRule("@")` 会跳过 CSS 属性方括号、伪类圆括号和引号中的 `@`，因此 `a[href="@"]@text` 应先完成选择器，再执行文本输出；此前 TS 直接按字符切分，会把属性值或伪类参数截成不完整选择器。现在 `splitSelectorChain` 按方括号、圆括号、引号和转义字符维护嵌套状态，只在顶层切分链；新增属性值和 `:contains(@)` 书源式回归，构建后 `source-rule-host` **115/115** 通过。D18 的完整 CSS/Jsoup 方言、畸形 HTML 和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
+
 ## 状态定义
 
 | 状态 | 含义 |
