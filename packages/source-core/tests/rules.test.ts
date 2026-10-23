@@ -162,6 +162,25 @@ test('Java 正则的常见边界、引用块和占有量词进入受控转换', 
   assert.equal('error' in unsupported ? unsupported.error.code : 'regex', 'unsupported-pattern')
 })
 
+test('Regex 规则编译预检复用 Java Pattern 转换', () => {
+  const inline = compileRule(':(?i)^abc$')
+  assert.deepEqual(inline.diagnostics, [])
+  assert.ok(inline.rule)
+  const inlineResult = evaluateRule(inline.rule!, context('ABC'))
+  assert.equal(inlineResult.status, 'success')
+  assert.deepEqual(inlineResult.value, [['ABC']])
+
+  const possessive = compileRule(':a++b')
+  assert.deepEqual(possessive.diagnostics, [])
+  assert.ok(possessive.rule)
+  assert.equal(evaluateRule(possessive.rule!, context('aaab')).status, 'success')
+
+  const quoted = compileRule(String.raw`:\Q[a-z]+\E`)
+  assert.deepEqual(quoted.diagnostics, [])
+  assert.ok(quoted.rule)
+  assert.deepEqual(evaluateRule(quoted.rule!, context('[a-z]+')).value, [['[a-z]+']])
+})
+
 test('Java 正则 POSIX/Unicode 属性映射到受控 ECMAScript 属性转义', () => {
   const lower = compileSourcePattern(String.raw`\p{Lower}+`, { flags: '' })
   assert.ok('regex' in lower)

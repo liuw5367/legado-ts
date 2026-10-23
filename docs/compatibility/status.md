@@ -123,6 +123,12 @@ QuickJS 的受控 `java.util.regex.Pattern` bridge 已补齐 Android 数值 `UNI
 
 新增 `source-rule-host.test.ts` 的 Android 多 class 书源规则回归；构建后相关 adapter 与规则宿主测试 **135/135** 通过。该阶段只关闭了一个已复现的具体解析缺口，D18 的完整 Jsoup 版本、复杂 CSS 转义、畸形 HTML 和 Android golden 仍未验证，因此清单中 CSS 族仍保持 `partial / conditional`，不把局部修复误记为完整兼容。
 
+## 2026-10-23 P50：Regex 编译预检复用 Java Pattern
+
+编译器原先用原生 ECMAScript `RegExp` 预检 Regex 规则，导致 `(?i)`、简单 Java 占有量词等语法在进入已有运行时转换器前就被标记为 `invalid-regex`，真实书源因此得到空结果或编译失败。现在 compiler 和 evaluator 共用 `compileSourcePattern`，预检会保留 Java flags、引用块、受控占有量词和安全诊断；对确实无法转换的语法仍以稳定的 `invalid-regex` 编译诊断终止，不把不支持语法降级为文本。
+
+新增 core 的 `compileRule → evaluateRule` 回归，覆盖内联大小写、占有量词和 `\Q...\E`；P50 定向规则测试与构建后回归通过。D21 的复杂 Java Pattern、完整 Unicode 大小写折叠和 Android golden 仍保持 `partial / conditional`，本修正不改变方法清单数量。
+
 ## 状态定义
 
 | 状态 | 含义 |

@@ -1,4 +1,5 @@
 import { splitReplacement, splitTopLevel } from './scanner.ts'
+import { compileSourcePattern } from './pattern-guard.ts'
 import type {
   CompiledRule,
   RuleAtom,
@@ -246,11 +247,8 @@ function compileAtom(input: string, span: RuleSpan, options: RuleCompileOptions)
     ? { pattern: replacementParts.parts[1]!, replacement: replacementParts.parts[2] ?? '', firstMatchOnly: replacementParts.parts.length === 4 }
     : undefined
   if (mode.mode === 'Regex') {
-    try {
-      new RegExp(mode.body)
-    } catch {
-      diagnostics.push({ code: 'invalid-regex', message: 'Regex 规则无法编译', span: trimmed.span, canContinue: false })
-    }
+    const compiled = compileSourcePattern(mode.body, { flags: 'g' })
+    if ('error' in compiled) diagnostics.push({ code: 'invalid-regex', message: `Regex 规则无法编译：${compiled.error.message}`, span: trimmed.span, canContinue: false })
   }
   const capabilities = capabilitiesFor(mode.mode, mode.body)
   if (isOpaqueScriptRule(trimmed.text) && !capabilities.includes('javascript')) capabilities.push('javascript')

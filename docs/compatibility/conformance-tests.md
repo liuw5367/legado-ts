@@ -124,7 +124,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `SCH-004` | 规则 | `@XPath`、XML 声明、大小写敏感 CSS/属性、`eq/containsOwn/matchesOwn` 伪类、表格片段补容器、节点/字符串/空结果归一化 |
 | `SCH-005` | 规则 | `@Json`、自动 JSON、对象/数组/标量、嵌套插值和非法 JSONPath |
 | `SCH-006` | 规则 | `&&`、`\|\|`、`%%` 在括号、引号、JSONPath、CSS 属性和代码中的平衡切分 |
-| `SCH-007` | 规则 | 全规则 Regex、`$1` 捕获组、`##match##replace`、首个替换和非法正则回退 |
+| `SCH-007` | 规则 | 全规则 Regex、Java flags/引用块/简单占有量词的编译预检、`$1` 捕获组、`##match##replace`、首个替换和非法正则回退 |
 | `SCH-008` | 规则 | JS 先扫描、WebJS 后扫描的兼容顺序和 capability error，不擅自按原文排序 |
 | `VAR-001` | 变量 | local、chapter、book、rule-data、source 的读取优先级；local 空值命中与其他作用域空值回退 |
 | `VAR-002` | 变量 | `@put`、`@get`、`{{}}` 写入、读取、删除、序列化和请求隔离 |
