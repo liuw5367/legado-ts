@@ -97,17 +97,21 @@ Android 对非法 `exploreUrl` 配置会生成 `ERROR:` 分类项，而不是把
 
 ## 2026-10-23 P45：逐成员状态收口
 
-当前 [`method-manifest.json`](../../fixtures/compatibility/method-manifest.json) 的 259 个成员按实现状态为 **124 implemented、99 simulated、36 partial**；按 TypeScript 证据为 **227 ts-passed、25 ts-diff、7 unverified**。`implemented` 表示 core/Node 提供了目标签名并有回归，`simulated` 表示有受控替代并有回归，不能解读为 Android/JVM 对象身份等价；`partial` 才是仍有未闭合行为的成员。
+当前 [`method-manifest.json`](../../fixtures/compatibility/method-manifest.json) 的 259 个成员按实现状态为 **124 implemented、99 simulated、36 partial**；按 TypeScript 证据为 **230 ts-passed、25 ts-diff、4 unverified**。`implemented` 表示 core/Node 提供了目标签名并有回归，`simulated` 表示有受控替代并有回归，不能解读为 Android/JVM 对象身份等价；`partial` 才是仍有未闭合行为的成员。
 
-剩余 **36 个 partial** 全部是条件语义差异：CSS 选择器 13、XPath/XML 5、Jayway JSONPath 9、Java 正则 7、SimpleDateFormat 2。它们已有安全子集或转换器，未支持的复杂语法会返回明确诊断；本轮没有把缺少 Android golden 误写成“未实现”。7 个 `unverified` 成员均属于真实 WebView/设备/应用配置宿主（`webView`、浏览器源码/验证码、`androidId`、阅读/主题配置），`getWebViewUA` 已作为默认 UA 的受控模拟并有 TS 回归。当前没有剩余的“可直接修复但尚未动手”成员；真实宿主与 Android 同输入 golden 是独立验证门槛。
+剩余 **36 个 partial** 全部是条件语义差异：CSS 选择器 13、XPath/XML 5、Jayway JSONPath 9、Java 正则 7、SimpleDateFormat 2。它们已有安全子集或转换器，未支持的复杂语法会返回明确诊断；本轮没有把缺少 Android golden 误写成“未实现”。4 个 `unverified` 成员均属于真实 WebView、浏览器或验证码宿主（`webView`、浏览器源码、验证码）；`getWebViewUA`、`androidId`、阅读配置和主题配置均已有受控模拟与 TS 回归。当前没有剩余的“可直接修复但尚未动手”成员；真实交互宿主与 Android 同输入 golden 是独立验证门槛。
 
-按可行性维度，259 个成员中有 86 个 `fixable`、83 个 `conditional`、83 个 `simulatable`、7 个 `real-host`；这四项是能力属性，不是未完成数量，不能相加当作待处理数。后续若补齐 Android runner，只需把对应 `verification` 从 `ts-passed`/`ts-diff`/`unverified` 更新为双端证据，不应改变已交付模拟的实现状态。
+按可行性维度，259 个成员中有 86 个 `fixable`、83 个 `conditional`、86 个 `simulatable`、4 个 `real-host`；这四项是能力属性，不是未完成数量，不能相加当作待处理数。后续若补齐 Android runner，只需把对应 `verification` 从 `ts-passed`/`ts-diff`/`unverified` 更新为双端证据，不应改变已交付模拟的实现状态。
 
 ## 2026-10-23 P46：最终 TypeScript 验证与剩余边界
 
 最终验证已覆盖规则、请求和宿主的组合路径：`pnpm test` **647/647**、`pnpm test:source` **191/191**、TypeScript conformance **6/6**，静态书源审计 **943** 个候选源、**20,231** 条规则，其中 **20,226** 条编译成功，5 条仍是清单白名单中的已知源文本错误。补充修正了 URL 内嵌脚本走完整 `executeWorkflowJavaScript` 钩子，以及脚本取消诊断保留 `field` 的错误分类；这些变化没有新增待处理成员。
 
-当前剩余可以明确列出的只有两类：36 个条件语义 partial（CSS 13、XPath/XML 5、JSONPath 9、Java 正则 7、SimpleDateFormat 2），以及 7 个必须真实 WebView/浏览器/设备配置的宿主成员。前者已有安全子集、受控转换和稳定 `unsupported-*` 诊断；后者不能用固定常量冒充真实页面、验证码、物理设备身份或应用设置。Android conformance runner 当前仍因外层项目缺少逐 fixture adapter/golden 输出而为 `not-run`，所以 227 个 `ts-passed` 不能改写成双端通过。
+当前剩余可以明确列出的只有两类：36 个条件语义 partial（CSS 13、XPath/XML 5、JSONPath 9、Java 正则 7、SimpleDateFormat 2），以及 4 个必须真实 WebView/浏览器/验证码宿主的成员。Node 平台已经用可注入 seed 和配置快照模拟稳定设备标识、阅读配置和主题配置；这些值不等价于物理设备或真实应用设置。交互宿主仍不能用固定常量冒充真实页面或验证码。Android conformance runner 当前仍因外层项目缺少逐 fixture adapter/golden 输出而为 `not-run`，所以 230 个 `ts-passed` 不能改写成双端通过。
+
+## 2026-10-23 P47：设备与阅读配置替代值收口
+
+Node 平台的 `androidId/deviceID`、`getReadBookConfigMap` 和 `getThemeConfigMap` 已有明确的受控模拟：设备值由 `deviceSeed` 的 SHA-256 前缀稳定派生，阅读/主题配置由 `platformOptions` 注入并在每次读取时返回副本，调用方修改返回对象不会污染下一次读取。`source-runtime-platform.test.ts` 新增稳定性和防御性副本回归；这 3 个成员从 `real-host/unverified` 更新为 `simulatable/ts-passed`。它们仍不声称是真实 Android `Settings.Secure.ANDROID_ID`、当前账号阅读设置或物理主题配置。
 
 ## 状态定义
 

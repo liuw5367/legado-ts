@@ -46,6 +46,24 @@ test('Node 平台桥接提供 Android 的转换、设备、配置和导航上下
   })
 })
 
+test('Node 平台的设备和阅读配置替代值稳定且返回防御性副本', () => {
+  const platform = new NodeSourceRuntimePlatform({ deviceSeed: 'stable-platform-test', readBookConfig: { reverseToc: true }, themeConfig: { dark: true } })
+  const context: SourceRuntimePlatformContext = { source, workflowStage: 'search', signal: new AbortController().signal, bindings: {} }
+  const first = platform.invoke('androidId', undefined, context)
+  const second = platform.invoke('androidId', undefined, context)
+  assert.equal(first, second)
+  assert.equal(platform.invoke('deviceID', undefined, context), first)
+
+  const read = platform.invoke('getReadBookConfigMap', undefined, context) as Record<string, unknown>
+  const theme = platform.invoke('getThemeConfigMap', undefined, context) as Record<string, unknown>
+  assert.deepEqual(read, { reverseToc: true })
+  assert.deepEqual(theme, { dark: true })
+  read.reverseToc = false
+  theme.dark = false
+  assert.deepEqual(platform.invoke('getReadBookConfigMap', undefined, context), { reverseToc: true })
+  assert.deepEqual(platform.invoke('getThemeConfigMap', undefined, context), { dark: true })
+})
+
 test('Node 平台桥接可以注入浏览器、媒体和宿主动作能力', async () => {
   const calls: Array<{ capability: string; input: unknown; source: string }> = []
   const platform = new NodeSourceRuntimePlatform({
