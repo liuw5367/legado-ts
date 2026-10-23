@@ -1062,6 +1062,27 @@ test('java.getString 区分 unescape 重载并把 null 内容回退到当前上�
   assert.deepEqual(JSON.parse(String(escaped.value)), ['甲&beta;', '甲β', '甲β'])
 })
 
+test('AnalyzeRule 重载保留空规则、列表空项和 evalJS 的 result 参数', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, `@js:JSON.stringify({
+    emptyString: java.getString(''),
+    emptyList: java.getStringList(''),
+    nullList: java.getStringList(null),
+    emptyElements: java.getElements(''),
+    list: java.getStringList('.item@text'),
+    evaluated: java.evalJS('result.value + ":" + baseUrl', { value: '嵌套结果' })
+  })`, '<div class="item"></div><div class="item">第二项</div>')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    emptyString: '',
+    emptyList: null,
+    nullList: null,
+    emptyElements: [],
+    list: ['第二项'],
+    evaluated: '嵌套结果:https://fixture.invalid',
+  })
+})
+
 test('java.getElements 提供 Android 书源使用的节点链式 API', async () => {
   const host = new SourceRuleHost()
   const html = '<ul><li class="item"><a href="/one">第一章</a></li><li class="item"><a href="/two">第二章</a></li></ul>'

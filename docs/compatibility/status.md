@@ -79,6 +79,12 @@ Android 对非法 `exploreUrl` 配置会生成 `ERROR:` 分类项，而不是把
 
 新增 `runtime-observations.test.ts` 覆盖宿主能力错误、AbortError、空解析、普通网络失败和候选跳过；构建后请求/会话/观测组合回归 **47/47** 通过。方法清单将 `runtime-observation` 的 5 个成员更新为 `implemented / ts-passed`；当前 259 个成员为 **92 implemented、123 partial、44 simulated**，仍待处理 **167** 个；验证状态为 **159 ts-passed、36 ts-diff、64 unverified**。按可行性统计，剩余 **18 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**；Android 同输入 golden 仍为 `not-run`，本轮只确认 TypeScript 行为和诊断边界。
 
+## 2026-10-23 P42：AnalyzeRule 重载与脚本结果上下文
+
+本轮完成 `AnalyzeRule` 家族剩余的 7 个直接可修复成员。`java.evalJS(js, result)` 现在通过受控 bridge 标记把第二个参数绑定为嵌套脚本的 `result`，同时保留 `baseUrl`、`src`、`book`、`chapter`、`chapters`、`nextChapterUrl`、`rssArticle`、`fromBookInfo` 和局部参数；`source.evalJS` 的额外 bindings 不再与该参数混淆。`setContent` 继续拒绝 null，并按新内容动态选择 JSON/Default 规则；`getString/getStringList/getElements` 对空规则、null 内容、HTML unescape、URL 基址/重定向、空列表和节点列表的返回类型按 Android 语义收口，列表保留 Android 选择器本身过滤空文本的行为。`reGetBook` 与 `refreshTocUrl` 的 preUpdateJs 权限、精确书名/作者匹配、详情重取、`isFromBookInfo` 跳过和失败终止已有组合回归，本轮将它们与上述重载一并收口为已实现。
+
+新增 `source-rule-host.test.ts` 的 AnalyzeRule 重载回归，覆盖空规则、null、列表、节点和 `evalJS` 第二参数；构建后规则宿主 **108/108** 通过，相关目录 preUpdateJs 回归保持通过。方法清单当前 259 个成员为 **99 implemented、116 partial、44 simulated**，仍待处理 **160** 个；验证状态仍为 **159 ts-passed、36 ts-diff、64 unverified**。剩余可直接修复成员降为 **11** 个（AnalyzeUrl 上下文 2、CacheInfoMap 4、发现工作流 5），另有 **83** 个条件实现、**58** 个可模拟和 **8** 个需要真实宿主。Android 同输入 golden 仍为 `not-run`；本轮提交只保留本地，完成剩余成员后统一推送。
+
 ## 状态定义
 
 | 状态 | 含义 |
