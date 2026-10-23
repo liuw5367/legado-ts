@@ -80,6 +80,23 @@ test('发现分类保留 Android ExploreKind 的默认 url 类型', async () => 
   ])
 })
 
+test('发现分类解析失败保留受控 ERROR 分类而不是伪装为空列表', async () => {
+  const result = await parseExploreKinds(ports([]), { ...source, exploreUrl: '[invalid' } as NormalizedSource)
+  assert.equal(result.kinds.length, 1)
+  assert.equal(result.kinds[0]?.type, 'error')
+  assert.match(result.kinds[0]?.title ?? '', /^ERROR:/u)
+  assert.equal(result.kinds[0]?.url, undefined)
+  assert.equal(result.diagnostics[0]?.code, 'rule-failed')
+})
+
+test('动态发现缺少脚本宿主时保留能力错误分类且不携带宿主堆栈', async () => {
+  const result = await parseExploreKinds(ports([]), { ...source, exploreUrl: '@js:[]' } as NormalizedSource)
+  assert.equal(result.kinds[0]?.type, 'error')
+  assert.match(result.kinds[0]?.title ?? '', /^ERROR:/u)
+  assert.equal(result.kinds[0]?.url, undefined)
+  assert.equal(result.diagnostics[0]?.code, 'capability-missing')
+})
+
 test('发现工作流优先使用调用方传入的已选分类 URL', async () => {
   const calls: string[] = []
   const configured = { ...source, exploreUrl: JSON.stringify([{ title: '热门', url: '/hot?page={{page}}' }]) } as NormalizedSource

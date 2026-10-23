@@ -27,6 +27,18 @@ function categoryId(source: StoredSourceRecord, index: number, category: Omit<Ca
   return createHash('sha256').update(JSON.stringify([source.fingerprint, index, category])).digest('hex').slice(0, 24)
 }
 
+function errorCategory(source: StoredSourceRecord, index: number, message: string): Category {
+  const title = `ERROR:${message.replace(/[\r\n]+/gu, ' ').trim().slice(0, 512)}`
+  const category = { title, type: 'error' }
+  return { id: categoryId(source, index, category), ...category }
+}
+
+function categoryDiagnostic(categories: readonly Category[], fallback?: string): string | undefined {
+  const error = categories.find((item) => item.type === 'error')
+  if (error !== undefined) return error.title.replace(/^ERROR:/u, '')
+  return fallback
+}
+
 function categoriesFromKinds(source: StoredSourceRecord, kinds: readonly ExploreKind[]): Category[] {
   const categories: Category[] = []
   let group = ''
@@ -98,7 +110,10 @@ export function parseDiscoveryCategories(source: StoredSourceRecord): { categori
         const row = item as Record<string, unknown>
         return typeof row.title === 'string' ? [{ title: row.title, ...(typeof row.url === 'string' ? { url: row.url } : {}), ...(typeof row.type === 'string' ? { type: row.type } : {}), ...(typeof row.action === 'string' ? { action: row.action } : {}), ...(Array.isArray(row.chars) ? { chars: row.chars.map((value) => value === null || typeof value === 'string' ? value : String(value)) } : {}), ...(typeof row.default === 'string' ? { default: row.default } : {}), ...(typeof row.viewName === 'string' ? { viewName: row.viewName } : {}), ...(row.style !== null && typeof row.style === 'object' && !Array.isArray(row.style) ? { style: row.style as Record<string, unknown> } : {}) }] : []
       })
-    } catch { return { categories: [], message: '发现分类配置无效，请切换书源或使用搜索。' } }
+    } catch {
+      const message = '发现分类配置无效，请切换书源或使用搜索。'
+      return { categories: [errorCategory(source, 0, message)], message }
+    }
   } else if (text.length > 0) {
     // Android 文本分类以 && 或换行分隔，首个 :: 后的内容完整保留为地址。
     rows = text.split(/&&|\r?\n/u).map((item) => {
@@ -126,25 +141,29 @@ async function resolveDiscoveryCategories(source: StoredSourceRecord, session: S
   if (state.discovery !== undefined && state.discovery.fingerprint === source.fingerprint) {
     const categories = structuredClone(state.discovery.categories)
     initializeControlValues(state, categories)
-    return { categories, ...(categories.length === 0 ? { message: '此书源没有可用的发现分类。' } : {}) }
+    const message = categoryDiagnostic(categories, categories.length === 0 ? '此书源没有可用的发现分类。' : undefined)
+    return { categories, ...(message === undefined ? {} : { message }) }
   }
   let categories: Category[]
+  let message: string | undefined
   if (!dynamicExploreUrl(source)) {
     const result = parseDiscoveryCategories(source)
     categories = result.categories
-    if (result.message !== undefined) return result
+    message = result.message
   } else {
     const result = await session.run((ports) => parseExploreKinds(ports, source.normalizedSource, { infoMap: state.infoMap, ...(signal === undefined ? {} : { signal }) }))
     state.replaceInfoMap(result.infoMap)
     if (result.saveRequest !== undefined) state.applyInfoMapSave(result.saveRequest)
     const diagnostic = result.diagnostics[0]
-    if (diagnostic !== undefined) return { categories: [], message: diagnostic.message }
     categories = categoriesFromKinds(source, result.kinds)
+    message = diagnostic?.message
+    if (diagnostic !== undefined && categories.length === 0) return { categories, ...(message === undefined ? {} : { message }) }
   }
   initializeControlValues(state, categories)
   await resolveCategoryLabels(session, source, state, categories, signal)
   state.replaceDiscovery({ version: 1, fingerprint: source.fingerprint, categories: structuredClone(categories) })
-  return { categories, ...(categories.length === 0 ? { message: '此书源没有可用的发现分类。' } : {}) }
+  const resultMessage = categoryDiagnostic(categories, message ?? (categories.length === 0 ? '此书源没有可用的发现分类。' : undefined))
+  return { categories, ...(resultMessage === undefined ? {} : { message: resultMessage }) }
 }
 
 export async function getDiscoveryCategories(repository: ReaderRepository, userId: string, sourceId: string): Promise<DiscoveryCategories> {
@@ -163,6 +182,7 @@ export async function updateDiscoveryControl(repository: ReaderRepository, userI
     const category = resolved.categories.find((item) => item.id === input.categoryId)
     if (category === undefined) throw new ReaderRuntimeError('invalid-input', resolved.message ?? '发现分类已失效，请重新选择')
     const type = category.type ?? 'url'
+    if (type === 'error') throw new ReaderRuntimeError('source-failed', categoryDiagnostic([category]) ?? '发现分类配置无效')
     if (type === 'url') throw new ReaderRuntimeError('invalid-input', '普通发现分类不需要控件操作')
     const chars = category.chars?.filter((value): value is string => value !== null) ?? []
     const beforeDigest = stateDigest(state)
@@ -230,6 +250,7 @@ function verifySelectionGeneration(state: PersistentSourceState, input: Discover
 }
 async function queryPage(session: SourceSession, source: StoredSourceRecord, category: Category, input: DiscoveryPageInput, state: PersistentSourceState, signal?: AbortSignal) {
   const categoryUrl = category.url
+  if (category.type === 'error') throw new ReaderRuntimeError('source-failed', categoryDiagnostic([category]) ?? '发现分类配置无效')
   if (categoryUrl === undefined || categoryUrl.length === 0 || (category.type !== undefined && category.type !== 'url')) throw new ReaderRuntimeError('invalid-input', '此发现分类需要先完成控件操作')
   const result = await session.run((ports) => discoverBooks(ports, {
     source: source.normalizedSource,

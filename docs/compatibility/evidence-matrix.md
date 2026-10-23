@@ -79,7 +79,7 @@
 | 结构化段评摘要、详情和回复 | 声明存在时必须兼容 | `ReviewController`、`ReviewRuleParser`、`JsSourceReview` | source-core 已支持声明式/JS 读取、内容协议、嵌套回复和分页；reader-web 对声明式详情游标做用户/书源/书籍/章节/段评上下文 HMAC 绑定；`packages/source-core/tests/review.test.ts` 通过，Android golden 待执行 |
 | 旧式段评网页桥接 | 受支持的 `getDP/getZP` 链接必须兼容 | `ReviewController`、`HttpServer`、`ReviewWebApiContractTest` | 会话 nonce、2 小时 TTL、64 KiB 脚本上限、CSP/sandbox 和图片重写见[段评流程](../upstream/android/flows/review-flow.md)，runtime 未实现，待安全 fixture |
 | WebView 真实页面行为 | 目标宿主能力 | WebView 相关流程 | 需 adapter 和 capability error |
-| 发现分类、`infoMap` 与发现列表 | 目标必须兼容 | `BookSourceExtensions`、`ExploreKind`、`WebBook.exploreBookAwait` | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
+| 发现分类、`infoMap` 与发现列表 | 目标必须兼容 | `BookSourceExtensions`、`ExploreKind`、`WebBook.exploreBookAwait` | source-core/reader-web 已保留 JSON/文本/动态分类元数据和 `ERROR:` 诊断项；错误分类公开为不可请求的 `type:error`，列表请求零网络执行；对照 fixture/golden 执行状态见测试基线|
 | 图片与封面解密 | 声明存在时必须兼容 | `ImageUtils`、`ContentRule.imageDecode`、`BookSource.coverDecodeJs` | `decodeImage` 已实现规则选择、QuickJS bytes 往返、封面流式输入兼容、错误和取消；下载/缓存由宿主负责，Android golden 待执行 |
 | 付费动作与购买后刷新 | 部分实现 | `ContentRule.payAction`、`ReadBookActivity.payAction` | `executePayAction` 已支持 JS 和 `{{js}}` URL、URL/真值结果；reader-web 提供人工触发 API、源版本校验、结构化刷新动作和进程内 operationId 幂等；购买后实际刷新、浏览器打开和多实例幂等仍缺 |
 | 段评写入、投票和删除 | 低优先待核实（写入流程为目标设计） | `ReviewRule` 有字段；已核对的 `ReviewController` 入口主要是读取 | 写入流程为 Web 目标设计（见 conformance-tests ACTION-002），不宣称 Android 等价 |

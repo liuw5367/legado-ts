@@ -36,8 +36,22 @@ test('categories parse JSON, grouping, text URLs and malformed/dynamic configura
   const withExplore = (exploreUrl: string): StoredSourceRecord => ({ ...source, normalizedSource: { ...source.normalizedSource, exploreUrl } })
   assert.deepEqual(parseDiscoveryCategories(withExplore('男频\n热门::/a&&完结::/b::c')).categories.map(({ title, group, url }) => [title, group, url]), [['热门', '男频', '/a'], ['完结', '男频', '/b::c']])
   assert.equal(parseDiscoveryCategories(withExplore('https://8.8.8.8/books')).categories[0]?.title, '浏览')
-  for (const text of ['@js:java.get()', '<JS>java.get()</JS>', '[invalid']) assert.ok(parseDiscoveryCategories(withExplore(text)).message)
+  for (const text of ['@js:java.get()', '<JS>java.get()</JS>']) assert.ok(parseDiscoveryCategories(withExplore(text)).message)
+  const malformed = parseDiscoveryCategories(withExplore('[invalid'))
+  assert.ok(malformed.message)
+  assert.equal(malformed.categories[0]?.type, 'error')
+  assert.match(malformed.categories[0]?.title ?? '', /^ERROR:/u)
   assert.deepEqual(parseDiscoveryCategories(withExplore('')).categories, [])
+})
+
+test('发现错误分类只展示诊断，不允许发起列表请求', async (t) => {
+  const { repository, source, input } = await setup({ exploreUrl: '[invalid' })
+  const categories = await getDiscoveryCategories(repository, 'user-a', source.sourceId)
+  assert.equal(categories.categories[0]?.type, 'error')
+  assert.match(categories.message ?? '', /发现分类配置无效/u)
+  const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(listHtml()))
+  await assert.rejects(loadDiscoveryPage(repository, 'user-a', input), /发现分类配置无效/u)
+  assert.equal(fetch.mock.callCount(), 0)
 })
 
 test('dynamic discovery categories execute with a persistent infoMap and then request the selected URL', async (t) => {

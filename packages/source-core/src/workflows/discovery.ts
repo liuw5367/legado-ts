@@ -36,12 +36,14 @@ export async function parseExploreKinds(ports: WorkflowPorts, source: Normalized
       return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
     }
     if (result.state === 'capability-missing') {
-      diagnostics.push({ code: 'capability-missing', stage: 'discover', field: 'exploreUrl', message: result.message ?? '发现分类需要 JavaScript 宿主', retryable: false })
-      return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
+      const message = errorMessage(result.message, '发现分类需要 JavaScript 宿主')
+      diagnostics.push({ code: 'capability-missing', stage: 'discover', field: 'exploreUrl', message, retryable: false })
+      return { kinds: [errorExploreKind(message)], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
     }
     if (result.state !== 'value') {
-      diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message: result.message ?? '发现分类脚本执行失败', retryable: false })
-      return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
+      const message = errorMessage(result.message, '发现分类脚本执行失败')
+      diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message, retryable: false })
+      return { kinds: [errorExploreKind(message)], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
     }
     const wrapper = result.value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: Record<string, unknown> } | null
     const rawValue = wrapper?.__legadoWorkflowValue ?? result.value
@@ -56,9 +58,22 @@ export async function parseExploreKinds(ports: WorkflowPorts, source: Normalized
   try {
     return { kinds: parseExploreKindText(text), infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
   } catch (error) {
-    diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message: error instanceof Error ? error.message : '发现分类配置无效', retryable: false })
-    return { kinds: [], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
+    const message = errorMessage(error, '发现分类配置无效')
+    diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreUrl', message, retryable: false })
+    return { kinds: [errorExploreKind(message)], infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
   }
+}
+
+/** Android keeps a displayable ERROR:* ExploreKind after parsing failures. Keep
+ * the same marker while omitting its stack trace and request URL. */
+function errorExploreKind(message: string): ExploreKind {
+  return { title: `ERROR:${message}`, type: 'error' }
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  const value = error instanceof Error ? error.message : String(error)
+  const normalized = value.replace(/[\r\n]+/gu, ' ').trim().slice(0, 512)
+  return normalized.length === 0 ? fallback : normalized
 }
 
 /** Execute an Android ExploreKind button/text action with a controlled host bridge. */

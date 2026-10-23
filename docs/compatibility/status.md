@@ -59,7 +59,13 @@ Node 请求宿主现在把一次 AnalyzeUrl 请求的 URL、Header、方法、bo
 
 分类解析结果同时为普通 JSON/文本项保留 Android `ExploreKind` 的默认 `type: "url"`；应用层仍可将 URL 类型压缩为未声明的公开字段，控件类型继续按原始类型处理。新增 source-core 回归覆盖 JSON/文本分类默认类型、显式分类 URL、空 URL 零请求；reader-web 发现回归在构建产物更新后继续覆盖动态分类、JS `explore(url,page)` 和分页。
 
-本轮修改范围为 `source-core` 工作流类型/解析、reader-web 请求装配、发现流程文档和方法清单；方法清单仅将 `discovery-workflow::001-exploreurl` 更新为 `partial / ts-passed / fixable / verify`，因为 Android 分类缓存、错误分类项和完整 ExploreKind 生命周期仍未达到实现完成条件。P38 定向发现与工作流测试 **60/60** 通过；完整 source 回归 **186/186**、根回归 **638/638**、静态语料 **20,226/20,231**、TypeScript conformance **6/6** 通过。Android 同输入 golden 仍为 `not-run`，方法清单 259 个成员仍为 **82 implemented、133 partial、44 simulated**，未完成 **177** 个；验证状态统计为 **154 ts-passed、40 ts-diff、65 unverified**。
+本轮修改范围为 `source-core` 工作流类型/解析、reader-web 请求装配、发现流程文档和方法清单；P38 将 `discovery-workflow::001-exploreurl` 更新为 `partial / ts-passed / fixable / verify`，P39 将 `discovery-workflow::003-explorekind` 收口为 `implemented / ts-passed / fixable / verify`。P38/P39 定向发现与工作流回归均通过；完整 source 回归、根回归、静态语料和 TypeScript conformance 结果以最近一次验证记录为准。Android 同输入 golden 仍为 `not-run`，方法清单当前统计以脚本输出为准；分类缓存键、完整控件/分类生命周期和其他发现成员仍未达到实现完成条件。
+
+## 2026-10-23 P39：发现分类错误项与安全诊断
+
+Android 对非法 `exploreUrl` 配置会生成 `ERROR:` 分类项，而不是把解析失败降成空列表。`parseExploreKinds` 现在在 JSON/文本解析失败、动态脚本失败或动态宿主缺失时返回受控 `ExploreKind { type: "error" }`，标题只保留脱敏后的单行错误消息，省略 Android 内部堆栈和请求地址；取消仍只返回取消诊断。reader-web 同样保留静态配置的错误分类，将错误分类写入发现快照，公开响应不下发 URL/action/viewName，`loadDiscoveryPage` 与控件更新会以 `source-failed` 拒绝执行，因此错误项可显示、可定位且不会发出书源请求。
+
+新增 source-core 与 reader-web 回归覆盖错误项、缓存后的错误诊断和零网络请求。方法清单将 `discovery-workflow::003-explorekind` 更新为 `implemented / ts-passed / fixable / verify`；当前 259 个成员为 **83 implemented、132 partial、44 simulated**，仍待处理 **176** 个；验证状态为 **155 ts-passed、40 ts-diff、64 unverified**。待处理成员按可行性为 **27 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**。其余发现缓存、完整控件生命周期和 Android golden 仍保持未完成。Android 同输入 runner 仍为 `not-run`，本轮不单独 push，待所有剩余任务完成后统一推送。
 
 ## 状态定义
 

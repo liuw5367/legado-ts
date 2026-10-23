@@ -3371,10 +3371,10 @@
           "signature": "ExploreKind",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "EXP-001",
             "EXP-004",
