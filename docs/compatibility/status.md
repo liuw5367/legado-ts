@@ -139,6 +139,10 @@ QuickJS 的受控 `java.util.regex.Pattern` bridge 已补齐 Android 数值 `UNI
 
 Android 的 `ElementsSingle` 对 `class.*`、`id.*` 和 `tag.*` 先按字面值调用 Jsoup 查询；core 现在只对 legacy 标识符本体做 CSS 转义，并保留后缀索引和属性选择器，因此包含 `:`、数字等字符的 class/id 不会被误解析成 CSS 伪类或非法标识符。新增规则宿主回归覆盖 `class.badge:hot` 与 `id.book:item`，构建后 `source-rule-host` **113/113** 通过；位置索引和属性选择器回归也保持通过。D18 的完整 Jsoup 版本、复杂 CSS 转义、畸形 HTML 和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
 
+## 2026-10-23 P53：XML 声明触发默认规则的 XML parser
+
+Android `AnalyzeByJSoup.parse` 对以 `<?xml` 开头的正文使用 XML parser；core 的默认规则现在采用同一判定，`tag.Item`、`tag.item` 和大小写敏感属性查询在 XML 正文中不会合并为 HTML 的大小写不敏感结果。新增规则宿主回归覆盖 XML 标签和 `ID` 属性，构建后 `source-rule-host` **114/114** 通过；HTML、位置选择器和已有 XPath/XML adapter 回归保持通过。D18/D19 的完整 Jsoup 修复算法、XML 边界和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
+
 ## 状态定义
 
 | 状态 | 含义 |

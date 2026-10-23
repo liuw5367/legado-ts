@@ -127,6 +127,20 @@ test('legacy class/id 选择器按 Android 字面值匹配 CSS 标识符', async
   assert.deepEqual(idResult.value, ['编号'])
 })
 
+test('带 XML 声明的默认规则保持 Android XML 大小写语义', async () => {
+  const host = new SourceRuleHost()
+  const xml = '<?xml version="1.0"?><Root><Item ID="upper">大写</Item><item id="lower">小写</item></Root>'
+  const upper = await evaluate(host, 'tag.Item@text', xml)
+  assert.equal(upper.status, 'success')
+  assert.deepEqual(upper.value, ['大写'])
+  const lower = await evaluate(host, 'tag.item@text', xml)
+  assert.equal(lower.status, 'success')
+  assert.deepEqual(lower.value, ['小写'])
+  const attribute = await evaluate(host, 'tag.Item@ID', xml)
+  assert.equal(attribute.status, 'success')
+  assert.deepEqual(attribute.value, ['upper'])
+})
+
 test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力', async () => {
   const output = await evaluate(new SourceRuleHost(), '@js:source.putConcurrent("1/100")', '')
   assert.equal(output.status, 'capability-missing')

@@ -2370,6 +2370,10 @@ function jsonContent(value: unknown): boolean {
   return (text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))
 }
 
+function htmlDocumentMode(value: string): 'html' | 'xml' {
+  return value.slice(0, 5).toLowerCase() === '<?xml' ? 'xml' : 'html'
+}
+
 /**
  * jsonpath-plus 只对「确定路径」额外包一层数组；含通配、递归、过滤、切片、联合或脚本的路径，
  * 返回值本身就是 Android `JsonPath.read` 的元素列表（如 `$.single[*]` 在 `[[1,2]]` 上返回 `[[1,2]]`）。
@@ -2991,7 +2995,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const plan: DefaultPlan = state.expect === 'nodes' ? { selector: expanded } : lastOutput(expanded)
     const selectorParts = splitSelectorChain(plan.selector).map(normalizeSelector)
     let current: Array<{ document: HtmlDocument; node?: ParserNode }> = storedNodes.length === 0
-      ? [{ document: this.html.parse(textValue(content)) }]
+      ? [{ document: this.html.parse(textValue(content), htmlDocumentMode(textValue(content))) }]
       : storedNodes
     if (selectorParts.length === 0) {
       // 没有选择器时按当前内容取值；属性名查询不落到整页文本上（Android 查的是根元素属性）。
