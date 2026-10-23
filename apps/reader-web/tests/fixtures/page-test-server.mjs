@@ -622,7 +622,7 @@ async function handleApi(request, response, url) {
     if ((method === 'PUT' || method === 'DELETE') && tail === 'bookshelf') {
       if (book === undefined) { json(response, { error: { code: 'not-found', message: '测试书籍不存在' } }, 404); return }
       if (method === 'PUT') bookshelf.add(bookId)
-      else bookshelf.delete(bookId)
+      else { bookshelf.delete(bookId); shelfGroups.delete(bookId) }
       json(response, { ok: true })
       return
     }

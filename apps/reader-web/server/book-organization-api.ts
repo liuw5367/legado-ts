@@ -20,16 +20,22 @@ export function registerBookOrganizationApi(app: Hono<{ Variables: Variables }>,
   app.get('/api/book-lists', guard(async (c) => {
     const userId = c.get('userId'); const repo = repository()
     const organization = await repo.getBookOrganization(userId)
-    const coverIds = organization.lists.filter((row) => row.type === 'booklist').flatMap((list) => organization.items.filter((row) => row.bookListId === list.id).sort((a, b) => b.addedAt.localeCompare(a.addedAt) || b.bookId.localeCompare(a.bookId)).slice(0, 4).map((row) => row.bookId))
-    const snapshot = await repo.getOrganizationLibrary(userId, [...new Set(coverIds)], false)
-    const books = new Map(snapshot.books.map((entry) => [entry.book.id, entry.book]))
     const bookId = c.req.query('bookId'); if (bookId !== undefined) z.uuid().parse(bookId)
     const query = (c.req.query('q') ?? '').trim().toLocaleLowerCase()
-    return c.json({ lists: organization.lists.filter((row) => row.type === 'booklist' && row.name.toLocaleLowerCase().includes(query)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id)).map((row) => {
-      const members = organization.items.filter((item) => item.bookListId === row.id).sort((a, b) => b.addedAt.localeCompare(a.addedAt) || b.bookId.localeCompare(a.bookId))
+    const visibleLists = organization.lists.filter((row) => row.type === 'booklist' && row.name.toLocaleLowerCase().includes(query)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
+    // 只分桶一次，避免书单数量与成员总数相乘的扫描开销。
+    const byList = new Map<string, typeof organization.items>()
+    for (const member of organization.items) { const members = byList.get(member.bookListId) ?? []; members.push(member); byList.set(member.bookListId, members) }
+    for (const members of byList.values()) members.sort((a, b) => b.addedAt.localeCompare(a.addedAt) || b.bookId.localeCompare(a.bookId))
+    const coverIds = visibleLists.flatMap((list) => (byList.get(list.id) ?? []).slice(0, 4).map((row) => row.bookId))
+    const snapshot = await repo.getOrganizationLibrary(userId, [...new Set(coverIds)], false)
+    const books = new Map(snapshot.books.map((entry) => [entry.book.id, entry.book]))
+    return c.json({ lists: visibleLists.map((row) => {
+      const members = byList.get(row.id) ?? []
       return { ...row, bookCount: members.length, coverBooks: members.slice(0, 4).flatMap((item) => { const book = books.get(item.bookId); return book ? [book] : [] }), containsBook: members.some((item) => item.bookId === bookId) }
     }) })
   }))
+
   app.post('/api/book-lists', guard(async (c) => {
     const input = createBookListSchema.parse(await c.req.json()); const createdId = randomUUID()
     const result = await repository().mutateBookOrganization(c.get('userId'), { kind: 'create', id: createdId, type: 'booklist', ...input })

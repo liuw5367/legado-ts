@@ -53,3 +53,15 @@ test('内存仓库失败不提交状态，返回对象不会泄漏内部引用',
   assert.equal((await repo.getBookOrganization(userId)).lists.length, 1)
   assert.deepEqual(await repo.getBookOrganization('other'), { lists: [], items: [] })
 })
+
+test('分组书籍移出后重新加入必须回到默认分组', async () => {
+  const repo = new MemoryReaderRepository()
+  const metadata = { sourceId: 'https://group.test', bookUrl: 'https://group.test/1', name: '测试书', rawFields: {}, traceRef: '', emptyFields: [], fieldErrors: {} }
+  const created = await repo.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: 'edition', sourceFingerprint: 'fp' })
+  const org = await repo.mutateBookOrganization(userId, { kind: 'create', type: 'shelf_group', name: '科幻' })
+  await repo.mutateBookOrganization(userId, { kind: 'assign', bookId: created.book.id, groupId: org.lists[0]!.id })
+  assert.equal((await repo.getHome(userId)).bookshelf[0]?.groupId, org.lists[0]!.id)
+  await repo.removeFromBookshelf(userId, created.book.id)
+  await repo.addToBookshelf(userId, created.book.id)
+  assert.equal((await repo.getHome(userId)).bookshelf[0]?.groupId, null)
+})

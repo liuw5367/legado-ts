@@ -974,7 +974,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     return edition
   }
   public async addToBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.set(`${userId}:${bookId}`, new Date().toISOString()) }
-  public async removeFromBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.delete(`${userId}:${bookId}`) }
+  public async removeFromBookshelf(userId: string, bookId: string): Promise<void> { this.shelf.delete(`${userId}:${bookId}`); this.shelfGroups.delete(`${userId}:${bookId}`) }
   public async isOnBookshelf(userId: string, bookId: string): Promise<boolean> { return this.shelf.has(`${userId}:${bookId}`) }
   public async getHome(userId: string): Promise<HomeSnapshot> {
     const values = [...this.books.values()].filter((item) => item.book.userId === userId)
@@ -1105,8 +1105,8 @@ export class MemoryReaderRepository implements ReaderRepository {
       }
     }
     if (selected.has('settings') || selected.has('bookshelf')) nextSettings.set(userId, { ...snapshot.settings })
-    if (selected.has('bookshelf') && snapshot.organization) {
-      this.organizations.set(userId, structuredClone(snapshot.organization))
+    if (selected.has('bookshelf')) {
+      if (snapshot.organization) this.organizations.set(userId, structuredClone(snapshot.organization))
       for (const key of this.shelfGroups.keys()) if (key.startsWith(userId + ':')) this.shelfGroups.delete(key)
       for (const row of snapshot.bookshelf) this.shelfGroups.set(`${userId}:${bookIdMap.get(row.bookId) ?? row.bookId}`, row.groupId ?? null)
     }

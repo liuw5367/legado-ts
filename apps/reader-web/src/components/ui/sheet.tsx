@@ -10,7 +10,7 @@ export function Sheet({ open, onOpenChange, title, children, side = 'bottom', cl
     const dialog = dialogRef.current
     if (dialog === null) return
     if (open && page?.active !== false && !dialog.open) {
-      previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      if (previousFocusRef.current === null) previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
       dialog.showModal()
       // 原生 showModal 也会聚焦首个控件；打开时清除该焦点，避免关闭按钮出现焦点框。
       const focused = document.activeElement
@@ -19,7 +19,7 @@ export function Sheet({ open, onOpenChange, title, children, side = 'bottom', cl
     if (!open && dialog.open) dialog.close()
     return () => {
       // StrictMode 的 Effect 重建会立即重新打开；关闭事件须以实际 open 状态判断。
-      if (dialog.open) { previousFocusRef.current = null; dialog.close() }
+      if (dialog.open) dialog.close()
     }
   }, [open, page?.active])
   return <dialog className={`sheet sheet-${side}${className === undefined ? '' : ` ${className}`}`} ref={dialogRef} aria-labelledby={titleId} onClick={(event) => { if (event.target === event.currentTarget) onOpenChange(false) }} onCancel={(event) => { event.preventDefault(); onOpenChange(false) }} onClose={() => { if (dialogRef.current?.open) return; previousFocusRef.current?.focus(); previousFocusRef.current = null; onOpenChange(false) }}>
