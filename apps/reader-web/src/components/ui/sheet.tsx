@@ -20,6 +20,7 @@ export function Sheet({ open, onOpenChange, title, children, side = 'bottom', cl
     return () => {
       // StrictMode 的 Effect 重建会立即重新打开；关闭事件须以实际 open 状态判断。
       if (dialog.open) dialog.close()
+      previousFocusRef.current?.focus()
     }
   }, [open, page?.active])
   return <dialog className={`sheet sheet-${side}${className === undefined ? '' : ` ${className}`}`} ref={dialogRef} aria-labelledby={titleId} onClick={(event) => { if (event.target === event.currentTarget) onOpenChange(false) }} onCancel={(event) => { event.preventDefault(); onOpenChange(false) }} onClose={() => { if (dialogRef.current?.open) return; previousFocusRef.current?.focus(); previousFocusRef.current = null; onOpenChange(false) }}>
