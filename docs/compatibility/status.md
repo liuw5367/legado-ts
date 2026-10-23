@@ -67,6 +67,12 @@ Android 对非法 `exploreUrl` 配置会生成 `ERROR:` 分类项，而不是把
 
 新增 source-core 与 reader-web 回归覆盖错误项、缓存后的错误诊断和零网络请求。方法清单将 `discovery-workflow::003-explorekind` 更新为 `implemented / ts-passed / fixable / verify`；当前 259 个成员为 **83 implemented、132 partial、44 simulated**，仍待处理 **176** 个；验证状态为 **155 ts-passed、40 ts-diff、64 unverified**。待处理成员按可行性为 **27 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**。其余发现缓存、完整控件生命周期和 Android golden 仍保持未完成。Android 同输入 runner 仍为 `not-run`，本轮不单独 push，待所有剩余任务完成后统一推送。
 
+## 2026-10-23 P40：InfoMap 返回值、缺失键和保存 TTL
+
+本轮继续对照 Android `InfoMap.kt` 和 `CacheManager.kt` 的脚本可观察语义。`infoMap.get(key)`、`put`、`remove` 对不存在的键现在返回 `null`，与 Kotlin `MutableMap` 经 Rhino 转换后的结果一致；`infoMap.set` 接受普通对象和受控 Java `Map`，替换当前映射后保持 Android `Unit` 的空返回值。`save(time, need)` 会记录本次保存 TTL，`saveNow()` 将此前 TTL 一并提交；两个方法均保持 Android `Unit` 的空返回值。原有 `save(time, false)` 不提交快照、Web 端 TTL 和缓存状态边界不变。
+
+`packages/source-node/tests/source-rule-host.test.ts` 新增缺失键、受控 `HashMap`、空返回值和 `save`/`saveNow` TTL 回归；构建后规则宿主 **107/107** 通过。方法清单将 `cache-info-map::005-infomap-get` 至 `::008-infomap-savenow` 更新为 `implemented / ts-passed`；当前 259 个成员为 **87 implemented、128 partial、44 simulated**，仍待处理 **172** 个；验证状态为 **159 ts-passed、36 ts-diff、64 unverified**。待处理成员按可行性为 **23 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**。CacheManager 的对象/bytes/onlyDisk/TTL 快照边界、`cacheContent` 的批量宿主写入和 Android golden 仍保持单独差异记录，本轮没有把它们误标为完整等价；后续 commit 仍只保留本地，全部问题完成后再统一 push。
+
 ## 状态定义
 
 | 状态 | 含义 |

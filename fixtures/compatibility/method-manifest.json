@@ -2975,8 +2975,8 @@
           "signature": "infoMap.get",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2993,8 +2993,8 @@
           "signature": "infoMap.set",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -3011,8 +3011,8 @@
           "signature": "infoMap.save",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -3029,8 +3029,8 @@
           "signature": "infoMap.saveNow",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [

@@ -1947,9 +1947,26 @@ test('规则宿主兼容真实书源中的 var result 和 Java 变量读取写�
 })
 
 test('InfoMap 支持 Android MutableMap 的读取、批量写入和删除', async () => {
-  const result = await evaluate(new SourceRuleHost(), '@js:infoMap.put("a", "1"); infoMap.putAll({ b: 2 }); var initial = JSON.stringify(infoMap.get()); var initialValue = infoMap.get("a"); var initialContains = infoMap.containsValue("2"); var originalKeys = Array.from(infoMap.keys); var originalValues = Array.from(infoMap.values); var originalEntries = Array.from(infoMap.entries); var keys = infoMap.keys; var values = infoMap.values; var entries = infoMap.entries; infoMap.put("c", "3"); var live = [keys.toArray(), keys.length, values.toArray(), entries.toArray()]; var removedValue = values.remove("2"); var removedEntry = entries.remove(["c", "3"]); var importer = new JavaImporter(Packages.java.util.HashMap); with (importer) { infoMap.putAll(new HashMap({ d: 4 })); } var removedKey = infoMap.remove("a"); JSON.stringify([JSON.parse(initial), initialValue, initialContains, originalKeys, originalValues, originalEntries, live, removedValue, removedEntry, removedKey, infoMap.get()])', '')
+  const result = await evaluate(new SourceRuleHost(), '@js:infoMap.put("a", "1"); infoMap.putAll({ b: 2 }); var initial = JSON.stringify(infoMap.get()); var initialValue = infoMap.get("a"); var missingValue = infoMap.get("missing"); var missingPut = infoMap.put("missing-put", "v"); var missingRemove = infoMap.remove("missing"); var initialContains = infoMap.containsValue("2"); var originalKeys = Array.from(infoMap.keys); var originalValues = Array.from(infoMap.values); var originalEntries = Array.from(infoMap.entries); var keys = infoMap.keys; var values = infoMap.values; var entries = infoMap.entries; infoMap.put("c", "3"); var live = [keys.toArray(), keys.length, values.toArray(), entries.toArray()]; var removedValue = values.remove("2"); var removedEntry = entries.remove(["c", "3"]); var importer = new JavaImporter(Packages.java.util.HashMap); with (importer) { infoMap.putAll(new HashMap({ d: 4 })); infoMap.set(new HashMap({ e: 5 })); } var removedKey = infoMap.remove("a"); JSON.stringify([JSON.parse(initial), initialValue, missingValue, missingPut, missingRemove, initialContains, originalKeys, originalValues, originalEntries, live, removedValue, removedEntry, removedKey, infoMap.get()])', '')
   assert.equal(result.status, 'success', result.message)
-  assert.deepEqual(JSON.parse(String(result.value)), [{ a: '1', b: '2' }, '1', true, ['a', 'b'], ['1', '2'], [['a', '1'], ['b', '2']], [['a', 'b', 'c'], 3, ['1', '2', '3'], [['a', '1'], ['b', '2'], ['c', '3']]], true, true, '1', { d: '4' }])
+  assert.deepEqual(JSON.parse(String(result.value)), [{ a: '1', b: '2' }, '1', null, null, null, true, ['a', 'b', 'missing-put'], ['1', '2', 'v'], [['a', '1'], ['b', '2'], ['missing-put', 'v']], [['a', 'b', 'missing-put', 'c'], 4, ['1', '2', 'v', '3'], [['a', '1'], ['b', '2'], ['missing-put', 'v'], ['c', '3']]], true, true, null, { e: '5' }])
+})
+
+test('InfoMap 的保存方法保持 Android 的空返回值并保留此前 save TTL', async () => {
+  const calls: unknown[] = []
+  const result = await new SourceRuleHost().executeWorkflowJavaScript({
+    source,
+    stage: 'search',
+    code: 'infoMap.put("a", "1"); var save = infoMap.save(60); var now = infoMap.saveNow(); JSON.stringify([save, now])',
+    content: '',
+    workflowActions: { saveInfoMap: async (_signal, input) => { calls.push(input); return input } },
+  })
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [null, null])
+  assert.deepEqual(calls, [
+    { infoMap: { a: '1' }, time: 60, need: true },
+    { infoMap: { a: '1' }, time: 60, need: true, now: true },
+  ])
 })
 
 test('规则宿主支持任意位置 @put、JSON 内嵌规则与非空分支 %%', async () => {
