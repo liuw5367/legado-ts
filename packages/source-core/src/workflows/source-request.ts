@@ -70,6 +70,28 @@ export interface RequestScriptContext {
   requestBudget?: Partial<RequestBudget>
 }
 
+/**
+ * AnalyzeUrl 的一次请求上下文。它只在 core 内部通过 symbol 传递给
+ * loginCheckJs，避免把 Node/HTTP 宿主对象暴露到书源脚本；随后由 QuickJS
+ * 重新挂载成可调用的 java.url/headerMap/getResponse 视图。
+ */
+export interface SourceRequestContextSnapshot {
+  ruleUrl?: string
+  url?: string
+  headerMap?: Readonly<Record<string, string>>
+  body?: string | Uint8Array
+  method?: string
+  options?: SourceRequestOptions
+  baseUrl?: string
+  redirectUrl?: string
+  urlDirty?: boolean
+}
+
+/** NetworkResponse 上的非枚举 AnalyzeUrl 上下文，不改变公开响应 DTO。 */
+// source-core 的测试/Node 宿主可能分别加载 src 与 dist；使用全局 symbol 保证
+// 两份模块实例之间仍能读取同一个内部上下文，而不把字段加入公开响应 DTO。
+export const sourceRequestContextSymbol = Symbol.for('legado.sourceRequestContext')
+
 function text(value: unknown): string {
   if (value === null || value === undefined) return ''
   return typeof value === 'string' ? value : JSON.stringify(value) ?? String(value)
@@ -334,7 +356,7 @@ export class SourceRequestRuntime {
       ...(input.options.budget?.deadlineMs === undefined ? { deadlineMs: Date.now() + defaultRequestDeadlineMs } : {}),
     }
     // 书源随这次调用显式传递：宿主上没有「当前书源」字段，同一宿主并发不同书源不会串源。
-    const urlContext: Record<string, unknown> = { url: input.url, headerMap: {}, urlDirty: false }
+    const urlContext: Record<string, unknown> = { ruleUrl: input.url, url: input.url, headerMap: {}, urlDirty: false }
     const captureBindings = ['__legadoUrlContext']
     if (input.book !== undefined) captureBindings.push('book')
     const scriptContext: RequestScriptContext = {
@@ -477,7 +499,8 @@ export class SourceRequestRuntime {
       ...(requestObserver !== undefined ? { requestObserver } : this.requestObserver === undefined ? {} : { requestObserver: this.requestObserver }),
     }
     const suppliedUrlContext = object(effectiveScriptContext.bindings?.__legadoUrlContext)
-    const urlContext: Record<string, unknown> = suppliedUrlContext ?? { url: rawUrl, headerMap: {}, urlDirty: false }
+    const urlContext: Record<string, unknown> = suppliedUrlContext ?? { ruleUrl: rawUrl, url: rawUrl, headerMap: {}, urlDirty: false }
+    if (typeof urlContext.ruleUrl !== 'string') urlContext.ruleUrl = rawUrl
     const effectiveRawUrl = urlContext.urlDirty === true && typeof urlContext.url === 'string' ? urlContext.url : rawUrl
     const split = splitSourceRequestUrl(effectiveRawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
@@ -585,9 +608,10 @@ export class SourceRequestRuntime {
     urlContext.redirectUrl = request.plan.url
     urlContext.method = method
     urlContext.body = body
+    // AnalyzeUrl 的重取会继续执行 bodyJs；只有 URL option-js 和 WebView js
+    // 属于首次构造阶段，不能在 java.getStrResponse() 内递归执行。
     const nestedOptions: SourceRequestOptions = { ...options }
     delete nestedOptions.js
-    delete nestedOptions.bodyJs
     delete nestedOptions.webJs
     urlContext.options = nestedOptions
     const urlScriptContext: RequestScriptContext = {
@@ -607,6 +631,10 @@ export class SourceRequestRuntime {
         throw new SourceRequestError(request.error?.code === 'webview-required' ? 'capability-missing' : 'invalid-config', request.error?.message ?? '书源 URL 脚本生成了无效地址', 'url')
       }
     }
+    // URL option-js 可以在没有写入 java.url 的情况下直接返回新地址；登录检查
+    // 复用 AnalyzeUrl 时仍应看到这次真正发出的请求地址。
+    urlContext.url = request.plan.url
+    urlContext.redirectUrl = request.plan.url
 
     let response: NetworkResponse | undefined
     for (let attempt = 0; attempt <= retry; attempt += 1) {
@@ -654,7 +682,14 @@ export class SourceRequestRuntime {
         result = { ...result, bytes: new TextEncoder().encode(transformed), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
       }
     }
-    return result
+    const contextualResult = { ...result }
+    Object.defineProperty(contextualResult, sourceRequestContextSymbol, {
+      configurable: false,
+      enumerable: false,
+      value: urlContext,
+      writable: false,
+    })
+    return contextualResult
   }
 
   private notifyStart(event: Parameters<NonNullable<RequestObserver['onStart']>>[0], observer?: RequestObserver): void {

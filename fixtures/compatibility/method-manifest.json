@@ -1664,8 +1664,8 @@
           "signature": "getStrResponse",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -1686,8 +1686,8 @@
           "signature": "getResponse",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -1708,8 +1708,8 @@
           "signature": "bodyJs",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -1730,8 +1730,8 @@
           "signature": "loginCheckJs",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [

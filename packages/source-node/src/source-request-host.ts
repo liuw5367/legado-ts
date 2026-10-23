@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { SourceRequestError, SourceRequestRuntime } from '@legado/source-core'
-import type { NetworkHost, NetworkResponse, NormalizedSource, RequestBudget, RequestObserver, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
+import { sourceRequestContextSymbol, SourceRequestError, SourceRequestRuntime } from '@legado/source-core'
+import type { NetworkHost, NetworkResponse, NormalizedSource, RequestBudget, RequestObserver, SourceRequestContextSnapshot, WorkflowRequest, WorkflowRulePort } from '@legado/source-core'
 import chardet from 'chardet'
 import { NodeCharsetCodec } from './charset.ts'
 import { NodeCookieStore } from './cookies.ts'
@@ -183,7 +183,7 @@ export class SourceRequestHost {
       if (depth >= maxBridgeDepth) throw new SourceRequestError('invalid-config', `书源请求嵌套过深（上限 ${maxBridgeDepth}）`)
       return this.bridgeDepth.run(depth + 1, async () => {
         const response = await this.runtime.requestRaw(source, contextUrl, overrides, signal, input.budget, input.stage ?? 'search', depth > 0, false, 'bridge', contextUrl, undefined, requestObserver)
-        return this.responseObject(response)
+        return this.responseObject(response, true)
       })
     }
     if (input.kind === 'token') throw new Error('书源 token bridge 不可用')
@@ -243,7 +243,8 @@ export class SourceRequestHost {
     return new TextDecoder().decode(bytes)
   }
 
-  private responseObject(response: NetworkResponse): Readonly<Record<string, unknown>> {
+  private responseObject(response: NetworkResponse, includeRequestMetadata = false): Readonly<Record<string, unknown>> {
+    const requestContext = (response as NetworkResponse & { [sourceRequestContextSymbol]?: SourceRequestContextSnapshot })[sourceRequestContextSymbol]
     const charset = responseCharset(response)
     const contentType = headerValue(response.headers['content-type'])
     return {
@@ -255,6 +256,9 @@ export class SourceRequestHost {
       headers: response.headers,
       url: response.url,
       redirected: response.redirected,
+      ...(!includeRequestMetadata || requestContext?.url === undefined ? {} : { requestUrl: requestContext.url }),
+      ...(!includeRequestMetadata || requestContext?.method === undefined ? {} : { requestMethod: requestContext.method }),
+      ...(!includeRequestMetadata || requestContext?.headerMap === undefined ? {} : { requestHeaders: requestContext.headerMap }),
       ...(charset === undefined ? {} : { charset }),
       ...(contentType === undefined ? {} : { contentType }),
     }

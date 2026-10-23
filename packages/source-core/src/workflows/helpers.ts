@@ -1,5 +1,6 @@
 import type { JsonObject, JsonValue, NormalizedSource } from '../model/types.ts'
-import { SourceRequestError, SourceRequestRuntime } from './source-request.ts'
+import { sourceRequestContextSymbol, SourceRequestError, SourceRequestRuntime } from './source-request.ts'
+import type { SourceRequestContextSnapshot } from './source-request.ts'
 import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/request-url.ts'
 import type { CharsetCodec, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
 import type { SourceFunctionName, SourceFunctionRequest, WorkflowDiagnostic, WorkflowImageDecodeRequest, WorkflowJavaScriptRequest, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRequest, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
@@ -479,8 +480,26 @@ async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, s
     return undefined
   }
   const responseBody = responseText(response, source, ports)
-  const responseBinding = { url: response.url, status: response.status, code: response.status, message: '', body: responseBody, headers: response.headers }
-  const urlContext = { url: response.url, headerMap: {}, urlDirty: false }
+  const requestUrlContext = (response as NetworkResponse & { [sourceRequestContextSymbol]?: SourceRequestContextSnapshot })[sourceRequestContextSymbol]
+  const urlContext = requestUrlContext === undefined
+    ? { url: response.url, headerMap: {}, urlDirty: false }
+    : {
+        ...requestUrlContext,
+        url: requestUrlContext.url ?? response.url,
+        headerMap: { ...(requestUrlContext.headerMap ?? {}) },
+        ...(requestUrlContext.options === undefined ? {} : { options: { ...requestUrlContext.options } }),
+      }
+  const responseBinding = {
+    url: response.url,
+    status: response.status,
+    code: response.status,
+    message: '',
+    body: responseBody,
+    headers: response.headers,
+    ...(urlContext.url === undefined ? {} : { requestUrl: urlContext.url }),
+    ...(urlContext.method === undefined ? {} : { requestMethod: urlContext.method }),
+    ...(urlContext.headerMap === undefined ? {} : { requestHeaders: urlContext.headerMap }),
+  }
   let output: WorkflowRuleOutput
   try {
     output = await ports.rules.executeWorkflowJavaScript({

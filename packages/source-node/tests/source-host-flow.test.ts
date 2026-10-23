@@ -759,6 +759,38 @@ test('loginCheckJs 可以登录后通过 AnalyzeUrl 上下文重取响应', asyn
   assert.deepEqual(plans.map((item) => item.authorization), [undefined, 'Bearer refreshed'])
 })
 
+test('loginCheckJs 重取请求保留 POST body、bodyJs 和请求元数据', async () => {
+  const source = {
+    bookSourceUrl: 'https://login-refresh-options.test',
+    bookSourceName: 'Login Refresh Options',
+    searchUrl: '/search,{"method":"POST","body":"token=1","bodyJs":"result.replace(\\"原始\\", \\"处理\\")"}',
+    loginUrl: '<js>function login(){ source.putLoginHeader(JSON.stringify({ Authorization: "Bearer refreshed" })) }</js>',
+    loginCheckJs: 'if (result.code() === 401) { source.login(); const refreshed = java.getStrResponse(null, null, false); if (refreshed.raw().request().method() !== "POST") throw new Error("AnalyzeUrl request method lost"); refreshed } else result',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
+  } as unknown as NormalizedSource
+  const plans: Array<{ method: string; body: string; authorization: string | undefined }> = []
+  let loginHeader: string | undefined
+  const network: NetworkHost = {
+    getLoginHeaders: async () => loginHeader === undefined ? undefined : JSON.parse(loginHeader) as Record<string, string>,
+    request: async (plan) => {
+      plans.push({ method: plan.method, body: typeof plan.body === 'string' ? plan.body : new TextDecoder().decode(plan.body), authorization: plan.headers.Authorization })
+      if (plan.headers.Authorization !== 'Bearer refreshed') return { ...response(plan.url, '{"books":[{"name":"原始","url":"/book"}]}'), status: 401 }
+      return response(plan.url, '{"books":[{"name":"原始","url":"/book"}]}')
+    },
+  }
+  const requestHost = new SourceRequestHost({ network, cookieStore: new NodeCookieStore() })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, currentSource) => requestHost.requestFromBridge(input, signal, currentSource), sourceState: { putLoginHeader: async (_currentSource, value) => { loginHeader = value } } })
+  requestHost.attachRuleHost(ruleHost)
+  const ports: WorkflowPorts = { network, rules: ruleHost, request: (input) => requestHost.request(input), decodeResponse: (input) => requestHost.decodeResponse(input) }
+  const result = await searchBooks(ports, { source, keyword: '刷新', maxItems: 3 })
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.name, '处理')
+  assert.deepEqual(plans, [
+    { method: 'POST', body: 'token=1', authorization: undefined },
+    { method: 'POST', body: 'token=1', authorization: 'Bearer refreshed' },
+  ])
+})
+
 test('目录预处理和标题格式脚本按 Android 绑定更新 tocUrl 与章节标题', async () => {
   const source = {
     bookSourceUrl: 'https://format.test',
