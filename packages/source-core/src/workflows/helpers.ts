@@ -514,6 +514,7 @@ async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, s
         ...(requestContext?.chapter === undefined ? {} : { [internalChapterScopeBinding]: requestContext.chapter }),
       },
       mutableBindings: ['__legadoUrlContext'],
+      captureMutations: ['__legadoUrlContext'],
       ...(signal === undefined ? {} : { signal }),
     })
   } catch {
@@ -531,7 +532,17 @@ async function applyLoginCheck(ports: WorkflowPorts, source: NormalizedSource, s
     diagnostics.push({ code: 'rule-failed', stage, field: 'loginCheckJs', message: output.message ?? 'loginCheckJs 必须返回响应对象', retryable: false })
     return undefined
   }
-  const value = output.value as Record<string, unknown>
+  const wrapped = output.value as Record<string, unknown>
+  const capturedBindings = wrapped.__legadoWorkflowBindings
+  if (capturedBindings !== null && typeof capturedBindings === 'object' && !Array.isArray(capturedBindings)) {
+    const capturedContext = (capturedBindings as Record<string, unknown>).__legadoUrlContext
+    if (capturedContext !== null && typeof capturedContext === 'object' && !Array.isArray(capturedContext)) {
+      const mutableUrlContext = urlContext as Record<string, unknown>
+      for (const key of Object.keys(mutableUrlContext)) delete mutableUrlContext[key]
+      Object.assign(mutableUrlContext, capturedContext)
+    }
+  }
+  const value = wrapped.__legadoWorkflowValue !== undefined ? wrapped.__legadoWorkflowValue as Record<string, unknown> : wrapped
   const body = firstString(value.body, value.__body)
   const responseUrl = firstString(value.url, value.__url) ?? response.url
   const status = firstNumber(value.status, value.code, value.__code) ?? response.status

@@ -17,6 +17,10 @@
 
 内嵌 JS 必须先于页码占位符处理，因为 JS 内容可能包含 `<`/`>`。迁移时不能先按尖括号切分整条 URL。
 
+URL 脚本和 `loginCheckJs` 共享一个 AnalyzeUrl 上下文：`java.url` 是当前可改写地址，`java.ruleUrl` 保留本次请求已经完成内嵌 JS、模板和页码展开的规则地址，`java.headerMap`/`java.getHeaderMap()` 是当前请求头 Map，`java.getStrResponse()`/`java.getResponse()` 会按该上下文重新发起请求。`java.initUrl()` 用于丢弃脚本对当前地址的改写并重新初始化这条规则地址，然后再进行重取；它不是简单地把字符串交给 HTTP 客户端，而是 Android `AnalyzeUrl` 的重新初始化入口。
+
+TypeScript core 已模拟 `ruleUrl`、URL/Header 的可变上下文、常见 Java Map 方法和登录检查后的上下文回写，并保留 POST/HEAD、body、bodyJs、登录头和请求元数据。当前 `initUrl()` 会恢复已展开的规则地址并可继续重取，但还没有重新执行 Android 的完整 `mUrl` 生命周期（内嵌 JS、`{{...}}`、页码占位符和 URL options）；Map 的集合视图也只是受控快照。依赖这些边界的书源应记录为部分兼容，不能把该模拟当成完整 Android URL 重解析。
+
 ## 未实现的能力
 
 - `ruleContent.subContent`、`imageDecode` 和 `contentBatch` 已有 source-core 工作流；图片/批量正文的 Android golden 尚未执行；`payAction` 已有 core 求值和 reader-web 人工触发入口，但购买后刷新/真实浏览器打开仍属于应用宿主边界；

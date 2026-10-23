@@ -1538,6 +1538,7 @@
       "androidOwner": "AnalyzeUrl",
       "androidMethods": [
         "url",
+        "ruleUrl",
         "headerMap",
         "initUrl",
         "getHeaderMap",
@@ -1576,10 +1577,32 @@
           "signature": "url",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
-          "decision": "fix",
+          "decision": "verify",
+          "fixtures": [
+            "URL-003",
+            "URL-005",
+            "JS-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "cancelled",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-url-context::009-ruleurl",
+          "owner": "AnalyzeUrl",
+          "name": "ruleUrl",
+          "signature": "ruleUrl",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
           "fixtures": [
             "URL-003",
             "URL-005",
@@ -1598,10 +1621,10 @@
           "signature": "headerMap",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-003",
             "URL-005",
@@ -1621,9 +1644,9 @@
           "parameters": [],
           "returnType": "unknown",
           "implementation": "partial",
-          "verification": "ts-diff",
+          "verification": "ts-passed",
           "feasibility": "fixable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-003",
             "URL-005",
@@ -1642,10 +1665,10 @@
           "signature": "getHeaderMap",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-003",
             "URL-005",
@@ -5953,5 +5976,5 @@
       ]
     }
   ],
-  "memberCount": 258
+  "memberCount": 259
 }

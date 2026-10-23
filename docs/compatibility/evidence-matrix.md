@@ -27,7 +27,7 @@
 
 未完成项、差异项和完成后的删除线记录统一维护在[状态总览](status.md)。本矩阵继续维护五维兼容证据；`implementation=absent/partial` 和 `execution=not-run` 的含义以状态总览为准。
 
-当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；2026-10-23 P35 后的 `pnpm test:source` 为 185/185，根全套 `pnpm test` 为 631/631。静态 corpus 审计覆盖 943 个候选源和 20,231 条规则，20,226 条编译成功，5 条仅按 manifest 的稳定 hash/诊断白名单归为已知源文本问题。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
+当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；2026-10-23 P36 的 `source-host-flow` 为 38/38，完整 source 回归为 186/186，根回归为 632/632，静态 corpus 为 20,226/20,231（5 条已知源文本错误），TypeScript conformance 为 6/6。比较器中的 6 条 Android 输出仍为 `not-run`。P36 后方法清单为 259 个成员（75 `implemented`、140 `partial`、44 `simulated`），仍待处理 184 个，其中 35 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主。静态 corpus 审计覆盖 943 个候选源和 20,231 条规则，20,226 条编译成功，5 条仅按 manifest 的稳定 hash/诊断白名单归为已知源文本问题。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
 
 2026-10-22 D34 当前方法清单为 27 个能力族、252 个成员：55 个 `implemented`、159 个 `partial`、38 个 `simulated`。本轮新增的 Java IO 流构造器、范围读写、transfer、单字节输出、CR/CRLF Reader 行语义和 `String.format/formatted` 常用 `%t/%T` 日期时间/周序号/纪元转换已有 `source-rule-host.test.ts` 书源式回归；它们仍属于受控 QuickJS 对象，日期时区名称和完整 Locale 规则保留近似，Android 同输入仍为 `not-run`。D14 的 JS 源 marshaller 另有 `source-host-flow.test.ts` 回归，覆盖 `BookType` 校验/回退、详情前类型重置、文件源按位合并、`downloadUrls` 过滤/相对地址/去重和文件源空下载失败；D45 继续覆盖详情、目录、正文和声明式目录重置时保留 Android 非媒体状态位；D46 新增搜索/发现 `variable` 的 Gson 字段类型校验、详情变量的 Map<String,String> 归一化和无效更新保留旧值；D47 新增 SearchBook 全字段形态校验和 Gson 整数文本边界；这四组行为尚未生成 Android 同输入 golden。
 
@@ -121,11 +121,11 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 | 案例范围 | evidence | spec | implementation | execution | priority |
 | --- | --- | --- | --- | --- | --- |
 | D18/D19/D20：Jsoup 选择器、HTML 文本和 JSONPath 函数/正则过滤 | Android source + TS 最小输入执行 | defined（表中列出的输入） | partial | TS 观察到失败/差异；D18 已补 Jsoup `eq/lt/gt` 负数原始索引边界，D19 已补普通文本 NBSP/换行归一化、`br`/`pre`/`textarea` 边界和 script/style DataNode 排除，D20 已补 Jayway `empty`/空聚合/文本函数边界；Android not-run | required |
-| D22/D23：java.url/headerMap、响应 Headers、getString 布尔重载和缺失成员 | Android source/内置帮助 + TS 请求桩/脚本执行 | defined（列出的成员、Headers 重复值/索引和重载） | D22 partial；D23 overload semantics implemented | D22 的 response/StrResponse 方法与属性、OkHttp/Jsoup Headers 查询、重复值、索引、映射、敏感头脱敏和 HTTP-date `getDate/getInstant` 已有 `source-rule-host` 回归；D23 的 `unescape` 布尔重载、`content`/`isUrl` 位置、null 内容回退、HTML 解码、URL 解析和 list 去重已有 TS 回归；Android golden not-run；WebView/loginCheckJs 专属路径仍归 D22 | required |
+| D22/D23：java.url/ruleUrl/headerMap、响应 Headers、getString 布尔重载和缺失成员 | Android source/内置帮助 + TS 请求桩/脚本执行 | defined（列出的成员、Headers 重复值/索引和重载） | D22 的 `url/headerMap/getHeaderMap/getStrResponse/getResponse/bodyJs/loginCheckJs` 已有 TS 实现，`ruleUrl/initUrl` 为部分实现；D23 overload semantics implemented | D22 的 response/StrResponse 方法与属性、OkHttp/Jsoup Headers 查询、重复值、索引、映射、敏感头脱敏和 HTTP-date `getDate/getInstant` 已有 `source-rule-host` 回归；P36 新增 `ruleUrl`、`initUrl` 地址恢复、Java Map 常用方法和 loginCheckJs 上下文回写回归；完整 Android URL 生命周期重解析、Map live view、WebView 和 Android golden not-run；D23 的 `unescape` 布尔重载、`content`/`isUrl` 位置、null 内容回退、HTML 解码、URL 解析和 list 去重已有 TS 回归 | required |
 | D24～D28/D31/D32/D34：对象方法、重建 session、InfoMap、AES 返回类型和 StrResponse 构造 | Android source + TS 脚本/session 执行 | defined（具体差异输入） | partial | TS 观察到差异；Android not-run | required |
 | D29/D30/D35～D40：文件命名空间、下载、字体、工具、宿主配置、导入、库状态和游标签名 | source | 部分 defined；完整语言/平台等价仍 blocked | partial 或 absent，详见状态表 | 组合路径 not-run，不能写 pass | required/host |
 | D42/D43：URL 和 File 对象 | Android source + TS URL 最小输入执行；File 为源码确认和 `source-rule-host.test.ts` FILE-004 父子对象回归 | defined（列出的成员） | partial | D42 URL 已有 TS 回归；D43 父子 File 方法、`listFiles()` 子项包装和即时元数据刷新已通过 TS；Android golden 仍 not-run | required |
-| 既有规则宿主、平台、session 回归 | test-run | defined（已有测试） | 按测试范围 | `pnpm test:source` 185/185；根全套 `pnpm test` 631/631；不能覆盖 Android golden 或真实宿主 | verify |
+| 既有规则宿主、平台、session 回归 | test-run | defined（已有测试） | 按测试范围 | P36 后 `pnpm test:source` 186/186；根全套 `pnpm test` 632/632；不能覆盖 Android golden 或真实宿主 | verify |
 
 本轮已执行命令：`node --test packages/source-node/tests/source-rule-host.test.ts packages/source-node/tests/source-runtime-platform.test.ts packages/source-node/tests/source-session.test.ts`。最小探针直接调用 SourceRuleRuntime/SourceRuleHost、使用固定 `.invalid` 地址和请求桩，没有访问公网、真实账户、购买或其他远程写入。探针属于差异发现证据，正式回归与共享 golden 要在对应修复时加入版本控制。
 
@@ -136,3 +136,5 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 `node scripts/run-source-conformance-typescript.mjs` 对六条跨运行时 fixture 逐条生成实际输出并完成 `6/6` expected 比较；`node scripts/compare-source-conformance.mjs` 记录六条 `typescript=pass`、`android=not-run`。`node scripts/run-source-conformance-android.mjs` 只完成前置检查：外层项目有 `gradlew`，但没有 `local.properties`、逐 fixture adapter 或输出目录，返回 `not-run`/退出码 2。因而本矩阵中所有 Android 同输入项仍保持 `execution=not-run`，没有把普通 Android 单测或 Node 结果提升为双端通过。
 
 同次静态语料审计为 943 个候选源、20,231 条规则、20,226 条编译成功、5 条已知源文本错误，`unexpectedUncompiledRules=0`、`staleKnownBrokenRules=0`。P13 新增的 runner、比较器和每条实际结果输出属于 TS 验证证据；Android adapter 仍是后续唯一阻塞的跨端执行项。
+
+2026-10-23 P36 新增 AnalyzeUrl 上下文回归：`loginCheckJs` 可读取已完成内嵌 JS/模板/页码展开的 `java.ruleUrl`，用 `java.initUrl()` 恢复该地址，并通过 `java.getHeaderMap().putAll()` 修改重取请求 Header；缺失 Map 值按 Java `null` 语义返回，修改后的上下文会回写请求宿主。`packages/source-node/tests/source-host-flow.test.ts` 该组为 38/38；完整 `initUrl` 重跑 Android URL 生命周期、Java Map live view、WebView 和 Android golden 仍未验证。

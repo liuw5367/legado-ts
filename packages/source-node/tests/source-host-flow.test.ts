@@ -759,6 +759,33 @@ test('loginCheckJs 可以登录后通过 AnalyzeUrl 上下文重取响应', asyn
   assert.deepEqual(plans.map((item) => item.authorization), [undefined, 'Bearer refreshed'])
 })
 
+test('loginCheckJs 的 initUrl 重置原始规则并保留 AnalyzeUrl Header Map 契约', async () => {
+  const source = {
+    bookSourceUrl: 'https://login-init-url.test',
+    bookSourceName: 'Login Init URL',
+    searchUrl: '/search',
+    loginCheckJs: 'if (result.code() === 401) { const headers = java.getHeaderMap(); if (headers.get("missing") !== null || headers.containsKey("missing") || headers.getOrDefault("missing", "fallback") !== "fallback") throw new Error("missing map value is not null"); if (headers.put("X-Temp", "one") !== null || !headers.containsValue("one") || !headers.keySet().contains("X-Temp") || !headers.values().contains("one") || headers.entrySet().size() < 1) throw new Error("map methods are incomplete"); let visited = false; headers.forEach((key, value) => { if (key === "X-Temp" && value === "one") visited = true }); if (!visited || headers.remove("X-Temp") !== "one") throw new Error("map mutation is incomplete"); java.url = "/wrong"; headers.putAll({"X-Refresh": "yes"}); java.initUrl(); if (java.ruleUrl.indexOf("/search") < 0 || java.url !== result.url()) throw new Error("initUrl did not restore rule URL"); java.getStrResponse(null, null, false) } else result',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
+  } as unknown as NormalizedSource
+  const plans: Array<{ url: string; refresh: string | undefined }> = []
+  const network: NetworkHost = { request: async (plan) => {
+    plans.push({ url: plan.url, refresh: plan.headers['X-Refresh'] })
+    if (plans.length === 1) return { ...response(plan.url, 'login'), status: 401 }
+    return response(plan.url, '{"books":[{"name":"初始化书","url":"/book"}]}')
+  } }
+  const requestHost = new SourceRequestHost({ network, cookieStore: new NodeCookieStore() })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, currentSource) => requestHost.requestFromBridge(input, signal, currentSource) })
+  requestHost.attachRuleHost(ruleHost)
+  const ports: WorkflowPorts = { network, rules: ruleHost, request: (input) => requestHost.request(input), decodeResponse: (input) => requestHost.decodeResponse(input) }
+  const result = await searchBooks(ports, { source, keyword: '初始化', maxItems: 3 })
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.name, '初始化书')
+  assert.deepEqual(plans, [
+    { url: 'https://login-init-url.test/search', refresh: undefined },
+    { url: 'https://login-init-url.test/search', refresh: 'yes' },
+  ])
+})
+
 test('loginCheckJs 重取请求保留 POST body、bodyJs 和请求元数据', async () => {
   const source = {
     bookSourceUrl: 'https://login-refresh-options.test',
