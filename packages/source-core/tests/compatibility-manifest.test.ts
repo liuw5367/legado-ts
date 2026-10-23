@@ -81,5 +81,5 @@ test('兼容方法清单具有唯一 ID、四维状态和可追踪入口', async
 
   assert.ok(manifest.entries.some((entry) => entry.id === 'parser-jsonpath' && entry.verification === 'ts-diff'))
   assert.ok(manifest.entries.some((entry) => entry.id === 'host-webview-device' && entry.feasibility === 'real-host'))
-  assert.ok(manifest.entries.some((entry) => entry.id === 'runtime-observation' && entry.decision === 'fix'))
+  assert.ok(manifest.entries.some((entry) => entry.id === 'runtime-observation' && entry.decision === 'verify'))
 })

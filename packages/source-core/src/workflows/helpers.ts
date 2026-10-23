@@ -186,15 +186,27 @@ async function expandEmbeddedUrlScripts(ports: WorkflowPorts, source: Normalized
     const code = match[1] ?? match[2] ?? ''
     let output: WorkflowRuleOutput
     try {
-      output = await ports.rules.evaluate({
-        source,
-        stage,
-        field: 'url',
-        rule: `@js:${code}`,
-        content: result,
-        bindings,
-        ...(signal === undefined ? {} : { signal }),
-      })
+      if (ports.rules.executeWorkflowJavaScript !== undefined) {
+        output = await ports.rules.executeWorkflowJavaScript({
+          source,
+          code,
+          stage: stage === 'detail' ? 'book' : 'search',
+          workflowStage: stage,
+          content: result,
+          bindings,
+          ...(signal === undefined ? {} : { signal }),
+        })
+      } else {
+        output = await ports.rules.evaluate({
+          source,
+          stage,
+          field: 'url',
+          rule: `@js:${code}`,
+          content: result,
+          bindings,
+          ...(signal === undefined ? {} : { signal }),
+        })
+      }
     } catch {
       if (signal?.aborted === true) return { error: { code: 'cancelled', message: '书源 URL 脚本已取消' } }
       return { error: { code: 'rule-failed', message: '书源 URL 脚本执行失败' } }
@@ -436,14 +448,12 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
       return undefined
     }
-    if (classifyRequestError(error) === 'cancelled') {
-      if (observation !== undefined) observationCollector?.markCancelled(observation)
-      diagnostics.push({ code: 'cancelled', stage, message: '网络请求已取消', retryable: false })
-      return undefined
-    }
     // 结构化请求错误是确定性失败：直接映射诊断，不伪装成 500 也不标记可重试。
     if (error instanceof SourceRequestError) {
-      if (observation !== undefined) observationCollector?.markError(observation, { code: error.code, retryable: false })
+      if (observation !== undefined) {
+        if (error.code === 'cancelled') observationCollector?.markCancelled(observation)
+        else observationCollector?.markError(observation, { code: error.code, retryable: false })
+      }
       diagnostics.push({
         code: error.code,
         stage,
@@ -451,6 +461,11 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
         message: error.message,
         retryable: false,
       })
+      return undefined
+    }
+    if (classifyRequestError(error) === 'cancelled') {
+      if (observation !== undefined) observationCollector?.markCancelled(observation)
+      diagnostics.push({ code: 'cancelled', stage, message: '网络请求已取消', retryable: false })
       return undefined
     }
     const loginCheckJs = sourceString(source, 'loginCheckJs')

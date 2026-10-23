@@ -228,7 +228,18 @@ export class SourceRequestHost {
     const bom = bomCharset(response.bytes)
     // Android strips UTF-8 BOM before applying a Content-Type charset.
     const bytes = bom === 'utf-8' ? response.bytes.subarray(3) : response.bytes
-    const candidates = [responseCharset(response), bom, htmlMetaCharset(bytes), chardet.detect(bytes) ?? undefined, 'utf-8']
+    // A short valid UTF-8 response can be misclassified as a single-byte
+    // legacy charset by chardet. Confirm UTF-8 before consulting detection;
+    // invalid UTF-8 still falls through to the legacy detector for GBK/etc.
+    let validUtf8 = false
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+      validUtf8 = true
+    } catch {
+      // Keep detector fallback for non-UTF-8 responses.
+    }
+    const detected = validUtf8 ? undefined : chardet.detect(bytes) ?? undefined
+    const candidates = [responseCharset(response), bom, htmlMetaCharset(bytes), validUtf8 ? 'utf-8' : detected, 'utf-8']
     const attempted = new Set<string>()
     for (const charset of candidates) {
       const normalized = charset?.trim()

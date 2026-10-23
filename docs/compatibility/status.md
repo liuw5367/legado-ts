@@ -85,6 +85,30 @@ Android 对非法 `exploreUrl` 配置会生成 `ERROR:` 分类项，而不是把
 
 新增 `source-rule-host.test.ts` 的 AnalyzeRule 重载回归，覆盖空规则、null、列表、节点和 `evalJS` 第二参数；构建后规则宿主 **108/108** 通过，相关目录 preUpdateJs 回归保持通过。方法清单当前 259 个成员为 **99 implemented、116 partial、44 simulated**，仍待处理 **160** 个；验证状态仍为 **159 ts-passed、36 ts-diff、64 unverified**。剩余可直接修复成员降为 **11** 个（AnalyzeUrl 上下文 2、CacheInfoMap 4、发现工作流 5），另有 **83** 个条件实现、**58** 个可模拟和 **8** 个需要真实宿主。Android 同输入 golden 仍为 `not-run`；本轮提交只保留本地，完成剩余成员后统一推送。
 
+## 2026-10-23 P43：AnalyzeUrl 与 CacheManager 返回契约收口
+
+本轮把 AnalyzeUrl 和缓存中仍容易被真实书源观察到的两个边界收口。请求宿主在解析 URL 表达式后回写 `ruleUrl`，`java.initUrl()` 按 Android Kotlin `Unit` 返回 `undefined`，`loginCheckJs` 重取时会重新解析 URL options、`js`、`bodyJs` 并继续沿用原请求的 POST/body/header 上下文。缓存 bridge 对普通、内存和文件缓存的 `put`/`delete` 都等待宿主完成后返回 `undefined`，即使注入的自定义缓存端口返回其他值也不会泄漏给脚本。
+
+新增 AnalyzeUrl 登录重取、`initUrl` 返回值、URL options 和 CacheManager Unit 回归；构建后 source-host-flow、source-rule-host 和 source-request-host 定向测试通过。Android 原始 `mUrl` 的完整内嵌 JS/模板/页码生命周期、任意 JVM 对象缓存身份和 Android golden 仍按差异登记保留。
+
+## 2026-10-23 P44：发现请求与归档宿主回归
+
+发现工作流的声明式分类、JS `explore`、`ruleExplore` 和 `ruleSearch` 已有 TypeScript 请求与结果回归；`nextPageUrl` 记录为受控模拟：Android `Explore` 没有同名公开字段，TS 用分页 cursor/扩展字段承接下一页地址，不能把它写成 Android 原生属性。归档宿主新增四种解包入口和 zip/rar/7z 字符串/字节读取回归，短 UTF-8 归档内容和普通响应正文先按合法 UTF-8 解码，再回退字符集探测，避免 chardet 将中文短文本误判为单字节编码；失败、取消和越权条目仍清理 `temp` 目录。
+
+## 2026-10-23 P45：逐成员状态收口
+
+当前 [`method-manifest.json`](../../fixtures/compatibility/method-manifest.json) 的 259 个成员按实现状态为 **124 implemented、99 simulated、36 partial**；按 TypeScript 证据为 **227 ts-passed、25 ts-diff、7 unverified**。`implemented` 表示 core/Node 提供了目标签名并有回归，`simulated` 表示有受控替代并有回归，不能解读为 Android/JVM 对象身份等价；`partial` 才是仍有未闭合行为的成员。
+
+剩余 **36 个 partial** 全部是条件语义差异：CSS 选择器 13、XPath/XML 5、Jayway JSONPath 9、Java 正则 7、SimpleDateFormat 2。它们已有安全子集或转换器，未支持的复杂语法会返回明确诊断；本轮没有把缺少 Android golden 误写成“未实现”。7 个 `unverified` 成员均属于真实 WebView/设备/应用配置宿主（`webView`、浏览器源码/验证码、`androidId`、阅读/主题配置），`getWebViewUA` 已作为默认 UA 的受控模拟并有 TS 回归。当前没有剩余的“可直接修复但尚未动手”成员；真实宿主与 Android 同输入 golden 是独立验证门槛。
+
+按可行性维度，259 个成员中有 86 个 `fixable`、83 个 `conditional`、83 个 `simulatable`、7 个 `real-host`；这四项是能力属性，不是未完成数量，不能相加当作待处理数。后续若补齐 Android runner，只需把对应 `verification` 从 `ts-passed`/`ts-diff`/`unverified` 更新为双端证据，不应改变已交付模拟的实现状态。
+
+## 2026-10-23 P46：最终 TypeScript 验证与剩余边界
+
+最终验证已覆盖规则、请求和宿主的组合路径：`pnpm test` **647/647**、`pnpm test:source` **191/191**、TypeScript conformance **6/6**，静态书源审计 **943** 个候选源、**20,231** 条规则，其中 **20,226** 条编译成功，5 条仍是清单白名单中的已知源文本错误。补充修正了 URL 内嵌脚本走完整 `executeWorkflowJavaScript` 钩子，以及脚本取消诊断保留 `field` 的错误分类；这些变化没有新增待处理成员。
+
+当前剩余可以明确列出的只有两类：36 个条件语义 partial（CSS 13、XPath/XML 5、JSONPath 9、Java 正则 7、SimpleDateFormat 2），以及 7 个必须真实 WebView/浏览器/设备配置的宿主成员。前者已有安全子集、受控转换和稳定 `unsupported-*` 诊断；后者不能用固定常量冒充真实页面、验证码、物理设备身份或应用设置。Android conformance runner 当前仍因外层项目缺少逐 fixture adapter/golden 输出而为 `not-run`，所以 227 个 `ts-passed` 不能改写成双端通过。
+
 ## 状态定义
 
 | 状态 | 含义 |

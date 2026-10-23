@@ -764,7 +764,7 @@ test('loginCheckJs 的 initUrl 重置原始规则并保留 AnalyzeUrl Header Map
     bookSourceUrl: 'https://login-init-url.test',
     bookSourceName: 'Login Init URL',
     searchUrl: '/search',
-    loginCheckJs: 'if (result.code() === 401) { const headers = java.getHeaderMap(); if (headers.get("missing") !== null || headers.containsKey("missing") || headers.getOrDefault("missing", "fallback") !== "fallback") throw new Error("missing map value is not null"); if (headers.put("X-Temp", "one") !== null || !headers.containsValue("one") || !headers.keySet().contains("X-Temp") || !headers.values().contains("one") || headers.entrySet().size() < 1) throw new Error("map methods are incomplete"); let visited = false; headers.forEach((key, value) => { if (key === "X-Temp" && value === "one") visited = true }); if (!visited || headers.remove("X-Temp") !== "one") throw new Error("map mutation is incomplete"); java.url = "/wrong"; headers.putAll({"X-Refresh": "yes"}); java.initUrl(); if (java.ruleUrl.indexOf("/search") < 0 || java.url !== result.url()) throw new Error("initUrl did not restore rule URL"); java.getStrResponse(null, null, false) } else result',
+    loginCheckJs: 'if (result.code() === 401) { const headers = java.getHeaderMap(); if (headers.get("missing") !== null || headers.containsKey("missing") || headers.getOrDefault("missing", "fallback") !== "fallback") throw new Error("missing map value is not null"); if (headers.put("X-Temp", "one") !== null || !headers.containsValue("one") || !headers.keySet().contains("X-Temp") || !headers.values().contains("one") || headers.entrySet().size() < 1) throw new Error("map methods are incomplete"); let visited = false; headers.forEach((key, value) => { if (key === "X-Temp" && value === "one") visited = true }); if (!visited || headers.remove("X-Temp") !== "one") throw new Error("map mutation is incomplete"); java.url = "/wrong"; headers.putAll({"X-Refresh": "yes"}); if (java.initUrl() !== undefined || java.ruleUrl.indexOf("/search") < 0 || java.url !== result.url()) throw new Error("initUrl did not restore rule URL"); java.getStrResponse(null, null, false) } else result',
     ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
   } as unknown as NormalizedSource
   const plans: Array<{ url: string; refresh: string | undefined }> = []
@@ -783,6 +783,33 @@ test('loginCheckJs 的 initUrl 重置原始规则并保留 AnalyzeUrl Header Map
   assert.deepEqual(plans, [
     { url: 'https://login-init-url.test/search', refresh: undefined },
     { url: 'https://login-init-url.test/search', refresh: 'yes' },
+  ])
+})
+
+test('loginCheckJs 的 initUrl 重新解析原始 URL options', async () => {
+  const source = {
+    bookSourceUrl: 'https://login-init-options.test',
+    bookSourceName: 'Login Init Options',
+    searchUrl: '/search,{"method":"POST","body":"token=1","js":"result + \\"/page\\"","bodyJs":"result.replace(\\"old\\", \\"new\\")"}',
+    loginCheckJs: 'if (result.code() === 401) { java.url = "/wrong"; java.initUrl(); const refreshed = java.getStrResponse(null, null, false); if (refreshed.raw().request().method() !== "POST") throw new Error("initUrl lost method"); refreshed } else result',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
+  } as unknown as import('../../source-core/src/index.ts').NormalizedSource
+  const plans: Array<{ url: string; method: string; body: string }> = []
+  const network: NetworkHost = { request: async (plan) => {
+    plans.push({ url: plan.url, method: plan.method, body: typeof plan.body === 'string' ? plan.body : new TextDecoder().decode(plan.body) })
+    if (plans.length === 1) return { ...response(plan.url, 'old'), status: 401 }
+    return response(plan.url, '{"books":[{"name":"重解析书","url":"/book"}]}')
+  } }
+  const requestHost = new SourceRequestHost({ network, cookieStore: new NodeCookieStore() })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, currentSource) => requestHost.requestFromBridge(input, signal, currentSource) })
+  requestHost.attachRuleHost(ruleHost)
+  const ports: WorkflowPorts = { network, rules: ruleHost, request: (input) => requestHost.request(input), decodeResponse: (input) => requestHost.decodeResponse(input) }
+  const result = await searchBooks(ports, { source, keyword: '重解析', maxItems: 3 })
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.name, '重解析书')
+  assert.deepEqual(plans, [
+    { url: 'https://login-init-options.test/search/page', method: 'POST', body: 'token=1' },
+    { url: 'https://login-init-options.test/search/page', method: 'POST', body: 'token=1' },
   ])
 })
 

@@ -413,6 +413,9 @@ export class SourceRequestRuntime {
       requestBudget,
     }
     const resolved = await this.resolveExpression(input.url, input.stage, input.options.signal, input.source, scriptContext)
+    // AnalyzeUrl.ruleUrl exposes the post-@js/template rule before URL options
+    // are parsed; initUrl() uses this value to rebuild the request context.
+    urlContext.ruleUrl = resolved
     const overrides: SourceRequestOptions = {
       ...(input.execution?.webJs === undefined ? {} : { webJs: input.execution.webJs }),
       ...(input.execution?.sourceRegex === undefined ? {} : { sourceRegex: input.execution.sourceRegex }),

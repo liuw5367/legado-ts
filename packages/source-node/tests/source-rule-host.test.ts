@@ -931,6 +931,12 @@ test('java.toURL 对无基址非法地址抛出可识别异常并提供 FTP 默�
   assert.deepEqual(JSON.parse(String(result.value)), ['Malformed URL', 21, -1])
 })
 
+test('java.toURL 的查询参数视图支持重复值和 Android 风格变更', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:JSON.stringify((() => { const url = java.toURL("https://example.test/p?old=1&q=a&q=b"); const params = url.searchParams; const before = [params.get("q"), params.getAll("q"), params.has("old")]; params.set("q", "c d"); params.append("q", "e"); params.delete("old"); return [before, params.toString(), url.search, params.getAll("q")]; })())', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [['a', ['a', 'b'], true], 'q=c+d&q=e', '?q=c+d&q=e', ['c d', 'e']])
+})
+
 test('规则宿主支持 JSON、XPath 和选择器后的 JavaScript 转换', async () => {
   const host = new SourceRuleHost()
   const json = { data: [{ name: '我本无意成仙', path: '/book/1' }] }
@@ -1682,6 +1688,27 @@ test('JavaScript CacheManager bridge 支持普通、内存和文件缓存', asyn
 
   const overwritten = await evaluate(host, "@js:cache.putMemory('ttl', 'stale'); cache.put('ttl', 'fresh', 60); cache.getFromMemory('ttl')", '')
   assert.equal(overwritten.status, 'empty', '带过期时间的普通缓存会清除旧的永久内存副本')
+})
+
+test('CacheManager 写入和删除保持 Android Unit 空返回值', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:JSON.stringify([cache.put("disk", "value"), cache.putMemory("memory", "value"), cache.putFile("file", "value"), cache.deleteMemory("memory"), cache.delete("disk"), cache.put("bytes", Uint8Array.from([1]))])', '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), [null, null, null, null, null, null])
+
+  const hostResult = await evaluate(new SourceRuleHost({ cache: {
+    get: () => undefined,
+    getFromDisk: () => undefined,
+    put: () => 'host-value',
+    putByteArray: () => 'host-byte-value',
+    delete: () => 'host-delete-value',
+    getFromMemory: () => undefined,
+    putMemory: () => 'host-memory-value',
+    deleteMemory: () => 'host-memory-delete-value',
+    getFile: () => undefined,
+    putFile: () => 'host-file-value',
+  } as never }), '@js:JSON.stringify([cache.put("disk", "value"), cache.putMemory("memory", "value"), cache.putFile("file", "value"), cache.deleteMemory("memory"), cache.delete("disk"), cache.put("bytes", Uint8Array.from([1]))])', '')
+  assert.equal(hostResult.status, 'success', hostResult.message)
+  assert.deepEqual(JSON.parse(String(hostResult.value)), [null, null, null, null, null, null])
 })
 
 test('CacheManager onlyDisk 在宿主没有磁盘端口时报告能力缺失', async () => {

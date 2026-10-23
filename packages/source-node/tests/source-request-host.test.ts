@@ -213,6 +213,7 @@ test('响应解码按显式 charset、HTTP header、BOM、HTML meta、自动检�
   assert.equal(host.decodeResponse(make(metaBytes, { 'content-type': 'text/html' })), '<meta charset="gbk">中文')
   assert.equal(host.decodeResponse(make(metaBytes, { 'content-type': 'text/html; charset=gbk' })), '<meta charset="gbk">中文')
 
+  assert.equal(host.decodeResponse(make(new TextEncoder().encode('rar-内容'))), 'rar-内容')
   const detectorText = '第一章，故事开始了。主人公走进书房，看到一本古老的书，封面上写着神秘的文字。'
   const detectorBytes = new NodeCharsetCodec().encode(detectorText, 'gbk')
   assert.equal(host.decodeResponse(make(detectorBytes)), detectorText)

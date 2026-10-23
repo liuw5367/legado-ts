@@ -57,12 +57,12 @@ function detectCharset(bytes: Uint8Array): string {
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return 'utf-8'
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le'
   if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be'
-  const detected = chardet.detect(Buffer.from(bytes))
-  if (detected !== undefined && detected !== null) return detected
   try {
     new TextDecoder('utf-8', { fatal: true }).decode(bytes)
     return 'utf-8'
   } catch {
+    const detected = chardet.detect(Buffer.from(bytes))
+    if (detected !== undefined && detected !== null) return detected
     // Android's ICU detector generally selects a Chinese legacy charset for invalid UTF-8.
     return 'gb18030'
   }

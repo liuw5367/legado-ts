@@ -1982,7 +1982,7 @@ if (__legadoUrlContext !== null && typeof __legadoUrlContext === "object" && !Ar
   __legadoSyncUrlMap()
   Object.defineProperties(java, { ruleUrl: { configurable: true, get: () => String(__legadoUrlContext.ruleUrl ?? "") }, url: { configurable: true, get: () => String(__legadoUrlContext.url ?? ""), set: (value) => { __legadoUrlContext.url = String(value ?? ""); __legadoUrlContext.urlDirty = true } }, headerMap: { configurable: true, get: () => __legadoUrlMap } })
   java.getHeaderMap = () => __legadoUrlMap
-  java.initUrl = () => { const value = String(__legadoUrlContext.ruleUrl ?? __legadoUrlContext.url ?? ""); __legadoUrlContext.url = value; __legadoUrlContext.urlDirty = true; return value }
+  java.initUrl = () => { const value = String(__legadoUrlContext.ruleUrl ?? __legadoUrlContext.url ?? ""); __legadoUrlContext.url = value; __legadoUrlContext.urlDirty = true }
   const __legadoResponseHeaders = (headers) => legadoResponseHeaders(headers)
   const __legadoStrResponse = (raw) => { const record = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {}; const target = String(record.url ?? __legadoUrlContext.url ?? ""); const body = String(record.body ?? raw ?? ""); const status = Number(record.status ?? record.code ?? 200); const headers = record.headers ?? {}; const message = String(record.message ?? record.statusMessage ?? ""); const headersValue = __legadoResponseHeaders(headers); const response = { body, status, code: status, url: target, headers: headersValue, redirected: Boolean(record.redirected), bytes: record.bytes }; Object.defineProperty(response, "__legadoResponseType", { value: "StrResponse", enumerable: false, configurable: false }); const rawResponse = { request: () => ({ url: () => String(record.requestUrl ?? target), method: () => String(record.requestMethod ?? "GET"), headers: () => __legadoResponseHeaders(record.requestHeaders ?? {}) }), url: () => target, code: () => status, statusCode: () => status, message: () => message, headers: () => __legadoResponseHeaders(headers), header: (name) => __legadoResponseHeaders(headers).get(name), isSuccessful: () => status >= 200 && status < 300 }; Object.defineProperties(rawResponse, { request: { value: rawResponse.request, configurable: true }, url: { value: rawResponse.url, configurable: true }, code: { value: rawResponse.code, configurable: true }, statusCode: { value: rawResponse.statusCode, configurable: true }, message: { value: rawResponse.message, configurable: true }, headers: { value: rawResponse.headers, configurable: true }, header: { value: rawResponse.header, configurable: true }, isSuccessful: { value: rawResponse.isSuccessful, configurable: true } }); Object.defineProperties(response, { statusCode: { value: () => status, configurable: true }, message: { value: () => message, configurable: true }, header: { value: (name) => __legadoResponseHeaders(headers).get(name), configurable: true }, isSuccessful: { value: () => status >= 200 && status < 300, configurable: true }, bodyAsBytes: { value: () => record.bytes instanceof Uint8Array ? record.bytes : record.bodyBytes instanceof Uint8Array ? record.bodyBytes : request({ kind: "encode-bytes", value: body, charset: "UTF-8" }), configurable: true }, errorBody: { value: () => record.errorBody ?? null, configurable: true }, callTime: { value: () => Number(record.callTime ?? 0), configurable: true }, raw: { value: () => rawResponse, configurable: true }, toString: { value: () => String(status) + " " + message, configurable: true } }); Object.defineProperties(response, { body: { value: __legadoCallableResponseValue(body), enumerable: true, configurable: true }, code: { value: __legadoCallableResponseValue(status), enumerable: true, configurable: true }, url: { value: __legadoCallableResponseValue(target), enumerable: true, configurable: true }, headers: { value: __legadoCallableResponseValue(headersValue), enumerable: true, configurable: true }, callTime: { value: __legadoCallableResponseValue(Number(record.callTime ?? 0)), enumerable: true, configurable: true }, errorBody: { value: __legadoCallableResponseValue(record.errorBody ?? null), enumerable: true, configurable: true }, raw: { value: __legadoCallableResponseValue(rawResponse), enumerable: true, configurable: true } }); return response }
   const __legadoUrlRequest = (kind, jsStr, sourceRegex, useWebView) => request({ kind: "url-context-response", input: { url: String(__legadoUrlContext.url ?? ""), headers: { ...(__legadoUrlContext.headerMap ?? {}) }, body: __legadoUrlContext.body, method: __legadoUrlContext.method, options: __legadoUrlContext.options, baseUrl: __legadoUrlContext.baseUrl, redirectUrl: __legadoUrlContext.redirectUrl, responseKind: kind, jsStr, sourceRegex, useWebView: useWebView !== false } })
@@ -3703,18 +3703,28 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (request.kind === 'cache-put') {
       const key = textValue(request.key)
       const saveTime = Number(request.saveTime) || 0
-      if (this.cache.putByteArray !== undefined && isByteValue(request.value)) return this.cache.putByteArray(key, byteValue(request.value), saveTime, signal)
-      return this.cache.put(key, encodeSourceCacheValue(this.encoding, request.value), saveTime, signal)
+      if (this.cache.putByteArray !== undefined && isByteValue(request.value)) {
+        await this.cache.putByteArray(key, byteValue(request.value), saveTime, signal)
+        return undefined
+      }
+      await this.cache.put(key, encodeSourceCacheValue(this.encoding, request.value), saveTime, signal)
+      return undefined
     }
     if (request.kind === 'cache-delete') {
       const key = textValue(request.key)
-      const result = await this.cache.delete(key, signal)
+      await this.cache.delete(key, signal)
       await this.file?.invalidateCacheFile?.(key, signal, source)
-      return result
+      return undefined
     }
     if (request.kind === 'cache-memory-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFromMemory(textValue(request.key)))
-    if (request.kind === 'cache-memory-put') return this.cache.putMemory(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), signal)
-    if (request.kind === 'cache-memory-delete') return this.cache.deleteMemory(textValue(request.key), signal)
+    if (request.kind === 'cache-memory-put') {
+      await this.cache.putMemory(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), signal)
+      return undefined
+    }
+    if (request.kind === 'cache-memory-delete') {
+      await this.cache.deleteMemory(textValue(request.key), signal)
+      return undefined
+    }
     if (request.kind === 'cache-bytes-get') {
       if (this.cache.getByteArray !== undefined) return this.cache.getByteArray(textValue(request.key), signal)
       const value = await this.cache.get(textValue(request.key), signal)
@@ -3722,7 +3732,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return decoded instanceof Uint8Array ? decoded : undefined
     }
     if (request.kind === 'cache-file-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFile(textValue(request.key)))
-    if (request.kind === 'cache-file-put') return this.cache.putFile(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), Number(request.saveTime) || 0, signal)
+    if (request.kind === 'cache-file-put') {
+      await this.cache.putFile(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), Number(request.saveTime) || 0, signal)
+      return undefined
+    }
     if (request.kind === 'cache-clear') {
       if (request.scope === 'jsLib') return this.clearSourceLibraries(source, signal)
       if (this.cache.clear === undefined) throw new Error('__LEGADO_CAPABILITY__runtime source.refreshJSLib unavailable')

@@ -158,3 +158,43 @@ test('Node 文件宿主在归档部分写入后失败或取消时清理临时目
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Node 文件宿主的归档入口复用同一解包端口并支持字符串/字节读取', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-archive-entry-test-'))
+  const archive: ArchiveHost = {
+    extract: async (_bytes, format) => [{ path: `${format}.txt`, data: new TextEncoder().encode(`${format}-内容`) }],
+  }
+  try {
+    const host = new NodeSourceFileHost({ root, archive, network: { request: async () => ({ url: 'https://fixture.invalid', status: 200, headers: {}, bytes: new TextEncoder().encode('archive'), redirected: false }) } })
+    const signal = new AbortController().signal
+    await writeFile(join(root, 'fixture.zip'), 'archive', 'utf8')
+    await writeFile(join(root, 'fixture.7z'), 'archive', 'utf8')
+    await writeFile(join(root, 'fixture.rar'), 'archive', 'utf8')
+    const inputs = [
+      ['unzipFile', 'zip'],
+      ['un7zFile', '7z'],
+      ['unrarFile', 'rar'],
+      ['unArchiveFile', 'zip'],
+    ] as const
+    for (const [operation, format] of inputs) {
+      const extracted = await host.execute(operation, { path: `fixture.${format}` }, signal, source)
+      assert.match(String(extracted), /^temp\//u)
+    }
+    for (const [operation, format] of [
+      ['getZipStringContent', 'zip'],
+      ['getRarStringContent', 'rar'],
+      ['get7zStringContent', '7z'],
+    ] as const) {
+      assert.equal(await host.execute(operation, { url: 'https://fixture.invalid/archive', path: `${format}.txt` }, signal, source), `${format}-内容`)
+    }
+    for (const [operation, format] of [
+      ['getZipByteArrayContent', 'zip'],
+      ['getRarByteArrayContent', 'rar'],
+      ['get7zByteArrayContent', '7z'],
+    ] as const) {
+      assert.deepEqual(await host.execute(operation, { url: 'https://fixture.invalid/archive', path: `${format}.txt` }, signal, source), new TextEncoder().encode(`${format}-内容`))
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
