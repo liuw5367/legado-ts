@@ -101,6 +101,14 @@ function object(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
+function androidToString(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return `[${value.map((item) => androidToString(item)).join(', ')}]`
+  const record = object(value)
+  if (record !== undefined) return `{${Object.entries(record).map(([key, item]) => `${key}=${androidToString(item)}`).join(', ')}}`
+  return String(value)
+}
+
 function unwrapCapturedBindings(value: unknown, context: RequestScriptContext | undefined): unknown {
   const names = context?.captureBindings
   if (names === undefined || names.length === 0) return value
@@ -123,7 +131,9 @@ function headerObject(value: unknown): Readonly<Record<string, string>> | undefi
   const record = object(input)
   if (record === undefined) return undefined
   const result: Record<string, string> = {}
-  for (const [key, item] of Object.entries(record)) if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') result[key] = String(item)
+  // AnalyzeUrl converts every Gson header value with `toString()`; Gson's
+  // integer-preserving map adapter makes arrays/maps render like Java values.
+  for (const [key, item] of Object.entries(record)) if (item !== undefined) result[key] = androidToString(item)
   return result
 }
 
@@ -195,9 +205,18 @@ function optionBoolean(value: unknown): boolean | undefined {
   return undefined
 }
 
-function optionInteger(value: unknown, minimum = 0): number | undefined {
-  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value.trim()) : NaN
-  return Number.isSafeInteger(number) && number >= minimum ? number : undefined
+function optionInteger(value: unknown, minimum = 0, maximum = Number.MAX_SAFE_INTEGER): number | undefined {
+  const number = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^[+-]?\d+$/u.test(value.trim())
+      ? Number(value.trim())
+      : NaN
+  return Number.isSafeInteger(number) && number >= minimum && number <= maximum ? number : undefined
+}
+
+/** Android UrlOption.useWebView() treats only null, empty string, false and "false" as disabled. */
+function useWebViewOption(value: unknown): boolean {
+  return !(value === null || value === undefined || value === '' || value === false || value === 'false')
 }
 
 // 表单组件只保留 RFC 3986 非保留字符；空格由编码器单独写成加号。
@@ -504,7 +523,7 @@ export class SourceRequestRuntime {
     const effectiveRawUrl = urlContext.urlDirty === true && typeof urlContext.url === 'string' ? urlContext.url : rawUrl
     const split = splitSourceRequestUrl(effectiveRawUrl)
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
-    if (optionBoolean(options.webView) === true || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
+    if (useWebViewOption(options.webView) || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
       throw new SourceRequestError('capability-missing', '书源请求需要 WebView')
     }
     const requestedMethod = typeof options.method === 'string' ? options.method.toUpperCase() : 'GET'
@@ -539,7 +558,7 @@ export class SourceRequestRuntime {
         throw new SourceRequestError('capability-missing', `当前网络宿主不支持 ${requestCharset} 编码`, 'url')
       }
     }
-    const bodyValue = options.body === undefined || typeof options.body === 'string' || options.body instanceof Uint8Array ? options.body : JSON.stringify(options.body)
+    const bodyValue = options.body === undefined || options.body === null || typeof options.body === 'string' || options.body instanceof Uint8Array ? options.body ?? undefined : JSON.stringify(options.body)
     let body: string | Uint8Array | undefined
 
     if (method === 'POST') {
@@ -560,11 +579,12 @@ export class SourceRequestRuntime {
       }
     }
 
-    const timeoutMs = optionInteger(options.timeout, 1)
+    const timeoutMs = optionInteger(options.timeout, 1, 2_147_483_647)
     const followRedirects = optionBoolean(options.followRedirects)
     const retry = Math.min(optionInteger(options.retry) ?? 0, 10)
     const serverId = optionInteger(options.serverID, 0)
     const webViewDelayTimeMs = optionInteger(options.webViewDelayTime, 0)
+    const responseType = typeof options.type === 'string' && options.type.length > 0 ? 'bytes' : 'text'
     const makePlan = (url: string, planHeaders: Readonly<Record<string, string>> | undefined = headers, planBody: string | Uint8Array | undefined = body) => createRequestPlan({
       url,
       baseUrl: source.bookSourceUrl,
@@ -574,7 +594,7 @@ export class SourceRequestRuntime {
       ...(requestCharset === undefined ? {} : { requestCharset }),
       ...(responseCharsetHint === undefined ? {} : { responseCharset: responseCharsetHint }),
       ...(followRedirects === undefined ? {} : { followRedirects }),
-      responseType: typeof options.type === 'string' && options.type.length > 0 ? 'bytes' : 'text',
+      responseType,
       execution: {
         useWebView: false,
         ...(typeof options.sourceRegex === 'string' ? { sourceRegex: options.sourceRegex } : {}),
@@ -664,7 +684,7 @@ export class SourceRequestRuntime {
 
     let result: NetworkResponse = response
     if (responseCharsetHint !== undefined) result = { ...result, headers: { ...result.headers, 'x-legado-response-charset': responseCharsetHint } }
-    if (typeof options.type === 'string' && options.type.length > 0) {
+    if (responseType === 'bytes') {
       result = { ...result, bytes: new TextEncoder().encode(hex(result.bytes)), headers: { ...result.headers, 'x-legado-response-charset': 'utf-8' } }
     } else {
       const decoded = this.decode(result)

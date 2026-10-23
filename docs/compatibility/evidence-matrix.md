@@ -27,7 +27,7 @@
 
 未完成项、差异项和完成后的删除线记录统一维护在[状态总览](status.md)。本矩阵继续维护五维兼容证据；`implementation=absent/partial` 和 `execution=not-run` 的含义以状态总览为准。
 
-当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；2026-10-23 P34 后的 `pnpm test:source` 为 185/185，根全套 `pnpm test` 为 628/628。静态 corpus 审计覆盖 943 个候选源和 20,231 条规则，20,226 条编译成功，5 条仅按 manifest 的稳定 hash/诊断白名单归为已知源文本问题。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
+当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；2026-10-23 P35 后的 `pnpm test:source` 为 185/185，根全套 `pnpm test` 为 631/631。静态 corpus 审计覆盖 943 个候选源和 20,231 条规则，20,226 条编译成功，5 条仅按 manifest 的稳定 hash/诊断白名单归为已知源文本问题。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
 
 2026-10-22 D34 当前方法清单为 27 个能力族、252 个成员：55 个 `implemented`、159 个 `partial`、38 个 `simulated`。本轮新增的 Java IO 流构造器、范围读写、transfer、单字节输出、CR/CRLF Reader 行语义和 `String.format/formatted` 常用 `%t/%T` 日期时间/周序号/纪元转换已有 `source-rule-host.test.ts` 书源式回归；它们仍属于受控 QuickJS 对象，日期时区名称和完整 Locale 规则保留近似，Android 同输入仍为 `not-run`。D14 的 JS 源 marshaller 另有 `source-host-flow.test.ts` 回归，覆盖 `BookType` 校验/回退、详情前类型重置、文件源按位合并、`downloadUrls` 过滤/相对地址/去重和文件源空下载失败；D45 继续覆盖详情、目录、正文和声明式目录重置时保留 Android 非媒体状态位；D46 新增搜索/发现 `variable` 的 Gson 字段类型校验、详情变量的 Map<String,String> 归一化和无效更新保留旧值；D47 新增 SearchBook 全字段形态校验和 Gson 整数文本边界；这四组行为尚未生成 Android 同输入 golden。
 
@@ -35,7 +35,7 @@
 
 2026-10-23 P32 将 D43 的 7 个 File 成员（`getName/getPath/getAbsolutePath/exists/isFile/isDirectory/listFiles`）更新为 `implemented / ts-passed / simulatable / verify`；父对象和 `listFiles()` 子项均能继续调用 File 方法，元数据按调用时宿主状态刷新。当前方法清单统计为 62 个 `implemented`、152 个 `partial`、44 个 `simulated`；Android golden 仍为 `not-run`。
 
-2026-10-23 P34 将 D23 的 `setLocal/setBaseUrl/setRedirectUrl` 更新为 `implemented / ts-passed / fixable / verify`；Node 回归覆盖 AnalyzeRule 链式返回、`setContent` 的 baseUrl/redirectUrl 分离、受控 URL 返回、非法 URL 保留旧值和 data URL 不覆盖。当前方法清单统计为 69 个 `implemented`、145 个 `partial`、44 个 `simulated`；Android golden 仍为 `not-run`。
+2026-10-23 P34 将 D23 的 `setLocal/setBaseUrl/setRedirectUrl` 更新为 `implemented / ts-passed / fixable / verify`；Node 回归覆盖 AnalyzeRule 链式返回、`setContent` 的 baseUrl/redirectUrl 分离、受控 URL 返回、非法 URL 保留旧值和 data URL 不覆盖。P35 将 URL options 的 `body/headers/timeout` 更新为 `implemented / ts-passed / fixable / verify`；Node 回归覆盖 WebView 真假边界、整数 timeout/Int.MAX_VALUE、POST null body 和 Gson map header 转换，`type` 空白 JSON 的 Gson setter/字段路径仍待验证。当前方法清单统计为 72 个 `implemented`、142 个 `partial`、44 个 `simulated`；Android golden 仍为 `not-run`。
 
 本次新增的 `HTML-FLOW-001`、`JSON-FLOW-001`、`XPATH-CONTENT-001`、`JS-TOC-001`、`TOC-EDGE-001`、`CONTENT-EDGE-001` 仍记录为 `android=not-run`；它们是 TypeScript 离线执行证据，不是 Android 兼容结论。
 
@@ -56,7 +56,7 @@
 | `$n`、`##match##replace`、`@put/@get`、`{{}}` | 目标必须兼容 | `AnalyzeRule`、变量规则源码 | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | 连续 `<js>` 和 `@js:` | 目标必须兼容 | `AnalyzeRule`、JS 规则测试 | 实现见 source-core/source-node 与对应 tests；对照 fixture/golden 执行状态见测试基线|
 | `@webjs:` | 目标宿主能力 | `AnalyzeRule`、WebView 相关流程 | 未实现 runtime，需 capability 设计 |
-| URL 页码、URL options、表单编码、URL JS 顺序和 XML 响应后处理 | 目标必须兼容 | `AnalyzeUrl`、`AnalyzeUrlNetworkOptionsTest` | `source-core` 请求运行时及测试覆盖页码、`@js` 先于 `{{}}`、origin `baseUrl`、未知 method 回退 GET、XML 补声明优先于 `bodyJs`；Android golden 尚未执行 |
+| URL 页码、URL options、表单编码、URL JS 顺序和 XML 响应后处理 | 目标必须兼容 | `AnalyzeUrl`、`AnalyzeUrlNetworkOptionsTest` | `source-core` 请求运行时及测试覆盖页码、`@js` 先于 `{{}}`、origin `baseUrl`、未知 method 回退 GET、WebView option 真假边界、整数 timeout/Int.MAX_VALUE、POST null body、复杂 headers 和 XML 补声明优先于 `bodyJs`；`type` 空白 JSON 的 Gson 反序列化路径仍待验证，Android golden 尚未执行 |
 | `concurrentRate` 书源级限流 | 目标必须兼容 | `ConcurrentRateLimiter`、`AnalyzeUrl` | `SourceRateLimiter` 已支持普通请求固定窗口、取消、`putConcurrent` 更新及 `ajaxAll(..., true)` bridge 旁路；首次非法值按 Android 首次请求 fallback 并由 `SourceSession.diagnostics()` 报告，`SourceSession.close()`/`ReaderApplication.close()` 释放等待（`source-rate-limiter.test.ts`、`source-session.test.ts`）；Android golden 及未来源管理入口的编辑删除集成仍待执行 |
 | 高频 JavaScript bridge（章节数字、字节数组、摘要/HMAC） | 目标必须兼容 | `JsExtensions.toNumChapter`、`strToBytes/bytesToStr`、`JsEncodeUtils` | `source-core`/Node 已实现 `toNumChapter`、字符集字节往返、Base64/Hex 字节数组、摘要 Base64、HMAC Hex/Base64、t2s/s2t，并有 QuickJS 回归；WebView、浏览器交互和 Android golden 尚未执行 |
 | Cookie、普通 source header、已保存登录头和最终域名 | 目标必须兼容 | `AnalyzeUrl`、`BaseSource.getHeaderMap()`、登录头站点判断 | CookieJar、静态/动态 source header、`loginCheckJs` 和 `NetworkHost.getLoginHeaders(sourceId)` 已实现；core 按初始 URL 同站范围注入独立登录头，URL options 可覆盖，网络及文件/字体/归档 bridge 首层重算动态 source header、深层按 D9 有界跳过并沿用初始 URL 规则；SecretStore 持久化、删除清理和 Android golden 仍待 fixture |
@@ -125,7 +125,7 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 | D24～D28/D31/D32/D34：对象方法、重建 session、InfoMap、AES 返回类型和 StrResponse 构造 | Android source + TS 脚本/session 执行 | defined（具体差异输入） | partial | TS 观察到差异；Android not-run | required |
 | D29/D30/D35～D40：文件命名空间、下载、字体、工具、宿主配置、导入、库状态和游标签名 | source | 部分 defined；完整语言/平台等价仍 blocked | partial 或 absent，详见状态表 | 组合路径 not-run，不能写 pass | required/host |
 | D42/D43：URL 和 File 对象 | Android source + TS URL 最小输入执行；File 为源码确认和 `source-rule-host.test.ts` FILE-004 父子对象回归 | defined（列出的成员） | partial | D42 URL 已有 TS 回归；D43 父子 File 方法、`listFiles()` 子项包装和即时元数据刷新已通过 TS；Android golden 仍 not-run | required |
-| 既有规则宿主、平台、session 回归 | test-run | defined（已有测试） | 按测试范围 | `pnpm test:source` 185/185；根全套 `pnpm test` 628/628；不能覆盖 Android golden 或真实宿主 | verify |
+| 既有规则宿主、平台、session 回归 | test-run | defined（已有测试） | 按测试范围 | `pnpm test:source` 185/185；根全套 `pnpm test` 631/631；不能覆盖 Android golden 或真实宿主 | verify |
 
 本轮已执行命令：`node --test packages/source-node/tests/source-rule-host.test.ts packages/source-node/tests/source-runtime-platform.test.ts packages/source-node/tests/source-session.test.ts`。最小探针直接调用 SourceRuleRuntime/SourceRuleHost、使用固定 `.invalid` 地址和请求桩，没有访问公网、真实账户、购买或其他远程写入。探针属于差异发现证据，正式回归与共享 golden 要在对应修复时加入版本控制。
 

@@ -153,6 +153,66 @@ test('Android 不识别的 URL method 回退为 GET', async () => {
   assert.equal(result.status, 'success')
 })
 
+test('URL option 的 webView 按 Android 的非通用真假规则判断', async () => {
+  const disabledValues: unknown[] = [undefined, null, '', false, 'false']
+  for (const value of disabledValues) {
+    const suffix = value === undefined ? '' : `,${JSON.stringify({ webView: value })}`
+    const source = await importFixture({ searchUrl: `/search${suffix}` })
+    const ports = probePorts()
+    const result = await searchBooks(ports, { source, keyword: 'x' })
+    assert.equal(result.status, 'success', `webView=${String(value)} 应走普通 HTTP`)
+    assert.equal(ports.calls, 1)
+  }
+
+  for (const value of [0, '0', true, 'true', ' false ', {}]) {
+    const source = await importFixture({ searchUrl: `/search,${JSON.stringify({ webView: value })}` })
+    const ports = probePorts()
+    const result = await searchBooks(ports, { source, keyword: 'x' })
+    assert.equal(ports.calls, 0, `webView=${String(value)} 不应静默降级到普通 HTTP`)
+    assert.ok(result.diagnostics.some((item) => item.code === 'capability-missing'), `webView=${String(value)} 应报告宿主能力缺失`)
+  }
+})
+
+test('URL option 的 timeout 和 POST null body 对齐 Android', async () => {
+  const source = await importFixture({ searchUrl: '/search,{}' })
+  const plans: RequestPlan[] = []
+  const runtime = new SourceRequestRuntime({
+    network: {
+      request: async (plan) => {
+        plans.push(plan)
+        return okResponse(plan.url, 'plain')
+      },
+    },
+    encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) },
+  })
+
+  await runtime.requestRaw(source, '/timeout,{"timeout":"5000"}')
+  assert.equal(plans.at(-1)?.budget.timeoutMs, 5000)
+  await runtime.requestRaw(source, '/timeout,{"timeout":"5000.0"}')
+  assert.equal(plans.at(-1)?.budget.timeoutMs, 30000, 'Android 的 Long.parse 不接受带小数点的字符串')
+  await runtime.requestRaw(source, '/timeout,{"timeout":2147483648}')
+  assert.equal(plans.at(-1)?.budget.timeoutMs, 30000, 'Android OkHttp timeout 上限为 Int.MAX_VALUE')
+
+  await runtime.requestRaw(source, '/body,{"method":"POST","body":null}')
+  const bodyPlan = plans.at(-1)
+  assert.equal(bodyPlan?.method, 'POST')
+  assert.deepEqual(bodyPlan?.body, new Uint8Array())
+  assert.equal(bodyPlan?.headers['Content-Type'], 'application/x-www-form-urlencoded')
+})
+
+test('URL option headers 将数组、对象和 null 按 Android toString 传给请求宿主', async () => {
+  const source = await importFixture({ searchUrl: '/search,{}' })
+  const ports = probePorts()
+  const runtime = new SourceRequestRuntime({
+    network: ports.network,
+    encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) },
+  })
+  await runtime.requestRaw(source, '/headers,{"headers":{"X-Array":[1,2],"X-Object":{"a":1},"X-Null":null}}')
+  assert.equal(ports.plans[0]?.headers['X-Array'], '[1, 2]')
+  assert.equal(ports.plans[0]?.headers['X-Object'], '{a=1}')
+  assert.equal(ports.plans[0]?.headers['X-Null'], 'null')
+})
+
 test('脚本 cancelled/capability-missing/failed 映射为对应诊断', async () => {
   const statuses = ['cancelled', 'capability-missing', 'failed'] as const
   for (const status of statuses) {

@@ -1979,8 +1979,8 @@
           "signature": "body",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2002,8 +2002,8 @@
           "signature": "headers",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2048,8 +2048,8 @@
           "signature": "timeout",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [

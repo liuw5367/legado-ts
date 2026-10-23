@@ -33,6 +33,12 @@ Node 请求宿主现在把一次 AnalyzeUrl 请求的 URL、Header、方法、bo
 
 方法清单中这三个成员更新为 `implemented / ts-passed / fixable / verify`，当前 258 个成员统计为 **69 implemented、145 partial、44 simulated**。`setContent` 仍保持 `partial`，因为 Android 的 `isJSON` 标记、解析器缓存清理和完整对象生命周期尚未由同输入 golden 验证；Android conformance runner 仍为 `not-run`。
 
+## 2026-10-23 P35：URL options 请求参数语义
+
+按 Android `AnalyzeUrl.UrlOption` 和 `AnalyzeUrlNetworkOptions.kt` 修正了请求参数边界：`webView` 现在只把 `null`、空字符串、`false` 和精确的字符串 `"false"` 视为关闭，`0`、`"0"`、大小写不同或带空白的字符串不会静默降级到普通 HTTP；超时字符串只接受整数毫秒并限制在 `Int.MAX_VALUE`，POST 的 `body:null` 按空表单处理，headers 中的数组、对象和 null 按 Gson/Java `toString()` 形态转换。新增 2 组 source-request 回归覆盖 WebView 能力诊断、超时/body 和复杂 Header 值；URL options `type` 空白值仍待 Android Gson 反序列化路径验证。
+
+方法清单将 `network-options` 的 `body/headers/timeout` 更新为 `implemented / ts-passed / fixable / verify`，当前 258 个成员统计为 **72 implemented、142 partial、44 simulated**，待处理 186 个。`webView` 的真实页面请求仍属于宿主能力，Node 继续返回 `capability-missing`；Android conformance runner 仍为 `not-run`。
+
 ## 状态定义
 
 | 状态 | 含义 |
