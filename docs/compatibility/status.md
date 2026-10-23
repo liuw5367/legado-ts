@@ -143,6 +143,10 @@ Android 的 `ElementsSingle` 对 `class.*`、`id.*` 和 `tag.*` 先按字面值�
 
 Android `AnalyzeByJSoup.parse` 对以 `<?xml` 开头的正文使用 XML parser；core 的默认规则现在采用同一判定，`tag.Item`、`tag.item` 和大小写敏感属性查询在 XML 正文中不会合并为 HTML 的大小写不敏感结果。新增规则宿主回归覆盖 XML 标签和 `ID` 属性，构建后 `source-rule-host` **114/114** 通过；HTML、位置选择器和已有 XPath/XML adapter 回归保持通过。D18/D19 的完整 Jsoup 修复算法、XML 边界和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
 
+## 2026-10-23 P54：Pattern.quote 处理嵌入式 `\\E`
+
+Java `Pattern.quote` 遇到输入中的 `\\E` 时必须先结束当前引用、转义字面量 `\\E`，再重新开始引用；此前 QuickJS bridge 直接拼接 `\\Q...\\E`，会让 `Pattern.quote('a\\\\E+b')` 过早结束引用并改变匹配结果。现在 bridge 按 Java 语义把每个嵌入式 `\\E` 展开为 `\\E\\\\E\\Q`，并新增 `Pattern.compile(Pattern.quote(...)).matcher(...).matches()` 书源式回归；构建后 `source-rule-host` **114/114** 通过。D21 的复杂 Java Pattern、完整 replacement 边界和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
+
 ## 状态定义
 
 | 状态 | 含义 |

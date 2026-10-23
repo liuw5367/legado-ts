@@ -1098,7 +1098,7 @@ const legadoPattern = {
   UNICODE_CASE: 64,
   LITERAL: 16,
   UNICODE_CHARACTER_CLASS: 256,
-  quote: (pattern) => "\\Q" + String(pattern ?? "") + "\\E",
+  quote: (pattern) => "\\Q" + String(pattern ?? "").replaceAll("\\E", "\\E\\\\E\\Q") + "\\E",
   compile: (pattern, flags) => {
     const numericFlags = Number(flags ?? 0)
     const patternText = String(pattern ?? "")

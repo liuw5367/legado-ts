@@ -661,6 +661,8 @@ test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement
       var replaced = pattern.matcher('aa bb').replaceAll('$0-\${word}-$1');
       var firstReplaced = pattern.matcher('aa bb').replaceFirst('$0-\${word}-$1');
       var quoted = Matcher.quoteReplacement('$1\\\\x');
+      var quotedPattern = Pattern.quote('a\\\\E+b');
+      var quotedMatch = Pattern.compile(quotedPattern).matcher('a\\\\E+b').matches();
       var positionsMatcher = Pattern.compile('(?:)').matcher('ab');
       var positions = [];
       while (positionsMatcher.find()) positions.push(positionsMatcher.start());
@@ -668,7 +670,7 @@ test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement
       var regionMatcher = Pattern.compile('a').matcher('xaay').region(1, 3);
       var region = regionMatcher.find() ? [regionMatcher.group(), regionMatcher.start(), regionMatcher.end(), regionMatcher.regionStart(), regionMatcher.regionEnd(), regionMatcher.replaceAll('z')] : null;
       var ten = Pattern.compile('(a)(b)').matcher('ab').replaceAll('$10');
-      JSON.stringify({ first: first, second: second, replaced: replaced, firstReplaced: firstReplaced, quoted: quoted, positions: positions, emptyReplace: emptyReplace, region: region, ten: ten });
+      JSON.stringify({ first: first, second: second, replaced: replaced, firstReplaced: firstReplaced, quoted: quoted, quotedPattern: quotedPattern, quotedMatch: quotedMatch, positions: positions, emptyReplace: emptyReplace, region: region, ten: ten });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
@@ -677,6 +679,8 @@ test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement
     replaced: 'aa-aa-aa bb-bb-bb',
     firstReplaced: 'aa-aa-aa bb',
     quoted: '\\$1\\\\x',
+    quotedPattern: '\\Qa\\E\\\\E\\Q+b\\E',
+    quotedMatch: true,
     positions: [0, 1, 2],
     emptyReplace: 'abX',
     region: ['a', 1, 2, 1, 3, 'xzzy'],
