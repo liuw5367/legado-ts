@@ -41,6 +41,31 @@ function optional<T extends Record<string, unknown>>(value: T): T {
   return value
 }
 
+/**
+ * Network hosts and bridge adapters cannot share one concrete Error class, so
+ * request callbacks need a small, stable error classifier.  Explicit
+ * `__LEGADO_CAPABILITY__` markers are treated as capability failures; an
+ * arbitrary script TypeError remains a normal request failure.
+ */
+export function classifyRequestError(error: unknown): 'capability-missing' | 'cancelled' | string {
+  const record = typeof error === 'object' && error !== null ? error as Record<string, unknown> : undefined
+  const explicit = typeof record?.code === 'string'
+    ? record.code
+    : typeof record?.status === 'string'
+      ? record.status
+      : undefined
+  if (explicit === 'capability-missing' || explicit === 'cancelled') return explicit
+  if (explicit !== undefined && /^(?:invalid-config|rule-failed|request-failed|cache-failed)$/u.test(explicit)) return explicit
+  const message = error instanceof Error ? error.message : String(error)
+  if (/__LEGADO_CAPABILITY__|webview\s*(?:required|unavailable)|需要\s*WebView|宿主能力不可用/iu.test(message)) return 'capability-missing'
+  if (error instanceof DOMException && error.name === 'AbortError' || record?.name === 'AbortError' || /(?:^|\b)(?:abort|cancel)(?:ed|led)?\b/iu.test(message)) return 'cancelled'
+  return 'request-failed'
+}
+
+function requestErrorRetryable(code: string): boolean {
+  return code === 'request-failed'
+}
+
 class DefaultRuntimeObservationCollector implements RuntimeObservationCollector {
   private nextId = 1
   private readonly entries: RuntimeObservation[] = []
@@ -174,7 +199,8 @@ class DefaultRuntimeObservationCollector implements RuntimeObservationCollector 
       let phase: RuntimeObservation['phase']
       if (status === 'cancelled') phase = 'cancelled'
       else if (status === 'capability-missing') phase = 'capability-missing'
-      else if (status === 'failed') phase = state.responded ? 'failed' : 'skipped'
+      else if (!state.requested) phase = 'skipped'
+      else if (status === 'failed') phase = 'failed'
       else if (status === 'empty' || itemCount === 0) phase = 'parsed-empty'
       else phase = 'success'
       this.entries.push(optional({
@@ -190,6 +216,7 @@ class DefaultRuntimeObservationCollector implements RuntimeObservationCollector 
         ...(state.itemIndex === undefined ? {} : { itemIndex: state.itemIndex }),
       }))
     }
+    this.requestHandles.clear()
   }
 
   public observerFor(handle: RuntimeObservationHandle, upstream?: RequestObserver): RequestObserver {
@@ -203,8 +230,8 @@ class DefaultRuntimeObservationCollector implements RuntimeObservationCollector 
         try { upstream?.onComplete?.(event) } catch { /* 外部观察器不能改变请求结果。 */ }
       },
       onError: (event) => {
-        const code = event.error instanceof Error && /webview/iu.test(event.error.message) ? 'capability-missing' : 'request-failed'
-        this.markError(handle, { code, retryable: code !== 'capability-missing', durationMs: event.durationMs })
+        const code = classifyRequestError(event.error)
+        this.markError(handle, { code, retryable: requestErrorRetryable(code), durationMs: event.durationMs })
         try { upstream?.onError?.(event) } catch { /* 外部观察器不能改变请求结果。 */ }
       },
     }
@@ -229,8 +256,8 @@ class DefaultRuntimeObservationCollector implements RuntimeObservationCollector 
       onError: (event) => {
         const handle = this.requestHandles.get(event.id)
         if (handle !== undefined) {
-          const code = event.error instanceof Error && /webview/iu.test(event.error.message) ? 'capability-missing' : 'request-failed'
-          this.markError(handle, { code, retryable: code !== 'capability-missing', durationMs: event.durationMs })
+          const code = classifyRequestError(event.error)
+          this.markError(handle, { code, retryable: requestErrorRetryable(code), durationMs: event.durationMs })
           this.requestHandles.delete(event.id)
         }
         try { upstream?.onError?.(event) } catch { /* 外部观察器不能改变请求结果。 */ }

@@ -5,6 +5,7 @@ import { resolveSourceRequestUrl, splitSourceRequestUrl } from '../runtime/reque
 import type { CharsetCodec, NetworkResponse, RequestBudget } from '../runtime/contracts.ts'
 import type { SourceFunctionName, SourceFunctionRequest, WorkflowDiagnostic, WorkflowImageDecodeRequest, WorkflowJavaScriptRequest, WorkflowJavaScriptStage, WorkflowOptions, WorkflowPage, WorkflowPorts, WorkflowRequest, WorkflowRuleOutput, WorkflowStage, WorkflowTraceEntry } from './types.ts'
 import { internalChapterScopeBinding } from './types.ts'
+import { classifyRequestError } from './observations.ts'
 
 export const listFields = [
   ['bookName', 'name'],
@@ -357,7 +358,7 @@ export function responseText(response: Parameters<NonNullable<WorkflowPorts['dec
 }
 
 function isWebViewError(value: unknown): boolean {
-  return value instanceof Error && /webview/i.test(value.message)
+  return classifyRequestError(value) === 'capability-missing'
 }
 
 export interface WorkflowPageResponse {
@@ -433,6 +434,11 @@ export async function requestPageResponse(ports: WorkflowPorts, source: Normaliz
     if (options.signal !== undefined && options.signal.aborted) {
       if (observation !== undefined) observationCollector?.markCancelled(observation)
       diagnostics.push({ code: 'cancelled', stage, message: '工作流已取消', retryable: false })
+      return undefined
+    }
+    if (classifyRequestError(error) === 'cancelled') {
+      if (observation !== undefined) observationCollector?.markCancelled(observation)
+      diagnostics.push({ code: 'cancelled', stage, message: '网络请求已取消', retryable: false })
       return undefined
     }
     // 结构化请求错误是确定性失败：直接映射诊断，不伪装成 500 也不标记可重试。

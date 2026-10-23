@@ -56,6 +56,23 @@ test('响应成功但列表为空记录 parsed-empty，请求异常记录 failed
   assert.equal(failed.observations?.at(-1)?.errorCode, 'request-failed')
 })
 
+test('显式宿主能力错误和 AbortError 不会被观测为普通网络失败', async () => {
+  const capability = await searchBooks(ports(async () => {
+    throw new Error('__LEGADO_CAPABILITY__runtime archive.rar unavailable')
+  }, []), { source, keyword: 'capability' })
+  assert.equal(capability.status, 'capability-missing')
+  assert.deepEqual(capability.observations?.map((item) => item.phase), ['planned', 'requested', 'capability-missing'])
+  assert.equal(capability.observations?.at(-1)?.errorCode, 'capability-missing')
+  assert.equal(capability.observations?.at(-1)?.retryable, false)
+
+  const cancelled = await searchBooks(ports(async () => {
+    throw new DOMException('The operation was aborted', 'AbortError')
+  }, []), { source, keyword: 'abort' })
+  assert.equal(cancelled.status, 'cancelled')
+  assert.deepEqual(cancelled.observations?.map((item) => item.phase), ['planned', 'requested', 'cancelled'])
+  assert.equal(cancelled.observations?.at(-1)?.errorCode, 'cancelled')
+})
+
 test('能力缺失和取消在真正请求前保留明确终态', async () => {
   const webViewSource = { ...source, searchUrl: '/search,{"webView":true}' }
   const webView = await searchBooks({

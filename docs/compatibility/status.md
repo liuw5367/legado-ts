@@ -73,6 +73,12 @@ Android 对非法 `exploreUrl` 配置会生成 `ERROR:` 分类项，而不是把
 
 `packages/source-node/tests/source-rule-host.test.ts` 新增缺失键、受控 `HashMap`、空返回值和 `save`/`saveNow` TTL 回归；构建后规则宿主 **107/107** 通过。方法清单将 `cache-info-map::005-infomap-get` 至 `::008-infomap-savenow` 更新为 `implemented / ts-passed`；当前 259 个成员为 **87 implemented、128 partial、44 simulated**，仍待处理 **172** 个；验证状态为 **159 ts-passed、36 ts-diff、64 unverified**。待处理成员按可行性为 **23 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**。CacheManager 的对象/bytes/onlyDisk/TTL 快照边界、`cacheContent` 的批量宿主写入和 Android golden 仍保持单独差异记录，本轮没有把它们误标为完整等价；后续 commit 仍只保留本地，全部问题完成后再统一 push。
 
+## 2026-10-23 P41：请求观测错误分类与终态
+
+本轮收口 `RuntimeObservation` 的五个请求阶段成员。网络观察现在识别显式 `__LEGADO_CAPABILITY__...` 宿主标记、`SourceRequestError` 的能力/取消状态和 `AbortError`：能力缺失进入 `capability-missing`，取消进入 `cancelled`，未知脚本异常仍保持 `request-failed`；错误码和 `retryable` 会保留在终态证据中。工作流在请求尚未真正发出时不会把 planned 项标成成功，已发出但未收到响应的失败也不会误标为 skipped；完成时清理 bridge 请求句柄，避免迟到回调污染下一次操作。
+
+新增 `runtime-observations.test.ts` 覆盖宿主能力错误、AbortError、空解析、普通网络失败和候选跳过；构建后请求/会话/观测组合回归 **47/47** 通过。方法清单将 `runtime-observation` 的 5 个成员更新为 `implemented / ts-passed`；当前 259 个成员为 **92 implemented、123 partial、44 simulated**，仍待处理 **167** 个；验证状态为 **159 ts-passed、36 ts-diff、64 unverified**。按可行性统计，剩余 **18 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**；Android 同输入 golden 仍为 `not-run`，本轮只确认 TypeScript 行为和诊断边界。
+
 ## 状态定义
 
 | 状态 | 含义 |
