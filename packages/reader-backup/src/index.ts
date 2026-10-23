@@ -161,7 +161,7 @@ export function buildBackupPreview(archive: BackupArchive): BackupPreview {
 }
 
 export function categoryForPath(path: string): BackupCategory {
-  if (path === 'bookshelf.json') return 'bookshelf'
+  if (path === 'bookshelf.json' || path === 'book-lists.json') return 'bookshelf'
   if (/^books\/[^/]+\/(?:book|sources)\.json$/u.test(path)) return 'bookshelf'
   if (path === 'reading-history.json') return 'reading'
   if (path === 'search-history.json') return 'search'
@@ -353,4 +353,29 @@ function crc32(input: Uint8Array): number {
     for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
   }
   return (crc ^ 0xffffffff) >>> 0
+}
+
+/** 校验跨端书单扩展的身份、成员和分组引用，不信任导入文件中的关联。 */
+export function validateBookOrganizationData(value: unknown, bookIds: ReadonlySet<string>, shelf: readonly { bookId: string; groupId?: unknown }[]): void {
+  if (!isRecord(value) || !Array.isArray(value.lists) || !Array.isArray(value.items)) throw new Error('书单扩展格式无效')
+  const lists = new Map<string, Record<string, unknown>>()
+  const groupNames = new Set<string>()
+  // UUID 只匹配规范连字符结构；账号归属由各运行端恢复时重新赋值。
+  const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)
+  for (const row of value.lists) {
+    if (!isRecord(row) || !uuid(row.id) || lists.has(row.id) || !['booklist', 'shelf_group'].includes(String(row.type)) || typeof row.name !== 'string' || row.name !== row.name.trim().normalize('NFC') || row.name.length === 0 || [...row.name].length > (row.type === 'shelf_group' ? 30 : 100) || typeof row.description !== 'string' || [...row.description].length > 2000 || typeof row.isPublic !== 'boolean' || !isIsoDateString(row.createdAt) || !isIsoDateString(row.updatedAt) || (row.customOrder !== undefined && (typeof row.customOrder !== 'number' || !Number.isSafeInteger(row.customOrder) || row.customOrder < 0))) throw new Error('书单记录无效')
+    if (row.type === 'shelf_group') {
+      if (groupNames.has(row.name) || row.name === '全部' || row.name === '默认' || row.description !== '' || row.isPublic) throw new Error('分组记录无效')
+      groupNames.add(row.name)
+    }
+    lists.set(row.id, row)
+  }
+  const members = new Set<string>()
+  for (const row of value.items) {
+    if (!isRecord(row) || !uuid(row.bookListId) || !uuid(row.bookId) || lists.get(row.bookListId)?.type !== 'booklist' || !bookIds.has(row.bookId) || typeof row.description !== 'string' || [...row.description].length > 2000 || !isIsoDateString(row.addedAt) || !isIsoDateString(row.updatedAt)) throw new Error('书单成员无效')
+    const key = row.bookListId + ':' + row.bookId
+    if (members.has(key)) throw new Error('书单成员重复')
+    members.add(key)
+  }
+  for (const row of shelf) if (row.groupId != null && (!uuid(row.groupId) || lists.get(row.groupId)?.type !== 'shelf_group')) throw new Error('书架分组引用无效')
 }

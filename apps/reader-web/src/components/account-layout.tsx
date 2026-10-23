@@ -7,22 +7,22 @@ import { Button } from './ui/button.tsx'
 
 export function AccountLayout({ children, reader = false }: { children?: ReactNode; reader?: boolean }) {
   const navigation = usePageNavigation()
-  const discoverTarget = navigation?.rootTarget('/discover') ?? '/discover'
+  const discoverTarget = navigation?.rootTarget('/book-lists') ?? '/book-lists'
   const { user, logout } = useAuth()
   const location = useLocation()
   const avoidDuplicateRoot = (event: MouseEvent<HTMLAnchorElement>) => {
     const target = new URL(event.currentTarget.href)
     if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && target.pathname === location.pathname && target.search === location.search) event.preventDefault()
   }
-  const showBottomNav = location.pathname === '/' || location.pathname === '/discover' || location.pathname === '/account/settings'
-  const discoveryActive = location.pathname === '/discover' || location.pathname === '/search'
+  const showBottomNav = location.pathname === '/' || location.pathname === '/book-lists' || location.pathname === '/account/settings'
+  const discoveryActive = location.pathname.startsWith('/book-lists')
   return <div className={reader ? 'reader-shell' : 'app-shell'}>
     {!reader ? <><a className="skip-link" href="#main-content">跳到正文</a>
     <header className="app-header">
       <Link onClick={avoidDuplicateRoot} className="brand" to="/">Legado Reader</Link>
       <nav className="desktop-nav" aria-label="主导航">
         <NavLink onClick={avoidDuplicateRoot} className="nav-link" to="/" end>书架</NavLink>
-        <Link onClick={avoidDuplicateRoot} className={`nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to={discoverTarget}>发现</Link>
+        <Link onClick={avoidDuplicateRoot} className={`nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to={discoverTarget}>书单</Link>
         <NavLink onClick={avoidDuplicateRoot} className="nav-link" to="/account/settings">设置</NavLink>
       </nav>
       <div className="account-actions">
@@ -33,7 +33,7 @@ export function AccountLayout({ children, reader = false }: { children?: ReactNo
     <main className={reader ? 'reader-main' : `app-main ${showBottomNav ? '' : 'app-main-standalone'}`} id="main-content">{children}</main>
     {showBottomNav && !reader ? <nav className="bottom-nav" aria-label="移动端主导航">
       <NavLink onClick={avoidDuplicateRoot} className="bottom-nav-link" to="/" end><LibraryBig aria-hidden="true" /><span>书架</span></NavLink>
-      <Link onClick={avoidDuplicateRoot} className={`bottom-nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to={discoverTarget}><Compass aria-hidden="true" /><span>发现</span></Link>
+      <Link onClick={avoidDuplicateRoot} className={`bottom-nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to={discoverTarget}><Compass aria-hidden="true" /><span>书单</span></Link>
       <NavLink onClick={avoidDuplicateRoot} className="bottom-nav-link" to="/account/settings"><Settings aria-hidden="true" /><span>设置</span></NavLink>
     </nav> : null}
   </div>

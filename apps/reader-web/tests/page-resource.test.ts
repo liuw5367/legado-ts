@@ -16,8 +16,8 @@ test('settled page reads survive effect cleanup, invalidation reads again and ca
 })
 test('mutation invalidation distinguishes domain queries, positions and source changes', () => {
   assert.deepEqual(mutationDomains('/api/discovery/page', 'POST'), [])
-  assert.deepEqual(mutationDomains('/api/books/a/position', 'POST'), ['home'])
-  assert.deepEqual(mutationDomains('/api/books/a/bookshelf', 'DELETE'), ['home', 'candidates', 'book:a'])
+  assert.deepEqual(mutationDomains('/api/books/a/position', 'POST'), ['home', 'booklist-books'])
+  assert.deepEqual(mutationDomains('/api/books/a/bookshelf', 'DELETE'), ['home', 'groups', 'books'])
   assert.deepEqual(mutationDomains('/api/books/a/toc?refresh=true', 'GET'), [])
   assert.ok(mutationDomains('/api/source-management/actions', 'POST').includes('content'))
 })

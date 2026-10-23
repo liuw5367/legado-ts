@@ -16,6 +16,9 @@ const LoginPage = lazy(() => import('./pages/login.tsx').then((module) => ({ def
 const RegisterPage = lazy(() => import('./pages/register.tsx').then((module) => ({ default: module.RegisterPage })))
 const ResetPasswordPage = lazy(() => import('./pages/reset-password.tsx').then((module) => ({ default: module.ResetPasswordPage })))
 const SearchPage = lazy(() => import('./pages/search.tsx').then((module) => ({ default: module.SearchPage })))
+const BookshelfGroupsPage = lazy(() => import('./pages/bookshelf-groups.tsx').then((module) => ({ default: module.BookshelfGroupsPage })))
+const BookListsPage = lazy(() => import('./pages/book-lists.tsx').then((module) => ({ default: module.BookListsPage })))
+const BookListDetailsPage = lazy(() => import('./pages/book-list-details.tsx').then((module) => ({ default: module.BookListDetailsPage })))
 const DiscoverPage = lazy(() => import('./pages/discover.tsx').then((module) => ({ default: module.DiscoverPage })))
 const SourcesPage = lazy(() => import('./pages/sources.tsx').then((module) => ({ default: module.SourcesPage })))
 const SourceLoginPage = lazy(() => import('./pages/source-login.tsx').then((module) => ({ default: module.SourceLoginPage })))
@@ -54,6 +57,8 @@ const router = createBrowserRouter([
     { path: '/*', element: <PageStack>
       <Route path="/" element={<LazyPage><AccountHomePage /></LazyPage>} />
       <Route path="/search" element={<LazyPage searchBack><SearchPage /></LazyPage>} />
+      <Route path="/book-lists" element={<LazyPage><BookListsPage /></LazyPage>} />
+      <Route path="/book-lists/:listId" element={<LazyPage backTo="/book-lists"><BookListDetailsPage /></LazyPage>} />
       <Route path="/discover" element={<LazyPage><DiscoverPage /></LazyPage>} />
       <Route path="/sources" element={<LazyPage backTo="/account/settings"><SourcesPage /></LazyPage>} />
       <Route path="/sources/:sourceId/login" element={<LazyPage backTo="/sources"><SourceLoginPage /></LazyPage>} />
@@ -63,6 +68,7 @@ const router = createBrowserRouter([
       <Route path="/account/password" element={<LazyPage backTo="/account/settings"><ChangePasswordPage /></LazyPage>} />
       <Route path="/account/settings" element={<LazyPage><SettingsPage /></LazyPage>} />
       <Route path="/account/settings/about" element={<LazyPage backTo="/account/settings"><AboutAppPage /></LazyPage>} />
+      <Route path="/account/settings/bookshelf-groups" element={<LazyPage backTo="/account/settings"><BookshelfGroupsPage /></LazyPage>} />
       <Route path="/account/settings/general" element={<LazyPage backTo="/account/settings"><GeneralSettingsPage /></LazyPage>} />
       <Route path="/account/settings/reading" element={<LazyPage backTo="/account/settings"><ReadingSettingsPage /></LazyPage>} />
       <Route path="/books/:bookId/read" element={<LazyPage viewport backTo="/"><ReaderEntryPage /></LazyPage>} />

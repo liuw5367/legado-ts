@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, rename, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { readBackupZip } from '@legado/reader-backup'
+import { createBackupZip, jsonBytes, parseJson, readBackupZip } from '@legado/reader-backup'
 import { READER_SETTINGS_DEFAULTS } from '../src/reader-settings.ts'
 import { ReaderStorage, editionKey } from '../src/storage.ts'
 
@@ -82,4 +82,25 @@ test('CLI 启动时恢复两个目录改名之间中断留下的 rollback 数据
     await storage.close().catch(() => undefined)
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('CLI 往返保留书单分组与 Web 启动设置', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legado-book-lists-backup-'))
+  const storage = new ReaderStorage({ paths: { dataRoot: join(root, 'data'), cacheRoot: join(root, 'cache') } })
+  try {
+    await storage.initialize()
+    const base = await readBackupZip(await storage.createBackupZip())
+    const groupId = 'a0000000-0000-4000-8000-000000000001'
+    const timestamp = '2026-10-23T00:00:00.000Z'
+    const organization = { lists: [{ id: groupId, userId: 'owner', type: 'shelf_group', name: '科幻', description: '', isPublic: false, customOrder: 0, createdAt: timestamp, updatedAt: timestamp }], items: [] }
+    const files = base.manifest.files.map((file) => ({ path: file.path, category: file.category, data: file.path === 'reader-settings.json' ? jsonBytes({ schemaVersion: 1, revision: 1, updatedAt: timestamp, data: { web: { general: { bookshelfInitialGroup: groupId } } } }) : base.files.get(file.path)! }))
+    files.push({ path: 'book-lists.json', category: 'bookshelf', data: jsonBytes({ schemaVersion: 1, revision: 1, updatedAt: timestamp, data: organization }) })
+    await storage.restoreBackup(createBackupZip(files, { producer: { name: 'reader-web', version: '0.1.0' } }), ['bookshelf', 'settings'])
+    await storage.saveReaderSettings({ ...READER_SETTINGS_DEFAULTS, searchConcurrency: 6 })
+    assert.equal((await storage.getReaderSettings()).searchConcurrency, 6)
+    const exported = await readBackupZip(await storage.createBackupZip())
+    assert.deepEqual(parseJson<{ data: unknown }>(exported, 'book-lists.json').data, organization)
+    const settings = parseJson<{ data: { web: { general: { bookshelfInitialGroup: string } } } }>(exported, 'reader-settings.json')
+    assert.equal(settings.data.web.general.bookshelfInitialGroup, groupId)
+  } finally { await storage.close(); await rm(root, { recursive: true, force: true }) }
 })

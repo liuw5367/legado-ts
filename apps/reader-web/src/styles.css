@@ -657,3 +657,18 @@ a { color: inherit; }
 .reader-status-top > span { min-width: 0; max-width: calc(50% - 6px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reader-status-top > span:last-child { text-align: right; }
 .reader-status-bottom > span { white-space: nowrap; }
+
+/* 书单四格整体沿用列表封面的 3:4 比例，每格独立显示封面。 */
+.book-list-cover { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); width: 48px; height: 64px; flex-shrink: 0; overflow: hidden; border-radius: var(--radius-sm, 4px); }
+.book-list-cover .book-cover { width: 100%; height: 100%; min-width: 0; min-height: 0; border-radius: 0; }
+.book-list-cover-empty { display: grid; place-items: center; background: var(--card); color: var(--muted); }
+.book-list-description { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.organization-choice { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.organization-choice > span:first-of-type { flex: 1; min-width: 0; }
+.organization-choice > span:first-of-type > span { display: block; }
+.organization-textarea { width: 100%; resize: vertical; }
+.organization-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
+.organization-split-actions { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.book-list-detail-row { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.shelf-group-bar { display: flex; gap: 8px; overflow-x: auto; padding-block: 4px; }
+.shelf-group-bar > button { flex-shrink: 0; }

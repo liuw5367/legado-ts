@@ -1,4 +1,5 @@
-import { boolean, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { boolean, check, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, PageCursor, TocBookPatch } from '@legado/source-core'
 import { DEFAULT_READER_SETTINGS_PREFERENCES, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SourceSearchState, type StoredBookMetadata, type StoredCandidate } from '../domain/types.ts'
 
@@ -56,12 +57,48 @@ export const books = readerSchema.table('books', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('books_user_updated_idx').on(table.userId, table.updatedAt)])
 
+export const bookLists = readerSchema.table('book_lists', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull(),
+  type: text('type').$type<'booklist' | 'shelf_group'>().notNull().default('booklist'),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  isPublic: boolean('is_public').notNull().default(false),
+  customOrder: integer('custom_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('book_lists_user_updated_idx').on(t.userId, t.type, t.updatedAt, t.id),
+  index('book_lists_user_order_idx').on(t.userId, t.type, t.customOrder, t.createdAt, t.id),
+  uniqueIndex('book_lists_group_name_idx').on(t.userId, t.name).where(sql`${t.type} = 'shelf_group'`),
+  check('book_lists_type_check', sql`${t.type} in ('booklist', 'shelf_group')`),
+  check('book_lists_name_check', sql`char_length(trim(${t.name})) between 1 and case when ${t.type} = 'shelf_group' then 30 else 100 end`),
+  check('book_lists_description_check', sql`char_length(${t.description}) <= 2000`),
+  check('book_lists_order_check', sql`${t.customOrder} >= 0`),
+  check('book_lists_group_fields_check', sql`${t.type} <> 'shelf_group' or (${t.name} not in ('全部', '默认') and ${t.description} = '' and not ${t.isPublic})`),
+])
+
+export const bookListItems = readerSchema.table('book_list_items', {
+  userId: uuid('user_id').notNull(),
+  bookListId: uuid('book_list_id').notNull(),
+  bookId: uuid('book_id').notNull(),
+  description: text('description').notNull().default(''),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('book_list_items_identity_idx').on(t.userId, t.bookListId, t.bookId),
+  index('book_list_items_order_idx').on(t.userId, t.bookListId, t.addedAt, t.bookId),
+  index('book_list_items_book_idx').on(t.userId, t.bookId),
+  check('book_list_items_description_check', sql`char_length(${t.description}) <= 2000`),
+])
+
 export const bookshelf = readerSchema.table('bookshelf', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull(),
   bookId: uuid('book_id').notNull(),
+  groupId: uuid('group_id'),
   addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex('bookshelf_user_book_idx').on(table.userId, table.bookId), index('bookshelf_user_added_idx').on(table.userId, table.addedAt)])
+}, (table) => [uniqueIndex('bookshelf_user_book_idx').on(table.userId, table.bookId), index('bookshelf_user_added_idx').on(table.userId, table.addedAt), index('bookshelf_user_group_idx').on(table.userId, table.groupId)])
 
 export const bookEditions = readerSchema.table('book_editions', {
   id: uuid('id').defaultRandom().primaryKey(),

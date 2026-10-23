@@ -64,10 +64,11 @@ export function SettingsPage() {
     </section>
     <nav className="settings-entry-list" aria-label="设置选项">
       <SettingsEntry to="/sources" title="书源管理" description="导入、启用与管理书源" />
+      <SettingsEntry to="/account/settings/bookshelf-groups" title="书架分组" description="管理分组、顺序和启动显示分组" />
       <SettingsEntry to="/account/settings/general" title="通用设置" description="设置书架排序等应用偏好" />
       <SettingsEntry to="/account/settings/reading" title="阅读设置" description="调整字号、行距、阅读模式和正文边距" />
       <SettingsEntry title="导入数据" description={busy ? '正在校验备份…' : '选择 ZIP 备份，恢复所选内容'} icon={<Upload aria-hidden="true" />} onClick={chooseBackup} disabled={busy} />
-      <SettingsEntry title="导出数据" description={busy ? '正在导出…' : '下载书架、阅读记录、搜索记录、书源和设置'} icon={<Download aria-hidden="true" />} onClick={exportData} disabled={busy} />
+      <SettingsEntry title="导出数据" description={busy ? '正在导出…' : '下载书架、书单、分组、阅读记录、搜索记录、书源和设置'} icon={<Download aria-hidden="true" />} onClick={exportData} disabled={busy} />
       <SettingsEntry to="/account/settings/about" title="关于应用" description="应用版本与项目地址" />
     </nav>
     <input ref={inputRef} className="sr-only" type="file" accept=".zip,application/zip" onChange={onFileChange} />

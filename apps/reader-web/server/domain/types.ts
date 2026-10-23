@@ -131,7 +131,7 @@ export interface SearchHistoryItem {
 }
 
 export interface HomeSnapshot {
-  bookshelf: Array<{ book: StoredBook; edition: StoredEdition } & ({ position: StoredPosition } | Record<never, never>)>
+  bookshelf: Array<{ book: StoredBook; edition: StoredEdition; groupId?: string | null } & ({ position: StoredPosition } | Record<never, never>)>
   reading: Array<{ book: StoredBook; edition: StoredEdition; position: StoredPosition }>
   searchHistory: SearchHistoryItem[]
 }
@@ -176,6 +176,7 @@ export type ReadingMode = 'scroll' | 'paged'
 export type BookshelfSortMode = 'addedAt' | 'lastReadAt'
 
 export interface GeneralSettings {
+  bookshelfInitialGroup?: string
   bookshelfSort: BookshelfSortMode
 }
 
@@ -229,7 +230,7 @@ export const DEFAULT_READER_SETTINGS = {
   marginRight: 16,
   marginBottom: 16,
   marginLeft: 16,
-  general: { bookshelfSort: 'addedAt' as BookshelfSortMode },
+  general: { bookshelfSort: 'addedAt' as BookshelfSortMode, bookshelfInitialGroup: 'all' },
   pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous' as PageTapAction, centerBottomAction: 'next' as PageTapAction },
 }
 

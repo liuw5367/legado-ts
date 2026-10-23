@@ -1,3 +1,4 @@
+import { applyOrganizationCommand } from '../../server/domain/book-organization.ts'
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
@@ -32,6 +33,8 @@ const books = new Map()
 const editions = new Map()
 const positions = new Map()
 const bookshelf = new Set()
+const organizations = new Map()
+const shelfGroups = new Map()
 const searches = new Map()
 let discoveryFailure = true
 let discoveryBookFailure = true
@@ -256,7 +259,7 @@ function homeSnapshot() {
   const visibleBooks = [...books.values()].map(displayBook).filter((value) => value !== undefined)
   const shelfItems = visibleBooks.filter(({ book }) => bookshelf.has(book.id)).map(({ book, edition }) => {
     const position = positionFor(book.id, edition.editionKey)
-    return position === null ? { book, edition } : { book, edition, position }
+    return position === null ? { book, edition, groupId: shelfGroups.get(book.id) ?? null } : { book, edition, position, groupId: shelfGroups.get(book.id) ?? null }
   })
   const seenReadingBooks = new Set()
   const readingItems = [...positions.values()].sort((left, right) => right.lastReadAt.localeCompare(left.lastReadAt)).flatMap((position) => {
@@ -399,7 +402,44 @@ async function handleAuth(request, response, url) {
   return true
 }
 
+async function handleOrganization(request, response, url) {
+  const path = url.pathname; const method = request.method ?? 'GET'
+  if (!path.startsWith('/api/book-lists') && !path.startsWith('/api/bookshelf-groups') && !path.endsWith('/bookshelf/group')) return false
+  if (![ACCESS_TOKEN, ACCESS_TOKEN + '-second'].some((token) => request.headers.authorization === `Bearer ${token}`)) { json(response, { error: { message: '需要登录' } }, 401); return true }
+  const second = request.headers.authorization === `Bearer ${ACCESS_TOKEN}-second`
+  const userId = second ? session(true).user.id : USER_ID
+  const organization = organizations.get(userId) ?? { lists: [], items: [] }
+  const state = { ...structuredClone(organization), shelf: new Map(second ? [] : [...bookshelf].map((id) => [id, shelfGroups.get(id) ?? null])), bookIds: new Set(second ? [] : books.keys()) }
+  const parts = path.split('/'); const isGroups = parts[2] === 'bookshelf-groups'
+  const type = isGroups ? 'shelf_group' : 'booklist'
+  const members = (listId) => state.items.filter((row) => row.bookListId === listId).sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+  const groupRows = () => state.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder).map((row) => ({ ...row, bookCount: [...state.shelf.values()].filter((id) => id === row.id).length }))
+  if (method === 'GET') {
+    if (isGroups) json(response, { groups: groupRows(), ungroupedCount: [...state.shelf.values()].filter((id) => id === null).length })
+    else if (parts.length === 3) json(response, { lists: state.lists.filter((row) => row.type === 'booklist').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((row) => ({ ...row, bookCount: members(row.id).length, coverBooks: members(row.id).slice(0, 4).map((item) => books.get(item.bookId)), containsBook: members(row.id).some((item) => item.bookId === url.searchParams.get('bookId')) })) })
+    else { const list = state.lists.find((row) => row.id === parts[3] && row.type === 'booklist'); if (!list) { json(response, { error: { message: '书单不存在' } }, 404); return true } json(response, { list, items: members(list.id).map((row) => ({ ...row, book: books.get(row.bookId), edition: editions.get(books.get(row.bookId)?.activeEditionKey), position: positions.get(row.bookId) })) }) }
+    return true
+  }
+  const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? await readJson(request) : {}
+  const createdId = randomUUID()
+  let command
+  if (path.endsWith('/bookshelf/group')) command = { kind: 'assign', bookId: parts[3], groupId: body.groupId }
+  else if (parts[3] === 'order') command = { kind: 'order', groupIds: body.groupIds }
+  else if (parts[4] === 'books') command = { kind: method === 'PUT' ? 'add' : method === 'DELETE' ? 'remove' : method === 'PATCH' ? 'review' : 'move', id: parts[3], bookId: parts[5], ...body }
+  else if (method === 'POST') command = { kind: 'create', id: createdId, type, ...body }
+  else command = { kind: method === 'DELETE' ? 'delete' : 'edit', type, id: parts[3], ...body }
+  try { applyOrganizationCommand(state, userId, command) } catch (error) { json(response, { error: { message: error.message } }, error.status ?? 400); return true }
+  organizations.set(userId, { lists: state.lists, items: state.items })
+  if (!second) { bookshelf.clear(); shelfGroups.clear(); for (const [id, group] of state.shelf) { bookshelf.add(id); shelfGroups.set(id, group) } }
+  const currentSettings = second ? secondSettings : settings
+  if (command.kind === 'delete' && currentSettings.general.bookshelfInitialGroup === command.id) currentSettings.general.bookshelfInitialGroup = 'all'
+  const created = state.lists.find((row) => row.id === createdId)
+  json(response, { ok: true, list: created ?? state.lists.find((row) => row.id === parts[3]), group: created, groups: groupRows(), listUpdatedAt: state.lists.find((row) => row.id === parts[3])?.updatedAt }, method === 'POST' && created ? 201 : 200)
+  return true
+}
+
 async function handleApi(request, response, url) {
+  if (await handleOrganization(request, response, url)) return
   // 第二账号使用空账号数据，绝不读取或修改第一账号的书籍与书源。
   if (request.headers.authorization === `Bearer ${ACCESS_TOKEN}-second`) {
     const path = url.pathname
@@ -582,7 +622,7 @@ async function handleApi(request, response, url) {
     if ((method === 'PUT' || method === 'DELETE') && tail === 'bookshelf') {
       if (book === undefined) { json(response, { error: { code: 'not-found', message: '测试书籍不存在' } }, 404); return }
       if (method === 'PUT') bookshelf.add(bookId)
-      else bookshelf.delete(bookId)
+      else { bookshelf.delete(bookId); shelfGroups.delete(bookId) }
       json(response, { ok: true })
       return
     }
@@ -631,6 +671,7 @@ const faults = new Map()
 const secondSettings = { ...structuredClone(settings), userId: session(true).user.id }
 const initialState = structuredClone({ sources, books, editions, positions, bookshelf, settings })
 function resetFixture() {
+  organizations.clear(); shelfGroups.clear()
   sources.splice(0, sources.length, ...structuredClone(initialState.sources))
   for (const [target, original] of [[books, initialState.books], [editions, initialState.editions], [positions, initialState.positions]]) { target.clear(); for (const [key, value] of structuredClone(original)) target.set(key, value) }
   bookshelf.clear(); for (const id of initialState.bookshelf) bookshelf.add(id)

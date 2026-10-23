@@ -1,5 +1,6 @@
+import { bookOrganizationBackupSchema } from '../shared/book-lists.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { createBackupZip, editionKey as sharedEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile, type BackupRecordCounts } from '@legado/reader-backup'
+import { createBackupZip, validateBookOrganizationData, editionKey as sharedEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile, type BackupRecordCounts } from '@legado/reader-backup'
 import { importSources, sourceDefinitionFingerprint, type NormalizedSource } from '@legado/source-core'
 import type { BookCandidate, JsonObject } from '@legado/source-core'
 import type { ReaderBackupSnapshot, ReaderRepository } from './db/repository.ts'
@@ -83,9 +84,10 @@ async function readValidatedBackup(input: Uint8Array): Promise<BackupArchive> {
 
 function snapshotToFiles(snapshot: ReaderBackupSnapshot): BackupFile[] {
   const files: BackupFile[] = []
-  const add = (path: string, value: unknown): void => { files.push({ path, data: jsonBytes(envelope(value)), category: path.startsWith('books/') ? 'bookshelf' : path === 'bookshelf.json' ? 'bookshelf' : path === 'reading-history.json' ? 'reading' : path === 'search-history.json' ? 'search' : path === 'reader-settings.json' ? 'settings' : 'sources' }) }
+  const add = (path: string, value: unknown): void => { files.push({ path, data: jsonBytes(envelope(value)), category: path.startsWith('books/') ? 'bookshelf' : (path === 'bookshelf.json' || path === 'book-lists.json') ? 'bookshelf' : path === 'reading-history.json' ? 'reading' : path === 'search-history.json' ? 'search' : path === 'reader-settings.json' ? 'settings' : 'sources' }) }
   const definitions: StoredSourceDefinition[] = snapshot.sources.map((item) => ({ sourceId: item.source.sourceId, fingerprint: item.source.fingerprint, rawText: rawSourceText(item.source.rawSource, item.source.normalizedSource), ...(item.deleted === true ? { deleted: true } : {}) }))
   const sourceState = Object.fromEntries(snapshot.sources.map((item) => [item.source.sourceId, { fingerprint: item.source.fingerprint, enabled: item.source.enabled, ...(item.deleted === true ? { deleted: true } : {}), enabledExplore: sourceField(item.source.normalizedSource, 'enabledExplore') !== false, customOrder: readInteger(sourceField(item.source.normalizedSource, 'customOrder'), 0), weight: readInteger(sourceField(item.source.normalizedSource, 'weight'), 0), searchHealth: { fingerprint: item.source.fingerprint, consecutiveFailures: 0 } }]))
+  if (snapshot.organization !== undefined) add('book-lists.json', snapshot.organization)
   add('bookshelf.json', snapshot.bookshelf.map((item) => ({ ...item, updatedAt: item.addedAt })))
   add('reading-history.json', readingRecords(snapshot))
   add('search-history.json', snapshot.searchHistory.map(toCliSearchHistory))
@@ -147,9 +149,14 @@ async function parseSnapshot(archive: BackupArchive, userId: string, currentSett
   const searchHistory = (searchData as CliSearchHistoryEntry[]).map((entry) => toSearchHistory(entry))
   const webSettings = readData<Record<string, unknown>>(archive, 'reader-settings.json', {})
   const importedSettings = isRecord(webSettings.web) ? validateWebSettings(webSettings.web, userId) : currentSettings
-  const bookshelf = readData<Array<{ bookId: string; addedAt: string }>>(archive, 'bookshelf.json', [])
+  const bookshelf = readData<Array<{ bookId: string; addedAt: string; groupId?: string | null }>>(archive, 'bookshelf.json', [])
   if (!Array.isArray(bookshelf) || bookshelf.some((item) => !isRecord(item) || !isUuid(item.bookId) || !isIsoDateString(item.addedAt)) || new Set(bookshelf.map((item) => item.bookId)).size !== bookshelf.length || bookshelf.some((item) => !bookIds.has(item.bookId))) throw new Error('书架数据格式无效')
-  return { sources, settings: { ...currentSettings, ...importedSettings, userId }, books, bookshelf: bookshelf.map((item) => ({ bookId: item.bookId, addedAt: item.addedAt })), positions, searchHistory }
+  const rawOrganization = archive.files.has('book-lists.json') ? readData<unknown>(archive, 'book-lists.json', {}) : undefined
+  if (isRecord(rawOrganization) && Array.isArray(rawOrganization.lists)) { let index = 0; for (const row of rawOrganization.lists) if (isRecord(row) && row.type === 'shelf_group') { if (row.customOrder === undefined) row.customOrder = index; index++ } }
+  const organization = rawOrganization === undefined ? undefined : bookOrganizationBackupSchema.parse(rawOrganization)
+  if (organization) validateBookOrganizationData(organization, bookIds, bookshelf)
+  if (organization) { for (const row of organization.lists) row.userId = userId; for (const row of organization.items) row.userId = userId }
+  return { ...(organization === undefined ? {} : { organization }), sources, settings: { ...currentSettings, ...importedSettings, userId }, books, bookshelf: bookshelf.map((item) => ({ bookId: item.bookId, addedAt: item.addedAt, groupId: item.groupId ?? null })), positions, searchHistory }
 }
 
 function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapshot['books'] {
@@ -272,7 +279,7 @@ function validateWebSettings(value: Record<string, unknown>, userId: string): Re
   if (!isRecord(general) || (general.bookshelfSort !== undefined && general.bookshelfSort !== 'addedAt' && general.bookshelfSort !== 'lastReadAt')) throw new Error('通用设置格式无效')
   const pageTapZones = readPageTapZones(value.pageTapZones)
   if ((theme !== 'system' && theme !== 'light' && theme !== 'dark') || (readingMode !== 'scroll' && readingMode !== 'paged') || !isIntegerInRange(fontSize, 15, 28) || typeof lineHeight !== 'number' || lineHeight < 1.4 || lineHeight > 2.6 || !isIntegerInRange(marginTop, 0, 64) || !isIntegerInRange(marginRight, 0, 64) || !isIntegerInRange(marginBottom, 0, 64) || !isIntegerInRange(marginLeft, 0, 64) || !isIsoDateString(value.updatedAt)) throw new Error('阅读设置格式无效')
-  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, general: { bookshelfSort: general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort }, pageTapZones, updatedAt: value.updatedAt }
+  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, general: { bookshelfSort: general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' }, pageTapZones, updatedAt: value.updatedAt }
 }
 function readPageTapZones(value: unknown): ReaderSettings['pageTapZones'] {
   if (value === undefined) return DEFAULT_READER_SETTINGS.pageTapZones

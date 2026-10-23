@@ -71,6 +71,13 @@
       "when": 1792483200000,
       "tag": "0009_reader_settings_json",
       "breakpoints": false
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792713600000,
+      "tag": "0010_book_lists",
+      "breakpoints": false
     }
   ]
 }

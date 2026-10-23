@@ -10,6 +10,7 @@
     search-history.json
     reading-history.json
     bookshelf.json
+    book-lists.json（导入书单扩展时存在）
     books/<bookId>/
       book.json
       sources.json
@@ -50,3 +51,7 @@
 ## 一致性和恢复
 
 应用单进程写入同一数据目录，使用 `writer.lock` 排除第二个写实例。启动时执行只读一致性检查：书架和阅读记录引用的书籍必须存在，活动版本必须仍在已知来源集合中，缓存身份不匹配按未命中处理。可选的书籍文件损坏会备份为 `.corrupt-*.json` 并从首页跳过，不阻塞其他书籍。退出时先取消并等待活动工作流、写队列和缓存索引完成，再删除当前实例的锁。
+
+## 跨端书单保留
+
+CLI 保留 Web 备份中的书单、分组和评价扩展，导出时原样携带，不提供编辑界面。旧备份恢复不会删除本地书单依赖的书籍，身份冲突时拒绝恢复。设置文件包含 web/cli 两端文档时，CLI 只更新自己的部分。文件格式、分类与兼容边界见[共享备份契约](../../../packages/reader-backup/README.md)。

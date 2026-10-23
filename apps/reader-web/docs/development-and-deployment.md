@@ -35,6 +35,8 @@ pnpm --filter @legado/reader-web dev
 
 书籍来源缓存依赖 `0006_book_source_candidates.sql`，应先执行迁移再部署新版应用。迁移只新增表，旧版应用回滚可保留缓存表。
 
+书单和完整书架分组依赖 `0010_book_lists.sql`，新增两个表、书架可空分组列及 RLS。先迁移再部署；回滚应用代码可保留新增数据结构，不删除用户书单。
+
 迁移是显式操作；开发和部署脚本不会在每次启动或构建时自动写数据库。
 
 ## 检查与构建
@@ -47,7 +49,7 @@ pnpm --filter @legado/reader-web test:db
 pnpm run build:web:vercel
 ```
 
-`test:db` 默认检查迁移文件。真实 PostgreSQL 集成测试需要显式设置 `READER_WEB_TEST_DATABASE_URL`，只使用独立测试数据库；它执行全部迁移并创建临时受限角色，以验证缓存 upsert、RLS 和认证 API，结束后删除角色。未设置时跳过该集成测试，不读取项目 DATABASE_URL。
+`test:db` 串行运行共享数据库的迁移和集成用例，默认检查迁移文件。真实 PostgreSQL 集成测试需要显式设置 `READER_WEB_TEST_DATABASE_URL`，只使用独立测试数据库；它执行全部迁移并创建临时受限角色，以验证缓存 upsert、RLS、认证 API、书单分组与移动故障回滚，结束后删除角色。未设置时跳过该集成测试，不读取项目 DATABASE_URL。
 
 `build:web:vercel` 生成根目录 `public/index.html` 与 `public/static/`，这些是构建产物，不手动提交。`vercel.json` 把 `/api/*` 交给 Hono，其余深链回退到 `index.html`。
 
