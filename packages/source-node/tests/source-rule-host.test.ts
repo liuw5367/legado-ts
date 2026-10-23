@@ -1078,6 +1078,46 @@ test('java.getElements 提供 Android 书源使用的节点链式 API', async ()
   assert.equal(replaced.value, '新内容')
 })
 
+test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, `@js:
+    var before = redirectUrl;
+    var localResult = java.setLocal('token', 'ok');
+    var contentResult = java.setContent('<p>替换内容</p>', 'https://fixture.invalid/base/');
+    var afterContent = redirectUrl;
+    var baseResult = java.setBaseUrl('https://fixture.invalid/other/');
+    var redirectResult = java.setRedirectUrl('https://cdn.fixture.invalid/final/index');
+    var invalidResult = java.setRedirectUrl('not-a-url');
+    var dataResult = java.setRedirectUrl('data:text/plain;base64,QQ==');
+    JSON.stringify({
+      localIsJava: localResult === java,
+      localValue: java.getLocal('token'),
+      contentIsJava: contentResult === java,
+      baseIsJava: baseResult === java,
+      before: before,
+      afterContent: afterContent,
+      baseUrl: baseUrl,
+      redirectUrl: redirectUrl,
+      redirect: redirectResult && redirectResult.url,
+      invalidSame: invalidResult === redirectResult,
+      dataSame: dataResult === redirectResult
+    })`, '<p>原始内容</p>')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    localIsJava: true,
+    localValue: 'ok',
+    contentIsJava: true,
+    baseIsJava: true,
+    before: 'https://fixture.invalid',
+    afterContent: 'https://fixture.invalid',
+    baseUrl: 'https://fixture.invalid/other/',
+    redirectUrl: 'https://cdn.fixture.invalid/final/index',
+    redirect: 'https://cdn.fixture.invalid/final/index',
+    invalidSame: true,
+    dataSame: true,
+  })
+})
+
 test('java.ajaxAll 返回可调用 body、code 和 url 的响应对象', async () => {
   const calls: unknown[] = []
   const host = new SourceRuleHost({ request: async (input) => {
