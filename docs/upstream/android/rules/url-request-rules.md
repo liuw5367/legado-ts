@@ -42,19 +42,19 @@ https://example.com/search,{
 
 | 字段 | 当前语义 |
 | --- | --- |
-| `method` | `POST`、`HEAD` 明确支持；其他值回退 GET |
+| `method` | Android GSON 的 String 字段先把数字/布尔/JSON 对象转成文本，再只把 `POST`、`HEAD` 作为专用方法；其他值回退 GET |
 | `headers` | 合并到请求头；帮助文档要求 key 大小写按原文保留 |
 | `body` | 字符串、JSON 对象或 JSON 数组最终转为请求体 |
 | `origin` | UrlOption 中仍可出现的历史字段；当前 AnalyzeUrl 不使用它，导入导出应保留原值 |
-| `type` | 二进制/媒体类型提示；非字符串响应路径使用 |
-| `charset` | 参数编码字符集；`escape` 使用 URL escape |
-| `retry` | 请求重试次数，未配置为 0 |
+| `type` | 只要 GSON String 字段不是 `null` 就切换到十六进制字节响应；空字符串和空白字符串也属于已配置值，标量/对象转换保留 |
+| `charset` | 参数编码字符集；空字符串按 UTF-8，只有精确小写 `escape` 使用 URL escape；空白字符串保留并在字符集解析阶段失败，非法字符集明确报告能力错误 |
+| `retry` | HTTP 非成功/非重定向响应的重试次数，未配置或非数字 primitive 为 0；Android `IntJsonDeserializer` 按 `Number.toInt()` 取整，TypeScript 还受请求预算限制 |
 | `webView` | 非空且不为 `false`/`"false"` 时启用 WebView |
 | `webJs` | WebView 页面加载后执行的脚本 |
 | `bodyJs` | 普通 HTTP 响应返回后处理 body 的脚本 |
 | `timeout` | 有效正整数毫秒；无效值忽略 |
 | `followRedirects` | 支持布尔、`0/1`、`false/true` 字符串；其他值忽略 |
-| `dnsIp` | 当前目标域名使用的 IPv4/IPv6 字面量列表；`resolveIp` 是旧别名 |
+| `dnsIp` | 当前目标域名使用的 IPv4/IPv6 字面量列表；`resolveIp` 是旧别名，GSON String 字段的标量值先转成文本 |
 | `js` | URL 选项解析后执行，结果写回 URL；脚本的 `baseUrl` 是请求源站 origin，`result` 是选项处理前的绝对 URL |
 | `serverID` | 服务端路由/节点提示；实际由 WebDAV 远端存储消费，作为 WebDAV 服务器配置 ID（`WebDav.fromPath` 解析 URL 中的 `serverID` 选择授权配置，缺失时直接失败） |
 | `webViewDelayTime` | WebView 加载后的非负等待毫秒数 |
@@ -63,7 +63,7 @@ Android 先尝试严格 JSON，再尝试 Gson 宽松解析；只有宽松解析�
 
 Android 在解析初始 URL 后把 `baseUrl` 更新为源站 origin，再执行 URL 选项 `js`；之后的 `bodyJs` 沿用这个 origin，即使选项脚本改写 URL 或 HTTP 发生重定向。TypeScript 仍提供 `redirectUrl` 绑定作为宿主扩展，但它不是 Android `AnalyzeUrl.evalJS` 的通用绑定。
 
-`proxy` 不是 `UrlOption` 的独立字段。Android 从已合并的请求头中读取特殊的 `proxy` 值并移出普通 Header；TypeScript `SourceRequestRuntime` 也会将它转为 `execution.proxy`，Node 当前不支持代理时明确报告能力缺失，不得把它作为普通远端请求头发送。`headers` 的键名要原样保留，因为当前 `Content-Type` 判断存在大小写敏感路径。
+`proxy` 不是 `UrlOption` 的独立字段。Android 在构造 `AnalyzeUrl` 时只从源级 Header Map 的小写 `proxy` 键读取代理并移出普通 Header，随后应用 URL options 的 `headers`；URL options 中再次出现的 `proxy` 仍是普通请求头。TypeScript `SourceRequestRuntime` 保留这个顺序，把源级代理放到 `execution.proxy`，把 URL options 的 `proxy` 留在 Header；Node 宿主再按自身策略校验协议、认证和 SSRF，不得静默直连。`headers` 的键名要原样保留，因为当前 `Content-Type` 判断存在大小写敏感路径。
 
 ### `concurrentRate`
 
@@ -141,6 +141,7 @@ TypeScript 的 JS bridge 首层子请求会重新执行动态 `source.header`，
 - `dnsIp` 只能包含 IPv4/IPv6 字面量，可用逗号分隔；域名、非法八位组和带 zone 的地址拒绝；
 - `dnsIp` 与 `proxy` 同时配置直接报错，不能静默直连；
 - `timeout` 必须是有效正整数并受 HTTP 客户端上限约束；
+- `retry` 只接受 Android Gson `IntJsonDeserializer` 可读取的数字 primitive；负数按 0 次重试，小数按 Java `Number.toInt()` 截断；TypeScript 使用 `maxRequests - 1` 作为本次调用的重试上限，既保留大多数书源配置，又不允许重试绕过请求预算；
 - 未显式配置时沿用宿主默认 timeout、重试和重定向策略；
 - AbortSignal 取消必须立即传播到 HTTP、解析器和脚本运行时。
 

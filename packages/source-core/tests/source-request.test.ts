@@ -153,6 +153,110 @@ test('Android 不识别的 URL method 回退为 GET', async () => {
   assert.equal(result.status, 'success')
 })
 
+test('URL option String 字段按 Android Gson 规则接收标量和 JSON 对象', async () => {
+  const source = await importFixture()
+  const plans: RequestPlan[] = []
+  const encoding = {
+    encode: (value: string, charset = 'utf-8') => {
+      if (charset !== 'utf-8') throw new Error(`unsupported charset: ${charset}`)
+      return new TextEncoder().encode(value)
+    },
+    decode: (bytes: Uint8Array) => new TextDecoder().decode(bytes),
+  }
+  const runtime = new SourceRequestRuntime({
+    network: {
+      request: async (plan) => {
+        plans.push(plan)
+        return { ...okResponse(plan.url), bytes: new Uint8Array([0, 255]) }
+      },
+    },
+    encoding,
+  })
+
+  await runtime.requestRaw(source, '/method,{"method":123}')
+  assert.equal(plans[0]?.method, 'GET', '数字 method 应先按 Gson String 转换，再按 Android 回退 GET')
+
+  const binary = await runtime.requestRaw(source, '/binary,{"type":0}')
+  assert.equal(plans[1]?.responseType, 'bytes')
+  assert.equal(new TextDecoder().decode(binary.bytes), '00ff')
+
+  await runtime.requestRaw(source, '/blank-type,{"type":"   "}')
+  assert.equal(plans[2]?.responseType, 'bytes', 'Gson 直接写入 String 字段后，非 null 的空白 type 仍切换到二进制响应')
+
+  await runtime.requestRaw(source, '/dns,{"resolveIp":123}')
+  assert.equal(plans[3]?.execution.dnsIp, '123', 'resolveIp 别名也按 Gson String 字段转换')
+
+  await assert.rejects(
+    () => runtime.requestRaw(source, '/charset,{"charset":123}'),
+    /不支持 123 编码/,
+    '非字符集数字必须在请求前报告能力错误',
+  )
+  assert.equal(plans.length, 4)
+
+  await assert.rejects(
+    () => runtime.requestRaw(source, '/charset-case?q=中文,{"charset":"ESCAPE"}'),
+    /不支持 ESCAPE 编码/,
+    'Android 只把精确小写 escape 视为 URL escape，其他大小写必须进入字符集解析',
+  )
+
+  await assert.rejects(
+    () => runtime.requestRaw(source, '/dns-blank,{"dnsIp":"   "}'),
+    /dnsIp must contain/,
+    '空白 dnsIp 不能被静默当成未配置，Android 会在 DNS 构造阶段失败',
+  )
+})
+
+test('followRedirects 只接受 Android 定义的布尔值，retry 受请求预算约束', async () => {
+  const source = await importFixture()
+  const plans: RequestPlan[] = []
+  let calls = 0
+  const runtime = new SourceRequestRuntime({
+    network: {
+      request: async (plan) => {
+        plans.push(plan)
+        calls += 1
+        return { ...okResponse(plan.url), status: 503 }
+      },
+    },
+    encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) },
+  })
+
+  await runtime.requestRaw(source, '/redirect,{"followRedirects":"false"}')
+  assert.equal(plans[0]?.followRedirects, false)
+  await runtime.requestRaw(source, '/invalid-redirect,{"followRedirects":"yes"}')
+  assert.equal(plans[1]?.followRedirects, true, '非法值应回到 OkHttp 默认跟随重定向')
+
+  await runtime.requestRaw(source, '/retry,{"retry":99}', {}, undefined, { maxRequests: 3 })
+  assert.equal(calls, 5, '前两次请求各自一次，预算为 3 的重试请求再执行两次')
+  assert.equal(plans.at(-1)?.budget.maxRequests, 3)
+
+  await runtime.requestRaw(source, '/retry-string,{"retry":"2"}')
+  assert.equal(calls, 6, 'Android IntJsonDeserializer 不接受字符串 retry，应回到 0 次重试')
+
+  await runtime.requestRaw(source, '/retry-float,{"retry":2.5}', {}, undefined, { maxRequests: 3 })
+  assert.equal(calls, 9, 'Android Number.toInt() 会把小数 retry 截断为 2，并受预算限制')
+})
+
+test('proxy 只从源级 lowercase Header 提取，URL options 的 proxy 保持普通 Header', async () => {
+  const source = await importFixture({ header: JSON.stringify({ proxy: 'http://source-proxy.invalid:8080', 'X-Source': 'yes' }) })
+  let plan: RequestPlan | undefined
+  const runtime = new SourceRequestRuntime({
+    network: {
+      request: async (value) => {
+        plan = value
+        return okResponse(value.url)
+      },
+    },
+    encoding: { encode: (value) => new TextEncoder().encode(value), decode: (bytes) => new TextDecoder().decode(bytes) },
+  })
+
+  await runtime.requestRaw(source, '/proxy,{"headers":{"proxy":"http://option-proxy.invalid:8080","X-Option":"yes"}}')
+  assert.equal(plan?.execution.proxy, 'http://source-proxy.invalid:8080')
+  assert.equal(plan?.headers.proxy, 'http://option-proxy.invalid:8080')
+  assert.equal(plan?.headers['X-Source'], 'yes')
+  assert.equal(plan?.headers['X-Option'], 'yes')
+})
+
 test('URL option 的 webView 按 Android 的非通用真假规则判断', async () => {
   const disabledValues: unknown[] = [undefined, null, '', false, 'false']
   for (const value of disabledValues) {

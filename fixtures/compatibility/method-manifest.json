@@ -1951,8 +1951,8 @@
         "packages/source-core/src/runtime/request-plan.ts",
         "packages/source-core/src/workflows/source-request.ts"
       ],
-      "implementation": "partial",
-      "verification": "ts-diff",
+      "implementation": "implemented",
+      "verification": "ts-passed",
       "feasibility": "fixable",
       "decision": "fix",
       "divergences": [
@@ -1979,8 +1979,8 @@
           "signature": "method",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2048,8 +2048,8 @@
           "signature": "charset",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2094,8 +2094,8 @@
           "signature": "followRedirects",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2117,8 +2117,8 @@
           "signature": "retry",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2140,8 +2140,8 @@
           "signature": "dnsIp",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2163,8 +2163,8 @@
           "signature": "proxy",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [
@@ -2186,8 +2186,8 @@
           "signature": "type",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "ts-diff",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "fixable",
           "decision": "fix",
           "fixtures": [

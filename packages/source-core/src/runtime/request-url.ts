@@ -58,7 +58,7 @@ function encodeQuery(value: string, charset: string | undefined, encodeCharset: 
   if (isSafeQuery(value)) return value
   return [...value].map((character) => {
     if (querySafeCharacters.has(character)) return character
-    if (charset?.toLowerCase() === 'escape') {
+    if (charset === 'escape') {
       const codePoint = character.codePointAt(0)!
       if (codePoint <= 0xff) return `%${codePoint.toString(16).padStart(2, '0').toUpperCase()}`
       const units = character.length === 2 ? [character.charCodeAt(0), character.charCodeAt(1)] : [codePoint]

@@ -109,6 +109,25 @@ function androidToString(value: unknown): string {
   return String(value)
 }
 
+/**
+ * 对齐 Android GSON 的 StringJsonDeserializer：URL options 的 String 字段
+ * 接收数字/布尔值时先转为文本；对象和数组保留 JSON 文本，而不是 JS 的
+ * `[object Object]`。这一步只作用于已解析的 options DTO，不执行任意脚本。
+ */
+function androidStringOption(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value)
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value) ?? String(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
 function unwrapCapturedBindings(value: unknown, context: RequestScriptContext | undefined): unknown {
   const names = context?.captureBindings
   if (names === undefined || names.length === 0) return value
@@ -192,9 +211,10 @@ function getHeader(headers: Readonly<Record<string, string>> | undefined, name: 
   return value
 }
 
-function withoutHeader(headers: Readonly<Record<string, string>> | undefined, name: string): Readonly<Record<string, string>> | undefined {
+/** Android only treats the lowercase source-header key `proxy` as a proxy hint. */
+function withoutExactHeader(headers: Readonly<Record<string, string>> | undefined, name: string): Readonly<Record<string, string>> | undefined {
   if (headers === undefined) return undefined
-  const result = Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== name.toLowerCase()))
+  const result = Object.fromEntries(Object.entries(headers).filter(([key]) => key !== name))
   return Object.keys(result).length === 0 ? undefined : result
 }
 
@@ -212,6 +232,12 @@ function optionInteger(value: unknown, minimum = 0, maximum = Number.MAX_SAFE_IN
       ? Number(value.trim())
       : NaN
   return Number.isSafeInteger(number) && number >= minimum && number <= maximum ? number : undefined
+}
+
+/** Android GSON 的 IntJsonDeserializer 只接受 JSON 数字，并按 Java Number.toInt() 取整。 */
+function androidIntOption(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.trunc(value) | 0
 }
 
 /** Android UrlOption.useWebView() treats only null, empty string, false and "false" as disabled. */
@@ -237,7 +263,7 @@ function isValidFormEncoded(input: string): boolean {
 function encodedFormCharacter(value: string, codec: CharsetCodec, charset: string | undefined): string {
   if (value === ' ') return '+'
   if (formSafe(value)) return value
-  if (charset?.toLowerCase() === 'escape') {
+  if (charset === 'escape') {
     return [...value].map((character) => {
       const code = character.codePointAt(0)!
       if (code <= 0xff) return `%${code.toString(16).padStart(2, '0').toUpperCase()}`
@@ -526,7 +552,7 @@ export class SourceRequestRuntime {
     if (useWebViewOption(options.webView) || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
       throw new SourceRequestError('capability-missing', '书源请求需要 WebView')
     }
-    const requestedMethod = typeof options.method === 'string' ? options.method.toUpperCase() : 'GET'
+    const requestedMethod = androidStringOption(options.method)?.toUpperCase() ?? 'GET'
     // AnalyzeUrl maps every method except POST and HEAD to GET.
     const method = requestedMethod === 'POST' || requestedMethod === 'HEAD' ? requestedMethod : 'GET'
     const sourceHeaders = await this.sourceHeaders(source, signal, nested, effectiveScriptContext)
@@ -537,16 +563,25 @@ export class SourceRequestRuntime {
     const loginHeaders = this.network.getLoginHeaders !== undefined && sameLoginSite
       ? await this.network.getLoginHeaders(source.bookSourceUrl)
       : undefined
-    let headers = mergeHeaders(sourceHeaders, defaultHeaders, loginHeaders, headerObject(options.headers))
-    const proxy = getHeader(headers, 'proxy')?.trim() || undefined
-    headers = withoutHeader(headers, 'proxy')
+    // Android extracts only the lowercase `proxy` entry from the source/header
+    // map before URL options are applied. A URL option header named `proxy`
+    // therefore remains an ordinary request header, matching AnalyzeUrl's
+    // constructor/analyzeUrl split instead of silently changing its meaning.
+    const sourceHeaderMap = mergeHeaders(sourceHeaders, defaultHeaders, loginHeaders)
+    const sourceProxy = sourceHeaderMap?.proxy?.trim() || undefined
+    let headers = mergeHeaders(withoutExactHeader(sourceHeaderMap, 'proxy'), headerObject(options.headers))
     const dnsIpValue = options.dnsIp ?? options.resolveIp
-    const dnsIp = dnsIpValue === undefined || dnsIpValue === null ? undefined : String(dnsIpValue).trim() || undefined
-    if (proxy !== undefined && dnsIp !== undefined) {
+    const dnsIpText = androidStringOption(dnsIpValue)
+    const dnsIp = dnsIpText === undefined ? undefined : dnsIpText.trim()
+    if (dnsIp !== undefined && dnsIp.length === 0) {
+      throw new SourceRequestError('invalid-config', 'dnsIp must contain an IPv4 or IPv6 address', 'header')
+    }
+    if (sourceProxy !== undefined && dnsIp !== undefined) {
       throw new SourceRequestError('invalid-config', 'dnsIp cannot be used together with a proxy', 'header')
     }
-    const charset = typeof options.charset === 'string' && options.charset.trim().length > 0 ? options.charset.trim() : undefined
-    const requestCharset = charset?.toLowerCase() === 'escape' ? undefined : charset
+    const charsetText = androidStringOption(options.charset)
+    const charset = charsetText !== undefined && charsetText.length > 0 ? charsetText : undefined
+    const requestCharset = charset === 'escape' ? undefined : charset
     const responseCharsetHint = typeof options.responseCharset === 'string' && options.responseCharset.trim().length > 0 ? options.responseCharset.trim() : undefined
     const cookieJar = optionBoolean(source.enabledCookieJar) ?? source.enabledCookieJar !== null
     // 非 UTF-8 编码必须由 CharsetCodec 真正支持；helpers 默认路径缺 encodeCharset 时会在此失败，
@@ -581,10 +616,15 @@ export class SourceRequestRuntime {
 
     const timeoutMs = optionInteger(options.timeout, 1, 2_147_483_647)
     const followRedirects = optionBoolean(options.followRedirects)
-    const retry = Math.min(optionInteger(options.retry) ?? 0, 10)
+    // Android accepts any non-negative Int retry count. Core still bounds it by
+    // the request budget so a malformed source cannot bypass the host's total
+    // request limit; the default budget allows the initial call plus 31 retries.
+    const retryBudget = Math.max(0, (budget?.maxRequests ?? 32) - 1)
+    const retry = Math.min(Math.max(0, androidIntOption(options.retry) ?? 0), retryBudget)
     const serverId = optionInteger(options.serverID, 0)
     const webViewDelayTimeMs = optionInteger(options.webViewDelayTime, 0)
-    const responseType = typeof options.type === 'string' && options.type.length > 0 ? 'bytes' : 'text'
+    const typeText = androidStringOption(options.type)
+    const responseType = typeText === undefined ? 'text' : 'bytes'
     const makePlan = (url: string, planHeaders: Readonly<Record<string, string>> | undefined = headers, planBody: string | Uint8Array | undefined = body) => createRequestPlan({
       url,
       baseUrl: source.bookSourceUrl,
@@ -599,7 +639,7 @@ export class SourceRequestRuntime {
         useWebView: false,
         ...(typeof options.sourceRegex === 'string' ? { sourceRegex: options.sourceRegex } : {}),
         ...(dnsIp === undefined ? {} : { dnsIp }),
-        ...(proxy === undefined ? {} : { proxy }),
+        ...(sourceProxy === undefined ? {} : { proxy: sourceProxy }),
         cookieJar,
         ...(serverId === undefined ? {} : { serverId }),
         ...(webViewDelayTimeMs === undefined ? {} : { webViewDelayTimeMs }),

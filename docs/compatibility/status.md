@@ -35,7 +35,7 @@ Node 请求宿主现在把一次 AnalyzeUrl 请求的 URL、Header、方法、bo
 
 ## 2026-10-23 P35：URL options 请求参数语义
 
-按 Android `AnalyzeUrl.UrlOption` 和 `AnalyzeUrlNetworkOptions.kt` 修正了请求参数边界：`webView` 现在只把 `null`、空字符串、`false` 和精确的字符串 `"false"` 视为关闭，`0`、`"0"`、大小写不同或带空白的字符串不会静默降级到普通 HTTP；超时字符串只接受整数毫秒并限制在 `Int.MAX_VALUE`，POST 的 `body:null` 按空表单处理，headers 中的数组、对象和 null 按 Gson/Java `toString()` 形态转换。新增 2 组 source-request 回归覆盖 WebView 能力诊断、超时/body 和复杂 Header 值；URL options `type` 空白值仍待 Android Gson 反序列化路径验证。
+按 Android `AnalyzeUrl.UrlOption` 和 `AnalyzeUrlNetworkOptions.kt` 修正了请求参数边界：`webView` 现在只把 `null`、空字符串、`false` 和精确的字符串 `"false"` 视为关闭，`0`、`"0"`、大小写不同或带空白的字符串不会静默降级到普通 HTTP；超时字符串只接受整数毫秒并限制在 `Int.MAX_VALUE`，POST 的 `body:null` 按空表单处理，headers 中的数组、对象和 null 按 Gson/Java `toString()` 形态转换。新增 2 组 source-request 回归覆盖 WebView 能力诊断、超时/body 和复杂 Header 值；当时 `type` 空白值仍待 Android Gson 反序列化路径验证，已在 P37 按 Gson 直接字段语义收口。
 
 方法清单将 `network-options` 的 `body/headers/timeout` 更新为 `implemented / ts-passed / fixable / verify`，当前 258 个成员统计为 **72 implemented、142 partial、44 simulated**，待处理 186 个。`webView` 的真实页面请求仍属于宿主能力，Node 继续返回 `capability-missing`；Android conformance runner 仍为 `not-run`。
 
@@ -44,6 +44,14 @@ Node 请求宿主现在把一次 AnalyzeUrl 请求的 URL、Header、方法、bo
 本轮补齐了登录检查脚本对 AnalyzeUrl 请求上下文的状态回传。`java.ruleUrl` 现在暴露本次请求已经完成内嵌 JS、模板和页码展开、但尚未执行 URL options 脚本的规则地址；`java.initUrl()` 会把被脚本改写的 `java.url` 恢复到这个地址，再由 `java.getStrResponse/getResponse` 发起重取。`java.headerMap`/`java.getHeaderMap()` 支持常见 Java `Map` 操作（缺失值返回 `null`、`put`/`putAll`/`remove`/`clear`、`containsKey`/`containsValue`、`getOrDefault`、`keySet`/`values`/`entrySet`、`forEach`），并把嵌套修改回传到请求宿主；`loginCheckJs` 的 URL、Header 和 `initUrl` 修改会合并回同一请求上下文。
 
 新增 `source-host-flow` 书源式回归覆盖原始 URL 恢复、Header Map 缺失值/批量写入和登录后重取，构建后该文件 **38/38** 通过。本轮完整 source 回归 **186/186**、根回归 **632/632**、静态语料审计 **20,226/20,231**（5 条已知源文本错误）、TypeScript conformance **6/6**；比较器中 6 条 Android 结果仍为 `not-run`。方法清单扩展为 **259 个成员**，其中 **75 implemented、140 partial、44 simulated**；所有成员按可行性为 **87 fixable、83 conditional、81 simulatable、8 real-host**。仍待处理的 **184 个**成员中，**35 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**；`initUrl` 的完整 Android 原始 `mUrl` 重解析（内嵌 JS、模板、页码替换和 URL options 生命周期）、完整 Java `Map` live view、WebView 默认路径及 Android 同输入 golden 仍保留为部分实现/待验证。
+
+## 2026-10-23 P37：URL options 网络字段和 Gson 字段语义
+
+本轮完成 `network-options` 剩余 7 个可直接修复成员：`method`、`charset`、`followRedirects`、`retry`、`dnsIp`、`proxy` 和 `type`。请求运行时新增 Android Gson String 字段转换（数字/布尔/对象/数组转为文本），`retry` 对齐数字 primitive 和 Java `Number.toInt()`，源级小写 `proxy` 与 URL options 的普通 `headers.proxy` 分离；`type` 按 Gson 直接写字段语义处理，只有 `null` 不切换 bytes，空字符串/空白字符串也返回十六进制；空字符串 `charset` 保持 UTF-8，只有精确小写 `escape` 走 URL escape，空白字符集和空白 `dnsIp` 明确报告配置错误。重试仍受本次请求的 `maxRequests - 1` 上限保护，避免 malformed source 绕过 core 请求预算。
+
+新增 `source-request.test.ts` 的标量转换、空白 type/charset/dnsIp、Int retry 字符串/小数、followRedirects、代理 Header 分离回归；该文件 **23/23**、组合 source 请求宿主回归 **48/48**、完整 source **186/186**、根回归 **635/635**、静态语料审计 **20,226/20,231**（5 条已知源文本错误）、TypeScript conformance **6/6** 均通过。比较器的 6 条 Android 输出仍为 `not-run`。
+
+方法清单当前为 **259 个成员**：**82 implemented、133 partial、44 simulated**；仍待处理 **177 个**，其中 **28 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**。本轮只关闭已由 Android 源码和 Node 回归证明的网络字段差异；Android GSON 版本/字段极端数值、代理 provider 细节、Node SSRF 安全策略和 Android 同输入 golden 仍按差异登记保留。
 
 ## 状态定义
 
@@ -149,7 +157,7 @@ Node 请求宿主现在把一次 AnalyzeUrl 请求的 URL、Header、方法、bo
 | D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12/P20，受限会话状态） | jsLib 状态键绑定 Node session、源定义指纹；跨操作和显式快照仅恢复可序列化 DTO，`refreshJSLib` 只清当前 scope；同一 session/source/jsLib 的并发执行按状态键串行提交，清理代次阻止外层旧快照覆盖嵌套刷新后的新状态；共享缓存不会串 session；函数/闭包/宿主对象不进入快照 | QuickJS 真实共享 VM、取消后的 handle 生命周期和 Android golden 仍未验证；整源 JS 继续每次重执行，函数/闭包状态仍以重新加载和可序列化状态模拟 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（P18） | 差异登记 D40；游标签名同时绑定发现代次和 `infoMap` 的 128 位不可逆摘要，筛选值变化（包括没有 action 的控件）会使分类快照失效并刷新列表；游标不携带筛选原文，旧游标和摘要篡改在请求执行前拒绝；`discovery.test.ts` 覆盖旧代次、旧摘要和敏感筛选值不出现在游标中 | 迟到请求写回、跨实例 CAS/租约组合和 Android golden 仍需验证 |
-| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；P36 后 TypeScript 证据为 `pnpm test:source` 186/186，根全套 632/632，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增 Java/Android 运行时类路径均有书源式回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
+| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；P37 后 TypeScript 证据为 `pnpm test:source` 186/186，根全套 635/635，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增 URL options Gson 字段和请求计划路径均有书源式回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段 A） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；无 query 时保持 `searchParams === null`，并补齐 Java URL 常用 getter；无 base 时按 Android `URL(url)` 解析，显式 base 才做相对地址合并，非法解析统一为 `Malformed URL`，HTTP/HTTPS/FTP 默认端口已补齐；回归覆盖 IPv6 host/port/origin、无 query、getter、非法输入和 FTP 默认端口 | Android golden、非 HTTP 协议完整 handler 属性、URL 编码/异常对象细节仍待验证 |
 | D43 | 文件对象 | File 方法和即时状态 | 部分实现（P09/P32） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；`listFiles()` 子项也包装为可调用 File 对象，exists/isFile/isDirectory 与元数据方法每次刷新宿主状态；`cache.delete` 会清理对应 `cacheFile` 映射；`source-rule-host.test.ts` 父子对象回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
 | D44 | 应用交互 | 登录 UI/action、书源事件和付费动作的应用入口 | 部分实现（第六阶段） | 差异登记 D44；reader-web 已提供静态/动态登录 API 与页面、动作事件、payAction/callBackJs 人工触发、源版本校验和进程内幂等；密码/token 脱敏；`source-login.test.ts`、`source-actions.test.ts` | 购买后刷新、自定义按钮消费、多实例幂等、真实网页登录/验证码和 Android golden 仍待验证；真实远程动作不自动执行 |
