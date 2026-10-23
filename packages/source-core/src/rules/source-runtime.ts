@@ -1863,13 +1863,34 @@ java.getStringList = (rule, content, isUrl) => legadoList(__legadoGetStringList(
 const __legadoGetElements = java.getElements
 java.getElements = (rule) => legadoList(__legadoGetElements(rule))
 const __legadoGetFile = java.getFile
-java.getFile = (path) => {
-  const value = __legadoGetFile(path)
-  const target = value !== null && typeof value === "object" ? value : { path: String(path ?? ""), absolutePath: String(path ?? ""), name: String(path ?? "").split("/").at(-1) ?? "" }
-  const refresh = () => legadoFileRequest("getFile", { path: String(path ?? "") }) ?? target
-  Object.defineProperties(target, { exists: { configurable: true, value: () => Boolean(refresh().exists) }, isFile: { configurable: true, value: () => Boolean(refresh().isFile) }, isDirectory: { configurable: true, value: () => Boolean(refresh().isDirectory) }, getName: { configurable: true, value: () => String(refresh().name ?? target.name ?? "") }, getPath: { configurable: true, value: () => String(refresh().path ?? target.path ?? "") }, getAbsolutePath: { configurable: true, value: () => String(refresh().absolutePath ?? target.absolutePath ?? target.path ?? "") }, length: { configurable: true, value: () => Number(refresh().length ?? 0) }, lastModified: { configurable: true, value: () => Number(refresh().lastModified ?? 0) }, canRead: { configurable: true, value: () => Boolean(refresh().exists) }, canWrite: { configurable: true, value: () => Boolean(refresh().exists) }, listFiles: { configurable: true, value: () => legadoList(legadoFileRequest("listFiles", { path: String(path ?? "") }) ?? []) } })
+const __legadoDecorateFile = (value, fallbackPath) => {
+  const pathValue = String(fallbackPath ?? "")
+  const target = value !== null && typeof value === "object" ? value : { path: pathValue, absolutePath: pathValue, name: pathValue.split("/").at(-1) ?? "" }
+  const filePath = () => String(target.path ?? pathValue)
+  const refresh = () => legadoFileRequest("getFile", { path: filePath() }) ?? target
+  const infoValue = (name, fallback) => {
+    const current = refresh()
+    return current !== null && typeof current === "object" ? current[name] ?? fallback : fallback
+  }
+  Object.defineProperties(target, {
+    exists: { configurable: true, value: () => Boolean(infoValue("exists", false)) },
+    isFile: { configurable: true, value: () => Boolean(infoValue("isFile", false)) },
+    isDirectory: { configurable: true, value: () => Boolean(infoValue("isDirectory", false)) },
+    getName: { configurable: true, value: () => String(infoValue("name", filePath().split("/").at(-1) ?? "")) },
+    getPath: { configurable: true, value: () => String(infoValue("path", filePath())) },
+    getAbsolutePath: { configurable: true, value: () => {
+      const current = refresh()
+      return String(current !== null && typeof current === "object" ? current.absolutePath ?? current.path ?? filePath() : filePath())
+    } },
+    length: { configurable: true, value: () => Number(infoValue("length", 0)) },
+    lastModified: { configurable: true, value: () => Number(infoValue("lastModified", 0)) },
+    canRead: { configurable: true, value: () => Boolean(infoValue("exists", false)) },
+    canWrite: { configurable: true, value: () => Boolean(infoValue("exists", false)) },
+    listFiles: { configurable: true, value: () => { const listed = legadoFileRequest("listFiles", { path: filePath() }); const items = Array.isArray(listed) ? listed : listed?.toArray?.() ?? []; return legadoList(items.map((item) => __legadoDecorateFile(item, item !== null && typeof item === "object" ? item.path : ""))) } },
+  })
   return target
 }
+java.getFile = (path) => __legadoDecorateFile(__legadoGetFile(path), path)
 const __legadoToURLCompat = java.toURL
 java.toURL = (value, base) => {
   const result = __legadoToURLCompat(value, base)

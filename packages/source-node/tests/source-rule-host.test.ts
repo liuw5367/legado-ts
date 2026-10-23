@@ -1315,6 +1315,35 @@ test('File.exists/isFile/isDirectory 每次读取宿主最新元数据', async (
   assert.equal(reads, 5)
 })
 
+test('File 方法返回可调用的 Android 元数据并包装 listFiles 子项', async () => {
+  const host = new SourceRuleHost({ file: {
+    execute: async (operation, input) => {
+      const path = String(input.path ?? '')
+      if (operation === 'getFile') {
+        const name = path.split('/').at(-1) ?? ''
+        return { path, absolutePath: `sandbox/${path}`, name, length: path.endsWith('.txt') ? 12 : 0, lastModified: 1234, exists: true, isFile: path.endsWith('.txt'), isDirectory: !path.endsWith('.txt') }
+      }
+      if (operation === 'listFiles') return [
+        { path: 'cache/child.txt', absolutePath: 'sandbox/cache/child.txt', name: 'child.txt', length: 7, lastModified: 1235, exists: true, isFile: true, isDirectory: false },
+        { path: 'cache/sub', absolutePath: 'sandbox/cache/sub', name: 'sub', length: 0, lastModified: 1236, exists: true, isFile: false, isDirectory: true },
+      ]
+      return undefined
+    },
+  } })
+  const result = await evaluate(host, `@js:
+    var file = java.getFile('cache/root.txt');
+    var children = file.listFiles();
+    JSON.stringify({
+      file: [file.getName(), file.getPath(), file.getAbsolutePath(), file.length(), file.lastModified(), file.canRead(), file.canWrite(), file.isFile(), file.isDirectory()],
+      children: [children.length, children[0].getName(), children[0].getPath(), children[0].getAbsolutePath(), children[0].length(), children[0].isFile(), children[1].isDirectory(), typeof children[0].listFiles],
+    })`, '')
+  assert.equal(result.status, 'success', result.message)
+  assert.deepEqual(JSON.parse(String(result.value)), {
+    file: ['root.txt', 'cache/root.txt', 'sandbox/cache/root.txt', 12, 1234, true, true, true, false],
+    children: [2, 'child.txt', 'cache/child.txt', 'sandbox/cache/child.txt', 12, true, true, 'function'],
+  })
+})
+
 test('source 动态请求头、源变量和登录脚本沿用 Android 调用链', async () => {
   const host = new SourceRuleHost()
   host.setVariable('token', 'dynamic')

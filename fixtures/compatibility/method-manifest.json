@@ -5494,10 +5494,10 @@
           "signature": "getName",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-009",
             "FILE-004"
@@ -5511,10 +5511,10 @@
           "signature": "getPath",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-009",
             "FILE-004"
@@ -5528,10 +5528,10 @@
           "signature": "getAbsolutePath",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-009",
             "FILE-004"
@@ -5545,10 +5545,10 @@
           "signature": "exists",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-009",
             "FILE-004"
@@ -5562,10 +5562,10 @@
           "signature": "isFile",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-009",
             "FILE-004"
@@ -5579,10 +5579,10 @@
           "signature": "isDirectory",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-009",
             "FILE-004"
@@ -5596,10 +5596,10 @@
           "signature": "listFiles",
           "parameters": [],
           "returnType": "unknown",
-          "implementation": "partial",
-          "verification": "unverified",
+          "implementation": "implemented",
+          "verification": "ts-passed",
           "feasibility": "simulatable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "URL-009",
             "FILE-004"

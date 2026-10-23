@@ -17,6 +17,10 @@
 
 `packages/source-node/tests/source-rule-host.test.ts` 的 `JS-011` 书源式回归验证了 POST body/重复 Header、响应对象、Base64、摘要、字符串/十六进制工具和 gzip 编码；当前 TypeScript 证据为通过，Android 同输入 golden 仍为 `not-run`。方法 manifest 已从 252 个成员扩展到 258 个，新增 6 个成员均标记为 `simulated / ts-passed / simulatable / verify`。这一步只承诺常见 facade 的明确成员，不把它扩大为通用 JVM、完整 OkHttp 或完整 Hutool。
 
+## 2026-10-23 P32：File 子对象包装和即时元数据
+
+`java.getFile()` 与 `File.listFiles()` 现在统一复用受控 File 包装。父对象和 `listFiles()` 返回的子对象都提供 `getName/getPath/getAbsolutePath/exists/isFile/isDirectory/length/lastModified/canRead/canWrite/listFiles`，每次调用元数据方法都会向文件宿主刷新；子项不再退化成只含字段的 DTO，可以继续执行 Android 书源常见的方法链。`source-rule-host.test.ts` 的 FILE-004 回归覆盖父子对象、相对路径投影和动态元数据，定向 source 回归为 183/183，根全套回归为 626/626。清单仍有 258 个成员，状态统计为 62 个 `implemented`、152 个 `partial`、44 个 `simulated`；写入/删除竞态、真实绝对路径和 Android golden 继续保留边界。
+
 ## 状态定义
 
 | 状态 | 含义 |
@@ -121,9 +125,9 @@
 | D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12/P20，受限会话状态） | jsLib 状态键绑定 Node session、源定义指纹；跨操作和显式快照仅恢复可序列化 DTO，`refreshJSLib` 只清当前 scope；同一 session/source/jsLib 的并发执行按状态键串行提交，清理代次阻止外层旧快照覆盖嵌套刷新后的新状态；共享缓存不会串 session；函数/闭包/宿主对象不进入快照 | QuickJS 真实共享 VM、取消后的 handle 生命周期和 Android golden 仍未验证；整源 JS 继续每次重执行，函数/闭包状态仍以重新加载和可序列化状态模拟 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（P18） | 差异登记 D40；游标签名同时绑定发现代次和 `infoMap` 的 128 位不可逆摘要，筛选值变化（包括没有 action 的控件）会使分类快照失效并刷新列表；游标不携带筛选原文，旧游标和摘要篡改在请求执行前拒绝；`discovery.test.ts` 覆盖旧代次、旧摘要和敏感筛选值不出现在游标中 | 迟到请求写回、跨实例 CAS/租约组合和 Android golden 仍需验证 |
-| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 179/179，根全套 621/621，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增 Java/Android 运行时类路径均有书源式回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
+| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；当前 TypeScript 证据为 `pnpm test:source` 183/183，根全套 626/626，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增 Java/Android 运行时类路径均有书源式回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段 A） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；无 query 时保持 `searchParams === null`，并补齐 Java URL 常用 getter；无 base 时按 Android `URL(url)` 解析，显式 base 才做相对地址合并，非法解析统一为 `Malformed URL`，HTTP/HTTPS/FTP 默认端口已补齐；回归覆盖 IPv6 host/port/origin、无 query、getter、非法输入和 FTP 默认端口 | Android golden、非 HTTP 协议完整 handler 属性、URL 编码/异常对象细节仍待验证 |
-| D43 | 文件对象 | File 方法和即时状态 | 部分实现（P09） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；exists/isFile/isDirectory 与元数据方法每次刷新宿主状态；`cache.delete` 会清理对应 `cacheFile` 映射；Node 文件回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
+| D43 | 文件对象 | File 方法和即时状态 | 部分实现（P09/P32） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；`listFiles()` 子项也包装为可调用 File 对象，exists/isFile/isDirectory 与元数据方法每次刷新宿主状态；`cache.delete` 会清理对应 `cacheFile` 映射；`source-rule-host.test.ts` 父子对象回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
 | D44 | 应用交互 | 登录 UI/action、书源事件和付费动作的应用入口 | 部分实现（第六阶段） | 差异登记 D44；reader-web 已提供静态/动态登录 API 与页面、动作事件、payAction/callBackJs 人工触发、源版本校验和进程内幂等；密码/token 脱敏；`source-login.test.ts`、`source-actions.test.ts` | 购买后刷新、自定义按钮消费、多实例幂等、真实网页登录/验证码和 Android golden 仍待验证；真实远程动作不自动执行 |
 | D45 | JS 源行为差异 | JS 详情、目录和正文入口重置 `BookType` 时的状态位传播 | 已实现待 Android golden | [差异登记](known-divergences.md)，D45；`discovery.ts`、`reading.ts`、`source-host-flow.test.ts`；重置只清除 Android `allBookType` 媒体位，保留 `local/archive/notShelf/updateError` 状态位；声明式目录和 JS 详情/目录/正文回归已覆盖 | 同输入 Android golden；需要继续确认 `BookType` 非媒体状态位在文件源、缓存和本地书籍组合中的边界 |
 | D46 | JS 源行为差异 | JS 源 `variable` 在搜索/发现与详情合并中的 Gson 类型语义 | 已实现待 Android golden | [差异登记](known-divergences.md)，D46；`discovery.ts`、`source-host-flow.test.ts`；搜索/发现只接受 Android `String?` 可读的字符串/数字/布尔，数组或对象跳过候选；详情只接受对象或对象 JSON 字符串，并按 `Map<String,String>` 归一化，嵌套对象/数组和非法 JSON 保留旧值 | 同输入 Android golden；继续确认 Gson 版本对极端数值和 null map value 的差异 |
