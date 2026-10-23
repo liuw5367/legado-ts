@@ -368,8 +368,9 @@ a { color: inherit; }
 .book-source-row.current { color: var(--primary); }
 .book-source-row strong { font-size: 14px; }
 .book-source-row p { max-width: 360px; margin: 3px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.reader-error { width: min(calc(100% - 24px), 680px); margin: 0 auto; padding-top: var(--page-top-inset); }
-.reader-error { display: flex; flex-direction: column; gap: 12px; }
+.reader-error { width: min(calc(100% - 24px), 680px); margin: 0 auto; flex: 1; gap: 12px; padding-block: 24px; }
+.reader-error .error { margin: 0; overflow-wrap: anywhere; }
+.reader-runtime-warning { padding: 12px; color: var(--muted); font-size: 13px; }
 
 .sheet { position: fixed; top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-width: none; max-height: 85vh; max-height: 85dvh; margin: 0; padding: 0; overflow: hidden; color: var(--foreground); background: var(--card); border: 0; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 30px rgb(36 33 29 / 16%); }
 .sheet.discovery-source-switcher { height: 85vh; min-height: 85vh; max-height: 85vh; height: 85dvh; min-height: 85dvh; max-height: 85dvh; }

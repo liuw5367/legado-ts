@@ -25,7 +25,7 @@ export interface ReaderRuntime {
   listBookSources(userId: string, bookId: string): Promise<BookSourcesResponse>
   openBookSource(userId: string, bookId: string, candidateId: string): Promise<StoredEdition>
   getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc>
-  getOrLoadContent(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<StoredContent>
+  getOrLoadContent(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<StoredContent & { runtimeWarning?: string }>
   getReviewSummary(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ReviewSummaryItem[]>
   getReviewDetail(userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage>
   getReviewReplies(userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, reviewId: string, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage>
@@ -269,7 +269,7 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
   })
 }
 
-async function getOrLoadContent(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, refresh = false): Promise<StoredContent> {
+async function getOrLoadContent(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, refresh = false): Promise<StoredContent & { runtimeWarning?: string }> {
   const edition = await repository.getEdition(userId, bookId, editionKey)
   if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
   const source = await requireSource(repository, userId, edition.sourceId)
@@ -283,18 +283,27 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
     if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
   }
   const nextChapterUrl = toc.chapters[chapterIndex + 1]?.chapterUrl
-  return withPersistentSourceSession(repository, userId, source, async (session) => {
-    const result = await session.run((ports) => loadChapterContent(ports, {
-      source: source.normalizedSource,
-      book: edition.metadata,
-      chapter,
-      ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }),
-      maxPages: 32,
-      maxOutputBytes: 4 * 1024 * 1024,
-    }))
-    if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
-    return repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
-  })
+  let loaded: StoredContent | undefined
+  try {
+    return await withPersistentSourceSession(repository, userId, source, async (session) => {
+      const result = await session.run((ports) => loadChapterContent(ports, {
+        source: source.normalizedSource,
+        book: edition.metadata,
+        chapter,
+        ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }),
+        maxPages: 32,
+        maxOutputBytes: 4 * 1024 * 1024,
+      }))
+      if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
+      loaded = await repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
+      return loaded
+    })
+  } catch (error) {
+    // 仅保留本次请求已成功保存的正文，不能用旧缓存掩盖抓取或正文写入失败。
+    if (loaded === undefined) throw error
+    console.warn('[reader] source-session-finalization-failed', { bookId, chapterId, errorName: error instanceof Error ? error.name : 'UnknownError' })
+    return { ...loaded, runtimeWarning: '正文已加载，但书源运行状态未能保存；后续章节如有异常，请重试。' }
+  }
 }
 
 async function getReviewSummary(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ReviewSummaryItem[]> {

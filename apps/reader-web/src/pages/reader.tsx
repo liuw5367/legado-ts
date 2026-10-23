@@ -46,6 +46,7 @@ export function ReaderPage() {
   const [position, setPosition] = useState<ApiPosition | null>(null)
   const [positionLoaded, setPositionLoaded] = useState(false)
   const [error, setError] = useState('')
+  const [runtimeWarning, setRuntimeWarning] = useState('')
   const [positionError, setPositionError] = useState('')
   const [panel, setPanel] = useState<ReaderPanel>(null)
   const [retryNonce, setRetryNonce] = useState(0)
@@ -79,7 +80,7 @@ export function ReaderPage() {
     const controller = new AbortController()
     const snapshotRequest = loadBookSnapshot(cache, bookId, editionKey)
     void Promise.all([
-      snapshotRequest.then(() => apiFetch<{ content: { content: ApiContent } }>(`/api/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?editionKey=${encodeURIComponent(editionKey)}`, { signal: controller.signal })),
+      snapshotRequest.then(() => apiFetch<{ content: { content: ApiContent; runtimeWarning?: string } }>(`/api/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chapterId)}?editionKey=${encodeURIComponent(editionKey)}`, { signal: controller.signal })),
       snapshotRequest,
       apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`, { signal: controller.signal }),
     ]).then(async ([contentResult, tocResult, positionResult]) => {
@@ -93,7 +94,7 @@ export function ReaderPage() {
       positionVersionRef.current = positionResult.position?.version ?? -1
       latestAnchorRef.current = chapterAnchor
       paginationAnchorRef.current = chapterAnchor
-      cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
+      setRuntimeWarning(contentResult.content.runtimeWarning ?? ''); cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
     }).catch((reason: unknown) => {
       if (!active || requestId !== requestIdRef.current) return
       const snapshot = cache.get(bookId, editionKey)
@@ -399,11 +400,11 @@ export function ReaderPage() {
     const top = visible?.getBoundingClientRect().top ?? 0
     setRefreshing(true); setRefreshError('')
     try {
-      const result = await apiFetch<{ content: { content: ApiContent; tocRevision: string } }>('/api/books/' + encodeURIComponent(bookId) + '/chapters/' + encodeURIComponent(chapterId) + '?editionKey=' + encodeURIComponent(editionKey) + '&refresh=true', { signal: controller.signal })
+      const result = await apiFetch<{ content: { content: ApiContent; tocRevision: string; runtimeWarning?: string } }>('/api/books/' + encodeURIComponent(bookId) + '/chapters/' + encodeURIComponent(chapterId) + '?editionKey=' + encodeURIComponent(editionKey) + '&refresh=true', { signal: controller.signal })
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       if (result.content.tocRevision !== cache.get(bookId, editionKey)?.toc.revision) await loadBookSnapshot(cache, bookId, editionKey, true)
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content)
+      setRuntimeWarning(result.content.runtimeWarning ?? ''); cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content)
       if (paged) {
         paginationAnchorRef.current = anchor ?? latestAnchorRef.current
         setPageLayout({ pageWidth: 0, pageCount: 0 })
@@ -420,7 +421,7 @@ export function ReaderPage() {
     } catch (reason) { if (!controller.signal.aborted && requestId === requestIdRef.current) setRefreshError(reason instanceof Error ? reason.message : '刷新失败') }
     finally { if (requestId === requestIdRef.current) setRefreshing(false) }
   }
-  if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
+  if (error.length > 0) return <section className="reader-error loading-state loading-state-viewport"><p className="error" role="alert">{error}</p><div className="loading-state-action"><PageBackButton appearance="button" /><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
   if (content === null) return <LoadingState message="正在读取正文…" variant="viewport" action={<PageBackButton appearance="button" />} />
   const dark = resolvedTheme === 'dark'
   const paged = settings.readingMode === 'paged'
@@ -454,6 +455,7 @@ export function ReaderPage() {
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原文地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />查看原文</a>}
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新内容'}</button>
     </MoreMenu></div></header>
+    {runtimeWarning ? <p className="reader-runtime-warning" role="status">{runtimeWarning}</p> : null}
     <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? `正文，左侧上一页，中栏上段${settings.pageTapZones.centerTopAction === 'previous' ? '上一页' : '下一页'}，中段显示或隐藏操作栏，下段${settings.pageTapZones.centerBottomAction === 'previous' ? '上一页' : '下一页'}，右侧下一页` : '正文，按回车显示或隐藏阅读操作'} style={readerStyle}
       onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY } }}
       onPointerCancel={() => { pointerStartRef.current = null }}
@@ -594,7 +596,7 @@ export function ReaderEntryPage() {
     return () => { active = false; controller.abort() }
   }, [bookId, navigate, requestedEditionKey, cache, location.state, retryNonce])
 
-  if (error.length > 0) return <section className="reader-error"><PageBackButton /><p className="error">{error}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
+  if (error.length > 0) return <section className="reader-error loading-state loading-state-viewport"><p className="error" role="alert">{error}</p><div className="loading-state-action"><PageBackButton appearance="button" /><Button variant="secondary" size="sm" type="button" onClick={() => setRetryNonce((value) => value + 1)}>重试</Button></div></section>
   return <LoadingState message="正在打开阅读…" variant="viewport" action={<PageBackButton appearance="button" />} />
 }
 
