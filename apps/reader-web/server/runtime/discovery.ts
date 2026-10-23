@@ -232,7 +232,8 @@ async function queryPage(session: SourceSession, source: StoredSourceRecord, cat
   const categoryUrl = category.url
   if (categoryUrl === undefined || categoryUrl.length === 0 || (category.type !== undefined && category.type !== 'url')) throw new ReaderRuntimeError('invalid-input', '此发现分类需要先完成控件操作')
   const result = await session.run((ports) => discoverBooks(ports, {
-    source: { ...source.normalizedSource, exploreUrl: categoryUrl },
+    source: source.normalizedSource,
+    url: categoryUrl,
     infoMap: state.infoMap,
     ...(input.cursor === undefined ? {} : { cursor: { index: input.cursor.index, ...(input.cursor.token === undefined ? {} : { token: input.cursor.token }) } }),
     ...(signal === undefined ? {} : { signal }),

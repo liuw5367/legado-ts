@@ -53,6 +53,14 @@ Node 请求宿主现在把一次 AnalyzeUrl 请求的 URL、Header、方法、bo
 
 方法清单当前为 **259 个成员**：**82 implemented、133 partial、44 simulated**；仍待处理 **177 个**，其中 **28 个可直接修复、83 个条件实现、58 个可模拟、8 个需要真实宿主**。本轮只关闭已由 Android 源码和 Node 回归证明的网络字段差异；Android GSON 版本/字段极端数值、代理 provider 细节、Node SSRF 安全策略和 Android 同输入 golden 仍按差异登记保留。
 
+## 2026-10-23 P38：发现页显式分类 URL 与 ExploreKind 默认类型
+
+本轮把 Android `WebBook.exploreBookAwait(bookSource, url, page)` 的选中分类地址提升为 `DiscoveryInput.url`。`discoverBooks` 在调用方提供该字段时优先使用它，保留 `NormalizedSource.exploreUrl` 作为分类定义和动态分类入口；空的已选地址现在以 `invalid-config` 结束且零网络请求。reader-web 发现请求改为传入显式分类 URL，不再通过复制并改写 `NormalizedSource.exploreUrl` 传递运行时状态，避免动态分类 JSON、JS 源和声明式列表在请求阶段混用原始入口。
+
+分类解析结果同时为普通 JSON/文本项保留 Android `ExploreKind` 的默认 `type: "url"`；应用层仍可将 URL 类型压缩为未声明的公开字段，控件类型继续按原始类型处理。新增 source-core 回归覆盖 JSON/文本分类默认类型、显式分类 URL、空 URL 零请求；reader-web 发现回归在构建产物更新后继续覆盖动态分类、JS `explore(url,page)` 和分页。
+
+本轮修改范围为 `source-core` 工作流类型/解析、reader-web 请求装配、发现流程文档和方法清单；方法清单仅将 `discovery-workflow::001-exploreurl` 更新为 `partial / ts-passed / fixable / verify`，因为 Android 分类缓存、错误分类项和完整 ExploreKind 生命周期仍未达到实现完成条件。P38 定向发现与工作流测试 **60/60** 通过；完整 source 回归 **186/186**、根回归 **638/638**、静态语料 **20,226/20,231**、TypeScript conformance **6/6** 通过。Android 同输入 golden 仍为 `not-run`，方法清单 259 个成员仍为 **82 implemented、133 partial、44 simulated**，未完成 **177** 个；验证状态统计为 **154 ts-passed、40 ts-diff、65 unverified**。
+
 ## 状态定义
 
 | 状态 | 含义 |
@@ -157,7 +165,7 @@ Node 请求宿主现在把一次 AnalyzeUrl 请求的 URL、Header、方法、bo
 | D38 | 导入/请求 | 历史宽松 JSON | 部分实现（第三阶段 A） | D38；`codec/relaxed-json.ts` 严格 JSON 优先，宽松回退用状态扫描只在字符串外处理注释、单引号、未引号键和尾逗号，避免修改字符串内伪语法；导入、规则、URL options、发现分类及原型键安全回归通过 | 仅解析数据语法，不执行表达式；GSON 其他宽松选项和 Android golden 仍待验证 |
 | D39 | JS 生命周期 | 声明式 jsLib 共享对象状态 | 部分实现（P12/P20，受限会话状态） | jsLib 状态键绑定 Node session、源定义指纹；跨操作和显式快照仅恢复可序列化 DTO，`refreshJSLib` 只清当前 scope；同一 session/source/jsLib 的并发执行按状态键串行提交，清理代次阻止外层旧快照覆盖嵌套刷新后的新状态；共享缓存不会串 session；函数/闭包/宿主对象不进入快照 | QuickJS 真实共享 VM、取消后的 handle 生命周期和 Android golden 仍未验证；整源 JS 继续每次重执行，函数/闭包状态仍以重新加载和可序列化状态模拟 |
 | D40 | 发现请求 | 分页签名未绑定筛选/快照版本 | 部分实现（P18） | 差异登记 D40；游标签名同时绑定发现代次和 `infoMap` 的 128 位不可逆摘要，筛选值变化（包括没有 action 的控件）会使分类快照失效并刷新列表；游标不携带筛选原文，旧游标和摘要篡改在请求执行前拒绝；`discovery.test.ts` 覆盖旧代次、旧摘要和敏感筛选值不出现在游标中 | 迟到请求写回、跨实例 CAS/租约组合和 Android golden 仍需验证 |
-| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；P37 后 TypeScript 证据为 `pnpm test:source` 186/186，根全套 635/635，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增 URL options Gson 字段和请求计划路径均有书源式回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
+| D41 | 诊断/证据 | 方法登记被误当兼容、缺失能力误报普通失败 | 部分实现，待 Android 对照 | 差异登记 D41；P38 后 TypeScript 证据为 `pnpm test:source` 186/186，根全套 638/638，Android golden 仍待最终门禁；静态语料 943 个候选源、20,231 条规则中 20,226 条编译，5 条已按 manifest 白名单归类为源文本错误，新增未编译规则会使审计失败；本轮新增发现分类 URL 和 ExploreKind 默认类型回归 | 逐签名和返回对象覆盖、能力错误可判别；Android not-run 保留 |
 | D42 | URL 对象 | IPv6、searchParams 和基准地址 | 部分实现（第四阶段 A） | toURL 补 get/getAll/has/set/append/delete/toString，保留重复 query 值、IPv6 authority 和已编码参数名；无 query 时保持 `searchParams === null`，并补齐 Java URL 常用 getter；无 base 时按 Android `URL(url)` 解析，显式 base 才做相对地址合并，非法解析统一为 `Malformed URL`，HTTP/HTTPS/FTP 默认端口已补齐；回归覆盖 IPv6 host/port/origin、无 query、getter、非法输入和 FTP 默认端口 | Android golden、非 HTTP 协议完整 handler 属性、URL 编码/异常对象细节仍待验证 |
 | D43 | 文件对象 | File 方法和即时状态 | 部分实现（P09/P32） | File 补 getName/getPath/getAbsolutePath/length/lastModified/canRead/canWrite/listFiles；`listFiles()` 子项也包装为可调用 File 对象，exists/isFile/isDirectory 与元数据方法每次刷新宿主状态；`cache.delete` 会清理对应 `cacheFile` 映射；`source-rule-host.test.ts` 父子对象回归通过 | 写入/删除竞态、绝对路径投影和 Android golden 仍待验证 |
 | D44 | 应用交互 | 登录 UI/action、书源事件和付费动作的应用入口 | 部分实现（第六阶段） | 差异登记 D44；reader-web 已提供静态/动态登录 API 与页面、动作事件、payAction/callBackJs 人工触发、源版本校验和进程内幂等；密码/token 脱敏；`source-login.test.ts`、`source-actions.test.ts` | 购买后刷新、自定义按钮消费、多实例幂等、真实网页登录/验证码和 Android golden 仍待验证；真实远程动作不自动执行 |

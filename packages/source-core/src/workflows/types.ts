@@ -374,6 +374,8 @@ export const internalChapterScopeBinding = '__legadoInternalChapterScope'
 
 export interface DiscoveryInput extends WorkflowOptions {
   source: NormalizedSource
+  /** Android WebBook.exploreBookAwait 的已选分类 URL；缺省时使用 source.exploreUrl。 */
+  url?: string
   cursor?: PageCursor
 }
 

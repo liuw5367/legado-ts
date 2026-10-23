@@ -36,6 +36,8 @@ BookSource + 用户会话
 
 声明式入口见 `app/src/main/java/io/legado/app/model/webBook/WebBook.kt` 的 `exploreBookAwait`。它接受调用方已经选定的 `url` 和从 1 开始的 `page`，并把书源级 `infoMap` 传给 `AnalyzeUrl`。最终响应 URL 是规则解析和相对地址的基准。`BookList.analyzeBookList` 在发现时先检查 JSON 分类格式以供调试，再选择 `ruleExplore`；仅当 `ruleExplore.bookList` 为空时退回 `ruleSearch`。列表项字段、空书名丢弃、同源去重与详情页回退沿用 [搜索流程](search-flow.md) 的 `BookList` 行为。JS 源调用 `explore(url, page)`，返回值按搜索结果数组归一化。
 
+source-core 的 `DiscoveryInput.url` 对应这个已选分类地址；未传入时才读取 `source.exploreUrl`，因此应用不需要改写原始分类定义来发起请求。core 仍通过书源请求 URL 解析和安全策略处理该地址，调用方不能借此绕过书源基准 URL、Cookie、代理或请求预算。
+
 分类列表与发现结果列表是不同输出：前者回答“有哪些入口和控件”，后者回答“选定入口这一页有哪些书”。单个分类请求失败不得删掉其他分类；换分类或换页时，调用方应取消旧请求并按分类身份和页码隔离结果。分类缓存更新不能复用旧 URL 对应的结果。正文、目录和详情仍以选中书籍的身份进入各自流程。
 
 ## 错误与验证

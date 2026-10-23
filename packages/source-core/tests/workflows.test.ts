@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { discoverBooks, loadBookDetails, loadTableOfContents, searchBooks } from '../src/index.ts'
+import { discoverBooks, loadBookDetails, loadTableOfContents, parseExploreKinds, searchBooks } from '../src/index.ts'
 import type { BookCandidate, NormalizedSource, WorkflowPorts } from '../src/index.ts'
 
 const source = {
@@ -62,6 +62,39 @@ test('发现工作流保留书源内身份、页码起点、去重和 partial �
   assert.equal(calls[0], 'https://source.test/explore?page=1')
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'duplicate-item'))
   assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing'))
+})
+
+test('发现分类保留 Android ExploreKind 的默认 url 类型', async () => {
+  const result = await parseExploreKinds(ports([]), {
+    ...source,
+    exploreUrl: JSON.stringify([{ title: '分组' }, { title: '热门', url: '/hot' }]),
+  } as NormalizedSource)
+  assert.deepEqual(result.kinds.map(({ title, url, type }) => ({ title, url, type })), [
+    { title: '分组', url: undefined, type: 'url' },
+    { title: '热门', url: '/hot', type: 'url' },
+  ])
+  const text = await parseExploreKinds(ports([]), { ...source, exploreUrl: '热门::/hot&&新书' } as NormalizedSource)
+  assert.deepEqual(text.kinds.map(({ title, url, type }) => ({ title, url, type })), [
+    { title: '热门', url: '/hot', type: 'url' },
+    { title: '新书', url: undefined, type: 'url' },
+  ])
+})
+
+test('发现工作流优先使用调用方传入的已选分类 URL', async () => {
+  const calls: string[] = []
+  const configured = { ...source, exploreUrl: JSON.stringify([{ title: '热门', url: '/hot?page={{page}}' }]) } as NormalizedSource
+  const result = await discoverBooks(ports(calls), { source: configured, url: '/selected?page={{page}}' })
+  assert.equal(result.status, 'success')
+  assert.equal(calls[0], 'https://source.test/selected?page=1')
+})
+
+test('发现缺少已选分类 URL 时失败且不发起请求', async () => {
+  const calls: string[] = []
+  const result = await discoverBooks(ports(calls), { source: { ...source, exploreUrl: '' } as NormalizedSource })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.value, null)
+  assert.equal(calls.length, 0)
+  assert.equal(result.diagnostics[0]?.field, 'exploreUrl')
 })
 
 test('列表必需字段规则失败会终止当前工作流，不把失败误判成候选缺失', async () => {

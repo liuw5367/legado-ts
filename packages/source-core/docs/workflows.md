@@ -4,7 +4,7 @@
 
 ## 发现、搜索和详情
 
-`discoverBooks(ports, input)` 使用 `DiscoveryInput` 的 source、cursor、signal 和 budget 执行发现规则；`searchBooks(ports, input)` 还接收 keyword、可选纯候选过滤和提前停止回调。二者返回 `RuntimeResult<WorkflowPage<BookCandidate>>`：
+`discoverBooks(ports, input)` 使用 `DiscoveryInput` 的 source、可选的已选分类 `url`、cursor、signal 和 budget 执行发现规则；未提供 `url` 时才读取 source.exploreUrl。这个显式 URL 对齐 Android `WebBook.exploreBookAwait(bookSource, url, page)`，并让应用在保留原始分类定义的同时隔离分类请求上下文。`searchBooks(ports, input)` 还接收 keyword、可选纯候选过滤和提前停止回调。二者返回 `RuntimeResult<WorkflowPage<BookCandidate>>`：
 
 - 每个候选保留 `sourceId`、`bookUrl`、`rawFields` 和 `traceRef`；名称、作者、分类等来源缺失时保持缺失；
 - `PageCursor.index` 是书源页码，`nextCursor` 只在后续地址会变化时出现；

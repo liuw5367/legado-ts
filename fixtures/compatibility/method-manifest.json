@@ -3334,9 +3334,9 @@
           "parameters": [],
           "returnType": "unknown",
           "implementation": "partial",
-          "verification": "unverified",
+          "verification": "ts-passed",
           "feasibility": "fixable",
-          "decision": "fix",
+          "decision": "verify",
           "fixtures": [
             "EXP-001",
             "EXP-004",

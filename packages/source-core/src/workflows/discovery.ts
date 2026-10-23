@@ -168,7 +168,7 @@ function parseExploreKindText(text: string): ExploreKind[] {
       if (item === null || typeof item !== 'object' || Array.isArray(item)) return []
       const row = item as Record<string, unknown>
       if (typeof row.title !== 'string') return []
-      const kind: ExploreKind = { title: row.title }
+      const kind: ExploreKind = { title: row.title, type: 'url' }
       for (const key of ['url', 'type', 'action', 'default', 'viewName'] as const) if (typeof row[key] === 'string') kind[key] = row[key] as never
       if (Array.isArray(row.chars)) kind.chars = row.chars.map((value) => value === null || typeof value === 'string' ? value : String(value))
       if (row.style !== null && typeof row.style === 'object' && !Array.isArray(row.style)) kind.style = jsonValue(row.style) as JsonObject
@@ -178,16 +178,26 @@ function parseExploreKindText(text: string): ExploreKind[] {
   if (trimmed.length === 0) return []
   return trimmed.split(/(?:&&|\r?\n)+/u).map((item) => {
     const split = item.indexOf('::')
-    if (split < 0) return { title: item.trim() }
-    return { title: item.slice(0, split).trim(), url: item.slice(split + 2).trim() }
+    if (split < 0) return { title: item.trim(), type: 'url' }
+    return { title: item.slice(0, split).trim(), url: item.slice(split + 2).trim(), type: 'url' }
   }).filter((item) => item.title.length > 0)
 }
 
 export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput): Promise<RuntimeResult<WorkflowPage<BookCandidate>>> {
   const scope = observationScope(ports)
   const cursor = input.cursor ?? { index: sourceNumber(input.source, 'explorePageStart') ?? 1 }
+  const exploreUrl = input.url ?? sourceString(input.source, 'exploreUrl')
+  if (exploreUrl === undefined || exploreUrl.trim().length === 0) {
+    const result: RuntimeResult<WorkflowPage<BookCandidate>> = {
+      status: 'failed',
+      value: null,
+      diagnostics: [{ code: 'invalid-config', stage: 'discover', field: 'exploreUrl', message: '发现缺少已选分类 URL', retryable: false }],
+      trace: [],
+    }
+    return attachRuntimeObservations(result, scope.collector, input.source.bookSourceUrl)
+  }
   const result = sourceString(input.source, 'mainJs') !== undefined
-    ? await javascriptListWorkflow(scope.ports, input.source, 'explore', sourceString(input.source, 'exploreUrl'), cursor, input.signal, 'discover', input.maxItems, input.infoMap)
+    ? await javascriptListWorkflow(scope.ports, input.source, 'explore', exploreUrl, cursor, input.signal, 'discover', input.maxItems, input.infoMap)
     : await (() => {
       const exploreListRule = ruleString(input.source, 'ruleExplore', 'bookList')
       const ruleGroup = exploreListRule?.trim() ? 'ruleExplore' : 'ruleSearch'
@@ -195,7 +205,7 @@ export async function discoverBooks(ports: WorkflowPorts, input: DiscoveryInput)
         scope.ports,
         'discover',
         input.source,
-        sourceString(input.source, 'exploreUrl'),
+        exploreUrl,
         exploreListRule?.trim() ? exploreListRule : ruleString(input.source, 'ruleSearch', 'bookList'),
         ruleString(input.source, ruleGroup, 'nextPage'),
         cursor,
