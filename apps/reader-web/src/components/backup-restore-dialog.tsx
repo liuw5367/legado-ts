@@ -1,7 +1,7 @@
 import type { BackupPreview } from '../lib/api.ts'
 
 export const BACKUP_CATEGORY_OPTIONS = [
-  { value: 'bookshelf', label: '书架', description: '书籍元数据和书架关系' },
+  { value: 'bookshelf', label: '书架', description: '书籍元数据、书架分组、书单与评价' },
   { value: 'reading', label: '阅读记录', description: '章节、段落和阅读位置' },
   { value: 'search', label: '搜索记录', description: '搜索关键词和结果摘要' },
   { value: 'sources', label: '书源', description: '书源定义和启用状态' },

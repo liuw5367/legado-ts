@@ -8,7 +8,7 @@ export function readerIdentity(location: Pick<Location, 'pathname' | 'search'>):
   const match = matchPath('/books/:bookId/read/:chapterId?', location.pathname)
   return match === null ? undefined : JSON.stringify([match.params.bookId, new URLSearchParams(location.search).get('editionKey') ?? ''])
 }
-function rootKey(path: string) { return ['/', '/discover', '/account/settings'].includes(path) ? path : undefined }
+function rootKey(path: string) { return ['/', '/book-lists', '/account/settings'].includes(path) ? path : undefined }
 function pageType(path: string) {
   for (const pattern of ['/books/:bookId/details', '/books/:bookId/toc', '/books/:bookId/sources']) if (matchPath(pattern, path)) return pattern
   return path

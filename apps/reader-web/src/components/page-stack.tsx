@@ -1,3 +1,4 @@
+import type { BookListPageSnapshot } from '../lib/book-list-state.ts'
 import { Activity, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context.tsx'
@@ -24,6 +25,8 @@ function AccountPageStack({ children, userId }: { children: ReactNode; userId: s
   if (current !== stack) setStack(current)
   const latest = useRef(current)
   latest.current = current
+  const bookListSnapshots = useRef(new Map<string, BookListPageSnapshot>())
+  useEffect(() => { const liveKeys = new Set(current.entries.map((entry) => entry.key)); for (const key of bookListSnapshots.current.keys()) if (!liveKeys.has(key)) bookListSnapshots.current.delete(key) }, [current.entries])
   const [versions, setVersions] = useState<ReadonlyMap<string, number>>(new Map())
   const pending = useRef<{ origin: string; target: string; state: unknown; via: string } | undefined>(undefined)
   const positions = useMemo(() => new ReadingPositionQueue(async (input) => {
@@ -39,6 +42,10 @@ function AccountPageStack({ children, userId }: { children: ReactNode; userId: s
       if (mutation.userId !== userId) return
       const domains = mutationDomains(mutation.path, mutation.method)
       if (domains.length === 0) return
+      if (mutation.method === 'DELETE' && mutation.path.split('/').length === 4 && mutation.path.startsWith('/api/book-lists/')) {
+        const listId = mutation.path.split('/')[3]
+        for (const [key, snapshot] of bookListSnapshots.current) if (snapshot.data.list.id === listId) bookListSnapshots.current.delete(key)
+      }
       if (domains.includes('sources')) cache.clear()
       setVersions((previous) => {
         const next = new Map(previous)
@@ -73,7 +80,7 @@ function AccountPageStack({ children, userId }: { children: ReactNode; userId: s
   useLayoutEffect(() => { processReadingNavigation() }, [location.key])
 
   const value = {
-    userId, versions, positions,
+    userId, versions, positions, bookListSnapshots: bookListSnapshots.current,
     back: (fallback: { to: string; state: unknown }) => {
       pending.current = undefined
       const delta = previousPageDelta(latest.current)

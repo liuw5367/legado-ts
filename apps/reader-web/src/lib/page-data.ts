@@ -16,10 +16,13 @@ export function mutationDomains(path: string, method: string): string[] {
   if (parts[1] === 'source-management' || parts[1] === 'sources') return ['sources', 'discovery', 'home', 'books', 'content']
   if (parts[1] === 'searches' || parts[1] === 'search-history') return ['home', 'candidates']
   if (parts[1] === 'discovery' && parts[2] === 'books') return ['books', 'candidates']
+  if (parts[1] === 'book-lists') return parts.at(-1) === 'move-from-bookshelf' ? ['booklists', 'home', 'groups'] : ['booklists']
+  if (parts[1] === 'bookshelf-groups') return ['groups', 'home']
+  if (parts[1] === 'books' && parts[3] === 'bookshelf') return ['home', 'groups', 'books']
   if (parts[1] !== 'books') return []
-  if (parts[3] === 'position') return ['home']
+  if (parts[3] === 'position') return ['home', 'booklist-books']
   const book = parts[2]
-  return ['home', 'candidates', ...(book === undefined ? ['books'] : [`book:${decodeURIComponent(book)}`])]
+  return ['home', 'candidates', 'booklist-books', ...(book === undefined ? ['books'] : [`book:${decodeURIComponent(book)}`])]
 }
 
 /** 页面实例拥有一次读取；取消恢复为 idle，成功或失败都不在激活时自动重试。 */

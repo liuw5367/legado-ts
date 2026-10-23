@@ -1,0 +1,37 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
+import { PageHeader } from '../components/page-header.tsx'
+import { BookCover } from '../components/book-cover.tsx'
+import { BookListEditor } from '../components/book-list-editor.tsx'
+import { Sheet } from '../components/ui/sheet.tsx'
+import { Button } from '../components/ui/button.tsx'
+import { apiFetch, ApiError, type ApiBookListDetails } from '../lib/api.ts'
+import { usePageLoadEffect, usePageNavigation, usePageActivity } from '../lib/use-page-resource.ts'
+import { pageReturnState } from '../lib/page-navigation.ts'
+import { formatShanghaiDateTime } from '../lib/time-format.ts'
+import { mergeBookListRows, type BookListDisplayItem } from '../lib/book-list-state.ts'
+
+export function BookListDetailsPage() {
+  const { listId = '' } = useParams(); const location = useLocation()
+  const navigation = usePageNavigation(); const page = usePageActivity(); const saved = navigation?.bookListSnapshots?.get(location.key)
+  const [data, setData] = useState<ApiBookListDetails | null>(saved?.data ?? null); const [rows, setRows] = useState<BookListDisplayItem[]>(saved?.rows ?? []);
+  const scrollRef = useRef(saved?.scrollY ?? 0)
+  useEffect(() => { if (data) { const previous = navigation?.bookListSnapshots?.get(location.key); navigation?.bookListSnapshots?.set(location.key, { data, rows, scrollY: scrollRef.current, ...(previous?.anchor ? { anchor: previous.anchor } : {}) }) } }, [data, rows, location.key, navigation?.bookListSnapshots])
+  useLayoutEffect(() => {
+    if (page?.active === false) return
+    const initial = navigation?.bookListSnapshots?.get(location.key)?.scrollY
+    const raf = requestAnimationFrame(() => { if (initial !== undefined) window.scrollTo(0, initial) })
+    const record = () => { scrollRef.current = window.scrollY; const snapshot = navigation?.bookListSnapshots?.get(location.key); if (snapshot) { snapshot.scrollY = window.scrollY; const row = [...(page?.root.current?.querySelectorAll<HTMLElement>('[data-book-list-row]') ?? [])].find((element) => element.getBoundingClientRect().bottom > 0); if (row?.dataset.bookListRow) snapshot.anchor = { bookId: row.dataset.bookListRow, top: row.getBoundingClientRect().top } } }
+    window.addEventListener('scroll', record, { passive: true })
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('scroll', record) }
+  }, [page?.active, location.key, navigation?.bookListSnapshots])
+  const [editing, setEditing] = useState(false); const [review, setReview] = useState<BookListDisplayItem | null>(null); const [description, setDescription] = useState(''); const [busy, setBusy] = useState(''); const [error, setError] = useState(''); const [retry, setRetry] = useState(0)
+  usePageLoadEffect((settle) => { const controller = new AbortController(); void apiFetch<ApiBookListDetails>(`/api/book-lists/${listId}`, { signal: controller.signal }).then((result) => { setData(result); setRows((previous) => mergeBookListRows(previous, result.items)); requestAnimationFrame(() => { const anchor = navigation?.bookListSnapshots?.get(location.key)?.anchor; const row = anchor ? [...(page?.root.current?.querySelectorAll<HTMLElement>('[data-book-list-row]') ?? [])].find((element) => element.dataset.bookListRow === anchor.bookId) : undefined; if (anchor && row && page?.active !== false) window.scrollBy(0, row.getBoundingClientRect().top - anchor.top) }) }).catch((reason: unknown) => { if (!controller.signal.aborted) { if (reason instanceof ApiError && reason.status === 404) { setData(null); setRows([]); navigation?.bookListSnapshots?.delete(location.key) } setError(reason instanceof Error ? reason.message : '读取失败') } }).finally(settle); return () => controller.abort() }, [listId, retry], ['booklists', 'booklist-books'])
+  async function membership(row: BookListDisplayItem) {
+    setBusy(row.bookId); setError('')
+    try { await apiFetch(`/api/book-lists/${listId}/books/${row.bookId}`, { method: row.removed ? 'PUT' : 'DELETE', body: JSON.stringify(row.removed ? { restore: { description: row.description, addedAt: row.addedAt } } : {}) }); setRows((previous) => previous.map((item) => item.bookId === row.bookId ? { ...item, removed: !row.removed } : item)) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败') } finally { setBusy('') }
+  }
+  async function saveReview() { if (!review) return; setBusy(review.bookId); try { await apiFetch(`/api/book-lists/${listId}/books/${review.bookId}`, { method: 'PATCH', body: JSON.stringify({ description }) }); setReview(null) } catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败') } finally { setBusy('') } }
+  return <section className="page-stack page-narrow"><PageHeader title="书单详情" backTo="/book-lists" />{error ? <p className="error" role="alert">{error}<Button onClick={() => { setError(''); setRetry((value) => value + 1) }}>重试</Button></p> : null}{data ? <><div><h2>{data.list.name}</h2><p className="organization-prose">{data.list.description}</p><p className="muted small">更新于 {formatShanghaiDateTime(data.list.updatedAt)} · 共 {rows.filter((row) => !row.removed).length} 本</p><div className="organization-split-actions"><Button variant="secondary" onClick={() => setEditing(true)}>编辑信息</Button><Link className="button" to={`/search?targetBookListId=${listId}`} state={pageReturnState(location)}>添加书籍</Link></div></div>{rows.length === 0 ? <div className="empty-state">书单里还没有书，搜索并加入一本吧。</div> : <div className="book-list">{rows.map((row) => <article className="book-list-detail-row" data-book-list-row={row.bookId} key={row.bookId}><Link className="book-row-main" to={`/books/${row.bookId}/details?targetBookListId=${listId}`} state={pageReturnState(location)}><BookCover name={row.book.name} coverUrl={row.book.coverUrl} /><span className="book-row-info"><strong>{row.book.name}</strong><span className="muted">{row.book.author ?? '作者未知'}</span>{row.removed ? <span className="muted small">已移除</span> : null}</span></Link>{row.description ? <p className="organization-prose">我的评价：{row.description}</p> : null}<div className="actions">{!row.removed ? <Button size="sm" variant="secondary" onClick={() => { setReview(row); setDescription(row.description) }}>编辑评价</Button> : null}<Button size="sm" variant="secondary" disabled={busy === row.bookId} onClick={() => void membership(row)}>{row.removed ? '加入' : '移除'}</Button></div></article>)}</div>}</> : !error ? <p>正在读取书单…</p> : null}{editing && data ? <BookListEditor list={data.list} onClose={() => setEditing(false)} onSaved={(list) => { setData({ ...data, list }); setEditing(false) }} /> : null}{review ? <Sheet open title="编辑评价" onOpenChange={(open) => { if (!open) setReview(null) }}><p>{review.book.name} · {review.book.author ?? '作者未知'}</p><label>我的评价<textarea className="input organization-textarea" rows={5} value={description} onChange={(event) => setDescription(event.target.value)} /></label><div className="actions"><Button variant="secondary" onClick={() => setReview(null)}>取消</Button><Button disabled={busy !== ''} onClick={() => void saveReview()}>保存</Button></div></Sheet> : null}</section>
+}

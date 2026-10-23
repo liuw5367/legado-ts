@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { BACKUP_CATEGORIES, categoryForPath, createBackupZip, editionKey as backupEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile } from '@legado/reader-backup'
+import { BACKUP_CATEGORIES, validateBookOrganizationData, categoryForPath, createBackupZip, editionKey as backupEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile } from '@legado/reader-backup'
 import { importSources, sourceDefinitionFingerprint } from '@legado/source-core'
 import type { ContentCacheRecord, ContentIdentity, ContentSaveToken, ContentStore, ContentWriteInput, StoreWriteResult } from '@legado/source-core'
 import { CacheStore } from './cache-store.ts'
@@ -173,6 +173,7 @@ export class ReaderStorage {
         const raw = await readFile(join(this.paths.dataRoot, path)).catch(() => undefined)
         files.push({ path, data: raw === undefined ? jsonBytes({ schemaVersion: 1, revision: 0, updatedAt: iso(this.now), data: fallback }) : Uint8Array.from(raw), category: categoryForPath(path) })
       }
+      if (await readFile(join(this.paths.dataRoot, 'book-lists.json')).then(() => true, () => false)) await addJson('book-lists.json', { lists: [], items: [] })
       await addJson('bookshelf.json', [])
       await addJson('reading-history.json', [])
       await addJson('search-history.json', [])
@@ -239,8 +240,21 @@ export class ReaderStorage {
         await ensureDirectory(join(staging, 'books'))
         const writeStaged = async <T>(path: string, value: T): Promise<void> => this.jsonStore.writeFile(join(staging, path), value)
         if (selected.has('bookshelf')) {
+          const preserved = archive.files.has('book-lists.json') ? [] : await this.jsonStore.readFile<{ items: Array<{ bookId: string }> }>(join(this.paths.dataRoot, 'book-lists.json'), { items: [] }).then((value) => value.items.map((row) => row.bookId))
+          const incomingIds = new Set(archive.manifest.files.filter((file) => file.path.endsWith('/book.json')).map((file) => file.path.split('/')[1]))
+          const retained = new Map<string, Uint8Array>()
+          for (const bookId of new Set(preserved)) {
+            safeUuid(bookId)
+            if (incomingIds.has(bookId)) {
+              const incoming = readData<{ name: string; author?: string }>(`books/${bookId}/book.json`, { name: '' })
+              const current = await this.jsonStore.readFile<{ name: string; author?: string }>(join(this.paths.dataRoot, 'books', bookId, 'book.json'), { name: '' })
+              if (current.name !== incoming.name || current.author !== incoming.author) throw new Error('导入书籍与本地书单引用的书籍 ID 冲突，请使用 Web 恢复以完成身份映射')
+            } else for (const name of ['book.json', 'sources.json']) retained.set(`books/${bookId}/${name}`, await readFile(join(this.paths.dataRoot, 'books', bookId, name)))
+          }
           await rm(join(staging, 'books'), { recursive: true, force: true })
           await ensureDirectory(join(staging, 'books'))
+          for (const [path, bytes] of retained) { await ensureDirectory(dirname(join(staging, path))); await writeFile(join(staging, path), bytes) }
+          if (archive.files.has('book-lists.json')) await writeStaged('book-lists.json', readData('book-lists.json', { lists: [], items: [] }))
           await writeStaged('bookshelf.json', readData('bookshelf.json', []))
           for (const file of archive.manifest.files.filter((item) => item.path.startsWith('books/'))) {
             await writeStaged(file.path, unwrapStoredValue(parseJson<unknown>(archive, file.path)))
@@ -251,7 +265,7 @@ export class ReaderStorage {
         if (selected.has('settings')) {
           const incoming = readData<unknown>('reader-settings.json', {})
           const settings = isRecord(incoming) && isRecord(incoming.web) && !isRecord(incoming.cli) ? await this.getReaderSettings() : normalizeReaderSettings((isRecord(incoming) && isRecord(incoming.cli) ? incoming.cli : incoming) as Partial<ReaderSettings>)
-          await writeStaged('reader-settings.json', settings)
+          await writeStaged('reader-settings.json', isRecord(incoming) && isRecord(incoming.web) ? { web: incoming.web, cli: settings } : settings)
         }
         if (selected.has('sources')) {
           await writeStaged('source-state.json', readData('source-state.json', {}))
@@ -307,12 +321,12 @@ export class ReaderStorage {
   }
 
   public async getReaderSettings(): Promise<ReaderSettings> {
-    const value = await this.jsonStore.readFile<Partial<ReaderSettings>>(join(this.paths.dataRoot, 'reader-settings.json'), {})
-    return normalizeReaderSettings(value)
+    const value = await this.jsonStore.readFile<Partial<ReaderSettings> & { cli?: Partial<ReaderSettings> }>(join(this.paths.dataRoot, 'reader-settings.json'), {})
+    return normalizeReaderSettings(isRecord(value) && isRecord(value.cli) ? value.cli : value)
   }
 
   public async saveReaderSettings(settings: ReaderSettings): Promise<void> {
-    await this.withWriteLock(async () => this.jsonStore.writeFile(join(this.paths.dataRoot, 'reader-settings.json'), normalizeReaderSettings(settings)))
+    await this.withWriteLock(async () => { const path = join(this.paths.dataRoot, 'reader-settings.json'); const previous = await this.jsonStore.readFile<Record<string, unknown>>(path, {}); await this.jsonStore.writeFile(path, isRecord(previous.web) ? { web: previous.web, cli: normalizeReaderSettings(settings) } : normalizeReaderSettings(settings)) })
   }
 
   public async addSearchHistory(entry: Omit<SearchHistoryEntry, 'id'>): Promise<SearchHistoryEntry> {
@@ -756,6 +770,7 @@ export async function validateReaderBackup(input: Uint8Array, categories: readon
   const shelfIds = new Set(shelf.map((item) => (item as Record<string, unknown>).bookId as string))
   if (shelfIds.size !== shelf.length) throw new Error('书架包含重复书籍')
   const books = await readBackupBooks(archive)
+  if (archive.files.has('book-lists.json')) validateBookOrganizationData(data('book-lists.json'), new Set(books.keys()), shelf as Array<{ bookId: string; groupId?: unknown }>)
   for (const bookId of shelfIds) if (!books.has(bookId)) throw new Error(`书架缺少书籍数据：${bookId}`)
   const reading = validateReadingRecords(data('reading-history.json'))
   validateReadingDependencies(reading, books)

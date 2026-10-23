@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test tests/*.test.ts",
     "test:e2e": "node --test tests/*.test.ts",
-    "test:db": "node --test tests/db/*.test.ts",
+    "test:db": "node --test --test-concurrency=1 tests/db/*.test.ts",
     "db:migrate": "tsx server/db/migrate.ts",
     "db:generate": "drizzle-kit generate",
     "preview": "rsbuild preview"

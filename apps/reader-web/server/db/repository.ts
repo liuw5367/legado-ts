@@ -1,3 +1,5 @@
+import type { BookListOrganizationSnapshot } from '../../shared/book-lists.ts'
+import { OrganizationError, type OrganizationCommand, applyOrganizationCommand } from '../domain/book-organization.ts'
 import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { compareSourceManagementOrder, compareSourceVersions, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
@@ -6,7 +8,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, max, or, sql } from 'drizzle-o
 import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } from '@legado/reader-backup'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser, type ReaderTransaction } from './client.ts'
-import { bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
+import { bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
@@ -37,7 +39,8 @@ export interface ReaderBackupSnapshot {
   sources: Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>
   settings: ReaderSettings
   books: ReaderBackupBook[]
-  bookshelf: Array<{ bookId: string; addedAt: string }>
+  organization?: BookListOrganizationSnapshot
+  bookshelf: Array<{ bookId: string; addedAt: string; groupId?: string | null }>
   positions: StoredPosition[]
   searchHistory: SearchHistoryItem[]
 }
@@ -52,6 +55,10 @@ export class BackupRestoreError extends Error {
 }
 
 export interface ReaderRepository {
+  getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean): Promise<{ books: Array<{ book: StoredBook; editions: StoredEdition[] }>; positions: StoredPosition[]; bookshelf: Array<{ bookId: string; groupId: string | null }> }>
+  getBookOrganization(userId: string, listId?: string, includeItems?: boolean): Promise<BookListOrganizationSnapshot>
+  mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot>
+
   listSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
   listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
   listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>>
@@ -98,6 +105,57 @@ export interface ReaderRepository {
 }
 
 export class PostgresReaderRepository implements ReaderRepository {
+  public async getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean) {
+    return withUser(userId, async (tx) => {
+      const [bookRows, editions, positions, shelf] = await Promise.all([tx.select().from(books).where(and(eq(books.userId, userId), bookIds ? inArray(books.id, bookIds) : undefined)), tx.select().from(bookEditions).where(and(eq(bookEditions.userId, userId), bookIds ? inArray(bookEditions.bookId, bookIds) : undefined)), includePositions === false ? Promise.resolve([]) : tx.select().from(readingRecords).where(and(eq(readingRecords.userId, userId), bookIds ? inArray(readingRecords.bookId, bookIds) : undefined)), tx.select({ bookId: bookshelf.bookId, groupId: bookshelf.groupId }).from(bookshelf).where(eq(bookshelf.userId, userId))])
+      const byBook = new Map<string, StoredEdition[]>()
+      for (const edition of editions) { const values = byBook.get(edition.bookId) ?? []; values.push(toEdition(edition)); byBook.set(edition.bookId, values) }
+      return { books: bookRows.map((row) => ({ book: toBook(row), editions: byBook.get(row.id) ?? [] })), positions: positions.map(toPosition), bookshelf: shelf }
+    })
+  }
+
+  public async getBookOrganization(userId: string, listId?: string, includeItems = true): Promise<BookListOrganizationSnapshot> {
+    return withUser(userId, async (tx) => readOrganization(tx, userId, listId, includeItems))
+  }
+
+  public async mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot> {
+    return withUser(userId, async (tx) => {
+      // 同账号的分组删除、归属修改及排序共用锁，防止产生悬空关系。
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId + ':book-organization'}, 0))`)
+      const before = await readOrganization(tx, userId)
+      const shelfRows = await tx.select().from(bookshelf).where(eq(bookshelf.userId, userId))
+      const bookRows = await tx.select({ id: books.id }).from(books).where(eq(books.userId, userId))
+      const state = { ...structuredClone(before), shelf: new Map(shelfRows.map((row) => [row.bookId, row.groupId])), bookIds: new Set(bookRows.map((row) => row.id)) }
+      applyOrganizationCommand(state, userId, command)
+      const memberKey = (row: { bookListId: string; bookId: string }) => row.bookListId + ':' + row.bookId
+      const previousLists = new Map(before.lists.map((row) => [row.id, row]))
+      const previousItems = new Map(before.items.map((row) => [memberKey(row), row]))
+      const nextLists = new Set(state.lists.map((row) => row.id))
+      const nextItems = new Set(state.items.map(memberKey))
+      for (const row of before.items) if (!nextItems.has(memberKey(row))) await tx.delete(bookListItems).where(and(eq(bookListItems.userId, userId), eq(bookListItems.bookListId, row.bookListId), eq(bookListItems.bookId, row.bookId)))
+      for (const row of before.lists) if (!nextLists.has(row.id)) await tx.delete(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.id, row.id)))
+      for (const row of state.lists) {
+        if (JSON.stringify(previousLists.get(row.id)) === JSON.stringify(row)) continue
+        const values = { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) }
+        await tx.insert(bookLists).values(values).onConflictDoUpdate({ target: bookLists.id, set: { name: row.name, description: row.description, customOrder: row.customOrder, updatedAt: values.updatedAt } })
+      }
+      for (const row of state.items) {
+        if (JSON.stringify(previousItems.get(memberKey(row))) === JSON.stringify(row)) continue
+        const values = { ...row, addedAt: new Date(row.addedAt), updatedAt: new Date(row.updatedAt) }
+        await tx.insert(bookListItems).values(values).onConflictDoUpdate({ target: [bookListItems.userId, bookListItems.bookListId, bookListItems.bookId], set: { description: row.description, updatedAt: values.updatedAt } })
+      }
+      for (const row of shelfRows) {
+        if (!state.shelf.has(row.bookId)) await tx.delete(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, row.bookId)))
+        else if (state.shelf.get(row.bookId) !== row.groupId) await tx.update(bookshelf).set({ groupId: state.shelf.get(row.bookId) ?? null }).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, row.bookId)))
+      }
+      if (command.kind === 'delete' && command.type === 'shelf_group') {
+        const [settings] = await tx.select().from(readerSettings).where(eq(readerSettings.userId, userId)).for('update')
+        if (settings?.preferences.general.bookshelfInitialGroup === command.id) await tx.update(readerSettings).set({ preferences: { ...settings.preferences, general: { ...settings.preferences.general, bookshelfInitialGroup: 'all' } }, updatedAt: new Date() }).where(eq(readerSettings.userId, userId))
+      }
+      return { lists: state.lists, items: state.items }
+    })
+  }
+
   public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> {
     return withUser(userId, async (transaction) => {
       const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false))).orderBy(asc(userSources.customOrder), asc(userSources.sourceId))
@@ -304,6 +362,12 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings> {
     return withUser(userId, async (transaction) => {
+      await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId + ':book-organization'}, 0))`)
+      const target = patch.general?.bookshelfInitialGroup
+      if (target !== undefined && target !== 'all' && target !== 'ungrouped') {
+        const [group] = await transaction.select().from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.id, target), eq(bookLists.type, 'shelf_group')))
+        if (!group) throw new OrganizationError(404, '启动分组不存在')
+      }
       const [currentRow] = await transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
       const current = currentRow === undefined ? defaultReaderSettings(userId) : toSettings(currentRow)
       const next = mergeReaderSettings(current, patch, new Date().toISOString())
@@ -476,7 +540,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const [settingsRow] = await transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
       const settings = settingsRow === undefined ? defaultReaderSettings(userId) : toSettings(settingsRow)
-      const shelfRows = await transaction.select({ book: books, edition: bookEditions, addedAt: bookshelf.addedAt }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
+      const shelfRows = await transaction.select({ book: books, edition: bookEditions, addedAt: bookshelf.addedAt, groupId: bookshelf.groupId }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
       let sortedShelfRows = shelfRows
       if (settings.general.bookshelfSort === 'lastReadAt' && shelfRows.length > 0) {
         const lastReadRows = await transaction.select({ bookId: readingRecords.bookId, lastReadAt: max(readingRecords.lastReadAt) }).from(readingRecords).where(and(eq(readingRecords.userId, userId), inArray(readingRecords.bookId, shelfRows.map((row) => row.book.id)))).groupBy(readingRecords.bookId)
@@ -494,7 +558,7 @@ export class PostgresReaderRepository implements ReaderRepository {
       const readingRows = await transaction.select({ book: books, edition: bookEditions, position: readingRecords }).from(readingRecords).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingRecords.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, readingRecords.bookId), eq(bookEditions.editionKey, readingRecords.editionKey))).where(eq(readingRecords.userId, userId)).orderBy(desc(readingRecords.lastReadAt)).limit(50)
       const historyRows = await transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))).orderBy(desc(searchHistory.createdAt), desc(searchHistory.id))
       const positions = new Map(readingRows.map((row) => [`${row.book.id}:${row.edition.editionKey}`, toPosition(row.position)]))
-      const shelf = sortedShelfRows.map((row) => { const book = toBook(row.book); const edition = toEdition(row.edition); const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition } : { book, edition, position } })
+      const shelf = sortedShelfRows.map((row) => { const book = toBook(row.book); const edition = toEdition(row.edition); const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition, groupId: row.groupId } : { book, edition, groupId: row.groupId, position } })
       const seenReadingBooks = new Set<string>()
       const reading = readingRows.filter((row) => { if (seenReadingBooks.has(row.book.id)) return false; seenReadingBooks.add(row.book.id); return true }).map((row) => ({ book: toBook(row.book), edition: toEdition(row.edition), position: toPosition(row.position) }))
       return { bookshelf: shelf, reading, searchHistory: latestSearchHistory(historyRows.map(toHistory)).slice(0, 50) }
@@ -502,30 +566,7 @@ export class PostgresReaderRepository implements ReaderRepository {
   }
 
   public async getBackupSnapshot(userId: string): Promise<ReaderBackupSnapshot> {
-    return withUser(userId, async (transaction) => {
-      const [sourceRows, settingRows, bookRows, editionRows, candidateRows, shelfRows, positionRows, historyRows] = await Promise.all([
-        transaction.select().from(userSources).where(eq(userSources.userId, userId)),
-        transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1),
-        transaction.select().from(books).where(eq(books.userId, userId)),
-        transaction.select().from(bookEditions).where(eq(bookEditions.userId, userId)),
-        transaction.select().from(bookSourceCandidates).where(eq(bookSourceCandidates.userId, userId)),
-        transaction.select().from(bookshelf).where(eq(bookshelf.userId, userId)),
-        transaction.select().from(readingRecords).where(eq(readingRecords.userId, userId)),
-        transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))),
-      ])
-      const editionsByBook = new Map<string, StoredEdition[]>()
-      for (const row of editionRows) editionsByBook.set(row.bookId, [...(editionsByBook.get(row.bookId) ?? []), toEdition(row)])
-      const candidatesByBook = new Map<string, StoredBookSourceCandidate[]>()
-      for (const row of candidateRows) candidatesByBook.set(row.bookId, [...(candidatesByBook.get(row.bookId) ?? []), { ...row, updatedAt: row.updatedAt.toISOString() }])
-      return {
-        sources: sourceRows.map((row) => ({ source: toUserSource(row), sourceRevision: row.revision, ...(row.deleted ? { deleted: true } : {}) })),
-        settings: settingRows[0] === undefined ? defaultReaderSettings(userId) : toSettings(settingRows[0]),
-        books: bookRows.map((row) => ({ book: toBook(row), editions: editionsByBook.get(row.id) ?? [], candidates: candidatesByBook.get(row.id) ?? [] })),
-        bookshelf: shelfRows.map((row) => ({ bookId: row.bookId, addedAt: row.addedAt.toISOString() })),
-        positions: positionRows.map(toPosition),
-        searchHistory: historyRows.map(toHistory),
-      }
-    })
+    return withUser(userId, async (transaction) => readBackupSnapshot(transaction, userId))
   }
 
   public async restoreBackupSnapshot(userId: string, snapshot: ReaderBackupSnapshot, categories: readonly BackupCategory[]): Promise<void> {
@@ -533,6 +574,8 @@ export class PostgresReaderRepository implements ReaderRepository {
     assertBackupSnapshotClosed(snapshot, userId)
     if (selected.size === 0) throw new BackupRestoreError('至少选择一个恢复分类')
     await withUser(userId, async (transaction) => {
+      await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId + ':book-organization'}, 0))`)
+      snapshot = prepareOrganizationRestore(await readBackupSnapshot(transaction, userId), snapshot, selected)
       if (selected.has('sources')) await lockUserSourceMutations(transaction, userId)
       const bookIdMap = new Map<string, string>()
       const currentBookRows = selected.has('bookshelf') || selected.has('reading') ? await transaction.select({ id: books.id, userId: books.userId }).from(books).where(eq(books.userId, userId)) : []
@@ -571,7 +614,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         for (const item of snapshot.bookshelf) {
           const bookId = bookIdMap.get(item.bookId)
           if (bookId === undefined) throw new BackupRestoreError(`书架缺少书籍：${item.bookId}`)
-          await transaction.insert(bookshelf).values({ userId, bookId, addedAt: new Date(item.addedAt) }).onConflictDoNothing({ target: [bookshelf.userId, bookshelf.bookId] })
+          await transaction.insert(bookshelf).values({ userId, bookId, addedAt: new Date(item.addedAt), groupId: item.groupId ?? null }).onConflictDoNothing({ target: [bookshelf.userId, bookshelf.bookId] })
         }
       }
       if (selected.has('reading')) {
@@ -604,7 +647,13 @@ export class PostgresReaderRepository implements ReaderRepository {
           await transaction.insert(userSources).values({ userId, sourceId: item.source.sourceId, fingerprint: item.source.fingerprint, rawSource: item.source.rawSource, normalizedSource: normalized, enabled: item.source.enabled, customOrder: readInteger((normalized as Record<string, unknown>).customOrder, 0), deleted: item.deleted === true, revision: item.sourceRevision || randomUUID(), updatedAt: new Date() })
         }
       }
-      if (selected.has('settings')) {
+      if (selected.has('bookshelf') && snapshot.organization) {
+        await transaction.delete(bookListItems).where(eq(bookListItems.userId, userId))
+        await transaction.delete(bookLists).where(eq(bookLists.userId, userId))
+        for (const row of snapshot.organization.lists) await transaction.insert(bookLists).values({ ...row, userId, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) })
+        for (const row of snapshot.organization.items) await transaction.insert(bookListItems).values({ ...row, userId, bookId: bookIdMap.get(row.bookId) ?? row.bookId, addedAt: new Date(row.addedAt), updatedAt: new Date(row.updatedAt) })
+      }
+      if (selected.has('settings') || selected.has('bookshelf')) {
         const values = readerSettingsValues(userId, snapshot.settings, new Date(snapshot.settings.updatedAt))
         await transaction.insert(readerSettings).values(values).onConflictDoUpdate({ target: readerSettings.userId, set: { preferences: values.preferences, updatedAt: values.updatedAt } })
       }
@@ -757,6 +806,34 @@ export class PostgresReaderRepository implements ReaderRepository {
 }
 
 export class MemoryReaderRepository implements ReaderRepository {
+  public async getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean) {
+    const rows = new Map<string, { book: StoredBook; editions: StoredEdition[] }>()
+    for (const entry of this.books.values()) if (entry.book.userId === userId && (bookIds === undefined || bookIds.includes(entry.book.id))) { const row = rows.get(entry.book.id) ?? { book: entry.book, editions: [] }; row.editions.push(entry.edition); rows.set(entry.book.id, row) }
+    return structuredClone({ books: [...rows.values()], positions: includePositions === false ? [] : [...this.positions.values()].filter((row) => row.userId === userId && (bookIds === undefined || bookIds.includes(row.bookId))), bookshelf: [...this.shelf.keys()].filter((key) => key.startsWith(userId + ':')).map((key) => ({ bookId: key.slice(userId.length + 1), groupId: this.shelfGroups.get(key) ?? null })) })
+  }
+
+  private readonly organizations = new Map<string, BookListOrganizationSnapshot>()
+  private readonly shelfGroups = new Map<string, string | null>()
+  public async getBookOrganization(userId: string, listId?: string, includeItems = true): Promise<BookListOrganizationSnapshot> { const value = this.organizations.get(userId) ?? { lists: [], items: [] }; return structuredClone({ lists: value.lists.filter((row) => !listId || row.id === listId), items: includeItems ? value.items.filter((row) => !listId || row.bookListId === listId) : [] }) }
+  public async mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot> {
+    // 在同步段内校验并提交，内存实现与数据库事务保持相同的失败语义。
+    const before = structuredClone(this.organizations.get(userId) ?? { lists: [], items: [] })
+    const shelf = new Map([...this.shelf.keys()].filter((key) => key.startsWith(userId + ':')).map((key) => [key.slice(userId.length + 1), this.shelfGroups.get(key) ?? null]))
+    const state = { ...before, shelf, bookIds: new Set([...this.books.values()].filter((row) => row.book.userId === userId).map((row) => row.book.id)) }
+    applyOrganizationCommand(state, userId, command)
+    this.organizations.set(userId, { lists: state.lists, items: state.items })
+    for (const key of this.shelf.keys()) if (key.startsWith(userId + ':')) {
+      const bookId = key.slice(userId.length + 1)
+      if (!state.shelf.has(bookId)) { this.shelf.delete(key); this.shelfGroups.delete(key) }
+      else this.shelfGroups.set(key, state.shelf.get(bookId) ?? null)
+    }
+    if (command.kind === 'delete' && command.type === 'shelf_group') {
+      const current = this.settings.get(userId)
+      if (current?.general.bookshelfInitialGroup === command.id) this.settings.set(userId, { ...current, general: { ...current.general, bookshelfInitialGroup: 'all' } })
+    }
+    return structuredClone({ lists: state.lists, items: state.items })
+  }
+
   private readonly userSourceMap = new Map<string, { source: StoredSourceRecord; deleted: boolean; revision: string }>()
   private readonly importPreviews = new Map<string, { userId: string; sourceUrl: string; preview: ImportPreview; consumedIds: string[]; result?: { imported: number } }>()
   private readonly runtimeStates = new Map<string, { snapshot: RuntimeStateSnapshot; version: number; leaseToken: string | null; leaseUntil: number | null }>()
@@ -867,7 +944,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async saveSourceRuntimeState(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, expectedVersion: number, snapshot: RuntimeStateSnapshot): Promise<SourceRuntimeStateRecord | null> { const key = runtimeStateKey(userId, sourceId, sourceFingerprint); const current = this.runtimeStates.get(key); if (current === undefined || current.leaseToken !== leaseToken || current.version !== expectedVersion) return null; const next = { snapshot: cloneRuntimeSnapshot(snapshot), version: current.version + 1, leaseToken: null, leaseUntil: null }; this.runtimeStates.set(key, next); return { sourceId, sourceFingerprint, snapshot: cloneRuntimeSnapshot(next.snapshot), version: next.version } }
   public async releaseSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string): Promise<void> { const current = this.runtimeStates.get(runtimeStateKey(userId, sourceId, sourceFingerprint)); if (current?.leaseToken !== leaseToken) return; current.leaseToken = null; current.leaseUntil = null }
   public async getSettings(userId: string): Promise<ReaderSettings> { return this.settings.get(userId) ?? defaultReaderSettings(userId) }
-  public async saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings> { const next = mergeReaderSettings(await this.getSettings(userId), patch, new Date().toISOString()); this.settings.set(userId, next); return next }
+  public async saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings> { const target = patch.general?.bookshelfInitialGroup; if (target !== undefined && target !== 'all' && target !== 'ungrouped' && !this.organizations.get(userId)?.lists.some((row) => row.type === 'shelf_group' && row.id === target)) throw new OrganizationError(404, '启动分组不存在'); const next = mergeReaderSettings(this.settings.get(userId) ?? defaultReaderSettings(userId), patch, new Date().toISOString()); this.settings.set(userId, next); return structuredClone(next) }
   public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> { const now = new Date().toISOString(); const sourceIds = input.sourceIds === undefined || input.sourceIds.length === 0 ? [input.sourceId] : [...new Set(input.sourceIds)]; const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, status: 'pending', candidates: [], diagnostics: [] })); const search: SearchRunState = { id: randomUUID(), userId, keyword: input.keyword, sourceId: sourceIds[0] ?? input.sourceId, sourceIds, ...(input.precision === true ? { precision: true } : {}), ...(sourceFingerprint === undefined ? {} : { sourceFingerprint }), status: 'running', candidates: [], sourceStates, ...(input.cursor === undefined ? {} : { cursor: input.cursor }), progress: { completed: 0, total: sourceIds.length }, version: 0, cancelled: false, createdAt: now, updatedAt: now }; this.searches.set(search.id, search); this.history.set(`${userId}:${search.id}`, { id: randomUUID(), searchId: search.id, keyword: input.keyword, sourceIds, status: 'running', resultCount: 0, createdAt: now, updatedAt: now }); return search }
   public async getSearch(userId: string, searchId: string): Promise<SearchRunState | null> { const search = this.searches.get(searchId); return search?.userId === userId ? search : null }
   public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || current.operationId !== undefined) return null; return this.updateSearch(userId, searchId, { sourceStates, progress, operationId, status: 'running', cancelled: false }) }
@@ -923,7 +1000,7 @@ export class MemoryReaderRepository implements ReaderRepository {
       }
       return rightAddedAt.localeCompare(leftAddedAt) || left.book.id.localeCompare(right.book.id)
     })
-    const shelf = shelfValues.map((value) => { const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } })
+    const shelf = shelfValues.map((entry) => { const value = { ...entry, groupId: this.shelfGroups.get(`${userId}:${entry.book.id}`) ?? null }; const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } })
     return { bookshelf: shelf, reading, searchHistory: latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50) }
   }
   public async getBackupSnapshot(userId: string): Promise<ReaderBackupSnapshot> {
@@ -942,8 +1019,9 @@ export class MemoryReaderRepository implements ReaderRepository {
     return {
       sources: this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), ...(deleted ? { deleted: true } : {}) })),
       settings: await this.getSettings(userId),
+      organization: await this.getBookOrganization(userId),
       books: [...books.values()],
-      bookshelf: [...this.shelf.entries()].filter(([key]) => key.startsWith(`${userId}:`)).map(([key, addedAt]) => ({ bookId: key.slice(userId.length + 1), addedAt })),
+      bookshelf: [...this.shelf.entries()].filter(([key]) => key.startsWith(`${userId}:`)).map(([key, addedAt]) => ({ bookId: key.slice(userId.length + 1), addedAt, groupId: this.shelfGroups.get(key) ?? null })),
       positions: [...this.positions.values()].filter((position) => position.userId === userId),
       searchHistory: [...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId),
     }
@@ -951,6 +1029,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async restoreBackupSnapshot(userId: string, snapshot: ReaderBackupSnapshot, categories: readonly BackupCategory[]): Promise<void> {
     const selected = new Set(categories)
     if (selected.size === 0) throw new BackupRestoreError('至少选择一个恢复分类')
+    snapshot = prepareOrganizationRestore(await this.getBackupSnapshot(userId), snapshot, selected)
     assertBackupSnapshotClosed(snapshot, userId)
     const bookIdMap = new Map<string, string>()
     const currentBookIds = new Set([...this.books.values()].filter((value) => value.book.userId === userId).map((value) => value.book.id))
@@ -1025,7 +1104,12 @@ export class MemoryReaderRepository implements ReaderRepository {
         if (identity[0] === userId) nextRuntimeStates.delete(key)
       }
     }
-    if (selected.has('settings')) nextSettings.set(userId, { ...snapshot.settings })
+    if (selected.has('settings') || selected.has('bookshelf')) nextSettings.set(userId, { ...snapshot.settings })
+    if (selected.has('bookshelf') && snapshot.organization) {
+      this.organizations.set(userId, structuredClone(snapshot.organization))
+      for (const key of this.shelfGroups.keys()) if (key.startsWith(userId + ':')) this.shelfGroups.delete(key)
+      for (const row of snapshot.bookshelf) this.shelfGroups.set(`${userId}:${bookIdMap.get(row.bookId) ?? row.bookId}`, row.groupId ?? null)
+    }
     this.books.clear(); for (const [key, value] of nextBooks) this.books.set(key, value)
     this.sourceCandidates.clear(); for (const [key, value] of nextCandidates) this.sourceCandidates.set(key, value)
     this.shelf.clear(); for (const [key, value] of nextShelf) this.shelf.set(key, value)
@@ -1150,7 +1234,7 @@ function toSettings(row: ReaderSettingsRow): ReaderSettings {
     marginRight: typeof display.marginRight === 'number' && Number.isInteger(display.marginRight) && display.marginRight >= 0 && display.marginRight <= 64 ? display.marginRight : DEFAULT_READER_SETTINGS.marginRight,
     marginBottom: typeof display.marginBottom === 'number' && Number.isInteger(display.marginBottom) && display.marginBottom >= 0 && display.marginBottom <= 64 ? display.marginBottom : DEFAULT_READER_SETTINGS.marginBottom,
     marginLeft: typeof display.marginLeft === 'number' && Number.isInteger(display.marginLeft) && display.marginLeft >= 0 && display.marginLeft <= 64 ? display.marginLeft : DEFAULT_READER_SETTINGS.marginLeft,
-    general: { bookshelfSort },
+    general: { bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' },
     pageTapZones: readPageTapZones(preferences.pageTapZones),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -1174,6 +1258,18 @@ function toContent(row: ChapterContentRow): StoredContent { return { userId: row
 function toPosition(row: typeof readingRecords.$inferSelect): StoredPosition { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, chapterId: row.chapterId, chapterUrl: row.chapterUrl, chapterIndex: row.chapterIndex, title: row.title, ...(row.tocRevision === null ? {} : { tocRevision: row.tocRevision }), paragraphIndex: row.paragraphIndex, offset: row.offset, version: row.version, lastReadAt: row.lastReadAt.toISOString() } }
 
 function assertBackupSnapshotClosed(snapshot: ReaderBackupSnapshot, userId: string): void {
+  if (!snapshot.organization && snapshot.bookshelf.some((row) => row.groupId != null)) throw new BackupRestoreError('备份缺少分组定义')
+  if (snapshot.organization) {
+    const { lists, items } = snapshot.organization
+    for (const row of lists) if (row.userId !== userId || (row.type === 'shelf_group' && (row.description !== '' || row.isPublic))) throw new BackupRestoreError('书单归属或类型字段无效')
+    const groups = new Set(lists.filter((row) => row.type === 'shelf_group').map((row) => row.id))
+    if (new Set(lists.map((row) => row.id)).size !== lists.length || new Set(items.map((row) => `${row.bookListId}:${row.bookId}`)).size !== items.length) throw new BackupRestoreError('书单记录重复')
+    const names = lists.filter((row) => row.type === 'shelf_group').map((row) => row.name)
+    if (new Set(names).size !== names.length || names.some((name) => name === '全部' || name === '默认' || [...name].length > 30)) throw new BackupRestoreError('分组名称无效')
+    for (const row of items) if (row.userId !== userId || !lists.some((list) => list.id === row.bookListId && list.type === 'booklist') || !snapshot.books.some((book) => book.book.id === row.bookId)) throw new BackupRestoreError('书单书籍关联无效')
+    for (const row of snapshot.bookshelf) if (row.groupId && !groups.has(row.groupId)) throw new BackupRestoreError('书架分组关联无效')
+  }
+
   const sourceIds = new Set<string>()
   for (const item of snapshot.sources) {
     if (item.source.sourceId.length === 0 || sourceIds.has(item.source.sourceId)) throw new BackupRestoreError(`书源定义重复：${item.source.sourceId}`)
@@ -1222,4 +1318,75 @@ function cacheableCandidate(stored: StoredCandidate): StoredCandidate {
   const { sourceId, bookUrl, name, author, intro, coverUrl, kind, wordCount, lastChapter, updateTime, tocUrl, variable, rawFields } = stored.candidate
   const fields = Object.fromEntries(Object.entries({ name, author, intro, coverUrl, kind, wordCount, lastChapter, updateTime, tocUrl }).filter(([, value]) => value !== undefined))
   return { sourceId: stored.sourceId, sourceFingerprint: stored.sourceFingerprint, ...(stored.searchDurationMs === undefined ? {} : { searchDurationMs: stored.searchDurationMs }), candidate: { sourceId, bookUrl, ...fields, ...(variable === undefined ? {} : { variable }), rawFields: structuredClone(rawFields), traceRef: 'book-source-cache' } }
+}
+
+async function readOrganization(tx: ReaderTransaction, userId: string, listId?: string, includeItems = true): Promise<BookListOrganizationSnapshot> {
+  const lists = await tx.select().from(bookLists).where(and(eq(bookLists.userId, userId), listId ? eq(bookLists.id, listId) : undefined))
+  const items = includeItems ? await tx.select().from(bookListItems).where(and(eq(bookListItems.userId, userId), listId ? eq(bookListItems.bookListId, listId) : undefined)) : []
+  return { lists: lists.map((row) => ({ ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() })), items: items.map((row) => ({ ...row, addedAt: row.addedAt.toISOString(), updatedAt: row.updatedAt.toISOString() })) }
+}
+
+async function readBackupSnapshot(transaction: ReaderTransaction, userId: string): Promise<ReaderBackupSnapshot> {
+  const [sourceRows, settingRows, bookRows, editionRows, candidateRows, shelfRows, positionRows, historyRows] = await Promise.all([
+    transaction.select().from(userSources).where(eq(userSources.userId, userId)),
+    transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1),
+    transaction.select().from(books).where(eq(books.userId, userId)),
+    transaction.select().from(bookEditions).where(eq(bookEditions.userId, userId)),
+    transaction.select().from(bookSourceCandidates).where(eq(bookSourceCandidates.userId, userId)),
+    transaction.select().from(bookshelf).where(eq(bookshelf.userId, userId)),
+    transaction.select().from(readingRecords).where(eq(readingRecords.userId, userId)),
+    transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))),
+  ])
+  const editionsByBook = new Map<string, StoredEdition[]>()
+  for (const row of editionRows) editionsByBook.set(row.bookId, [...(editionsByBook.get(row.bookId) ?? []), toEdition(row)])
+  const candidatesByBook = new Map<string, StoredBookSourceCandidate[]>()
+  for (const row of candidateRows) candidatesByBook.set(row.bookId, [...(candidatesByBook.get(row.bookId) ?? []), { ...row, updatedAt: row.updatedAt.toISOString() }])
+  return {
+    sources: sourceRows.map((row) => ({ source: toUserSource(row), sourceRevision: row.revision, ...(row.deleted ? { deleted: true } : {}) })),
+    settings: settingRows[0] === undefined ? defaultReaderSettings(userId) : toSettings(settingRows[0]),
+    books: bookRows.map((row) => ({ book: toBook(row), editions: editionsByBook.get(row.id) ?? [], candidates: candidatesByBook.get(row.id) ?? [] })),
+    organization: await readOrganization(transaction, userId),
+    bookshelf: shelfRows.map((row) => ({ bookId: row.bookId, addedAt: row.addedAt.toISOString(), groupId: row.groupId })),
+    positions: positionRows.map(toPosition),
+    searchHistory: historyRows.map(toHistory),
+  }
+
+}
+
+function prepareOrganizationRestore(current: ReaderBackupSnapshot, input: ReaderBackupSnapshot, selected: ReadonlySet<BackupCategory>): ReaderBackupSnapshot {
+  assertBackupSnapshotClosed(input, input.settings.userId)
+  const next = structuredClone(input)
+  if (!selected.has('settings')) next.settings = structuredClone(current.settings)
+  const listIdMap = new Map<string, string>()
+  if (selected.has('bookshelf') && next.organization) {
+    for (const row of next.organization.lists) { const previous = row.id; row.id = randomUUID(); listIdMap.set(previous, row.id) }
+    for (const row of next.organization.items) row.bookListId = listIdMap.get(row.bookListId) ?? row.bookListId
+    for (const row of next.bookshelf) if (row.groupId) row.groupId = listIdMap.get(row.groupId) ?? row.groupId
+    const initial = next.settings.general.bookshelfInitialGroup
+    if (initial && listIdMap.has(initial)) next.settings.general.bookshelfInitialGroup = listIdMap.get(initial)!
+  }
+  const organization = selected.has('bookshelf') ? next.organization ?? current.organization : current.organization
+  if (selected.has('bookshelf') && next.organization === undefined && organization) {
+    // 旧备份不包含书单扩展，保留本地书单依赖，避免替换书架后关联悬空。
+    const referenced = new Set(organization.items.map((row) => row.bookId))
+    const incoming = new Map(next.books.map((row) => [row.book.id, row]))
+    for (const old of current.books.filter((row) => referenced.has(row.book.id))) {
+      const conflict = incoming.get(old.book.id)
+      if (conflict && (normalizeIdentity(conflict.book.name) !== normalizeIdentity(old.book.name) || normalizeIdentity(conflict.book.author ?? '') !== normalizeIdentity(old.book.author ?? ''))) {
+        const replacement = randomUUID()
+        conflict.book.id = replacement
+        for (const row of conflict.editions) row.bookId = replacement
+        for (const row of conflict.candidates) row.bookId = replacement
+        for (const row of next.bookshelf) if (row.bookId === old.book.id) row.bookId = replacement
+        for (const row of next.positions) if (row.bookId === old.book.id) row.bookId = replacement
+        next.books.push(structuredClone(old))
+      } else if (!conflict) next.books.push(structuredClone(old))
+    }
+    next.organization = structuredClone(organization)
+  }
+  const target = next.settings.general.bookshelfInitialGroup ?? 'all'
+  const valid = target === 'all' || target === 'ungrouped' || organization?.lists.some((row) => row.type === 'shelf_group' && row.id === target)
+  if (selected.has('settings')) next.settings.general.bookshelfInitialGroup = valid ? target : 'all'
+  else if (!valid) next.settings.general.bookshelfInitialGroup = 'all'
+  return next
 }

@@ -7,6 +7,7 @@ export interface PageNavigation {
   versions: ReadonlyMap<string, number>
   back: (fallback: { to: string; state: unknown }) => void
   rootTarget: (path: string) => string
+  bookListSnapshots?: Map<string, import('./book-list-state.ts').BookListPageSnapshot>
   positions: ReadingPositionQueue
 }
 export const NavigationContext = createContext<PageNavigation | null>(null)

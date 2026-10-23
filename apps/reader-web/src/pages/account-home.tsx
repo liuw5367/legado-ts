@@ -1,3 +1,5 @@
+import { BookListPicker } from '../components/book-list-picker.tsx'
+import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { Search } from 'lucide-react'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
@@ -7,18 +9,22 @@ import { BookCover } from '../components/book-cover.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { MoreMenu } from '../components/more-menu.tsx'
 import { Button } from '../components/ui/button.tsx'
-import { apiFetch, type ApiHome } from '../lib/api.ts'
+import { apiFetch, type ApiHome, type ApiShelfGroups, type ApiSettings } from '../lib/api.ts'
 import { formatShanghaiDateTime } from '../lib/time-format.ts'
 
 type BookItem = ApiHome['bookshelf'][number]
 type View = 'bookshelf' | 'reading' | 'history'
 
 export function AccountHomePage() {
+  const [groupData, setGroupData] = useState<ApiShelfGroups | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState('all')
+  const groupInitialized = useRef(false)
   const [home, setHome] = useState<ApiHome | null>(null)
   const [loading, setLoading] = useState(true)
   const location = useLocation()
   const initialView = (location.state as { homeView?: View } | null)?.homeView
   const [view, setView] = useState<View>(initialView === 'reading' || initialView === 'history' ? initialView : 'bookshelf')
+  const [feedback, setFeedback] = useState('')
   const [message, setMessage] = useState('')
   const [removing, setRemoving] = useState<string>()
   const [deletingHistory, setDeletingHistory] = useState<string>()
@@ -33,9 +39,12 @@ export function AccountHomePage() {
     setLoading(true)
     setMessage('')
     try {
-      const result = await apiFetch<ApiHome>('/api/home', { signal: controller.signal })
+      const [result, groups, settings] = await Promise.all([apiFetch<ApiHome>('/api/home', { signal: controller.signal }), apiFetch<ApiShelfGroups>('/api/bookshelf-groups', { signal: controller.signal }), apiFetch<{ settings: ApiSettings }>('/api/settings', { signal: controller.signal })])
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      setHome(result)
+      setHome(result); setGroupData(groups)
+      const valid = (id: string) => id === 'all' || id === 'ungrouped' || groups.groups.some((group) => group.id === id)
+      if (!groupInitialized.current) { const initial = settings.settings.general.bookshelfInitialGroup ?? 'all'; setSelectedGroup(valid(initial) ? initial : 'all'); groupInitialized.current = true }
+      else setSelectedGroup((current) => valid(current) ? current : 'all')
     } catch (error: unknown) {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       setMessage(error instanceof Error ? error.message : '首页加载失败')
@@ -54,7 +63,7 @@ export function AccountHomePage() {
       controllerRef.current?.abort()
       controllerRef.current = null
     }
-  }, [], ['home'])
+  }, [], ['home', 'groups'])
 
   async function removeBook(bookId: string) {
     setRemoving(bookId); setMessage('')
@@ -69,7 +78,7 @@ export function AccountHomePage() {
     finally { setDeletingHistory(undefined) }
   }
 
-  const bookItems: BookItem[] = home === null ? [] : view === 'bookshelf' ? home.bookshelf : home.reading
+  const bookItems: BookItem[] = home === null ? [] : view === 'bookshelf' ? home.bookshelf.filter((row) => selectedGroup === 'all' || (selectedGroup === 'ungrouped' ? !row.groupId : row.groupId === selectedGroup)) : home.reading
   const countLabel = home === null ? (loading ? '读取中…' : '暂时无法读取') : view === 'bookshelf' ? `${home.bookshelf.length} 本书` : view === 'reading' ? `${home.reading.length} 条记录` : `${home.searchHistory.length} 条搜索`
   return <section className="page-stack page-narrow">
     <PageHeader title="我的阅读" description={countLabel} actions={<Link className="button small page-action" to="/search"><Search aria-hidden="true" /><span>搜索</span></Link>} />
@@ -78,20 +87,25 @@ export function AccountHomePage() {
       <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => setView('reading')}>阅读 {home === null ? null : <span>{home.reading.length}</span>}</button>
       <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>搜索 {home === null ? null : <span>{home.searchHistory.length}</span>}</button>
     </div>
+    {view === 'bookshelf' && groupData && groupData.groups.length > 0 ? <div className="shelf-group-bar" aria-label="书架分组">{[{ id: 'all', name: '全部' }, { id: 'ungrouped', name: '默认' }, ...groupData.groups].map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div> : null}
+    {view === 'bookshelf' && home && bookItems.length === 0 && selectedGroup !== 'all' ? <div className="empty-state"><p>这个分组还没有书</p><Link className="button secondary" to="/search">搜索书籍</Link></div> : null}
     {loading && home === null ? <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : home === null ? <div className="error-state"><p className="error" role="alert">{message || '首页加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
       {loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
+      {feedback ? <p className="success compact-message" role="status">{feedback}</p> : null}
       {message.length > 0 ? <p className="error compact-message" role="alert">{message}</p> : null}
-      {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList view={view} items={bookItems} showRemove={view === 'bookshelf'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
+      {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList onOrganized={setFeedback} view={view} items={bookItems} showRemove={view === 'bookshelf'} hideEmpty={view === 'bookshelf' && selectedGroup !== 'all'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
     </>}
   </section>
 }
 
-function BookList({ view, items, showRemove, removingId, onRemove }: { view: View; items: BookItem[]; showRemove: boolean; removingId: string | undefined; onRemove: (bookId: string) => void }) {
+function BookList({ view, items, showRemove, hideEmpty = false, removingId, onRemove, onOrganized }: { view: View; items: BookItem[]; showRemove: boolean; hideEmpty?: boolean; onOrganized: (message: string) => void; removingId: string | undefined; onRemove: (bookId: string) => void }) {
+  if (items.length === 0 && hideEmpty) return null
   if (items.length === 0) return <div className="empty-state">{showRemove ? '书架还是空的，去搜索一本书吧。' : '还没有阅读记录。'}</div>
-  return <div className="book-list">{items.map((item) => <BookRow key={`${item.book.id}:${item.edition.editionKey}`} item={item} view={view} showRemove={showRemove} removing={removingId === item.book.id} onRemove={onRemove} />)}</div>
+  return <div className="book-list">{items.map((item) => <BookRow key={`${item.book.id}:${item.edition.editionKey}`} item={item} onOrganized={onOrganized} view={view} showRemove={showRemove} removing={removingId === item.book.id} onRemove={onRemove} />)}</div>
 }
 
-function BookRow({ view, item, showRemove, removing, onRemove }: { view: View; item: BookItem; showRemove: boolean; removing: boolean; onRemove: (bookId: string) => void }) {
+function BookRow({ view, item, showRemove, removing, onRemove, onOrganized }: { view: View; item: BookItem; showRemove: boolean; onOrganized: (message: string) => void; removing: boolean; onRemove: (bookId: string) => void }) {
+  const [picker, setPicker] = useState<'join' | 'move' | 'group' | null>(null)
   const { book, edition, position } = item
   const target = position === undefined ? `/books/${encodeURIComponent(book.id)}/read?editionKey=${encodeURIComponent(edition.editionKey)}` : `/books/${encodeURIComponent(book.id)}/read/${encodeURIComponent(position.chapterId)}?editionKey=${encodeURIComponent(edition.editionKey)}`
   return <article className="book-row">
@@ -102,8 +116,10 @@ function BookRow({ view, item, showRemove, removing, onRemove }: { view: View; i
     <MoreMenu label={`更多操作：${book.name}`}>
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(book.id) + '/details?editionKey=' + encodeURIComponent(edition.editionKey)} state={{ backTo: '/', backState: { homeView: view } }}>查看详情</Link>
       <Link className="more-menu-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`} state={{ backTo: '/', backState: { homeView: view } }}>查看目录</Link>
+      {showRemove ? <><button className="more-menu-item" onClick={() => setPicker('group')}>修改分组</button><button className="more-menu-item" onClick={() => setPicker('join')}>加入书单</button><button className="more-menu-item" onClick={() => setPicker('move')}>移入书单</button></> : null}
       {showRemove ? <button className="more-menu-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}
     </MoreMenu>
+    {picker === 'group' ? <ShelfGroupPicker book={book} onSaved={() => onOrganized('已修改分组')} onClose={() => setPicker(null)} /> : picker ? <BookListPicker book={book} move={picker === 'move'} onSaved={() => onOrganized(picker === 'move' ? '已移入书单并移出书架' : '已加入书单')} onClose={() => setPicker(null)} /> : null}
   </article>
 }
 

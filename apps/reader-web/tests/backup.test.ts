@@ -104,3 +104,40 @@ async function saveSource(repository: MemoryReaderRepository, source: NonNullabl
   await repository.saveImportPreview(userId, { previewId: 'backup-source-preview', expiresAt: new Date(Date.now() + 60_000).toISOString(), writableCount: 1, candidates: [{ id: 'backup-source-candidate', sourceId: source.bookSourceUrl, name: source.bookSourceName, fingerprint, normalizedSource: source, rawSource: source, disposition: 'new', reason: '可导入' }] }, 'https://backup.example/source.json')
   await repository.commitImportPreview(userId, 'backup-source-preview', ['backup-source-candidate'])
 }
+
+test('书单独立评价、分组顺序和启动目标随备份恢复', async () => {
+  const source = new MemoryReaderRepository()
+  const edition = sharedEditionKey(metadata.sourceId, metadata.bookUrl)
+  const created = await source.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: edition, sourceFingerprint: 'fp' })
+  const org = await source.mutateBookOrganization(userId, { kind: 'create', type: 'booklist', name: '重读' })
+  const list = org.lists[0]!
+  await source.mutateBookOrganization(userId, { kind: 'add', id: list.id, bookId: created.book.id })
+  await source.mutateBookOrganization(userId, { kind: 'review', id: list.id, bookId: created.book.id, description: '我的评价' })
+  const groups = await source.mutateBookOrganization(userId, { kind: 'create', type: 'shelf_group', name: '科幻' })
+  const group = groups.lists.find((row) => row.type === 'shelf_group')!
+  await source.mutateBookOrganization(userId, { kind: 'assign', bookId: created.book.id, groupId: group.id })
+  await source.saveSettings(userId, { general: { bookshelfInitialGroup: group.id } })
+  const target = new MemoryReaderRepository()
+  await restoreWebBackup(target, userId, await createWebBackup(source, userId), ['bookshelf', 'reading', 'settings'])
+  const restored = await target.getBackupSnapshot(userId)
+  assert.equal(restored.organization?.items[0]?.description, '我的评价')
+  const restoredGroup = restored.organization?.lists.find((row) => row.name === '科幻')
+  assert.ok(restoredGroup)
+  assert.equal(restored.bookshelf[0]?.groupId, restoredGroup.id)
+  assert.equal(restored.settings.general.bookshelfInitialGroup, restoredGroup.id)
+})
+
+test('旧备份恢复保留本地书单和不在书架的依赖书籍', async () => {
+  const target = new MemoryReaderRepository()
+  const edition = sharedEditionKey(metadata.sourceId, metadata.bookUrl)
+  const created = await target.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: edition, sourceFingerprint: 'fp', addToBookshelf: false })
+  const org = await target.mutateBookOrganization(userId, { kind: 'create', type: 'booklist', name: '保留书单' })
+  await target.mutateBookOrganization(userId, { kind: 'add', id: org.lists[0]!.id, bookId: created.book.id })
+  const archive = await readBackupZip(await createWebBackup(new MemoryReaderRepository(), userId))
+  const { createBackupZip } = await import('@legado/reader-backup')
+  const zip = createBackupZip(archive.manifest.files.filter((file) => file.path !== 'book-lists.json').map((file) => ({ path: file.path, category: file.category, data: archive.files.get(file.path)! })), { producer: { name: 'reader-cli', version: '0.1.0' } })
+  await restoreWebBackup(target, userId, zip, ['bookshelf', 'reading'])
+  assert.equal((await target.getBookOrganization(userId)).items[0]?.bookId, created.book.id)
+  assert.equal((await target.getBook(userId, created.book.id))?.name, metadata.name)
+  assert.equal((await target.getHome(userId)).bookshelf.length, 0)
+})

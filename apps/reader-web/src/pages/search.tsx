@@ -1,3 +1,4 @@
+import { BookListPicker } from '../components/book-list-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageActivity, usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
@@ -32,6 +33,8 @@ export function SearchPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryKeyword = searchParams.get('q') ?? ''
+  const [listCandidate, setListCandidate] = useState<{ group: CandidateGroup; identity: string; searchId: string } | null>(null)
+  const targetBookListId = searchParams.get('targetBookListId') ?? ''
   const targetBookId = searchParams.get('bookId') ?? ''
   const [books, setBooks] = useState<ApiBook[]>([])
   const [booksLoaded, setBooksLoaded] = useState(false)
@@ -83,12 +86,13 @@ export function SearchPage() {
   const previousQuery = useRef(queryKeyword)
   useEffect(() => { if (previousQuery.current !== queryKeyword) { previousQuery.current = queryKeyword; setKeyword(queryKeyword) } }, [queryKeyword])
 
-  async function saveCandidate(group: CandidateGroup, action: 'shelf' | 'directory' | 'details') {
+  async function saveCandidate(group: CandidateGroup, action: 'shelf' | 'directory' | 'details' | 'list') {
     if (!booksLoaded || saveController.current !== null) return
     const selectedIndex = selectedCandidateIndex(group.items, selectedByGroup[group.key])
     if (selectedIndex === undefined || searchId.length === 0) return
     const result = candidates[selectedIndex]
     if (result === undefined) return
+    if (action === 'list') { setListCandidate({ group, identity: candidateSelectionKey(result), searchId }); return }
     const requestedBook = targetBookId.length > 0 ? books.find((book) => book.id === targetBookId) : undefined
     const existingBook = requestedBook ?? books.find((book) => sameBookIdentity(book.name, book.author, result.candidate.name, result.candidate.author))
     const controller = new AbortController(); saveController.current = controller
@@ -98,12 +102,24 @@ export function SearchPage() {
       if (controller.signal.aborted) return
       if (action !== 'shelf') {
         if (page?.active === false) return
-        navigate(`/books/${encodeURIComponent(created.book.id)}/${action === 'details' ? 'details' : 'toc'}?editionKey=${encodeURIComponent(created.edition.editionKey)}`, { state: pageReturnState(location) })
+        navigate(`/books/${encodeURIComponent(created.book.id)}/${action === 'details' ? 'details' : 'toc'}?editionKey=${encodeURIComponent(created.edition.editionKey)}${targetBookListId ? '&targetBookListId=' + encodeURIComponent(targetBookListId) : ''}`, { state: pageReturnState(location) })
       } else {
         setBooks((current) => [...current.filter((book) => book.id !== created.book.id), created.book]); setMessageTone(created.cacheWarning === undefined ? 'success' : 'error'); setMessage(created.cacheWarning === undefined ? '已加入书架' : `书籍已保存，但${created.cacheWarning.message}`)
       }
     } catch (error) { if (!controller.signal.aborted) { setMessageTone('error'); setMessage(error instanceof Error ? error.message : action === 'directory' ? '打开目录失败' : action === 'details' ? '打开详情失败' : '加入书架失败') } }
     finally { saveController.current = null; if (!controller.signal.aborted) setSaving(null) }
+  }
+
+  async function resolveListBook(): Promise<ApiBook> {
+    if (!listCandidate) throw new Error('请选择搜索结果')
+    const index = candidates.findIndex((candidate) => candidateSelectionKey(candidate) === listCandidate.identity)
+    const result = candidates[index]
+    if (!result || searchId !== listCandidate.searchId) throw new Error('搜索结果已变化，请重新选择')
+    const existing = books.find((book) => sameBookIdentity(book.name, book.author, result.candidate.name, result.candidate.author))
+    if (existing) return existing
+    const created = await apiFetch<{ book: ApiBook }>('/api/books', { method: 'POST', body: JSON.stringify({ searchId, candidateIndex: index, candidateIdentity: { sourceId: result.sourceId, sourceFingerprint: result.sourceFingerprint, bookUrl: result.candidate.bookUrl }, addToBookshelf: false, activateEdition: false }) })
+    setBooks((previous) => [...previous.filter((book) => book.id !== created.book.id), created.book])
+    return created.book
   }
 
   function submitSearch(event: FormEvent) {
@@ -165,10 +181,11 @@ export function SearchPage() {
     {groups.length === 0 && status === 'done' && !booksLoaded ? <LoadingState message="正在读取已有书籍…" variant="viewport" /> : null}
     <div className="result-summary" aria-live="polite">{status === 'done' && booksLoaded ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
     <div className="result-list">{groups.length === 0 && status === 'done' && booksLoaded ? <div className="empty-state">没有找到匹配书籍。</div> : groups.map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedCandidateIndex(group.items, selectedByGroup[group.key])} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null || switchingSourceId !== null} sourceGroupsByKey={managedGroupByKey} sourceById={managedSourceById} switchingSourceId={switchingSourceId} onSetDefault={(sourceId) => void setDomainDefault(sourceId)} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => { const item = candidates[index]; if (item !== undefined) setSelectedByGroup((current) => ({ ...current, [group.key]: candidateSelectionKey(item) })) }} onSave={(action) => void saveCandidate(group, action)} />)}</div>
+    {listCandidate ? <BookListPicker book={books.find((book) => sameBookIdentity(book.name, book.author, listCandidate.group.name, listCandidate.group.author)) ?? { name: listCandidate.group.name, author: listCandidate.group.author }} resolveBook={resolveListBook} {...(targetBookListId ? { defaultListId: targetBookListId } : {})} onClose={() => setListCandidate(null)} onSaved={() => { setMessageTone('success'); setMessage('已加入书单') }} /> : null}
   </section>
 }
 
-function SearchResult({ group, selectedIndex, expanded, disabled, saving, sourceGroupsByKey, sourceById, switchingSourceId, onSetDefault, onToggle, onSelect, onSave }: { group: CandidateGroup; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; sourceGroupsByKey: Map<string, SourceDomainGroup<ManagedSourceSummary>>; sourceById: Map<string, ManagedSourceSummary>; switchingSourceId: string | null; onSetDefault: (sourceId: string) => void; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory' | 'details') => void }) {
+function SearchResult({ group, selectedIndex, expanded, disabled, saving, sourceGroupsByKey, sourceById, switchingSourceId, onSetDefault, onToggle, onSelect, onSave }: { group: CandidateGroup; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; sourceGroupsByKey: Map<string, SourceDomainGroup<ManagedSourceSummary>>; sourceById: Map<string, ManagedSourceSummary>; switchingSourceId: string | null; onSetDefault: (sourceId: string) => void; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory' | 'details' | 'list') => void }) {
   const selected = group.items.find((item) => item.index === selectedIndex) ?? group.items[0]
   if (selected === undefined) return null
   const intro = selected.item.candidate.intro?.trim() ?? ''
@@ -195,7 +212,7 @@ function SearchResult({ group, selectedIndex, expanded, disabled, saving, source
     <div className="result-card-body">
       <div className="result-card-heading">
         <div><h2><button type="button" className="result-detail-title" disabled={disabled || saving} onClick={() => onSave('details')}>{group.name}</button></h2><p className="muted small">{group.author} · {group.items.length} 个来源</p></div>
-        <div className="result-card-actions"><Button className="save-button" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('shelf')}>{saving ? '处理中' : '添加书架'}</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('directory')}>目录</Button></div>
+        <div className="result-card-actions"><Button className="save-button" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('shelf')}>{saving ? '处理中' : '加入书架'}</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('list')}>加入书单</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('directory')}>目录</Button></div>
       </div>
       {group.items.length > 1 ? <label className="result-source-select"><span className="muted small">选择本次结果来源</span><Select value={String(selected.index)} disabled={disabled || saving} onChange={(event) => onSelect(Number(event.target.value))}>{[...candidateDomains.entries()].map(([domainKey, domain]) => <optgroup key={domainKey} label={domain.domain}>{domain.items.map(({ item, index }) => { const displayName = sourceGroupsByKey.get(domainKey)?.versions.find(({ source }) => source.sourceId === item.sourceId)?.displayName ?? sourceById.get(item.sourceId)?.name ?? item.sourceId; return <option key={`${item.sourceId}:${item.candidate.bookUrl}`} value={index}>{displayName} · {item.sourceId}</option> })}</optgroup>)}</Select></label> : <p className="muted small result-source-label">來源：{selectedDisplayName} · {selectedDomain.domain}</p>}
       {selectedDomainGroup !== undefined && selectedDomainGroup.versions.length > 1 ? <label className="result-source-select"><span className="muted small">{selectedDomain.domain} · 账号默认版本（切换后重新搜索）</span><Select value={effectiveSource?.sourceId ?? ''} disabled={disabled || switchingSourceId !== null} onChange={(event) => onSetDefault(event.target.value)}>{effectiveSource === undefined ? <option value="" disabled>未设置默认版本</option> : null}{selectedDomainGroup.versions.map(({ source, displayName }) => <option key={source.sourceId} value={source.sourceId}>{displayName} · {formatSourceRuleDateTime(source.lastUpdateTime)}</option>)}</Select></label> : null}
