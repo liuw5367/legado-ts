@@ -135,6 +135,10 @@ QuickJS 的受控 `java.util.regex.Pattern` bridge 已补齐 Android 数值 `UNI
 
 新增 core 与 `source-rule-host.test.ts` 的书源式回归，覆盖命名组、首匹配、字面 `$`、零宽 `$` 匹配和既有插值替换；P51 定向 core/规则宿主测试、构建和静态语料审计通过。Android `Matcher` 的全部 replacement 边界、复杂 Unicode 组和 golden 仍保持 D21 的 `partial / conditional` 状态。
 
+## 2026-10-23 P52：legacy class/id/tag 字面选择器转义
+
+Android 的 `ElementsSingle` 对 `class.*`、`id.*` 和 `tag.*` 先按字面值调用 Jsoup 查询；core 现在只对 legacy 标识符本体做 CSS 转义，并保留后缀索引和属性选择器，因此包含 `:`、数字等字符的 class/id 不会被误解析成 CSS 伪类或非法标识符。新增规则宿主回归覆盖 `class.badge:hot` 与 `id.book:item`，构建后 `source-rule-host` **113/113** 通过；位置索引和属性选择器回归也保持通过。D18 的完整 Jsoup 版本、复杂 CSS 转义、畸形 HTML 和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
+
 ## 状态定义
 
 | 状态 | 含义 |

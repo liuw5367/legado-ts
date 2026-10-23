@@ -116,6 +116,17 @@ test('HTML 规则兼容 Android 的多 class 简写选择器', async () => {
   assert.deepEqual(result.value, ['作者'])
 })
 
+test('legacy class/id 选择器按 Android 字面值匹配 CSS 标识符', async () => {
+  const host = new SourceRuleHost()
+  const html = '<section><p class="badge:hot">类名</p><p id="book:item">编号</p></section>'
+  const classResult = await evaluate(host, 'class.badge:hot@text', html)
+  assert.equal(classResult.status, 'success')
+  assert.deepEqual(classResult.value, ['类名'])
+  const idResult = await evaluate(host, 'id.book:item@text', html)
+  assert.equal(idResult.status, 'success')
+  assert.deepEqual(idResult.value, ['编号'])
+})
+
 test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力', async () => {
   const output = await evaluate(new SourceRuleHost(), '@js:source.putConcurrent("1/100")', '')
   assert.equal(output.status, 'capability-missing')

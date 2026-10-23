@@ -2379,13 +2379,36 @@ function isDefiniteJsonPath(expression: string): boolean {
   return !/[*?()]|\.\.|,|:/u.test(unquoted)
 }
 
-function normalizeSelector(selector: string): string {
-  if (selector.startsWith('class.')) {
-    const classNames = selector.slice('class.'.length).trim().split(/\s+/u).filter(Boolean)
-    return classNames.length === 0 ? '.' : classNames.map((className) => `.${className}`).join('')
+function escapeLegacyCssIdentifier(value: string): string {
+  let output = ''
+  const characters = [...value]
+  for (const [index, character] of characters.entries()) {
+    const codePoint = character.codePointAt(0) ?? 0
+    const first = index === 0
+    const nextCodePoint = characters[index + 1]?.codePointAt(0)
+    const asciiLetter = (codePoint >= 0x41 && codePoint <= 0x5a) || (codePoint >= 0x61 && codePoint <= 0x7a)
+    const digit = codePoint >= 0x30 && codePoint <= 0x39
+    const leadingHyphenDigit = first && codePoint === 0x2d && nextCodePoint !== undefined && nextCodePoint >= 0x30 && nextCodePoint <= 0x39
+    const loneHyphen = value.length === 1 && codePoint === 0x2d
+    const safe = asciiLetter || codePoint >= 0x80 || codePoint === 0x5f || (codePoint === 0x2d && !leadingHyphenDigit && !loneHyphen) || (!first && digit)
+    if (safe) output += character
+    else output += `\\${codePoint.toString(16)} `
   }
-  if (selector.startsWith('tag.')) return selector.slice('tag.'.length)
-  if (selector.startsWith('id.')) return `#${selector.slice('id.'.length)}`
+  return output
+}
+
+function normalizeSelector(selector: string): string {
+  const position = parseBracketSelection(selector) ?? parseLegacySelection(selector)
+  const legacyPrefix = /^(?:class|tag|id)\./u.test(selector)
+  const attributeStart = legacyPrefix ? selector.indexOf('[') : -1
+  const base = position?.base ?? (attributeStart >= 0 ? selector.slice(0, attributeStart) : selector)
+  const suffix = position !== undefined ? selector.slice(base.length) : attributeStart >= 0 ? selector.slice(attributeStart) : ''
+  if (base.startsWith('class.')) {
+    const classNames = base.slice('class.'.length).trim().split(/\s+/u).filter(Boolean)
+    return (classNames.length === 0 ? '.' : classNames.map((className) => `.${escapeLegacyCssIdentifier(className)}`).join('')) + suffix
+  }
+  if (base.startsWith('tag.')) return escapeLegacyCssIdentifier(base.slice('tag.'.length)) + suffix
+  if (base.startsWith('id.')) return `#${escapeLegacyCssIdentifier(base.slice('id.'.length))}` + suffix
   return selector
 }
 
