@@ -98,6 +98,65 @@ export function compileSourcePattern(pattern: string, options: SourcePatternOpti
   }
 }
 
+/** 将 Java Matcher replacement 展开为当前匹配的文本。 */
+export function applyJavaReplacement(replacement: string, match: RegExpExecArray): string {
+  const groupCount = Math.max(0, match.length - 1)
+  let result = ''
+  for (let index = 0; index < replacement.length; index += 1) {
+    const current = replacement[index]!
+    if (current === '\\') {
+      if (index + 1 >= replacement.length) throw new Error('Illegal group reference')
+      result += replacement[++index]!
+      continue
+    }
+    if (current !== '$') {
+      result += current
+      continue
+    }
+    if (replacement[index + 1] === '{') {
+      const close = replacement.indexOf('}', index + 2)
+      if (close < 0 || close === index + 2) throw new Error('Illegal group reference')
+      const name = replacement.slice(index + 2, close)
+      if (match.groups === undefined || !Object.prototype.hasOwnProperty.call(match.groups, name)) throw new Error(`No group with name <${name}>`)
+      result += match.groups[name] ?? ''
+      index = close
+      continue
+    }
+    if (!/\d/u.test(replacement[index + 1] ?? '')) throw new Error('Illegal group reference')
+    let groupIndex = Number(replacement[++index])
+    let cursor = index + 1
+    while (cursor < replacement.length && /\d/u.test(replacement[cursor]!)) {
+      const candidate = groupIndex * 10 + Number(replacement[cursor])
+      if (candidate > groupCount) break
+      groupIndex = candidate
+      index = cursor
+      cursor += 1
+    }
+    if (groupIndex > groupCount) throw new Error(`No group ${groupIndex}`)
+    result += match[groupIndex] ?? ''
+  }
+  return result
+}
+
+/** 使用 Java Matcher 的 replacement 语义执行全量或首个匹配替换。 */
+export function replaceWithJavaReplacement(input: string, regex: RegExp, replacement: string, replaceAll: boolean): string {
+  const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`
+  const matcher = new RegExp(regex.source, flags)
+  let result = ''
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = matcher.exec(input)) !== null) {
+    result += input.slice(cursor, match.index) + applyJavaReplacement(replacement, match)
+    cursor = match.index + match[0].length
+    if (!replaceAll) break
+    if (match[0].length === 0) {
+      if (match.index >= input.length) break
+      matcher.lastIndex = match.index + 1
+    }
+  }
+  return result + input.slice(cursor)
+}
+
 /**
  * 转换 Java Pattern 中可安全表达的历史书源语法；不把未知语法降级成字面匹配。
  * `\Q...\E` 和边界转义是等价转换；简单原子上的占有量词和单原子原子组可用

@@ -1,4 +1,4 @@
-import { compileSourcePattern } from './pattern-guard.ts'
+import { compileSourcePattern, replaceWithJavaReplacement } from './pattern-guard.ts'
 import { snapshotVariables, variableChanges } from './variables.ts'
 import type {
   CompiledRule,
@@ -88,12 +88,10 @@ function applyReplacement(value: RuleValue, atom: RuleAtom, state: EvaluationSta
     if (compiled.error.code !== 'invalid-pattern') throw new EvaluationStop(diagnostic('invalid-regex', compiled.error.message))
     return atom.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
   }
-  const pattern = compiled.regex
-  if (!atom.replacement.firstMatchOnly) return text.replace(pattern, replacement)
-  const first = pattern.exec(text)
+  if (!atom.replacement.firstMatchOnly) return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
+  const first = compiled.regex.exec(text)
   if (first === null) return ''
-  const firstPattern = new RegExp(pattern.source, pattern.flags.replace(/g/u, ''))
-  return first[0].replace(firstPattern, replacement)
+  return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)
 }
 
 function evaluateRegex(body: string, input: unknown): RuleValue {

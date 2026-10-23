@@ -1,5 +1,5 @@
 import { compileRule } from './compiler.ts'
-import { compileSourcePattern } from './pattern-guard.ts'
+import { compileSourcePattern, replaceWithJavaReplacement } from './pattern-guard.ts'
 import { MemoryVariableView } from './variables.ts'
 import { sourceDefinitionFingerprint } from '../codec/identity.ts'
 import { MemorySourceScriptCache } from '../runtime/source-session.ts'
@@ -497,7 +497,10 @@ const legadoJavaReplace = (input, regex, replacement, replaceAll) => {
     result += input.slice(cursor, match.index) + legadoJavaReplacement(replacement, match)
     cursor = match.index + match[0].length
     if (!replaceAll) break
-    if (match[0].length === 0) matcher.lastIndex = Math.min(input.length, matcher.lastIndex + 1)
+    if (match[0].length === 0) {
+      if (match.index >= input.length) break
+      matcher.lastIndex = match.index + 1
+    }
   }
   return result + input.slice(cursor)
 }
@@ -3163,11 +3166,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       if (compiled.error.code === 'invalid-pattern') return rule.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
       throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
     }
-    if (!rule.replacement.firstMatchOnly) return text.replace(compiled.regex, replacement)
+    if (!rule.replacement.firstMatchOnly) return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
     const first = compiled.regex.exec(text)
     if (first === null) return ''
-    const firstPattern = new RegExp(compiled.regex.source, compiled.regex.flags.replace(/g/u, ''))
-    return first[0].replace(firstPattern, replacement)
+    return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)
   }
 
   private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; jsLibOwner?: object; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; requestBudget?: Partial<RequestBudget>; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver }): Promise<WorkflowRuleOutput> {

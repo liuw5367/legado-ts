@@ -639,10 +639,11 @@ test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement
       var positionsMatcher = Pattern.compile('(?:)').matcher('ab');
       var positions = [];
       while (positionsMatcher.find()) positions.push(positionsMatcher.start());
+      var emptyReplace = Pattern.compile('$').matcher('ab').replaceAll('X');
       var regionMatcher = Pattern.compile('a').matcher('xaay').region(1, 3);
       var region = regionMatcher.find() ? [regionMatcher.group(), regionMatcher.start(), regionMatcher.end(), regionMatcher.regionStart(), regionMatcher.regionEnd(), regionMatcher.replaceAll('z')] : null;
       var ten = Pattern.compile('(a)(b)').matcher('ab').replaceAll('$10');
-      JSON.stringify({ first: first, second: second, replaced: replaced, firstReplaced: firstReplaced, quoted: quoted, positions: positions, region: region, ten: ten });
+      JSON.stringify({ first: first, second: second, replaced: replaced, firstReplaced: firstReplaced, quoted: quoted, positions: positions, emptyReplace: emptyReplace, region: region, ten: ten });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
@@ -652,6 +653,7 @@ test('Pattern/Matcher 支持命名组、Java 替换占位符和 quoteReplacement
     firstReplaced: 'aa-aa-aa bb',
     quoted: '\\$1\\\\x',
     positions: [0, 1, 2],
+    emptyReplace: 'abX',
     region: ['a', 1, 2, 1, 3, 'xzzy'],
     ten: 'a0',
   })
@@ -2143,6 +2145,25 @@ test('## 替换段里的 {{}} 参与插值', async () => {
   host.setVariable('author', '张三')
   const html = '<div class="intro">《书名》是由张三写的。</div>'
   assert.equal((await evaluate(host, '.intro@text##^《.*?是由{{author}}写的。##已清洗', html)).value, '已清洗')
+})
+
+test('## 替换使用 Java Matcher 的占位符、转义和零宽匹配语义', async () => {
+  const host = new SourceRuleHost()
+  const named = await evaluate(host, 'literal:ab ab##(?<word>ab)##$0-' + '${word}' + '-$1', '')
+  assert.equal(named.status, 'success')
+  assert.equal(named.value, 'ab-ab-ab ab-ab-ab')
+
+  const quoted = await evaluate(host, String.raw`literal:ab##ab##\$1`, '')
+  assert.equal(quoted.status, 'success')
+  assert.equal(quoted.value, '$1')
+
+  const empty = await evaluate(host, 'literal:ab##$##X', '')
+  assert.equal(empty.status, 'success')
+  assert.equal(empty.value, 'abX')
+
+  const first = await evaluate(host, 'literal:ab ab##(?<word>ab)##$0-' + '${word}' + '-$1###first', '')
+  assert.equal(first.status, 'success')
+  assert.equal(first.value, 'ab-ab-ab')
 })
 
 test('源可控正则按形态守卫：未锚定的嵌套量词一律拒绝，语料写法放行', async () => {

@@ -129,6 +129,12 @@ QuickJS 的受控 `java.util.regex.Pattern` bridge 已补齐 Android 数值 `UNI
 
 新增 core 的 `compileRule → evaluateRule` 回归，覆盖内联大小写、占有量词和 `\Q...\E`；P50 定向规则测试与构建后回归通过。D21 的复杂 Java Pattern、完整 Unicode 大小写折叠和 Android golden 仍保持 `partial / conditional`，本修正不改变方法清单数量。
 
+## 2026-10-23 P51：规则替换统一 Java Matcher 语义
+
+规则 `##匹配##替换` 现在由受控 Java replacement 展开器处理，而不是交给 JavaScript 原生 `String.replace`：支持 `$0`、最长可用的 `$1/$10` 组号、`${name}` 命名组和反斜杠转义；非法组引用继续让当前规则失败。全量和首匹配都复用同一实现，零宽匹配在输入末尾只处理一次，避免替换循环；QuickJS `String.replaceAll/replaceFirst` bridge 同步修正末尾零宽匹配的推进边界。
+
+新增 core 与 `source-rule-host.test.ts` 的书源式回归，覆盖命名组、首匹配、字面 `$`、零宽 `$` 匹配和既有插值替换；P51 定向 core/规则宿主测试、构建和静态语料审计通过。Android `Matcher` 的全部 replacement 边界、复杂 Unicode 组和 golden 仍保持 D21 的 `partial / conditional` 状态。
+
 ## 状态定义
 
 | 状态 | 含义 |
