@@ -139,6 +139,27 @@ test('CSS 选择器链不会切断属性值和伪类参数中的 @', async () =>
   assert.deepEqual(pseudo.value, ['含@内容'])
 })
 
+test('legacy text 选择器按 Jsoup containsOwn 归一化大小写和空白', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, 'text.alpha beta@text', '<main><p>Alpha  Beta<b>子节点</b></p><p>gamma</p></main>')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value, ['Alpha Beta子节点'])
+})
+
+test('书源规则支持 Jsoup matchText 伪元素并保持文本顺序', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, 'div:matchText@text', '<main><div>A <b>B</b> C</div></main>')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value, ['A', 'C'])
+})
+
+test('书源规则支持 matchText 伪元素的同级位置后缀', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, 'div:matchText:last-child@text', '<main><div>A <b>B</b> C</div></main>')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value, ['C'])
+})
+
 test('带 XML 声明的默认规则保持 Android XML 大小写语义', async () => {
   const host = new SourceRuleHost()
   const xml = '<?xml version="1.0"?><Root><Item ID="upper">大写</Item><item id="lower">小写</item></Root>'

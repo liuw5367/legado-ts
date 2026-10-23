@@ -310,6 +310,10 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 | SCH-002/text-nodes | `<div>A<b>B</b>C</div>`，`tag.div@textNodes` | 直接文本 `A\nC`，不包含 B；对照原测试确认实体细节 |
 | SCH-002/at-balanced | `<a href="@">含@内容</a>`，`a[href="@"]@text` 和 `a:contains(@)@text` | `@` 只在顶层选择器链切分，两个规则均返回 `含@内容`；不完整 CSS 选择器不得被静默执行 |
 | SCH-002/selector-extensions | `<div class="content" data-x="alpha"><a>One</a></div>`，分别使用 `div:has(a)`, `div:not(.missing)`, `div:is(.content,.other)`, `div:matches(/One/)`, `[data-x~=(?i)^alp]` | 五个选择器均按 Jsoup 兼容语义命中；非法 Java 正则返回 `unsupported-selector` |
+| SCH-002/contains-own-normalization | `<main><p>Alpha  Beta</p><p>beta</p><p>Gamma</p></main>`，使用 `p:containsOwn(ALPHA)`、`p:containsOwn(alpha beta)` 和 `p:containsOwn(BETA)` | 搜索参数先折叠空白，比较忽略大小写，结果分别为 1、1、2；与 Jsoup `Evaluator.ContainsOwnText` 的构造和匹配逻辑一致 |
+| SCH-002/text-pseudos | HTML/XML 节点含嵌套文本、script/style、注释和原始空白，使用 `:contains`、`:containsWholeText`、`:containsWholeOwnText`、`:containsData`、`:matchesWholeText`、`:matchesWholeOwnText` | HTML/XML 均支持 Jsoup 常用文本伪类；普通 contains 折叠空白并忽略大小写，whole/data 变体保留各自原始或数据节点语义，正则沿用 Java Pattern 受控编译 |
+| SCH-002/blank | HTML/XML 中分别有空元素、空白文本、只有子元素文本和自身文本，使用 `:blank` | 与 Jsoup 一样只检查直接文本；空白和只有子元素文本的元素命中，直接含非空文本的元素不命中 |
+| SCH-002/match-text | HTML/XML 节点含根文本、嵌套元素文本和多个直接文本节点，使用 `:matchText`、`div:matchText`、`div:matchText:first-child`、`div:matchText:last-child`、`div:matchText:eq(2)`、`div:has(b:matchText)` | 直接文本按 Jsoup 文档顺序包装为可读取属性和文本的伪元素；同级位置后缀按伪元素替换后的节点序号匹配，常见 `:has` 组合保留父元素结果；复杂 `:not/:is` 伪元素输出仍按差异登记 |
 | SCH-004/table-fragment | `<td>A <b>B</b> C</td>`，分别执行 `@XPath://td`, `text`, `ownText`, `textNodes` | 片段自动补 `tr/table` 容器；结果分别保留 `A B C`、`A C`、`A\nC` |
 | SCH-003/nonmutating | 三个 a 的文本为 A/B/C，先排除索引 0，再读全部 | 首次 B/C，第二次仍 A/B/C |
 | SCH-006/bracket | `a[href="x\|\|y"]@text` | 属性中的组合符不切断 |

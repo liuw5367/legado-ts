@@ -131,6 +131,8 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 
 本轮已执行命令：`node --test packages/source-node/tests/source-rule-host.test.ts packages/source-node/tests/source-runtime-platform.test.ts packages/source-node/tests/source-session.test.ts`。最小探针直接调用 SourceRuleRuntime/SourceRuleHost、使用固定 `.invalid` 地址和请求桩，没有访问公网、真实账户、购买或其他远程写入。探针属于差异发现证据，正式回归与共享 golden 要在对应修复时加入版本控制。
 
+2026-10-23 P56～P59 的新增证据：`containsOwn`/`text.*` 的 Jsoup 空白与大小写归一化、文本/数据/whole/blank 伪类、HTML/XML `matchText` 伪元素、同级位置后缀和嵌套 `has` 已加入 adapter 与规则宿主回归；当前定向 adapter **30/30**、source-rule-host **118/118**、`pnpm typecheck` 和构建通过。HTML `matchText` 回归还确认 script/style DataNode 不会被误包装，文本伪类参数中的字面量 `:matchText` 不会误触发伪元素转换。Android 同输入 golden、完整 Jsoup 修复算法和复杂伪元素变换仍为 `not-run`/待验证，不改变方法清单的 partial/conditional 状态。
+
 环境只读核验：Android Studio JBR `21.0.4` 可以启动，默认 Java 为 `1.8.0_504`；常规 Android SDK 目录未发现 API 36/build-tools 36.0.0。本轮没有验证 Gradle 编译、SDK 下载和真实 WebView。后续 Android runner 必须使用独立 checkout，不能更改父仓已有工作树。
 
 ## 2026-10-22 P13 最终执行证据

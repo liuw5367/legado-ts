@@ -2374,6 +2374,10 @@ function htmlDocumentMode(value: string): 'html' | 'xml' {
   return value.slice(0, 5).toLowerCase() === '<?xml' ? 'xml' : 'html'
 }
 
+function normalizeJsoupContainsText(value: string): string {
+  return value.replace(/[\s\u00a0]+/gu, ' ').toLowerCase()
+}
+
 /**
  * jsonpath-plus 只对「确定路径」额外包一层数组；含通配、递归、过滤、切片、联合或脚本的路径，
  * 返回值本身就是 Android `JsonPath.read` 的元素列表（如 `$.single[*]` 在 `[[1,2]]` 上返回 `[[1,2]]`）。
@@ -3064,7 +3068,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
           const expected = textSelector.slice('text.'.length)
           // Jsoup's getElementsContainingOwnText only inspects each element's
           // direct text nodes; descendant text must not make an ancestor match.
-          const matching = view.select('*').filter((node) => view.read(node, 'ownText').includes(expected))
+          // Its Evaluator.ContainsOwnText also folds whitespace and ignores case.
+          const normalizedExpected = normalizeJsoupContainsText(expected)
+          const matching = view.select('*').filter((node) => normalizeJsoupContainsText(view.read(node, 'ownText')).includes(normalizedExpected))
           for (const node of applyPositionSelection(matching, textSelection)) next.push({ document: view, node })
         } else for (const node of selectWithPosition(view, selector)) next.push({ document: view, node })
       }

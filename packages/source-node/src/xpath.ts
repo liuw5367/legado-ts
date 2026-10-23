@@ -1,5 +1,5 @@
 import { DOMParser } from '@xmldom/xmldom'
-import { selectAll } from 'css-select'
+import { is as matchesSelector, selectAll } from 'css-select'
 import fontoxpath from 'fontoxpath'
 import { parseDocument } from 'htmlparser2'
 import { render } from 'dom-serializer'
@@ -39,6 +39,8 @@ const cssAdapter = {
 class XmlDocumentView implements HtmlDocument {
   private readonly ids = new Map<string, XmlNode>()
   private readonly reverse = new WeakMap<object, string>()
+  private readonly matchTextMeta = new WeakMap<object, { owner: XmlNode; text: XmlNode }>()
+  private readonly matchTextParents = new WeakMap<object, XmlNode>()
   private nextId = 0
   private readonly root: XmlNode
 
@@ -49,7 +51,21 @@ class XmlDocumentView implements HtmlDocument {
   public select(selector: string): ParserNode[] {
     try {
       const normalized = normalizeXmlSelector(selector)
-      return selectAll<XmlNode, XmlNode>(normalized.selector, this.root, { adapter: cssAdapter, xmlMode: true, pseudos: normalized.pseudos }).map((node) => this.wrap(node))
+      if (!normalized.matchTextTopLevel) {
+        return selectAll<XmlNode, XmlNode>(normalized.selector, this.root, { adapter: cssAdapter, xmlMode: true, pseudos: normalized.pseudos }).map((node) => this.wrap(node))
+      }
+      const split = splitTopLevelMatchText(selector)
+      if (split === undefined) throw new ParserAdapterError('unsupported-selector', ':matchText 复杂组合选择器暂不受支持')
+      const ownerSelector = split.prefix.trim() || '*'
+      const ownerNormalized = normalizeXmlSelector(ownerSelector)
+      if (ownerNormalized.matchTextTopLevel) throw new ParserAdapterError('unsupported-selector', ':matchText 不能重复出现在同一选择器分支')
+      const owners = selectAll<XmlNode, XmlNode>(ownerNormalized.selector, this.root, { adapter: cssAdapter, xmlMode: true, pseudos: ownerNormalized.pseudos })
+      const matched = this.matchTextNodes(owners)
+      const suffix = split.suffix.trim()
+      if (suffix.length === 0) return matched
+      const suffixNormalized = normalizeXmlSelector(suffix)
+      if (suffixNormalized.matchTextTopLevel) throw new ParserAdapterError('unsupported-selector', ':matchText 不能嵌套在同一选择器分支')
+      return matched.filter((node) => matchesSelector(this.node(node), suffixNormalized.selector, { adapter: cssAdapter, xmlMode: true, pseudos: suffixNormalized.pseudos }))
     } catch (error) {
       if (error instanceof ParserAdapterError) throw error
       const message = error instanceof Error ? error.message : String(error)
@@ -72,6 +88,8 @@ class XmlDocumentView implements HtmlDocument {
 
   public read(node: ParserNode, output: 'text' | 'textNodes' | 'ownText' | 'html' | 'all'): string {
     const value = this.node(node)
+    const matchText = this.matchTextMeta.get(value)
+    if (matchText !== undefined && (output === 'html' || output === 'all')) return matchText.text.toString?.() ?? matchText.text.nodeValue ?? ''
     if (output === 'text') return normalizeXmlText(value.textContent ?? value.nodeValue ?? '')
     const children = childNodes(value)
     if (output === 'textNodes') return children.filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => normalizeXmlText(child.nodeValue ?? '')).filter(Boolean).join('\n')
@@ -86,8 +104,10 @@ class XmlDocumentView implements HtmlDocument {
 
   public describe(node: ParserNode): ParserNodeInfo {
     const value = this.node(node)
-    const parent = value.parentNode ?? null
-    const elementSiblings = parent === null ? [] : childNodes(parent).filter((item) => item.nodeType === 1)
+    const matchText = this.matchTextMeta.get(value)
+    const parent = matchText?.owner ?? value.parentNode ?? null
+    const siblingParent = value.parentNode ?? null
+    const elementSiblings = siblingParent === null ? [] : childNodes(siblingParent).filter((item) => item.nodeType === 1)
     const siblingIndex = elementSiblings.indexOf(value)
     const parents: ParserNode[] = []
     let current = parent
@@ -118,6 +138,22 @@ class XmlDocumentView implements HtmlDocument {
 
   public mutate(node: ParserNode, mutation: ParserNodeMutation): ParserNode | undefined {
     const value = this.node(node)
+    const matchText = this.matchTextMeta.get(value)
+    if (matchText !== undefined && mutation.operation === 'remove') {
+      const parent = matchText.text.parentNode
+      if (parent?.removeChild !== undefined) {
+        parent.removeChild(matchText.text)
+      } else if (parent?.childNodes !== undefined) {
+        const children = childNodes(parent).filter((child) => child !== matchText.text)
+        parent.childNodes = { length: children.length, item: (index: number) => children[index] ?? null }
+      }
+      const virtualParent = this.matchTextParents.get(matchText.owner)
+      if (virtualParent?.childNodes !== undefined) {
+        const children = childNodes(virtualParent).filter((child) => child !== value)
+        virtualParent.childNodes = { length: children.length, item: (index: number) => children[index] ?? null }
+      }
+      return undefined
+    }
     if (mutation.operation === 'clone') {
       const clone = value.cloneNode?.(true)
       return clone === undefined ? undefined : this.wrap(clone)
@@ -170,6 +206,72 @@ class XmlDocumentView implements HtmlDocument {
     return { id, kind: value.nodeType === 3 ? 'text' : value.nodeType === 9 ? 'document' : 'element' }
   }
 
+  private matchTextParent(owner: XmlNode): XmlNode {
+    // Mirror Jsoup's temporary TextNode replacement in a detached parent so
+    // structural suffixes can traverse pseudo-element siblings safely.
+    const existing = this.matchTextParents.get(owner)
+    if (existing !== undefined) return existing
+    const parent: XmlNode = {
+      nodeType: owner.nodeType,
+      nodeName: owner.nodeName ?? '',
+      nodeValue: owner.nodeValue ?? null,
+      textContent: owner.textContent ?? '',
+      parentNode: owner.parentNode ?? null,
+      ...(owner.attributes === undefined ? {} : { attributes: owner.attributes }),
+    }
+    const children = childNodes(owner).map((child) => {
+      if (child.nodeType === 3 || child.nodeType === 4) return this.createMatchTextPseudo(owner, child, parent)
+      const clone = child.cloneNode?.(true) ?? child
+      clone.parentNode = parent
+      return clone
+    })
+    parent.childNodes = { length: children.length, item: (index: number) => children[index] ?? null }
+    this.matchTextParents.set(owner, parent)
+    return parent
+  }
+
+  private createMatchTextPseudo(owner: XmlNode, text: XmlNode, parent: XmlNode): XmlNode {
+    const textClone: XmlNode = {
+      nodeType: text.nodeType,
+      nodeValue: text.nodeValue ?? null,
+      textContent: text.textContent ?? text.nodeValue ?? '',
+      parentNode: null,
+      childNodes: { length: 0, item: () => null },
+      toString: () => text.toString?.() ?? text.nodeValue ?? '',
+    }
+    const pseudo: XmlNode = {
+      nodeType: 1,
+      nodeName: owner.nodeName ?? '',
+      textContent: textClone.textContent ?? '',
+      parentNode: parent,
+      childNodes: { length: 1, item: (index: number) => index === 0 ? textClone : null },
+      ...(owner.attributes === undefined ? {} : { attributes: owner.attributes }),
+      setAttribute: (name, value) => owner.setAttribute?.(name, value),
+      removeAttribute: (name) => owner.removeAttribute?.(name),
+      toString: () => textClone.toString?.() ?? textClone.nodeValue ?? '',
+    }
+    textClone.parentNode = pseudo
+    this.matchTextMeta.set(pseudo, { owner, text })
+    return pseudo
+  }
+
+  private matchTextNodes(nodes: XmlNode[]): ParserNode[] {
+    const selected = new Set(nodes)
+    const matched: ParserNode[] = []
+    const visit = (node: XmlNode): void => {
+      for (const child of childNodes(node)) {
+        if (node.nodeType === 1 && selected.has(node) && (child.nodeType === 3 || child.nodeType === 4)) {
+          const parent = this.matchTextParent(node)
+          const pseudo = childNodes(parent).find((item) => this.matchTextMeta.get(item)?.text === child)
+          if (pseudo !== undefined) matched.push(this.wrap(pseudo))
+        }
+        if (child.nodeType === 1 || child.nodeType === 9) visit(child)
+      }
+    }
+    visit(this.root)
+    return matched
+  }
+
   private node(reference: ParserNode): XmlNode {
     const value = this.ids.get(reference.id)
     if (value === undefined) throw new Error('node reference does not belong to this XML document')
@@ -210,6 +312,39 @@ function xmlPseudoRegex(value: string | null | undefined): RegExp {
   return compiled.regex
 }
 
+function xmlRegexMatches(regex: RegExp, value: string): boolean {
+  regex.lastIndex = 0
+  return regex.test(value)
+}
+
+function xmlContainsValue(value: string | null | undefined): string {
+  return normalizeXmlText(value ?? '').toLowerCase()
+}
+
+function xmlWholeOwnText(element: XmlNode): string {
+  return childNodes(element)
+    .filter((child) => child.nodeType === 3 || child.nodeType === 4)
+    .map((child) => child.nodeValue ?? '')
+    .join('')
+}
+
+function xmlWholeText(element: XmlNode): string {
+  return element.textContent ?? element.nodeValue ?? ''
+}
+
+function xmlData(element: XmlNode): string {
+  let output = ''
+  const visit = (node: XmlNode): void => {
+    if (node.nodeType === 4 || node.nodeType === 8) {
+      output += node.nodeValue ?? ''
+      return
+    }
+    for (const child of childNodes(node)) visit(child)
+  }
+  visit(element)
+  return output
+}
+
 const xmlPseudos: Record<string, (element: XmlNode, value?: string | null) => boolean> = {
   // 与 Jsoup Evaluator.Index* 一致：负数不表示从末尾倒数。
   legadoeq: (element, value) => xmlSiblingIndex(element) === xmlPseudoNumber(value),
@@ -217,18 +352,27 @@ const xmlPseudos: Record<string, (element: XmlNode, value?: string | null) => bo
   legadogt: (element, value) => xmlSiblingIndex(element) > xmlPseudoNumber(value),
   legadocontainsown: (element, value) => {
     const own = childNodes(element).filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').join('')
-    return normalizeXmlText(own).includes(value ?? '')
+    return xmlContainsValue(normalizeXmlText(own)).includes(xmlContainsValue(value))
   },
+  legadocontains: (element, value) => xmlContainsValue(normalizeXmlText(element.textContent ?? '')).includes(xmlContainsValue(value)),
+  legadocontainswholetext: (element, value) => xmlWholeText(element).includes(value ?? ''),
+  legadocontainswholeowntext: (element, value) => xmlWholeOwnText(element).includes(value ?? ''),
+  legadocontainsdata: (element, value) => xmlData(element).toLowerCase().includes((value ?? '').toLowerCase()),
+  legadoblank: (element) => normalizeXmlText(xmlWholeOwnText(element)).length === 0,
+  legadomatchtext: (element) => childNodes(element).some((child) => child.nodeType === 3 || child.nodeType === 4),
   legadomatchesown: (element, value) => {
     const own = childNodes(element).filter((child) => child.nodeType === 3 || child.nodeType === 4).map((child) => child.nodeValue ?? '').join('')
-    return xmlPseudoRegex(value).test(normalizeXmlText(own))
+    return xmlRegexMatches(xmlPseudoRegex(value), normalizeXmlText(own))
   },
-  legadomatches: (element, value) => xmlPseudoRegex(value).test(normalizeXmlText(element.textContent ?? '')),
+  legadomatches: (element, value) => xmlRegexMatches(xmlPseudoRegex(value), normalizeXmlText(element.textContent ?? '')),
+  legadomatcheswholetext: (element, value) => xmlRegexMatches(xmlPseudoRegex(value), xmlWholeText(element)),
+  legadomatcheswholeowntext: (element, value) => xmlRegexMatches(xmlPseudoRegex(value), xmlWholeOwnText(element)),
 }
 
 interface NormalizedXmlSelector {
   selector: string
   pseudos: Record<string, (element: XmlNode, value?: string | null) => boolean>
+  matchTextTopLevel: boolean
 }
 
 function normalizeXmlSelector(selector: string): NormalizedXmlSelector {
@@ -237,10 +381,28 @@ function normalizeXmlSelector(selector: string): NormalizedXmlSelector {
   let index = 0
   let sequence = 0
   while (index < selector.length) {
-    const pseudo = /^:(containsown|matchesown|matches|eq|lt|gt)\(/iu.exec(selector.slice(index))
+    if (/^:matchText\b/iu.test(selector.slice(index))) {
+      output += ':legadomatchtext'
+      index += ':matchText'.length
+      continue
+    }
+    const pseudo = /^:(containsWholeOwnText|containsWholeText|containsOwn|containsData|contains|matchesWholeOwnText|matchesWholeText|matchesOwn|matches|eq|lt|gt)\(/iu.exec(selector.slice(index))
     if (pseudo !== null) {
       output += `:legado${pseudo[1]!.toLowerCase()}(`
-      index += pseudo[0].length
+      const argumentStart = index + pseudo[0].length
+      const argumentEnd = findXmlSelectorParenthesisEnd(selector, argumentStart - 1)
+      if (argumentEnd !== undefined) {
+        output += selector.slice(argumentStart, argumentEnd)
+        output += ')'
+        index = argumentEnd + 1
+      } else {
+        index = argumentStart
+      }
+      continue
+    }
+    if (/^:blank\b/iu.test(selector.slice(index))) {
+      output += ':legadoblank'
+      index += 6
       continue
     }
     if (selector[index] === '[') {
@@ -270,7 +432,108 @@ function normalizeXmlSelector(selector: string): NormalizedXmlSelector {
     output += selector[index]!
     index += 1
   }
-  return { selector: output, pseudos: { ...xmlPseudos, ...dynamic } }
+  return { selector: output, pseudos: { ...xmlPseudos, ...dynamic }, matchTextTopLevel: hasTopLevelMatchText(selector) }
+}
+
+function hasTopLevelMatchText(selector: string): boolean {
+  let bracketDepth = 0
+  let parenthesisDepth = 0
+  let quote: 'single' | 'double' | null = null
+  let escaped = false
+  for (let index = 0; index < selector.length; index += 1) {
+    const current = selector[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (current === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote !== null) {
+      if (current === quote) quote = null
+      continue
+    }
+    if (current === '"' || current === "'") {
+      quote = current === '"' ? 'double' : 'single'
+      continue
+    }
+    if (current === '[') {
+      bracketDepth += 1
+      continue
+    }
+    if (current === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1)
+      continue
+    }
+    if (bracketDepth > 0) continue
+    if (current === '(') {
+      parenthesisDepth += 1
+      continue
+    }
+    if (current === ')') {
+      parenthesisDepth = Math.max(0, parenthesisDepth - 1)
+      continue
+    }
+    if (parenthesisDepth === 0 && /^:matchText\b/iu.test(selector.slice(index))) return true
+  }
+  return false
+}
+
+function splitTopLevelMatchText(selector: string): { prefix: string; suffix: string } | undefined {
+  let bracketDepth = 0
+  let parenthesisDepth = 0
+  let quote: 'single' | 'double' | null = null
+  let escaped = false
+  let start: number | undefined
+  let end: number | undefined
+  for (let index = 0; index < selector.length; index += 1) {
+    const current = selector[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (current === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote !== null) {
+      if (current === quote) quote = null
+      continue
+    }
+    if (current === '"' || current === "'") {
+      quote = current === '"' ? 'double' : 'single'
+      continue
+    }
+    if (current === '[') {
+      bracketDepth += 1
+      continue
+    }
+    if (current === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1)
+      continue
+    }
+    if (bracketDepth > 0) continue
+    if (current === '(') {
+      parenthesisDepth += 1
+      continue
+    }
+    if (current === ')') {
+      parenthesisDepth = Math.max(0, parenthesisDepth - 1)
+      continue
+    }
+    if (parenthesisDepth !== 0) continue
+    if (current === ',') return undefined
+    if (/^:matchText\b/iu.test(selector.slice(index))) {
+      if (start !== undefined) return undefined
+      start = index
+      end = index + ':matchText'.length
+      index = end - 1
+    }
+  }
+  if (start === undefined || end === undefined) return undefined
+  if (/[\s>+~]/u.test(selector.slice(end).trimStart()[0] ?? '')) return undefined
+  return { prefix: selector.slice(0, start), suffix: selector.slice(end) }
 }
 
 function findXmlSelectorBracketEnd(selector: string, start: number): number | undefined {
@@ -288,6 +551,50 @@ function findXmlSelectorBracketEnd(selector: string, start: number): number | un
     if (current === '"' || current === "'") { quote = current === '"' ? 'double' : 'single'; continue }
     if (current === '[') { nested += 1; continue }
     if (current === ']') {
+      if (nested > 0) nested -= 1
+      else return index
+    }
+  }
+  return undefined
+}
+
+function findXmlSelectorParenthesisEnd(selector: string, start: number): number | undefined {
+  let quote: 'single' | 'double' | null = null
+  let escaped = false
+  let nested = 0
+  let bracketDepth = 0
+  for (let index = start + 1; index < selector.length; index += 1) {
+    const current = selector[index]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (current === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote !== null) {
+      if (current === quote) quote = null
+      continue
+    }
+    if (current === '"' || current === "'") {
+      quote = current === '"' ? 'double' : 'single'
+      continue
+    }
+    if (current === '(') {
+      nested += 1
+      continue
+    }
+    if (current === '[') {
+      bracketDepth += 1
+      continue
+    }
+    if (current === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1)
+      continue
+    }
+    if (current === ')') {
+      if (bracketDepth > 0) continue
       if (nested > 0) nested -= 1
       else return index
     }

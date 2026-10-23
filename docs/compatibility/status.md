@@ -151,6 +151,26 @@ Java `Pattern.quote` 遇到输入中的 `\\E` 时必须先结束当前引用、�
 
 Android `RuleAnalyzer.splitRule("@")` 会跳过 CSS 属性方括号、伪类圆括号和引号中的 `@`，因此 `a[href="@"]@text` 应先完成选择器，再执行文本输出；此前 TS 直接按字符切分，会把属性值或伪类参数截成不完整选择器。现在 `splitSelectorChain` 按方括号、圆括号、引号和转义字符维护嵌套状态，只在顶层切分链；新增属性值和 `:contains(@)` 书源式回归，构建后 `source-rule-host` **115/115** 通过。D18 的完整 CSS/Jsoup 方言、畸形 HTML 和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
 
+## 2026-10-23 P56：Jsoup `containsOwn` 大小写与空白归一化
+
+Jsoup `Evaluator.ContainsOwnText` 会先用 `StringUtil.normaliseWhitespace` 归一化选择器参数，再以不区分大小写的方式匹配 `Element.ownText()`；此前 Node adapter 直接按原字符串区分大小写，连续空白和大小写不同的书源规则会漏匹配。现在 `:containsOwn` 对搜索参数做同样的空白折叠，并对两侧使用大小写不敏感比较；新增 `Alpha  Beta`、`ALPHA`、`BETA` 的 adapter 回归。定向 adapter **25/25**、类型检查通过；D18 的完整 Jsoup 版本、Unicode locale 极端边界和 Android golden 仍保持 `partial / conditional`，本阶段不改变方法清单总数。
+
+## 2026-10-23 P57：补齐 Jsoup 文本伪类与 legacy `text.*` 语义
+
+对照 Jsoup 1.23.2 `Evaluator` 后，HTML/XML adapter 新增 `:contains`、`:containsWholeText`、`:containsWholeOwnText`、`:containsData`、`:matchesWholeText` 和 `:matchesWholeOwnText`；普通 `contains` 按 Jsoup 归一化空白并忽略大小写，whole 变体保留原始文本节点边界，data 变体读取 script/style/注释数据，所有正则伪类复用受控 Java Pattern 并重置全局匹配游标。legacy `text.关键词` 同步按 `getElementsContainingOwnText` 的大小写不敏感/空白归一化匹配。新增 HTML/XML adapter 和规则宿主回归，定向 adapter **26/26**、source-rule-host **116/116**、类型检查通过；`matchText` 的 TextNode 结果对象、完整 Jsoup 修复算法和 Android golden 仍保持待验证，不把元素近似误标为完全等价。
+
+## 2026-10-23 P58：补齐 Jsoup `blank` 伪类
+
+Jsoup 的 `:blank` 与 `:empty` 不同：它只判断当前元素的直接文本是否为空白，包含非空子元素文本的父元素仍可命中。HTML/XML adapter 现在提供 `:blank` 自定义伪类，新增空元素、空白文本、只有子元素文本和直接文本的双适配器回归；定向 adapter **27/27**、类型检查通过。`matchText` 的 TextNode 结果对象、完整 Jsoup 版本和 Android golden 仍保持待验证，不把 `:blank` 的可实现子集误标为完整 Jsoup 等价。
+
+## 2026-10-23 P59：补齐 Jsoup `matchText` 伪元素
+
+Jsoup 的 `:matchText` 会把匹配元素的每个直接 `TextNode` 包装成带父元素标签和属性的伪元素，并保持文档顺序；它也能作为 `:has`、`:not` 等组合选择器的子选择器。HTML/XML adapter 现在提供 `:matchText` 自定义伪类、伪元素文本/属性/HTML 读取和删除映射，并用虚拟同级节点保留 `:first-child`、`:last-child`、`:nth-child`、`:eq/:lt/:gt` 等位置后缀语义；常见 `:has` 组合保留父元素结果，复杂 `:not/:is` 的伪元素输出仍按差异登记。HTML 还按 Jsoup `textNodes()` 规则排除 script/style DataNode；新增全局、限定元素、同级位置、嵌套 `:has`、DataNode 边界、文本伪类参数字面量和文档顺序回归。定向 adapter **30/30**、source-rule-host **118/118**、类型检查通过；XML 修复算法、复杂伪元素变换、完整 Jsoup 版本和 Android golden 仍保持待验证，不把可实现的伪元素子集误标为完整 Jsoup 等价。
+
+P59 后机器清单仍为 **259 个成员**：**124 implemented、36 partial、99 simulated**；验证为 **230 ts-passed、25 ts-diff、4 unverified**。按“尚未完全等价或尚未验证”统计，当前还有 **40 个成员**：36 个属于 CSS/XPath/JSONPath/Java Pattern 的条件语义，4 个属于真实 WebView、浏览器和验证码宿主；本轮没有遗留可直接修复成员。`fixable/conditional/simulatable/real-host` 是能力属性，不能相加当作待处理数量；Android golden 仍需外部 runner，不能把 TS 通过替换成双端通过。
+
+P59 最终门禁：完整 Node 回归 **663/663**、书源回归 **199/199**、适配器 **30/30**、source-rule-host **118/118**、TypeScript conformance **6/6**、静态书源审计 **943/943**（20,231 条规则中 20,226 编译成功、5 条已知源文本错误）；`pnpm test:source:compare` 的 Android 6 条和 `run-source-conformance-android` 仍为 **not-run**，原因已在证据矩阵记录。
+
 ## 状态定义
 
 | 状态 | 含义 |

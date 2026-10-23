@@ -36,6 +36,94 @@ test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
   assert.equal(document.read(document.select('main')[0]!, 'text'), '前甲 中乙 后丙')
 })
 
+test('HTML adapter 的 containsOwn 按 Jsoup 归一化搜索空白并忽略大小写', () => {
+  const document = new HtmlParserAdapter().parse('<main><p>Alpha  Beta</p><p>beta</p><p>Gamma</p></main>')
+  assert.equal(document.select('p:containsOwn(ALPHA)').length, 1)
+  assert.equal(document.select('p:containsOwn(alpha beta)').length, 1)
+  assert.equal(document.select('p:containsOwn(BETA)').length, 2)
+})
+
+test('HTML/XML 文本伪类参数中的字面量不会被当作 matchText 选择器', () => {
+  const html = new HtmlParserAdapter().parse('<main><p>:matchText</p><p>other</p></main>')
+  assert.equal(html.select('p:contains(:matchText)').length, 1)
+  assert.equal(html.select('p:matches(:matchText)').length, 1)
+
+  const xml = new XPathParserAdapter().parse('<?xml version="1.0"?><main><p>:matchText</p><p>other</p></main>')
+  assert.equal(xml.select('p:contains(:matchText)').length, 1)
+  assert.equal(xml.select('p:matches(:matchText)').length, 1)
+})
+
+test('HTML/XML adapter 支持 Jsoup wholeText、data 和完整文本正则伪类', () => {
+  const html = new HtmlParserAdapter().parse('<div>A  <b>B</b>\n<script>x</script><style>y</style><!-- c --></div>')
+  assert.equal(html.select('div:contains(A B)').length, 1)
+  assert.equal(html.select('div:containsWholeText(A  B)').length, 1)
+  assert.equal(html.select('div:containsWholeOwnText(A  )').length, 1)
+  assert.equal(html.select('div:containsData(XY)').length, 1)
+  assert.equal(html.select('div:matchesWholeText(/^A  B/)').length, 1)
+  assert.equal(html.select('div:matchesWholeOwnText(/^A  /)').length, 1)
+
+  const xml = new XPathParserAdapter().parse('<?xml version="1.0"?><root><item>A  <b>B</b></item></root>')
+  assert.equal(xml.select('item:contains(A B)').length, 1)
+  assert.equal(xml.select('item:containsWholeText(A  B)').length, 1)
+  assert.equal(xml.select('item:containsWholeOwnText(A  )').length, 1)
+  assert.equal(xml.select('item:matchesWholeText(/^A  B/)').length, 1)
+})
+
+test('HTML/XML adapter 支持 Jsoup blank 伪类的直接文本语义', () => {
+  const html = new HtmlParserAdapter().parse('<main><p id="a"></p><p id="b"> </p><p id="c"><b>x</b></p><p id="d">x</p></main>')
+  assert.deepEqual(html.select('p:blank').map((node) => html.attr(node, 'id')), ['a', 'b', 'c'])
+
+  const xml = new XPathParserAdapter().parse('<?xml version="1.0"?><main><p id="a"/><p id="b"> </p><p id="c"><b>x</b></p><p id="d">x</p></main>')
+  assert.deepEqual(xml.select('p:blank').map((node) => xml.attr(node, 'id')), ['a', 'b', 'c'])
+})
+
+test('HTML adapter 支持 Jsoup matchText 伪元素和嵌套 has 选择', () => {
+  const document = new HtmlParserAdapter().parse('<div id="x">A <b>B</b> C</div><p>F</p>')
+  const all = document.select(':matchText')
+  assert.deepEqual(all.map((node) => document.read(node, 'text')), ['A', 'B', 'C', 'F'])
+  assert.equal(all[0]?.kind, 'element')
+  assert.equal(document.attr(all[0]!, 'id'), 'x')
+  assert.deepEqual(document.select('div:matchText').map((node) => document.read(node, 'text')), ['A', 'C'])
+  assert.deepEqual(document.select('div:matchText:contains(C)').map((node) => document.read(node, 'text')), ['C'])
+  assert.deepEqual(document.select('div:matchText:first-child').map((node) => document.read(node, 'text')), ['A'])
+  assert.deepEqual(document.select('div:matchText:last-child').map((node) => document.read(node, 'text')), ['C'])
+  assert.deepEqual(document.select('div:matchText:nth-child(3)').map((node) => document.read(node, 'text')), ['C'])
+  assert.deepEqual(document.select('div:matchText:eq(2)').map((node) => document.read(node, 'text')), ['C'])
+  assert.deepEqual(document.select('div:matchText:has(+ b)').map((node) => document.read(node, 'text')), ['A'])
+  assert.equal(document.select('div:has(b:matchText)').length, 1)
+
+  const removable = new HtmlParserAdapter().parse('<div>A <b>B</b> C</div>')
+  removable.mutate?.(removable.select('div:matchText')[0]!, { operation: 'remove' })
+  assert.equal(removable.read(removable.select('div')[0]!, 'text'), 'B C')
+  assert.deepEqual(removable.select('div:matchText').map((node) => removable.read(node, 'text')), ['C'])
+
+  const splitText = new HtmlParserAdapter().parse('<div>A<!--split-->B</div>')
+  splitText.mutate?.(splitText.select('div:matchText')[0]!, { operation: 'remove' })
+  assert.deepEqual(splitText.select('div:matchText:first-child').map((node) => splitText.read(node, 'text')), ['B'])
+
+  const xml = new XPathParserAdapter().parse('<?xml version="1.0"?><root><item id="x">A <b>B</b> C</item></root>')
+  const xmlMatch = xml.select('item:matchText')
+  assert.deepEqual(xmlMatch.map((node) => xml.read(node, 'text')), ['A', 'C'])
+  assert.equal(xml.attr(xmlMatch[0]!, 'id'), 'x')
+  assert.deepEqual(xml.select('item:matchText:first-child').map((node) => xml.read(node, 'text')), ['A'])
+  assert.deepEqual(xml.select('item:matchText:last-child').map((node) => xml.read(node, 'text')), ['C'])
+  assert.deepEqual(xml.select('item:matchText:nth-child(3)').map((node) => xml.read(node, 'text')), ['C'])
+  assert.deepEqual(xml.select('item:matchText:eq(2)').map((node) => xml.read(node, 'text')), ['C'])
+  assert.deepEqual(xml.select('item:matchText:has(+ b)').map((node) => xml.read(node, 'text')), ['A'])
+
+  const xmlRemovable = new XPathParserAdapter().parse('<?xml version="1.0"?><root><item>A <b>B</b> C</item></root>')
+  xmlRemovable.mutate?.(xmlRemovable.select('item:matchText')[0]!, { operation: 'remove' })
+  assert.equal(xmlRemovable.read(xmlRemovable.select('item')[0]!, 'text'), 'B C')
+  assert.deepEqual(xmlRemovable.select('item:matchText').map((node) => xmlRemovable.read(node, 'text')), ['C'])
+})
+
+test('HTML adapter 的 matchText 忽略 script/style DataNode', () => {
+  const document = new HtmlParserAdapter().parse('<main><div>A<script>script-data</script><style>.x{}</style>B</div></main>')
+  assert.deepEqual(document.select('div:matchText').map((node) => document.read(node, 'text')), ['A', 'B'])
+  assert.equal(document.select('script:matchText').length, 0)
+  assert.equal(document.select('style:matchText').length, 0)
+})
+
 test('HTML adapter 支持 Jsoup 文本正则、属性正则和常见组合选择器', () => {
   const document = new HtmlParserAdapter().parse('<main><div class="content" data-x="abc"><a href="/one">One</a></div><div class="head" data-x="xbc"><a href="/two">Two</a></div><p>Three</p></main>')
   assert.equal(document.select('div:matches(/One/)').length, 1)
