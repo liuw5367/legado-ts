@@ -118,7 +118,7 @@ TypeScript 侧已有自动测试：`packages/source-core/tests/`（含 `source-c
 | `EXP-004` | 发现列表 | 声明式 `ruleExplore`、`ruleSearch` 回退、响应最终 URL 和同源去重 |
 | `EXP-005` | 发现列表 | JS 源 `explore(url, page)` 返回归一化、非法结果与取消 |
 | `EXP-006` | 发现生命周期 | 换分类、换页、旧请求迟到、分类 URL 为空和宿主能力缺失 |
-| `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`、`@CSS` 元素选择、字符串终端输出和模式前缀大小写不敏感 |
+| `SCH-001` | 规则 | 默认 CSS、旧式 `class/tag/id/text`（含 `class.foo bar` 多 class 简写）、`@CSS` 元素选择、字符串终端输出和模式前缀大小写不敏感 |
 | `SCH-002` | 规则 | `@` 链、`text`、`textNodes`、`ownText`、`html`、`all`、属性输出、文本/属性正则选择器 |
 | `SCH-003` | 规则 | 正负索引、范围、负步长、排除、越界和 DOM 不被破坏 |
 | `SCH-004` | 规则 | `@XPath`、XML 声明、大小写敏感 CSS/属性、`eq/containsOwn/matchesOwn` 伪类、表格片段补容器、节点/字符串/空结果归一化 |

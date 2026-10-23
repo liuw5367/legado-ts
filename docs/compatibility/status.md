@@ -117,6 +117,12 @@ Node 平台的 `androidId/deviceID`、`getReadBookConfigMap` 和 `getThemeConfig
 
 QuickJS 的受控 `java.util.regex.Pattern` bridge 已补齐 Android 数值 `UNIX_LINES(1)` 和 `COMMENTS(4)`：前者映射为只把 LF 视为行终止符的 `(?d)` 语义，后者映射为 Java COMMENTS 的 ASCII 空白与 `#` 行注释规则；已有 `UNICODE_CHARACTER_CLASS(256)`、`UNICODE_CASE(64)` 映射也改为统一的作用域前缀组合，和 `LITERAL(16)` 同时使用时不丢失 flag。`source-rule-host.test.ts` 新增 CR 行边界、COMMENTS 和现有 Unicode flag 回归，重建后的定向规则宿主测试 110/110 通过。该修正不改变清单成员数量；剩余边界仍为 36 个条件解析成员和 4 个真实交互宿主，完整 Java Pattern 与 Android golden 仍需另行验证。
 
+## 2026-10-23 P49：CSS 多 class 简写收口
+
+按 Android `AnalyzeByJSoup.ElementsSingle` 的 `getElementsByClass` 语义，默认 CSS 规则现在把 `class.foo bar` 转换为同时要求 `foo`、`bar` 两个 class token 的 `.foo.bar` 选择器；此前只拼接成 `.foo bar`，会把多 class 书源规则解释为后代选择器，导致正文/作者等字段直接空结果。文本 `matches`/`matchesOwn` 当前每次伪类调用都会重新编译受控正则，未发现跨节点复用 `lastIndex` 的实际缺口，因此不额外修改。
+
+新增 `source-rule-host.test.ts` 的 Android 多 class 书源规则回归；构建后相关 adapter 与规则宿主测试 **135/135** 通过。该阶段只关闭了一个已复现的具体解析缺口，D18 的完整 Jsoup 版本、复杂 CSS 转义、畸形 HTML 和 Android golden 仍未验证，因此清单中 CSS 族仍保持 `partial / conditional`，不把局部修复误记为完整兼容。
+
 ## 状态定义
 
 | 状态 | 含义 |

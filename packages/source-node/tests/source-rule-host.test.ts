@@ -109,6 +109,13 @@ test('HTML 规则的 text 选择器只匹配元素自身文本，html 返回外�
   assert.deepEqual(withHtml.value, ['<div class="outer">needle<span>nested</span><p><b>needle descendant</b></p></div>'])
 })
 
+test('HTML 规则兼容 Android 的多 class 简写选择器', async () => {
+  const host = new SourceRuleHost()
+  const result = await evaluate(host, 'class.pull-right smaller-5@text', '<div class="pull-right smaller-5">作者</div>')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(result.value, ['作者'])
+})
+
 test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力', async () => {
   const output = await evaluate(new SourceRuleHost(), '@js:source.putConcurrent("1/100")', '')
   assert.equal(output.status, 'capability-missing')

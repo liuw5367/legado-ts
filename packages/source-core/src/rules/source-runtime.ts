@@ -2377,7 +2377,10 @@ function isDefiniteJsonPath(expression: string): boolean {
 }
 
 function normalizeSelector(selector: string): string {
-  if (selector.startsWith('class.')) return `.${selector.slice('class.'.length)}`
+  if (selector.startsWith('class.')) {
+    const classNames = selector.slice('class.'.length).trim().split(/\s+/u).filter(Boolean)
+    return classNames.length === 0 ? '.' : classNames.map((className) => `.${className}`).join('')
+  }
   if (selector.startsWith('tag.')) return selector.slice('tag.'.length)
   if (selector.startsWith('id.')) return `#${selector.slice('id.'.length)}`
   return selector
