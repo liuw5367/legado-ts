@@ -1,11 +1,14 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthCard, EmailPasswordFields } from '../components/auth-form.tsx'
 import { signIn } from '../lib/auth.ts'
 
 export function LoginPage() {
   const navigate = useNavigate(); const location = useLocation()
-  const target = (location.state as { from?: string } | null)?.from ?? '/'
-  return <AuthCard title="登录" footer={<span>还没有账号？ <Link className="link" to="/register">注册</Link> · <Link className="link" to="/forgot-password">忘记密码</Link></span>}>
-    <EmailPasswordFields submitLabel="登录" onSubmit={async ({ email, password }) => { await signIn(email, password); await navigate(target, { replace: true }) }} />
+  const state = location.state as { from?: string; notice?: string } | null
+  const target = state?.from ?? '/'
+  return <AuthCard title="登录" description="登录你的 Legado Reader 账号" footer={<span>还没有账号？ <Link className="link" to="/register">创建账号</Link></span>}>
+    {state?.notice === undefined ? null : <DismissibleMessage className="success auth-inline-message" role="status">{state.notice}</DismissibleMessage>}
+    <EmailPasswordFields submitLabel="登录" passwordAside={<Link className="link auth-field-link" to="/forgot-password">忘记密码？</Link>} onSubmit={async ({ email, password }) => { await signIn(email, password); await navigate(target, { replace: true }) }} />
   </AuthCard>
 }

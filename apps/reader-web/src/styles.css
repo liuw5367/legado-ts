@@ -722,3 +722,47 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reader-controls-backdrop { position: fixed; inset: 0; z-index: 3; touch-action: none; }
 .reader-exit { position: absolute; bottom: calc(100% + 16px); left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 20px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); box-shadow: 0 4px 16px rgb(0 0 0 / 12%); white-space: nowrap; }
 .reader-exit svg { width: 18px; height: 18px; }
+
+/* 认证页使用比普通内容页更窄的输入栏，让标题、字段和操作形成单一阅读节奏。 */
+.auth-shell { display: flex; width: 100%; min-height: 100dvh; justify-content: center; padding: clamp(32px, 8vh, 88px) max(20px, calc(20px + var(--safe-left))) calc(32px + var(--safe-bottom)) max(20px, calc(20px + var(--safe-right))); }
+.auth-frame { width: min(100%, 400px); }
+.auth-brand { display: flex; align-items: center; gap: 8px; margin: 0 0 16px 4px; color: var(--foreground); font-size: 13px; font-weight: 700; letter-spacing: .01em; }
+.auth-brand-mark { display: inline-grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; background: color-mix(in srgb, var(--primary) 16%, var(--card)); color: var(--primary); font-size: 15px; font-weight: 750; }
+.auth-card { width: 100%; padding: 28px; border-radius: 10px; box-shadow: 0 1px 4px rgb(36 33 29 / 10%); }
+.auth-card-embedded { width: min(100%, 400px); margin: 0; padding: 20px; box-shadow: none; }
+.auth-card .page-header { align-items: flex-start; gap: 8px; margin-bottom: 24px; }
+.auth-card .page-header h1 { overflow: visible; font-size: 20px; line-height: 28px; white-space: normal; }
+.auth-card .page-header-description { overflow: visible; font-size: 13px; line-height: 20px; white-space: normal; }
+.auth-card .page-header > .back-link { margin: -4px 0 0 -8px; }
+.auth-form { width: 100%; margin: 0; gap: 16px; }
+.auth-form-intro { margin: -4px 0 0; font-size: 13px; line-height: 20px; }
+.auth-submit { width: 100%; margin-top: 4px; }
+.auth-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12px; line-height: 20px; text-align: center; }
+.auth-inline-message { margin-bottom: 16px; }
+.field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.auth-field-link { display: inline-flex; min-height: 28px; align-items: center; font-size: 12px; font-weight: 500; }
+.password-control { position: relative; }
+.password-control .input { padding-right: 72px; }
+.password-toggle { position: absolute; top: 4px; right: 4px; display: inline-flex; min-width: 48px; height: 28px; align-items: center; justify-content: center; gap: 3px; padding: 3px 5px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font-size: 11px; line-height: 16px; }
+.password-toggle svg { width: 14px; height: 14px; }
+.password-toggle:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); color: var(--foreground); }
+.password-toggle:active { transform: scale(.97); }
+.field-hint { margin: -2px 0 0; color: var(--muted); font-size: 12px; line-height: 18px; }
+.auth-result { display: flex; flex-direction: column; gap: 12px; }
+.auth-result-mark { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--success) 14%, var(--card)); color: var(--success); font-size: 20px; font-weight: 700; }
+.auth-result h2 { margin: 0; font-size: 18px; line-height: 24px; }
+.auth-result-copy { color: var(--foreground); font-size: 13px; line-height: 21px; }
+.auth-result-copy p { margin: 0 0 10px; }
+.auth-result-copy p:last-child { margin-bottom: 0; }
+.auth-result-email { overflow-wrap: anywhere; font-weight: 650; }
+.auth-result-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.auth-result-actions .button { width: 100%; }
+.auth-result-link { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--primary); font-size: 13px; text-decoration: none; cursor: pointer; }
+.auth-result-link:hover { text-decoration: underline; }
+.auth-result-link:active { transform: scale(.97); }
+
+@media (max-width: 520px) {
+  .auth-shell { padding-top: 28px; padding-right: max(20px, calc(20px + var(--safe-right))); padding-bottom: calc(28px + var(--safe-bottom)); padding-left: max(20px, calc(20px + var(--safe-left))); }
+  .auth-card:not(.auth-card-embedded) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .auth-brand { margin-bottom: 24px; }
+}
