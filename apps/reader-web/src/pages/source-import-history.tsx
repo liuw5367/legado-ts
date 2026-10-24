@@ -6,6 +6,7 @@ import { Select } from '../components/ui/select.tsx'
 import { Sheet } from '../components/ui/sheet.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
+import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import { ApiError, apiFetch } from '../lib/api.ts'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import type { ImportHistoryItem, ImportHistoryPage, ImportItemsPage, UndoPreview } from '../../shared/source-management.ts'
@@ -36,13 +37,25 @@ export function SourceImportHistoryPage() {
   const load = useCallback(async () => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller
     setLoading(true); setError('')
-    const params = new URLSearchParams({ page: String(page), pageSize: '50', filter })
+    const params = new URLSearchParams({ page: batchId ? '1' : String(page), pageSize: batchId ? '50' : '20', filter })
     if (linkId) params.set('linkId', linkId)
     if (sourceUuid) params.set('sourceUuid', sourceUuid)
     try {
       const path = batchId ? `/api/source-management/import-history/${batchId}/items` : '/api/source-management/import-history'
-      const value = await apiFetch<ImportHistoryPage | ImportItemsPage>(path + '?' + params, { signal: controller.signal })
-      if (!controller.signal.aborted) { if ('batch' in value) setDetail(value); else setHistory(value) }
+      if (batchId) {
+        const first = await apiFetch<ImportItemsPage>(path + '?' + params, { signal: controller.signal })
+        const items = [...first.items]
+        for (let nextPage = 2; items.length < first.total; nextPage += 1) {
+          params.set('page', String(nextPage))
+          const next = await apiFetch<ImportItemsPage>(path + '?' + params, { signal: controller.signal })
+          if (next.items.length === 0) break
+          items.push(...next.items)
+        }
+        if (!controller.signal.aborted) setDetail({ ...first, items })
+      } else {
+        const value = await apiFetch<ImportHistoryPage>(path + '?' + params, { signal: controller.signal })
+        if (!controller.signal.aborted) setHistory((current) => ({ ...value, batches: page === 1 ? value.batches : [...(current?.batches.filter((batch) => !value.batches.some((next) => next.id === batch.id)) ?? []), ...value.batches] }))
+      }
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '导入记录加载失败') }
     finally { if (!controller.signal.aborted) setLoading(false) }
   }, [batchId, page, filter, linkId, sourceUuid])
@@ -90,14 +103,14 @@ export function SourceImportHistoryPage() {
     {message ? <DismissibleMessage className="success" role="status">{message}</DismissibleMessage> : null}
     {error ? <DismissibleMessage className="error" role="alert">{error}<Button variant="secondary" onClick={() => void load()}>刷新</Button></DismissibleMessage> : null}
     {loading ? <LoadingState message="正在加载导入记录…" /> : null}
-    {!batchId ? <div className="source-management-list">{history?.batches.map((batch) => <article key={batch.id} className="source-management-row import-history-row"><div className="source-management-info"><Link to={'/sources/import-history/' + batch.id}><strong>{new Date(batch.importedAt).toLocaleString('zh-CN')}</strong></Link><span className="source-url">{batch.displayUrl}</span><span>新增 {batch.newCount} · 更新 {batch.updatedCount} · 恢复 {batch.restoredCount}</span><span className="muted small">跳过 {batch.skippedCount} · 未选择 {batch.unselectedCount} · {undoLabel[batch.undoStatus]}</span>{batch.undoneAt ? <span className="muted small">撤销于 {new Date(batch.undoneAt).toLocaleString('zh-CN')}</span> : null}{batch.invalidatedReason ? <span className="muted small">{batch.invalidatedReason}</span> : null}</div><Link to={'/sources/import-history/' + batch.id}>查看明细</Link></article>)}{!loading && total === 0 ? <p className="empty-state">没有导入记录。上线前的书源未记录历史。</p> : null}</div> : detail ? <>
+    {!batchId ? <div className="source-management-list">{history?.batches.map((batch) => <Link key={batch.id} to={'/sources/import-history/' + batch.id} className="source-management-row import-history-row"><strong className="import-history-date">{new Date(batch.importedAt).toLocaleString('zh-CN')}</strong><span className="source-url import-history-origin">{batch.displayUrl}</span><div className="source-management-info"><span>新增 {batch.newCount} · 更新 {batch.updatedCount} · 恢复 {batch.restoredCount}</span><span className="muted small">跳过 {batch.skippedCount} · 未选择 {batch.unselectedCount} · {undoLabel[batch.undoStatus]}</span></div><span className="button secondary small import-history-detail">查看明细</span>{batch.undoneAt ? <span className="muted small import-history-note">撤销于 {new Date(batch.undoneAt).toLocaleString('zh-CN')}</span> : null}{batch.invalidatedReason ? <span className="muted small import-history-note">{batch.invalidatedReason}</span> : null}</Link>)}{!loading && total === 0 ? <p className="empty-state">没有导入记录。上线前的书源未记录历史。</p> : null}</div> : detail ? <>
       <p className="source-url">{detail.batch.displayUrl}</p>
       <p className="muted small">{undoLabel[detail.batch.undoStatus]}{detail.batch.invalidatedReason ? ' · ' + detail.batch.invalidatedReason : ''}</p>
-      <div className="actions"><Select aria-label="筛选导入明细" value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1); setSelected([]) }}><option value="imported">实际导入</option><option value="skipped">跳过与未选择</option><option value="all">全部明细</option></Select><Button variant="secondary" disabled={busy || !selected.length} onClick={() => void prepareUndo(false)}>撤销选中 {selected.length || ''}</Button><Button variant="secondary" disabled={busy || detail.batch.undoStatus === 'all' || !!detail.batch.invalidatedReason} onClick={() => void prepareUndo(true)}>撤销整批</Button></div>
-      <div className="source-management-list">{detail.items.map((item) => <article className="source-management-row" key={item.id}><label className="source-management-check"><input aria-label={'选择 ' + item.name} type="checkbox" checked={selected.includes(item.id)} disabled={busy || !item.afterRevision || !!item.undoneAt} onChange={(event) => toggle(item, event.target.checked)} /></label><div className="source-management-info"><strong>{item.name}</strong><span className="muted small">{actionLabel[item.action]} · {currentLabel[item.currentStatus]} · {item.group ?? '未分组'}</span><span className="source-url">{item.sourceId}</span><span className="source-url">来源：{item.displayUrl}</span><span className="muted small">{item.reason}</span></div></article>)}</div>
+      <div className="source-toolbar"><Select aria-label="筛选导入明细" value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1); setSelected([]) }}><option value="imported">实际导入</option><option value="skipped">跳过与未选择</option><option value="all">全部明细</option></Select><div className="actions source-toolbar-end"><Button variant="secondary" disabled={busy || !selected.length} onClick={() => void prepareUndo(false)}>撤销选中 {selected.length || ''}</Button><Button variant="secondary" disabled={busy || detail.batch.undoStatus === 'all' || !!detail.batch.invalidatedReason} onClick={() => void prepareUndo(true)}>撤销整批</Button></div></div>
+      <div className="source-management-list">{detail.items.map((item) => <article className="source-management-row" key={item.id}><label className="source-management-check"><input aria-label={'选择 ' + item.name} type="checkbox" checked={selected.includes(item.id)} disabled={busy || !item.afterRevision || !!item.undoneAt} onChange={(event) => toggle(item, event.target.checked)} /></label><div className="source-management-info"><div className="import-item-heading"><strong>{item.name}</strong><span className="muted small">{item.group ?? '未分组'}</span><span className="source-url">{sourceDomainInfo(item.sourceId).domain}</span></div><div className="import-item-status small"><span className={`badge import-action-${item.action}`}>{actionLabel[item.action]}</span><span className={`badge import-current-${item.currentStatus}`}>{currentLabel[item.currentStatus]}</span><span className={`import-reason-${item.currentStatus}`}>{item.reason}</span></div></div></article>)}</div>
       {!loading && detail.items.length === 0 ? <p className="empty-state">没有符合条件的明细。</p> : null}
     </> : null}
-    <div className="actions"><Button variant="secondary" disabled={loading || page === 1} onClick={() => { setPage(page - 1); setSelected([]) }}>上一页</Button><span>第 {page} 页 · 共 {total} 项</span><Button variant="secondary" disabled={loading || page * 50 >= total} onClick={() => { setPage(page + 1); setSelected([]) }}>下一页</Button></div>
+    {!batchId && (history?.batches.length ?? 0) < total ? <Button variant="secondary" disabled={loading} onClick={() => setPage((current) => current + 1)}>{loading ? '加载中…' : '加载更多'}</Button> : null}
     <Sheet open={preview !== null} onOpenChange={(open) => { if (!open && !busy) setPreview(null) }} title="确认撤销导入">
       {preview ? <><p>将移除 {preview.removable} 个新增书源，恢复 {preview.restorable} 个书源的导入前状态。书架和阅读进度会保留；登录态不会恢复。</p><p className="muted small">后续已修改、正在使用或存在同域冲突的书源不会撤销。</p><div className="import-undo-list">{preview.items.map((item) => <p key={item.itemId}><strong>{item.name}</strong> · {item.canUndo ? item.action === 'new' ? '移除新增书源' : '恢复导入前状态' : item.reason}</p>)}</div>{error ? <p className="error" role="alert">{error}</p> : null}<div className="actions"><Button variant="secondary" disabled={busy} onClick={() => setPreview(null)}>取消</Button><Button disabled={busy || preview.removable + preview.restorable === 0} onClick={() => void confirmUndo()}>{busy ? '撤销中…' : '确认撤销可执行项'}</Button></div></> : null}
     </Sheet>
