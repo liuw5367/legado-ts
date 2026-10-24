@@ -1330,3 +1330,37 @@ test('真实正文规则请求失败时返回失败并保留请求轨迹', async
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'request-failed'))
   assert.ok(result.trace.some((entry) => entry.event === 'request'))
 })
+
+test('正文 @text 在文字一致时保留 HTML 段落，其他字段仍使用普通文本', async () => {
+  const source = {
+    bookSourceUrl: 'https://paragraph.test', bookSourceName: 'Paragraphs', bookSourceType: 0,
+    ruleContent: { content: '#showReading .readChapterAppendBody@text' },
+  } as unknown as NormalizedSource
+  const html = '<div id="showReading"><div class="readChapterAppendBody"><p>第一段<strong>加粗</strong>文字。</p><p>第二段<br>换行。</p><p>第三段 &amp; 结尾。</p></div></div>'
+  const rules = new SourceRuleHost()
+  const network: NetworkHost = { request: async (plan) => response(plan.url, html) }
+  const chapter = { sourceId: source.bookSourceUrl, bookUrl: `${source.bookSourceUrl}/book`, chapterUrl: `${source.bookSourceUrl}/chapter/1`, index: 0 }
+  const result = await loadChapterContent({ network, rules }, { source, chapter })
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.deepEqual(result.value?.cleaned.split('\n').map((line) => line.trim()), ['第一段加粗文字。', '第二段', '换行。', '第三段 & 结尾。'])
+  const ordinary = await rules.evaluate({ source, stage: 'detail', field: 'intro', rule: '#showReading .readChapterAppendBody@text', content: html })
+  assert.equal(ordinary.value instanceof Array ? ordinary.value.join('\n') : ordinary.value, '第一段加粗文字。 第二段 换行。 第三段 & 结尾。')
+})
+
+test('正文段落兜底保留单段和已有换行，不改变媒体正文或替换规则', async () => {
+  for (const [html, type, replacement, expected] of [
+    ['<div class="body">单段<strong>文字</strong>。</div>', 0, undefined, ['单段文字。']],
+    ['<div class="body"><pre>第一行\n第二行</pre></div>', 0, undefined, ['第一行', '第二行']],
+    ['<div class="body"><p>音频</p><p>地址</p></div>', 1, undefined, ['音频 地址']],
+    ['<div class="body"><p>视频</p><p>地址</p></div>', 4, undefined, ['视频 地址']],
+    ['<div class="body"><p>第一段</p><p>第二段</p></div>', 0, '##第二段##替换后', ['第一段', '替换后']],
+    ['<div class="body"><p>第一段</p><p>第二段</p></div>', 0, '##\\s+##', ['第一段第二段']],
+  ] as const) {
+    const source = { bookSourceUrl: 'https://paragraph.test', bookSourceName: 'Paragraphs', bookSourceType: type, ruleContent: { content: `.body@text${replacement ?? ''}` } } as unknown as NormalizedSource
+    const network: NetworkHost = { request: async (plan) => response(plan.url, html) }
+    const chapter = { sourceId: source.bookSourceUrl, bookUrl: `${source.bookSourceUrl}/book`, chapterUrl: `${source.bookSourceUrl}/chapter/1`, index: 0 }
+    const result = await loadChapterContent({ network, rules: new SourceRuleHost() }, { source, chapter })
+    assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+    assert.deepEqual(result.value?.cleaned.split('\n').map((line) => line.trim()), expected)
+  }
+})

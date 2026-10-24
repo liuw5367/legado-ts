@@ -3012,6 +3012,17 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return wrapper.__legadoWorkflowValue
   }
 
+  private readDefaultNode(document: HtmlDocument, node: ParserNode, output: DefaultOutput, state: EvaluationState): string {
+    const text = document.read(node, output)
+    const mediaType = state.source.bookSourceType
+    // 只为文本正文恢复块级换行；简介、搜索、媒体地址和已有分段仍遵循 @text 语义。
+    if (output !== 'text' || state.request.field !== 'content' || mediaType === 1 || mediaType === 4 || text.includes('\n')) return text
+    const formatted = formatChapterBody(document.read(node, 'html'), state.request.redirectUrl ?? state.request.baseUrl ?? state.source.bookSourceUrl).content
+    // 仅忽略空白比较文字，防止格式化额外删除内容或将正文中的字面标签误作 HTML。
+    const compact = (value: string): string => value.replace(/\s/gu, '')
+    return formatted.includes('\n') && compact(formatted) === compact(text) ? formatted : text
+  }
+
   private async evaluateDefault(body: string, state: EvaluationState, content: unknown): Promise<unknown> {
     const expanded = await this.interpolate(body, state, content)
     const storedNodes = this.storedNodes(content)
@@ -3020,7 +3031,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       // 沿用上一份内容；字段规则走 getString，最终落到 AnalyzeByJSoup.getString("")，结果是空。
       if (state.expect !== 'nodes') {
         if (storedNodes.length === 0) return ''
-        const values = storedNodes.map((stored) => stored.document.read(stored.node, 'text'))
+        const values = storedNodes.map((stored) => this.readDefaultNode(stored.document, stored.node, 'text', state))
         return values.length === 1 ? values[0] : values
       }
       if (storedNodes.length === 0) return textValue(content)
@@ -3029,7 +3040,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     if (expanded === 'text' || expanded === 'ownText' || expanded === 'html') {
       if (storedNodes.length === 0) return textValue(content)
-      const values = storedNodes.map((stored) => stored.document.read(stored.node, expanded))
+      const values = storedNodes.map((stored) => this.readDefaultNode(stored.document, stored.node, expanded, state))
       return values.length === 1 ? values[0] : values
     }
     // Legado 的节点字段规则允许直接写属性名，不要求 @ 前缀。
@@ -3055,7 +3066,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         const refs = current.filter((item): item is SelectedNode => item.node !== undefined).map((item) => this.remember(item.document, item.node))
         return refs.length === 1 ? refs[0] : refs
       }
-      const values = current.filter((item): item is SelectedNode => item.node !== undefined).map((item) => item.document.read(item.node, plan.output!))
+      const values = current.filter((item): item is SelectedNode => item.node !== undefined).map((item) => this.readDefaultNode(item.document, item.node, plan.output!, state))
       return values.length === 1 ? values[0] : values
     }
     for (const selector of selectorParts) {
@@ -3087,7 +3098,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return values
     }
     if (plan.output === undefined) return selected.map((item) => this.remember(item.document, item.node))
-    return selected.map((item) => item.document.read(item.node, plan.output!)).filter((value) => value.length > 0)
+    return selected.map((item) => this.readDefaultNode(item.document, item.node, plan.output!, state)).filter((value) => value.length > 0)
   }
 
   private async evaluateJson(expression: string, state: EvaluationState, content: unknown): Promise<unknown> {
