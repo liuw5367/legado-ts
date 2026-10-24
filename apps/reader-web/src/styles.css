@@ -708,3 +708,10 @@ a { color: inherit; }
 .notice-with-recovery { display: flex; align-items: center; gap: 8px; }
 .notice-with-recovery > .dismissible-message { flex: 1; }
 .notice-with-recovery > button { flex: 0 0 auto; margin-left: auto; }
+
+.book-list-info-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.book-list-info-heading h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.book-list-info-heading time { flex: 0 0 auto; white-space: nowrap; }
+.book-list-info-meta { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; text-align: right; }
+.book-list-info-meta time { white-space: nowrap; }
+.book-list-info > .organization-prose { margin: 12px 0 0; }
