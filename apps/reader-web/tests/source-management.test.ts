@@ -90,7 +90,7 @@ test('redirect import supports another public host and rejects invalid final res
   })
   assert.equal((await createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/start')).writableCount, 1)
   t.mock.restoreAll()
-  for (const finalResponse of [() => new Response('<html>login</html>'), () => new Response('unavailable', { status: 503 }), () => new Response('x'.repeat(10 * 1024 * 1024 + 1))]) {
+  for (const finalResponse of [() => new Response('<html>login</html>'), () => new Response('unavailable', { status: 503 }), () => new Response('x'.repeat(20 * 1024 * 1024 + 1))]) {
     calls = 0
     t.mock.method(globalThis, 'fetch', async () => ++calls === 1 ? new Response(null, { status: 302, headers: { location: '/final.json' } }) : finalResponse())
     const repository = new MemoryReaderRepository()
@@ -289,8 +289,8 @@ test('web source order is persisted, returned in summaries, and checked by revis
   await assert.rejects(repository.applySourceOrder('order-user', [{ sourceId: first.sourceId, expectedSourceRevision: first.sourceRevision, customOrder: 0 }]), /已更新/u)
 })
 
-test('import preview accepts the 10 MiB boundary and rejects larger responses', async (t) => {
-  const limit = 10 * 1024 * 1024
+test('import preview accepts the 20 MiB boundary and rejects larger responses', async (t) => {
+  const limit = 20 * 1024 * 1024
   const text = JSON.stringify([baseSource])
   for (const size of [4 * 1024 * 1024 + 1, limit, limit + 1]) {
     t.mock.method(globalThis, 'fetch', async () => new Response(text + ' '.repeat(size - Buffer.byteLength(text))))
@@ -398,5 +398,29 @@ test('local JSON requires a valid source link and rejects empty, invalid and ove
   }
   for (const text of ['', '  ', '{bad-json']) await assert.rejects(createImportPreview(repository, 'local-user', 'https://example.test', undefined, text), /JSON/u)
   const tooLarge = JSON.stringify({ text: '中'.repeat(Math.ceil(IMPORT_FILE_MAX_BYTES / 3)) })
-  await assert.rejects(createImportPreview(repository, 'local-user', 'https://example.test', undefined, tooLarge), /3 MiB/u)
+  await assert.rejects(createImportPreview(repository, 'local-user', 'https://example.test', undefined, tooLarge), /20 MiB/u)
+})
+
+
+test('local JSON accepts exactly 20 MiB and rejects an extra byte', async (t) => {
+  const { IMPORT_FILE_MAX_BYTES } = await import('../shared/source-import-limits.ts')
+  const fetch = t.mock.method(globalThis, 'fetch', async () => { throw new Error('local import must not fetch') })
+  const text = JSON.stringify([baseSource])
+  const atLimit = text + ' '.repeat(IMPORT_FILE_MAX_BYTES - Buffer.byteLength(text))
+  const repository = new MemoryReaderRepository()
+  const preview = await createImportPreview(repository, 'large-local-user', 'https://example.test/collection', undefined, atLimit)
+  assert.equal(preview.writableCount, 1)
+  await assert.rejects(createImportPreview(repository, 'large-local-user', 'https://example.test/collection', undefined, atLimit + ' '), /20 MiB/u)
+  assert.equal(fetch.mock.calls.length, 0)
+})
+
+test('large source rules fit the preview budget as well as the input budget', async (t) => {
+  const jsonText = JSON.stringify([{ ...baseSource, bookSourceComment: 'x'.repeat(9 * 1024 * 1024) }])
+  const repository = new MemoryReaderRepository()
+  t.mock.method(globalThis, 'fetch', async () => new Response(jsonText))
+  const remote = await createImportPreview(repository, 'large-rules', 'https://8.8.8.8/sources.json')
+  assert.equal(remote.writableCount, 1)
+  assert.ok(Buffer.byteLength(JSON.stringify(remote.candidates)) > 16 * 1024 * 1024)
+  const local = await createImportPreview(repository, 'large-rules', 'https://example.test/collection', undefined, jsonText)
+  assert.equal(local.writableCount, 1)
 })

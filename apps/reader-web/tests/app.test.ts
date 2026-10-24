@@ -107,7 +107,7 @@ test('封面 API 通过真实认证与路由写入，仅修改当前账号的用
 test('本地 JSON 导入通过真实认证和路由校验链接、限制请求并保存来源', async (t) => {
   const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
   const { sourceDefinition } = await import('./fixtures/import-history.ts')
-  const { IMPORT_REQUEST_MAX_BYTES } = await import('../shared/source-import-limits.ts')
+  const { IMPORT_FILE_MAX_BYTES, IMPORT_REQUEST_MAX_BYTES } = await import('../shared/source-import-limits.ts')
   const memory = new MemoryReaderRepository()
   for (const method of ['listSourceStatesForUser', 'saveImportPreview', 'commitImportPreview'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
   const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
@@ -122,7 +122,9 @@ test('本地 JSON 导入通过真实认证和路由校验链接、限制请求�
   assert.equal((await request({ url: '', jsonText: '{}' })).status, 400)
   assert.equal((await request({ url: 'https://example.test', jsonText: '{bad' })).status, 400)
   assert.equal((await request({ url: 'https://example.test', jsonText: 'x'.repeat(IMPORT_REQUEST_MAX_BYTES) })).status, 413)
-  const response = await request({ url: 'https://example.test/local', jsonText: JSON.stringify(sourceDefinition()) })
+  const definition = JSON.stringify(sourceDefinition())
+  const jsonText = definition + ' '.repeat(IMPORT_FILE_MAX_BYTES - Buffer.byteLength(definition))
+  const response = await request({ url: 'https://example.test/local', jsonText })
   assert.equal(response.status, 201)
   const preview = await response.json()
   assert.equal(preview.writableCount, 1)

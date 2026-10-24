@@ -618,7 +618,7 @@ async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: 
           total += next.value.byteLength
           if (total > maxBytes) {
             await reader.cancel().catch(() => undefined)
-            return context.json({ error: { code: 'invalid-input', message: '导入请求超过 4 MiB，请缩小 JSON 文件后重试' } }, 413)
+            return context.json({ error: { code: 'invalid-input', message: '导入请求超过大小限制，请缩小 JSON 文件后重试' } }, 413)
           }
           chunks.push(next.value)
         }

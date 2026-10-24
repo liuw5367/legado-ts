@@ -69,6 +69,8 @@ Vercel Project Root 必须是仓库根目录。Preview 和 Production 都要配�
 
 浏览器只拿 publishable key 和脱敏 DTO。数据库密码、服务端密钥、Cookie、脚本变量和运行状态密钥只能在 Hono/Repository/Node runtime 使用。书源导入仅接受 HTTP(S) 地址，并限制响应、候选、重定向和处理时长。日志、SSE 和错误消息不能回显 Authorization、Cookie、密码或完整私有请求体。
 
-书源导入弹窗支持链接下载和本地 JSON 文件。本地文件必须填写非空的 HTTP(S) 来源链接，用于导入历史和书源归属管理；服务端仅解析上传内容，不请求来源链接或文件中的 `sourceUrls`。文件使用 UTF-8 编码，最大 3 MiB；序列化后的整个导入请求最大 4 MiB，超过限制返回 413。两种方式均需预览并确认后保存。
+书源导入弹窗支持链接下载和本地 JSON 文件。本地文件必须填写非空的 HTTP(S) 来源链接，用于导入历史和书源归属管理；服务端仅解析上传内容，不请求来源链接或文件中的 `sourceUrls`。文件使用 UTF-8 编码，本地文件和单次远程下载均最大 20 MiB，整个远程导入的累计下载量也限制为 20 MiB。JSON 字符串序列化需要转义引号和反斜线，因此整个导入请求允许最多 40 MiB 加 64 KiB 的来源链接及字段开销，超过限制返回 413。预览同时保存原始与规范化规则，独立限制为 61 MiB。两种方式均需预览并确认后保存。
+
+Vercel Function 的请求体上限为 4.5 MB；上述应用限制不会提高平台限制。因此 Vercel 上的本地文件上传仍可能提前被平台拒绝，远程下载由函数内部执行，不受该入站请求体限制。
 
 Node 宿主安全边界与共享兼容性见 [source-node 安全与部署](../../../packages/source-node/docs/security-and-deployment.md)；本文件只记录 reader-web 当前的本地和 Vercel 接入。

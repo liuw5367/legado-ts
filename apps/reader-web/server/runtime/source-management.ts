@@ -7,11 +7,12 @@ import type { ReaderRepository } from '../db/repository.ts'
 import { SourceManagementError } from '../db/repository.ts'
 import { compareImportCandidates } from './source-comparison.ts'
 
-const MAX_RESPONSE_BYTES = 10 * 1024 * 1024
-const MAX_TOTAL_BYTES = 16 * 1024 * 1024
+const MAX_RESPONSE_BYTES = IMPORT_FILE_MAX_BYTES
+const MAX_TOTAL_BYTES = IMPORT_FILE_MAX_BYTES
 const MAX_CANDIDATES = 1000
 const MAX_SOURCE_URLS = 32
-const MAX_PREVIEW_BYTES = 16 * 1024 * 1024
+// 预览同时保存原始规则和规范化规则，其大小可超过输入文件。
+const MAX_PREVIEW_BYTES = 3 * IMPORT_FILE_MAX_BYTES + 1024 * 1024
 const MAX_PREVIEW_TIME_MS = 45_000
 const PREVIEW_TTL_MS = 15 * 60 * 1000
 
@@ -20,7 +21,7 @@ export { SourceManagementError }
 export async function createImportPreview(repository: ReaderRepository, userId: string, sourceUrl: string, parentSignal?: AbortSignal, jsonText?: string): Promise<ImportPreview> {
   const url = validateImportUrl(sourceUrl)
   if (jsonText !== undefined) {
-    if (new TextEncoder().encode(jsonText).byteLength > IMPORT_FILE_MAX_BYTES) throw new SourceManagementError('preview-invalid', 'JSON 文件不能超过 3 MiB')
+    if (new TextEncoder().encode(jsonText).byteLength > IMPORT_FILE_MAX_BYTES) throw new SourceManagementError('preview-invalid', 'JSON 文件不能超过 20 MiB')
     if (jsonText.trim().length === 0) throw new SourceManagementError('preview-invalid', 'JSON 文件内容不能为空')
     try { JSON.parse(jsonText) } catch { throw new SourceManagementError('preview-invalid', '文件不是有效的 JSON，请检查文件内容与 UTF-8 编码') }
   }
