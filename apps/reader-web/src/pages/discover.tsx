@@ -42,7 +42,7 @@ export function DiscoverPage() {
       const selected = store.getSnapshot()
       // 只在本次选择结算后规范化 URL，避免旧分类状态把用户的新 tab 选择改回去。
       if (active && selected.loaded && selected.error.length === 0 && selected.source !== null && (sourceId !== selected.source.sourceId || (categoryId ?? '') !== selected.categoryId)) {
-        setParams({ sourceId: selected.source.sourceId, ...(selected.categoryId.length === 0 ? {} : { categoryId: selected.categoryId }) }, { replace: true })
+        setParams({ sourceId: selected.source.sourceId, ...(selected.categoryId.length === 0 ? {} : { categoryId: selected.categoryId }) }, { replace: true, state: location.state })
       }
       if (active) settle()
     })
@@ -58,12 +58,12 @@ export function DiscoverPage() {
     setExpandedSourceId(null)
     if (next === state.source?.sourceId) return
     store.scrollY = 0; window.scrollTo(0, 0)
-    setParams({ sourceId: next })
+    setParams({ sourceId: next }, { replace: true, state: location.state })
   }
   function selectCategory(next: string) {
     if (state.source === null || next === state.categoryId) return
     store.scrollY = 0; window.scrollTo(0, 0)
-    setParams({ sourceId: state.source.sourceId, categoryId: next })
+    setParams({ sourceId: state.source.sourceId, categoryId: next }, { replace: true, state: location.state })
   }
   function tabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const count = urlCategories.length

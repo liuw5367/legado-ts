@@ -806,8 +806,9 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .organization-form > label, .organization-field { display: grid; gap: 8px; color: var(--foreground); font-size: 13px; font-weight: 650; }
 .organization-sheet .input { padding-inline: 12px; font-weight: 400; }
 .organization-sheet .organization-textarea { min-height: 112px; padding: 12px; line-height: 1.65; }
-.organization-book { display: grid; gap: 4px; margin-bottom: 20px; overflow-wrap: anywhere; }
+.organization-book { display: block; margin-bottom: 20px; overflow-wrap: anywhere; }
 .organization-book strong { font-size: 16px; font-weight: 650; line-height: 1.5; }
+.organization-book > span::before { content: ' · '; }
 .organization-book > span { color: var(--muted); font-size: 13px; }
 .organization-sheet .sheet-footer, .organization-sheet .actions { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--border); }
 .organization-sheet .organization-field + .actions { margin-top: 20px; }

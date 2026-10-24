@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
 import type { Location, NavigationType } from 'react-router-dom'
 import { emptyPageStack, pageDelta, previousPageDelta, visitPage } from '../src/lib/page-stack.ts'
 
@@ -62,4 +63,24 @@ test('replace in the middle preserves the browser forward branch and releases th
   assert.equal(stack.frames.some((frame) => frame.id === oldId), false)
   stack = visitPage(stack, location('/sources', 'sources'), 'POP' as NavigationType)
   assert.equal(stack.activeId, forwardId)
+})
+
+
+test('discovery selection replaces the current entry and preserves the entry origin', async () => {
+  const source = await readFile(new URL('../src/pages/discover.tsx', import.meta.url), 'utf8')
+  // 三个参数更新入口都须替换历史并保留来源，避免切分类后返回仍停留在发现页。
+  const updates = source.split('\n').filter((line) => line.trimStart().startsWith('setParams('))
+  assert.equal(updates.length, 3)
+  for (const update of updates) assert.ok(update.includes('{ replace: true, state: location.state }'))
+  let stack = visitPage(emptyPageStack(), location('/book-lists', 'lists'), 'POP' as NavigationType)
+  stack = visitPage(stack, location('/discover', 'discover'), 'PUSH' as NavigationType)
+  const frame = stack.activeId
+  for (const [index, path] of ['/discover?sourceId=a&categoryId=popular', '/discover?sourceId=a&categoryId=new', '/discover?sourceId=b'].entries()) {
+    stack = visitPage(stack, location(path, 'selection-' + index), 'REPLACE' as NavigationType)
+    assert.equal(stack.activeId, frame)
+    assert.equal(stack.entries.length, 2)
+    assert.equal(stack.entries[stack.index - 1]?.location.pathname, '/book-lists')
+  }
+  stack = visitPage(stack, location('/book-lists', 'lists'), 'POP' as NavigationType)
+  assert.equal(stack.frames.find((item) => item.id === stack.activeId)?.location.pathname, '/book-lists')
 })
