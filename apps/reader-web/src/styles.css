@@ -763,6 +763,6 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 
 @media (max-width: 520px) {
   .auth-shell { padding-top: 28px; padding-right: max(20px, calc(20px + var(--safe-right))); padding-bottom: calc(28px + var(--safe-bottom)); padding-left: max(20px, calc(20px + var(--safe-left))); }
-  .auth-card:not(.auth-card-embedded) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .auth-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
   .auth-brand { margin-bottom: 24px; }
 }
