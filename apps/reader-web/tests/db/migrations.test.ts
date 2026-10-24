@@ -49,3 +49,12 @@ test('reader margins migration adds validated per-user reading margins', async (
   assert.match(migration, /constraint "reader_settings_margin_left_check" check \("margin_left" between 0 and 64\)/u)
   assert.match(journal, /"tag": "0008_reader_margins"/u)
 })
+
+test('用户封面迁移保持旧书籍默认行为并注册迁移顺序', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0012_book_cover.sql'), 'utf8')
+  const journal = JSON.parse(await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8'))
+  assert.ok(migration.includes('add column if not exists "custom_cover_url" text'))
+  assert.ok(!migration.includes('not null'))
+  assert.equal(journal.entries.at(-1).tag, '0012_book_cover')
+  assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
+})

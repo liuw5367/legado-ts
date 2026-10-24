@@ -16,7 +16,7 @@ export interface ApiCandidate { sourceOrder?: number; sourceId: string; sourceFi
 export interface ApiSearchProgress { completed: number; total: number; currentGroup?: string }
 export interface ApiSearchSourceState { sourceId: string; status: string; nextCursor?: { index: number; token?: string } }
 export interface ApiSearch { id: string; keyword: string; sourceId: string; precision?: boolean; status: string; candidates: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean; nextCursor?: { index: number; token?: string } }
-export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
+export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; customCoverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
 export interface ApiEdition { id: string; userId: string; bookId: string; editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; metadata: Record<string, unknown>; variable?: string }
 export interface ApiPosition { userId: string; bookId: string; editionKey: string; chapterId: string; chapterUrl: string; chapterIndex: number; title: string; tocRevision?: string; paragraphIndex: number; offset: number; version: number; lastReadAt: string }
 export interface ApiHistory { id: string; searchId: string; keyword: string; sourceIds: string[]; status: string; resultCount: number; summary?: string; createdAt: string; updatedAt: string }

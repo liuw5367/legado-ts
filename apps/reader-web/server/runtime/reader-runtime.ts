@@ -1,7 +1,7 @@
 import { SOURCE_CONCURRENCY, SOURCE_EXECUTION_MS, SEARCH_BATCH_SIZE, SEARCH_BATCH_MS } from './source-execution.ts'
 import { ReaderRuntimeError, requireSource, withPersistentSourceSession } from './source-session.ts'
 import { bookIdentityKey, normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
-import type { BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
+import type { BookCoverSelection, BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { loadBookDetails, loadChapterContent, loadReviewDetail, loadReviewReplies, loadReviewSummary, loadTableOfContents, searchBooks } from '@legado/source-core'
@@ -24,7 +24,8 @@ export interface ReaderRuntime {
   cancelSearch(userId: string, searchId: string): Promise<SearchRunState | null>
   createBookFromSearch(userId: string, searchId: string, candidateIndex: number, bookId?: string, addToBookshelf?: boolean, activateEdition?: boolean, candidateIdentity?: SearchCandidateIdentity): Promise<{ book: StoredBook; edition: StoredEdition; cacheWarning?: SourceCacheWarning }>
   listBookSources(userId: string, bookId: string): Promise<BookSourcesResponse>
-  openBookSource(userId: string, bookId: string, candidateId: string): Promise<StoredEdition>
+  openBookSource(userId: string, bookId: string, candidateId: string, signal?: AbortSignal): Promise<StoredEdition>
+  setBookCover(userId: string, bookId: string, selection: BookCoverSelection | null): Promise<StoredBook>
   getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc>
   getOrLoadContent(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<StoredContent & { runtimeWarning?: string }>
   getReviewSummary(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ReviewSummaryItem[]>
@@ -44,7 +45,8 @@ export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime
     cancelSearch: (userId, searchId) => cancelSearch(repository, userId, searchId),
     createBookFromSearch: (userId, searchId, candidateIndex, bookId, addToBookshelf, activateEdition, candidateIdentity) => createBookFromSearch(repository, userId, searchId, candidateIndex, bookId, addToBookshelf, activateEdition, candidateIdentity),
     listBookSources: (userId, bookId) => listBookSources(repository, userId, bookId),
-    openBookSource: (userId, bookId, candidateId) => openBookSource(repository, userId, bookId, candidateId),
+    openBookSource: (userId, bookId, candidateId, signal) => openBookSource(repository, userId, bookId, candidateId, signal),
+    setBookCover: (userId, bookId, selection) => setBookCover(repository, userId, bookId, selection),
     getOrLoadToc: (userId, bookId, editionKey, refresh) => getOrLoadToc(repository, userId, bookId, editionKey, refresh),
     getOrLoadContent: (userId, bookId, editionKey, chapterId, refresh) => getOrLoadContent(repository, userId, bookId, editionKey, chapterId, refresh),
     getReviewSummary: (userId, bookId, editionKey, chapterId) => getReviewSummary(repository, userId, bookId, editionKey, chapterId),
@@ -279,19 +281,36 @@ async function listBookSources(repository: ReaderRepository, userId: string, boo
   for (const item of candidates) {
     const source = sources.get(item.sourceId)
     if (source?.fingerprint !== item.sourceFingerprint) continue
-    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id })
+    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id, ...(item.candidate.candidate.coverUrl ? { coverUrl: item.candidate.candidate.coverUrl } : {}) })
   }
   for (const edition of editions) {
     const source = sources.get(edition.sourceId)
     if (source?.fingerprint !== edition.sourceFingerprint) continue
-    result.set(JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl]), { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey })
+    result.set(JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl]), { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}) })
   }
   const priorities = new Map((await repository.listAllSourcesForUser(userId)).map((source) => [source.sourceId, source]))
   const items = [...result.values()].sort((left, right) => compareSourcePriority(priorities.get(left.sourceId)!, priorities.get(right.sourceId)!))
   return { sources: items, ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }) }
 }
 
-async function openBookSource(repository: ReaderRepository, userId: string, bookId: string, candidateId: string): Promise<StoredEdition> {
+async function setBookCover(repository: ReaderRepository, userId: string, bookId: string, selection: BookCoverSelection | null): Promise<StoredBook> {
+  if (await repository.getBook(userId, bookId) === null) throw new ReaderRuntimeError('not-found', '书籍不存在')
+  let coverUrl: string | null = null
+  if (selection !== null) {
+    // 仅解析服务端缓存的同书来源，客户端不能提交任意图片 URL。
+    const sources = await listBookSources(repository, userId, bookId)
+    const source = sources.sources.find((item) => item.sourceId === selection.sourceId && item.sourceFingerprint === selection.sourceFingerprint && item.bookUrl === selection.bookUrl)
+    if (source === undefined) throw new ReaderRuntimeError('invalid-input', '来源已失效，请重新打开封面选择')
+    coverUrl = source.coverUrl || null
+    if (coverUrl === null) throw new ReaderRuntimeError('invalid-input', '该来源没有可用封面')
+  }
+  const book = await repository.setCustomCover(userId, bookId, coverUrl)
+  if (book === null) throw new ReaderRuntimeError('not-found', '书籍不存在')
+  return book
+}
+
+async function openBookSource(repository: ReaderRepository, userId: string, bookId: string, candidateId: string, signal?: AbortSignal): Promise<StoredEdition> {
+  signal?.throwIfAborted()
   const book = await repository.getBook(userId, bookId)
   const cached = (await repository.listBookSourceCandidates(userId, bookId)).find((item) => item.id === candidateId)
   if (book === null || cached === undefined) throw new ReaderRuntimeError('not-found', '书籍来源不存在')
@@ -299,15 +318,23 @@ async function openBookSource(repository: ReaderRepository, userId: string, book
   if (source.fingerprint !== cached.sourceFingerprint) throw new ReaderRuntimeError('configuration', '书源定义已更新，请重新搜索')
   const existing = (await repository.listEditions(userId, bookId)).find((item) => item.sourceId === cached.sourceId && item.sourceFingerprint === cached.sourceFingerprint && item.bookUrl === cached.bookUrl)
   if (existing !== undefined) return existing
-  return withPersistentSourceSession(repository, userId, source, async (session) => {
-    // 预览新来源时核验详情身份，不能让搜索字段掩盖详情中不同的书名作者。
-    const result = await session.run((ports) => loadBookDetails(ports, { source: { ...source.normalizedSource, ruleBookInfo: { ...(typeof source.normalizedSource.ruleBookInfo === 'object' && source.normalizedSource.ruleBookInfo !== null ? source.normalizedSource.ruleBookInfo : {}), canReName: 'true' } }, candidates: [cached.candidate.candidate], maxItems: 1 }))
-    const metadata = result.value?.items[0]
-    if (metadata === undefined) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '没有读取到书籍详情'))
-    if (!sameBookIdentity(book.name, book.author, metadata.name, metadata.author)) throw new ReaderRuntimeError('source-failed', '来源详情与书籍不匹配，请重新搜索')
-    const editionKey = sharedEditionKey(cached.sourceId, metadata.bookUrl)
-    return repository.saveEdition(userId, bookId, { candidate: cached.candidate, metadata: { ...metadata, ...(cached.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: cached.candidate.searchDurationMs }) }, editionKey, sourceFingerprint: cached.sourceFingerprint })
-  })
+  const lease = await repository.acquireExecutionSlot(userId, randomUUID())
+  if (lease === null) throw new ReaderRuntimeError('source-busy', '服务器繁忙，请稍后重试')
+  const executionSignal = signal === undefined ? AbortSignal.timeout(SOURCE_EXECUTION_MS) : AbortSignal.any([signal, AbortSignal.timeout(SOURCE_EXECUTION_MS)])
+  try {
+    return await withPersistentSourceSession(repository, userId, source, async (session) => {
+      executionSignal.throwIfAborted()
+      // 预览新来源时核验详情身份，不能让搜索字段掩盖详情中不同的书名作者。
+      const result = await session.run((ports) => loadBookDetails(ports, { source: { ...source.normalizedSource, ruleBookInfo: { ...(typeof source.normalizedSource.ruleBookInfo === 'object' && source.normalizedSource.ruleBookInfo !== null ? source.normalizedSource.ruleBookInfo : {}), canReName: 'true' } }, candidates: [cached.candidate.candidate], maxItems: 1, signal: executionSignal }))
+      executionSignal.throwIfAborted()
+      const metadata = result.value?.items[0]
+      if (metadata === undefined) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '没有读取到书籍详情'))
+      if (!sameBookIdentity(book.name, book.author, metadata.name, metadata.author)) throw new ReaderRuntimeError('source-failed', '来源详情与书籍不匹配，请重新搜索')
+      const editionKey = sharedEditionKey(cached.sourceId, metadata.bookUrl)
+      executionSignal.throwIfAborted()
+      return repository.saveEdition(userId, bookId, { candidate: cached.candidate, metadata: { ...metadata, ...(cached.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: cached.candidate.searchDurationMs }) }, editionKey, sourceFingerprint: cached.sourceFingerprint })
+    })
+  } finally { await repository.releaseExecutionSlot(userId, lease) }
 }
 
 async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<StoredToc> {

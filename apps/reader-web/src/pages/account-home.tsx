@@ -111,7 +111,7 @@ function BookRow({ view, item, showRemove, removing, onRemove, onOrganized }: { 
   const target = position === undefined ? `/books/${encodeURIComponent(book.id)}/read?editionKey=${encodeURIComponent(edition.editionKey)}` : `/books/${encodeURIComponent(book.id)}/read/${encodeURIComponent(position.chapterId)}?editionKey=${encodeURIComponent(edition.editionKey)}`
   return <article className="book-row">
     <Link className="book-row-main" to={target} state={{ backTo: '/', backState: { homeView: view } }} aria-label={`阅读：${book.name}`}>
-      <BookCover name={book.name} coverUrl={book.coverUrl} />
+      <BookCover name={book.name} coverUrl={book.customCoverUrl || book.coverUrl} />
       <span className="book-row-info"><strong>{book.name}</strong><span className="muted">{book.author ?? '作者未知'}</span><span className={position === undefined ? 'muted small' : 'small'}>{position === undefined ? '尚未阅读' : `读到：${position.title}`}</span></span>
     </Link>
     <MoreMenu label={`更多操作：${book.name}`}>

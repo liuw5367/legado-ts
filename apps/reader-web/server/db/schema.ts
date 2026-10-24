@@ -55,6 +55,7 @@ export const books = readerSchema.table('books', {
   author: text('author'),
   intro: text('intro'),
   coverUrl: text('cover_url'),
+  customCoverUrl: text('custom_cover_url'),
   activeEditionKey: text('active_edition_key'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

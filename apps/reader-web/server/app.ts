@@ -1,3 +1,4 @@
+import { bookCoverRequestSchema } from '../shared/book-sources.ts'
 import { OrganizationError } from './domain/book-organization.ts'
 import { registerBookOrganizationApi } from './book-organization-api.ts'
 import { bookshelfInitialGroupSchema } from '../shared/bookshelf-groups.ts'
@@ -354,6 +355,15 @@ app.get('/api/books', async (context) => {
   }
 })
 
+app.put('/api/books/:bookId/cover', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await parseBody(context, bookCoverRequestSchema)
+  if (body instanceof Response) return body
+  try { return context.json({ book: await dependencies.runtime.setBookCover(context.get('userId'), context.req.param('bookId'), body.selection) }) }
+  catch (error) { return handleError(context, error) }
+})
+
 app.get('/api/books/:bookId/details', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -387,7 +397,7 @@ app.get('/api/books/:bookId/sources', async (context) => {
 app.post('/api/books/:bookId/sources/:candidateId/open', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
-  try { return context.json({ edition: await dependencies.runtime.openBookSource(context.get('userId'), context.req.param('bookId'), context.req.param('candidateId')) }) }
+  try { return context.json({ edition: await dependencies.runtime.openBookSource(context.get('userId'), context.req.param('bookId'), context.req.param('candidateId'), context.req.raw.signal) }) }
   catch (error) { return handleError(context, error) }
 })
 

@@ -67,6 +67,8 @@ export interface StoredBook {
   author?: string
   intro?: string
   coverUrl?: string
+  /** 用户选择的书籍封面，优先于来源封面；缺省表示跟随书源。 */
+  customCoverUrl?: string
   activeEditionKey?: string
   createdAt: string
   updatedAt: string

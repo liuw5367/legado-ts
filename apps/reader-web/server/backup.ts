@@ -7,7 +7,7 @@ import type { ReaderBackupSnapshot, ReaderRepository } from './db/repository.ts'
 import { DEFAULT_READER_SETTINGS, type ReaderSettings, type StoredBook, type StoredBookSourceCandidate, type StoredEdition, type SearchHistoryItem } from './domain/types.ts'
 
 interface StoredSourceDefinition { sourceId: string; fingerprint: string; rawText: string; deleted?: boolean }
-interface CliBookDocument { bookId: string; name: string; author?: string; intro?: string; coverUrl?: string; tocUrl?: string; activeEditionKey?: string; metadataEditionKey?: string; createdAt: string; updatedAt: string }
+interface CliBookDocument { bookId: string; name: string; author?: string; intro?: string; coverUrl?: string; customCoverUrl?: string; tocUrl?: string; activeEditionKey?: string; metadataEditionKey?: string; createdAt: string; updatedAt: string }
 interface CliKnownSource { editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; tocUrl?: string; lastChapter?: string; updateTime?: string; wordCount?: string; kind?: string; searchDurationMs?: number; variable?: string; rawFields: JsonObject; discoveredAt: string; searchId?: string; confirmedAt?: string; matchKind: 'selected' | 'title-author' | 'title-only' | 'user-confirmed' }
 interface CliReadingPosition { editionKey: string; sourceId: string; bookUrl: string; chapterUrl: string; index: number; title: string; tocRevision?: string; paragraphIndex: number; offset: number; lastReadAt: string }
 interface CliReadingRecord { bookId: string; activeEditionKey?: string; lastReadAt?: string; lastOpenedAt?: string; positions: Record<string, CliReadingPosition>; updatedAt: string }
@@ -165,7 +165,7 @@ function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapsho
   const editionOwners = new Map<string, string>()
   const books = bookPaths.map((file) => {
     const book = readData<CliBookDocument>(archive, file.path, {} as CliBookDocument)
-    if (!isUuid(book.bookId) || file.path.split('/')[1] !== book.bookId || typeof book.name !== 'string' || !isIsoDateString(book.createdAt) || !isIsoDateString(book.updatedAt) || (book.tocUrl !== undefined && typeof book.tocUrl !== 'string') || (book.activeEditionKey !== undefined && typeof book.activeEditionKey !== 'string') || (book.metadataEditionKey !== undefined && typeof book.metadataEditionKey !== 'string')) throw new Error(`书籍数据无效：${file.path}`)
+    if (!isUuid(book.bookId) || file.path.split('/')[1] !== book.bookId || typeof book.name !== 'string' || (book.customCoverUrl !== undefined && typeof book.customCoverUrl !== 'string') || !isIsoDateString(book.createdAt) || !isIsoDateString(book.updatedAt) || (book.tocUrl !== undefined && typeof book.tocUrl !== 'string') || (book.activeEditionKey !== undefined && typeof book.activeEditionKey !== 'string') || (book.metadataEditionKey !== undefined && typeof book.metadataEditionKey !== 'string')) throw new Error(`书籍数据无效：${file.path}`)
     if (seenBookIds.has(book.bookId)) throw new Error(`书籍数据重复：${book.bookId}`)
     seenBookIds.add(book.bookId)
     const sourcePath = `books/${book.bookId}/sources.json`
@@ -203,7 +203,7 @@ function parseBooks(archive: BackupArchive, userId: string): ReaderBackupSnapsho
       const metadataEdition = editions.find((edition) => edition.editionKey === metadataEditionKey)
       if (metadataEdition !== undefined && metadataEdition.metadata.tocUrl === undefined) metadataEdition.metadata = { ...metadataEdition.metadata, tocUrl: book.tocUrl }
     }
-    const storedBook: StoredBook = { id: book.bookId, userId, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt }
+    const storedBook: StoredBook = { id: book.bookId, userId, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(book.customCoverUrl === undefined ? {} : { customCoverUrl: book.customCoverUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt }
     if (storedBook.activeEditionKey !== undefined && !editions.some((edition) => edition.editionKey === storedBook.activeEditionKey)) throw new Error(`书籍活动版本不存在：${book.bookId}`)
     return { book: storedBook, editions, candidates }
   })
@@ -232,7 +232,7 @@ function readingRecords(snapshot: ReaderBackupSnapshot): CliReadingRecord[] {
 
 function toCliBook(book: StoredBook, editions: readonly StoredEdition[]): CliBookDocument {
   const activeEdition = editions.find((edition) => edition.editionKey === book.activeEditionKey)
-  return { bookId: book.id, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(activeEdition?.metadata.tocUrl === undefined ? {} : { tocUrl: activeEdition.metadata.tocUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey, metadataEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt }
+  return { bookId: book.id, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.intro === undefined ? {} : { intro: book.intro }), ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(book.customCoverUrl === undefined ? {} : { customCoverUrl: book.customCoverUrl }), ...(activeEdition?.metadata.tocUrl === undefined ? {} : { tocUrl: activeEdition.metadata.tocUrl }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey, metadataEditionKey: book.activeEditionKey }), createdAt: book.createdAt, updatedAt: book.updatedAt }
 }
 function toCliKnownSource(edition: StoredEdition, book: StoredBook): CliKnownSource {
   const metadata = edition.metadata

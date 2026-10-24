@@ -1,4 +1,5 @@
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
+import { BookCoverPicker } from '../components/book-cover-picker.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
 import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
@@ -25,7 +26,7 @@ export function BookDetailsPage() {
   const [data, setData] = useState<BookDetailsResponse | null>(null)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
-  const [picker, setPicker] = useState<'join' | 'group' | null>(null)
+  const [picker, setPicker] = useState<'join' | 'group' | 'cover' | null>(null)
   const [saving, setSaving] = useState(false)
   const [retry, setRetry] = useState(0)
   usePageLoadEffect((settle) => {
@@ -54,13 +55,14 @@ export function BookDetailsPage() {
     {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success" role="status">{feedback}</DismissibleMessage> : null}
     {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>重试</Button></DismissibleMessage> : null}
     {data === null ? error.length === 0 ? <LoadingState message="正在读取详情…" variant="viewport" action={<PageBackButton appearance="button" />} /> : null : <>
-      <div className="book-details-heading"><BookCover name={name} coverUrl={metadata?.coverUrl || data.book.coverUrl} size="detail" /><div><h2>{name}</h2>{metadata?.author || data.book.author ? <p className="muted small">{metadata?.author || data.book.author}</p> : null}{metadata?.kind ? <p className="muted small">{metadata.kind}</p> : null}{data.sourceName ? <p className="muted small">{data.sourceName}</p> : null}</div></div>
+      <div className="book-details-heading"><button type="button" className="book-details-cover-button" aria-label="切换封面" aria-haspopup="dialog" onClick={() => setPicker('cover')}><BookCover name={name} coverUrl={data.book.customCoverUrl || metadata?.coverUrl || data.book.coverUrl} size="detail" /></button><div><h2>{name}</h2>{metadata?.author || data.book.author ? <p className="muted small">{metadata?.author || data.book.author}</p> : null}{metadata?.kind ? <p className="muted small">{metadata.kind}</p> : null}{data.sourceName ? <p className="muted small">{data.sourceName}</p> : null}</div></div>
       <div className="book-details-actions"><Button variant="secondary" disabled={saving} onClick={() => void updateShelf(!data.onBookshelf)}>{saving ? '保存中…' : data.onBookshelf ? '移出书架' : '加入书架'}</Button><Button variant="secondary" onClick={() => setPicker('join')}>加入书单</Button>{data.onBookshelf ? <Button variant="secondary" onClick={() => setPicker('group')}>修改分组</Button> : null}<Link className="button secondary" to={prefix + '/toc' + query} state={pageReturnState(location)}>查看目录</Link><Link className="button secondary" to={prefix + '/sources'} state={pageReturnState(location)}>切换书源</Link><Link className="button" to={prefix + '/read' + query} state={readingEntryState(location)}>阅读 / 继续阅读</Link></div>
       <div className="detail-section"><h3>书籍信息</h3><dl className="book-details-meta"><div><dt>更新时间</dt><dd>{metadata?.updateTime || formatShanghaiDateTime(data.book.updatedAt)}</dd></div>{metadata?.wordCount ? <div><dt>字数</dt><dd>{metadata.wordCount}</dd></div> : null}{metadata?.searchDurationMs === undefined ? null : <div><dt>搜索耗时</dt><dd>{metadata.searchDurationMs}ms</dd></div>}<div><dt>阅读进度</dt><dd>{data.reading === undefined || data.reading === null ? '尚未开始阅读' : `${data.reading.title} · ${formatShanghaiDateTime(data.reading.lastReadAt)}`}</dd></div></dl></div>
       {metadata?.lastChapter ? <div className="detail-section"><h3>最新章节</h3><p>{metadata.lastChapter}</p></div> : null}
       <div className="detail-section"><h3>简介</h3><p className="book-details-intro">{metadata?.intro || data.book.intro || '暂无简介'}</p></div>
       {original === undefined ? null : <a className="link book-original-link" href={original} target="_blank" rel="noopener noreferrer">原地址</a>}
     </>}
+    {data && picker === 'cover' ? <BookCoverPicker data={data} onClose={() => setPicker(null)} onSaved={(book) => { cache.clear(); setData((current) => current ? { ...current, book } : current); setFeedback('已切换封面') }} /> : null}
     {data && picker === 'join' ? <BookListPicker onSaved={() => setFeedback('已加入书单')} book={data.book} {...(params.get('targetBookListId') ? { defaultListId: params.get('targetBookListId')! } : {})} onClose={() => setPicker(null)} /> : data && picker === 'group' ? <ShelfGroupPicker onSaved={() => setFeedback('已修改分组')} book={data.book} onClose={() => setPicker(null)} /> : null}
   </section>
 }

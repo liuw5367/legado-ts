@@ -319,6 +319,7 @@ a { color: inherit; }
 .reader-title .muted { flex: 0 0 auto; font-size: 11px; }
 .reader-content { padding: calc(20px + env(safe-area-inset-top, 0px)) 16px calc(120px + var(--safe-bottom)); color: var(--foreground); overflow-wrap: anywhere; scroll-margin-top: 64px; }
 .reader-content p { margin: 0 0 1.2em; white-space: pre-wrap; }
+.reader-paragraph { text-indent: 2em; }
 .reader-html-content { margin: 0 0 1.2em; white-space: pre-wrap; }
 .reader-html-content p, .reader-html-content div, .reader-html-content blockquote, .reader-html-content pre { white-space: pre-wrap; }
 .reader-html-content img, .reader-resource img { display: block; max-width: 100%; height: auto; margin: 1em auto; }
@@ -778,3 +779,23 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
   .auth-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
   .auth-brand { margin-bottom: 24px; }
 }
+
+.book-details-cover-button { flex: 0 0 auto; padding: 0; border: 0; border-radius: 4px; background: transparent; }
+.book-details-cover-button:active, .cover-option:active { transform: scale(.97); }
+.sheet.book-cover-sheet { max-width: 760px; margin-inline: auto; }
+.book-cover-sheet .sheet-body { padding-bottom: 0; }
+.cover-current { display: flex; align-items: center; gap: 16px; margin-block: 12px; }
+.cover-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); align-items: start; gap: 12px; }
+.cover-grid-item { min-width: 0; }
+.cover-option { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: center; gap: 5px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--foreground); text-align: center; }
+.cover-current .cover-option { width: 112px; flex: 0 0 112px; }
+.cover-option[aria-pressed="true"] { border-color: var(--primary); outline: 1px solid var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--card)); }
+.cover-option:disabled { cursor: default; }
+.cover-source-name, .cover-option .small, .cover-source-names { max-width: 100%; overflow-wrap: anywhere; }
+.cover-source-name { font-size: 13px; }
+.cover-failed { color: var(--danger); }
+.cover-grid-item details { margin-top: 4px; }
+.cover-grid-item > .button { margin-top: 6px; }
+.cover-picker-footer { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-block: 12px calc(12px + var(--safe-bottom)); background: var(--card); border-top: 1px solid var(--border); }
+.cover-picker-footer > .actions { margin-left: auto; }
+.cover-current > .button[aria-pressed="true"] { border-color: var(--primary); color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--card)); }

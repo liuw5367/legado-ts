@@ -110,6 +110,7 @@ export interface ReaderRepository {
   deleteSearchHistory(userId: string, historyId: string): Promise<boolean>
   listBooks(userId: string): Promise<Array<{ book: StoredBook; edition: StoredEdition }>>
   getBook(userId: string, bookId: string): Promise<StoredBook | null>
+  setCustomCover(userId: string, bookId: string, coverUrl: string | null): Promise<StoredBook | null>
   listEditions(userId: string, bookId: string): Promise<StoredEdition[]>
   setActiveEdition(userId: string, bookId: string, editionKey: string): Promise<StoredEdition | null>
   getEdition(userId: string, bookId: string, editionKey?: string): Promise<StoredEdition | null>
@@ -525,6 +526,13 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
+  public async setCustomCover(userId: string, bookId: string, coverUrl: string | null): Promise<StoredBook | null> {
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.update(books).set({ customCoverUrl: coverUrl }).where(and(eq(books.userId, userId), eq(books.id, bookId))).returning()
+      return row === undefined ? null : toBook(row)
+    })
+  }
+
   public async listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]> {
     return withUser(userId, async (transaction) => {
       const rows = await transaction.select().from(bookSourceCandidates).where(and(eq(bookSourceCandidates.userId, userId), eq(bookSourceCandidates.bookId, bookId))).orderBy(desc(bookSourceCandidates.updatedAt), asc(bookSourceCandidates.id))
@@ -641,7 +649,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         for (const item of snapshot.books) {
           const targetBookId = bookIdMap.get(item.book.id)
           if (targetBookId === undefined) throw new BackupRestoreError(`书籍映射失败：${item.book.id}`)
-          await transaction.insert(books).values({ id: targetBookId, userId, name: item.book.name, ...(item.book.author === undefined ? {} : { author: item.book.author }), ...(item.book.intro === undefined ? {} : { intro: item.book.intro }), ...(item.book.coverUrl === undefined ? {} : { coverUrl: item.book.coverUrl }), ...(item.book.activeEditionKey === undefined ? {} : { activeEditionKey: item.book.activeEditionKey }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
+          await transaction.insert(books).values({ id: targetBookId, userId, name: item.book.name, ...(item.book.author === undefined ? {} : { author: item.book.author }), ...(item.book.intro === undefined ? {} : { intro: item.book.intro }), ...(item.book.coverUrl === undefined ? {} : { coverUrl: item.book.coverUrl }), ...(item.book.customCoverUrl === undefined ? {} : { customCoverUrl: item.book.customCoverUrl }), ...(item.book.activeEditionKey === undefined ? {} : { activeEditionKey: item.book.activeEditionKey }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
           for (const edition of item.editions) await transaction.insert(bookEditions).values({ id: randomUUID(), userId, bookId: targetBookId, editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata: edition.metadata, ...(edition.variable === undefined ? {} : { variable: edition.variable }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
           for (const candidate of item.candidates) await transaction.insert(bookSourceCandidates).values({ id: randomUUID(), userId, bookId: targetBookId, sourceId: candidate.sourceId, sourceFingerprint: candidate.sourceFingerprint, bookUrl: candidate.bookUrl, candidate: candidate.candidate, updatedAt: new Date(candidate.updatedAt) })
         }
@@ -1010,6 +1018,16 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
   public async updateSearch(userId: string, searchId: string, patch: { knownRun?: SearchRunState; status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || (patch.expectedOperationId !== undefined && current.operationId !== patch.expectedOperationId)) return null; const updated: SearchRunState = { ...current, ...(patch.status === undefined ? {} : { status: patch.status }), ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }), ...(patch.sourceStates === undefined ? {} : { sourceStates: patch.sourceStates }), ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }), ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }), ...(patch.nextCursor === undefined ? {} : { nextCursor: patch.nextCursor }), ...(patch.operationId === undefined || patch.operationId === null ? {} : { operationId: patch.operationId }), ...(patch.progress === undefined ? {} : { progress: patch.progress }), ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }), updatedAt: new Date().toISOString(), version: current.version + 1 }; if (patch.operationId === null) delete updated.operationId; this.searches.set(searchId, updated); if (updated.operationId) this.searchLeases.set(searchId, Date.now() + 30000); else this.searchLeases.delete(searchId); const history = this.history.get(`${userId}:${searchId}`); if (history !== undefined) this.history.set(`${userId}:${searchId}`, { ...history, status: updated.status, resultCount: updated.candidates.length, summary: searchSummary(updated.status, updated.candidates.length), updatedAt: updated.updatedAt }); return updated }
   public async createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }> { const existing = [...this.books.values()].find((item) => item.book.userId === userId && item.edition.editionKey === input.editionKey); const target = input.bookId === undefined ? undefined : [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === input.bookId); if (input.bookId !== undefined && target === undefined) throw new Error('书籍不存在'); if (existing !== undefined && input.bookId !== undefined && existing.book.id !== input.bookId) throw new Error('书籍版本已经属于其他书籍'); const now = new Date().toISOString(); const book: StoredBook = existing?.book ?? target?.book ?? { id: randomUUID(), userId, name: input.metadata.name ?? input.candidate.candidate.name ?? '未命名书籍', ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), activeEditionKey: input.editionKey, createdAt: now, updatedAt: now }; const activeEditionKey = input.activateEdition === false ? book.activeEditionKey : input.editionKey; const updatedBook = input.activateEdition === false ? book : { ...book, name: input.metadata.name ?? book.name, ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), ...(activeEditionKey === undefined ? {} : { activeEditionKey }), updatedAt: now }; const edition: StoredEdition = { id: existing?.edition.id ?? randomUUID(), userId, bookId: updatedBook.id, editionKey: input.editionKey, sourceId: input.candidate.sourceId, sourceFingerprint: input.sourceFingerprint, bookUrl: input.metadata.bookUrl, metadata: input.metadata, ...(input.metadata.variable === undefined ? {} : { variable: input.metadata.variable }) }; const value = { book: updatedBook, edition }; for (const [key, item] of this.books) if (item.book.id === updatedBook.id && item.book.userId === userId) this.books.set(key, { ...item, book: updatedBook }); this.books.set(`${userId}:${input.editionKey}`, value); if (input.addToBookshelf !== false) this.shelf.set(`${userId}:${updatedBook.id}`, now); return value }
+  public async setCustomCover(userId: string, bookId: string, coverUrl: string | null): Promise<StoredBook | null> {
+    const book = await this.getBook(userId, bookId)
+    if (book === null) return null
+    const next = { ...book }
+    if (coverUrl === null) delete next.customCoverUrl
+    else next.customCoverUrl = coverUrl
+    for (const [key, item] of this.books) if (item.book.userId === userId && item.book.id === bookId) this.books.set(key, { ...item, book: next })
+    return next
+  }
+
   public async listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]> {
     return [...this.sourceCandidates.values()].filter((row) => row.userId === userId && row.bookId === bookId).map((row) => structuredClone(row))
   }
@@ -1309,7 +1327,7 @@ function readPageTapZones(value: unknown): ReaderSettings['pageTapZones'] {
   return { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction }
 }
 function settingsObject(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {} }
-function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
+function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.customCoverUrl === null ? {} : { customCoverUrl: row.customCoverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function toEdition(row: BookEditionRow): StoredEdition { return { id: row.id, userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, bookUrl: row.bookUrl, metadata: row.metadata, ...(row.variable === null ? {} : { variable: row.variable }) } }
 // 结果只存于 candidates；逐源状态保存元数据，读取时共享同一批候选对象，避免 JSON 重复存储和解析。
 function compactSearchStates(states: SourceSearchState[]): SourceSearchState[] { return states.map((state) => ({ ...state, candidates: [] })) }

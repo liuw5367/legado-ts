@@ -26,6 +26,8 @@ test('真实数据库书单、分组、RLS、移动回滚与启动设置', { ski
   const repo = new PostgresReaderRepository(); const user = randomUUID(); const other = randomUUID()
   const metadata = { sourceId: 'https://book.test', bookUrl: 'https://book.test/1', name: '事务书', author: '作者', traceRef: '', rawFields: {}, emptyFields: [], fieldErrors: {} }
   const created = await repo.createBook(user, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: editionKey(metadata.sourceId, metadata.bookUrl), sourceFingerprint: 'fp' })
+  assert.equal((await repo.setCustomCover(user, created.book.id, 'https://covers.test/custom.jpg'))?.customCoverUrl, 'https://covers.test/custom.jpg')
+  assert.equal(await repo.setCustomCover(other, created.book.id, 'https://covers.test/wrong.jpg'), null)
   const org = await repo.mutateBookOrganization(user, { kind: 'create', type: 'booklist', name: '重读' }); const list = org.lists[0]!
   await repo.mutateBookOrganization(user, { kind: 'add', id: list.id, bookId: created.book.id })
   await repo.mutateBookOrganization(user, { kind: 'review', id: list.id, bookId: created.book.id, description: '独立评价' })
@@ -60,6 +62,7 @@ test('真实数据库书单、分组、RLS、移动回滚与启动设置', { ski
   const snapshot = await repo.getBackupSnapshot(user)
   await repo.restoreBackupSnapshot(user, snapshot, ['bookshelf', 'reading', 'settings'])
   const after = await repo.getBackupSnapshot(user)
+  assert.equal(after.books.find((row) => row.book.id === created.book.id)?.book.customCoverUrl, 'https://covers.test/custom.jpg')
   const newGroup = after.organization?.lists.find((row) => row.name === '恢复组')
   assert.ok(newGroup)
   assert.equal(after.bookshelf[0]?.groupId, newGroup.id)

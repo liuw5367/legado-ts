@@ -35,3 +35,8 @@ test('home history preserves distinct keywords and applies the 50-keyword limit 
   assert.equal(history[0]?.keyword, '重复')
   assert.equal(new Set(history.map((item) => item.keyword)).size, 50)
 })
+
+test('封面保存使详情、首页、书单封面及成员数据失效', async () => {
+  const { mutationDomains } = await import('../src/lib/page-data.ts')
+  assert.deepEqual(mutationDomains('/api/books/book-id/cover', 'PUT'), ['home', 'books', 'booklists', 'booklist-books', 'book:book-id'])
+})

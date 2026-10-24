@@ -1,3 +1,4 @@
+import { bookCoverRequestSchema } from '../../shared/book-sources.ts'
 import { MemoryReaderRepository } from '../../server/db/repository.ts'
 import { importSources } from '@legado/source-core'
 import { compareImportCandidates } from '../../server/runtime/source-comparison.ts'
@@ -61,7 +62,7 @@ const initialBook = {
   name: '星海旅人',
   author: '林简',
   intro: '一段关于远行、旧星图与归途的测试简介，用于核对详情页的多行文案布局。',
-  coverUrl: '',
+  coverUrl: '/api/fixture-cover/1.svg',
   activeEditionKey: 'edition-a',
   createdAt: now(),
   updatedAt: now(),
@@ -89,10 +90,16 @@ for (const [index, editionKey] of ['edition-a', 'edition-b'].entries()) {
       updateTime: '2026-10-20 10:00',
       wordCount: '128 万字',
       searchDurationMs: 86,
-      coverUrl: '',
+      coverUrl: `/api/fixture-cover/${index + 1}.svg`,
     },
   }
   editions.set(editionKey, edition)
+}
+
+for (const [index, coverUrl] of [[5, '/api/fixture-cover/1.svg'], [6, '/api/fixture-cover/broken.svg']]) {
+  const source = sources[index]
+  const editionKey = 'cover-sample-' + index
+  editions.set(editionKey, { id: randomUUID(), userId: USER_ID, bookId: BOOK_ID, editionKey, sourceId: source.sourceId, sourceFingerprint: source.fingerprint, bookUrl: longBookUrl(index), metadata: { name: initialBook.name, author: initialBook.author, coverUrl } })
 }
 
 function chaptersFor(editionKey) {
@@ -626,13 +633,39 @@ async function handleApi(request, response, url) {
       json(response, { editions: [...editions.values()].filter((edition) => edition.bookId === bookId), activeEditionKey: book.activeEditionKey })
       return
     }
+    if (method === 'PUT' && tail === 'cover') {
+      if (book === undefined) { json(response, { error: { code: 'not-found', message: '书籍不存在' } }, 404); return }
+      const input = bookCoverRequestSchema.parse(await readJson(request))
+      if (input.selection === null) delete book.customCoverUrl
+      else {
+        const selected = [...editions.values()].find((edition) => edition.bookId === bookId && edition.sourceId === input.selection.sourceId && edition.sourceFingerprint === input.selection.sourceFingerprint && edition.bookUrl === input.selection.bookUrl)
+        if (!selected?.metadata.coverUrl) { json(response, { error: { code: 'invalid-input', message: '来源没有可用封面' } }, 400); return }
+        book.customCoverUrl = selected.metadata.coverUrl
+      }
+      json(response, { book }); return
+    }
     if (method === 'GET' && tail === 'sources') {
-      const saved = [...editions.values()].filter((edition) => edition.bookId === bookId).map((edition) => ({ status: 'saved', sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: book?.name ?? initialBook.name, bookUrl: edition.bookUrl, sourceEnabled: sources.find((source) => source.sourceId === edition.sourceId)?.enabled ?? false, editionKey: edition.editionKey }))
+      const saved = [...editions.values()].filter((edition) => edition.bookId === bookId).map((edition) => ({ status: 'saved', sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: sources.find((source) => source.sourceId === edition.sourceId)?.name ?? '示例来源', bookUrl: edition.bookUrl, sourceEnabled: sources.find((source) => source.sourceId === edition.sourceId)?.enabled ?? false, editionKey: edition.editionKey, ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}) }))
+      if (bookId === BOOK_ID) for (const index of [2, 3, 4]) {
+        const source = sources[index]
+        if (source && !saved.some((row) => row.sourceId === source.sourceId)) saved.push({ status: 'discovered', sourceId: source.sourceId, sourceFingerprint: source.fingerprint, name: source.name, bookUrl: longBookUrl(index), sourceEnabled: source.enabled, candidateId: 'cover-source-' + index })
+      }
       json(response, { sources: saved, activeEditionKey: book?.activeEditionKey })
       return
     }
     if (method === 'POST' && /^sources\/[^/]+\/open$/u.test(tail)) {
       const candidateId = decodeURIComponent(tail.split('/')[1] ?? '')
+      if (candidateId.startsWith('cover-source-') && bookId === BOOK_ID) {
+        const index = Number(candidateId.slice('cover-source-'.length))
+        const source = sources[index]
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        if (response.destroyed) return
+        if (!source || index === 3) { json(response, { error: { code: 'source-failed', message: '示例来源暂时不可用' } }, 500); return }
+        const editionKey = 'cover-edition-' + index
+        const edition = { id: randomUUID(), userId: USER_ID, bookId, editionKey, sourceId: source.sourceId, sourceFingerprint: source.fingerprint, bookUrl: longBookUrl(index), metadata: { name: book.name, author: book.author, ...(index === 4 ? {} : { coverUrl: `/api/fixture-cover/${index + 1}.svg` }) } }
+        editions.set(editionKey, edition); json(response, { edition }); return
+      }
+
       const candidate = [...searches.values()].flatMap((search) => search.sourceIds.map((sourceId) => sources.find((source) => source.sourceId === sourceId)).filter((source) => source !== undefined).map((source) => candidateFor(source, search.keyword))).find((item) => item.sourceId === candidateId)
       if (candidate === undefined) { json(response, { error: { code: 'not-found', message: '测试候选不存在' } }, 404); return }
       const editionKey = editionKeyForSource(candidate.sourceId)
@@ -713,6 +746,13 @@ function resetFixture() {
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://${HOST}:${PORT}`)
+  if (url.pathname.startsWith('/api/fixture-cover/')) {
+    if (url.pathname.endsWith('/broken.svg')) { response.writeHead(404); response.end(); return }
+    const id = Number(url.pathname.split('/').at(-1)?.split('.')[0]) || 1
+    const colors = ['#76542e', '#354f52', '#664b65']
+    response.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store' })
+    response.end(`<svg xmlns="http://www.w3.org/2000/svg" width="168" height="224" viewBox="0 0 168 224"><rect width="168" height="224" fill="${colors[(id - 1) % colors.length]}"/><text x="84" y="80" text-anchor="middle" fill="#fffefa" font-size="22">星海旅人</text><text x="84" y="140" text-anchor="middle" fill="#fffefa" font-size="36">${id}</text><text x="84" y="184" text-anchor="middle" fill="#fffefa" font-size="13">封面验收示例</text></svg>`); return
+  }
   if (url.pathname === '/__fixture/status') { json(response, { counts: Object.fromEntries(requestCounts) }); return }
   if (url.pathname === '/__fixture/control' && request.method === 'POST') {
     const control = await readJson(request)
