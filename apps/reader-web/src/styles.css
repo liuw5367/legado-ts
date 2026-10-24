@@ -788,6 +788,7 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .cover-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); align-items: start; gap: 12px; }
 .cover-grid-item { min-width: 0; }
 .cover-option { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: center; gap: 5px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--foreground); text-align: center; }
+.cover-option > .book-cover { flex: none; }
 .cover-current .cover-option { width: 112px; flex: 0 0 112px; }
 .cover-option[aria-pressed="true"] { border-color: var(--primary); outline: 1px solid var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--card)); }
 .cover-option:disabled { cursor: default; }
