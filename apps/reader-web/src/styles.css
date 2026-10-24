@@ -696,6 +696,7 @@ a { color: inherit; }
 .book-list-member > .organization-prose { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 13px; }
 .group-startup-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .group-startup-setting > span { flex: 0 0 auto; }
+.group-startup-copy { display: flex; flex-direction: column; gap: 2px; }
 .group-startup-setting .select { width: auto; min-width: 0; max-width: 50%; }
 .group-management-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .group-management-info { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
