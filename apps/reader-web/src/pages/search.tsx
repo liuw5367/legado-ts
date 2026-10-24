@@ -17,7 +17,7 @@ import { BookCover } from '../components/book-cover.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
-import { apiFetch, type ApiBook, type ApiCandidate } from '../lib/api.ts'
+import { apiFetch, type ApiBook, type ApiCandidate, type ApiHome } from '../lib/api.ts'
 import { compareSourceManagementOrder, groupSourcesByDomain, selectOneSourcePerDomain, sourceDomainInfo, type SourceDomainGroup } from '../../shared/source-domain.ts'
 import type { ManagedSourceSummary, SourceManagementPage } from '../../shared/source-management.ts'
 
@@ -39,6 +39,7 @@ export function SearchPage() {
   const targetBookListId = searchParams.get('targetBookListId') ?? ''
   const targetBookId = searchParams.get('bookId') ?? ''
   const [books, setBooks] = useState<ApiBook[]>([])
+  const [shelfBooks, setShelfBooks] = useState<ApiBook[]>([])
   const [booksLoaded, setBooksLoaded] = useState(false)
   const [precision, setPrecision] = useState(false)
   const [keyword, setKeyword] = useState(queryKeyword)
@@ -67,14 +68,14 @@ export function SearchPage() {
 
   usePageLoadEffect((settle) => {
     let active = true
-    void apiFetch<{ books: Array<{ book: ApiBook }> }>('/api/books').then((result) => {
-      if (active) { setBooks(result.books.map((item) => item.book)); setBooksLoaded(true) }
+    void Promise.all([apiFetch<{ books: Array<{ book: ApiBook }> }>('/api/books'), apiFetch<ApiHome>('/api/home')]).then(([result, home]) => {
+      if (active) { setBooks(result.books.map((item) => item.book)); setShelfBooks(home.bookshelf.map((item) => item.book)); setBooksLoaded(true) }
     }).catch((error: unknown) => {
       if (active) { setBooksLoaded(true); setMessageTone('error'); setMessage(error instanceof Error ? `已有书籍加载失败，仍可搜索：${error.message}` : '已有书籍加载失败，仍可搜索') }
     })
       .finally(() => { if (active) settle() })
     return () => { active = false }
-  }, [], ['candidates'])
+  }, [], ['candidates', 'home'])
   usePageLoadEffect((settle) => {
     let active = true
     void apiFetch<SourceManagementPage>('/api/source-management?all=true').then((result) => {
@@ -106,7 +107,7 @@ export function SearchPage() {
         if (page?.active === false) return
         navigate(`/books/${encodeURIComponent(created.book.id)}/${action === 'details' ? 'details' : 'toc'}?editionKey=${encodeURIComponent(created.edition.editionKey)}${targetBookListId ? '&targetBookListId=' + encodeURIComponent(targetBookListId) : ''}`, { state: pageReturnState(location) })
       } else {
-        setBooks((current) => [...current.filter((book) => book.id !== created.book.id), created.book]); setMessageTone(created.cacheWarning === undefined ? 'success' : 'error'); setMessage(created.cacheWarning === undefined ? '已加入书架' : `书籍已保存，但${created.cacheWarning.message}`)
+        setShelfBooks((current) => [...current.filter((book) => book.id !== created.book.id), created.book]); setBooks((current) => [...current.filter((book) => book.id !== created.book.id), created.book]); setMessageTone(created.cacheWarning === undefined ? 'success' : 'error'); setMessage(created.cacheWarning === undefined ? '已加入书架' : `书籍已保存，但${created.cacheWarning.message}`)
       }
     } catch (error) { if (!controller.signal.aborted) { setMessageTone('error'); setMessage(error instanceof Error ? error.message : action === 'directory' ? '打开目录失败' : action === 'details' ? '打开详情失败' : '加入书架失败') } }
     finally { saveController.current = null; if (!controller.signal.aborted) setSaving(null) }
@@ -183,13 +184,13 @@ export function SearchPage() {
     {groups.length === 0 && status === 'done' && !booksLoaded ? <LoadingState message="正在读取已有书籍…" variant="viewport" /> : null}
     <div className="result-summary" aria-live="polite">{status === 'done' && booksLoaded ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
     {status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
-    <div className="result-list">{groups.length === 0 && status === 'done' && booksLoaded ? <div className="empty-state">没有找到匹配书籍。</div> : groups.slice(0, visibleCount).map((group) => <SearchResult key={group.key} group={group} selectedIndex={selectedCandidateIndex(group.items, selectedByGroup[group.key])} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null || switchingSourceId !== null} sourceGroupsByKey={managedGroupByKey} sourceById={managedSourceById} switchingSourceId={switchingSourceId} onSetDefault={(sourceId) => void setDomainDefault(sourceId)} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => { const item = candidates[index]; if (item !== undefined) setSelectedByGroup((current) => ({ ...current, [group.key]: candidateSelectionKey(item) })) }} onSave={(action) => void saveCandidate(group, action)} />)}</div>
+    <div className="result-list">{groups.length === 0 && status === 'done' && booksLoaded ? <div className="empty-state">没有找到匹配书籍。</div> : groups.slice(0, visibleCount).map((group) => <SearchResult key={group.key} group={group} inBookshelf={shelfBooks.some((book) => sameBookIdentity(book.name, book.author, group.name, group.author))} selectedIndex={selectedCandidateIndex(group.items, selectedByGroup[group.key])} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null || switchingSourceId !== null} sourceGroupsByKey={managedGroupByKey} sourceById={managedSourceById} switchingSourceId={switchingSourceId} onSetDefault={(sourceId) => void setDomainDefault(sourceId)} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => { const item = candidates[index]; if (item !== undefined) setSelectedByGroup((current) => ({ ...current, [group.key]: candidateSelectionKey(item) })) }} onSave={(action) => void saveCandidate(group, action)} />)}</div>
     {groups.length > visibleCount ? <Button variant="secondary" onClick={() => setVisibleCount((value) => value + 50)}>继续显示结果</Button> : null}
     {listCandidate ? <BookListPicker book={books.find((book) => sameBookIdentity(book.name, book.author, listCandidate.group.name, listCandidate.group.author)) ?? { name: listCandidate.group.name, author: listCandidate.group.author }} resolveBook={resolveListBook} {...(targetBookListId ? { defaultListId: targetBookListId } : {})} onClose={() => setListCandidate(null)} onSaved={() => { setMessageTone('success'); setMessage('已加入书单') }} /> : null}
   </section>
 }
 
-function SearchResult({ group, selectedIndex, expanded, disabled, saving, sourceGroupsByKey, sourceById, switchingSourceId, onSetDefault, onToggle, onSelect, onSave }: { group: CandidateGroup; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; sourceGroupsByKey: Map<string, SourceDomainGroup<ManagedSourceSummary>>; sourceById: Map<string, ManagedSourceSummary>; switchingSourceId: string | null; onSetDefault: (sourceId: string) => void; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory' | 'details' | 'list') => void }) {
+function SearchResult({ group, inBookshelf, selectedIndex, expanded, disabled, saving, sourceGroupsByKey, sourceById, switchingSourceId, onSetDefault, onToggle, onSelect, onSave }: { group: CandidateGroup; inBookshelf: boolean; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; sourceGroupsByKey: Map<string, SourceDomainGroup<ManagedSourceSummary>>; sourceById: Map<string, ManagedSourceSummary>; switchingSourceId: string | null; onSetDefault: (sourceId: string) => void; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory' | 'details' | 'list') => void }) {
   const [sourceVisibleCount, setSourceVisibleCount] = useState(50)
   const selected = group.items.find((item) => item.index === selectedIndex) ?? group.items[0]
   if (selected === undefined) return null
@@ -219,7 +220,7 @@ function SearchResult({ group, selectedIndex, expanded, disabled, saving, source
     <div className="result-card-body">
       <div className="result-card-heading">
         <div><h2><button type="button" className="result-detail-title" disabled={disabled || saving} onClick={() => onSave('details')}>{group.name}</button></h2><p className="muted small">{group.author} · {group.items.length} 个来源</p></div>
-        <div className="result-card-actions"><Button className="save-button" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('shelf')}>{saving ? '处理中' : '加入书架'}</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('list')}>加入书单</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('directory')}>目录</Button></div>
+        <div className="result-card-actions"><Button className="save-button" size="sm" type="button" disabled={disabled || saving || inBookshelf} onClick={() => onSave('shelf')}>{inBookshelf ? '已在书架' : saving ? '处理中' : '加入书架'}</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('list')}>加入书单</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('directory')}>目录</Button></div>
       </div>
       {group.items.length > 1 ? <label className="result-source-select"><span className="muted small">选择本次结果来源</span><Select value={String(selected.index)} disabled={disabled || saving} onChange={(event) => onSelect(Number(event.target.value))}>{[...candidateDomains.entries()].map(([domainKey, domain]) => <optgroup key={domainKey} label={domain.domain}>{domain.items.map(({ item, index }) => { const displayName = sourceGroupsByKey.get(domainKey)?.versions.find(({ source }) => source.sourceId === item.sourceId)?.displayName ?? sourceById.get(item.sourceId)?.name ?? item.sourceId; return <option key={`${item.sourceId}:${item.candidate.bookUrl}`} value={index}>{displayName} · {item.sourceId}</option> })}</optgroup>)}</Select></label> : <p className="muted small result-source-label">來源：{selectedDisplayName} · {selectedDomain.domain}</p>}
       {group.items.length > sourceVisibleCount ? <Button size="sm" variant="secondary" onClick={() => setSourceVisibleCount((value) => value + 50)}>继续显示来源</Button> : null}

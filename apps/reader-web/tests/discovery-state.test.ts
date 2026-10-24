@@ -204,3 +204,20 @@ test('empty sources and empty categories settle as empty, while request failures
   failed = false; await retry.initialize()
   assert.equal(retry.getSnapshot().items.length, 2)
 })
+
+
+test('after source invalidation, URL normalization restores results and category changes request only books', async () => {
+  const { request, calls } = fixture()
+  const store = new DiscoveryStore('user', request)
+  await store.initialize()
+  await store.initialize(source.sourceId, 'source-a-popular', true, true)
+  const refreshedCalls = calls.length
+  store.suspend()
+  await store.initialize(source.sourceId, 'source-a-popular', false, true)
+  assert.equal(calls.length, refreshedCalls)
+  store.suspend()
+  await store.initialize(source.sourceId, 'source-a-new', false, true)
+  assert.deepEqual(calls.slice(refreshedCalls).map(({ path }) => path), ['/api/discovery/page'])
+  assert.equal(store.getSnapshot().categoryId, 'source-a-new')
+  assert.equal(store.getSnapshot().items.length, 2)
+})

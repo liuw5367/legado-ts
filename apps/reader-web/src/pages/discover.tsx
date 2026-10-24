@@ -1,7 +1,7 @@
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageActivity, usePageLoadEffect, usePageVersion } from '../lib/use-page-resource.ts'
-import { useEffect, useId, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent } from 'react'
 import { ArrowLeftRight, Check, ChevronDown, ChevronUp, Search } from 'lucide-react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
@@ -19,6 +19,7 @@ import type { DiscoveryBookResult, DiscoveryCategories, DiscoverySource } from '
 export function DiscoverPage() {
   const page = usePageActivity()
   const sourceVersion = usePageVersion(['discovery'])
+  const loadedSourceVersion = useRef('0')
   const store = useDiscoveryStore()
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const [params, setParams] = useSearchParams()
@@ -31,7 +32,13 @@ export function DiscoverPage() {
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null)
   usePageLoadEffect((settle) => {
     let active = true
-    void store.initialize(sourceId, categoryId, sourceVersion !== '0', true).then(() => {
+    // 等待本轮 Effect 稳定，避免开发模式的挂载检查发出随后立即取消的请求。
+    void Promise.resolve().then(async () => {
+      if (!active) return
+      const refresh = loadedSourceVersion.current !== sourceVersion
+      await store.initialize(sourceId, categoryId, refresh, true)
+      if (!active) return
+      loadedSourceVersion.current = sourceVersion
       const selected = store.getSnapshot()
       // 只在本次选择结算后规范化 URL，避免旧分类状态把用户的新 tab 选择改回去。
       if (active && selected.loaded && selected.error.length === 0 && selected.source !== null && (sourceId !== selected.source.sourceId || (categoryId ?? '') !== selected.categoryId)) {
