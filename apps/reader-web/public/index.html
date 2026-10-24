@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#f6f3ed" />
+    <script id="theme-bootstrap">
+      (() => {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        let theme = prefersDark ? 'dark' : 'light'
+        try {
+          const raw = window.localStorage.getItem('legado-reader-settings:anonymous')
+          const storedTheme = raw === null ? undefined : JSON.parse(raw)?.theme
+          if (storedTheme === 'dark' || storedTheme === 'light') theme = storedTheme
+        } catch {}
+        document.documentElement.dataset.theme = theme
+        document.documentElement.style.colorScheme = theme
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#171513' : '#f6f3ed')
+      })()
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="阅读" />
     <link rel="manifest" href="/static/pwa/manifest.webmanifest" />
