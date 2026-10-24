@@ -1,3 +1,4 @@
+import { IMPORT_FILE_MAX_BYTES } from '../../shared/source-import-limits.ts'
 import { randomUUID } from 'node:crypto'
 import { importSources, createRequestPlan, type ImportReader } from '@legado/source-core'
 import { NodeCookieStore, NodeNetworkHost } from '@legado/source-node'
@@ -16,15 +17,21 @@ const PREVIEW_TTL_MS = 15 * 60 * 1000
 
 export { SourceManagementError }
 
-export async function createImportPreview(repository: ReaderRepository, userId: string, sourceUrl: string, parentSignal?: AbortSignal): Promise<ImportPreview> {
+export async function createImportPreview(repository: ReaderRepository, userId: string, sourceUrl: string, parentSignal?: AbortSignal, jsonText?: string): Promise<ImportPreview> {
   const url = validateImportUrl(sourceUrl)
+  if (jsonText !== undefined) {
+    if (new TextEncoder().encode(jsonText).byteLength > IMPORT_FILE_MAX_BYTES) throw new SourceManagementError('preview-invalid', 'JSON 文件不能超过 3 MiB')
+    if (jsonText.trim().length === 0) throw new SourceManagementError('preview-invalid', 'JSON 文件内容不能为空')
+    try { JSON.parse(jsonText) } catch { throw new SourceManagementError('preview-invalid', '文件不是有效的 JSON，请检查文件内容与 UTF-8 编码') }
+  }
   const readFailures = new Map<string, string>()
   const reader = createImportReader(readFailures)
   const origins = new Map<string, string>()
   const timeoutSignal = AbortSignal.timeout(MAX_PREVIEW_TIME_MS)
   const signal = parentSignal === undefined ? timeoutSignal : AbortSignal.any([parentSignal, timeoutSignal])
-  const candidates = await importSources({ kind: 'url', uri: url, origin: { kind: 'remote-url', location: url } }, {
-    reader,
+  const candidates = await importSources(jsonText === undefined ? { kind: 'url', uri: url, origin: { kind: 'remote-url', location: url } } : { kind: 'text', text: jsonText, origin: { kind: 'remote-url', location: url } }, {
+    // 本地文件只解析已上传内容，不能根据 sourceUrls 再发起远程下载。
+    ...(jsonText === undefined ? { reader } : {}),
     onCandidateOrigin: (candidateId, location) => { origins.set(candidateId, location) },
     signal,
     limits: { maxCandidates: MAX_CANDIDATES, maxBytes: MAX_RESPONSE_BYTES, maxSourceUrls: MAX_SOURCE_URLS },

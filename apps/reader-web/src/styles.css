@@ -814,3 +814,6 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .organization-sheet .organization-field + .actions { margin-top: 20px; }
 
 .source-site-url { overflow-wrap: anywhere; }
+
+.source-import-form input.source-import-file { height: auto; padding-block: 8px; }
+.source-import-file::file-selector-button { margin-right: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--foreground); font: inherit; cursor: pointer; }

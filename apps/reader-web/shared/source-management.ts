@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { IMPORT_FILE_MAX_BYTES } from './source-import-limits.ts'
 
 export const sourceManagementStatusSchema = z.enum(['all', 'enabled', 'disabled'])
 export const sourceManagementPageSchema = z.object({
@@ -17,7 +18,7 @@ export const sourceOrderSchema = z.object({
   items: z.array(z.object({ sourceId: z.string().trim().min(1).max(2000), expectedSourceRevision: z.string().trim().min(1).max(200), customOrder: z.number().int().min(-1_000_000_000).max(1_000_000_000) })).min(1).max(1000),
 })
 
-export const importPreviewRequestSchema = z.object({ url: z.string().trim().url().max(4000) })
+export const importPreviewRequestSchema = z.object({ url: z.string().trim().url().max(4000), jsonText: z.string().min(1).max(IMPORT_FILE_MAX_BYTES).optional() })
 export const importConfirmRequestSchema = z.object({ previewId: z.string().uuid(), candidateIds: z.array(z.string().trim().min(1).max(200)).min(1).max(1000) })
 
 export type SourceManagementStatus = z.infer<typeof sourceManagementStatusSchema>

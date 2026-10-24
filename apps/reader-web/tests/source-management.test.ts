@@ -367,3 +367,36 @@ test('nested subscription read failures retain successful members and identify t
   assert.ok(failed.reason.includes('HTTP-403'))
   assert.ok(!failed.reason.includes('secret-token'))
 })
+
+
+test('local JSON imports without network reads and preserves the required management link', async (t) => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => { throw new Error('local import must not fetch') })
+  const repository = new MemoryReaderRepository()
+  const link = 'https://shuyuan-api.yiove.com/import/collection?token=private-value'
+  const preview = await createImportPreview(repository, 'local-user', link, undefined, JSON.stringify([baseSource]))
+  assert.equal(preview.writableCount, 1)
+  assert.equal(preview.candidates[0]?.originLocation, link)
+  const imported = await repository.commitImportPreview('local-user', preview.previewId, preview.candidates.map((candidate) => candidate.id))
+  assert.equal(imported.imported, 1)
+  assert.equal((await repository.listImportLinks('local-user')).links.length, 1)
+  const history = await repository.listImportItems('local-user', imported.batchId, (await import('../shared/source-management.ts')).importHistoryQuerySchema.parse({}))
+  assert.ok(history.items[0]?.displayUrl.includes('token=已隐藏'))
+  assert.ok(!JSON.stringify(publicImportPreview(preview)).includes('private-value'))
+  const nested = await createImportPreview(repository, 'local-user', link, undefined, JSON.stringify({ sourceUrls: ['https://8.8.8.8/blocked'] }))
+  assert.equal(nested.writableCount, 0)
+  assert.equal(fetch.mock.calls.length, 0)
+})
+
+test('local JSON requires a valid source link and rejects empty, invalid and oversized content', async () => {
+  const { importPreviewRequestSchema } = await import('../shared/source-management.ts')
+  const { IMPORT_FILE_MAX_BYTES } = await import('../shared/source-import-limits.ts')
+  for (const url of ['', ' ', 'not-a-url']) assert.equal(importPreviewRequestSchema.safeParse({ url, jsonText: '{}' }).success, false)
+  assert.equal(importPreviewRequestSchema.safeParse({ url: 'https://example.test', jsonText: '' }).success, false)
+  const repository = new MemoryReaderRepository()
+  for (const url of ['', ' ', 'not-a-url', 'file:///sources.json', 'https://user:password@example.test']) {
+    await assert.rejects(createImportPreview(repository, 'local-user', url, undefined, JSON.stringify(baseSource)))
+  }
+  for (const text of ['', '  ', '{bad-json']) await assert.rejects(createImportPreview(repository, 'local-user', 'https://example.test', undefined, text), /JSON/u)
+  const tooLarge = JSON.stringify({ text: '中'.repeat(Math.ceil(IMPORT_FILE_MAX_BYTES / 3)) })
+  await assert.rejects(createImportPreview(repository, 'local-user', 'https://example.test', undefined, tooLarge), /3 MiB/u)
+})

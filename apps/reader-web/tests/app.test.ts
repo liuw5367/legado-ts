@@ -102,3 +102,33 @@ test('封面 API 通过真实认证与路由写入，仅修改当前账号的用
   assert.equal((await request(null)).status, 200)
   assert.equal((await memory.getBook(userId, created.book.id))?.customCoverUrl, undefined)
 })
+
+
+test('本地 JSON 导入通过真实认证和路由校验链接、限制请求并保存来源', async (t) => {
+  const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const { sourceDefinition } = await import('./fixtures/import-history.ts')
+  const { IMPORT_REQUEST_MAX_BYTES } = await import('../shared/source-import-limits.ts')
+  const memory = new MemoryReaderRepository()
+  for (const method of ['listSourceStatesForUser', 'saveImportPreview', 'commitImportPreview'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
+  t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
+  const fetch = t.mock.method(globalThis, 'fetch', async (url: unknown) => {
+    assert.ok(String(url).startsWith('https://auth.example.test/'))
+    return Response.json({ id: 'local-user' })
+  })
+  const request = (body: unknown, path = '/api/source-management/import-preview') => app.request('http://localhost' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer fixture-owner' }, body: JSON.stringify(body) })
+  assert.equal((await app.request('http://localhost/api/source-management/import-preview', { method: 'POST' })).status, 401)
+  assert.equal((await request({ url: '', jsonText: '{}' })).status, 400)
+  assert.equal((await request({ url: 'https://example.test', jsonText: '{bad' })).status, 400)
+  assert.equal((await request({ url: 'https://example.test', jsonText: 'x'.repeat(IMPORT_REQUEST_MAX_BYTES) })).status, 413)
+  const response = await request({ url: 'https://example.test/local', jsonText: JSON.stringify(sourceDefinition()) })
+  assert.equal(response.status, 201)
+  const preview = await response.json()
+  assert.equal(preview.writableCount, 1)
+  const imported = await request({ previewId: preview.previewId, candidateIds: preview.candidates.map((item: { id: string }) => item.id) }, '/api/source-management/import-confirm')
+  assert.equal(imported.status, 200)
+  assert.equal((await imported.json()).imported, 1)
+  assert.equal((await memory.listImportLinks('local-user')).links.length, 1)
+  assert.ok(fetch.mock.calls.length > 0)
+})

@@ -14,6 +14,7 @@ import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRunti
 import { confirmImport, createImportPreview, listSourceActions, publicImportPreview } from './runtime/source-management.ts'
 import { serveReaderAsset } from './static.ts'
 import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
+import { IMPORT_REQUEST_MAX_BYTES } from '../shared/source-import-limits.ts'
 import { importHistoryQuerySchema, importLinkOrderSchema, undoPreviewSchema, undoImportSchema, importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 import { sourceDomainInfo } from '../shared/source-domain.ts'
 import type { ReaderSettingsPatch } from './domain/types.ts'
@@ -170,9 +171,9 @@ app.post('/api/source-management/order', async (context) => {
 app.post('/api/source-management/import-preview', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
-  const body = await parseBody(context, importPreviewRequestSchema)
+  const body = await parseBody(context, importPreviewRequestSchema, false, IMPORT_REQUEST_MAX_BYTES)
   if (body instanceof Response) return body
-  try { return context.json(publicImportPreview(await createImportPreview(dependencies.repository, context.get('userId'), body.url, context.req.raw.signal)), 201) } catch (error) { return handleError(context, error) }
+  try { return context.json(publicImportPreview(await createImportPreview(dependencies.repository, context.get('userId'), body.url, context.req.raw.signal, body.jsonText)), 201) } catch (error) { return handleError(context, error) }
 })
 
 app.post('/api/source-management/import-confirm', async (context) => {
@@ -602,10 +603,32 @@ const settingsSchema = z.object({
 }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个设置项' })
 const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })
 
-async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: z.ZodType<T>, optional = false): Promise<T | Response> {
+async function parseBody<T>(context: Context<{ Variables: Variables }>, schema: z.ZodType<T>, optional = false, maxBytes?: number): Promise<T | Response> {
   try {
     let input: unknown
-    try { input = await context.req.json() } catch { if (!optional) throw new Error('invalid-json'); input = {} }
+    let request = context.req.raw
+    if (maxBytes !== undefined && request.body !== null) {
+      const reader = request.body.getReader()
+      const chunks: Uint8Array[] = []
+      let total = 0
+      try {
+        while (true) {
+          const next = await reader.read()
+          if (next.done) break
+          total += next.value.byteLength
+          if (total > maxBytes) {
+            await reader.cancel().catch(() => undefined)
+            return context.json({ error: { code: 'invalid-input', message: '导入请求超过 4 MiB，请缩小 JSON 文件后重试' } }, 413)
+          }
+          chunks.push(next.value)
+        }
+      } finally { reader.releaseLock() }
+      const bytes = new Uint8Array(total)
+      let offset = 0
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+      request = new Request(request.url, { method: 'POST', body: bytes })
+    }
+    try { input = await request.json() } catch { if (!optional) throw new Error('invalid-json'); input = {} }
     const parsed = schema.safeParse(input)
     return parsed.success ? parsed.data : context.json({ error: { code: 'invalid-input', message: '请求参数无效', issues: parsed.error.issues } }, 400)
   } catch {

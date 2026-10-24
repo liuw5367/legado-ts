@@ -1,0 +1,2 @@
+export const IMPORT_FILE_MAX_BYTES = 3 * 1024 * 1024
+export const IMPORT_REQUEST_MAX_BYTES = 4 * 1024 * 1024
