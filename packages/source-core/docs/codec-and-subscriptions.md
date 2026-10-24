@@ -18,6 +18,8 @@ Codec 的完整实现位于 [`codec/`](../src/codec/)，数据边界定义在 [`
 - 规范化 `source`（无效候选没有该字段）、`sourceUuid`、定义指纹和 `localMatch`；
 - 替换规则执行结果、稳定 `ImportDiagnostic[]`、`writable` 和 `status`。
 
+候选的 `origin.location` 使用受控读取端口返回的最终地址，`sourceUrls` 成员分别保留自己的地址，并始终脱敏。受控应用可以传入 `onCandidateOrigin(candidateId, location)`，将完整地址交给加密存储；该地址可能包含私有参数，不能直接展示或记录日志。
+
 应用必须先检查 `status`、`writable` 和 diagnostics，再决定是否写入。`sourceUuid` 是本次导入实例 UUID，不替代 `bookSourceUrl` 的兼容身份；用户保存版本由应用的 `SourceSnapshot` 管理。
 
 导入限制默认在 [`import.ts`](../src/codec/import.ts) 中定义：候选数、单份输入字节数和 `sourceUrls` 展开数都有限制。`sourceUrls` 只展开一层，每个 URI 仍经过 `ImportReader` 和取消信号；读取失败、超限和取消生成候选级诊断，不静默丢弃来源。

@@ -710,3 +710,11 @@ a { color: inherit; }
 .notice-with-recovery > button { flex: 0 0 auto; margin-left: auto; }
 
 dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
+
+.import-undo-list { max-height: 40vh; overflow-y: auto; overflow-wrap: anywhere; }
+.import-history-row { grid-template-columns: minmax(0, 1fr) auto; }
+.import-history-row .source-url { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .import-history-row { grid-template-columns: minmax(0, 1fr); }
+  .import-history-row .source-row-actions { justify-content: flex-start; }
+}

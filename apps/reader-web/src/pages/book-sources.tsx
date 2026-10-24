@@ -28,6 +28,7 @@ export function BookSourcesPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const cache = useBookCache()
+  const [visibleCount, setVisibleCount] = useState(50)
   const [book, setBook] = useState<BookDetailsResponse['book'] | null>(null)
   const [data, setData] = useState<BookSourcesResponse | null>(null)
   const [keyword, setKeyword] = useState('')
@@ -40,7 +41,7 @@ export function BookSourcesPage() {
   const [pendingSwitch, setPendingSwitch] = useState<PendingSourceSwitch | null>(null)
   const [retry, setRetry] = useState(0)
   const controllerRef = useRef<AbortController | null>(null)
-  const { candidates, searchId, status, message, progress, cancellationPending, search, replaceSearch, cancelAndWait, cancel } = useBookSearch()
+  const { candidates, searchId, status, message, progress, cancellationPending, search, replaceSearch, cancelAndWait, cancel, resume } = useBookSearch()
   const prefix = '/books/' + encodeURIComponent(bookId)
   const managedSourceById = useMemo(() => new Map(managedSources.map((source) => [source.sourceId, source])), [managedSources])
   const accountDefaults = useMemo(() => new Map(selectOneSourcePerDomain(managedSources.filter((source) => source.enabled), compareSourceManagementOrder).map((source) => [sourceDomainInfo(source.sourceId).key, source])), [managedSources])
@@ -199,11 +200,12 @@ export function BookSourcesPage() {
       <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); setNotice(''); void search(keyword, precision) }}><div className="search-row"><Input aria-label="搜索可用书源" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={status !== 'loading' && keyword.trim().length === 0} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div><p className="muted small">切换会更新账号默认书源；目录预览不会改本书当前版本。</p></form>
       {notice.length > 0 ? <DismissibleMessage onDismiss={() => setNotice('')} className="success compact-message" role="status">{notice}</DismissibleMessage> : null}
       {message.length > 0 ? <DismissibleMessage className="muted small" role="status">{message}</DismissibleMessage> : null}
-      {status === 'loading' ? <LoadingState message={'正在搜索可用书源…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}`)} variant={data.sources.length === 0 && results.length === 0 ? 'content' : 'inline'} /> : null}
+      {status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
+      {status === 'loading' ? <LoadingState message={'正在搜索可用书源…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}${progress.currentGroup ? " · " + progress.currentGroup : ""}`)} variant={data.sources.length === 0 && results.length === 0 ? 'content' : 'inline'} /> : null}
       {status === 'done' && searchId.length > 0 && results.length === 0 ? <div className="empty-state">当前搜索没有找到与这本书匹配的来源。</div> : null}
       <div className="book-source-list">
         {bookSourceGroups.length === 0 && results.length === 0 && status !== 'loading' ? <div className="empty-state">没有关联书源，请搜索书名或为某个域名版本搜索。</div> : null}
-        {bookSourceGroups.map((group) => {
+        {bookSourceGroups.slice(0, visibleCount).map((group) => {
           const latest = group.versions[0]?.source
           const defaultVersion = group.versions.find((version) => version.isAccountDefault)?.source
           const enabledCount = group.versions.filter((version) => version.source.enabled).length
@@ -231,6 +233,7 @@ export function BookSourcesPage() {
         })}
         {ungroupedResults.map(({ item, index }) => <article className="book-source-row" key={'search:' + index}><div className="book-source-info"><strong>{managedSourceById.get(item.sourceId)?.name ?? item.sourceId}</strong><p className="muted small" title={item.candidate.bookUrl}>{item.candidate.bookUrl}</p><span className="muted small">本次搜索 · {sourceDomainInfo(item.sourceId).domain}</span></div><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSearchCandidate(index, 'directory')}>查看目录</Button><Button size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSearchCandidate(index, 'switch')}>{opening === 'search:' + index ? '加载中…' : '切换书源'}</Button></div></article>)}
       </div>
+      {bookSourceGroups.length > visibleCount ? <Button variant="secondary" onClick={() => setVisibleCount((count) => count + 50)}>继续显示书源</Button> : null}
     </>}
     <Sheet open={pendingSwitch !== null} onOpenChange={(open) => { if (!open) setPendingSwitch(null) }} title="确认切换书源"><div className="source-switch-confirm">{pendingSwitch === null ? null : <><p>将切换到“{pendingSwitch.target.title}”。{pendingSwitch.matched ? `已按“${pendingSwitch.currentTitle}”匹配。` : '没有找到同名章节，将按章节序号定位。'}</p><div className="actions"><Button type="button" onClick={() => void confirmSwitch()} disabled={opening !== null}>确认切换</Button><Button type="button" variant="secondary" onClick={() => setPendingSwitch(null)}>取消</Button></div></>}</div></Sheet>
     <Link className="sr-only" to={fallback}>本书目录</Link>

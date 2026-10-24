@@ -183,15 +183,21 @@ function readRequest(uri: string, maxBytes: number, signal: AbortSignal | undefi
 export async function importSources(input: ImportInput, options: ImportOptions = {}): Promise<ImportCandidate[]> {
   const limits = { ...defaultLimits, ...options.limits }
   const candidates: ImportCandidate[] = []
-  const add = (candidate: ImportCandidate): void => {
-    if (candidates.length < limits.maxCandidates) candidates.push(candidate)
+  let location: string | undefined
+  const add = (candidate: ImportCandidate, actualLocation = location): void => {
+    if (candidates.length >= limits.maxCandidates) return
+    if (actualLocation !== undefined) {
+      const origin = { ...candidate.origin, location: safeLocation(actualLocation) ?? actualLocation }
+      candidate = { ...candidate, origin, raw: { ...candidate.raw, origin } }
+      options.onCandidateOrigin?.(candidate.id, actualLocation)
+    }
+    candidates.push(candidate)
   }
   if (isCancelled(options.signal)) return [invalidCandidate(emptyRaw('', 'json'), [diagnostic('cancelled', 'input', '导入已取消', { retryable: true })], 'cancelled')]
 
   let text: string | undefined
   let value: JsonValue | undefined
   let inputKind: RawSource['kind'] = 'json'
-  let location: string | undefined
   if (typeof input === 'string') text = input
   else if (isStructuredInput(input)) {
     if ('text' in input && typeof input.text === 'string') {
@@ -231,14 +237,14 @@ export async function importSources(input: ImportInput, options: ImportOptions =
       if (options.reader === undefined) return [invalidCandidate(emptyRaw(jsonText(value), 'json'), [diagnostic('reader-missing', 'fetch', 'sourceUrls 输入缺少受控读取端口', { retryable: false })], 'source-urls-reader')]
       for (const [index, uri] of urls.entries()) {
         if (isCancelled(options.signal)) {
-          add(invalidCandidate(emptyRaw('', 'uri', uri), [diagnostic('cancelled', 'fetch', '导入已取消', { retryable: true })], `source-${index}-cancelled`))
+          add(invalidCandidate(emptyRaw('', 'uri', uri), [diagnostic('cancelled', 'fetch', '导入已取消', { retryable: true })], `source-${index}-cancelled`), uri)
           break
         }
         try {
           const response = await options.reader.read(readRequest(uri, limits.maxBytes, options.signal))
-          for (const candidate of parseText(response.text, `source-${index}`, options)) add(candidate)
+          for (const candidate of parseText(response.text, `source-${index}`, options)) add(candidate, response.location ?? uri)
         } catch {
-          add(invalidCandidate(emptyRaw('', 'uri', uri), [diagnostic(isCancelled(options.signal) ? 'cancelled' : 'reader-failed', 'fetch', isCancelled(options.signal) ? '导入已取消' : 'sourceUrls 成员读取失败', { retryable: true })], `source-${index}-reader`))
+          add(invalidCandidate(emptyRaw('', 'uri', uri), [diagnostic(isCancelled(options.signal) ? 'cancelled' : 'reader-failed', 'fetch', isCancelled(options.signal) ? '导入已取消' : 'sourceUrls 成员读取失败', { retryable: true })], `source-${index}-reader`), uri)
         }
       }
     } else if (Array.isArray(value)) {

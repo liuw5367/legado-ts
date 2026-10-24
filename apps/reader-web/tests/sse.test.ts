@@ -36,3 +36,13 @@ test('search stream candidates follow the server snapshot order across out-of-or
   const afterNextPage = mergeSearchStreamCandidates(afterSlowSource, { source: { candidates: [candidate('source-a', 'https://books.example.test/a-2')] }, search: { candidates: [sourceA, candidate('source-a', 'https://books.example.test/a-2'), sourceB] } })
   assert.deepEqual(afterNextPage.map((item) => item.candidate.bookUrl), ['https://books.example.test/a', 'https://books.example.test/a-2', 'https://books.example.test/b'])
 })
+
+test('incremental results keep frozen source priority despite concurrent completion order', () => {
+  const candidate = (sourceId: string, sourceOrder: number): ApiCandidate => ({ sourceId, sourceOrder, sourceFingerprint: 'fp', candidate: { sourceId, bookUrl: '/' + sourceId, name: '目标书', author: '作者' } })
+  const latePriority = candidate('slow-priority', 0); const fastLater = candidate('fast-later', 1)
+  const ordering = { keyword: '目标书', precision: false }
+  const first = mergeSearchStreamCandidates([], { source: { candidates: [fastLater] } }, ordering)
+  const final = mergeSearchStreamCandidates(first, { source: { candidates: [latePriority] } }, ordering)
+  assert.deepEqual(final.map((item) => item.sourceId), ['slow-priority', 'fast-later'])
+  assert.equal(mergeSearchStreamCandidates(final, { source: { candidates: [latePriority] } }, ordering).length, 2)
+})

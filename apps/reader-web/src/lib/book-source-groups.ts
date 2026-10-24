@@ -44,10 +44,11 @@ export function groupBookSourcesByDomain<T extends BookSourceSearchResultRef>(ma
 
   return groupSourcesByDomain(managedSources)
     .filter((group) => relatedDomains.has(group.domainKey))
+    .sort((left, right) => Math.min(...left.versions.map(({ source }) => source.importPriority ?? Number.MAX_SAFE_INTEGER)) - Math.min(...right.versions.map(({ source }) => source.importPriority ?? Number.MAX_SAFE_INTEGER)))
     .map((group) => ({
       domainKey: group.domainKey,
       domain: group.domain,
-      versions: group.versions.map(({ source, displayName }) => ({
+      versions: [...group.versions].sort((left, right) => (left.source.importPriority ?? Number.MAX_SAFE_INTEGER) - (right.source.importPriority ?? Number.MAX_SAFE_INTEGER) || compareSourceManagementOrder(left.source, right.source)).map(({ source, displayName }) => ({
         source,
         displayName,
         items: itemsBySourceId.get(source.sourceId) ?? [],

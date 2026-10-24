@@ -37,7 +37,7 @@ test('import skips sources containing NUL without persisting their unsafe previe
   }
   assertSafe(JSON.parse(JSON.stringify(await repository.getImportPreview('user-a', preview.previewId))))
   const selected = preview.candidates.filter((candidate) => candidate.disposition !== undefined)
-  assert.deepEqual(await repository.commitImportPreview('user-a', preview.previewId, selected.map((candidate) => candidate.id)), { imported: 2 })
+  assert.equal((await repository.commitImportPreview('user-a', preview.previewId, selected.map((candidate) => candidate.id))).imported, 2)
   const saved = await repository.listAllSourcesForUser('user-a')
   assert.equal(saved.length, 2)
   assert.equal(saved.find((source) => source.sourceId === 'https://literal.example')?.normalizedSource.bookSourceComment, 'literal \\u0000')

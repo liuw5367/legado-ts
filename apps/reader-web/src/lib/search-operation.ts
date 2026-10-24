@@ -21,14 +21,14 @@ export class SearchOperation {
   }
   get hasPendingCancellation() { return this.pendingCancellation !== undefined }
   get isRunning() { return this.current !== undefined }
-  async start(keyword: string, precision: boolean, event: (value: StreamEvent) => void, created: (id: string) => void, sourceIds?: string[]) {
+  async start(keyword: string, precision: boolean, event: (value: StreamEvent) => void, created: (id: string) => void, sourceIds?: string[], resumeId?: string) {
     if (this.current !== undefined) throw new Error('上一轮搜索尚未结束')
     if (this.pendingCancellation !== undefined) throw new Error('上次取消未完成，请重试取消')
     const run = { controller: new AbortController(), id: '', cancelled: false, completed: false }
     this.current = run
     try {
       // 创建请求不中断，必须获得服务端ID，才能结算创建期间的取消请求。
-      run.id = await this.transport.create(keyword, precision, sourceIds)
+      run.id = resumeId ?? await this.transport.create(keyword, precision, sourceIds)
       created(run.id)
       if (!run.cancelled) await this.transport.stream(run.id, (value) => { if (!run.cancelled && !run.completed) { if (value.type === 'done') run.completed = true; event(value) } }, run.controller.signal)
     } catch (reason) {

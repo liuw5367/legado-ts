@@ -13,7 +13,7 @@ import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRunti
 import { confirmImport, createImportPreview, listSourceActions, publicImportPreview } from './runtime/source-management.ts'
 import { serveReaderAsset } from './static.ts'
 import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
-import { importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
+import { importHistoryQuerySchema, importLinkOrderSchema, undoPreviewSchema, undoImportSchema, importConfirmRequestSchema, importPreviewRequestSchema, sourceActionSchema, sourceManagementPageSchema, sourceOrderSchema } from '../shared/source-management.ts'
 import { sourceDomainInfo } from '../shared/source-domain.ts'
 import type { ReaderSettingsPatch } from './domain/types.ts'
 import { discoveryBookSchema, discoveryControlSchema, discoveryPageSchema, discoverySourceSchema } from '../shared/discovery.ts'
@@ -182,6 +182,39 @@ app.post('/api/source-management/import-confirm', async (context) => {
   try { return context.json({ previewId: body.previewId, ...(await confirmImport(dependencies.repository, context.get('userId'), body.previewId, body.candidateIds)) }) } catch (error) { return handleError(context, error) }
 })
 
+app.get('/api/source-management/import-links', async (context) => {
+  const rejected = await requireUser(context); if (rejected) return rejected
+  try { return context.json(await dependencies.repository.listImportLinks(context.get('userId'))) } catch (error) { return handleError(context, error) }
+})
+app.post('/api/source-management/import-links/order', async (context) => {
+  const rejected = await requireUser(context); if (rejected) return rejected
+  const body = await parseBody(context, importLinkOrderSchema); if (body instanceof Response) return body
+  try { return context.json(await dependencies.repository.orderImportLinks(context.get('userId'), body.orderedIds, body.expectedRevision)) } catch (error) { return handleError(context, error) }
+})
+app.get('/api/source-management/import-history', async (context) => {
+  const rejected = await requireUser(context); if (rejected) return rejected
+  const query = importHistoryQuerySchema.safeParse(context.req.query()); if (!query.success) return context.json({ error: { code: 'invalid-input', message: '历史查询参数无效' } }, 400)
+  try { return context.json(await dependencies.repository.listImportHistory(context.get('userId'), query.data)) } catch (error) { return handleError(context, error) }
+})
+app.get('/api/source-management/import-history/:batchId/items', async (context) => {
+  const rejected = await requireUser(context); if (rejected) return rejected
+  const query = importHistoryQuerySchema.safeParse(context.req.query()); const batchId = z.string().uuid().safeParse(context.req.param('batchId'))
+  if (!query.success || !batchId.success) return context.json({ error: { code: 'invalid-input', message: '历史查询参数无效' } }, 400)
+  try { return context.json(await dependencies.repository.listImportItems(context.get('userId'), batchId.data, query.data)) } catch (error) { return handleError(context, error) }
+})
+app.post('/api/source-management/import-history/:batchId/undo-preview', async (context) => {
+  const rejected = await requireUser(context); if (rejected) return rejected
+  const body = await parseBody(context, undoPreviewSchema); if (body instanceof Response) return body
+  const batchId = z.string().uuid().safeParse(context.req.param('batchId')); if (!batchId.success) return context.json({ error: { code: 'invalid-input', message: '导入记录 ID 无效' } }, 400)
+  try { return context.json(await dependencies.repository.previewImportUndo(context.get('userId'), batchId.data, body.itemIds)) } catch (error) { return handleError(context, error) }
+})
+app.post('/api/source-management/import-history/:batchId/undo', async (context) => {
+  const rejected = await requireUser(context); if (rejected) return rejected
+  const body = await parseBody(context, undoImportSchema); if (body instanceof Response) return body
+  const batchId = z.string().uuid().safeParse(context.req.param('batchId')); if (!batchId.success) return context.json({ error: { code: 'invalid-input', message: '导入记录 ID 无效' } }, 400)
+  try { return context.json(await dependencies.repository.undoImport(context.get('userId'), batchId.data, body)) } catch (error) { return handleError(context, error) }
+})
+
 app.get('/api/settings', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -248,7 +281,7 @@ app.post('/api/searches', async (context) => {
     if (selectedSources.length !== requestedIds.length) return context.json({ error: { code: 'source-not-found', message: '请求包含已禁用或不可用的书源' } }, 404)
     const source = selectedSources[0]
     if (source === undefined || source === null) return context.json({ error: { code: 'source-not-found', message: '没有可用书源' } }, 404)
-    const search = await dependencies.repository.createSearch(context.get('userId'), { keyword: body.keyword, sourceId: source.sourceId, sourceIds: selectedSources.map((item) => item.sourceId), ...(body.precision === undefined ? {} : { precision: body.precision }) }, source.fingerprint)
+    const search = await dependencies.repository.createSearch(context.get('userId'), { keyword: body.keyword, sourceId: source.sourceId, sourceIds: selectedSources.map((item) => item.sourceId), sourceSnapshots: selectedSources.map((item) => ({ sourceId: item.sourceId, sourceFingerprint: item.fingerprint, ...(item.sourceRevision ? { sourceRevision: item.sourceRevision } : {}), ...(item.importLinkId ? { importLinkId: item.importLinkId } : {}), ...(item.priority === undefined ? {} : { priority: item.priority }) })), ...(body.precision === undefined ? {} : { precision: body.precision }) }, source.fingerprint)
     return context.json({ search }, 201)
   } catch (error) {
     return handleError(context, error)
@@ -624,16 +657,18 @@ function errorResponse(error: unknown): { body: { error: { code: string; message
 function streamSearchResponse(context: Context<{ Variables: Variables }>, userId: string, searchId: string, options: SearchBatchOptions) {
   return streamSSE(context, async (stream) => {
     let sequence = 0
+    const disconnected = new AbortController()
+    stream.onAbort(() => disconnected.abort())
     const heartbeat = setInterval(() => { void stream.write(': heartbeat\n\n').catch(() => undefined) }, 10_000)
     await stream.writeSSE({ event: 'batch-start', data: JSON.stringify({ searchId, seq: sequence++ }) })
     try {
       const result = await dependencies.runtime.runSearchBatchStream(userId, searchId, async (source, search) => {
-        await stream.writeSSE({ event: 'source-result', data: JSON.stringify({ searchId, seq: sequence++, source, search, progress: search.progress }) })
+        await stream.writeSSE({ event: 'source-result', data: JSON.stringify({ searchId, seq: sequence++, source, progress: search.progress }) })
         await stream.writeSSE({ event: 'progress', data: JSON.stringify({ searchId, seq: sequence++, progress: search.progress }) })
-      }, options)
-      await stream.writeSSE({ event: 'batch-end', data: JSON.stringify({ searchId, seq: sequence++, search: result.search, progress: result.progress }) })
-      await stream.writeSSE({ event: 'batch', data: JSON.stringify(result) })
-      await stream.writeSSE({ event: 'done', data: JSON.stringify({ search: result.search }) })
+      }, { ...options, signal: disconnected.signal })
+      await stream.writeSSE({ event: 'batch-end', data: JSON.stringify({ searchId, seq: sequence++, hasPending: result.hasPending, retryAfterMs: result.retryAfterMs, search: { sourceStates: result.sourceResults.map(({ sourceId, nextCursor }) => ({ sourceId, nextCursor })), cancelled: result.search.cancelled }, progress: result.progress }) })
+      await stream.writeSSE({ event: 'batch', data: JSON.stringify({ progress: result.progress, cacheWarning: result.cacheWarning }) })
+      await stream.writeSSE({ event: 'done', data: JSON.stringify({ search: { id: searchId, status: result.search.status, cancelled: result.search.cancelled }, hasPending: result.hasPending }) })
     } catch (error) {
       const response = errorResponse(error)
       await stream.writeSSE({ event: 'error', data: JSON.stringify(response.body.error) })

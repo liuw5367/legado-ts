@@ -37,6 +37,22 @@ export function decryptRuntimeState(value: string, secret: string = configuredSe
   }
 }
 
+/** 导入来源和撤销快照复用部署密钥，独立封装避免运行状态 schema 丢弃字段。 */
+export function encryptImportData(value: unknown): string {
+  const iv = randomBytes(IV_BYTES)
+  const cipher = createCipheriv(ALGORITHM, deriveKey(configuredSecret()), iv)
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()])
+  return [FORMAT_VERSION, encode(iv), encode(cipher.getAuthTag()), encode(ciphertext)].join('.')
+}
+
+export function decryptImportData<T>(value: string): T {
+  const [version, iv, tag, ciphertext] = value.split('.')
+  if (version !== FORMAT_VERSION || !iv || !tag || !ciphertext) throw new Error('导入记录格式无效')
+  const decipher = createDecipheriv(ALGORITHM, deriveKey(configuredSecret()), decode(iv))
+  decipher.setAuthTag(decode(tag))
+  return JSON.parse(Buffer.concat([decipher.update(decode(ciphertext)), decipher.final()]).toString('utf8')) as T
+}
+
 export function configuredSecret(): string {
   const secret = process.env.SOURCE_RUNTIME_STATE_KEY?.trim() ?? ''
   if (secret.length < 32) throw new Error('SOURCE_RUNTIME_STATE_KEY 未配置或长度不足 32 个字符')

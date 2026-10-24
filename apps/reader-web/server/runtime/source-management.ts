@@ -19,16 +19,19 @@ export { SourceManagementError }
 export async function createImportPreview(repository: ReaderRepository, userId: string, sourceUrl: string, parentSignal?: AbortSignal): Promise<ImportPreview> {
   const url = validateImportUrl(sourceUrl)
   const reader = createImportReader()
+  const origins = new Map<string, string>()
   const timeoutSignal = AbortSignal.timeout(MAX_PREVIEW_TIME_MS)
   const signal = parentSignal === undefined ? timeoutSignal : AbortSignal.any([parentSignal, timeoutSignal])
   const candidates = await importSources({ kind: 'url', uri: url, origin: { kind: 'remote-url', location: url } }, {
     reader,
+    onCandidateOrigin: (candidateId, location) => { origins.set(candidateId, location) },
     signal,
     limits: { maxCandidates: MAX_CANDIDATES, maxBytes: MAX_RESPONSE_BYTES, maxSourceUrls: MAX_SOURCE_URLS },
   })
   const states = await repository.listSourceStatesForUser(userId)
   const localById = new Map(states.map((state) => [state.source.sourceId, state]))
   const previewCandidates = compareImportCandidates(candidates, localById)
+  for (const candidate of previewCandidates) { const origin = origins.get(candidate.id); if (origin) candidate.originLocation = origin }
   const previewBytes = new TextEncoder().encode(JSON.stringify(previewCandidates)).byteLength
   if (previewBytes > MAX_PREVIEW_BYTES) throw new SourceManagementError('preview-invalid', '导入预览超过大小限制，请拆分书源后重试')
   const preview: ImportPreview = { previewId: randomUUID(), expiresAt: new Date(Date.now() + PREVIEW_TTL_MS).toISOString(), candidates: previewCandidates, writableCount: previewCandidates.filter((candidate) => candidate.disposition !== undefined).length }
@@ -41,7 +44,7 @@ export function publicImportPreview(preview: ImportPreview): ImportPreviewSummar
   return { previewId: preview.previewId, expiresAt: preview.expiresAt, candidates, writableCount: preview.writableCount }
 }
 
-export function confirmImport(repository: ReaderRepository, userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }> {
+export function confirmImport(repository: ReaderRepository, userId: string, previewId: string, candidateIds: string[]): Promise<import('../../shared/source-management.ts').ImportConfirmResult> {
   return repository.commitImportPreview(userId, previewId, [...new Set(candidateIds)])
 }
 

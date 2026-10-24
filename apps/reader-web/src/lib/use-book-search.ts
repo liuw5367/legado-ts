@@ -2,18 +2,19 @@ import { publishPageMutation } from './page-data.ts'
 import { usePageNavigation } from './use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SourceCacheWarning } from '../../shared/book-sources.ts'
-import { apiFetch, mergeSearchStreamCandidates, searchProgressFromEvent, streamSearchAll, type ApiCandidate, type ApiSearchProgress, type SearchSourceEventData } from './api.ts'
+import { ApiError, apiFetch, mergeSearchStreamCandidates, searchProgressFromEvent, streamSearchAll, type ApiCandidate, type ApiSearchProgress, type SearchSourceEventData } from './api.ts'
 import { SearchOperation } from './search-operation.ts'
 
 export function useBookSearch() {
   const navigation = usePageNavigation()
   const userId = navigation?.userId
-  const settleState = useRef<{ status: 'done' | 'error'; message: string } | undefined>(undefined)
+  const settleState = useRef<{ status: 'done' | 'error' | 'paused'; message: string } | undefined>(undefined)
   const [candidates, setCandidates] = useState<ApiCandidate[]>([])
   const [searchId, setSearchId] = useState('')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'paused'>('idle')
   const [message, setMessage] = useState('')
   const [progress, setProgress] = useState<ApiSearchProgress | undefined>()
+  const ordering = useRef({ keyword: '', precision: false })
   const mounted = useRef(false)
   const progressRef = useRef<ApiSearchProgress | undefined>(undefined)
   const visibleProgressRef = useRef<ApiSearchProgress | undefined>(undefined)
@@ -48,23 +49,23 @@ export function useBookSearch() {
       if (latest !== undefined) { visibleProgressRef.current = latest; if (mounted.current) setProgress(latest) }
     }, 5000)
   }
-  async function runSearch(keyword: string, precision: boolean, sourceIds?: string[]): Promise<boolean> {
-    if (operation.isRunning || keyword.trim().length === 0) return false
+  async function runSearch(keyword: string, precision: boolean, sourceIds?: string[], resumeId?: string): Promise<boolean> {
+    if (operation.isRunning || (!resumeId && keyword.trim().length === 0)) return false
     if (progressTimerRef.current !== undefined) {
       clearTimeout(progressTimerRef.current)
       progressTimerRef.current = undefined
     }
     settleState.current = undefined
-    setCandidates([]); setSearchId(''); setMessage(''); setProgress(undefined); progressRef.current = undefined; visibleProgressRef.current = undefined; setStatus('loading')
+    if (!resumeId) { ordering.current = { keyword, precision }; setCandidates([]); setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; visibleProgressRef.current = undefined; setStatus('loading')
     let succeeded = true
     const task = (async () => {
       try {
         const result = await operation.start(keyword.trim(), precision, (event) => {
           if (!mounted.current) return
-          if (event.type === 'error') throw new Error((event.data as { message?: string }).message ?? '搜索失败')
+          if (event.type === 'error') { const detail = event.data as { code?: string; message?: string }; throw new ApiError(detail.code ?? 'server-error', detail.message ?? '搜索失败', 500) }
           if (event.type === 'source-result' || event.type === 'batch-end') {
             const batch = event.data as SearchSourceEventData & { source?: { status?: string } }
-            setCandidates((current) => mergeSearchStreamCandidates(current, batch))
+            setCandidates((current) => mergeSearchStreamCandidates(current, batch, ordering.current))
             const nextProgress = searchProgressFromEvent(batch)
             if (nextProgress !== undefined) showProgress(nextProgress, event.type === 'batch-end')
             if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') setMessage('部分书源执行失败，已保留可用结果。')
@@ -75,13 +76,13 @@ export function useBookSearch() {
           }
           if (event.type === 'batch') {
             const batch = event.data as SearchSourceEventData & { cacheWarning?: SourceCacheWarning; candidates?: ApiCandidate[] }
-            setCandidates((current) => mergeSearchStreamCandidates(current, batch))
+            setCandidates((current) => mergeSearchStreamCandidates(current, batch, ordering.current))
             const nextProgress = searchProgressFromEvent(batch)
             if (nextProgress !== undefined) showProgress(nextProgress, true)
             const warning = batch.cacheWarning
             if (warning !== undefined) setMessage(warning.message)
           }
-        }, (id) => { if (mounted.current) setSearchId(id) }, sourceIds)
+        }, (id) => { if (mounted.current) setSearchId(id) }, sourceIds, resumeId)
         succeeded = !result.cancelled
         settleState.current = { status: 'done', message: result.cancelled ? '搜索已取消，保留已有结果' : '' }
         setStatus('done'); if (result.cancelled) setMessage('搜索已取消，保留已有结果')
@@ -89,8 +90,8 @@ export function useBookSearch() {
         if (mounted.current && progressRef.current !== undefined) showProgress(progressRef.current, true)
       } catch (reason) {
         succeeded = false
-        settleState.current = { status: 'error', message: reason instanceof Error ? reason.message : '搜索失败' }
-        setStatus('error'); setMessage(settleState.current.message)
+        settleState.current = { status: reason instanceof ApiError && ['search-paused', 'server-error', 'source-busy'].includes(reason.code) ? 'paused' : 'error', message: reason instanceof Error ? reason.message : '搜索失败' }
+        setStatus(settleState.current.status); setMessage(settleState.current.message)
       }
     })()
     searchTaskRef.current = task
@@ -101,10 +102,12 @@ export function useBookSearch() {
     if (operation.isRunning || searchTaskRef.current !== null) return false
     try { if (operation.hasPendingCancellation) await operation.cancel() }
     catch (reason) { setMessage(reason instanceof Error ? reason.message : '取消请求失败'); return false }
+    if (status === 'paused') await cancelAndWait()
     return runSearch(keyword, precision, sourceIds)
   }
   async function cancelAndWait() {
     const activeTask = searchTaskRef.current
+    if (status === 'paused' && searchId) await apiFetch('/api/searches/' + encodeURIComponent(searchId) + '/cancel', { method: 'POST' }, userId)
     await operation.cancel()
     if (activeTask !== null) {
       await activeTask
@@ -123,5 +126,5 @@ export function useBookSearch() {
     }
     catch (reason) { if (mounted.current) setMessage(reason instanceof Error ? '取消请求失败：' + reason.message : '取消请求失败') }
   }
-  return { candidates, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, search, replaceSearch, cancelAndWait, cancel }
+  return { candidates, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
 }

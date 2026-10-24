@@ -21,6 +21,8 @@ const BookshelfGroupsPage = lazy(() => import('./pages/bookshelf-groups.tsx').th
 const BookListsPage = lazy(() => import('./pages/book-lists.tsx').then((module) => ({ default: module.BookListsPage })))
 const BookListDetailsPage = lazy(() => import('./pages/book-list-details.tsx').then((module) => ({ default: module.BookListDetailsPage })))
 const DiscoverPage = lazy(() => import('./pages/discover.tsx').then((module) => ({ default: module.DiscoverPage })))
+const SourceImportHistoryPage = lazy(() => import('./pages/source-import-history.tsx').then((module) => ({ default: module.SourceImportHistoryPage })))
+const SourceImportLinksPage = lazy(() => import('./pages/source-import-links.tsx').then((module) => ({ default: module.SourceImportLinksPage })))
 const SourcesPage = lazy(() => import('./pages/sources.tsx').then((module) => ({ default: module.SourcesPage })))
 const SourceLoginPage = lazy(() => import('./pages/source-login.tsx').then((module) => ({ default: module.SourceLoginPage })))
 const SettingsPage = lazy(() => import('./pages/settings.tsx').then((module) => ({ default: module.SettingsPage })))
@@ -62,6 +64,9 @@ const router = createBrowserRouter([
       <Route path="/book-lists/:listId" element={<LazyPage backTo="/book-lists"><BookListDetailsPage /></LazyPage>} />
       <Route path="/discover" element={<LazyPage><DiscoverPage /></LazyPage>} />
       <Route path="/sources" element={<LazyPage backTo="/account/settings"><SourcesPage /></LazyPage>} />
+      <Route path="/sources/import-history" element={<LazyPage backTo="/sources"><SourceImportHistoryPage /></LazyPage>} />
+      <Route path="/sources/import-history/:batchId" element={<LazyPage backTo="/sources/import-history"><SourceImportHistoryPage /></LazyPage>} />
+      <Route path="/sources/import-links" element={<LazyPage backTo="/sources"><SourceImportLinksPage /></LazyPage>} />
       <Route path="/sources/:sourceId/login" element={<LazyPage backTo="/sources"><SourceLoginPage /></LazyPage>} />
       <Route path="/books/:bookId/details" element={<LazyPage backTo="/"><BookDetailsPage /></LazyPage>} />
       <Route path="/books/:bookId/toc" element={<LazyPage backTo="/"><TocPage /></LazyPage>} />

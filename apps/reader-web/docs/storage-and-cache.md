@@ -8,7 +8,11 @@
 
 | 实体 | 作用 |
 | --- | --- |
-| `user_sources` | 用户书源、raw/normalized 内容、fingerprint、enabled、customOrder、revision 和删除标记 |
+| `user_sources` | 用户书源、raw/normalized 内容、fingerprint、enabled、customOrder、revision、稳定 source_uuid、当前来源归属和删除标记 |
+| `source_import_links`、`source_import_settings` | 来源地址的账号内唯一摘要、加密地址、展示地址、排序及排序版本 |
+| `source_import_batches`、`source_import_items` | 独立保留的导入批次、摘要、加密前快照、导入后版本及撤销状态 |
+| `source_import_undo_operations` | 账号范围内撤销幂等键、选择签名及结果 |
+| `source_execution_slots` | 固定八个跨实例执行槽位，20 秒租期，只保存服务端调度元数据 |
 | `source_import_previews` | 有效期 15 分钟的导入候选与已消费候选，确认前不改变书源 |
 | `books`、`bookshelf` | 逻辑书籍与书架关系；group_id 为单分组归属，null 表示默认；移出书架不删除书籍 |
 | `book_lists`、`book_list_items` | type 区分 booklist 与 shelf_group；普通书单成员单独保存评价，分组成员由书架关系保存 |
@@ -27,13 +31,15 @@
 
 ## 版本与身份
 
+`user_sources.source_uuid` 是服务端分配的稳定 UUID，数据库唯一约束防止碰撞；更新、软删除、恢复和撤销保留 UUID。`user_id + source_id` 仍用于业务去重，sourceId 继续保留原始 bookSourceUrl。旧数据只回填 UUID，不推断来源和导入时间。
+
 书源 `fingerprint` 区分功能定义版本；导入确认发现 fingerprint 改变时清除该源的运行状态。`user_sources.revision` 是用户源记录的当前版本，用于应用层判断变更。`editionKey` 将 sourceId、bookUrl 和 fingerprint 绑定到书籍来源版本；目录 `revision` 由章节序列摘要生成。正文缓存键包含 editionKey、目录 revision 和 chapterId，章节身份由 URL 与 index 的 SHA-256 摘要生成。
 
 这些身份用于避免跨源和跨目录复用数据，不能替代用户授权。书源删除只清理源记录和运行状态；书籍、书架和阅读记录保留。
 
 ## 搜索与写入
 
-搜索开始时写入 `search_runs` 和 `search_history`，每次来源完成后更新 sourceStates、候选、进度和 operationId。领取、更新和取消都带用户身份及当前操作条件，防止迟到结果覆盖新状态。搜索历史只记录摘要和数量，不保存 Cookie 或完整请求体。
+搜索开始时写入 `search_runs` 和 `search_history`，将来源完成事件合并为每 500ms 至多一次的 sourceStates、候选和进度检查点，批次结算立即保存。领取校验搜索版本和 operationId，并持有 30 秒操作租约；检查点续租，进程异常退出后可重新领取。领取、更新和取消都带用户身份及当前操作条件，防止迟到结果覆盖新状态。候选只在 candidates 保存一份；sourceStates 持久化逐源元数据，读取时按 sourceId 重建共享候选引用，兼容旧记录。已持有且经过操作条件校验的快照在领取和检查点写入时直接复用，数据库不重复返回大结果。搜索历史只记录摘要和数量，不保存 Cookie 或完整请求体。
 
 首页搜索记录按 trim/NFC 后的关键词去重，保留创建时间最新的一次请求，再取最近 50 个不同关键词。完成时间不影响排序；删除某关键词的可见记录同时隐藏其旧记录，不删除搜索任务和候选。
 
@@ -49,7 +55,7 @@
 
 `source_runtime_state.encrypted_state` 使用 AES-256-GCM，密钥来自服务端环境变量 `SOURCE_RUNTIME_STATE_KEY`，至少 32 个字符，明文上限 512 KiB。运行前取得 leaseToken 和 leaseUntil；只有持有 token 且版本仍匹配的调用可以提交新快照。提交成功后清除租约，失败时释放租约；旧 fingerprint 或过期 token 不能覆盖新状态。
 
-Cookie、脚本变量和运行时缓存不进入浏览器响应，也不写入 raw/normalized source JSON。轮换密钥会使旧运行状态无法解密，需要重新建立书源会话。
+Cookie、脚本变量和运行时缓存不进入浏览器响应，也不写入 raw/normalized source JSON。轮换密钥会使旧运行状态、导入原始来源和撤销前快照无法解密；轮换前必须迁移加密数据，不能只要求用户重新登录后继续使用旧撤销记录。
 
 ## 目录、正文和阅读位置
 
@@ -64,6 +70,12 @@ Cookie、脚本变量和运行时缓存不进入浏览器响应，也不写入 r
 页面失效通知按账号隔离：书架及搜索历史变更影响首页，书籍与来源变更影响对应书籍，书源导入或管理变更影响书源、发现、书籍与正文。阅读位置成功保存只更新位置缓存并使首页和书单书籍信息失效，不重新抓取正文；设置继续由设置 Provider 通知。失败写入不发布成功失效，隐藏页面等到激活才重新读取。
 
 阅读位置队列保存完整书籍、来源、章节与版本身份，顺序提交并保证版本递增；失败保留待重试位置。切换账号停止未发送任务，请求发送时校验队列所属账号，迟到结果只属于原账号。已发送的业务写入不会因为页面隐藏而中断，防止把请求取消误认为服务端回滚。
+
+## 导入历史与备份
+
+历史与临时预览分表保存，不自动过期；读取列表或明细不加载加密撤销快照。批次写入、源变更、预览消费结果共用账号事务锁；来源排序也使用账号锁及排序版本。撤销只允许当前 revision 等于该明细的导入后版本，恢复产生新版本，保留历史。用户业务历史表强制 RLS；全局额度表只供受控服务端连接跨账号统计，客户端没有对应接口。
+
+跨 CLI 备份格式只保存现有书源定义和用户状态，不包含导入历史与私有来源。恢复书源时，同账号按 sourceId 保留已有 UUID，新源生成 UUID；清除当前来源归属，并在同一事务将旧批次标为“备份恢复后不可撤销”，历史仍可读。跨账号不复制旧 UUID 或历史。
 
 ## 清理与恢复
 

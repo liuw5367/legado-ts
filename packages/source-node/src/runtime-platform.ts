@@ -95,6 +95,10 @@ const t2sOverrides = new Map<string, string>([
   ['奇幻魔法Melody', '奇幻魔法Melody'], ['列支敦斯登', '列支敦斯登'],
 ])
 
+// 默认词典构建后只读；跨会话共享，避免每个并发书源重复分配相同的字典树。
+let defaultT2sConverter: DictionaryConverter | undefined
+let defaultS2tConverter: DictionaryConverter | undefined
+
 export class NodeSourceRuntimePlatform implements SourceRuntimePlatform {
   private readonly options: NodeSourceRuntimePlatformOptions
   private readonly deviceId: string
@@ -105,8 +109,8 @@ export class NodeSourceRuntimePlatform implements SourceRuntimePlatform {
     this.options = options
     const seed = options.deviceSeed ?? `legado-node:${process.cwd()}`
     this.deviceId = createHash('sha256').update(seed, 'utf8').digest('hex').slice(0, 16)
-    if (options.t2s === undefined) this.t2sConverter = new DictionaryConverter(t2sDictionaryGzipBase64, t2sOverrides)
-    if (options.s2t === undefined) this.s2tConverter = new DictionaryConverter(s2tDictionaryGzipBase64)
+    if (options.t2s === undefined) this.t2sConverter = defaultT2sConverter ??= new DictionaryConverter(t2sDictionaryGzipBase64, t2sOverrides)
+    if (options.s2t === undefined) this.s2tConverter = defaultS2tConverter ??= new DictionaryConverter(s2tDictionaryGzipBase64)
   }
 
   public invoke(capability: string, input: unknown, context: SourceRuntimePlatformContext): unknown | Promise<unknown> {

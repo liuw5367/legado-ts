@@ -214,6 +214,8 @@ export interface ImportReplacementRule {
 }
 
 export interface ImportOptions {
+  /** 受控应用可记录候选的完整输入地址；该地址可能包含秘密，不得直接展示或记录日志。 */
+  onCandidateOrigin?: (candidateId: string, location: string) => void
   /** URI/file/url 输入所使用的受控读取端口。 */
   reader?: ImportReader
   /** 读取和展开限制。 */

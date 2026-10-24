@@ -64,7 +64,7 @@ export function compareImportCandidates(candidates: ImportCandidate[], localById
     } else if (remoteTime !== undefined && localTime !== undefined && remoteTime < localTime) {
       base.skippedReason = 'old-version'; base.reason = '远端版本较旧，跳过'; if (localTime !== undefined) base.localLastUpdateTime = localTime
     } else if (remoteTime !== undefined && localTime !== undefined && remoteTime > localTime) {
-      base.disposition = 'update'; base.reason = '远端版本较新，可更新'; if (localTime !== undefined) base.localLastUpdateTime = localTime
+      base.disposition = local.deleted === true ? 'restore' : 'update'; base.reason = local.deleted === true ? '书源已删除，远端版本较新，可恢复' : '远端版本较新，可更新'; if (localTime !== undefined) base.localLastUpdateTime = localTime
     } else {
       base.skippedReason = 'conflict'; base.reason = '内容不同但无法安全判断版本'; if (localTime !== undefined) base.localLastUpdateTime = localTime
     }
@@ -107,7 +107,7 @@ function toPreviewCandidate(candidate: ImportCandidate, disposition: ImportPrevi
   const group = typeof normalized.bookSourceGroup === 'string' ? normalized.bookSourceGroup : undefined
   const reason = maybeReason ?? reasonOrCode
   const reasonCode = maybeReason === undefined ? undefined : reasonOrCode as ImportPreviewCandidate['skippedReason']
-  const value: ImportPreviewCandidate = { id: candidate.id, sourceId, name, ...(group === undefined ? {} : { group }), fingerprint: candidate.sourceFingerprint ?? '', normalizedSource: normalized, rawSource: candidate.raw.parsed ?? normalized, reason }
+  const value: ImportPreviewCandidate = { ...(candidate.origin.location === undefined ? {} : { originLocation: candidate.origin.location }), id: candidate.id, sourceId, name, ...(group === undefined ? {} : { group }), fingerprint: candidate.sourceFingerprint ?? '', normalizedSource: normalized, rawSource: candidate.raw.parsed ?? normalized, reason }
   const time = sourceUpdateTime(normalized)
   if (time !== undefined) value.lastUpdateTime = time
   if (disposition !== undefined) value.disposition = disposition

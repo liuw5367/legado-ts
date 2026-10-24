@@ -1,3 +1,4 @@
+import { orderSearchCandidates } from '../../shared/search-candidates.ts'
 import type { StoredBookList, StoredBookListItem } from '../../shared/book-lists.ts'
 import { mutationDomains, publishPageMutation } from './page-data.ts'
 import { currentSession } from './auth.ts'
@@ -11,8 +12,8 @@ export interface ApiGeneralSettings { bookshelfInitialGroup?: string; bookshelfS
 export interface ApiPageTapZones { leftWidthPercent: number; centerWidthPercent: number; centerTopHeightPercent: number; centerMiddleHeightPercent: number; centerTopAction: ApiPageTapAction; centerBottomAction: ApiPageTapAction }
 export const DEFAULT_PAGE_TAP_ZONES: ApiPageTapZones = { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' }
 export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; marginTop: number; marginRight: number; marginBottom: number; marginLeft: number; general: ApiGeneralSettings; pageTapZones: ApiPageTapZones; updatedAt: string }
-export interface ApiCandidate { sourceId: string; sourceFingerprint: string; searchDurationMs?: number; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string; updateTime?: string; wordCount?: string } }
-export interface ApiSearchProgress { completed: number; total: number }
+export interface ApiCandidate { sourceOrder?: number; sourceId: string; sourceFingerprint: string; searchDurationMs?: number; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string; updateTime?: string; wordCount?: string } }
+export interface ApiSearchProgress { completed: number; total: number; currentGroup?: string }
 export interface ApiSearchSourceState { sourceId: string; status: string; nextCursor?: { index: number; token?: string } }
 export interface ApiSearch { id: string; keyword: string; sourceId: string; precision?: boolean; status: string; candidates: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean; nextCursor?: { index: number; token?: string } }
 export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
@@ -36,12 +37,15 @@ export interface BackupPreview { manifest: { createdAt: string; producer: { name
 
 export interface StreamEvent { type: string; data: unknown }
 export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
-export interface SearchSourceEventData { source?: { status?: string; candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
+export interface SearchSourceEventData { hasPending?: boolean; retryAfterMs?: number; source?: { status?: string; candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
 
-export function mergeSearchStreamCandidates(current: ApiCandidate[], event: SearchSourceEventData): ApiCandidate[] {
+export function mergeSearchStreamCandidates(current: ApiCandidate[], event: SearchSourceEventData, ordering?: { keyword: string; precision: boolean }): ApiCandidate[] {
   if (event.search?.candidates !== undefined) return [...event.search.candidates]
   if (event.candidates !== undefined) return [...event.candidates]
-  return [...current, ...(event.source?.candidates ?? [])]
+  const values = new Map(current.map((item) => [JSON.stringify([item.sourceId, item.sourceFingerprint, item.candidate.bookUrl]), item]))
+  for (const item of event.source?.candidates ?? []) values.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.candidate.bookUrl]), item)
+  const merged = [...values.values()]
+  return ordering ? orderSearchCandidates(ordering.keyword, merged, ordering.precision) : merged
 }
 
 export function searchProgressFromEvent(event: SearchSourceEventData): ApiSearchProgress | undefined {
@@ -155,18 +159,26 @@ async function sha256ArrayBuffer(value: ArrayBuffer): Promise<string> {
 export async function streamSearch(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal, options?: SearchStreamOptions): Promise<void> {
   const session = await currentSession()
   const request = createSearchStreamRequest(searchId, session, signal, options)
-  const response = await fetch(request.path, request.init)
+  let response: Response
+  try { response = await fetch(request.path, request.init) } catch (reason) {
+    if (signal?.aborted) throw reason
+    throw new ApiError('search-paused', '连接已中断，可继续搜索', 0)
+  }
   if (!response.ok || response.body === null) {
     const body = await readJson(response)
     const error = isRecord(body)?.error
     const errorRecord = isRecord(error)
-    throw new ApiError(typeof errorRecord?.code === 'string' ? errorRecord.code : 'stream-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '搜索流连接失败', response.status)
+    throw new ApiError(errorRecord?.code === 'source-busy' ? 'search-paused' : typeof errorRecord?.code === 'string' ? errorRecord.code : 'stream-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '搜索流连接失败', response.status)
   }
   const reader = response.body.getReader()
   const decoder = new SseDecoder()
   const isAborted = () => signal?.aborted === true
   while (true) {
-    const chunk = await reader.read()
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try { chunk = await reader.read() } catch (reason) {
+      if (signal?.aborted) throw reason
+      throw new ApiError('search-paused', '连接已中断，可继续搜索', 0)
+    }
     if (chunk.done) break
     if (isAborted()) { await reader.cancel().catch(() => undefined); return }
     for (const event of decoder.push(chunk.value)) {
@@ -183,7 +195,11 @@ export async function streamSearchAll(searchId: string, onEvent: (event: { type:
   let nextPage = false
   let finalDone: { type: string; data: unknown } | undefined
   const seenNextPageCursors = new Set<string>()
+  let hasPending = false
+  let waitingSince = 0
   do {
+    let retryAfterMs = 0
+    hasPending = false
     let hasNextPage = false
     let repeatedCursor = false
     let batchEndSeen = false
@@ -193,17 +209,29 @@ export async function streamSearchAll(searchId: string, onEvent: (event: { type:
       if (event.type === 'batch-end') {
         batchEndSeen = true
         const data = (event.data ?? {}) as SearchSourceEventData
+        hasPending = data.hasPending === true
+        retryAfterMs = data.retryAfterMs ?? 0
         hasNextPage = searchHasNextPage(data)
-        repeatedCursor = hasRepeatedNextPageCursor(data, seenNextPageCursors)
+        repeatedCursor = !hasPending && hasRepeatedNextPageCursor(data, seenNextPageCursors)
       } else if (event.type === 'batch' && !batchEndSeen) {
         const data = (event.data ?? {}) as SearchSourceEventData
         hasNextPage = searchHasNextPage(data)
         repeatedCursor = hasRepeatedNextPageCursor(data, seenNextPageCursors)
       }
     }, signal, nextPage ? { nextPage: true } : undefined)
+    if (!batchEndSeen && !signal?.aborted) throw new ApiError('search-paused', '连接已中断，可继续搜索', 0)
     // 异常书源可能重复返回同一游标，自动翻页必须在游标不前进时结束。
-    nextPage = hasNextPage && !repeatedCursor
-  } while (nextPage && signal?.aborted !== true)
+    if (hasPending && retryAfterMs > 0) {
+      waitingSince ||= Date.now()
+      if (Date.now() - waitingSince >= 30_000) throw new ApiError('search-paused', '服务器繁忙，搜索已暂停，可继续已有任务', 429)
+      await new Promise<void>((resolve) => {
+        const finish = () => { clearTimeout(timer); signal?.removeEventListener('abort', finish); resolve() }
+        const timer = setTimeout(finish, retryAfterMs)
+        signal?.addEventListener('abort', finish, { once: true })
+      })
+    } else waitingSince = 0
+    nextPage = !hasPending && hasNextPage && !repeatedCursor
+  } while ((hasPending || nextPage) && signal?.aborted !== true)
   if (signal?.aborted !== true && finalDone !== undefined) onEvent(finalDone)
 }
 

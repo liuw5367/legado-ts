@@ -1,3 +1,4 @@
+import { SOURCE_CONCURRENCY, SOURCE_EXECUTION_MS, SEARCH_BATCH_SIZE, SEARCH_BATCH_MS } from './source-execution.ts'
 import { ReaderRuntimeError, requireSource, withPersistentSourceSession } from './source-session.ts'
 import { bookIdentityKey, normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
@@ -5,7 +6,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto
 import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { loadBookDetails, loadChapterContent, loadReviewDetail, loadReviewReplies, loadReviewSummary, loadTableOfContents, searchBooks } from '@legado/source-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, ReviewDetailPage, ReviewSummaryItem, WorkflowStatus } from '@legado/source-core'
-import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
+import { compareSourcePriority, type ReaderRepository, type StoredSourceRecord } from '../db/repository.ts'
 import { configuredSecret } from '../db/runtime-state-crypto.ts'
 import type { BookCreationInput, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
@@ -13,7 +14,7 @@ import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-ca
 export { ReaderRuntimeError } from './source-session.ts'
 
 export interface SearchCandidateIdentity { sourceId: string; sourceFingerprint: string; bookUrl: string }
-export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean }
+export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean; signal?: AbortSignal }
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
 
 export interface ReaderRuntime {
@@ -71,37 +72,93 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
   const controller = new AbortController()
   activeSearches.set(searchId, { operationId, controller })
   try {
-    let current = await repository.claimSearch(userId, searchId, operationId, states, { completed: completedCount(states), total: states.length })
+    let current = await repository.claimSearch(userId, searchId, operationId, states, { completed: completedCount(states), total: states.length }, run.version, run)
     if (current === null) throw new ReaderRuntimeError('source-busy', '该搜索正在执行')
+    const sourceRank = new Map(run.sourceIds.map((sourceId, index) => [sourceId, index]))
+    const orderCandidates = () => orderSearchCandidates(run.keyword, [...preservedCandidates, ...states.flatMap((item) => item.candidates)], run.precision === true, sourceRank)
+    const indices = new Map(states.map((state, index) => [state.sourceId, index]))
     const pending = states.filter((state) => state.status === 'pending')
+    const firstGroup = pending[0]?.importLinkId
+    const groupLabel = (await repository.listImportLinks(userId)).links.find((link) => link.id === firstGroup)?.displayUrl ?? '其他书源'
+    const batch = pending.filter((state) => state.importLinkId === firstGroup).slice(0, SEARCH_BATCH_SIZE)
+    const started = Date.now()
+    let nextIndex = 0
+    let noCapacity = false
+    let lastSaved = 0
+    let dirty = false
+    let timer: ReturnType<typeof setTimeout> | undefined
     let serialized = Promise.resolve()
-    const outcomes = pending.map((state) => runOneSource(repository, current!, state, controller.signal).then(async (outcome) => {
+    const events: SourceSearchState[] = []
+    const disconnect = () => controller.abort()
+    options?.signal?.addEventListener('abort', disconnect, { once: true })
+    if (options?.signal?.aborted) controller.abort()
+    const flush = () => {
       serialized = serialized.then(async () => {
-        const index = states.findIndex((item) => item.sourceId === outcome.state.sourceId)
-        if (index >= 0) states[index] = outcome.state
-        if (controller.signal.aborted) for (const state of states) if (state.status === 'pending' || state.status === 'running') { state.status = 'cancelled'; state.completedAt = new Date().toISOString() }
-        const candidates = orderSearchCandidates(run.keyword, [...preservedCandidates, ...states.flatMap((item) => item.candidates)], run.precision === true)
-        const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'running', candidates.length)
-        const nextStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'running' : aggregate
-        current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates, status: nextStatus, expectedOperationId: operationId, operationId, progress: { completed: completedCount(states), total: states.length }, cancelled: controller.signal.aborted })
-        if (current === null) {
-          if (controller.signal.aborted) return
-          throw new ReaderRuntimeError('source-busy', '搜索操作已失效')
-        }
-        await listener?.(outcome.state, current)
+        if (!dirty) return
+        dirty = false; lastSaved = Date.now()
+        const completed = events.splice(0)
+        const saved = await repository.updateSearch(userId, searchId, { knownRun: current!, sourceStates: states.map((state) => ({ ...state })), candidates: orderCandidates(), status: 'running', expectedOperationId: operationId, operationId, progress: { completed: completedCount(states), total: states.length } })
+        if (!saved) { controller.abort(); const latest = await repository.getSearch(userId, searchId); if (latest?.cancelled) return; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
+        saved.progress.currentGroup = groupLabel
+        current = saved
+        for (const state of completed) await listener?.(state, saved)
       })
-      await serialized
-      return outcome
-    }))
-    await Promise.all(outcomes)
-    const candidates = orderSearchCandidates(run.keyword, [...preservedCandidates, ...states.flatMap((item) => item.candidates)], run.precision === true)
-    const aggregate = controller.signal.aborted ? 'cancelled' : aggregateStatus(states, 'success', candidates.length)
-    const finalStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'partial' : aggregate
-    current = await repository.updateSearch(userId, searchId, { sourceStates: states, candidates, status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
+      return serialized
+    }
+    const scheduleFlush = () => {
+      if (Date.now() - lastSaved >= 500) return flush()
+      timer ??= setTimeout(() => { timer = undefined; void flush().catch(() => controller.abort()) }, 500 - (Date.now() - lastSaved))
+      return Promise.resolve()
+    }
+    try {
+      const outcomes = await Promise.allSettled(Array.from({ length: Math.min(SOURCE_CONCURRENCY, batch.length) }, async () => {
+        try {
+        while (!controller.signal.aborted && Date.now() - started < SEARCH_BATCH_MS - SOURCE_EXECUTION_MS) {
+          const state = batch[nextIndex++]
+          if (!state) return
+          let lease = await repository.acquireExecutionSlot(userId, operationId)
+          if (!lease && !controller.signal.aborted) {
+            await new Promise<void>((resolve) => { const timeout = setTimeout(resolve, 1000); timeout.unref?.() })
+            lease = await repository.acquireExecutionSlot(userId, operationId)
+          }
+          if (!lease) { noCapacity = true; return }
+          try {
+            const deadline = new AbortController()
+            const timeout = setTimeout(() => deadline.abort(new DOMException('书源执行超时', 'TimeoutError')), SOURCE_EXECUTION_MS)
+            const signal = AbortSignal.any([controller.signal, deadline.signal])
+            let outcome: Awaited<ReturnType<typeof runOneSource>>
+            try { outcome = await runOneSource(repository, current!, state, signal) } finally { clearTimeout(timeout); deadline.abort() }
+            // 断线只暂停当前批次，显式 cancel 由持久化状态负责终止整次搜索。
+            if (controller.signal.aborted && options?.signal?.aborted) continue
+            states[indices.get(state.sourceId)!] = outcome.state
+            dirty = true; events.push(outcome.state)
+            await scheduleFlush()
+          } finally { await repository.releaseExecutionSlot(userId, lease) }
+        }
+        } catch (error) { controller.abort(); throw error }
+      }))
+      const failed = outcomes.find((outcome) => outcome.status === 'rejected')
+      if (failed?.status === 'rejected') throw failed.reason
+      if (timer) clearTimeout(timer)
+      await flush()
+    } finally {
+      if (timer) clearTimeout(timer)
+      options?.signal?.removeEventListener('abort', disconnect)
+    }
+    const candidates = current.candidates
+    const latestState = controller.signal.aborted ? await repository.getSearch(userId, searchId) : null
+    const cancelled = latestState?.cancelled === true
+    const hasPending = !cancelled && states.some((state) => state.status === 'pending')
+    const aggregate = cancelled ? 'cancelled' : aggregateStatus(states, 'success', candidates.length)
+    const finalStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'running' : aggregate
+    current = await repository.updateSearch(userId, searchId, { knownRun: current, sourceStates: states, candidates, status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
     if (current === null) { const latest = await repository.getSearch(userId, searchId); if (latest !== null && latest.cancelled) { const warning = await cacheSearchSources(repository, userId, latest.candidates); return { search: latest, candidates: latest.candidates, sourceResults: latest.sourceStates, sourceStatus: 'cancelled', progress: latest.progress, diagnostics: [], ...warning } }; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
-    return { search: current, candidates: current.candidates, sourceResults: states, sourceStatus: toBatchStatus(finalStatus), progress: current.progress, diagnostics: states.flatMap((item) => item.diagnostics), ...(await cacheSearchSources(repository, userId, current.candidates)) }
+    current.progress.currentGroup = groupLabel
+    return { search: current, candidates: current.candidates, sourceResults: states, sourceStatus: toBatchStatus(finalStatus), progress: current.progress, hasPending, ...(noCapacity ? { retryAfterMs: 1000 } : {}), diagnostics: states.flatMap((item) => item.diagnostics), ...(!hasPending ? await cacheSearchSources(repository, userId, current.candidates) : {}) }
   } finally {
-    activeSearches.delete(searchId)
+    controller.abort()
+    try { await repository.updateSearch(userId, searchId, { knownRun: run, expectedOperationId: operationId, operationId: null }) }
+    finally { activeSearches.delete(searchId) }
   }
 }
 
@@ -109,16 +166,18 @@ async function runOneSource(repository: ReaderRepository, run: SearchRunState, s
   const startedAt = new Date().toISOString()
   let source: StoredSourceRecord
   try { source = await requireSource(repository, run.userId, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
+  if ((state.sourceRevision && source.sourceRevision !== state.sourceRevision) || (state.sourceFingerprint && source.fingerprint !== state.sourceFingerprint)) return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ code: 'stale', message: '书源已变化，本次搜索跳过' }], startedAt, completedAt: new Date().toISOString() } }
   try {
     const result = await withPersistentSourceSession(repository, run.userId, source, (session) => session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(run.precision === true ? { acceptSearchFields: (fields) => acceptsPrecisionSearchFields(run.keyword, fields) } : {}), ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 })))
     const searchDurationMs = Math.max(0, Date.now() - Date.parse(startedAt))
-    const additions = (result.value?.items ?? []).map((candidate) => ({ sourceId: source.sourceId, sourceFingerprint: source.fingerprint, searchDurationMs, candidate }))
-    const status = result.status === 'capability-missing' ? 'capability-missing' : result.status
+    const additions = (result.value?.items ?? []).map((candidate) => ({ sourceId: source.sourceId, sourceOrder: run.sourceIds.indexOf(source.sourceId), sourceFingerprint: source.fingerprint, searchDurationMs, candidate }))
+    const timedOut = signal.aborted && signal.reason?.name === 'TimeoutError'
+    const status = timedOut ? 'failed' : result.status === 'capability-missing' ? 'capability-missing' : result.status
     const nextState = { ...state }
     delete nextState.nextCursor
-    return { additions, state: { ...nextState, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
+    return { additions, state: { ...nextState, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: timedOut ? [...result.diagnostics, { code: 'source-timeout', message: '书源执行超时' }] : result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
   } catch (error) {
-    if (signal.aborted) return { additions: [], state: { ...state, status: 'cancelled', diagnostics: [{ message: '搜索已取消' }], startedAt, completedAt: new Date().toISOString() } }
+    if (signal.aborted) return { additions: [], state: { ...state, status: signal.reason?.name === 'TimeoutError' ? 'failed' : 'cancelled', diagnostics: [{ message: signal.reason?.name === 'TimeoutError' ? '书源执行超时' : '搜索已取消' }], startedAt, completedAt: new Date().toISOString() } }
     return { additions: [], state: { ...state, sourceFingerprint: source.fingerprint, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源执行失败' }], startedAt, completedAt: new Date().toISOString() } }
   }
 }
@@ -128,7 +187,7 @@ async function cancelSearch(repository: ReaderRepository, userId: string, search
   if (run === null) return null
   activeSearches.get(searchId)?.controller.abort()
   const states = run.sourceStates.map((state) => state.status === 'pending' || state.status === 'running' ? { ...state, status: 'cancelled' as const, completedAt: new Date().toISOString() } : state)
-  return repository.updateSearch(userId, searchId, { status: 'cancelled', sourceStates: states, operationId: null, cancelled: true, progress: { completed: completedCount(states), total: states.length } })
+  return repository.updateSearch(userId, searchId, { knownRun: run, status: 'cancelled', sourceStates: states, operationId: null, cancelled: true, progress: { completed: completedCount(states), total: states.length } })
 }
 
 function prepareSourceStates(run: SearchRunState, options?: SearchBatchOptions): SourceSearchState[] {
@@ -227,7 +286,8 @@ async function listBookSources(repository: ReaderRepository, userId: string, boo
     if (source?.fingerprint !== edition.sourceFingerprint) continue
     result.set(JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl]), { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey })
   }
-  const items = [...result.values()].sort((left, right) => Number(right.status === 'saved' && right.editionKey === book.activeEditionKey) - Number(left.status === 'saved' && left.editionKey === book.activeEditionKey))
+  const priorities = new Map((await repository.listAllSourcesForUser(userId)).map((source) => [source.sourceId, source]))
+  const items = [...result.values()].sort((left, right) => compareSourcePriority(priorities.get(left.sourceId)!, priorities.get(right.sourceId)!))
   return { sources: items, ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }) }
 }
 

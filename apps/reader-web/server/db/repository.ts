@@ -1,19 +1,28 @@
+import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
+import * as importHistory from './source-import-history.ts'
+import { MemoryImportHistory } from './memory-import-history.ts'
+import type { ImportConfirmResult, ImportHistoryQuery, ImportLinksResponse, ImportHistoryPage, ImportItemsPage, UndoImportInput, UndoImportResult, UndoPreview } from '../../shared/source-management.ts'
 import type { BookListOrganizationSnapshot } from '../../shared/book-lists.ts'
 import { OrganizationError, type OrganizationCommand, applyOrganizationCommand } from '../domain/book-organization.ts'
 import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { compareSourceManagementOrder, compareSourceVersions, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, inArray, isNull, lt, max, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, max, or, sql } from 'drizzle-orm'
 import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } from '@legado/reader-backup'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser, type ReaderTransaction } from './client.ts'
-import { bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
+import { bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportBatches, sourceImportLinks, sourceImportItems, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
 
 export interface StoredSourceRecord extends SourceSummary {
+  sourceUuid?: string
+  importLinkId?: string
+  currentImportItemId?: string
+  sourceRevision?: string
+  priority?: number
   rawSource: unknown
   normalizedSource: NormalizedSource
 }
@@ -69,7 +78,15 @@ export interface ReaderRepository {
   applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }>
   saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void>
   getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null>
-  commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }>
+  commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<ImportConfirmResult>
+  listImportLinks(userId: string): Promise<ImportLinksResponse>
+  orderImportLinks(userId: string, orderedIds: string[], expectedRevision: string): Promise<ImportLinksResponse>
+  listImportHistory(userId: string, query: ImportHistoryQuery): Promise<ImportHistoryPage>
+  listImportItems(userId: string, batchId: string, query: ImportHistoryQuery): Promise<ImportItemsPage>
+  previewImportUndo(userId: string, batchId: string, itemIds?: string[]): Promise<UndoPreview>
+  undoImport(userId: string, batchId: string, input: UndoImportInput): Promise<UndoImportResult>
+  acquireExecutionSlot(userId: string, operationId: string): Promise<ExecutionLease | null>
+  releaseExecutionSlot(userId: string, lease: ExecutionLease): Promise<void>
   acquireSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, leaseMs: number): Promise<SourceRuntimeLease | null>
   saveSourceRuntimeState(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, expectedVersion: number, snapshot: RuntimeStateSnapshot): Promise<SourceRuntimeStateRecord | null>
   releaseSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string): Promise<void>
@@ -77,8 +94,8 @@ export interface ReaderRepository {
   saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings>
   createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState>
   getSearch(userId: string, searchId: string): Promise<SearchRunState | null>
-  claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null>
-  updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null>
+  claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }, expectedVersion?: number, knownRun?: SearchRunState): Promise<SearchRunState | null>
+  updateSearch(userId: string, searchId: string, patch: { knownRun?: SearchRunState; status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null>
   createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }>
   listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]>
   saveBookSourceCandidates(userId: string, bookId: string, candidates: StoredCandidate[]): Promise<void>
@@ -105,6 +122,15 @@ export interface ReaderRepository {
 }
 
 export class PostgresReaderRepository implements ReaderRepository {
+  public acquireExecutionSlot(userId: string, operationId: string) { return acquireExecutionSlot(userId, operationId) }
+  public releaseExecutionSlot(userId: string, lease: ExecutionLease) { return releaseExecutionSlot(userId, lease) }
+  public listImportLinks(userId: string) { return withUser(userId, (tx) => importHistory.readImportLinks(tx, userId)) }
+  public orderImportLinks(userId: string, ids: string[], revision: string) { return withUser(userId, (tx) => importHistory.orderImportLinks(tx, userId, ids, revision)) }
+  public listImportHistory(userId: string, query: ImportHistoryQuery) { return withUser(userId, (tx) => importHistory.readImportHistory(tx, userId, query)) }
+  public listImportItems(userId: string, batchId: string, query: ImportHistoryQuery) { return withUser(userId, (tx) => importHistory.readImportItems(tx, userId, batchId, query)) }
+  public previewImportUndo(userId: string, batchId: string, ids?: string[]) { return withUser(userId, (tx) => importHistory.previewUndo(tx, userId, batchId, ids)) }
+  public undoImport(userId: string, batchId: string, input: UndoImportInput) { return withUser(userId, (tx) => importHistory.undoImport(tx, userId, batchId, input)) }
+
   public async getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean) {
     return withUser(userId, async (tx) => {
       const [bookRows, editions, positions, shelf] = await Promise.all([tx.select().from(books).where(and(eq(books.userId, userId), bookIds ? inArray(books.id, bookIds) : undefined)), tx.select().from(bookEditions).where(and(eq(bookEditions.userId, userId), bookIds ? inArray(bookEditions.bookId, bookIds) : undefined)), includePositions === false ? Promise.resolve([]) : tx.select().from(readingRecords).where(and(eq(readingRecords.userId, userId), bookIds ? inArray(readingRecords.bookId, bookIds) : undefined)), tx.select({ bookId: bookshelf.bookId, groupId: bookshelf.groupId }).from(bookshelf).where(eq(bookshelf.userId, userId))])
@@ -159,14 +185,16 @@ export class PostgresReaderRepository implements ReaderRepository {
   public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> {
     return withUser(userId, async (transaction) => {
       const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false))).orderBy(asc(userSources.customOrder), asc(userSources.sourceId))
-      return selectOneSourcePerDomain(rows, compareSourceManagementOrder).map(toUserSource)
+      const priorities = new Map((await importHistory.readImportLinks(transaction, userId)).links.map((link) => [link.id, link.sortOrder]))
+      return selectOneSourcePerDomain(rows, compareSourceManagementOrder).map((row) => ({ ...toUserSource(row), priority: priorities.get(row.importLinkId ?? '') ?? Number.MAX_SAFE_INTEGER })).sort(compareSourcePriority)
     })
   }
 
   public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> {
     return withUser(userId, async (transaction) => {
       const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false))).orderBy(asc(userSources.customOrder), asc(userSources.sourceId))
-      return rows.map(toUserSource)
+      const priorities = new Map((await importHistory.readImportLinks(transaction, userId)).links.map((link) => [link.id, link.sortOrder]))
+      return rows.map((row) => ({ ...toUserSource(row), priority: priorities.get(row.importLinkId ?? '') ?? Number.MAX_SAFE_INTEGER })).sort(compareSourcePriority)
     })
   }
 
@@ -193,8 +221,8 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
     return withUser(userId, async (transaction) => {
-      const sourceRows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
-      const allRows = sourceRows.map((row) => managedSummary(toUserSource(row), row.revision, 'account', row.customOrder))
+      const sourceRows = await transaction.select({ source: userSources, displayUrl: sourceImportLinks.displayUrl, priority: sourceImportLinks.sortOrder, importedAt: sourceImportBatches.importedAt }).from(userSources).leftJoin(sourceImportLinks, and(eq(sourceImportLinks.userId, userId), eq(sourceImportLinks.id, userSources.importLinkId))).leftJoin(sourceImportItems, and(eq(sourceImportItems.userId, userId), eq(sourceImportItems.id, userSources.currentImportItemId))).leftJoin(sourceImportBatches, and(eq(sourceImportBatches.userId, userId), eq(sourceImportBatches.id, sourceImportItems.batchId))).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
+      const allRows = sourceRows.map(({ source: row, displayUrl, priority, importedAt }) => ({ ...managedSummary(toUserSource(row), row.revision, 'account', row.customOrder), ...(displayUrl ? { importDisplayUrl: displayUrl } : {}), ...(priority === null ? {} : { importPriority: priority }), ...(importedAt ? { importedAt: importedAt.toISOString() } : {}) }))
       const enabledCount = allRows.filter((source) => source.enabled).length
       const rows = allRows
         .filter((source) => {
@@ -293,14 +321,16 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }> {
+  public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<ImportConfirmResult> {
     return withUser(userId, async (transaction) => {
       await lockUserSourceMutations(transaction, userId)
+      const committed = await importHistory.committedImport(transaction, userId, previewId, candidateIds)
+      if (committed) return committed
       const [previewRow] = await transaction.select().from(sourceImportPreviews).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId))).limit(1).for('update')
       if (previewRow === undefined || previewRow.expiresAt.getTime() <= Date.now()) throw new SourceManagementError('preview-expired', '导入预览已过期，请重新获取')
       const previousIds = previewRow.consumedCandidateIds
       if (previousIds.length > 0) {
-        if (sameStringSet(previousIds, candidateIds)) return previewRow.consumedResult ?? { imported: 0 }
+        if (sameStringSet(previousIds, candidateIds)) throw new SourceManagementError('preview-invalid', '旧版预览已确认，请查看书源列表')
         throw new SourceManagementError('preview-invalid', '导入预览已经确认过')
       }
       const candidates = (previewRow.candidates as ImportPreviewCandidate[]).filter((candidate) => candidateIds.includes(candidate.id))
@@ -308,6 +338,7 @@ export class PostgresReaderRepository implements ReaderRepository {
       const overrides = await transaction.select().from(userSources).where(eq(userSources.userId, userId)).for('update')
       const overrideById = new Map(overrides.map((row) => [row.sourceId, row]))
       const importEnabled = decideImportedSourceEnabled(candidates, new Map(overrides.map((row) => [row.sourceId, { enabled: row.enabled, deleted: row.deleted }])))
+      const history = await importHistory.recordImport(transaction, userId, previewId, previewRow.sourceUrl, { previewId, expiresAt: previewRow.expiresAt.toISOString(), candidates: previewRow.candidates as ImportPreviewCandidate[], writableCount: candidates.length }, candidateIds, overrides)
       for (const candidate of candidates) {
         const current = overrideById.get(candidate.sourceId)
         const currentRevision = current?.revision
@@ -317,9 +348,9 @@ export class PostgresReaderRepository implements ReaderRepository {
         const runtimeRows = await transaction.select().from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId))).for('update')
         if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${candidate.name}`)
         if (currentSource !== undefined && currentSource.fingerprint !== candidate.fingerprint) await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId)))
-        await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, normalizedSource, enabled: importEnabled.get(candidate.id) ?? false, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: randomUUID(), updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
+        await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, sourceUuid: history.changes.get(candidate.id)!.sourceUuid, importLinkId: history.linkId, currentImportItemId: history.changes.get(candidate.id)!.itemId, normalizedSource, enabled: importEnabled.get(candidate.id) ?? false, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: history.changes.get(candidate.id)!.revision, updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { importLinkId: history.linkId, currentImportItemId: sql.raw('excluded."current_import_item_id"'), fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
       }
-      const result = { imported: candidates.length }
+      const result = history.result
       await transaction.update(sourceImportPreviews).set({ consumedCandidateIds: candidateIds, consumedResult: result }).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId)))
       return result
     })
@@ -381,7 +412,7 @@ export class PostgresReaderRepository implements ReaderRepository {
   public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> {
     return withUser(userId, async (transaction) => {
       const sourceIds = input.sourceIds === undefined || input.sourceIds.length === 0 ? [input.sourceId] : [...new Set(input.sourceIds)]
-      const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, status: 'pending', candidates: [], diagnostics: [] }))
+      const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, ...input.sourceSnapshots?.find((item) => item.sourceId === sourceId), status: 'pending', candidates: [], diagnostics: [] }))
       const [row] = await transaction.insert(searchRuns).values({
         userId,
         keyword: input.keyword,
@@ -407,28 +438,33 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null> {
+  public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }, expectedVersion?: number, knownRun?: SearchRunState): Promise<SearchRunState | null> {
     return withUser(userId, async (transaction) => {
-      const [row] = await transaction.update(searchRuns).set({ operationId, sourceStates, progressCompleted: progress.completed, progressTotal: progress.total, status: 'running', cancelled: false, version: sql`${searchRuns.version} + 1`, updatedAt: new Date() }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), isNull(searchRuns.operationId))).returning()
-      return row === undefined ? null : toSearch(row)
+      const [row] = await transaction.update(searchRuns).set({ operationId, operationLeaseUntil: sql`now() + interval '30 seconds'`, sourceStates: compactSearchStates(sourceStates), progressCompleted: progress.completed, progressTotal: progress.total, status: 'running', cancelled: false, version: sql`${searchRuns.version} + 1`, updatedAt: new Date() }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), eq(searchRuns.cancelled, false), expectedVersion === undefined ? undefined : eq(searchRuns.version, expectedVersion), or(isNull(searchRuns.operationId), sql`${searchRuns.operationLeaseUntil} < now()`))).returning({ ...getTableColumns(searchRuns), ...(knownRun ? { candidates: sql<StoredCandidate[]>`'[]'::jsonb`, sourceStates: sql<SourceSearchState[]>`'[]'::jsonb` } : {}) })
+      return row === undefined ? null : toSearch(knownRun ? { ...row, candidates: knownRun.candidates, sourceStates } : row)
     })
   }
 
-  public async updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> {
+  public async updateSearch(userId: string, searchId: string, patch: { knownRun?: SearchRunState; status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> {
     return withUser(userId, async (transaction) => {
       const [row] = await transaction.update(searchRuns).set({
         ...(patch.status === undefined ? {} : { status: patch.status }),
         ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }),
-        ...(patch.sourceStates === undefined ? {} : { sourceStates: patch.sourceStates }),
+        ...(patch.sourceStates === undefined ? {} : { sourceStates: compactSearchStates(patch.sourceStates) }),
         ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }),
         ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }),
         ...(patch.nextCursor === undefined ? {} : { nextCursor: patch.nextCursor }),
-        ...(patch.operationId === undefined ? {} : { operationId: patch.operationId }),
+        ...(patch.operationId === undefined ? {} : { operationId: patch.operationId, operationLeaseUntil: patch.operationId === null ? null : sql`now() + interval '30 seconds'` }),
         ...(patch.progress === undefined ? {} : { progressCompleted: patch.progress.completed, progressTotal: patch.progress.total }),
         ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }),
         updatedAt: new Date(),
         version: sql`${searchRuns.version} + 1`,
-      }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), ...(patch.expectedOperationId === undefined ? [] : [eq(searchRuns.operationId, patch.expectedOperationId)]))).returning()
+      }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), ...(patch.expectedOperationId === undefined ? [] : [eq(searchRuns.operationId, patch.expectedOperationId)]))).returning({ ...getTableColumns(searchRuns), ...(patch.knownRun ? { candidates: sql<StoredCandidate[]>`'[]'::jsonb`, sourceStates: sql<SourceSearchState[]>`'[]'::jsonb` } : {}) })
+      // 已有快照经过 operationId 条件校验，复用应用持有的数据，避免数据库重复返回整份大结果。
+      if (row !== undefined && patch.knownRun) {
+        row.candidates = patch.candidates ?? patch.knownRun.candidates
+        row.sourceStates = patch.sourceStates ?? patch.knownRun.sourceStates
+      }
       if (row !== undefined) {
         const historyStatus = row.status === 'capability-missing' ? 'failed' : row.status
         await transaction.update(searchHistory).set({ status: historyStatus, resultCount: row.candidates.length, summary: searchSummary(historyStatus, row.candidates.length), updatedAt: new Date() }).where(and(eq(searchHistory.userId, userId), eq(searchHistory.searchId, searchId), isNull(searchHistory.deletedAt)))
@@ -640,11 +676,14 @@ export class PostgresReaderRepository implements ReaderRepository {
         }
       }
       if (selected.has('sources')) {
+        await importHistory.lockSourceMutations(transaction, userId)
+        const identities = new Map((await transaction.select({ sourceId: userSources.sourceId, sourceUuid: userSources.sourceUuid }).from(userSources).where(eq(userSources.userId, userId))).map((row) => [row.sourceId, row.sourceUuid]))
+        await transaction.update(sourceImportBatches).set({ invalidatedAt: new Date(), invalidatedReason: '备份恢复后不可撤销' }).where(eq(sourceImportBatches.userId, userId))
         await transaction.delete(userSources).where(eq(userSources.userId, userId))
         await transaction.delete(sourceRuntimeState).where(eq(sourceRuntimeState.userId, userId))
         for (const item of snapshot.sources) {
           const normalized = { ...item.source.normalizedSource, enabled: item.source.enabled }
-          await transaction.insert(userSources).values({ userId, sourceId: item.source.sourceId, fingerprint: item.source.fingerprint, rawSource: item.source.rawSource, normalizedSource: normalized, enabled: item.source.enabled, customOrder: readInteger((normalized as Record<string, unknown>).customOrder, 0), deleted: item.deleted === true, revision: item.sourceRevision || randomUUID(), updatedAt: new Date() })
+          await transaction.insert(userSources).values({ userId, sourceUuid: identities.get(item.source.sourceId) ?? randomUUID(), sourceId: item.source.sourceId, fingerprint: item.source.fingerprint, rawSource: item.source.rawSource, normalizedSource: normalized, enabled: item.source.enabled, customOrder: readInteger((normalized as Record<string, unknown>).customOrder, 0), deleted: item.deleted === true, revision: randomUUID(), updatedAt: new Date() })
         }
       }
       if (selected.has('bookshelf') && snapshot.organization) {
@@ -835,8 +874,9 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
 
   private readonly userSourceMap = new Map<string, { source: StoredSourceRecord; deleted: boolean; revision: string }>()
-  private readonly importPreviews = new Map<string, { userId: string; sourceUrl: string; preview: ImportPreview; consumedIds: string[]; result?: { imported: number } }>()
+  private readonly importPreviews = new Map<string, { userId: string; sourceUrl: string; preview: ImportPreview; consumedIds: string[]; result?: ImportConfirmResult }>()
   private readonly runtimeStates = new Map<string, { snapshot: RuntimeStateSnapshot; version: number; leaseToken: string | null; leaseUntil: number | null }>()
+  private readonly searchLeases = new Map<string, number>()
   private readonly searches = new Map<string, SearchRunState>()
   private readonly books = new Map<string, { book: StoredBook; edition: StoredEdition }>()
   private readonly tocs = new Map<string, StoredToc>()
@@ -847,10 +887,22 @@ export class MemoryReaderRepository implements ReaderRepository {
   private readonly sourceCandidates = new Map<string, StoredBookSourceCandidate>()
   private readonly settings = new Map<string, ReaderSettings>()
 
-  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return selectOneSourcePerDomain(this.allSources(userId).filter((source) => source.enabled), compareStoredSourceManagementOrder) }
-  public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.sortSources(this.allSources(userId)) }
+  private readonly importHistory = new MemoryImportHistory(this.userSourceMap,
+    (userId, sourceId) => this.runtimeEntriesForSource(userId, sourceId).some(([, value]) => (value.leaseUntil ?? 0) > Date.now()),
+    (userId, sourceId) => { for (const [key] of this.runtimeEntriesForSource(userId, sourceId)) this.runtimeStates.delete(key) })
+  public async acquireExecutionSlot(userId: string, _operationId: string) { return acquireMemoryExecutionSlot(userId) }
+  public async releaseExecutionSlot(userId: string, lease: ExecutionLease) { releaseMemoryExecutionSlot(userId, lease) }
+  public async listImportLinks(userId: string) { return this.importHistory.readLinks(userId) }
+  public async orderImportLinks(userId: string, ids: string[], revision: string) { return this.importHistory.order(userId, ids, revision) }
+  public async listImportHistory(userId: string, query: ImportHistoryQuery) { return this.importHistory.history(userId, query) }
+  public async listImportItems(userId: string, batchId: string, query: ImportHistoryQuery) { return this.importHistory.items(userId, batchId, query) }
+  public async previewImportUndo(userId: string, batchId: string, ids?: string[]) { return this.importHistory.preview(userId, batchId, ids) }
+  public async undoImport(userId: string, batchId: string, input: UndoImportInput) { return this.importHistory.undo(userId, batchId, input) }
+  private withPriority(userId: string, sources: StoredSourceRecord[]) { const priorities = new Map(this.importHistory.readLinks(userId).links.map((row) => [row.id, row.sortOrder])); return sources.map((source) => ({ ...source, sourceRevision: this.sourceRevision(userId, source.sourceId), priority: priorities.get(source.importLinkId ?? '') ?? Number.MAX_SAFE_INTEGER })).sort(compareSourcePriority) }
+  public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.withPriority(userId, selectOneSourcePerDomain(this.allSources(userId).filter((source) => source.enabled), compareStoredSourceManagementOrder)) }
+  public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.withPriority(userId, this.allSources(userId)) }
   public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
-  public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { return this.allSources(userId).find((source) => source.sourceId === sourceId && source.enabled) ?? null }
+  public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { const row = this.userSourceMap.get(`${userId}:${sourceId}`); if (!row || row.deleted || !row.source.enabled) return null; const priority = this.importHistory.links.get(userId)?.find((link) => link.id === row.source.importLinkId)?.sortOrder ?? Number.MAX_SAFE_INTEGER; return { ...row.source, sourceRevision: row.revision, priority } }
   public async getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined> { return this.allSources(userId).find((source) => source.sourceId === sourceId)?.normalizedSource.bookSourceName }
   public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
     const query = params.query.toLocaleLowerCase()
@@ -861,7 +913,7 @@ export class MemoryReaderRepository implements ReaderRepository {
       return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
     }).sort((a, b) => readInteger(a.normalizedSource.customOrder, 0) - readInteger(b.normalizedSource.customOrder, 0) || a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
     const offset = (params.page - 1) * params.pageSize
-    return { sources: (params.all === true ? rows : rows.slice(offset, offset + params.pageSize)).map((source) => managedSummary(source, this.sourceRevision(userId, source.sourceId), 'account')), page: params.all === true ? 1 : params.page, pageSize: params.all === true ? Math.max(1, rows.length) : params.pageSize, total: rows.length, enabledCount }
+    return { sources: (params.all === true ? rows : rows.slice(offset, offset + params.pageSize)).map((source) => ({ ...managedSummary(source, this.sourceRevision(userId, source.sourceId), 'account'), ...this.importHistory.sourceMetadata(userId, source) })), page: params.all === true ? 1 : params.page, pageSize: params.all === true ? Math.max(1, rows.length) : params.pageSize, total: rows.length, enabledCount }
   }
   public async applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }> {
     const seen = new Set<string>()
@@ -911,13 +963,15 @@ export class MemoryReaderRepository implements ReaderRepository {
     }
     return { affected: items.length }
   }
-  private sortSources(sources: StoredSourceRecord[]): StoredSourceRecord[] { return sources.sort((a, b) => readInteger(a.normalizedSource.customOrder, 0) - readInteger(b.normalizedSource.customOrder, 0) || a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId)) }
+
   public async saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void> { this.importPreviews.set(`${userId}:${preview.previewId}`, { userId, sourceUrl, preview, consumedIds: [] }) }
   public async getImportPreview(userId: string, previewId: string): Promise<ImportPreview | null> { const record = this.importPreviews.get(`${userId}:${previewId}`); return record === undefined || new Date(record.preview.expiresAt).getTime() <= Date.now() ? null : record.preview }
-  public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<{ imported: number }> {
+  public async commitImportPreview(userId: string, previewId: string, candidateIds: string[]): Promise<ImportConfirmResult> {
+    const committed = this.importHistory.committed(userId, previewId, candidateIds)
+    if (committed) return committed
     const record = this.importPreviews.get(`${userId}:${previewId}`)
     if (record === undefined || new Date(record.preview.expiresAt).getTime() <= Date.now()) throw new SourceManagementError('preview-expired', '导入预览已过期，请重新获取')
-    if (record.consumedIds.length > 0) { if (sameStringSet(record.consumedIds, candidateIds)) return record.result ?? { imported: 0 }; throw new SourceManagementError('preview-invalid', '导入预览已经确认过') }
+    if (record.consumedIds.length > 0) { if (sameStringSet(record.consumedIds, candidateIds)) return record.result!; throw new SourceManagementError('preview-invalid', '导入预览已经确认过') }
     const candidates = record.preview.candidates.filter((candidate) => candidateIds.includes(candidate.id))
     if (candidates.length !== candidateIds.length || candidates.some((candidate) => candidate.disposition === undefined)) throw new SourceManagementError('preview-invalid', '确认列表包含不可导入的书源')
     const currentStates = new Map([...this.userSourceMap.entries()].filter(([key]) => key.startsWith(`${userId}:`)).map(([key, value]) => [key.slice(userId.length + 1), { enabled: value.source.enabled, deleted: value.deleted }]))
@@ -927,13 +981,14 @@ export class MemoryReaderRepository implements ReaderRepository {
       if (candidate.sourceRevision === undefined ? currentRevision !== undefined : currentRevision !== candidate.sourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请重新获取预览：${candidate.name}`)
       if (this.runtimeEntriesForSource(userId, candidate.sourceId).some(([, state]) => state.leaseToken !== null && (state.leaseUntil ?? 0) > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${candidate.name}`)
     }
+    const history = this.importHistory.record(userId, record.preview, record.sourceUrl, candidateIds)
     for (const candidate of candidates) {
       const current = this.userSourceMap.get(`${userId}:${candidate.sourceId}`)?.source
       if (current !== undefined && current.fingerprint !== candidate.fingerprint) for (const [key] of this.runtimeEntriesForSource(userId, candidate.sourceId)) this.runtimeStates.delete(key)
       const normalizedSource = mergeImportedSource(current, candidate.normalizedSource as NormalizedSource)
-      this.userSourceMap.set(`${userId}:${candidate.sourceId}`, { source: { sourceId: candidate.sourceId, name: normalizedSource.bookSourceName, ...(typeof normalizedSource.bookSourceGroup === 'string' ? { group: normalizedSource.bookSourceGroup } : {}), fingerprint: candidate.fingerprint, enabled: importEnabled.get(candidate.id) ?? false, rawSource: candidate.rawSource, normalizedSource }, deleted: false, revision: randomUUID() })
+      this.userSourceMap.set(`${userId}:${candidate.sourceId}`, { source: { sourceUuid: history.changes.get(candidate.id)!.sourceUuid!, importLinkId: history.batch.linkId, currentImportItemId: history.changes.get(candidate.id)!.id, sourceId: candidate.sourceId, name: normalizedSource.bookSourceName, ...(typeof normalizedSource.bookSourceGroup === 'string' ? { group: normalizedSource.bookSourceGroup } : {}), fingerprint: candidate.fingerprint, enabled: importEnabled.get(candidate.id) ?? false, rawSource: candidate.rawSource, normalizedSource }, deleted: false, revision: history.changes.get(candidate.id)!.afterRevision! })
     }
-    record.consumedIds = [...candidateIds]; record.result = { imported: candidates.length }; return record.result
+    record.consumedIds = [...candidateIds]; record.result = this.importHistory.result(history.batch); return record.result
   }
   private allSources(userId: string): StoredSourceRecord[] { return [...this.userSourceMap.entries()].filter(([key, value]) => key.startsWith(`${userId}:`) && value.deleted === false).map(([, value]) => value.source) }
   private allSourceStates(userId: string): Array<{ source: StoredSourceRecord; deleted: boolean }> { return [...this.userSourceMap.entries()].filter(([key]) => key.startsWith(`${userId}:`)).map(([, value]) => ({ source: value.source, deleted: value.deleted })) }
@@ -945,10 +1000,15 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async releaseSourceRuntimeLease(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string): Promise<void> { const current = this.runtimeStates.get(runtimeStateKey(userId, sourceId, sourceFingerprint)); if (current?.leaseToken !== leaseToken) return; current.leaseToken = null; current.leaseUntil = null }
   public async getSettings(userId: string): Promise<ReaderSettings> { return this.settings.get(userId) ?? defaultReaderSettings(userId) }
   public async saveSettings(userId: string, patch: ReaderSettingsPatch): Promise<ReaderSettings> { const target = patch.general?.bookshelfInitialGroup; if (target !== undefined && target !== 'all' && target !== 'ungrouped' && !this.organizations.get(userId)?.lists.some((row) => row.type === 'shelf_group' && row.id === target)) throw new OrganizationError(404, '启动分组不存在'); const next = mergeReaderSettings(this.settings.get(userId) ?? defaultReaderSettings(userId), patch, new Date().toISOString()); this.settings.set(userId, next); return structuredClone(next) }
-  public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> { const now = new Date().toISOString(); const sourceIds = input.sourceIds === undefined || input.sourceIds.length === 0 ? [input.sourceId] : [...new Set(input.sourceIds)]; const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, status: 'pending', candidates: [], diagnostics: [] })); const search: SearchRunState = { id: randomUUID(), userId, keyword: input.keyword, sourceId: sourceIds[0] ?? input.sourceId, sourceIds, ...(input.precision === true ? { precision: true } : {}), ...(sourceFingerprint === undefined ? {} : { sourceFingerprint }), status: 'running', candidates: [], sourceStates, ...(input.cursor === undefined ? {} : { cursor: input.cursor }), progress: { completed: 0, total: sourceIds.length }, version: 0, cancelled: false, createdAt: now, updatedAt: now }; this.searches.set(search.id, search); this.history.set(`${userId}:${search.id}`, { id: randomUUID(), searchId: search.id, keyword: input.keyword, sourceIds, status: 'running', resultCount: 0, createdAt: now, updatedAt: now }); return search }
+  public async createSearch(userId: string, input: SearchInput, sourceFingerprint?: string): Promise<SearchRunState> { const now = new Date().toISOString(); const sourceIds = input.sourceIds === undefined || input.sourceIds.length === 0 ? [input.sourceId] : [...new Set(input.sourceIds)]; const sourceStates: SourceSearchState[] = sourceIds.map((sourceId) => ({ sourceId, ...input.sourceSnapshots?.find((item) => item.sourceId === sourceId), status: 'pending', candidates: [], diagnostics: [] })); const search: SearchRunState = { id: randomUUID(), userId, keyword: input.keyword, sourceId: sourceIds[0] ?? input.sourceId, sourceIds, ...(input.precision === true ? { precision: true } : {}), ...(sourceFingerprint === undefined ? {} : { sourceFingerprint }), status: 'running', candidates: [], sourceStates, ...(input.cursor === undefined ? {} : { cursor: input.cursor }), progress: { completed: 0, total: sourceIds.length }, version: 0, cancelled: false, createdAt: now, updatedAt: now }; this.searches.set(search.id, search); this.history.set(`${userId}:${search.id}`, { id: randomUUID(), searchId: search.id, keyword: input.keyword, sourceIds, status: 'running', resultCount: 0, createdAt: now, updatedAt: now }); return search }
   public async getSearch(userId: string, searchId: string): Promise<SearchRunState | null> { const search = this.searches.get(searchId); return search?.userId === userId ? search : null }
-  public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || current.operationId !== undefined) return null; return this.updateSearch(userId, searchId, { sourceStates, progress, operationId, status: 'running', cancelled: false }) }
-  public async updateSearch(userId: string, searchId: string, patch: { status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || (patch.expectedOperationId !== undefined && current.operationId !== patch.expectedOperationId)) return null; const updated: SearchRunState = { ...current, ...(patch.status === undefined ? {} : { status: patch.status }), ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }), ...(patch.sourceStates === undefined ? {} : { sourceStates: patch.sourceStates }), ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }), ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }), ...(patch.nextCursor === undefined ? {} : { nextCursor: patch.nextCursor }), ...(patch.operationId === undefined || patch.operationId === null ? {} : { operationId: patch.operationId }), ...(patch.progress === undefined ? {} : { progress: patch.progress }), ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }), updatedAt: new Date().toISOString(), version: current.version + 1 }; if (patch.operationId === null) delete updated.operationId; this.searches.set(searchId, updated); const history = this.history.get(`${userId}:${searchId}`); if (history !== undefined) this.history.set(`${userId}:${searchId}`, { ...history, status: updated.status, resultCount: updated.candidates.length, summary: searchSummary(updated.status, updated.candidates.length), updatedAt: updated.updatedAt }); return updated }
+  public async claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }, expectedVersion?: number, _knownRun?: SearchRunState): Promise<SearchRunState | null> {
+    const current = this.searches.get(searchId)
+    if (!current || current.userId !== userId || current.cancelled || (expectedVersion !== undefined && current.version !== expectedVersion) || (current.operationId && (this.searchLeases.get(searchId) ?? Infinity) > Date.now())) return null
+    const next = { ...current, sourceStates, progress, operationId, status: 'running' as const, cancelled: false, version: current.version + 1 }
+    this.searches.set(searchId, next); this.searchLeases.set(searchId, Date.now() + 30000); return next
+  }
+  public async updateSearch(userId: string, searchId: string, patch: { knownRun?: SearchRunState; status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || (patch.expectedOperationId !== undefined && current.operationId !== patch.expectedOperationId)) return null; const updated: SearchRunState = { ...current, ...(patch.status === undefined ? {} : { status: patch.status }), ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }), ...(patch.sourceStates === undefined ? {} : { sourceStates: patch.sourceStates }), ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }), ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }), ...(patch.nextCursor === undefined ? {} : { nextCursor: patch.nextCursor }), ...(patch.operationId === undefined || patch.operationId === null ? {} : { operationId: patch.operationId }), ...(patch.progress === undefined ? {} : { progress: patch.progress }), ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }), updatedAt: new Date().toISOString(), version: current.version + 1 }; if (patch.operationId === null) delete updated.operationId; this.searches.set(searchId, updated); if (updated.operationId) this.searchLeases.set(searchId, Date.now() + 30000); else this.searchLeases.delete(searchId); const history = this.history.get(`${userId}:${searchId}`); if (history !== undefined) this.history.set(`${userId}:${searchId}`, { ...history, status: updated.status, resultCount: updated.candidates.length, summary: searchSummary(updated.status, updated.candidates.length), updatedAt: updated.updatedAt }); return updated }
   public async createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }> { const existing = [...this.books.values()].find((item) => item.book.userId === userId && item.edition.editionKey === input.editionKey); const target = input.bookId === undefined ? undefined : [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === input.bookId); if (input.bookId !== undefined && target === undefined) throw new Error('书籍不存在'); if (existing !== undefined && input.bookId !== undefined && existing.book.id !== input.bookId) throw new Error('书籍版本已经属于其他书籍'); const now = new Date().toISOString(); const book: StoredBook = existing?.book ?? target?.book ?? { id: randomUUID(), userId, name: input.metadata.name ?? input.candidate.candidate.name ?? '未命名书籍', ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), activeEditionKey: input.editionKey, createdAt: now, updatedAt: now }; const activeEditionKey = input.activateEdition === false ? book.activeEditionKey : input.editionKey; const updatedBook = input.activateEdition === false ? book : { ...book, name: input.metadata.name ?? book.name, ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), ...(activeEditionKey === undefined ? {} : { activeEditionKey }), updatedAt: now }; const edition: StoredEdition = { id: existing?.edition.id ?? randomUUID(), userId, bookId: updatedBook.id, editionKey: input.editionKey, sourceId: input.candidate.sourceId, sourceFingerprint: input.sourceFingerprint, bookUrl: input.metadata.bookUrl, metadata: input.metadata, ...(input.metadata.variable === undefined ? {} : { variable: input.metadata.variable }) }; const value = { book: updatedBook, edition }; for (const [key, item] of this.books) if (item.book.id === updatedBook.id && item.book.userId === userId) this.books.set(key, { ...item, book: updatedBook }); this.books.set(`${userId}:${input.editionKey}`, value); if (input.addToBookshelf !== false) this.shelf.set(`${userId}:${updatedBook.id}`, now); return value }
   public async listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]> {
     return [...this.sourceCandidates.values()].filter((row) => row.userId === userId && row.bookId === bookId).map((row) => structuredClone(row))
@@ -1098,7 +1158,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     }
     if (selected.has('sources')) {
       for (const key of [...nextSources.keys()]) if (key.startsWith(`${userId}:`)) nextSources.delete(key)
-      for (const item of snapshot.sources) nextSources.set(`${userId}:${item.source.sourceId}`, { source: item.source, deleted: item.deleted === true, revision: item.sourceRevision || randomUUID() })
+      for (const item of snapshot.sources) nextSources.set(`${userId}:${item.source.sourceId}`, { source: { sourceId: item.source.sourceId, name: item.source.name, fingerprint: item.source.fingerprint, enabled: item.source.enabled, rawSource: item.source.rawSource, normalizedSource: item.source.normalizedSource, ...(item.source.group ? { group: item.source.group } : {}), sourceUuid: this.userSourceMap.get(`${userId}:${item.source.sourceId}`)?.source.sourceUuid ?? randomUUID() }, deleted: item.deleted === true, revision: randomUUID() })
       for (const [key] of nextRuntimeStates) {
         const identity = JSON.parse(key) as unknown[]
         if (identity[0] === userId) nextRuntimeStates.delete(key)
@@ -1118,6 +1178,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     this.contents.clear(); for (const [key, value] of nextContents) this.contents.set(key, value)
     this.searches.clear(); for (const [key, value] of nextSearches) this.searches.set(key, value)
     this.history.clear(); for (const [key, value] of nextHistory) this.history.set(key, value)
+    if (selected.has('sources')) this.importHistory.invalidate(userId)
     this.userSourceMap.clear(); for (const [key, value] of nextSources) this.userSourceMap.set(key, value)
     this.settings.clear(); for (const [key, value] of nextSettings) this.settings.set(key, value)
     this.runtimeStates.clear(); for (const [key, value] of nextRuntimeStates) this.runtimeStates.set(key, value)
@@ -1184,8 +1245,8 @@ function toRuntimeState(row: SourceRuntimeRow): SourceRuntimeStateRecord { retur
 function toRuntimeLease(row: SourceRuntimeRow, leaseToken: string): SourceRuntimeLease { return { ...toRuntimeState(row), leaseToken } }
 function runtimeStateKey(userId: string, sourceId: string, sourceFingerprint: string): string { return JSON.stringify([userId, sourceId, sourceFingerprint]) }
 function cloneRuntimeSnapshot(snapshot: RuntimeStateSnapshot): RuntimeStateSnapshot { return structuredClone(snapshot) }
-function toUserSource(row: UserSourceRow): StoredSourceRecord { return { sourceId: row.sourceId, name: typeof row.normalizedSource.bookSourceName === 'string' ? row.normalizedSource.bookSourceName : row.sourceId, ...(typeof row.normalizedSource.bookSourceGroup === 'string' ? { group: row.normalizedSource.bookSourceGroup } : {}), fingerprint: row.fingerprint, enabled: row.enabled, rawSource: row.rawSource, normalizedSource: row.normalizedSource } }
-function managedSummary(source: StoredSourceRecord, sourceRevision: string, origin: 'account', customOrder = readInteger(source.normalizedSource.customOrder, 0)): ManagedSourceSummary { const time = readTimestamp(source.normalizedSource.lastUpdateTime); return { sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled, customOrder, sourceRevision, origin, ...(time === undefined ? {} : { lastUpdateTime: time }) } }
+function toUserSource(row: UserSourceRow): StoredSourceRecord { return { sourceUuid: row.sourceUuid, sourceRevision: row.revision, ...(row.importLinkId ? { importLinkId: row.importLinkId } : {}), ...(row.currentImportItemId ? { currentImportItemId: row.currentImportItemId } : {}), sourceId: row.sourceId, name: typeof row.normalizedSource.bookSourceName === 'string' ? row.normalizedSource.bookSourceName : row.sourceId, ...(typeof row.normalizedSource.bookSourceGroup === 'string' ? { group: row.normalizedSource.bookSourceGroup } : {}), fingerprint: row.fingerprint, enabled: row.enabled, rawSource: row.rawSource, normalizedSource: row.normalizedSource } }
+function managedSummary(source: StoredSourceRecord, sourceRevision: string, origin: 'account', customOrder = readInteger(source.normalizedSource.customOrder, 0)): ManagedSourceSummary { const time = readTimestamp(source.normalizedSource.lastUpdateTime); return { ...(source.sourceUuid ? { sourceUuid: source.sourceUuid } : {}), ...(source.importLinkId ? { importLinkId: source.importLinkId } : {}), sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled, customOrder, sourceRevision, origin, ...(time === undefined ? {} : { lastUpdateTime: time }) } }
 function readInteger(value: unknown, fallback: number): number { return typeof value === 'number' && Number.isSafeInteger(value) ? value : fallback }
 function readTimestamp(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined }
 function sameStringSet(left: string[], right: string[]): boolean { return left.length === right.length && left.every((value) => right.includes(value)) }
@@ -1250,7 +1311,28 @@ function readPageTapZones(value: unknown): ReaderSettings['pageTapZones'] {
 function settingsObject(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function toEdition(row: BookEditionRow): StoredEdition { return { id: row.id, userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, bookUrl: row.bookUrl, metadata: row.metadata, ...(row.variable === null ? {} : { variable: row.variable }) } }
-function toSearch(row: SearchRunRow): SearchRunState { const sourceIds = row.sourceIds.length === 0 ? [row.sourceId] : row.sourceIds; return { id: row.id, userId: row.userId, keyword: row.keyword, sourceId: row.sourceId, sourceIds, ...(row.precision ? { precision: true } : {}), ...(row.sourceFingerprint === null ? {} : { sourceFingerprint: row.sourceFingerprint }), status: row.status as SearchRunState['status'], candidates: row.candidates, sourceStates: row.sourceStates, ...(row.cursor === null || row.cursor === undefined ? {} : { cursor: row.cursor }), ...(row.nextCursor === null || row.nextCursor === undefined ? {} : { nextCursor: row.nextCursor }), ...(row.operationId === null ? {} : { operationId: row.operationId }), progress: { completed: row.progressCompleted, total: row.progressTotal === 0 ? sourceIds.length : row.progressTotal }, version: row.version, cancelled: row.cancelled, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
+// 结果只存于 candidates；逐源状态保存元数据，读取时共享同一批候选对象，避免 JSON 重复存储和解析。
+function compactSearchStates(states: SourceSearchState[]): SourceSearchState[] { return states.map((state) => ({ ...state, candidates: [] })) }
+function toSearch(row: SearchRunRow): SearchRunState {
+  const candidatesBySource = new Map<string, StoredCandidate[]>()
+  for (const candidate of row.candidates) {
+    const group = candidatesBySource.get(candidate.sourceId) ?? []
+    group.push(candidate); candidatesBySource.set(candidate.sourceId, group)
+  }
+  const sourceStates = row.sourceStates.map((state) => ({ ...state, candidates: state.candidates.length > 0 ? state.candidates : candidatesBySource.get(state.sourceId) ?? [] }))
+  const sourceIds = row.sourceIds.length === 0 ? [row.sourceId] : row.sourceIds
+  return {
+    id: row.id, userId: row.userId, keyword: row.keyword, sourceId: row.sourceId, sourceIds,
+    ...(row.precision ? { precision: true } : {}),
+    ...(row.sourceFingerprint === null ? {} : { sourceFingerprint: row.sourceFingerprint }),
+    status: row.status as SearchRunState['status'], candidates: row.candidates, sourceStates,
+    ...(row.cursor == null ? {} : { cursor: row.cursor }),
+    ...(row.nextCursor == null ? {} : { nextCursor: row.nextCursor }),
+    ...(row.operationId === null ? {} : { operationId: row.operationId }),
+    progress: { completed: row.progressCompleted, total: row.progressTotal === 0 ? sourceIds.length : row.progressTotal },
+    version: row.version, cancelled: row.cancelled, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+  }
+}
 function toHistory(row: SearchHistoryRow): SearchHistoryItem { return { id: row.id, searchId: row.searchId, keyword: row.keyword, sourceIds: row.sourceIds, status: row.status, resultCount: row.resultCount, ...(row.summary === null ? {} : { summary: row.summary }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function searchSummary(status: string, count: number): string { if (status === 'success') return `${count} 条结果`; if (status === 'empty') return '没有找到结果'; if (status === 'partial') return `${count} 条结果，部分书源失败`; if (status === 'cancelled') return '已取消'; if (status === 'failed') return '搜索失败'; return status }
 function toToc(row: TocSnapshotRow): StoredToc { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceFingerprint: row.sourceFingerprint, revision: row.revision, chapters: row.chapters, bookPatch: row.bookPatch, ...(row.bookAfter === null || row.bookAfter === undefined ? {} : { bookAfter: row.bookAfter }), updatedAt: row.updatedAt.toISOString() } }
@@ -1390,3 +1472,5 @@ function prepareOrganizationRestore(current: ReaderBackupSnapshot, input: Reader
   else if (!valid) next.settings.general.bookshelfInitialGroup = 'all'
   return next
 }
+
+export function compareSourcePriority(left: StoredSourceRecord, right: StoredSourceRecord): number { return (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER) || compareStoredSourceManagementOrder(left, right) }

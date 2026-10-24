@@ -17,6 +17,9 @@ export const sources = readerSchema.table('sources', {
 
 export const userSources = readerSchema.table('user_sources', {
   userId: uuid('user_id').notNull(),
+  sourceUuid: uuid('source_uuid').notNull().defaultRandom(),
+  importLinkId: uuid('import_link_id'),
+  currentImportItemId: uuid('current_import_item_id'),
   sourceId: text('source_id').notNull(),
   fingerprint: text('fingerprint').notNull(),
   rawSource: jsonb('raw_source').$type<unknown>().notNull(),
@@ -26,7 +29,7 @@ export const userSources = readerSchema.table('user_sources', {
   deleted: boolean('deleted').notNull().default(false),
   revision: text('revision').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex('user_sources_identity_idx').on(table.userId, table.sourceId), index('user_sources_user_enabled_idx').on(table.userId, table.enabled, table.deleted)])
+}, (table) => [uniqueIndex('user_sources_uuid_idx').on(table.sourceUuid), uniqueIndex('user_sources_identity_idx').on(table.userId, table.sourceId), index('user_sources_user_enabled_idx').on(table.userId, table.enabled, table.deleted)])
 
 export const sourceImportPreviews = readerSchema.table('source_import_previews', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -155,6 +158,7 @@ export const searchRuns = readerSchema.table('search_runs', {
   cursor: jsonb('cursor').$type<PageCursor | null>(),
   nextCursor: jsonb('next_cursor').$type<PageCursor | null>(),
   operationId: text('operation_id'),
+  operationLeaseUntil: timestamp('operation_lease_until', { withTimezone: true }),
   progressCompleted: integer('progress_completed').notNull().default(0),
   progressTotal: integer('progress_total').notNull().default(0),
   version: integer('version').notNull().default(0),
@@ -229,3 +233,29 @@ export type ChapterContentRow = typeof chapterContents.$inferSelect
 export type SourceRuntimeRow = typeof sourceRuntimeState.$inferSelect
 
 export type RuntimeStateJson = RuntimeStateSnapshot
+
+export const sourceImportLinks = readerSchema.table('source_import_links', {
+  id: uuid('id').primaryKey().defaultRandom(), userId: uuid('user_id').notNull(),
+  urlKey: text('url_key').notNull(), encryptedUrl: text('encrypted_url').notNull(), displayUrl: text('display_url').notNull(),
+  sortOrder: integer('sort_order').notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('source_import_links_url_idx').on(t.userId, t.urlKey), index('source_import_links_order_idx').on(t.userId, t.sortOrder)])
+export const sourceImportSettings = readerSchema.table('source_import_settings', {
+  userId: uuid('user_id').primaryKey(), revision: text('revision').notNull(),
+})
+export const sourceImportBatches = readerSchema.table('source_import_batches', {
+  id: uuid('id').primaryKey().defaultRandom(), userId: uuid('user_id').notNull(), previewId: uuid('preview_id').notNull().unique(), linkId: uuid('link_id').notNull(),
+  selection: jsonb('selection').$type<string[]>().notNull(), importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+  imported: integer('imported').notNull(), newCount: integer('new_count').notNull(), updatedCount: integer('updated_count').notNull(), restoredCount: integer('restored_count').notNull(), skippedCount: integer('skipped_count').notNull(), unselectedCount: integer('unselected_count').notNull(),
+  undoStatus: text('undo_status').$type<'none' | 'partial' | 'all'>().notNull().default('none'), undoneAt: timestamp('undone_at', { withTimezone: true }), invalidatedAt: timestamp('invalidated_at', { withTimezone: true }), invalidatedReason: text('invalidated_reason'),
+}, (t) => [index('source_import_batches_time_idx').on(t.userId, t.importedAt), check('source_import_batches_undo_check', sql`${t.undoStatus} in ('none', 'partial', 'all')`)])
+export const sourceImportItems = readerSchema.table('source_import_items', {
+  id: uuid('id').primaryKey().defaultRandom(), userId: uuid('user_id').notNull(), batchId: uuid('batch_id').notNull(), sourceUuid: uuid('source_uuid'), sourceId: text('source_id').notNull(),
+  name: text('name').notNull(), group: text('source_group'), action: text('action').$type<'new' | 'update' | 'restore' | 'skipped' | 'unselected'>().notNull(), reason: text('reason').notNull(),
+  displayUrl: text('display_url').notNull(), encryptedOrigin: text('encrypted_origin').notNull(), beforeSnapshot: text('before_snapshot'), afterRevision: text('after_revision'), undoRevision: text('undo_revision'), undoneAt: timestamp('undone_at', { withTimezone: true }),
+}, (t) => [index('source_import_items_batch_idx').on(t.userId, t.batchId, t.id), index('source_import_items_source_idx').on(t.userId, t.sourceUuid), check('source_import_items_action_check', sql`${t.action} in ('new', 'update', 'restore', 'skipped', 'unselected')`)])
+export const sourceImportUndoOperations = readerSchema.table('source_import_undo_operations', {
+  userId: uuid('user_id').notNull(), idempotencyKey: uuid('idempotency_key').notNull(), batchId: uuid('batch_id').notNull(), selection: text('selection').notNull(), result: jsonb('result').$type<import('../../shared/source-management.ts').UndoImportResult>().notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('source_import_undo_key_idx').on(t.userId, t.idempotencyKey)])
+export const sourceExecutionSlots = readerSchema.table('source_execution_slots', {
+  slotId: integer('slot_id').primaryKey(), userId: uuid('user_id'), operationId: uuid('operation_id'), leaseToken: uuid('lease_token'), leaseUntil: timestamp('lease_until', { withTimezone: true }),
+})

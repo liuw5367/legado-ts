@@ -4,6 +4,7 @@ import type { BookCandidate, BookMetadata, Chapter, ChapterContent, JsonObject, 
 export type StoredSource = Pick<NormalizedSource, 'bookSourceUrl' | 'bookSourceName' | 'bookSourceGroup' | 'bookSourceType' | 'searchUrl' | 'exploreUrl' | 'ruleSearch' | 'ruleExplore' | 'ruleBookInfo' | 'ruleToc' | 'ruleContent' | 'concurrentRate' | 'loginUrl' | 'enabled'> & Record<string, unknown>
 
 export interface StoredCandidate {
+  sourceOrder?: number
   sourceId: string
   sourceFingerprint: string
   searchDurationMs?: number
@@ -37,7 +38,7 @@ export interface SearchRunState {
   cursor?: PageCursor
   nextCursor?: PageCursor
   operationId?: string
-  progress: { completed: number; total: number }
+  progress: { completed: number; total: number; currentGroup?: string }
   version: number
   cancelled: boolean
   createdAt: string
@@ -45,6 +46,9 @@ export interface SearchRunState {
 }
 
 export interface SourceSearchState {
+  sourceRevision?: string
+  importLinkId?: string
+  priority?: number
   sourceId: string
   sourceFingerprint?: string
   status: 'pending' | 'running' | 'success' | 'empty' | 'partial' | 'failed' | 'capability-missing' | 'cancelled'
@@ -145,6 +149,7 @@ export interface SourceSummary {
 }
 
 export interface SearchInput {
+  sourceSnapshots?: Array<{ sourceId: string; sourceFingerprint: string; sourceRevision?: string; importLinkId?: string; priority?: number }>
   keyword: string
   sourceId: string
   sourceIds?: string[]
@@ -153,6 +158,8 @@ export interface SearchInput {
 }
 
 export interface SearchBatchResult {
+  hasPending?: boolean
+  retryAfterMs?: number
   cacheWarning?: SourceCacheWarning
   search: SearchRunState
   candidates: StoredCandidate[]

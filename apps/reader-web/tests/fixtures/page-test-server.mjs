@@ -1,3 +1,7 @@
+import { MemoryReaderRepository } from '../../server/db/repository.ts'
+import { importSources } from '@legado/source-core'
+import { compareImportCandidates } from '../../server/runtime/source-comparison.ts'
+import { importHistoryQuerySchema } from '../../shared/source-management.ts'
 import { applyOrganizationCommand } from '../../server/domain/book-organization.ts'
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -28,6 +32,15 @@ const sources = Array.from({ length: 65 }, (_, index) => ({
   lastUpdateTime: Date.UTC(2026, 0, 1) + index * 60_000,
   origin: 'account',
 }))
+
+const importRepository = new MemoryReaderRepository()
+for (const [index, url] of ['https://source-list.example.test/精选书源.json', 'https://source-list.example.test/补充书源.json?token=fixture-private'].entries()) {
+  const definitions = sources.slice(index * 3, index * 3 + 3).map((source) => ({ bookSourceUrl: source.sourceId, bookSourceName: source.name, bookSourceGroup: source.group, bookSourceType: 0, lastUpdateTime: 10, searchUrl: '/search' }))
+  const candidates = compareImportCandidates(await importSources({ kind: 'text', text: JSON.stringify(definitions) }), new Map())
+  const previewId = randomUUID()
+  await importRepository.saveImportPreview(USER_ID, { previewId, expiresAt: new Date(Date.now() + 60000).toISOString(), candidates, writableCount: candidates.length }, url)
+  await importRepository.commitImportPreview(USER_ID, previewId, candidates.map((candidate) => candidate.id))
+}
 
 const books = new Map()
 const editions = new Map()
@@ -459,6 +472,23 @@ async function handleApi(request, response, url) {
   }
   const path = url.pathname
   const method = request.method ?? 'GET'
+
+  if (url.pathname.startsWith('/api/source-management/import-links')) {
+    const body = request.method === 'POST' ? await readJson(request) : {}
+    const value = request.method === 'POST' ? await importRepository.orderImportLinks(USER_ID, body.orderedIds, body.expectedRevision) : await importRepository.listImportLinks(USER_ID)
+    json(response, value); return
+  }
+  if (url.pathname.startsWith('/api/source-management/import-history')) {
+    const parts = url.pathname.split('/').filter(Boolean)
+    const batchId = parts[3]
+    const query = importHistoryQuerySchema.parse(Object.fromEntries(url.searchParams))
+    if (!batchId) { json(response, await importRepository.listImportHistory(USER_ID, query)); return }
+    if (parts[4] === 'items') { json(response, await importRepository.listImportItems(USER_ID, batchId, query)); return }
+    const body = await readJson(request)
+    if (parts[4] === 'undo-preview') json(response, await importRepository.previewImportUndo(USER_ID, batchId, body.itemIds))
+    else json(response, await importRepository.undoImport(USER_ID, batchId, body))
+    return
+  }
 
   if (method === 'GET' && path === '/api/me') { json(response, { user: { id: USER_ID } }); return }
   if (method === 'GET' && path === '/api/home') { json(response, homeSnapshot()); return }
