@@ -1,8 +1,8 @@
 import { DismissibleMessage } from './dismissible-message.tsx'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Sheet } from './ui/sheet.tsx'
-import { Button, buttonVariants } from './ui/button.tsx'
+import { Button } from './ui/button.tsx'
 import { Input } from './ui/input.tsx'
 import { apiFetch } from '../lib/api.ts'
 import { formatSourceRuleDateTime } from '../lib/time-format.ts'
@@ -12,6 +12,7 @@ import type { ImportPreviewSummary, ImportPreviewSummaryCandidate } from '../../
 export function SourceImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpenChange: (open: boolean) => void; onImported: (imported: number) => void }) {
   const id = useId()
   const [url, setUrl] = useState('')
+  const [showSourceSites, setShowSourceSites] = useState(false)
   const [preview, setPreview] = useState<ImportPreviewSummary | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [filter, setFilter] = useState('')
@@ -22,7 +23,7 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
   const controllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    if (!open) { controllerRef.current?.abort(); controllerRef.current = null; setUrl(''); setPreview(null); setSelected([]); setFilter(''); setWritableExpanded(true); setSkippedExpanded(true); setStatus('input'); setMessage('') }
+    if (!open) { setShowSourceSites(false); controllerRef.current?.abort(); controllerRef.current = null; setUrl(''); setPreview(null); setSelected([]); setFilter(''); setWritableExpanded(true); setSkippedExpanded(true); setStatus('input'); setMessage('') }
   }, [open])
 
   useEffect(() => () => { controllerRef.current?.abort() }, [])
@@ -59,8 +60,8 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
   const matchingWritable = writable.filter(matchesFilter)
   const matchingSkipped = skipped.filter(matchesFilter)
   const busy = status === 'loading' || status === 'confirming'
-  return <Sheet className="source-import-dialog" open={open} onOpenChange={onOpenChange} title="导入书源">
-    {preview === null ? <form className="form source-import-form" onSubmit={(event) => { event.preventDefault(); void loadPreview() }}><div className="field"><label htmlFor={id + '-source-import-url'}>书源或订阅链接</label><Input id={id + '-source-import-url'} type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/sources.json" disabled={busy} /><p className="muted small">只获取一次并在确认后保存，不会创建自动订阅。</p></div>{message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="error" role="alert">{message}</DismissibleMessage> : null}<div className="source-import-actions"><a className={buttonVariants({ variant: 'secondary' })} href="https://www.yckceo.com/yuedu/shuyuans/index.html" target="_blank" rel="noopener noreferrer">书源网站</a><div className="actions"><Button variant="secondary" type="button" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button><Button type="submit" disabled={busy || url.trim().length === 0}>{status === 'loading' ? '加载中…' : '加载书源'}</Button></div></div></form> : <div className="source-import-preview">
+  return <><Sheet className="source-import-dialog" open={open} onOpenChange={onOpenChange} title="导入书源">
+    {preview === null ? <form className="form source-import-form" onSubmit={(event) => { event.preventDefault(); void loadPreview() }}><div className="field"><label htmlFor={id + '-source-import-url'}>书源或订阅链接</label><Input id={id + '-source-import-url'} type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/sources.json" disabled={busy} /><p className="muted small">只获取一次并在确认后保存，不会创建自动订阅。</p></div>{message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="error" role="alert">{message}</DismissibleMessage> : null}<div className="source-import-actions"><Button variant="secondary" type="button" aria-haspopup="dialog" onClick={() => setShowSourceSites(true)}>获取书源</Button><div className="actions"><Button variant="secondary" type="button" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button><Button type="submit" disabled={busy || url.trim().length === 0}>{status === 'loading' ? '加载中…' : '加载书源'}</Button></div></div></form> : <div className="source-import-preview">
       <p className="muted small">预览有效至 {new Date(preview.expiresAt).toLocaleTimeString()}</p>
       <label className="sr-only" htmlFor={id + '-source-import-filter'}>筛选可导入和不会导入的书源</label>
       <Input id={id + '-source-import-filter'} type="search" placeholder="搜索名称、分组或地址" value={filter} onChange={(event) => setFilter(event.target.value)} />
@@ -76,6 +77,18 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
       <div className="source-import-footer"><Button variant="secondary" type="button" disabled={busy} onClick={() => { setPreview(null); setSelected([]); setFilter(''); setStatus('input'); setMessage('') }}>返回修改地址</Button><Button variant="secondary" type="button" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button><Button type="button" disabled={busy || selected.length === 0} onClick={() => void confirm()}>{status === 'confirming' ? '保存中…' : `确认导入 ${selected.length} 项`}</Button></div>
     </div>}
   </Sheet>
+    <Sheet open={open && showSourceSites} onOpenChange={setShowSourceSites} title="获取书源">
+      <nav className="settings-entry-list" aria-label="书源获取地址">
+        {[
+          { name: '源仓库 · 原网站', url: 'https://www.yckceo.com/yuedu/shuyuans/index.html' },
+          { name: '源仓库 · yck2026.fun', url: 'https://www.yck2026.fun/yuedu/shuyuans/index.html' },
+          { name: '书源合集 · yiove.com', url: 'https://shuyuan.yiove.com/book-source-collections?page=1&page_size=20' },
+          { name: '源仓库 · yckceo.vip', url: 'https://yckceo.vip' },
+          { name: 'Bing 搜索：源仓库', url: 'https://www.bing.com/search?q=%E6%BA%90%E4%BB%93%E5%BA%93' },
+        ].map((site) => <a className="settings-entry" key={site.url} href={site.url} target="_blank" rel="noopener noreferrer"><span className="settings-entry-copy"><strong>{site.name}</strong><span className="muted small source-site-url">{site.url}</span></span><ExternalLink aria-hidden="true" /></a>)}
+      </nav>
+    </Sheet>
+  </>
 }
 
 function ImportCandidateRow({ candidate, displayName, domain, selected = false, disabled = false, onChange }: { candidate: ImportPreviewSummaryCandidate; displayName: string; domain: string; selected?: boolean; disabled?: boolean; onChange?: (checked: boolean) => void }) {

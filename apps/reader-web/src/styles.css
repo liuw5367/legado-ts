@@ -811,3 +811,5 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .organization-book > span { color: var(--muted); font-size: 13px; }
 .organization-sheet .sheet-footer, .organization-sheet .actions { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--border); }
 .organization-sheet .organization-field + .actions { margin-top: 20px; }
+
+.source-site-url { overflow-wrap: anywhere; }
