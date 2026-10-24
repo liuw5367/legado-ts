@@ -370,7 +370,6 @@ a { color: inherit; }
 .book-source-row p { max-width: 360px; margin: 3px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reader-error { width: min(calc(100% - 24px), 680px); margin: 0 auto; flex: 1; gap: 12px; padding-block: 24px; }
 .reader-error .error { margin: 0; overflow-wrap: anywhere; }
-.reader-runtime-warning { padding: 12px; color: var(--muted); font-size: 13px; }
 
 .sheet { position: fixed; top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-width: none; max-height: 85vh; max-height: 85dvh; margin: 0; padding: 0; overflow: hidden; color: var(--foreground); background: var(--card); border: 0; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 30px rgb(36 33 29 / 16%); }
 .sheet.discovery-source-switcher { height: 85vh; min-height: 85vh; max-height: 85vh; height: 85dvh; min-height: 85dvh; max-height: 85dvh; }
@@ -667,9 +666,45 @@ a { color: inherit; }
 .organization-choice { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
 .organization-choice > span:first-of-type { flex: 1; min-width: 0; }
 .organization-choice > span:first-of-type > span { display: block; }
-.organization-textarea { width: 100%; resize: vertical; }
+.organization-textarea { width: 100%; min-height: 88px; height: auto; resize: vertical; }
 .organization-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
 .organization-split-actions { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .book-list-detail-row { padding: 16px 0; border-bottom: 1px solid var(--border); }
 .shelf-group-bar { display: flex; gap: 8px; overflow-x: auto; padding-block: 4px; }
 .shelf-group-bar > button { flex-shrink: 0; }
+
+.startup-loading { display: flex; flex-direction: column; min-height: 100dvh; }
+.dismissible-message { display: flex; align-items: flex-start; gap: 8px; }
+.dismissible-message-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.message-close { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; padding: 4px; border: 0; border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
+.message-close svg { width: 16px; height: 16px; }
+.message-close:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+.sheet-footer, .sheet-body .actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.sheet-footer { width: 100%; }
+.sheet-footer-start { margin-right: auto; }
+.organization-choice { gap: 10px; min-height: 44px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.organization-choice input { flex: 0 0 auto; }
+.organization-choice > span:last-child { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
+.organization-choice > span:first-of-type > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+.book-list-cover svg { width: 14px; height: 18px; }
+.book-list-back { display: flex; align-items: center; min-height: 36px; }
+.organization-detail-actions { margin-top: 16px; }
+.book-list-member { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; }
+.book-list-member-actions { display: flex; flex-direction: column; gap: 6px; }
+.book-list-member-actions .button { height: 30px; min-height: 30px; padding: 3px 10px; }
+.book-list-member > .book-row-main { padding: 0; }
+.book-list-member > .organization-prose { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 13px; }
+.group-startup-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.group-startup-setting > span { flex: 0 0 auto; }
+.group-startup-setting .select { width: auto; min-width: 0; max-width: 50%; }
+.group-management-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.group-management-info { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.group-management-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-management-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.group-management-actions .button { min-height: 32px; padding: 4px 6px; }
+.group-management-actions svg { width: 14px; height: 14px; }
+.more-menu-list { z-index: 30; max-width: calc(100vw - 16px); overflow-y: auto; overscroll-behavior: contain; }
+
+.notice-with-recovery { display: flex; align-items: center; gap: 8px; }
+.notice-with-recovery > .dismissible-message { flex: 1; }
+.notice-with-recovery > button { flex: 0 0 auto; margin-left: auto; }

@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthCard } from '../components/auth-form.tsx'
@@ -14,8 +15,8 @@ export function RegisterPage() {
       <div className="field"><label htmlFor="email">邮箱</label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
       <div className="field"><label htmlFor="password">密码</label><Input id="password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>
       <div className="field"><label htmlFor="confirmation">确认密码</label><Input id="confirmation" type="password" autoComplete="new-password" minLength={8} required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>
-      {message === undefined ? null : <p className="success" role="status">{message} <Button className="inline-action" size="sm" variant="secondary" disabled={resending} type="button" onClick={() => void resend()}>{resending ? '发送中…' : '重新发送'}</Button></p>}
-      {error === undefined ? null : <p className="error" role="alert">{error}</p>}
+      {message === undefined ? null : <DismissibleMessage onDismiss={() => setMessage('')} className="success" role="status">{message} <Button className="inline-action" size="sm" variant="secondary" disabled={resending} type="button" onClick={() => void resend()}>{resending ? '发送中…' : '重新发送'}</Button></DismissibleMessage>}
+      {error === undefined ? null : <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}</DismissibleMessage>}
       <Button disabled={pending} type="submit">{pending ? '注册中…' : '注册'}</Button>
     </form>
   </AuthCard>

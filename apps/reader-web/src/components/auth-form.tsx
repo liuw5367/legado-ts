@@ -1,3 +1,4 @@
+import { DismissibleMessage } from './dismissible-message.tsx'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { PageHeader } from './page-header.tsx'
 import { Button } from './ui/button.tsx'
@@ -20,7 +21,7 @@ export function EmailPasswordFields({ submitLabel, onSubmit, includeCurrent = fa
     {includeCurrent ? <div className="field"><label htmlFor="current-password">当前密码</label><Input id="current-password" type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div> : null}
     <div className="field"><label htmlFor="email">邮箱</label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
     <div className="field"><label htmlFor="password">{includeCurrent ? '新密码' : '密码'}</label><Input id="password" type="password" autoComplete={includeCurrent ? 'new-password' : 'current-password'} minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></div>
-    {error === undefined ? null : <p className="error" role="alert">{error}</p>}
+    {error === undefined ? null : <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}</DismissibleMessage>}
     <Button disabled={pending} type="submit">{pending ? '处理中…' : submitLabel}</Button>
   </form>
 }

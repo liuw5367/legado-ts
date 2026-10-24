@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { useId } from 'react'
 import { Select } from '../components/ui/select.tsx'
@@ -17,7 +18,7 @@ export function GeneralSettingsPage() {
         <label className="general-setting-select"><span className="sr-only">书架排序</span><Select value={settings.general.bookshelfSort} onChange={(event) => void updateSettings({ general: { bookshelfSort: event.target.value as ApiBookshelfSortMode } }).catch(() => undefined)}><option value="addedAt">加入时间</option><option value="lastReadAt">阅读时间</option></Select></label>
       </div>
       {saving ? <p className="muted small" role="status">正在保存…</p> : null}
-      {error === undefined ? null : <p className="error compact-message" role="alert">{error}</p>}
+      {error === undefined ? null : <DismissibleMessage className="error compact-message" role="alert">{error}</DismissibleMessage>}
     </section>
   </section>
 }

@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
 import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
@@ -50,8 +51,8 @@ export function BookDetailsPage() {
   const original = browserUrl(data?.edition.bookUrl)
   return <section className="page-stack page-narrow book-details-page">
     <PageHeader backTo="/" title="书籍详情" />
-    {feedback ? <p className="success" role="status">{feedback}</p> : null}
-    {error.length > 0 ? <p className="error" role="alert">{error}<Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>重试</Button></p> : null}
+    {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success" role="status">{feedback}</DismissibleMessage> : null}
+    {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>重试</Button></DismissibleMessage> : null}
     {data === null ? error.length === 0 ? <LoadingState message="正在读取详情…" variant="viewport" action={<PageBackButton appearance="button" />} /> : null : <>
       <div className="book-details-heading"><BookCover name={name} coverUrl={metadata?.coverUrl || data.book.coverUrl} size="detail" /><div><h2>{name}</h2>{metadata?.author || data.book.author ? <p className="muted small">{metadata?.author || data.book.author}</p> : null}{metadata?.kind ? <p className="muted small">{metadata.kind}</p> : null}{data.sourceName ? <p className="muted small">{data.sourceName}</p> : null}</div></div>
       <div className="book-details-actions"><Button variant="secondary" disabled={saving} onClick={() => void updateShelf(!data.onBookshelf)}>{saving ? '保存中…' : data.onBookshelf ? '移出书架' : '加入书架'}</Button><Button variant="secondary" onClick={() => setPicker('join')}>加入书单</Button>{data.onBookshelf ? <Button variant="secondary" onClick={() => setPicker('group')}>修改分组</Button> : null}<Link className="button secondary" to={prefix + '/toc' + query} state={pageReturnState(location)}>查看目录</Link><Link className="button secondary" to={prefix + '/sources'} state={pageReturnState(location)}>切换书源</Link><Link className="button" to={prefix + '/read' + query} state={readingEntryState(location)}>阅读 / 继续阅读</Link></div>

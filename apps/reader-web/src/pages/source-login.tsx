@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/page-header.tsx'
@@ -80,11 +81,11 @@ export function SourceLoginPage() {
   return <section className="page-stack page-narrow source-login-page">
     <PageHeader backTo="/sources" title="书源登录" description={ui?.dynamic === true ? '动态登录表单' : '书源登录信息'} />
     {loading ? <LoadingState message="正在读取登录表单…" variant="content" /> : null}
-    {error.length > 0 ? <p className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => navigate(0)}>重试</Button></p> : null}
+    {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => navigate(0)}>重试</Button></DismissibleMessage> : null}
     {!loading && ui !== null && fields.length === 0 && error.length === 0 ? <div className="empty-state"><p>此书源没有可用的非浏览器登录表单。</p><p className="muted small">需要 WebView、验证码或外部浏览器的登录流程会明确返回能力缺失。</p></div> : null}
     {!loading && ui !== null && fields.length > 0 ? <form className="form" onSubmit={(event) => { event.preventDefault(); void submit() }}>
       {fields.map((field) => { const valueKey = field.key ?? field.name; const action = field.action; const countdown = action === undefined ? undefined : countdowns[action]; return <LoginField key={valueKey} field={field} value={values[valueKey] ?? field.value ?? field.default ?? ''} disabled={pending || (countdown ?? 0) > 0} {...(countdown === undefined ? {} : { countdown })} onChange={(value) => changeField(field, value)} onAction={(nextAction, value) => void submit(nextAction, value === undefined ? undefined : { [valueKey]: value })} /> })}
-      {message.length > 0 ? <p className="success" role="status">{message}</p> : null}
+      {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="success" role="status">{message}</DismissibleMessage> : null}
       <Button type="submit" disabled={pending}>{pending ? '提交中…' : '提交登录'}</Button>
     </form> : null}
   </section>

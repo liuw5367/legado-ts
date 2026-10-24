@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -191,13 +192,13 @@ export function BookSourcesPage() {
   const ungroupedResults = results.filter(({ item }) => !groupedResultDomains.has(sourceDomainInfo(item.sourceId).key))
   const fallback = prefix + '/toc' + (book?.activeEditionKey ? '?editionKey=' + encodeURIComponent(book.activeEditionKey) : '')
   return <section className="page-stack page-narrow book-sources-page">
-    {cancellationPending ? <p className="error" role="alert">搜索取消尚未完成。<Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></p> : null}
+    {cancellationPending ? <div className="notice-with-recovery"><DismissibleMessage className="error" role="alert">搜索取消尚未完成。</DismissibleMessage><Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></div> : null}
     <PageHeader backTo={fallback} title="切换书源" description={book?.name ?? '书籍来源'} />
-    {error.length > 0 ? <p className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>重试列表</Button></p> : null}
+    {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>重试列表</Button></DismissibleMessage> : null}
     {data === null ? error.length === 0 ? <LoadingState message="正在读取可用书源…" variant="viewport" action={<PageBackButton appearance="button" fallback={fallback} />} /> : null : <>
       <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); setNotice(''); void search(keyword, precision) }}><div className="search-row"><Input aria-label="搜索可用书源" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={status !== 'loading' && keyword.trim().length === 0} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div><p className="muted small">切换会更新账号默认书源；目录预览不会改本书当前版本。</p></form>
-      {notice.length > 0 ? <p className="success compact-message" role="status">{notice}</p> : null}
-      {message.length > 0 ? <p className="muted small" role="status">{message}</p> : null}
+      {notice.length > 0 ? <DismissibleMessage onDismiss={() => setNotice('')} className="success compact-message" role="status">{notice}</DismissibleMessage> : null}
+      {message.length > 0 ? <DismissibleMessage className="muted small" role="status">{message}</DismissibleMessage> : null}
       {status === 'loading' ? <LoadingState message={'正在搜索可用书源…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}`)} variant={data.sources.length === 0 && results.length === 0 ? 'content' : 'inline'} /> : null}
       {status === 'done' && searchId.length > 0 && results.length === 0 ? <div className="empty-state">当前搜索没有找到与这本书匹配的来源。</div> : null}
       <div className="book-source-list">

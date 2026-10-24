@@ -67,6 +67,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     saving,
     ...(error === undefined ? {} : { error }),
     updateSettings: async (patch, options = {}) => {
+      setError(undefined)
       const next: ApiSettings = { ...latestSettings.current, ...patch, general: { ...latestSettings.current.general, ...patch.general }, updatedAt: new Date().toISOString() }
       const sequence = ++changeSequence.current
       const optimistic = options.optimistic !== false || session === null || user?.id === undefined

@@ -31,6 +31,12 @@ Buttons use a 0.5rem radius, solid primary fill for the main action, and a one-p
 
 Loading states use a 28px ring with a 2px border, a primary-colored leading edge, and a 0.9s linear rotation. Supporting text is 14px with a 12px gap below the ring; an optional outlined secondary button labelled “返回页面”, without an arrow icon, sits 20px below the text with a 44px minimum hit area. Center blocking states in the available content area, or the safe viewport for startup, authentication, and reading. Inline updates use a 16px ring beside 12px text and retain existing content. Do not add a card, shadow, or entrance animation. Disable rotation for `prefers-reduced-motion`. The inline HTML startup styles use the same dimensions and system theme until account settings become available.
 
+Inline success and error messages use DismissibleMessage with a trailing close control; dismissing a message does not cancel the underlying operation. Blocking startup authentication uses a full viewport flex container. Reading never inserts source-runtime persistence warnings into the text column; server diagnostics remain available.
+
+Book list and group sheets use a compact divided selection list. Footer actions align right, with the optional new-list or new-group action anchored left. Book list detail actions use the existing two-column 44px detail-button grid. Member edit/remove buttons stack at the right of the cover row, and the review occupies the line below. Missing quadrants and missing member covers within the composite cover use the book outline icon.
+
+More menus position against the visible viewport, open upward when there is more usable space above, avoid the bottom navigation, and scroll internally when neither side fits. Group management rows keep names and right-aligned actions on one vertically centered row; the startup-group label and select share a row.
+
 ## 5. Layout principles
 
 Pages use a single reading column capped at 680px, with a two-level rhythm of 0.75rem and 1.25rem. The header aligns to the same content width. Search and settings collapse to one column below 720px; reader controls wrap before the text column becomes cramped. Paginated reading reuses the same viewport width and lays out one non-scrollable page per column.

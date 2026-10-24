@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
 import { CircleHelp, ExternalLink, Info, RefreshCw } from 'lucide-react'
 import { useBookCache } from '../lib/book-cache-context.tsx'
@@ -46,7 +47,6 @@ export function ReaderPage() {
   const [position, setPosition] = useState<ApiPosition | null>(null)
   const [positionLoaded, setPositionLoaded] = useState(false)
   const [error, setError] = useState('')
-  const [runtimeWarning, setRuntimeWarning] = useState('')
   const [positionError, setPositionError] = useState('')
   const [panel, setPanel] = useState<ReaderPanel>(null)
   const [retryNonce, setRetryNonce] = useState(0)
@@ -94,7 +94,7 @@ export function ReaderPage() {
       positionVersionRef.current = positionResult.position?.version ?? -1
       latestAnchorRef.current = chapterAnchor
       paginationAnchorRef.current = chapterAnchor
-      setRuntimeWarning(contentResult.content.runtimeWarning ?? ''); cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
+      cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
     }).catch((reason: unknown) => {
       if (!active || requestId !== requestIdRef.current) return
       const snapshot = cache.get(bookId, editionKey)
@@ -404,7 +404,7 @@ export function ReaderPage() {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       if (result.content.tocRevision !== cache.get(bookId, editionKey)?.toc.revision) await loadBookSnapshot(cache, bookId, editionKey, true)
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      setRuntimeWarning(result.content.runtimeWarning ?? ''); cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content)
+      cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content)
       if (paged) {
         paginationAnchorRef.current = anchor ?? latestAnchorRef.current
         setPageLayout({ pageWidth: 0, pageCount: 0 })
@@ -455,7 +455,6 @@ export function ReaderPage() {
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原文地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />查看原文</a>}
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新内容'}</button>
     </MoreMenu></div></header>
-    {runtimeWarning ? <p className="reader-runtime-warning" role="status">{runtimeWarning}</p> : null}
     <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? `正文，左侧上一页，中栏上段${settings.pageTapZones.centerTopAction === 'previous' ? '上一页' : '下一页'}，中段显示或隐藏操作栏，下段${settings.pageTapZones.centerBottomAction === 'previous' ? '上一页' : '下一页'}，右侧下一页` : '正文，按回车显示或隐藏阅读操作'} style={readerStyle}
       onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY } }}
       onPointerCancel={() => { pointerStartRef.current = null }}
@@ -506,14 +505,14 @@ export function ReaderPage() {
           </div>
           <div className="reader-page-guide-actions"><label><span>上栏点击</span><select aria-label="上栏点击动作" value={pageGuideDraft.centerTopAction} onChange={(event) => updateCenterPageAction('top', event.target.value as ApiPageTapAction)}><option value="previous">上一页</option><option value="next">下一页</option></select></label><label><span>下栏点击</span><select aria-label="下栏点击动作" value={pageGuideDraft.centerBottomAction} onChange={(event) => updateCenterPageAction('bottom', event.target.value as ApiPageTapAction)}><option value="previous">上一页</option><option value="next">下一页</option></select></label></div>
           <p className="reader-page-guide-hint">左 / 中 / 右：{pageGuideDraft.leftWidthPercent}% / {pageGuideDraft.centerWidthPercent}% / {100 - pageGuideDraft.leftWidthPercent - pageGuideDraft.centerWidthPercent}%；上 / 中 / 下：{pageGuideDraft.centerTopHeightPercent}% / {pageGuideDraft.centerMiddleHeightPercent}% / {100 - pageGuideDraft.centerTopHeightPercent - pageGuideDraft.centerMiddleHeightPercent}%。每个区域至少 18%，分割线也可用方向键微调。</p>
-          {pageGuideError.length > 0 ? <p className="error reader-page-guide-error" role="alert">{pageGuideError}</p> : null}
+          {pageGuideError.length > 0 ? <DismissibleMessage onDismiss={() => setPageGuideError('')} className="error reader-page-guide-error" role="alert">{pageGuideError}</DismissibleMessage> : null}
         </div>
         <footer className="reader-page-guide-footer"><Button variant="secondary" type="button" disabled={settingsSaving} onClick={closePageGuide}>关闭</Button><Button type="button" disabled={settingsSaving} onClick={() => void savePageGuide()}>{settingsSaving ? '保存中…' : '保存设置'}</Button></footer>
       </div>
     </dialog> : null}
-    {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><p className="error">{paginationError}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
-    {refreshError.length > 0 ? <p className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></p> : null}
-    {positionError.length > 0 ? <p className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void navigation?.positions.retry(bookId, editionKey).then((result) => { if (result !== undefined) { setPosition(result); setPositionError('') } }, (reason: unknown) => setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败'))}>重试</button></p> : null}
+    {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><DismissibleMessage onDismiss={() => setPaginationError('')} className="error">{paginationError}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
+    {refreshError.length > 0 ? <DismissibleMessage onDismiss={() => setRefreshError('')} className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></DismissibleMessage> : null}
+    {positionError.length > 0 ? <DismissibleMessage onDismiss={() => setPositionError('')} className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void navigation?.positions.retry(bookId, editionKey).then((result) => { if (result !== undefined) { setPosition(result); setPositionError('') } }, (reason: unknown) => setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败'))}>重试</button></DismissibleMessage> : null}
     <div className="reader-bottom-bar" hidden={!controlsVisible}>
       <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? `分页进度 ${pageCounter}，${wordCountLabel}` : '章节字数'}>{paged ? <><span>{pageCounter}</span><span className="reader-word-count-separator" aria-hidden="true">·</span><span>{wordCountLabel}</span></> : wordCountLabel}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">
@@ -522,7 +521,7 @@ export function ReaderPage() {
         <button type="button" className="reader-shortcut" aria-label="设置" onClick={() => setPanel('settings')}><ReaderIcon name="settings" /><span>设置</span></button>
         <button type="button" className="reader-shortcut" aria-label={dark ? '切换日间模式' : '切换夜间模式'} disabled={settingsSaving} onClick={() => void toggleTheme()}><ReaderIcon name={dark ? 'sun' : 'moon'} /><span>{dark ? '日间' : '夜间'}</span></button>
       </nav>
-      {settingsError === undefined ? null : <p className="error reader-settings-error" role="alert">{settingsError}{themeRetry === null ? null : <button className="text-button" type="button" disabled={settingsSaving} onClick={() => void toggleTheme(themeRetry)}>重试</button>}</p>}
+      {settingsError === undefined ? null : <div className="notice-with-recovery"><DismissibleMessage className="error reader-settings-error" role="alert">{settingsError}</DismissibleMessage>{themeRetry === null ? null : <button className="text-button" type="button" disabled={settingsSaving} onClick={() => void toggleTheme(themeRetry)}>重试</button>}</div>}
     </div>
     <Sheet open={panel === 'toc'} onOpenChange={(open) => setPanel(open ? 'toc' : null)} title="章节目录"><ReaderTocPanel open={panel === 'toc'} bookId={bookId} editionKey={editionKey} chapters={siblings} currentChapterId={chapterId} onNavigate={() => setPanel(null)} /></Sheet>
     <Sheet open={panel === 'settings'} onOpenChange={(open) => setPanel(open ? 'settings' : null)} title="阅读设置"><ReaderSettingsPanel /></Sheet>
@@ -559,7 +558,7 @@ function ReaderTocPanel({ open, bookId, editionKey, chapters, currentChapterId, 
     }
   }
   const orderedChapters = reversed ? [...chapters].reverse() : chapters
-  return <div className="reader-toc-panel"><div className="reader-toc-actions"><Link className="button secondary reader-toc-directory" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} state={pageReturnState(location)} onClick={onNavigate}>完整目录</Link><div className="reader-toc-utility-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? '正序' : '倒序'}</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>到顶部</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })}>到底部</Button><Button variant="secondary" size="sm" type="button" aria-label="刷新目录数据" disabled={refreshing} onClick={() => void refreshDirectory()}>{refreshing ? '刷新中…' : '刷新'}</Button></div></div>{refreshError.length > 0 ? <p className="error reader-toc-error" role="alert">{refreshError}<button className="text-button" type="button" disabled={refreshing} onClick={() => void refreshDirectory()}>重试</button></p> : null}<div className="reader-toc-list" ref={listRef}>{orderedChapters.map((chapter) => <Link className={`reader-toc-row ${chapter.chapterId === currentChapterId ? 'current' : ''}`} aria-current={chapter.chapterId === currentChapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} replace state={location.state} onClick={onNavigate}><span className="toc-index">{chapter.index + 1}</span><span>{chapter.title}</span>{chapter.chapterId === currentChapterId ? <span className="toc-check" aria-label="当前阅读章节">✓</span> : null}</Link>)}</div></div>
+  return <div className="reader-toc-panel"><div className="reader-toc-actions"><Link className="button secondary reader-toc-directory" to={`/books/${encodeURIComponent(bookId)}/toc?editionKey=${encodeURIComponent(editionKey)}`} state={pageReturnState(location)} onClick={onNavigate}>完整目录</Link><div className="reader-toc-utility-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? '正序' : '倒序'}</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>到顶部</Button><Button variant="secondary" size="sm" type="button" onClick={() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })}>到底部</Button><Button variant="secondary" size="sm" type="button" aria-label="刷新目录数据" disabled={refreshing} onClick={() => void refreshDirectory()}>{refreshing ? '刷新中…' : '刷新'}</Button></div></div>{refreshError.length > 0 ? <DismissibleMessage onDismiss={() => setRefreshError('')} className="error reader-toc-error" role="alert">{refreshError}<button className="text-button" type="button" disabled={refreshing} onClick={() => void refreshDirectory()}>重试</button></DismissibleMessage> : null}<div className="reader-toc-list" ref={listRef}>{orderedChapters.map((chapter) => <Link className={`reader-toc-row ${chapter.chapterId === currentChapterId ? 'current' : ''}`} aria-current={chapter.chapterId === currentChapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} replace state={location.state} onClick={onNavigate}><span className="toc-index">{chapter.index + 1}</span><span>{chapter.title}</span>{chapter.chapterId === currentChapterId ? <span className="toc-check" aria-label="当前阅读章节">✓</span> : null}</Link>)}</div></div>
 }
 
 export function ReaderEntryPage() {

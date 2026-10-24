@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
 import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
@@ -89,10 +90,10 @@ export function AccountHomePage() {
     </div>
     {view === 'bookshelf' && groupData && groupData.groups.length > 0 ? <div className="shelf-group-bar" aria-label="书架分组">{[{ id: 'all', name: '全部' }, { id: 'ungrouped', name: '默认' }, ...groupData.groups].map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div> : null}
     {view === 'bookshelf' && home && bookItems.length === 0 && selectedGroup !== 'all' ? <div className="empty-state"><p>这个分组还没有书</p><Link className="button secondary" to="/search">搜索书籍</Link></div> : null}
-    {loading && home === null ? <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : home === null ? <div className="error-state"><p className="error" role="alert">{message || '首页加载失败'}</p><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
+    {loading && home === null ? <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : home === null ? <div className="error-state"><DismissibleMessage className="error" role="alert">{message || '首页加载失败'}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
       {loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
-      {feedback ? <p className="success compact-message" role="status">{feedback}</p> : null}
-      {message.length > 0 ? <p className="error compact-message" role="alert">{message}</p> : null}
+      {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success compact-message" role="status">{feedback}</DismissibleMessage> : null}
+      {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="error compact-message" role="alert">{message}</DismissibleMessage> : null}
       {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList onOrganized={setFeedback} view={view} items={bookItems} showRemove={view === 'bookshelf'} hideEmpty={view === 'bookshelf' && selectedGroup !== 'all'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
     </>}
   </section>

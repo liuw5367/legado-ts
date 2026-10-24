@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { useEffect } from 'react'
 import { Download, ChevronRight, LogOut, LockKeyhole, Upload } from 'lucide-react'
@@ -72,8 +73,8 @@ export function SettingsPage() {
       <SettingsEntry to="/account/settings/about" title="关于应用" description="应用版本与项目地址" />
     </nav>
     <input ref={inputRef} className="sr-only" type="file" accept=".zip,application/zip" onChange={onFileChange} />
-    {error === undefined ? null : <p className="error compact-message">{error}</p>}
-    {message === undefined ? null : <p className="success compact-message">{message}</p>}
+    {error === undefined ? null : <DismissibleMessage onDismiss={() => setError('')} className="error compact-message">{error}</DismissibleMessage>}
+    {message === undefined ? null : <DismissibleMessage onDismiss={() => setMessage('')} className="success compact-message">{message}</DismissibleMessage>}
     <BackupRestoreDialog preview={preview} open={dialogOpen} categories={categories} busy={busy} error={error} onChange={setCategories} onConfirm={confirmImport} onCancel={() => { setDialogOpen(false); setError(undefined) }} />
   </section>
 }

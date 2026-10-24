@@ -1,3 +1,4 @@
+import { DismissibleMessage } from './dismissible-message.tsx'
 import type { BackupPreview } from '../lib/api.ts'
 
 export const BACKUP_CATEGORY_OPTIONS = [
@@ -17,7 +18,7 @@ export function BackupRestoreDialog({ preview, open, categories, busy, error, on
       <div className="backup-dialog-list">
         {BACKUP_CATEGORY_OPTIONS.map((option) => <label className="backup-dialog-option" key={option.value}><input type="checkbox" checked={categories.includes(option.value)} disabled={busy} onChange={() => toggle(option.value)} /><span><strong>{option.label}</strong><span className="muted small">{option.description}，备份 {preview.preview.recordCounts[option.value]} 项，当前 {preview.currentCounts[option.value]} 项；确认后完整覆盖</span></span></label>)}
       </div>
-      {error === undefined ? null : <p className="error compact-message">{error}</p>}
+      {error === undefined ? null : <DismissibleMessage className="error compact-message">{error}</DismissibleMessage>}
       <div className="backup-dialog-actions"><button className="button secondary" type="button" disabled={busy} onClick={onCancel}>取消</button><button className="button" type="button" disabled={busy || categories.length === 0} onClick={onConfirm}>{busy ? '正在恢复…' : '确认恢复'}</button></div>
     </section>
   </div>

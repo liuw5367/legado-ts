@@ -1,3 +1,4 @@
+import { DismissibleMessage } from './dismissible-message.tsx'
 import { useId } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { stepSetting } from '../lib/setting-step.ts'
@@ -22,7 +23,7 @@ export function ReaderSettingsPanel() {
       <SettingRange label="左边距" value={settings.marginLeft} min={0} max={64} step={1} suffix="px" onChange={(value) => void save({ marginLeft: value })} />
     </div>
     {saving ? <p className="muted small" role="status">正在保存…</p> : null}
-    {error === undefined ? null : <p className="error compact-message" role="alert">{error}</p>}
+    {error === undefined ? null : <DismissibleMessage className="error compact-message" role="alert">{error}</DismissibleMessage>}
   </div>
 }
 

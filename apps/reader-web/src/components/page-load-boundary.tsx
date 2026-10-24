@@ -1,3 +1,4 @@
+import { DismissibleMessage } from './dismissible-message.tsx'
 import { Component, Suspense, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { LoadingState } from './loading-state.tsx'
@@ -18,7 +19,7 @@ class PageLoadErrorBoundary extends Component<{ children: ReactNode; action: Rea
     if (!this.state.failed) return this.props.children
     // lazy 会缓存失败的模块 Promise，恢复网络后需要完整刷新才能重新下载。
     return <div className="page-load-error">
-      <p className="error" role="alert">页面加载失败，请刷新页面后重试。</p>
+      <DismissibleMessage className="error" role="alert">页面加载失败，请刷新页面后重试。</DismissibleMessage>
       <div className="loading-state-action">
         <Button type="button" onClick={() => window.location.reload()}>刷新页面</Button>
         {this.props.action}

@@ -1,3 +1,4 @@
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageActivity, usePageLoadEffect } from '../lib/use-page-resource.ts'
@@ -168,15 +169,15 @@ export function SearchPage() {
   }
 
   return <section className="page-stack page-narrow search-page">
-    {cancellationPending ? <p className="error" role="alert">搜索取消尚未完成。<Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></p> : null}
+    {cancellationPending ? <div className="notice-with-recovery"><DismissibleMessage className="error" role="alert">搜索取消尚未完成。</DismissibleMessage><Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></div> : null}
     <PageHeader backTo={targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : "/discover"} title="搜索书籍" description={status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者'} actions={<Link className="button small page-action" to="/sources">管理书源</Link>} />
     <form className="search-panel" onSubmit={(event) => void submitSearch(event)}>
       <div className="search-row"><label className="sr-only" htmlFor={`${page?.id ?? 'search'}-keyword`}>关键词</label><Input className="search-input" id={`${page?.id ?? 'search'}-keyword`} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={saving !== null || (status !== 'loading' && keyword.trim().length === 0)} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div>
 
     </form>
-    {searchMessage.length > 0 ? <p className="muted compact-message" role="status">{searchMessage}</p> : null}
-    {sourceManagementError.length > 0 ? <p className="muted compact-message" role="status">同域版本列表暂不可用：{sourceManagementError}。可在书源管理页切换版本。</p> : null}
-    {message.length > 0 ? <p className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</p> : null}
+    {searchMessage.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">{searchMessage}</DismissibleMessage> : null}
+    {sourceManagementError.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">同域版本列表暂不可用：{sourceManagementError}。可在书源管理页切换版本。</DismissibleMessage> : null}
+    {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</DismissibleMessage> : null}
     {status === 'loading' ? <LoadingState message={'正在搜索书籍…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}`)} variant={groups.length === 0 ? 'content' : 'inline'} /> : null}
     {groups.length === 0 && status === 'done' && !booksLoaded ? <LoadingState message="正在读取已有书籍…" variant="viewport" /> : null}
     <div className="result-summary" aria-live="polite">{status === 'done' && booksLoaded ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
