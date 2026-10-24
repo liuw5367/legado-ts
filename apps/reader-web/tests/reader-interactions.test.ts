@@ -41,3 +41,15 @@ test('page return preserves parent state and rejects external/self targets', () 
   assert.deepEqual(pageReturnTarget({ backTo: '/search?q=书', backState: { backTo: '/' } }, '/books/b/toc', '/'), { to: '/search?q=书', state: { backTo: '/' } })
   for (const backTo of ['//evil.example', '/\\evil.example', 'https://evil.example', '/books/b/toc?editionKey=old', '/\nmalformed']) assert.equal(pageReturnTarget({ backTo }, '/books/b/toc', '/').to, '/')
 })
+
+test('paginated taps resume immediately after an existing text selection', () => {
+  const start = { x: 250, y: 80, scrollY: 0, selectedText: '原有选区' }
+  assert.equal(isReaderTap(start, start, '原有选区'), true)
+  assert.equal(pageActionForTap(start, start, '原有选区', 250, 0, 300), 'next')
+  assert.equal(pageActionForTap(start, { ...start, x: 50 }, '原有选区', 50, 0, 300), null)
+  const previous = { ...start, x: 50 }
+  assert.equal(pageActionForTap(previous, previous, '原有选区', 50, 0, 300), 'previous')
+  assert.equal(pageActionForTap(start, start, '重新选择的文字', 250, 0, 300), null)
+  assert.equal(pageActionForTap({ ...start, selectedText: '' }, start, '新选区', 250, 0, 300), null)
+  assert.equal(isReaderTap(null, start, '原有选区'), false)
+})

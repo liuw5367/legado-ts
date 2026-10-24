@@ -10,6 +10,7 @@ export interface PageLayout {
 
 export interface ReaderAnchor {
   paragraphIndex: number
+  /** 段落 textContent 中的 UTF-16 偏移，定位跨页段落内的首个可见字符。 */
   offset: number
 }
 
@@ -115,10 +116,53 @@ export function firstVisibleParagraphIndex(viewport: HTMLElement | null): number
 export function pageIndexForAnchor(viewport: HTMLElement | null, anchor: ReaderAnchor | null, layout: PageLayout): number {
   if (viewport === null || anchor === null) return 0
   const element = viewport.querySelector<HTMLElement>(`[data-paragraph="${anchor.paragraphIndex}"]`)
+  if (element !== null && anchor.offset > 0) {
+    const walker = element.ownerDocument.createTreeWalker(element, 4)
+    let remaining = anchor.offset
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const length = node.textContent?.length ?? 0
+      if (remaining < length) {
+        const range = element.ownerDocument.createRange()
+        range.setStart(node, remaining)
+        range.setEnd(node, remaining + 1)
+        const rect = range.getBoundingClientRect()
+        const left = rect.left - viewport.getBoundingClientRect().left + viewport.scrollLeft
+        return clampPageIndex(Math.floor(Math.max(0, left) / layout.pageWidth), layout.pageCount)
+      }
+      remaining -= length
+    }
+  }
   return pageIndexForElement(element, viewport, layout)
 }
 
 export function anchorFromViewport(viewport: HTMLElement | null): ReaderAnchor | undefined {
   const paragraphIndex = firstVisibleParagraphIndex(viewport)
-  return paragraphIndex === undefined ? undefined : { paragraphIndex, offset: 0 }
+  if (paragraphIndex === undefined || viewport === null) return undefined
+  const element = viewport.querySelector<HTMLElement>(`[data-paragraph="${paragraphIndex}"]`)
+  if (element === null) return undefined
+  const viewportRect = viewport.getBoundingClientRect()
+  const walker = element.ownerDocument.createTreeWalker(element, 4)
+  const range = element.ownerDocument.createRange()
+  let offset = 0
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const length = node.textContent?.length ?? 0
+    // 多栏中的同一段落可跨页；逐文本节点二分查找当前栏首字符，不能使用段落整体矩形定位。
+    let low = 0
+    let high = length
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2)
+      range.setStart(node, middle)
+      range.setEnd(node, middle + 1)
+      if (range.getBoundingClientRect().right <= viewportRect.left + 1) low = middle + 1
+      else high = middle
+    }
+    if (low < length) {
+      range.setStart(node, low)
+      range.setEnd(node, low + 1)
+      const rect = range.getBoundingClientRect()
+      if (rect.right > viewportRect.left + 1 && rect.left < viewportRect.right - 1 && rect.bottom > viewportRect.top + 8 && rect.top < viewportRect.bottom - 8) return { paragraphIndex, offset: offset + low }
+    }
+    offset += length
+  }
+  return { paragraphIndex, offset: 0 }
 }

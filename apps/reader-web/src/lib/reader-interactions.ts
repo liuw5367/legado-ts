@@ -4,9 +4,14 @@ export function chapterCharacterCount(text: string): number {
   return [...text.replace(/\s/gu, '')].length
 }
 /** 拖动、滚动或选字结束不应触发工具栏显隐。 */
-export interface ReaderTapPoint { x: number; y: number; scrollY: number }
+export interface ReaderTapPoint {
+  x: number; y: number; scrollY: number
+  /** 分页手势开始前已有的选中文字，用于区分旧选区与本次选字。 */
+  selectedText?: string
+}
 export function isReaderTap(start: ReaderTapPoint | null, end: ReaderTapPoint, selectedText: string): boolean {
-  return selectedText.length === 0 && (start === null || (Math.hypot(end.x - start.x, end.y - start.y) < 8 && end.scrollY === start.scrollY))
+  const selectingText = selectedText.length > 0 && selectedText !== start?.selectedText
+  return !selectingText && (start === null || (Math.hypot(end.x - start.x, end.y - start.y) < 8 && end.scrollY === start.scrollY))
 }
 /** 目录响应必须同时属于当前书籍和书源版本，避免切换期间复用旧章节链接。 */
 export function isCurrentToc(toc: { bookId: string; editionKey: string } | null, bookId: string, editionKey: string): boolean {

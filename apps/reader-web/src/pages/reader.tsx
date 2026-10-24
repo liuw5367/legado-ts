@@ -7,7 +7,7 @@ import { MoreMenu } from '../components/more-menu.tsx'
 import { PageBackButton } from '../components/page-back-button.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { ReaderIcon } from '../components/reader-icon.tsx'
-import { browserUrl, chapterCharacterCount, isReaderTap } from '../lib/reader-interactions.ts'
+import { browserUrl, chapterCharacterCount, isReaderTap, type ReaderTapPoint } from '../lib/reader-interactions.ts'
 import { pageReturnState } from '../lib/page-navigation.ts'
 import { anchorFromViewport, clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageIndexForAnchor, pageLabel, pageTapZoneBoundaryRange, resizePageTapZones, type PageLayout, type PageTapZoneBoundary, type ReaderAnchor, type ReaderPageAction } from '../lib/reader-pagination.ts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
@@ -40,8 +40,9 @@ export function ReaderPage() {
   const [pageGuideDraft, setPageGuideDraft] = useState<ApiPageTapZones>(settings.pageTapZones)
   const [pageGuideError, setPageGuideError] = useState('')
   const [themeRetry, setThemeRetry] = useState<'light' | 'dark' | null>(null)
-  const pointerStartRef = useRef<{ x: number; y: number; scrollY: number } | null>(null)
+  const pointerStartRef = useRef<ReaderTapPoint | null>(null)
   const restoredPositionRef = useRef(false)
+  const previousChapterEndRef = useRef<string | null>(location.hash === '#last-page' ? chapterId : null)
   const [content, setContent] = useState<ApiContent | null>(null)
   const [toc, setToc] = useState<ApiToc | null>(null)
   const [position, setPosition] = useState<ApiPosition | null>(null)
@@ -89,6 +90,8 @@ export function ReaderPage() {
       if (!active || requestId !== requestIdRef.current) return
       restoredPositionRef.current = positionResult.position?.chapterId !== chapterId
       const chapterPosition = positionResult.position?.chapterId === chapterId ? positionResult.position : null
+      // 末页入口仅在跨章时生效；刷新已有本章进度的页面必须恢复已保存位置。
+      if (chapterPosition !== null) previousChapterEndRef.current = null
       const chapterAnchor = chapterPosition === null ? null : { paragraphIndex: chapterPosition.paragraphIndex, offset: chapterPosition.offset }
       latestPositionRef.current = positionResult.position
       positionVersionRef.current = positionResult.position?.version ?? -1
@@ -215,8 +218,15 @@ export function ReaderPage() {
   useEffect(() => () => { pageGuideDragRef.current = null }, [])
 
   useEffect(() => {
+    if (!controlsVisible) return
+    const overflow = document.documentElement.style.overflow
+    document.documentElement.style.overflow = 'hidden'
+    return () => { document.documentElement.style.overflow = overflow }
+  }, [controlsVisible])
+
+  useEffect(() => {
     const viewport = articleRef.current
-    if (settings.readingMode !== 'paged' || paginationError.length > 0 || content === null || viewport === null) return
+    if (settings.readingMode !== 'paged' || paginationError.length > 0 || content === null || content.chapter.chapterId !== chapterId || !positionLoaded || viewport === null) return
     let active = true
     let attempts = 0
     let measuredWidth = 0
@@ -248,7 +258,9 @@ export function ReaderPage() {
       attempts = 0
       const layout = { pageWidth, pageCount }
       setPageLayout((current) => current.pageWidth === layout.pageWidth && current.pageCount === layout.pageCount ? current : layout)
-      const targetPage = !measured || measuredWidth !== pageWidth
+      // 跨章回退在正文和位置加载后定位末页，避免被旧章节位置恢复覆盖。
+      const enteringPreviousEnd = previousChapterEndRef.current === chapterId
+      const targetPage = enteringPreviousEnd ? pageCount - 1 : !measured || measuredWidth !== pageWidth
         ? pageIndexForAnchor(viewport, paginationAnchorRef.current ?? latestAnchorRef.current, layout)
         : clampPageIndex(Math.round(viewport.scrollLeft / pageWidth), pageCount)
       measuredWidth = pageWidth
@@ -257,6 +269,15 @@ export function ReaderPage() {
       viewport.scrollTo({ left: targetPage * pageWidth, top: 0, behavior: 'auto' })
       setPageIndex(targetPage)
       setPaginationError('')
+      if (enteringPreviousEnd) {
+        previousChapterEndRef.current = null
+        const anchor = anchorFromViewport(viewport)
+        if (anchor !== undefined) {
+          latestAnchorRef.current = anchor
+          paginationAnchorRef.current = anchor
+          void persistPosition({ ...anchor, version: positionVersionRef.current + 1 })
+        }
+      }
     }
     const schedule = () => {
       if (!active) return
@@ -276,7 +297,7 @@ export function ReaderPage() {
       resources.forEach((image) => { image.removeEventListener('load', schedule); image.removeEventListener('error', schedule) })
       void fontsReady
     }
-  }, [content, paginationError, settings.fontSize, settings.lineHeight, settings.marginTop, settings.marginRight, settings.marginBottom, settings.marginLeft, settings.readingMode])
+  }, [content, chapterId, positionLoaded, paginationError, settings.fontSize, settings.lineHeight, settings.marginTop, settings.marginRight, settings.marginBottom, settings.marginLeft, settings.readingMode])
 
   const paragraphs = useMemo(() => content?.cleaned.split(/\n+/u).map((text) => text.trim()).filter(Boolean) ?? [], [content])
   const htmlContent = useMemo(() => content?.contentType === 'html' ? sanitizeChapterHtml(content.cleaned) : '', [content])
@@ -313,7 +334,13 @@ export function ReaderPage() {
   }
 
   function handlePageAction(action: ReaderPageAction) {
-    if (action === 'previous') turnPage(pageIndex - 1)
+    if (controlsVisible) { setControlsVisible(false); return }
+    if (action === 'previous') {
+      if (pageLayout.pageCount > 0 && pageIndex === 0 && previous !== undefined) {
+        previousChapterEndRef.current = previous.chapterId
+        navigate(chapterLink(bookId, previous, editionKey) + '#last-page', { replace: true, state: location.state })
+      } else turnPage(pageIndex - 1)
+    }
     else if (action === 'next') {
       // 排版完成且已到本章末页时，沿用章节导航流程加载下一章。
       if (pageLayout.pageCount > 0 && pageIndex >= pageLayout.pageCount - 1 && next !== undefined) {
@@ -456,7 +483,7 @@ export function ReaderPage() {
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新内容'}</button>
     </MoreMenu></div></header>
     <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? `正文，左侧上一页，中栏上段${settings.pageTapZones.centerTopAction === 'previous' ? '上一页' : '下一页'}，中段显示或隐藏操作栏，下段${settings.pageTapZones.centerBottomAction === 'previous' ? '上一页' : '下一页'}，右侧下一页` : '正文，按回车显示或隐藏阅读操作'} style={readerStyle}
-      onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY } }}
+      onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY, selectedText: paged ? window.getSelection()?.toString() ?? '' : '' } }}
       onPointerCancel={() => { pointerStartRef.current = null }}
       onClick={(event) => {
         const start = pointerStartRef.current
@@ -468,7 +495,11 @@ export function ReaderPage() {
         if (paged && articleRef.current !== null) {
           const rect = articleRef.current.getBoundingClientRect()
           const action = pageActionForTap(start, end, selectedText, event.clientX, rect.left, rect.width, settings.pageTapZones, event.clientY, rect.top, rect.height)
-          if (action !== null) handlePageAction(action)
+          if (action !== null) {
+            // 普通点击结束旧选区并立即响应；本次新建或拖动的选区已被手势判断拦截。
+            if (selectedText.length > 0) window.getSelection()?.removeAllRanges()
+            handlePageAction(action)
+          }
         } else setControlsVisible((value) => !value)
       }}
       onWheel={(event) => { if (paged) event.preventDefault() }}
@@ -513,7 +544,9 @@ export function ReaderPage() {
     {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><DismissibleMessage onDismiss={() => setPaginationError('')} className="error">{paginationError}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
     {refreshError.length > 0 ? <DismissibleMessage onDismiss={() => setRefreshError('')} className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></DismissibleMessage> : null}
     {positionError.length > 0 ? <DismissibleMessage onDismiss={() => setPositionError('')} className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void navigation?.positions.retry(bookId, editionKey).then((result) => { if (result !== undefined) { setPosition(result); setPositionError('') } }, (reason: unknown) => setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败'))}>重试</button></DismissibleMessage> : null}
+    {controlsVisible ? <div className="reader-controls-backdrop" aria-hidden="true" onClick={() => setControlsVisible(false)} onWheel={(event) => event.preventDefault()} onTouchMove={(event) => event.preventDefault()} /> : null}
     <div className="reader-bottom-bar" hidden={!controlsVisible}>
+      <PageBackButton className="reader-exit" label="退出阅读" />
       <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? `分页进度 ${pageCounter}，${wordCountLabel}` : '章节字数'}>{paged ? <><span>{pageCounter}</span><span className="reader-word-count-separator" aria-hidden="true">·</span><span>{wordCountLabel}</span></> : wordCountLabel}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">
         <button type="button" className="reader-shortcut" aria-label="目录" onClick={() => setPanel('toc')}><ReaderIcon name="toc" /><span>目录</span></button>

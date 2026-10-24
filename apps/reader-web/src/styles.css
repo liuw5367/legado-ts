@@ -212,7 +212,7 @@ a { color: inherit; }
 .about-app-brand h2 { margin: 14px 0 0; font-size: 20px; }
 .about-app-brand p { margin: 8px 0 2px; }
 .about-app-build-time { font-size: 14px; font-variant-numeric: tabular-nums; }
-.settings-account { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 0 0 18px; border-bottom: 1px solid var(--border); }
+.settings-account { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; }
 .settings-account-info { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
 .settings-account h2, .settings-detail-section h2 { margin: 0; font-size: 14px; font-weight: 650; }
 .settings-account p { margin: 0; overflow-wrap: anywhere; font-size: 15px; font-weight: 650; }
@@ -674,7 +674,7 @@ a { color: inherit; }
 .shelf-group-bar > button { flex-shrink: 0; }
 
 .startup-loading { display: flex; flex-direction: column; min-height: 100dvh; }
-.dismissible-message { display: flex; align-items: flex-start; gap: 8px; }
+.dismissible-message { display: flex; align-items: center; gap: 8px; }
 .dismissible-message-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .message-close { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; padding: 4px; border: 0; border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
 .message-close svg { width: 16px; height: 16px; }
@@ -718,3 +718,7 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
   .import-history-row { grid-template-columns: minmax(0, 1fr); }
   .import-history-row .source-row-actions { justify-content: flex-start; }
 }
+
+.reader-controls-backdrop { position: fixed; inset: 0; z-index: 3; touch-action: none; }
+.reader-exit { position: absolute; bottom: calc(100% + 16px); left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 20px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); box-shadow: 0 4px 16px rgb(0 0 0 / 12%); white-space: nowrap; }
+.reader-exit svg { width: 18px; height: 18px; }

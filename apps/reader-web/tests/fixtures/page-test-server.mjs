@@ -686,7 +686,9 @@ async function handleApi(request, response, url) {
       if (refresh) refreshCounts.set(`content:${chapterId}`, (refreshCounts.get(`content:${chapterId}`) ?? 0) + 1)
       const revision = refreshCounts.get(`content:${chapterId}`) ?? 0
       const paragraphs = Array.from({ length: 28 }, (_, index) => `这是第 ${index + 1} 段模拟正文。用于检查阅读排版、字号、行距、翻章和章节刷新行为。${refresh && index === 0 ? `（刷新版本 ${revision}）` : ''}`)
-      const content = { chapter, contentType: 'text', raw: paragraphs.join('\n\n'), cleaned: paragraphs.join('\n\n'), pages: paragraphs, resources: [], title: chapter.title }
+      // 第三章使用跨页长段落，验证分页位置不能只保存段落编号。
+      const text = paragraphs.join(chapter.index === 2 ? '' : '\n\n')
+      const content = { chapter, contentType: 'text', raw: text, cleaned: text, pages: paragraphs, resources: [], title: chapter.title }
       json(response, { content: { content, tocRevision: `fixture-toc-${editionKey}-${(refreshCounts.get(editionKey) ?? 0) + 1}` } })
       return
     }
