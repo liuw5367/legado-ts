@@ -49,18 +49,18 @@ test('PWA HTML metadata and PNG assets are present with expected dimensions', as
   }
 })
 
-test('PWA HTML applies the startup theme before the app bundle loads', async () => {
+test('PWA HTML applies the system theme before the app bundle loads', async () => {
   const html = await readFile(`${publicDirectory}/index.html`, 'utf8')
   const source = html.match(/<script id="theme-bootstrap">([\s\S]*?)<\/script>/u)?.[1]
   if (source === undefined) throw new Error('缺少首屏主题初始化脚本')
+  assert.match(html, /:root\[data-theme="dark"\] \.boot-loading/u)
 
-  const run = (prefersDark: boolean, storedTheme?: 'light' | 'dark') => {
+  const run = (prefersDark: boolean) => {
     let themeColor = '#f6f3ed'
     const documentElement = { dataset: {} as Record<string, string>, style: { colorScheme: '' } }
     runInNewContext(source, {
       window: {
         matchMedia: () => ({ matches: prefersDark }),
-        localStorage: { getItem: () => storedTheme === undefined ? null : JSON.stringify({ theme: storedTheme }) },
       },
       document: {
         documentElement,
@@ -70,9 +70,8 @@ test('PWA HTML applies the startup theme before the app bundle loads', async () 
     return { themeColor, theme: documentElement.dataset.theme, colorScheme: documentElement.style.colorScheme }
   }
 
-  assert.deepEqual(run(false), { themeColor: '#f6f3ed', theme: 'light', colorScheme: 'light' })
-  assert.deepEqual(run(true), { themeColor: '#171513', theme: 'dark', colorScheme: 'dark' })
-  assert.deepEqual(run(false, 'dark'), { themeColor: '#171513', theme: 'dark', colorScheme: 'dark' })
+  assert.deepEqual(run(false), { themeColor: '#f6f3ed', theme: undefined, colorScheme: 'light' })
+  assert.deepEqual(run(true), { themeColor: '#171513', theme: undefined, colorScheme: 'dark' })
 })
 
 test('PWA static endpoint returns its MIME and revalidation policy', async () => {

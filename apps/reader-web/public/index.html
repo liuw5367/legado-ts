@@ -7,14 +7,7 @@
     <meta name="theme-color" content="#f6f3ed" />
     <script id="theme-bootstrap">
       (() => {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-        let theme = prefersDark ? 'dark' : 'light'
-        try {
-          const raw = window.localStorage.getItem('legado-reader-settings:anonymous')
-          const storedTheme = raw === null ? undefined : JSON.parse(raw)?.theme
-          if (storedTheme === 'dark' || storedTheme === 'light') theme = storedTheme
-        } catch {}
-        document.documentElement.dataset.theme = theme
+        const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
         document.documentElement.style.colorScheme = theme
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#171513' : '#f6f3ed')
       })()
@@ -36,6 +29,7 @@
       .boot-loading-refresh:focus-visible { outline: 2px solid var(--boot-primary); outline-offset: 2px; }
       .boot-loading-refresh:active { transform: scale(.97); }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
+      :root[data-theme="dark"] .boot-loading { --boot-background: #171513; --boot-muted: #b8afa4; --boot-primary: #d6aa72; --boot-border: #3c3832; color-scheme: dark; }
       @media (prefers-color-scheme: dark) { .boot-loading { --boot-background: #171513; --boot-muted: #b8afa4; --boot-primary: #d6aa72; --boot-border: #3c3832; color-scheme: dark; } }
       @media (prefers-reduced-motion: reduce) { .boot-loading-spinner { animation: none; } }
     </style>
