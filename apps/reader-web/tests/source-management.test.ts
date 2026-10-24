@@ -312,3 +312,58 @@ test('import preview filters non-text media before preview and commit', async (t
   assert.equal(result.imported, 2)
   assert.ok((await repository.listAllSourcesForUser('user-a')).every((source) => source.normalizedSource.bookSourceType === 0))
 })
+
+
+test('import read failures expose classified diagnostics without private URLs or raw errors', async (t) => {
+  const logs: unknown[][] = []
+  t.mock.method(console, 'error', (...args: unknown[]) => { logs.push(args) })
+  const cases = [
+    { error: new TypeError('fetch failed secret-token', { cause: Object.assign(new Error('private-detail'), { code: 'ENOTFOUND' }) }), expected: 'ENOTFOUND' },
+    { error: new TypeError('fetch failed', { cause: new AggregateError([Object.assign(new Error('private-detail'), { code: 'ECONNRESET' })]) }), expected: 'ECONNRESET' },
+    { error: new DOMException('private-detail', 'TimeoutError'), expected: 'timeout' },
+    { error: new DOMException('private-detail', 'AbortError'), expected: 'cancelled' },
+    { error: Object.assign(new Error('private-detail'), { code: 'CERT_HAS_EXPIRED' }), expected: 'CERT_HAS_EXPIRED' },
+    { error: new Error('private network request is not allowed'), expected: 'private-network' },
+    { error: new Error('response exceeds byte budget'), expected: 'response-too-large' },
+    { error: new Error('redirect budget exceeded'), expected: 'redirect-limit' },
+    { error: new Error('secret-token https://private.example/path'), expected: 'network-error' },
+    { status: 403, expected: 'HTTP-403' },
+    { status: 429, expected: 'HTTP-429' },
+    { status: 503, expected: 'HTTP-503' },
+  ]
+  for (const scenario of cases) {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => {
+      if ('error' in scenario) throw scenario.error
+      return new Response('secret-token', { status: scenario.status })
+    })
+    const preview = await createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/private-path?token=secret-token')
+    assert.equal(preview.writableCount, 0)
+    const reason = publicImportPreview(preview).candidates[0]?.reason ?? ''
+    assert.ok(reason.includes(scenario.expected), reason)
+    assert.ok(reason.includes('诊断编号'))
+    assert.ok(!reason.includes('受控读取失败'))
+    assert.ok(!reason.includes('secret-token'))
+    fetch.mock.restore()
+  }
+  assert.equal(logs.length, cases.length)
+  const output = JSON.stringify(logs)
+  assert.ok(output.includes('ENOTFOUND'))
+  assert.ok(output.includes('8.8.8.8'))
+  for (const secret of ['secret-token', 'private-path', 'private-detail', 'private.example']) assert.ok(!output.includes(secret))
+})
+
+test('nested subscription read failures retain successful members and identify the failed member', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    const path = new URL(String(url)).pathname
+    if (path === '/collection') return Response.json({ sourceUrls: ['https://8.8.8.8/good', 'https://8.8.8.8/bad?token=secret-token'] })
+    if (path === '/good') return Response.json(baseSource)
+    return new Response('', { status: 403 })
+  })
+  const preview = await createImportPreview(new MemoryReaderRepository(), 'user-a', 'https://8.8.8.8/collection')
+  assert.equal(preview.writableCount, 1)
+  const failed = publicImportPreview(preview).candidates.find((candidate) => candidate.disposition === undefined)
+  assert.ok(failed)
+  assert.ok(failed.reason.includes('HTTP-403'))
+  assert.ok(!failed.reason.includes('secret-token'))
+})
