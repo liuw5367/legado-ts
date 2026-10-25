@@ -65,6 +65,6 @@ test('source capacity migration adds the remaining slots without replacing activ
   assert.ok(migration.includes('insert into reader.source_execution_slots(slot_id)'))
   assert.ok(migration.includes('select generate_series(9,20)'))
   assert.ok(migration.includes('on conflict (slot_id) do nothing'))
-  assert.equal(journal.entries.at(-1).tag, '0013_source_execution_capacity')
+  assert.equal(journal.entries[13].tag, '0013_source_execution_capacity')
   assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
 })

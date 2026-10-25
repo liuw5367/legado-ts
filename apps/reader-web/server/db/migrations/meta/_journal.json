@@ -99,6 +99,13 @@
       "when": 1792915200000,
       "tag": "0013_source_execution_capacity",
       "breakpoints": false
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792935000000,
+      "tag": "0014_reading_annotations",
+      "breakpoints": false
     }
   ]
 }

@@ -1,3 +1,4 @@
+import { changeMark, markPage } from '../../shared/reading-annotations.ts'
 import { bookCoverRequestSchema } from '../../shared/book-sources.ts'
 import { MemoryReaderRepository } from '../../server/db/repository.ts'
 import { importSources } from '@legado/source-core'
@@ -15,6 +16,7 @@ const FIXTURE_EMAIL = 'reader@example.test'
 const FIXTURE_PASSWORD = 'fixture-password'
 const ACCESS_TOKEN = 'reader-web-page-fixture-token'
 const REFRESH_TOKEN = 'reader-web-page-fixture-refresh-token'
+const readingMarks = new Map()
 const now = () => new Date().toISOString()
 
 function longBookUrl(index) {
@@ -480,6 +482,21 @@ async function handleApi(request, response, url) {
   const path = url.pathname
   const method = request.method ?? 'GET'
 
+  // 复用批注领域规则，页面验收时写入后查询及恢复保持有状态。
+  const markRoute = path.match(/^\/api\/books\/([^/]+)\/(bookmarks|annotations)(?:\/([^/]+))?(?:\/(restore))?$/u)
+  if (path === '/api/annotations/books') { const values = [...readingMarks.values()].filter((r) => r.kind === 'annotations'); json(response, { books: [...new Map(values.map((r) => [r.bookId, { id: r.bookId, name: r.bookName, author: r.author }])).values()] }); return }
+  if (path === '/api/annotations' || markRoute) {
+    const kind = markRoute?.[2] ?? 'annotations'; const bookId = markRoute?.[1]; const id = markRoute?.[3]
+    const rows = [...readingMarks.values()].filter((r) => r.kind === kind).map(({ kind: _kind, ...r }) => r)
+    try {
+      if (method === 'GET') { json(response, markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, deleted: url.searchParams.get('deleted') === 'true' })); return }
+      const body = await readJson(request); const book = books.get(bookId)
+      if (!book) { json(response, { error: { message: '书籍不存在' } }, 404); return }
+      const item = changeMark(rows, USER_ID, method === 'PUT' ? { action: 'save', kind, id, bookId, input: body, bookName: book.name, author: book.author ?? null } : { action: markRoute[4] === 'restore' ? 'restore' : 'delete', kind, id, bookId, expectedVersion: body.expectedVersion })
+      readingMarks.set(kind + ':' + item.id, { ...item, kind }); json(response, { item }); return
+    } catch (error) { json(response, { error: { message: error.message } }, error.status ?? 500); return }
+  }
+
   if (url.pathname.startsWith('/api/source-management/import-links')) {
     const body = request.method === 'POST' ? await readJson(request) : {}
     const value = request.method === 'POST' ? await importRepository.orderImportLinks(USER_ID, body.orderedIds, body.expectedRevision) : await importRepository.listImportLinks(USER_ID)
@@ -736,7 +753,7 @@ const faults = new Map()
 const secondSettings = { ...structuredClone(settings), userId: session(true).user.id }
 const initialState = structuredClone({ sources, books, editions, positions, bookshelf, settings })
 function resetFixture() {
-  organizations.clear(); shelfGroups.clear()
+  organizations.clear(); shelfGroups.clear(); readingMarks.clear()
   sources.splice(0, sources.length, ...structuredClone(initialState.sources))
   for (const [target, original] of [[books, initialState.books], [editions, initialState.editions], [positions, initialState.positions]]) { target.clear(); for (const [key, value] of structuredClone(original)) target.set(key, value) }
   bookshelf.clear(); for (const id of initialState.bookshelf) bookshelf.add(id)

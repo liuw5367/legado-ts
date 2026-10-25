@@ -1,3 +1,5 @@
+import { readMarks, writeMark, lockMarks, restoreMarks } from './reading-marks.ts'
+import { readingMarkSchema, changeMark, markPage, type MarkQuery, type MarkCommand, type MarkPage, type ReadingMark } from '../../shared/reading-annotations.ts'
 import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
 import * as importHistory from './source-import-history.ts'
 import { MemoryImportHistory } from './memory-import-history.ts'
@@ -45,6 +47,8 @@ export interface ReaderBackupBook {
 }
 
 export interface ReaderBackupSnapshot {
+  bookmarks?: ReadingMark[]
+  annotations?: ReadingMark[]
   sources: Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>
   settings: ReaderSettings
   books: ReaderBackupBook[]
@@ -64,6 +68,8 @@ export class BackupRestoreError extends Error {
 }
 
 export interface ReaderRepository {
+  listReadingMarks(userId: string, query: MarkQuery): Promise<MarkPage>
+  mutateReadingMark(userId: string, command: MarkCommand): Promise<ReadingMark>
   getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean): Promise<{ books: Array<{ book: StoredBook; editions: StoredEdition[] }>; positions: StoredPosition[]; bookshelf: Array<{ bookId: string; groupId: string | null }> }>
   getBookOrganization(userId: string, listId?: string, includeItems?: boolean): Promise<BookListOrganizationSnapshot>
   mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot>
@@ -123,6 +129,8 @@ export interface ReaderRepository {
 }
 
 export class PostgresReaderRepository implements ReaderRepository {
+  public listReadingMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query)) }
+  public mutateReadingMark(userId: string, command: MarkCommand) { return withUser(userId, (tx) => writeMark(tx, userId, command)) }
   public acquireExecutionSlot(userId: string, operationId: string) { return acquireExecutionSlot(userId, operationId) }
   public releaseExecutionSlot(userId: string, lease: ExecutionLease) { return releaseExecutionSlot(userId, lease) }
   public listImportLinks(userId: string) { return withUser(userId, (tx) => importHistory.readImportLinks(tx, userId)) }
@@ -619,6 +627,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     if (selected.size === 0) throw new BackupRestoreError('至少选择一个恢复分类')
     await withUser(userId, async (transaction) => {
       await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId + ':book-organization'}, 0))`)
+      await lockMarks(transaction, userId)
       snapshot = prepareOrganizationRestore(await readBackupSnapshot(transaction, userId), snapshot, selected)
       if (selected.has('sources')) await lockUserSourceMutations(transaction, userId)
       const bookIdMap = new Map<string, string>()
@@ -662,12 +671,12 @@ export class PostgresReaderRepository implements ReaderRepository {
         }
       }
       if (selected.has('reading')) {
-        const missingBooks = [...new Set(snapshot.positions.map((position) => position.bookId))].filter((bookId) => !bookIdMap.has(bookId))
+        const missingBooks = [...new Set([...snapshot.positions, ...(snapshot.bookmarks ?? []), ...(snapshot.annotations ?? [])].map((position) => position.bookId))].filter((bookId) => !bookIdMap.has(bookId))
         if (missingBooks.length > 0) throw new BackupRestoreError(`阅读记录依赖的书籍不存在，请同时选择书架：${missingBooks.join('、')}`)
         if (!selected.has('bookshelf')) {
           const existingEditions = await transaction.select({ bookId: bookEditions.bookId, editionKey: bookEditions.editionKey }).from(bookEditions).where(eq(bookEditions.userId, userId))
           const available = new Set(existingEditions.map((item) => `${item.bookId}\u0000${item.editionKey}`))
-          const unavailable = [...new Set(snapshot.positions.map((position) => `${bookIdMap.get(position.bookId)}\u0000${position.editionKey}`))].filter((key) => !available.has(key))
+          const unavailable = [...new Set([...snapshot.positions, ...(snapshot.bookmarks ?? []), ...(snapshot.annotations ?? [])].map((position) => `${bookIdMap.get(position.bookId)}\u0000${position.editionKey}`))].filter((key) => !available.has(key))
           if (unavailable.length > 0) throw new BackupRestoreError('阅读记录依赖的书籍版本不存在，请同时选择书架')
         }
         if (!selected.has('bookshelf')) await transaction.delete(readingRecords).where(eq(readingRecords.userId, userId))
@@ -676,6 +685,9 @@ export class PostgresReaderRepository implements ReaderRepository {
           if (bookId === undefined) continue
           await transaction.insert(readingRecords).values({ id: randomUUID(), userId, bookId, editionKey: position.editionKey, chapterId: position.chapterId, chapterUrl: position.chapterUrl, chapterIndex: position.chapterIndex, title: position.title, ...(position.tocRevision === undefined ? {} : { tocRevision: position.tocRevision }), paragraphIndex: position.paragraphIndex, offset: position.offset, version: position.version, lastReadAt: new Date(position.lastReadAt) }).onConflictDoUpdate({ target: [readingRecords.userId, readingRecords.bookId, readingRecords.editionKey], set: { chapterId: position.chapterId, chapterUrl: position.chapterUrl, chapterIndex: position.chapterIndex, title: position.title, tocRevision: position.tocRevision ?? null, paragraphIndex: position.paragraphIndex, offset: position.offset, version: position.version, lastReadAt: new Date(position.lastReadAt) } })
         }
+      }
+      if (selected.has('reading')) {
+        for (const kind of ['bookmarks', 'annotations'] as const) if (snapshot[kind] !== undefined) await restoreMarks(transaction, userId, kind, snapshot[kind]!.map((row) => ({ ...row, userId, bookId: bookIdMap.get(row.bookId) ?? row.bookId })))
       }
       if (selected.has('search')) {
         await transaction.delete(searchHistory).where(eq(searchHistory.userId, userId))
@@ -853,6 +865,15 @@ export class PostgresReaderRepository implements ReaderRepository {
 }
 
 export class MemoryReaderRepository implements ReaderRepository {
+  private readonly readingMarks = new Map<string, ReadingMark>()
+  public async listReadingMarks(userId: string, query: MarkQuery) { return structuredClone(markPage([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + query.kind + ':')).map(([, row]) => row), query)) }
+  public async mutateReadingMark(userId: string, command: MarkCommand) {
+    const rows = [...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + command.kind + ':')).map(([, row]) => row)
+    const next = changeMark(rows, userId, command)
+    this.readingMarks.set(userId + ':' + command.kind + ':' + next.id, structuredClone(next))
+    return structuredClone(next)
+  }
+
   public async getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean) {
     const rows = new Map<string, { book: StoredBook; editions: StoredEdition[] }>()
     for (const entry of this.books.values()) if (entry.book.userId === userId && (bookIds === undefined || bookIds.includes(entry.book.id))) { const row = rows.get(entry.book.id) ?? { book: entry.book, editions: [] }; row.editions.push(entry.edition); rows.set(entry.book.id, row) }
@@ -1098,6 +1119,8 @@ export class MemoryReaderRepository implements ReaderRepository {
       sources: this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), ...(deleted ? { deleted: true } : {}) })),
       settings: await this.getSettings(userId),
       organization: await this.getBookOrganization(userId),
+      bookmarks: (await this.listReadingMarks(userId, { kind: 'bookmarks', all: true })).items,
+      annotations: (await this.listReadingMarks(userId, { kind: 'annotations', all: true })).items,
       books: [...books.values()],
       bookshelf: [...this.shelf.entries()].filter(([key]) => key.startsWith(`${userId}:`)).map(([key, addedAt]) => ({ bookId: key.slice(userId.length + 1), addedAt, groupId: this.shelfGroups.get(key) ?? null })),
       positions: [...this.positions.values()].filter((position) => position.userId === userId),
@@ -1119,11 +1142,11 @@ export class MemoryReaderRepository implements ReaderRepository {
     if (selected.has('bookshelf')) for (const item of snapshot.books) bookIdMap.set(item.book.id, currentBookIds.has(item.book.id) ? item.book.id : item.book.id)
     else if (selected.has('reading')) for (const item of snapshot.books) if (currentBookIds.has(item.book.id)) bookIdMap.set(item.book.id, item.book.id)
     if (selected.has('reading')) {
-      const missingBooks = [...new Set(snapshot.positions.map((position) => position.bookId))].filter((bookId) => !bookIdMap.has(bookId))
+      const missingBooks = [...new Set([...snapshot.positions, ...(snapshot.bookmarks ?? []), ...(snapshot.annotations ?? [])].map((position) => position.bookId))].filter((bookId) => !bookIdMap.has(bookId))
       if (missingBooks.length > 0) throw new BackupRestoreError(`阅读记录依赖的书籍不存在，请同时选择书架：${missingBooks.join('、')}`)
       if (!selected.has('bookshelf')) {
         const available = new Set([...this.books.values()].filter((value) => value.book.userId === userId).map((value) => `${value.book.id}\u0000${value.edition.editionKey}`))
-        const missingEditions = [...new Set(snapshot.positions.map((position) => `${position.bookId}\u0000${position.editionKey}`))].filter((key) => !available.has(key))
+        const missingEditions = [...new Set([...snapshot.positions, ...(snapshot.bookmarks ?? []), ...(snapshot.annotations ?? [])].map((position) => `${position.bookId}\u0000${position.editionKey}`))].filter((key) => !available.has(key))
         if (missingEditions.length > 0) throw new BackupRestoreError('阅读记录依赖的书籍版本不存在，请同时选择书架')
       }
     }
@@ -1187,6 +1210,12 @@ export class MemoryReaderRepository implements ReaderRepository {
       if (snapshot.organization) this.organizations.set(userId, structuredClone(snapshot.organization))
       for (const key of this.shelfGroups.keys()) if (key.startsWith(userId + ':')) this.shelfGroups.delete(key)
       for (const row of snapshot.bookshelf) this.shelfGroups.set(`${userId}:${bookIdMap.get(row.bookId) ?? row.bookId}`, row.groupId ?? null)
+    }
+    if (selected.has('reading')) {
+      for (const kind of ['bookmarks', 'annotations'] as const) if (snapshot[kind] !== undefined) {
+        for (const key of this.readingMarks.keys()) if (key.startsWith(userId + ':' + kind + ':')) this.readingMarks.delete(key)
+        for (const row of snapshot[kind]!) this.readingMarks.set(userId + ':' + kind + ':' + row.id, structuredClone({ ...row, userId, bookId: bookIdMap.get(row.bookId) ?? row.bookId }))
+      }
     }
     this.books.clear(); for (const [key, value] of nextBooks) this.books.set(key, value)
     this.sourceCandidates.clear(); for (const [key, value] of nextCandidates) this.sourceCandidates.set(key, value)
@@ -1404,6 +1433,13 @@ function assertBackupSnapshotClosed(snapshot: ReaderBackupSnapshot, userId: stri
     historyIds.add(item.id)
     searchIds.add(item.searchId)
   }
+  for (const kind of ['bookmarks', 'annotations'] as const) {
+    const ids = new Set<string>()
+    for (const row of snapshot[kind] ?? []) {
+      if (!readingMarkSchema.safeParse(row).success || row.userId !== userId || ids.has(row.id) || !snapshot.books.some((item) => item.book.id === row.bookId && item.editions.some((e) => e.editionKey === row.editionKey))) throw new BackupRestoreError('批注缺少书籍版本或记录格式无效')
+      ids.add(row.id)
+    }
+  }
   if (snapshot.settings.userId !== userId) throw new BackupRestoreError('阅读设置用户不匹配')
 }
 
@@ -1446,6 +1482,8 @@ async function readBackupSnapshot(transaction: ReaderTransaction, userId: string
     settings: settingRows[0] === undefined ? defaultReaderSettings(userId) : toSettings(settingRows[0]),
     books: bookRows.map((row) => ({ book: toBook(row), editions: editionsByBook.get(row.id) ?? [], candidates: candidatesByBook.get(row.id) ?? [] })),
     organization: await readOrganization(transaction, userId),
+    bookmarks: (await readMarks(transaction, userId, { kind: 'bookmarks', all: true })).items,
+    annotations: (await readMarks(transaction, userId, { kind: 'annotations', all: true })).items,
     bookshelf: shelfRows.map((row) => ({ bookId: row.bookId, addedAt: row.addedAt.toISOString(), groupId: row.groupId })),
     positions: positionRows.map(toPosition),
     searchHistory: historyRows.map(toHistory),

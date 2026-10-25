@@ -1,3 +1,4 @@
+import { registerReadingMarksApi } from './reading-marks-api.ts'
 import { bookCoverRequestSchema } from '../shared/book-sources.ts'
 import { OrganizationError } from './domain/book-organization.ts'
 import { registerBookOrganizationApi } from './book-organization-api.ts'
@@ -49,6 +50,7 @@ export async function requireUser(context: Context<{ Variables: Variables }>): P
 }
 
 registerBookOrganizationApi(app, () => dependencies.repository, requireUser)
+registerReadingMarksApi(app, () => dependencies.repository, requireUser)
 
 app.get('/api/me', async (context) => {
   const rejected = await requireUser(context)

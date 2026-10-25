@@ -260,3 +260,15 @@ export const sourceImportUndoOperations = readerSchema.table('source_import_undo
 export const sourceExecutionSlots = readerSchema.table('source_execution_slots', {
   slotId: integer('slot_id').primaryKey(), userId: uuid('user_id'), operationId: uuid('operation_id'), leaseToken: uuid('lease_token'), leaseUntil: timestamp('lease_until', { withTimezone: true }),
 })
+
+// 批注使用独立新表，不修改既有书籍、正文、位置及设置表。
+export const readingBookmarks = readerSchema.table('reading_bookmarks', {
+  userId: uuid('user_id').notNull(), id: uuid('id').notNull(), bookId: uuid('book_id').notNull(),
+  editionKey: text('edition_key').notNull(), chapterUrl: text('chapter_url').notNull(),
+  data: jsonb('data').$type<import('../../shared/reading-annotations.ts').ReadingMark>().notNull(),
+}, (t) => [uniqueIndex('reading_bookmarks_user_id_idx').on(t.userId, t.id), index('reading_bookmarks_chapter_idx').on(t.userId, t.bookId, t.editionKey, t.chapterUrl)])
+export const readingAnnotations = readerSchema.table('reading_annotations', {
+  userId: uuid('user_id').notNull(), id: uuid('id').notNull(), bookId: uuid('book_id').notNull(),
+  editionKey: text('edition_key').notNull(), chapterUrl: text('chapter_url').notNull(),
+  data: jsonb('data').$type<import('../../shared/reading-annotations.ts').ReadingMark>().notNull(),
+}, (t) => [uniqueIndex('reading_annotations_user_id_idx').on(t.userId, t.id), index('reading_annotations_chapter_idx').on(t.userId, t.bookId, t.editionKey, t.chapterUrl)])

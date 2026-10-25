@@ -25,6 +25,7 @@ const SourceImportHistoryPage = lazy(() => import('./pages/source-import-history
 const SourceImportLinksPage = lazy(() => import('./pages/source-import-links.tsx').then((module) => ({ default: module.SourceImportLinksPage })))
 const SourcesPage = lazy(() => import('./pages/sources.tsx').then((module) => ({ default: module.SourcesPage })))
 const SourceLoginPage = lazy(() => import('./pages/source-login.tsx').then((module) => ({ default: module.SourceLoginPage })))
+const NotesPage = lazy(() => import('./pages/notes.tsx').then((module) => ({ default: module.NotesPage })))
 const SettingsPage = lazy(() => import('./pages/settings.tsx').then((module) => ({ default: module.SettingsPage })))
 const ImportExportSettingsPage = lazy(() => import('./pages/import-export-settings.tsx').then((module) => ({ default: module.ImportExportSettingsPage })))
 const ReadingSettingsPage = lazy(() => import('./pages/reading-settings.tsx').then((module) => ({ default: module.ReadingSettingsPage })))
@@ -78,6 +79,7 @@ const router = createBrowserRouter([
       <Route path="/account/settings/about" element={<LazyPage backTo="/account/settings"><AboutAppPage /></LazyPage>} />
       <Route path="/account/settings/bookshelf-groups" element={<LazyPage backTo="/account/settings"><BookshelfGroupsPage /></LazyPage>} />
       <Route path="/account/settings/general" element={<LazyPage backTo="/account/settings"><GeneralSettingsPage /></LazyPage>} />
+      <Route path="/account/settings/notes" element={<LazyPage backTo="/account/settings"><NotesPage /></LazyPage>} />
       <Route path="/account/settings/reading" element={<LazyPage backTo="/account/settings"><ReadingSettingsPage /></LazyPage>} />
       <Route path="/books/:bookId/read" element={<LazyPage viewport backTo="/"><ReaderEntryPage /></LazyPage>} />
       <Route path="/books/:bookId/read/:chapterId" element={<LazyPage viewport backTo="/"><ReaderPage /></LazyPage>} />

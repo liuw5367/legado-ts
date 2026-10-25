@@ -163,7 +163,7 @@ export function buildBackupPreview(archive: BackupArchive): BackupPreview {
 export function categoryForPath(path: string): BackupCategory {
   if (path === 'bookshelf.json' || path === 'book-lists.json') return 'bookshelf'
   if (/^books\/[^/]+\/(?:book|sources)\.json$/u.test(path)) return 'bookshelf'
-  if (path === 'reading-history.json') return 'reading'
+  if (path === 'reading-history.json' || path === 'reading/bookmarks.json' || path === 'reading/annotations.json') return 'reading'
   if (path === 'search-history.json') return 'search'
   if (path === 'sources.json' || path === 'source-state.json' || path === 'source-check-config.json') return 'sources'
   if (path === 'reader-settings.json') return 'settings'

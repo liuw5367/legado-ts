@@ -1,3 +1,9 @@
+import { Bookmark, Moon, Sun } from 'lucide-react'
+import { useReaderMarks } from '../lib/use-reader-marks.ts'
+import { markedFragments, markedHtml } from '../lib/reader-annotations.ts'
+import { ReaderSelectionToolbar } from '../components/reader-selection-toolbar.tsx'
+import { ReadingMarkEditor } from '../components/reading-mark-editor.tsx'
+import { ReadingMarksList } from '../components/reading-marks-list.tsx'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { usePageActivity, usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
 import { CircleHelp, ExternalLink, Info, RefreshCw } from 'lucide-react'
@@ -19,7 +25,7 @@ import { apiFetch, type ApiChapter, type ApiContent, type ApiPageTapAction, type
 import { useReaderSettings } from '../lib/settings-context.tsx'
 import { safeResourceUrl, sanitizeChapterHtml } from '../lib/html-content.ts'
 
-type ReaderPanel = 'toc' | 'settings' | null
+type ReaderPanel = 'toc' | 'settings' | 'marks' | null
 type PageTapZoneDrag = { pointerId: number; boundary: PageTapZoneBoundary }
 
 export function ReaderPage() {
@@ -53,6 +59,7 @@ export function ReaderPage() {
   const [error, setError] = useState('')
   const [positionError, setPositionError] = useState('')
   const [panel, setPanel] = useState<ReaderPanel>(null)
+  const [markTab, setMarkTab] = useState<'bookmarks' | 'annotations'>('bookmarks')
   const [retryNonce, setRetryNonce] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState('')
@@ -78,6 +85,8 @@ export function ReaderPage() {
   const readingModeRef = useRef(settings.readingMode)
   const requestIdRef = useRef(0)
   const liveToc = cache.get(bookId, editionKey)?.toc ?? toc
+
+  const marks = useReaderMarks({ articleRef, bookId, editionKey, chapterId, content, toc: liveToc, blocked: panel !== null || pageGuideVisible || refreshing, paged: settings.readingMode === 'paged', layout: pageLayout, pageIndex, positionReady: positionLoaded, onRestore: () => { restoredPositionRef.current = true }, onPage: turnPage, onInteract: cancelGesture })
 
   function cancelGesture() {
     if (gestureRef.current !== null) cancelReaderGesture(gestureRef.current.gesture)
@@ -355,7 +364,7 @@ export function ReaderPage() {
   }, [content, chapterId, positionLoaded, paginationError, settings.fontSize, settings.lineHeight, settings.marginTop, settings.marginRight, settings.marginBottom, settings.marginLeft, settings.readingMode])
 
   const paragraphs = useMemo(() => content?.cleaned.split(/\n+/u).map((text) => text.trim()).filter(Boolean) ?? [], [content])
-  const htmlContent = useMemo(() => content?.contentType === 'html' ? sanitizeChapterHtml(content.cleaned) : '', [content])
+  const htmlContent = useMemo(() => content?.contentType === 'html' ? markedHtml(sanitizeChapterHtml(content.cleaned), marks.resolved) : '', [content, marks.resolved])
   const additionalResources = useMemo(() => {
     if (content?.contentType !== 'html') return []
     return content.resources.map((resource) => safeResourceUrl(resource.url, true)).filter((url): url is string => url !== undefined).filter((url) => !htmlContent.includes(url))
@@ -542,6 +551,7 @@ export function ReaderPage() {
     </MoreMenu></div></header>
     <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? `正文，左侧上一页，中栏上段${settings.pageTapZones.centerTopAction === 'previous' ? '上一页' : '下一页'}，中段显示或隐藏操作栏，下段${settings.pageTapZones.centerBottomAction === 'previous' ? '上一页' : '下一页'}，右侧下一页` : '正文，按回车显示或隐藏阅读操作'} style={readerStyle}
       onPointerDown={(event) => {
+        if (event.target instanceof Element && event.target.closest('[data-mark-id]')) { cancelGesture(); return }
         if (paged && event.pointerType === 'touch' && !event.isPrimary) { cancelGesture(); return }
         blockedClickRef.current = false
         gestureRef.current = null
@@ -576,6 +586,7 @@ export function ReaderPage() {
       onPointerCancel={() => { if (paged) cancelGesture(); else pointerStartRef.current = null }}
       onLostPointerCapture={() => { if (gestureRef.current !== null) cancelGesture() }}
       onClick={(event) => {
+        if (event.target instanceof Element && marks.openMark(event.target)) { event.stopPropagation(); return }
         if (paged && event.target instanceof Element && event.target.closest('a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"])') !== null) return
         if (paged && event.detail !== 0 && blockedClickRef.current) return
         const start = pointerStartRef.current
@@ -596,6 +607,7 @@ export function ReaderPage() {
       }}
       onWheel={(event) => { if (paged) event.preventDefault() }}
       onKeyDown={(event) => {
+        if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof Element && event.target.closest('[data-mark-id]')) { event.preventDefault(); marks.openMark(event.target); return }
         if (event.target !== event.currentTarget) return
         if (paged && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
           event.preventDefault()
@@ -605,7 +617,7 @@ export function ReaderPage() {
           setControlsVisible((value) => !value)
         }
       }}>
-      {content.contentType === 'html' ? htmlContent.length === 0 && additionalResources.length === 0 ? <p className="muted">本章暂无正文。</p> : <><div className="reader-html-content" data-paragraph={0} dangerouslySetInnerHTML={{ __html: htmlContent }} />{additionalResources.map((url, index) => <p className="reader-resource" data-paragraph={index + 1} key={url}><img src={url} alt="正文插图" loading="lazy" decoding="async" /></p>)}</> : paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p className="reader-paragraph" data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{paragraph}</p>)}
+      {content.contentType === 'html' ? htmlContent.length === 0 && additionalResources.length === 0 ? <p className="muted">本章暂无正文。</p> : <><div className="reader-html-content" data-paragraph={0} dangerouslySetInnerHTML={{ __html: htmlContent }} />{additionalResources.map((url, index) => <p className="reader-resource" data-paragraph={index + 1} key={url}><img src={url} alt="正文插图" loading="lazy" decoding="async" /></p>)}</> : paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p className="reader-paragraph" data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{markedFragments(paragraph, index, marks.resolved).map((part, i) => part.mark ? <span className="reader-mark" data-mark-id={part.mark.id} data-color={part.mark.color} role="button" tabIndex={0} aria-label={part.mark.note ? '编辑想法' : '编辑标记'} key={i}>{part.text}</span> : part.text)}</p>)}
     </article>
     {paged ? <dialog ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" aria-labelledby="reader-page-guide-title" onCancel={(event) => { event.preventDefault(); closePageGuide() }}>
       <div className="reader-page-guide-shell">
@@ -642,12 +654,20 @@ export function ReaderPage() {
       <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? `分页进度 ${pageCounter}，${wordCountLabel}` : '章节字数'}>{paged ? <><span>{pageCounter}</span><span className="reader-word-count-separator" aria-hidden="true">·</span><span>{wordCountLabel}</span></> : wordCountLabel}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">
         <button type="button" className="reader-shortcut" aria-label="目录" onClick={() => setPanel('toc')}><ReaderIcon name="toc" /><span>目录</span></button>
-        <Link className="reader-shortcut" to={`/books/${encodeURIComponent(bookId)}/sources`} state={pageReturnState(location)} aria-label="换源"><ReaderIcon name="source" /><span>换源</span></Link>
+        <button type="button" className="reader-shortcut" aria-label="书签和笔记" onClick={() => setPanel('marks')}><Bookmark aria-hidden="true" /><span>书签</span></button>
         <button type="button" className="reader-shortcut" aria-label="设置" onClick={() => setPanel('settings')}><ReaderIcon name="settings" /><span>设置</span></button>
-        <button type="button" className="reader-shortcut" aria-label={dark ? '切换日间模式' : '切换夜间模式'} disabled={settingsSaving} onClick={() => void toggleTheme()}><ReaderIcon name={dark ? 'sun' : 'moon'} /><span>{dark ? '日间' : '夜间'}</span></button>
+        <Link className="reader-shortcut" to={`/books/${encodeURIComponent(bookId)}/sources`} state={pageReturnState(location)} aria-label="换源"><ReaderIcon name="source" /><span>换源</span></Link>
       </nav>
       {settingsError === undefined ? null : <div className="notice-with-recovery"><DismissibleMessage className="error reader-settings-error" role="alert">{settingsError}</DismissibleMessage>{themeRetry === null ? null : <button className="text-button" type="button" disabled={settingsSaving} onClick={() => void toggleTheme(themeRetry)}>重试</button>}</div>}
     </div>
+    {controlsVisible && panel === null && !pageGuideVisible && !marks.selection && !marks.editing ? <div className="reader-floating-actions">
+      <button type="button" aria-label={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} title={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} aria-pressed={Boolean(marks.currentBookmark)} disabled={marks.busy} onClick={() => void marks.toggleBookmark()}><Bookmark aria-hidden="true" fill={marks.currentBookmark ? 'currentColor' : 'none'} /></button>
+      <button type="button" aria-label={dark ? '切换日间模式' : '切换夜间模式'} title={dark ? '切换日间模式' : '切换夜间模式'} disabled={settingsSaving} onClick={() => void toggleTheme()}>{dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
+    </div> : null}
+    {marks.error ? <div className="reader-mark-error"><DismissibleMessage className="error" role="alert" onDismiss={() => marks.setError('')}>{marks.error}<button className="text-button" type="button" onClick={marks.retry}>重新加载</button></DismissibleMessage></div> : null}
+    {marks.selection && !marks.editing ? <ReaderSelectionToolbar rect={marks.selection.rect} mark={marks.selection.mark} busy={marks.busy} onColor={(color) => void marks.save(color, marks.selection?.mark?.note ?? null)} onThought={marks.startThought} onDelete={() => void marks.remove()} onClose={marks.close} /> : null}
+    {marks.editing && marks.selection ? <ReadingMarkEditor initialNote={marks.selection.mark?.note ?? ''} onClose={marks.stopThought} onSave={(note) => marks.save(marks.selection?.mark?.color ?? 'orange', note, true)} /> : null}
+    <Sheet open={panel === 'marks'} onOpenChange={(open) => setPanel(open ? 'marks' : null)} title="书签与笔记"><div className="notes-status-tabs" role="tablist" aria-label="书签与笔记"><button type="button" role="tab" aria-selected={markTab === 'bookmarks'} onClick={() => setMarkTab('bookmarks')}>书签</button><button type="button" role="tab" aria-selected={markTab === 'annotations'} onClick={() => setMarkTab('annotations')}>笔记</button></div>{panel === 'marks' ? <ReadingMarksList key={markTab} kind={markTab} bookId={bookId} onNavigate={() => setPanel(null)} /> : null}</Sheet>
     <Sheet open={panel === 'toc'} onOpenChange={(open) => setPanel(open ? 'toc' : null)} title="章节目录"><ReaderTocPanel open={panel === 'toc'} bookId={bookId} editionKey={editionKey} chapters={siblings} currentChapterId={chapterId} onNavigate={() => setPanel(null)} /></Sheet>
     <Sheet open={panel === 'settings'} onOpenChange={(open) => setPanel(open ? 'settings' : null)} title="阅读设置"><ReaderSettingsPanel /></Sheet>
   </section>

@@ -889,3 +889,49 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .import-item-reason { grid-column: 3; grid-row: 2; max-width: min(42vw, 240px); justify-self: end; text-align: right; overflow-wrap: anywhere; }
 
 .reader-boundary-notice { position: fixed; z-index: 12; left: 50%; bottom: calc(80px + var(--safe-bottom)); transform: translateX(-50%); max-width: calc(100% - 32px); padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--foreground); color: var(--background); font-size: 14px; pointer-events: none; }
+
+/* 标记颜色同时驱动下划线、浅背景及笔记列表色点。 */
+[data-color="pink"] { --mark-color: #ff8fa8; }
+[data-color="purple"] { --mark-color: #b79af7; }
+[data-color="blue"] { --mark-color: #75b2f5; }
+[data-color="green"] { --mark-color: #72ce82; }
+[data-color="orange"] { --mark-color: #f7c879; }
+.reader-mark { background: color-mix(in srgb, var(--mark-color) 18%, transparent); text-decoration: underline; text-decoration-color: var(--mark-color); text-decoration-thickness: 2px; text-underline-offset: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; }
+.reader-mark:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.reader-floating-actions { position: fixed; right: calc(var(--safe-right) + 12px); bottom: calc(var(--safe-bottom) + 196px); z-index: 6; display: flex; flex-direction: column; gap: 8px; }
+.reader-floating-actions button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); }
+.reader-floating-actions svg { width: 20px; height: 20px; }
+.reader-floating-actions button[aria-pressed="true"] { color: var(--primary); }
+.reader-selection-popover { position: fixed; z-index: 12; max-width: calc(100vw - 16px); }
+.reader-selection-toolbar { display: flex; align-items: center; gap: 2px; width: max-content; padding: 7px 8px; border-radius: 999px; background: #3c3b39; color: #f5f1eb; box-shadow: 0 3px 12px rgb(0 0 0 / 18%); }
+.reader-selection-toolbar button { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0; min-height: 36px; border: 0; background: transparent; color: inherit; }
+.reader-selection-toolbar .mark-color-button { width: 32px; }
+.mark-color-button > span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #343230; }
+.mark-color-button svg { width: 16px; height: 16px; }
+.reader-selection-toolbar .mark-thought-button { gap: 4px; padding: 0 7px; border-left: 1px solid #68645f; font-size: 12px; }
+.reader-selection-toolbar .mark-delete-button { width: 32px; border-left: 1px solid #68645f; }
+.mark-thought-button svg, .mark-delete-button svg { width: 16px; height: 16px; }
+.reader-mark-thought { margin-top: 8px; max-width: 280px; max-height: min(240px, 35dvh); overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
+.reader-mark-thought p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.reader-mark-error { position: fixed; z-index: 15; bottom: calc(var(--safe-bottom) + 148px); left: 12px; right: 12px; max-width: 650px; margin: auto; }
+.mark-editor { display: grid; gap: 10px; }
+.mark-editor textarea { width: 100%; min-height: 140px; resize: vertical; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--foreground); font: inherit; }
+.mark-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.notes-filter { display: flex; gap: 8px; }
+.notes-filter input { flex: 1; width: 0; min-width: 0; }
+.notes-filter select { flex: 0 0 120px; width: 120px; min-width: 0; text-overflow: ellipsis; }
+.notes-status-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.notes-status-tabs button { flex: 1; min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); }
+.notes-status-tabs button[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
+.reading-marks-list { display: grid; gap: 0; }
+.reading-mark-item { min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.reading-mark-meta { display: flex; align-items: baseline; gap: 12px; justify-content: space-between; margin-bottom: 8px; }
+.reading-mark-meta strong { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.reading-mark-meta time { flex-shrink: 0; font-size: 12px; color: var(--muted); }
+.reading-mark-excerpt { display: block; width: 100%; text-align: left; border: 0; padding: 0 0 0 12px; background: transparent; color: var(--foreground); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
+.reading-mark-excerpt::before { content: ''; position: absolute; width: 5px; height: 5px; left: 0; top: .6em; background: var(--mark-color); border-radius: 50%; }
+.reading-mark-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reading-mark-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 3px; }
+.reading-mark-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.reading-mark-actions { display: flex; gap: 8px; margin-left: auto; }
+@media (pointer: coarse) { .reader-selection-toolbar button { min-height: 44px; } .mark-editor textarea { font-size: 16px; } }

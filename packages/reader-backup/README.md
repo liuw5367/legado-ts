@@ -5,6 +5,7 @@
 - `book-lists.json`：可选书单扩展，归入 bookshelf 分类，封装数据为 `{lists,items}`；lists 保存普通书单、分组、customOrder，items 保存普通书单成员及独立评价
 - `bookshelf.json` 和 `books/<bookId>/*`：书架及书籍元数据、书源版本记录
 - `reading-history.json`：阅读位置
+- `reading/bookmarks.json`、`reading/annotations.json`：可选 Web 书签与笔记扩展，归入 reading 分类
 - `search-history.json`：搜索记录
 - `sources.json`、`source-state.json`、`source-check-config.json`：书源和书源状态
 - `reader-settings.json`：阅读设置。CLI 直接沿用 CLI 的设置文件内容，Web 使用 `web` 字段保存 Web 设置；导入另一端时会保留本端无法识别的设置。
@@ -24,3 +25,9 @@ Web 与 CLI 共享路径、封装和共同字段，但不把不存在于 Web 第
 新版读取器继续接收没有 book-lists.json 的旧第一版归档，缺少该文件表示保留本地书单和分组定义；恢复书架时保护这些书单引用的书籍。含扩展的归档选择 bookshelf 时完整替换组织数据，空 lists/items 表示清空。Web 恢复会重新分配导入组织标识并同步成员、书架归属和启动目标；旧备份中的书籍 ID 与本地书单引用冲突时映射导入书籍。只恢复设置时，目标分组不存在则使用全部。
 
 CLI 不提供书单或分组界面，保留导入的扩展并随下一次导出携带；恢复旧备份保留本地书单依赖，遇到同 ID 不同书籍时拒绝并提示使用 Web 恢复。CLI 保存自己的设置时保留 web 设置文档。格式版本仍为 1，但旧版读取器严格拒绝新增路径，因此含书单的新备份需要更新后的应用恢复。
+
+## Web批注扩展兼容
+
+两个reading扩展文件使用schemaVersion 1封装，保存书籍/来源/章节身份、文字锚点、摘录、颜色、想法、创建/更新时间、版本和deletedAt，包含已删除记录。恢复reading时，存在的文件替换对应账号数据，空数组清空；缺失文件保留当前数据。恢复重映射账号与书籍身份，校验书籍版本依赖，和现有恢复事务一起提交或回滚。
+
+格式版本仍为1，旧版应用严格拒绝新增路径，因此需要更新后的应用读取。CLI不展示或持久化这两个Web专属文件，CLI重新导出不会保留Web批注；需要保留笔记时使用Web导出与恢复。

@@ -21,6 +21,7 @@
 | `search_runs`、`search_history` | 当前搜索的候选、分源状态、游标、operationId、进度和历史摘要 |
 | `toc_snapshots` | edition 的章节列表、sourceFingerprint 和目录 revision |
 | `chapter_contents` | edition、toc revision、chapterId 和 sourceFingerprint 对应的正文 |
+| `reading_bookmarks`、`reading_annotations` | 账号书签与文字批注，独立于阅读位置；JSONB data 保存锚点、摘录、颜色、想法、时间、版本和删除状态 |
 | `reading_records` | 每个用户/书籍/edition 的章节、段落索引、偏移、版本和最近阅读时间 |
 | `source_runtime_state` | 加密的 Cookie/变量快照、fingerprint、版本和五分钟租约 |
 | `reader_settings` | 当前账号的全部阅读与通用偏好；`preferences` JSONB 保存带版本号的完整设置文档 |
@@ -98,3 +99,11 @@ Cookie、脚本变量和运行时缓存不进入浏览器响应，也不写入 r
 同账号的组织数据写入共用事务锁，覆盖分组排序、删除、归属修改和移入书单。移入在同一事务完成成员加入和移出书架；删除分组同时处理书架关系及失效的启动设置。重复加入保持评价和加入时间。列表封面与详情书籍批量读取，书单接口不返回内部脚本变量。
 
 启动选择保存为 preferences.general.bookshelfInitialGroup，all 表示全部，ungrouped 表示默认，其他值为当前账号分组 UUID。缺失按 all 读取。备份路径与恢复兼容以[共享备份契约](../../../packages/reader-backup/README.md)为准。
+
+## 书签与文字批注
+
+`0014_reading_annotations.sql` 只创建 reading_bookmarks、reading_annotations 及其索引、约束和强制RLS，不修改旧表或回填旧数据。新表以 user_id/id 唯一，按书籍、来源和章节索引查询；活动锚点具有唯一约束。data 的身份字段受数据库校验约束，与关系列一致。五色、文字位置及想法输入在API边界校验。
+
+创建时验证账号书籍、来源 fingerprint、目录版本、章节及正文摘要；已有记录允许正文失效后编辑颜色或想法，不允许替换文字身份。并发写入和备份恢复共用账号批注事务锁，更新、删除与恢复需要 expectedVersion，冲突不覆盖。删除保存 deletedAt，正文与正常列表只读取活动记录，设置笔记页可恢复；没有自动清理或永久删除入口。
+
+书籍列表接口为 /api/books/:bookId/bookmarks 和 /annotations；账号笔记查询为 /api/annotations，书籍筛选为 /api/annotations/books。列表使用绑定筛选条件的稳定游标，每页50条；当前章单独读取。成功变更只发布 notes 失效，不重新抓取正文或改写阅读进度。文字锚点为段落索引与UTF-16偏移，原文及前后文用于正文变化后的唯一匹配，换源不自动转移标记。备份兼容以[共享备份契约](../../../packages/reader-backup/README.md)为准。
