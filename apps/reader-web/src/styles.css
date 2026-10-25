@@ -845,7 +845,6 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .source-domain-version.source-management-row { margin: 0; padding: 8px 0; border-radius: 0; box-shadow: none; }
 .source-version-meta { display: flex; flex-wrap: wrap; column-gap: 8px; row-gap: 2px; }
 .source-version-meta > span { min-width: 0; overflow-wrap: anywhere; }
-.source-version-meta > span + span::before { content: '·'; margin-right: 8px; }
 .source-version-origin { white-space: normal; overflow-wrap: anywhere; }
 
 .sources-page, .source-import-detail-page { --source-selection-background: color-mix(in srgb, #6b8fa3 23%, var(--card)); }
@@ -864,13 +863,15 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .import-detail-item.selected { background: var(--source-selection-background); }
 .import-detail-item:has(input:disabled) { cursor: default; }
 .import-detail-item .source-management-info { display: contents; }
-.import-item-name { grid-column: 2 / -1; overflow-wrap: anywhere; }
+.import-item-name { grid-column: 2; overflow-wrap: anywhere; }
 .import-item-meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 2px 8px; color: var(--muted); overflow-wrap: anywhere; }
 .import-detail-item > input { grid-row: 1; }
-.import-detail-item .import-item-status { grid-column: 3; grid-row: 2; max-width: min(42vw, 240px); align-items: flex-start; justify-content: flex-end; gap: 4px; }
+.import-detail-item .import-item-status { grid-column: 3; grid-row: 1; max-width: min(42vw, 240px); align-items: flex-start; justify-content: flex-end; gap: 4px; }
 .organization-picker .sheet-body { padding-top: 12px; }
 .organization-picker .organization-choice:last-child { border-bottom: 0; }
 
 .import-undo-list > p { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 0; padding-block: 8px; }
 .import-undo-list > p > strong { min-width: 0; overflow-wrap: anywhere; }
 .import-undo-list > p > span { max-width: 55%; text-align: right; overflow-wrap: anywhere; }
+
+.import-item-reason { grid-column: 3; grid-row: 2; max-width: min(42vw, 240px); justify-self: end; text-align: right; overflow-wrap: anywhere; }
