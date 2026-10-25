@@ -15,6 +15,7 @@ export function AccountLayout({ children, reader = false }: { children?: ReactNo
     if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && target.pathname === location.pathname && target.search === location.search) event.preventDefault()
   }
   const showBottomNav = location.pathname === '/' || location.pathname === '/book-lists' || location.pathname === '/account/settings'
+  const fullWidth = location.pathname === '/sources' || /^\/sources\/import-history\/[^/]+$/u.test(location.pathname)
   const discoveryActive = location.pathname.startsWith('/book-lists')
   return <div className={reader ? 'reader-shell' : 'app-shell'}>
     {!reader ? <><a className="skip-link" href="#main-content">跳到正文</a>
@@ -30,7 +31,7 @@ export function AccountLayout({ children, reader = false }: { children?: ReactNo
         <Button variant="secondary" size="sm" type="button" onClick={() => void logout()}>退出</Button>
       </div>
     </header></> : null}
-    <main className={reader ? 'reader-main' : `app-main ${showBottomNav ? '' : 'app-main-standalone'}`} id="main-content">{children}</main>
+    <main className={reader ? 'reader-main' : `app-main ${showBottomNav ? '' : 'app-main-standalone'}${fullWidth ? ' app-main-full-width' : ''}`} id="main-content">{children}</main>
     {showBottomNav && !reader ? <nav className="bottom-nav" aria-label="移动端主导航">
       <NavLink onClick={avoidDuplicateRoot} className="bottom-nav-link" to="/" end><LibraryBig aria-hidden="true" /><span>书架</span></NavLink>
       <Link onClick={avoidDuplicateRoot} className={`bottom-nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to={discoverTarget}><Compass aria-hidden="true" /><span>书单</span></Link>

@@ -848,10 +848,21 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .source-version-meta > span + span::before { content: '·'; margin-right: 8px; }
 .source-version-origin { white-space: normal; overflow-wrap: anywhere; }
 
-.sources-page { --source-selection-background: color-mix(in srgb, #6b8fa3 23%, var(--card)); }
-.app-main:has(> .sources-page),
-.app-main:has([data-page-frame]:not([inert]) .sources-page) { width: 100%; }
-.sources-page > :not(.source-management-list):not(.source-bulk-bar):not(.sheet) { width: min(calc(100% - 24px), 720px); margin-inline: auto; }
+.sources-page, .source-import-detail-page { --source-selection-background: color-mix(in srgb, #6b8fa3 23%, var(--card)); }
+.app-main.app-main-full-width { width: 100%; }
+.sources-page > :not(.source-management-list):not(.source-bulk-bar):not(.sheet),
+.source-import-detail-page > :not(.source-management-list):not(.sheet) { width: min(calc(100% - 24px), 720px); margin-inline: auto; }
 .source-domain-summary { min-height: 56px; }
 .source-domain-versions { padding-left: 0; }
 .source-management-list .button.secondary { background: var(--card); border-color: color-mix(in srgb, var(--foreground) 34%, var(--card)); }
+
+.import-detail-origin { display: flex; align-items: flex-start; gap: 12px; }
+.import-detail-origin .source-url { flex: 1; min-width: 0; margin: 0; white-space: normal; overflow-wrap: anywhere; }
+.import-detail-origin > .badge { flex: 0 0 auto; }
+.import-detail-item.source-management-row { grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 8px 12px; cursor: pointer; }
+.import-detail-item > input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--primary); }
+.import-detail-item.selected { background: var(--source-selection-background); }
+.import-detail-item:has(input:disabled) { cursor: default; }
+.import-detail-item .import-item-status { max-width: min(42vw, 240px); align-items: flex-start; justify-content: flex-end; gap: 4px; }
+.organization-picker .sheet-body { padding-top: 12px; }
+.organization-picker .organization-choice:last-child { border-bottom: 0; }
