@@ -1,5 +1,6 @@
+import { REMOVED_CHAPTER_TAGS } from '../../shared/reading-text.ts'
 const allowedTags = new Set(['a', 'b', 'blockquote', 'br', 'code', 'div', 'em', 'figure', 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'i', 'img', 'li', 'ol', 'p', 'pre', 'q', 'small', 'span', 'strong', 'u', 'ul'])
-const removedTags = new Set(['audio', 'embed', 'form', 'iframe', 'object', 'script', 'style', 'svg', 'video'])
+const removedTags = new Set<string>(REMOVED_CHAPTER_TAGS)
 
 export function safeResourceUrl(value: string, image = false): string | undefined {
   const trimmed = value.trim()

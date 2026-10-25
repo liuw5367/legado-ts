@@ -102,8 +102,8 @@ Cookie、脚本变量和运行时缓存不进入浏览器响应，也不写入 r
 
 ## 书签与文字批注
 
-`0014_reading_annotations.sql` 只创建 reading_bookmarks、reading_annotations 及其索引、约束和强制RLS，不修改旧表或回填旧数据。新表以 user_id/id 唯一，按书籍、来源和章节索引查询；活动锚点具有唯一约束。data 的身份字段受数据库校验约束，与关系列一致。五色、文字位置及想法输入在API边界校验。
+`0014_reading_annotations.sql` 只创建 reading_bookmarks、reading_annotations 及其索引、约束和强制RLS，不修改旧表或回填旧数据。新表以 user_id/id 唯一，按书籍、来源和章节索引查询，同章查询用于范围冲突检查；活动锚点具有唯一约束。data 的身份字段受数据库校验约束，与关系列一致。五色、文字位置及想法输入在API边界校验。
 
-创建时验证账号书籍、来源 fingerprint、目录版本、章节及正文摘要；已有记录允许正文失效后编辑颜色或想法，不允许替换文字身份。并发写入和备份恢复共用账号批注事务锁，更新、删除与恢复需要 expectedVersion，冲突不覆盖。删除保存 deletedAt，正文与正常列表只读取活动记录，设置笔记页可恢复；没有自动清理或永久删除入口。
+创建时验证账号书籍、来源 fingerprint、目录版本、章节、正文摘要及摘录范围，HTML文本校验排除被清洗移除的标签；已有记录允许正文失效后编辑颜色或想法，不允许替换文字身份。并发写入和备份恢复共用账号批注事务锁，更新、删除与恢复需要 expectedVersion，冲突不覆盖。删除保存 deletedAt，正文与正常列表只读取活动记录，设置笔记页可恢复；没有自动清理或永久删除入口。
 
 书籍列表接口为 /api/books/:bookId/bookmarks 和 /annotations；账号笔记查询为 /api/annotations，书籍筛选为 /api/annotations/books。列表使用绑定筛选条件的稳定游标，每页50条；当前章单独读取。成功变更只发布 notes 失效，不重新抓取正文或改写阅读进度。文字锚点为段落索引与UTF-16偏移，原文及前后文用于正文变化后的唯一匹配，换源不自动转移标记。备份兼容以[共享备份契约](../../../packages/reader-backup/README.md)为准。

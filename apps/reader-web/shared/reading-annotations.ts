@@ -10,7 +10,7 @@ export const MARK_COLORS = [
 export const markColorSchema = z.enum(['pink', 'purple', 'blue', 'green', 'orange'])
 const pointSchema = z.object({ paragraphIndex: z.number().int().min(0), offset: z.number().int().min(0) }).strict()
 export type TextPoint = z.infer<typeof pointSchema>
-export const markAnchorSchema = z.object({ start: pointSchema, end: pointSchema, exact: z.string().min(1).max(50000), prefix: z.string().max(32), suffix: z.string().max(32), contentHash: z.string().min(1).max(128) }).strict().refine((a) => comparePoints(a.start, a.end) <= 0, '文字范围无效')
+export const markAnchorSchema = z.object({ start: pointSchema, end: pointSchema, exact: z.string().min(1).max(50000), prefix: z.string().max(32), suffix: z.string().max(32), contentHash: z.string().min(1).max(128) }).strict().refine((a) => comparePoints(a.start, a.end) < 0, '文字范围无效')
 export type MarkAnchor = z.infer<typeof markAnchorSchema>
 export type MarkKind = 'bookmarks' | 'annotations'
 export const markInputSchema = z.object({
@@ -24,15 +24,15 @@ export interface ReadingMark extends Omit<MarkInput, 'expectedVersion'> {
   createdAt: string; updatedAt: string; deletedAt: string | null; version: number
 }
 export const readingMarkSchema = markInputSchema.omit({ expectedVersion: true }).extend({ id: z.uuid(), userId: z.uuid(), bookId: z.uuid(), bookName: z.string(), author: z.string().nullable(), createdAt: z.iso.datetime({ offset: true }), updatedAt: z.iso.datetime({ offset: true }), deletedAt: z.iso.datetime({ offset: true }).nullable(), version: z.number().int().min(0) }).strict()
-export interface MarkQuery { kind: MarkKind; bookId?: string; editionKey?: string; chapterUrl?: string; q?: string; deleted?: boolean; cursor?: string; all?: boolean }
+export interface MarkQuery { kind: MarkKind; id?: string; order?: 'created' | 'position'; bookId?: string; editionKey?: string; chapterUrl?: string; q?: string; deleted?: boolean; cursor?: string; all?: boolean }
 export interface MarkPage { items: ReadingMark[]; nextCursor: string | null }
 export type MarkCommand = { action: 'save'; kind: MarkKind; id: string; bookId: string; input: MarkInput; bookName: string; author: string | null } | { action: 'delete' | 'restore'; kind: MarkKind; id: string; bookId: string; expectedVersion: number }
 export class MarkError extends Error { public readonly status: 400 | 404 | 409; constructor(status: 400 | 404 | 409, message: string) { super(message); this.status = status } }
 export function comparePoints(a: TextPoint, b: TextPoint) { return a.paragraphIndex - b.paragraphIndex || a.offset - b.offset }
 export function sameChapter(a: Pick<ReadingMark, 'editionKey' | 'chapterUrl' | 'sourceFingerprint'>, b: Pick<ReadingMark, 'editionKey' | 'chapterUrl' | 'sourceFingerprint'>) { return a.editionKey === b.editionKey && a.chapterUrl === b.chapterUrl && a.sourceFingerprint === b.sourceFingerprint }
 export function rangesOverlap(a: MarkAnchor, b: MarkAnchor) { return comparePoints(a.start, b.end) < 0 && comparePoints(b.start, a.end) < 0 }
-export function markOrder(query: MarkQuery) { return Boolean(query.bookId && !query.q && !query.deleted) }
-function queryIdentity(query: MarkQuery) { return JSON.stringify([query.kind, query.bookId ?? '', query.editionKey ?? '', query.chapterUrl ?? '', (query.q ?? '').trim(), Boolean(query.deleted)]) }
+export function markOrder(query: MarkQuery) { return Boolean(query.order !== 'created' && query.bookId && !query.q && !query.deleted) }
+function queryIdentity(query: MarkQuery) { return JSON.stringify([query.kind, query.bookId ?? '', query.editionKey ?? '', query.chapterUrl ?? '', (query.q ?? '').trim(), Boolean(query.deleted), query.order ?? 'position']) }
 export function markCursor(row: ReadingMark, query: MarkQuery) { return encodeURIComponent(JSON.stringify({ scope: queryIdentity(query), id: row.id, time: row.createdAt, chapter: row.chapterIndex, paragraph: row.anchor.start.paragraphIndex, offset: row.anchor.start.offset })) }
 export function parseMarkCursor(query: MarkQuery) {
   if (!query.cursor) return null
@@ -44,7 +44,7 @@ export function parseMarkCursor(query: MarkQuery) {
 }
 export function markPage(rows: ReadingMark[], query: MarkQuery): MarkPage {
   const q = (query.q ?? '').trim().toLocaleLowerCase()
-  let items = rows.filter((r) => (!query.bookId || r.bookId === query.bookId) && (!query.editionKey || r.editionKey === query.editionKey) && (!query.chapterUrl || r.chapterUrl === query.chapterUrl) && (query.all || Boolean(r.deletedAt) === Boolean(query.deleted)) && (!q || r.anchor.exact.toLocaleLowerCase().includes(q) || (r.note ?? '').toLocaleLowerCase().includes(q)))
+  let items = rows.filter((r) => (!query.id || r.id === query.id) && (!query.bookId || r.bookId === query.bookId) && (!query.editionKey || r.editionKey === query.editionKey) && (!query.chapterUrl || r.chapterUrl === query.chapterUrl) && (query.all || Boolean(r.deletedAt) === Boolean(query.deleted)) && (!q || r.anchor.exact.toLocaleLowerCase().includes(q) || (r.note ?? '').toLocaleLowerCase().includes(q)))
   const chapterOrder = markOrder(query)
   items.sort((a, b) => chapterOrder ? a.chapterIndex - b.chapterIndex || comparePoints(a.anchor.start, b.anchor.start) || a.id.localeCompare(b.id) : b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
   const cursor = parseMarkCursor(query)
@@ -82,4 +82,20 @@ export function changeMark(rows: ReadingMark[], userId: string, command: MarkCom
 }
 function checkOverlap(rows: ReadingMark[], next: ReadingMark, kind: MarkKind) {
   if (rows.some((r) => r.id !== next.id && !r.deletedAt && sameChapter(r, next) && (kind === 'annotations' ? rangesOverlap(r.anchor, next.anchor) : comparePoints(r.anchor.start, next.anchor.start) === 0))) throw new MarkError(409, '与已有标记重叠，请编辑已有标记或重新选择')
+}
+
+/** 备份恢复也遵守活动记录唯一及范围不重叠的约束。 */
+export function validateMarkCollection(rows: ReadingMark[], kind: MarkKind) {
+  const chapters = new Map<string, ReadingMark[]>()
+  for (const row of rows) {
+    if (row.deletedAt) continue
+    const key = JSON.stringify([row.bookId, row.editionKey, row.sourceFingerprint, row.chapterUrl]); const group = chapters.get(key) ?? []; group.push(row); chapters.set(key, group)
+  }
+  for (const group of chapters.values()) {
+    group.sort((a, b) => comparePoints(a.anchor.start, b.anchor.start)); let previous: ReadingMark | undefined
+    for (const row of group) {
+      if (previous && (kind === 'bookmarks' ? comparePoints(previous.anchor.start, row.anchor.start) === 0 : comparePoints(previous.anchor.end, row.anchor.start) > 0)) throw new MarkError(400, '备份包含重复或重叠的活动标记')
+      previous = row
+    }
+  }
 }

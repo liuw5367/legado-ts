@@ -1,4 +1,4 @@
-import { readingMarkSchema, type ReadingMark } from '../shared/reading-annotations.ts'
+import { validateMarkCollection, readingMarkSchema, type ReadingMark } from '../shared/reading-annotations.ts'
 import { bookOrganizationBackupSchema } from '../shared/book-lists.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { createBackupZip, validateBookOrganizationData, editionKey as sharedEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile, type BackupRecordCounts } from '@legado/reader-backup'
@@ -76,6 +76,11 @@ function validateSnapshotForExport(snapshot: ReaderBackupSnapshot, userId: strin
     if (position.userId !== userId || !books.get(position.bookId)?.has(position.editionKey) || !isIsoDateString(position.lastReadAt)) throw new Error(`阅读记录数据无效：${position.bookId}`)
   }
   for (const item of snapshot.searchHistory) if (!isUuid(item.id) || !isUuid(item.searchId) || !isIsoDateString(item.createdAt) || !isIsoDateString(item.updatedAt)) throw new Error(`搜索记录数据无效：${item.id}`)
+  for (const kind of ['bookmarks', 'annotations'] as const) {
+    const rows = snapshot[kind] ?? []
+    for (const row of rows) { readingMarkSchema.parse(row); if (row.userId !== userId || !books.get(row.bookId)?.has(row.editionKey)) throw new Error('批注缺少书籍版本') }
+    validateMarkCollection(rows, kind)
+  }
   validateWebSettings(snapshot.settings as unknown as Record<string, unknown>, userId)
 }
 
@@ -166,6 +171,7 @@ async function parseSnapshot(archive: BackupArchive, userId: string, currentSett
     const rows = readingMarkSchema.array().parse(readData<unknown>(archive, path, []))
     if (new Set(rows.map((r) => r.id)).size !== rows.length) throw new Error('批注记录重复')
     for (const row of rows) { if (!editions.has(row.bookId + ':' + row.editionKey)) throw new Error('批注缺少书籍版本'); row.userId = userId }
+    validateMarkCollection(rows, kind)
     marks[kind] = rows
   }
   return { ...marks, ...(organization === undefined ? {} : { organization }), sources, settings: { ...currentSettings, ...importedSettings, userId }, books, bookshelf: bookshelf.map((item) => ({ bookId: item.bookId, addedAt: item.addedAt, groupId: item.groupId ?? null })), positions, searchHistory }

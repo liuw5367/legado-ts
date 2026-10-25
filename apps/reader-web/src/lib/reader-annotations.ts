@@ -4,27 +4,8 @@ import { textFingerprint } from '../../shared/reading-text.ts'
 export { textFingerprint }
 
 export function paragraphTexts(root: HTMLElement): string[] { return [...root.querySelectorAll<HTMLElement>('[data-paragraph]')].map((p) => p.textContent ?? '') }
-function absolutePoint(texts: string[], point: TextPoint) { return texts.slice(0, point.paragraphIndex).reduce((n, s) => n + s.length + 1, 0) + point.offset }
-function pointAt(texts: string[], offset: number): TextPoint {
-  for (let i = 0; i < texts.length; i++) { if (offset <= texts[i]!.length) return { paragraphIndex: i, offset }; offset -= texts[i]!.length + 1 }
-  return { paragraphIndex: Math.max(0, texts.length - 1), offset: texts.at(-1)?.length ?? 0 }
-}
-export function createAnchor(texts: string[], start: TextPoint, end: TextPoint, hash: string): MarkAnchor {
-  const text = texts.join('\n'); const from = absolutePoint(texts, start); const to = absolutePoint(texts, end)
-  return { start, end, exact: text.slice(from, to), prefix: text.slice(Math.max(0, from - 32), from), suffix: text.slice(to, to + 32), contentHash: hash }
-}
-export function resolveAnchor(texts: string[], anchor: MarkAnchor, hash: string): MarkAnchor | null {
-  const text = texts.join('\n'); const from = absolutePoint(texts, anchor.start); const to = absolutePoint(texts, anchor.end)
-  if (anchor.contentHash === hash && text.slice(from, to) === anchor.exact) return anchor
-  let position = text.indexOf(anchor.exact); const matches: number[] = []
-  while (position >= 0) {
-    if ((!anchor.prefix || text.slice(Math.max(0, position - anchor.prefix.length), position) === anchor.prefix) && (!anchor.suffix || text.slice(position + anchor.exact.length, position + anchor.exact.length + anchor.suffix.length) === anchor.suffix)) matches.push(position)
-    position = text.indexOf(anchor.exact, position + 1)
-  }
-  if (matches.length !== 1) return null
-  const index = matches[0]!
-  return { ...anchor, start: pointAt(texts, index), end: pointAt(texts, index + anchor.exact.length), contentHash: hash }
-}
+export { createAnchor, resolveAnchor } from '../../shared/reading-text.ts'
+import { createAnchor } from '../../shared/reading-text.ts'
 function boundaryPoint(root: HTMLElement, node: Node, offset: number): TextPoint | null {
   const element = node instanceof Element ? node : node.parentElement
   const paragraph = element?.closest<HTMLElement>('[data-paragraph]')

@@ -75,7 +75,7 @@ test('过期正文、部分重叠与恢复冲突不会丢失数据', async () =>
   const { request, repo, path, input, bookId } = await setup()
   assert.equal((await request(path, 'PUT', { ...input, anchor: { ...input.anchor, contentHash: 'old' } })).status, 409)
   const row = (await (await request(path, 'PUT', input)).json()).item as ReadingMark
-  const overlap = { ...input, anchor: { ...input.anchor, start: { paragraphIndex: 0, offset: 1 }, end: { paragraphIndex: 0, offset: 4 } } }
+  const overlap = { ...input, anchor: createAnchor(['慢下来，才能看见光。', '读书有时就是如此。'], { paragraphIndex: 0, offset: 1 }, { paragraphIndex: 0, offset: 4 }, input.anchor.contentHash) }
   assert.equal((await request(path.replace(row.id, randomUUID()), 'PUT', overlap)).status, 409)
   await request(path, 'DELETE', { expectedVersion: row.version })
   await request(path.replace(row.id, randomUUID()), 'PUT', overlap)
@@ -115,4 +115,66 @@ test('Web备份包含活动及已删除笔记，旧备份缺字段保留现有�
   const old = createBackupZip(archive.manifest.files.filter((f) => !f.path.startsWith('reading/')).map((f) => ({ path: f.path, category: f.category, data: archive.files.get(f.path)! })), { producer: archive.manifest.producer })
   await restoreWebBackup(restored, user, old, ['reading'])
   assert.equal((await restored.listReadingMarks(user, { kind: 'annotations', deleted: true })).items.length, 1)
+})
+
+test('设置页筛选单本书后仍按创建时间倒序，阅读抽屉按章节位置', async () => {
+  const { input, bookId } = await setup()
+  const base = changeMark([], user, { action: 'save', kind: 'annotations', id: randomUUID(), bookId, input, bookName: '书', author: null })
+  const rows = [{ ...base, id: randomUUID(), chapterIndex: 0, createdAt: '2026-01-01T00:00:00.000Z' }, { ...base, id: randomUUID(), chapterIndex: 5, createdAt: '2026-02-01T00:00:00.000Z' }]
+  assert.equal(markPage(rows, { kind: 'annotations', bookId, order: 'created' }).items[0]?.chapterIndex, 5)
+  assert.equal(markPage(rows, { kind: 'annotations', bookId }).items[0]?.chapterIndex, 0)
+})
+
+test('恢复缺少批注文件的旧书架备份时保留笔记依赖书籍', async () => {
+  const { repo, request, path, input, bookId } = await setup()
+  await request(path, 'PUT', input)
+  const empty = await readBackupZip(await createWebBackup(new MemoryReaderRepository(), user))
+  const old = createBackupZip(empty.manifest.files.filter((f) => !f.path.startsWith('reading/')).map((f) => ({ path: f.path, category: f.category, data: empty.files.get(f.path)! })), { producer: empty.manifest.producer })
+  await restoreWebBackup(repo, user, old, ['bookshelf', 'reading'])
+  assert.ok(await repo.getBook(user, bookId))
+  assert.equal((await repo.listReadingMarks(user, { kind: 'annotations' })).items.length, 1)
+  await readBackupZip(await createWebBackup(repo, user))
+})
+
+test('服务端拒绝超界及伪造摘录锚点，HTML实体和嵌套文字保持精确', async () => {
+  const { repo, request, path, input, bookId } = await setup()
+  assert.equal((await request(path, 'PUT', { ...input, anchor: { ...input.anchor, exact: '伪造摘录' } })).status, 400)
+  assert.equal((await request(path, 'PUT', { ...input, anchor: { ...input.anchor, end: { paragraphIndex: 99, offset: 0 } } })).status, 400)
+  const cleaned = '<p>甲&amp;<b>乙</b><br>丙</p><script>移除</script><p>丁</p>'
+  const chapter = { sourceId: 'https://marks.test', bookUrl: 'https://marks.test/book', chapterUrl: input.chapterUrl, title: input.chapterTitle, index: input.chapterIndex, traceRef: '', rawFields: {} }
+  await repo.saveContent(user, { userId: user, bookId, editionKey: input.editionKey, chapterId: input.chapterId, sourceFingerprint: input.sourceFingerprint, tocRevision: input.tocRevision, content: { chapter, cleaned, raw: cleaned, contentType: 'html', pages: [cleaned], resources: [] } })
+  const anchor = createAnchor(['甲&乙丙丁'], { paragraphIndex: 0, offset: 1 }, { paragraphIndex: 0, offset: 4 }, textFingerprint(cleaned))
+  const response = await request(path, 'PUT', { ...input, anchor }); assert.equal(response.status, 200); assert.equal((await response.json()).item.anchor.exact, '&乙丙')
+})
+
+test('备份校验拒绝重叠活动标记，导入失败保留原数据', async () => {
+  const { repo, request, path, input } = await setup()
+  const row = (await (await request(path, 'PUT', input)).json()).item as ReadingMark
+  const archive = await readBackupZip(await createWebBackup(repo, user))
+  const overlapping = { ...row, id: randomUUID(), anchor: createAnchor(['慢下来，才能看见光。', '读书有时就是如此。'], { paragraphIndex: 0, offset: 1 }, { paragraphIndex: 0, offset: 4 }, input.anchor.contentHash) }
+  const data = new TextEncoder().encode(JSON.stringify({ schemaVersion: 1, data: [row, overlapping] }))
+  const invalid = createBackupZip(archive.manifest.files.map((f) => ({ path: f.path, category: f.category, data: f.path === 'reading/annotations.json' ? data : archive.files.get(f.path)! })), { producer: archive.manifest.producer })
+  await assert.rejects(restoreWebBackup(repo, user, invalid, ['reading']), /重叠/u)
+  assert.equal((await repo.listReadingMarks(user, { kind: 'annotations' })).items[0]?.id, row.id)
+})
+
+test('书单保留的同ID书籍冲突时同步重映射导入笔记', async () => {
+  const { repo, request, path, input, bookId } = await setup()
+  await request(path, 'PUT', input)
+  const archive = await readBackupZip(await createWebBackup(repo, user))
+  const withoutLists = createBackupZip(archive.manifest.files.filter((f) => f.path !== 'book-lists.json').map((f) => ({ path: f.path, category: f.category, data: archive.files.get(f.path)! })), { producer: archive.manifest.producer })
+  const target = new MemoryReaderRepository()
+  const metadata = { sourceId: 'https://local.test', bookUrl: 'https://local.test/other', name: '本地另一本书', traceRef: '', rawFields: {}, emptyFields: [], fieldErrors: {} }
+  await target.createBook(user, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'local-fp', candidate: metadata }, metadata, editionKey: sharedEditionKey(metadata.sourceId, metadata.bookUrl), sourceFingerprint: 'local-fp' })
+  const local = await target.getBackupSnapshot(user)
+  for (const entry of local.books) { entry.book.id = bookId; for (const edition of entry.editions) edition.bookId = bookId }
+  for (const row of local.bookshelf) row.bookId = bookId
+  await target.restoreBackupSnapshot(user, local, ['bookshelf', 'reading'])
+  const org = await target.mutateBookOrganization(user, { kind: 'create', type: 'booklist', name: '保留书单' })
+  await target.mutateBookOrganization(user, { kind: 'add', id: org.lists[0]!.id, bookId })
+  await restoreWebBackup(target, user, withoutLists, ['bookshelf', 'reading'])
+  const note = (await target.listReadingMarks(user, { kind: 'annotations' })).items[0]!
+  assert.notEqual(note.bookId, bookId)
+  assert.equal((await target.getBook(user, note.bookId))?.name, '山间来信')
+  assert.equal((await target.getBook(user, bookId))?.name, '本地另一本书')
 })

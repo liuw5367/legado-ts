@@ -1,5 +1,5 @@
 import { readMarks, writeMark, lockMarks, restoreMarks } from './reading-marks.ts'
-import { readingMarkSchema, changeMark, markPage, type MarkQuery, type MarkCommand, type MarkPage, type ReadingMark } from '../../shared/reading-annotations.ts'
+import { validateMarkCollection, readingMarkSchema, changeMark, markPage, type MarkQuery, type MarkCommand, type MarkPage, type ReadingMark } from '../../shared/reading-annotations.ts'
 import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
 import * as importHistory from './source-import-history.ts'
 import { MemoryImportHistory } from './memory-import-history.ts'
@@ -14,7 +14,7 @@ import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, max, or, sql 
 import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } from '@legado/reader-backup'
 import type { NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser, type ReaderTransaction } from './client.ts'
-import { bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportBatches, sourceImportLinks, sourceImportItems, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
+import { readingAnnotations, bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportBatches, sourceImportLinks, sourceImportItems, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
@@ -68,6 +68,7 @@ export class BackupRestoreError extends Error {
 }
 
 export interface ReaderRepository {
+  listReadingMarkBooks(userId: string): Promise<Array<{ id: string; name: string; author: string | null }>>
   listReadingMarks(userId: string, query: MarkQuery): Promise<MarkPage>
   mutateReadingMark(userId: string, command: MarkCommand): Promise<ReadingMark>
   getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean): Promise<{ books: Array<{ book: StoredBook; editions: StoredEdition[] }>; positions: StoredPosition[]; bookshelf: Array<{ bookId: string; groupId: string | null }> }>
@@ -129,6 +130,7 @@ export interface ReaderRepository {
 }
 
 export class PostgresReaderRepository implements ReaderRepository {
+  public listReadingMarkBooks(userId: string) { return withUser(userId, (tx) => tx.selectDistinct({ id: books.id, name: books.name, author: books.author }).from(readingAnnotations).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingAnnotations.bookId))).where(eq(readingAnnotations.userId, userId)).orderBy(books.name, books.id)) }
   public listReadingMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query)) }
   public mutateReadingMark(userId: string, command: MarkCommand) { return withUser(userId, (tx) => writeMark(tx, userId, command)) }
   public acquireExecutionSlot(userId: string, operationId: string) { return acquireExecutionSlot(userId, operationId) }
@@ -865,8 +867,16 @@ export class PostgresReaderRepository implements ReaderRepository {
 }
 
 export class MemoryReaderRepository implements ReaderRepository {
+  public async listReadingMarkBooks(userId: string) {
+    const referenced = new Set([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':annotations:')).map(([, row]) => row.bookId))
+    return [...new Map([...this.books.values()].filter(({ book }) => book.userId === userId && referenced.has(book.id)).map(({ book }) => [book.id, { id: book.id, name: book.name, author: book.author ?? null }])).values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+  }
+
   private readonly readingMarks = new Map<string, ReadingMark>()
-  public async listReadingMarks(userId: string, query: MarkQuery) { return structuredClone(markPage([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + query.kind + ':')).map(([, row]) => row), query)) }
+  public async listReadingMarks(userId: string, query: MarkQuery) {
+    const books = new Map([...this.books.values()].filter(({ book }) => book.userId === userId).map(({ book }) => [book.id, book]))
+    return structuredClone(markPage([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + query.kind + ':')).map(([, row]) => { const book = books.get(row.bookId); return book ? { ...row, bookName: book.name, author: book.author ?? null } : row }), query))
+  }
   public async mutateReadingMark(userId: string, command: MarkCommand) {
     const rows = [...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + command.kind + ':')).map(([, row]) => row)
     const next = changeMark(rows, userId, command)
@@ -1439,6 +1449,7 @@ function assertBackupSnapshotClosed(snapshot: ReaderBackupSnapshot, userId: stri
       if (!readingMarkSchema.safeParse(row).success || row.userId !== userId || ids.has(row.id) || !snapshot.books.some((item) => item.book.id === row.bookId && item.editions.some((e) => e.editionKey === row.editionKey))) throw new BackupRestoreError('批注缺少书籍版本或记录格式无效')
       ids.add(row.id)
     }
+    validateMarkCollection(snapshot[kind] ?? [], kind)
   }
   if (snapshot.settings.userId !== userId) throw new BackupRestoreError('阅读设置用户不匹配')
 }
@@ -1495,6 +1506,22 @@ function prepareOrganizationRestore(current: ReaderBackupSnapshot, input: Reader
   assertBackupSnapshotClosed(input, input.settings.userId)
   const next = structuredClone(input)
   if (!selected.has('settings')) next.settings = structuredClone(current.settings)
+  if (selected.has('bookshelf')) {
+    // 缺少批注扩展或未选择恢复批注时，保留其书籍及版本依赖。
+    const retained = (['bookmarks', 'annotations'] as const).flatMap((kind) => !selected.has('reading') || next[kind] === undefined ? current[kind] ?? [] : [])
+    for (const old of current.books.filter((entry) => retained.some((row) => row.bookId === entry.book.id))) {
+      let incoming = next.books.find((entry) => entry.book.id === old.book.id)
+      if (incoming && (normalizeIdentity(incoming.book.name) !== normalizeIdentity(old.book.name) || normalizeIdentity(incoming.book.author ?? '') !== normalizeIdentity(old.book.author ?? ''))) throw new BackupRestoreError('导入书籍与现有笔记的书籍标识冲突，请先保留现有书籍')
+      if (!incoming) { incoming = structuredClone(old); next.books.push(incoming) }
+      else for (const edition of old.editions.filter((e) => retained.some((row) => row.bookId === old.book.id && row.editionKey === e.editionKey))) if (!incoming.editions.some((e) => e.editionKey === edition.editionKey)) incoming.editions.push(structuredClone(edition))
+    }
+    const editionOwners = new Map<string, string>()
+    for (const entry of next.books) for (const edition of entry.editions) {
+      const owner = editionOwners.get(edition.editionKey)
+      if (owner && owner !== entry.book.id) throw new BackupRestoreError('导入版本与现有笔记的书籍冲突，请保留原版本后恢复')
+      editionOwners.set(edition.editionKey, entry.book.id)
+    }
+  }
   const listIdMap = new Map<string, string>()
   if (selected.has('bookshelf') && next.organization) {
     for (const row of next.organization.lists) { const previous = row.id; row.id = randomUUID(); listIdMap.set(previous, row.id) }
@@ -1517,6 +1544,7 @@ function prepareOrganizationRestore(current: ReaderBackupSnapshot, input: Reader
         for (const row of conflict.candidates) row.bookId = replacement
         for (const row of next.bookshelf) if (row.bookId === old.book.id) row.bookId = replacement
         for (const row of next.positions) if (row.bookId === old.book.id) row.bookId = replacement
+        for (const row of [...(next.bookmarks ?? []), ...(next.annotations ?? [])]) if (row.bookId === old.book.id) row.bookId = replacement
         next.books.push(structuredClone(old))
       } else if (!conflict) next.books.push(structuredClone(old))
     }
@@ -1526,6 +1554,7 @@ function prepareOrganizationRestore(current: ReaderBackupSnapshot, input: Reader
   const valid = target === 'all' || target === 'ungrouped' || organization?.lists.some((row) => row.type === 'shelf_group' && row.id === target)
   if (selected.has('settings')) next.settings.general.bookshelfInitialGroup = valid ? target : 'all'
   else if (!valid) next.settings.general.bookshelfInitialGroup = 'all'
+  assertBackupSnapshotClosed(next, next.settings.userId)
   return next
 }
 

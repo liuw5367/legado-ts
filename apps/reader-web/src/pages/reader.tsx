@@ -43,6 +43,8 @@ export function ReaderPage() {
   positionIdentityRef.current = positionIdentity
   const { settings, resolvedTheme, updateSettings, saving: settingsSaving, error: settingsError } = useReaderSettings()
   const [controlsVisible, setControlsVisible] = useState(false)
+  const [floatingBottom, setFloatingBottom] = useState(196)
+  const bottomBarRef = useRef<HTMLDivElement>(null)
   const [pageGuideVisible, setPageGuideVisible] = useState(false)
   const [pageGuideDraft, setPageGuideDraft] = useState<ApiPageTapZones>(settings.pageTapZones)
   const [pageGuideError, setPageGuideError] = useState('')
@@ -86,7 +88,15 @@ export function ReaderPage() {
   const requestIdRef = useRef(0)
   const liveToc = cache.get(bookId, editionKey)?.toc ?? toc
 
-  const marks = useReaderMarks({ articleRef, bookId, editionKey, chapterId, content, toc: liveToc, blocked: panel !== null || pageGuideVisible || refreshing, paged: settings.readingMode === 'paged', layout: pageLayout, pageIndex, positionReady: positionLoaded, onRestore: () => { restoredPositionRef.current = true }, onPage: turnPage, onInteract: cancelGesture })
+  const marks = useReaderMarks({ articleRef, bookId, editionKey, chapterId, content, toc: liveToc, blocked: panel !== null || pageGuideVisible || refreshing, paged: settings.readingMode === 'paged', layout: pageLayout, pageIndex, positionReady: positionLoaded, onRestore: (point) => { restoredPositionRef.current = true; latestAnchorRef.current = point; paginationAnchorRef.current = point }, onPage: turnPage, onInteract: cancelGesture })
+
+  useLayoutEffect(() => {
+    const bar = bottomBarRef.current
+    if (!controlsVisible || !bar) return
+    const measure = () => { const exit = bar.querySelector<HTMLElement>('.reader-exit'); if (exit) setFloatingBottom(window.innerHeight - exit.getBoundingClientRect().top + 12) }
+    measure(); const observer = new ResizeObserver(measure); observer.observe(bar); window.addEventListener('resize', measure)
+    return () => { observer.disconnect(); window.removeEventListener('resize', measure) }
+  }, [controlsVisible, content])
 
   function cancelGesture() {
     if (gestureRef.current !== null) cancelReaderGesture(gestureRef.current.gesture)
@@ -536,7 +546,8 @@ export function ReaderPage() {
   const address = browserUrl(content.chapter.chapterUrl)
   return <section className={`reader-page${paged ? ' reader-page-paged' : ''}`} onKeyDown={(event) => {
     if (event.key === 'Escape') {
-      if (pageGuideVisible) { event.preventDefault(); closePageGuide() }
+      if (marks.selection && !marks.editing) { event.preventDefault(); marks.close(); window.getSelection()?.removeAllRanges() }
+      else if (pageGuideVisible) { event.preventDefault(); closePageGuide() }
       else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
     }
   }}>
@@ -586,7 +597,7 @@ export function ReaderPage() {
       onPointerCancel={() => { if (paged) cancelGesture(); else pointerStartRef.current = null }}
       onLostPointerCapture={() => { if (gestureRef.current !== null) cancelGesture() }}
       onClick={(event) => {
-        if (event.target instanceof Element && marks.openMark(event.target)) { event.stopPropagation(); return }
+        if (event.target instanceof Element && marks.openMark(event.target)) { event.preventDefault(); event.stopPropagation(); return }
         if (paged && event.target instanceof Element && event.target.closest('a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"])') !== null) return
         if (paged && event.detail !== 0 && blockedClickRef.current) return
         const start = pointerStartRef.current
@@ -649,7 +660,7 @@ export function ReaderPage() {
     {refreshError.length > 0 ? <DismissibleMessage onDismiss={() => setRefreshError('')} className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></DismissibleMessage> : null}
     {positionError.length > 0 ? <DismissibleMessage onDismiss={() => setPositionError('')} className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void navigation?.positions.retry(bookId, editionKey).then((result) => { if (result !== undefined) { setPosition(result); setPositionError('') } }, (reason: unknown) => setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败'))}>重试</button></DismissibleMessage> : null}
     {controlsVisible ? <div className="reader-controls-backdrop" aria-hidden="true" onClick={() => setControlsVisible(false)} onWheel={(event) => event.preventDefault()} onTouchMove={(event) => event.preventDefault()} /> : null}
-    <div className="reader-bottom-bar" hidden={!controlsVisible}>
+    <div className="reader-bottom-bar" ref={bottomBarRef} hidden={!controlsVisible}>
       <PageBackButton className="reader-exit" label="退出阅读" />
       <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? `分页进度 ${pageCounter}，${wordCountLabel}` : '章节字数'}>{paged ? <><span>{pageCounter}</span><span className="reader-word-count-separator" aria-hidden="true">·</span><span>{wordCountLabel}</span></> : wordCountLabel}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">
@@ -660,7 +671,7 @@ export function ReaderPage() {
       </nav>
       {settingsError === undefined ? null : <div className="notice-with-recovery"><DismissibleMessage className="error reader-settings-error" role="alert">{settingsError}</DismissibleMessage>{themeRetry === null ? null : <button className="text-button" type="button" disabled={settingsSaving} onClick={() => void toggleTheme(themeRetry)}>重试</button>}</div>}
     </div>
-    {controlsVisible && panel === null && !pageGuideVisible && !marks.selection && !marks.editing ? <div className="reader-floating-actions">
+    {controlsVisible && panel === null && !pageGuideVisible && !marks.selection && !marks.editing ? <div className="reader-floating-actions" style={{ bottom: floatingBottom }}>
       <button type="button" aria-label={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} title={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} aria-pressed={Boolean(marks.currentBookmark)} disabled={marks.busy} onClick={() => void marks.toggleBookmark()}><Bookmark aria-hidden="true" fill={marks.currentBookmark ? 'currentColor' : 'none'} /></button>
       <button type="button" aria-label={dark ? '切换日间模式' : '切换夜间模式'} title={dark ? '切换日间模式' : '切换夜间模式'} disabled={settingsSaving} onClick={() => void toggleTheme()}>{dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
     </div> : null}

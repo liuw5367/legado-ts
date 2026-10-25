@@ -489,7 +489,7 @@ async function handleApi(request, response, url) {
     const kind = markRoute?.[2] ?? 'annotations'; const bookId = markRoute?.[1]; const id = markRoute?.[3]
     const rows = [...readingMarks.values()].filter((r) => r.kind === kind).map(({ kind: _kind, ...r }) => r)
     try {
-      if (method === 'GET') { json(response, markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, deleted: url.searchParams.get('deleted') === 'true' })); return }
+      if (method === 'GET') { json(response, markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, ...(path === '/api/annotations' ? { order: 'created' } : {}), deleted: url.searchParams.get('deleted') === 'true' })); return }
       const body = await readJson(request); const book = books.get(bookId)
       if (!book) { json(response, { error: { message: '书籍不存在' } }, 404); return }
       const item = changeMark(rows, USER_ID, method === 'PUT' ? { action: 'save', kind, id, bookId, input: body, bookName: book.name, author: book.author ?? null } : { action: markRoute[4] === 'restore' ? 'restore' : 'delete', kind, id, bookId, expectedVersion: body.expectedVersion })
@@ -738,7 +738,9 @@ async function handleApi(request, response, url) {
       const paragraphs = Array.from({ length: 28 }, (_, index) => `这是第 ${index + 1} 段模拟正文。用于检查阅读排版、字号、行距、翻章和章节刷新行为。${refresh && index === 0 ? `（刷新版本 ${revision}）` : ''}`)
       // 第三章使用跨页长段落，验证分页位置不能只保存段落编号。
       const text = paragraphs.join(chapter.index === 2 ? '' : '\n\n')
-      const content = { chapter, contentType: 'text', raw: text, cleaned: text, pages: paragraphs, resources: [], title: chapter.title }
+      const html = '<p>正文与<a href="https://example.test">链接中的标记文字</a>相邻。</p><p>第一行<br>第二行<strong>嵌套文字</strong> &amp; 实体。</p>' + paragraphs.map((p) => '<p>' + p + '</p>').join('')
+      const cleaned = chapter.index === 3 ? html : text
+      const content = { chapter, contentType: chapter.index === 3 ? 'html' : 'text', raw: cleaned, cleaned, pages: paragraphs, resources: [], title: chapter.title }
       json(response, { content: { content, tocRevision: `fixture-toc-${editionKey}-${(refreshCounts.get(editionKey) ?? 0) + 1}` } })
       return
     }
