@@ -825,6 +825,19 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .source-import-selection { display: flex; flex: 0 0 auto; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; }
 .source-import-selection > span { margin-right: auto; }
 
-.source-import-selection-note { flex: 0 0 auto; margin: 0 0 8px; }
 .source-selection-actions { flex-wrap: wrap; }
 .source-list-header { flex-wrap: wrap; }
+
+.source-select-all { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.source-select-all:has(input:disabled) { opacity: .6; cursor: wait; }
+.source-domain-header > .source-domain-check { align-self: start; height: 68px; }
+.source-domain-title { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; }
+.source-domain-title > strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-domain-title > .badge { max-width: 60%; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-domain-group.selected > .source-domain-header > .source-domain-details > .source-domain-summary,
+.source-domain-group.selected > .source-domain-header > .source-domain-check,
+.source-domain-version.selected { background: color-mix(in srgb, var(--primary) 9%, var(--card)); }
+.source-domain-version.source-management-row { display: block; }
+.source-domain-version > .source-management-title { min-height: var(--control-height); margin-bottom: 6px; }
+.source-domain-version .source-management-check { align-self: center; flex: 0 0 16px; }
+.source-domain-version .source-row-actions { flex: 0 0 auto; margin-left: auto; }

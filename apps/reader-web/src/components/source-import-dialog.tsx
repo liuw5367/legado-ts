@@ -19,7 +19,6 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
   const [showSourceSites, setShowSourceSites] = useState(false)
   const [preview, setPreview] = useState<ImportPreviewSummary | null>(null)
   const [selected, setSelected] = useState<string[]>([])
-  const [skippedSelected, setSkippedSelected] = useState<string[]>([])
   const [filter, setFilter] = useState('')
   const [writableExpanded, setWritableExpanded] = useState(true)
   const [skippedExpanded, setSkippedExpanded] = useState(true)
@@ -28,7 +27,7 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
   const controllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    if (!open) { setMode('url'); setFile(null); setShowSourceSites(false); controllerRef.current?.abort(); controllerRef.current = null; setUrl(''); setPreview(null); setSelected([]); setSkippedSelected([]); setFilter(''); setWritableExpanded(true); setSkippedExpanded(true); setStatus('input'); setMessage('') }
+    if (!open) { setMode('url'); setFile(null); setShowSourceSites(false); controllerRef.current?.abort(); controllerRef.current = null; setUrl(''); setPreview(null); setSelected([]); setFilter(''); setWritableExpanded(true); setSkippedExpanded(true); setStatus('input'); setMessage('') }
   }, [open])
 
   useEffect(() => () => { controllerRef.current?.abort() }, [])
@@ -49,7 +48,7 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
       const body = JSON.stringify({ url, ...(jsonText === undefined ? {} : { jsonText }) })
       if (new TextEncoder().encode(body).byteLength > IMPORT_REQUEST_MAX_BYTES) throw new Error('导入请求超过大小限制，请缩小 JSON 文件后重试')
       const result = await apiFetch<ImportPreviewSummary>('/api/source-management/import-preview', { method: 'POST', body, signal: controller.signal })
-      setPreview(result); setSkippedSelected([]); setSelected(result.candidates.filter((candidate) => candidate.disposition !== undefined).map((candidate) => candidate.id)); setFilter(''); setWritableExpanded(true); setSkippedExpanded(true); setStatus('input')
+      setPreview(result); setSelected(result.candidates.filter((candidate) => candidate.disposition !== undefined).map((candidate) => candidate.id)); setFilter(''); setWritableExpanded(true); setSkippedExpanded(true); setStatus('input')
     } catch (error) { if (!controller.signal.aborted) { setStatus('error'); setMessage(error instanceof Error ? error.message : '加载书源失败') } }
     finally { if (controllerRef.current === controller) controllerRef.current = null }
   }
@@ -88,11 +87,10 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
       </section>
       <section className={`source-import-section${skippedExpanded ? '' : ' collapsed'}`} aria-labelledby={id + '-source-import-skipped'}>
         <h3 className="source-import-section-heading" id={id + '-source-import-skipped'}><button className="source-import-section-toggle" type="button" aria-expanded={skippedExpanded} aria-controls={id + '-source-import-skipped-list'} onClick={() => setSkippedExpanded((value) => !value)}><span>不会导入 {matchingSkipped.length === skipped.length ? skipped.length : `${matchingSkipped.length}/${skipped.length}`}</span>{skippedExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}</button></h3>
-        {skippedExpanded ? <><ImportSelectionActions label="不会导入书源" candidates={matchingSkipped} selected={skippedSelected} disabled={busy} onChange={setSkippedSelected} /><p className="muted small source-import-selection-note">此区域的勾选用于核对，不参与确认导入。</p></> : null}
-        <div className="source-import-list" id={id + '-source-import-skipped-list'} hidden={!skippedExpanded}>{matchingSkipped.length === 0 ? <p className="empty-state">{skipped.length === 0 ? '没有跳过项。' : '没有匹配的书源。'}</p> : matchingSkipped.map((candidate) => <ImportCandidateRow key={candidate.id} candidate={candidate} displayName={presentationById.get(candidate.id)?.displayName ?? candidate.name} domain={presentationById.get(candidate.id)?.domain ?? candidate.sourceId} selected={skippedSelected.includes(candidate.id)} disabled={busy} onChange={(checked) => setSkippedSelected((current) => checked ? [...current, candidate.id] : current.filter((itemId) => itemId !== candidate.id))} />)}</div>
+        <div className="source-import-list" id={id + '-source-import-skipped-list'} hidden={!skippedExpanded}>{matchingSkipped.length === 0 ? <p className="empty-state">{skipped.length === 0 ? '没有跳过项。' : '没有匹配的书源。'}</p> : matchingSkipped.map((candidate) => <ImportCandidateRow key={candidate.id} candidate={candidate} displayName={presentationById.get(candidate.id)?.displayName ?? candidate.name} domain={presentationById.get(candidate.id)?.domain ?? candidate.sourceId} disabled />)}</div>
       </section>
       {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className={status === 'done' ? 'success' : 'error'} role={status === 'done' ? 'status' : 'alert'}>{message}</DismissibleMessage> : null}
-      <div className="source-import-footer"><Button variant="secondary" type="button" disabled={busy} onClick={() => { setPreview(null); setFile(null); setSelected([]); setSkippedSelected([]); setFilter(''); setStatus('input'); setMessage('') }}>返回修改地址</Button><Button variant="secondary" type="button" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button><Button type="button" disabled={busy || selected.length === 0} onClick={() => void confirm()}>{status === 'confirming' ? '保存中…' : `确认导入 ${selected.length} 项`}</Button></div>
+      <div className="source-import-footer"><Button variant="secondary" type="button" disabled={busy} onClick={() => { setPreview(null); setFile(null); setSelected([]); setFilter(''); setStatus('input'); setMessage('') }}>返回修改地址</Button><Button variant="secondary" type="button" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button><Button type="button" disabled={busy || selected.length === 0} onClick={() => void confirm()}>{status === 'confirming' ? '保存中…' : `确认导入 ${selected.length} 项`}</Button></div>
     </div>}
   </Sheet>
     <Sheet open={open && showSourceSites} onOpenChange={setShowSourceSites} title="获取书源">
@@ -110,12 +108,12 @@ export function SourceImportDialog({ open, onOpenChange, onImported }: { open: b
 }
 
 function ImportCandidateRow({ candidate, displayName, domain, selected = false, disabled = false, onChange }: { candidate: ImportPreviewSummaryCandidate; displayName: string; domain: string; selected?: boolean; disabled?: boolean; onChange?: (checked: boolean) => void }) {
-  return <label className={`source-import-row ${candidate.disposition === undefined ? 'skipped' : ''}`}><input type="checkbox" checked={selected} disabled={disabled} onChange={(event) => onChange?.(event.target.checked)} /><span className="source-import-row-body"><span className="source-import-row-title"><strong>{displayName}</strong><span className="source-import-reason">{candidate.reason}</span></span><span className="muted small">域名：{domain}{candidate.group === undefined ? '' : ` · ${candidate.group}`}</span><span className="source-url" title={candidate.sourceId}>{candidate.sourceId}</span><span className="muted small">规则更新时间 {formatSourceRuleDateTime(candidate.lastUpdateTime)}</span></span></label>
+  return <label className={`source-import-row ${candidate.disposition === undefined ? 'skipped' : ''}`}>{candidate.disposition !== undefined ? <input type="checkbox" checked={selected} disabled={disabled} onChange={(event) => onChange?.(event.target.checked)} /> : null}<span className="source-import-row-body"><span className="source-import-row-title"><strong>{displayName}</strong><span className="source-import-reason">{candidate.reason}</span></span><span className="muted small">域名：{domain}{candidate.group === undefined ? '' : ` · ${candidate.group}`}</span><span className="source-url" title={candidate.sourceId}>{candidate.sourceId}</span><span className="muted small">规则更新时间 {formatSourceRuleDateTime(candidate.lastUpdateTime)}</span></span></label>
 }
 
 function ImportSelectionActions({ label, candidates, selected, disabled, onChange }: { label: string; candidates: ImportPreviewSummaryCandidate[]; selected: string[]; disabled: boolean; onChange: (selected: string[]) => void }) {
   const ids = candidates.map((candidate) => candidate.id)
   const selectedIds = new Set(selected)
   const selectedCount = ids.filter((id) => selectedIds.has(id)).length
-  return <div className="source-import-selection" role="group" aria-label={`${label}批量选择`}><span className="muted small" aria-live="polite">已选 {selectedCount}/{ids.length}</span><Button variant="secondary" size="sm" type="button" disabled={disabled || ids.length === 0 || selectedCount === ids.length} onClick={() => onChange(updateImportSelection(selected, ids, 'all'))}>全选</Button><Button variant="secondary" size="sm" type="button" disabled={disabled || ids.length === 0} onClick={() => onChange(updateImportSelection(selected, ids, 'invert'))}>反选</Button><Button variant="secondary" size="sm" type="button" disabled={disabled || selectedCount === 0} onClick={() => onChange(updateImportSelection(selected, ids, 'clear'))}>取消全选</Button></div>
+  return <div className="source-import-selection" role="group" aria-label={`${label}批量选择`}><span className="muted small" aria-live="polite">已选 {selectedCount}/{ids.length}</span><Button variant="secondary" size="sm" type="button" disabled={disabled || ids.length === 0 || selectedCount === ids.length} onClick={() => onChange(updateImportSelection(selected, ids, 'all'))}>全选</Button><Button variant="secondary" size="sm" type="button" disabled={disabled || ids.length === 0} onClick={() => onChange(updateImportSelection(selected, ids, 'invert'))}>反选</Button><Button variant="secondary" size="sm" type="button" disabled={disabled || selectedCount === 0} onClick={() => onChange(updateImportSelection(selected, ids, 'clear'))}>清空</Button></div>
 }
