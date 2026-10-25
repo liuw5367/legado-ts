@@ -83,6 +83,17 @@ export function SourcesPage() {
     })
   }
 
+  function invertVisibleSelection() {
+    setSelected((current) => {
+      const next = new Map(current)
+      for (const source of visibleSources) {
+        if (next.has(source.sourceId)) next.delete(source.sourceId)
+        else next.set(source.sourceId, source.sourceRevision)
+      }
+      return next
+    })
+  }
+
   async function apply(action: 'enable' | 'disable' | 'delete', sources?: ManagedSourceSummary[]) {
     const items = sources === undefined
       ? [...selected.entries()].map(([sourceId, expectedSourceRevision]) => ({ sourceId, expectedSourceRevision }))
@@ -114,7 +125,7 @@ export function SourcesPage() {
     {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="success" role="status">{message}</DismissibleMessage> : null}{error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button variant="secondary" size="sm" type="button" onClick={() => void load()}>重试</Button></DismissibleMessage> : null}
     {selected.size > 0 ? <div className="source-bulk-bar"><span>已选 {selected.size} 个实现{enableConflict ? '，同域多选时不能批量启用' : ''}</span><div className="actions"><Button size="sm" type="button" disabled={acting || loading || enableConflict} onClick={() => void apply('enable')}>启用</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('disable')}>禁用</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('delete')}>删除</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => setSelected(new Map())}>取消选择</Button></div></div> : null}
     {loading ? <LoadingState message={data === null ? '正在加载书源…' : '正在更新书源…'} variant={data === null ? 'viewport' : 'inline'} action={data === null ? <PageBackButton appearance="button" fallback="/account/settings" /> : undefined} /> : null}
-    {data === null ? null : visibleGroups.length === 0 ? loading ? null : <div className="empty-state">没有匹配的书源域名。</div> : <><div className="source-list-header"><label><input ref={selectAllRef} type="checkbox" checked={pageSelected} disabled={loading} onChange={(event) => toggleMany(visibleSources, event.target.checked)} /> 全选筛选结果</label><span className="muted small">显示 {visibleGroups.length} 个域名、{visibleSources.length} 个实现</span></div><div className="source-management-list">{visibleGroups.map((group) => <SourceDomainRow key={group.domainKey} group={group} busy={acting || loading} selected={selected} onToggle={(source, checked) => toggle(source, checked)} onToggleGroup={(sources, checked) => toggleMany(sources, checked)} onAction={(source, action) => void apply(action, [source])} />)}</div></>}
+    {data === null ? null : visibleGroups.length === 0 ? loading ? null : <div className="empty-state">没有匹配的书源域名。</div> : <><div className="source-list-header"><label><input ref={selectAllRef} type="checkbox" checked={pageSelected} disabled={acting || loading} onChange={(event) => toggleMany(visibleSources, event.target.checked)} /> 全选筛选结果</label><span className="muted small">显示 {visibleGroups.length} 个域名、{visibleSources.length} 个实现</span><div className="actions source-selection-actions" role="group" aria-label="书源列表批量选择"><Button size="sm" variant="secondary" type="button" disabled={acting || loading || pageSelected} onClick={() => toggleMany(visibleSources, true)}>全选</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={invertVisibleSelection}>反选</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading || pageSelectedCount === 0} onClick={() => toggleMany(visibleSources, false)}>取消全选</Button></div></div><div className="source-management-list">{visibleGroups.map((group) => <SourceDomainRow key={group.domainKey} group={group} busy={acting || loading} selected={selected} onToggle={(source, checked) => toggle(source, checked)} onToggleGroup={(sources, checked) => toggleMany(sources, checked)} onAction={(source, action) => void apply(action, [source])} />)}</div></>}
     <SourceImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={(imported) => { setImportOpen(false); cache.clear(); setMessage(`已导入 ${imported} 个书源`) }} />
   </section>
 }

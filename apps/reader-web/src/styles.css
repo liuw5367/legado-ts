@@ -817,3 +817,14 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 
 .source-import-form input.source-import-file { height: auto; padding-block: 8px; }
 .source-import-file::file-selector-button { margin-right: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--foreground); font: inherit; cursor: pointer; }
+
+.source-import-mode { width: min(100%, 280px); grid-template-columns: repeat(2, minmax(0, 1fr)); margin-inline: auto; }
+.source-import-mode button { cursor: pointer; }
+.source-import-mode button:disabled { cursor: wait; opacity: .6; }
+.source-import-mode button:active { transform: scale(.98); }
+.source-import-selection { display: flex; flex: 0 0 auto; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; }
+.source-import-selection > span { margin-right: auto; }
+
+.source-import-selection-note { flex: 0 0 auto; margin: 0 0 8px; }
+.source-selection-actions { flex-wrap: wrap; }
+.source-list-header { flex-wrap: wrap; }
