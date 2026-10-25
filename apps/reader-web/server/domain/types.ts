@@ -1,3 +1,4 @@
+import { DEFAULT_SEARCH_CONCURRENCY } from '../../shared/search-settings.ts'
 import type { SourceCacheWarning } from '../../shared/book-sources.ts'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent, JsonObject, NormalizedSource, PageCursor, TocBookPatch } from '@legado/source-core'
 
@@ -185,6 +186,7 @@ export type ReadingMode = 'scroll' | 'paged'
 export type BookshelfSortMode = 'addedAt' | 'lastReadAt'
 
 export interface GeneralSettings {
+  searchConcurrency: number
   bookshelfInitialGroup?: string
   bookshelfSort: BookshelfSortMode
 }
@@ -239,7 +241,7 @@ export const DEFAULT_READER_SETTINGS = {
   marginRight: 16,
   marginBottom: 16,
   marginLeft: 16,
-  general: { bookshelfSort: 'addedAt' as BookshelfSortMode, bookshelfInitialGroup: 'all' },
+  general: { searchConcurrency: DEFAULT_SEARCH_CONCURRENCY, bookshelfSort: 'addedAt' as BookshelfSortMode, bookshelfInitialGroup: 'all' },
   pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous' as PageTapAction, centerBottomAction: 'next' as PageTapAction },
 }
 

@@ -24,7 +24,7 @@ test('web 备份可完整恢复书源、书架、阅读、搜索和设置', asyn
   await origin.savePosition(userId, { userId, bookId: book.book.id, editionKey: edition, chapterId: 'chapter-1', chapterUrl: 'https://backup.example/book/1/1', chapterIndex: 0, title: '第一章', paragraphIndex: 2, offset: 3, version: 1, lastReadAt: '2026-10-15T00:00:00.000Z' })
   const search = await origin.createSearch(userId, { keyword: '备份书', sourceId: metadata.sourceId })
   await origin.updateSearch(userId, search.id, { status: 'success', candidates: [] })
-  await origin.saveSettings(userId, { theme: 'dark', readingMode: 'paged', fontSize: 22 })
+  await origin.saveSettings(userId, { theme: 'dark', readingMode: 'paged', fontSize: 22, general: { searchConcurrency: 7 } })
 
   await origin.setCustomCover(userId, book.book.id, 'https://covers.test/custom.jpg')
   const zip = await createWebBackup(origin, userId)
@@ -44,6 +44,7 @@ test('web 备份可完整恢复书源、书架、阅读、搜索和设置', asyn
   assert.equal(snapshot.positions[0]?.offset, 3)
   assert.equal(snapshot.searchHistory[0]?.keyword, '备份书')
   assert.equal(snapshot.settings.theme, 'dark')
+  assert.equal(snapshot.settings.general.searchConcurrency, 7)
   assert.equal(snapshot.books.some((item) => item.book.id === stale.book.id), false)
 })
 

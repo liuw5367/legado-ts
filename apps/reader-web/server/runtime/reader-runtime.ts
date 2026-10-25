@@ -1,4 +1,6 @@
-import { SOURCE_CONCURRENCY, SOURCE_EXECUTION_MS, SEARCH_BATCH_SIZE, SEARCH_BATCH_MS } from './source-execution.ts'
+import { SOURCE_EXECUTION_MS, SEARCH_BATCH_MS } from './source-execution.ts'
+import { setTimeout as delay } from 'node:timers/promises'
+import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
 import { ReaderRuntimeError, requireSource, withPersistentSourceSession } from './source-session.ts'
 import { bookIdentityKey, normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookCoverSelection, BookSourceItem, BookSourcesResponse, SourceCacheWarning } from '../../shared/book-sources.ts'
@@ -80,8 +82,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
     const orderCandidates = () => orderSearchCandidates(run.keyword, [...preservedCandidates, ...states.flatMap((item) => item.candidates)], run.precision === true, sourceRank)
     const indices = new Map(states.map((state, index) => [state.sourceId, index]))
     const pending = states.filter((state) => state.status === 'pending')
-    const firstGroup = pending[0]?.importLinkId
-    const batch = pending.filter((state) => state.importLinkId === firstGroup).slice(0, SEARCH_BATCH_SIZE)
+    const concurrency = searchConcurrencySchema.catch(DEFAULT_SEARCH_CONCURRENCY).parse((await repository.getSettings(userId)).general.searchConcurrency)
     const started = Date.now()
     let nextIndex = 0
     let noCapacity = false
@@ -91,6 +92,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
     const activeSources = new Map<string, string>()
     const progress = () => ({ completed: completedCount(states), total: states.length, activeSources: [...activeSources.values()] })
     const disconnect = () => controller.abort()
+    const waitForRefill = () => delay(1000, undefined, { signal: controller.signal }).catch((error: unknown) => { if (!controller.signal.aborted) throw error })
     options?.signal?.addEventListener('abort', disconnect, { once: true })
     if (options?.signal?.aborted) controller.abort()
     const flush = () => {
@@ -107,18 +109,21 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
       return serialized
     }
     try {
-      const outcomes = await Promise.allSettled(Array.from({ length: Math.min(SOURCE_CONCURRENCY, batch.length) }, async () => {
+      // 按冻结的优先级持续补位，不等待同批慢书源；请求预算到期后由客户端续接。
+      const outcomes = await Promise.allSettled(Array.from({ length: Math.min(concurrency, pending.length) }, async () => {
         try {
         while (!controller.signal.aborted && Date.now() - started < SEARCH_BATCH_MS - SOURCE_EXECUTION_MS) {
-          const state = batch[nextIndex++]
+          const state = pending[nextIndex++]
           if (!state) return
           let lease = await repository.acquireExecutionSlot(userId, operationId)
           if (!lease && !controller.signal.aborted) {
-            await new Promise<void>((resolve) => { const timeout = setTimeout(resolve, 1000); timeout.unref?.() })
+            await waitForRefill()
+            if (controller.signal.aborted) return
             lease = await repository.acquireExecutionSlot(userId, operationId)
           }
           if (!lease) { noCapacity = true; return }
           try {
+            if (controller.signal.aborted || Date.now() - started >= SEARCH_BATCH_MS - SOURCE_EXECUTION_MS) return
             const deadline = new AbortController()
             const timeout = setTimeout(() => deadline.abort(new DOMException('书源执行超时', 'TimeoutError')), SOURCE_EXECUTION_MS)
             const signal = AbortSignal.any([controller.signal, deadline.signal])
@@ -134,6 +139,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
             dirty = true; events.push(outcome.state)
             await flush()
           } finally { await repository.releaseExecutionSlot(userId, lease) }
+          if (nextIndex < pending.length && !controller.signal.aborted) await waitForRefill()
         }
         } catch (error) { controller.abort(); throw error }
       }))

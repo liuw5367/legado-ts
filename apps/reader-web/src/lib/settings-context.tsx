@@ -1,10 +1,11 @@
+import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './auth-context.tsx'
 import { apiFetch, DEFAULT_PAGE_TAP_ZONES, type ApiPageTapZones, type ApiReadingMode, type ApiSettings, type ApiThemeMode } from './api.ts'
 import { normalizePageTapZones } from './reader-pagination.ts'
 import { Select } from '../components/ui/select.tsx'
 
-export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { bookshelfSort: 'addedAt', bookshelfInitialGroup: 'all' }, pageTapZones: DEFAULT_PAGE_TAP_ZONES }
+export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { searchConcurrency: DEFAULT_SEARCH_CONCURRENCY, bookshelfSort: 'addedAt', bookshelfInitialGroup: 'all' }, pageTapZones: DEFAULT_PAGE_TAP_ZONES }
 type SettingsPatch = Partial<Pick<ApiSettings, 'theme' | 'readingMode' | 'fontSize' | 'lineHeight' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft'>> & { general?: Partial<ApiSettings['general']>; pageTapZones?: ApiPageTapZones }
 type UpdateSettingsOptions = { optimistic?: boolean }
 type LocalSettingsSnapshot = Partial<ApiSettings> & { schemaVersion?: number }
@@ -116,7 +117,7 @@ function readLocalSettings(userId: string | undefined): ApiSettings {
     if (raw === null) return fallback
     const value = JSON.parse(raw) as LocalSettingsSnapshot
     const bookshelfSort = value.general?.bookshelfSort === 'lastReadAt' || value.general?.bookshelfSort === 'addedAt' ? value.general.bookshelfSort : fallback.general.bookshelfSort
-    return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(value.readingMode === 'scroll' || value.readingMode === 'paged' ? { readingMode: value.readingMode } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...readMargin('marginTop', value.marginTop), ...readMargin('marginRight', value.marginRight), ...readMargin('marginBottom', value.marginBottom), ...readMargin('marginLeft', value.marginLeft), general: { bookshelfSort, bookshelfInitialGroup: typeof value.general?.bookshelfInitialGroup === 'string' ? value.general.bookshelfInitialGroup : 'all' }, pageTapZones: normalizePageTapZones(value.pageTapZones), ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) }
+    return { ...fallback, ...(value.theme === 'system' || value.theme === 'light' || value.theme === 'dark' ? { theme: value.theme } : {}), ...(value.readingMode === 'scroll' || value.readingMode === 'paged' ? { readingMode: value.readingMode } : {}), ...(typeof value.fontSize === 'number' && value.fontSize >= 15 && value.fontSize <= 28 ? { fontSize: value.fontSize } : {}), ...(typeof value.lineHeight === 'number' && value.lineHeight >= 1.4 && value.lineHeight <= 2.6 ? { lineHeight: value.lineHeight } : {}), ...readMargin('marginTop', value.marginTop), ...readMargin('marginRight', value.marginRight), ...readMargin('marginBottom', value.marginBottom), ...readMargin('marginLeft', value.marginLeft), general: { searchConcurrency: searchConcurrencySchema.catch(DEFAULT_SEARCH_CONCURRENCY).parse(value.general?.searchConcurrency), bookshelfSort, bookshelfInitialGroup: typeof value.general?.bookshelfInitialGroup === 'string' ? value.general.bookshelfInitialGroup : 'all' }, pageTapZones: normalizePageTapZones(value.pageTapZones), ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}) }
   } catch { return fallback }
 }
 function readMargin(key: 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft', value: unknown): Partial<ApiSettings> { return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 64 ? { [key]: value } : {} }

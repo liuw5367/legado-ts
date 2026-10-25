@@ -1,4 +1,5 @@
 import { validateMarkCollection, readingMarkSchema, type ReadingMark } from '../shared/reading-annotations.ts'
+import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../shared/search-settings.ts'
 import { bookOrganizationBackupSchema } from '../shared/book-lists.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { createBackupZip, validateBookOrganizationData, editionKey as sharedEditionKey, isIsoDateString, jsonBytes, parseJson, readBackupZip, type BackupArchive, type BackupCategory, type BackupFile, type BackupRecordCounts } from '@legado/reader-backup'
@@ -294,10 +295,10 @@ function validateWebSettings(value: Record<string, unknown>, userId: string): Re
   const marginBottom = value.marginBottom
   const marginLeft = value.marginLeft
   const general = value.general === undefined ? DEFAULT_READER_SETTINGS.general : value.general
-  if (!isRecord(general) || (general.bookshelfSort !== undefined && general.bookshelfSort !== 'addedAt' && general.bookshelfSort !== 'lastReadAt')) throw new Error('通用设置格式无效')
+  if (!isRecord(general) || (general.searchConcurrency !== undefined && !searchConcurrencySchema.safeParse(general.searchConcurrency).success) || (general.bookshelfSort !== undefined && general.bookshelfSort !== 'addedAt' && general.bookshelfSort !== 'lastReadAt')) throw new Error('通用设置格式无效')
   const pageTapZones = readPageTapZones(value.pageTapZones)
   if ((theme !== 'system' && theme !== 'light' && theme !== 'dark') || (readingMode !== 'scroll' && readingMode !== 'paged') || !isIntegerInRange(fontSize, 15, 28) || typeof lineHeight !== 'number' || lineHeight < 1.4 || lineHeight > 2.6 || !isIntegerInRange(marginTop, 0, 64) || !isIntegerInRange(marginRight, 0, 64) || !isIntegerInRange(marginBottom, 0, 64) || !isIntegerInRange(marginLeft, 0, 64) || !isIsoDateString(value.updatedAt)) throw new Error('阅读设置格式无效')
-  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, general: { bookshelfSort: general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' }, pageTapZones, updatedAt: value.updatedAt }
+  return { userId, theme, readingMode, fontSize, lineHeight, marginTop, marginRight, marginBottom, marginLeft, general: { searchConcurrency: searchConcurrencySchema.catch(DEFAULT_SEARCH_CONCURRENCY).parse(general.searchConcurrency), bookshelfSort: general.bookshelfSort === 'lastReadAt' ? 'lastReadAt' : DEFAULT_READER_SETTINGS.general.bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' }, pageTapZones, updatedAt: value.updatedAt }
 }
 function readPageTapZones(value: unknown): ReaderSettings['pageTapZones'] {
   if (value === undefined) return DEFAULT_READER_SETTINGS.pageTapZones

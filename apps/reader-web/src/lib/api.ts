@@ -8,7 +8,7 @@ export type ApiThemeMode = 'system' | 'light' | 'dark'
 export type ApiReadingMode = 'scroll' | 'paged'
 export type ApiBookshelfSortMode = 'addedAt' | 'lastReadAt'
 export type ApiPageTapAction = 'previous' | 'next'
-export interface ApiGeneralSettings { bookshelfInitialGroup?: string; bookshelfSort: ApiBookshelfSortMode }
+export interface ApiGeneralSettings { searchConcurrency: number; bookshelfInitialGroup?: string; bookshelfSort: ApiBookshelfSortMode }
 export interface ApiPageTapZones { leftWidthPercent: number; centerWidthPercent: number; centerTopHeightPercent: number; centerMiddleHeightPercent: number; centerTopAction: ApiPageTapAction; centerBottomAction: ApiPageTapAction }
 export const DEFAULT_PAGE_TAP_ZONES: ApiPageTapZones = { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' }
 export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; marginTop: number; marginRight: number; marginBottom: number; marginLeft: number; general: ApiGeneralSettings; pageTapZones: ApiPageTapZones; updatedAt: string }

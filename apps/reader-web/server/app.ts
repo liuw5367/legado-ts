@@ -1,4 +1,5 @@
 import { registerReadingMarksApi } from './reading-marks-api.ts'
+import { searchConcurrencySchema } from '../shared/search-settings.ts'
 import { bookCoverRequestSchema } from '../shared/book-sources.ts'
 import { OrganizationError } from './domain/book-organization.ts'
 import { registerBookOrganizationApi } from './book-organization-api.ts'
@@ -600,7 +601,7 @@ const settingsSchema = z.object({
   marginRight: z.number().int().min(0).max(64).optional(),
   marginBottom: z.number().int().min(0).max(64).optional(),
   marginLeft: z.number().int().min(0).max(64).optional(),
-  general: z.object({ bookshelfInitialGroup: bookshelfInitialGroupSchema.optional(), bookshelfSort: z.enum(['addedAt', 'lastReadAt']).optional() }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个通用设置项' }).optional(),
+  general: z.object({ searchConcurrency: searchConcurrencySchema.optional(), bookshelfInitialGroup: bookshelfInitialGroupSchema.optional(), bookshelfSort: z.enum(['addedAt', 'lastReadAt']).optional() }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个通用设置项' }).optional(),
   pageTapZones: pageTapZonesSchema.optional(),
 }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个设置项' })
 const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })

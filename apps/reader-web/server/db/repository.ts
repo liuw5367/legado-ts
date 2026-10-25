@@ -1,5 +1,6 @@
 import { readMarks, writeMark, lockMarks, restoreMarks } from './reading-marks.ts'
 import { validateMarkCollection, readingMarkSchema, changeMark, markPage, type MarkQuery, type MarkCommand, type MarkPage, type ReadingMark } from '../../shared/reading-annotations.ts'
+import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
 import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
 import * as importHistory from './source-import-history.ts'
 import { MemoryImportHistory } from './memory-import-history.ts'
@@ -1352,7 +1353,7 @@ function toSettings(row: ReaderSettingsRow): ReaderSettings {
     marginRight: typeof display.marginRight === 'number' && Number.isInteger(display.marginRight) && display.marginRight >= 0 && display.marginRight <= 64 ? display.marginRight : DEFAULT_READER_SETTINGS.marginRight,
     marginBottom: typeof display.marginBottom === 'number' && Number.isInteger(display.marginBottom) && display.marginBottom >= 0 && display.marginBottom <= 64 ? display.marginBottom : DEFAULT_READER_SETTINGS.marginBottom,
     marginLeft: typeof display.marginLeft === 'number' && Number.isInteger(display.marginLeft) && display.marginLeft >= 0 && display.marginLeft <= 64 ? display.marginLeft : DEFAULT_READER_SETTINGS.marginLeft,
-    general: { bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' },
+    general: { searchConcurrency: searchConcurrencySchema.catch(DEFAULT_SEARCH_CONCURRENCY).parse(general.searchConcurrency), bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' },
     pageTapZones: readPageTapZones(preferences.pageTapZones),
     updatedAt: row.updatedAt.toISOString(),
   }
