@@ -834,10 +834,16 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .source-domain-title { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; }
 .source-domain-title > strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-domain-title > .badge { max-width: 60%; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-domain-group.selected > .source-domain-header > .source-domain-details > .source-domain-summary,
-.source-domain-group.selected > .source-domain-header > .source-domain-check,
-.source-domain-version.selected { background: color-mix(in srgb, var(--primary) 9%, var(--card)); }
+.source-domain-group.selected,
+.source-domain-version.selected { background: color-mix(in srgb, var(--primary) 22%, var(--card)); }
 .source-domain-version.source-management-row { display: block; }
 .source-domain-version > .source-management-title { min-height: var(--control-height); margin-bottom: 6px; }
 .source-domain-version .source-management-check { align-self: center; flex: 0 0 16px; }
 .source-domain-version .source-row-actions { flex: 0 0 auto; margin-left: auto; }
+
+.source-domain-group { margin: 4px 8px; padding: 4px 10px; border-radius: 8px; }
+.source-domain-version.source-management-row { margin-block: 4px; padding: 10px 8px; border-radius: 6px; }
+.source-version-meta { display: flex; flex-wrap: wrap; column-gap: 8px; row-gap: 2px; }
+.source-version-meta > span { min-width: 0; overflow-wrap: anywhere; }
+.source-version-meta > span + span::before { content: '·'; margin-right: 8px; }
+.source-version-origin { white-space: normal; overflow-wrap: anywhere; }

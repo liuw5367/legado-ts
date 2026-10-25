@@ -30,6 +30,7 @@ export type ImportPreviewRequest = z.infer<typeof importPreviewRequestSchema>
 export type ImportConfirmRequest = z.infer<typeof importConfirmRequestSchema>
 
 export interface ManagedSourceSummary {
+  author?: string
   importPriority?: number
   sourceUuid?: string
   importLinkId?: string

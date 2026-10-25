@@ -424,3 +424,22 @@ test('large source rules fit the preview budget as well as the input budget', as
   const local = await createImportPreview(repository, 'large-rules', 'https://example.test/collection', undefined, jsonText)
   assert.equal(local.writableCount, 1)
 })
+
+
+test('managed source summaries expose explicit author metadata without guessing from comments', async () => {
+  const repository = new MemoryReaderRepository()
+  const definitions = [
+    { ...baseSource, author: '  甲作者  ' },
+    { ...baseSource, bookSourceUrl: 'https://second.example', author: ' ', bookSourceAuthor: '乙作者' },
+    { ...baseSource, bookSourceUrl: 'https://third.example', bookSourceComment: '作者：不应猜测' },
+  ]
+  const candidates = compareImportCandidates(await importSources({ kind: 'text', text: JSON.stringify(definitions) }), new Map())
+  const preview = { previewId: randomUUID(), expiresAt: new Date(Date.now() + 60000).toISOString(), candidates, writableCount: candidates.length }
+  await repository.saveImportPreview('authors', preview, 'https://example.test/sources')
+  await repository.commitImportPreview('authors', preview.previewId, candidates.map((candidate) => candidate.id))
+  const data = await repository.listManagedSources('authors', { page: 1, pageSize: 50, query: '', status: 'all', all: true })
+  const byId = new Map(data.sources.map((source) => [source.sourceId, source]))
+  assert.equal(byId.get(baseSource.bookSourceUrl)?.author, '甲作者')
+  assert.equal(byId.get('https://second.example')?.author, '乙作者')
+  assert.equal(byId.get('https://third.example')?.author, undefined)
+})
