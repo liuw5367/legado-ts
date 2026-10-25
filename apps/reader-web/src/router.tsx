@@ -26,6 +26,7 @@ const SourceImportLinksPage = lazy(() => import('./pages/source-import-links.tsx
 const SourcesPage = lazy(() => import('./pages/sources.tsx').then((module) => ({ default: module.SourcesPage })))
 const SourceLoginPage = lazy(() => import('./pages/source-login.tsx').then((module) => ({ default: module.SourceLoginPage })))
 const SettingsPage = lazy(() => import('./pages/settings.tsx').then((module) => ({ default: module.SettingsPage })))
+const ImportExportSettingsPage = lazy(() => import('./pages/import-export-settings.tsx').then((module) => ({ default: module.ImportExportSettingsPage })))
 const ReadingSettingsPage = lazy(() => import('./pages/reading-settings.tsx').then((module) => ({ default: module.ReadingSettingsPage })))
 const ReaderEntryPage = lazy(() => import('./pages/reader.tsx').then((module) => ({ default: module.ReaderEntryPage })))
 const ReaderPage = lazy(() => import('./pages/reader.tsx').then((module) => ({ default: module.ReaderPage })))
@@ -73,6 +74,7 @@ const router = createBrowserRouter([
       <Route path="/books/:bookId/sources" element={<LazyPage bookToc><BookSourcesPage /></LazyPage>} />
       <Route path="/account/password" element={<LazyPage backTo="/account/settings"><ChangePasswordPage /></LazyPage>} />
       <Route path="/account/settings" element={<LazyPage><SettingsPage /></LazyPage>} />
+      <Route path="/account/settings/import-export" element={<LazyPage backTo="/account/settings"><ImportExportSettingsPage /></LazyPage>} />
       <Route path="/account/settings/about" element={<LazyPage backTo="/account/settings"><AboutAppPage /></LazyPage>} />
       <Route path="/account/settings/bookshelf-groups" element={<LazyPage backTo="/account/settings"><BookshelfGroupsPage /></LazyPage>} />
       <Route path="/account/settings/general" element={<LazyPage backTo="/account/settings"><GeneralSettingsPage /></LazyPage>} />

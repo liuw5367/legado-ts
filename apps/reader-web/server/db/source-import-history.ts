@@ -118,9 +118,9 @@ async function requireBatch(tx: ReaderTransaction, userId: string, batchId: stri
 export async function readImportItems(tx: ReaderTransaction, userId: string, batchId: string, query: ImportHistoryQuery) {
   const { batch, displayUrl } = await requireBatch(tx, userId, batchId)
   const condition = and(eq(items.userId, userId), eq(items.batchId, batchId), query.filter === 'imported' ? inArray(items.action, ['new', 'update', 'restore']) : query.filter === 'skipped' ? inArray(items.action, ['skipped', 'unselected']) : undefined)
-  const rows = await tx.select({ item: itemSummaryColumns, revision: userSources.revision, deleted: userSources.deleted }).from(items).leftJoin(userSources, and(eq(userSources.userId, userId), eq(userSources.sourceUuid, items.sourceUuid))).where(condition).orderBy(asc(items.id)).limit(query.pageSize).offset((query.page - 1) * query.pageSize)
+  const rows = await tx.select({ item: itemSummaryColumns, revision: userSources.revision, deleted: userSources.deleted, author: sql<string | null>`coalesce(nullif(trim(${userSources.normalizedSource}->>'author'), ''), nullif(trim(${userSources.normalizedSource}->>'bookSourceAuthor'), ''))` }).from(items).leftJoin(userSources, and(eq(userSources.userId, userId), eq(userSources.sourceUuid, items.sourceUuid))).where(condition).orderBy(asc(items.id)).limit(query.pageSize).offset((query.page - 1) * query.pageSize)
   const [total] = await tx.select({ value: count() }).from(items).where(condition)
-  return { batch: summarizeBatch(batch, displayUrl), items: rows.map(({ item, revision, deleted }) => ({ ...item, undoneAt: item.undoneAt?.toISOString() ?? null, currentStatus: itemStatus(item, revision ? { revision, deleted: deleted ?? false } : undefined) })), total: total?.value ?? 0, page: query.page, pageSize: query.pageSize }
+  return { batch: summarizeBatch(batch, displayUrl), items: rows.map(({ item, revision, deleted, author }) => ({ ...item, author, undoneAt: item.undoneAt?.toISOString() ?? null, currentStatus: itemStatus(item, revision ? { revision, deleted: deleted ?? false } : undefined) })), total: total?.value ?? 0, page: query.page, pageSize: query.pageSize }
 }
 
 async function undoContext(tx: ReaderTransaction, userId: string, batchId: string, itemIds?: string[]) {

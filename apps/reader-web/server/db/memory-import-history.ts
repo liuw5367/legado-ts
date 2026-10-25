@@ -64,7 +64,7 @@ export class MemoryImportHistory {
   items(userId: string, batchId: string, query: ImportHistoryQuery) {
     const row = this.require(userId, batchId)
     const details = row.items.filter((item) => query.filter === 'all' || (query.filter === 'imported' ? !!item.afterRevision : !item.afterRevision))
-    return { batch: structuredClone(row.batch), items: details.slice((query.page - 1) * query.pageSize, query.page * query.pageSize).map(({ before, ...item }) => ({ ...item, currentStatus: itemStatus(item, this.sources.get(userId + ':' + item.sourceId)) })), total: details.length, page: query.page, pageSize: query.pageSize }
+    return { batch: structuredClone(row.batch), items: details.slice((query.page - 1) * query.pageSize, query.page * query.pageSize).map(({ before, ...item }) => ({ ...item, author: [this.sources.get(userId + ':' + item.sourceId)?.source.normalizedSource.author, this.sources.get(userId + ':' + item.sourceId)?.source.normalizedSource.bookSourceAuthor].find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() ?? null, currentStatus: itemStatus(item, this.sources.get(userId + ':' + item.sourceId)) })), total: details.length, page: query.page, pageSize: query.pageSize }
   }
   preview(userId: string, batchId: string, ids?: string[]) {
     const row = this.require(userId, batchId)

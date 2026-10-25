@@ -5,7 +5,7 @@ import type { ReaderRepository } from '../../server/db/repository.ts'
 import { compareImportCandidates } from '../../server/runtime/source-comparison.ts'
 import { importHistoryQuerySchema } from '../../shared/source-management.ts'
 
-export const sourceDefinition = (id = 'https://history.example/source', time = 10) => ({ bookSourceUrl: id, bookSourceName: '历史书源', bookSourceType: 0, lastUpdateTime: time, searchUrl: '/search?q={{key}}&v=' + time, ruleSearch: { bookList: '.book', name: '.name@text', author: '.author@text', bookUrl: '.name@href' }, ruleBookInfo: {}, ruleToc: {}, ruleContent: {} })
+export const sourceDefinition = (id = 'https://history.example/source', time = 10) => ({ bookSourceUrl: id, bookSourceName: '历史书源', bookSourceAuthor: '示例作者', bookSourceType: 0, lastUpdateTime: time, searchUrl: '/search?q={{key}}&v=' + time, ruleSearch: { bookList: '.book', name: '.name@text', author: '.author@text', bookUrl: '.name@href' }, ruleBookInfo: {}, ruleToc: {}, ruleContent: {} })
 export async function importBatch(repository: ReaderRepository, userId: string, definitions: unknown, url = 'https://8.8.8.8/sources?token=private') {
   const candidates = compareImportCandidates(await importSources({ kind: 'text', text: JSON.stringify(definitions) }), new Map((await repository.listSourceStatesForUser(userId)).map((row) => [row.source.sourceId, row])))
   const previewId = randomUUID()
@@ -34,6 +34,7 @@ export async function verifyImportHistory(repository: ReaderRepository, userId: 
   assert.equal((await repository.previewImportUndo(userId, first.result.batchId)).removable, 0)
   const detail = await repository.listImportItems(userId, second.result.batchId, query)
   assert.equal(detail.items[0]!.currentStatus, 'unchanged')
+  assert.equal(detail.items[0]!.author, '示例作者')
   assert.ok(!('beforeSnapshot' in detail.items[0]!))
   const preview = await repository.previewImportUndo(userId, second.result.batchId)
   const input = { idempotencyKey: randomUUID(), items: preview.items.filter((item) => item.canUndo).map((item) => ({ itemId: item.itemId, expectedRevision: item.expectedRevision! })) }

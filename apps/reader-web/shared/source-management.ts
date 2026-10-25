@@ -129,6 +129,7 @@ export interface ImportBatch {
   undoStatus: 'none' | 'partial' | 'all'; undoneAt: string | null; invalidatedReason: string | null
 }
 export interface ImportHistoryItem {
+  author?: string | null
   id: string; sourceUuid: string | null; sourceId: string; name: string; group: string | null
   action: 'new' | 'update' | 'restore' | 'skipped' | 'unselected'; reason: string; displayUrl: string
   afterRevision: string | null; undoneAt: string | null
