@@ -46,3 +46,31 @@ test('incremental results keep frozen source priority despite concurrent complet
   assert.deepEqual(final.map((item) => item.sourceId), ['slow-priority', 'fast-later'])
   assert.equal(mergeSearchStreamCandidates(final, { source: { candidates: [latePriority] } }, ordering).length, 2)
 })
+
+test('search finishes after pending sources settle even when a source offers more pages and SSE stays open', { timeout: 2000 }, async () => {
+  const { readFileSync } = await import('node:fs')
+  const { runInNewContext } = await import('node:vm')
+  const { default: ts } = await import('typescript')
+  const module = { exports: {} as { streamSearchAll: (id: string, listener: (event: { type: string }) => void) => Promise<void> } }
+  const code = ts.transpileModule(readFileSync(new URL('../src/lib/api.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  let requests = 0
+  let closed = 0
+  runInNewContext(code, {
+    module, exports: module.exports, Headers, TextDecoder, setTimeout, clearTimeout,
+    require: (name: string) => name === './auth.ts' ? { currentSession: async () => null } : {},
+    fetch: async () => {
+      requests++
+      assert.ok(requests <= 2, 'must not follow next-page cursors after all sources finish')
+      const data = { hasPending: requests === 1, search: { sourceStates: [{ sourceId: 'source', nextCursor: { index: requests } }] } }
+      return new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode(`event: batch-end\ndata: ${JSON.stringify(data)}\n\nevent: done\ndata: {}\n\n`)) },
+        cancel() { closed++ },
+      }))
+    },
+  })
+  const events: string[] = []
+  await module.exports.streamSearchAll('search', (event) => events.push(event.type))
+  assert.equal(requests, 2)
+  assert.equal(closed, 2)
+  assert.deepEqual(events, ['batch-end', 'batch-end', 'done'])
+})

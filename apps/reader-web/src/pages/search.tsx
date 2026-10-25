@@ -41,7 +41,7 @@ export function SearchPage() {
   const [books, setBooks] = useState<ApiBook[]>([])
   const [shelfBooks, setShelfBooks] = useState<ApiBook[]>([])
   const [booksLoaded, setBooksLoaded] = useState(false)
-  const [precision, setPrecision] = useState(false)
+  const [precision, setPrecision] = useState(true)
   const [keyword, setKeyword] = useState(queryKeyword)
   const { candidates, searchId, status, message: searchMessage, progress, cancellationPending, search, replaceSearch, cancelAndWait, cancel, resume } = useBookSearch()
   const [expandedKey, setExpandedKey] = useState<string>()
@@ -180,7 +180,7 @@ export function SearchPage() {
     {searchMessage.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">{searchMessage}</DismissibleMessage> : null}
     {sourceManagementError.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">同域版本列表暂不可用：{sourceManagementError}。可在书源管理页切换版本。</DismissibleMessage> : null}
     {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className={`${messageTone === 'error' ? 'error' : messageTone === 'success' ? 'success' : 'muted'} compact-message`} role={messageTone === 'error' ? 'alert' : 'status'}>{message}</DismissibleMessage> : null}
-    {status === 'loading' ? <LoadingState message={'正在搜索书籍…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}${progress.currentGroup ? " · " + progress.currentGroup : ""}`)} variant={groups.length === 0 ? 'content' : 'inline'} /> : null}
+    {status === 'loading' ? <LoadingState message={'正在搜索书籍…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}${progress.activeSources?.length ? " · " + progress.activeSources.join("、") : ""}`)} variant="inline" /> : null}
     {groups.length === 0 && status === 'done' && !booksLoaded ? <LoadingState message="正在读取已有书籍…" variant="viewport" /> : null}
     <div className="result-summary" aria-live="polite">{status === 'done' && booksLoaded ? `找到 ${groups.length} 本书` : groups.length > 0 ? `${groups.length} 本书` : ''}</div>
     {status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
@@ -201,15 +201,8 @@ function SearchResult({ group, inBookshelf, selectedIndex, expanded, disabled, s
   const enabledVersions = selectedDomainGroup?.versions.filter(({ source }) => source.enabled) ?? []
   const effectiveSource = [...enabledVersions].sort((left, right) => compareSourceManagementOrder(left.source, right.source))[0]?.source
   const selectedDisplayName = selectedDomainGroup?.versions.find(({ source }) => source.sourceId === selected.item.sourceId)?.displayName ?? sourceById.get(selected.item.sourceId)?.name ?? selected.item.sourceId
-  const candidateDomains = new Map<string, { domain: string; items: CandidateGroup['items'] }>()
-  const visibleItems = group.items.slice(0, sourceVisibleCount)
-  if (!visibleItems.includes(selected)) visibleItems.push(selected)
-  for (const entry of visibleItems) {
-    const info = sourceDomainInfo(entry.item.sourceId)
-    const domain = candidateDomains.get(info.key) ?? { domain: info.domain, items: [] }
-    domain.items.push(entry)
-    candidateDomains.set(info.key, domain)
-  }
+  const sortedItems = [...group.items].sort((left, right) => (left.item.searchDurationMs ?? Infinity) - (right.item.searchDurationMs ?? Infinity))
+  const visibleItems = sortedItems.filter((entry, index) => index < sourceVisibleCount || entry === selected)
 
   return <article className="result-card" onClick={(event) => {
     // 操作按钮和来源选择保持独立，卡片其余区域复用详情打开流程。
@@ -222,7 +215,7 @@ function SearchResult({ group, inBookshelf, selectedIndex, expanded, disabled, s
         <div><h2><button type="button" className="result-detail-title" disabled={disabled || saving} onClick={() => onSave('details')}>{group.name}</button></h2><p className="muted small">{group.author} · {group.items.length} 个来源</p></div>
         <div className="result-card-actions"><Button className="save-button" size="sm" type="button" disabled={disabled || saving || inBookshelf} onClick={() => onSave('shelf')}>{inBookshelf ? '已在书架' : saving ? '处理中' : '加入书架'}</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('list')}>加入书单</Button><Button className="save-button" variant="secondary" size="sm" type="button" disabled={disabled || saving} onClick={() => onSave('directory')}>目录</Button></div>
       </div>
-      {group.items.length > 1 ? <label className="result-source-select"><span className="muted small">选择本次结果来源</span><Select value={String(selected.index)} disabled={disabled || saving} onChange={(event) => onSelect(Number(event.target.value))}>{[...candidateDomains.entries()].map(([domainKey, domain]) => <optgroup key={domainKey} label={domain.domain}>{domain.items.map(({ item, index }) => { const displayName = sourceGroupsByKey.get(domainKey)?.versions.find(({ source }) => source.sourceId === item.sourceId)?.displayName ?? sourceById.get(item.sourceId)?.name ?? item.sourceId; return <option key={`${item.sourceId}:${item.candidate.bookUrl}`} value={index}>{displayName} · {item.sourceId}</option> })}</optgroup>)}</Select></label> : <p className="muted small result-source-label">來源：{selectedDisplayName} · {selectedDomain.domain}</p>}
+      {group.items.length > 1 ? <label className="result-source-select"><span className="muted small">选择使用书源</span><Select value={String(selected.index)} disabled={disabled || saving} onChange={(event) => onSelect(Number(event.target.value))}>{visibleItems.map(({ item, index }) => { const domain = sourceDomainInfo(item.sourceId); const displayName = sourceGroupsByKey.get(domain.key)?.versions.find(({ source }) => source.sourceId === item.sourceId)?.displayName ?? sourceById.get(item.sourceId)?.name ?? domain.domain; return <option key={`${item.sourceId}:${item.candidate.bookUrl}`} value={index}>{displayName} · {domain.domain}{item.searchDurationMs === undefined ? '' : ` · ${item.searchDurationMs}ms`}</option> })}</Select></label> : <p className="muted small result-source-label">來源：{selectedDisplayName} · {selectedDomain.domain}</p>}
       {group.items.length > sourceVisibleCount ? <Button size="sm" variant="secondary" onClick={() => setSourceVisibleCount((value) => value + 50)}>继续显示来源</Button> : null}
       {selectedDomainGroup !== undefined && selectedDomainGroup.versions.length > 1 ? <label className="result-source-select"><span className="muted small">{selectedDomain.domain} · 账号默认版本（切换后重新搜索）</span><Select value={effectiveSource?.sourceId ?? ''} disabled={disabled || switchingSourceId !== null} onChange={(event) => onSetDefault(event.target.value)}>{effectiveSource === undefined ? <option value="" disabled>未设置默认版本</option> : null}{selectedDomainGroup.versions.map(({ source, displayName }) => <option key={source.sourceId} value={source.sourceId}>{displayName} · {formatSourceRuleDateTime(source.lastUpdateTime)}</option>)}</Select></label> : null}
       <p className="muted small result-source-meta">规则更新时间：{formatSourceRuleDateTime(sourceById.get(selected.item.sourceId)?.lastUpdateTime)} · 匹配：{rank === 'exact' ? '完全匹配' : rank === 'kind' ? '分类命中' : rank === 'contains' ? '包含关键词' : '其他'}{selected.item.candidate.updateTime ? ` · 书目更新：${selected.item.candidate.updateTime}` : ''}{selected.item.searchDurationMs === undefined ? '' : ` · 耗时：${selected.item.searchDurationMs}ms`}</p>

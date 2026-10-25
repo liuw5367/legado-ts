@@ -183,8 +183,10 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .save-button { flex: 0 0 auto; }
 .result-source-select { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .result-source-select .select { min-height: var(--control-height); flex: 1; }
-.search-page .result-source-select { align-items: stretch; flex-direction: column; gap: 4px; }
-.search-page .result-source-select .select { min-height: var(--control-height); width: 100%; }
+.search-page .result-source-select { align-items: center; }
+.search-page .result-source-select > span { flex: 0 0 auto; }
+.search-page .result-source-select .select { min-width: 0; width: 0; flex: 1; }
+.search-page .result-card h2, .search-page .result-detail-title { white-space: normal; overflow-wrap: anywhere; }
 .result-source-label { margin-top: 6px !important; }
 .result-intro p { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; font-size: 12px; }
 .result-intro.expanded p { display: block; }
@@ -356,6 +358,10 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .book-source-domain-title .badge { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .book-source-domain-title strong { min-width: 0; overflow: hidden; flex: 1 1 auto; text-overflow: ellipsis; white-space: nowrap; }
 .book-source-domain-summary .badge { flex: 0 0 auto; }
+.book-source-domain-meta { display: flex; justify-content: space-between; gap: 8px; }
+.book-source-domain-meta > span:last-child { flex: 0 0 auto; }
+.book-source-group { margin-left: 8px; font-weight: 400; }
+.book-source-version-address { display: flex; gap: 8px; }
 .book-source-domain-versions { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; }
 .book-source-version { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
 .book-source-version-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

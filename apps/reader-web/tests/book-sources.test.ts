@@ -310,3 +310,18 @@ test('取消来源封面详情请求后不保存新版本并释放执行槽位',
   assert.equal(save.mock.callCount(), 0); assert.equal(release.mock.callCount(), 1)
   assert.equal((await repository.listEditions('user-a', created.book.id)).length, 1)
 })
+
+test('saved and discovered book sources expose cached search duration for sorting after reload', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
+  const { repository, runtime, run } = await setup()
+  const batch = await runtime.runSearchBatch('user-a', run.id)
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0)
+  const sources = await runtime.listBookSources('user-a', created.book.id)
+  assert.equal(sources.sources.length, 2)
+  for (const source of sources.sources) {
+    const candidate = batch.candidates.find((candidate) => candidate.sourceId === source.sourceId)
+    assert.equal(typeof source.searchDurationMs, 'number')
+    assert.equal(source.searchDurationMs, candidate?.searchDurationMs)
+  }
+  assert.equal((await repository.listBookSourceCandidates('user-a', created.book.id)).length, 2)
+})

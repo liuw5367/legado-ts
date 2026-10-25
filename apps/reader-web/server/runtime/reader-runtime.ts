@@ -14,7 +14,7 @@ import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-ca
 export { ReaderRuntimeError } from './source-session.ts'
 
 export interface SearchCandidateIdentity { sourceId: string; sourceFingerprint: string; bookUrl: string }
-export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean; signal?: AbortSignal }
+export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean; signal?: AbortSignal; onProgress?: (progress: SearchRunState['progress']) => Promise<void> | void }
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
 
 export interface ReaderRuntime {
@@ -81,36 +81,30 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
     const indices = new Map(states.map((state, index) => [state.sourceId, index]))
     const pending = states.filter((state) => state.status === 'pending')
     const firstGroup = pending[0]?.importLinkId
-    const groupLabel = (await repository.listImportLinks(userId)).links.find((link) => link.id === firstGroup)?.displayUrl ?? '其他书源'
     const batch = pending.filter((state) => state.importLinkId === firstGroup).slice(0, SEARCH_BATCH_SIZE)
     const started = Date.now()
     let nextIndex = 0
     let noCapacity = false
-    let lastSaved = 0
     let dirty = false
-    let timer: ReturnType<typeof setTimeout> | undefined
     let serialized = Promise.resolve()
     const events: SourceSearchState[] = []
+    const activeSources = new Map<string, string>()
+    const progress = () => ({ completed: completedCount(states), total: states.length, activeSources: [...activeSources.values()] })
     const disconnect = () => controller.abort()
     options?.signal?.addEventListener('abort', disconnect, { once: true })
     if (options?.signal?.aborted) controller.abort()
     const flush = () => {
       serialized = serialized.then(async () => {
         if (!dirty) return
-        dirty = false; lastSaved = Date.now()
+        dirty = false
         const completed = events.splice(0)
         const saved = await repository.updateSearch(userId, searchId, { knownRun: current!, sourceStates: states.map((state) => ({ ...state })), candidates: orderCandidates(), status: 'running', expectedOperationId: operationId, operationId, progress: { completed: completedCount(states), total: states.length } })
         if (!saved) { controller.abort(); const latest = await repository.getSearch(userId, searchId); if (latest?.cancelled) return; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
-        saved.progress.currentGroup = groupLabel
+        saved.progress = progress()
         current = saved
         for (const state of completed) await listener?.(state, saved)
       })
       return serialized
-    }
-    const scheduleFlush = () => {
-      if (Date.now() - lastSaved >= 500) return flush()
-      timer ??= setTimeout(() => { timer = undefined; void flush().catch(() => controller.abort()) }, 500 - (Date.now() - lastSaved))
-      return Promise.resolve()
     }
     try {
       const outcomes = await Promise.allSettled(Array.from({ length: Math.min(SOURCE_CONCURRENCY, batch.length) }, async () => {
@@ -129,22 +123,24 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
             const timeout = setTimeout(() => deadline.abort(new DOMException('书源执行超时', 'TimeoutError')), SOURCE_EXECUTION_MS)
             const signal = AbortSignal.any([controller.signal, deadline.signal])
             let outcome: Awaited<ReturnType<typeof runOneSource>>
-            try { outcome = await runOneSource(repository, current!, state, signal) } finally { clearTimeout(timeout); deadline.abort() }
+            try { outcome = await runOneSource(repository, current!, state, signal, async (name) => {
+              activeSources.set(state.sourceId, name)
+              await options?.onProgress?.(progress())
+            }) } finally { clearTimeout(timeout); deadline.abort() }
             // 断线只暂停当前批次，显式 cancel 由持久化状态负责终止整次搜索。
             if (controller.signal.aborted && options?.signal?.aborted) continue
             states[indices.get(state.sourceId)!] = outcome.state
+            activeSources.delete(state.sourceId)
             dirty = true; events.push(outcome.state)
-            await scheduleFlush()
+            await flush()
           } finally { await repository.releaseExecutionSlot(userId, lease) }
         }
         } catch (error) { controller.abort(); throw error }
       }))
       const failed = outcomes.find((outcome) => outcome.status === 'rejected')
       if (failed?.status === 'rejected') throw failed.reason
-      if (timer) clearTimeout(timer)
       await flush()
     } finally {
-      if (timer) clearTimeout(timer)
       options?.signal?.removeEventListener('abort', disconnect)
     }
     const candidates = current.candidates
@@ -155,7 +151,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
     const finalStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'running' : aggregate
     current = await repository.updateSearch(userId, searchId, { knownRun: current, sourceStates: states, candidates, status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
     if (current === null) { const latest = await repository.getSearch(userId, searchId); if (latest !== null && latest.cancelled) { const warning = await cacheSearchSources(repository, userId, latest.candidates); return { search: latest, candidates: latest.candidates, sourceResults: latest.sourceStates, sourceStatus: 'cancelled', progress: latest.progress, diagnostics: [], ...warning } }; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
-    current.progress.currentGroup = groupLabel
+    current.progress = progress()
     return { search: current, candidates: current.candidates, sourceResults: states, sourceStatus: toBatchStatus(finalStatus), progress: current.progress, hasPending, ...(noCapacity ? { retryAfterMs: 1000 } : {}), diagnostics: states.flatMap((item) => item.diagnostics), ...(!hasPending ? await cacheSearchSources(repository, userId, current.candidates) : {}) }
   } finally {
     controller.abort()
@@ -164,11 +160,12 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
   }
 }
 
-async function runOneSource(repository: ReaderRepository, run: SearchRunState, state: SourceSearchState, signal: AbortSignal): Promise<{ state: SourceSearchState; additions: StoredCandidate[] }> {
+async function runOneSource(repository: ReaderRepository, run: SearchRunState, state: SourceSearchState, signal: AbortSignal, onStart?: (name: string) => Promise<void>): Promise<{ state: SourceSearchState; additions: StoredCandidate[] }> {
   const startedAt = new Date().toISOString()
   let source: StoredSourceRecord
   try { source = await requireSource(repository, run.userId, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
   if ((state.sourceRevision && source.sourceRevision !== state.sourceRevision) || (state.sourceFingerprint && source.fingerprint !== state.sourceFingerprint)) return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ code: 'stale', message: '书源已变化，本次搜索跳过' }], startedAt, completedAt: new Date().toISOString() } }
+  await onStart?.(source.name)
   try {
     const result = await withPersistentSourceSession(repository, run.userId, source, (session) => session.run((ports) => searchBooks(ports, { source: source.normalizedSource, keyword: run.keyword, ...(run.precision === true ? { acceptSearchFields: (fields) => acceptsPrecisionSearchFields(run.keyword, fields) } : {}), ...(state.cursor === undefined ? {} : { cursor: state.cursor }), signal, maxItems: 100 })))
     const searchDurationMs = Math.max(0, Date.now() - Date.parse(startedAt))
@@ -281,12 +278,14 @@ async function listBookSources(repository: ReaderRepository, userId: string, boo
   for (const item of candidates) {
     const source = sources.get(item.sourceId)
     if (source?.fingerprint !== item.sourceFingerprint) continue
-    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id, ...(item.candidate.candidate.coverUrl ? { coverUrl: item.candidate.candidate.coverUrl } : {}) })
+    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id, ...(item.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: item.candidate.searchDurationMs }), ...(item.candidate.candidate.coverUrl ? { coverUrl: item.candidate.candidate.coverUrl } : {}) })
   }
   for (const edition of editions) {
     const source = sources.get(edition.sourceId)
     if (source?.fingerprint !== edition.sourceFingerprint) continue
-    result.set(JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl]), { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}) })
+    const key = JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl])
+    const searchDurationMs = result.get(key)?.searchDurationMs ?? edition.metadata.searchDurationMs
+    result.set(key, { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(typeof searchDurationMs === 'number' ? { searchDurationMs } : {}), ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}) })
   }
   const priorities = new Map((await repository.listAllSourcesForUser(userId)).map((source) => [source.sourceId, source]))
   const items = [...result.values()].sort((left, right) => compareSourcePriority(priorities.get(left.sourceId)!, priorities.get(right.sourceId)!))

@@ -13,7 +13,7 @@ export interface ApiPageTapZones { leftWidthPercent: number; centerWidthPercent:
 export const DEFAULT_PAGE_TAP_ZONES: ApiPageTapZones = { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' }
 export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; marginTop: number; marginRight: number; marginBottom: number; marginLeft: number; general: ApiGeneralSettings; pageTapZones: ApiPageTapZones; updatedAt: string }
 export interface ApiCandidate { sourceOrder?: number; sourceId: string; sourceFingerprint: string; searchDurationMs?: number; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string; updateTime?: string; wordCount?: string } }
-export interface ApiSearchProgress { completed: number; total: number; currentGroup?: string }
+export interface ApiSearchProgress { completed: number; total: number; currentGroup?: string; activeSources?: string[] }
 export interface ApiSearchSourceState { sourceId: string; status: string; nextCursor?: { index: number; token?: string } }
 export interface ApiSearch { id: string; keyword: string; sourceId: string; precision?: boolean; status: string; candidates: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean; nextCursor?: { index: number; token?: string } }
 export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; customCoverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
@@ -50,10 +50,6 @@ export function mergeSearchStreamCandidates(current: ApiCandidate[], event: Sear
 
 export function searchProgressFromEvent(event: SearchSourceEventData): ApiSearchProgress | undefined {
   return event.progress ?? event.search?.progress
-}
-
-export function searchHasNextPage(event: SearchSourceEventData): boolean {
-  return event.search?.sourceStates?.some((state) => state.nextCursor !== undefined) === true
 }
 
 export function createSearchStreamRequest(searchId: string, session: { access_token?: string } | null, signal?: AbortSignal, options?: SearchStreamOptions): { path: string; init: RequestInit } {
@@ -184,24 +180,21 @@ export async function streamSearch(searchId: string, onEvent: (event: { type: st
     for (const event of decoder.push(chunk.value)) {
       if (isAborted()) { await reader.cancel().catch(() => undefined); return }
       onEvent(event)
+      if (event.type === 'done') { await reader.cancel().catch(() => undefined); return }
     }
   }
   if (isAborted()) { await reader.cancel().catch(() => undefined); return }
   for (const event of decoder.finish()) onEvent(event)
 }
 
-/** Web 端自动继续拉取所有仍有游标的书源，调用方无需暴露分页操作。 */
+/** 自动接续待执行书源批次；首轮完成即结束，避免游标翻页使进度满后仍持续请求。 */
 export async function streamSearchAll(searchId: string, onEvent: (event: { type: string; data: unknown }) => void, signal?: AbortSignal): Promise<void> {
-  let nextPage = false
   let finalDone: { type: string; data: unknown } | undefined
-  const seenNextPageCursors = new Set<string>()
   let hasPending = false
   let waitingSince = 0
   do {
     let retryAfterMs = 0
     hasPending = false
-    let hasNextPage = false
-    let repeatedCursor = false
     let batchEndSeen = false
     await streamSearch(searchId, (event) => {
       if (event.type === 'done') { finalDone = event; return }
@@ -211,16 +204,9 @@ export async function streamSearchAll(searchId: string, onEvent: (event: { type:
         const data = (event.data ?? {}) as SearchSourceEventData
         hasPending = data.hasPending === true
         retryAfterMs = data.retryAfterMs ?? 0
-        hasNextPage = searchHasNextPage(data)
-        repeatedCursor = !hasPending && hasRepeatedNextPageCursor(data, seenNextPageCursors)
-      } else if (event.type === 'batch' && !batchEndSeen) {
-        const data = (event.data ?? {}) as SearchSourceEventData
-        hasNextPage = searchHasNextPage(data)
-        repeatedCursor = hasRepeatedNextPageCursor(data, seenNextPageCursors)
       }
-    }, signal, nextPage ? { nextPage: true } : undefined)
+    }, signal)
     if (!batchEndSeen && !signal?.aborted) throw new ApiError('search-paused', '连接已中断，可继续搜索', 0)
-    // 异常书源可能重复返回同一游标，自动翻页必须在游标不前进时结束。
     if (hasPending && retryAfterMs > 0) {
       waitingSince ||= Date.now()
       if (Date.now() - waitingSince >= 30_000) throw new ApiError('search-paused', '服务器繁忙，搜索已暂停，可继续已有任务', 429)
@@ -230,21 +216,8 @@ export async function streamSearchAll(searchId: string, onEvent: (event: { type:
         signal?.addEventListener('abort', finish, { once: true })
       })
     } else waitingSince = 0
-    nextPage = !hasPending && hasNextPage && !repeatedCursor
-  } while ((hasPending || nextPage) && signal?.aborted !== true)
+  } while (hasPending && signal?.aborted !== true)
   if (signal?.aborted !== true && finalDone !== undefined) onEvent(finalDone)
-}
-
-function hasRepeatedNextPageCursor(event: SearchSourceEventData, seenCursors: Set<string>): boolean {
-  let repeated = false
-  for (const state of event.search?.sourceStates ?? []) {
-    const cursor = state.nextCursor
-    if (cursor === undefined) continue
-    const key = JSON.stringify([state.sourceId, cursor.index, cursor.token ?? null])
-    if (seenCursors.has(key)) repeated = true
-    seenCursors.add(key)
-  }
-  return repeated
 }
 
 async function readJson(response: Response): Promise<unknown> {

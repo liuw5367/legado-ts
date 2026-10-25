@@ -698,7 +698,9 @@ function streamSearchResponse(context: Context<{ Variables: Variables }>, userId
       const result = await dependencies.runtime.runSearchBatchStream(userId, searchId, async (source, search) => {
         await stream.writeSSE({ event: 'source-result', data: JSON.stringify({ searchId, seq: sequence++, source, progress: search.progress }) })
         await stream.writeSSE({ event: 'progress', data: JSON.stringify({ searchId, seq: sequence++, progress: search.progress }) })
-      }, { ...options, signal: disconnected.signal })
+      }, { ...options, signal: disconnected.signal, onProgress: async (progress) => {
+        await stream.writeSSE({ event: 'progress', data: JSON.stringify({ searchId, seq: sequence++, progress }) })
+      } })
       await stream.writeSSE({ event: 'batch-end', data: JSON.stringify({ searchId, seq: sequence++, hasPending: result.hasPending, retryAfterMs: result.retryAfterMs, search: { sourceStates: result.sourceResults.map(({ sourceId, nextCursor }) => ({ sourceId, nextCursor })), cancelled: result.search.cancelled }, progress: result.progress }) })
       await stream.writeSSE({ event: 'batch', data: JSON.stringify({ progress: result.progress, cacheWarning: result.cacheWarning }) })
       await stream.writeSSE({ event: 'done', data: JSON.stringify({ search: { id: searchId, status: result.search.status, cancelled: result.search.cancelled }, hasPending: result.hasPending }) })

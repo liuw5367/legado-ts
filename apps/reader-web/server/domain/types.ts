@@ -38,7 +38,7 @@ export interface SearchRunState {
   cursor?: PageCursor
   nextCursor?: PageCursor
   operationId?: string
-  progress: { completed: number; total: number; currentGroup?: string }
+  progress: { completed: number; total: number; currentGroup?: string; activeSources?: string[] }
   version: number
   cancelled: boolean
   createdAt: string
@@ -166,7 +166,7 @@ export interface SearchBatchResult {
   search: SearchRunState
   candidates: StoredCandidate[]
   sourceResults: SourceSearchState[]
-  progress: { completed: number; total: number }
+  progress: SearchRunState['progress']
   sourceStatus: 'success' | 'empty' | 'partial' | 'failed' | 'capability-missing' | 'cancelled'
   diagnostics: unknown[]
 }

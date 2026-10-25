@@ -3,10 +3,10 @@ import { and, eq, sql } from 'drizzle-orm'
 import { withUser } from '../db/client.ts'
 import { sourceExecutionSlots } from '../db/schema.ts'
 
-export const SOURCE_CONCURRENCY = 4
-export const GLOBAL_SOURCE_CONCURRENCY = 8
+export const SOURCE_CONCURRENCY = 20
+export const GLOBAL_SOURCE_CONCURRENCY = 20
 export const SOURCE_EXECUTION_MS = 5_000
-export const SEARCH_BATCH_SIZE = 8
+export const SEARCH_BATCH_SIZE = 20
 export const SEARCH_BATCH_MS = 25_000
 export interface ExecutionLease { token: string; slotId: number }
 

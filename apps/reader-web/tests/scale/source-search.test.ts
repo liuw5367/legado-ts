@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { MemoryReaderRepository, PostgresReaderRepository } from '../../server/db/repository.ts'
+import { SOURCE_CONCURRENCY } from '../../server/runtime/source-execution.ts'
 import { createReaderRuntime } from '../../server/runtime/reader-runtime.ts'
 import { importBatch, sourceDefinition } from '../fixtures/import-history.ts'
 
@@ -46,7 +47,7 @@ test('2,000 sources and 40,000 candidates use finite workers and resumable batch
     batches++; if (batches % 50 === 0) process.stderr.write('scale batches=' + batches + ' calls=' + calls + ' rss=' + Math.round(process.memoryUsage().rss / 1024 / 1024) + '\n'); maxBatchMs = Math.max(maxBatchMs, Date.now() - batchStart); peakRss = Math.max(peakRss, process.memoryUsage().rss)
   } while (result.hasPending)
   assert.equal(calls, 2000); assert.equal(result.candidates.length, 40000)
-  assert.ok(peak <= 4); assert.ok(maxBatchMs < 30000); assert.ok(firstResultMs < 2000)
+  assert.ok(peak <= SOURCE_CONCURRENCY); assert.ok(maxBatchMs < 30000); assert.ok(firstResultMs < 2000)
   t.diagnostic(JSON.stringify({ finalMemory: process.memoryUsage(), serializedBytes: Buffer.byteLength(JSON.stringify(result.search)), baseline }))
   assert.ok(peakRss - baseline <= 256 * 1024 * 1024, `RSS 增长 ${(peakRss - baseline) / 1024 / 1024} MiB`)
   assert.ok(eventBytes < 100000, 'source-result 不包含完整搜索')

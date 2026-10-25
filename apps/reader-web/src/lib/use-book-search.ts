@@ -17,8 +17,6 @@ export function useBookSearch() {
   const ordering = useRef({ keyword: '', precision: false })
   const mounted = useRef(false)
   const progressRef = useRef<ApiSearchProgress | undefined>(undefined)
-  const visibleProgressRef = useRef<ApiSearchProgress | undefined>(undefined)
-  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const searchTaskRef = useRef<Promise<void> | null>(null)
   const operation = useMemo(() => new SearchOperation({
     create: async (keyword, precision, sourceIds) => (await apiFetch<{ search: { id: string } }>('/api/searches', { method: 'POST', body: JSON.stringify({ keyword, precision, ...(sourceIds === undefined ? {} : { sourceIds }) }) }, userId)).search.id,
@@ -31,32 +29,19 @@ export function useBookSearch() {
     if (settled !== undefined) { setStatus(settled.status); if (settled.message) setMessage(settled.message) }
     return () => {
       mounted.current = false
-      if (progressTimerRef.current !== undefined) { clearTimeout(progressTimerRef.current); progressTimerRef.current = undefined }
       void operation.cancel().catch((reason: unknown) => {
         settleState.current = { status: 'error', message: reason instanceof Error ? reason.message : '取消请求失败' }
       })
     }
   }, [operation])
-  function showProgress(value: ApiSearchProgress, immediate = false) {
+  function showProgress(value: ApiSearchProgress) {
     progressRef.current = value
-    if (immediate || visibleProgressRef.current === undefined) {
-      visibleProgressRef.current = value; if (mounted.current) setProgress(value); return
-    }
-    if (progressTimerRef.current !== undefined) return
-    progressTimerRef.current = setTimeout(() => {
-      progressTimerRef.current = undefined
-      const latest = progressRef.current
-      if (latest !== undefined) { visibleProgressRef.current = latest; if (mounted.current) setProgress(latest) }
-    }, 5000)
+    if (mounted.current) setProgress(value)
   }
   async function runSearch(keyword: string, precision: boolean, sourceIds?: string[], resumeId?: string): Promise<boolean> {
     if (operation.isRunning || (!resumeId && keyword.trim().length === 0)) return false
-    if (progressTimerRef.current !== undefined) {
-      clearTimeout(progressTimerRef.current)
-      progressTimerRef.current = undefined
-    }
     settleState.current = undefined
-    if (!resumeId) { ordering.current = { keyword, precision }; setCandidates([]); setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; visibleProgressRef.current = undefined; setStatus('loading')
+    if (!resumeId) { ordering.current = { keyword, precision }; setCandidates([]); setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; setStatus('loading')
     let succeeded = true
     const task = (async () => {
       try {
@@ -67,7 +52,7 @@ export function useBookSearch() {
             const batch = event.data as SearchSourceEventData & { source?: { status?: string } }
             setCandidates((current) => mergeSearchStreamCandidates(current, batch, ordering.current))
             const nextProgress = searchProgressFromEvent(batch)
-            if (nextProgress !== undefined) showProgress(nextProgress, event.type === 'batch-end')
+            if (nextProgress !== undefined) showProgress(nextProgress)
             if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') setMessage('部分书源执行失败，已保留可用结果。')
           }
           if (event.type === 'progress') {
@@ -78,7 +63,7 @@ export function useBookSearch() {
             const batch = event.data as SearchSourceEventData & { cacheWarning?: SourceCacheWarning; candidates?: ApiCandidate[] }
             setCandidates((current) => mergeSearchStreamCandidates(current, batch, ordering.current))
             const nextProgress = searchProgressFromEvent(batch)
-            if (nextProgress !== undefined) showProgress(nextProgress, true)
+            if (nextProgress !== undefined) showProgress(nextProgress)
             const warning = batch.cacheWarning
             if (warning !== undefined) setMessage(warning.message)
           }
@@ -87,7 +72,7 @@ export function useBookSearch() {
         settleState.current = { status: 'done', message: result.cancelled ? '搜索已取消，保留已有结果' : '' }
         setStatus('done'); if (result.cancelled) setMessage('搜索已取消，保留已有结果')
         if (userId !== undefined) publishPageMutation({ userId, path: '/api/searches', method: 'POST' })
-        if (mounted.current && progressRef.current !== undefined) showProgress(progressRef.current, true)
+        if (mounted.current && progressRef.current !== undefined) showProgress(progressRef.current)
       } catch (reason) {
         succeeded = false
         settleState.current = { status: reason instanceof ApiError && ['search-paused', 'server-error', 'source-busy'].includes(reason.code) ? 'paused' : 'error', message: reason instanceof Error ? reason.message : '搜索失败' }

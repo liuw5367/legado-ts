@@ -55,6 +55,16 @@ test('用户封面迁移保持旧书籍默认行为并注册迁移顺序', async
   const journal = JSON.parse(await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8'))
   assert.ok(migration.includes('add column if not exists "custom_cover_url" text'))
   assert.ok(!migration.includes('not null'))
-  assert.equal(journal.entries.at(-1).tag, '0012_book_cover')
+  assert.ok(journal.entries.some((entry: { tag: string }) => entry.tag === '0012_book_cover'))
+  assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
+})
+
+test('source capacity migration adds the remaining slots without replacing active leases', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0013_source_execution_capacity.sql'), 'utf8')
+  const journal = JSON.parse(await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8'))
+  assert.ok(migration.includes('insert into reader.source_execution_slots(slot_id)'))
+  assert.ok(migration.includes('select generate_series(9,20)'))
+  assert.ok(migration.includes('on conflict (slot_id) do nothing'))
+  assert.equal(journal.entries.at(-1).tag, '0013_source_execution_capacity')
   assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
 })

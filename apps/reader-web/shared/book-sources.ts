@@ -9,6 +9,7 @@ export type BookSourceItem = {
   bookUrl: string
   sourceEnabled: boolean
   coverUrl?: string
+  searchDurationMs?: number
 } & ({ status: 'saved'; editionKey: string } | { status: 'discovered'; candidateId: string })
 export interface BookSourcesResponse { sources: BookSourceItem[]; activeEditionKey?: string }
 
