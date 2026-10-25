@@ -8,7 +8,7 @@ export function ReaderSelectionToolbar({ rect, mark, busy, onColor, onThought, o
     function place() {
       const box = ref.current?.getBoundingClientRect(); const v = window.visualViewport; const left = v?.offsetLeft ?? 0; const top = v?.offsetTop ?? 0; const width = v?.width ?? window.innerWidth; const height = v?.height ?? window.innerHeight
       if (!box) return
-      setPosition({ left: Math.max(left + 8, Math.min(rect.left + rect.width / 2 - box.width / 2, left + width - box.width - 8)), top: Math.max(top + 8, Math.min(rect.top - box.height - 8 >= top + 8 ? rect.top - box.height - 8 : rect.bottom + 8, top + height - box.height - 8)) })
+      setPosition({ left: Math.max(left + 8, Math.min(rect.left + rect.width / 2 - box.width / 2, left + width - box.width - 8)), top: Math.max(top + 6, Math.min(rect.top - box.height - 4 >= top + 6 ? rect.top - box.height - 4 : rect.bottom + 4, top + height - box.height - 6)) })
     }
     place(); window.visualViewport?.addEventListener('resize', place); window.visualViewport?.addEventListener('scroll', place)
     return () => { window.visualViewport?.removeEventListener('resize', place); window.visualViewport?.removeEventListener('scroll', place) }

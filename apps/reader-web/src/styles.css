@@ -405,6 +405,11 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .sheet-top { top: 0; right: 0; bottom: auto; left: 0; margin: 0; border-radius: 0 0 12px 12px; }
 .sheet::backdrop { background: rgb(36 33 29 / 34%); }
 .sheet-content { display: flex; max-height: 85vh; max-height: 85dvh; flex-direction: column; }
+.sheet.reader-marks-sheet { height: 85vh; min-height: 85vh; max-height: 85vh; height: 85dvh; min-height: 85dvh; max-height: 85dvh; }
+.sheet.reader-marks-sheet .sheet-content { height: 100%; min-height: 0; max-height: 100%; }
+.sheet.reader-marks-sheet .sheet-body { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+.sheet.reader-marks-sheet .notes-status-tabs { flex: 0 0 auto; }
+.sheet.reader-marks-sheet .reading-marks-list { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
 .sheet-header { display: flex; min-height: 48px; flex: 0 0 auto; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .sheet-header h2 { margin: 0; font-size: 16px; font-weight: 650; }
 .sheet-close { display: grid; width: 44px; height: 44px; place-items: center; border: 0; background: transparent; color: var(--muted); font-size: 24px; cursor: pointer; }
@@ -742,8 +747,14 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .import-reason-skipped, .import-reason-undone { color: var(--muted); }
 
 .reader-controls-backdrop { position: fixed; inset: 0; z-index: 3; touch-action: none; }
-.reader-exit { position: absolute; bottom: calc(100% + 16px); left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 20px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); box-shadow: 0 4px 16px rgb(0 0 0 / 12%); white-space: nowrap; }
+.reader-exit-row { position: absolute; right: 8px; bottom: calc(100% + 16px); left: 8px; z-index: 6; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.reader-exit { grid-column: 2; position: static; justify-self: center; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 20px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); box-shadow: 0 4px 16px rgb(0 0 0 / 12%); white-space: nowrap; }
 .reader-exit svg { width: 18px; height: 18px; }
+.reader-theme-toggle { grid-column: 3; justify-self: end; display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); }
+.reader-theme-toggle svg { width: 20px; height: 20px; }
+.reader-bookmark-float { position: fixed; top: calc(var(--page-top-inset) + 56px); right: max(calc((100vw - 680px) / 2 + 12px), calc(var(--safe-right) + 12px)); z-index: 6; display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); }
+.reader-bookmark-float svg { width: 20px; height: 20px; }
+.reader-bookmark-float[aria-pressed="true"] { color: var(--primary); }
 
 /* 认证页使用比普通内容页更窄的输入栏，让标题、字段和操作形成单一阅读节奏。 */
 .auth-shell { display: flex; width: 100%; min-height: 100dvh; justify-content: center; padding: clamp(32px, 8vh, 88px) max(20px, calc(20px + var(--safe-left))) calc(32px + var(--safe-bottom)) max(20px, calc(20px + var(--safe-right))); }
@@ -898,12 +909,9 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 [data-color="orange"] { --mark-color: #f7c879; }
 .reader-mark { background: color-mix(in srgb, var(--mark-color) 18%, transparent); text-decoration: underline; text-decoration-color: var(--mark-color); text-decoration-thickness: 2px; text-underline-offset: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; }
 .reader-mark:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.reader-floating-actions { position: fixed; right: calc(var(--safe-right) + 12px); bottom: calc(var(--safe-bottom) + 196px); z-index: 6; display: flex; flex-direction: column; gap: 8px; }
-.reader-floating-actions button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); }
-.reader-floating-actions svg { width: 20px; height: 20px; }
-.reader-floating-actions button[aria-pressed="true"] { color: var(--primary); }
+.reader-selection-backdrop { position: fixed; inset: 0; z-index: 11; touch-action: none; overscroll-behavior: none; }
 .reader-selection-popover { position: fixed; z-index: 12; max-width: calc(100vw - 16px); }
-.reader-selection-toolbar { display: flex; align-items: center; gap: 2px; width: max-content; padding: 7px 8px; border-radius: 999px; background: #3c3b39; color: #f5f1eb; box-shadow: 0 3px 12px rgb(0 0 0 / 18%); }
+.reader-selection-toolbar { display: flex; align-items: center; gap: 2px; width: max-content; padding: 4px 8px; border-radius: 999px; background: #3c3b39; color: #f5f1eb; box-shadow: 0 3px 12px rgb(0 0 0 / 18%); }
 .reader-selection-toolbar button { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0; min-height: 36px; border: 0; background: transparent; color: inherit; }
 .reader-selection-toolbar .mark-color-button { width: 32px; }
 .mark-color-button > span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #343230; }
@@ -911,8 +919,9 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reader-selection-toolbar .mark-thought-button { gap: 4px; padding: 0 7px; border-left: 1px solid #68645f; font-size: 12px; }
 .reader-selection-toolbar .mark-delete-button { width: 32px; border-left: 1px solid #68645f; }
 .mark-thought-button svg, .mark-delete-button svg { width: 16px; height: 16px; }
-.reader-mark-thought { margin-top: 8px; max-width: 280px; max-height: min(240px, 35dvh); overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
-.reader-mark-thought p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.reader-mark-thought { margin-top: 4px; max-width: 280px; max-height: min(240px, 35dvh); overflow: auto; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
+.reader-mark-thought > .muted { display: block; line-height: 1.2; }
+.reader-mark-thought p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .reader-mark-error { position: fixed; z-index: 15; bottom: calc(var(--safe-bottom) + 148px); left: 12px; right: 12px; max-width: 650px; margin: auto; }
 .mark-editor { display: grid; gap: 10px; }
 .mark-editor textarea { width: 100%; min-height: 140px; resize: vertical; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--foreground); font: inherit; }
@@ -927,11 +936,18 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reading-mark-item { min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--border); }
 .reading-mark-meta { display: flex; align-items: baseline; gap: 12px; justify-content: space-between; margin-bottom: 8px; }
 .reading-mark-meta strong { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
-.reading-mark-meta time { flex-shrink: 0; font-size: 12px; color: var(--muted); }
+.reading-mark-meta-trailing { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+.reading-mark-meta time { flex-shrink: 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.reading-mark-meta-trailing .more-menu { flex-basis: 40px; }
+.reading-mark-meta-trailing .more-menu > summary { width: 40px; height: 40px; }
+.reading-mark-meta-trailing .more-menu > summary svg { width: 18px; height: 18px; }
 .reading-mark-excerpt { display: block; width: 100%; text-align: left; border: 0; padding: 0 0 0 12px; background: transparent; color: var(--foreground); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
 .reading-mark-excerpt::before { content: ''; position: absolute; width: 5px; height: 5px; left: 0; top: .6em; background: var(--mark-color); border-radius: 50%; }
 .reading-mark-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reading-mark-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 3px; }
 .reading-mark-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .reading-mark-actions { display: flex; gap: 8px; margin-left: auto; }
+.reading-mark-actions .button svg { width: 16px; height: 16px; flex: 0 0 16px; }
+.reading-marks-list-global .reading-mark-excerpt { font-size: 14px; line-height: 1.5; }
+.reading-marks-list-global .reading-mark-note { font-size: 16px; line-height: 1.5; }
 @media (pointer: coarse) { .reader-selection-toolbar button { min-height: 44px; } .mark-editor textarea { font-size: 16px; } }

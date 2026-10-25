@@ -43,7 +43,7 @@ export function useReaderMarks({ articleRef, bookId, editionKey, chapterId, cont
       if (candidate) { onInteract(); selectionId.current = null; const exact = resolved.find((r) => comparePoints(r.anchor.start, candidate.anchor.start) === 0 && comparePoints(r.anchor.end, candidate.anchor.end) === 0); setSelection({ ...candidate, mark: exact ? annotations.find((r) => r.id === exact.id) ?? null : null }) }
     }, 120) }
     const scrolled = () => { setViewportVersion((n) => n + 1); if (!editing) setSelection(null) }
-    const outside = (event: PointerEvent) => { if (editing) return; if (event.target instanceof Element && event.target.closest('.reader-selection-popover,.reader-mark')) return; if (!(event.target instanceof Node) || !articleRef.current?.contains(event.target)) setSelection(null) }
+    const outside = (event: PointerEvent) => { if (editing) return; if (event.target instanceof Element && event.target.closest('.reader-selection-popover,.reader-selection-backdrop,.reader-mark')) return; if (!(event.target instanceof Node) || !articleRef.current?.contains(event.target)) setSelection(null) }
     document.addEventListener('selectionchange', changed); window.addEventListener('scroll', scrolled, { passive: true }); document.addEventListener('pointerdown', outside)
     return () => { if (timer) window.clearTimeout(timer); document.removeEventListener('selectionchange', changed); window.removeEventListener('scroll', scrolled); document.removeEventListener('pointerdown', outside) }
   }, [page?.active, hash, editing, blocked, busy, annotations, resolved])
