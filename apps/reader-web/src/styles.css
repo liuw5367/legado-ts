@@ -64,6 +64,8 @@ button, input, select { font: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 a { color: inherit; }
+/* 仅关闭站内操作入口的 iOS 链接预览，正文和外部链接保留系统行为。 */
+a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .reader-back, .reader-shortcut, .more-menu-item, .settings-entry, .book-row-main, .toc-row, .reader-toc-row)[href^="/"]:not([href^="//"]):not(.reader-content *) { -webkit-touch-callout: none; }
 
 .app-shell { min-height: 100dvh; display: flex; flex-direction: column; }
 .skip-link { position: fixed; top: 4px; left: 8px; z-index: 20; padding: 8px 12px; background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: 6px; transform: translateY(-150%); }

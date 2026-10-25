@@ -1,5 +1,5 @@
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
-import { usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
+import { usePageActivity, usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
 import { CircleHelp, ExternalLink, Info, RefreshCw } from 'lucide-react'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
@@ -7,7 +7,7 @@ import { MoreMenu } from '../components/more-menu.tsx'
 import { PageBackButton } from '../components/page-back-button.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { ReaderIcon } from '../components/reader-icon.tsx'
-import { browserUrl, chapterCharacterCount, isReaderTap, type ReaderTapPoint } from '../lib/reader-interactions.ts'
+import { browserUrl, cancelReaderGesture, chapterCharacterCount, finishReaderGesture, isReaderTap, moveReaderGesture, startReaderGesture, type ReaderGesture, type ReaderTapPoint } from '../lib/reader-interactions.ts'
 import { pageReturnState } from '../lib/page-navigation.ts'
 import { anchorFromViewport, clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageIndexForAnchor, pageLabel, pageTapZoneBoundaryRange, resizePageTapZones, type PageLayout, type PageTapZoneBoundary, type ReaderAnchor, type ReaderPageAction } from '../lib/reader-pagination.ts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
@@ -24,6 +24,7 @@ type PageTapZoneDrag = { pointerId: number; boundary: PageTapZoneBoundary }
 
 export function ReaderPage() {
   const navigation = usePageNavigation()
+  const pageActivity = usePageActivity()
   const visible = useRef(false)
   const { bookId = '', chapterId = '' } = useParams()
   const cache = useBookCache()
@@ -41,6 +42,8 @@ export function ReaderPage() {
   const [pageGuideError, setPageGuideError] = useState('')
   const [themeRetry, setThemeRetry] = useState<'light' | 'dark' | null>(null)
   const pointerStartRef = useRef<ReaderTapPoint | null>(null)
+  const gestureRef = useRef<{ pointerId: number; gesture: ReaderGesture; selection: { anchorNode: Node | null; anchorOffset: number; focusNode: Node | null; focusOffset: number; text: string } } | null>(null)
+  const blockedClickRef = useRef(false)
   const restoredPositionRef = useRef(false)
   const previousChapterEndRef = useRef<string | null>(location.hash === '#last-page' ? chapterId : null)
   const [content, setContent] = useState<ApiContent | null>(null)
@@ -75,6 +78,50 @@ export function ReaderPage() {
   const readingModeRef = useRef(settings.readingMode)
   const requestIdRef = useRef(0)
   const liveToc = cache.get(bookId, editionKey)?.toc ?? toc
+
+  function cancelGesture() {
+    if (gestureRef.current !== null) cancelReaderGesture(gestureRef.current.gesture)
+    blockedClickRef.current = true
+    pointerStartRef.current = null
+  }
+
+  function selectionSnapshot() {
+    const selection = window.getSelection()
+    return { anchorNode: selection?.anchorNode ?? null, anchorOffset: selection?.anchorOffset ?? 0, focusNode: selection?.focusNode ?? null, focusOffset: selection?.focusOffset ?? 0, text: selection?.toString() ?? '' }
+  }
+
+  function checkGestureSelection() {
+    const active = gestureRef.current
+    if (active === null) return
+    const current = selectionSnapshot()
+    const previous = active.selection
+    const changed = current.anchorNode !== previous.anchorNode || current.anchorOffset !== previous.anchorOffset || current.focusNode !== previous.focusNode || current.focusOffset !== previous.focusOffset
+    // 浏览器可能在普通点击时清除旧选区；只把新的非空选区或范围变化视为本次选字。
+    if (current.text.length > 0 && (changed || current.text !== previous.text)) cancelGesture()
+  }
+
+  useEffect(() => {
+    if (pageActivity?.active === false || settings.readingMode !== 'paged') return
+    const selectionChanged = () => checkGestureSelection()
+    const anotherPointer = (event: PointerEvent) => {
+      if (event.pointerType === 'touch' && !event.isPrimary) cancelGesture()
+    }
+    const cancel = () => cancelGesture()
+    document.addEventListener('selectionchange', selectionChanged)
+    document.addEventListener('pointerdown', anotherPointer, true)
+    document.addEventListener('visibilitychange', cancel)
+    window.addEventListener('blur', cancel)
+    return () => {
+      cancelGesture()
+      gestureRef.current = null
+      document.removeEventListener('selectionchange', selectionChanged)
+      document.removeEventListener('pointerdown', anotherPointer, true)
+      document.removeEventListener('visibilitychange', cancel)
+      window.removeEventListener('blur', cancel)
+    }
+  }, [pageActivity?.active, settings.readingMode, positionIdentity, content])
+
+  useLayoutEffect(() => { cancelGesture(); gestureRef.current = null }, [pageLayout, refreshing])
 
   usePageLoadEffect((settle) => {
     const requestId = ++requestIdRef.current
@@ -242,6 +289,7 @@ export function ReaderPage() {
     const measure = () => {
       if (!active || !visible.current) return
       const pageWidth = viewport.clientWidth
+      cancelGesture()
       if (pageWidth <= 0) {
         attempts += 1
         if (attempts >= 6) setPaginationError('分页排版失败，请重试或切换为滚动阅读。')
@@ -493,9 +541,43 @@ export function ReaderPage() {
       <button className="more-menu-item" type="button" disabled={refreshing} onClick={() => void refreshChapter()}><RefreshCw aria-hidden="true" />{refreshing ? '刷新中…' : '刷新内容'}</button>
     </MoreMenu></div></header>
     <article className={`reader-content${paged ? ' reader-content-paged' : ''}`} ref={articleRef} tabIndex={0} aria-label={paged ? `正文，左侧上一页，中栏上段${settings.pageTapZones.centerTopAction === 'previous' ? '上一页' : '下一页'}，中段显示或隐藏操作栏，下段${settings.pageTapZones.centerBottomAction === 'previous' ? '上一页' : '下一页'}，右侧下一页` : '正文，按回车显示或隐藏阅读操作'} style={readerStyle}
-      onPointerDown={(event) => { articleRef.current?.focus({ preventScroll: true }); pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY, selectedText: paged ? window.getSelection()?.toString() ?? '' : '' } }}
-      onPointerCancel={() => { pointerStartRef.current = null }}
+      onPointerDown={(event) => {
+        if (paged && event.pointerType === 'touch' && !event.isPrimary) { cancelGesture(); return }
+        blockedClickRef.current = false
+        gestureRef.current = null
+        if (paged && event.target instanceof Element && event.target.closest('a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"])') !== null) { cancelGesture(); return }
+        const selection = paged ? selectionSnapshot() : null
+        articleRef.current?.focus({ preventScroll: true })
+        pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY, selectedText: selection?.text ?? '' }
+        if (paged && event.pointerType === 'touch' && selection !== null) {
+          const visualViewport = window.visualViewport
+          const left = visualViewport?.offsetLeft ?? 0
+          const width = visualViewport?.width ?? window.innerWidth
+          const allowed = !controlsVisible && panel === null && !pageGuideVisible && !refreshing && pageLayout.pageCount > 0 && selection.text.length === 0 && event.clientX - left >= 24 && left + width - event.clientX >= 24
+          gestureRef.current = { pointerId: event.pointerId, selection, gesture: startReaderGesture({ x: event.clientX, y: event.clientY, time: event.timeStamp }, event.currentTarget.clientWidth, allowed) }
+        }
+      }}
+      onPointerMove={(event) => {
+        const active = gestureRef.current
+        if (active?.pointerId !== event.pointerId) return
+        checkGestureSelection()
+        moveReaderGesture(active.gesture, { x: event.clientX, y: event.clientY, time: event.timeStamp })
+        blockedClickRef.current ||= active.gesture.clickBlocked
+      }}
+      onPointerUp={(event) => {
+        const active = gestureRef.current
+        if (active?.pointerId !== event.pointerId) return
+        checkGestureSelection()
+        const action = finishReaderGesture(active.gesture, { x: event.clientX, y: event.clientY, time: event.timeStamp })
+        blockedClickRef.current ||= active.gesture.clickBlocked
+        gestureRef.current = null
+        if (action !== null && visible.current && !controlsVisible && panel === null && !pageGuideVisible && !refreshing) handlePageAction(action)
+      }}
+      onPointerCancel={() => { if (paged) cancelGesture(); else pointerStartRef.current = null }}
+      onLostPointerCapture={() => { if (gestureRef.current !== null) cancelGesture() }}
       onClick={(event) => {
+        if (paged && event.target instanceof Element && event.target.closest('a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"])') !== null) return
+        if (paged && event.detail !== 0 && blockedClickRef.current) return
         const start = pointerStartRef.current
         const selectedText = window.getSelection()?.toString() ?? ''
         const end = { x: event.clientX, y: event.clientY, scrollY: window.scrollY }

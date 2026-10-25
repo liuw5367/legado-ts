@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chapterCharacterCount, isCurrentToc, isReaderTap } from '../src/lib/reader-interactions.ts'
+import { cancelReaderGesture, chapterCharacterCount, finishReaderGesture, isCurrentToc, isReaderTap, moveReaderGesture, startReaderGesture } from '../src/lib/reader-interactions.ts'
 import { pageReturnTarget } from '../src/lib/page-navigation.ts'
 import { clampPageIndex, pageActionForTap, pageCountFromScrollWidth, pageLabel } from '../src/lib/reader-pagination.ts'
 
@@ -52,4 +52,85 @@ test('paginated taps resume immediately after an existing text selection', () =>
   assert.equal(pageActionForTap(start, start, '重新选择的文字', 250, 0, 300), null)
   assert.equal(pageActionForTap({ ...start, selectedText: '' }, start, '新选区', 250, 0, 300), null)
   assert.equal(isReaderTap(null, start, '原有选区'), false)
+})
+
+function swipe(x: number, time: number, width = 390, y = 0) {
+  const gesture = startReaderGesture({ x: 100, y: 100, time: 0 }, width, true)
+  moveReaderGesture(gesture, { x: 100 + Math.sign(x) * 15, y: 100, time: 30 })
+  return { gesture, action: finishReaderGesture(gesture, { x: 100 + x, y: 100 + y, time }) }
+}
+
+test('reader swipes combine distance, speed, direction and duration', () => {
+  assert.equal(swipe(-50, 400).action, 'next')
+  assert.equal(swipe(50, 400).action, 'previous')
+  assert.equal(swipe(-30, 80).action, 'next')
+  assert.equal(swipe(-30, 200).action, null)
+  assert.equal(swipe(-50, 800).action, 'next')
+  assert.equal(swipe(-50, 801).action, null)
+  assert.equal(swipe(-105, 300, 1024).action, 'next')
+  assert.equal(swipe(-28, 80).action, 'next')
+  assert.equal(swipe(-27.9, 70).action, null)
+  assert.equal(swipe(-28, 81).action, null)
+  assert.equal(swipe(-50, 0).action, null)
+  assert.equal(swipe(-50, 400, 390, 30).action, 'next')
+  assert.equal(swipe(-50, 400, 390, 40).action, null)
+  for (const [width, threshold] of [[320, 40], [390, 46.8], [1024, 72]] as const) {
+    assert.equal(swipe(-threshold, 400, width).action, 'next')
+    assert.equal(swipe(-(threshold - 0.01), 400, width).action, null)
+  }
+})
+
+test('reader gesture rejects vertical starts, retraction and long presses', () => {
+  const start = { x: 100, y: 100, time: 0 }
+  const vertical = startReaderGesture(start, 390, true)
+  moveReaderGesture(vertical, { x: 102, y: 120, time: 30 })
+  assert.equal(finishReaderGesture(vertical, { x: 0, y: 120, time: 200 }), null)
+  for (const [retraction, action] of [[20, 'next'], [20.1, null]] as const) {
+    const gesture = startReaderGesture(start, 390, true)
+    moveReaderGesture(gesture, { x: 20, y: 100, time: 100 })
+    assert.equal(finishReaderGesture(gesture, { x: 20 + retraction, y: 100, time: 400 }), action)
+  }
+  const held = startReaderGesture(start, 390, true)
+  moveReaderGesture(held, { ...start, time: 300 })
+  assert.equal(finishReaderGesture(held, { x: 0, y: 100, time: 450 }), null)
+  assert.equal(swipe(-50, 400).action, 'next')
+})
+
+test('reader drag and cancellation block the associated click without blocking a new gesture', () => {
+  const start = { x: 100, y: 100, time: 0 }
+  const tap = startReaderGesture(start, 390, true)
+  moveReaderGesture(tap, { ...start, x: 107.9, time: 50 })
+  assert.equal(tap.clickBlocked, false)
+  moveReaderGesture(tap, { ...start, x: 108, time: 60 })
+  finishReaderGesture(tap, { ...start, time: 100 })
+  assert.equal(tap.clickBlocked, true)
+  const cancelled = startReaderGesture(start, 390, true)
+  cancelReaderGesture(cancelled)
+  assert.equal(finishReaderGesture(cancelled, { x: 0, y: 100, time: 100 }), null)
+  assert.equal(cancelled.clickBlocked, true)
+  const selectionOrEdge = startReaderGesture(start, 390, false)
+  assert.equal(finishReaderGesture(selectionOrEdge, { ...start, time: 100 }), null)
+  assert.equal(selectionOrEdge.clickBlocked, false)
+  assert.equal(startReaderGesture(start, 390, true).clickBlocked, false)
+  assert.equal(swipe(-50, 400).gesture.clickBlocked, true)
+})
+
+test('reader gesture direction and cancellation remain stable throughout a trajectory', () => {
+  const start = { x: 100, y: 100, time: 0 }
+  const diagonal = startReaderGesture(start, 390, true)
+  moveReaderGesture(diagonal, { x: 115, y: 115, time: 40 })
+  assert.equal(finishReaderGesture(diagonal, { x: 125, y: 125, time: 100 }), null)
+  const turnedBack = startReaderGesture(start, 390, true)
+  moveReaderGesture(turnedBack, { x: 20, y: 100, time: 100 })
+  moveReaderGesture(turnedBack, { x: 50, y: 100, time: 150 })
+  assert.equal(finishReaderGesture(turnedBack, { x: 0, y: 100, time: 250 }), null)
+  const held = startReaderGesture(start, 390, true)
+  moveReaderGesture(held, { ...start, x: 105, time: 299 })
+  moveReaderGesture(held, { ...start, x: 110, time: 300 })
+  assert.equal(finishReaderGesture(held, { x: 0, y: 100, time: 400 }), null)
+  const cancelledAtEnd = startReaderGesture(start, 390, true)
+  moveReaderGesture(cancelledAtEnd, { x: 0, y: 100, time: 100 })
+  cancelReaderGesture(cancelledAtEnd)
+  assert.equal(finishReaderGesture(cancelledAtEnd, { x: 0, y: 100, time: 120 }), null)
+  assert.equal(cancelledAtEnd.clickBlocked, true)
 })
