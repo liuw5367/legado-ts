@@ -20,7 +20,7 @@ export function AccountLayout({ children, reader = false }: { children?: ReactNo
   return <div className={reader ? 'reader-shell' : 'app-shell'}>
     {!reader ? <><a className="skip-link" href="#main-content">跳到正文</a>
     <header className="app-header">
-      <Link onClick={avoidDuplicateRoot} className="brand" to="/">Legado Reader</Link>
+      <Link onClick={avoidDuplicateRoot} className="brand" to="/"><img src="/static/pwa/icon-192.png" alt="" width="28" height="28" /><span>页灯</span></Link>
       <nav className="desktop-nav" aria-label="主导航">
         <NavLink onClick={avoidDuplicateRoot} className="nav-link" to="/" end>书架</NavLink>
         <Link onClick={avoidDuplicateRoot} className={`nav-link${discoveryActive ? ' active' : ''}`} aria-current={discoveryActive ? 'page' : undefined} to={discoverTarget}>书单</Link>

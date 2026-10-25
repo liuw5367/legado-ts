@@ -1,7 +1,7 @@
 {
-  "name": "Legado Reader",
-  "short_name": "阅读",
-  "description": "Legado Web 阅读器",
+  "name": "页灯",
+  "short_name": "页灯",
+  "description": "为阅读，留一盏灯。",
   "lang": "zh-CN",
   "id": "/",
   "start_url": "/",
@@ -23,7 +23,7 @@
       "purpose": "any"
     },
     {
-      "src": "/static/pwa/icon-512.png",
+      "src": "/static/pwa/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

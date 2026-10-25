@@ -16,7 +16,7 @@
 
 数据库密码、Cookie、脚本变量和 `SOURCE_RUNTIME_STATE_KEY` 不应放入 `PUBLIC_*` 变量或提交到仓库。
 
-认证回调依赖 Supabase 的 Confirm signup、Reset password 模板。模板分别使用 `auth-email-templates/confirm-signup.html` 和 `auth-email-templates/reset-password.html`，将 `token_hash` 交给站内回调。生产环境配置 SMTP，并把部署域名加入 Site URL 和 Redirect URL 白名单。
+认证回调依赖 Supabase 的 Confirm signup、Reset password 模板。模板分别使用 `auth-email-templates/confirm-signup.html` 和 `auth-email-templates/reset-password.html`，将 `token_hash` 交给站内回调。生产环境配置 SMTP，并把部署域名加入 Site URL 和 Redirect URL 白名单。邮件模板品牌为“页灯”，图标从 `{{ .SiteURL }}/static/pwa/icon-192.png` 加载；修改仓库模板后需要在 Supabase 控制台同步模板，代码部署不会自动更新邮件模板。
 
 ## 本地启动
 
@@ -55,7 +55,7 @@ pnpm run build:web:vercel
 
 ## PWA 安装
 
-应用通过 `/static/pwa/manifest.webmanifest` 提供可安装的 PWA 配置，启动地址为 `/`，安装后使用独立窗口。阅读图标使用米白色主题背景和 📖，同时用于 manifest、favicon 与 iOS 主屏幕图标。浏览器需要 HTTPS，或在本地使用 `localhost`/`127.0.0.1`，才会显示安装入口；iOS 使用分享菜单添加到主屏幕。
+应用通过 `/static/pwa/manifest.webmanifest` 提供可安装的 PWA 配置，启动地址为 `/`，安装后使用独立窗口。应用名称与主屏幕短名称为“页灯”，描述为“为阅读，留一盏灯。”；书页与阅读灯融合的墨绿、暖金图标用于 manifest、favicon 与 iOS 主屏幕图标。原始设计文件位于 `../assets/brand/`，使用说明见 [视觉规范](../DESIGN.md)。浏览器需要 HTTPS，或在本地使用 `localhost`/`127.0.0.1`，才会显示安装入口；iOS 使用分享菜单添加到主屏幕。
 
 PWA 资源使用 `no-cache`，让 manifest 和图标更新可以重新校验；带 hash 的前端脚本和样式仍使用长期缓存。当前 PWA 仍依赖在线认证和 API，不提供离线章节阅读或后台同步。
 

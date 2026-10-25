@@ -244,7 +244,7 @@ app.get('/api/backup/export', async (context) => {
   if (rejected !== undefined) return rejected
   try {
     const bytes = await createWebBackup(dependencies.repository, context.get('userId'))
-    return new Response(Buffer.from(bytes), { status: 200, headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="legado-reader-backup.zip"', 'Cache-Control': 'no-store', 'X-Backup-Bytes': String(bytes.byteLength), 'X-Backup-Sha256': sha256Bytes(bytes) } })
+    return new Response(Buffer.from(bytes), { status: 200, headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="yedeng-backup.zip"', 'Cache-Control': 'no-store', 'X-Backup-Bytes': String(bytes.byteLength), 'X-Backup-Sha256': sha256Bytes(bytes) } })
   } catch (error) { return handleError(context, error) }
 })
 

@@ -9,7 +9,7 @@ import { Input } from './ui/input.tsx'
 export function AuthCard({ title, description, children, footer, backTo, embedded = false }: { title: string; description?: ReactNode; children: ReactNode; footer?: ReactNode; backTo?: string; /** 已有页面布局时仅渲染卡片，避免重复安全区和顶部留白。 */ embedded?: boolean }) {
   const card = <Card className={`auth-card${embedded ? ' auth-card-embedded' : ''}`}><PageHeader title={title} description={description} {...(backTo === undefined ? {} : { backTo })} />{children}{footer === undefined ? null : <div className="auth-footer muted">{footer}</div>}</Card>
   if (embedded) return card
-  return <div className="auth-shell"><div className="auth-frame"><div className="auth-brand"><span className="auth-brand-mark" aria-hidden="true">L</span><span>Legado Reader</span></div>{card}</div></div>
+  return <div className="auth-shell"><div className="auth-frame"><div className="auth-brand"><img className="auth-brand-mark" src="/static/pwa/icon-192.png" alt="" width="36" height="36" /><div className="auth-brand-copy"><strong>页灯</strong><span>为阅读，留一盏灯。</span></div></div>{card}</div></div>
 }
 
 export function PasswordField({ id, label, value, onChange, hint, aside, ...inputProps }: { id: string; label: string; value: string; onChange: (value: string) => void; hint?: ReactNode; aside?: ReactNode } & Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'type' | 'value' | 'onChange'>) {

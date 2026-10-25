@@ -5,7 +5,7 @@ void import('./app.tsx').catch(() => {
   state.className = 'boot-loading'
   const message = document.createElement('p')
   message.setAttribute('role', 'alert')
-  message.textContent = '阅读器加载失败，请刷新页面后重试。'
+  message.textContent = '页灯加载失败，请刷新页面后重试。'
   const refresh = document.createElement('button')
   refresh.className = 'boot-loading-refresh'
   refresh.type = 'button'

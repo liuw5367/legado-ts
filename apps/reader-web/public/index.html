@@ -13,11 +13,15 @@
       })()
     </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="阅读" />
+    <meta name="apple-mobile-web-app-title" content="页灯" />
     <link rel="manifest" href="/static/pwa/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="32x32" href="/static/pwa/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png" />
-    <title>Legado Reader</title>
+    <meta name="application-name" content="页灯" />
+    <meta name="description" content="为阅读，留一盏灯。" />
+    <meta property="og:title" content="页灯" />
+    <meta property="og:description" content="为阅读，留一盏灯。" />
+    <title>页灯</title>
     <style>
       .boot-loading { --boot-background: #f6f3ed; --boot-muted: #70685e; --boot-primary: #76542e; --boot-border: #ded8ce; box-sizing: border-box; display: flex; min-height: 100vh; min-height: 100dvh; flex-direction: column; align-items: center; justify-content: center; padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px)); background: var(--boot-background); color: var(--boot-muted); font: 14px/1.6 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif; text-align: center; }
       body { margin: 0; }
@@ -36,6 +40,6 @@
     <noscript><style>.boot-loading-status { display: none; }</style></noscript>
   </head>
   <body>
-    <div id="root"><main class="boot-loading"><div class="boot-loading-status" role="status"><span class="boot-loading-spinner" aria-hidden="true"></span><p>正在打开阅读器…</p></div><noscript>请启用 JavaScript 后使用阅读器。</noscript></main></div>
+    <div id="root"><main class="boot-loading"><div class="boot-loading-status" role="status"><img src="/static/pwa/icon-192.png" alt="" width="64" height="64" style="border-radius:14px" /><span class="boot-loading-spinner" aria-hidden="true"></span><p>正在点亮页灯…</p></div><noscript>请启用 JavaScript 后使用页灯。</noscript></main></div>
   </body>
 </html>

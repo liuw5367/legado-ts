@@ -45,7 +45,7 @@ export function ImportExportSettingsPage() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `legado-reader-backup-${new Date().toISOString().slice(0, 10)}.zip`
+      anchor.download = `yedeng-backup-${new Date().toISOString().slice(0, 10)}.zip`
       anchor.className = 'sr-only'
       document.body.append(anchor)
       anchor.click()

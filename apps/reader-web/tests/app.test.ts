@@ -13,7 +13,7 @@ test('SPA entrypoint is available when Vercel static files are not in the checko
   const response = await app.request('http://localhost/')
   assert.equal(response.status, 200)
   assert.equal(response.headers.get('content-type')?.startsWith('text/html'), true)
-  assert.match(await response.text(), /<title>Legado Reader<\/title>/u)
+  assert.match(await response.text(), /<title>页灯<\/title>/u)
 })
 
 test('SPA deep links fall back to the entrypoint without intercepting API 404s', async () => {

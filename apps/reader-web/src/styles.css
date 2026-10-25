@@ -71,7 +71,8 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .skip-link { position: fixed; top: 4px; left: 8px; z-index: 20; padding: 8px 12px; background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: 6px; transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
 .app-header { display: none; position: sticky; top: 0; z-index: 5; align-items: center; justify-content: space-between; min-height: 48px; gap: 12px; padding: 0 12px; background: color-mix(in srgb, var(--background) 94%, transparent); border-bottom: 1px solid var(--border); }
-.brand { color: var(--foreground); text-decoration: none; font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+.brand { display: inline-flex; align-items: center; gap: 8px; color: var(--foreground); text-decoration: none; font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+.brand img { border-radius: 6px; }
 .desktop-nav, .account-actions { display: none; align-items: center; gap: 12px; }
 .nav-link { color: var(--muted); font-size: 13px; text-decoration: none; }
 .nav-link.active { color: var(--foreground); font-weight: 650; }
@@ -742,7 +743,10 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .auth-shell { display: flex; width: 100%; min-height: 100dvh; justify-content: center; padding: clamp(32px, 8vh, 88px) max(20px, calc(20px + var(--safe-left))) calc(32px + var(--safe-bottom)) max(20px, calc(20px + var(--safe-right))); }
 .auth-frame { width: min(100%, 400px); }
 .auth-brand { display: flex; align-items: center; gap: 8px; margin: 0 0 16px 4px; color: var(--foreground); font-size: 13px; font-weight: 700; letter-spacing: .01em; }
-.auth-brand-mark { display: inline-grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; background: color-mix(in srgb, var(--primary) 16%, var(--card)); color: var(--primary); font-size: 15px; font-weight: 750; }
+.auth-brand-mark { width: 36px; height: 36px; border-radius: 8px; object-fit: contain; }
+.auth-brand-copy { display: grid; gap: 2px; }
+.auth-brand-copy strong { font-size: 16px; }
+.auth-brand-copy span { color: var(--muted); font-size: 12px; font-weight: 400; }
 .auth-card { width: 100%; padding: 28px; border-radius: 10px; box-shadow: 0 1px 4px rgb(36 33 29 / 10%); }
 .auth-card-embedded { width: min(100%, 400px); margin: 0; padding: 20px; box-shadow: none; }
 .auth-card .page-header { align-items: flex-start; gap: 8px; margin-bottom: 24px; }

@@ -2,7 +2,7 @@
 
 Legado TS 是一个以兼容 [Legado](https://github.com/LegadoTeam/legado) 书源行为为目标的 TypeScript 书源运行时。它负责导入书源、解释规则，并编排从发现和搜索到书籍详情、目录和正文的处理流程。
 
-仓库同时提供两个使用同一运行时的阅读应用：交互式终端阅读器和带服务端书源代理的 Web 阅读器。核心运行时不负责书架、阅读进度或界面状态；这些数据由应用保存。
+仓库同时提供两个使用同一运行时的阅读应用：交互式终端阅读器和带服务端书源代理的 Web 阅读器“页灯”。核心运行时不负责书架、阅读进度或界面状态；这些数据由应用保存。
 
 ## 主要能力
 
@@ -10,7 +10,7 @@ Legado TS 是一个以兼容 [Legado](https://github.com/LegadoTeam/legado) 书�
 - 执行 CSS、XPath、JSONPath 和 JavaScript 规则，生成可判别的成功、空结果、部分失败、取消和能力缺失结果。
 - 编排发现、搜索、详情、目录、正文和正文缓存流程，并通过宿主端口注入网络、Cookie、解析器、字符集和 JavaScript 能力。
 - 提供 Node 宿主实现，包括 HTTP、Cookie、HTML/JSONPath/XPath、QuickJS、字体、归档、加密和并发能力。
-- 提供 `legado-reader` 终端阅读器，以及使用 React、Hono、Supabase 和 Postgres 的 Web 阅读器。
+- 提供 `legado-reader` 终端阅读器，以及使用 React、Hono、Supabase 和 Postgres 的 Web 阅读器“页灯”。
 
 ## 仓库组成
 
@@ -19,7 +19,7 @@ Legado TS 是一个以兼容 [Legado](https://github.com/LegadoTeam/legado) 书�
 | `@legado/source-core` | 平台无关的书源 codec、规则、请求和阅读工作流 | [source-core 文档](packages/source-core/README.md) |
 | `@legado/source-node` | Node 宿主适配和 `createNodeSourceSession` | [source-node 文档](packages/source-node/README.md) |
 | `@legado/reader-cli` | 终端阅读器、书架、本地阅读状态和书源管理 | [CLI README](apps/reader-cli/README.md) |
-| `@legado/reader-web` | Web 阅读器、账号、书源管理、目录和正文 | [Web README](apps/reader-web/README.md) |
+| `@legado/reader-web` | 页灯 Web 阅读器、账号、书源管理、目录和正文 | [Web README](apps/reader-web/README.md) |
 
 `source-core` 不依赖 Node。浏览器应用不直接执行 Node 宿主；reader-web 通过服务端调用共享运行时，并把用户范围和持久化交给应用层。
 

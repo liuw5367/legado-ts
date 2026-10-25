@@ -1,8 +1,12 @@
-# Reader web design
+# 页灯 design
 
 ## 1. Visual theme and atmosphere
 
-Legado Reader uses a quiet ink-on-paper direction for long reading sessions: warm neutral surfaces, restrained brown ink in light mode, and muted amber ink in night mode. The application is utility-first, with a clear reading column, low visual noise, and no decorative motion.
+页灯 uses a quiet ink-on-paper direction for long reading sessions: warm neutral surfaces, restrained brown ink in light mode, and muted amber ink in night mode. The application is utility-first, with a clear reading column, low visual noise, and no decorative motion.
+
+The brand name is “页灯”, with the tagline “为阅读，留一盏灯。”. The approved mark merges an open book with a reading lamp, using forest green and a warm amber light. Use the opaque green icon on both light and dark surfaces; the existing reading and action theme tokens remain unchanged.
+
+Original PNGs are preserved in `assets/brand/`: `yedeng-concept-original.png` is the approved identity presentation, `yedeng-mark-original.png` is the transparent symbol, and `yedeng-app-icon-original.png` preserves the initial opaque icon. `yedeng-app-icon-v2-original.png` enlarges the symbol to about 80% width for small-size legibility. Production PNGs in `public/static/pwa/` are resized from v2 to 32, 180, 192 and 512 pixels. The separate `icon-maskable-512.png` uses the initial master with additional safe space for circular system masks. The transparent 256px symbol is in `public/static/brand/yedeng-mark.png`. Preserve originals when making future exports; do not enlarge the production files to create new masters.
 
 ## 2. Color palette and roles
 
