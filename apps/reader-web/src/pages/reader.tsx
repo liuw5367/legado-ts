@@ -56,6 +56,13 @@ export function ReaderPage() {
   const [pageLayout, setPageLayout] = useState<PageLayout>({ pageWidth: 0, pageCount: 0 })
   const [pageIndex, setPageIndex] = useState(0)
   const [paginationError, setPaginationError] = useState('')
+  const [boundaryNotice, setBoundaryNotice] = useState<{ text: string } | null>(null)
+  useEffect(() => {
+    if (boundaryNotice === null) return
+    const timer = window.setTimeout(() => setBoundaryNotice(null), 2500)
+    return () => window.clearTimeout(timer)
+  }, [boundaryNotice])
+  useEffect(() => setBoundaryNotice(null), [chapterId, pageIndex])
   const refreshController = useRef<AbortController | null>(null)
   const articleRef = useRef<HTMLElement>(null)
   const pageGuideRef = useRef<HTMLDialogElement>(null)
@@ -336,12 +343,14 @@ export function ReaderPage() {
   function handlePageAction(action: ReaderPageAction) {
     if (controlsVisible) { setControlsVisible(false); return }
     if (action === 'previous') {
+      if (pageLayout.pageCount > 0 && pageIndex === 0 && currentIndex === 0) { setBoundaryNotice({ text: '当前已经是第一章' }); return }
       if (pageLayout.pageCount > 0 && pageIndex === 0 && previous !== undefined) {
         previousChapterEndRef.current = previous.chapterId
         navigate(chapterLink(bookId, previous, editionKey) + '#last-page', { replace: true, state: location.state })
       } else turnPage(pageIndex - 1)
     }
     else if (action === 'next') {
+      if (pageLayout.pageCount > 0 && pageIndex >= pageLayout.pageCount - 1 && currentIndex >= 0 && currentIndex === siblings.length - 1) { setBoundaryNotice({ text: '当前已是最后一章' }); return }
       // 排版完成且已到本章末页时，沿用章节导航流程加载下一章。
       if (pageLayout.pageCount > 0 && pageIndex >= pageLayout.pageCount - 1 && next !== undefined) {
         navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state })
@@ -474,6 +483,7 @@ export function ReaderPage() {
       else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
     }
   }}>
+    {boundaryNotice ? <div className="reader-boundary-notice" role="status" aria-live="polite">{boundaryNotice.text}</div> : null}
     <div className="reader-status reader-status-top" aria-label="当前阅读书籍与章节"><span title={bookName}>{bookName}</span><span title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</span></div>
     <div className="reader-status reader-status-bottom" aria-label="阅读进度"><span>{chapterProgress}</span><span>{paged ? `${pageCounter}${pageLayout.pageCount > 0 ? '页' : ''} ` : ''}{wordCountLabel}</span></div>
     <header className="reader-topbar" hidden={!controlsVisible}><PageBackButton className="reader-back" /><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
