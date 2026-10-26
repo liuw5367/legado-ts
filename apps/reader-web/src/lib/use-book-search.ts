@@ -125,5 +125,5 @@ export function useBookSearch() {
     }
     catch (reason) { if (mounted.current) setMessage(reason instanceof Error ? '取消请求失败：' + reason.message : '取消请求失败') }
   }
-  return { candidates, candidateSearchId: (candidate: ApiCandidate) => candidateSearchIds.current.get(candidate) ?? searchId, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
+  return { candidates, candidateSearchId: (candidate: ApiCandidate) => candidateSearchIds.current.get(candidate) ?? searchId, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, isTargetedSearch: retainedSourceIds.current !== undefined, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
 }

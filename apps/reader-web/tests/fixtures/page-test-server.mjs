@@ -798,6 +798,12 @@ const server = createServer(async (request, response) => {
   if (url.pathname === '/__fixture/control' && request.method === 'POST') {
     const control = await readJson(request)
     if (control.reset) resetFixture()
+    if (control.sourceVersions === true) {
+      for (const version of [2, 3]) {
+        const sourceId = sources[2].sourceId + '/version-' + version
+        if (!sources.some((source) => source.sourceId === sourceId)) sources.push({ ...sources[2], sourceId, name: '同域实现 ' + version, enabled: false, fingerprint: 'fixture-version-' + version, sourceRevision: 'fixture-version-revision-' + version })
+      }
+    }
     if (typeof control.route === 'string') faults.set(control.route, { delay: Math.min(10000, Math.max(0, Number(control.delay) || 0)), failures: Math.min(10, Math.max(0, Number(control.failures) || 0)) })
     json(response, { ok: true }); return
   }

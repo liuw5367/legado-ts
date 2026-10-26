@@ -41,8 +41,12 @@ export function BookSourcesPage() {
   const [managedSources, setManagedSources] = useState<ManagedSourceSummary[]>([])
   const [pendingSwitch, setPendingSwitch] = useState<PendingSourceSwitch | null>(null)
   const [retry, setRetry] = useState(0)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [itemSearchError, setItemSearchError] = useState('')
+  const listOrderRef = useRef<{ domains: string[]; versions: Map<string, string[]> } | null>(null)
+  const targetedSourceRef = useRef<string | null>(null)
   const controllerRef = useRef<AbortController | null>(null)
-  const { candidates, candidateSearchId, searchId, status, message, progress, cancellationPending, search, replaceSearch, cancelAndWait, cancel, resume } = useBookSearch()
+  const { candidates, candidateSearchId, searchId, status, message, progress, cancellationPending, isTargetedSearch, search, replaceSearch, cancelAndWait, cancel, resume } = useBookSearch()
   const prefix = '/books/' + encodeURIComponent(bookId)
   const managedSourceById = useMemo(() => new Map(managedSources.map((source) => [source.sourceId, source])), [managedSources])
   const accountDefaults = useMemo(() => new Map(selectOneSourcePerDomain(managedSources.filter((source) => source.enabled), compareSourceManagementOrder).map((source) => [sourceDomainInfo(source.sourceId).key, source])), [managedSources])
@@ -56,7 +60,13 @@ export function BookSourcesPage() {
       return [{ item, index }]
     })
   }, [book, candidates])
-  const bookSourceGroups = useMemo(() => groupBookSourcesByDomain(managedSources, data?.sources ?? [], matchingResults.map(({ item, index }) => ({ sourceId: item.sourceId, searchDurationMs: item.searchDurationMs, index, item })), data?.activeEditionKey), [data, managedSources, matchingResults])
+  const sortedSourceGroups = useMemo(() => groupBookSourcesByDomain(managedSources, data?.sources ?? [], matchingResults.map(({ item, index }) => ({ sourceId: item.sourceId, searchDurationMs: item.searchDurationMs, index, item })), data?.activeEditionKey), [data, managedSources, matchingResults])
+
+  // 定向搜索只更新内容，沿用点击前的分组与实现顺序，避免耗时和默认版本变化移动列表。
+  const order = listOrderRef.current
+  const bookSourceGroups = order === null ? sortedSourceGroups : [...sortedSourceGroups]
+    .sort((left, right) => order.domains.indexOf(left.domainKey) - order.domains.indexOf(right.domainKey))
+    .map((group) => ({ ...group, versions: [...group.versions].sort((left, right) => (order.versions.get(group.domainKey)?.indexOf(left.source.sourceId) ?? -1) - (order.versions.get(group.domainKey)?.indexOf(right.source.sourceId) ?? -1)) }))
 
   useEffect(() => {
     const controller = new AbortController(); controllerRef.current = controller
@@ -64,9 +74,9 @@ export function BookSourcesPage() {
     return () => controller.abort()
   }, [])
   usePageLoadEffect((settle) => {
-    if (opening?.startsWith('search-source:')) { settle(); return }
     const controller = new AbortController()
     setError(''); setNotice('')
+    // 页面内写入由操作处理器更新，避免搜索启用书源触发整页重载。
     void Promise.all([
       apiFetch<BookDetailsResponse>('/api' + prefix + '/details', { signal: controller.signal }),
       apiFetch<BookSourcesResponse>('/api' + prefix + '/sources', { signal: controller.signal }),
@@ -77,7 +87,7 @@ export function BookSourcesPage() {
     }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '书源加载失败') })
       .finally(() => { if (!controller.signal.aborted) settle() })
     return () => controller.abort()
-  }, [prefix, retry], ['books', 'sources', `book:${bookId}`])
+  }, [prefix, retry])
 
   async function refreshSourceLists(signal?: AbortSignal) {
     const [sourceManagement, sources] = await Promise.all([
@@ -118,16 +128,15 @@ export function BookSourcesPage() {
   async function searchThisBookWithSource(sourceId: string) {
     if (opening !== null || switchingSourceId !== null || book === null) return
     const signal = controllerRef.current?.signal
-    setOpening('search-source:' + sourceId); setError(''); setNotice('正在搜索这本书…')
+    listOrderRef.current = { domains: bookSourceGroups.map((group) => group.domainKey), versions: new Map(bookSourceGroups.map((group) => [group.domainKey, group.versions.map((version) => version.source.sourceId)])) }
+    targetedSourceRef.current = sourceId
+    setOpening('search-source:' + sourceId); setItemSearchError('')
     try {
       await ensureSourceActive(sourceId, signal, false)
       if (signal?.aborted) return
       const searched = await replaceSearch(book.name, precision, [sourceId], true)
-      if (!signal?.aborted) {
-        if (searched) setNotice(`已用 ${managedSourceById.get(sourceId)?.name ?? sourceId} 搜索，匹配结果已更新到对应版本。`)
-        else { setNotice(''); setError('这次书源搜索未完成，请重试。') }
-      }
-    } catch (reason) { if (!signal?.aborted) { setNotice(''); setError(reason instanceof Error ? reason.message : '书源搜索失败') } }
+      if (!signal?.aborted && !searched) setItemSearchError('这次搜索未完成，请重试。')
+    } catch (reason) { if (!signal?.aborted) setItemSearchError(reason instanceof Error ? reason.message : '书源搜索失败') }
     finally { if (!signal?.aborted) setOpening(null) }
   }
 
@@ -192,6 +201,7 @@ export function BookSourcesPage() {
     finally { if (!signal?.aborted) setOpening(null) }
   }
 
+  const fullSearchLoading = status === 'loading' && !isTargetedSearch
   const groupedResultDomains = new Set(bookSourceGroups.map((group) => group.domainKey))
   const ungroupedResults = matchingResults.filter(({ item }) => !groupedResultDomains.has(sourceDomainInfo(item.sourceId).key)).sort((left, right) => (left.item.searchDurationMs ?? Infinity) - (right.item.searchDurationMs ?? Infinity))
   const fallback = prefix + '/toc' + (book?.activeEditionKey ? '?editionKey=' + encodeURIComponent(book.activeEditionKey) : '')
@@ -200,25 +210,25 @@ export function BookSourcesPage() {
     <PageHeader backTo={fallback} title="切换书源" description={book?.name ?? '书籍来源'} />
     {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>重试列表</Button></DismissibleMessage> : null}
     {data === null ? error.length === 0 ? <LoadingState message="正在读取可用书源…" variant="viewport" action={<PageBackButton appearance="button" fallback={fallback} />} /> : null : <>
-      <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); setNotice(''); void search(keyword, precision) }}>
+      <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); listOrderRef.current = null; targetedSourceRef.current = null; setNotice(''); void search(keyword, precision) }}>
         <div className="search-row">
           <div className="search-input-shell">
             <Search className="search-input-icon" aria-hidden="true" />
             <Input aria-label="搜索可用书源" className="search-input" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" autoComplete="off" />
             {keyword.length > 0 ? <button className="search-clear" type="button" aria-label="清空关键词" onClick={() => setKeyword('')}><X aria-hidden="true" /></button> : null}
           </div>
-          <Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={status !== 'loading' && keyword.trim().length === 0} onClick={status === 'loading' ? () => void cancel() : undefined}>
-            {status === 'loading' ? '取消' : <><Search aria-hidden="true" />搜索</>}
+          <Button className={fullSearchLoading ? 'cancel-button-active' : 'cancel-button'} variant={fullSearchLoading ? 'secondary' : 'default'} type={fullSearchLoading ? 'button' : 'submit'} disabled={!fullSearchLoading && keyword.trim().length === 0} onClick={fullSearchLoading ? () => void cancel() : undefined}>
+            {fullSearchLoading ? '取消' : <><Search aria-hidden="true" />搜索</>}
           </Button>
         </div>
-        <PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} />
+        <PrecisionToggle checked={precision} disabled={fullSearchLoading} onChange={setPrecision} />
         <p className="muted small">切换会更新账号默认书源；目录预览不会改本书当前版本。</p>
       </form>
       {notice.length > 0 ? <DismissibleMessage onDismiss={() => setNotice('')} className="success compact-message" role="status">{notice}</DismissibleMessage> : null}
-      {message.length > 0 ? <DismissibleMessage className="muted small" role="status">{message}</DismissibleMessage> : null}
-      {status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
-      {status === 'loading' ? <LoadingState message={'正在搜索可用书源…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}${progress.activeSources?.length ? " · 请求中：" + progress.activeSources.join("、") : ""}`)} variant="inline" /> : null}
-      {status === 'done' && searchId.length > 0 && matchingResults.length === 0 ? <div className="empty-state">当前搜索没有找到与这本书匹配的来源。</div> : null}
+      {!isTargetedSearch && message.length > 0 ? <DismissibleMessage className="muted small" role="status">{message}</DismissibleMessage> : null}
+      {!isTargetedSearch && status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
+      {!isTargetedSearch && status === 'loading' ? <LoadingState message={'正在搜索可用书源…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}${progress.activeSources?.length ? " · 请求中：" + progress.activeSources.join("、") : ""}`)} variant="inline" /> : null}
+      {!isTargetedSearch && status === 'done' && searchId.length > 0 && matchingResults.length === 0 ? <div className="empty-state">当前搜索没有找到与这本书匹配的来源。</div> : null}
       <div className="book-source-list">
         {bookSourceGroups.length === 0 && matchingResults.length === 0 && status !== 'loading' ? <div className="empty-state">没有关联书源，请搜索书名或为某个域名版本搜索。</div> : null}
         {bookSourceGroups.slice(0, visibleCount).map((group) => {
@@ -229,7 +239,7 @@ export function BookSourcesPage() {
             ?? currentVersion?.items.find((item) => item.lastChapter?.trim())?.lastChapter
           const activeBookEditionInGroup = group.versions.some((version) => version.items.some((source) => source.status === 'saved' && source.editionKey === data.activeEditionKey))
           return <article className="book-source-domain" key={group.domainKey}>
-            <details className="book-source-domain-details" open={activeBookEditionInGroup}>
+            <details className="book-source-domain-details" open={expandedGroups[group.domainKey] ?? activeBookEditionInGroup} onToggle={(event) => { const open = event.currentTarget.open; setExpandedGroups((current) => current[group.domainKey] === open ? current : { ...current, [group.domainKey]: open }) }}>
               <summary className="book-source-domain-summary">
                 <span className="book-source-domain-heading">
                   <span className="book-source-domain-title">
@@ -252,14 +262,15 @@ export function BookSourcesPage() {
                 const searching = opening === 'search-source:' + source.sourceId
                 return <section className="book-source-version" key={source.sourceId}>
                   <div className="book-source-version-header"><div className="book-source-info"><div className="book-source-version-title"><strong>{displayName}{source.group ? <span className="book-source-group muted small">{source.group}</span> : null}</strong><span className="book-source-domain-duration muted small">{searchDurationMs === undefined ? '耗时未知' : `耗时 ${searchDurationMs}ms`}</span></div><p className="book-source-version-chapter muted small" title={latestChapter ?? undefined}>最新章节：{latestChapter || '暂无章节信息'}</p><span className="muted small">规则更新时间 {formatSourceRuleDateTime(source.lastUpdateTime)} · {source.enabled ? isAccountDefault ? '账号默认' : '旧启用项' : '已停用'}</span></div></div>
-                  {items.length === 0 && versionResults.length === 0 ? <div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{isAccountDefault ? '账号默认' : '设为账号默认'}</Button><Button size="sm" disabled={opening !== null || switchingSourceId !== null || status === 'loading'} onClick={() => void searchThisBookWithSource(source.sourceId)}>{searching ? '搜索中…' : '用此版本搜索本书'}</Button></div> : null}
+                  {items.length === 0 && versionResults.length === 0 ? <div className="book-source-actions book-source-version-actions"><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{isAccountDefault ? '账号默认' : '设为账号默认'}</Button><Button size="sm" disabled={opening !== null || switchingSourceId !== null || status === 'loading'} onClick={() => void searchThisBookWithSource(source.sourceId)}>{searching ? '搜索中…' : '用此版本搜索本书'}</Button></div> : null}
+                  {targetedSourceRef.current === source.sourceId && itemSearchError ? <p className="book-source-search-feedback error small" role="alert">{itemSearchError}</p> : null}
                   {items.map((item) => {
                     const current = item.status === 'saved' && item.editionKey === data.activeEditionKey
                     const key = item.status === 'saved' ? item.editionKey : item.candidateId
                     const canSwitch = !current || !isAccountDefault
-                    return <article className={'book-source-row book-source-entry' + (current ? ' current' : '')} key={key}><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{switchingSourceId === source.sourceId ? '切换中…' : isAccountDefault ? '账号默认' : '设为账号默认'}</Button><a className="button secondary small" href={new URL(item.bookUrl, source.sourceId).href} target="_blank" rel="noopener noreferrer">查看原文</a><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSource(item, 'directory')}>查看目录</Button><Button size="sm" disabled={!canSwitch || opening !== null || switchingSourceId !== null} onClick={() => openSource(item, 'switch')}>{opening === key ? '加载中…' : current && !isAccountDefault ? '切换书源' : current ? '当前使用' : '切换书源'}</Button></div></article>
+                    return <article className={'book-source-row book-source-entry' + (current ? ' current' : '')} key={key}><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{switchingSourceId === source.sourceId ? '切换中…' : isAccountDefault ? '账号默认' : '设为账号默认'}</Button><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSource(item, 'directory')}>查看目录</Button><Button size="sm" disabled={!canSwitch || opening !== null || switchingSourceId !== null} onClick={() => openSource(item, 'switch')}>{opening === key ? '加载中…' : current && !isAccountDefault ? '切换书源' : current ? '当前使用' : '切换书源'}</Button></div></article>
                   })}
-                  {versionResults.map(({ item, index }) => <article className="book-source-row book-source-entry" key={'search:' + index}><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{switchingSourceId === source.sourceId ? '切换中…' : isAccountDefault ? '账号默认' : '设为账号默认'}</Button><a className="button secondary small" href={new URL(item.candidate.bookUrl, source.sourceId).href} target="_blank" rel="noopener noreferrer">查看原文</a><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSearchCandidate(index, 'directory')}>查看目录</Button><Button size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSearchCandidate(index, 'switch')}>{opening === 'search:' + index ? '加载中…' : '切换书源'}</Button></div></article>)}
+                  {versionResults.map(({ index }) => <article className="book-source-row book-source-entry" key={'search:' + index}><div className="book-source-actions"><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{switchingSourceId === source.sourceId ? '切换中…' : isAccountDefault ? '账号默认' : '设为账号默认'}</Button><Button variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSearchCandidate(index, 'directory')}>查看目录</Button><Button size="sm" disabled={opening !== null || switchingSourceId !== null} onClick={() => openSearchCandidate(index, 'switch')}>{opening === 'search:' + index ? '加载中…' : '切换书源'}</Button></div></article>)}
                 </section>
               })}</div>
             </details>

@@ -1,5 +1,4 @@
 import { BookOpen, Check, ChevronLeft, ChevronRight, CircleCheck, ExternalLink, LibraryBig, Search, X } from 'lucide-react'
-import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth-context.tsx'
 import { markOnboardingSeen, onboardingReturnTo, onboardingSteps } from '../lib/onboarding.ts'
@@ -8,7 +7,11 @@ export function OnboardingPage() {
   const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [stepIndex, setStepIndex] = useState(0)
+  const savedStep = (location.state as { stepIndex?: unknown } | null)?.stepIndex
+  const stepIndex = typeof savedStep === 'number' && Number.isInteger(savedStep) && savedStep >= 0 && savedStep < onboardingSteps.length ? savedStep : 0
+  function setStepIndex(update: (current: number) => number) {
+    navigate(location.pathname, { replace: true, state: { returnTo, stepIndex: update(stepIndex) } })
+  }
   const step = onboardingSteps[stepIndex]!
   const returnTo = onboardingReturnTo((location.state as { returnTo?: unknown } | null)?.returnTo)
   const isLastStep = stepIndex === onboardingSteps.length - 1
@@ -19,7 +22,8 @@ export function OnboardingPage() {
   }
 
   function openPage() {
-    leave(step.path, { backTo: '/onboarding', backState: { returnTo } })
+    if (user?.id) markOnboardingSeen(user.id)
+    navigate(step.path, { state: { backTo: '/onboarding', backState: { returnTo, stepIndex } } })
   }
 
   return <main className="onboarding-page" aria-labelledby="onboarding-title">

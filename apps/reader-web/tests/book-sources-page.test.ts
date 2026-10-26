@@ -25,9 +25,9 @@ function text(value: unknown): string {
   if (typeof value === 'string' || typeof value === 'number') return String(value)
   return value !== null && typeof value === 'object' ? text((value as Node).props?.children) : ''
 }
-function render(candidates: ApiCandidate[], status = 'done') {
+function render(candidates: ApiCandidate[], status = 'done', isTargetedSearch = false, expandedGroups: Record<string, boolean> = {}) {
   let stateIndex = 0
-  const states = [50, { name: '目标书', author: '作者', activeEditionKey: 'active' }, { activeEditionKey: 'active', sources: [{ sourceId, sourceFingerprint: 'fingerprint', name: '书源', bookUrl: '/book', sourceEnabled: true, status: 'saved', editionKey: 'active', searchDurationMs: 100 }] }, '目标书', true, '', '', null, null, [{ sourceId, name: '书源', group: '测试分组', fingerprint: 'fingerprint', enabled: true, customOrder: 0, sourceRevision: 'revision', origin: 'account' }], null, 0]
+  const states = [50, { name: '目标书', author: '作者', activeEditionKey: 'active' }, { activeEditionKey: 'active', sources: [{ sourceId, sourceFingerprint: 'fingerprint', name: '书源', bookUrl: '/book', sourceEnabled: true, status: 'saved', editionKey: 'active', searchDurationMs: 100 }] }, '目标书', true, '', '', null, null, [{ sourceId, name: '书源', group: '测试分组', fingerprint: 'fingerprint', enabled: true, customOrder: 0, sourceRevision: 'revision', origin: 'account' }], null, 0, expandedGroups, '']
   const jsx = (type: unknown, props: unknown) => ({ type, props })
   const module = { exports: {} as { BookSourcesPage: () => unknown } }
   runInNewContext(code, { URL, module, exports: module.exports, require: (name: string) => {
@@ -40,7 +40,7 @@ function render(candidates: ApiCandidate[], status = 'done') {
     if (name.includes('time-format')) return { formatSourceRuleDateTime }
     if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
     if (name.includes('use-page-resource')) return { usePageLoadEffect() {} }
-    if (name.includes('use-book-search')) return { useBookSearch: () => ({ candidates, searchId: 'search', status, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
+    if (name.includes('use-book-search')) return { useBookSearch: () => ({ candidates, searchId: 'search', status, isTargetedSearch, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
     if (name.includes('loading-state')) return { LoadingState: 'loading' }
     return {}
   } })
@@ -52,7 +52,7 @@ test('matching an existing source suppresses empty search text and duplicate res
   const content = text(tree)
   assert.ok(!content.includes('当前搜索没有找到与这本书匹配的来源'))
   assert.ok(!content.includes('已保存版本'))
-  assert.ok(content.includes('查看原文'))
+  assert.ok(!content.includes('查看原文'))
   assert.ok(content.includes('查看目录'))
   assert.ok(!content.includes('本次搜索结果'))
   assert.ok(content.includes('25ms'))
@@ -68,4 +68,16 @@ test('source search renders progress inline with active source names', () => {
   const loading = nodes(render([], 'loading')).find((node) => node.type === 'loading')
   assert.equal(loading?.props?.variant, 'inline')
   assert.equal(loading?.props?.message, '正在搜索可用书源… 书源 0/1 · 请求中：实时书源')
+})
+
+
+test('定向搜索不显示全局空结果和加载提示，展开状态独立于当前版本', () => {
+  const normal = text(render([], 'done'))
+  assert.ok(normal.includes('当前搜索没有找到与这本书匹配的来源'))
+  const targeted = render([], 'done', true, { 'host:book.example': true })
+  assert.ok(!text(targeted).includes('当前搜索没有找到与这本书匹配的来源'))
+  const loading = nodes(render([], 'loading', true)).find((node) => node.type === 'loading')
+  assert.equal(loading, undefined)
+  const details = nodes(render([], 'done', true, { 'host:book.example': false })).find((node) => node.type === 'details')
+  assert.equal((details?.props as { open?: boolean })?.open, false)
 })
