@@ -19,7 +19,6 @@ import { isCurrentToc } from '../lib/reader-interactions.ts'
 export function TocPage() {
   const page = usePageActivity()
   const filterId = `${page?.id ?? 'toc'}-chapter-filter`
-  const positioned = useRef(false)
   const { bookId = '' } = useParams()
   const cache = useBookCache()
   const navigate = useNavigate()
@@ -78,11 +77,10 @@ export function TocPage() {
   const filteredEntries = useMemo(() => filterEntries(currentToc?.chapters ?? [], filter), [filter, currentToc])
   const orderedEntries = useMemo(() => reversed ? reverseEntries(filteredEntries) : filteredEntries, [filteredEntries, reversed])
   useEffect(() => {
-    if (page?.active === false || page?.restored || positioned.current || position?.chapterId === undefined) return
-    positioned.current = true
-    const frame = window.requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>(`[data-chapter-id="${CSS.escape(position.chapterId)}"]`)?.scrollIntoView({ block: 'center' }))
+    if (page?.active === false || loading || currentPosition?.chapterId === undefined) return
+    const frame = window.requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>('.toc-row.current')?.scrollIntoView({ block: 'center' }))
     return () => window.cancelAnimationFrame(frame)
-  }, [position?.chapterId, orderedEntries, page?.active])
+  }, [bookId, editionKey, currentPosition?.chapterId, loading, page?.active])
   useEffect(() => {
     const controls = controlsRef.current
     if (controls === null) return

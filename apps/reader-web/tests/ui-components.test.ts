@@ -55,7 +55,7 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(sheet, /event\.target === event\.currentTarget/u)
   assert.doesNotMatch(readerSettingsPanel, /已保存/u)
   assert.match(readerPage, /reader-toc-utility-actions/u)
-  assert.match(readerPage, />完整目录<\/Link>/u)
+  assert.match(readerPage, />展开<\/Link>/u)
   assert.doesNotMatch(readerPage, /打开完整目录/u)
   assert.match(readerPage, /刷新目录数据/u)
   assert.match(readerSettingsPanel, /阅读模式/u)
