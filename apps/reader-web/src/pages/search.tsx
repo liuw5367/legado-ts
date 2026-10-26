@@ -1,6 +1,7 @@
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
+import { Search, X } from 'lucide-react'
 import { usePageActivity, usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import { searchMatchRank } from '@legado/source-core'
@@ -172,10 +173,20 @@ export function SearchPage() {
 
   return <section className="page-stack page-narrow search-page">
     {cancellationPending ? <div className="notice-with-recovery"><DismissibleMessage className="error" role="alert">搜索取消尚未完成。</DismissibleMessage><Button variant="secondary" size="sm" onClick={() => void cancel()}>重试取消</Button></div> : null}
-    <PageHeader backTo={targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : "/discover"} title="搜索书籍" description={status === 'loading' ? '结果正在陆续到达…' : '输入书名或作者'} actions={<Link className="button small page-action" to="/sources">管理书源</Link>} />
+    <PageHeader backTo={targetBookId.length > 0 ? `/books/${encodeURIComponent(targetBookId)}/sources` : "/discover"} title="搜索书籍" description={status === 'loading' ? '结果正在陆续到达…' : '输入书名、作者或分类'} actions={<Link className="button small page-action" to="/sources">管理书源</Link>} />
     <form className="search-panel" onSubmit={(event) => void submitSearch(event)}>
-      <div className="search-row"><label className="sr-only" htmlFor={`${page?.id ?? 'search'}-keyword`}>关键词</label><Input className="search-input" id={`${page?.id ?? 'search'}-keyword`} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={saving !== null || (status !== 'loading' && keyword.trim().length === 0)} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div>
-
+      <div className="search-row">
+        <label className="sr-only" htmlFor={`${page?.id ?? 'search'}-keyword`}>关键词</label>
+        <div className="search-input-shell">
+          <Search className="search-input-icon" aria-hidden="true" />
+          <Input className="search-input" id={`${page?.id ?? 'search'}-keyword`} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名、作者或分类" autoComplete="off" />
+          {keyword.length > 0 ? <button className="search-clear" type="button" aria-label="清空关键词" onClick={() => setKeyword('')}><X aria-hidden="true" /></button> : null}
+        </div>
+        <Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={saving !== null || (status !== 'loading' && keyword.trim().length === 0)} onClick={status === 'loading' ? () => void cancel() : undefined}>
+          {status === 'loading' ? '取消' : <><Search aria-hidden="true" />搜索</>}
+        </Button>
+      </div>
+      <PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} />
     </form>
     {searchMessage.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">{searchMessage}</DismissibleMessage> : null}
     {sourceManagementError.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">同域版本列表暂不可用：{sourceManagementError}。可在书源管理页切换版本。</DismissibleMessage> : null}

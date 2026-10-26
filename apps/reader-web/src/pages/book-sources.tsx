@@ -2,6 +2,7 @@ import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Search, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
@@ -194,7 +195,20 @@ export function BookSourcesPage() {
     <PageHeader backTo={fallback} title="切换书源" description={book?.name ?? '书籍来源'} />
     {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}>重试列表</Button></DismissibleMessage> : null}
     {data === null ? error.length === 0 ? <LoadingState message="正在读取可用书源…" variant="viewport" action={<PageBackButton appearance="button" fallback={fallback} />} /> : null : <>
-      <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); setNotice(''); void search(keyword, precision) }}><div className="search-row"><Input aria-label="搜索可用书源" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" /><PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} /><Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={status !== 'loading' && keyword.trim().length === 0} onClick={status === 'loading' ? () => void cancel() : undefined}>{status === 'loading' ? '取消' : '搜索'}</Button></div><p className="muted small">切换会更新账号默认书源；目录预览不会改本书当前版本。</p></form>
+      <form className="book-source-search" onSubmit={(event) => { event.preventDefault(); setNotice(''); void search(keyword, precision) }}>
+        <div className="search-row">
+          <div className="search-input-shell">
+            <Search className="search-input-icon" aria-hidden="true" />
+            <Input aria-label="搜索可用书源" className="search-input" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" autoComplete="off" />
+            {keyword.length > 0 ? <button className="search-clear" type="button" aria-label="清空关键词" onClick={() => setKeyword('')}><X aria-hidden="true" /></button> : null}
+          </div>
+          <Button className={status === 'loading' ? 'cancel-button-active' : 'cancel-button'} variant={status === 'loading' ? 'secondary' : 'default'} type={status === 'loading' ? 'button' : 'submit'} disabled={status !== 'loading' && keyword.trim().length === 0} onClick={status === 'loading' ? () => void cancel() : undefined}>
+            {status === 'loading' ? '取消' : <><Search aria-hidden="true" />搜索</>}
+          </Button>
+        </div>
+        <PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} />
+        <p className="muted small">切换会更新账号默认书源；目录预览不会改本书当前版本。</p>
+      </form>
       {notice.length > 0 ? <DismissibleMessage onDismiss={() => setNotice('')} className="success compact-message" role="status">{notice}</DismissibleMessage> : null}
       {message.length > 0 ? <DismissibleMessage className="muted small" role="status">{message}</DismissibleMessage> : null}
       {status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
