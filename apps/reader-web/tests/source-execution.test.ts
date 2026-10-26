@@ -181,3 +181,44 @@ test('request time budget preserves pending sources for the next stream instead 
   assert.equal(final.progress.completed, 22)
   assert.equal(calls, 22)
 })
+
+for (const scenario of ['success', 'checkpoint-failure', 'final-failure', 'cancelled', 'replaced'] as const) {
+  test(`search cleanup skips only confirmed final release: ${scenario}`, async (t) => {
+    const repository = new MemoryReaderRepository(); const user = randomUUID()
+    await importBatch(repository, user, [{ ...sourceDefinition('https://8.8.4.1/source'), searchUrl: '/search' }])
+    t.mock.method(globalThis, 'fetch', async () => new Response('没有结果'))
+    const sources = await repository.listSourcesForUser(user)
+    const run = await repository.createSearch(user, { keyword: '目标书', sourceId: sources[0]!.sourceId, sourceIds: [sources[0]!.sourceId] })
+    const update = repository.updateSearch.bind(repository)
+    const patches: Parameters<typeof update>[2][] = []
+    let injected = false
+    t.mock.method(repository, 'updateSearch', async (userId: string, searchId: string, patch: Parameters<typeof update>[2]) => {
+      patches.push(patch)
+      const checkpoint = patch.status === 'running' && patch.candidates !== undefined
+      const final = patch.status !== undefined && patch.operationId === null
+      if (!injected && ((scenario === 'checkpoint-failure' && checkpoint) || (scenario === 'final-failure' && final))) {
+        injected = true; throw new Error('fixture write failed')
+      }
+      if (!injected && checkpoint && (scenario === 'cancelled' || scenario === 'replaced')) {
+        injected = true
+        await update(userId, searchId, scenario === 'cancelled' ? { status: 'cancelled', operationId: null, cancelled: true } : { operationId: 'replacement' })
+        return null
+      }
+      return update(userId, searchId, patch)
+    })
+    const runtime = createReaderRuntime(repository)
+    if (scenario === 'checkpoint-failure' || scenario === 'final-failure') await assert.rejects(runtime.runSearchBatch(user, run.id), /fixture write failed/u)
+    else if (scenario === 'replaced') await assert.rejects(runtime.runSearchBatch(user, run.id), /失效/u)
+    else assert.equal((await runtime.runSearchBatch(user, run.id)).search.status, scenario === 'cancelled' ? 'cancelled' : 'empty')
+    const cleanups = patches.filter((patch) => patch.operationId === null && patch.status === undefined)
+    assert.equal(cleanups.length, scenario === 'success' ? 0 : 1)
+    const saved = await repository.getSearch(user, run.id)
+    assert.equal(saved?.operationId, scenario === 'replaced' ? 'replacement' : undefined)
+    if (scenario === 'checkpoint-failure' || scenario === 'final-failure') {
+      assert.equal((await runtime.runSearchBatch(user, run.id)).search.status, 'empty', 'failed operation must release its local active marker')
+    }
+    const leases = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY }, () => repository.acquireExecutionSlot(user, randomUUID())))
+    try { assert.equal(leases.filter(Boolean).length, SOURCE_CONCURRENCY) }
+    finally { for (const lease of leases) if (lease) await repository.releaseExecutionSlot(user, lease) }
+  })
+}

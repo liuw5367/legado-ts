@@ -75,6 +75,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
   const operationId = randomUUID()
   const controller = new AbortController()
   activeSearches.set(searchId, { operationId, controller })
+  let operationReleased = false
   try {
     let current = await repository.claimSearch(userId, searchId, operationId, states, { completed: completedCount(states), total: states.length }, run.version, run)
     if (current === null) throw new ReaderRuntimeError('source-busy', '该搜索正在执行')
@@ -157,11 +158,12 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
     const finalStatus: SearchRunState['status'] = aggregate === 'capability-missing' ? 'failed' : aggregate === 'running' ? 'running' : aggregate
     current = await repository.updateSearch(userId, searchId, { knownRun: current, sourceStates: states, candidates, status: finalStatus, expectedOperationId: operationId, operationId: null, progress: { completed: completedCount(states), total: states.length }, cancelled: finalStatus === 'cancelled' })
     if (current === null) { const latest = await repository.getSearch(userId, searchId); if (latest !== null && latest.cancelled) { const warning = await cacheSearchSources(repository, userId, latest.candidates); return { search: latest, candidates: latest.candidates, sourceResults: latest.sourceStates, sourceStatus: 'cancelled', progress: latest.progress, diagnostics: [], ...warning } }; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
+    operationReleased = true
     current.progress = progress()
     return { search: current, candidates: current.candidates, sourceResults: states, sourceStatus: toBatchStatus(finalStatus), progress: current.progress, hasPending, ...(noCapacity ? { retryAfterMs: 1000 } : {}), diagnostics: states.flatMap((item) => item.diagnostics), ...(!hasPending ? await cacheSearchSources(repository, userId, current.candidates) : {}) }
   } finally {
     controller.abort()
-    try { await repository.updateSearch(userId, searchId, { knownRun: run, expectedOperationId: operationId, operationId: null }) }
+    try { if (!operationReleased) await repository.updateSearch(userId, searchId, { knownRun: run, expectedOperationId: operationId, operationId: null }) }
     finally { activeSearches.delete(searchId) }
   }
 }
