@@ -4,14 +4,16 @@ import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { Search } from 'lucide-react'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
-import { useCallback, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { MoreMenu } from '../components/more-menu.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { apiFetch, type ApiHome, type ApiShelfGroups, type ApiSettings } from '../lib/api.ts'
 import { formatShanghaiDateTime } from '../lib/time-format.ts'
+import { useAuth } from '../lib/auth-context.tsx'
+import { hasSeenOnboarding } from '../lib/onboarding.ts'
 
 type BookItem = ApiHome['bookshelf'][number]
 type View = 'bookshelf' | 'reading' | 'history'
@@ -23,6 +25,9 @@ export function AccountHomePage() {
   const [home, setHome] = useState<ApiHome | null>(null)
   const [loading, setLoading] = useState(true)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const onboardingRedirected = useRef(false)
   const initialView = (location.state as { homeView?: View } | null)?.homeView
   const [view, setView] = useState<View>(initialView === 'reading' || initialView === 'history' ? initialView : 'bookshelf')
   const [feedback, setFeedback] = useState('')
@@ -31,6 +36,12 @@ export function AccountHomePage() {
   const [deletingHistory, setDeletingHistory] = useState<string>()
   const requestIdRef = useRef(0)
   const controllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (!user?.id || onboardingRedirected.current || hasSeenOnboarding(user.id)) return
+    onboardingRedirected.current = true
+    navigate('/onboarding', { replace: true, state: { returnTo: '/' } })
+  }, [navigate, user?.id])
 
   const loadHome = useCallback(async () => {
     const requestId = ++requestIdRef.current

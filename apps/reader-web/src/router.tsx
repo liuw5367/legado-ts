@@ -9,6 +9,7 @@ import { useAuth } from './lib/auth-context.tsx'
 
 const AccountHomePage = lazy(() => import('./pages/account-home.tsx').then((module) => ({ default: module.AccountHomePage })))
 const AboutAppPage = lazy(() => import('./pages/about-app.tsx').then((module) => ({ default: module.AboutAppPage })))
+const OnboardingPage = lazy(() => import('./pages/onboarding.tsx').then((module) => ({ default: module.OnboardingPage })))
 const AuthConfirmPage = lazy(() => import('./pages/auth-confirm.tsx').then((module) => ({ default: module.AuthConfirmPage })))
 const ChangePasswordPage = lazy(() => import('./pages/change-password.tsx').then((module) => ({ default: module.ChangePasswordPage })))
 const ForgotPasswordPage = lazy(() => import('./pages/forgot-password.tsx').then((module) => ({ default: module.ForgotPasswordPage })))
@@ -59,6 +60,7 @@ const router = createBrowserRouter([
   { path: '/auth/confirm', element: <LazyPage viewport><AuthConfirmPage /></LazyPage> },
   { path: '/reset-password', element: <LazyPage viewport backTo="/login"><ResetPasswordPage /></LazyPage> },
   { element: <ProtectedRoute />, children: [
+    { path: '/onboarding', element: <LazyPage viewport><OnboardingPage /></LazyPage> },
     { path: '/*', element: <PageStack>
       <Route path="/" element={<LazyPage><AccountHomePage /></LazyPage>} />
       <Route path="/search" element={<LazyPage searchBack><SearchPage /></LazyPage>} />

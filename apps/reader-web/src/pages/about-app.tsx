@@ -1,7 +1,8 @@
 import { APP_NAME, APP_TAGLINE } from '../lib/app-config.ts'
 import { PageHeader } from '../components/page-header.tsx'
 import { useId, useState } from 'react'
-import { ExternalLink, Share2 } from 'lucide-react'
+import { BookOpen, ExternalLink, Share2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const buildTimestamp = process.env.BUILD_TIME ?? new Date(0).toISOString()
 const buildTime = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(buildTimestamp))
@@ -31,6 +32,10 @@ export function AboutAppPage() {
       <time className="about-app-build-time" dateTime={buildTimestamp}>{buildTime}</time>
     </section>
     <nav className="settings-entry-list" aria-label="关于应用链接">
+      <Link className="settings-entry" to="/onboarding" state={{ returnTo: '/account/settings/about' }}>
+        <span className="settings-entry-copy"><strong>新手引导</strong><span className="muted small">重新查看书源导入和搜索流程</span></span>
+        <BookOpen aria-hidden="true" />
+      </Link>
       <a className="settings-entry" href={repositoryUrl} target="_blank" rel="noreferrer">
         <span className="settings-entry-copy"><strong>GitHub 仓库</strong><span className="muted small">查看源代码与项目动态</span></span>
         <ExternalLink aria-hidden="true" />
