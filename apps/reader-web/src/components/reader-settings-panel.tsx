@@ -1,14 +1,18 @@
 import { DismissibleMessage } from './dismissible-message.tsx'
-import { useId } from 'react'
+import { useEffect, useId } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { stepSetting } from '../lib/setting-step.ts'
 import { ReadingModeSelect, ThemeModeSelect, useReaderSettings } from '../lib/settings-context.tsx'
 
-export function ReaderSettingsPanel() {
+export function ReaderSettingsPanel({ open = true }: { open?: boolean }) {
   const marginTitle = useId()
-  const { settings, saving, error, updateSettings } = useReaderSettings()
+  const { settings, saving, canRetrySettings, error, updateSettings, flushSettings } = useReaderSettings()
+  useEffect(() => {
+    if (!open) return
+    return () => { void flushSettings().catch(() => undefined) }
+  }, [open, flushSettings])
   async function save(patch: Parameters<typeof updateSettings>[0]) {
-    try { await updateSettings(patch) }
+    try { await updateSettings(patch, { debounce: true }) }
     catch { /* context 会保留错误并展示 */ }
   }
   return <div className="reader-settings-panel">
@@ -23,7 +27,7 @@ export function ReaderSettingsPanel() {
       <SettingRange label="左边距" value={settings.marginLeft} min={0} max={64} step={1} suffix="px" onChange={(value) => void save({ marginLeft: value })} />
     </div>
     {saving ? <p className="muted small" role="status">正在保存…</p> : null}
-    {error === undefined ? null : <DismissibleMessage className="error compact-message" role="alert">{error}</DismissibleMessage>}
+    {error === undefined ? null : <DismissibleMessage className="error compact-message" role="alert">{error}{canRetrySettings ? <button className="text-button" type="button" disabled={saving} onClick={() => void flushSettings(true).catch(() => undefined)}>重试</button> : null}</DismissibleMessage>}
   </div>
 }
 
