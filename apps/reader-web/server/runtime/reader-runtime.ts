@@ -286,14 +286,15 @@ async function listBookSources(repository: ReaderRepository, userId: string, boo
   for (const item of candidates) {
     const source = sources.get(item.sourceId)
     if (source?.fingerprint !== item.sourceFingerprint) continue
-    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id, ...(item.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: item.candidate.searchDurationMs }), ...(item.candidate.candidate.coverUrl ? { coverUrl: item.candidate.candidate.coverUrl } : {}) })
+    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id, ...(item.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: item.candidate.searchDurationMs }), ...(item.candidate.candidate.coverUrl ? { coverUrl: item.candidate.candidate.coverUrl } : {}), ...(item.candidate.candidate.lastChapter ? { lastChapter: item.candidate.candidate.lastChapter } : {}) })
   }
   for (const edition of editions) {
     const source = sources.get(edition.sourceId)
     if (source?.fingerprint !== edition.sourceFingerprint) continue
     const key = JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl])
     const searchDurationMs = result.get(key)?.searchDurationMs ?? edition.metadata.searchDurationMs
-    result.set(key, { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(typeof searchDurationMs === 'number' ? { searchDurationMs } : {}), ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}) })
+    const lastChapter = result.get(key)?.lastChapter ?? edition.metadata.lastChapter
+    result.set(key, { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(typeof searchDurationMs === 'number' ? { searchDurationMs } : {}), ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}), ...(lastChapter ? { lastChapter } : {}) })
   }
   const priorities = new Map((await repository.listAllSourcesForUser(userId)).map((source) => [source.sourceId, source]))
   const items = [...result.values()].sort((left, right) => compareSourcePriority(priorities.get(left.sourceId)!, priorities.get(right.sourceId)!))

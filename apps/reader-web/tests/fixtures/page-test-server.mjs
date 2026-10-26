@@ -689,7 +689,7 @@ async function handleApi(request, response, url) {
       json(response, { book }); return
     }
     if (method === 'GET' && tail === 'sources') {
-      const saved = [...editions.values()].filter((edition) => edition.bookId === bookId).map((edition) => ({ status: 'saved', sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: sources.find((source) => source.sourceId === edition.sourceId)?.name ?? '示例来源', bookUrl: edition.bookUrl, sourceEnabled: sources.find((source) => source.sourceId === edition.sourceId)?.enabled ?? false, editionKey: edition.editionKey, ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}) }))
+      const saved = [...editions.values()].filter((edition) => edition.bookId === bookId).map((edition) => ({ status: 'saved', sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: sources.find((source) => source.sourceId === edition.sourceId)?.name ?? '示例来源', bookUrl: edition.bookUrl, sourceEnabled: sources.find((source) => source.sourceId === edition.sourceId)?.enabled ?? false, editionKey: edition.editionKey, ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}), ...(edition.metadata.lastChapter ? { lastChapter: edition.metadata.lastChapter } : {}) }))
       if (bookId === BOOK_ID) for (const index of [2, 3, 4]) {
         const source = sources[index]
         if (source && !saved.some((row) => row.sourceId === source.sourceId)) saved.push({ status: 'discovered', sourceId: source.sourceId, sourceFingerprint: source.fingerprint, name: source.name, bookUrl: longBookUrl(index), sourceEnabled: source.enabled, candidateId: 'cover-source-' + index })

@@ -2,7 +2,7 @@ import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { ChevronDown, Search, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
@@ -221,16 +221,33 @@ export function BookSourcesPage() {
           const currentVersion = group.versions.find((version) => version.isCurrentBookEdition || version.isAccountDefault) ?? group.versions[0]
           const defaultVersion = group.versions.find((version) => version.isAccountDefault)?.source
           const enabledCount = group.versions.filter((version) => version.source.enabled).length
+          const currentVersionLastChapter = currentVersion?.searchResults.find(({ item }) => item.candidate.lastChapter?.trim())?.item.candidate.lastChapter
+            ?? currentVersion?.items.find((item) => item.lastChapter?.trim())?.lastChapter
           const activeBookEditionInGroup = group.versions.some((version) => version.items.some((source) => source.status === 'saved' && source.editionKey === data.activeEditionKey))
           return <article className="book-source-domain" key={group.domainKey}>
             <details className="book-source-domain-details" open={activeBookEditionInGroup}>
-              <summary className="book-source-domain-summary"><span className="book-source-domain-heading"><span className="book-source-domain-title">{enabledCount > 1 ? <span className="badge source-domain-warning">存在多个旧启用项</span> : defaultVersion === undefined ? <span className="badge source-disabled">暂无账号默认版本</span> : <span className="badge source-enabled">默认：{group.versions.find((version) => version.source.sourceId === defaultVersion.sourceId)?.displayName}</span>}<strong>{group.domain}</strong></span><span className="book-source-domain-meta muted small"><span>{group.versions.length} 个实现 · 最新规则 {formatSourceRuleDateTime(latest?.lastUpdateTime)}</span><span>{currentVersion?.searchDurationMs === undefined ? '耗时未知' : `${currentVersion.searchDurationMs}ms`}</span></span></span></summary>
+              <summary className="book-source-domain-summary">
+                <span className="book-source-domain-heading">
+                  <span className="book-source-domain-title">
+                    {enabledCount > 1 ? <span className="badge source-domain-warning">存在多个旧启用项</span> : defaultVersion === undefined ? <span className="badge source-disabled">暂无账号默认版本</span> : <span className="badge source-enabled">默认：{group.versions.find((version) => version.source.sourceId === defaultVersion.sourceId)?.displayName}</span>}
+                    <strong>{group.domain}</strong>
+                    <span className="book-source-domain-count muted small">{group.versions.length} 个实现</span>
+                  </span>
+                  <span className="book-source-domain-meta muted small">
+                    <span className="book-source-domain-chapter" title={currentVersionLastChapter ?? undefined}>{currentVersionLastChapter || '暂无章节信息'}</span>
+                    <span className="book-source-domain-duration">{currentVersion?.searchDurationMs === undefined ? '耗时未知' : `耗时 ${currentVersion.searchDurationMs}ms`}</span>
+                  </span>
+                </span>
+                <ChevronDown className="book-source-domain-chevron" aria-hidden="true" />
+              </summary>
               <div className="book-source-domain-versions">{group.versions.map((version) => {
                 const { source, displayName, items, isAccountDefault, searchDurationMs } = version
                 const versionResults = version.searchResults.filter(({ item }) => !items.some((saved) => saved.sourceFingerprint === item.sourceFingerprint && saved.bookUrl === item.candidate.bookUrl))
+                const latestChapter = version.searchResults.find(({ item }) => item.candidate.lastChapter?.trim())?.item.candidate.lastChapter
+                  ?? items.find((item) => item.lastChapter?.trim())?.lastChapter
                 const searching = opening === 'search-source:' + source.sourceId
                 return <section className="book-source-version" key={source.sourceId}>
-                  <div className="book-source-version-header"><div className="book-source-info"><div className="book-source-version-title"><strong>{displayName}{source.group ? <span className="book-source-group muted small">{source.group}</span> : null}</strong><Button className="book-source-default-button" variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{switchingSourceId === source.sourceId ? '切换中…' : isAccountDefault ? '账号默认' : '设为账号默认'}</Button></div><p className="book-source-version-address muted small" title={source.sourceId}><span>{searchDurationMs === undefined ? '耗时未知' : `${searchDurationMs}ms`}</span><span>{sourceDomainInfo(source.sourceId).domain}</span></p><span className="muted small">规则更新时间 {formatSourceRuleDateTime(source.lastUpdateTime)} · {source.enabled ? isAccountDefault ? '账号默认' : '旧启用项' : '已停用'}</span></div>{items.length === 0 && versionResults.length === 0 ? <div className="book-source-actions"><Button size="sm" disabled={opening !== null || switchingSourceId !== null || status === 'loading'} onClick={() => void searchThisBookWithSource(source.sourceId)}>{searching ? '搜索中…' : '用此版本搜索本书'}</Button></div> : null}</div>
+                  <div className="book-source-version-header"><div className="book-source-info"><div className="book-source-version-title"><strong>{displayName}{source.group ? <span className="book-source-group muted small">{source.group}</span> : null}</strong><Button className="book-source-default-button" variant="secondary" size="sm" disabled={opening !== null || switchingSourceId !== null || isAccountDefault} onClick={() => void setAccountDefault(source.sourceId)}>{switchingSourceId === source.sourceId ? '切换中…' : isAccountDefault ? '账号默认' : '设为账号默认'}</Button></div><p className="book-source-version-address muted small" title={source.sourceId}><span>{searchDurationMs === undefined ? '耗时未知' : `耗时 ${searchDurationMs}ms`}</span><span>{sourceDomainInfo(source.sourceId).domain}</span></p><p className="book-source-version-chapter muted small" title={latestChapter ?? undefined}>最新章节：{latestChapter || '暂无章节信息'}</p><span className="muted small">规则更新时间 {formatSourceRuleDateTime(source.lastUpdateTime)} · {source.enabled ? isAccountDefault ? '账号默认' : '旧启用项' : '已停用'}</span></div>{items.length === 0 && versionResults.length === 0 ? <div className="book-source-actions"><Button size="sm" disabled={opening !== null || switchingSourceId !== null || status === 'loading'} onClick={() => void searchThisBookWithSource(source.sourceId)}>{searching ? '搜索中…' : '用此版本搜索本书'}</Button></div> : null}</div>
                   {items.length === 0 && versionResults.length === 0 ? <p className="book-source-unsearched muted small">尚未搜索这本书。搜索会只使用这个实现，并将它设为账号默认版本。</p> : null}
                   {items.map((item) => {
                     const current = item.status === 'saved' && item.editionKey === data.activeEditionKey
