@@ -39,16 +39,19 @@ test('global and account execution slots are shared by concurrent operations and
   const repository = new MemoryReaderRepository(); const user = randomUUID(); const other = randomUUID()
   const leases = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY + 1 }, () => repository.acquireExecutionSlot(user, randomUUID())))
   assert.equal(leases.filter(Boolean).length, SOURCE_CONCURRENCY)
+  const otherLeases = await Promise.all(Array.from({ length: GLOBAL_SOURCE_CONCURRENCY - SOURCE_CONCURRENCY }, () => repository.acquireExecutionSlot(other, randomUUID())))
+  assert.equal(otherLeases.filter(Boolean).length, GLOBAL_SOURCE_CONCURRENCY - SOURCE_CONCURRENCY)
   assert.equal(await repository.acquireExecutionSlot(other, randomUUID()), null)
   const released = leases.find((lease) => lease !== null)!
   await repository.releaseExecutionSlot(user, released)
-  const replacement = await repository.acquireExecutionSlot(other, randomUUID())
+  const replacement = await repository.acquireExecutionSlot(user, randomUUID())
   assert.ok(replacement)
   await repository.releaseExecutionSlot(user, released)
   assert.equal(await repository.acquireExecutionSlot(randomUUID(), randomUUID()), null)
-  assert.equal(leases.filter(Boolean).length, GLOBAL_SOURCE_CONCURRENCY)
+  assert.equal(leases.filter(Boolean).length + otherLeases.filter(Boolean).length, GLOBAL_SOURCE_CONCURRENCY)
   for (const lease of leases) if (lease) await repository.releaseExecutionSlot(user, lease)
-  await repository.releaseExecutionSlot(other, replacement)
+  for (const lease of otherLeases) if (lease) await repository.releaseExecutionSlot(other, lease)
+  await repository.releaseExecutionSlot(user, replacement)
 })
 
 test('empty, failing and timed-out sources settle independently and cancellation releases slots', async (t) => {
@@ -158,7 +161,7 @@ test('search workers obey the minimum configured concurrency', async (t) => {
 
 test('request time budget preserves pending sources for the next stream instead of exceeding the deadline', async (t) => {
   const repository = new MemoryReaderRepository(); const user = randomUUID()
-  await repository.saveSettings(user, { general: { searchConcurrency: 20 } })
+  await repository.saveSettings(user, { general: { searchConcurrency: SOURCE_CONCURRENCY } })
   await importBatch(repository, user, Array.from({ length: 22 }, (_, index) => ({ ...sourceDefinition(`https://8.8.4.${index + 1}/source`), searchUrl: '/search' })))
   let now = Date.now(); let calls = 0
   t.mock.method(Date, 'now', () => now)
@@ -172,7 +175,7 @@ test('request time budget preserves pending sources for the next stream instead 
   const runtime = createReaderRuntime(repository)
   const first = await runtime.runSearchBatch(user, run.id)
   assert.equal(first.hasPending, true)
-  assert.equal(first.progress.completed, 20)
+  assert.equal(first.progress.completed, SOURCE_CONCURRENCY)
   const final = await runtime.runSearchBatch(user, run.id)
   assert.equal(final.hasPending, false)
   assert.equal(final.progress.completed, 22)

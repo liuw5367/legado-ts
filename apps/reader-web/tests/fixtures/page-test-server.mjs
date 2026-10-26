@@ -165,7 +165,7 @@ const settings = {
   marginRight: 16,
   marginBottom: 16,
   marginLeft: 16,
-  general: { bookshelfSort: 'addedAt', searchConcurrency: 10 },
+  general: { bookshelfSort: 'addedAt', searchConcurrency: 5 },
   pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' },
   updatedAt: now(),
 }

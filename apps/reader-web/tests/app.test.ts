@@ -135,7 +135,7 @@ test('本地 JSON 导入通过真实认证和路由校验链接、限制请求�
   assert.ok(fetch.mock.calls.length > 0)
 })
 
-test('search concurrency settings persist per account, default to ten and reject values outside five to twenty', async (t) => {
+test('search concurrency settings persist per account, default to five and reject values outside five to ten', async (t) => {
   const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
   const memory = new MemoryReaderRepository()
   for (const method of ['getSettings', 'saveSettings'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
@@ -145,14 +145,14 @@ test('search concurrency settings persist per account, default to ten and reject
   t.mock.method(globalThis, 'fetch', async (_url: unknown, input?: RequestInit) => new Response(JSON.stringify({ id: new Headers(input?.headers).get('authorization') === 'Bearer fixture-other' ? 'other-user' : 'settings-user' }), { headers: { 'Content-Type': 'application/json' } }))
   const get = (token = 'fixture-owner') => app.request('/api/settings', { headers: { Authorization: 'Bearer ' + token } })
   const update = (value: unknown) => app.request('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer fixture-owner' }, body: JSON.stringify({ general: { searchConcurrency: value } }) })
-  assert.equal((await (await get()).json()).settings.general.searchConcurrency, 10)
-  for (const value of [5, 10, 20]) {
+  assert.equal((await (await get()).json()).settings.general.searchConcurrency, 5)
+  for (const value of [5, 7, 10]) {
     const response = await update(value)
     assert.equal(response.status, 200)
     assert.equal((await response.json()).settings.general.searchConcurrency, value)
     assert.equal((await (await get()).json()).settings.general.searchConcurrency, value)
   }
-  for (const value of [4, 21, 10.5, '10', null]) assert.equal((await update(value)).status, 400)
-  assert.equal((await (await get()).json()).settings.general.searchConcurrency, 20)
-  assert.equal((await (await get('fixture-other')).json()).settings.general.searchConcurrency, 10)
+  for (const value of [4, 11, 20, 10.5, '10', null]) assert.equal((await update(value)).status, 400)
+  assert.equal((await (await get()).json()).settings.general.searchConcurrency, 10)
+  assert.equal((await (await get('fixture-other')).json()).settings.general.searchConcurrency, 5)
 })
