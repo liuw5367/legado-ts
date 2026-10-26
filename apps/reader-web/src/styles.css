@@ -373,7 +373,6 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .book-source-domain-chapter { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .book-source-domain-duration { flex: 0 0 auto; white-space: nowrap; }
 .book-source-group { margin-left: 8px; font-weight: 400; }
-.book-source-version-address { display: flex; gap: 8px; }
 .book-source-version-chapter { margin: 3px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .book-source-domain-versions { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; }
 .book-source-version { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
@@ -383,9 +382,11 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .book-source-version-title > strong { min-width: 0; flex: 1 1 auto; }
 .book-source-default-button { flex: 0 0 auto; }
 .book-source-version-header .book-source-info > span { display: block; margin-top: 3px; }
-.book-sources-page .book-source-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.book-sources-page .book-source-actions { display: flex; flex-direction: row; align-items: stretch; gap: 6px; }
+.book-sources-page .book-source-entry .book-source-actions { display: grid; width: 100%; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.book-sources-page .book-source-entry .button { padding-inline: 4px; font-size: 12px; white-space: nowrap; }
 .book-sources-page .book-source-actions .button { min-height: var(--control-height); }
-.book-source-entry { padding-inline: 8px; }
+.book-source-entry { min-height: 0; padding: 8px 0 0; border-bottom: 0; }
 .book-source-unsearched { margin: 8px 0 0; }
 .book-source-row { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .book-source-row.current { color: var(--primary); }

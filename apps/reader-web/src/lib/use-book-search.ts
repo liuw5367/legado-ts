@@ -14,6 +14,8 @@ export function useBookSearch() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'paused'>('idle')
   const [message, setMessage] = useState('')
   const [progress, setProgress] = useState<ApiSearchProgress | undefined>()
+  const retainedSourceIds = useRef<string[] | undefined>(undefined)
+  const candidateSearchIds = useRef(new WeakMap<ApiCandidate, string>())
   const ordering = useRef({ keyword: '', precision: false })
   const mounted = useRef(false)
   const progressRef = useRef<ApiSearchProgress | undefined>(undefined)
@@ -38,11 +40,23 @@ export function useBookSearch() {
     progressRef.current = value
     if (mounted.current) setProgress(value)
   }
-  async function runSearch(keyword: string, precision: boolean, sourceIds?: string[], resumeId?: string): Promise<boolean> {
+  async function runSearch(keyword: string, precision: boolean, sourceIds?: string[], resumeId?: string, preserveResults = false): Promise<boolean> {
     if (operation.isRunning || (!resumeId && keyword.trim().length === 0)) return false
     settleState.current = undefined
-    if (!resumeId) { ordering.current = { keyword, precision }; setCandidates([]); setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; setStatus('loading')
+    if (!resumeId) { ordering.current = { keyword, precision }; if (!preserveResults) setCandidates([]); setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; setStatus('loading')
     let succeeded = true
+    if (!resumeId) retainedSourceIds.current = preserveResults ? sourceIds : undefined
+    const retainedSources = retainedSourceIds.current
+    let currentSearchId = resumeId ?? ''
+    let currentCandidates: ApiCandidate[] = resumeId ? candidates.filter((item) => candidateSearchIds.current.get(item) === resumeId) : []
+    function updateCandidates(batch: SearchSourceEventData) {
+      currentCandidates = mergeSearchStreamCandidates(currentCandidates, batch, ordering.current)
+      // 保留其他搜索的候选时，打开操作仍必须使用候选所属的搜索记录。
+      for (const item of currentCandidates) candidateSearchIds.current.set(item, currentSearchId)
+      setCandidates((current) => retainedSources !== undefined
+        ? [...current.filter((item) => !retainedSources.includes(item.sourceId)), ...currentCandidates]
+        : currentCandidates)
+    }
     const task = (async () => {
       try {
         const result = await operation.start(keyword.trim(), precision, (event) => {
@@ -50,7 +64,7 @@ export function useBookSearch() {
           if (event.type === 'error') { const detail = event.data as { code?: string; message?: string }; throw new ApiError(detail.code ?? 'server-error', detail.message ?? '搜索失败', 500) }
           if (event.type === 'source-result' || event.type === 'batch-end') {
             const batch = event.data as SearchSourceEventData & { source?: { status?: string } }
-            setCandidates((current) => mergeSearchStreamCandidates(current, batch, ordering.current))
+            updateCandidates(batch)
             const nextProgress = searchProgressFromEvent(batch)
             if (nextProgress !== undefined) showProgress(nextProgress)
             if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') setMessage('部分书源执行失败，已保留可用结果。')
@@ -61,13 +75,13 @@ export function useBookSearch() {
           }
           if (event.type === 'batch') {
             const batch = event.data as SearchSourceEventData & { cacheWarning?: SourceCacheWarning; candidates?: ApiCandidate[] }
-            setCandidates((current) => mergeSearchStreamCandidates(current, batch, ordering.current))
+            updateCandidates(batch)
             const nextProgress = searchProgressFromEvent(batch)
             if (nextProgress !== undefined) showProgress(nextProgress)
             const warning = batch.cacheWarning
             if (warning !== undefined) setMessage(warning.message)
           }
-        }, (id) => { if (mounted.current) setSearchId(id) }, sourceIds, resumeId)
+        }, (id) => { currentSearchId = id; if (mounted.current) setSearchId(id) }, sourceIds, resumeId)
         succeeded = !result.cancelled
         settleState.current = { status: 'done', message: result.cancelled ? '搜索已取消，保留已有结果' : '' }
         setStatus('done'); if (result.cancelled) setMessage('搜索已取消，保留已有结果')
@@ -98,9 +112,9 @@ export function useBookSearch() {
       await activeTask
     }
   }
-  async function replaceSearch(keyword: string, precision: boolean, sourceIds?: string[]): Promise<boolean> {
+  async function replaceSearch(keyword: string, precision: boolean, sourceIds?: string[], preserveResults = false): Promise<boolean> {
     await cancelAndWait()
-    if (mounted.current) return runSearch(keyword, precision, sourceIds)
+    if (mounted.current) return runSearch(keyword, precision, sourceIds, undefined, preserveResults)
     return false
   }
   async function cancel() {
@@ -111,5 +125,5 @@ export function useBookSearch() {
     }
     catch (reason) { if (mounted.current) setMessage(reason instanceof Error ? '取消请求失败：' + reason.message : '取消请求失败') }
   }
-  return { candidates, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
+  return { candidates, candidateSearchId: (candidate: ApiCandidate) => candidateSearchIds.current.get(candidate) ?? searchId, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
 }

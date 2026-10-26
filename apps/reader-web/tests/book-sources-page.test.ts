@@ -30,7 +30,7 @@ function render(candidates: ApiCandidate[], status = 'done') {
   const states = [50, { name: '目标书', author: '作者', activeEditionKey: 'active' }, { activeEditionKey: 'active', sources: [{ sourceId, sourceFingerprint: 'fingerprint', name: '书源', bookUrl: '/book', sourceEnabled: true, status: 'saved', editionKey: 'active', searchDurationMs: 100 }] }, '目标书', true, '', '', null, null, [{ sourceId, name: '书源', group: '测试分组', fingerprint: 'fingerprint', enabled: true, customOrder: 0, sourceRevision: 'revision', origin: 'account' }], null, 0]
   const jsx = (type: unknown, props: unknown) => ({ type, props })
   const module = { exports: {} as { BookSourcesPage: () => unknown } }
-  runInNewContext(code, { module, exports: module.exports, require: (name: string) => {
+  runInNewContext(code, { URL, module, exports: module.exports, require: (name: string) => {
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx }
     if (name === 'react') return { useState: () => [states[stateIndex++], () => {}], useRef: () => ({ current: null }), useMemo: (fn: () => unknown) => fn(), useEffect() {} }
     if (name === 'react-router-dom') return { useParams: () => ({ bookId: 'book' }), useNavigate: () => () => {}, useLocation: () => ({ pathname: '/books/book/sources' }), Link: 'a' }
@@ -51,7 +51,9 @@ test('matching an existing source suppresses empty search text and duplicate res
   const tree = render([candidate])
   const content = text(tree)
   assert.ok(!content.includes('当前搜索没有找到与这本书匹配的来源'))
-  assert.ok(content.includes('已保存版本'))
+  assert.ok(!content.includes('已保存版本'))
+  assert.ok(content.includes('查看原文'))
+  assert.ok(content.includes('查看目录'))
   assert.ok(!content.includes('本次搜索结果'))
   assert.ok(content.includes('25ms'))
   assert.ok(content.includes('测试分组'))
