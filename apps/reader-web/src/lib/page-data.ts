@@ -19,6 +19,7 @@ export function mutationDomains(path: string, method: string): string[] {
   if (parts[1] === 'book-lists') return parts.at(-1) === 'move-from-bookshelf' ? ['booklists', 'home', 'groups'] : ['booklists']
   if (parts[1] === 'bookshelf-groups') return ['groups', 'home']
   if (parts[1] === 'books' && (parts[3] === 'annotations' || parts[3] === 'bookmarks')) return ['notes']
+  if (parts[1] === 'books' && parts[3] === 'edition') return ['notes', 'home', 'books', `book:${decodeURIComponent(parts[2]!)}`]
   if (parts[1] === 'books' && parts[3] === 'bookshelf') return ['home', 'groups', 'books']
   if (parts[1] !== 'books') return []
   if (parts[3] === 'cover') return ['home', 'books', 'booklists', 'booklist-books', `book:${decodeURIComponent(parts[2]!)}`]

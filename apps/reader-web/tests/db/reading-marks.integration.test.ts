@@ -31,7 +31,7 @@ test('真实Postgres新增表RLS、约束、游标、并发与回滚', { skip: !
   const appUrl = new URL(url); appUrl.username = role; process.env.DATABASE_URL = appUrl.toString(); client = postgres(appUrl.toString(), { max: 1 })
   const repo = new PostgresReaderRepository(); const user = randomUUID(); const other = randomUUID(); const bookId = randomUUID()
   const input = markInputSchema.parse({ editionKey: 'edition', sourceFingerprint: 'fp', chapterId: 'chapter', chapterUrl: '/chapter', chapterIndex: 0, chapterTitle: '章', tocRevision: 'rev', anchor: createAnchor(['正文'], { paragraphIndex: 0, offset: 0 }, { paragraphIndex: 0, offset: 2 }, 'hash'), note: '100%_字面' })
-  const command = { action: 'save' as const, kind: 'annotations' as const, bookId, id: randomUUID(), input, bookName: '书', author: null }
+  const command = { action: 'save' as const, kind: 'annotations' as const, bookId, id: randomUUID(), input, bookName: '书', author: null, sourceName: '书源', cachedChapter: null }
   const saved = await repo.mutateReadingMark(user, command)
   assert.equal((await repo.listReadingMarks(user, { kind: 'annotations', q: '%_' })).items.length, 1)
   assert.equal((await repo.listReadingMarks(other, { kind: 'annotations' })).items.length, 0)

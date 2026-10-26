@@ -1,4 +1,4 @@
-import { comparePoints, type MarkAnchor, type TextPoint } from './reading-annotations.ts'
+import { comparePoints, type CachedChapter, type MarkAnchor, type TextPoint } from './reading-annotations.ts'
 /** 文本版本标识只用于检测正文变化，不用于安全或授权。 */
 export function textFingerprint(value: string): string {
   let hash = 2166136261
@@ -14,6 +14,30 @@ function pointAt(texts: string[], offset: number): TextPoint {
 export function createAnchor(texts: string[], start: TextPoint, end: TextPoint, hash: string): MarkAnchor {
   const text = texts.join('\n'); const from = absolutePoint(texts, start); const to = absolutePoint(texts, end)
   return { start, end, exact: text.slice(from, to), prefix: text.slice(Math.max(0, from - 32), from), suffix: text.slice(to, to + 32), contentHash: hash }
+}
+export function createCachedChapter(texts: string[], anchor: MarkAnchor, limit = 2000, paragraphBreaks: number[] = []): CachedChapter {
+  const sourceText = texts.join('\n'); const sourceStart = absolutePoint(texts, anchor.start); const sourceEnd = absolutePoint(texts, anchor.end)
+  const breaks = [...new Set(paragraphBreaks)].filter((offset) => offset > 0 && offset < sourceText.length).sort((a, b) => a - b)
+  let text = sourceText; let markStart = sourceStart; let markEnd = sourceEnd
+  if (breaks.length > 0) {
+    // 预览补入段落换行时，同步映射选区偏移，原文锚点本身保持不变。
+    let previous = 0
+    const parts: string[] = []
+    for (const offset of breaks) { parts.push(sourceText.slice(previous, offset), '\n'); previous = offset }
+    parts.push(sourceText.slice(previous)); text = parts.join('')
+    markStart = sourceStart + breaks.filter((offset) => offset <= sourceStart).length
+    markEnd = sourceEnd + breaks.filter((offset) => offset < sourceEnd).length
+  }
+  const maxLength = Math.min(2000, Math.max(1, Math.trunc(limit)))
+  let from = 0; let to = text.length
+  if (text.length > maxLength) {
+    const center = (markStart + markEnd) / 2
+    from = Math.max(0, Math.min(text.length - maxLength, Math.floor(center - maxLength / 2)))
+    to = from + maxLength
+  }
+  const snippet = text.slice(from, to); const paragraphs = snippet.split('\n')
+  const clippedMarkStart = Math.max(0, Math.min(snippet.length, markStart - from)); const clippedMarkEnd = Math.max(clippedMarkStart, Math.min(snippet.length, markEnd - from))
+  return { paragraphs, start: pointAt(paragraphs, clippedMarkStart), end: pointAt(paragraphs, clippedMarkEnd), truncatedBefore: from > 0, truncatedAfter: to < text.length }
 }
 export function resolveAnchor(texts: string[], anchor: MarkAnchor, hash: string): MarkAnchor | null {
   const text = texts.join('\n'); const from = absolutePoint(texts, anchor.start); const to = absolutePoint(texts, anchor.end)

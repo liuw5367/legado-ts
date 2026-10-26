@@ -71,6 +71,33 @@ test('鉴权、创建默认橙色、五色编辑、软删除与恢复', async ()
   assert.equal((await request(path, 'PUT', { ...input, color: 'red' })).status, 400)
 })
 
+test('改色时锚点 JSON 键顺序变化不应被当作移动原文位置', async () => {
+  const { repo, request, path, input } = await setup()
+  const created = await request(path, 'PUT', input)
+  assert.equal(created.status, 200)
+  const mark = (await created.json()).item as ReadingMark
+  const listMarks = repo.listReadingMarks.bind(repo)
+  repo.listReadingMarks = async (userId, query) => {
+    const page = await listMarks(userId, query)
+    return {
+      ...page,
+      items: page.items.map((item) => ({ ...item, anchor: {
+        contentHash: item.anchor.contentHash,
+        suffix: item.anchor.suffix,
+        prefix: item.anchor.prefix,
+        exact: item.anchor.exact,
+        end: item.anchor.end,
+        start: item.anchor.start,
+      } })),
+    }
+  }
+  const changed = await request(path, 'PUT', { ...input, color: 'blue', expectedVersion: mark.version })
+  assert.equal(changed.status, 200)
+  const updated = (await changed.json()).item as ReadingMark
+  assert.equal(updated.color, 'blue')
+  assert.deepEqual(updated.anchor, mark.anchor)
+})
+
 test('过期正文、部分重叠与恢复冲突不会丢失数据', async () => {
   const { request, repo, path, input, bookId } = await setup()
   assert.equal((await request(path, 'PUT', { ...input, anchor: { ...input.anchor, contentHash: 'old' } })).status, 409)
@@ -85,7 +112,7 @@ test('过期正文、部分重叠与恢复冲突不会丢失数据', async () =>
 
 test('搜索字面百分号和下划线、稳定游标、筛选条件绑定', async () => {
   const { input, bookId } = await setup()
-  const command: MarkCommand = { action: 'save', kind: 'annotations', id: randomUUID(), bookId, bookName: '书', author: null, input }
+  const command: MarkCommand = { action: 'save', kind: 'annotations', id: randomUUID(), bookId, bookName: '书', author: null, sourceName: '书源', cachedChapter: null, input }
   const base = changeMark([], user, command)
   const rows = Array.from({ length: 55 }, (_, n) => ({ ...base, id: randomUUID(), createdAt: new Date(1700000000000 + n * 1000).toISOString(), note: n === 0 ? '100%_字面' : '一般' }))
   assert.equal(markPage(rows, { kind: 'annotations', q: '%_' }).items.length, 1)
@@ -97,7 +124,7 @@ test('搜索字面百分号和下划线、稳定游标、筛选条件绑定', as
 
 test('同账号相同记录 id 不能覆盖其他书籍，双并发更新只有一次成功', async () => {
   const { repo, input, bookId } = await setup(); const id = randomUUID()
-  const command = { action: 'save' as const, kind: 'annotations' as const, id, bookId, input, bookName: '书', author: null }
+  const command = { action: 'save' as const, kind: 'annotations' as const, id, bookId, input, bookName: '书', author: null, sourceName: '书源', cachedChapter: null }
   await repo.mutateReadingMark(user, command)
   await assert.rejects(repo.mutateReadingMark(user, { ...command, bookId: randomUUID() }))
   const updates = await Promise.allSettled([repo.mutateReadingMark(user, { ...command, input: { ...input, color: 'blue', expectedVersion: 0 } }), repo.mutateReadingMark(user, { ...command, input: { ...input, color: 'green', expectedVersion: 0 } })])
@@ -117,12 +144,13 @@ test('Web备份包含活动及已删除笔记，旧备份缺字段保留现有�
   assert.equal((await restored.listReadingMarks(user, { kind: 'annotations', deleted: true })).items.length, 1)
 })
 
-test('设置页筛选单本书后仍按创建时间倒序，阅读抽屉按章节位置', async () => {
+test('设置页和阅读抽屉的书签笔记都按创建时间倒序', async () => {
   const { input, bookId } = await setup()
-  const base = changeMark([], user, { action: 'save', kind: 'annotations', id: randomUUID(), bookId, input, bookName: '书', author: null })
+  const base = changeMark([], user, { action: 'save', kind: 'annotations', id: randomUUID(), bookId, input, bookName: '书', author: null, sourceName: '书源', cachedChapter: null })
   const rows = [{ ...base, id: randomUUID(), chapterIndex: 0, createdAt: '2026-01-01T00:00:00.000Z' }, { ...base, id: randomUUID(), chapterIndex: 5, createdAt: '2026-02-01T00:00:00.000Z' }]
   assert.equal(markPage(rows, { kind: 'annotations', bookId, order: 'created' }).items[0]?.chapterIndex, 5)
-  assert.equal(markPage(rows, { kind: 'annotations', bookId }).items[0]?.chapterIndex, 0)
+  assert.equal(markPage(rows, { kind: 'annotations', bookId }).items[0]?.chapterIndex, 5)
+  assert.equal(markPage(rows, { kind: 'annotations', bookId, order: 'position' }).items[0]?.chapterIndex, 0)
 })
 
 test('恢复缺少批注文件的旧书架备份时保留笔记依赖书籍', async () => {

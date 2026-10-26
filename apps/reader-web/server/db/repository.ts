@@ -1,5 +1,5 @@
-import { readMarks, writeMark, lockMarks, restoreMarks } from './reading-marks.ts'
-import { validateMarkCollection, readingMarkSchema, changeMark, markPage, type MarkQuery, type MarkCommand, type MarkPage, type ReadingMark } from '../../shared/reading-annotations.ts'
+import { readMarks, writeMark, lockMarks, purgeMark, restoreMarks } from './reading-marks.ts'
+import { validateMarkCollection, readingMarkSchema, changeMark, markPage, MarkError, type MarkKind, type MarkQuery, type MarkCommand, type MarkPage, type ReadingMark } from '../../shared/reading-annotations.ts'
 import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
 import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
 import * as importHistory from './source-import-history.ts'
@@ -72,6 +72,7 @@ export interface ReaderRepository {
   listReadingMarkBooks(userId: string): Promise<Array<{ id: string; name: string; author: string | null }>>
   listReadingMarks(userId: string, query: MarkQuery): Promise<MarkPage>
   mutateReadingMark(userId: string, command: MarkCommand): Promise<ReadingMark>
+  purgeReadingMark(userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number): Promise<void>
   getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean): Promise<{ books: Array<{ book: StoredBook; editions: StoredEdition[] }>; positions: StoredPosition[]; bookshelf: Array<{ bookId: string; groupId: string | null }> }>
   getBookOrganization(userId: string, listId?: string, includeItems?: boolean): Promise<BookListOrganizationSnapshot>
   mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot>
@@ -134,6 +135,7 @@ export class PostgresReaderRepository implements ReaderRepository {
   public listReadingMarkBooks(userId: string) { return withUser(userId, (tx) => tx.selectDistinct({ id: books.id, name: books.name, author: books.author }).from(readingAnnotations).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingAnnotations.bookId))).where(eq(readingAnnotations.userId, userId)).orderBy(books.name, books.id)) }
   public listReadingMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query)) }
   public mutateReadingMark(userId: string, command: MarkCommand) { return withUser(userId, (tx) => writeMark(tx, userId, command)) }
+  public purgeReadingMark(userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number) { return withUser(userId, (tx) => purgeMark(tx, userId, kind, bookId, id, expectedVersion)) }
   public acquireExecutionSlot(userId: string, operationId: string) { return acquireExecutionSlot(userId, operationId) }
   public releaseExecutionSlot(userId: string, lease: ExecutionLease) { return releaseExecutionSlot(userId, lease) }
   public listImportLinks(userId: string) { return withUser(userId, (tx) => importHistory.readImportLinks(tx, userId)) }
@@ -883,6 +885,14 @@ export class MemoryReaderRepository implements ReaderRepository {
     const next = changeMark(rows, userId, command)
     this.readingMarks.set(userId + ':' + command.kind + ':' + next.id, structuredClone(next))
     return structuredClone(next)
+  }
+  public async purgeReadingMark(userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number) {
+    const key = userId + ':' + kind + ':' + id
+    const current = this.readingMarks.get(key)
+    if (!current || current.bookId !== bookId) throw new MarkError(404, '记录不存在')
+    if (current.version !== expectedVersion) throw new MarkError(409, '记录已修改，请重新加载')
+    if (current.deletedAt === null) throw new MarkError(409, '只能彻底删除已删除的笔记')
+    this.readingMarks.delete(key)
   }
 
   public async getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean) {

@@ -19,7 +19,7 @@ export function SettingsPage() {
       <SettingsEntry to="/account/settings/bookshelf-groups" title="书架分组" description="管理分组、顺序和启动显示分组" />
       <SettingsEntry to="/account/settings/general" title="通用设置" description="设置书架排序等应用偏好" />
       <SettingsEntry to="/account/settings/reading" title="阅读设置" description="调整字号、行距、阅读模式和正文边距" />
-      <SettingsEntry to="/account/settings/notes" title="笔记" description="查看和搜索各本书的划线与想法" />
+      <SettingsEntry to="/account/settings/notes" title="笔记管理" description="查看和搜索各本书的划线与想法" />
       <SettingsEntry to="/account/settings/import-export" title="导入导出" description="导入备份或导出应用数据" />
       <SettingsEntry to="/account/settings/about" title="关于应用" description="应用版本与项目地址" />
     </nav>

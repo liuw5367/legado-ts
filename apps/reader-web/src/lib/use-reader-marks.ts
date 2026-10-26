@@ -42,11 +42,25 @@ export function useReaderMarks({ articleRef, bookId, editionKey, chapterId, cont
       const root = articleRef.current; const candidate = root ? selectedAnchor(root, hash) : null
       if (candidate) { onInteract(); selectionId.current = null; const exact = resolved.find((r) => comparePoints(r.anchor.start, candidate.anchor.start) === 0 && comparePoints(r.anchor.end, candidate.anchor.end) === 0); setSelection({ ...candidate, mark: exact ? annotations.find((r) => r.id === exact.id) ?? null : null }) }
     }, 120) }
-    const scrolled = () => { setViewportVersion((n) => n + 1); if (!editing) setSelection(null) }
-    const outside = (event: PointerEvent) => { if (editing) return; if (event.target instanceof Element && event.target.closest('.reader-selection-popover,.reader-selection-backdrop,.reader-mark')) return; if (!(event.target instanceof Node) || !articleRef.current?.contains(event.target)) setSelection(null) }
+    const scrolled = () => {
+      setViewportVersion((n) => n + 1)
+      if (editing) return
+      const root = articleRef.current; const candidate = root ? selectedAnchor(root, hash) : null
+      if (candidate) {
+        const matched = resolved.find((row) => comparePoints(row.anchor.start, candidate.anchor.start) === 0 && comparePoints(row.anchor.end, candidate.anchor.end) === 0)
+        setSelection({ ...candidate, mark: matched ? annotations.find((row) => row.id === matched.id) ?? null : null })
+      }
+      else setSelection(null)
+    }
+    const outside = (event: PointerEvent) => {
+      if (editing) return
+      if (event.target instanceof Element && event.target.closest('.reader-selection-popover,.reader-mark')) return
+      if (event.pointerType === 'touch' && selection?.rect && Math.abs(event.clientX - selection.rect.left) <= 36 && event.clientY >= selection.rect.top - 36 && event.clientY <= selection.rect.bottom + 36) return
+      if (!(event.target instanceof Node) || !articleRef.current?.contains(event.target)) setSelection(null)
+    }
     document.addEventListener('selectionchange', changed); window.addEventListener('scroll', scrolled, { passive: true }); document.addEventListener('pointerdown', outside)
     return () => { if (timer) window.clearTimeout(timer); document.removeEventListener('selectionchange', changed); window.removeEventListener('scroll', scrolled); document.removeEventListener('pointerdown', outside) }
-  }, [page?.active, hash, editing, blocked, busy, annotations, resolved])
+  }, [page?.active, hash, editing, blocked, busy, annotations, resolved, selection?.rect])
   useEffect(() => { if (blocked || page?.active === false) { setSelection(null); if (page?.active === false) setEditing(false) } }, [blocked, page?.active])
   useEffect(() => { setSelection(null) }, [paged, layout.pageWidth, layout.pageCount, content])
   const currentBookmark = useMemo(() => {
@@ -72,7 +86,7 @@ export function useReaderMarks({ articleRef, bookId, editionKey, chapterId, cont
     if (!content || !toc) throw new Error('正文尚未就绪')
     return { editionKey, sourceFingerprint: toc.sourceFingerprint, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, chapterTitle: content.chapter.title, tocRevision: toc.revision, anchor, color, note }
   }
-  function markInput(mark: ReadingMark): MarkInput { const { id: _id, userId: _user, bookId: _book, bookName: _name, author: _author, createdAt: _created, updatedAt: _updated, deletedAt: _deleted, version, ...input } = mark; return { ...input, expectedVersion: version } }
+  function markInput(mark: ReadingMark): MarkInput { const { id: _id, userId: _user, bookId: _book, bookName: _name, author: _author, sourceName: _source, cachedChapter: _cache, createdAt: _created, updatedAt: _updated, deletedAt: _deleted, version, ...input } = mark; return { ...input, expectedVersion: version } }
   async function save(color: ReadingMark['color'], note: string | null, throwError = false) {
     if (!selection || busy) return
     setBusy(true); setError(''); const ownIdentity = identity

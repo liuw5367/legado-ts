@@ -331,7 +331,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .reader-html-content a { color: var(--primary); }
 .reader-html-content blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid var(--border); color: var(--muted); }
 .reader-html-content ul, .reader-html-content ol { padding-left: 1.5em; }
-.reader-bottom-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: min(100%, 680px); z-index: 4; display: flex; flex-direction: column; min-height: 48px; padding: 0 8px var(--safe-bottom); background: color-mix(in srgb, var(--card) 96%, transparent); border-top: 1px solid var(--border); }
+.reader-bottom-bar { position: fixed; right: 0; bottom: 0; left: 0; width: 100%; z-index: 4; display: flex; flex-direction: column; min-height: 48px; padding: 0 0 var(--safe-bottom); background: color-mix(in srgb, var(--card) 96%, transparent); border-top: 1px solid var(--border); }
 .reader-nav-button { min-height: 48px; border: 0; background: transparent; color: var(--foreground); font-size: 13px; }
 .reader-nav-button:disabled { color: var(--muted); cursor: default; opacity: .55; }
 .reader-toc-button { color: var(--primary); font-weight: 650; }
@@ -405,7 +405,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .sheet-top { top: 0; right: 0; bottom: auto; left: 0; margin: 0; border-radius: 0 0 12px 12px; }
 .sheet::backdrop { background: rgb(36 33 29 / 34%); }
 .sheet-content { display: flex; max-height: 85vh; max-height: 85dvh; flex-direction: column; }
-.sheet.reader-marks-sheet { height: 85vh; min-height: 85vh; max-height: 85vh; height: 85dvh; min-height: 85dvh; max-height: 85dvh; }
+.sheet.reader-marks-sheet { height: 90vh; min-height: 90vh; max-height: 90vh; height: 90dvh; min-height: 90dvh; max-height: 90dvh; }
 .sheet.reader-marks-sheet .sheet-content { height: 100%; min-height: 0; max-height: 100%; }
 .sheet.reader-marks-sheet .sheet-body { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
 .sheet.reader-marks-sheet .notes-status-tabs { flex: 0 0 auto; }
@@ -451,7 +451,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .reader-word-count { display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; text-align: center; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .reader-word-count-separator { color: var(--border); }
 .reader-shortcuts { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); }
-.reader-shortcut { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 56px; padding: 6px; border: 0; background: transparent; color: var(--foreground); font-size: 11px; text-decoration: none; cursor: pointer; }
+.reader-shortcut { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 64px; padding: 10px 6px; border: 0; background: transparent; color: var(--foreground); font-size: 11px; text-decoration: none; cursor: pointer; }
 .reader-shortcut:disabled { opacity: .55; cursor: default; }
 .reader-shortcut:active, .reader-nav-button:active { background: var(--background); }
 .reader-settings-error { margin: 0; padding: 8px; font-size: 12px; }
@@ -755,6 +755,10 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reader-bookmark-float { position: fixed; top: calc(var(--page-top-inset) + 56px); right: max(calc((100vw - 680px) / 2 + 12px), calc(var(--safe-right) + 12px)); z-index: 6; display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); }
 .reader-bookmark-float svg { width: 20px; height: 20px; }
 .reader-bookmark-float[aria-pressed="true"] { color: var(--primary); }
+.reader-progress-choice { position: fixed; z-index: 7; right: max(12px, var(--safe-right)); bottom: max(calc(var(--safe-bottom) + 12px), 20px); left: max(12px, var(--safe-left)); display: flex; width: fit-content; min-height: 44px; align-items: center; gap: 12px; margin: 0 auto; padding: 3px 8px 3px 16px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); box-shadow: 0 3px 14px rgb(36 33 29 / 14%); }
+.reader-progress-choice button { display: inline-flex; min-width: 36px; min-height: 36px; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; }
+.reader-progress-choice button:first-child { padding-inline: 4px; color: var(--primary); font-size: 13px; font-weight: 650; white-space: nowrap; }
+.reader-progress-choice button:last-child svg { width: 18px; height: 18px; }
 
 /* 认证页使用比普通内容页更窄的输入栏，让标题、字段和操作形成单一阅读节奏。 */
 .auth-shell { display: flex; width: 100%; min-height: 100dvh; justify-content: center; padding: clamp(32px, 8vh, 88px) max(20px, calc(20px + var(--safe-left))) calc(32px + var(--safe-bottom)) max(20px, calc(20px + var(--safe-right))); }
@@ -909,18 +913,17 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 [data-color="orange"] { --mark-color: #f7c879; }
 .reader-mark { background: color-mix(in srgb, var(--mark-color) 18%, transparent); text-decoration: underline; text-decoration-color: var(--mark-color); text-decoration-thickness: 2px; text-underline-offset: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; }
 .reader-mark:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.reader-selection-backdrop { position: fixed; inset: 0; z-index: 11; touch-action: none; overscroll-behavior: none; }
 .reader-selection-popover { position: fixed; z-index: 12; max-width: calc(100vw - 16px); }
-.reader-selection-toolbar { display: flex; align-items: center; gap: 2px; width: max-content; padding: 4px 8px; border-radius: 999px; background: #3c3b39; color: #f5f1eb; box-shadow: 0 3px 12px rgb(0 0 0 / 18%); }
+.reader-selection-toolbar { display: flex; align-items: center; gap: 4px; width: max-content; padding: 3px 6px; border-radius: 999px; background: #3c3b39; color: #f5f1eb; box-shadow: 0 3px 12px rgb(0 0 0 / 18%); }
 .reader-selection-toolbar button { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0; min-height: 36px; border: 0; background: transparent; color: inherit; }
 .reader-selection-toolbar .mark-color-button { width: 32px; }
 .mark-color-button > span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #343230; }
 .mark-color-button svg { width: 16px; height: 16px; }
 .reader-selection-toolbar .mark-thought-button { gap: 4px; padding: 0 7px; border-left: 1px solid #68645f; font-size: 12px; }
-.reader-selection-toolbar .mark-delete-button { width: 32px; border-left: 1px solid #68645f; }
+.reader-selection-toolbar .mark-delete-button { width: 36px; border-left: 1px solid #68645f; }
 .mark-thought-button svg, .mark-delete-button svg { width: 16px; height: 16px; }
-.reader-mark-thought { margin-top: 4px; max-width: 280px; max-height: min(240px, 35dvh); overflow: auto; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
-.reader-mark-thought > .muted { display: block; line-height: 1.2; }
+.reader-mark-thought { margin-top: 2px; max-width: 280px; max-height: min(240px, 35dvh); overflow: auto; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
+.reader-mark-thought > .muted { display: block; line-height: 1.15; }
 .reader-mark-thought p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .reader-mark-error { position: fixed; z-index: 15; bottom: calc(var(--safe-bottom) + 148px); left: 12px; right: 12px; max-width: 650px; margin: auto; }
 .mark-editor { display: grid; gap: 10px; }
@@ -934,7 +937,7 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .notes-status-tabs button[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
 .reading-marks-list { display: grid; gap: 0; }
 .reading-mark-item { min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--border); }
-.reading-mark-meta { display: flex; align-items: baseline; gap: 12px; justify-content: space-between; margin-bottom: 8px; }
+.reading-mark-meta { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 8px; }
 .reading-mark-meta strong { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 .reading-mark-meta-trailing { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
 .reading-mark-meta time { flex-shrink: 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -943,11 +946,23 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reading-mark-meta-trailing .more-menu > summary svg { width: 18px; height: 18px; }
 .reading-mark-excerpt { display: block; width: 100%; text-align: left; border: 0; padding: 0 0 0 12px; background: transparent; color: var(--foreground); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
 .reading-mark-excerpt::before { content: ''; position: absolute; width: 5px; height: 5px; left: 0; top: .6em; background: var(--mark-color); border-radius: 50%; }
-.reading-mark-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.reading-mark-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 3px; }
+.reading-mark-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reading-mark-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 4px; }
 .reading-mark-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .reading-mark-actions { display: flex; gap: 8px; margin-left: auto; }
 .reading-mark-actions .button svg { width: 16px; height: 16px; flex: 0 0 16px; }
 .reading-marks-list-global .reading-mark-excerpt { font-size: 14px; line-height: 1.5; }
 .reading-marks-list-global .reading-mark-note { font-size: 16px; line-height: 1.5; }
+.reading-marks-list-global .reading-mark-quote { margin: 5px 0 0; padding: 7px 10px 8px; border-radius: 8px; background: color-mix(in srgb, var(--mark-color) 9%, var(--background)); }
+.reading-mark-chapter { display: block; margin-bottom: 3px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.reading-marks-list-global .reading-mark-quote .reading-mark-excerpt { padding-left: 10px; font-size: 14px; line-height: 1.45; }
+.reading-mark-quote .reading-mark-excerpt::before { left: 0; top: .55em; width: 4px; height: 4px; }
+.cached-chapter-sheet { height: 85vh; max-height: 85vh; height: 85dvh; max-height: 85dvh; }
+.cached-chapter-sheet .sheet-content { height: 100%; min-height: 0; max-height: 100%; }
+.cached-chapter-sheet .sheet-body { min-height: 0; overflow: auto; }
+.cached-chapter-origin { margin: 0 0 8px; }
+.cached-chapter-reader.reader-content { min-height: 0; margin: 0; padding: 0 0 12px; }
+.cached-chapter-reader .reader-paragraph { margin-bottom: 1.2em; }
+.cached-chapter-ellipsis { margin: 8px 0; text-indent: 0; text-align: center; color: var(--muted); }
+.cached-chapter-highlight { scroll-margin-block: 35vh; }
 @media (pointer: coarse) { .reader-selection-toolbar button { min-height: 44px; } .mark-editor textarea { font-size: 16px; } }

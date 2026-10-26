@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { books, readingAnnotations, readingBookmarks } from './schema.ts'
 import type { ReaderTransaction } from './client.ts'
-import { changeMark, markCursor, markOrder, parseMarkCursor, type MarkCommand, type MarkKind, type MarkQuery, type ReadingMark } from '../../shared/reading-annotations.ts'
+import { changeMark, MarkError, markCursor, markOrder, parseMarkCursor, type MarkCommand, type MarkKind, type MarkQuery, type ReadingMark } from '../../shared/reading-annotations.ts'
 
 export async function readMarks(tx: ReaderTransaction, userId: string, query: MarkQuery) {
   const table = query.kind === 'bookmarks' ? readingBookmarks : readingAnnotations
@@ -26,6 +26,15 @@ export async function writeMark(tx: ReaderTransaction, userId: string, command: 
   const next = changeMark([...before.items, ...(sameId && !before.items.some((r) => r.id === sameId.data.id) ? [sameId.data] : [])], userId, command)
   await tx.insert(table).values(markValues(next)).onConflictDoUpdate({ target: [table.userId, table.id], set: markValues(next) })
   return next
+}
+export async function purgeMark(tx: ReaderTransaction, userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number) {
+  await lockMarks(tx, userId)
+  const table = kind === 'bookmarks' ? readingBookmarks : readingAnnotations
+  const [row] = await tx.select({ data: table.data }).from(table).where(and(eq(table.userId, userId), eq(table.bookId, bookId), eq(table.id, id)))
+  if (row === undefined) throw new MarkError(404, '记录不存在')
+  if (row.data.version !== expectedVersion) throw new MarkError(409, '记录已修改，请重新加载')
+  if (row.data.deletedAt === null) throw new MarkError(409, '只能彻底删除已删除的笔记')
+  await tx.delete(table).where(and(eq(table.userId, userId), eq(table.bookId, bookId), eq(table.id, id)))
 }
 export async function lockMarks(tx: ReaderTransaction, userId: string) { await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId + ':reading-marks'}, 0))`) }
 export function markValues(row: ReadingMark) { return { id: row.id, userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, chapterUrl: row.chapterUrl, data: row } }

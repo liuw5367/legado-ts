@@ -1,4 +1,5 @@
 import { changeMark, markPage } from '../../shared/reading-annotations.ts'
+import { createCachedChapter } from '../../shared/reading-text.ts'
 import { bookCoverRequestSchema } from '../../shared/book-sources.ts'
 import { MemoryReaderRepository } from '../../server/db/repository.ts'
 import { importSources } from '@legado/source-core'
@@ -123,6 +124,16 @@ function chaptersFor(editionKey) {
       isPay: false,
     }
   })
+}
+
+function contentForChapter(chapter, refresh = false) {
+  const paragraphs = Array.from({ length: 28 }, (_, index) => `这是第 ${index + 1} 段模拟正文。用于检查阅读排版、字号、行距、翻章和章节刷新行为。${refresh && index === 0 ? `（刷新版本 ${refreshCounts.get(`content:${chapter.chapterId}`) ?? 0}）` : ''}`)
+  const text = paragraphs.join(chapter.index === 2 ? '' : '\n\n')
+  const html = '<p>正文与<a href="https://example.test">链接中的标记文字</a>相邻。</p><p>第一行<br>第二行<strong>嵌套文字</strong> &amp; 实体。</p>' + paragraphs.map((paragraph) => '<p>' + paragraph + '</p>').join('')
+  const contentType = chapter.index === 3 ? 'html' : 'text'
+  const cleaned = contentType === 'html' ? html : text
+  const cachedParagraphs = contentType === 'html' ? [html.replace(/<[^>]*>/gu, '').replace(/&amp;/gu, '&')] : cleaned.split(/\n+/u).map((paragraph) => paragraph.trim()).filter(Boolean)
+  return { content: { chapter, contentType, raw: cleaned, cleaned, pages: paragraphs, resources: [], title: chapter.title }, cachedParagraphs }
 }
 
 for (const editionKey of editions.keys()) {
@@ -483,7 +494,7 @@ async function handleApi(request, response, url) {
   const method = request.method ?? 'GET'
 
   // 复用批注领域规则，页面验收时写入后查询及恢复保持有状态。
-  const markRoute = path.match(/^\/api\/books\/([^/]+)\/(bookmarks|annotations)(?:\/([^/]+))?(?:\/(restore))?$/u)
+  const markRoute = path.match(/^\/api\/books\/([^/]+)\/(bookmarks|annotations)(?:\/([^/]+))?(?:\/(restore|permanent))?$/u)
   if (path === '/api/annotations/books') { const values = [...readingMarks.values()].filter((r) => r.kind === 'annotations'); json(response, { books: [...new Map(values.map((r) => [r.bookId, { id: r.bookId, name: r.bookName, author: r.author }])).values()] }); return }
   if (path === '/api/annotations' || markRoute) {
     const kind = markRoute?.[2] ?? 'annotations'; const bookId = markRoute?.[1]; const id = markRoute?.[3]
@@ -492,7 +503,23 @@ async function handleApi(request, response, url) {
       if (method === 'GET') { json(response, markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, ...(path === '/api/annotations' ? { order: 'created' } : {}), deleted: url.searchParams.get('deleted') === 'true' })); return }
       const body = await readJson(request); const book = books.get(bookId)
       if (!book) { json(response, { error: { message: '书籍不存在' } }, 404); return }
-      const item = changeMark(rows, USER_ID, method === 'PUT' ? { action: 'save', kind, id, bookId, input: body, bookName: book.name, author: book.author ?? null } : { action: markRoute[4] === 'restore' ? 'restore' : 'delete', kind, id, bookId, expectedVersion: body.expectedVersion })
+      if (method === 'DELETE' && markRoute[4] === 'permanent') {
+        const current = readingMarks.get(kind + ':' + id)
+        if (kind !== 'annotations' || !current) { json(response, { error: { message: '记录不存在' } }, 404); return }
+        if (current.version !== body.expectedVersion) { json(response, { error: { message: '记录已修改，请重新加载' } }, 409); return }
+        if (current.deletedAt === null) { json(response, { error: { message: '只能彻底删除已删除的笔记' } }, 409); return }
+        readingMarks.delete(kind + ':' + id); response.writeHead(204); response.end(); return
+      }
+      let item
+      if (method === 'PUT') {
+        const previous = readingMarks.get(kind + ':' + id)
+        const edition = editions.get(body.editionKey)
+        const chapter = chaptersFor(body.editionKey).find((entry) => entry.chapterId === body.chapterId && editions.get(body.editionKey)?.bookId === bookId)
+        if (!edition || edition.bookId !== bookId || !chapter) { json(response, { error: { message: '正文已变化，请重新加载后选择' } }, 409); return }
+        const sourceName = previous?.sourceName ?? sources.find((source) => source.sourceId === edition.sourceId)?.name ?? edition.sourceId
+        const cachedChapter = kind === 'annotations' ? previous?.cachedChapter ?? createCachedChapter(contentForChapter(chapter).cachedParagraphs, body.anchor) : null
+        item = changeMark(rows, USER_ID, { action: 'save', kind, id, bookId, input: body, bookName: book.name, author: book.author ?? null, sourceName, cachedChapter })
+      } else item = changeMark(rows, USER_ID, { action: markRoute[4] === 'restore' ? 'restore' : 'delete', kind, id, bookId, expectedVersion: body.expectedVersion })
       readingMarks.set(kind + ':' + item.id, { ...item, kind }); json(response, { item }); return
     } catch (error) { json(response, { error: { message: error.message } }, error.status ?? 500); return }
   }
@@ -735,12 +762,7 @@ async function handleApi(request, response, url) {
       const refresh = url.searchParams.get('refresh') === 'true'
       if (refresh) refreshCounts.set(`content:${chapterId}`, (refreshCounts.get(`content:${chapterId}`) ?? 0) + 1)
       const revision = refreshCounts.get(`content:${chapterId}`) ?? 0
-      const paragraphs = Array.from({ length: 28 }, (_, index) => `这是第 ${index + 1} 段模拟正文。用于检查阅读排版、字号、行距、翻章和章节刷新行为。${refresh && index === 0 ? `（刷新版本 ${revision}）` : ''}`)
-      // 第三章使用跨页长段落，验证分页位置不能只保存段落编号。
-      const text = paragraphs.join(chapter.index === 2 ? '' : '\n\n')
-      const html = '<p>正文与<a href="https://example.test">链接中的标记文字</a>相邻。</p><p>第一行<br>第二行<strong>嵌套文字</strong> &amp; 实体。</p>' + paragraphs.map((p) => '<p>' + p + '</p>').join('')
-      const cleaned = chapter.index === 3 ? html : text
-      const content = { chapter, contentType: chapter.index === 3 ? 'html' : 'text', raw: cleaned, cleaned, pages: paragraphs, resources: [], title: chapter.title }
+      const { content } = contentForChapter(chapter, refresh)
       json(response, { content: { content, tocRevision: `fixture-toc-${editionKey}-${(refreshCounts.get(editionKey) ?? 0) + 1}` } })
       return
     }
