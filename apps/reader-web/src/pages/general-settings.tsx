@@ -23,7 +23,7 @@ export function GeneralSettingsPage() {
     <section className="settings-detail-section" aria-labelledby={searchTitleId}>
       <h2 id={searchTitleId}>书源搜索</h2>
       <div className="reader-setting-row general-setting-row">
-        <div><strong>搜索并发数</strong><p className="muted small">同时搜索 5–20 个书源，默认 10 个。每个请求结束后等待 1 秒再补充下一个。</p></div>
+        <div><strong>搜索并发数</strong><p className="muted small">搜索页面和切换书源页面并发次数，默认 10 个。</p></div>
         <label className="general-setting-select"><span className="sr-only">搜索并发数</span><Select value={settings.general.searchConcurrency ?? DEFAULT_SEARCH_CONCURRENCY} onChange={(event) => void updateSettings({ general: { searchConcurrency: Number(event.target.value) } }).catch(() => undefined)}>{Array.from({ length: MAX_SEARCH_CONCURRENCY - MIN_SEARCH_CONCURRENCY + 1 }, (_, index) => MIN_SEARCH_CONCURRENCY + index).map((value) => <option key={value} value={value}>{value} 个</option>)}</Select></label>
       </div>
     </section>

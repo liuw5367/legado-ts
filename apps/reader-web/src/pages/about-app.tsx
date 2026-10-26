@@ -1,3 +1,4 @@
+import { APP_NAME, APP_TAGLINE } from '../lib/app-config.ts'
 import { PageHeader } from '../components/page-header.tsx'
 import { useId, useState } from 'react'
 import { ExternalLink, Share2 } from 'lucide-react'
@@ -24,8 +25,8 @@ export function AboutAppPage() {
     <PageHeader backTo="/account/settings" title="关于应用" />
     <section className="about-app-brand" aria-labelledby={titleId}>
       <img className="about-app-logo" src="/static/pwa/icon-512.png" alt="" width="112" height="112" />
-      <h2 id={titleId}>页灯</h2>
-      <p className="muted">为阅读，留一盏灯。</p>
+      <h2 id={titleId}>{APP_NAME}</h2>
+      <p className="muted">{APP_TAGLINE}</p>
       <p className="muted small">更新时间</p>
       <time className="about-app-build-time" dateTime={buildTimestamp}>{buildTime}</time>
     </section>
@@ -34,8 +35,8 @@ export function AboutAppPage() {
         <span className="settings-entry-copy"><strong>GitHub 仓库</strong><span className="muted small">查看源代码与项目动态</span></span>
         <ExternalLink aria-hidden="true" />
       </a>
-      <button className="settings-entry settings-entry-action" type="button" disabled={sharing} onClick={() => void share('页灯 仓库', repositoryUrl)}><span className="settings-entry-copy"><strong>分享仓库</strong><span className="muted small">分享 GitHub 项目地址</span></span><Share2 aria-hidden="true" /></button>
-      <button className="settings-entry settings-entry-action" type="button" disabled={sharing} onClick={() => void share('页灯', window.location.origin)}><span className="settings-entry-copy"><strong>分享应用</strong><span className="muted small">分享当前应用地址</span></span><Share2 aria-hidden="true" /></button>
+      <button className="settings-entry settings-entry-action" type="button" disabled={sharing} onClick={() => void share(`${APP_NAME} 仓库`, repositoryUrl)}><span className="settings-entry-copy"><strong>分享仓库</strong><span className="muted small">分享 GitHub 项目地址</span></span><Share2 aria-hidden="true" /></button>
+      <button className="settings-entry settings-entry-action" type="button" disabled={sharing} onClick={() => void share(APP_NAME, window.location.origin)}><span className="settings-entry-copy"><strong>分享应用</strong><span className="muted small">分享当前应用地址</span></span><Share2 aria-hidden="true" /></button>
     </nav>
     {message ? <p className="muted small" role="status">{message}</p> : null}
   </section>
