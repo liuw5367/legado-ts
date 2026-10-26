@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { MessageSquare, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { Bookmark, MessageSquare, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react'
 import { apiFetch, type ApiContent } from '../lib/api.ts'
 import { usePageActivity, usePageLoadEffect, usePageNavigation, usePageVersion } from '../lib/use-page-resource.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
@@ -21,7 +21,7 @@ type CachedMarkPage = { items: ReadingMark[]; cursor: string | null }
 const cachedMarkPages = new Map<string, CachedMarkPage>()
 export type ReaderMarkDestination = { path: string; editionKey: string; chapterId: string; point: TextPoint }
 
-export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global = false, currentEditionKey, activeEditions, onNavigate }: { kind: MarkKind; bookId?: string; q?: string; deleted?: boolean; global?: boolean; currentEditionKey?: string; activeEditions?: Record<string, string | undefined>; onNavigate?: (destination: ReaderMarkDestination) => void }) {
+export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global = false, readerSheet = false, currentProgressTitle, onCurrentProgress, currentEditionKey, activeEditions, onNavigate }: { kind: MarkKind; bookId?: string; q?: string; deleted?: boolean; global?: boolean; readerSheet?: boolean; currentProgressTitle?: string; onCurrentProgress?: () => void; currentEditionKey?: string; activeEditions?: Record<string, string | undefined>; onNavigate?: (destination: ReaderMarkDestination) => void }) {
   const page = usePageActivity(); const navigation = usePageNavigation(); const userId = navigation?.userId; const notesVersion = usePageVersion(['notes']); const active = useRef(true); active.current = page?.active !== false
   const [items, setItems] = useState<ReadingMark[]>([]); const [cursor, setCursor] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [retry, setRetry] = useState(0); const [busy, setBusy] = useState<string | null>(null); const [editing, setEditing] = useState<ReadingMark | null>(null); const [missing, setMissing] = useState<ReadingMark | null>(null); const [retryMark, setRetryMark] = useState<ReadingMark | null>(null); const [cachePreview, setCachePreview] = useState<ReadingMark | null>(null); const [purging, setPurging] = useState<string | null>(null)
   const generation = useRef(0)
@@ -30,7 +30,11 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
   const { settings } = useReaderSettings()
   const params = new URLSearchParams({ q, deleted: String(deleted) }); if (bookId) params.set('bookId', bookId)
   const path = global ? '/api/annotations?' + params : '/api/books/' + encodeURIComponent(bookId ?? '') + '/' + kind + '?' + params
-  const cacheKey = `${userId ?? ''}:${notesVersion}:${path}`
+  const cacheKey = `${userId ?? ''}:${notesVersion}:${path}`; const cardLayout = global || readerSheet && kind === 'annotations'
+  const empty = !loading && !error && items.length === 0
+  const emptyTitle = global && (q.length > 0 || bookId !== undefined) ? '没有符合条件的笔记' : deleted ? '暂无已删除笔记' : kind === 'bookmarks' ? '还没有书签' : '还没有笔记'
+  const emptyDescription = global && (q.length > 0 || bookId !== undefined) ? '请调整搜索内容或书籍筛选，再试一次。' : deleted ? '删除的笔记会暂存在这里，恢复后会回到笔记列表。' : kind === 'bookmarks' ? '阅读时点击右上角的书签图标，即可保存当前位置。' : global ? '在阅读页面选择一段文字，可添加颜色标记或写下想法。' : '在正文中选择一段文字，可添加颜色标记或写下想法。'
+  const EmptyIcon = global && (q.length > 0 || bookId !== undefined) ? Search : kind === 'bookmarks' ? Bookmark : MessageSquare
   useEffect(() => () => { openGeneration.current++; openController.current?.abort(); openController.current = null }, [page?.active])
   usePageLoadEffect((settle) => {
     generation.current++; const ownGeneration = generation.current; setBusy(null); setError('')
@@ -52,9 +56,12 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
   async function action(mark: ReadingMark, restore: boolean) {
     const actionPath = cacheKey; const ownGeneration = generation.current; setBusy(mark.id); setError('')
     try {
-      await apiFetch(itemPath(mark) + (restore ? '/restore' : ''), { method: restore ? 'POST' : 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId)
-      const cached = cachedMarkPages.get(actionPath); const next = (cached?.items ?? items).filter((r) => r.id !== mark.id)
-      cachedMarkPages.set(actionPath, { items: next, cursor: cached?.cursor ?? cursor })
+      const result = await apiFetch<{ item: ReadingMark }>(itemPath(mark) + (restore ? '/restore' : ''), { method: restore ? 'POST' : 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId)
+      const cached = cachedMarkPages.get(actionPath); const source = cached?.items ?? items
+      const next = readerSheet ? source.map((row) => row.id === result.item.id ? result.item : row) : source.filter((row) => row.id !== mark.id)
+      const page = { items: next, cursor: cached?.cursor ?? cursor }
+      cachedMarkPages.set(actionPath, page)
+      if (readerSheet) cachedMarkPages.set(`${userId ?? ''}:${Number(notesVersion) + 1}:${path}`, page)
       if (ownGeneration === generation.current) setItems(next)
     } catch (reason) { if (ownGeneration === generation.current) setError(reason instanceof Error ? reason.message : '操作失败') } finally { if (ownGeneration === generation.current) setBusy(null) }
   }
@@ -125,19 +132,24 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
       cachedMarkPages.set(cacheKey, { items: next, cursor: result.nextCursor }); setItems(next); setCursor(result.nextCursor)
     } catch (reason) { if (ownGeneration === generation.current && active.current) setError(reason instanceof Error ? reason.message : '加载失败') } finally { if (ownGeneration === generation.current && active.current) setBusy(null) }
   }
-  return <div className={`reading-marks-list${global ? ' reading-marks-list-global' : ''}`}>
+  return <div className={`reading-marks-list${cardLayout ? ' reading-marks-list-global' : ''}${readerSheet ? ' reading-marks-list-reader-sheet' : ''}${empty ? ' reading-marks-list-empty' : ''}`}>
+    {readerSheet && kind === 'bookmarks' && currentProgressTitle !== undefined ? <button className="reader-current-progress" type="button" onClick={onCurrentProgress}><span>当前进度</span><strong>{currentProgressTitle}</strong></button> : null}
     {error ? <div className="notice-with-recovery"><DismissibleMessage className="error" role="alert" onDismiss={() => { setError(''); setMissing(null); setRetryMark(null) }}>{error}{missing?.cachedChapter && kind === 'annotations' ? <button className="text-button" type="button" onClick={() => setCachePreview(missing)}>查看缓存</button> : null}</DismissibleMessage><button className="text-button" onClick={() => retryMark ? void open(retryMark) : reload()} type="button">{retryMark ? '重试打开' : '重新加载'}</button></div> : null}
-    {loading ? <LoadingState message="正在读取记录…" /> : items.length === 0 ? <p className="muted">{q || bookId && global ? '没有符合条件的笔记' : deleted ? '没有已删除的笔记' : kind === 'bookmarks' ? '还没有书签' : '还没有笔记'}</p> : null}
-    {items.map((mark) => <div className="reading-mark-item" key={mark.id} data-color={mark.color}>
-      <div className="reading-mark-meta"><strong>{global ? mark.bookName : mark.chapterTitle}</strong><div className="reading-mark-meta-trailing"><time dateTime={mark.createdAt}>{new Date(mark.createdAt).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>{global ? <MoreMenu label={`更多笔记操作：${mark.bookName}`}>
-        {deleted ? <><button className="more-menu-item" type="button" disabled={busy !== null || purging !== null} onClick={() => void action(mark, true)}><RotateCcw aria-hidden="true" />恢复</button><button className="more-menu-item danger-action" type="button" disabled={busy !== null || purging !== null} onClick={() => void purge(mark)}><Trash2 aria-hidden="true" />彻底删除</button></> : <>{kind === 'annotations' ? <button className="more-menu-item" type="button" disabled={busy !== null} onClick={() => setEditing(mark)}><Pencil aria-hidden="true" />编辑</button> : null}<button className="more-menu-item danger-action" type="button" disabled={busy !== null} onClick={() => void action(mark, false)}><Trash2 aria-hidden="true" />删除</button></>}
-      </MoreMenu> : null}</div></div>
-      {global ? <div className="reading-mark-quote"><span className="reading-mark-chapter">{mark.chapterTitle}</span><button type="button" className="reading-mark-excerpt" disabled={busy !== null || deleted || purging !== null} onClick={() => void open(mark)}>{mark.anchor.exact}</button></div> : <button type="button" className="reading-mark-excerpt" disabled={busy !== null || deleted || purging !== null} onClick={() => void open(mark)}>{mark.anchor.exact}</button>}
-      {mark.note ? <p className="reading-mark-note"><MessageSquare aria-hidden="true" />{mark.note}</p> : null}
-      {global ? null : <div className="reading-mark-footer"><div className="reading-mark-actions">{deleted ? <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void action(mark, true)}><RotateCcw aria-hidden="true" />恢复</Button> : <>{kind === 'annotations' ? <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => setEditing(mark)}><Pencil aria-hidden="true" />编辑</Button> : null}<Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void action(mark, false)}><Trash2 aria-hidden="true" />删除</Button></>}</div></div>}
-    </div>)}
+    {loading ? <LoadingState message="正在读取记录…" /> : empty ? <div className="reading-marks-empty" role="status"><span className="reading-marks-empty-icon"><EmptyIcon aria-hidden="true" /></span><strong>{emptyTitle}</strong><p>{emptyDescription}</p></div> : null}
+    {items.map((mark) => {
+      const restoreLabel = kind === 'bookmarks' ? '恢复书签' : '恢复笔记'
+      const showMenu = global || readerSheet
+      return <div className="reading-mark-item" key={mark.id} data-color={mark.color}>
+        <div className="reading-mark-meta"><strong>{global ? mark.bookName : mark.chapterTitle}{!global && mark.deletedAt ? <span className="reading-mark-deleted-dot" role="img" aria-label="已删除" title="已删除" /> : null}</strong><div className="reading-mark-meta-trailing"><time dateTime={mark.createdAt}>{new Date(mark.createdAt).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>{showMenu ? <MoreMenu label={`更多${kind === 'bookmarks' ? '书签' : '笔记'}操作：${mark.chapterTitle}`}>
+          {mark.deletedAt ? <><button className="more-menu-item" type="button" disabled={busy !== null || purging !== null} onClick={() => void action(mark, true)}><RotateCcw aria-hidden="true" />{restoreLabel}</button>{global ? <button className="more-menu-item danger-action" type="button" disabled={busy !== null || purging !== null} onClick={() => void purge(mark)}><Trash2 aria-hidden="true" />彻底删除</button> : null}</> : <>{kind === 'annotations' ? <button className="more-menu-item" type="button" disabled={busy !== null} onClick={() => setEditing(mark)}><Pencil aria-hidden="true" />编辑</button> : null}<button className="more-menu-item danger-action" type="button" disabled={busy !== null} onClick={() => void action(mark, false)}><Trash2 aria-hidden="true" />删除</button></>}
+        </MoreMenu> : null}</div></div>
+        {cardLayout ? <div className="reading-mark-quote">{global ? <span className="reading-mark-chapter">{mark.chapterTitle}{mark.deletedAt ? <span className="reading-mark-deleted-dot" role="img" aria-label="已删除" title="已删除" /> : null}</span> : null}<button type="button" className="reading-mark-excerpt" disabled={busy !== null || deleted || purging !== null} onClick={() => void open(mark)}>{mark.anchor.exact}</button></div> : <button type="button" className="reading-mark-excerpt" disabled={busy !== null || deleted || purging !== null} onClick={() => void open(mark)}>{mark.anchor.exact}</button>}
+        {mark.note ? <p className="reading-mark-note"><MessageSquare aria-hidden="true" />{mark.note}</p> : null}
+        {global || readerSheet ? null : <div className="reading-mark-footer"><div className="reading-mark-actions">{deleted ? <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void action(mark, true)}><RotateCcw aria-hidden="true" />{restoreLabel}</Button> : <>{kind === 'annotations' ? <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => setEditing(mark)}><Pencil aria-hidden="true" />编辑</Button> : null}<Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void action(mark, false)}><Trash2 aria-hidden="true" />删除</Button></>}</div></div>}
+      </div>
+    })}
     {cursor ? <Button variant="secondary" disabled={busy !== null || loading} onClick={() => void more()}>加载更多</Button> : null}
-    {editing ? <ReadingMarkEditor key={editing.id} initialNote={editing.note ?? ''} onClose={() => setEditing(null)} onSave={async (note) => { const { id: _id, userId: _user, bookId: _book, bookName: _name, author: _author, sourceName: _source, cachedChapter: _cache, createdAt: _created, updatedAt: _updated, deletedAt: _deleted, version, ...input } = editing; const result = await apiFetch<{ item: ReadingMark }>(itemPath(editing), { method: 'PUT', body: JSON.stringify({ ...input, note, expectedVersion: version }) }, userId); const cached = cachedMarkPages.get(cacheKey); const next = (cached?.items ?? items).map((item) => item.id === result.item.id ? result.item : item); cachedMarkPages.set(cacheKey, { items: next, cursor: cached?.cursor ?? cursor }); setItems(next) }} /> : null}
+    {editing ? <ReadingMarkEditor key={editing.id} initialNote={editing.note ?? ''} onClose={() => setEditing(null)} onSave={async (note) => { const { id: _id, userId: _user, bookId: _book, bookName: _name, author: _author, sourceName: _source, cachedChapter: _cache, createdAt: _created, updatedAt: _updated, deletedAt: _deleted, version, ...input } = editing; const result = await apiFetch<{ item: ReadingMark }>(itemPath(editing), { method: 'PUT', body: JSON.stringify({ ...input, note, expectedVersion: version }) }, userId); const cached = cachedMarkPages.get(cacheKey); const next = (cached?.items ?? items).map((item) => item.id === result.item.id ? result.item : item); const page = { items: next, cursor: cached?.cursor ?? cursor }; cachedMarkPages.set(cacheKey, page); if (readerSheet) cachedMarkPages.set(`${userId ?? ''}:${Number(notesVersion) + 1}:${path}`, page); setItems(next) }} /> : null}
     <Sheet className="cached-chapter-sheet" open={cachePreview !== null} onOpenChange={(open) => { if (!open) setCachePreview(null) }} title="当时的章节内容">{cachePreview ? <CachedChapterPreview mark={cachePreview} fontSize={settings.fontSize} lineHeight={settings.lineHeight} /> : null}</Sheet>
   </div>
 }
