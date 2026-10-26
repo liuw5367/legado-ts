@@ -1081,7 +1081,8 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reading-mark-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 0; font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reading-mark-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 4px; }
 .reading-mark-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.reading-mark-actions { display: flex; gap: 8px; margin-left: auto; }
+.reading-mark-actions { display: flex; align-items: flex-start; gap: 8px; margin-left: auto; }
+.reading-mark-edit-actions { display: flex; flex-direction: column; gap: 8px; }
 .reading-mark-actions .button svg { width: 16px; height: 16px; flex: 0 0 16px; }
 .reading-marks-list-global .reading-mark-excerpt { font-size: 14px; line-height: 1.5; }
 .reading-marks-list-global .reading-mark-note { font-size: 16px; line-height: 1.5; }
