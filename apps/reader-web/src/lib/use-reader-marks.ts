@@ -41,6 +41,7 @@ export function useReaderMarks({ articleRef, bookId, editionKey, chapterId, cont
     const changed = () => { if (editing || blocked || busy) return; if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => {
       const root = articleRef.current; const candidate = root ? selectedAnchor(root, hash) : null
       if (candidate) { onInteract(); selectionId.current = null; const exact = resolved.find((r) => comparePoints(r.anchor.start, candidate.anchor.start) === 0 && comparePoints(r.anchor.end, candidate.anchor.end) === 0); setSelection({ ...candidate, mark: exact ? annotations.find((r) => r.id === exact.id) ?? null : null }) }
+      else setSelection((current) => current?.mark ? current : null)
     }, 120) }
     const scrolled = () => {
       setViewportVersion((n) => n + 1)
@@ -55,8 +56,10 @@ export function useReaderMarks({ articleRef, bookId, editionKey, chapterId, cont
     const outside = (event: PointerEvent) => {
       if (editing) return
       if (event.target instanceof Element && event.target.closest('.reader-selection-popover,.reader-mark')) return
-      if (event.pointerType === 'touch' && selection?.rect && Math.abs(event.clientX - selection.rect.left) <= 36 && event.clientY >= selection.rect.top - 36 && event.clientY <= selection.rect.bottom + 36) return
-      if (!(event.target instanceof Node) || !articleRef.current?.contains(event.target)) setSelection(null)
+      const rect = selection?.rect
+      if (rect && event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) return
+      if (event.pointerType === 'touch' && rect && event.clientY >= rect.top - 36 && event.clientY <= rect.bottom + 36 && Math.min(Math.abs(event.clientX - rect.left), Math.abs(event.clientX - rect.right)) <= 36) return
+      setSelection(null)
     }
     document.addEventListener('selectionchange', changed); window.addEventListener('scroll', scrolled, { passive: true }); document.addEventListener('pointerdown', outside)
     return () => { if (timer) window.clearTimeout(timer); document.removeEventListener('selectionchange', changed); window.removeEventListener('scroll', scrolled); document.removeEventListener('pointerdown', outside) }

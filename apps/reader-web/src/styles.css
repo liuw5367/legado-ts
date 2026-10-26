@@ -14,8 +14,8 @@
   --danger-surface: #fff1f0;
   --success: #166534;
   --success-surface: #f0fdf4;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --app-safe-bottom: calc(var(--safe-bottom) / 2);
+  --safe-bottom: calc(env(safe-area-inset-bottom, 0px) / 2);
+  --app-safe-bottom: var(--safe-bottom);
   --page-top-gap: 24px;
   --page-top-inset: calc(var(--safe-top) + var(--page-top-gap));
   --page-content-top: var(--page-top-inset);
@@ -118,7 +118,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .loading-state-inline .loading-state-status { flex-direction: row; gap: 8px; }
 .loading-state-inline .loading-state-spinner { width: 16px; height: 16px; }
 .loading-state-inline .loading-state-message { font-size: 12px; }
-.page-load-error { display: flex; flex: 1; min-height: min(240px, 50dvh); flex-direction: column; align-items: center; justify-content: center; padding: var(--page-top-inset) 12px calc(24px + env(safe-area-inset-bottom, 0px)); text-align: center; }
+.page-load-error { display: flex; flex: 1; min-height: min(240px, 50dvh); flex-direction: column; align-items: center; justify-content: center; padding: var(--page-top-inset) 12px calc(24px + var(--safe-bottom)); text-align: center; }
 @keyframes loading-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading-state-spinner { animation: none; } }
 .error, .success { margin: 0; padding: 10px 12px; border-radius: 6px; }
@@ -331,7 +331,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .reader-html-content a { color: var(--primary); }
 .reader-html-content blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid var(--border); color: var(--muted); }
 .reader-html-content ul, .reader-html-content ol { padding-left: 1.5em; }
-.reader-bottom-bar { position: fixed; right: 0; bottom: 0; left: 0; width: 100%; z-index: 4; display: flex; flex-direction: column; min-height: 48px; padding: 0 0 var(--safe-bottom); background: color-mix(in srgb, var(--card) 96%, transparent); border-top: 1px solid var(--border); }
+.reader-bottom-bar { position: fixed; right: 0; bottom: 0; left: 0; width: 100%; z-index: 4; display: flex; flex-direction: column; min-height: 48px; padding: 0; background: color-mix(in srgb, var(--card) 96%, transparent); border-top: 1px solid var(--border); }
 .reader-nav-button { min-height: 48px; border: 0; background: transparent; color: var(--foreground); font-size: 13px; }
 .reader-nav-button:disabled { color: var(--muted); cursor: default; opacity: .55; }
 .reader-toc-button { color: var(--primary); font-weight: 650; }
@@ -525,7 +525,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .reader-topbar { grid-template-columns: 60px minmax(0, 1fr) auto; padding: var(--page-top-inset) max(12px, var(--safe-right)) 0 max(12px, var(--safe-left)); background: var(--background); }
 .reader-back { min-height: 44px; }
 .reader-tools { gap: 2px; }
-.reader-bottom-bar { padding-bottom: calc(var(--safe-bottom) + 8px); background: var(--card); }
+.reader-bottom-bar { background: var(--card); }
 .reader-content { --reader-content-top: calc(var(--page-top-inset) + var(--reader-margin-top, 16px)); padding-top: var(--reader-content-top); padding-bottom: max(calc(var(--reader-margin-bottom, 16px) + var(--safe-bottom)), calc(136px + var(--safe-bottom))); padding-left: max(var(--reader-margin-left, 16px), var(--safe-left)); padding-right: max(var(--reader-margin-right, 16px), var(--safe-right)); }
 .reader-page-paged { height: 100dvh; overflow: hidden; }
 .reader-content-paged { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding-top: var(--reader-content-top); padding-bottom: calc(var(--reader-margin-bottom, 16px) + var(--safe-bottom) + 24px); padding-left: 0; padding-right: 0; overflow: hidden; overscroll-behavior: none; scrollbar-width: none; column-width: var(--reader-page-width, 100vw); column-gap: 0; column-fill: auto; touch-action: none; }
@@ -755,9 +755,11 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reader-bookmark-float { position: fixed; top: calc(var(--page-top-inset) + 56px); right: max(calc((100vw - 680px) / 2 + 12px), calc(var(--safe-right) + 12px)); z-index: 6; display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); }
 .reader-bookmark-float svg { width: 20px; height: 20px; }
 .reader-bookmark-float[aria-pressed="true"] { color: var(--primary); }
-.reader-progress-choice { position: fixed; z-index: 7; right: max(12px, var(--safe-right)); bottom: max(calc(var(--safe-bottom) + 12px), 20px); left: max(12px, var(--safe-left)); display: flex; width: fit-content; min-height: 44px; align-items: center; gap: 12px; margin: 0 auto; padding: 3px 8px 3px 16px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); box-shadow: 0 3px 14px rgb(36 33 29 / 14%); }
+.reader-progress-choice { position: fixed; z-index: 7; right: max(12px, var(--safe-right)); bottom: max(calc(var(--safe-bottom) + 12px), 20px); left: max(12px, var(--safe-left)); display: flex; width: fit-content; min-height: 44px; align-items: center; gap: 4px; margin: 0 auto; padding: 3px 8px 3px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--foreground); box-shadow: 0 3px 14px rgb(36 33 29 / 14%); }
 .reader-progress-choice button { display: inline-flex; min-width: 36px; min-height: 36px; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; }
 .reader-progress-choice button:first-child { padding-inline: 4px; color: var(--primary); font-size: 13px; font-weight: 650; white-space: nowrap; }
+.reader-progress-separator { display: inline-flex; width: 1px; height: 18px; flex: 0 0 1px; align-self: center; padding: 0; background: var(--primary); }
+.reader-progress-choice button:last-child { color: var(--primary); }
 .reader-progress-choice button:last-child svg { width: 18px; height: 18px; }
 
 /* 认证页使用比普通内容页更窄的输入栏，让标题、字段和操作形成单一阅读节奏。 */
@@ -936,7 +938,7 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .notes-status-tabs button { flex: 1; min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); }
 .notes-status-tabs button[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
 .reading-marks-list { display: grid; gap: 0; }
-.reading-mark-item { min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.reading-mark-item { min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .reading-mark-meta { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 8px; }
 .reading-mark-meta strong { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 .reading-mark-meta-trailing { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
@@ -946,14 +948,14 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .reading-mark-meta-trailing .more-menu > summary svg { width: 18px; height: 18px; }
 .reading-mark-excerpt { display: block; width: 100%; text-align: left; border: 0; padding: 0 0 0 12px; background: transparent; color: var(--foreground); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
 .reading-mark-excerpt::before { content: ''; position: absolute; width: 5px; height: 5px; left: 0; top: .6em; background: var(--mark-color); border-radius: 50%; }
-.reading-mark-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reading-mark-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 0; font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reading-mark-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 4px; }
-.reading-mark-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.reading-mark-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .reading-mark-actions { display: flex; gap: 8px; margin-left: auto; }
 .reading-mark-actions .button svg { width: 16px; height: 16px; flex: 0 0 16px; }
 .reading-marks-list-global .reading-mark-excerpt { font-size: 14px; line-height: 1.5; }
 .reading-marks-list-global .reading-mark-note { font-size: 16px; line-height: 1.5; }
-.reading-marks-list-global .reading-mark-quote { margin: 5px 0 0; padding: 7px 10px 8px; border-radius: 8px; background: color-mix(in srgb, var(--mark-color) 9%, var(--background)); }
+.reading-marks-list-global .reading-mark-quote { margin: 0; padding: 7px 10px 8px; border-radius: 8px; background: color-mix(in srgb, var(--mark-color) 9%, var(--background)); }
 .reading-mark-chapter { display: block; margin-bottom: 3px; color: var(--muted); font-size: 12px; line-height: 1.35; }
 .reading-marks-list-global .reading-mark-quote .reading-mark-excerpt { padding-left: 10px; font-size: 14px; line-height: 1.45; }
 .reading-mark-quote .reading-mark-excerpt::before { left: 0; top: .55em; width: 4px; height: 4px; }
