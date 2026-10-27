@@ -52,7 +52,7 @@ fixture-password
 
 ## 页面保留验收
 
-仅模拟服务暴露 `GET /__fixture/status`，返回按请求方法和路径统计的 `counts`；不记录查询词、请求体或令牌。`POST /__fixture/control` 接受 JSON：`reset: true` 恢复初始数据、计数和失败状态；`route` 指定如 `GET /api/home`，`delay` 设置 0～10000 毫秒延迟，`failures` 设置接下来 0～10 次失败。重置后刷新页面，避免继续使用重置前的内存状态。
+仅模拟服务暴露 `GET /__fixture/status`，返回按请求方法和路径统计的 `counts`；不记录查询词、请求体或令牌。`POST /__fixture/control` 接受 JSON：`reset: true` 恢复初始数据、计数和失败状态；`route` 指定如 `GET /api/home`，`delay` 设置 0～10000 毫秒延迟，`failures` 设置接下来 0～10 次失败；同时设置 `unauthorized: true` 可模拟应用登录失效的 401 响应。重置后刷新页面，避免继续使用重置前的内存状态。
 
 先记录计数，再执行“书架切标签 → 发现 → 设置 → 书架”，检查标签保持且 `/api/home` 未增加。搜索完成后进入详情再返回，检查关键词、候选和展开状态保持，未新增搜索。正文打开详情再返回，检查正文 GET 和活动 edition PUT 未增加；完整目录选章或下一章后，返回不逐章回退。
 

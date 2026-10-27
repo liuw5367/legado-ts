@@ -8,6 +8,7 @@ import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { pageReturnState } from '../lib/page-navigation.ts'
 import { resolveAnchor, textFingerprint } from '../../shared/reading-text.ts'
 import type { MarkKind, MarkPage, ReadingMark, TextPoint } from '../../shared/reading-annotations.ts'
+import { EmptyState } from './empty-state.tsx'
 import { ReadingMarkEditor } from './reading-mark-editor.tsx'
 import { DismissibleMessage } from './dismissible-message.tsx'
 import { LoadingState } from './loading-state.tsx'
@@ -33,7 +34,7 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
   const cacheKey = `${userId ?? ''}:${notesVersion}:${path}`; const cardLayout = global || readerSheet && kind === 'annotations'
   const empty = !loading && !error && items.length === 0
   const emptyTitle = global && (q.length > 0 || bookId !== undefined) ? '没有符合条件的笔记' : deleted ? '暂无已删除笔记' : kind === 'bookmarks' ? '还没有书签' : '还没有笔记'
-  const emptyDescription = global && (q.length > 0 || bookId !== undefined) ? '请调整搜索内容或书籍筛选，再试一次。' : deleted ? '删除的笔记会暂存在这里，恢复后会回到笔记列表。' : kind === 'bookmarks' ? '阅读时点击右上角的书签图标，即可保存当前位置。' : global ? '在阅读页面选择一段文字，可添加颜色标记或写下想法。' : '在正文中选择一段文字，可添加颜色标记或写下想法。'
+  const emptyDescription = global && (q.length > 0 || bookId !== undefined) ? '调整搜索或书籍筛选' : deleted ? '删除的笔记可在此恢复' : kind === 'bookmarks' ? '阅读时点击书签图标添加' : '选中文字即可添加笔记'
   const EmptyIcon = global && (q.length > 0 || bookId !== undefined) ? Search : kind === 'bookmarks' ? Bookmark : MessageSquare
   useEffect(() => () => { openGeneration.current++; openController.current?.abort(); openController.current = null }, [page?.active])
   usePageLoadEffect((settle) => {
@@ -135,7 +136,7 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
   return <div className={`reading-marks-list${cardLayout ? ' reading-marks-list-global' : ''}${readerSheet ? ' reading-marks-list-reader-sheet' : ''}${empty ? ' reading-marks-list-empty' : ''}`}>
     {readerSheet && kind === 'bookmarks' && currentProgressTitle !== undefined ? <button className="reader-current-progress" type="button" onClick={onCurrentProgress}><span>当前进度</span><strong>{currentProgressTitle}</strong></button> : null}
     {error ? <div className="notice-with-recovery"><DismissibleMessage className="error" role="alert" onDismiss={() => { setError(''); setMissing(null); setRetryMark(null) }}>{error}{missing?.cachedChapter && kind === 'annotations' ? <button className="text-button" type="button" onClick={() => setCachePreview(missing)}>查看缓存</button> : null}</DismissibleMessage><button className="text-button" onClick={() => retryMark ? void open(retryMark) : reload()} type="button">{retryMark ? '重试打开' : '重新加载'}</button></div> : null}
-    {loading ? <LoadingState message="正在读取记录…" /> : empty ? <div className="reading-marks-empty" role="status"><span className="reading-marks-empty-icon"><EmptyIcon aria-hidden="true" /></span><strong>{emptyTitle}</strong><p>{emptyDescription}</p></div> : null}
+    {loading ? <LoadingState message="正在读取记录…" /> : empty ? <EmptyState icon={EmptyIcon} title={emptyTitle} description={emptyDescription} /> : null}
     {items.map((mark) => {
       const restoreLabel = kind === 'bookmarks' ? '恢复书签' : '恢复笔记'
       const showMenu = global || readerSheet

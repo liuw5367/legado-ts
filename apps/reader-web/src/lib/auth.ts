@@ -44,6 +44,21 @@ export async function signOut(): Promise<void> {
   if (error) throw error
 }
 
+let invalidation: { token: string; promise: Promise<void> } | undefined
+
+export async function invalidateSession(accessToken: string | undefined): Promise<void> {
+  if (accessToken === undefined) return
+  if (invalidation?.token === accessToken) return invalidation.promise
+  const promise = (async () => {
+    const current = await currentSession()
+    if (current?.access_token !== accessToken) return
+    window.dispatchEvent(new Event('app-session-expired'))
+    await supabase().auth.signOut({ scope: 'local' })
+  })()
+  invalidation = { token: accessToken, promise }
+  try { await promise } finally { if (invalidation?.promise === promise) invalidation = undefined }
+}
+
 export async function requestPasswordReset(email: string): Promise<void> {
   const { error } = await supabase().auth.resetPasswordForEmail(email, { redirectTo: authRedirect('/reset-password') })
   if (error) throw error

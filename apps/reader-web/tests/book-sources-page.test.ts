@@ -13,7 +13,7 @@ const sourceId = 'https://book.example/source'
 const candidate: ApiCandidate = { sourceId, sourceFingerprint: 'fingerprint', searchDurationMs: 25, candidate: { sourceId, bookUrl: '/book', name: '目标书', author: '作者' } }
 const code = ts.transpileModule(readFileSync(new URL('../src/pages/book-sources.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
 
-type Node = { type?: unknown; props?: { children?: unknown; className?: string; message?: string; variant?: string } }
+type Node = { type?: unknown; props?: { children?: unknown; className?: string; message?: string; variant?: string; title?: string } }
 function nodes(value: unknown): Node[] {
   if (Array.isArray(value)) return value.flatMap(nodes)
   if (value === null || typeof value !== 'object') return []
@@ -41,6 +41,7 @@ function render(candidates: ApiCandidate[], status = 'done', isTargetedSearch = 
     if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
     if (name.includes('use-page-resource')) return { usePageLoadEffect() {} }
     if (name.includes('use-book-search')) return { useBookSearch: () => ({ candidates, searchId: 'search', status, isTargetedSearch, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
+    if (name.includes('empty-state')) return { EmptyState: 'empty' }
     if (name.includes('loading-state')) return { LoadingState: 'loading' }
     return {}
   } })
@@ -61,7 +62,7 @@ test('matching an existing source suppresses empty search text and duplicate res
 
 test('empty search text still appears when candidates do not match the book author', () => {
   const tree = render([{ ...candidate, candidate: { ...candidate.candidate, author: '其他作者' } }])
-  assert.ok(text(tree).includes('当前搜索没有找到与这本书匹配的来源'))
+  assert.ok(nodes(tree).some((node) => node.type === 'empty' && node.props?.title === '没有匹配的书源'))
 })
 
 test('source search renders progress inline with active source names', () => {
@@ -72,10 +73,10 @@ test('source search renders progress inline with active source names', () => {
 
 
 test('定向搜索不显示全局空结果和加载提示，展开状态独立于当前版本', () => {
-  const normal = text(render([], 'done'))
-  assert.ok(normal.includes('当前搜索没有找到与这本书匹配的来源'))
+  const normal = render([], 'done')
+  assert.ok(nodes(normal).some((node) => node.type === 'empty' && node.props?.title === '没有匹配的书源'))
   const targeted = render([], 'done', true, { 'host:book.example': true })
-  assert.ok(!text(targeted).includes('当前搜索没有找到与这本书匹配的来源'))
+  assert.ok(!nodes(targeted).some((node) => node.type === 'empty' && node.props?.title === '没有匹配的书源'))
   const loading = nodes(render([], 'loading', true)).find((node) => node.type === 'loading')
   assert.equal(loading, undefined)
   const details = nodes(render([], 'done', true, { 'host:book.example': false })).find((node) => node.type === 'details')

@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/empty-state.tsx'
+import { List } from 'lucide-react'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { ArrowDownToLine, ArrowUpToLine, ArrowDownWideNarrow, ArrowUpWideNarrow, RefreshCw } from 'lucide-react'
@@ -106,7 +108,7 @@ export function TocPage() {
     <div className="toc-filter-row"><label className="sr-only" htmlFor={filterId}>筛选章节</label><Input id={filterId} value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="筛选章节" /><span className="muted small">{filter.length > 0 ? `${chapters.filter((chapter) => normalizeChapterText(chapter.title).includes(normalizeChapterText(filter))).length} 个匹配` : `共 ${chapters.length} 章`}</span></div>
     </div>
     {refreshing ? <LoadingState message="正在更新目录…" variant="inline" /> : null}
-    <div className="toc-list" ref={listRef}>{orderedEntries.length === 0 ? <div className="empty-state">没有匹配的章节。</div> : orderedEntries.map((chapter) => chapter.isVolume === true ? <div className="toc-volume" key={`volume:${chapter.index}:${chapter.title}`}>{chapter.title}</div> : <Link className={`toc-row ${chapter.chapterId === currentPosition?.chapterId ? 'current' : ''}`} data-chapter-id={chapter.chapterId} aria-current={chapter.chapterId === currentPosition?.chapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} state={readingEntryState(location)}><span className="toc-index">{chapter.index + 1}</span><span className="toc-title">{chapter.title}</span>{chapter.chapterId === currentPosition?.chapterId ? <span className="toc-check" aria-label="当前阅读章节">✓</span> : chapter.isVip === true ? <Badge>VIP</Badge> : null}</Link>)}</div>
+    <div className="toc-list" ref={listRef}>{orderedEntries.length === 0 ? <EmptyState icon={List} title="没有匹配的章节" description="调整章节搜索条件" /> : orderedEntries.map((chapter) => chapter.isVolume === true ? <div className="toc-volume" key={`volume:${chapter.index}:${chapter.title}`}>{chapter.title}</div> : <Link className={`toc-row ${chapter.chapterId === currentPosition?.chapterId ? 'current' : ''}`} data-chapter-id={chapter.chapterId} aria-current={chapter.chapterId === currentPosition?.chapterId ? 'location' : undefined} key={chapter.chapterId} to={chapterLink(bookId, chapter, editionKey)} state={readingEntryState(location)}><span className="toc-index">{chapter.index + 1}</span><span className="toc-title">{chapter.title}</span>{chapter.chapterId === currentPosition?.chapterId ? <span className="toc-check" aria-label="当前阅读章节">✓</span> : chapter.isVip === true ? <Badge>VIP</Badge> : null}</Link>)}</div>
   </section>
 }
 

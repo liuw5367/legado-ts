@@ -1,3 +1,5 @@
+import { EmptyState } from './empty-state.tsx'
+import { ImageOff } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { BookCoverSelection, BookSourceItem, BookSourcesResponse } from '../../shared/book-sources.ts'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
@@ -127,7 +129,7 @@ export function BookCoverPicker({ data, onClose, onSaved }: { data: BookDetailsR
         {row.status === 'failed' ? <Button size="sm" variant="secondary" disabled={running || saving} onClick={() => void run([row.source])}>重试</Button> : failed && url ? <Button size="sm" variant="secondary" disabled={saving} onClick={() => { setFailedImages((current) => { const next = new Set(current); next.delete(url); return next }); setLoadedImages((current) => { const next = new Set(current); next.delete(url); return next }); replaceRows(rowsRef.current.map((item) => item.coverUrl === url ? { ...item } : item)); setImageRetries((value) => ({ ...value, [url]: (value[url] ?? 0) + 1 })) }}>重试图片</Button> : null}
       </div>
     })}</div>
-    {!loading && rows.length === 0 && !error ? <p className="empty-state">没有其他已搜索到的来源，可先到切换书源页面搜索。</p> : null}
+    {!loading && rows.length === 0 && !error ? <EmptyState icon={ImageOff} title="没有其他封面来源" description="先到切换书源页面搜索" /> : null}
     <div className="cover-picker-footer"><div>{running ? <Button variant="secondary" disabled={saving} onClick={stop}>停止获取</Button> : pending ? <Button variant="secondary" disabled={saving} onClick={() => void run(rowsRef.current.filter((row) => row.status === 'pending').map((row) => row.source))}>继续获取</Button> : null}</div><div className="actions"><Button variant="secondary" disabled={saving} onClick={close}>取消</Button><Button disabled={saving || !canSave} onClick={() => void save()}>{saving ? '保存中…' : '保存封面'}</Button></div></div>
   </Sheet>
 }

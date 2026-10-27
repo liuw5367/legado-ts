@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/empty-state.tsx'
+import { SearchX } from 'lucide-react'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
@@ -228,9 +230,9 @@ export function BookSourcesPage() {
       {!isTargetedSearch && message.length > 0 ? <DismissibleMessage className="muted small" role="status">{message}</DismissibleMessage> : null}
       {!isTargetedSearch && status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
       {!isTargetedSearch && status === 'loading' ? <LoadingState message={'正在搜索可用书源…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}${progress.activeSources?.length ? " · 请求中：" + progress.activeSources.join("、") : ""}`)} variant="inline" /> : null}
-      {!isTargetedSearch && status === 'done' && searchId.length > 0 && matchingResults.length === 0 ? <div className="empty-state">当前搜索没有找到与这本书匹配的来源。</div> : null}
+      {!isTargetedSearch && status === 'done' && searchId.length > 0 && matchingResults.length === 0 ? <EmptyState icon={SearchX} title="没有匹配的书源" description="尝试其他搜索条件" /> : null}
       <div className="book-source-list">
-        {bookSourceGroups.length === 0 && matchingResults.length === 0 && status !== 'loading' ? <div className="empty-state">没有关联书源，请搜索书名或为某个域名版本搜索。</div> : null}
+        {bookSourceGroups.length === 0 && matchingResults.length === 0 && status !== 'loading' ? <EmptyState icon={SearchX} title="还没有关联书源" description="搜索书名或域名版本" /> : null}
         {bookSourceGroups.slice(0, visibleCount).map((group) => {
           const currentVersion = group.versions.find((version) => version.isCurrentBookEdition || version.isAccountDefault) ?? group.versions[0]
           const defaultVersion = group.versions.find((version) => version.isAccountDefault)?.source

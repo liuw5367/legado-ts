@@ -1,7 +1,7 @@
 import { orderSearchCandidates } from '../../shared/search-candidates.ts'
 import type { StoredBookList, StoredBookListItem } from '../../shared/book-lists.ts'
 import { mutationDomains, publishPageMutation } from './page-data.ts'
-import { currentSession } from './auth.ts'
+import { currentSession, invalidateSession } from './auth.ts'
 
 export interface ApiSource { sourceId: string; name: string; group?: string; fingerprint: string; enabled: boolean }
 export type ApiThemeMode = 'system' | 'light' | 'dark'
@@ -102,6 +102,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, expected
   if (!response.ok) {
     const error = isRecord(body)?.error
     const errorRecord = isRecord(error)
+    await handleExpiredSession(response, body, session?.access_token)
     throw new ApiError(typeof errorRecord?.code === 'string' ? errorRecord.code : 'request-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '请求失败', response.status)
   }
   if (method !== 'GET' && method !== 'HEAD' && session !== null) publishPageMutation({ userId: session.user.id, path, method })
@@ -109,23 +110,26 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, expected
 }
 
 export async function validateBackup(file: File): Promise<BackupPreview> {
-  const response = await fetch('/api/backup/validate', { method: 'POST', headers: await binaryHeaders(), body: file })
+  const headers = await binaryHeaders()
+  const response = await fetch('/api/backup/validate', { method: 'POST', headers, body: file })
   const body = await readJson(response)
-  if (!response.ok) throw apiErrorFromResponse(response, body, '备份校验失败')
+  if (!response.ok) { await handleExpiredSession(response, body, bearerToken(headers)); throw apiErrorFromResponse(response, body, '备份校验失败') }
   return body as BackupPreview
 }
 
 export async function importBackup(file: File, categories: readonly string[]): Promise<{ counts: BackupPreview['manifest']['counts'] }> {
   const query = encodeURIComponent(categories.join(','))
-  const response = await fetch(`/api/backup/import?categories=${query}`, { method: 'POST', headers: await binaryHeaders(), body: file })
+  const headers = await binaryHeaders()
+  const response = await fetch(`/api/backup/import?categories=${query}`, { method: 'POST', headers, body: file })
   const body = await readJson(response)
-  if (!response.ok) throw apiErrorFromResponse(response, body, '备份导入失败')
+  if (!response.ok) { await handleExpiredSession(response, body, bearerToken(headers)); throw apiErrorFromResponse(response, body, '备份导入失败') }
   return body as { counts: BackupPreview['manifest']['counts'] }
 }
 
 export async function downloadBackup(): Promise<Blob> {
-  const response = await fetch('/api/backup/export', { headers: await binaryHeaders('application/zip') })
-  if (!response.ok) throw apiErrorFromResponse(response, await readJson(response), '备份导出失败')
+  const headers = await binaryHeaders('application/zip')
+  const response = await fetch('/api/backup/export', { headers })
+  if (!response.ok) { const body = await readJson(response); await handleExpiredSession(response, body, bearerToken(headers)); throw apiErrorFromResponse(response, body, '备份导出失败') }
   const bytes = await response.arrayBuffer()
   const expectedBytes = Number(response.headers.get('X-Backup-Bytes') ?? '')
   if (Number.isSafeInteger(expectedBytes) && expectedBytes !== bytes.byteLength) throw new ApiError('backup-integrity', '下载的备份大小校验失败', 502)
@@ -139,6 +143,15 @@ async function binaryHeaders(accept = 'application/json'): Promise<Headers> {
   const headers = new Headers({ Accept: accept, 'Content-Type': 'application/zip' })
   if (session?.access_token !== undefined) headers.set('Authorization', `Bearer ${session.access_token}`)
   return headers
+}
+
+function bearerToken(headers: Headers): string | undefined {
+  return headers.get('Authorization')?.slice(7)
+}
+
+async function handleExpiredSession(response: Response, body: unknown, token: string | undefined): Promise<void> {
+  if (response.status !== 401 || isRecord(isRecord(body)?.error)?.code !== 'unauthenticated') return
+  await invalidateSession(token).catch(() => undefined)
 }
 
 function apiErrorFromResponse(response: Response, body: unknown, fallback: string): ApiError {
@@ -164,6 +177,7 @@ export async function streamSearch(searchId: string, onEvent: (event: { type: st
     const body = await readJson(response)
     const error = isRecord(body)?.error
     const errorRecord = isRecord(error)
+    await handleExpiredSession(response, body, session?.access_token)
     throw new ApiError(errorRecord?.code === 'source-busy' ? 'search-paused' : typeof errorRecord?.code === 'string' ? errorRecord.code : 'stream-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '搜索流连接失败', response.status)
   }
   const reader = response.body.getReader()

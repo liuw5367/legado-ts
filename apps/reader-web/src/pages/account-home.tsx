@@ -2,7 +2,8 @@ import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
 import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
-import { Search } from 'lucide-react'
+import { BookOpen, Bookmark, History, Search } from 'lucide-react'
+import { EmptyState } from '../components/empty-state.tsx'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -100,7 +101,7 @@ export function AccountHomePage() {
       <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>搜索 {home === null ? null : <span>{home.searchHistory.length}</span>}</button>
     </div>
     {view === 'bookshelf' && groupData && groupData.groups.length > 0 ? <div className="shelf-group-bar" aria-label="书架分组">{[{ id: 'all', name: '全部' }, { id: 'ungrouped', name: '默认' }, ...groupData.groups].map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div> : null}
-    {view === 'bookshelf' && home && bookItems.length === 0 && selectedGroup !== 'all' ? <div className="empty-state"><p>这个分组还没有书</p><Link className="button secondary" to="/search">搜索书籍</Link></div> : null}
+    {view === 'bookshelf' && home && bookItems.length === 0 && selectedGroup !== 'all' ? <EmptyState icon={BookOpen} title="这个分组还没有书" description="搜索书籍后加入分组" /> : null}
     {loading && home === null ? <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : home === null ? <div className="error-state"><DismissibleMessage className="error" role="alert">{message || '首页加载失败'}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
       {loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
       {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success compact-message" role="status">{feedback}</DismissibleMessage> : null}
@@ -112,7 +113,7 @@ export function AccountHomePage() {
 
 function BookList({ view, items, showRemove, hideEmpty = false, removingId, onRemove, onOrganized }: { view: View; items: BookItem[]; showRemove: boolean; hideEmpty?: boolean; onOrganized: (message: string) => void; removingId: string | undefined; onRemove: (bookId: string) => void }) {
   if (items.length === 0 && hideEmpty) return null
-  if (items.length === 0) return <div className="empty-state">{showRemove ? '书架还是空的，去搜索一本书吧。' : '还没有阅读记录。'}</div>
+  if (items.length === 0) return <EmptyState icon={showRemove ? BookOpen : Bookmark} title={showRemove ? '书架还是空的' : '还没有阅读记录'} description={showRemove ? '搜索书籍并加入书架' : '开始阅读后会显示在这里'} />
   return <div className="book-list">{items.map((item) => <BookRow key={`${item.book.id}:${item.edition.editionKey}`} item={item} onOrganized={onOrganized} view={view} showRemove={showRemove} removing={removingId === item.book.id} onRemove={onRemove} />)}</div>
 }
 
@@ -136,6 +137,6 @@ function BookRow({ view, item, showRemove, removing, onRemove, onOrganized }: { 
 }
 
 function SearchHistory({ items, deletingId, onRemove }: { items: ApiHome['searchHistory']; deletingId: string | undefined; onRemove: (id: string) => void }) {
-  if (items.length === 0) return <div className="empty-state">还没有搜索记录。</div>
+  if (items.length === 0) return <EmptyState icon={History} title="还没有搜索记录" description="搜索书籍后会显示在这里" />
   return <div className="history-list">{items.map((item) => <article className="history-row" key={item.id}><div className="history-content"><Link className="link history-keyword" to={`/search?q=${encodeURIComponent(item.keyword)}`}>{item.keyword}</Link><span className="muted small">{item.resultCount} 条结果 · {formatShanghaiDateTime(item.updatedAt)}</span><span className="muted small">{item.summary ?? item.status}</span></div><Button size="sm" variant="secondary" type="button" disabled={deletingId === item.id} onClick={() => onRemove(item.id)}>{deletingId === item.id ? '删除中…' : '删除'}</Button></article>)}</div>
 }

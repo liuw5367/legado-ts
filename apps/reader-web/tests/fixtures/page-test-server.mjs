@@ -804,7 +804,7 @@ const server = createServer(async (request, response) => {
         if (!sources.some((source) => source.sourceId === sourceId)) sources.push({ ...sources[2], sourceId, name: '同域实现 ' + version, enabled: false, fingerprint: 'fixture-version-' + version, sourceRevision: 'fixture-version-revision-' + version })
       }
     }
-    if (typeof control.route === 'string') faults.set(control.route, { delay: Math.min(10000, Math.max(0, Number(control.delay) || 0)), failures: Math.min(10, Math.max(0, Number(control.failures) || 0)) })
+    if (typeof control.route === 'string') faults.set(control.route, { delay: Math.min(10000, Math.max(0, Number(control.delay) || 0)), failures: Math.min(10, Math.max(0, Number(control.failures) || 0)), unauthorized: control.unauthorized === true })
     json(response, { ok: true }); return
   }
   if (url.pathname.startsWith('/auth/v1/')) {
@@ -817,7 +817,7 @@ const server = createServer(async (request, response) => {
   requestCounts.set(route, (requestCounts.get(route) ?? 0) + 1)
   const fault = faults.get(route)
   if (fault?.delay) await new Promise((resolve) => setTimeout(resolve, fault.delay))
-  if (fault?.failures > 0) { fault.failures--; json(response, { error: { code: 'fixture-failure', message: '页面验收注入失败，可重试' } }, 503); return }
+  if (fault?.failures > 0) { fault.failures--; json(response, { error: fault.unauthorized ? { code: 'unauthenticated', message: '登录已失效' } : { code: 'fixture-failure', message: '页面验收注入失败，可重试' } }, fault.unauthorized ? 401 : 503); return }
   try { await handleApi(request, response, url) }
   catch (error) { json(response, { error: { code: 'fixture-error', message: error instanceof Error ? error.message : '页面验收请求失败' } }, 400) }
 })
