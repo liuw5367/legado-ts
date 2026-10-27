@@ -801,7 +801,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .book-cover-detail { width: 84px; height: 112px; flex-basis: 84px; }
 .book-details-heading > div { display: flex; min-height: 112px; flex-direction: column; justify-content: space-between; gap: 6px; }
 .book-details-heading p { margin: 0; }
-.book-details-actions .book-details-source-switch:disabled { background: var(--border); color: var(--muted); cursor: default; }
+.book-details-actions .book-details-group:disabled { background: var(--border); color: var(--muted); cursor: default; }
 .book-details-actions .button { height: 44px; min-height: 44px; font-size: 14px; }
 .result-card { cursor: pointer; }
 

@@ -14,9 +14,10 @@ function nodes(value: unknown): Node[] {
   return [node, ...nodes(node.props?.children)]
 }
 
-for (const state of ['loading', 'error', 'ready']) {
-  test(`详情页切换书源入口在 ${state} 状态保持可见`, () => {
-    const data = state === 'ready' ? { book: { name: '测试书' }, edition: { editionKey: 'edition', metadata: {} } } : null
+for (const state of ['loading', 'error', 'ready', 'on-shelf']) {
+  test(`详情页在 ${state} 状态只在详情操作区显示切换书源入口`, () => {
+    const ready = state === 'ready' || state === 'on-shelf'
+    const data = ready ? { onBookshelf: state === 'on-shelf', book: { name: '测试书' }, edition: { editionKey: 'edition', metadata: {} } } : null
     const states = [data, '', state === 'error' ? '加载失败' : '', null, false, 0]
     let index = 0
     const jsx = (type: unknown, props: unknown) => ({ type, props })
@@ -32,10 +33,18 @@ for (const state of ['loading', 'error', 'ready']) {
       if (name.includes('time-format')) return { formatShanghaiDateTime: () => '' }
       return { Button: 'button' }
     } })
-    const buttons = nodes(module.exports.BookDetailsPage()).filter((node) => node.props?.children === '切换书源')
-    assert.equal(buttons.length, 1)
-    assert.equal(buttons[0]?.type, state === 'ready' ? 'a' : 'button')
-    assert.equal(buttons[0]?.props?.disabled, state === 'ready' ? undefined : true)
-    assert.equal(buttons[0]?.props?.to, state === 'ready' ? '/books/book/sources' : undefined)
+    const rendered = nodes(module.exports.BookDetailsPage())
+    const buttons = rendered.filter((node) => node.props?.children === '切换书源')
+    assert.equal(buttons.length, ready ? 1 : 0)
+    assert.equal(buttons[0]?.type, ready ? 'a' : undefined)
+    assert.equal(buttons[0]?.props?.disabled, undefined)
+    assert.equal(buttons[0]?.props?.to, ready ? '/books/book/sources' : undefined)
+    if (ready) {
+      const group = rendered.find((node) => node.props?.children === '修改分组')
+      assert.ok(group)
+      assert.equal(group.props?.disabled, state !== 'on-shelf')
+      const actionArea = rendered.find((node) => node.props?.className === 'book-details-actions')
+      assert.deepEqual(nodes(actionArea).filter((node) => node.type === 'a' || node.type === 'button').map((node) => node.props?.children), ['加入书架', '加入书单', '修改分组', '查看目录', '切换书源', '阅读 / 继续阅读'].map((label) => label === '加入书架' && state === 'on-shelf' ? '移出书架' : label))
+    }
   })
 }
