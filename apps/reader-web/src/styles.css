@@ -201,7 +201,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .result-source-summary > span:first-child { color: var(--primary); font-weight: 650; }
 .result-latest-chapter { overflow: hidden; margin-top: 3px; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .result-latest-chapter > span { color: var(--foreground); font-weight: 600; }
-.search-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; }
+.search-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .search-result-button { min-height: 36px !important; padding: 4px 9px !important; border: 1px solid var(--border) !important; font-size: 12px !important; line-height: 1.2; }
 .search-result-button svg { width: 15px; height: 15px; }
 .search-shelf-button { gap: 6px; border-color: var(--primary) !important; background: var(--primary) !important; color: var(--primary-foreground) !important; font-weight: 650; }
@@ -209,7 +209,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .search-source-toggle > svg { width: 14px; height: 14px; transition: transform 140ms ease-out; }
 .search-source-toggle[aria-expanded="true"] { color: var(--primary); }
 .search-source-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
-.search-source-options { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.search-source-options { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .search-source-option { display: flex; min-width: 0; flex-direction: column; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: color-mix(in srgb, var(--primary) 3%, var(--card)); color: var(--foreground); text-align: left; }
 .search-source-option[aria-pressed="true"] { border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); background: color-mix(in srgb, var(--primary) 10%, var(--card)); }
 .search-source-option-heading { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
