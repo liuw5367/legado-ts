@@ -2,7 +2,6 @@ import type { Context, Hono } from 'hono'
 import { z } from 'zod'
 import type { ReaderRepository } from './db/repository.ts'
 import { MarkError, markInputSchema, type CachedChapter, type MarkAnchor, type MarkQuery } from '../shared/reading-annotations.ts'
-import { chapterIdFor } from './runtime/reader-runtime.ts'
 import { XPathParserAdapter } from '@legado/source-node'
 import { createCachedChapter, REMOVED_CHAPTER_TAGS, validTextAnchor, textFingerprint } from '../shared/reading-text.ts'
 
@@ -41,8 +40,8 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
         if (!sameAnchor(current.anchor, input.anchor) || (['editionKey', 'chapterUrl', 'sourceFingerprint', 'chapterId', 'chapterIndex', 'chapterTitle', 'tocRevision'] as const).some((key) => current[key] !== input[key])) throw new MarkError(409, '不能修改原文位置，请重新选择')
       } else {
         const edition = await repo.getEdition(userId, bookId, input.editionKey)
-        const toc = edition ? await repo.getToc(userId, bookId, input.editionKey) : null
-        const chapter = toc?.chapters.find((r) => chapterIdFor(r) === input.chapterId && r.chapterUrl === input.chapterUrl)
+        const toc = edition ? await repo.getChapterContext(userId, bookId, input.editionKey, input.chapterId) : null
+        const chapter = toc?.chapter?.chapterUrl === input.chapterUrl ? toc.chapter : undefined
         const content = toc && chapter ? await repo.getContent(userId, input.editionKey, toc.revision, input.chapterId) : null
         if (!edition || edition.sourceFingerprint !== input.sourceFingerprint || !toc || toc.revision !== input.tocRevision || !chapter || chapter.index !== input.chapterIndex || !content || textFingerprint(content.content.cleaned) !== input.anchor.contentHash) throw new MarkError(409, '正文已变化，请重新加载后选择')
         input.chapterTitle = chapter.title ?? ''

@@ -8,7 +8,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto
 import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { loadBookDetails, loadChapterContent, loadReviewDetail, loadReviewReplies, loadReviewSummary, loadTableOfContents, searchBooks } from '@legado/source-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, ReviewDetailPage, ReviewSummaryItem, WorkflowStatus } from '@legado/source-core'
-import { compareSourcePriority, type ReaderRepository, type StoredSourceRecord } from '../db/repository.ts'
+import { compareSourceListPriority, type SourceListRecord, type ReaderRepository, type StoredSourceRecord } from '../db/repository.ts'
 import { configuredSecret } from '../db/runtime-state-crypto.ts'
 import type { BookCreationInput, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
@@ -20,7 +20,7 @@ export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean; 
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
 
 export interface ReaderRuntime {
-  listSources(userId: string): Promise<StoredSourceRecord[]>
+  listSources(userId: string): Promise<SourceListRecord[]>
   runSearchBatch(userId: string, searchId: string, options?: SearchBatchOptions): Promise<SearchBatchResult>
   runSearchBatchStream(userId: string, searchId: string, listener: SearchSourceListener, options?: SearchBatchOptions): Promise<SearchBatchResult>
   cancelSearch(userId: string, searchId: string): Promise<SearchRunState | null>
@@ -41,7 +41,7 @@ type ReviewCursorScope = { kind: 'detail' | 'replies'; userId: string; bookId: s
 
 export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime {
   return {
-    listSources: (userId) => repository.listSourcesForUser(userId),
+    listSources: (userId) => repository.listSourceSummaries(userId),
     runSearchBatch: (userId, searchId, options) => runSearchBatch(repository, userId, searchId, options),
     runSearchBatchStream: (userId, searchId, listener, options) => runSearchBatchStream(repository, userId, searchId, listener, options),
     cancelSearch: (userId, searchId) => cancelSearch(repository, userId, searchId),
@@ -280,8 +280,9 @@ async function cacheSearchSources(repository: ReaderRepository, userId: string, 
 async function listBookSources(repository: ReaderRepository, userId: string, bookId: string): Promise<BookSourcesResponse> {
   const book = await repository.getBook(userId, bookId)
   if (book === null) throw new ReaderRuntimeError('not-found', '书籍不存在')
-  const [editions, candidates, sourceStates] = await Promise.all([repository.listEditions(userId, bookId), repository.listBookSourceCandidates(userId, bookId), repository.listSourceStatesForUser(userId)])
-  const sources = new Map(sourceStates.filter((state) => state.deleted !== true).map((state) => [state.source.sourceId, state.source]))
+  const [editions, candidates] = await Promise.all([repository.listEditions(userId, bookId), repository.listBookSourceCandidates(userId, bookId)])
+  const summaries = await repository.listSourceSummaries(userId, [...new Set([...editions, ...candidates].map((item) => item.sourceId))])
+  const sources = new Map(summaries.map((source) => [source.sourceId, source]))
   const result = new Map<string, BookSourceItem>()
   for (const item of candidates) {
     const source = sources.get(item.sourceId)
@@ -296,8 +297,7 @@ async function listBookSources(repository: ReaderRepository, userId: string, boo
     const lastChapter = result.get(key)?.lastChapter ?? edition.metadata.lastChapter
     result.set(key, { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(typeof searchDurationMs === 'number' ? { searchDurationMs } : {}), ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}), ...(lastChapter ? { lastChapter } : {}) })
   }
-  const priorities = new Map((await repository.listAllSourcesForUser(userId)).map((source) => [source.sourceId, source]))
-  const items = [...result.values()].sort((left, right) => compareSourcePriority(priorities.get(left.sourceId)!, priorities.get(right.sourceId)!))
+  const items = [...result.values()].sort((left, right) => compareSourceListPriority(sources.get(left.sourceId)!, sources.get(right.sourceId)!))
   return { sources: items, ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }) }
 }
 
@@ -368,16 +368,15 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
   const edition = await repository.getEdition(userId, bookId, editionKey)
   if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
   const source = await requireSource(repository, userId, edition.sourceId)
-  const toc = await repository.getToc(userId, bookId, editionKey)
+  const toc = await repository.getChapterContext(userId, bookId, editionKey, chapterId)
   if (toc === null) throw new ReaderRuntimeError('not-found', '目录尚未加载')
-  const chapterIndex = toc.chapters.findIndex((chapter) => chapterIdFor(chapter) === chapterId)
-  const chapter = chapterIndex < 0 ? undefined : toc.chapters[chapterIndex]
+  const chapter = toc.chapter
   if (chapter === undefined) throw new ReaderRuntimeError('not-found', '章节不存在')
   if (!refresh) {
     const cached = await repository.getContent(userId, editionKey, toc.revision, chapterId)
     if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
   }
-  const nextChapterUrl = toc.chapters[chapterIndex + 1]?.chapterUrl
+  const nextChapterUrl = toc.nextChapterUrl
   let loaded: StoredContent | undefined
   try {
     return await withPersistentSourceSession(repository, userId, source, async (session) => {
@@ -483,9 +482,9 @@ async function getReviewContext(repository: ReaderRepository, userId: string, bo
   const edition = await repository.getEdition(userId, bookId, editionKey)
   if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
   const source = await requireSource(repository, userId, edition.sourceId)
-  const toc = await repository.getToc(userId, bookId, editionKey)
+  const toc = await repository.getChapterContext(userId, bookId, editionKey, chapterId)
   if (toc === null) throw new ReaderRuntimeError('not-found', '目录尚未加载')
-  const chapter = toc.chapters.find((item) => chapterIdFor(item) === chapterId)
+  const chapter = toc.chapter
   if (chapter === undefined) throw new ReaderRuntimeError('not-found', '章节不存在')
   return { source, edition, chapter }
 }

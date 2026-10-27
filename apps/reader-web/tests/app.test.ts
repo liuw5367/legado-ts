@@ -83,7 +83,7 @@ test('封面 API 通过真实认证与路由写入，仅修改当前账号的用
   const source = (await memory.listSourcesForUser(userId))[0]!
   const metadata = { sourceId: source.sourceId, bookUrl: 'https://history.example/book', name: '封面测试书', author: '作者', coverUrl: 'https://covers.test/original.jpg', rawFields: {}, traceRef: 'cover-api', emptyFields: [], fieldErrors: {} }
   const created = await memory.createBook(userId, { candidate: { sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate: metadata }, metadata, sourceFingerprint: source.fingerprint, editionKey: 'edition-cover-api' })
-  for (const method of ['getBook', 'listEditions', 'listBookSourceCandidates', 'listSourceStatesForUser', 'listAllSourcesForUser', 'setCustomCover'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  for (const method of ['getBook', 'listEditions', 'listBookSourceCandidates', 'listSourceSummaries', 'setCustomCover'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
   const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
   process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
   t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
@@ -155,4 +155,34 @@ test('search concurrency settings persist per account, default to five and rejec
   for (const value of [4, 11, 20, 10.5, '10', null]) assert.equal((await update(value)).status, 400)
   assert.equal((await (await get()).json()).settings.general.searchConcurrency, 10)
   assert.equal((await (await get('fixture-other')).json()).settings.general.searchConcurrency, 5)
+})
+
+test('正文缓存命中后只用轻量章节上下文校正标题，不读取完整目录', async (t) => {
+  const { PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const { chapterIdFor } = await import('../server/runtime/reader-runtime.ts')
+  const sourceId = 'https://chapter.example'
+  const chapter = { sourceId, bookUrl: sourceId + '/book', chapterUrl: sourceId + '/chapter', index: 0, title: '当前目录标题', rawFields: {}, traceRef: 'fixture' }
+  const chapterId = chapterIdFor(chapter)
+  const cached = { userId: '11111111-1111-4111-8111-111111111111', bookId: 'book', editionKey: 'edition', chapterId, tocRevision: 'rev', sourceFingerprint: 'fp', updatedAt: new Date().toISOString(), content: { chapter: { ...chapter, title: '旧缓存标题' }, cleaned: '缓存正文', raw: '缓存正文', contentType: 'text' as const, pages: ['缓存正文'], resources: [] } }
+  t.mock.method(PostgresReaderRepository.prototype, 'getEdition', async () => ({ sourceId }))
+  t.mock.method(PostgresReaderRepository.prototype, 'getSourceForUser', async () => ({ sourceId, fingerprint: 'fp', enabled: true }))
+  const context = t.mock.method(PostgresReaderRepository.prototype, 'getChapterContext', async () => ({ revision: 'rev', sourceFingerprint: 'fp', chapter }))
+  t.mock.method(PostgresReaderRepository.prototype, 'getContent', async () => cached)
+  const fullToc = t.mock.method(PostgresReaderRepository.prototype, 'getToc', async () => { throw new Error('正文接口不能读取完整目录') })
+  const previousUrl = process.env.SUPABASE_URL, previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
+  t.after(() => {
+    if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl
+    if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey
+  })
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ id: cached.userId }), { headers: { 'Content-Type': 'application/json' } }))
+  const response = await app.request(`http://localhost/api/books/book/chapters/${chapterId}?editionKey=edition`, { headers: { Authorization: 'Bearer fixture-token' } })
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  assert.equal(result.content.content.cleaned, '缓存正文')
+  assert.equal(result.content.content.chapter.title, '当前目录标题')
+  assert.equal(result.content.content.chapter.chapterId, chapterId)
+  assert.equal(cached.content.chapter.title, '旧缓存标题')
+  assert.ok(context.mock.callCount() > 0)
+  assert.equal(fullToc.mock.callCount(), 0)
 })

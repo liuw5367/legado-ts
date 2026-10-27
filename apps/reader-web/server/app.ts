@@ -521,8 +521,8 @@ app.get('/api/books/:bookId/chapters/:chapterId', async (context) => {
   if (editionKey === undefined || editionKey.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
   try {
     const content = await dependencies.runtime.getOrLoadContent(context.get('userId'), context.req.param('bookId'), editionKey, context.req.param('chapterId'), context.req.query('refresh') === 'true')
-    const toc = await dependencies.repository.getToc(context.get('userId'), context.req.param('bookId'), editionKey)
-    const title = toc?.chapters.find((chapter) => chapterIdFor(chapter) === context.req.param('chapterId'))?.title
+    const chapter = await dependencies.repository.getChapterContext(context.get('userId'), context.req.param('bookId'), editionKey, context.req.param('chapterId'))
+    const title = chapter?.chapter?.title
     return context.json({ content: { ...content, content: { ...content.content, chapter: { ...content.content.chapter, chapterId: context.req.param('chapterId'), ...(title === undefined ? {} : { title }) } } } })
   } catch (error) {
     return handleError(context, error)

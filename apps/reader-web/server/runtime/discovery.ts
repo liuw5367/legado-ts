@@ -12,7 +12,8 @@ interface Category extends DiscoveryCategory { url?: string }
 function available(source: StoredSourceRecord): boolean {
   return source.enabled && source.normalizedSource.enabledExplore !== false && typeof source.normalizedSource.exploreUrl === 'string' && source.normalizedSource.exploreUrl.trim().length > 0
 }
-function summary(source: StoredSourceRecord): DiscoverySource {
+
+function summary(source: Pick<StoredSourceRecord, 'sourceId' | 'name' | 'fingerprint' | 'group'>): DiscoverySource {
   return { sourceId: source.sourceId, name: source.name, fingerprint: source.fingerprint, ...(source.group === undefined ? {} : { group: source.group }) }
 }
 
@@ -86,7 +87,7 @@ async function resolveCategoryLabels(session: SourceSession, source: StoredSourc
 
 export async function listDiscoverySources(repository: ReaderRepository, userId: string): Promise<{ sources: DiscoverySource[] }> {
   // 仓储已按管理顺序排列并选出每个域名当前启用的版本。
-  return { sources: (await repository.listSourcesForUser(userId)).filter(available).map(summary) }
+  return { sources: (await repository.listSourceSummaries(userId)).filter((source) => source.canExplore).map(summary) }
 }
 
 async function discoverySource(repository: ReaderRepository, userId: string, sourceId: string) {
