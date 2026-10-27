@@ -72,6 +72,7 @@ export function ReaderPage() {
   const [retryNonce, setRetryNonce] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState('')
+  const [contentWarning, setContentWarning] = useState('')
   const [pageLayout, setPageLayout] = useState<PageLayout>({ pageWidth: 0, pageCount: 0 })
   const [pageIndex, setPageIndex] = useState(0)
   const [paginationError, setPaginationError] = useState('')
@@ -160,7 +161,7 @@ export function ReaderPage() {
   usePageLoadEffect((settle) => {
     const requestId = ++requestIdRef.current
     const cachedContent = cache.getContent(bookId, editionKey, chapterId)
-    setControlsVisible(false); setPageGuideVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0); setPaginationError('')
+    setControlsVisible(false); setPageGuideVisible(false); restoredPositionRef.current = false; setPanel(null); setContent(cachedContent ?? null); setToc(null); setPosition(null); setPositionLoaded(false); setError(''); setPositionError(''); setRefreshing(false); setRefreshError(''); setContentWarning(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0); setPaginationError('')
     latestPositionRef.current = null
     positionVersionRef.current = -1
     latestAnchorRef.current = null
@@ -185,7 +186,7 @@ export function ReaderPage() {
       positionVersionRef.current = positionResult.position?.version ?? -1
       latestAnchorRef.current = chapterAnchor
       paginationAnchorRef.current = chapterAnchor
-      cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
+      cache.setContent(bookId, editionKey, chapterId, contentResult.content.content); setContent(contentResult.content.content); setContentWarning(contentResult.content.runtimeWarning ?? ''); setToc(tocResult.toc); setPosition(positionResult.position); setPositionLoaded(true); cache.setPosition(bookId, editionKey, positionResult.position); window.scrollTo({ top: 0, behavior: 'auto' })
     }).catch((reason: unknown) => {
       if (!active || requestId !== requestIdRef.current) return
       const snapshot = cache.get(bookId, editionKey)
@@ -586,7 +587,7 @@ export function ReaderPage() {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       if (result.content.tocRevision !== cache.get(bookId, editionKey)?.toc.revision) await loadBookSnapshot(cache, bookId, editionKey, true)
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content)
+      cache.setContent(bookId, editionKey, chapterId, result.content.content); setContent(result.content.content); setContentWarning(result.content.runtimeWarning ?? '')
       if (paged) {
         paginationAnchorRef.current = anchor ?? latestAnchorRef.current
         setPageLayout({ pageWidth: 0, pageCount: 0 })
@@ -631,6 +632,7 @@ export function ReaderPage() {
     }
   }}>
     {boundaryNotice ? <div className="reader-boundary-notice" role="status" aria-live="polite">{boundaryNotice.text}</div> : null}
+    {contentWarning.length > 0 ? <div className="reader-boundary-notice" role="status" aria-live="polite">{contentWarning}</div> : null}
     <div className="reader-status reader-status-top" aria-label="当前阅读书籍与章节"><span title={bookName}>{bookName}</span><span title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</span></div>
     <div className="reader-status reader-status-bottom" aria-label="阅读进度"><span>{chapterProgress}</span><span>{paged ? `${pageCounter}${pageLayout.pageCount > 0 ? '页' : ''} ` : ''}{wordCountLabel}</span></div>
     <header className="reader-topbar" hidden={!controlsVisible}><PageBackButton className="reader-back" /><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">

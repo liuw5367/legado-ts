@@ -861,8 +861,10 @@ export async function loadBookDetails(ports: WorkflowPorts, input: DetailInput):
       if (init.state === 'cancelled') return { status: 'cancelled', value: null, diagnostics, trace }
       if (init.state === 'value') content = init.value
       else if (init.state === 'empty' || init.state === 'missing') {
-        diagnostics.push({ code: 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: '详情初始化规则没有匹配节点', retryable: false })
-        continue
+        // Android `setContent(getElement(init))` 在 init 无匹配时把内容置空后继续解析，
+        // 详情字段按空结果处理、候选仍会保存；直接跳过候选会让这类源整本打不开。
+        content = ''
+        diagnostics.push({ code: 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: '详情初始化规则没有匹配节点，已按空内容继续解析', retryable: false })
       }
       else if (init.state === 'failed' || init.state === 'capability-missing') {
         diagnostics.push({ code: init.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage: 'detail', field: 'init', itemIndex, message: init.message ?? '详情初始化规则失败', retryable: false })

@@ -506,7 +506,7 @@ test('详情 init 失败时不把未初始化页面解析成成功详情', async
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'init'))
 })
 
-test('详情 init 没有匹配节点时按 Android 的空内容失败', async () => {
+test('详情 init 没有匹配节点时按 Android 的空内容继续并保留候选', async () => {
   const calls: string[] = []
   const initSource = {
     ...source,
@@ -514,15 +514,21 @@ test('详情 init 没有匹配节点时按 Android 的空内容失败', async ()
   } as unknown as NormalizedSource
   const base = ports(calls)
   base.rules = {
-    evaluate: async ({ rule }) => rule === 'missing-init'
+    evaluate: async ({ rule, content }) => rule === 'missing-init'
       ? { status: 'empty', value: [] }
-      : { status: 'success', value: 'should not be used' },
+      : content === ''
+        ? { status: 'empty', value: null }
+        : { status: 'success', value: 'should not be used' },
   }
   const result = await loadBookDetails(base, {
     source: initSource,
     candidates: [{ sourceId: source.bookSourceUrl, bookUrl: '/book/missing-init', name: 'Old', rawFields: {}, traceRef: 'test' }],
   })
-  assert.equal(result.value?.items.length, 0)
+  // Android 不清空候选：字段按空内容解析，书名退回搜索字段，目录退回详情地址。
+  assert.equal(result.value?.items.length, 1)
+  assert.equal(result.value?.items[0]?.name, 'Old')
+  assert.equal(result.value?.items[0]?.tocUrl, 'https://source.test/book/missing-init')
+  assert.equal(result.status, 'partial')
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.field === 'init' && diagnostic.message.includes('没有匹配节点')))
 })
 
@@ -718,6 +724,14 @@ test('没有页码占位符的列表地址不产生下一页游标', async () =>
   const pageDriven = await discoverBooks(ports([]), { source: templated })
   assert.equal(pageDriven.value?.nextCursor?.index, 2)
   assert.equal(pageDriven.value?.nextCursor?.token, undefined)
+
+  // 页码只出现在请求体或请求头里时同样是分页请求，不能因为 URL 没有占位符而停止翻页。
+  const bodyPaged = { ...fixedSource, exploreUrl: 'https://source.test/explore,{"method":"POST","body":"page={{page}}&size=20"}' } as unknown as NormalizedSource
+  const bodyDriven = await discoverBooks(ports([]), { source: bodyPaged })
+  assert.equal(bodyDriven.value?.nextCursor?.index, 2)
+  const headerPaged = { ...fixedSource, exploreUrl: 'https://source.test/explore,{"headers":{"X-Page":"{{pageIndex}}"}}' } as unknown as NormalizedSource
+  const headerDriven = await discoverBooks(ports([]), { source: headerPaged })
+  assert.equal(headerDriven.value?.nextCursor?.index, 2)
 })
 
 test('探索书源缺少 bookList 时回退整套搜索规则并且不隐式截断列表', async () => {

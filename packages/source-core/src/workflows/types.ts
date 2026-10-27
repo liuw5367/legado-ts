@@ -68,6 +68,8 @@ export interface ExploreViewNameResult {
 /** 目录成功后脚本实际使用的书籍状态；仅由目录流程返回，应用可按书源版本持久化。 */
 export interface TocPage extends WorkflowPage<Chapter> {
   bookAfter?: BookMetadata
+  /** 目录分页达到页数/预算边界仍有未抓取的页；宿主应提示而不是当作完整目录。 */
+  truncated?: boolean
 }
 
 export interface BookIdentity {
@@ -527,6 +529,8 @@ export interface ChapterContent {
   title?: string
   /** Android BookChapter.imgUrl；由 `ruleContent.title` 中的 data/http URL 提取。 */
   imgUrl?: string
+  /** 正文分页达到页数/预算边界仍有未抓取的内容；宿主应提示而不是当作完整正文。 */
+  truncated?: boolean
 }
 
 export interface ContentInput extends WorkflowOptions {

@@ -28,7 +28,7 @@ export interface ReaderRuntime {
   listBookSources(userId: string, bookId: string): Promise<BookSourcesResponse>
   openBookSource(userId: string, bookId: string, candidateId: string, signal?: AbortSignal): Promise<StoredEdition>
   setBookCover(userId: string, bookId: string, selection: BookCoverSelection | null): Promise<StoredBook>
-  getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc>
+  getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc & { runtimeWarning?: string }>
   getOrLoadContent(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<StoredContent & { runtimeWarning?: string }>
   getReviewSummary(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ReviewSummaryItem[]>
   getReviewDetail(userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage>
@@ -345,7 +345,7 @@ async function openBookSource(repository: ReaderRepository, userId: string, book
   } finally { await repository.releaseExecutionSlot(userId, lease) }
 }
 
-async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<StoredToc> {
+async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<StoredToc & { runtimeWarning?: string }> {
   const edition = await repository.getEdition(userId, bookId, editionKey)
   if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
   const source = await requireSource(repository, userId, edition.sourceId)
@@ -354,13 +354,15 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
     if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
   }
   return withPersistentSourceSession(repository, userId, source, async (session) => {
-    const result = await session.run((ports) => loadTableOfContents(ports, { source: source.normalizedSource, book: edition.metadata, refresh, maxPages: 32 }))
+    const result = await session.run((ports) => loadTableOfContents(ports, { source: source.normalizedSource, book: edition.metadata, refresh, maxPages: 200 }))
     if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '目录读取失败'))
     const chapters = result.value.items
     const revision = digest(JSON.stringify(chapters))
     const bookAfter = result.value.bookAfter
     const bookPatch = createBookPatch(chapters)
-    return repository.saveToc(userId, { userId, bookId, editionKey, sourceFingerprint: source.fingerprint, revision, chapters, bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }) })
+    const saved = await repository.saveToc(userId, { userId, bookId, editionKey, sourceFingerprint: source.fingerprint, revision, chapters, bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }) })
+    // 截断的目录不能静默当成完整目录；保留已解析章节，同时把原因交给客户端。
+    return result.value.truncated === true ? { ...saved, runtimeWarning: '目录分页超过上限，已截断；请刷新重试或联系书源作者。' } : saved
   })
 }
 
@@ -385,12 +387,13 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
         book: edition.metadata,
         chapter,
         ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }),
-        maxPages: 32,
+        maxPages: 200,
         maxOutputBytes: 4 * 1024 * 1024,
       }))
       if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
       loaded = await repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
-      return loaded
+      // 截断的正文保留已抓取内容，但必须让客户端知道这不是完整章节。
+      return result.value.truncated === true ? { ...loaded, runtimeWarning: '正文分页超过上限，已截断；请刷新重试。' } : loaded
     })
   } catch (error) {
     // 仅保留本次请求已成功保存的正文，不能用旧缓存掩盖抓取或正文写入失败。

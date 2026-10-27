@@ -38,6 +38,7 @@ export function TocPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [warning, setWarning] = useState('')
   const requestIdRef = useRef(0)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -50,6 +51,7 @@ export function TocPage() {
   async function load(refresh: boolean, requestId = requestIdRef.current) {
     if (refresh) setRefreshing(true); else setLoading(true)
     setError('')
+    setWarning('')
     try {
       const cachedPosition = cache.getPosition(bookId, editionKey)
       const [snapshot, positionResult] = await Promise.all([
@@ -58,7 +60,7 @@ export function TocPage() {
       ])
       if (requestId !== requestIdRef.current) return
       cache.setPosition(bookId, editionKey, positionResult.position)
-      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(snapshot.editions); setSources([...snapshot.sources.filter((source) => source.sourceId !== snapshot.details.edition.sourceId), { sourceId: snapshot.details.edition.sourceId, name: snapshot.details.sourceName, fingerprint: snapshot.toc.sourceFingerprint, enabled: true }]); setPosition(positionResult.position)
+      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(snapshot.editions); setSources([...snapshot.sources.filter((source) => source.sourceId !== snapshot.details.edition.sourceId), { sourceId: snapshot.details.edition.sourceId, name: snapshot.details.sourceName, fingerprint: snapshot.toc.sourceFingerprint, enabled: true }]); setPosition(positionResult.position); setWarning(snapshot.toc.runtimeWarning ?? '')
     } catch (reason) { if (requestId === requestIdRef.current) setError(reason instanceof Error ? reason.message : '目录加载失败') }
     finally { if (requestId === requestIdRef.current) { setLoading(false); setRefreshing(false) } }
   }
@@ -105,6 +107,7 @@ export function TocPage() {
     <div className="toc-controls" ref={controlsRef}><PageHeader backTo="/" title={book?.name ?? '书籍目录'} description={`${chapters.length} 章 · ${displaySource}`} actions={continueTarget === undefined ? null : <Link className="button small page-action" to={chapterLink(bookId, continueTarget, editionKey)} state={readingEntryState(location)}>{currentChapter === undefined ? '开始阅读' : '继续阅读'}</Link>} />
     <div className="toc-toolbar">{editions.length > 1 ? <label className="toc-source"><span className="sr-only">阅读来源</span><Select value={editionKey} onChange={(event) => void switchEdition(event.target.value)}>{editions.map((edition) => <option key={edition.editionKey} value={edition.editionKey}>{sources.find((source) => source.sourceId === edition.sourceId)?.name ?? edition.sourceId}</option>)}</Select></label> : <span className="muted small toc-source toc-source-name">{displaySource}</span>}<div className="toc-actions"><Button className="page-action" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? <ArrowUpWideNarrow aria-hidden="true" /> : <ArrowDownWideNarrow aria-hidden="true" />}<span>{reversed ? '正序' : '倒序'}</span></Button><Button className="page-action" size="sm" type="button" aria-label="到顶部" title="到顶部" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUpToLine aria-hidden="true" /></Button><Button className="page-action" size="sm" type="button" aria-label="到底部" title="到底部" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}><ArrowDownToLine aria-hidden="true" /></Button><Button className="refresh-button page-action" size="sm" type="button" disabled={refreshing} onClick={() => void load(true)}><RefreshCw aria-hidden="true" /><span>{refreshing ? '刷新中' : '刷新'}</span></Button></div></div>
     {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error compact-message" role="alert">{error}</DismissibleMessage> : null}
+    {warning.length > 0 ? <DismissibleMessage onDismiss={() => setWarning('')} className="compact-message" role="status">{warning}</DismissibleMessage> : null}
     <div className="toc-filter-row"><label className="sr-only" htmlFor={filterId}>筛选章节</label><Input id={filterId} value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="筛选章节" /><span className="muted small">{filter.length > 0 ? `${chapters.filter((chapter) => normalizeChapterText(chapter.title).includes(normalizeChapterText(filter))).length} 个匹配` : `共 ${chapters.length} 章`}</span></div>
     </div>
     {refreshing ? <LoadingState message="正在更新目录…" variant="inline" /> : null}

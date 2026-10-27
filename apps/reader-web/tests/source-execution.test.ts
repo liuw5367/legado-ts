@@ -74,7 +74,7 @@ test('empty, failing and timed-out sources settle independently and cancellation
   assert.equal(result.candidates.length, 0)
   assert.ok(result.sourceResults.some((state) => state.status === 'empty'))
   assert.ok(result.sourceResults.some((state) => state.diagnostics.some((value) => JSON.stringify(value).includes('超时') || JSON.stringify(value).includes('timeout') || JSON.stringify(value).includes('budget'))))
-  assert.ok(Date.now() - started < 7000)
+  assert.ok(Date.now() - started < SOURCE_EXECUTION_MS + 2_000)
   const available = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY }, () => repository.acquireExecutionSlot(user, randomUUID())))
   assert.equal(available.filter(Boolean).length, SOURCE_CONCURRENCY)
   for (const lease of available) if (lease) await repository.releaseExecutionSlot(user, lease)

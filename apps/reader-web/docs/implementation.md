@@ -18,7 +18,7 @@
 
 `POST /api/searches` 冻结关键词、精准模式、启用来源范围、版本和来源优先级。SSE 的 source-result 只发送单源候选增量及进度，不重复携带整个搜索；batch-end 返回 hasPending、重试等待时间和翻页游标。客户端续接未执行来源，首轮全部完成后结束搜索，不自动追查后续结果页；收到 done 后关闭流读取。匹配等级和同书来源数沿用核心归并规则，同等级同来源数时使用冻结的来源顺序。
 
-搜索按冻结的来源优先级持续取任务，不按固定数量分轮，也不等待一个导入来源组全部结束。通用设置的 `general.searchConcurrency` 控制每次搜索请求的工作线程数，范围为 5–10，默认 5；每次启动或续接时读取账号设置。每个线程完成一个书源后释放槽位，等待 1 秒再取下一个，不等待其他慢书源；取消会中断等待。每个 HTTP 请求的执行预算为 25 秒，剩余不足 5 秒不再启动单源，已启动任务结算后返回 hasPending，由客户端自动续接。单源超时为 5 秒。数据库槽位跨实例限制总并发为 20，同账号最多使用 10 个；额度满时返回 retryAfterMs，客户端连续等待 30 秒后提供继续按钮。迁移 `0013_source_execution_capacity` 追加第 9 至 20 个槽位，保留已有租约，部署时需先执行迁移才能使用完整额度；回退代码不会自动删除追加的槽位。搜索与切换来源的搜索共用额度，多个账号同时使用时合计仍不超过 20；打开选定来源的详情和目录按一次操作执行，不会并发切换多个来源。单源结果保存后立即推送，开始请求时通过 progress.activeSources 推送正在执行的书源名称，前端实时更新；所有已取得的额度在 finally 释放。断线暂停当前请求，未启动项保留 pending，显式停止才取消整个搜索。前端每次展示 50 本书，可继续显示。
+搜索按冻结的来源优先级持续取任务，不按固定数量分轮，也不等待一个导入来源组全部结束。通用设置的 `general.searchConcurrency` 控制每次搜索请求的工作线程数，范围为 5–10，默认 5；每次启动或续接时读取账号设置。每个线程完成一个书源后释放槽位，等待 1 秒再取下一个，不等待其他慢书源；取消会中断等待。每个 HTTP 请求的执行预算为 25 秒，剩余不足 15 秒不再启动单源，已启动任务结算后返回 hasPending，由客户端自动续接。单源超时为 15 秒；Android `SearchModel` 为 30 秒，reader-web 受 Vercel 60 秒函数预算限制先取 15 秒，该差额是有意保留的平台差异，不是解析缺陷。数据库槽位跨实例限制总并发为 20，同账号最多使用 10 个；额度满时返回 retryAfterMs，客户端连续等待 30 秒后提供继续按钮。迁移 `0013_source_execution_capacity` 追加第 9 至 20 个槽位，保留已有租约，部署时需先执行迁移才能使用完整额度；回退代码不会自动删除追加的槽位。搜索与切换来源的搜索共用额度，多个账号同时使用时合计仍不超过 20；打开选定来源的详情和目录按一次操作执行，不会并发切换多个来源。单源结果保存后立即推送，开始请求时通过 progress.activeSources 推送正在执行的书源名称，前端实时更新；所有已取得的额度在 finally 释放。断线暂停当前请求，未启动项保留 pending，显式停止才取消整个搜索。前端每次展示 50 本书，可继续显示。
 
 普通搜索与换源页共享搜索生命周期。切换域名默认版本先取消并等待当前搜索，再用更新后的账号默认来源范围重新搜索。创建请求尚未取得 searchId 时取消，会在创建返回后补发取消请求；取消完成前不允许启动下一次搜索。排队期间来源删除、禁用或版本改变时跳过该来源，不能把新版本结果写入旧快照。
 
@@ -34,7 +34,7 @@
 
 目录接口先按 userId、bookId、editionKey 查找快照；快照的 sourceFingerprint 与当前书源一致且未请求 refresh 时直接返回。未命中或 refresh 时，runtime 创建 Node source session，调用 `loadTableOfContents`，按章节列表摘要生成 revision 后保存。
 
-正文接口按目录 revision 和 chapterId 查找缓存。chapterId 是章节 URL 与 index 的 SHA-256 摘要；缓存命中且来源 fingerprint 一致时不请求网络。未命中时调用 `loadChapterContent`，限制正文输出为 4 MiB，成功后保存内容。阅读页提交段落索引、字符偏移和 version 到 reading_records，并以 editionKey 保存每个来源版本的阅读位置。阅读设置通过现有 `/api/settings` 保存；`reader_settings.preferences` 是按 `general`、`display` 分组的 JSONB 唯一设置文档。`0009_reader_settings_json.sql` 移除旧阅读列，并以默认 JSON 初始化，现有账号设置会重置为默认值。设置 API 保持对旧阅读字段的兼容校验，新增偏好存入文档，不再为每项新增数据库列。
+正文接口按目录 revision 和 chapterId 查找缓存。chapterId 是章节 URL 与 index 的 SHA-256 摘要；缓存命中且来源 fingerprint 一致时不请求网络。未命中时调用 `loadChapterContent`，限制正文输出为 4 MiB，成功后保存内容。目录和正文分页上限为 200 页（Android 没有全局页数上限，该值只作安全边界）。命中上限时 core 在结果上返回 `truncated` 并给出「页数超过限制」诊断，接口以 `runtimeWarning` 下发，目录页和阅读页显示截断提示；已解析的内容仍会保存，但不会被当成完整结果而不告知。阅读页提交段落索引、字符偏移和 version 到 reading_records，并以 editionKey 保存每个来源版本的阅读位置。阅读设置通过现有 `/api/settings` 保存；`reader_settings.preferences` 是按 `general`、`display` 分组的 JSONB 唯一设置文档。`0009_reader_settings_json.sql` 移除旧阅读列，并以默认 JSON 初始化，现有账号设置会重置为默认值。设置 API 保持对旧阅读字段的兼容校验，新增偏好存入文档，不再为每项新增数据库列。
 
 书架按账号通用设置排序，默认按加入时间倒序；选择阅读时间后，按书籍所有版本的最近阅读时间倒序，未读书籍排在末尾，并以加入时间作为次序相同时的排序依据。
 
@@ -55,6 +55,8 @@ API 将未登录、输入无效、资源不存在、来源忙、配置错误和�
 ## 当前非范围
 
 当前 Web 没有订阅自动刷新、持久 JobStore/Worker、完整书源编辑器、Android 旧 Web API/WebSocket 兼容和交互式 WebView 登录。相关目标与限制见根目录 [archive](../../../docs/archive/README.md) 和 [能力清单](../../../docs/compatibility/capabilities.md)，不能从当前 API 的存在推断这些能力已实现。
+
+产品主要服务手机浏览器，而移动端不能安装浏览器扩展（Chrome Android 不提供扩展运行时，iOS Safari 扩展需要原生容器），服务端又受 Vercel 60 秒函数预算限制无法运行无头浏览器。因此 `useWebView`、`@webjs`、`java.webView`、`webViewGetSource` 和 `sourceRegex` 类书源在本部署形态下保持 `capability-missing`；跨域 iframe 不可能读取页面 DOM，不作为补救方案。
 
 ## 验证
 

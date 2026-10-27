@@ -610,6 +610,8 @@ test('目录多 URL 分支把首页计入 maxPages 预算', async () => {
   assert.deepEqual(calls, ['https://source.test/toc', 'https://source.test/branchA'])
   assert.deepEqual(result.value?.items.map((chapter) => chapter.title), ['Only branch'])
   assert.ok(result.diagnostics.some((item) => item.message.includes('页数超过限制')))
+  // 截断必须显式标记，宿主不能把半份目录当成完整目录。
+  assert.equal(result.value?.truncated, true)
 })
 
 test('目录并发分支均分剩余累计响应字节预算', async () => {
@@ -1209,6 +1211,7 @@ test('正文多 URL 分支把首页计入 maxPages 预算', async () => {
   assert.deepEqual(calls, [chapter.chapterUrl, 'https://source.test/pageA'])
   assert.deepEqual(result.value?.pages, ['first', 'A'])
   assert.ok(result.diagnostics.some((item) => item.message.includes('页数超过限制')))
+  assert.equal(result.value?.truncated, true)
 })
 
 test('取消目录并发分页后等待所有活动网络请求清理', async () => {

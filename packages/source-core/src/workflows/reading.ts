@@ -94,7 +94,9 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     diagnostics.push({ code: 'invalid-config', stage, message: '缺少 chapterList 规则', retryable: false })
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  const maxPages = input.maxPages ?? sourceNumber(input.source, 'tocMaxPages') ?? 32
+  // Android 目录分页没有全局页数上限；这里保留一个远高于现实目录的安全边界（默认 200 页），
+  // 命中时在结果上标记 truncated，宿主不得把截断目录当成完整目录。
+  const maxPages = input.maxPages ?? sourceNumber(input.source, 'tocMaxPages') ?? 200
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const visited = new Set<string>()
   const chapters: Chapter[] = []
@@ -111,6 +113,8 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
   const bookBaseUrl = expandedBookUrl.url
   const pendingPages = [{ url: bookBaseUrl, followNext: true }]
   let pagesFetched = 0
+  // 页数边界命中的分支不会再进入 pendingPages，需单独记账，结果上必须标记截断。
+  let truncatedPages = false
   let totalBytes = 0
   let volume: string | undefined
   let paginationMode: 'undecided' | 'serial' | 'parallel' | 'none' = 'undecided'
@@ -175,7 +179,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     }
     const availablePages = Math.max(0, maxPages - pagesFetched)
     const branchUrls = unseenNextUrls.slice(0, availablePages)
-    if (branchUrls.length < unseenNextUrls.length) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
+    if (branchUrls.length < unseenNextUrls.length) {
+      diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
+      truncatedPages = true
+    }
     if (branchUrls.length > 0) {
       for (const branchUrl of branchUrls) visited.add(branchUrl)
       const firstBranchNeedsLoginCheck = !loginCheckConsumed
@@ -210,7 +217,10 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     }
     break
   }
-  if (pendingPages.length > 0 && visited.size >= maxPages) diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
+  if (pendingPages.length > 0 && visited.size >= maxPages) {
+    diagnostics.push({ code: 'item-skipped', stage, message: '目录页数超过限制', retryable: false })
+    truncatedPages = true
+  }
   if (!reverseByRule) chapters.reverse()
   const uniqueChapters = deduplicateChapters(chapters, diagnostics, stage)
   if (book.readConfig?.reverseToc !== true) uniqueChapters.reverse()
@@ -221,7 +231,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     if (input.signal?.aborted === true || diagnostics.some((item) => item.code === 'cancelled')) return { status: 'cancelled', value: null, diagnostics, trace }
   }
   if (uniqueChapters.length === 0) diagnostics.push({ code: 'empty-page', stage, message: '目录为空', retryable: false })
-  const value: TocPage = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}) }
+  const value: TocPage = { items: uniqueChapters, cursor, ...(pendingPages.length > 0 ? { nextCursor: { index: cursor.index + 1 } } : {}), ...(pendingPages.length > 0 || truncatedPages ? { truncated: true } : {}) }
   const fatalCode = diagnostics.find((item) => item.code === 'request-failed' || item.code === 'rule-failed' || item.code === 'capability-missing')?.code
   if (fatalCode !== undefined) return { status: fatalCode === 'capability-missing' ? 'capability-missing' : 'failed', value: null, diagnostics, trace }
   if (uniqueChapters.length === 0) {
@@ -376,7 +386,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     ? undefined
     : { ...(contentWebJs === undefined ? {} : { webJs: contentWebJs }), ...(contentSourceRegex === undefined ? {} : { sourceRegex: contentSourceRegex }) }
   const pagedExecution = contentWebJs === undefined ? undefined : { webJs: contentWebJs }
-  const maxPages = input.maxPages ?? sourceNumber(input.source, 'contentMaxPages') ?? 32
+  // 与目录一致：Android 正文分页没有全局页数上限，200 页只作为安全边界。
+  const maxPages = input.maxPages ?? sourceNumber(input.source, 'contentMaxPages') ?? 200
   const maxBytes = input.maxBytes ?? 16 * 1024 * 1024
   const maxOutputBytes = input.maxOutputBytes ?? 4 * 1024 * 1024
   const variableBook: BookMetadata = input.book ?? {
@@ -589,7 +600,11 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   // 请求被取消时不能把半截正文当成成功或空结果交付，状态必须与目录流程一致。
   // 诊断已经在请求层压过一条，这里只改状态，不再重复报告。
   if (diagnostics.some((item) => item.code === 'cancelled')) return { status: 'cancelled', value: null, diagnostics, trace }
-  if (pendingPages.length > 0) stoppedByLimit = true
+  if (pendingPages.length > 0) {
+    // 串行分页在页数边界退出时同样要留下诊断，结果上再由 truncated 标记交给宿主。
+    diagnostics.push({ code: 'item-skipped', stage, message: '正文页数超过限制', retryable: false })
+    stoppedByLimit = true
+  }
   let auxiliary: ChapterContent['auxiliary']
   const subContentRule = ruleString(input.source, 'ruleContent', 'subContent')
   if (subContentRule !== undefined && firstPage !== undefined) {
@@ -700,7 +715,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (resultChapter.isVolume === true) return { status: 'empty', value: { chapter: resultChapter, contentType, raw, cleaned, pages, resources: [], ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }, diagnostics, trace }
     return { status: 'failed', value: null, diagnostics, trace }
   }
-  const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }) }
+  const value: ChapterContent = { chapter: resultChapter, contentType, raw, cleaned, pages, resources: uniqueResources(resources), ...(finalResponseUrl === undefined ? {} : { finalUrl: finalResponseUrl }), ...(auxiliary === undefined ? {} : { auxiliary }), ...(title === undefined ? {} : { title }), ...(imgUrl === undefined ? {} : { imgUrl }), ...(stoppedByLimit ? { truncated: true } : {}) }
   // Android catches副内容网络异常、记录日志并继续交付主正文；保留诊断，
   // 但不能把可选副内容失败升级成 partial 正文结果。
   const status = stoppedByLimit ? 'partial' : 'success'

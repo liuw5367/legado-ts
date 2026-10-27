@@ -6,7 +6,11 @@ import { MAX_SEARCH_CONCURRENCY } from '../../shared/search-settings.ts'
 
 export const SOURCE_CONCURRENCY = MAX_SEARCH_CONCURRENCY
 export const GLOBAL_SOURCE_CONCURRENCY = 20
-export const SOURCE_EXECUTION_MS = 5_000
+/**
+ * 单个书源操作的执行上限。Android `SearchModel` 为 30 秒，reader-web 部署在
+ * Vercel 60 秒函数预算内，先取 15 秒；差额是有意保留的平台差异，不是解析缺陷。
+ */
+export const SOURCE_EXECUTION_MS = 15_000
 export const SEARCH_BATCH_MS = 25_000
 export interface ExecutionLease { token: string; slotId: number }
 
