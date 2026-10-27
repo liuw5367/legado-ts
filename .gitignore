@@ -30,3 +30,5 @@
 *.module.stylus.d.ts
 
 **/prisma/generated
+
+/output
