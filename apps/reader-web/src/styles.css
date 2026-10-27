@@ -388,7 +388,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .book-source-domain-details[open] > .book-source-domain-summary .book-source-domain-chevron { transform: rotate(180deg); }
 .book-source-domain-summary > span:first-child { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
 .book-source-domain-title { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.book-source-domain-title .badge { max-width: 45%; overflow: hidden; padding: 3px 5px; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.book-source-domain-title .badge { max-width: 45%; overflow: hidden; padding: 3px 5px; border-width: 1px; border-style: solid; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .book-source-domain-title strong { min-width: 0; overflow: hidden; flex: 1 1 auto; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .book-source-domain-summary .badge { flex: 0 1 auto; }
 .book-source-domain-count { flex: 0 0 auto; margin-left: auto; font-size: 11px; white-space: nowrap; }

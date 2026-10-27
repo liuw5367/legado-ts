@@ -246,7 +246,7 @@ export function BookSourcesPage() {
               <summary className="book-source-domain-summary">
                 <span className="book-source-domain-heading">
                   <span className="book-source-domain-title">
-                    {enabledCount > 1 ? <span className="badge source-domain-warning">存在多个旧启用项</span> : defaultVersion === undefined ? <span className="badge source-disabled">暂无账号默认版本</span> : <span className="badge source-enabled">默认：{group.versions.find((version) => version.source.sourceId === defaultVersion.sourceId)?.displayName}</span>}
+                    {enabledCount > 1 ? <span className="badge source-domain-warning">存在多个旧启用项</span> : defaultVersion === undefined ? <span className="badge source-disabled">暂无账号默认版本</span> : <span className="badge source-enabled">{group.versions.find((version) => version.source.sourceId === defaultVersion.sourceId)?.displayName}</span>}
                     <strong>{group.domain}</strong>
                     <span className="book-source-domain-count muted small">{group.versions.length} 个实现</span>
                   </span>
