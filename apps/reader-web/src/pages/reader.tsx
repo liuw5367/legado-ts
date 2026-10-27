@@ -655,7 +655,7 @@ export function ReaderPage() {
         gestureRef.current = null
         if (paged && event.target instanceof Element && event.target.closest('a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"])') !== null) { cancelGesture(); return }
         const selection = paged ? selectionSnapshot() : null
-        articleRef.current?.focus({ preventScroll: true })
+        if (event.pointerType === 'mouse') articleRef.current?.focus({ preventScroll: true })
         pointerStartRef.current = { x: event.clientX, y: event.clientY, scrollY: window.scrollY, selectedText: selection?.text ?? '' }
         if (paged && event.pointerType === 'touch' && selection !== null) {
           const visualViewport = window.visualViewport

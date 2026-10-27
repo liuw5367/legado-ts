@@ -50,7 +50,7 @@ export function moveReaderGesture(gesture: ReaderGesture, point: GesturePoint): 
   const distance = Math.hypot(dx, dy)
   if (distance >= TAP_DISTANCE) gesture.clickBlocked = true
   // 以首次离开起始范围的时刻判断长按；慢速滑动开始后不再被长按门槛取消。
-  if (!gesture.leftOrigin && point.time - gesture.start.time >= LONG_PRESS_MS) gesture.swipeCancelled = true
+  if (!gesture.leftOrigin && point.time - gesture.start.time >= LONG_PRESS_MS) cancelReaderGesture(gesture)
   if (distance >= DIRECTION_DISTANCE) gesture.leftOrigin = true
   if (gesture.swipeCancelled || !gesture.leftOrigin) return
   if (gesture.direction === 0) {

@@ -134,3 +134,16 @@ test('reader gesture direction and cancellation remain stable throughout a traje
   assert.equal(finishReaderGesture(cancelledAtEnd, { x: 0, y: 100, time: 120 }), null)
   assert.equal(cancelledAtEnd.clickBlocked, true)
 })
+
+
+test('stationary long press blocks the release click before native selection arrives', () => {
+  const start = { x: 100, y: 100, time: 0 }
+  const tap = startReaderGesture(start, 390, true)
+  finishReaderGesture(tap, { ...start, time: 299 })
+  assert.equal(tap.clickBlocked, false)
+  for (const allowed of [true, false]) {
+    const held = startReaderGesture(start, 390, allowed)
+    assert.equal(finishReaderGesture(held, { ...start, time: 600 }), null)
+    assert.equal(held.clickBlocked, true)
+  }
+})
