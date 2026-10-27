@@ -47,10 +47,10 @@ function LazyPage({ children, viewport = true, backTo, bookToc = false, searchBa
 }
 
 function ProtectedRoute() {
-  const { error, loading, session, expired } = useAuth(); const location = useLocation()
+  const { error, loading, session } = useAuth(); const location = useLocation()
   if (loading) return <main className="startup-loading"><LoadingState message="正在读取登录状态…" variant="viewport" /></main>
   if (error !== undefined) return <main className="app-main app-main-standalone"><section className="card"><h1>认证服务未配置</h1><DismissibleMessage className="error">{error.message}</DismissibleMessage><p className="muted">请配置 Supabase 的公开 URL 和 publishable key 后重试。</p></section></main>
-  return session === null ? <Navigate to="/login" replace state={expired ? { notice: '登录已失效，请重新登录' } : { from: location.pathname + location.search + location.hash }} /> : <Outlet />
+  return session === null ? <Navigate to="/login" replace state={{ from: location.pathname + location.search + location.hash }} /> : <Outlet />
 }
 
 const router = createBrowserRouter([

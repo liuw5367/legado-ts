@@ -9,6 +9,8 @@ function publicConfig(): { url: string; key: string } {
   return { url, key }
 }
 
+export function authStorageKey(): string { return `sb-${new URL(publicConfig().url).hostname.split('.')[0]}-auth-token` }
+
 export function supabase(): SupabaseClient {
   client ??= createClient(publicConfig().url, publicConfig().key, {
     auth: { autoRefreshToken: true, detectSessionInUrl: false, persistSession: true, flowType: 'pkce' },
@@ -52,8 +54,17 @@ export async function invalidateSession(accessToken: string | undefined): Promis
   const promise = (async () => {
     const current = await currentSession()
     if (current?.access_token !== accessToken) return
-    window.dispatchEvent(new Event('app-session-expired'))
-    await supabase().auth.signOut({ scope: 'local' })
+    try {
+      const storage = window.localStorage
+      const key = authStorageKey()
+      const stored = storage.getItem(key)
+      if (stored !== null && (JSON.parse(stored) as { access_token?: string }).access_token !== accessToken) return
+      storage.removeItem(key)
+      storage.removeItem(`legado-reader-settings:${current.user.id}`)
+      storage.removeItem(`legado.discovery.v1:${current.user.id}`)
+      storage.removeItem(`legado:onboarding:v1:${encodeURIComponent(current.user.id)}`)
+    } catch { /* 存储不可用时，重新加载会清除内存会话。 */ }
+    window.location.replace('/login')
   })()
   invalidation = { token: accessToken, promise }
   try { await promise } finally { if (invalidation?.promise === promise) invalidation = undefined }

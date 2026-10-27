@@ -1,30 +1,32 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { currentSession, signOut, subscribeAuth } from './auth.ts'
+import { authStorageKey, currentSession, signOut, subscribeAuth } from './auth.ts'
 
-interface AuthContextValue { session: Session | null; user: User | null; loading: boolean; expired: boolean; error?: Error; logout: () => Promise<void> }
+interface AuthContextValue { session: Session | null; user: User | null; loading: boolean; error?: Error; logout: () => Promise<void> }
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [expired, setExpired] = useState(false)
   const [error, setError] = useState<Error | undefined>()
   useEffect(() => {
     let active = true
     let unsubscribe: () => void = () => undefined
-    const expire = () => setExpired(true)
-    window.addEventListener('app-session-expired', expire)
+    const storageChanged = (event: StorageEvent) => {
+      if (event.key !== authStorageKey() || event.newValue !== null) return
+      void currentSession().then((next) => { if (active) setSession(next) }).catch(() => undefined)
+    }
+    window.addEventListener('storage', storageChanged)
     void currentSession().then((value) => { if (active) { setSession(value); setLoading(false) } }, (reason: unknown) => { if (active) { setError(reason instanceof Error ? reason : new Error('认证服务尚未配置')); setLoading(false) } })
     try {
-      const subscription = subscribeAuth((_event, next) => { if (active) { setSession(next); if (next !== null) setExpired(false) } })
+      const subscription = subscribeAuth((_event, next) => { if (active) setSession(next) })
       unsubscribe = subscription.unsubscribe
     } catch (reason) {
       if (active) { setError(reason instanceof Error ? reason : new Error('认证服务尚未配置')); setLoading(false) }
     }
-    return () => { active = false; unsubscribe(); window.removeEventListener('app-session-expired', expire) }
+    return () => { active = false; unsubscribe(); window.removeEventListener('storage', storageChanged) }
   }, [])
-  const value = useMemo<AuthContextValue>(() => ({ session, user: session?.user ?? null, loading, expired, ...(error === undefined ? {} : { error }), logout: signOut }), [error, loading, session, expired])
+  const value = useMemo<AuthContextValue>(() => ({ session, user: session?.user ?? null, loading, ...(error === undefined ? {} : { error }), logout: signOut }), [error, loading, session])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

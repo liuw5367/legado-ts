@@ -51,7 +51,7 @@ function render(candidates: ApiCandidate[], status = 'done', isTargetedSearch = 
 test('matching an existing source suppresses empty search text and duplicate result rows while refreshing timing', () => {
   const tree = render([candidate])
   const content = text(tree)
-  assert.ok(!content.includes('当前搜索没有找到与这本书匹配的来源'))
+  assert.ok(!nodes(tree).some((node) => node.type === 'empty' && node.props?.title === '没有匹配的书源'))
   assert.ok(!content.includes('已保存版本'))
   assert.ok(!content.includes('查看原文'))
   assert.ok(content.includes('查看目录'))
