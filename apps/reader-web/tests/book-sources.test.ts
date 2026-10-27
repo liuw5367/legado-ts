@@ -292,6 +292,20 @@ test('缓存中的截断正文再次读取时仍返回截断提示', async (t) =
   assert.match(cached.runtimeWarning ?? '', /截断/u)
 })
 
+test('缓存中的截断目录再次读取时仍返回截断提示', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
+  const { repository, runtime, run } = await setup()
+  await runtime.runSearchBatch('user-a', run.id)
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0)
+  const source = await repository.getSourceForUser('user-a', created.edition.sourceId)
+  assert.ok(source)
+  const chapter = { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: 'https://8.8.8.8/chapter-truncated-toc', index: 0, title: '第一章', rawFields: {}, traceRef: '' }
+  await repository.saveToc('user-a', { userId: 'user-a', bookId: created.book.id, editionKey: created.edition.editionKey, sourceFingerprint: source.fingerprint, revision: 'r-truncated-toc', chapters: [chapter], bookPatch: { lastCheckTime: Date.now(), totalChapterNum: 1 }, truncated: true })
+  const cached = await runtime.getOrLoadToc('user-a', created.book.id, created.edition.editionKey)
+  assert.equal(cached.truncated, true)
+  assert.match(cached.runtimeWarning ?? '', /截断/u)
+})
+
 test('封面选择只使用有效同书来源，保留阅读版本并支持恢复默认', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
   const { repository, runtime, run } = await setup()

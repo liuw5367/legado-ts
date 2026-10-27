@@ -192,6 +192,7 @@ export const tocSnapshots = readerSchema.table('toc_snapshots', {
   chapters: jsonb('chapters').$type<Chapter[]>().notNull(),
   bookPatch: jsonb('book_patch').$type<TocBookPatch>().notNull(),
   bookAfter: jsonb('book_after').$type<BookMetadata | null>(),
+  truncated: boolean('truncated').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex('toc_snapshots_user_edition_idx').on(table.userId, table.editionKey), index('toc_snapshots_user_book_idx').on(table.userId, table.bookId)])
 

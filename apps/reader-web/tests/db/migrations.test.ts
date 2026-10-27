@@ -68,3 +68,11 @@ test('source capacity migration adds the remaining slots without replacing activ
   assert.equal(journal.entries[13].tag, '0013_source_execution_capacity')
   assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
 })
+
+test('目录截断标记随快照持久化', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0015_toc_truncated.sql'), 'utf8')
+  const journal = JSON.parse(await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8'))
+  assert.match(migration, /add column if not exists "truncated" boolean not null default false/u)
+  assert.equal(journal.entries.at(-1).tag, '0015_toc_truncated')
+  assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
+})

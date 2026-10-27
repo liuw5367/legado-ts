@@ -24,6 +24,12 @@ function withTruncatedContentWarning(content: StoredContent & { runtimeWarning?:
   return { ...content, runtimeWarning: TRUNCATED_CONTENT_WARNING }
 }
 
+/** 目录快照把抓取时的截断状态落库；缓存命中时据此继续提示。 */
+function withTruncatedTocWarning(toc: StoredToc & { runtimeWarning?: string }): StoredToc & { runtimeWarning?: string } {
+  if (toc.truncated !== true || toc.runtimeWarning !== undefined) return toc
+  return { ...toc, runtimeWarning: TRUNCATED_TOC_WARNING }
+}
+
 export interface SearchCandidateIdentity { sourceId: string; sourceFingerprint: string; bookUrl: string }
 export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean; signal?: AbortSignal; onProgress?: (progress: SearchRunState['progress']) => Promise<void> | void }
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
@@ -360,7 +366,7 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
   const source = await requireSource(repository, userId, edition.sourceId)
   if (!refresh) {
     const cached = await repository.getToc(userId, bookId, editionKey)
-    if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
+    if (cached !== null && cached.sourceFingerprint === source.fingerprint) return withTruncatedTocWarning(cached)
   }
   return withPersistentSourceSession(repository, userId, source, async (session) => {
     const result = await session.run((ports) => loadTableOfContents(ports, { source: source.normalizedSource, book: edition.metadata, refresh, maxPages: 200 }))
@@ -369,7 +375,7 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
     const revision = digest(JSON.stringify(chapters))
     const bookAfter = result.value.bookAfter
     const bookPatch = createBookPatch(chapters)
-    const saved = await repository.saveToc(userId, { userId, bookId, editionKey, sourceFingerprint: source.fingerprint, revision, chapters, bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }) })
+    const saved = await repository.saveToc(userId, { userId, bookId, editionKey, sourceFingerprint: source.fingerprint, revision, chapters, bookPatch, truncated: result.value.truncated === true, ...(bookAfter === undefined ? {} : { bookAfter }) })
     // 截断的目录不能静默当成完整目录；保留已解析章节，同时把原因交给客户端。
     return result.value.truncated === true ? { ...saved, runtimeWarning: TRUNCATED_TOC_WARNING } : saved
   })

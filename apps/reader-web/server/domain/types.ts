@@ -96,6 +96,8 @@ export interface StoredToc {
   chapters: Chapter[]
   bookPatch: TocBookPatch
   bookAfter?: BookMetadata
+  /** 该快照在抓取时命中分页/预算上限；缓存命中时据此继续提示，不静默当成完整目录。 */
+  truncated?: boolean
   updatedAt: string
 }
 
