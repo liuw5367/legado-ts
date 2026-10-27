@@ -189,7 +189,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .search-page .result-list { gap: 10px; }
 .search-page .result-card { display: block; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); box-shadow: 0 1px 3px rgb(36 33 29 / 10%); cursor: pointer; }
 .result-card-main { display: flex; min-width: 0; align-items: center; gap: 10px; }
-.search-page .result-detail-cover { flex: 0 0 auto; }
+.search-page .result-detail-cover { flex: 0 0 auto; align-self: center; }
 .result-card-body { min-width: 0; flex: 1; }
 .result-card-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .result-card-heading h2 { min-width: 0; margin: 0; font-size: 15px; font-weight: 700; line-height: 1.2; }
@@ -199,9 +199,9 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .result-author { margin-top: 2px; color: var(--muted); font-size: 12px; }
 .result-source-summary { display: flex; min-width: 0; flex-wrap: wrap; gap: 4px 8px; margin-top: 3px; color: var(--muted); font-size: 11px; }
 .result-source-summary > span:first-child { color: var(--primary); font-weight: 650; }
-.result-latest-chapter { margin-top: 3px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.result-latest-chapter { overflow: hidden; margin-top: 3px; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .result-latest-chapter > span { color: var(--foreground); font-weight: 600; }
-.search-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.search-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; }
 .search-result-button { min-height: 36px !important; padding: 4px 9px !important; border: 1px solid var(--border) !important; font-size: 12px !important; line-height: 1.2; }
 .search-result-button svg { width: 15px; height: 15px; }
 .search-shelf-button { gap: 6px; border-color: var(--primary) !important; background: var(--primary) !important; color: var(--primary-foreground) !important; font-weight: 650; }
