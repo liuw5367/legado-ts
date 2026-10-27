@@ -102,7 +102,8 @@ export function normalizeReadingContent(input: ReadingContentInput, parseHtml?: 
   if (input.contentType === 'html' && input.cleaned.includes('<')) html(input.cleaned)
   else {
     // text 也可能保留 Android 特殊格式与图片；其他标签和实体仍作为普通文字。
-    const special = /<usehtml>[\s\S]*?<\/usehtml>|<img\b[^>]*>/giu
+    // 这里只识别保留标记的范围；属性引号中的 > 不是 img 结束，标签解释仍交给宿主解析器。
+    const special = /<usehtml>[\s\S]*?<\/usehtml>|<img\b(?:[^"'<>]|"[^"]*"|'[^']*')*>/giu
     let from = 0
     const text = (value: string) => {
       value.replace(/\r\n?/gu, '\n').split('\n').forEach((line, index) => {

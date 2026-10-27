@@ -3,9 +3,10 @@ import { flushSync } from 'react-dom'
 import { useState } from 'react'
 import { normalizeReadingContent, readingParagraphTexts, type ReadingDocument } from '@legado/source-core'
 import { readingContentCases } from '../../../../packages/source-core/tests/fixtures/reading-content.ts'
+import { pageCountFromScrollWidth, pageIndexForAnchor } from '../../src/lib/reader-pagination.ts'
 import { ReaderBody } from '../../src/components/reader-body.tsx'
 import { parseReadingHtml } from '../../src/lib/html-content.ts'
-import { createAnchor, selectedAnchor, rangeForAnchor, paragraphTexts, textFingerprint } from '../../src/lib/reader-annotations.ts'
+import { createAnchor, selectedAnchor, rangeForAnchor, paragraphTexts, textFingerprint, visibleTextPoint } from '../../src/lib/reader-annotations.ts'
 import type { ReadingMark } from '../../shared/reading-annotations.ts'
 import '../../src/styles.css'
 
@@ -53,6 +54,18 @@ try {
   equal(paragraphTexts(marked), texts, '高亮不改变文字或索引')
   equal([...marked.querySelectorAll('[data-mark-id]')].map((node) => node.textContent).join(''), '😀乙丙丁下一', '跨格式与跨段高亮')
   window.getSelection()!.removeAllRanges()
+  const imageDocument = normalizeReadingContent({ contentType: 'text', cleaned: '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWb8AAAAASUVORK5CYII=">\n图片后正文', resources: [] }, parseReadingHtml)
+  flushSync(() => root.render(<article className="reader-content" style={{ position: 'fixed', top: 24, left: 0, width: 390, height: 600, padding: 16 }}><ReaderBody document={imageDocument} marks={marks} /></article>))
+  equal(visibleTextPoint(mount.querySelector('article')!, false)?.paragraphIndex, 1, '滚动模式图片之后仍可创建文字书签')
+  equal(visibleTextPoint(mount.querySelector('article')!, true)?.paragraphIndex, 1, '分页模式图片之后仍可创建文字书签')
+  const pagedDocument = normalizeReadingContent({ contentType: 'text', cleaned: '第一页\n[newpage]\n第二页', resources: [] })
+  flushSync(() => root.render(<article className="reader-content reader-content-paged" style={{ position: 'fixed', top: 24, left: 0, width: 390, height: 300, minHeight: 300, maxHeight: 300, paddingTop: 0, paddingBottom: 0, columnWidth: 390 }}><ReaderBody document={pagedDocument} marks={marks} /></article>))
+  const paged = mount.querySelector('article')!
+  const layout = { pageWidth: 390, pageCount: pageCountFromScrollWidth(paged.scrollWidth, 390) }
+  equal(layout.pageCount, 2, '显式分页产生两栏')
+  equal(pageIndexForAnchor(paged, { paragraphIndex: 2, offset: 0 }, layout), 1, '显式分页后文字定位到第二页')
+  equal(getComputedStyle(paged).touchAction, 'pan-y pinch-zoom', '正文保留纵向原生手势与缩放')
+  equal(getComputedStyle(paged).userSelect, 'text', '正文允许系统文字选择')
   report.dataset.status = 'passed'; report.textContent = `PASS ${count} assertions\n包含真实 DOMParser、React 正文、DOM Range、跨段高亮及节点稳定性。\n原生手机长按需另外真机验证。`
 } catch (error) {
   report.dataset.status = 'failed'; report.textContent = String(error); throw error

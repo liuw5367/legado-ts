@@ -19,3 +19,6 @@ readingContentCases.push(
   { name: 'pre 保留行首与行尾空格', input: { contentType: 'html', cleaned: '<pre>  甲  \n    乙</pre>', resources: [] }, texts: ['  甲  ', '    乙'], kinds: ['paragraph', 'paragraph'] },
   { name: 'HTML 段落中的显式分页', input: { contentType: 'html', cleaned: '<p>甲</p><p>[newpage]</p><p>乙</p>', resources: [] }, texts: ['甲', '', '乙'], kinds: ['paragraph', 'pageBreak', 'paragraph'] },
 )
+readingContentCases.push(
+  { name: 'text 图片属性包含大于号', input: { contentType: 'text', cleaned: '前<img alt="a > b" src="/a.png">后', baseUrl: 'https://book.test/1', resources: [] }, texts: ['前', '', '后'], kinds: ['paragraph', 'image', 'paragraph'] },
+)

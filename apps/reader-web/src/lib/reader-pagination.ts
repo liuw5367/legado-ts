@@ -97,7 +97,7 @@ export function pageIndexForElement(element: HTMLElement | null, viewport: HTMLE
   return clampPageIndex(Math.floor(Math.max(0, absoluteLeft) / layout.pageWidth), layout.pageCount)
 }
 
-export function firstVisibleParagraphIndex(viewport: HTMLElement | null): number | undefined {
+export function firstVisibleParagraphIndex(viewport: HTMLElement | null, textOnly = false): number | undefined {
   if (viewport === null) return undefined
   const viewportRect = viewport.getBoundingClientRect()
   const left = viewportRect.left + 1
@@ -105,6 +105,7 @@ export function firstVisibleParagraphIndex(viewport: HTMLElement | null): number
   const top = viewportRect.top + 8
   const bottom = viewportRect.bottom - 8
   const visible = [...viewport.querySelectorAll<HTMLElement>('[data-paragraph]')].find((element) => {
+    if (textOnly && !element.textContent?.trim()) return false
     const rect = element.getBoundingClientRect()
     return rect.right > left && rect.left < right && rect.bottom > top && rect.top < bottom
   })
@@ -135,8 +136,8 @@ export function pageIndexForAnchor(viewport: HTMLElement | null, anchor: ReaderA
   return pageIndexForElement(element, viewport, layout)
 }
 
-export function anchorFromViewport(viewport: HTMLElement | null): ReaderAnchor | undefined {
-  const paragraphIndex = firstVisibleParagraphIndex(viewport)
+export function anchorFromViewport(viewport: HTMLElement | null, textOnly = false): ReaderAnchor | undefined {
+  const paragraphIndex = firstVisibleParagraphIndex(viewport, textOnly)
   if (paragraphIndex === undefined || viewport === null) return undefined
   const element = viewport.querySelector<HTMLElement>(`[data-paragraph="${paragraphIndex}"]`)
   if (element === null) return undefined

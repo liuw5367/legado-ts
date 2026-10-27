@@ -51,9 +51,9 @@ export function markedFragments(text: string, paragraphIndex: number, marks: Rea
 }
 /** 滚动阅读按可视窗口查找首字；分页阅读沿用多列位置计算。 */
 export function visibleTextPoint(root: HTMLElement, paged: boolean): TextPoint | undefined {
-  if (paged) return anchorFromViewport(root)
+  if (paged) return anchorFromViewport(root, true)
   const top = 24; const bottom = window.innerHeight - 24
-  const paragraph = [...root.querySelectorAll<HTMLElement>('[data-paragraph]')].find((p) => { const rect = p.getBoundingClientRect(); return rect.bottom > top && rect.top < bottom })
+  const paragraph = [...root.querySelectorAll<HTMLElement>('[data-paragraph]')].find((p) => { if (!p.textContent?.trim()) return false; const rect = p.getBoundingClientRect(); return rect.bottom > top && rect.top < bottom })
   if (!paragraph) return undefined
   const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT); const range = document.createRange(); let node: Node | null; let offset = 0
   while ((node = walker.nextNode())) {
