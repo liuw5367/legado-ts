@@ -152,6 +152,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
     totalBytes += new TextEncoder().encode(body).byteLength
     if (totalBytes > maxBytes) {
       diagnostics.push({ code: 'item-skipped', stage, message: '目录累计响应超过字节预算', retryable: false })
+      truncatedPages = true
       break
     }
     const responseUrl = resolveUrl(page.url, normalizedUrl) ?? normalizedUrl
@@ -203,6 +204,7 @@ export async function loadTableOfContents(ports: ReadingPorts, input: TocInput):
         totalBytes += branchBytes
         if (totalBytes > maxBytes) {
           diagnostics.push({ code: 'item-skipped', stage, message: '目录累计响应超过字节预算', retryable: false })
+          truncatedPages = true
           break
         }
         const branchUrl = resolveUrl(outcome.page.url, branchUrls[branchIndex]!) ?? branchUrls[branchIndex]!

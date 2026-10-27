@@ -636,6 +636,27 @@ test('目录并发分支均分剩余累计响应字节预算', async () => {
   assert.equal(result.value?.items.length, 2)
 })
 
+test('目录响应超过字节预算时同样标记截断', async () => {
+  const pageLimitedSource = { ...source, ruleToc: { chapterList: 'list', chapterName: 'name', chapterUrl: 'url', nextTocUrl: 'next' } } as NormalizedSource
+  const result = await loadTableOfContents({
+    network: { request: async (plan) => {
+      const body = plan.url.endsWith('/toc') ? 'root' : plan.url.endsWith('/branchA') ? 'one' : 'two'
+      return { url: plan.url, status: 200, headers: {}, bytes: new TextEncoder().encode(body), redirected: false }
+    } },
+    rules: { evaluate: async ({ field, content }) => {
+      if (field === 'chapterList') return { status: 'success', value: content === 'root' ? [] : [{ title: String(content), url: `/chapter/${content}` }] }
+      if (field === 'chapterName') return { status: 'success', value: (content as { title: string }).title }
+      if (field === 'chapterUrl') return { status: 'success', value: (content as { url: string }).url }
+      if (field === 'nextTocUrl') return { status: 'success', value: ['/branchA', '/branchB'] }
+      return { status: 'empty', value: null }
+    } },
+  }, { source: pageLimitedSource, book: { ...book, tocUrl: 'https://source.test/toc' }, maxBytes: 8 })
+  // 首页 4 字节 + 第一个分支 3 字节后，第二个分支把累计推到预算外。
+  assert.equal(result.value?.items.length, 1)
+  assert.equal(result.value?.truncated, true)
+  assert.ok(result.diagnostics.some((item) => item.message.includes('字节预算')))
+})
+
 test('目录并发分页失败时取消兄弟任务并等待其清理完成', async () => {
   const concurrency = new KeyedConcurrencyHost({ maxConcurrent: 2, maxConcurrentPerKey: 1 })
   const calls: string[] = []
