@@ -60,7 +60,7 @@ export class SourceSession implements ReaderSourceSession {
     const cachedPage = options.refresh !== true && this.tocPage?.bookUrl === book.bookUrl ? this.tocPage : undefined
     const inputBook = cachedPage !== undefined && cachedPage.url === book.tocUrl ? { ...book, tocHtml: cachedPage.html } : book
     capture?.beginStage('toc')
-    const result = await this.core.run((ports) => loadTableOfContents(ports, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.runPerJs === true ? { runPerJs: true } : {}), ...(options.isFromBookInfo === true ? { isFromBookInfo: true } : {}), ...(options.tocCountWords === undefined ? {} : { tocCountWords: options.tocCountWords }), maxPages: 32 }), capture === undefined ? undefined : { requestObserver: capture })
+    const result = await this.core.run((ports) => loadTableOfContents(ports, { source: this.source, book: inputBook, ...(signal === undefined ? {} : { signal }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.runPerJs === true ? { runPerJs: true } : {}), ...(options.isFromBookInfo === true ? { isFromBookInfo: true } : {}), ...(options.tocCountWords === undefined ? {} : { tocCountWords: options.tocCountWords }) }), capture === undefined ? undefined : { requestObserver: capture })
     capture?.recordResult('toc', result, { chapters: result.value?.items.length ?? 0 })
     return result
   }
@@ -72,8 +72,8 @@ export class SourceSession implements ReaderSourceSession {
     const nextChapterUrl = options?.nextChapterUrl
     capture?.beginStage('content')
     const run = (ports: WorkflowPorts) => options?.contentStore !== undefined && options.contentIdentity !== undefined
-      ? loadStoredChapterContent(ports, { source: this.source, book, chapter, contentStore: options.contentStore, contentIdentity: options.contentIdentity, ...(options.operationId === undefined ? {} : { operationId: options.operationId }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.saveChapterMetadata === undefined ? {} : { saveChapterMetadata: options.saveChapterMetadata }), ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
-      : loadChapterContent(ports, { source: this.source, book, chapter, ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxPages: 32, maxOutputBytes: 4 * 1024 * 1024 })
+      ? loadStoredChapterContent(ports, { source: this.source, book, chapter, contentStore: options.contentStore, contentIdentity: options.contentIdentity, ...(options.operationId === undefined ? {} : { operationId: options.operationId }), ...(options.refresh === true ? { refresh: true } : {}), ...(options.saveChapterMetadata === undefined ? {} : { saveChapterMetadata: options.saveChapterMetadata }), ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxOutputBytes: 4 * 1024 * 1024 })
+      : loadChapterContent(ports, { source: this.source, book, chapter, ...(tocHtml === undefined ? {} : { tocHtml }), ...(nextChapterUrl === undefined ? {} : { nextChapterUrl }), ...(signal === undefined ? {} : { signal }), maxOutputBytes: 4 * 1024 * 1024 })
     const result = await this.core.run(run, capture === undefined ? undefined : { requestObserver: capture })
     capture?.recordResult('content', result, { contentCharacters: result.value?.cleaned.length ?? 0 })
     return result
