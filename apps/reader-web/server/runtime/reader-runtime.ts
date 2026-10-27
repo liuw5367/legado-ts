@@ -15,6 +15,15 @@ import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-ca
 
 export { ReaderRuntimeError } from './source-session.ts'
 
+const TRUNCATED_TOC_WARNING = '目录分页超过上限，已截断；请刷新重试或联系书源作者。'
+const TRUNCATED_CONTENT_WARNING = '正文分页超过上限，已截断；请刷新重试。'
+
+/** 缓存的正文记录本身带 truncated；命中缓存时也要提示，不能只在首次抓取时提示一次。 */
+function withTruncatedContentWarning(content: StoredContent & { runtimeWarning?: string }): StoredContent & { runtimeWarning?: string } {
+  if (content.content.truncated !== true || content.runtimeWarning !== undefined) return content
+  return { ...content, runtimeWarning: TRUNCATED_CONTENT_WARNING }
+}
+
 export interface SearchCandidateIdentity { sourceId: string; sourceFingerprint: string; bookUrl: string }
 export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean; signal?: AbortSignal; onProgress?: (progress: SearchRunState['progress']) => Promise<void> | void }
 export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
@@ -362,7 +371,7 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
     const bookPatch = createBookPatch(chapters)
     const saved = await repository.saveToc(userId, { userId, bookId, editionKey, sourceFingerprint: source.fingerprint, revision, chapters, bookPatch, ...(bookAfter === undefined ? {} : { bookAfter }) })
     // 截断的目录不能静默当成完整目录；保留已解析章节，同时把原因交给客户端。
-    return result.value.truncated === true ? { ...saved, runtimeWarning: '目录分页超过上限，已截断；请刷新重试或联系书源作者。' } : saved
+    return result.value.truncated === true ? { ...saved, runtimeWarning: TRUNCATED_TOC_WARNING } : saved
   })
 }
 
@@ -376,7 +385,7 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
   if (chapter === undefined) throw new ReaderRuntimeError('not-found', '章节不存在')
   if (!refresh) {
     const cached = await repository.getContent(userId, editionKey, toc.revision, chapterId)
-    if (cached !== null && cached.sourceFingerprint === source.fingerprint) return cached
+    if (cached !== null && cached.sourceFingerprint === source.fingerprint) return withTruncatedContentWarning(cached)
   }
   const nextChapterUrl = toc.nextChapterUrl
   let loaded: StoredContent | undefined
@@ -393,7 +402,7 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
       if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
       loaded = await repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
       // 截断的正文保留已抓取内容，但必须让客户端知道这不是完整章节。
-      return result.value.truncated === true ? { ...loaded, runtimeWarning: '正文分页超过上限，已截断；请刷新重试。' } : loaded
+      return result.value.truncated === true ? { ...loaded, runtimeWarning: TRUNCATED_CONTENT_WARNING } : loaded
     })
   } catch (error) {
     // 仅保留本次请求已成功保存的正文，不能用旧缓存掩盖抓取或正文写入失败。

@@ -267,6 +267,31 @@ test('正文已保存时，书源状态结算失败不阻断首次阅读且释�
   assert.ok(lease)
 })
 
+test('缓存中的截断正文再次读取时仍返回截断提示', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
+  const { repository, runtime, run } = await setup()
+  await runtime.runSearchBatch('user-a', run.id)
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0)
+  const source = await repository.getSourceForUser('user-a', created.edition.sourceId)
+  assert.ok(source)
+  const chapter = { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: 'https://8.8.8.8/chapter-truncated', index: 0, title: '第一章', rawFields: {}, traceRef: '' }
+  const { chapterIdFor } = await import('../server/runtime/reader-runtime.ts')
+  const chapterId = chapterIdFor(chapter)
+  await repository.saveToc('user-a', { userId: 'user-a', bookId: created.book.id, editionKey: created.edition.editionKey, sourceFingerprint: source.fingerprint, revision: 'r-truncated', chapters: [chapter], bookPatch: { lastCheckTime: Date.now(), totalChapterNum: 1 } })
+  await repository.saveContent('user-a', {
+    userId: 'user-a',
+    bookId: created.book.id,
+    editionKey: created.edition.editionKey,
+    chapterId,
+    tocRevision: 'r-truncated',
+    sourceFingerprint: source.fingerprint,
+    content: { chapter: { sourceId: chapter.sourceId, bookUrl: chapter.bookUrl, chapterUrl: chapter.chapterUrl, index: chapter.index }, contentType: 'text', raw: '截断正文', cleaned: '截断正文', pages: ['截断正文'], resources: [], truncated: true },
+  })
+  const cached = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId)
+  assert.equal(cached.content.cleaned, '截断正文')
+  assert.match(cached.runtimeWarning ?? '', /截断/u)
+})
+
 test('封面选择只使用有效同书来源，保留阅读版本并支持恢复默认', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
   const { repository, runtime, run } = await setup()
