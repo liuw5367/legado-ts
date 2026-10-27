@@ -15,8 +15,8 @@ import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-ca
 
 export { ReaderRuntimeError } from './source-session.ts'
 
-const TRUNCATED_TOC_WARNING = '目录分页超过上限，已截断；请刷新重试或联系书源作者。'
-const TRUNCATED_CONTENT_WARNING = '正文分页超过上限，已截断；请刷新重试。'
+const TRUNCATED_TOC_WARNING = '目录未完整抓取（分页或响应预算上限），已截断；请刷新重试或联系书源作者。'
+const TRUNCATED_CONTENT_WARNING = '正文未完整抓取（分页或预算上限），已截断；请刷新重试。'
 
 /** 缓存的正文记录本身带 truncated；命中缓存时也要提示，不能只在首次抓取时提示一次。 */
 function withTruncatedContentWarning(content: StoredContent & { runtimeWarning?: string }): StoredContent & { runtimeWarning?: string } {
