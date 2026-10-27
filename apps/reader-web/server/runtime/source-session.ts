@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { NodeCookieStore, createNodeSourceSession } from '@legado/source-node'
+import { KeyedConcurrencyHost, NodeCookieStore, createNodeSourceSession } from '@legado/source-node'
 import type { NodeSourceSession, NodeSourceRuntimeSnapshot } from '@legado/source-node'
 import type { InfoMapSaveRequest, SourceSession } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
@@ -7,6 +7,12 @@ import type { RuntimeStateSnapshot } from '../domain/types.ts'
 import { sourceFileRoot } from '../db/runtime-state-crypto.ts'
 
 const SOURCE_RUNTIME_LEASE_MS = 5 * 60 * 1000
+/**
+ * 目录/正文并行分页的并发上限。Android 用 threadCount（默认 32）并行抓取，
+ * Web 部署在单个 Vercel 函数内，必须给外连扇出设硬上限，避免一个书源把
+ * 200 个分页请求同时打出去。
+ */
+const SOURCE_PAGE_CONCURRENCY = 6
 
 export interface PersistentSourceState {
   /** Android InfoMap 的当前快照；仅在本次租约内向书源脚本暴露。 */
@@ -101,6 +107,7 @@ export async function withPersistentSourceSession<T>(repository: ReaderRepositor
     }
     session = createNodeSourceSession(source.normalizedSource, {
       cookieStore,
+      concurrency: new KeyedConcurrencyHost({ maxConcurrent: SOURCE_PAGE_CONCURRENCY }),
       ...(lease.snapshot.variables === undefined ? {} : { initialVariables: lease.snapshot.variables }),
       ...(lease.snapshot.nodeRuntime === undefined ? {} : { initialRuntimeState: lease.snapshot.nodeRuntime as NodeSourceRuntimeSnapshot }),
       fileRoot: sourceFileRoot(userId, source.sourceId, source.fingerprint),
