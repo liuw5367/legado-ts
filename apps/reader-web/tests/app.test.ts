@@ -103,6 +103,34 @@ test('封面 API 通过真实认证与路由写入，仅修改当前账号的用
   assert.equal((await memory.getBook(userId, created.book.id))?.customCoverUrl, undefined)
 })
 
+test('截断的目录和正文在接口响应里带 runtimeWarning', async (t) => {
+  const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const { importBatch, sourceDefinition } = await import('./fixtures/import-history.ts')
+  const { chapterIdFor } = await import('../server/runtime/reader-runtime.ts')
+  const memory = new MemoryReaderRepository()
+  const userId = '11111111-1111-4111-8111-111111111111'
+  await importBatch(memory, userId, sourceDefinition())
+  const source = (await memory.listSourcesForUser(userId))[0]!
+  const metadata = { sourceId: source.sourceId, bookUrl: 'https://history.example/book', name: '截断测试书', author: '作者', rawFields: {}, traceRef: 'truncated-api', emptyFields: [], fieldErrors: {} }
+  const created = await memory.createBook(userId, { candidate: { sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate: metadata }, metadata, sourceFingerprint: source.fingerprint, editionKey: 'edition-truncated-api' })
+  const chapter = { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: 'https://history.example/chapter-1', index: 0, title: '第一章', rawFields: {}, traceRef: '' }
+  const chapterId = chapterIdFor(chapter)
+  await memory.saveToc(userId, { userId, bookId: created.book.id, editionKey: created.edition.editionKey, sourceFingerprint: source.fingerprint, revision: 'r-truncated-api', chapters: [chapter], bookPatch: { lastCheckTime: Date.now(), totalChapterNum: 1 }, truncated: true })
+  await memory.saveContent(userId, { userId, bookId: created.book.id, editionKey: created.edition.editionKey, chapterId, tocRevision: 'r-truncated-api', sourceFingerprint: source.fingerprint, content: { chapter: { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: chapter.chapterUrl, index: 0 }, contentType: 'text', raw: '截断正文', cleaned: '截断正文', pages: ['截断正文'], resources: [], truncated: true } })
+  for (const method of ['getEdition', 'getSourceForUser', 'getToc', 'getChapterContext', 'getContent'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
+  t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
+  t.mock.method(globalThis, 'fetch', async (_url: unknown, input?: RequestInit) => new Response(JSON.stringify({ id: new Headers(input?.headers).get('authorization') === 'Bearer fixture-other' ? 'other-user' : userId }), { headers: { 'Content-Type': 'application/json' } }))
+  const headers = { Authorization: 'Bearer fixture-owner' }
+  const toc = await app.request('http://localhost/api/books/' + created.book.id + '/toc?editionKey=' + encodeURIComponent(created.edition.editionKey), { headers })
+  assert.equal(toc.status, 200)
+  assert.match(((await toc.json()) as { toc: { runtimeWarning?: string } }).toc.runtimeWarning ?? '', /截断/u)
+  const content = await app.request('http://localhost/api/books/' + created.book.id + '/chapters/' + chapterId + '?editionKey=' + encodeURIComponent(created.edition.editionKey), { headers })
+  assert.equal(content.status, 200)
+  assert.match(((await content.json()) as { content: { runtimeWarning?: string } }).content.runtimeWarning ?? '', /截断/u)
+})
+
 
 test('本地 JSON 导入通过真实认证和路由校验链接、限制请求并保存来源', async (t) => {
   const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
