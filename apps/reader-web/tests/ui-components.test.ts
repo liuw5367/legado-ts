@@ -110,5 +110,6 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(accountHome, /loading && home === null/u)
   assert.doesNotMatch(accountHome, /if \(home === null\) return/u)
   assert.doesNotMatch(searchPage, /\/api\/sources/u)
-  assert.match(searchPage, /sourceIds/u)
+  // 搜索页不再按受控 sourceIds 发起检索；书源选择在结果项内展开完成。
+  assert.match(searchPage, /search-source-options/u)
 })
