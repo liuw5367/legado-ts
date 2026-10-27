@@ -37,6 +37,8 @@ pnpm --filter @legado/reader-web dev
 
 书单和完整书架分组依赖 `0010_book_lists.sql`，新增两个表、书架可空分组列及 RLS。先迁移再部署；回滚应用代码可保留新增数据结构，不删除用户书单。
 
+目录截断提示依赖 `0015_toc_truncated.sql` 新增的 `toc_snapshots.truncated` 列。先迁移再部署；旧快照默认 `false`，回滚应用代码可保留该列。
+
 迁移是显式操作；开发和部署脚本不会在每次启动或构建时自动写数据库。
 
 ## 检查与构建

@@ -34,7 +34,7 @@
 
 目录接口先按 userId、bookId、editionKey 查找快照；快照的 sourceFingerprint 与当前书源一致且未请求 refresh 时直接返回。未命中或 refresh 时，runtime 创建 Node source session，调用 `loadTableOfContents`，按章节列表摘要生成 revision 后保存。
 
-正文接口按目录 revision 和 chapterId 查找缓存。chapterId 是章节 URL 与 index 的 SHA-256 摘要；缓存命中且来源 fingerprint 一致时不请求网络。未命中时调用 `loadChapterContent`，限制正文输出为 4 MiB，成功后保存内容。目录和正文分页上限为 200 页（Android 没有全局页数上限，该值只作安全边界）。命中上限时 core 在结果上返回 `truncated` 并给出「页数超过限制」诊断，接口以 `runtimeWarning` 下发，目录页和阅读页显示截断提示；已解析的内容仍会保存，但不会被当成完整结果而不告知。阅读页提交段落索引、字符偏移和 version 到 reading_records，并以 editionKey 保存每个来源版本的阅读位置。阅读设置通过现有 `/api/settings` 保存；`reader_settings.preferences` 是按 `general`、`display` 分组的 JSONB 唯一设置文档。`0009_reader_settings_json.sql` 移除旧阅读列，并以默认 JSON 初始化，现有账号设置会重置为默认值。设置 API 保持对旧阅读字段的兼容校验，新增偏好存入文档，不再为每项新增数据库列。
+正文接口按目录 revision 和 chapterId 查找缓存。chapterId 是章节 URL 与 index 的 SHA-256 摘要；缓存命中且来源 fingerprint 一致时不请求网络。未命中时调用 `loadChapterContent`，限制正文输出为 4 MiB，成功后保存内容。目录和正文分页上限为 200 页（Android 没有全局页数上限，该值只作安全边界）；并行分页最多同时发出 6 个请求，避免单函数外连扇出（Android 用 threadCount）。命中上限时 core 在结果上返回 `truncated` 并给出「页数超过限制」诊断，接口以 `runtimeWarning` 下发，目录页和阅读页显示截断提示；已解析的内容仍会保存，但不会被当成完整结果而不告知。阅读页提交段落索引、字符偏移和 version 到 reading_records，并以 editionKey 保存每个来源版本的阅读位置。阅读设置通过现有 `/api/settings` 保存；`reader_settings.preferences` 是按 `general`、`display` 分组的 JSONB 唯一设置文档。`0009_reader_settings_json.sql` 移除旧阅读列，并以默认 JSON 初始化，现有账号设置会重置为默认值。设置 API 保持对旧阅读字段的兼容校验，新增偏好存入文档，不再为每项新增数据库列。
 
 书架按账号通用设置排序，默认按加入时间倒序；选择阅读时间后，按书籍所有版本的最近阅读时间倒序，未读书籍排在末尾，并以加入时间作为次序相同时的排序依据。
 
