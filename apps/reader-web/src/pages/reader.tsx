@@ -5,6 +5,7 @@ import { ReaderSelectionToolbar } from '../components/reader-selection-toolbar.t
 import { ReadingMarkEditor } from '../components/reading-mark-editor.tsx'
 import { ReadingMarksList, type ReaderMarkDestination } from '../components/reading-marks-list.tsx'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
+import { FloatingMessage } from '../components/floating-message.tsx'
 import { usePageActivity, usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
 import { CircleHelp, ExternalLink, Info, RefreshCw } from 'lucide-react'
 import { useBookCache } from '../lib/book-cache-context.tsx'
@@ -757,7 +758,7 @@ export function ReaderPage() {
       {settingsError === undefined ? null : <div className="notice-with-recovery"><DismissibleMessage className="error reader-settings-error" role="alert">{settingsError}</DismissibleMessage>{themeRetry === null ? null : <button className="text-button" type="button" disabled={settingsSaving} onClick={() => void toggleTheme(themeRetry)}>重试</button>}</div>}
     </div>
     {controlsVisible && panel === null && !pageGuideVisible && !marks.selection && !marks.editing ? <button className="reader-bookmark-float" type="button" aria-label={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} title={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} aria-pressed={Boolean(marks.currentBookmark)} disabled={marks.busy} onClick={() => void marks.toggleBookmark()}><Bookmark aria-hidden="true" fill={marks.currentBookmark ? 'currentColor' : 'none'} /></button> : null}
-    {marks.error ? <div className="reader-mark-error"><DismissibleMessage className="error" role="alert" onDismiss={() => marks.setError('')}>{marks.error}<button className="text-button" type="button" onClick={marks.retry}>重新加载</button></DismissibleMessage></div> : null}
+    {marks.error ? <FloatingMessage className="reader-floating-message" message={marks.error} actionLabel="重新加载" onAction={marks.retry} onDismiss={() => marks.setError('')} /> : null}
     {marks.selection && !marks.editing ? <ReaderSelectionToolbar rect={marks.selection.rect} mark={marks.selection.mark} busy={marks.busy} onColor={(color) => void marks.save(color, marks.selection?.mark?.note ?? null)} onThought={marks.startThought} onDelete={() => void marks.remove()} onClose={marks.close} /> : null}
     {marks.editing && marks.selection ? <ReadingMarkEditor initialNote={marks.selection.mark?.note ?? ''} onClose={marks.stopThought} onSave={(note) => marks.save(marks.selection?.mark?.color ?? 'orange', note, true)} /> : null}
     {previewActive && !controlsVisible && !marks.selection && !marks.editing ? <div className="reader-progress-choice"><button type="button" onClick={returnToReadingProgress}>返回阅读进度</button><span className="reader-progress-separator" aria-hidden="true" /><button type="button" aria-label="接受当前位置为最新阅读进度" title="将当前位置设为最新阅读进度" onClick={() => void acceptPreviewPosition()}><X aria-hidden="true" /></button></div> : null}

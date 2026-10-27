@@ -8,6 +8,7 @@ import { Select } from '../components/ui/select.tsx'
 import { Sheet } from '../components/ui/sheet.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
+import { FloatingMessage } from '../components/floating-message.tsx'
 import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import { ApiError, apiFetch } from '../lib/api.ts'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
@@ -103,7 +104,7 @@ export function SourceImportHistoryPage() {
   function toggle(item: ImportHistoryItem, checked: boolean) { setSelected((values) => checked ? [...values, item.id] : values.filter((id) => id !== item.id)) }
   return <section className={`page-stack page-narrow${batchId ? ' source-import-detail-page' : ''}`}>
     <PageHeader backTo={batchId ? '/sources/import-history' : '/sources'} title={batchId ? '导入明细' : '导入记录'} description={batchId ? detail ? new Date(detail.batch.importedAt).toLocaleString('zh-CN') : '查看当时导入的书源与来源。' : '查看每次导入，并撤销仍可安全恢复的变更。'} />
-    {message ? <DismissibleMessage className="success" role="status">{message}</DismissibleMessage> : null}
+    {message ? <FloatingMessage tone="success" message={message} onDismiss={() => setMessage('')} /> : null}
     {error ? <DismissibleMessage className="error" role="alert">{error}<Button variant="secondary" onClick={() => void load()}>刷新</Button></DismissibleMessage> : null}
     {loading ? <LoadingState message="正在加载导入记录…" /> : null}
     {!batchId ? <div className="source-management-list">{history?.batches.map((batch) => <Link key={batch.id} to={'/sources/import-history/' + batch.id} className="source-management-row import-history-row"><strong className="import-history-date">{new Date(batch.importedAt).toLocaleString('zh-CN')}</strong><span className="source-url import-history-origin">{batch.displayUrl}</span><div className="source-management-info"><span>新增 {batch.newCount} · 更新 {batch.updatedCount} · 恢复 {batch.restoredCount}</span><span className="muted small">跳过 {batch.skippedCount} · 未选择 {batch.unselectedCount} · {undoLabel[batch.undoStatus]}</span></div><span className="button secondary small import-history-detail">查看明细</span>{batch.undoneAt ? <span className="muted small import-history-note">撤销于 {new Date(batch.undoneAt).toLocaleString('zh-CN')}</span> : null}{batch.invalidatedReason ? <span className="muted small import-history-note">{batch.invalidatedReason}</span> : null}</Link>)}{!loading && !error && history !== null && total === 0 ? <EmptyState icon={History} title="还没有导入记录" description="导入书源后会显示在这里；上线前的书源未记录历史" /> : null}</div> : detail ? <>
