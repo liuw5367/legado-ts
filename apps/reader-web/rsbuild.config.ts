@@ -12,8 +12,9 @@ export default defineConfig({
       'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
     },
   },
-  html: { template: './public/index.html' },
+  html: { template: './public/index.html', inject: 'body' },
   output: {
+    inlineScripts: { enable: 'auto', test: ({ size }: { size: number }) => size < 10_000 },
     distPath: { root: './dist' },
     sourceMap: { js: false, css: false },
   },

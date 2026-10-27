@@ -53,6 +53,8 @@ pnpm run build:web:vercel
 
 `build:web:vercel` 生成根目录 `public/index.html` 与 `public/static/`，这些是构建产物，不手动提交。`vercel.json` 把 `/api/*` 交给 Hono，其余深链回退到 `index.html`。
 
+生产构建将小于 10 kB 的初始脚本内联到 HTML 的 body 末尾，省去启动脚本的独立请求；应用、页面及 CSS 继续异步加载。HTML 内置启动 loading，不依赖应用资源。Vercel 为 `/static/js/` 和 `/static/css/` 下带内容 hash 的构建资源设置一年 `immutable` 缓存；这些目录只能放置带内容 hash 的构建产物。
+
 ## PWA 安装
 
 应用通过 `/static/pwa/manifest.webmanifest` 提供可安装的 PWA 配置，启动地址为 `/`，安装后使用独立窗口。应用名称与主屏幕短名称为“页灯”，描述为“为阅读，留一盏灯。”；书页与阅读灯融合的墨绿、暖金图标用于 manifest、favicon 与 iOS 主屏幕图标。原始设计文件位于 `../assets/brand/`，使用说明见 [视觉规范](../DESIGN.md)。浏览器需要 HTTPS，或在本地使用 `localhost`/`127.0.0.1`，才会显示安装入口；iOS 使用分享菜单添加到主屏幕。
