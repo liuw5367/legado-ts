@@ -49,26 +49,6 @@ export function markedFragments(text: string, paragraphIndex: number, marks: Rea
   if (offset < text.length) result.push({ text: text.slice(offset) })
   return result
 }
-/** 只在清洗过的 HTML 副本上添加标记，保留嵌套标签及 textContent 偏移。 */
-export function markedHtml(html: string, marks: ReadingMark[]): string {
-  if (!marks.length) return html
-  const doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html'); const root = doc.body.firstElementChild!
-  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT); const nodes: Text[] = []; let node: Node | null
-  while ((node = walker.nextNode())) nodes.push(node as Text)
-  let offset = 0
-  for (const node of nodes) {
-    const text = node.data; const start = offset; offset += text.length
-    const adjusted = marks.map((m) => ({ ...m, anchor: { ...m.anchor, start: { paragraphIndex: 0, offset: Math.max(0, m.anchor.start.offset - start) }, end: { paragraphIndex: 0, offset: Math.min(text.length, m.anchor.end.offset - start) } } })).filter((m) => m.anchor.end.offset > m.anchor.start.offset)
-    const fragment = doc.createDocumentFragment()
-    for (const part of markedFragments(text, 0, adjusted)) {
-      if (!part.mark) fragment.append(doc.createTextNode(part.text))
-      else { const span = doc.createElement('span'); span.className = 'reader-mark'; span.dataset.markId = part.mark.id; span.dataset.color = part.mark.color; span.setAttribute('role', 'button'); span.tabIndex = 0; span.setAttribute('aria-label', part.mark.note ? '编辑想法' : '编辑标记'); span.textContent = part.text; fragment.append(span) }
-    }
-    node.replaceWith(fragment)
-  }
-  return root.innerHTML
-}
-
 /** 滚动阅读按可视窗口查找首字；分页阅读沿用多列位置计算。 */
 export function visibleTextPoint(root: HTMLElement, paged: boolean): TextPoint | undefined {
   if (paged) return anchorFromViewport(root)

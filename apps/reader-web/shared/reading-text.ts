@@ -15,19 +15,9 @@ export function createAnchor(texts: string[], start: TextPoint, end: TextPoint, 
   const text = texts.join('\n'); const from = absolutePoint(texts, start); const to = absolutePoint(texts, end)
   return { start, end, exact: text.slice(from, to), prefix: text.slice(Math.max(0, from - 32), from), suffix: text.slice(to, to + 32), contentHash: hash }
 }
-export function createCachedChapter(texts: string[], anchor: MarkAnchor, limit = 2000, paragraphBreaks: number[] = []): CachedChapter {
+export function createCachedChapter(texts: string[], anchor: MarkAnchor, limit = 2000): CachedChapter {
   const sourceText = texts.join('\n'); const sourceStart = absolutePoint(texts, anchor.start); const sourceEnd = absolutePoint(texts, anchor.end)
-  const breaks = [...new Set(paragraphBreaks)].filter((offset) => offset > 0 && offset < sourceText.length).sort((a, b) => a - b)
-  let text = sourceText; let markStart = sourceStart; let markEnd = sourceEnd
-  if (breaks.length > 0) {
-    // 预览补入段落换行时，同步映射选区偏移，原文锚点本身保持不变。
-    let previous = 0
-    const parts: string[] = []
-    for (const offset of breaks) { parts.push(sourceText.slice(previous, offset), '\n'); previous = offset }
-    parts.push(sourceText.slice(previous)); text = parts.join('')
-    markStart = sourceStart + breaks.filter((offset) => offset <= sourceStart).length
-    markEnd = sourceEnd + breaks.filter((offset) => offset < sourceEnd).length
-  }
+  const text = sourceText; const markStart = sourceStart; const markEnd = sourceEnd
   const maxLength = Math.min(2000, Math.max(1, Math.trunc(limit)))
   let from = 0; let to = text.length
   if (text.length > maxLength) {
@@ -57,4 +47,3 @@ export function validTextAnchor(texts: string[], anchor: MarkAnchor, hash: strin
   if (!validPoint(anchor.start) || !validPoint(anchor.end) || comparePoints(anchor.start, anchor.end) >= 0) return false
   return JSON.stringify(createAnchor(texts, anchor.start, anchor.end, hash)) === JSON.stringify(anchor)
 }
-export const REMOVED_CHAPTER_TAGS = ['audio', 'embed', 'form', 'iframe', 'object', 'script', 'style', 'svg', 'video'] as const

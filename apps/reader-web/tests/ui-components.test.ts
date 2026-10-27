@@ -82,7 +82,7 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   const styles = await readFile(resolve(sourceRoot, 'styles.css'), 'utf8')
   assert.match(styles, /\.reader-toc-actions \{[^}]*justify-content: space-between/u)
   assert.doesNotMatch(styles, /\.reader-toc-actions \{ flex-direction: column/u)
-  assert.match(styles, /\.reader-html-content \{[^}]*white-space: pre-wrap/u)
+  assert.match(styles, /\.reader-content p \{[^}]*white-space: pre-wrap/u)
   assert.match(styles, /\.reader-content-paged \{/u)
   assert.match(styles, /column-width: var\(--reader-page-width, 100vw\)/u)
   assert.doesNotMatch(styles, /column-width: 100%/u)

@@ -3,7 +3,7 @@ import { Element, Text, isCDATA, isComment, isDocument, isText, isTag, type AnyN
 import { getAttributeValue, getChildren, getText } from 'domutils'
 import { is as matchesSelector, selectAll } from 'css-select'
 import { render } from 'dom-serializer'
-import { compileSourcePattern, ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode, type ParserNodeInfo, type ParserNodeMutation } from '@legado/source-core'
+import { compileSourcePattern, ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode, type ParserNodeInfo, type ParserNodeMutation, type ReadingHtmlNode } from '@legado/source-core'
 
 class HtmlDocumentView implements HtmlDocument {
   private readonly ids = new Map<string, AnyNode>()
@@ -643,4 +643,14 @@ export class HtmlParserAdapter implements HtmlParser {
   public parse(input: string, mode: 'html' | 'xml' = 'html'): HtmlDocument {
     return new HtmlDocumentView(parseDocument(input, { xmlMode: mode === 'xml' }), mode === 'xml')
   }
+}
+
+/** 仅提供顺序完整的节点视图；正文规范化与安全策略由 source-core 处理。 */
+export function parseReadingHtml(html: string): readonly ReadingHtmlNode[] {
+  const view = (node: AnyNode): ReadingHtmlNode[] => {
+    if (isText(node)) return [{ kind: 'text', text: node.data }]
+    if (!isTag(node)) return []
+    return [{ kind: 'element', tag: node.name, attributes: node.attribs, get children() { return node.children.flatMap(view) } }]
+  }
+  return parseDocument(html).children.flatMap(view)
 }

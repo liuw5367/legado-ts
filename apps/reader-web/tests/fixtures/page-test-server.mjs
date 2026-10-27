@@ -1,3 +1,5 @@
+import { normalizeReadingContent, readingParagraphTexts } from '@legado/source-core'
+import { parseReadingHtml } from '@legado/source-node'
 import { changeMark, markPage } from '../../shared/reading-annotations.ts'
 import { createCachedChapter } from '../../shared/reading-text.ts'
 import { bookCoverRequestSchema } from '../../shared/book-sources.ts'
@@ -132,8 +134,9 @@ function contentForChapter(chapter, refresh = false) {
   const html = '<p>正文与<a href="https://example.test">链接中的标记文字</a>相邻。</p><p>第一行<br>第二行<strong>嵌套文字</strong> &amp; 实体。</p>' + paragraphs.map((paragraph) => '<p>' + paragraph + '</p>').join('')
   const contentType = chapter.index === 3 ? 'html' : 'text'
   const cleaned = contentType === 'html' ? html : text
-  const cachedParagraphs = contentType === 'html' ? [html.replace(/<[^>]*>/gu, '').replace(/&amp;/gu, '&')] : cleaned.split(/\n+/u).map((paragraph) => paragraph.trim()).filter(Boolean)
-  return { content: { chapter, contentType, raw: cleaned, cleaned, pages: paragraphs, resources: [], title: chapter.title }, cachedParagraphs }
+  const content = { chapter, contentType, raw: cleaned, cleaned, pages: paragraphs, resources: [], title: chapter.title }
+  const cachedParagraphs = readingParagraphTexts(normalizeReadingContent({ ...content, baseUrl: chapter.chapterUrl }, parseReadingHtml))
+  return { content, cachedParagraphs }
 }
 
 for (const editionKey of editions.keys()) {

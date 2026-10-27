@@ -42,6 +42,14 @@
 
 详见 [工作流](workflows.md)。多源调度、应用状态、书架和用户凭据属于 `apps/`，不由这些入口代办。
 
+## 阅读正文结构
+
+`normalizeReadingContent(input, parseHtml)` 将已提取的 `ChapterContent.cleaned`、`contentType` 和图片资源转换为 `ReadingDocument`；可提供最终响应地址作为 `baseUrl` 解析相对图片。它不执行网络请求、书源替换或抓取格式化，也不改变原始缓存契约。
+
+纯文本与 HTML 都输出有序的段落、图片及显式分页块。段落只保留加粗、斜体、下划线和代码格式，来源链接保留为普通文字，脚本及危险容器整棵移除。`text` 中保留的 `img`、`usehtml` 和独立行 `[newpage]` 同样参与规范化，其他文本标签和实体不重新解释。纯文本边界缩进由阅读器控制，HTML 的 `pre` 保留行内空白。图片仅接受 HTTP(S) 或限定的位图 base64 data URL，附加图片按规范化地址去重。
+
+`ReadingHtmlParser` 由宿主提供包含全部文本节点的有序节点视图，core 统一决定过滤、断段和格式；需要解释 HTML 却未提供解析器时抛出带 `capability-missing` 的错误。`readingParagraphTexts(document)` 生成按块索引对齐的文字数组，图片与分页标记对应空字符串，字符偏移为 UTF-16。渲染、笔记校验和摘录必须使用同一模型及索引，不能另外从 HTML 的整章 `textContent` 推导锚点。
+
 ## 诊断与会话
 
 `diagnostic`、`primaryError`、`safeLocation` 创建脱敏诊断；`createSourceSession` 为一个固定书源隔离脚本缓存、变量快照和 `concurrentRate` 窗口，`run` 每次创建工作流端口，`close` 释放等待并拒绝新操作。

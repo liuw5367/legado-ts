@@ -81,3 +81,10 @@ node --max-old-space-size=192 --test apps/reader-web/tests/scale/source-search.t
 ## 书签与笔记验收
 
 正文选字后可选择五色或直接输入想法，点击已有标记显示改色、想法与快速删除。底栏书签打开当前书籍双列表，右侧悬浮书签记录当前位置；设置笔记页可组合关键词与书籍筛选，正常记录删除后在已删除页恢复。第四章提供链接、br换行、嵌套标签和HTML实体正文，用于检查精确范围与点击标记不跳转链接。模拟服务复用批注领域规则，写入、列表、删除和恢复均有状态；reset清空模拟笔记。数据库RLS、版本及备份语义由reading-marks测试验证，模拟服务不替代真实后端验收。
+
+
+## 统一正文浏览器回归
+
+在仓库根目录先构建 source-core 和 source-node，然后在 `apps/reader-web` 运行 `./node_modules/.bin/rsbuild dev --config tests/fixtures/reading-content.config.ts`，打开 `http://127.0.0.1:3001/`。这是独立测试入口，不加载账号、数据库或生产页面；页面显示 PASS 及断言数量，失败显示实际值与预期值。
+
+该入口使用真实浏览器 DOMParser、React 正文和 DOM Range，验证 core 夹具预期、浏览器与 Node 的完整模型一致、跨段 UTF-16 选区、笔记高亮及工具栏更新后的文本节点稳定性。它不替代手机系统长按验收；完整阅读交互仍使用上面的内存模拟服务。

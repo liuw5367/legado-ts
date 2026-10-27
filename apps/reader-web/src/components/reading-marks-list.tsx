@@ -16,7 +16,8 @@ import { Button } from './ui/button.tsx'
 import { MoreMenu } from './more-menu.tsx'
 import { Sheet } from './ui/sheet.tsx'
 import { useReaderSettings } from '../lib/settings-context.tsx'
-import { sanitizeChapterHtml } from '../lib/html-content.ts'
+import { readingDocument } from '../lib/html-content.ts'
+import { readingParagraphTexts } from '@legado/source-core'
 
 type CachedMarkPage = { items: ReadingMark[]; cursor: string | null }
 const cachedMarkPages = new Map<string, CachedMarkPage>()
@@ -157,9 +158,7 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
 
 function normalizeChapterTitle(value: string) { return value.trim().replace(/\s+/gu, '').toLocaleLowerCase() }
 function chapterTexts(content: ApiContent) {
-  if (content.contentType === 'text') return content.cleaned.split(/\n+/u).map((paragraph) => paragraph.trim()).filter(Boolean)
-  const documentValue = new DOMParser().parseFromString(sanitizeChapterHtml(content.cleaned), 'text/html')
-  return [(documentValue.body.textContent ?? '').trim()]
+  return readingParagraphTexts(readingDocument({ ...content, baseUrl: content.finalUrl ?? content.chapter.chapterUrl }))
 }
 
 function CachedChapterPreview({ mark, fontSize, lineHeight }: { mark: ReadingMark; fontSize: number; lineHeight: number }) {

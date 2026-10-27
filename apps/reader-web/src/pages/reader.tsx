@@ -1,6 +1,6 @@
 import { Bookmark, Moon, Sun, X } from 'lucide-react'
 import { useReaderMarks } from '../lib/use-reader-marks.ts'
-import { markedFragments, markedHtml, visibleTextPoint } from '../lib/reader-annotations.ts'
+import { visibleTextPoint } from '../lib/reader-annotations.ts'
 import { ReaderSelectionToolbar } from '../components/reader-selection-toolbar.tsx'
 import { ReadingMarkEditor } from '../components/reading-mark-editor.tsx'
 import { ReadingMarksList, type ReaderMarkDestination } from '../components/reading-marks-list.tsx'
@@ -24,7 +24,9 @@ import { Button } from '../components/ui/button.tsx'
 import { Sheet } from '../components/ui/sheet.tsx'
 import { apiFetch, type ApiChapter, type ApiContent, type ApiPageTapAction, type ApiPageTapZones, type ApiPosition, type ApiToc } from '../lib/api.ts'
 import { useReaderSettings } from '../lib/settings-context.tsx'
-import { safeResourceUrl, sanitizeChapterHtml } from '../lib/html-content.ts'
+import { readingDocument } from '../lib/html-content.ts'
+import { readingParagraphTexts } from '@legado/source-core'
+import { ReaderBody } from '../components/reader-body.tsx'
 
 type ReaderPanel = 'toc' | 'settings' | 'marks' | null
 type PageTapZoneDrag = { pointerId: number; boundary: PageTapZoneBoundary }
@@ -96,7 +98,9 @@ export function ReaderPage() {
   const requestIdRef = useRef(0)
   const liveToc = cache.get(bookId, editionKey)?.toc ?? toc
 
-  const marks = useReaderMarks({ articleRef, bookId, editionKey, chapterId, content, toc: liveToc, blocked: panel !== null || pageGuideVisible || refreshing, paged: settings.readingMode === 'paged', layout: pageLayout, pageIndex, positionReady: positionLoaded, onRestore: (point) => { restoredPositionRef.current = true; latestAnchorRef.current = point; paginationAnchorRef.current = point }, onPage: turnPage, onInteract: cancelGesture })
+  const readingContent = useMemo(() => content ? readingDocument({ ...content, baseUrl: content.finalUrl ?? content.chapter.chapterUrl }) : { blocks: [] }, [content])
+  const texts = useMemo(() => readingParagraphTexts(readingContent), [readingContent])
+  const marks = useReaderMarks({ texts, articleRef, bookId, editionKey, chapterId, content, toc: liveToc, blocked: panel !== null || pageGuideVisible || refreshing, paged: settings.readingMode === 'paged', layout: pageLayout, pageIndex, positionReady: positionLoaded, onRestore: (point) => { restoredPositionRef.current = true; latestAnchorRef.current = point; paginationAnchorRef.current = point }, onPage: turnPage, onInteract: cancelGesture })
 
   useEffect(() => {
     if (marks.selection === null || marks.editing) return
@@ -453,12 +457,6 @@ export function ReaderPage() {
     }
   }, [content, chapterId, positionLoaded, paginationError, settings.fontSize, settings.lineHeight, settings.marginTop, settings.marginRight, settings.marginBottom, settings.marginLeft, settings.readingMode])
 
-  const paragraphs = useMemo(() => content?.cleaned.split(/\n+/u).map((text) => text.trim()).filter(Boolean) ?? [], [content])
-  const htmlContent = useMemo(() => content?.contentType === 'html' ? markedHtml(sanitizeChapterHtml(content.cleaned), marks.resolved) : '', [content, marks.resolved])
-  const additionalResources = useMemo(() => {
-    if (content?.contentType !== 'html') return []
-    return content.resources.map((resource) => safeResourceUrl(resource.url, true)).filter((url): url is string => url !== undefined).filter((url) => !htmlContent.includes(url))
-  }, [content, htmlContent])
   const siblings = liveToc?.chapters.filter((chapter) => chapter.isVolume !== true) ?? []
   const currentIndex = siblings.findIndex((chapter) => chapter.chapterId === chapterId)
   const previous = currentIndex > 0 ? siblings[currentIndex - 1] : undefined
@@ -612,7 +610,7 @@ export function ReaderPage() {
   const bookDetails = cache.get(bookId, editionKey)?.details
   const bookName = bookDetails?.edition.metadata?.name || bookDetails?.book.name || '阅读'
   const chapterProgress = `${currentIndex < 0 ? '—' : currentIndex + 1}/${siblings.length || '—'}章`
-  const wordCountLabel = `${chapterCharacterCount(content.cleaned).toLocaleString('zh-CN')} 字`
+  const wordCountLabel = `${chapterCharacterCount(texts.join('\n')).toLocaleString('zh-CN')} 字`
   const readerStyle = { fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight, '--reader-margin-top': `${settings.marginTop}px`, '--reader-margin-right': `${settings.marginRight}px`, '--reader-margin-bottom': `${settings.marginBottom}px`, '--reader-margin-left': `${settings.marginLeft}px` } as CSSProperties
   const pageZonePreviewStyle = { '--zone-left-width': `${pageGuideDraft.leftWidthPercent}%`, '--zone-center-width': `${pageGuideDraft.centerWidthPercent}%`, '--zone-top-height': `${pageGuideDraft.centerTopHeightPercent}%`, '--zone-middle-height': `${pageGuideDraft.centerMiddleHeightPercent}%` } as CSSProperties
   const leftCenterRange = pageTapZoneBoundaryRange(pageGuideDraft, 'left-center')
@@ -716,7 +714,7 @@ export function ReaderPage() {
           setControlsVisible((value) => !value)
         }
       }}>
-      {content.contentType === 'html' ? htmlContent.length === 0 && additionalResources.length === 0 ? <p className="muted">本章暂无正文。</p> : <><div className="reader-html-content" data-paragraph={0} dangerouslySetInnerHTML={{ __html: htmlContent }} />{additionalResources.map((url, index) => <p className="reader-resource" data-paragraph={index + 1} key={url}><img src={url} alt="正文插图" loading="lazy" decoding="async" /></p>)}</> : paragraphs.length === 0 ? <p className="muted">本章暂无正文。</p> : paragraphs.map((paragraph, index) => <p className="reader-paragraph" data-paragraph={index} key={`${index}:${paragraph.slice(0, 12)}`}>{markedFragments(paragraph, index, marks.resolved).map((part, i) => part.mark ? <span className="reader-mark" data-mark-id={part.mark.id} data-color={part.mark.color} role="button" tabIndex={0} aria-label={part.mark.note ? '编辑想法' : '编辑标记'} key={i}>{part.text}</span> : part.text)}</p>)}
+      <ReaderBody document={readingContent} marks={marks.resolved} />
     </article>
     {paged ? <dialog ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" aria-labelledby="reader-page-guide-title" onCancel={(event) => { event.preventDefault(); closePageGuide() }}>
       <div className="reader-page-guide-shell">

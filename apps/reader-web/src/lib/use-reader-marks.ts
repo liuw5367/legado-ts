@@ -5,9 +5,8 @@ import { apiFetch, type ApiContent, type ApiToc } from './api.ts'
 import { usePageActivity, usePageLoadEffect, usePageNavigation } from './use-page-resource.ts'
 import { pageIndexForAnchor, type PageLayout } from './reader-pagination.ts'
 import { createAnchor, rangeForAnchor, resolveAnchor, selectedAnchor, textFingerprint, visibleTextPoint } from './reader-annotations.ts'
-import { sanitizeChapterHtml } from './html-content.ts'
 
-export function useReaderMarks({ articleRef, bookId, editionKey, chapterId, content, toc, blocked, paged, layout, pageIndex, positionReady, onRestore, onPage, onInteract }: { articleRef: RefObject<HTMLElement | null>; bookId: string; editionKey: string; chapterId: string; content: ApiContent | null; toc: ApiToc | null; blocked: boolean; paged: boolean; layout: PageLayout; pageIndex: number; positionReady: boolean; onRestore: (point: MarkAnchor['start']) => void; onPage: (page: number) => void; onInteract: () => void }) {
+export function useReaderMarks({ texts, articleRef, bookId, editionKey, chapterId, content, toc, blocked, paged, layout, pageIndex, positionReady, onRestore, onPage, onInteract }: { texts: string[]; articleRef: RefObject<HTMLElement | null>; bookId: string; editionKey: string; chapterId: string; content: ApiContent | null; toc: ApiToc | null; blocked: boolean; paged: boolean; layout: PageLayout; pageIndex: number; positionReady: boolean; onRestore: (point: MarkAnchor['start']) => void; onPage: (page: number) => void; onInteract: () => void }) {
   const page = usePageActivity(); const navigation = usePageNavigation(); const userId = navigation?.userId; const [params] = useSearchParams(); const [annotations, setAnnotations] = useState<ReadingMark[]>([]); const [bookmarks, setBookmarks] = useState<ReadingMark[]>([]); const [selection, setSelection] = useState<{ anchor: MarkAnchor; rect: DOMRect; mark: ReadingMark | null } | null>(null); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [retry, setRetry] = useState(0); const [viewportVersion, setViewportVersion] = useState(0)
   const identity = JSON.stringify([bookId, editionKey, chapterId, toc?.sourceFingerprint]); const identityRef = useRef(identity); identityRef.current = identity
   const restoreIdentity = JSON.stringify([identity, page?.location.key ?? '']);
@@ -15,7 +14,6 @@ export function useReaderMarks({ articleRef, bookId, editionKey, chapterId, cont
   const resetIdentity = useRef(identity)
   const restoredMark = useRef(''); const selectionId = useRef<string | null>(null)
   const hash = content ? textFingerprint(content.cleaned) : ''
-  const texts = useMemo(() => { if (!content) return []; if (content.contentType === 'text') return content.cleaned.split(/\n+/u).map((p) => p.trim()).filter(Boolean); const doc = new DOMParser().parseFromString(sanitizeChapterHtml(content.cleaned), 'text/html'); return [doc.body.textContent ?? ''] }, [content])
   const resolved = useMemo(() => annotations.filter((r) => r.editionKey === editionKey && r.chapterUrl === content?.chapter.chapterUrl && r.sourceFingerprint === toc?.sourceFingerprint).flatMap((r) => { const anchor = resolveAnchor(texts, r.anchor, hash); return anchor ? [{ ...r, anchor }] : [] }), [annotations, texts, hash, editionKey, content?.chapter.chapterUrl, toc?.sourceFingerprint])
   useEffect(() => {
     if (resetIdentity.current === identity) return

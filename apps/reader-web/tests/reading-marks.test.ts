@@ -171,8 +171,8 @@ test('服务端拒绝超界及伪造摘录锚点，HTML实体和嵌套文字保�
   const cleaned = '<p>甲&amp;<b>乙</b><br>丙</p><script>移除</script><p>丁</p>'
   const chapter = { sourceId: 'https://marks.test', bookUrl: 'https://marks.test/book', chapterUrl: input.chapterUrl, title: input.chapterTitle, index: input.chapterIndex, traceRef: '', rawFields: {} }
   await repo.saveContent(user, { userId: user, bookId, editionKey: input.editionKey, chapterId: input.chapterId, sourceFingerprint: input.sourceFingerprint, tocRevision: input.tocRevision, content: { chapter, cleaned, raw: cleaned, contentType: 'html', pages: [cleaned], resources: [] } })
-  const anchor = createAnchor(['甲&乙丙丁'], { paragraphIndex: 0, offset: 1 }, { paragraphIndex: 0, offset: 4 }, textFingerprint(cleaned))
-  const response = await request(path, 'PUT', { ...input, anchor }); assert.equal(response.status, 200); assert.equal((await response.json()).item.anchor.exact, '&乙丙')
+  const anchor = createAnchor(['甲&乙', '丙', '丁'], { paragraphIndex: 0, offset: 1 }, { paragraphIndex: 1, offset: 1 }, textFingerprint(cleaned))
+  const response = await request(path, 'PUT', { ...input, anchor }); assert.equal(response.status, 200); assert.equal((await response.json()).item.anchor.exact, '&乙\n丙')
 })
 
 test('备份校验拒绝重叠活动标记，导入失败保留原数据', async () => {
@@ -205,4 +205,21 @@ test('书单保留的同ID书籍冲突时同步重映射导入笔记', async () 
   assert.notEqual(note.bookId, bookId)
   assert.equal((await target.getBook(user, note.bookId))?.name, '山间来信')
   assert.equal((await target.getBook(user, bookId))?.name, '本地另一本书')
+})
+
+test('text 内图片与特殊格式使用统一块索引校验并保存摘录', async () => {
+  const { repo, request, path, input, bookId } = await setup()
+  const cleaned = '前文<img src="/a.png">后文\n<usehtml><p>特殊<b>文字</b></p></usehtml>'
+  const chapter = { sourceId: 'https://marks.test', bookUrl: 'https://marks.test/book', chapterUrl: input.chapterUrl, title: input.chapterTitle, index: input.chapterIndex, traceRef: '', rawFields: {} }
+  await repo.saveContent(user, { userId: user, bookId, editionKey: input.editionKey, chapterId: input.chapterId, sourceFingerprint: input.sourceFingerprint, tocRevision: input.tocRevision, content: { chapter, cleaned, raw: cleaned, contentType: 'text', pages: [cleaned], resources: [{ kind: 'image', url: 'https://marks.test/a.png' }] } })
+  const texts = ['前文', '', '后文', '特殊文字']
+  const anchor = createAnchor(texts, { paragraphIndex: 2, offset: 1 }, { paragraphIndex: 3, offset: 3 }, textFingerprint(cleaned))
+  const response = await request(path, 'PUT', { ...input, anchor })
+  assert.equal(response.status, 200)
+  const row = (await response.json()).item as ReadingMark
+  assert.equal(row.anchor.exact, '文\n特殊文')
+  assert.deepEqual(row.cachedChapter?.paragraphs, texts)
+  assert.deepEqual(row.cachedChapter?.start, anchor.start)
+  const invalid = { ...anchor, start: { paragraphIndex: 1, offset: 1 } }
+  assert.equal((await request(path.replace(row.id, randomUUID()), 'PUT', { ...input, anchor: invalid })).status, 400)
 })
