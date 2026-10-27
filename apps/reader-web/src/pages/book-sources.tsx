@@ -4,7 +4,7 @@ import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { usePageLoadEffect } from '../lib/use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Search, X } from 'lucide-react'
+import { ChevronDown, Search } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
@@ -217,8 +217,7 @@ export function BookSourcesPage() {
         <div className="search-row">
           <div className="search-input-shell">
             <Search className="search-input-icon" aria-hidden="true" />
-            <Input aria-label="搜索可用书源" className="search-input" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="书名" autoComplete="off" />
-            {keyword.length > 0 ? <button className="search-clear" type="button" aria-label="清空关键词" onClick={() => setKeyword('')}><X aria-hidden="true" /></button> : null}
+            <Input aria-label="搜索可用书源" className="search-input" value={keyword} readOnly placeholder="书名" autoComplete="off" />
           </div>
           <Button className={fullSearchLoading ? 'cancel-button-active' : 'cancel-button'} variant={fullSearchLoading ? 'secondary' : 'default'} type={fullSearchLoading ? 'button' : 'submit'} disabled={!fullSearchLoading && keyword.trim().length === 0} onClick={fullSearchLoading ? () => void cancel() : undefined}>
             {fullSearchLoading ? '取消' : <><Search aria-hidden="true" />搜索</>}

@@ -122,13 +122,15 @@ function BookRow({ view, item, showRemove, removing, onRemove, onOrganized }: { 
   const { book, edition, position } = item
   const target = position === undefined ? `/books/${encodeURIComponent(book.id)}/read?editionKey=${encodeURIComponent(edition.editionKey)}` : `/books/${encodeURIComponent(book.id)}/read/${encodeURIComponent(position.chapterId)}?editionKey=${encodeURIComponent(edition.editionKey)}`
   return <article className="book-row">
-    <Link className="book-row-main" to={target} state={{ backTo: '/', backState: { homeView: view } }} aria-label={`阅读：${book.name}`}>
+    <Link className="book-row-main" to={view === 'reading' ? '/books/' + encodeURIComponent(book.id) + '/details?editionKey=' + encodeURIComponent(edition.editionKey) : target} state={{ backTo: '/', backState: { homeView: view } }} aria-label={`${view === 'reading' ? '查看详情' : '阅读'}：${book.name}`}>
       <BookCover name={book.name} coverUrl={book.customCoverUrl || book.coverUrl} />
       <span className="book-row-info"><strong>{book.name}</strong><span className="muted">{book.author ?? '作者未知'}</span><span className={position === undefined ? 'muted small' : 'small'}>{position === undefined ? '尚未阅读' : `读到：${position.title}`}</span></span>
     </Link>
     <MoreMenu label={`更多操作：${book.name}`}>
+      {view === 'reading' ? <Link className="more-menu-item" to={target} state={{ backTo: '/', backState: { homeView: view } }}>继续阅读</Link> : null}
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(book.id) + '/details?editionKey=' + encodeURIComponent(edition.editionKey)} state={{ backTo: '/', backState: { homeView: view } }}>查看详情</Link>
       <Link className="more-menu-item" to={`/books/${encodeURIComponent(book.id)}/toc?editionKey=${encodeURIComponent(edition.editionKey)}`} state={{ backTo: '/', backState: { homeView: view } }}>查看目录</Link>
+      {showRemove ? <Link className="more-menu-item" to={`/books/${encodeURIComponent(book.id)}/sources`} state={{ backTo: '/', backState: { homeView: view } }}>切换书源</Link> : null}
       {showRemove ? <><button className="more-menu-item" onClick={() => setPicker('group')}>修改分组</button><button className="more-menu-item" onClick={() => setPicker('join')}>加入书单</button><button className="more-menu-item" onClick={() => setPicker('move')}>移入书单</button></> : null}
       {showRemove ? <button className="more-menu-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}
     </MoreMenu>
