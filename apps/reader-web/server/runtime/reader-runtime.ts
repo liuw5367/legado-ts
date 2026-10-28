@@ -374,7 +374,7 @@ async function openBookSource(repository: ReaderRepository, userId: string, book
 async function getOrLoadTocSummary(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<TocSummary> {
   let summary: CachedTocSummary | null = null
   if (!refresh) {
-    const edition = await repository.getEdition(userId, bookId, editionKey)
+    const edition = await repository.getEditionSource(userId, bookId, editionKey)
     if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
     const [source] = await repository.listSourceSummaries(userId, [edition.sourceId])
     if (source === undefined || !source.enabled) throw new ReaderRuntimeError('configuration', `书源不可用：${edition.sourceId}`)

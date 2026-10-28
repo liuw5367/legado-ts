@@ -55,15 +55,16 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
       // 已有笔记的文字身份不可被编辑请求替换；原文失效后仍允许修改想法和颜色。
       const current = input.expectedVersion === undefined ? undefined : (await repo.listReadingMarks(userId, { kind, bookId, id, all: true })).items.find((r) => r.id === id)
       let sourceName = current?.sourceName
+      let editionSource: { sourceId: string; sourceFingerprint: string } | null | undefined
       let cachedChapter: CachedChapter | null = current?.cachedChapter ?? null
       if (current) {
         if (!sameAnchor(current.anchor, input.anchor) || (['editionKey', 'chapterUrl', 'sourceFingerprint', 'chapterId', 'chapterIndex', 'chapterTitle', 'tocRevision'] as const).some((key) => current[key] !== input[key])) throw new MarkError(409, '不能修改原文位置，请重新选择')
       } else {
-        const edition = await repo.getEditionSource(userId, bookId, input.editionKey)
-        const toc = edition ? await repo.getChapterContext(userId, bookId, input.editionKey, input.chapterId) : null
+        editionSource = await repo.getEditionSource(userId, bookId, input.editionKey)
+        const toc = editionSource ? await repo.getChapterContext(userId, bookId, input.editionKey, input.chapterId, true) : null
         const chapter = toc?.chapter?.chapterUrl === input.chapterUrl ? toc.chapter : undefined
         const content = toc && chapter ? await repo.getContentDisplay(userId, input.editionKey, toc.revision, input.chapterId) : null
-        if (!edition || edition.sourceFingerprint !== input.sourceFingerprint || !toc || toc.revision !== input.tocRevision || !chapter || chapter.index !== input.chapterIndex || !content || textFingerprint(content.content.cleaned) !== input.anchor.contentHash) throw new MarkError(409, '正文已变化，请重新加载后选择')
+        if (!editionSource || editionSource.sourceFingerprint !== input.sourceFingerprint || !toc || toc.revision !== input.tocRevision || !chapter || chapter.index !== input.chapterIndex || !content || textFingerprint(content.content.cleaned) !== input.anchor.contentHash) throw new MarkError(409, '正文已变化，请重新加载后选择')
         input.chapterTitle = chapter.title ?? ''
         const chapterContent = content.content
         const document = normalizeReadingContent({ ...chapterContent, baseUrl: chapterContent.finalUrl ?? chapterContent.chapter.chapterUrl }, parseReadingHtml)
@@ -73,7 +74,7 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
 
       }
       if (!sourceName) {
-        const edition = await repo.getEditionSource(userId, bookId, input.editionKey)
+        const edition = editionSource ?? await repo.getEditionSource(userId, bookId, input.editionKey)
         if (!edition) throw new MarkError(409, '书源已变化，请重新加载后选择')
         sourceName = (await repo.getSourceDisplayName(userId, edition.sourceId) ?? edition.sourceId).trim().slice(0, 256) || edition.sourceId.slice(0, 256)
       }

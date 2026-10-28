@@ -429,6 +429,12 @@ test('目录展示缓存只读取精简摘要，保留章节身份与截断提�
   assert.equal(toc.chapters[0]!.isVip, true)
   assert.deepEqual(Object.keys(toc.chapters[0]!).sort(), ['chapterId', 'chapterUrl', 'index', 'isVip', 'title'])
   assert.ok(JSON.stringify(toc).length < JSON.stringify(chapter).length / 5)
+  const originalGetEdition = repository.getEdition.bind(repository)
+  t.mock.method(repository, 'getEdition', async (userId: string, bookId: string, editionKey?: string) => {
+    if (userId === 'user-a' && bookId === created.book.id && editionKey === created.edition.editionKey) throw new Error('不得读取完整版本')
+    return originalGetEdition(userId, bookId, editionKey)
+  })
+  await assert.doesNotReject(runtime.getOrLoadTocSummary('user-a', created.book.id, created.edition.editionKey))
   await assert.rejects(runtime.getOrLoadTocSummary('other-user', created.book.id, created.edition.editionKey), /不存在/u)
   const management = await repository.listManagedSources('user-a', { all: true, page: 1, pageSize: 50, query: '', status: 'all', sourceIds: [source.sourceId] })
   await repository.applySourceActions('user-a', 'disable', [{ sourceId: source.sourceId, expectedSourceRevision: management.sources[0]!.sourceRevision }])

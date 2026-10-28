@@ -48,10 +48,24 @@ test('跨段标记片段保留原文，无额外字符和重叠渲染', () => {
 })
 
 test('鉴权、创建默认橙色、五色编辑、软删除与恢复', async () => {
-  const { app, request, path, input, bookId } = await setup()
+  const { repo, app, request, path, input, bookId } = await setup()
+  const originalGetChapterContext = repo.getChapterContext.bind(repo)
+  const displayFlags: Array<boolean | undefined> = []
+  repo.getChapterContext = async (userId, currentBookId, editionKey, chapterId, display) => {
+    displayFlags.push(display)
+    return originalGetChapterContext(userId, currentBookId, editionKey, chapterId, display)
+  }
+  const originalGetEditionSource = repo.getEditionSource.bind(repo)
+  let editionSourceCalls = 0
+  repo.getEditionSource = async (userId, currentBookId, editionKey) => {
+    editionSourceCalls++
+    return originalGetEditionSource(userId, currentBookId, editionKey)
+  }
   assert.equal((await app.request('http://localhost/api/annotations')).status, 401)
   assert.equal((await request(path, 'PUT', input, 'other')).status, 404)
   const response = await request(path, 'PUT', input); assert.equal(response.status, 200)
+  assert.deepEqual(displayFlags, [true])
+  assert.equal(editionSourceCalls, 1)
   let row = (await response.json()).item as ReadingMark
   assert.equal(row.color, 'orange'); assert.equal(row.note, '想起日落')
   assert.equal((await request(path, 'PUT', input)).status, 200)

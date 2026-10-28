@@ -1519,7 +1519,10 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async getBook(userId: string, bookId: string): Promise<StoredBook | null> { return [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId)?.book ?? null }
   public async listEditions(userId: string, bookId: string): Promise<StoredEdition[]> { return [...this.books.values()].filter((item) => item.book.userId === userId && item.book.id === bookId).map((item) => item.edition).sort((a, b) => a.editionKey.localeCompare(b.editionKey)) }
   public async activateEdition(userId: string, bookId: string, editionKey: string) { const edition = await this.setActiveEdition(userId, bookId, editionKey); return edition ? { editionKey: edition.editionKey } : null }
-  public async getEditionSource(userId: string, bookId: string, editionKey: string) { const edition = await this.getEdition(userId, bookId, editionKey); return edition ? { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint } : null }
+  public async getEditionSource(userId: string, bookId: string, editionKey: string) {
+    const edition = [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId && item.edition.editionKey === editionKey)?.edition
+    return edition ? { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint } : null
+  }
   public async getContentDisplay(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<CachedReadingContent | null> {
     const cached = this.contents.get(`${userId}:${editionKey}:${tocRevision}:${chapterId}`)
     return cached ? { tocRevision: cached.tocRevision, sourceFingerprint: cached.sourceFingerprint, content: readingContent(cached.content, chapterId), ...(cached.content.truncated === undefined ? {} : { truncated: cached.content.truncated }) } : null
