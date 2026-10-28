@@ -18,7 +18,7 @@ import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } 
 import type { Chapter, NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser, type ReaderTransaction } from './client.ts'
 import { readingAnnotations, bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportBatches, sourceImportLinks, sourceImportItems, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
-import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
+import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStats, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type HomeSearchHistory, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
 
@@ -111,6 +111,7 @@ export interface ReaderRepository {
   listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>>
   getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null>
   getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined>
+  getSourceManagementStats(userId: string): Promise<SourceManagementStats>
   listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage>
   applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }>
   applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }>
@@ -333,6 +334,13 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const [row] = await transaction.select({ name: sql<unknown>`${userSources.normalizedSource}->'bookSourceName'` }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sourceId), eq(userSources.deleted, false))).limit(1)
       return typeof row?.name === 'string' ? row.name : undefined
+    })
+  }
+
+  public async getSourceManagementStats(userId: string): Promise<SourceManagementStats> {
+    return withUser(userId, async (transaction) => {
+      const rows = await transaction.select({ sourceId: userSources.sourceId, enabled: userSources.enabled }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
+      return sourceManagementStats(rows)
     })
   }
 
@@ -1134,6 +1142,9 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
   public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { const row = this.userSourceMap.get(`${userId}:${sourceId}`); if (!row || row.deleted || !row.source.enabled) return null; const priority = this.importHistory.links.get(userId)?.find((link) => link.id === row.source.importLinkId)?.sortOrder ?? Number.MAX_SAFE_INTEGER; return { ...row.source, sourceRevision: row.revision, priority } }
   public async getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined> { return this.allSources(userId).find((source) => source.sourceId === sourceId)?.normalizedSource.bookSourceName }
+  public async getSourceManagementStats(userId: string): Promise<SourceManagementStats> {
+    return sourceManagementStats(this.allSources(userId))
+  }
   public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
     const query = params.query.toLocaleLowerCase()
     const allRows = this.allSources(userId)
@@ -1786,3 +1797,14 @@ function displayBook(row: { id: string; name: string; author?: string | null; co
   return { id: row.id, name: row.name, ...(row.author == null ? {} : { author: row.author }), ...(row.coverUrl == null ? {} : { coverUrl: row.coverUrl }), ...(row.customCoverUrl == null ? {} : { customCoverUrl: row.customCoverUrl }) }
 }
 function displayPosition(row: { chapterId: string; title: string; lastReadAt: Date | string }) { return { chapterId: row.chapterId, title: row.title, lastReadAt: typeof row.lastReadAt === 'string' ? row.lastReadAt : row.lastReadAt.toISOString() } }
+
+function sourceManagementStats(sources: Array<{ sourceId: string; enabled: boolean }>): SourceManagementStats {
+  const domains = new Set<string>()
+  const enabledDomains = new Set<string>()
+  for (const source of sources) {
+    const key = sourceDomainInfo(source.sourceId).key
+    domains.add(key)
+    if (source.enabled) enabledDomains.add(key)
+  }
+  return { total: sources.length, domainCount: domains.size, enabledDomainCount: enabledDomains.size }
+}

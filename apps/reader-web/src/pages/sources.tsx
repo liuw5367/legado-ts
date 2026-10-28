@@ -1,5 +1,5 @@
 import { EmptyState } from '../components/empty-state.tsx'
-import { SearchX } from 'lucide-react'
+import { BookOpen, SearchX } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { FloatingMessage } from '../components/floating-message.tsx'
@@ -17,7 +17,7 @@ import { SourceImportDialog } from '../components/source-import-dialog.tsx'
 import { apiFetch } from '../lib/api.ts'
 import { formatSourceRuleDateTime } from '../lib/time-format.ts'
 import { groupSourcesByDomain, sourceDomainInfo, type SourceDomainGroup } from '../../shared/source-domain.ts'
-import type { ManagedSourceSummary, SourceManagementPage, SourceManagementStatus } from '../../shared/source-management.ts'
+import type { ManagedSourceSummary, SourceManagementPage, SourceManagementStats, SourceManagementStatus } from '../../shared/source-management.ts'
 
 export function SourcesPage() {
   const cache = useBookCache()
@@ -25,7 +25,11 @@ export function SourcesPage() {
   const [status, setStatus] = useState<SourceManagementStatus>('all')
   const [data, setData] = useState<SourceManagementPage | null>(null)
   const [selected, setSelected] = useState<Map<string, string>>(new Map())
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<SourceManagementStats | null>(null)
+  const [statsError, setStatsError] = useState('')
+  const [statsAttempt, setStatsAttempt] = useState(0)
+  const [showSources, setShowSources] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -46,7 +50,21 @@ export function SourcesPage() {
     finally { if (!controller.signal.aborted) setLoading(false) }
   }, [])
   useEffect(() => { mounted.current = true; if (!actionRef.current) setActing(false); return () => { mounted.current = false; requestRef.current?.abort() } }, [load])
-  usePageLoadEffect((settle) => { void load().then(settle); return () => requestRef.current?.abort() }, [], ['sources'])
+  usePageLoadEffect((settle) => {
+    if (!showSources) { settle(); return }
+    void load().then(settle)
+    return () => requestRef.current?.abort()
+  }, [showSources], ['sources'])
+
+  usePageLoadEffect((settle) => {
+    const controller = new AbortController()
+    setStatsError('')
+    void apiFetch<SourceManagementStats>('/api/source-management/stats', { signal: controller.signal })
+      .then((next) => { if (!controller.signal.aborted) setStats(next) })
+      .catch((error) => { if (!controller.signal.aborted) setStatsError(error instanceof Error ? error.message : '书源统计加载失败') })
+      .finally(settle)
+    return () => controller.abort()
+  }, [statsAttempt], ['sources'])
 
   const groups = useMemo(() => groupSourcesByDomain(data?.sources ?? []), [data?.sources])
   const visibleGroups = groups.filter((group) => {
@@ -122,14 +140,16 @@ export function SourcesPage() {
   }
 
   return <section className={`page-stack page-narrow sources-page${selected.size > 0 ? ' has-selection' : ''}`}>
-    <PageHeader backTo="/account/settings" title="书源" description={data === null ? '按域名管理当前账号的书源实现。' : `共 ${groups.length} 个域名、${data.sources.length} 个实现，启用 ${enabledDomainCount} 个域名`} actions={<Button size="sm" className="page-action" type="button" onClick={() => setImportOpen(true)}><Import aria-hidden="true" /><span>导入</span></Button>} />
+    <PageHeader backTo="/account/settings" title="书源" description={data === null ? stats === null ? '正在统计书源数量…' : `共 ${stats.domainCount} 个域名、${stats.total} 个实现，启用 ${stats.enabledDomainCount} 个域名` : `共 ${groups.length} 个域名、${data.sources.length} 个实现，启用 ${enabledDomainCount} 个域名`} actions={<Button size="sm" className="page-action" type="button" onClick={() => setImportOpen(true)}><Import aria-hidden="true" /><span>导入</span></Button>} />
     <nav className="actions source-management-nav" aria-label="书源导入管理"><Link to="/sources/import-history">导入记录</Link><Link to="/sources/import-links">来源排序</Link></nav>
-    <div className="source-management-filters"><Input aria-label="搜索书源" placeholder="搜索名称、分组、域名或 URL" value={query} onChange={(event) => { setQuery(event.target.value) }} /><Select aria-label="筛选状态" value={status} onChange={(event) => { setStatus(event.target.value as SourceManagementStatus) }}><option value="all">全部</option><option value="enabled">启用</option><option value="disabled">禁用</option></Select></div>
+    {statsError.length > 0 ? <DismissibleMessage onDismiss={() => setStatsError('')} className="error" role="alert">{statsError}<Button variant="secondary" size="sm" type="button" onClick={() => setStatsAttempt((value) => value + 1)}>重试统计</Button></DismissibleMessage> : null}
+    {!showSources && stats !== null ? stats.total === 0 ? <EmptyState icon={SearchX} title="没有匹配的书源域名" description="调整筛选条件或导入书源" /> : <EmptyState icon={BookOpen} title="书源按需查看" description="点击下方按钮查看和管理书源" action={<Button type="button" onClick={() => setShowSources(true)}>查看书源数据</Button>} /> : null}
+    {showSources ? <div className="source-management-filters"><Input aria-label="搜索书源" placeholder="搜索名称、分组、域名或 URL" value={query} onChange={(event) => { setQuery(event.target.value) }} /><Select aria-label="筛选状态" value={status} onChange={(event) => { setStatus(event.target.value as SourceManagementStatus) }}><option value="all">全部</option><option value="enabled">启用</option><option value="disabled">禁用</option></Select></div> : null}
     {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error" role="alert">{error}<Button variant="secondary" size="sm" type="button" onClick={() => void load()}>重试</Button></DismissibleMessage> : null}
     {selected.size > 0 ? <div className="source-bulk-bar"><span>已选 {selected.size} 个实现{enableConflict ? '，同域多选时不能批量启用' : ''}</span><div className="actions"><Button size="sm" type="button" disabled={acting || loading || enableConflict} onClick={() => void apply('enable')}>启用</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('disable')}>禁用</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('delete')}>删除</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => setSelected(new Map())}>清空</Button></div></div> : null}
     {loading ? <LoadingState message={data === null ? '正在加载书源…' : '正在更新书源…'} variant={data === null ? 'viewport' : 'inline'} action={data === null ? <PageBackButton appearance="button" fallback="/account/settings" /> : undefined} /> : null}
     {data === null ? null : visibleGroups.length === 0 ? loading ? null : <EmptyState icon={SearchX} title="没有匹配的书源域名" description="调整筛选条件或导入书源" /> : <><div className="source-list-header"><div className="actions source-selection-actions" role="group" aria-label="书源列表批量选择"><label className="button small secondary source-select-all"><input ref={selectAllRef} type="checkbox" checked={pageSelected} disabled={acting || loading} onChange={(event) => toggleMany(visibleSources, event.target.checked)} /><span>全选</span></label><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={invertVisibleSelection}>反选</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading || pageSelectedCount === 0} onClick={() => toggleMany(visibleSources, false)}>清空</Button></div><span className="muted small">显示 {visibleGroups.length} 个域名、{visibleSources.length} 个实现</span></div><div className="source-management-list">{visibleGroups.map((group) => <SourceDomainRow key={group.domainKey} group={group} busy={acting || loading} selected={selected} onToggle={(source, checked) => toggle(source, checked)} onToggleGroup={(sources, checked) => toggleMany(sources, checked)} onAction={(source, action) => void apply(action, [source])} />)}</div></>}
-    <SourceImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={(imported) => { setImportOpen(false); cache.clear(); setMessage(`已导入 ${imported} 个书源`) }} />
+    <SourceImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={(imported) => { setImportOpen(false); cache.clear(); setStatsAttempt((value) => value + 1); setMessage(`已导入 ${imported} 个书源`) }} />
     {message.length > 0 ? <FloatingMessage tone="success" message={message} onDismiss={() => setMessage('')} /> : null}
   </section>
 }

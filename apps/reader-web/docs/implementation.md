@@ -2,6 +2,8 @@
 
 ## 书源导入与管理
 
+`/sources` 打开时只请求 `GET /api/source-management/stats`，返回当前账号未删除书源的 `total`（实现数）、`domainCount`（域名数）和 `enabledDomainCount`（至少有一个启用实现的域名数）。统计查询仅读取 sourceId 和启用状态，复用管理页的域名归组口径，不读取规则和导入明细。有书源时点击“查看书源数据”才请求完整列表；无书源时显示空状态，不显示加载列表按钮。导入完成后刷新统计。
+
 `/sources` 通过 `POST /api/source-management/import-preview` 提交 HTTP(S) 地址。服务端限制响应大小、总字节数、候选数、来源 URL 数量和 45 秒预览时间，网络宿主最多执行五次重定向、六次请求，每跳检查目标地址；调用共享 `importSources` 后与当前用户源快照比较，生成带过期时间的预览记录。页面只显示脱敏摘要，用户选择候选后再调用 `import-confirm`；确认事务保留用户的启用和排序状态，定义指纹变化时清除旧运行状态。
 
 启用、禁用和删除通过 `/api/source-management/actions` 批量处理。删除源配置和加密运行状态，但书籍、书架和阅读记录由独立业务关系保存。接口按当前用户查询，不接受客户端传入的 userId。

@@ -71,6 +71,12 @@ app.get('/api/sources', async (context) => {
   }
 })
 
+app.get('/api/source-management/stats', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try { return context.json(await dependencies.repository.getSourceManagementStats(context.get('userId'))) } catch (error) { return handleError(context, error) }
+})
+
 app.get('/api/source-management', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected

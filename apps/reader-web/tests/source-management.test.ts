@@ -443,3 +443,23 @@ test('managed source summaries expose explicit author metadata without guessing 
   assert.equal(byId.get('https://second.example')?.author, '乙作者')
   assert.equal(byId.get('https://third.example')?.author, undefined)
 })
+
+test('source statistics count domains and implementations within the current account and exclude deleted sources', async () => {
+  const repository = new MemoryReaderRepository()
+  assert.deepEqual(await repository.getSourceManagementStats('stats-user'), { total: 0, domainCount: 0, enabledDomainCount: 0 })
+  const parsed = await candidates([
+    { ...baseSource, bookSourceUrl: 'https://one.example/a' },
+    { ...baseSource, bookSourceUrl: 'https://one.example/b' },
+    { ...baseSource, bookSourceUrl: 'https://two.example/a' },
+  ])
+  for (const [index, candidate] of parsed.entries()) {
+    assert.ok(candidate.source)
+    await saveNewSource(repository, 'stats-user', candidate.source, candidate.sourceFingerprint ?? '', `stats-${index}`)
+  }
+  assert.deepEqual(await repository.getSourceManagementStats('stats-user'), { total: 3, domainCount: 2, enabledDomainCount: 2 })
+  assert.deepEqual(await repository.getSourceManagementStats('other-user'), { total: 0, domainCount: 0, enabledDomainCount: 0 })
+  const page = await repository.listManagedSources('stats-user', { page: 1, pageSize: 50, query: '', status: 'all' })
+  const secondDomain = page.sources.find((source) => source.sourceId === 'https://two.example/a')!
+  await repository.applySourceActions('stats-user', 'delete', [{ sourceId: secondDomain.sourceId, expectedSourceRevision: secondDomain.sourceRevision }])
+  assert.deepEqual(await repository.getSourceManagementStats('stats-user'), { total: 2, domainCount: 1, enabledDomainCount: 1 })
+})

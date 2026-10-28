@@ -47,6 +47,12 @@ export interface ManagedSourceSummary {
   origin: 'account'
 }
 
+export interface SourceManagementStats {
+  total: number
+  domainCount: number
+  enabledDomainCount: number
+}
+
 export interface SourceManagementPage {
   sources: ManagedSourceSummary[]
   page: number
