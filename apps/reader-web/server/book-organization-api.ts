@@ -19,21 +19,9 @@ export function registerBookOrganizationApi(app: Hono<{ Variables: Variables }>,
   const id = (c: Context, name: string) => z.uuid().parse(c.req.param(name))
   app.get('/api/book-lists', guard(async (c) => {
     const userId = c.get('userId'); const repo = repository()
-    const organization = await repo.getBookOrganization(userId)
     const bookId = c.req.query('bookId'); if (bookId !== undefined) z.uuid().parse(bookId)
-    const query = (c.req.query('q') ?? '').trim().toLocaleLowerCase()
-    const visibleLists = organization.lists.filter((row) => row.type === 'booklist' && row.name.toLocaleLowerCase().includes(query)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
-    // 只分桶一次，避免书单数量与成员总数相乘的扫描开销。
-    const byList = new Map<string, typeof organization.items>()
-    for (const member of organization.items) { const members = byList.get(member.bookListId) ?? []; members.push(member); byList.set(member.bookListId, members) }
-    for (const members of byList.values()) members.sort((a, b) => b.addedAt.localeCompare(a.addedAt) || b.bookId.localeCompare(a.bookId))
-    const coverIds = visibleLists.flatMap((list) => (byList.get(list.id) ?? []).slice(0, 4).map((row) => row.bookId))
-    const snapshot = await repo.getOrganizationLibrary(userId, [...new Set(coverIds)], false)
-    const books = new Map(snapshot.books.map((entry) => [entry.book.id, entry.book]))
-    return c.json({ lists: visibleLists.map((row) => {
-      const members = byList.get(row.id) ?? []
-      return { ...row, bookCount: members.length, coverBooks: members.slice(0, 4).flatMap((item) => { const book = books.get(item.bookId); return book ? [book] : [] }), containsBook: members.some((item) => item.bookId === bookId) }
-    }) })
+    const purpose = z.enum(['picker']).optional().parse(c.req.query('purpose'))
+    return c.json({ lists: await repo.listBookListSummaries(userId, c.req.query('q') ?? '', bookId, purpose === 'picker') })
   }))
 
   app.post('/api/book-lists', guard(async (c) => {
@@ -43,18 +31,9 @@ export function registerBookOrganizationApi(app: Hono<{ Variables: Variables }>,
   }))
   app.get('/api/book-lists/:listId', guard(async (c) => {
     const listId = id(c, 'listId'); const repo = repository(); const userId = c.get('userId')
-    const organization = await repo.getBookOrganization(userId, listId)
-    const list = organization.lists.find((row) => row.id === listId && row.type === 'booklist')
-    if (!list) throw new OrganizationError(404, '书单不存在')
-    const snapshot = await repo.getOrganizationLibrary(userId, organization.items.map((row) => row.bookId))
-    const books = new Map(snapshot.books.map((entry) => [entry.book.id, entry]))
-    const items = organization.items.filter((row) => row.bookListId === listId && books.has(row.bookId)).sort((a, b) => b.addedAt.localeCompare(a.addedAt) || b.bookId.localeCompare(a.bookId)).map((row) => {
-      const entry = books.get(row.bookId)!
-      const edition = entry.editions.find((value) => value.editionKey === entry.book.activeEditionKey)
-      const position = snapshot.positions.find((value) => value.bookId === row.bookId && value.editionKey === edition?.editionKey)
-      return { ...row, book: entry.book, edition: edition ? { id: edition.id, userId: edition.userId, bookId: edition.bookId, editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl } : undefined, position }
-    })
-    return c.json({ list, items })
+    const result = await repo.getBookListDetails(userId, listId)
+    if (!result) throw new OrganizationError(404, '书单不存在')
+    return c.json(result)
   }))
   app.patch('/api/book-lists/:listId', guard(async (c) => {
     const listId = id(c, 'listId'); const input = updateBookListSchema.parse(await c.req.json())
@@ -72,8 +51,8 @@ export function registerBookOrganizationApi(app: Hono<{ Variables: Variables }>,
     }))
   }
   app.get('/api/bookshelf-groups', guard(async (c) => {
-    const repo = repository(); const userId = c.get('userId'); const organization = await repo.getBookOrganization(userId, undefined, false); const home = await repo.getOrganizationLibrary(userId, [], false)
-    return c.json({ groups: organization.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((row) => ({ ...row, bookCount: home.bookshelf.filter((item) => item.groupId === row.id).length })), ungroupedCount: home.bookshelf.filter((row) => !row.groupId).length })
+    const bookId = c.req.query('bookId'); if (bookId !== undefined) z.uuid().parse(bookId)
+    return c.json(await repository().getShelfGroups(c.get('userId'), bookId))
   }))
   app.post('/api/bookshelf-groups', guard(async (c) => {
     const input = shelfGroupSchema.parse(await c.req.json()); const repo = repository(); const createdId = randomUUID()

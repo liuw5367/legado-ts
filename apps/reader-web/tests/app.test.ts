@@ -214,3 +214,24 @@ test('正文缓存命中后只用轻量章节上下文校正标题，不读取�
   assert.ok(context.mock.callCount() > 0)
   assert.equal(fullToc.mock.callCount(), 0)
 })
+
+test('轻量身份、阅读入口和版本选项通过真实路由认证且按账号隔离', async (t) => {
+  const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const memory = new MemoryReaderRepository()
+  const userId = '11111111-1111-4111-8111-111111111111'
+  const metadata = { sourceId: 'https://entry.test', bookUrl: '/book', name: '轻量入口', author: '作者', rawFields: {}, traceRef: '', emptyFields: [], fieldErrors: {} }
+  const { book } = await memory.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: 'e', sourceFingerprint: 'fp', addToBookshelf: true })
+  for (const method of ['listBookIdentities', 'getReadingEntry', 'listEditionOptions'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  const previousUrl = process.env.SUPABASE_URL, previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://8.8.8.8/auth-fixture'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-public-key'
+  t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
+  t.mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => new Response(JSON.stringify({ id: new Headers(init?.headers).get('authorization') === 'Bearer other-entry' ? 'other-user' : userId }), { headers: { 'Content-Type': 'application/json' } }))
+  const paths = ['/api/books/identities', `/api/books/${book.id}/reading-entry`, `/api/books/${book.id}/edition-options`]
+  for (const path of paths) assert.equal((await app.request(path)).status, 401)
+  const request = (path: string, token = 'owner-entry') => app.request(path, { headers: { Authorization: 'Bearer ' + token } })
+  assert.deepEqual(await (await request(paths[0]!)).json(), { books: [{ id: book.id, name: metadata.name, author: metadata.author, onBookshelf: true }] })
+  assert.deepEqual(await (await request(paths[1]!)).json(), { activeEditionKey: 'e' })
+  assert.deepEqual(await (await request(paths[2]!)).json(), { editions: [{ editionKey: 'e', sourceId: metadata.sourceId, sourceName: metadata.sourceId }] })
+  assert.deepEqual(await (await request(paths[0]!, 'other-entry')).json(), { books: [] })
+  for (const path of paths.slice(1)) assert.equal((await request(path, 'other-entry')).status, 404)
+})

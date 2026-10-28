@@ -6,7 +6,7 @@ import { Button } from './ui/button.tsx'
 import { apiFetch } from '../lib/api.ts'
 import type { StoredBookList } from '../../shared/book-lists.ts'
 
-export function BookListEditor({ list, onClose, onSaved }: { list?: StoredBookList; onClose: () => void; onSaved: (list: StoredBookList) => void }) {
+export function BookListEditor({ list, onClose, onSaved }: { list?: Pick<StoredBookList, 'id' | 'name' | 'description'>; onClose: () => void; onSaved: (list: StoredBookList) => void }) {
   const [name, setName] = useState(list?.name ?? '')
   const [description, setDescription] = useState(list?.description ?? '')
   const [error, setError] = useState(''); const [saving, setSaving] = useState(false)

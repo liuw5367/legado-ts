@@ -1,5 +1,5 @@
 import { orderSearchCandidates } from '../../shared/search-candidates.ts'
-import type { StoredBookList, StoredBookListItem } from '../../shared/book-lists.ts'
+import type { BookListSummary, BookListMember, BookListDetails, BookListChoice } from '../../shared/book-lists.ts'
 import { mutationDomains, publishPageMutation } from './page-data.ts'
 import { currentSession, invalidateSession } from './auth.ts'
 
@@ -20,7 +20,10 @@ export interface ApiBook { id: string; userId: string; name: string; author?: st
 export interface ApiEdition { id: string; userId: string; bookId: string; editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; metadata: Record<string, unknown>; variable?: string }
 export interface ApiPosition { userId: string; bookId: string; editionKey: string; chapterId: string; chapterUrl: string; chapterIndex: number; title: string; tocRevision?: string; paragraphIndex: number; offset: number; version: number; lastReadAt: string }
 export interface ApiHistory { id: string; searchId: string; keyword: string; sourceIds: string[]; status: string; resultCount: number; summary?: string; createdAt: string; updatedAt: string }
-export interface ApiHome { bookshelf: Array<{ book: ApiBook; edition: ApiEdition; groupId?: string | null; position?: ApiPosition }>; reading: Array<{ book: ApiBook; edition: ApiEdition; position: ApiPosition }>; searchHistory: ApiHistory[] }
+export type ApiHomeBook = Pick<ApiBook, 'id' | 'name' | 'author' | 'coverUrl' | 'customCoverUrl'>
+export type ApiHomePosition = Pick<ApiPosition, 'chapterId' | 'title' | 'lastReadAt'>
+export type ApiHomeHistory = Pick<ApiHistory, 'id' | 'keyword' | 'status' | 'resultCount' | 'summary' | 'updatedAt'>
+export interface ApiHome { bookshelf: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; groupId?: string | null; position?: ApiHomePosition }>; reading: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; position: ApiHomePosition }>; searchHistory: ApiHomeHistory[] }
 export interface ApiChapter { chapterId: string; sourceId: string; bookUrl: string; chapterUrl: string; index: number; title: string; url?: string; isVolume?: boolean; isVip?: boolean; isPay?: boolean }
 export interface ApiToc { userId: string; bookId: string; editionKey: string; sourceFingerprint: string; revision: string; chapters: ApiChapter[]; bookPatch: Record<string, unknown>; bookAfter?: Record<string, unknown>; runtimeWarning?: string }
 export interface ApiContent { chapter: ApiChapter; contentType: 'text' | 'html'; raw: string; cleaned: string; pages: string[]; resources: Array<{ kind: 'image'; url: string }>; finalUrl?: string; title?: string; imgUrl?: string }
@@ -242,8 +245,9 @@ async function readJson(response: Response): Promise<unknown> {
 
 function isRecord(value: unknown): Record<string, unknown> | undefined { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined }
 
-export interface ApiBookList extends StoredBookList { bookCount: number; coverBooks: ApiBook[]; containsBook: boolean }
-export interface ApiBookListItem extends StoredBookListItem { book: ApiBook; edition?: Pick<ApiEdition, 'id' | 'userId' | 'bookId' | 'editionKey' | 'sourceId' | 'sourceFingerprint' | 'bookUrl'>; position?: ApiPosition }
-export interface ApiBookListDetails { list: StoredBookList; items: ApiBookListItem[] }
-export interface ApiShelfGroup extends StoredBookList { bookCount: number }
+export type ApiBookList = BookListSummary
+export type ApiBookListItem = BookListMember
+export type ApiBookListDetails = BookListDetails
+export type ApiBookListChoice = BookListChoice
+export interface ApiShelfGroup { id: string; name: string; bookCount: number }
 export interface ApiShelfGroups { groups: ApiShelfGroup[]; ungroupedCount: number }

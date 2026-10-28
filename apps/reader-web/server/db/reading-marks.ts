@@ -1,14 +1,16 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { books, readingAnnotations, readingBookmarks } from './schema.ts'
 import type { ReaderTransaction } from './client.ts'
-import { changeMark, MarkError, markCursor, markOrder, parseMarkCursor, type MarkCommand, type MarkKind, type MarkQuery, type ReadingMark } from '../../shared/reading-annotations.ts'
+import { changeMark, MarkError, markCursor, markOrder, parseMarkCursor, type MarkCommand, type MarkKind, type MarkQuery, type ReadingMark, type MarkPage, type MarkSummaryPage, type ReadingMarkSummary } from '../../shared/reading-annotations.ts'
 
-export async function readMarks(tx: ReaderTransaction, userId: string, query: MarkQuery) {
+export function readMarks(tx: ReaderTransaction, userId: string, query: MarkQuery): Promise<MarkPage>
+export function readMarks(tx: ReaderTransaction, userId: string, query: MarkQuery, summary: true): Promise<MarkSummaryPage>
+export async function readMarks(tx: ReaderTransaction, userId: string, query: MarkQuery, summary = false) {
   const table = query.kind === 'bookmarks' ? readingBookmarks : readingAnnotations
   const data = table.data
   const chapter = sql`(${data}->>'chapterIndex')::integer`; const paragraph = sql`(${data}->'anchor'->'start'->>'paragraphIndex')::integer`; const offset = sql`(${data}->'anchor'->'start'->>'offset')::integer`; const time = sql`${data}->>'createdAt'`
   const q = (query.q ?? '').trim().toLocaleLowerCase(); const cursor = parseMarkCursor(query); const ordered = markOrder(query)
-  const rows = await tx.select({ data, bookName: books.name, author: books.author }).from(table).leftJoin(books, and(eq(books.userId, userId), eq(books.id, table.bookId))).where(and(eq(table.userId, userId), query.id ? eq(table.id, query.id) : undefined, query.bookId ? eq(table.bookId, query.bookId) : undefined, query.editionKey ? eq(table.editionKey, query.editionKey) : undefined, query.chapterUrl ? eq(table.chapterUrl, query.chapterUrl) : undefined,
+  const rows = await tx.select({ data: summary ? sql<ReadingMarkSummary>`${data} - 'cachedChapter' || jsonb_build_object('hasCachedChapter', coalesce(${data}->'cachedChapter' <> 'null'::jsonb, false))` : data, bookName: books.name, author: books.author }).from(table).leftJoin(books, and(eq(books.userId, userId), eq(books.id, table.bookId))).where(and(eq(table.userId, userId), query.id ? eq(table.id, query.id) : undefined, query.bookId ? eq(table.bookId, query.bookId) : undefined, query.editionKey ? eq(table.editionKey, query.editionKey) : undefined, query.chapterUrl ? eq(table.chapterUrl, query.chapterUrl) : undefined,
     query.all ? undefined : query.deleted ? sql`${data}->>'deletedAt' is not null` : sql`${data}->>'deletedAt' is null`,
     q ? sql`(strpos(lower(${data}->'anchor'->>'exact'), ${q}) > 0 or strpos(lower(coalesce(${data}->>'note', '')), ${q}) > 0)` : undefined,
     cursor ? ordered ? sql`(${chapter}, ${paragraph}, ${offset}, ${table.id}) > (${cursor.chapter}, ${cursor.paragraph}, ${cursor.offset}, ${cursor.id}::uuid)` : sql`(${time}, ${table.id}) < (${cursor.time}, ${cursor.id}::uuid)` : undefined,

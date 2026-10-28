@@ -139,10 +139,13 @@ export interface SearchHistoryItem {
   updatedAt: string
 }
 
+export type HomeBook = Pick<StoredBook, 'id' | 'name' | 'author' | 'coverUrl' | 'customCoverUrl'>
+export type HomePosition = Pick<StoredPosition, 'chapterId' | 'title' | 'lastReadAt'>
+export type HomeSearchHistory = Pick<SearchHistoryItem, 'id' | 'searchId' | 'keyword' | 'status' | 'resultCount' | 'summary' | 'createdAt' | 'updatedAt'>
 export interface HomeSnapshot {
-  bookshelf: Array<{ book: StoredBook; edition: StoredEdition; groupId?: string | null } & ({ position: StoredPosition } | Record<never, never>)>
-  reading: Array<{ book: StoredBook; edition: StoredEdition; position: StoredPosition }>
-  searchHistory: SearchHistoryItem[]
+  bookshelf: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; groupId?: string | null } & ({ position: HomePosition } | Record<never, never>)>
+  reading: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; position: HomePosition }>
+  searchHistory: HomeSearchHistory[]
 }
 
 export interface SourceSummary {

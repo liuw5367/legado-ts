@@ -137,3 +137,96 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   assert.equal(result.sources.length, 1)
   assert.equal(result.sources[0]?.name, '已更新')
 })
+
+test('页面展示查询在驱动层排除原文、规则、执行变量和无关版本', { skip: !url ? '需要独立 READER_WEB_TEST_DATABASE_URL' : false }, async (t) => {
+  assert.ok(url)
+  const admin = postgres(url, { max: 1, onnotice: () => undefined })
+  const role = `display_${randomUUID().replaceAll('-', '')}`, user = randomUUID(), other = randomUUID(), bookId = randomUUID(), listId = randomUUID()
+  await migrate(drizzle(admin), { migrationsFolder: fileURLToPath(new URL('../../server/db/migrations', import.meta.url)) })
+  await admin`create role ${admin(role)} login`
+  await admin`grant usage on schema reader to ${admin(role)}`
+  await admin`grant select, insert, update, delete on all tables in schema reader to ${admin(role)}`
+  const appUrl = new URL(url); appUrl.username = role; process.env.DATABASE_URL = appUrl.toString()
+  const repo = new PostgresReaderRepository()
+  const client = (getReaderDb() as ReturnType<typeof getReaderDb> & { $client: ReturnType<typeof postgres> }).$client
+  const original = client.options.transform.row.from
+  let rows: unknown[] = [], observing = false
+  client.options.transform.row.from = (row) => { if (observing) rows.push(row); return original ? original(row) : row }
+  t.after(async () => {
+    client.options.transform.row.from = original
+    await closeReaderDb()
+    for (const table of ['source_import_items', 'source_import_batches', 'source_import_links', 'reading_annotations', 'reading_records', 'bookshelf', 'book_list_items', 'book_lists', 'book_editions', 'books', 'user_sources']) await admin`delete from reader.${admin(table)} where user_id = ${user}`
+    await admin`drop owned by ${admin(role)}`; await admin`drop role ${admin(role)}`; await admin.end()
+  })
+  const measure = async <T>(read: () => Promise<T>) => {
+    rows = []; observing = true
+    try { const value = await read(); assert.ok(rows.length > 0); assert.notEqual(value, null); assert.notEqual(value, undefined); if (Array.isArray(value)) assert.ok(value.length > 0); return { value, bytes: bytes(rows), text: JSON.stringify(rows) } } finally { observing = false }
+  }
+  const large = '执行字段禁止进入展示结果'.repeat(10000)
+  const metadata = { name: '测试书', author: '作者', intro: '展示简介', sourceId: 'https://display.test', bookUrl: '/book', traceRef: '', rawFields: { large }, emptyFields: [], fieldErrors: {} }
+  await admin`insert into reader.books (id,user_id,name,author,intro,active_edition_key,custom_cover_url) values (${bookId},${user},'测试书','作者',${large},'e','https://cover.test/custom')`
+  for (const key of ['e', 'old']) await admin`insert into reader.book_editions (user_id,book_id,edition_key,source_id,source_fingerprint,book_url,metadata,variable) values (${user},${bookId},${key},'https://display.test','fp','/book',${JSON.stringify(metadata)}::jsonb,${large})`
+  await admin`insert into reader.user_sources (user_id,source_id,fingerprint,revision,raw_source,normalized_source) values (${user},'https://display.test','fp','r',${JSON.stringify({ large })}::jsonb,${JSON.stringify({ bookSourceName: '名称', exploreUrl: 'https://explore/' + large, ruleContent: large })}::jsonb)`
+  await admin`insert into reader.bookshelf (user_id,book_id) values (${user},${bookId})`
+  await admin`insert into reader.reading_records (user_id,book_id,edition_key,chapter_id,chapter_url,chapter_index,title) values (${user},${bookId},'e','c','/c',0,'第一章')`
+  await admin`insert into reader.book_lists (id,user_id,type,name,description) values (${listId},${user},'booklist','100%_书单','书单简介')`
+  await admin`insert into reader.book_list_items (user_id,book_list_id,book_id,description) values (${user},${listId},${bookId},'独立评价')`
+  const { markInputSchema } = await import('../../shared/reading-annotations.ts')
+  const input = markInputSchema.parse({ editionKey: 'e', sourceFingerprint: 'fp', chapterId: 'c', chapterUrl: '/c', chapterIndex: 0, chapterTitle: '第一章', tocRevision: 'rev', anchor: { start: { paragraphIndex: 0, offset: 0 }, end: { paragraphIndex: 0, offset: 1 }, exact: '摘', prefix: '', suffix: '', contentHash: 'hash' } })
+  const cachedChapter = { paragraphs: ['摘' + '原文缓存'.repeat(450)], start: input.anchor.start, end: input.anchor.end, truncatedBefore: false, truncatedAfter: false }
+  let markId = ''
+  for (let i = 0; i < 50; i++) {
+    const item = await repo.mutateReadingMark(user, { action: 'save', kind: 'annotations', id: randomUUID(), bookId, input: { ...input, chapterUrl: '/c/' + i }, bookName: '测试书', author: '作者', sourceName: '名称', cachedChapter })
+    markId = item.id
+  }
+  const fullMarks = await measure(() => repo.listReadingMarks(user, { kind: 'annotations' }))
+  const summaryMarks = await measure(() => repo.listReadingMarkSummaries(user, { kind: 'annotations' }))
+  assert.ok(summaryMarks.bytes < fullMarks.bytes * 0.4)
+  assert.equal(summaryMarks.text.includes('原文缓存'), false)
+  assert.equal(summaryMarks.value.items[0]?.hasCachedChapter, true)
+  assert.equal(summaryMarks.value.nextCursor, null)
+  const cache = await repo.getCachedMarkChapter(user, bookId, markId)
+  assert.deepEqual(cache?.cachedChapter, cachedChapter)
+  assert.equal(await repo.getCachedMarkChapter(other, bookId, markId), null)
+  assert.equal(await repo.getCachedMarkChapter(user, randomUUID(), markId), null)
+  const baseline = await measure(() => repo.listBooks(user))
+  const home = await measure(() => repo.getHome(user))
+  assert.ok(home.bytes < baseline.bytes * 0.01); assert.equal(home.text.includes('执行字段'), false)
+  assert.equal(home.value.bookshelf[0]?.book.customCoverUrl, 'https://cover.test/custom')
+  const list = await measure(() => repo.listBookListSummaries(user, '%_', bookId))
+  assert.equal(list.value.length, 1); assert.equal(list.value[0]?.bookCount, 1); assert.equal(list.value[0]?.containsBook, true)
+  assert.equal(list.value[0]?.coverBooks?.[0]?.customCoverUrl, 'https://cover.test/custom')
+  await admin`update reader.book_lists set name = 'ÄBC%_书单' where user_id = ${user} and id = ${listId}`
+  assert.equal((await repo.listBookListSummaries(user, 'äbc%_')).length, 1)
+  const picker = await measure(() => repo.listBookListSummaries(user, '', bookId, true))
+  assert.equal('coverBooks' in picker.value[0]!, false); assert.equal(picker.text.includes('https://cover.test/custom'), false)
+  const detail = await measure(() => repo.getBookListDetails(user, listId))
+  assert.equal(detail.value?.items[0]?.description, '独立评价'); assert.equal(detail.text.includes('执行字段'), false)
+  assert.equal(await repo.getBookListDetails(other, listId), null)
+  for (const read of [() => repo.listBookIdentities(user), () => repo.getReadingEntry(user, bookId), () => repo.listEditionOptions(user, bookId), () => repo.getDisplayEdition(user, bookId, 'old'), () => repo.getDisplayPosition(user, bookId, 'e'), () => repo.getShelfGroups(user, bookId), () => repo.getSourceDisplayName(user, 'https://display.test'), () => repo.listSourceSummaries(user)]) {
+    const result = await measure<unknown>(read)
+    assert.equal(result.text.includes('执行字段'), false)
+    assert.ok(result.bytes < baseline.bytes * 0.01)
+  }
+  assert.deepEqual(await repo.listBookIdentities(other), [])
+  assert.equal(await repo.getReadingEntry(other, bookId), null)
+  assert.equal(await repo.getDisplayEdition(other, bookId, 'e'), null)
+  assert.equal(await repo.getDisplayEdition(user, bookId, 'missing'), null)
+  for (const [enabledExplore, exploreUrl, expected] of [[false, 'https://x', false], [true, '\u3000\ufeff\v', false], [null, 'https://x', true], [true, 123, false]] as const) {
+    await admin`update reader.user_sources set normalized_source = ${JSON.stringify({ bookSourceName: '名称', enabledExplore, exploreUrl })}::jsonb where user_id = ${user}`
+    assert.equal((await repo.listSourceSummaries(user))[0]?.canExplore, expected)
+  }
+  const linkId = randomUUID(), batchId = randomUUID()
+  await admin`insert into reader.source_import_links (id,user_id,url_key,encrypted_url,display_url,sort_order) values (${linkId},${user},'display-link','private-not-for-list','来源地址',0)`
+  await admin`insert into reader.source_import_batches (id,user_id,preview_id,link_id,selection,imported,new_count,updated_count,restored_count,skipped_count,unselected_count) values (${batchId},${user},${randomUUID()},${linkId},${JSON.stringify(Array.from({ length: 1000 }, (_, i) => 'chosen-id-' + i))}::jsonb,1000,1000,0,0,0,0)`
+  const { importHistoryQuerySchema } = await import('../../shared/source-management.ts')
+  const history = await measure(() => repo.listImportHistory(user, importHistoryQuerySchema.parse({})))
+  assert.equal(history.value.batches[0]?.imported, 1000)
+  assert.equal(history.text.includes('chosen-id-'), false)
+  const historyItems = await measure(() => repo.listImportItems(user, batchId, importHistoryQuerySchema.parse({})))
+  assert.equal(historyItems.text.includes('chosen-id-'), false)
+  assert.ok(history.bytes < 2000); assert.ok(historyItems.bytes < 2000)
+  await admin`update reader.user_sources set deleted = true where user_id = ${user}`
+  assert.ok((await repo.listEditionOptions(user, bookId)).every((row) => row.sourceName === 'https://display.test'))
+  t.diagnostic(JSON.stringify({ fullMarks: fullMarks.bytes, summaryMarks: summaryMarks.bytes, fullBooks: baseline.bytes, home: home.bytes, bookLists: list.bytes, picker: picker.bytes, listDetails: detail.bytes }))
+})

@@ -18,7 +18,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { BookCover } from '../components/book-cover.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
-import { apiFetch, type ApiBook, type ApiCandidate, type ApiHome } from '../lib/api.ts'
+import { apiFetch, type ApiBook, type ApiCandidate } from '../lib/api.ts'
 import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import type { ManagedSourceSummary, SourceManagementPage } from '../../shared/source-management.ts'
 
@@ -39,8 +39,8 @@ export function SearchPage() {
   const [listCandidate, setListCandidate] = useState<{ group: CandidateGroup; identity: string; searchId: string } | null>(null)
   const targetBookListId = searchParams.get('targetBookListId') ?? ''
   const targetBookId = searchParams.get('bookId') ?? ''
-  const [books, setBooks] = useState<ApiBook[]>([])
-  const [shelfBooks, setShelfBooks] = useState<ApiBook[]>([])
+  const [books, setBooks] = useState<Array<Pick<ApiBook, 'id' | 'name' | 'author'>>>([])
+  const [shelfBooks, setShelfBooks] = useState<Array<Pick<ApiBook, 'id' | 'name' | 'author'>>>([])
   const [booksLoaded, setBooksLoaded] = useState(false)
   const [precision, setPrecision] = useState(true)
   const [keyword, setKeyword] = useState(queryKeyword)
@@ -65,8 +65,8 @@ export function SearchPage() {
 
   usePageLoadEffect((settle) => {
     let active = true
-    void Promise.all([apiFetch<{ books: Array<{ book: ApiBook }> }>('/api/books'), apiFetch<ApiHome>('/api/home')]).then(([result, home]) => {
-      if (active) { setBooks(result.books.map((item) => item.book)); setShelfBooks(home.bookshelf.map((item) => item.book)); setBooksLoaded(true) }
+    void apiFetch<{ books: Array<Pick<ApiBook, 'id' | 'name' | 'author'> & { onBookshelf: boolean }> }>('/api/books/identities').then((result) => {
+      if (active) { setBooks(result.books); setShelfBooks(result.books.filter((book) => book.onBookshelf)); setBooksLoaded(true) }
     }).catch((error: unknown) => {
       if (active) { setBooksLoaded(true); setMessageTone('error'); setMessage(error instanceof Error ? `已有书籍加载失败，仍可搜索：${error.message}` : '已有书籍加载失败，仍可搜索') }
     })
@@ -110,7 +110,7 @@ export function SearchPage() {
     finally { saveController.current = null; if (!controller.signal.aborted) setSaving(null) }
   }
 
-  async function resolveListBook(): Promise<ApiBook> {
+  async function resolveListBook(): Promise<Pick<ApiBook, 'id' | 'name' | 'author'>> {
     if (!listCandidate) throw new Error('请选择搜索结果')
     const index = candidates.findIndex((candidate) => candidateSelectionKey(candidate) === listCandidate.identity)
     const result = candidates[index]

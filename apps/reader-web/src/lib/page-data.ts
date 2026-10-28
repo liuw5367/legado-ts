@@ -19,13 +19,14 @@ export function mutationDomains(path: string, method: string): string[] {
   if (parts[1] === 'book-lists') return parts.at(-1) === 'move-from-bookshelf' ? ['booklists', 'home', 'groups'] : ['booklists']
   if (parts[1] === 'bookshelf-groups') return ['groups', 'home']
   if (parts[1] === 'books' && (parts[3] === 'annotations' || parts[3] === 'bookmarks')) return ['notes']
+  if (parts[1] === 'books' && parts[3] === 'sources' && parts.at(-1) === 'open') return ['home', 'candidates', 'booklist-books', `book:${decodeURIComponent(parts[2]!)}`, 'edition-options']
   if (parts[1] === 'books' && parts[3] === 'edition') return ['notes', 'home', 'books', `book:${decodeURIComponent(parts[2]!)}`]
   if (parts[1] === 'books' && parts[3] === 'bookshelf') return ['home', 'groups', 'books']
   if (parts[1] !== 'books') return []
   if (parts[3] === 'cover') return ['home', 'books', 'booklists', 'booklist-books', `book:${decodeURIComponent(parts[2]!)}`]
   if (parts[3] === 'position') return ['home', 'booklist-books']
   const book = parts[2]
-  return ['home', 'candidates', 'booklist-books', ...(book === undefined ? ['books'] : [`book:${decodeURIComponent(book)}`])]
+  return ['home', 'candidates', 'booklist-books', ...(book === undefined ? ['books', ...(method === 'POST' && parts.length === 2 ? ['edition-options'] : [])] : [`book:${decodeURIComponent(book)}`])]
 }
 
 /** 页面实例拥有一次读取；取消恢复为 idle，成功或失败都不在激活时自动重试。 */

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mergeBookListRows } from '../src/lib/book-list-state.ts'
 import type { ApiBookListItem } from '../src/lib/api.ts'
-function item(id: string): ApiBookListItem { return { userId: 'u', bookListId: 'l', bookId: id, description: id, addedAt: '2026-01-01', updatedAt: '2026-01-01', book: { id, userId: 'u', name: id, createdAt: '2026-01-01', updatedAt: '2026-01-01' } } }
+function item(id: string): ApiBookListItem { return { bookId: id, description: id, addedAt: '2026-01-01', book: { id, name: id } } }
 test('返回刷新合并新增书籍且保留移除行原位置和独立评价', () => {
   const a = item('a'); const b = item('b'); const c = item('c')
   const next = mergeBookListRows([a, { ...b, removed: true }], [c, { ...a, description: '新评价' }])

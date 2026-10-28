@@ -9,7 +9,7 @@ import { SettingsSaveQueue, type SettingsPatch } from './settings-save-queue.ts'
 export const DEFAULT_SETTINGS: Omit<ApiSettings, 'userId' | 'updatedAt'> = { theme: 'system', readingMode: 'scroll', fontSize: 18, lineHeight: 1.9, marginTop: 16, marginRight: 16, marginBottom: 16, marginLeft: 16, general: { searchConcurrency: DEFAULT_SEARCH_CONCURRENCY, bookshelfSort: 'addedAt', bookshelfInitialGroup: 'all' }, pageTapZones: DEFAULT_PAGE_TAP_ZONES }
 type UpdateSettingsOptions = { optimistic?: boolean; debounce?: boolean }
 type LocalSettingsSnapshot = Partial<ApiSettings> & { schemaVersion?: number }
-interface ReaderSettingsContextValue { settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; canRetrySettings: boolean; error?: string; updateSettings: (patch: SettingsPatch, options?: UpdateSettingsOptions) => Promise<ApiSettings>; flushSettings: (retry?: boolean) => Promise<void> }
+interface ReaderSettingsContextValue { settingsLoadStatus: 'loading' | 'ready' | 'error'; retrySettingsLoad: () => Promise<void>; settings: ApiSettings; resolvedTheme: 'light' | 'dark'; saving: boolean; canRetrySettings: boolean; error?: string; updateSettings: (patch: SettingsPatch, options?: UpdateSettingsOptions) => Promise<ApiSettings>; flushSettings: (retry?: boolean) => Promise<void> }
 const ReaderSettingsContext = createContext<ReaderSettingsContextValue | undefined>(undefined)
 const storagePrefix = 'legado-reader-settings:'
 const themeColors: Record<'light' | 'dark', string> = { light: '#f6f3ed', dark: '#171513' }
@@ -32,6 +32,8 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   const activeOwner = useRef(owner)
   activeOwner.current = owner
 
+  const [loadState, setLoadState] = useState<{ owner: typeof owner; status: 'loading' | 'ready' | 'error' }>({ owner, status: 'loading' })
+  const loadGeneration = useRef(0)
   const reconcile = useCallback((saved: ApiSettings, sequence: number) => {
     if (activeOwner.current !== owner) return
     const next = { ...saved, general: { ...saved.general } }
@@ -58,24 +60,31 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     if (saved) reconcile(saved, sequence)
   }, [owner, track, reconcile])
 
+  const retrySettingsLoad = useCallback(async () => {
+    if (activeOwner.current !== owner) return
+    const generation = ++loadGeneration.current
+    setLoadState({ owner, status: 'loading' })
+    if (!authenticated || !userId) { setLoadState({ owner, status: 'ready' }); return }
+    try {
+      const result = await apiFetch<{ settings: ApiSettings }>('/api/settings', {}, userId)
+      if (activeOwner.current !== owner || generation !== loadGeneration.current) return
+      // 加载与重试都不能覆盖当前账号已编辑的字段，包括尚未发送的显示设置。
+      reconcile(result.settings, 0)
+      setLoadState({ owner, status: 'ready' })
+    } catch (reason) {
+      if (activeOwner.current === owner && generation === loadGeneration.current) { setError(reason instanceof Error ? reason.message : '设置加载失败'); setLoadState({ owner, status: 'error' }) }
+    }
+  }, [owner, authenticated, userId, reconcile])
+
   useEffect(() => {
     owner.queue.resume()
     changeSequence.current += 1
     fieldVersions.current.clear()
-    const sequence = changeSequence.current
     const local = readLocalSettings(userId); latestSettings.current = local; setSettings(local)
     setError(undefined); setSaving(false)
-    let active = true
-    if (authenticated && userId !== undefined) void apiFetch<{ settings: ApiSettings }>('/api/settings', {}, userId).then((result) => {
-      if (!active || sequence !== changeSequence.current) return
-      latestSettings.current = result.settings
-      setSettings(result.settings)
-      writeLocalSettings(userId, result.settings)
-    }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : '设置加载失败')
-    })
-    return () => { active = false; owner.queue.dispose() }
-  }, [owner, authenticated, userId])
+    void retrySettingsLoad()
+    return () => { loadGeneration.current++; owner.queue.dispose() }
+  }, [owner, userId, retrySettingsLoad])
 
   useEffect(() => {
     const flush = () => { void flushSettings().catch(() => undefined) }
@@ -102,6 +111,8 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   }, [settings.theme])
 
   const value = useMemo<ReaderSettingsContextValue>(() => ({
+    settingsLoadStatus: loadState.owner === owner ? loadState.status : 'loading',
+    retrySettingsLoad,
     settings,
     resolvedTheme,
     saving,
@@ -125,7 +136,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       reconcile(saved, sequence)
       return saved
     },
-  }), [error, resolvedTheme, saving, session, settings, user?.id, owner, track, reconcile, flushSettings])
+  }), [loadState, retrySettingsLoad, error, resolvedTheme, saving, session, settings, user?.id, owner, track, reconcile, flushSettings])
   return <ReaderSettingsContext.Provider value={value}>{children}</ReaderSettingsContext.Provider>
 }
 

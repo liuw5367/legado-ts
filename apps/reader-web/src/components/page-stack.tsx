@@ -47,6 +47,7 @@ function AccountPageStack({ children, userId }: { children: ReactNode; userId: s
         for (const [key, snapshot] of bookListSnapshots.current) if (snapshot.data.list.id === listId) bookListSnapshots.current.delete(key)
       }
       if (domains.includes('sources')) cache.clear()
+      if (domains.includes('edition-options')) cache.invalidateEditionOptions()
       setVersions((previous) => {
         const next = new Map(previous)
         const books = new Set(latest.current.frames.map((frame) => frame.location.pathname.split('/')[2]))

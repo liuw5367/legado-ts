@@ -5,12 +5,12 @@ import type { ReaderRepository } from '../db/repository.ts'
 export async function getBookDetails(repository: ReaderRepository, userId: string, bookId: string, editionKey?: string): Promise<BookDetailsResponse | null> {
   const book = await repository.getBook(userId, bookId)
   if (book === null) return null
-  const edition = await repository.getEdition(userId, bookId, editionKey || book.activeEditionKey)
+  const edition = await repository.getDisplayEdition(userId, bookId, editionKey || book.activeEditionKey)
   if (edition === null) return null
   const [onBookshelf, sourceName, reading] = await Promise.all([
     repository.isOnBookshelf(userId, bookId),
     repository.getSourceDisplayName(userId, edition.sourceId),
-    repository.getPosition(userId, bookId, edition.editionKey),
+    repository.getDisplayPosition(userId, bookId, edition.editionKey),
   ])
   const metadata: BookDetailsResponse['edition']['metadata'] = {}
   for (const key of ['name', 'author', 'intro', 'coverUrl', 'kind', 'lastChapter', 'updateTime', 'wordCount'] as const) {
@@ -18,5 +18,5 @@ export async function getBookDetails(repository: ReaderRepository, userId: strin
     if (typeof value === 'string') metadata[key] = value
   }
   if (typeof edition.metadata.searchDurationMs === 'number') metadata.searchDurationMs = edition.metadata.searchDurationMs
-  return { book, edition: { editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata }, sourceName: sourceName ?? edition.sourceId, onBookshelf, reading: reading === null ? null : { editionKey: reading.editionKey, chapterId: reading.chapterId, chapterUrl: reading.chapterUrl, chapterIndex: reading.chapterIndex, title: reading.title, ...(reading.tocRevision === undefined ? {} : { tocRevision: reading.tocRevision }), paragraphIndex: reading.paragraphIndex, offset: reading.offset, version: reading.version, lastReadAt: reading.lastReadAt } }
+  return { book, edition: { editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata }, sourceName: sourceName ?? edition.sourceId, onBookshelf, reading }
 }

@@ -1,10 +1,10 @@
 import { memo, type ReactNode } from 'react'
 import type { ReadingDocument, ReadingTextRun } from '@legado/source-core'
-import type { ReadingMark } from '../../shared/reading-annotations.ts'
+import type { ReadingMarkSummary } from '../../shared/reading-annotations.ts'
 import { markedFragments } from '../lib/reader-annotations.ts'
 
 /** 独立记忆正文，工具栏和原生选区状态更新不替换正文节点。 */
-export const ReaderBody = memo(function ReaderBody({ document, marks }: { document: ReadingDocument; marks: ReadingMark[] }) {
+export const ReaderBody = memo(function ReaderBody({ document, marks }: { document: ReadingDocument; marks: Pick<ReadingMarkSummary, 'id' | 'color' | 'anchor' | 'note'>[] }) {
   if (!document.blocks.length) return <p className="muted">本章暂无正文。</p>
   return document.blocks.map((block, index) => {
     const breakBefore = document.blocks[index - 1]?.kind === 'pageBreak' ? ' reader-page-break-before' : ''

@@ -1,11 +1,27 @@
-import { apiFetch, type ApiContent, type ApiEdition, type ApiPosition, type ApiSource, type ApiToc } from './api.ts'
+import { apiFetch, type ApiContent, type ApiPosition, type ApiToc } from './api.ts'
 import type { BookDetailsResponse } from '../../shared/book-details.ts'
 
-export interface BookSnapshot { toc: ApiToc; details: BookDetailsResponse; editions: ApiEdition[]; sources: ApiSource[] }
+export interface BookSnapshot { toc: ApiToc; details: BookDetailsResponse }
+export type EditionOption = { editionKey: string; sourceId: string; sourceName: string }
 type Loader = (signal: AbortSignal) => Promise<BookSnapshot>
 
 /** 仅持有当前书籍；刷新代次和失效控制阻止旧响应回写新快照。 */
 export class BookCache {
+  private editionOptions: EditionOption[] | undefined
+  private optionsRequest: { controller: AbortController; promise: Promise<EditionOption[]> } | undefined
+  async loadEditionOptions(bookId: string, refresh = false): Promise<EditionOption[]> {
+    this.select(bookId)
+    if (!refresh && this.editionOptions) return this.editionOptions
+    if (!refresh && this.optionsRequest) return this.optionsRequest.promise
+    this.optionsRequest?.controller.abort()
+    const controller = new AbortController()
+    const promise = apiFetch<{ editions: EditionOption[] }>(`/api/books/${encodeURIComponent(bookId)}/edition-options`, { signal: controller.signal }).then(({ editions }) => {
+      if (controller.signal.aborted || this.bookId !== bookId) throw new DOMException('版本请求已失效', 'AbortError')
+      this.editionOptions = editions; return editions
+    }).finally(() => { if (this.optionsRequest?.controller === controller) this.optionsRequest = undefined })
+    this.optionsRequest = { controller, promise }
+    return promise
+  }
   private bookId = ''
   private snapshots = new Map<string, BookSnapshot>()
   private positions = new Map<string, ApiPosition | null>()
@@ -28,6 +44,9 @@ export class BookCache {
     this.notify()
   }
   getPosition(bookId: string, editionKey: string) { return bookId === this.bookId ? this.positions.get(editionKey) : undefined }
+  invalidateEditionOptions() {
+    this.optionsRequest?.controller.abort(); this.optionsRequest = undefined; this.editionOptions = undefined
+  }
   setPosition(bookId: string, editionKey: string, position: ApiPosition | null) {
     if (bookId !== this.bookId) return
     const current = this.positions.get(editionKey)
@@ -35,6 +54,7 @@ export class BookCache {
     this.positions.set(editionKey, position); this.notify()
   }
   clear() {
+    this.optionsRequest?.controller.abort(); this.optionsRequest = undefined; this.editionOptions = undefined
     for (const request of this.requests.values()) request.controller.abort()
     this.requests.clear(); this.snapshots.clear(); this.positions.clear(); this.currentContent = undefined; this.bookId = ''; this.notify()
   }
@@ -60,12 +80,10 @@ export function loadBookSnapshot(cache: BookCache, bookId: string, editionKey: s
   const path = '/api/books/' + encodeURIComponent(bookId)
   const query = '?editionKey=' + encodeURIComponent(editionKey)
   return cache.load(bookId, editionKey, async (signal) => {
-    const [toc, details, editions, sources] = await Promise.all([
+    const [toc, details] = await Promise.all([
       apiFetch<{ toc: ApiToc }>(path + '/toc' + query + (refresh ? '&refresh=true' : ''), { signal }),
       apiFetch<BookDetailsResponse>(path + '/details' + query, { signal }),
-      apiFetch<{ editions: ApiEdition[] }>(path + '/editions', { signal }),
-      apiFetch<{ sources: ApiSource[] }>('/api/sources', { signal }).catch((reason: unknown) => { if (signal.aborted) throw reason; return { sources: [] } }),
     ])
-    return { toc: toc.toc, details, editions: editions.editions, sources: sources.sources }
+    return { toc: toc.toc, details }
   }, refresh)
 }

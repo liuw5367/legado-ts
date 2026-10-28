@@ -13,7 +13,7 @@ import { Badge } from '../components/ui/badge.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
-import { apiFetch, type ApiBook, type ApiChapter, type ApiEdition, type ApiPosition, type ApiSource, type ApiToc } from '../lib/api.ts'
+import { apiFetch, type ApiBook, type ApiChapter, type ApiPosition, type ApiToc } from '../lib/api.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { isCurrentToc } from '../lib/reader-interactions.ts'
@@ -30,8 +30,7 @@ export function TocPage() {
   const editionKey = searchParams.get('editionKey') ?? ''
   const [toc, setToc] = useState<ApiToc | null>(null)
   const [book, setBook] = useState<ApiBook | null>(null)
-  const [editions, setEditions] = useState<ApiEdition[]>([])
-  const [sources, setSources] = useState<ApiSource[]>([])
+  const [editions, setEditions] = useState<Array<{ editionKey: string; sourceId: string; sourceName: string }>>([])
   const [position, setPosition] = useState<ApiPosition | null>(null)
   const [filter, setFilter] = useState('')
   const [reversed, setReversed] = useState(false)
@@ -54,13 +53,14 @@ export function TocPage() {
     setWarning('')
     try {
       const cachedPosition = cache.getPosition(bookId, editionKey)
-      const [snapshot, positionResult] = await Promise.all([
+      const [snapshot, positionResult, options] = await Promise.all([
         loadBookSnapshot(cache, bookId, editionKey, refresh),
         cachedPosition === undefined ? apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position?editionKey=' + encodeURIComponent(editionKey)) : Promise.resolve({ position: cachedPosition }),
+        cache.loadEditionOptions(bookId, refresh),
       ])
       if (requestId !== requestIdRef.current) return
       cache.setPosition(bookId, editionKey, positionResult.position)
-      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(snapshot.editions); setSources([...snapshot.sources.filter((source) => source.sourceId !== snapshot.details.edition.sourceId), { sourceId: snapshot.details.edition.sourceId, name: snapshot.details.sourceName, fingerprint: snapshot.toc.sourceFingerprint, enabled: true }]); setPosition(positionResult.position); setWarning(snapshot.toc.runtimeWarning ?? '')
+      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(options); setPosition(positionResult.position); setWarning(snapshot.toc.runtimeWarning ?? '')
     } catch (reason) { if (requestId === requestIdRef.current) setError(reason instanceof Error ? reason.message : '目录加载失败') }
     finally { if (requestId === requestIdRef.current) { setLoading(false); setRefreshing(false) } }
   }
@@ -76,8 +76,7 @@ export function TocPage() {
   const chapters = currentToc?.chapters.filter((chapter) => chapter.isVolume !== true) ?? []
   const currentPosition = cache.getPosition(bookId, editionKey) ?? position
   const currentChapter = currentPosition === null ? undefined : chapters.find((chapter) => chapter.chapterId === currentPosition.chapterId)
-  const sourceName = editions.find((edition) => edition.editionKey === editionKey)?.sourceId
-  const displaySource = sources.find((source) => source.sourceId === sourceName)?.name ?? sourceName ?? '当前来源'
+  const displaySource = editions.find((edition) => edition.editionKey === (editionKey || snapshot?.details.edition.editionKey))?.sourceName ?? '当前来源'
   const filteredEntries = useMemo(() => filterEntries(currentToc?.chapters ?? [], filter), [filter, currentToc])
   const orderedEntries = useMemo(() => reversed ? reverseEntries(filteredEntries) : filteredEntries, [filteredEntries, reversed])
   useEffect(() => {
@@ -105,7 +104,7 @@ export function TocPage() {
   if (currentToc === null) return <section className="reader-error loading-state loading-state-viewport"><p className="error" role="alert">{error || '目录加载失败'}</p><div className="loading-state-action"><PageBackButton appearance="button" /><Button variant="secondary" size="sm" type="button" onClick={() => void load(false)}>重试</Button></div></section>
   return <section className="page-stack page-narrow toc-page">
     <div className="toc-controls" ref={controlsRef}><PageHeader backTo="/" title={book?.name ?? '书籍目录'} description={`${chapters.length} 章 · ${displaySource}`} actions={continueTarget === undefined ? null : <Link className="button small page-action" to={chapterLink(bookId, continueTarget, editionKey)} state={readingEntryState(location)}>{currentChapter === undefined ? '开始阅读' : '继续阅读'}</Link>} />
-    <div className="toc-toolbar">{editions.length > 1 ? <label className="toc-source"><span className="sr-only">阅读来源</span><Select value={editionKey} onChange={(event) => void switchEdition(event.target.value)}>{editions.map((edition) => <option key={edition.editionKey} value={edition.editionKey}>{sources.find((source) => source.sourceId === edition.sourceId)?.name ?? edition.sourceId}</option>)}</Select></label> : <span className="muted small toc-source toc-source-name">{displaySource}</span>}<div className="toc-actions"><Button className="page-action" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? <ArrowUpWideNarrow aria-hidden="true" /> : <ArrowDownWideNarrow aria-hidden="true" />}<span>{reversed ? '正序' : '倒序'}</span></Button><Button className="page-action" size="sm" type="button" aria-label="到顶部" title="到顶部" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUpToLine aria-hidden="true" /></Button><Button className="page-action" size="sm" type="button" aria-label="到底部" title="到底部" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}><ArrowDownToLine aria-hidden="true" /></Button><Button className="refresh-button page-action" size="sm" type="button" disabled={refreshing} onClick={() => void load(true)}><RefreshCw aria-hidden="true" /><span>{refreshing ? '刷新中' : '刷新'}</span></Button></div></div>
+    <div className="toc-toolbar">{editions.length > 1 ? <label className="toc-source"><span className="sr-only">阅读来源</span><Select value={editionKey} onChange={(event) => void switchEdition(event.target.value)}>{editions.map((edition) => <option key={edition.editionKey} value={edition.editionKey}>{edition.sourceName}</option>)}</Select></label> : <span className="muted small toc-source toc-source-name">{displaySource}</span>}<div className="toc-actions"><Button className="page-action" size="sm" type="button" onClick={() => setReversed((value) => !value)}>{reversed ? <ArrowUpWideNarrow aria-hidden="true" /> : <ArrowDownWideNarrow aria-hidden="true" />}<span>{reversed ? '正序' : '倒序'}</span></Button><Button className="page-action" size="sm" type="button" aria-label="到顶部" title="到顶部" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUpToLine aria-hidden="true" /></Button><Button className="page-action" size="sm" type="button" aria-label="到底部" title="到底部" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}><ArrowDownToLine aria-hidden="true" /></Button><Button className="refresh-button page-action" size="sm" type="button" disabled={refreshing} onClick={() => void load(true)}><RefreshCw aria-hidden="true" /><span>{refreshing ? '刷新中' : '刷新'}</span></Button></div></div>
     {error.length > 0 ? <DismissibleMessage onDismiss={() => setError('')} className="error compact-message" role="alert">{error}</DismissibleMessage> : null}
     {warning.length > 0 ? <DismissibleMessage onDismiss={() => setWarning('')} className="compact-message" role="status">{warning}</DismissibleMessage> : null}
     <div className="toc-filter-row"><label className="sr-only" htmlFor={filterId}>筛选章节</label><Input id={filterId} value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="筛选章节" /><span className="muted small">{filter.length > 0 ? `${chapters.filter((chapter) => normalizeChapterText(chapter.title).includes(normalizeChapterText(filter))).length} 个匹配` : `共 ${chapters.length} 章`}</span></div>

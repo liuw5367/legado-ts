@@ -7,8 +7,7 @@ import { apiFetch } from '../lib/api.ts'
 import { usePageLoadEffect, usePageNavigation, usePageVersion } from '../lib/use-page-resource.ts'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 
-type BookChoice = { id: string; name: string; author: string | null; activeEditionKey?: string }
-type ApiBooks = { books: Array<{ book: { id: string; name: string; author?: string }; edition: { editionKey: string } }> }
+type BookChoice = { id: string; name: string; author: string | null; activeEditionKey?: string | null }
 const cachedBooks = new Map<string, BookChoice[]>()
 export function NotesPage() {
   const [params, setParams] = useSearchParams(); const q = params.get('q') ?? ''; const bookId = params.get('bookId') ?? ''; const deleted = params.get('deleted') === 'true'
@@ -19,9 +18,7 @@ export function NotesPage() {
     const cached = cachedBooks.get(booksKey)
     if (cached) { setBooks(cached); settle(); return }
     const controller = new AbortController()
-    void Promise.all([apiFetch<{ books: BookChoice[] }>('/api/annotations/books', { signal: controller.signal }), apiFetch<ApiBooks>('/api/books', { signal: controller.signal })]).then(([marked, library]) => {
-      const byBook = new Map(library.books.map(({ book, edition }) => [book.id, edition.editionKey]))
-      const result = marked.books.map((book) => { const activeEditionKey = byBook.get(book.id); return { ...book, ...(activeEditionKey ? { activeEditionKey } : {}) } })
+    void apiFetch<{ books: BookChoice[] }>('/api/annotations/books', { signal: controller.signal }).then(({ books: result }) => {
       cachedBooks.set(booksKey, result); setBooks(result); setError('')
     }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '读取书籍失败') }).finally(() => { if (!controller.signal.aborted) settle() })
     return () => controller.abort()

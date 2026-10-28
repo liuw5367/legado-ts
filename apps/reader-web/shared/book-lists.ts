@@ -37,3 +37,10 @@ export const bookOrganizationBackupSchema = z.object({
   lists: z.array(z.object({ id: z.uuid(), userId: z.string(), type: z.enum(['booklist', 'shelf_group']), name: bookListNameSchema, description: bookListDescriptionSchema, isPublic: z.boolean(), customOrder: z.number().int().min(0).default(0), createdAt: z.iso.datetime({ offset: true }), updatedAt: z.iso.datetime({ offset: true }) })),
   items: z.array(z.object({ userId: z.string(), bookListId: z.uuid(), bookId: z.uuid(), description: bookListDescriptionSchema, addedAt: z.iso.datetime({ offset: true }), updatedAt: z.iso.datetime({ offset: true }) })),
 })
+
+export type BookDisplay = { id: string; name: string; author?: string; coverUrl?: string; customCoverUrl?: string }
+export type BookListDisplay = Pick<StoredBookList, 'id' | 'name' | 'description' | 'createdAt' | 'updatedAt'>
+export type BookListChoice = Pick<StoredBookList, 'id' | 'name' | 'description'> & { bookCount: number; containsBook: boolean }
+export type BookListSummary = BookListDisplay & { bookCount: number; containsBook: boolean; coverBooks: BookDisplay[] }
+export type BookListMember = Pick<StoredBookListItem, 'bookId' | 'description' | 'addedAt'> & { book: BookDisplay }
+export type BookListDetails = { list: BookListDisplay; items: BookListMember[] }

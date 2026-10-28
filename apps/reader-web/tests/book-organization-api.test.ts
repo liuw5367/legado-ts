@@ -50,16 +50,18 @@ test('100 个书单与单书单 1000 本书完整返回，封面查询仅读取�
     const created = await repository.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: String(index), sourceFingerprint: 'fp', addToBookshelf: false })
     await repository.mutateBookOrganization(userId, { kind: 'add', id: listId, bookId: created.book.id })
   }
-  const library = t.mock.method(repository, 'getOrganizationLibrary')
+  const library = t.mock.method(repository, 'getOrganizationLibrary', async () => { throw new Error('展示查询不得加载完整书库') })
   const lists = await (await request('/api/book-lists')).json()
   assert.equal(lists.lists.length, 100)
   const populated = lists.lists.find((row: ApiBookList) => row.id === listId)
   assert.equal(populated.bookCount, 1000); assert.equal(populated.coverBooks.length, 4)
-  assert.equal(library.mock.calls[0]?.arguments[1]?.length, 4)
+  const choices = await (await request('/api/book-lists?purpose=picker')).json()
+  assert.ok(choices.lists.every((row: object) => !('coverBooks' in row)))
+  assert.equal(choices.lists.find((row: { id: string }) => row.id === listId).bookCount, 1000)
   const details = await (await request(`/api/book-lists/${listId}`)).json()
   assert.equal(details.items.length, 1000)
   await request('/api/bookshelf-groups')
-  assert.deepEqual(library.mock.calls.at(-1)?.arguments[1], [])
+  assert.equal(library.mock.callCount(), 0)
 })
 
 test('数据库失败仍返回统一 JSON 错误且不伪装为空列表', async (t) => {
@@ -68,4 +70,27 @@ test('数据库失败仍返回统一 JSON 错误且不伪装为空列表', async
   const response = await request('/api/book-lists')
   assert.equal(response.status, 500)
   assert.equal((await response.json()).error.code, 'server-error')
+})
+
+test('展示查询使用必要字段，书单选择器省去封面且特殊字符按字面筛选', async () => {
+  const { repository, request } = setup()
+  const metadata = { sourceId: 'https://display.test', bookUrl: '/b', name: '显示书籍', author: '作者', intro: '大简介', rawFields: { secret: '执行字段' }, traceRef: '', emptyFields: [], fieldErrors: {} }
+  const { book } = await repository.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: 'edition', sourceFingerprint: 'fp', addToBookshelf: true })
+  const result = await (await request('/api/book-lists', 'POST', { name: '100%_书单', description: '描述' })).json()
+  const id = result.list.id
+  await request(`/api/book-lists/${id}/books/${book.id}`, 'PUT', {})
+  const choices = await (await request(`/api/book-lists?purpose=picker&bookId=${book.id}&q=${encodeURIComponent('%_')}`)).json()
+  assert.equal(choices.lists.length, 1); assert.equal(choices.lists[0].containsBook, true)
+  assert.equal('coverBooks' in choices.lists[0], false)
+  const list = (await (await request('/api/book-lists')).json()).lists[0]
+  assert.deepEqual(Object.keys(list.coverBooks[0]).sort(), ['id', 'name'])
+  const details = await (await request(`/api/book-lists/${id}`)).json()
+  assert.equal('edition' in details.items[0], false); assert.equal('position' in details.items[0], false)
+  assert.equal('intro' in details.items[0].book, false)
+  const groups = await (await request(`/api/bookshelf-groups?bookId=${book.id}`)).json()
+  assert.equal(groups.onBookshelf, true); assert.equal(groups.currentGroupId, null); assert.equal(groups.ungroupedCount, 1)
+  const identities = await repository.listBookIdentities(userId)
+  assert.deepEqual(identities, [{ id: book.id, name: metadata.name, author: metadata.author, onBookshelf: true }])
+  assert.deepEqual(await repository.getReadingEntry(userId, book.id), { activeEditionKey: 'edition' })
+  assert.equal(await repository.getReadingEntry('other', book.id), null)
 })

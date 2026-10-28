@@ -1,3 +1,4 @@
+import { useReaderSettings } from '../lib/settings-context.tsx'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
 import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
@@ -11,7 +12,7 @@ import { BookCover } from '../components/book-cover.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { MoreMenu } from '../components/more-menu.tsx'
 import { Button } from '../components/ui/button.tsx'
-import { apiFetch, type ApiHome, type ApiShelfGroups, type ApiSettings } from '../lib/api.ts'
+import { apiFetch, type ApiHome, type ApiShelfGroups } from '../lib/api.ts'
 import { formatShanghaiDateTime } from '../lib/time-format.ts'
 import { useAuth } from '../lib/auth-context.tsx'
 import { hasSeenOnboarding } from '../lib/onboarding.ts'
@@ -22,7 +23,8 @@ type View = 'bookshelf' | 'reading' | 'history'
 export function AccountHomePage() {
   const [groupData, setGroupData] = useState<ApiShelfGroups | null>(null)
   const [selectedGroup, setSelectedGroup] = useState('all')
-  const groupInitialized = useRef(false)
+  const groupInitialized = useRef<string | undefined>(undefined)
+  const { settings, settingsLoadStatus, retrySettingsLoad, error: settingsError } = useReaderSettings()
   const [home, setHome] = useState<ApiHome | null>(null)
   const [loading, setLoading] = useState(true)
   const location = useLocation()
@@ -44,6 +46,13 @@ export function AccountHomePage() {
     navigate('/onboarding', { replace: true, state: { returnTo: '/' } })
   }, [navigate, user?.id])
 
+  useEffect(() => {
+    if (!user?.id || settingsLoadStatus !== 'ready' || !groupData || groupInitialized.current === user.id) return
+    const initial = settings.general.bookshelfInitialGroup ?? 'all'
+    setSelectedGroup(initial === 'all' || initial === 'ungrouped' || groupData.groups.some((group) => group.id === initial) ? initial : 'all')
+    groupInitialized.current = user.id
+  }, [user?.id, settingsLoadStatus, settings.general.bookshelfInitialGroup, groupData])
+
   const loadHome = useCallback(async () => {
     const requestId = ++requestIdRef.current
     controllerRef.current?.abort()
@@ -52,12 +61,11 @@ export function AccountHomePage() {
     setLoading(true)
     setMessage('')
     try {
-      const [result, groups, settings] = await Promise.all([apiFetch<ApiHome>('/api/home', { signal: controller.signal }), apiFetch<ApiShelfGroups>('/api/bookshelf-groups', { signal: controller.signal }), apiFetch<{ settings: ApiSettings }>('/api/settings', { signal: controller.signal })])
+      const [result, groups] = await Promise.all([apiFetch<ApiHome>('/api/home', { signal: controller.signal }), apiFetch<ApiShelfGroups>('/api/bookshelf-groups', { signal: controller.signal })])
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       setHome(result); setGroupData(groups)
       const valid = (id: string) => id === 'all' || id === 'ungrouped' || groups.groups.some((group) => group.id === id)
-      if (!groupInitialized.current) { const initial = settings.settings.general.bookshelfInitialGroup ?? 'all'; setSelectedGroup(valid(initial) ? initial : 'all'); groupInitialized.current = true }
-      else setSelectedGroup((current) => valid(current) ? current : 'all')
+      setSelectedGroup((current) => valid(current) ? current : 'all')
     } catch (error: unknown) {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       setMessage(error instanceof Error ? error.message : '首页加载失败')
@@ -95,6 +103,7 @@ export function AccountHomePage() {
   const countLabel = home === null ? (loading ? '读取中…' : '暂时无法读取') : view === 'bookshelf' ? `${home.bookshelf.length} 本书` : view === 'reading' ? `${home.reading.length} 条记录` : `${home.searchHistory.length} 条搜索`
   return <section className="page-stack page-narrow">
     <PageHeader title="我的阅读" description={countLabel} actions={<Link className="button small page-action" to="/search"><Search aria-hidden="true" /><span>搜索</span></Link>} />
+    {settingsLoadStatus === 'error' ? <DismissibleMessage className="error" role="alert">{settingsError ?? '设置加载失败'}<button type="button" onClick={() => void retrySettingsLoad()}>重试</button></DismissibleMessage> : null}
     <div className="segmented" role="tablist" aria-label="阅读数据视图">
       <button className={view === 'bookshelf' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'bookshelf'} onClick={() => setView('bookshelf')}>书架 {home === null ? null : <span>{home.bookshelf.length}</span>}</button>
       <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => setView('reading')}>阅读 {home === null ? null : <span>{home.reading.length}</span>}</button>

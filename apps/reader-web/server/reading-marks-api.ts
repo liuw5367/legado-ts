@@ -22,12 +22,18 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
     const books = await repository().listReadingMarkBooks(c.get('userId'))
     return c.json({ books })
   }))
-  app.get('/api/annotations', guard(async (c) => c.json(await repository().listReadingMarks(c.get('userId'), { ...query(c), order: 'created' }))))
+  app.get('/api/books/:bookId/annotations/:id/cached-chapter', guard(async (c) => {
+    const bookId = z.uuid().parse(c.req.param('bookId')); const id = z.uuid().parse(c.req.param('id'))
+    const row = await repository().getCachedMarkChapter(c.get('userId'), bookId, id)
+    if (!row) throw new MarkError(404, '记录不存在')
+    return c.json(row)
+  }))
+  app.get('/api/annotations', guard(async (c) => c.json(await repository().listReadingMarkSummaries(c.get('userId'), { ...query(c), order: 'created' }))))
   for (const kind of ['bookmarks', 'annotations'] as const) {
     app.get('/api/books/:bookId/' + kind, guard(async (c) => {
       const bookId = z.uuid().parse(c.req.param('bookId')); const repo = repository(); const userId = c.get('userId')
-      if (!await repo.getBook(userId, bookId)) throw new MarkError(404, '书籍不存在')
-      return c.json(await repo.listReadingMarks(userId, { ...query(c), bookId, kind }))
+      if (!await repo.getReadingEntry(userId, bookId)) throw new MarkError(404, '书籍不存在')
+      return c.json(await repo.listReadingMarkSummaries(userId, { ...query(c), bookId, kind }))
     }))
     app.put('/api/books/:bookId/' + kind + '/:id', guard(async (c) => {
       const bookId = z.uuid().parse(c.req.param('bookId')); const id = z.uuid().parse(c.req.param('id')); const input = markInputSchema.parse(await c.req.json()); const repo = repository(); const userId = c.get('userId')
@@ -63,7 +69,7 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
     for (const action of ['delete', 'restore'] as const) {
       const handler = guard(async (c) => {
         const bookId = z.uuid().parse(c.req.param('bookId')); const id = z.uuid().parse(c.req.param('id')); const input = z.object({ expectedVersion: z.number().int().min(0) }).strict().parse(await c.req.json()); const repo = repository(); const userId = c.get('userId')
-        if (!await repo.getBook(userId, bookId)) throw new MarkError(404, '书籍不存在')
+        if (!await repo.getReadingEntry(userId, bookId)) throw new MarkError(404, '书籍不存在')
         return c.json({ item: await repo.mutateReadingMark(userId, { action, kind, id, bookId, expectedVersion: input.expectedVersion }) })
       })
       if (action === 'delete') app.delete('/api/books/:bookId/' + kind + '/:id', handler)
@@ -72,7 +78,7 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
   }
   app.delete('/api/books/:bookId/annotations/:id/permanent', guard(async (c) => {
     const bookId = z.uuid().parse(c.req.param('bookId')); const id = z.uuid().parse(c.req.param('id')); const input = z.object({ expectedVersion: z.number().int().min(0) }).strict().parse(await c.req.json()); const repo = repository(); const userId = c.get('userId')
-    if (!await repo.getBook(userId, bookId)) throw new MarkError(404, '书籍不存在')
+    if (!await repo.getReadingEntry(userId, bookId)) throw new MarkError(404, '书籍不存在')
     await repo.purgeReadingMark(userId, 'annotations', bookId, id, input.expectedVersion)
     return c.body(null, 204)
   }))

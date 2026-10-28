@@ -223,3 +223,38 @@ test('text 内图片与特殊格式使用统一块索引校验并保存摘录', 
   const invalid = { ...anchor, start: { paragraphIndex: 1, offset: 1 } }
   assert.equal((await request(path.replace(row.id, randomUUID()), 'PUT', { ...input, anchor: invalid })).status, 400)
 })
+
+test('展示列表不携带缓存原文，单条查询隔离账号并保留编辑删除恢复后的缓存', async () => {
+  const { repo, request, path, input, bookId } = await setup()
+  const saved = await (await request(path, 'PUT', input)).json() as { item: ReadingMark }
+  assert.ok(saved.item.cachedChapter)
+  const { markSaveInput, markSummary } = await import('../shared/reading-annotations.ts')
+  for (const url of ['/api/annotations', `/api/books/${bookId}/annotations`, `/api/books/${bookId}/annotations?chapterUrl=${encodeURIComponent(input.chapterUrl)}`]) {
+    const result = await (await request(url)).json()
+    assert.equal(result.items[0].hasCachedChapter, true)
+    assert.equal('cachedChapter' in result.items[0], false)
+    assert.equal(markInputSchema.safeParse(markSaveInput(result.items[0])).success, true)
+  }
+  const choices = await (await request('/api/annotations/books')).json()
+  assert.equal(choices.books[0].activeEditionKey, input.editionKey)
+  const cachePath = path + '/cached-chapter'
+  assert.deepEqual((await (await request(cachePath)).json()).cachedChapter, saved.item.cachedChapter)
+  assert.equal((await request(cachePath, 'GET', undefined, 'other')).status, 404)
+  assert.equal((await request(cachePath.replace(bookId, randomUUID()))).status, 404)
+  let current = saved.item
+  for (const color of ['blue', 'pink'] as const) {
+    const changed = await request(path, 'PUT', { ...markSaveInput(markSummary(current)), color, note: '修改想法' })
+    assert.equal(changed.status, 200)
+    current = (await changed.json()).item
+    assert.deepEqual(current.cachedChapter, saved.item.cachedChapter)
+  }
+  const deleted = await (await request(path, 'DELETE', { expectedVersion: current.version })).json()
+  assert.deepEqual((await (await request(cachePath)).json()).cachedChapter, saved.item.cachedChapter)
+  const restored = await request(path + '/restore', 'POST', { expectedVersion: deleted.item.version })
+  assert.equal(restored.status, 200)
+  assert.deepEqual((await repo.getCachedMarkChapter(user, bookId, current.id))?.cachedChapter, saved.item.cachedChapter)
+  const noCache = await repo.mutateReadingMark(user, { action: 'save', kind: 'annotations', id: randomUUID(), bookId, input: { ...input, chapterUrl: '/without-cache' }, bookName: '星海旅人', author: null, sourceName: '来源', cachedChapter: null })
+  const noCachePath = path.replace(current.id, noCache.id) + '/cached-chapter'
+  assert.deepEqual(await (await request(noCachePath)).json(), { cachedChapter: null })
+  assert.equal((await repo.listReadingMarkSummaries(user, { kind: 'annotations', id: noCache.id })).items[0]?.hasCachedChapter, false)
+})

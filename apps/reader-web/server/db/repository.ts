@@ -1,5 +1,7 @@
+import type { BookDetailsResponse } from '../../shared/book-details.ts'
+import type { BookDisplay, BookListChoice, BookListDetails } from '../../shared/book-lists.ts'
 import { readMarks, writeMark, lockMarks, purgeMark, restoreMarks } from './reading-marks.ts'
-import { validateMarkCollection, readingMarkSchema, changeMark, markPage, MarkError, type MarkKind, type MarkQuery, type MarkCommand, type MarkPage, type ReadingMark } from '../../shared/reading-annotations.ts'
+import { markSummary, validateMarkCollection, readingMarkSchema, changeMark, markPage, MarkError, type MarkKind, type MarkQuery, type MarkCommand, type MarkPage, type MarkSummaryPage, type CachedChapter, type ReadingMark } from '../../shared/reading-annotations.ts'
 import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
 import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
 import * as importHistory from './source-import-history.ts'
@@ -17,7 +19,7 @@ import type { Chapter, NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser, type ReaderTransaction } from './client.ts'
 import { readingAnnotations, bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportBatches, sourceImportLinks, sourceImportItems, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
-import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
+import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type HomeSearchHistory, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
 
 export interface StoredSourceRecord extends SourceSummary {
@@ -85,8 +87,18 @@ export class BackupRestoreError extends Error {
 }
 
 export interface ReaderRepository {
-  listReadingMarkBooks(userId: string): Promise<Array<{ id: string; name: string; author: string | null }>>
+  listBookListSummaries(userId: string, query?: string, bookId?: string, picker?: boolean): Promise<Array<BookListChoice & { createdAt?: string; updatedAt?: string; coverBooks?: BookDisplay[] }>>
+  getBookListDetails(userId: string, listId: string): Promise<BookListDetails | null>
+  getShelfGroups(userId: string, bookId?: string): Promise<{ groups: Array<{ id: string; name: string; bookCount: number }>; ungroupedCount: number; onBookshelf?: boolean; currentGroupId?: string | null }>
+  listBookIdentities(userId: string): Promise<Array<{ id: string; name: string; author?: string; onBookshelf: boolean }>>
+  getReadingEntry(userId: string, bookId: string): Promise<{ activeEditionKey: string | null } | null>
+  listEditionOptions(userId: string, bookId: string): Promise<Array<{ editionKey: string; sourceId: string; sourceName: string }>>
+  getDisplayEdition(userId: string, bookId: string, editionKey?: string): Promise<BookDetailsResponse['edition'] | null>
+  getDisplayPosition(userId: string, bookId: string, editionKey: string): Promise<{ title: string; lastReadAt: string } | null>
+  listReadingMarkBooks(userId: string): Promise<Array<{ id: string; name: string; author: string | null; activeEditionKey: string | null }>>
   listReadingMarks(userId: string, query: MarkQuery): Promise<MarkPage>
+  listReadingMarkSummaries(userId: string, query: MarkQuery): Promise<MarkSummaryPage>
+  getCachedMarkChapter(userId: string, bookId: string, id: string): Promise<{ cachedChapter: CachedChapter | null } | null>
   mutateReadingMark(userId: string, command: MarkCommand): Promise<ReadingMark>
   purgeReadingMark(userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number): Promise<void>
   getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean): Promise<{ books: Array<{ book: StoredBook; editions: StoredEdition[] }>; positions: StoredPosition[]; bookshelf: Array<{ bookId: string; groupId: string | null }> }>
@@ -150,8 +162,70 @@ export interface ReaderRepository {
 }
 
 export class PostgresReaderRepository implements ReaderRepository {
-  public listReadingMarkBooks(userId: string) { return withUser(userId, (tx) => tx.selectDistinct({ id: books.id, name: books.name, author: books.author }).from(readingAnnotations).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingAnnotations.bookId))).where(eq(readingAnnotations.userId, userId)).orderBy(books.name, books.id)) }
+  public async listBookListSummaries(userId: string, query = '', bookId?: string, picker = false) {
+    return withUser(userId, async (tx) => {
+      const keyword = query.trim().toLocaleLowerCase()
+      // 沿用 JavaScript 的 Unicode 大小写匹配，不依赖数据库 locale 的 lower 行为。
+      const matchingIds = keyword ? (await tx.select({ id: bookLists.id, name: bookLists.name }).from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.type, 'booklist')))).filter((row) => row.name.toLocaleLowerCase().includes(keyword)).map((row) => row.id) : undefined
+      if (matchingIds?.length === 0) return []
+      const rows = await tx.select({ id: bookLists.id, name: bookLists.name, description: bookLists.description,
+        ...(picker ? {} : { createdAt: bookLists.createdAt, updatedAt: bookLists.updatedAt }),
+        bookCount: sql<number>`(select count(*)::int from reader.book_list_items i where i.user_id = ${userId} and i.book_list_id = ${bookLists.id})`,
+        containsBook: bookId ? sql<boolean>`exists (select 1 from reader.book_list_items i where i.user_id = ${userId} and i.book_list_id = ${bookLists.id} and i.book_id = ${bookId}::uuid)` : sql<boolean>`false`,
+        ...(picker ? {} : { coverBooks: sql<BookDisplay[]>`(select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', b.id, 'name', b.name, 'coverUrl', b.cover_url, 'customCoverUrl', b.custom_cover_url)) order by chosen.added_at desc, chosen.book_id desc), '[]'::jsonb) from (select i.book_id, i.added_at from reader.book_list_items i where i.user_id = ${userId} and i.book_list_id = ${bookLists.id} order by i.added_at desc, i.book_id desc limit 4) chosen join reader.books b on b.user_id = ${userId} and b.id = chosen.book_id)` }),
+      }).from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.type, 'booklist'), matchingIds ? inArray(bookLists.id, matchingIds) : undefined)).orderBy(desc(bookLists.updatedAt), desc(bookLists.id))
+      return rows.map(({ createdAt, updatedAt, ...row }) => ({ ...row, ...(createdAt ? { createdAt: createdAt.toISOString() } : {}), ...(updatedAt ? { updatedAt: updatedAt.toISOString() } : {}) }))
+    })
+  }
+  public async getBookListDetails(userId: string, listId: string): Promise<BookListDetails | null> {
+    return withUser(userId, async (tx) => {
+      const [list] = await tx.select(bookListDisplayColumns).from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.id, listId), eq(bookLists.type, 'booklist')))
+      if (!list) return null
+      const rows = await tx.select({ bookId: bookListItems.bookId, description: bookListItems.description, addedAt: bookListItems.addedAt, book: bookDisplayColumns }).from(bookListItems).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookListItems.bookId))).where(and(eq(bookListItems.userId, userId), eq(bookListItems.bookListId, listId))).orderBy(desc(bookListItems.addedAt), desc(bookListItems.bookId))
+      return { list: { ...list, createdAt: list.createdAt.toISOString(), updatedAt: list.updatedAt.toISOString() }, items: rows.map((row) => ({ ...row, addedAt: row.addedAt.toISOString(), book: displayBook(row.book) })) }
+    })
+  }
+  public async getShelfGroups(userId: string, bookId?: string) {
+    return withUser(userId, async (tx) => {
+      const groups = await tx.select({ id: bookLists.id, name: bookLists.name, bookCount: sql<number>`(select count(*)::int from reader.bookshelf s where s.user_id = ${userId} and s.group_id = ${bookLists.id})` }).from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.type, 'shelf_group'))).orderBy(asc(bookLists.customOrder), asc(bookLists.createdAt), asc(bookLists.id))
+      const [ungrouped] = await tx.select({ value: sql<number>`count(*)::int` }).from(bookshelf).where(and(eq(bookshelf.userId, userId), isNull(bookshelf.groupId)))
+      const [current] = bookId ? await tx.select({ groupId: bookshelf.groupId }).from(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId))) : []
+      return { groups, ungroupedCount: ungrouped?.value ?? 0, ...(bookId ? { onBookshelf: current !== undefined, currentGroupId: current?.groupId ?? null } : {}) }
+    })
+  }
+  public async listBookIdentities(userId: string) {
+    return withUser(userId, async (tx) => {
+      const rows = await tx.select({ id: books.id, name: books.name, author: books.author, onBookshelf: sql<boolean>`exists (select 1 from reader.bookshelf s where s.user_id = ${userId} and s.book_id = ${books.id})` }).from(books).where(eq(books.userId, userId)).orderBy(desc(books.updatedAt))
+      return rows.map(({ author, ...row }) => ({ ...row, ...(author === null ? {} : { author }) }))
+    })
+  }
+  public async getReadingEntry(userId: string, bookId: string) {
+    return withUser(userId, async (tx) => { const [row] = await tx.select({ activeEditionKey: books.activeEditionKey }).from(books).where(and(eq(books.userId, userId), eq(books.id, bookId))); return row ?? null })
+  }
+  public async listEditionOptions(userId: string, bookId: string) {
+    return withUser(userId, async (tx) => {
+      const rows = await tx.select({ editionKey: bookEditions.editionKey, sourceId: bookEditions.sourceId, name: sql<unknown>`${userSources.normalizedSource}->'bookSourceName'` }).from(bookEditions).leftJoin(userSources, and(eq(userSources.userId, userId), eq(userSources.sourceId, bookEditions.sourceId), eq(userSources.deleted, false))).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId))).orderBy(desc(bookEditions.updatedAt), asc(bookEditions.createdAt))
+      return rows.map(({ name, ...row }) => ({ ...row, sourceName: typeof name === 'string' ? name : row.sourceId }))
+    })
+  }
+  public async getDisplayEdition(userId: string, bookId: string, editionKey?: string) {
+    return withUser(userId, async (tx) => {
+      const [row] = await tx.select({ editionKey: bookEditions.editionKey, sourceId: bookEditions.sourceId, sourceFingerprint: bookEditions.sourceFingerprint, bookUrl: bookEditions.bookUrl, metadata: sql<BookDetailsResponse['edition']['metadata']>`(select coalesce(jsonb_object_agg(key, value), '{}'::jsonb) from jsonb_each(${bookEditions.metadata}) where key in ('name', 'author', 'intro', 'coverUrl', 'kind', 'lastChapter', 'updateTime', 'wordCount', 'searchDurationMs'))` }).from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId), editionKey ? eq(bookEditions.editionKey, editionKey) : undefined)).orderBy(desc(bookEditions.updatedAt)).limit(1)
+      return row ?? null
+    })
+  }
+  public async getDisplayPosition(userId: string, bookId: string, editionKey: string) {
+    return withUser(userId, async (tx) => { const [row] = await tx.select({ title: readingRecords.title, lastReadAt: readingRecords.lastReadAt }).from(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId), eq(readingRecords.editionKey, editionKey))).limit(1); return row ? { title: row.title, lastReadAt: row.lastReadAt.toISOString() } : null })
+  }
+  public listReadingMarkBooks(userId: string) { return withUser(userId, (tx) => tx.selectDistinct({ id: books.id, name: books.name, author: books.author, activeEditionKey: books.activeEditionKey }).from(readingAnnotations).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingAnnotations.bookId))).where(eq(readingAnnotations.userId, userId)).orderBy(books.name, books.id)) }
   public listReadingMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query)) }
+  public listReadingMarkSummaries(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query, true)) }
+  public getCachedMarkChapter(userId: string, bookId: string, id: string) {
+    return withUser(userId, async (tx) => {
+      const [row] = await tx.select({ cachedChapter: sql<CachedChapter | null>`${readingAnnotations.data}->'cachedChapter'` }).from(readingAnnotations).where(and(eq(readingAnnotations.userId, userId), eq(readingAnnotations.bookId, bookId), eq(readingAnnotations.id, id))).limit(1)
+      return row ?? null
+    })
+  }
   public mutateReadingMark(userId: string, command: MarkCommand) { return withUser(userId, (tx) => writeMark(tx, userId, command)) }
   public purgeReadingMark(userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number) { return withUser(userId, (tx) => purgeMark(tx, userId, kind, bookId, id, expectedVersion)) }
   public acquireExecutionSlot(userId: string, operationId: string) { return acquireExecutionSlot(userId, operationId) }
@@ -257,8 +331,8 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined> {
     return withUser(userId, async (transaction) => {
-      const [row] = await transaction.select({ normalizedSource: userSources.normalizedSource }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sourceId), eq(userSources.deleted, false))).limit(1)
-      return row?.normalizedSource.bookSourceName
+      const [row] = await transaction.select({ name: sql<unknown>`${userSources.normalizedSource}->'bookSourceName'` }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sourceId), eq(userSources.deleted, false))).limit(1)
+      return typeof row?.name === 'string' ? row.name : undefined
     })
   }
 
@@ -624,11 +698,11 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async getHome(userId: string): Promise<HomeSnapshot> {
     return withUser(userId, async (transaction) => {
-      const [settingsRow] = await transaction.select().from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
-      const settings = settingsRow === undefined ? defaultReaderSettings(userId) : toSettings(settingsRow)
-      const shelfRows = await transaction.select({ book: books, edition: bookEditions, addedAt: bookshelf.addedAt, groupId: bookshelf.groupId }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
+      const [settingsRow] = await transaction.select({ sort: sql<unknown>`${readerSettings.preferences}->'general'->>'bookshelfSort'` }).from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
+      const sortByReading = settingsRow?.sort === 'lastReadAt'
+      const shelfRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, addedAt: bookshelf.addedAt, groupId: bookshelf.groupId }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
       let sortedShelfRows = shelfRows
-      if (settings.general.bookshelfSort === 'lastReadAt' && shelfRows.length > 0) {
+      if (sortByReading && shelfRows.length > 0) {
         const lastReadRows = await transaction.select({ bookId: readingRecords.bookId, lastReadAt: max(readingRecords.lastReadAt) }).from(readingRecords).where(and(eq(readingRecords.userId, userId), inArray(readingRecords.bookId, shelfRows.map((row) => row.book.id)))).groupBy(readingRecords.bookId)
         const lastReadByBookId = new Map<string, Date>()
         for (const row of lastReadRows) if (row.lastReadAt !== null) lastReadByBookId.set(row.bookId, row.lastReadAt)
@@ -641,13 +715,20 @@ export class PostgresReaderRepository implements ReaderRepository {
           return right.addedAt.getTime() - left.addedAt.getTime() || left.book.id.localeCompare(right.book.id)
         })
       }
-      const readingRows = await transaction.select({ book: books, edition: bookEditions, position: readingRecords }).from(readingRecords).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingRecords.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, readingRecords.bookId), eq(bookEditions.editionKey, readingRecords.editionKey))).where(eq(readingRecords.userId, userId)).orderBy(desc(readingRecords.lastReadAt)).limit(50)
-      const historyRows = await transaction.select().from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))).orderBy(desc(searchHistory.createdAt), desc(searchHistory.id))
-      const positions = new Map(readingRows.map((row) => [`${row.book.id}:${row.edition.editionKey}`, toPosition(row.position)]))
-      const shelf = sortedShelfRows.map((row) => { const book = toBook(row.book); const edition = toEdition(row.edition); const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition, groupId: row.groupId } : { book, edition, groupId: row.groupId, position } })
+      const readingRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, position: { chapterId: readingRecords.chapterId, title: readingRecords.title, lastReadAt: readingRecords.lastReadAt } }).from(readingRecords).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingRecords.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, readingRecords.bookId), eq(bookEditions.editionKey, readingRecords.editionKey))).where(eq(readingRecords.userId, userId)).orderBy(desc(readingRecords.lastReadAt)).limit(50)
+      const historyIdentityRows = await transaction.select({ id: searchHistory.id, keyword: searchHistory.keyword, createdAt: searchHistory.createdAt }).from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt))).orderBy(desc(searchHistory.createdAt), desc(searchHistory.id))
+      const latestHistory = latestSearchHistory(historyIdentityRows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }))).slice(0, 50)
+      const historyDetails = latestHistory.length === 0 ? [] : await transaction.select({ id: searchHistory.id, searchId: searchHistory.searchId, status: searchHistory.status, resultCount: searchHistory.resultCount, summary: searchHistory.summary, updatedAt: searchHistory.updatedAt }).from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt), inArray(searchHistory.id, latestHistory.map((row) => row.id))))
+      const historyDetailsById = new Map(historyDetails.map((row) => [row.id, row]))
+      const positions = new Map(readingRows.map((row) => [`${row.book.id}:${row.edition.editionKey}`, displayPosition(row.position)]))
+      const shelf = sortedShelfRows.map((row) => { const book = displayBook(row.book); const edition = row.edition; const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition, groupId: row.groupId } : { book, edition, groupId: row.groupId, position } })
       const seenReadingBooks = new Set<string>()
-      const reading = readingRows.filter((row) => { if (seenReadingBooks.has(row.book.id)) return false; seenReadingBooks.add(row.book.id); return true }).map((row) => ({ book: toBook(row.book), edition: toEdition(row.edition), position: toPosition(row.position) }))
-      return { bookshelf: shelf, reading, searchHistory: latestSearchHistory(historyRows.map(toHistory)).slice(0, 50) }
+      const reading = readingRows.filter((row) => { if (seenReadingBooks.has(row.book.id)) return false; seenReadingBooks.add(row.book.id); return true }).map((row) => ({ book: displayBook(row.book), edition: row.edition, position: displayPosition(row.position) }))
+      const visibleHistory: HomeSearchHistory[] = latestHistory.flatMap((row) => {
+        const details = historyDetailsById.get(row.id)
+        return details === undefined ? [] : [{ ...row, searchId: details.searchId, status: details.status, resultCount: details.resultCount, ...(details.summary === null ? {} : { summary: details.summary }), updatedAt: details.updatedAt.toISOString() }]
+      })
+      return { bookshelf: shelf, reading, searchHistory: visibleHistory }
     })
   }
 
@@ -922,9 +1003,50 @@ export class PostgresReaderRepository implements ReaderRepository {
 }
 
 export class MemoryReaderRepository implements ReaderRepository {
+  public async listBookListSummaries(userId: string, query = '', bookId?: string, picker = false) {
+    const organization = await this.getBookOrganization(userId)
+    return Promise.all(organization.lists.filter((row) => row.type === 'booklist' && row.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id)).map(async (row) => {
+      const members = organization.items.filter((item) => item.bookListId === row.id).sort((a, b) => b.addedAt.localeCompare(a.addedAt) || b.bookId.localeCompare(a.bookId))
+      const { id, name, description, createdAt, updatedAt } = row
+      const coverBooks = picker ? [] : (await Promise.all(members.slice(0, 4).map((item) => this.getBook(userId, item.bookId)))).flatMap((book) => book ? [{ id: book.id, name: book.name, ...(book.coverUrl === undefined ? {} : { coverUrl: book.coverUrl }), ...(book.customCoverUrl === undefined ? {} : { customCoverUrl: book.customCoverUrl }) }] : [])
+      return { id, name, description, ...(picker ? {} : { createdAt, updatedAt }), bookCount: members.length, containsBook: members.some((item) => item.bookId === bookId), ...(picker ? {} : { coverBooks }) }
+    }))
+  }
+  public async getBookListDetails(userId: string, listId: string): Promise<BookListDetails | null> {
+    const organization = await this.getBookOrganization(userId, listId)
+    const list = organization.lists.find((row) => row.type === 'booklist')
+    if (!list) return null
+    const { id, name, description, createdAt, updatedAt } = list
+    const items = (await Promise.all(organization.items.sort((a, b) => b.addedAt.localeCompare(a.addedAt) || b.bookId.localeCompare(a.bookId)).map(async (row) => {
+      const book = await this.getBook(userId, row.bookId)
+      return book ? { bookId: row.bookId, description: row.description, addedAt: row.addedAt, book: displayBook(book) } : null
+    }))).filter((row) => row !== null)
+    return { list: { id, name, description, createdAt, updatedAt }, items }
+  }
+  public async getShelfGroups(userId: string, bookId?: string) {
+    const organization = await this.getBookOrganization(userId, undefined, false)
+    const shelfKeys = [...this.shelf.keys()].filter((key) => key.startsWith(userId + ':'))
+    const groups = organization.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((row) => ({ id: row.id, name: row.name, bookCount: shelfKeys.filter((key) => this.shelfGroups.get(key) === row.id).length }))
+    return { groups, ungroupedCount: shelfKeys.filter((key) => !this.shelfGroups.get(key)).length, ...(bookId ? { onBookshelf: this.shelf.has(`${userId}:${bookId}`), currentGroupId: this.shelfGroups.get(`${userId}:${bookId}`) ?? null } : {}) }
+  }
+  public async listBookIdentities(userId: string) {
+    const rows = [...new Map([...this.books.values()].filter((entry) => entry.book.userId === userId).map(({ book }) => [book.id, book])).values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    return rows.map(({ id, name, author }) => ({ id, name, ...(author === undefined ? {} : { author }), onBookshelf: this.shelf.has(`${userId}:${id}`) }))
+  }
+  public async getReadingEntry(userId: string, bookId: string) { const book = await this.getBook(userId, bookId); return book ? { activeEditionKey: book.activeEditionKey ?? null } : null }
+  public async listEditionOptions(userId: string, bookId: string) {
+    return Promise.all((await this.listEditions(userId, bookId)).map(async (edition) => ({ editionKey: edition.editionKey, sourceId: edition.sourceId, sourceName: await this.getSourceDisplayName(userId, edition.sourceId) ?? edition.sourceId })))
+  }
+  public async getDisplayEdition(userId: string, bookId: string, editionKey?: string) {
+    const edition = await this.getEdition(userId, bookId, editionKey)
+    if (!edition) return null
+    const metadata = Object.fromEntries(Object.entries(edition.metadata).filter(([key]) => ['name', 'author', 'intro', 'coverUrl', 'kind', 'lastChapter', 'updateTime', 'wordCount', 'searchDurationMs'].includes(key))) as BookDetailsResponse['edition']['metadata']
+    return { editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata }
+  }
+  public async getDisplayPosition(userId: string, bookId: string, editionKey: string) { const row = await this.getPosition(userId, bookId, editionKey); return row ? { title: row.title, lastReadAt: row.lastReadAt } : null }
   public async listReadingMarkBooks(userId: string) {
     const referenced = new Set([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':annotations:')).map(([, row]) => row.bookId))
-    return [...new Map([...this.books.values()].filter(({ book }) => book.userId === userId && referenced.has(book.id)).map(({ book }) => [book.id, { id: book.id, name: book.name, author: book.author ?? null }])).values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    return [...new Map([...this.books.values()].filter(({ book }) => book.userId === userId && referenced.has(book.id)).map(({ book }) => [book.id, { id: book.id, name: book.name, author: book.author ?? null, activeEditionKey: book.activeEditionKey ?? null }])).values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
   }
 
   private readonly readingMarks = new Map<string, ReadingMark>()
@@ -932,6 +1054,8 @@ export class MemoryReaderRepository implements ReaderRepository {
     const books = new Map([...this.books.values()].filter(({ book }) => book.userId === userId).map(({ book }) => [book.id, book]))
     return structuredClone(markPage([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + query.kind + ':')).map(([, row]) => { const book = books.get(row.bookId); return book ? { ...row, bookName: book.name, author: book.author ?? null } : row }), query))
   }
+  public async listReadingMarkSummaries(userId: string, query: MarkQuery) { const page = await this.listReadingMarks(userId, query); return { ...page, items: page.items.map(markSummary) } }
+  public async getCachedMarkChapter(userId: string, bookId: string, id: string) { const row = this.readingMarks.get(userId + ':annotations:' + id); return row?.bookId === bookId ? structuredClone({ cachedChapter: row.cachedChapter }) : null }
   public async mutateReadingMark(userId: string, command: MarkCommand) {
     const rows = [...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + command.kind + ':')).map(([, row]) => row)
     const next = changeMark(rows, userId, command)
@@ -1177,7 +1301,8 @@ export class MemoryReaderRepository implements ReaderRepository {
       return rightAddedAt.localeCompare(leftAddedAt) || left.book.id.localeCompare(right.book.id)
     })
     const shelf = shelfValues.map((entry) => { const value = { ...entry, groupId: this.shelfGroups.get(`${userId}:${entry.book.id}`) ?? null }; const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } })
-    return { bookshelf: shelf, reading, searchHistory: latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50) }
+    const searchHistory: HomeSearchHistory[] = latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50).map(({ id, searchId, keyword, status, resultCount, summary, createdAt, updatedAt }) => ({ id, searchId, keyword, status, resultCount, ...(summary === undefined ? {} : { summary }), createdAt, updatedAt }))
+    return { bookshelf: shelf.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, groupId: row.groupId, ...('position' in row ? { position: displayPosition(row.position) } : {}) })), reading: reading.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, position: displayPosition(row.position) })), searchHistory }
   }
   public async getBackupSnapshot(userId: string): Promise<ReaderBackupSnapshot> {
     const books = new Map<string, ReaderBackupBook>()
@@ -1377,13 +1502,12 @@ const sourceListColumns = {
   name: sql<unknown>`${userSources.normalizedSource}->'bookSourceName'`,
   group: sql<unknown>`${userSources.normalizedSource}->'bookSourceGroup'`,
   ruleOrder: sql<unknown>`${userSources.normalizedSource}->'customOrder'`,
-  enabledExplore: sql<unknown>`${userSources.normalizedSource}->'enabledExplore'`,
-  exploreUrl: sql<unknown>`${userSources.normalizedSource}->'exploreUrl'`,
+  canExplore: sql<boolean>`coalesce(${userSources.normalizedSource}->'enabledExplore' <> 'false'::jsonb, true) and jsonb_typeof(${userSources.normalizedSource}->'exploreUrl') = 'string' and length(btrim(${userSources.normalizedSource}->>'exploreUrl', ${' \t\n\r\f\v\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff'})) > 0`,
 }
 
-type SourceListRow = { sourceId: string; fingerprint: string; enabled: boolean; sourceUuid: string; importLinkId: string | null; sourceRevision: string; customOrder: number; name: unknown; group: unknown; ruleOrder: unknown; enabledExplore: unknown; exploreUrl: unknown; priority?: number | null }
+type SourceListRow = { sourceId: string; fingerprint: string; enabled: boolean; sourceUuid: string; importLinkId: string | null; sourceRevision: string; customOrder: number; name: unknown; group: unknown; ruleOrder: unknown; canExplore: boolean; priority?: number | null }
 function sourceListRecord(row: SourceListRow): SourceListRecord {
-  return { sourceId: row.sourceId, name: typeof row.name === 'string' ? row.name : row.sourceId, ...(typeof row.group === 'string' ? { group: row.group } : {}), fingerprint: row.fingerprint, enabled: row.enabled, sourceUuid: row.sourceUuid, ...(row.importLinkId ? { importLinkId: row.importLinkId } : {}), sourceRevision: row.sourceRevision, customOrder: readInteger(row.ruleOrder, 0), priority: row.priority ?? Number.MAX_SAFE_INTEGER, canExplore: row.enabledExplore !== false && typeof row.exploreUrl === 'string' && row.exploreUrl.trim().length > 0 }
+  return { sourceId: row.sourceId, name: typeof row.name === 'string' ? row.name : row.sourceId, ...(typeof row.group === 'string' ? { group: row.group } : {}), fingerprint: row.fingerprint, enabled: row.enabled, sourceUuid: row.sourceUuid, ...(row.importLinkId ? { importLinkId: row.importLinkId } : {}), sourceRevision: row.sourceRevision, customOrder: readInteger(row.ruleOrder, 0), priority: row.priority ?? Number.MAX_SAFE_INTEGER, canExplore: row.canExplore === true }
 }
 function managedListSummary(row: SourceListRow & { revision: string; author: unknown; bookSourceAuthor: unknown; lastUpdateTime: unknown }): ManagedSourceSummary {
   const source = sourceListRecord(row)
@@ -1655,3 +1779,10 @@ function prepareOrganizationRestore(current: ReaderBackupSnapshot, input: Reader
 }
 
 export function compareSourcePriority(left: StoredSourceRecord, right: StoredSourceRecord): number { return (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER) || compareStoredSourceManagementOrder(left, right) }
+
+const bookDisplayColumns = { id: books.id, name: books.name, author: books.author, coverUrl: books.coverUrl, customCoverUrl: books.customCoverUrl }
+const bookListDisplayColumns = { id: bookLists.id, name: bookLists.name, description: bookLists.description, createdAt: bookLists.createdAt, updatedAt: bookLists.updatedAt }
+function displayBook(row: { id: string; name: string; author?: string | null; coverUrl?: string | null; customCoverUrl?: string | null }): BookDisplay {
+  return { id: row.id, name: row.name, ...(row.author == null ? {} : { author: row.author }), ...(row.coverUrl == null ? {} : { coverUrl: row.coverUrl }), ...(row.customCoverUrl == null ? {} : { customCoverUrl: row.customCoverUrl }) }
+}
+function displayPosition(row: { chapterId: string; title: string; lastReadAt: Date | string }) { return { chapterId: row.chapterId, title: row.title, lastReadAt: typeof row.lastReadAt === 'string' ? row.lastReadAt : row.lastReadAt.toISOString() } }

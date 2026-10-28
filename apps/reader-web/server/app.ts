@@ -349,6 +349,26 @@ app.post('/api/books', async (context) => {
   }
 })
 
+app.get('/api/books/identities', async (context) => {
+  const rejected = await requireUser(context); if (rejected !== undefined) return rejected
+  try { return context.json({ books: await dependencies.repository.listBookIdentities(context.get('userId')) }) } catch (error) { return handleError(context, error) }
+})
+app.get('/api/books/:bookId/reading-entry', async (context) => {
+  const rejected = await requireUser(context); if (rejected !== undefined) return rejected
+  try {
+    const value = await dependencies.repository.getReadingEntry(context.get('userId'), z.uuid().parse(context.req.param('bookId')))
+    return value ? context.json(value) : context.json({ error: { code: 'not-found', message: '书籍不存在' } }, 404)
+  } catch (error) { return handleError(context, error) }
+})
+app.get('/api/books/:bookId/edition-options', async (context) => {
+  const rejected = await requireUser(context); if (rejected !== undefined) return rejected
+  try {
+    const userId = context.get('userId'); const bookId = z.uuid().parse(context.req.param('bookId'))
+    if (!await dependencies.repository.getReadingEntry(userId, bookId)) return context.json({ error: { code: 'not-found', message: '书籍不存在' } }, 404)
+    return context.json({ editions: await dependencies.repository.listEditionOptions(userId, bookId) })
+  } catch (error) { return handleError(context, error) }
+})
+
 app.get('/api/books', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -422,7 +442,8 @@ app.get('/api/home', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
   try {
-    return context.json(await dependencies.repository.getHome(context.get('userId')))
+    const home = await dependencies.repository.getHome(context.get('userId'))
+    return context.json({ ...home, searchHistory: home.searchHistory.map(({ id, keyword, status, resultCount, summary, updatedAt }) => ({ id, keyword, status, resultCount, ...(summary === undefined ? {} : { summary }), updatedAt })) })
   } catch (error) {
     return handleError(context, error)
   }

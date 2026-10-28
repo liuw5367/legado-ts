@@ -10,6 +10,7 @@ import { SourceManagementError } from './repository.ts'
 
 export type BeforeSource = Pick<UserSourceRow, 'sourceUuid' | 'sourceId' | 'fingerprint' | 'rawSource' | 'normalizedSource' | 'enabled' | 'customOrder' | 'deleted' | 'importLinkId' | 'currentImportItemId'>
 type BatchRow = typeof batches.$inferSelect
+const batchSummaryColumns = { id: batches.id, linkId: batches.linkId, importedAt: batches.importedAt, imported: batches.imported, newCount: batches.newCount, updatedCount: batches.updatedCount, restoredCount: batches.restoredCount, skippedCount: batches.skippedCount, unselectedCount: batches.unselectedCount, undoStatus: batches.undoStatus, undoneAt: batches.undoneAt, invalidatedReason: batches.invalidatedReason }
 export const itemSummaryColumns = { id: items.id, sourceUuid: items.sourceUuid, sourceId: items.sourceId, name: items.name, group: items.group, action: items.action, reason: items.reason, displayUrl: items.displayUrl, afterRevision: items.afterRevision, undoneAt: items.undoneAt }
 
 export function importUrlInfo(value: string): { key: string; display: string; normalized: string } {
@@ -28,7 +29,7 @@ export function displayImportOrigin(value: string): string {
 }
 export function selectionKey(values: string[]): string { return JSON.stringify([...values].sort()) }
 export function batchResult(row: Pick<BatchRow, 'id' | 'imported' | 'newCount' | 'updatedCount' | 'restoredCount'>): ImportConfirmResult { return { imported: row.imported, batchId: row.id, newCount: row.newCount, updatedCount: row.updatedCount, restoredCount: row.restoredCount } }
-export function summarizeBatch(row: BatchRow, displayUrl: string): ImportBatch { return { id: row.id, linkId: row.linkId, displayUrl, importedAt: row.importedAt.toISOString(), imported: row.imported, newCount: row.newCount, updatedCount: row.updatedCount, restoredCount: row.restoredCount, skippedCount: row.skippedCount, unselectedCount: row.unselectedCount, undoStatus: row.undoStatus, undoneAt: row.undoneAt?.toISOString() ?? null, invalidatedReason: row.invalidatedReason } }
+export function summarizeBatch(row: Omit<BatchRow, 'selection' | 'userId' | 'previewId' | 'invalidatedAt'>, displayUrl: string): ImportBatch { return { id: row.id, linkId: row.linkId, displayUrl, importedAt: row.importedAt.toISOString(), imported: row.imported, newCount: row.newCount, updatedCount: row.updatedCount, restoredCount: row.restoredCount, skippedCount: row.skippedCount, unselectedCount: row.unselectedCount, undoStatus: row.undoStatus, undoneAt: row.undoneAt?.toISOString() ?? null, invalidatedReason: row.invalidatedReason } }
 export function itemStatus(item: { action: string; undoneAt: unknown; afterRevision: string | null }, current?: { revision: string; deleted: boolean }): ImportHistoryItem['currentStatus'] {
   if (!item.afterRevision) return 'skipped'
   if (item.undoneAt) return 'undone'
@@ -106,12 +107,12 @@ export async function orderImportLinks(tx: ReaderTransaction, userId: string, or
 }
 export async function readImportHistory(tx: ReaderTransaction, userId: string, query: ImportHistoryQuery) {
   const condition = and(eq(batches.userId, userId), query.linkId ? eq(batches.linkId, query.linkId) : undefined, query.sourceUuid ? sql`exists (select 1 from reader.source_import_items i where i.user_id = ${userId} and i.batch_id = ${batches.id} and i.source_uuid = ${query.sourceUuid}::uuid)` : undefined)
-  const rows = await tx.select({ batch: batches, displayUrl: links.displayUrl }).from(batches).innerJoin(links, and(eq(links.id, batches.linkId), eq(links.userId, userId))).where(condition).orderBy(desc(batches.importedAt), desc(batches.id)).limit(query.pageSize).offset((query.page - 1) * query.pageSize)
+  const rows = await tx.select({ batch: batchSummaryColumns, displayUrl: links.displayUrl }).from(batches).innerJoin(links, and(eq(links.id, batches.linkId), eq(links.userId, userId))).where(condition).orderBy(desc(batches.importedAt), desc(batches.id)).limit(query.pageSize).offset((query.page - 1) * query.pageSize)
   const [total] = await tx.select({ value: count() }).from(batches).where(condition)
   return { batches: rows.map((row) => summarizeBatch(row.batch, row.displayUrl)), total: total?.value ?? 0, page: query.page, pageSize: query.pageSize }
 }
 async function requireBatch(tx: ReaderTransaction, userId: string, batchId: string) {
-  const [row] = await tx.select({ batch: batches, displayUrl: links.displayUrl }).from(batches).innerJoin(links, and(eq(links.id, batches.linkId), eq(links.userId, userId))).where(and(eq(batches.userId, userId), eq(batches.id, batchId)))
+  const [row] = await tx.select({ batch: batchSummaryColumns, displayUrl: links.displayUrl }).from(batches).innerJoin(links, and(eq(links.id, batches.linkId), eq(links.userId, userId))).where(and(eq(batches.userId, userId), eq(batches.id, batchId)))
   if (!row) throw new SourceManagementError('source-not-found', '导入记录不存在')
   return row
 }

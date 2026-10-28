@@ -1,6 +1,6 @@
 import { normalizeReadingContent, readingParagraphTexts } from '@legado/source-core'
 import { parseReadingHtml } from '@legado/source-node'
-import { changeMark, markPage } from '../../shared/reading-annotations.ts'
+import { changeMark, markPage, markSummary } from '../../shared/reading-annotations.ts'
 import { createCachedChapter } from '../../shared/reading-text.ts'
 import { bookCoverRequestSchema } from '../../shared/book-sources.ts'
 import { MemoryReaderRepository } from '../../server/db/repository.ts'
@@ -451,8 +451,8 @@ async function handleOrganization(request, response, url) {
   const members = (listId) => state.items.filter((row) => row.bookListId === listId).sort((a, b) => b.addedAt.localeCompare(a.addedAt))
   const groupRows = () => state.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder).map((row) => ({ ...row, bookCount: [...state.shelf.values()].filter((id) => id === row.id).length }))
   if (method === 'GET') {
-    if (isGroups) json(response, { groups: groupRows(), ungroupedCount: [...state.shelf.values()].filter((id) => id === null).length })
-    else if (parts.length === 3) json(response, { lists: state.lists.filter((row) => row.type === 'booklist').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((row) => ({ ...row, bookCount: members(row.id).length, coverBooks: members(row.id).slice(0, 4).map((item) => books.get(item.bookId)), containsBook: members(row.id).some((item) => item.bookId === url.searchParams.get('bookId')) })) })
+    if (isGroups) json(response, { groups: groupRows(), ungroupedCount: [...state.shelf.values()].filter((id) => id === null).length, ...(url.searchParams.has('bookId') ? { onBookshelf: state.shelf.has(url.searchParams.get('bookId')), currentGroupId: state.shelf.get(url.searchParams.get('bookId')) ?? null } : {}) })
+    else if (parts.length === 3) json(response, { lists: state.lists.filter((row) => row.type === 'booklist').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((row) => ({ ...row, bookCount: members(row.id).length, ...(url.searchParams.get('purpose') === 'picker' ? {} : { coverBooks: members(row.id).slice(0, 4).map((item) => books.get(item.bookId)) }), containsBook: members(row.id).some((item) => item.bookId === url.searchParams.get('bookId')) })) })
     else { const list = state.lists.find((row) => row.id === parts[3] && row.type === 'booklist'); if (!list) { json(response, { error: { message: '书单不存在' } }, 404); return true } json(response, { list, items: members(list.id).map((row) => ({ ...row, book: books.get(row.bookId), edition: editions.get(books.get(row.bookId)?.activeEditionKey), position: positions.get(row.bookId) })) }) }
     return true
   }
@@ -496,14 +496,26 @@ async function handleApi(request, response, url) {
   const path = url.pathname
   const method = request.method ?? 'GET'
 
+  // 页面验收使用与生产相同的按需原文、身份和版本选项契约。
+  const cacheRoute = path.match(/^\/api\/books\/([^/]+)\/annotations\/([^/]+)\/cached-chapter$/u)
+  if (cacheRoute && method === 'GET') { const row = readingMarks.get('annotations:' + cacheRoute[2]); json(response, row?.bookId === cacheRoute[1] ? { cachedChapter: row.cachedChapter } : { error: { message: '记录不存在' } }, row?.bookId === cacheRoute[1] ? 200 : 404); return }
+  if (path === '/api/books/identities' && method === 'GET') { json(response, { books: [...books.values()].map(({ id, name, author }) => ({ id, name, author, onBookshelf: bookshelf.has(id) })) }); return }
+  const entryRoute = path.match(/^\/api\/books\/([^/]+)\/(reading-entry|edition-options)$/u)
+  if (entryRoute && method === 'GET') {
+    const book = books.get(entryRoute[1])
+    if (!book) { json(response, { error: { message: '书籍不存在' } }, 404); return }
+    if (entryRoute[2] === 'reading-entry') json(response, { activeEditionKey: book.activeEditionKey ?? null })
+    else json(response, { editions: [...editions.values()].filter((edition) => edition.bookId === book.id).map(({ editionKey, sourceId }) => ({ editionKey, sourceId, sourceName: sources.find((source) => source.sourceId === sourceId)?.name ?? sourceId })) })
+    return
+  }
   // 复用批注领域规则，页面验收时写入后查询及恢复保持有状态。
   const markRoute = path.match(/^\/api\/books\/([^/]+)\/(bookmarks|annotations)(?:\/([^/]+))?(?:\/(restore|permanent))?$/u)
-  if (path === '/api/annotations/books') { const values = [...readingMarks.values()].filter((r) => r.kind === 'annotations'); json(response, { books: [...new Map(values.map((r) => [r.bookId, { id: r.bookId, name: r.bookName, author: r.author }])).values()] }); return }
+  if (path === '/api/annotations/books') { const values = [...readingMarks.values()].filter((r) => r.kind === 'annotations'); json(response, { books: [...new Map(values.map((r) => [r.bookId, { id: r.bookId, name: r.bookName, author: r.author, activeEditionKey: books.get(r.bookId)?.activeEditionKey ?? null }])).values()] }); return }
   if (path === '/api/annotations' || markRoute) {
     const kind = markRoute?.[2] ?? 'annotations'; const bookId = markRoute?.[1]; const id = markRoute?.[3]
     const rows = [...readingMarks.values()].filter((r) => r.kind === kind).map(({ kind: _kind, ...r }) => r)
     try {
-      if (method === 'GET') { json(response, markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, ...(path === '/api/annotations' ? { order: 'created' } : {}), deleted: url.searchParams.get('deleted') === 'true' })); return }
+      if (method === 'GET') { const page = markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, ...(path === '/api/annotations' ? { order: 'created' } : {}), deleted: url.searchParams.get('deleted') === 'true' }); json(response, { ...page, items: page.items.map(markSummary) }); return }
       const body = await readJson(request); const book = books.get(bookId)
       if (!book) { json(response, { error: { message: '书籍不存在' } }, 404); return }
       if (method === 'DELETE' && markRoute[4] === 'permanent') {

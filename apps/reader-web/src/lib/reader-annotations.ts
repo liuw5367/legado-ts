@@ -1,5 +1,5 @@
 import { anchorFromViewport } from './reader-pagination.ts'
-import { comparePoints, type MarkAnchor, type ReadingMark, type TextPoint } from '../../shared/reading-annotations.ts'
+import { comparePoints, type MarkAnchor, type ReadingMarkSummary, type TextPoint } from '../../shared/reading-annotations.ts'
 import { textFingerprint } from '../../shared/reading-text.ts'
 export { textFingerprint }
 
@@ -36,8 +36,8 @@ export function rangeForAnchor(root: HTMLElement, anchor: MarkAnchor): Range | n
   if (!a || !b) return null
   const range = document.createRange(); range.setStart(a.node, a.offset); range.setEnd(b.node, b.offset); return range
 }
-export interface TextFragment { text: string; mark?: ReadingMark }
-export function markedFragments(text: string, paragraphIndex: number, marks: ReadingMark[]): TextFragment[] {
+export interface TextFragment { text: string; mark?: Pick<ReadingMarkSummary, 'id' | 'color' | 'anchor' | 'note'> }
+export function markedFragments(text: string, paragraphIndex: number, marks: Pick<ReadingMarkSummary, 'id' | 'color' | 'anchor' | 'note'>[]): TextFragment[] {
   const ranges = marks.flatMap((mark) => {
     const { start, end } = mark.anchor
     if (paragraphIndex < start.paragraphIndex || paragraphIndex > end.paragraphIndex) return []

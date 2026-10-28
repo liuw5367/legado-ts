@@ -817,10 +817,9 @@ export function ReaderEntryPage() {
     setError('')
     void (async () => {
       try {
-        const booksResult = requestedEditionKey.length > 0 ? { books: [] } : await apiFetch<{ books: Array<{ book: { id: string; activeEditionKey?: string } }> }>('/api/books', { signal: controller.signal })
+        const entry = requestedEditionKey.length > 0 ? null : await apiFetch<{ activeEditionKey: string | null }>(`/api/books/${encodeURIComponent(bookId)}/reading-entry`, { signal: controller.signal })
         if (!active) return
-        const book = booksResult.books.find((item) => item.book.id === bookId)?.book
-        const editionKey = requestedEditionKey || book?.activeEditionKey || ''
+        const editionKey = requestedEditionKey || entry?.activeEditionKey || ''
         if (editionKey.length === 0) throw new Error('没有可用的书源版本')
         const [tocResult, positionResult] = await Promise.all([
           loadBookSnapshot(cache, bookId, editionKey),

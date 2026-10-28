@@ -26,6 +26,13 @@ export interface ReadingMark extends Omit<MarkInput, 'expectedVersion'> {
   sourceName: string; cachedChapter: CachedChapter | null
   createdAt: string; updatedAt: string; deletedAt: string | null; version: number
 }
+export type ReadingMarkSummary = Omit<ReadingMark, 'cachedChapter'> & { hasCachedChapter: boolean }
+export interface MarkSummaryPage { items: ReadingMarkSummary[]; nextCursor: string | null }
+export function markSummary({ cachedChapter, ...mark }: ReadingMark): ReadingMarkSummary { return { ...mark, hasCachedChapter: cachedChapter !== null } }
+export function markSaveInput(mark: ReadingMarkSummary): MarkInput {
+  const { editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, color, note, version } = mark
+  return { editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, color, note, expectedVersion: version }
+}
 export const readingMarkSchema = markInputSchema.omit({ expectedVersion: true }).extend({ id: z.uuid(), userId: z.uuid(), bookId: z.uuid(), bookName: z.string(), author: z.string().nullable(), sourceName: z.string().min(1).max(256), cachedChapter: cachedChapterSchema.nullable(), createdAt: z.iso.datetime({ offset: true }), updatedAt: z.iso.datetime({ offset: true }), deletedAt: z.iso.datetime({ offset: true }).nullable(), version: z.number().int().min(0) }).strict()
 export interface MarkQuery { kind: MarkKind; id?: string; order?: 'created' | 'position'; bookId?: string; editionKey?: string; chapterUrl?: string; q?: string; deleted?: boolean; cursor?: string; all?: boolean }
 export interface MarkPage { items: ReadingMark[]; nextCursor: string | null }
@@ -36,7 +43,7 @@ export function sameChapter(a: Pick<ReadingMark, 'editionKey' | 'chapterUrl' | '
 export function rangesOverlap(a: MarkAnchor, b: MarkAnchor) { return comparePoints(a.start, b.end) < 0 && comparePoints(b.start, a.end) < 0 }
 export function markOrder(query: MarkQuery) { return query.order === 'position' }
 function queryIdentity(query: MarkQuery) { return JSON.stringify([query.kind, query.bookId ?? '', query.editionKey ?? '', query.chapterUrl ?? '', (query.q ?? '').trim(), Boolean(query.deleted), query.order ?? 'created']) }
-export function markCursor(row: ReadingMark, query: MarkQuery) { return encodeURIComponent(JSON.stringify({ scope: queryIdentity(query), id: row.id, time: row.createdAt, chapter: row.chapterIndex, paragraph: row.anchor.start.paragraphIndex, offset: row.anchor.start.offset })) }
+export function markCursor(row: Omit<ReadingMark, 'cachedChapter'>, query: MarkQuery) { return encodeURIComponent(JSON.stringify({ scope: queryIdentity(query), id: row.id, time: row.createdAt, chapter: row.chapterIndex, paragraph: row.anchor.start.paragraphIndex, offset: row.anchor.start.offset })) }
 export function parseMarkCursor(query: MarkQuery) {
   if (!query.cursor) return null
   try {
