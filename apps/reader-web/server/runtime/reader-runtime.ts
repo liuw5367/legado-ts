@@ -302,22 +302,19 @@ async function cacheSearchSources(repository: ReaderRepository, userId: string, 
 async function listBookSources(repository: ReaderRepository, userId: string, bookId: string): Promise<BookSourcesResponse> {
   const book = await repository.getBook(userId, bookId)
   if (book === null) throw new ReaderRuntimeError('not-found', '书籍不存在')
-  const [editions, candidates] = await Promise.all([repository.listEditions(userId, bookId), repository.listBookSourceCandidates(userId, bookId)])
-  const related = await repository.listManagedSources(userId, { all: true, page: 1, pageSize: 50, query: '', status: 'all', sourceIds: [...new Set([...editions, ...candidates].map((item) => item.sourceId))] })
+  const entries = await repository.listBookSourceEntries(userId, bookId)
+  const related = await repository.listManagedSources(userId, { all: true, page: 1, pageSize: 50, query: '', status: 'all', sourceIds: [...new Set(entries.map((item) => item.sourceId))] })
   const sources = new Map(related.sources.map((source) => [source.sourceId, source]))
   const result = new Map<string, BookSourceItem>()
-  for (const item of candidates) {
-    const source = sources.get(item.sourceId)
-    if (source?.fingerprint !== item.sourceFingerprint) continue
-    result.set(JSON.stringify([item.sourceId, item.sourceFingerprint, item.bookUrl]), { sourceId: item.sourceId, sourceFingerprint: item.sourceFingerprint, name: source.name, bookUrl: item.bookUrl, sourceEnabled: source.enabled, status: 'discovered', candidateId: item.id, ...(item.candidate.searchDurationMs === undefined ? {} : { searchDurationMs: item.candidate.searchDurationMs }), ...(item.candidate.candidate.coverUrl ? { coverUrl: item.candidate.candidate.coverUrl } : {}), ...(item.candidate.candidate.lastChapter ? { lastChapter: item.candidate.candidate.lastChapter } : {}) })
-  }
-  for (const edition of editions) {
-    const source = sources.get(edition.sourceId)
-    if (source?.fingerprint !== edition.sourceFingerprint) continue
-    const key = JSON.stringify([edition.sourceId, edition.sourceFingerprint, edition.bookUrl])
-    const searchDurationMs = result.get(key)?.searchDurationMs ?? edition.metadata.searchDurationMs
-    const lastChapter = result.get(key)?.lastChapter ?? edition.metadata.lastChapter
-    result.set(key, { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(typeof searchDurationMs === 'number' ? { searchDurationMs } : {}), ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}), ...(lastChapter ? { lastChapter } : {}) })
+  for (const entry of entries) {
+    const source = sources.get(entry.sourceId)
+    if (source?.fingerprint !== entry.sourceFingerprint) continue
+    const key = JSON.stringify([entry.sourceId, entry.sourceFingerprint, entry.bookUrl])
+    const discovered = result.get(key)
+    result.set(key, { ...entry, name: source.name, sourceEnabled: source.enabled,
+      ...(entry.status === 'saved' && (discovered?.searchDurationMs ?? entry.searchDurationMs) !== undefined ? { searchDurationMs: discovered?.searchDurationMs ?? entry.searchDurationMs } : {}),
+      ...(entry.status === 'saved' && (discovered?.lastChapter ?? entry.lastChapter) ? { lastChapter: discovered?.lastChapter ?? entry.lastChapter } : {}),
+    })
   }
   const items = [...result.values()].sort((left, right) => {
     const a = sources.get(left.sourceId)!, b = sources.get(right.sourceId)!

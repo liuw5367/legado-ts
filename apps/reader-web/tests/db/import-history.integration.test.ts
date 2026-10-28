@@ -5,7 +5,7 @@ import test from 'node:test'
 import postgres from 'postgres'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
-import { SOURCE_CONCURRENCY } from '../../server/runtime/source-execution.ts'
+import { GLOBAL_SOURCE_CONCURRENCY, SOURCE_CONCURRENCY } from '../../server/runtime/source-execution.ts'
 import { PostgresReaderRepository } from '../../server/db/repository.ts'
 import { closeReaderDb } from '../../server/db/client.ts'
 import { importBatch, sourceDefinition, verifyImportHistory } from '../fixtures/import-history.ts'
@@ -43,15 +43,19 @@ test('real import transactions, UUIDs, encrypted history, RLS and global executi
   const other = new PostgresReaderRepository(); const operation = randomUUID()
   const leases = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY + 1 }, (_, index) => (index % 2 ? other : repository).acquireExecutionSlot(user, operation)))
   assert.equal(leases.filter(Boolean).length, SOURCE_CONCURRENCY)
-  assert.equal(await other.acquireExecutionSlot(outsider, randomUUID()), null)
+  const outsiderLeases = await Promise.all(Array.from({ length: GLOBAL_SOURCE_CONCURRENCY - SOURCE_CONCURRENCY }, () => other.acquireExecutionSlot(outsider, randomUUID())))
+  assert.ok(outsiderLeases.every(Boolean))
+  const thirdUser = randomUUID()
+  assert.equal(await other.acquireExecutionSlot(thirdUser, randomUUID()), null)
   const released = leases.find((lease) => lease !== null)!
   await repository.releaseExecutionSlot(user, released)
-  const replacement = await other.acquireExecutionSlot(outsider, randomUUID())
+  const replacement = await other.acquireExecutionSlot(thirdUser, randomUUID())
   assert.ok(replacement)
   await repository.releaseExecutionSlot(user, released)
   assert.equal(await other.acquireExecutionSlot(randomUUID(), randomUUID()), null)
   for (const lease of leases) if (lease) await repository.releaseExecutionSlot(user, lease)
-  await other.releaseExecutionSlot(outsider, replacement)
+  for (const lease of outsiderLeases) if (lease) await other.releaseExecutionSlot(outsider, lease)
+  await other.releaseExecutionSlot(thirdUser, replacement)
   process.env.SUPABASE_URL = 'https://8.8.8.8/auth-fixture'
   process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-public-key'
   t.mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => new Response(JSON.stringify({ id: new Headers(init?.headers).get('Authorization') === 'Bearer outsider' ? outsider : user, aud: 'authenticated', role: 'authenticated', email: 'fixture@example.test', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() }), { headers: { 'Content-Type': 'application/json' } }))

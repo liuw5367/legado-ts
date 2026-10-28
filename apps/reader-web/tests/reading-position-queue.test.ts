@@ -5,6 +5,17 @@ import type { ApiPosition } from '../src/lib/api.ts'
 
 const input: PositionWrite = { bookId: 'b', editionKey: 'e', chapterId: 'c', chapterUrl: 'https://example.test/c', chapterIndex: 0, title: 'chapter', paragraphIndex: 1, offset: 0, version: 0 }
 const position = (write: PositionWrite): ApiPosition => ({ ...write, tocRevision: write.tocRevision ?? '', userId: 'a', lastReadAt: '' })
+test('接受新位置后淘汰同版本旧防抖任务，其他版本仍正常保存', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const calls: PositionWrite[] = []
+  const queue = new ReadingPositionQueue(async (write) => { calls.push(write); return position(write) })
+  const old = queue.enqueueDebounced({ ...input, offset: 10 })
+  const other = queue.enqueueDebounced({ ...input, editionKey: 'other' })
+  await queue.enqueue({ ...input, offset: 100, version: 2 })
+  t.mock.timers.tick(2000)
+  await queue.flush(); await Promise.all([old, other])
+  assert.deepEqual(calls.map((write) => [write.editionKey, write.offset, write.version]), [['e', 100, 2], ['other', 0, 0]])
+})
 test('queued positions are serial and monotonic across chapter changes', async () => {
   const calls: PositionWrite[] = []
   const queue = new ReadingPositionQueue(async (write) => { calls.push(write); return position(write) })

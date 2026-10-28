@@ -83,7 +83,7 @@ test('封面 API 通过真实认证与路由写入，仅修改当前账号的用
   const source = (await memory.listSourcesForUser(userId))[0]!
   const metadata = { sourceId: source.sourceId, bookUrl: 'https://history.example/book', name: '封面测试书', author: '作者', coverUrl: 'https://covers.test/original.jpg', rawFields: {}, traceRef: 'cover-api', emptyFields: [], fieldErrors: {} }
   const created = await memory.createBook(userId, { candidate: { sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate: metadata }, metadata, sourceFingerprint: source.fingerprint, editionKey: 'edition-cover-api' })
-  for (const method of ['getBook', 'listEditions', 'listBookSourceCandidates', 'listSourceSummaries', 'listManagedSources', 'setCustomCover'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  for (const method of ['getBook', 'listBookSourceEntries', 'listSourceSummaries', 'listManagedSources', 'setCustomCover'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
   const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
   process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
   t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })

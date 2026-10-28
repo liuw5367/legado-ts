@@ -41,6 +41,10 @@ export class ReadingPositionQueue {
   }
   enqueue(input: PositionWrite): Promise<ApiPosition | undefined> {
     const key = JSON.stringify([input.bookId, input.editionKey])
+    const delayed = this.delayed.get(key)
+    if (delayed !== undefined) {
+      clearTimeout(delayed.timer); this.delayed.delete(key); delayed.resolve(undefined)
+    }
     const identity = JSON.stringify([input.bookId, input.editionKey, input.chapterId, input.chapterUrl, input.chapterIndex, input.title, input.tocRevision, input.paragraphIndex, input.offset])
     const pending = this.pending
     if (this.active && pending?.identity === identity) {

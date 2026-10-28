@@ -82,3 +82,51 @@ test('定向搜索不显示全局空结果和加载提示，展开状态独立�
   const details = nodes(render([], 'done', true, { 'host:book.example': false })).find((node) => node.type === 'details')
   assert.equal((details?.props as { open?: boolean })?.open, false)
 })
+
+test('重试来源列表后仍可展开已加载的同域版本', async () => {
+  let cursor = 0
+  const slots: any[] = []
+  let load!: (settle: () => void) => unknown
+  const requests: string[] = []
+  const source = { sourceId, name: '书源', enabled: true, customOrder: 0, sourceRevision: 'r' }
+  const alternate = { ...source, sourceId: sourceId + '/v2', name: '备用实现', enabled: false }
+  const jsx = (type: unknown, props: unknown) => ({ type, props })
+  const module = { exports: {} as { BookSourcesPage: () => unknown } }
+  runInNewContext(code, { URL, AbortController, module, exports: module.exports, require: (name: string) => {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx }
+    if (name === 'react') return {
+      useState: (initial: unknown) => { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], (next: any) => { slots[i] = typeof next === 'function' ? next(slots[i]) : next }] },
+      useRef: (initial: unknown) => { const i = cursor++; return slots[i] ?? (slots[i] = { current: initial }) },
+      useMemo: (fn: () => unknown) => fn(), useEffect() {},
+    }
+    if (name === 'react-router-dom') return { useParams: () => ({ bookId: 'book' }), useNavigate: () => () => {}, useLocation: () => ({ pathname: '/books/book/sources' }), Link: 'a' }
+    if (name.includes('book-identity')) return identity
+    if (name.includes('source-domain')) return domains
+    if (name.includes('book-source-groups')) return { groupBookSourcesByDomain }
+    if (name.includes('time-format')) return { formatSourceRuleDateTime }
+    if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
+    if (name.includes('use-page-resource')) return { usePageLoadEffect: (effect: typeof load) => { load = effect } }
+    if (name.includes('use-book-search')) return { useBookSearch: () => ({ sourceSummaries: [], candidates: [], status: 'idle', message: '' }) }
+    if (name.includes('api.ts')) return { apiFetch: async (path: string) => {
+      requests.push(path)
+      if (path.includes('source-management')) return { sources: [source, alternate] }
+      if (path.endsWith('reading-info')) return { book: { name: '目标书', activeEditionKey: 'active' } }
+      return { sources: [{ ...source, sourceFingerprint: 'fp', bookUrl: '/book', status: 'saved', editionKey: 'active' }], sourceSummaries: [source], activeEditionKey: 'active' }
+    } }
+    return {}
+  } })
+  const render = () => { cursor = 0; return module.exports.BookSourcesPage() }
+  const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); return render() }
+  const toggle = (tree: unknown, open: boolean) => {
+    const details = nodes(tree).find((node) => node.type === 'details')!
+    ;(details.props as any).onToggle({ currentTarget: { open } })
+  }
+  render(); load(() => {})
+  let tree = await settle()
+  toggle(tree, true); tree = await settle()
+  assert.ok(text(tree).includes('备用实现'))
+  load(() => {}); tree = await settle()
+  toggle(tree, false); tree = render(); toggle(tree, true); tree = await settle()
+  assert.ok(text(tree).includes('备用实现'), '重试不能丢弃同域版本后仍跳过加载')
+  assert.ok(requests.some((path) => path.includes('domain=')))
+})

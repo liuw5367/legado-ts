@@ -404,6 +404,8 @@ test('执行搜索复用已加载书源生成摘要，本书来源只查询一�
   assert.equal(summaries.mock.callCount(), 0)
   const created = await runtime.createBookFromSearch('user-a', run.id, 0)
   managed.mock.resetCalls(); summaries.mock.resetCalls()
+  t.mock.method(repository, 'listEditions', async () => { throw new Error('展示列表不得读取完整版本') })
+  t.mock.method(repository, 'listBookSourceCandidates', async () => { throw new Error('展示列表不得读取完整候选') })
   const list = await runtime.listBookSources('user-a', created.book.id)
   assert.equal(managed.mock.callCount(), 1)
   assert.equal(summaries.mock.callCount(), 0)

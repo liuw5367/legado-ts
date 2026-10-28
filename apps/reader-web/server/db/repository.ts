@@ -1,3 +1,4 @@
+import type { BookSourceItem } from '../../shared/book-sources.ts'
 import { readingContent, type CachedReadingContent } from '../../shared/reading-content.ts'
 import type { CachedTocSummary } from '../../shared/toc.ts'
 import type { BookDetailsResponse, BookReadingInfo } from '../../shared/book-details.ts'
@@ -23,6 +24,8 @@ import { readingAnnotations, bookLists, bookListItems, bookSourceCandidates, boo
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStats, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type HomeSearchHistory, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
 import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
+
+export type BookSourceEntry = Omit<BookSourceItem, 'name' | 'sourceEnabled' | 'status'> & ({ status: 'saved'; editionKey: string } | { status: 'discovered'; candidateId: string })
 
 export interface StoredSourceRecord extends SourceSummary {
   sourceUuid?: string
@@ -140,6 +143,7 @@ export interface ReaderRepository {
   claimSearch(userId: string, searchId: string, operationId: string, sourceStates: SourceSearchState[], progress: { completed: number; total: number }, expectedVersion?: number, knownRun?: SearchRunState): Promise<SearchRunState | null>
   updateSearch(userId: string, searchId: string, patch: { knownRun?: SearchRunState; status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null>
   createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }>
+  listBookSourceEntries(userId: string, bookId: string): Promise<BookSourceEntry[]>
   listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]>
   saveBookSourceCandidates(userId: string, bookId: string, candidates: StoredCandidate[]): Promise<void>
   /** 保存版本用于目录预览，不修改书籍元数据、活动来源或书架关系。 */
@@ -366,9 +370,14 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] }): Promise<SourceManagementPage> {
     return withUser(userId, async (transaction) => {
-      const sourceRows = await transaction.select({ source: { ...sourceListColumns, revision: userSources.revision, author: sql<unknown>`${userSources.normalizedSource}->'author'`, bookSourceAuthor: sql<unknown>`${userSources.normalizedSource}->'bookSourceAuthor'`, lastUpdateTime: sql<unknown>`${userSources.normalizedSource}->'lastUpdateTime'` }, displayUrl: sourceImportLinks.displayUrl, priority: sourceImportLinks.sortOrder, importedAt: sourceImportBatches.importedAt }).from(userSources).leftJoin(sourceImportLinks, and(eq(sourceImportLinks.userId, userId), eq(sourceImportLinks.id, userSources.importLinkId))).leftJoin(sourceImportItems, and(eq(sourceImportItems.userId, userId), eq(sourceImportItems.id, userSources.currentImportItemId))).leftJoin(sourceImportBatches, and(eq(sourceImportBatches.userId, userId), eq(sourceImportBatches.id, sourceImportItems.batchId))).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false), params.sourceIds === undefined ? undefined : inArray(userSources.sourceId, params.sourceIds)))
+      // 域名身份沿用 WHATWG URL 规则；先读最小身份，再收窄带导入关联的摘要查询。
+      const identities = params.domain === undefined ? undefined : await transaction.select({ sourceId: userSources.sourceId, enabled: userSources.enabled }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
+      const sourceIds = identities === undefined ? params.sourceIds : identities.filter((source) => sourceDomainInfo(source.sourceId).key === sourceDomainInfo(params.domain!).key && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId))).map((source) => source.sourceId)
+      const domainEnabledCount = identities?.filter((source) => source.enabled && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId))).length
+      if (sourceIds?.length === 0) return { sources: [], page: params.all ? 1 : params.page, pageSize: params.all ? 1 : params.pageSize, total: 0, enabledCount: domainEnabledCount ?? 0 }
+      const sourceRows = await transaction.select({ source: { ...sourceListColumns, revision: userSources.revision, author: sql<unknown>`${userSources.normalizedSource}->'author'`, bookSourceAuthor: sql<unknown>`${userSources.normalizedSource}->'bookSourceAuthor'`, lastUpdateTime: sql<unknown>`${userSources.normalizedSource}->'lastUpdateTime'` }, displayUrl: sourceImportLinks.displayUrl, priority: sourceImportLinks.sortOrder, importedAt: sourceImportBatches.importedAt }).from(userSources).leftJoin(sourceImportLinks, and(eq(sourceImportLinks.userId, userId), eq(sourceImportLinks.id, userSources.importLinkId))).leftJoin(sourceImportItems, and(eq(sourceImportItems.userId, userId), eq(sourceImportItems.id, userSources.currentImportItemId))).leftJoin(sourceImportBatches, and(eq(sourceImportBatches.userId, userId), eq(sourceImportBatches.id, sourceImportItems.batchId))).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false), sourceIds === undefined ? undefined : inArray(userSources.sourceId, sourceIds)))
       const allRows = sourceRows.map(({ source: row, displayUrl, priority, importedAt }) => ({ ...managedListSummary(row), ...(displayUrl ? { importDisplayUrl: displayUrl } : {}), ...(priority === null ? {} : { importPriority: priority }), ...(importedAt ? { importedAt: importedAt.toISOString() } : {}) }))
-      const enabledCount = allRows.filter((source) => source.enabled).length
+      const enabledCount = domainEnabledCount ?? allRows.filter((source) => source.enabled).length
       const rows = allRows
         .filter((source) => {
           const query = params.query.toLocaleLowerCase()
@@ -677,6 +686,18 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
+  public async listBookSourceEntries(userId: string, bookId: string): Promise<BookSourceEntry[]> {
+    return withUser(userId, async (tx) => {
+      const candidates = await tx.select({ candidateId: bookSourceCandidates.id, sourceId: bookSourceCandidates.sourceId, sourceFingerprint: bookSourceCandidates.sourceFingerprint, bookUrl: bookSourceCandidates.bookUrl,
+        coverUrl: sql<unknown>`${bookSourceCandidates.candidate}->'candidate'->'coverUrl'`, lastChapter: sql<unknown>`${bookSourceCandidates.candidate}->'candidate'->'lastChapter'`, searchDurationMs: sql<unknown>`${bookSourceCandidates.candidate}->'searchDurationMs'`,
+      }).from(bookSourceCandidates).where(and(eq(bookSourceCandidates.userId, userId), eq(bookSourceCandidates.bookId, bookId))).orderBy(desc(bookSourceCandidates.updatedAt), asc(bookSourceCandidates.id))
+      const editions = await tx.select({ editionKey: bookEditions.editionKey, sourceId: bookEditions.sourceId, sourceFingerprint: bookEditions.sourceFingerprint, bookUrl: bookEditions.bookUrl,
+        coverUrl: sql<unknown>`${bookEditions.metadata}->'coverUrl'`, lastChapter: sql<unknown>`${bookEditions.metadata}->'lastChapter'`, searchDurationMs: sql<unknown>`${bookEditions.metadata}->'searchDurationMs'`,
+      }).from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId))).orderBy(desc(bookEditions.updatedAt), asc(bookEditions.createdAt))
+      return [...candidates.map((row) => ({ ...bookSourceEntry(row), status: 'discovered' as const, candidateId: row.candidateId })), ...editions.map((row) => ({ ...bookSourceEntry(row), status: 'saved' as const, editionKey: row.editionKey }))]
+    })
+  }
+
   public async listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]> {
     return withUser(userId, async (transaction) => {
       const rows = await transaction.select().from(bookSourceCandidates).where(and(eq(bookSourceCandidates.userId, userId), eq(bookSourceCandidates.bookId, bookId))).orderBy(desc(bookSourceCandidates.updatedAt), asc(bookSourceCandidates.id))
@@ -911,7 +932,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (tx) => {
       const [row] = await tx.select({ sourceFingerprint: chapterContents.sourceFingerprint, tocRevision: chapterContents.tocRevision,
         content: sql<CachedReadingContent['content']>`jsonb_strip_nulls(jsonb_build_object(
-          'chapter', jsonb_build_object('chapterId', ${chapterId}, 'chapterUrl', ${chapterContents.content}->'chapter'->'chapterUrl', 'index', ${chapterContents.content}->'chapter'->'index', 'title', ${chapterContents.content}->'chapter'->'title'),
+          'chapter', jsonb_build_object('chapterId', ${chapterId}::text, 'chapterUrl', ${chapterContents.content}->'chapter'->'chapterUrl', 'index', ${chapterContents.content}->'chapter'->'index', 'title', ${chapterContents.content}->'chapter'->'title'),
           'contentType', ${chapterContents.content}->'contentType', 'cleaned', ${chapterContents.content}->'cleaned', 'resources', ${chapterContents.content}->'resources', 'finalUrl', ${chapterContents.content}->'finalUrl'
         ))`, truncated: sql<boolean>`${chapterContents.content}->'truncated' = 'true'::jsonb`,
       }).from(chapterContents).where(and(eq(chapterContents.userId, userId), eq(chapterContents.editionKey, editionKey), eq(chapterContents.tocRevision, tocRevision), eq(chapterContents.chapterId, chapterId))).limit(1)
@@ -1332,6 +1353,11 @@ export class MemoryReaderRepository implements ReaderRepository {
     return next
   }
 
+  public async listBookSourceEntries(userId: string, bookId: string): Promise<BookSourceEntry[]> {
+    const candidates = [...this.sourceCandidates.values()].filter((row) => row.userId === userId && row.bookId === bookId)
+    const editions = [...this.books.values()].filter((row) => row.book.userId === userId && row.book.id === bookId).map((row) => row.edition).sort((a, b) => a.editionKey.localeCompare(b.editionKey))
+    return [...candidates.map((row) => ({ ...bookSourceEntry({ ...row.candidate.candidate, ...row, searchDurationMs: row.candidate.searchDurationMs }), status: 'discovered' as const, candidateId: row.id })), ...editions.map((row) => ({ ...bookSourceEntry({ ...row.metadata, ...row }), status: 'saved' as const, editionKey: row.editionKey }))]
+  }
   public async listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]> {
     return [...this.sourceCandidates.values()].filter((row) => row.userId === userId && row.bookId === bookId).map((row) => structuredClone(row))
   }
@@ -1897,4 +1923,10 @@ export function tocSummary(toc: StoredToc): CachedTocSummary {
   return { bookId: toc.bookId, editionKey: toc.editionKey, sourceFingerprint: toc.sourceFingerprint, revision: toc.revision,
     chapters: toc.chapters.map(({ chapterUrl, index, title, isVolume, isVip }) => ({ chapterId: createHash('sha256').update(`${chapterUrl}\u0000${index}`).digest('hex'), chapterUrl, index, title, ...(isVolume === undefined ? {} : { isVolume }), ...(isVip === undefined ? {} : { isVip }) })),
     ...(toc.truncated === undefined ? {} : { truncated: toc.truncated }) }
+}
+
+function bookSourceEntry(row: { sourceId: string; sourceFingerprint: string; bookUrl: string; coverUrl?: unknown; lastChapter?: unknown; searchDurationMs?: unknown }): Omit<BookSourceItem, 'name' | 'sourceEnabled' | 'status'> {
+  return { sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, bookUrl: row.bookUrl,
+    ...(typeof row.coverUrl === 'string' && row.coverUrl ? { coverUrl: row.coverUrl } : {}), ...(typeof row.lastChapter === 'string' && row.lastChapter ? { lastChapter: row.lastChapter } : {}),
+    ...(typeof row.searchDurationMs === 'number' ? { searchDurationMs: row.searchDurationMs } : {}) }
 }

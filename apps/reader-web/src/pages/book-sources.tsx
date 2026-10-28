@@ -81,6 +81,8 @@ export function BookSourcesPage() {
   usePageLoadEffect((settle) => {
     const controller = new AbortController()
     setError(''); setNotice('')
+    loadedDomains.current.clear()
+    setExpandedGroups((current) => Object.fromEntries(Object.keys(current).map((domain) => [domain, false])))
     // 页面内写入由操作处理器更新，避免搜索启用书源触发整页重载。
     void Promise.all([
       apiFetch<BookReadingInfo>('/api' + prefix + '/reading-info', { signal: controller.signal }),
