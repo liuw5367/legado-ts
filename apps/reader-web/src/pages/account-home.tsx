@@ -5,7 +5,7 @@ import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { BookOpen, Bookmark, History, Search } from 'lucide-react'
 import { EmptyState } from '../components/empty-state.tsx'
-import { usePageLoadEffect } from '../lib/use-page-resource.ts'
+import { usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
@@ -21,6 +21,7 @@ type BookItem = ApiHome['bookshelf'][number]
 type View = 'bookshelf' | 'reading' | 'history'
 
 export function AccountHomePage() {
+  const navigation = usePageNavigation()
   const [groupData, setGroupData] = useState<ApiShelfGroups | null>(null)
   const [selectedGroup, setSelectedGroup] = useState('all')
   const groupInitialized = useRef<string | undefined>(undefined)
@@ -61,6 +62,8 @@ export function AccountHomePage() {
     setLoading(true)
     setMessage('')
     try {
+      await navigation?.positions.flush()
+      if (controller.signal.aborted || requestId !== requestIdRef.current) return
       const [result, groups] = await Promise.all([apiFetch<ApiHome>('/api/home', { signal: controller.signal }), apiFetch<ApiShelfGroups>('/api/bookshelf-groups', { signal: controller.signal })])
       if (controller.signal.aborted || requestId !== requestIdRef.current) return
       setHome(result); setGroupData(groups)
@@ -75,7 +78,7 @@ export function AccountHomePage() {
         if (controllerRef.current === controller) controllerRef.current = null
       }
     }
-  }, [])
+  }, [navigation?.positions])
 
   usePageLoadEffect((settle) => {
     void loadHome().then(settle)

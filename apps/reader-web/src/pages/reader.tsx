@@ -204,14 +204,14 @@ export function ReaderPage() {
 
   useEffect(() => () => { void navigation?.positions.flush(bookId, editionKey).catch(() => undefined) }, [navigation?.positions, bookId, editionKey, chapterId])
 
-  async function persistPosition(input: { paragraphIndex: number; offset: number; version: number }, acceptPreview = false): Promise<boolean> {
+  async function persistPosition(input: { paragraphIndex: number; offset: number; version: number }, acceptPreview = false, immediate = acceptPreview): Promise<boolean> {
     if (previewActiveRef.current && !acceptPreview || content === null || content.chapter.chapterId !== chapterId || navigation === null) return false
     const version = Math.max(input.version, positionVersionRef.current + 1)
     positionVersionRef.current = version
     const identity = positionIdentity
     const write = { bookId, editionKey, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, title: content.chapter.title ?? `第 ${content.chapter.index + 1} 章`, tocRevision: liveToc?.revision, paragraphIndex: input.paragraphIndex, offset: input.offset, version }
     try {
-      const result = await (acceptPreview ? navigation.positions.enqueue(write) : navigation.positions.enqueueDebounced(write))
+      const result = await (immediate ? navigation.positions.enqueue(write) : navigation.positions.enqueueDebounced(write))
       if (result === undefined || identity !== positionIdentityRef.current) return false
       positionVersionRef.current = Math.max(positionVersionRef.current, result.version)
       latestPositionRef.current = result
@@ -294,7 +294,7 @@ export function ReaderPage() {
       visible.current = false
       refreshController.current?.abort()
       const anchor = settings.readingMode === 'paged' ? anchorFromViewport(articleRef.current) : latestAnchorRef.current
-      if (anchor !== null && anchor !== undefined) { latestAnchorRef.current = anchor; paginationAnchorRef.current = anchor; if (!previewActive && !previewActiveRef.current) void persistPosition({ ...anchor, version: positionVersionRef.current + 1 }) }
+      if (anchor !== null && anchor !== undefined) { latestAnchorRef.current = anchor; paginationAnchorRef.current = anchor; if (!previewActive && !previewActiveRef.current) void persistPosition({ ...anchor, version: positionVersionRef.current + 1 }, false, true) }
       pageGuideRef.current?.close()
     }
   }, [bookId, chapterId, editionKey, content, settings.readingMode, previewActive])

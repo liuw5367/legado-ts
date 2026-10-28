@@ -157,3 +157,17 @@ test('不同书籍的防抖计时相互独立，不提前保存后进入的书�
   await second
   assert.deepEqual(calls.map((write) => write.bookId), ['b', 'other'])
 })
+
+test('退出刷新等待已经发出的进度保存结算，不提前读取书架', async () => {
+  let release!: () => void
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  const order: string[] = []
+  const queue = new ReadingPositionQueue(async (write) => { order.push('save-start'); await hold; order.push('save-end'); return position(write) })
+  const saving = queue.enqueue(input)
+  await Promise.resolve()
+  const refresh = queue.flush().then(() => { order.push('home-read') })
+  for (let i = 0; i < 8; i++) await Promise.resolve()
+  assert.deepEqual(order, ['save-start'])
+  release(); await saving; await refresh
+  assert.deepEqual(order, ['save-start', 'save-end', 'home-read'])
+})

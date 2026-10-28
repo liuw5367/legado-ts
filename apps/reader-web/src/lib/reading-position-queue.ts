@@ -34,10 +34,10 @@ export class ReadingPositionQueue {
   flush(bookId?: string, editionKey?: string): Promise<void> {
     const entries = [...this.delayed.entries()].filter(([, entry]) => bookId === undefined || entry.input.bookId === bookId && entry.input.editionKey === editionKey)
     for (const [key] of entries) this.delayed.delete(key)
-    return Promise.all(entries.map(([, entry]) => {
+    return Promise.all([...entries.map(([, entry]) => {
       clearTimeout(entry.timer)
       return this.enqueue(entry.input).then(entry.resolve, entry.reject)
-    })).then(() => undefined)
+    }), this.tail]).then(() => undefined)
   }
   enqueue(input: PositionWrite): Promise<ApiPosition | undefined> {
     const key = JSON.stringify([input.bookId, input.editionKey])

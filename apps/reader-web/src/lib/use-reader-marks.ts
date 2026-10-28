@@ -21,11 +21,11 @@ export function useReaderMarks({ texts, articleRef, bookId, editionKey, chapterI
   }, [identity])
   useEffect(() => () => { setSelection(null); setEditing(false) }, [page?.id])
   usePageLoadEffect((settle) => {
-    if (!content) { settle(); return }
+    if (!positionReady || !toc || !content || content.chapter.chapterId !== chapterId) { settle(); return }
     const controller = new AbortController(); const query = '?view=reader&editionKey=' + encodeURIComponent(editionKey) + '&chapterUrl=' + encodeURIComponent(content.chapter.chapterUrl)
     void Promise.all(['annotations', 'bookmarks'].map((kind) => apiFetch<{ items: ReaderMark[] }>('/api/books/' + encodeURIComponent(bookId) + '/' + kind + query, { signal: controller.signal }))).then(([a, b]) => { if (controller.signal.aborted) return; if (articleRef.current && !editing) preservedSelection.current = selectedAnchor(articleRef.current, hash); setAnnotations(a!.items); setBookmarks(b!.items); setError('') }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '读取标记失败') }).finally(() => { if (!controller.signal.aborted) settle() })
     return () => controller.abort()
-  }, [identity, content?.chapter.chapterUrl, hash, toc?.revision, retry], ['notes'])
+  }, [identity, content?.chapter.chapterUrl, hash, toc?.revision, positionReady, retry], ['notes'])
   useLayoutEffect(() => {
     const previous = preservedSelection.current; preservedSelection.current = null
     const root = articleRef.current
