@@ -18,11 +18,11 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 function snapshot(revision: string): BookSnapshot {
-  return { toc: { userId: 'a', bookId: 'b', editionKey: 'e', sourceFingerprint: 'f', revision, chapters: [], bookPatch: {} }, details: { book: { id: 'b', userId: 'a', name: '书', createdAt: '', updatedAt: '' }, edition: { editionKey: 'e', sourceId: 's', sourceFingerprint: 'f', bookUrl: 'https://example.test', metadata: {} }, sourceName: '源', onBookshelf: false } }
+  return { toc: { bookId: 'b', editionKey: 'e', sourceFingerprint: 'f', revision, chapters: [] }, info: { book: { id: 'b', name: '书' }, edition: { editionKey: 'e' } } }
 }
 function content(chapterId: string): ApiContent {
   const chapter = { chapterId, sourceId: 's', bookUrl: 'https://example.test/book', chapterUrl: `https://example.test/chapter/${chapterId}`, index: 0, title: '章节' }
-  return { chapter, contentType: 'text', raw: '正文', cleaned: '正文', pages: [], resources: [] }
+  return { chapter, contentType: 'text', cleaned: '正文', resources: [] }
 }
 
 test('shared book cache merges requests, retains success on refresh failure and rejects late responses', async () => {

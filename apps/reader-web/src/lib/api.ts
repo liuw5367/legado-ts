@@ -1,3 +1,6 @@
+import type { ReadingContent } from '../../shared/reading-content.ts'
+import type { TocSummary, TocChapter } from '../../shared/toc.ts'
+import type { ReadingSourceSummary } from '../../shared/source-management.ts'
 import { orderSearchCandidates } from '../../shared/search-candidates.ts'
 import type { BookListSummary, BookListMember, BookListDetails, BookListChoice } from '../../shared/book-lists.ts'
 import { mutationDomains, publishPageMutation } from './page-data.ts'
@@ -25,8 +28,9 @@ export type ApiHomePosition = Pick<ApiPosition, 'chapterId' | 'title' | 'lastRea
 export type ApiHomeHistory = Pick<ApiHistory, 'id' | 'keyword' | 'status' | 'resultCount' | 'summary' | 'updatedAt'>
 export interface ApiHome { bookshelf: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; groupId?: string | null; position?: ApiHomePosition }>; reading: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; position: ApiHomePosition }>; searchHistory: ApiHomeHistory[] }
 export interface ApiChapter { chapterId: string; sourceId: string; bookUrl: string; chapterUrl: string; index: number; title: string; url?: string; isVolume?: boolean; isVip?: boolean; isPay?: boolean }
-export interface ApiToc { userId: string; bookId: string; editionKey: string; sourceFingerprint: string; revision: string; chapters: ApiChapter[]; bookPatch: Record<string, unknown>; bookAfter?: Record<string, unknown>; runtimeWarning?: string }
-export interface ApiContent { chapter: ApiChapter; contentType: 'text' | 'html'; raw: string; cleaned: string; pages: string[]; resources: Array<{ kind: 'image'; url: string }>; finalUrl?: string; title?: string; imgUrl?: string }
+export type ApiTocChapter = TocChapter
+export type ApiToc = TocSummary
+export type ApiContent = ReadingContent
 
 export class ApiError extends Error {
   public readonly code: string
@@ -40,7 +44,7 @@ export interface BackupPreview { manifest: { createdAt: string; producer: { name
 
 export interface StreamEvent { type: string; data: unknown }
 export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
-export interface SearchSourceEventData { hasPending?: boolean; retryAfterMs?: number; source?: { status?: string; candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
+export interface SearchSourceEventData { sourceSummary?: ReadingSourceSummary; hasPending?: boolean; retryAfterMs?: number; source?: { status?: string; candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
 
 export function mergeSearchStreamCandidates(current: ApiCandidate[], event: SearchSourceEventData, ordering?: { keyword: string; precision: boolean }): ApiCandidate[] {
   if (event.search?.candidates !== undefined) return [...event.search.candidates]

@@ -8,3 +8,8 @@ export interface BookDetailsResponse {
   onBookshelf: boolean
   reading?: BookDetailsPosition | null
 }
+
+export interface BookReadingInfo {
+  book: { id: string; name: string; author?: string; activeEditionKey?: string }
+  edition: { editionKey: string; name?: string }
+}

@@ -1,3 +1,6 @@
+import { readingContent, type ReadingContentResponse } from '../../shared/reading-content.ts'
+import type { TocSummary, CachedTocSummary } from '../../shared/toc.ts'
+import { readingSourceSummary, type ReadingSourceSummary } from '../../shared/source-management.ts'
 import { SOURCE_EXECUTION_MS, SEARCH_BATCH_MS } from './source-execution.ts'
 import { setTimeout as delay } from 'node:timers/promises'
 import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
@@ -8,7 +11,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto
 import { editionKey as sharedEditionKey } from '@legado/reader-backup'
 import { loadBookDetails, loadChapterContent, loadReviewDetail, loadReviewReplies, loadReviewSummary, loadTableOfContents, searchBooks } from '@legado/source-core'
 import type { BookMetadata, Chapter, ChapterContent, NormalizedSource, ReviewDetailPage, ReviewSummaryItem, WorkflowStatus } from '@legado/source-core'
-import { compareSourceListPriority, type SourceListRecord, type ReaderRepository, type StoredSourceRecord } from '../db/repository.ts'
+import { tocSummary, managedSummary, type SourceListRecord, type ReaderRepository, type StoredSourceRecord } from '../db/repository.ts'
 import { configuredSecret } from '../db/runtime-state-crypto.ts'
 import type { BookCreationInput, SearchBatchResult, SearchRunState, SourceSearchState, StoredBook, StoredCandidate, StoredContent, StoredEdition, StoredToc } from '../domain/types.ts'
 import { acceptsPrecisionSearchFields, orderSearchCandidates } from './search-candidates.ts'
@@ -32,7 +35,7 @@ function withTruncatedTocWarning(toc: StoredToc & { runtimeWarning?: string }): 
 
 export interface SearchCandidateIdentity { sourceId: string; sourceFingerprint: string; bookUrl: string }
 export interface SearchBatchOptions { sourceIds?: string[]; nextPage?: boolean; signal?: AbortSignal; onProgress?: (progress: SearchRunState['progress']) => Promise<void> | void }
-export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState) => Promise<void> | void
+export type SearchSourceListener = (source: SourceSearchState, search: SearchRunState, sourceSummary?: ReadingSourceSummary) => Promise<void> | void
 
 export interface ReaderRuntime {
   listSources(userId: string): Promise<SourceListRecord[]>
@@ -43,7 +46,9 @@ export interface ReaderRuntime {
   listBookSources(userId: string, bookId: string): Promise<BookSourcesResponse>
   openBookSource(userId: string, bookId: string, candidateId: string, signal?: AbortSignal): Promise<StoredEdition>
   setBookCover(userId: string, bookId: string, selection: BookCoverSelection | null): Promise<StoredBook>
+  getOrLoadTocSummary(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<TocSummary>
   getOrLoadToc(userId: string, bookId: string, editionKey: string, refresh?: boolean): Promise<StoredToc & { runtimeWarning?: string }>
+  getOrLoadContentDisplay(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<ReadingContentResponse>
   getOrLoadContent(userId: string, bookId: string, editionKey: string, chapterId: string, refresh?: boolean): Promise<StoredContent & { runtimeWarning?: string }>
   getReviewSummary(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ReviewSummaryItem[]>
   getReviewDetail(userId: string, bookId: string, editionKey: string, chapterId: string, paragraphIndex: number, paragraphData?: string, cursor?: { index: number; token?: string }): Promise<ReviewDetailPage>
@@ -64,7 +69,9 @@ export function createReaderRuntime(repository: ReaderRepository): ReaderRuntime
     listBookSources: (userId, bookId) => listBookSources(repository, userId, bookId),
     openBookSource: (userId, bookId, candidateId, signal) => openBookSource(repository, userId, bookId, candidateId, signal),
     setBookCover: (userId, bookId, selection) => setBookCover(repository, userId, bookId, selection),
+    getOrLoadTocSummary: (userId, bookId, editionKey, refresh) => getOrLoadTocSummary(repository, userId, bookId, editionKey, refresh),
     getOrLoadToc: (userId, bookId, editionKey, refresh) => getOrLoadToc(repository, userId, bookId, editionKey, refresh),
+    getOrLoadContentDisplay: (userId, bookId, editionKey, chapterId, refresh) => getOrLoadContentDisplay(repository, userId, bookId, editionKey, chapterId, refresh),
     getOrLoadContent: (userId, bookId, editionKey, chapterId, refresh) => getOrLoadContent(repository, userId, bookId, editionKey, chapterId, refresh),
     getReviewSummary: (userId, bookId, editionKey, chapterId) => getReviewSummary(repository, userId, bookId, editionKey, chapterId),
     getReviewDetail: (userId, bookId, editionKey, chapterId, paragraphIndex, paragraphData, cursor) => getReviewDetail(repository, userId, bookId, editionKey, chapterId, paragraphIndex, paragraphData, cursor),
@@ -104,7 +111,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
     let noCapacity = false
     let dirty = false
     let serialized = Promise.resolve()
-    const events: SourceSearchState[] = []
+    const events: Array<{ state: SourceSearchState; sourceSummary?: ReadingSourceSummary }> = []
     const activeSources = new Map<string, string>()
     const progress = () => ({ completed: completedCount(states), total: states.length, activeSources: [...activeSources.values()] })
     const disconnect = () => controller.abort()
@@ -120,7 +127,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
         if (!saved) { controller.abort(); const latest = await repository.getSearch(userId, searchId); if (latest?.cancelled) return; throw new ReaderRuntimeError('source-busy', '搜索操作已失效') }
         saved.progress = progress()
         current = saved
-        for (const state of completed) await listener?.(state, saved)
+        for (const event of completed) await listener?.(event.state, saved, event.sourceSummary)
       })
       return serialized
     }
@@ -152,7 +159,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
             if (controller.signal.aborted && options?.signal?.aborted) continue
             states[indices.get(state.sourceId)!] = outcome.state
             activeSources.delete(state.sourceId)
-            dirty = true; events.push(outcome.state)
+            dirty = true; events.push({ state: outcome.state, ...(outcome.sourceSummary === undefined ? {} : { sourceSummary: outcome.sourceSummary }) })
             await flush()
           } finally { await repository.releaseExecutionSlot(userId, lease) }
           if (nextIndex < pending.length && !controller.signal.aborted) await waitForRefill()
@@ -183,7 +190,7 @@ async function executeSearchBatch(repository: ReaderRepository, userId: string, 
   }
 }
 
-async function runOneSource(repository: ReaderRepository, run: SearchRunState, state: SourceSearchState, signal: AbortSignal, onStart?: (name: string) => Promise<void>): Promise<{ state: SourceSearchState; additions: StoredCandidate[] }> {
+async function runOneSource(repository: ReaderRepository, run: SearchRunState, state: SourceSearchState, signal: AbortSignal, onStart?: (name: string) => Promise<void>): Promise<{ state: SourceSearchState; additions: StoredCandidate[]; sourceSummary?: ReadingSourceSummary }> {
   const startedAt = new Date().toISOString()
   let source: StoredSourceRecord
   try { source = await requireSource(repository, run.userId, state.sourceId) } catch (error) { return { additions: [], state: { ...state, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源不可用' }], startedAt, completedAt: new Date().toISOString() } } }
@@ -197,7 +204,7 @@ async function runOneSource(repository: ReaderRepository, run: SearchRunState, s
     const status = timedOut ? 'failed' : result.status === 'capability-missing' ? 'capability-missing' : result.status
     const nextState = { ...state }
     delete nextState.nextCursor
-    return { additions, state: { ...nextState, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: timedOut ? [...result.diagnostics, { code: 'source-timeout', message: '书源执行超时' }] : result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
+    return { additions, sourceSummary: readingSourceSummary({ ...managedSummary(source, source.sourceRevision ?? '', 'account'), ...(state.priority === undefined ? {} : { importPriority: state.priority }) }), state: { ...nextState, sourceFingerprint: source.fingerprint, status, candidates: additions, ...(result.value?.cursor === undefined ? {} : { cursor: result.value.cursor }), ...(result.value?.nextCursor === undefined ? {} : { nextCursor: result.value.nextCursor }), diagnostics: timedOut ? [...result.diagnostics, { code: 'source-timeout', message: '书源执行超时' }] : result.diagnostics, startedAt, completedAt: new Date().toISOString() } }
   } catch (error) {
     if (signal.aborted) return { additions: [], state: { ...state, status: signal.reason?.name === 'TimeoutError' ? 'failed' : 'cancelled', diagnostics: [{ message: signal.reason?.name === 'TimeoutError' ? '书源执行超时' : '搜索已取消' }], startedAt, completedAt: new Date().toISOString() } }
     return { additions: [], state: { ...state, sourceFingerprint: source.fingerprint, status: 'failed', diagnostics: [{ message: error instanceof Error ? error.message : '书源执行失败' }], startedAt, completedAt: new Date().toISOString() } }
@@ -296,8 +303,8 @@ async function listBookSources(repository: ReaderRepository, userId: string, boo
   const book = await repository.getBook(userId, bookId)
   if (book === null) throw new ReaderRuntimeError('not-found', '书籍不存在')
   const [editions, candidates] = await Promise.all([repository.listEditions(userId, bookId), repository.listBookSourceCandidates(userId, bookId)])
-  const summaries = await repository.listSourceSummaries(userId, [...new Set([...editions, ...candidates].map((item) => item.sourceId))])
-  const sources = new Map(summaries.map((source) => [source.sourceId, source]))
+  const related = await repository.listManagedSources(userId, { all: true, page: 1, pageSize: 50, query: '', status: 'all', sourceIds: [...new Set([...editions, ...candidates].map((item) => item.sourceId))] })
+  const sources = new Map(related.sources.map((source) => [source.sourceId, source]))
   const result = new Map<string, BookSourceItem>()
   for (const item of candidates) {
     const source = sources.get(item.sourceId)
@@ -312,8 +319,12 @@ async function listBookSources(repository: ReaderRepository, userId: string, boo
     const lastChapter = result.get(key)?.lastChapter ?? edition.metadata.lastChapter
     result.set(key, { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, name: source.name, bookUrl: edition.bookUrl, sourceEnabled: source.enabled, status: 'saved', editionKey: edition.editionKey, ...(typeof searchDurationMs === 'number' ? { searchDurationMs } : {}), ...(edition.metadata.coverUrl ? { coverUrl: edition.metadata.coverUrl } : {}), ...(lastChapter ? { lastChapter } : {}) })
   }
-  const items = [...result.values()].sort((left, right) => compareSourceListPriority(sources.get(left.sourceId)!, sources.get(right.sourceId)!))
-  return { sources: items, ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }) }
+  const items = [...result.values()].sort((left, right) => {
+    const a = sources.get(left.sourceId)!, b = sources.get(right.sourceId)!
+    return (a.importPriority ?? Number.MAX_SAFE_INTEGER) - (b.importPriority ?? Number.MAX_SAFE_INTEGER) || a.customOrder - b.customOrder || a.sourceId.localeCompare(b.sourceId)
+  })
+  const sourceIds = new Set(items.map((item) => item.sourceId))
+  return { sources: items, sourceSummaries: related.sources.filter((source) => sourceIds.has(source.sourceId)).map(readingSourceSummary), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }) }
 }
 
 async function setBookCover(repository: ReaderRepository, userId: string, bookId: string, selection: BookCoverSelection | null): Promise<StoredBook> {
@@ -360,6 +371,21 @@ async function openBookSource(repository: ReaderRepository, userId: string, book
   } finally { await repository.releaseExecutionSlot(userId, lease) }
 }
 
+async function getOrLoadTocSummary(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<TocSummary> {
+  let summary: CachedTocSummary | null = null
+  if (!refresh) {
+    const edition = await repository.getEdition(userId, bookId, editionKey)
+    if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
+    const [source] = await repository.listSourceSummaries(userId, [edition.sourceId])
+    if (source === undefined || !source.enabled) throw new ReaderRuntimeError('configuration', `书源不可用：${edition.sourceId}`)
+    const cached = await repository.getTocSummary(userId, bookId, editionKey)
+    if (cached?.sourceFingerprint === source.fingerprint) summary = cached
+  }
+  if (summary === null) summary = tocSummary(await getOrLoadToc(repository, userId, bookId, editionKey, true))
+  const { truncated, ...toc } = summary
+  return { ...toc, ...(truncated === true ? { runtimeWarning: TRUNCATED_TOC_WARNING } : {}) }
+}
+
 async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, refresh = false): Promise<StoredToc & { runtimeWarning?: string }> {
   const edition = await repository.getEdition(userId, bookId, editionKey)
   if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
@@ -379,6 +405,23 @@ async function getOrLoadToc(repository: ReaderRepository, userId: string, bookId
     // 截断的目录不能静默当成完整目录；保留已解析章节，同时把原因交给客户端。
     return result.value.truncated === true ? { ...saved, runtimeWarning: TRUNCATED_TOC_WARNING } : saved
   })
+}
+
+async function getOrLoadContentDisplay(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, refresh = false): Promise<ReadingContentResponse> {
+  if (!refresh) {
+    const edition = await repository.getEditionSource(userId, bookId, editionKey)
+    if (edition === null) throw new ReaderRuntimeError('not-found', '书籍版本不存在')
+    const [source] = await repository.listSourceSummaries(userId, [edition.sourceId])
+    if (!source?.enabled) throw new ReaderRuntimeError('configuration', `书源不可用：${edition.sourceId}`)
+    const chapter = await repository.getChapterContext(userId, bookId, editionKey, chapterId, true)
+    if (chapter === null) throw new ReaderRuntimeError('not-found', '目录尚未加载')
+    if (!chapter.chapter) throw new ReaderRuntimeError('not-found', '章节不存在')
+    const cached = await repository.getContentDisplay(userId, editionKey, chapter.revision, chapterId)
+    if (cached?.sourceFingerprint === source.fingerprint) return { tocRevision: cached.tocRevision, content: { ...cached.content, chapter: { ...cached.content.chapter, ...(chapter.chapter.title === undefined ? {} : { title: chapter.chapter.title }) } }, ...(cached.truncated ? { runtimeWarning: TRUNCATED_CONTENT_WARNING } : {}) }
+  }
+  const loaded = await getOrLoadContent(repository, userId, bookId, editionKey, chapterId, true)
+  const chapter = await repository.getChapterContext(userId, bookId, editionKey, chapterId, true)
+  return { tocRevision: loaded.tocRevision, content: readingContent(loaded.content, chapterId, chapter?.chapter?.title), ...(loaded.runtimeWarning === undefined ? {} : { runtimeWarning: loaded.runtimeWarning }) }
 }
 
 async function getOrLoadContent(repository: ReaderRepository, userId: string, bookId: string, editionKey: string, chapterId: string, refresh = false): Promise<StoredContent & { runtimeWarning?: string }> {

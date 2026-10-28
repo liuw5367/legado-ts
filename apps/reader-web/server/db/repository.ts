@@ -1,7 +1,9 @@
-import type { BookDetailsResponse } from '../../shared/book-details.ts'
+import { readingContent, type CachedReadingContent } from '../../shared/reading-content.ts'
+import type { CachedTocSummary } from '../../shared/toc.ts'
+import type { BookDetailsResponse, BookReadingInfo } from '../../shared/book-details.ts'
 import type { BookDisplay, BookListChoice, BookListDetails } from '../../shared/book-lists.ts'
-import { readMarks, writeMark, lockMarks, purgeMark, restoreMarks } from './reading-marks.ts'
-import { markSummary, validateMarkCollection, readingMarkSchema, changeMark, markPage, MarkError, type MarkKind, type MarkQuery, type MarkCommand, type MarkPage, type MarkSummaryPage, type CachedChapter, type ReadingMark } from '../../shared/reading-annotations.ts'
+import { readReaderMarks, readMarks, writeMark, lockMarks, purgeMark, restoreMarks } from './reading-marks.ts'
+import { markListItem, readerMark, type ReaderMark, validateMarkCollection, readingMarkSchema, changeMark, markPage, MarkError, type MarkKind, type MarkQuery, type MarkCommand, type MarkPage, type MarkSummaryPage, type CachedChapter, type ReadingMark } from '../../shared/reading-annotations.ts'
 import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
 import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
 import * as importHistory from './source-import-history.ts'
@@ -91,12 +93,14 @@ export interface ReaderRepository {
   getBookListDetails(userId: string, listId: string): Promise<BookListDetails | null>
   getShelfGroups(userId: string, bookId?: string): Promise<{ groups: Array<{ id: string; name: string; bookCount: number }>; ungroupedCount: number; onBookshelf?: boolean; currentGroupId?: string | null }>
   listBookIdentities(userId: string): Promise<Array<{ id: string; name: string; author?: string; onBookshelf: boolean }>>
+  getBookReadingInfo(userId: string, bookId: string, editionKey?: string): Promise<BookReadingInfo | null>
   getReadingEntry(userId: string, bookId: string): Promise<{ activeEditionKey: string | null } | null>
   listEditionOptions(userId: string, bookId: string): Promise<Array<{ editionKey: string; sourceId: string; sourceName: string }>>
   getDisplayEdition(userId: string, bookId: string, editionKey?: string): Promise<BookDetailsResponse['edition'] | null>
   getDisplayPosition(userId: string, bookId: string, editionKey: string): Promise<{ title: string; lastReadAt: string } | null>
   listReadingMarkBooks(userId: string): Promise<Array<{ id: string; name: string; author: string | null; activeEditionKey: string | null }>>
   listReadingMarks(userId: string, query: MarkQuery): Promise<MarkPage>
+  listReaderMarks(userId: string, query: MarkQuery): Promise<ReaderMark[]>
   listReadingMarkSummaries(userId: string, query: MarkQuery): Promise<MarkSummaryPage>
   getCachedMarkChapter(userId: string, bookId: string, id: string): Promise<{ cachedChapter: CachedChapter | null } | null>
   mutateReadingMark(userId: string, command: MarkCommand): Promise<ReadingMark>
@@ -112,7 +116,7 @@ export interface ReaderRepository {
   getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null>
   getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined>
   getSourceManagementStats(userId: string): Promise<SourceManagementStats>
-  listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage>
+  listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] }): Promise<SourceManagementPage>
   applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }>
   applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }>
   saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void>
@@ -151,9 +155,13 @@ export interface ReaderRepository {
   getBook(userId: string, bookId: string): Promise<StoredBook | null>
   setCustomCover(userId: string, bookId: string, coverUrl: string | null): Promise<StoredBook | null>
   listEditions(userId: string, bookId: string): Promise<StoredEdition[]>
+  activateEdition(userId: string, bookId: string, editionKey: string): Promise<{ editionKey: string } | null>
+  getEditionSource(userId: string, bookId: string, editionKey: string): Promise<{ sourceId: string; sourceFingerprint: string } | null>
+  getContentDisplay(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<CachedReadingContent | null>
   setActiveEdition(userId: string, bookId: string, editionKey: string): Promise<StoredEdition | null>
   getEdition(userId: string, bookId: string, editionKey?: string): Promise<StoredEdition | null>
-  getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ChapterContext | null>
+  getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string, display?: boolean): Promise<ChapterContext | null>
+  getTocSummary(userId: string, bookId: string, editionKey: string): Promise<CachedTocSummary | null>
   getToc(userId: string, bookId: string, editionKey: string): Promise<StoredToc | null>
   saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc>
   getContent(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<StoredContent | null>
@@ -200,6 +208,17 @@ export class PostgresReaderRepository implements ReaderRepository {
       return rows.map(({ author, ...row }) => ({ ...row, ...(author === null ? {} : { author }) }))
     })
   }
+  public async getBookReadingInfo(userId: string, bookId: string, editionKey?: string): Promise<BookReadingInfo | null> {
+    return withUser(userId, async (tx) => {
+      const [row] = await tx.select({ id: books.id, name: books.name, author: books.author, activeEditionKey: books.activeEditionKey,
+        editionKey: bookEditions.editionKey, editionName: sql<unknown>`${bookEditions.metadata}->'name'`,
+      }).from(books).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id),
+        editionKey ? eq(bookEditions.editionKey, editionKey) : or(eq(bookEditions.editionKey, books.activeEditionKey), isNull(books.activeEditionKey)),
+      )).where(and(eq(books.userId, userId), eq(books.id, bookId))).orderBy(desc(bookEditions.updatedAt)).limit(1)
+      return row === undefined ? null : { book: { id: row.id, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }) },
+        edition: { editionKey: row.editionKey, ...(typeof row.editionName === 'string' ? { name: row.editionName } : {}) } }
+    })
+  }
   public async getReadingEntry(userId: string, bookId: string) {
     return withUser(userId, async (tx) => { const [row] = await tx.select({ activeEditionKey: books.activeEditionKey }).from(books).where(and(eq(books.userId, userId), eq(books.id, bookId))); return row ?? null })
   }
@@ -220,6 +239,7 @@ export class PostgresReaderRepository implements ReaderRepository {
   }
   public listReadingMarkBooks(userId: string) { return withUser(userId, (tx) => tx.selectDistinct({ id: books.id, name: books.name, author: books.author, activeEditionKey: books.activeEditionKey }).from(readingAnnotations).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingAnnotations.bookId))).where(eq(readingAnnotations.userId, userId)).orderBy(books.name, books.id)) }
   public listReadingMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query)) }
+  public listReaderMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readReaderMarks(tx, userId, query)) }
   public listReadingMarkSummaries(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query, true)) }
   public getCachedMarkChapter(userId: string, bookId: string, id: string) {
     return withUser(userId, async (tx) => {
@@ -344,16 +364,16 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] }): Promise<SourceManagementPage> {
     return withUser(userId, async (transaction) => {
-      const sourceRows = await transaction.select({ source: { ...sourceListColumns, revision: userSources.revision, author: sql<unknown>`${userSources.normalizedSource}->'author'`, bookSourceAuthor: sql<unknown>`${userSources.normalizedSource}->'bookSourceAuthor'`, lastUpdateTime: sql<unknown>`${userSources.normalizedSource}->'lastUpdateTime'` }, displayUrl: sourceImportLinks.displayUrl, priority: sourceImportLinks.sortOrder, importedAt: sourceImportBatches.importedAt }).from(userSources).leftJoin(sourceImportLinks, and(eq(sourceImportLinks.userId, userId), eq(sourceImportLinks.id, userSources.importLinkId))).leftJoin(sourceImportItems, and(eq(sourceImportItems.userId, userId), eq(sourceImportItems.id, userSources.currentImportItemId))).leftJoin(sourceImportBatches, and(eq(sourceImportBatches.userId, userId), eq(sourceImportBatches.id, sourceImportItems.batchId))).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
+      const sourceRows = await transaction.select({ source: { ...sourceListColumns, revision: userSources.revision, author: sql<unknown>`${userSources.normalizedSource}->'author'`, bookSourceAuthor: sql<unknown>`${userSources.normalizedSource}->'bookSourceAuthor'`, lastUpdateTime: sql<unknown>`${userSources.normalizedSource}->'lastUpdateTime'` }, displayUrl: sourceImportLinks.displayUrl, priority: sourceImportLinks.sortOrder, importedAt: sourceImportBatches.importedAt }).from(userSources).leftJoin(sourceImportLinks, and(eq(sourceImportLinks.userId, userId), eq(sourceImportLinks.id, userSources.importLinkId))).leftJoin(sourceImportItems, and(eq(sourceImportItems.userId, userId), eq(sourceImportItems.id, userSources.currentImportItemId))).leftJoin(sourceImportBatches, and(eq(sourceImportBatches.userId, userId), eq(sourceImportBatches.id, sourceImportItems.batchId))).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false), params.sourceIds === undefined ? undefined : inArray(userSources.sourceId, params.sourceIds)))
       const allRows = sourceRows.map(({ source: row, displayUrl, priority, importedAt }) => ({ ...managedListSummary(row), ...(displayUrl ? { importDisplayUrl: displayUrl } : {}), ...(priority === null ? {} : { importPriority: priority }), ...(importedAt ? { importedAt: importedAt.toISOString() } : {}) }))
       const enabledCount = allRows.filter((source) => source.enabled).length
       const rows = allRows
         .filter((source) => {
           const query = params.query.toLocaleLowerCase()
           const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
-          return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
+          return matchesQuery && (params.domain === undefined || sourceDomainInfo(source.sourceId).key === sourceDomainInfo(params.domain).key) && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId)) && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
         })
         .sort((a, b) => a.customOrder - b.customOrder || a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
       const offset = (params.page - 1) * params.pageSize
@@ -875,6 +895,30 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
+  public async activateEdition(userId: string, bookId: string, editionKey: string) {
+    return withUser(userId, async (tx) => {
+      const [row] = await tx.update(books).set({ activeEditionKey: editionKey, updatedAt: new Date() }).where(and(eq(books.userId, userId), eq(books.id, bookId), sql`exists (select 1 from ${bookEditions} where ${bookEditions.userId} = ${userId} and ${bookEditions.bookId} = ${bookId} and ${bookEditions.editionKey} = ${editionKey})`)).returning({ editionKey: books.activeEditionKey })
+      return row?.editionKey ? { editionKey: row.editionKey } : null
+    })
+  }
+  public async getEditionSource(userId: string, bookId: string, editionKey: string) {
+    return withUser(userId, async (tx) => {
+      const [row] = await tx.select({ sourceId: bookEditions.sourceId, sourceFingerprint: bookEditions.sourceFingerprint }).from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId), eq(bookEditions.editionKey, editionKey))).limit(1)
+      return row ?? null
+    })
+  }
+  public async getContentDisplay(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<CachedReadingContent | null> {
+    return withUser(userId, async (tx) => {
+      const [row] = await tx.select({ sourceFingerprint: chapterContents.sourceFingerprint, tocRevision: chapterContents.tocRevision,
+        content: sql<CachedReadingContent['content']>`jsonb_strip_nulls(jsonb_build_object(
+          'chapter', jsonb_build_object('chapterId', ${chapterId}, 'chapterUrl', ${chapterContents.content}->'chapter'->'chapterUrl', 'index', ${chapterContents.content}->'chapter'->'index', 'title', ${chapterContents.content}->'chapter'->'title'),
+          'contentType', ${chapterContents.content}->'contentType', 'cleaned', ${chapterContents.content}->'cleaned', 'resources', ${chapterContents.content}->'resources', 'finalUrl', ${chapterContents.content}->'finalUrl'
+        ))`, truncated: sql<boolean>`${chapterContents.content}->'truncated' = 'true'::jsonb`,
+      }).from(chapterContents).where(and(eq(chapterContents.userId, userId), eq(chapterContents.editionKey, editionKey), eq(chapterContents.tocRevision, tocRevision), eq(chapterContents.chapterId, chapterId))).limit(1)
+      return row === undefined ? null : { ...row, truncated: row.truncated === true }
+    })
+  }
+
   public async setActiveEdition(userId: string, bookId: string, editionKey: string): Promise<StoredEdition | null> {
     return withUser(userId, async (transaction) => {
       const [edition] = await transaction.select().from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId), eq(bookEditions.editionKey, editionKey))).limit(1)
@@ -892,7 +936,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ChapterContext | null> {
+  public async getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string, display?: boolean): Promise<ChapterContext | null> {
     return withUser(userId, async (tx) => {
       // NUL 分隔符以 bytea 拼接，保持与 Node SHA-256 的 UTF-8 输入完全一致。
       const rows = await tx.execute(sql`
@@ -900,7 +944,7 @@ export class PostgresReaderRepository implements ReaderRepository {
           t.chapters -> (c.ordinality::int) ->> 'chapterUrl' as "nextChapterUrl"
         from ${tocSnapshots} t
         left join lateral (
-          select item as chapter, ordinality
+          select ${display ? sql`jsonb_strip_nulls(jsonb_build_object('sourceId', item->'sourceId', 'bookUrl', item->'bookUrl', 'chapterUrl', item->'chapterUrl', 'index', item->'index', 'title', item->'title'))` : sql`item`} as chapter, ordinality
           from jsonb_array_elements(t.chapters) with ordinality as entries(item, ordinality)
           where encode(sha256(convert_to(item->>'chapterUrl', 'UTF8') || decode('00', 'hex') || convert_to(item->>'index', 'UTF8')), 'hex') = ${chapterId}
           order by ordinality limit 1
@@ -910,6 +954,24 @@ export class PostgresReaderRepository implements ReaderRepository {
       `)
       const row = rows[0]
       return row === undefined ? null : { revision: row.revision as string, sourceFingerprint: row.sourceFingerprint as string, ...(row.chapter === null ? {} : { chapter: row.chapter as Chapter }), ...(row.nextChapterUrl === null ? {} : { nextChapterUrl: row.nextChapterUrl as string }) }
+    })
+  }
+
+  public async getTocSummary(userId: string, bookId: string, editionKey: string): Promise<CachedTocSummary | null> {
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.select({
+        bookId: tocSnapshots.bookId, editionKey: tocSnapshots.editionKey,
+        sourceFingerprint: tocSnapshots.sourceFingerprint, revision: tocSnapshots.revision, truncated: tocSnapshots.truncated,
+        chapters: sql<CachedTocSummary['chapters']>`(
+          select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+            'chapterId', encode(sha256(convert_to(item->>'chapterUrl', 'UTF8') || decode('00', 'hex') || convert_to(item->>'index', 'UTF8')), 'hex'),
+            'chapterUrl', item->'chapterUrl', 'index', item->'index', 'title', item->'title',
+            'isVolume', item->'isVolume', 'isVip', item->'isVip'
+          )) order by ordinality), '[]'::jsonb)
+          from jsonb_array_elements(${tocSnapshots.chapters}) with ordinality as entries(item, ordinality)
+        )`,
+      }).from(tocSnapshots).where(and(eq(tocSnapshots.userId, userId), eq(tocSnapshots.bookId, bookId), eq(tocSnapshots.editionKey, editionKey))).limit(1)
+      return row ?? null
     })
   }
 
@@ -1041,6 +1103,14 @@ export class MemoryReaderRepository implements ReaderRepository {
     const rows = [...new Map([...this.books.values()].filter((entry) => entry.book.userId === userId).map(({ book }) => [book.id, book])).values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     return rows.map(({ id, name, author }) => ({ id, name, ...(author === undefined ? {} : { author }), onBookshelf: this.shelf.has(`${userId}:${id}`) }))
   }
+  public async getBookReadingInfo(userId: string, bookId: string, editionKey?: string): Promise<BookReadingInfo | null> {
+    const book = await this.getBook(userId, bookId)
+    if (book === null) return null
+    const edition = await this.getEdition(userId, bookId, editionKey || book.activeEditionKey)
+    if (edition === null) return null
+    return { book: { id: book.id, name: book.name, ...(book.author === undefined ? {} : { author: book.author }), ...(book.activeEditionKey === undefined ? {} : { activeEditionKey: book.activeEditionKey }) },
+      edition: { editionKey: edition.editionKey, ...(typeof edition.metadata.name === 'string' ? { name: edition.metadata.name } : {}) } }
+  }
   public async getReadingEntry(userId: string, bookId: string) { const book = await this.getBook(userId, bookId); return book ? { activeEditionKey: book.activeEditionKey ?? null } : null }
   public async listEditionOptions(userId: string, bookId: string) {
     return Promise.all((await this.listEditions(userId, bookId)).map(async (edition) => ({ editionKey: edition.editionKey, sourceId: edition.sourceId, sourceName: await this.getSourceDisplayName(userId, edition.sourceId) ?? edition.sourceId })))
@@ -1062,7 +1132,8 @@ export class MemoryReaderRepository implements ReaderRepository {
     const books = new Map([...this.books.values()].filter(({ book }) => book.userId === userId).map(({ book }) => [book.id, book]))
     return structuredClone(markPage([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + query.kind + ':')).map(([, row]) => { const book = books.get(row.bookId); return book ? { ...row, bookName: book.name, author: book.author ?? null } : row }), query))
   }
-  public async listReadingMarkSummaries(userId: string, query: MarkQuery) { const page = await this.listReadingMarks(userId, query); return { ...page, items: page.items.map(markSummary) } }
+  public async listReaderMarks(userId: string, query: MarkQuery) { const page = await this.listReadingMarks(userId, { ...query, deleted: false }); return page.items.map((item) => ({ ...readerMark(item), ...(query.id ? { sourceName: item.sourceName } : {}) })) }
+  public async listReadingMarkSummaries(userId: string, query: MarkQuery) { const page = await this.listReadingMarks(userId, query); return { ...page, items: page.items.map(markListItem) } }
   public async getCachedMarkChapter(userId: string, bookId: string, id: string) { const row = this.readingMarks.get(userId + ':annotations:' + id); return row?.bookId === bookId ? structuredClone({ cachedChapter: row.cachedChapter }) : null }
   public async mutateReadingMark(userId: string, command: MarkCommand) {
     const rows = [...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + command.kind + ':')).map(([, row]) => row)
@@ -1145,13 +1216,13 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async getSourceManagementStats(userId: string): Promise<SourceManagementStats> {
     return sourceManagementStats(this.allSources(userId))
   }
-  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean }): Promise<SourceManagementPage> {
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] }): Promise<SourceManagementPage> {
     const query = params.query.toLocaleLowerCase()
     const allRows = this.allSources(userId)
     const enabledCount = allRows.filter((source) => source.enabled).length
     const rows = allRows.filter((source) => {
       const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
-      return matchesQuery && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
+      return matchesQuery && (params.domain === undefined || sourceDomainInfo(source.sourceId).key === sourceDomainInfo(params.domain).key) && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId)) && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
     }).sort((a, b) => readInteger(a.normalizedSource.customOrder, 0) - readInteger(b.normalizedSource.customOrder, 0) || a.name.localeCompare(b.name, 'zh-Hans') || a.sourceId.localeCompare(b.sourceId))
     const offset = (params.page - 1) * params.pageSize
     return { sources: (params.all === true ? rows : rows.slice(offset, offset + params.pageSize)).map((source) => ({ ...managedSummary(source, this.sourceRevision(userId, source.sourceId), 'account'), ...this.importHistory.sourceMetadata(userId, source) })), page: params.all === true ? 1 : params.page, pageSize: params.all === true ? Math.max(1, rows.length) : params.pageSize, total: rows.length, enabledCount }
@@ -1447,13 +1518,23 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async listBooks(userId: string): Promise<Array<{ book: StoredBook; edition: StoredEdition }>> { return [...this.books.values()].filter((item) => item.book.userId === userId && item.book.activeEditionKey === item.edition.editionKey).sort((a, b) => b.book.updatedAt.localeCompare(a.book.updatedAt)) }
   public async getBook(userId: string, bookId: string): Promise<StoredBook | null> { return [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId)?.book ?? null }
   public async listEditions(userId: string, bookId: string): Promise<StoredEdition[]> { return [...this.books.values()].filter((item) => item.book.userId === userId && item.book.id === bookId).map((item) => item.edition).sort((a, b) => a.editionKey.localeCompare(b.editionKey)) }
+  public async activateEdition(userId: string, bookId: string, editionKey: string) { const edition = await this.setActiveEdition(userId, bookId, editionKey); return edition ? { editionKey: edition.editionKey } : null }
+  public async getEditionSource(userId: string, bookId: string, editionKey: string) { const edition = await this.getEdition(userId, bookId, editionKey); return edition ? { sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint } : null }
+  public async getContentDisplay(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<CachedReadingContent | null> {
+    const cached = this.contents.get(`${userId}:${editionKey}:${tocRevision}:${chapterId}`)
+    return cached ? { tocRevision: cached.tocRevision, sourceFingerprint: cached.sourceFingerprint, content: readingContent(cached.content, chapterId), ...(cached.content.truncated === undefined ? {} : { truncated: cached.content.truncated }) } : null
+  }
   public async setActiveEdition(userId: string, bookId: string, editionKey: string): Promise<StoredEdition | null> { const selected = [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId && item.edition.editionKey === editionKey); if (selected === undefined) return null; const updatedBook = { ...selected.book, activeEditionKey: editionKey, updatedAt: new Date().toISOString() }; for (const [key, item] of this.books) if (item.book.userId === userId && item.book.id === bookId) this.books.set(key, { ...item, book: updatedBook }); return selected.edition }
   public async getEdition(userId: string, bookId: string, editionKey?: string): Promise<StoredEdition | null> { const item = [...this.books.values()].find((value) => value.book.userId === userId && value.book.id === bookId && (editionKey === undefined || value.edition.editionKey === editionKey)); return item?.edition ?? null }
-  public async getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string): Promise<ChapterContext | null> {
+  public async getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string, _display?: boolean): Promise<ChapterContext | null> {
     const toc = await this.getToc(userId, bookId, editionKey)
     if (toc === null) return null
     const index = toc.chapters.findIndex((chapter) => createHash('sha256').update(`${chapter.chapterUrl}\u0000${chapter.index}`).digest('hex') === chapterId)
     return { revision: toc.revision, sourceFingerprint: toc.sourceFingerprint, ...(index < 0 ? {} : { chapter: toc.chapters[index], ...(toc.chapters[index + 1] === undefined ? {} : { nextChapterUrl: toc.chapters[index + 1]!.chapterUrl }) }) }
+  }
+  public async getTocSummary(userId: string, bookId: string, editionKey: string): Promise<CachedTocSummary | null> {
+    const toc = this.tocs.get(`${userId}:${bookId}:${editionKey}`)
+    return toc === undefined ? null : tocSummary(toc)
   }
   public async getToc(userId: string, bookId: string, editionKey: string): Promise<StoredToc | null> { return this.tocs.get(`${userId}:${bookId}:${editionKey}`) ?? null }
   public async saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc> { const value = { ...toc, userId, updatedAt: new Date().toISOString() }; this.tocs.set(`${userId}:${toc.bookId}:${toc.editionKey}`, value); return value }
@@ -1534,7 +1615,7 @@ function toRuntimeLease(row: SourceRuntimeRow, leaseToken: string): SourceRuntim
 function runtimeStateKey(userId: string, sourceId: string, sourceFingerprint: string): string { return JSON.stringify([userId, sourceId, sourceFingerprint]) }
 function cloneRuntimeSnapshot(snapshot: RuntimeStateSnapshot): RuntimeStateSnapshot { return structuredClone(snapshot) }
 function toUserSource(row: UserSourceRow): StoredSourceRecord { return { sourceUuid: row.sourceUuid, sourceRevision: row.revision, ...(row.importLinkId ? { importLinkId: row.importLinkId } : {}), ...(row.currentImportItemId ? { currentImportItemId: row.currentImportItemId } : {}), sourceId: row.sourceId, name: typeof row.normalizedSource.bookSourceName === 'string' ? row.normalizedSource.bookSourceName : row.sourceId, ...(typeof row.normalizedSource.bookSourceGroup === 'string' ? { group: row.normalizedSource.bookSourceGroup } : {}), fingerprint: row.fingerprint, enabled: row.enabled, rawSource: row.rawSource, normalizedSource: row.normalizedSource } }
-function managedSummary(source: StoredSourceRecord, sourceRevision: string, origin: 'account', customOrder = readInteger(source.normalizedSource.customOrder, 0)): ManagedSourceSummary { const time = readTimestamp(source.normalizedSource.lastUpdateTime); const author = [source.normalizedSource.author, source.normalizedSource.bookSourceAuthor].find((value): value is string => typeof value === 'string' && value.trim().length > 0); return { ...(author === undefined ? {} : { author: author.trim() }), ...(source.sourceUuid ? { sourceUuid: source.sourceUuid } : {}), ...(source.importLinkId ? { importLinkId: source.importLinkId } : {}), sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled, customOrder, sourceRevision, origin, ...(time === undefined ? {} : { lastUpdateTime: time }) } }
+export function managedSummary(source: StoredSourceRecord, sourceRevision: string, origin: 'account', customOrder = readInteger(source.normalizedSource.customOrder, 0)): ManagedSourceSummary { const time = readTimestamp(source.normalizedSource.lastUpdateTime); const author = [source.normalizedSource.author, source.normalizedSource.bookSourceAuthor].find((value): value is string => typeof value === 'string' && value.trim().length > 0); return { ...(author === undefined ? {} : { author: author.trim() }), ...(source.sourceUuid ? { sourceUuid: source.sourceUuid } : {}), ...(source.importLinkId ? { importLinkId: source.importLinkId } : {}), sourceId: source.sourceId, name: source.name, ...(source.group === undefined ? {} : { group: source.group }), fingerprint: source.fingerprint, enabled: source.enabled, customOrder, sourceRevision, origin, ...(time === undefined ? {} : { lastUpdateTime: time }) } }
 function readInteger(value: unknown, fallback: number): number { return typeof value === 'number' && Number.isSafeInteger(value) ? value : fallback }
 function readTimestamp(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined }
 function sameStringSet(left: string[], right: string[]): boolean { return left.length === right.length && left.every((value) => right.includes(value)) }
@@ -1807,4 +1888,10 @@ function sourceManagementStats(sources: Array<{ sourceId: string; enabled: boole
     if (source.enabled) enabledDomains.add(key)
   }
   return { total: sources.length, domainCount: domains.size, enabledDomainCount: enabledDomains.size }
+}
+
+export function tocSummary(toc: StoredToc): CachedTocSummary {
+  return { bookId: toc.bookId, editionKey: toc.editionKey, sourceFingerprint: toc.sourceFingerprint, revision: toc.revision,
+    chapters: toc.chapters.map(({ chapterUrl, index, title, isVolume, isVip }) => ({ chapterId: createHash('sha256').update(`${chapterUrl}\u0000${index}`).digest('hex'), chapterUrl, index, title, ...(isVolume === undefined ? {} : { isVolume }), ...(isVip === undefined ? {} : { isVip }) })),
+    ...(toc.truncated === undefined ? {} : { truncated: toc.truncated }) }
 }

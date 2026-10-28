@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import postgres from 'postgres'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
-import { PostgresReaderRepository } from '../../server/db/repository.ts'
+import { tocSummary, PostgresReaderRepository } from '../../server/db/repository.ts'
 import { closeReaderDb } from '../../server/db/client.ts'
 import type { StoredCandidate } from '../../server/domain/types.ts'
 
@@ -31,6 +31,25 @@ test('real migrations, cache persistence, RLS and authenticated source API', { s
   const candidate: StoredCandidate = { sourceId: 'https://8.8.8.8/source', sourceFingerprint: 'fp', candidate: { sourceId: 'https://8.8.8.8/source', bookUrl: 'https://8.8.8.8/book', name: '测试书', author: '作者', rawFields: { cacheToken: 'runtime-marker' }, traceRef: 'fixture', variable: '{"token":"runtime-marker"}', infoPage: { body: '详情正文不应缓存', requestUrl: 'url', responseUrl: 'url' } } }
   const metadata = { ...candidate.candidate, emptyFields: [], fieldErrors: {} }
   const created = await repository.createBook(userA, { candidate, metadata, editionKey: 'edition-a', sourceFingerprint: 'fp' })
+  const readingInfo = await repository.getBookReadingInfo(userA, created.book.id)
+  assert.deepEqual(readingInfo, { book: { id: created.book.id, name: '测试书', author: '作者', activeEditionKey: 'edition-a' }, edition: { editionKey: 'edition-a', name: '测试书' } })
+  assert.equal(await repository.getBookReadingInfo(userB, created.book.id), null)
+  assert.equal(await repository.getBookReadingInfo(userA, created.book.id, 'missing'), null)
+  const displayChapter = { sourceId: candidate.sourceId, bookUrl: metadata.bookUrl, chapterUrl: 'https://8.8.8.8/chapter-中文', index: 0, title: '第一章', isVip: false, isVolume: true, rawFields: { ignored: '内部数据' }, traceRef: 'internal' }
+  const savedToc = await repository.saveToc(userA, { userId: userA, bookId: created.book.id, editionKey: 'edition-a', sourceFingerprint: 'fp', revision: 'r1', chapters: [displayChapter], bookPatch: { lastCheckTime: 1, totalChapterNum: 1 }, bookAfter: metadata, truncated: true })
+  const displayId = tocSummary(savedToc).chapters[0]!.chapterId
+  await repository.saveContent(userA, { userId: userA, bookId: created.book.id, editionKey: 'edition-a', tocRevision: 'r1', sourceFingerprint: 'fp', chapterId: displayId, content: { chapter: displayChapter, contentType: 'text', raw: '原始正文', cleaned: '展示正文', pages: ['展示正文'], resources: [], truncated: true } })
+  const display = await repository.getContentDisplay(userA, 'edition-a', 'r1', displayId)
+  assert.equal(display?.content.cleaned, '展示正文')
+  assert.equal(display?.content.chapter.chapterId, displayId)
+  assert.equal(display?.truncated, true)
+  assert.equal('raw' in display!.content, false)
+  assert.equal('pages' in display!.content, false)
+  assert.equal(await repository.getContentDisplay(userB, 'edition-a', 'r1', displayId), null)
+  assert.deepEqual(await repository.activateEdition(userA, created.book.id, 'edition-a'), { editionKey: 'edition-a' })
+  assert.equal(await repository.activateEdition(userB, created.book.id, 'edition-a'), null)
+  assert.deepEqual(await repository.getTocSummary(userA, created.book.id, 'edition-a'), tocSummary(savedToc))
+  assert.equal(await repository.getTocSummary(userB, created.book.id, 'edition-a'), null)
   await repository.saveBookSourceCandidates(userA, created.book.id, [candidate, candidate])
   await repository.saveBookSourceCandidates(userA, created.book.id, [candidate])
   const cached = await repository.listBookSourceCandidates(userA, created.book.id)

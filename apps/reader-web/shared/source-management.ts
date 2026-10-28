@@ -3,6 +3,7 @@ import { IMPORT_FILE_MAX_BYTES } from './source-import-limits.ts'
 
 export const sourceManagementStatusSchema = z.enum(['all', 'enabled', 'disabled'])
 export const sourceManagementPageSchema = z.object({
+  domain: z.string().trim().min(1).max(4000).optional(),
   all: z.enum(['true', 'false']).optional().transform((value) => value === 'true'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(50),
@@ -146,3 +147,10 @@ export interface ImportItemsPage { batch: ImportBatch; items: ImportHistoryItem[
 export interface UndoPreviewItem { itemId: string; name: string; action: ImportHistoryItem['action']; expectedRevision: string | null; canUndo: boolean; reason: string }
 export interface UndoPreview { items: UndoPreviewItem[]; removable: number; restorable: number }
 export interface UndoImportResult { affected: number; batchId: string; undoStatus: ImportBatch['undoStatus'] }
+
+export type ReadingSourceSummary = Pick<ManagedSourceSummary, 'sourceId' | 'name' | 'group' | 'enabled' | 'customOrder' | 'sourceRevision' | 'lastUpdateTime' | 'importPriority'>
+
+export function readingSourceSummary(source: ManagedSourceSummary): ReadingSourceSummary {
+  const { sourceId, name, group, enabled, customOrder, sourceRevision, lastUpdateTime, importPriority } = source
+  return { sourceId, name, enabled, customOrder, sourceRevision, ...(group === undefined ? {} : { group }), ...(lastUpdateTime === undefined ? {} : { lastUpdateTime }), ...(importPriority === undefined ? {} : { importPriority }) }
+}

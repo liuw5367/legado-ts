@@ -17,7 +17,7 @@ React Router 页面与组件
 
 `server/app.ts` 创建 Hono 应用，并通过 `requireUser` 使用 Supabase Auth 校验 Bearer token，将可信 `userId` 放入请求上下文。除 `/api/health` 外的业务接口都先执行该校验。API 只接受领域输入，错误通过稳定 code 和 HTTP 状态返回；source-core 的 `capability-missing`、取消和上游失败不会被统一改写为空结果。
 
-当前接口分为书源管理（列表、导入预览/确认、启用/禁用/删除）、设置、搜索（创建、查询、SSE、续页、取消）、书籍与来源版本、书架、目录、正文和阅读位置。页面通过 `apiFetch` 自动加入当前会话令牌，搜索流使用 `SseDecoder` 逐事件更新候选和进度。
+当前接口分为书源管理（列表、导入预览/确认、启用/禁用/删除）、设置、搜索（创建、查询、SSE、续页、取消）、书籍与来源版本、书架、目录、正文和阅读位置。页面通过 `apiFetch` 自动加入当前会话令牌，搜索流使用 `SseDecoder` 逐事件更新候选和进度。`source-result` 在来源首次命中时附带 `sourceSummary`，同一 SSE 响应内每个来源只发送一次摘要；两个页面只在用户提交搜索后，由创建搜索任务接口查询账号的全部可用书源；进入页面不预查搜索范围。流式摘要复用执行该来源时已读取的书源数据，不额外查询管理摘要。本书来源接口用一次按来源 ID 限定的摘要查询完成指纹校验和 `sourceSummaries` 展示信息组装，切换页展开域名时通过 `GET /api/source-management?all=true&domain=<sourceId>` 按账号查询该域名的版本。阅读摘要只包含展示、排序及版本切换需要的字段，不返回导入地址、导入时间和管理指纹。
 
 ## 运行时与会话
 

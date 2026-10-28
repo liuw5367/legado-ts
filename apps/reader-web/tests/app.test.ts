@@ -83,7 +83,7 @@ test('封面 API 通过真实认证与路由写入，仅修改当前账号的用
   const source = (await memory.listSourcesForUser(userId))[0]!
   const metadata = { sourceId: source.sourceId, bookUrl: 'https://history.example/book', name: '封面测试书', author: '作者', coverUrl: 'https://covers.test/original.jpg', rawFields: {}, traceRef: 'cover-api', emptyFields: [], fieldErrors: {} }
   const created = await memory.createBook(userId, { candidate: { sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate: metadata }, metadata, sourceFingerprint: source.fingerprint, editionKey: 'edition-cover-api' })
-  for (const method of ['getBook', 'listEditions', 'listBookSourceCandidates', 'listSourceSummaries', 'setCustomCover'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  for (const method of ['getBook', 'listEditions', 'listBookSourceCandidates', 'listSourceSummaries', 'listManagedSources', 'setCustomCover'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
   const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
   process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
   t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
@@ -117,7 +117,7 @@ test('截断的目录和正文在接口响应里带 runtimeWarning', async (t) =
   const chapterId = chapterIdFor(chapter)
   await memory.saveToc(userId, { userId, bookId: created.book.id, editionKey: created.edition.editionKey, sourceFingerprint: source.fingerprint, revision: 'r-truncated-api', chapters: [chapter], bookPatch: { lastCheckTime: Date.now(), totalChapterNum: 1 }, truncated: true })
   await memory.saveContent(userId, { userId, bookId: created.book.id, editionKey: created.edition.editionKey, chapterId, tocRevision: 'r-truncated-api', sourceFingerprint: source.fingerprint, content: { chapter: { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: chapter.chapterUrl, index: 0 }, contentType: 'text', raw: '截断正文', cleaned: '截断正文', pages: ['截断正文'], resources: [], truncated: true } })
-  for (const method of ['getEdition', 'getSourceForUser', 'getToc', 'getChapterContext', 'getContent'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  for (const method of ['getEdition', 'getSourceForUser', 'getEditionSource', 'getContentDisplay', 'listSourceSummaries', 'getTocSummary', 'getToc', 'getChapterContext', 'getContent'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
   const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
   process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
   t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
@@ -125,7 +125,10 @@ test('截断的目录和正文在接口响应里带 runtimeWarning', async (t) =
   const headers = { Authorization: 'Bearer fixture-owner' }
   const toc = await app.request('http://localhost/api/books/' + created.book.id + '/toc?editionKey=' + encodeURIComponent(created.edition.editionKey), { headers })
   assert.equal(toc.status, 200)
-  assert.match(((await toc.json()) as { toc: { runtimeWarning?: string } }).toc.runtimeWarning ?? '', /截断/u)
+  const tocBody = (await toc.json()).toc
+  assert.match(tocBody.runtimeWarning ?? '', /截断/u)
+  assert.deepEqual(Object.keys(tocBody).sort(), ['bookId', 'chapters', 'editionKey', 'revision', 'runtimeWarning', 'sourceFingerprint'])
+  assert.deepEqual(tocBody.chapters, [{ chapterId, chapterUrl: chapter.chapterUrl, index: 0, title: '第一章' }])
   const content = await app.request('http://localhost/api/books/' + created.book.id + '/chapters/' + chapterId + '?editionKey=' + encodeURIComponent(created.edition.editionKey), { headers })
   assert.equal(content.status, 200)
   assert.match(((await content.json()) as { content: { runtimeWarning?: string } }).content.runtimeWarning ?? '', /截断/u)
@@ -192,10 +195,10 @@ test('正文缓存命中后只用轻量章节上下文校正标题，不读取�
   const chapter = { sourceId, bookUrl: sourceId + '/book', chapterUrl: sourceId + '/chapter', index: 0, title: '当前目录标题', rawFields: {}, traceRef: 'fixture' }
   const chapterId = chapterIdFor(chapter)
   const cached = { userId: '11111111-1111-4111-8111-111111111111', bookId: 'book', editionKey: 'edition', chapterId, tocRevision: 'rev', sourceFingerprint: 'fp', updatedAt: new Date().toISOString(), content: { chapter: { ...chapter, title: '旧缓存标题' }, cleaned: '缓存正文', raw: '缓存正文', contentType: 'text' as const, pages: ['缓存正文'], resources: [] } }
-  t.mock.method(PostgresReaderRepository.prototype, 'getEdition', async () => ({ sourceId }))
-  t.mock.method(PostgresReaderRepository.prototype, 'getSourceForUser', async () => ({ sourceId, fingerprint: 'fp', enabled: true }))
+  t.mock.method(PostgresReaderRepository.prototype, 'getEditionSource', async () => ({ sourceId }))
+  t.mock.method(PostgresReaderRepository.prototype, 'listSourceSummaries', async () => [{ sourceId, fingerprint: 'fp', enabled: true }])
   const context = t.mock.method(PostgresReaderRepository.prototype, 'getChapterContext', async () => ({ revision: 'rev', sourceFingerprint: 'fp', chapter }))
-  t.mock.method(PostgresReaderRepository.prototype, 'getContent', async () => cached)
+  t.mock.method(PostgresReaderRepository.prototype, 'getContentDisplay', async () => ({ ...cached, content: { chapter: { chapterId, chapterUrl: chapter.chapterUrl, index: 0 }, contentType: 'text', cleaned: '缓存正文', resources: [] } }))
   const fullToc = t.mock.method(PostgresReaderRepository.prototype, 'getToc', async () => { throw new Error('正文接口不能读取完整目录') })
   const previousUrl = process.env.SUPABASE_URL, previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
   process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
@@ -207,6 +210,8 @@ test('正文缓存命中后只用轻量章节上下文校正标题，不读取�
   const response = await app.request(`http://localhost/api/books/book/chapters/${chapterId}?editionKey=edition`, { headers: { Authorization: 'Bearer fixture-token' } })
   assert.equal(response.status, 200)
   const result = await response.json()
+  assert.deepEqual(Object.keys(result.content).sort(), ['content', 'tocRevision'])
+  assert.deepEqual(Object.keys(result.content.content).sort(), ['chapter', 'cleaned', 'contentType', 'resources'])
   assert.equal(result.content.content.cleaned, '缓存正文')
   assert.equal(result.content.content.chapter.title, '当前目录标题')
   assert.equal(result.content.content.chapter.chapterId, chapterId)
@@ -234,4 +239,76 @@ test('轻量身份、阅读入口和版本选项通过真实路由认证且按�
   assert.deepEqual(await (await request(paths[2]!)).json(), { editions: [{ editionKey: 'e', sourceId: metadata.sourceId, sourceName: metadata.sourceId }] })
   assert.deepEqual(await (await request(paths[0]!, 'other-entry')).json(), { books: [] })
   for (const path of paths.slice(1)) assert.equal((await request(path, 'other-entry')).status, 404)
+})
+
+test('同域版本接口只返回该账号相关版本的精简摘要', async (t) => {
+  const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const { importBatch, sourceDefinition } = await import('./fixtures/import-history.ts')
+  const memory = new MemoryReaderRepository()
+  const userId = '11111111-1111-4111-8111-111111111111'
+  await importBatch(memory, userId, sourceDefinition())
+  const source = (await memory.listSourcesForUser(userId))[0]!
+  t.mock.method(PostgresReaderRepository.prototype, 'listManagedSources', memory.listManagedSources.bind(memory))
+  const previousUrl = process.env.SUPABASE_URL, previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
+  t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
+  t.mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => new Response(JSON.stringify({ id: new Headers(init?.headers).get('authorization') === 'Bearer other-domain' ? 'other-user' : userId }), { headers: { 'Content-Type': 'application/json' } }))
+  const path = '/api/source-management?all=true&domain=' + encodeURIComponent(source.sourceId)
+  assert.equal((await app.request(path)).status, 401)
+  const response = await app.request(path, { headers: { Authorization: 'Bearer owner-domain' } })
+  assert.equal(response.status, 200)
+  const page = await response.json()
+  assert.equal(page.sources.length, 1)
+  assert.equal(page.sources[0].sourceId, source.sourceId)
+  assert.equal('fingerprint' in page.sources[0], false)
+  assert.equal('importDisplayUrl' in page.sources[0], false)
+  const other = await app.request(path, { headers: { Authorization: 'Bearer other-domain' } })
+  assert.deepEqual((await other.json()).sources, [])
+  const unrelated = await app.request('/api/source-management?all=true&domain=https%3A%2F%2Funrelated.test', { headers: { Authorization: 'Bearer owner-domain' } })
+  assert.deepEqual((await unrelated.json()).sources, [])
+})
+
+test('阅读基础信息接口只调用轻量查询，按账号和版本隔离且不激活来源', async (t) => {
+  const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const memory = new MemoryReaderRepository()
+  const userId = '11111111-1111-4111-8111-111111111111'
+  const metadata = { sourceId: 'https://reading.test', bookUrl: '/book', name: '版本书名', author: '作者', intro: '无需传输的长简介'.repeat(1000), variable: 'private', rawFields: {}, traceRef: '', emptyFields: [], fieldErrors: {} }
+  const { book } = await memory.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: 'one', sourceFingerprint: 'fp' })
+  await memory.saveEdition(userId, book.id, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata: { ...metadata, name: '另一个版本' }, editionKey: 'two', sourceFingerprint: 'fp' })
+  const query = t.mock.method(PostgresReaderRepository.prototype, 'getBookReadingInfo', memory.getBookReadingInfo.bind(memory))
+  for (const method of ['getBook', 'getDisplayEdition', 'getDisplayPosition', 'isOnBookshelf', 'getSourceDisplayName'] as const) t.mock.method(PostgresReaderRepository.prototype, method, async () => { throw new Error('不得读取完整详情') })
+  const previousUrl = process.env.SUPABASE_URL, previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
+  t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
+  t.mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => new Response(JSON.stringify({ id: new Headers(init?.headers).get('authorization') === 'Bearer other-reading' ? 'other-user' : userId }), { headers: { 'Content-Type': 'application/json' } }))
+  const path = `/api/books/${book.id}/reading-info`
+  assert.equal((await app.request(path)).status, 401)
+  assert.equal(query.mock.callCount(), 0)
+  const request = (suffix = '', token = 'owner-reading') => app.request(path + suffix, { headers: { Authorization: 'Bearer ' + token } })
+  const response = await request()
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { book: { id: book.id, name: book.name, author: '作者', activeEditionKey: 'one' }, edition: { editionKey: 'one', name: '版本书名' } })
+  assert.equal(query.mock.callCount(), 1)
+  const selected = await request('?editionKey=two')
+  assert.equal((await selected.json()).edition.name, '另一个版本')
+  assert.equal((await memory.getBook(userId, book.id))?.activeEditionKey, 'one')
+  assert.equal((await request('?editionKey=missing')).status, 404)
+  assert.equal((await request('', 'other-reading')).status, 404)
+})
+
+test('切换当前版本只返回标识，不读取或返回版本 metadata', async (t) => {
+  const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const memory = new MemoryReaderRepository()
+  const userId = '11111111-1111-4111-8111-111111111111'
+  const metadata = { sourceId: 'https://activate.test', bookUrl: '/book', name: '书', variable: 'private', rawFields: {}, traceRef: '', emptyFields: [], fieldErrors: {} }
+  const { book } = await memory.createBook(userId, { candidate: { sourceId: metadata.sourceId, sourceFingerprint: 'fp', candidate: metadata }, metadata, editionKey: 'edition', sourceFingerprint: 'fp' })
+  t.mock.method(PostgresReaderRepository.prototype, 'activateEdition', memory.activateEdition.bind(memory))
+  t.mock.method(PostgresReaderRepository.prototype, 'setActiveEdition', async () => { throw new Error('不能读取完整版本') })
+  const previousUrl = process.env.SUPABASE_URL, previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
+  t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ id: userId }), { headers: { 'Content-Type': 'application/json' } }))
+  const response = await app.request(`/api/books/${book.id}/edition`, { method: 'PUT', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: JSON.stringify({ editionKey: 'edition' }) })
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { edition: { editionKey: 'edition' } })
 })

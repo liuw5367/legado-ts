@@ -1,3 +1,4 @@
+import type { BookReadingInfo } from '../../shared/book-details.ts'
 import { EmptyState } from '../components/empty-state.tsx'
 import { List } from 'lucide-react'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
@@ -13,7 +14,7 @@ import { Badge } from '../components/ui/badge.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Select } from '../components/ui/select.tsx'
-import { apiFetch, type ApiBook, type ApiChapter, type ApiPosition, type ApiToc } from '../lib/api.ts'
+import { apiFetch, type ApiTocChapter, type ApiPosition, type ApiToc } from '../lib/api.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { isCurrentToc } from '../lib/reader-interactions.ts'
@@ -29,7 +30,7 @@ export function TocPage() {
   const [searchParams] = useSearchParams()
   const editionKey = searchParams.get('editionKey') ?? ''
   const [toc, setToc] = useState<ApiToc | null>(null)
-  const [book, setBook] = useState<ApiBook | null>(null)
+  const [book, setBook] = useState<BookReadingInfo['book'] | null>(null)
   const [editions, setEditions] = useState<Array<{ editionKey: string; sourceId: string; sourceName: string }>>([])
   const [position, setPosition] = useState<ApiPosition | null>(null)
   const [filter, setFilter] = useState('')
@@ -60,7 +61,7 @@ export function TocPage() {
       ])
       if (requestId !== requestIdRef.current) return
       cache.setPosition(bookId, editionKey, positionResult.position)
-      setToc(snapshot.toc); setBook(snapshot.details.book); setEditions(options); setPosition(positionResult.position); setWarning(snapshot.toc.runtimeWarning ?? '')
+      setToc(snapshot.toc); setBook(snapshot.info.book); setEditions(options); setPosition(positionResult.position); setWarning(snapshot.toc.runtimeWarning ?? '')
     } catch (reason) { if (requestId === requestIdRef.current) setError(reason instanceof Error ? reason.message : '目录加载失败') }
     finally { if (requestId === requestIdRef.current) { setLoading(false); setRefreshing(false) } }
   }
@@ -76,7 +77,7 @@ export function TocPage() {
   const chapters = currentToc?.chapters.filter((chapter) => chapter.isVolume !== true) ?? []
   const currentPosition = cache.getPosition(bookId, editionKey) ?? position
   const currentChapter = currentPosition === null ? undefined : chapters.find((chapter) => chapter.chapterId === currentPosition.chapterId)
-  const displaySource = editions.find((edition) => edition.editionKey === (editionKey || snapshot?.details.edition.editionKey))?.sourceName ?? '当前来源'
+  const displaySource = editions.find((edition) => edition.editionKey === (editionKey || snapshot?.info.edition.editionKey))?.sourceName ?? '当前来源'
   const filteredEntries = useMemo(() => filterEntries(currentToc?.chapters ?? [], filter), [filter, currentToc])
   const orderedEntries = useMemo(() => reversed ? reverseEntries(filteredEntries) : filteredEntries, [filteredEntries, reversed])
   useEffect(() => {
@@ -114,11 +115,11 @@ export function TocPage() {
   </section>
 }
 
-function filterEntries(entries: ApiChapter[], filter: string): ApiChapter[] {
+function filterEntries(entries: ApiTocChapter[], filter: string): ApiTocChapter[] {
   const normalized = normalizeChapterText(filter)
   if (normalized.length === 0) return entries
-  const filtered: ApiChapter[] = []
-  let volume: ApiChapter | undefined
+  const filtered: ApiTocChapter[] = []
+  let volume: ApiTocChapter | undefined
   let volumeHasMatch = false
   for (const entry of entries) {
     if (entry.isVolume === true) { volume = entry; volumeHasMatch = false; continue }
@@ -131,9 +132,9 @@ function filterEntries(entries: ApiChapter[], filter: string): ApiChapter[] {
 
 function normalizeChapterText(value: string): string { return value.normalize('NFKC').toLocaleLowerCase().trim() }
 
-function reverseEntries(entries: ApiChapter[]): ApiChapter[] {
-  const groups: ApiChapter[][] = []
-  let current: ApiChapter[] = []
+function reverseEntries(entries: ApiTocChapter[]): ApiTocChapter[] {
+  const groups: ApiTocChapter[][] = []
+  let current: ApiTocChapter[] = []
   for (const entry of entries) {
     if (entry.isVolume === true && current.length > 0) { groups.push(current); current = [] }
     current.push(entry)
@@ -146,4 +147,4 @@ function reverseEntries(entries: ApiChapter[]): ApiChapter[] {
   })
 }
 
-function chapterLink(bookId: string, chapter: ApiChapter, editionKey: string): string { return `/books/${encodeURIComponent(bookId)}/read/${encodeURIComponent(chapter.chapterId)}?editionKey=${encodeURIComponent(editionKey)}` }
+function chapterLink(bookId: string, chapter: ApiTocChapter, editionKey: string): string { return `/books/${encodeURIComponent(bookId)}/read/${encodeURIComponent(chapter.chapterId)}?editionKey=${encodeURIComponent(editionKey)}` }

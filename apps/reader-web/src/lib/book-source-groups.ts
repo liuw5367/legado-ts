@@ -1,6 +1,6 @@
 import type { BookSourceItem } from '../../shared/book-sources.ts'
 import { compareSourceManagementOrder, groupSourcesByDomain, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
-import type { ManagedSourceSummary } from '../../shared/source-management.ts'
+import type { ReadingSourceSummary } from '../../shared/source-management.ts'
 
 export interface BookSourceSearchResultRef {
   sourceId: string
@@ -9,7 +9,7 @@ export interface BookSourceSearchResultRef {
 }
 
 export interface BookSourceImplementation<T extends BookSourceSearchResultRef = BookSourceSearchResultRef> {
-  source: ManagedSourceSummary
+  source: ReadingSourceSummary
   displayName: string
   items: BookSourceItem[]
   searchResults: T[]
@@ -24,7 +24,7 @@ export interface BookSourceDomainGroup<T extends BookSourceSearchResultRef = Boo
   versions: BookSourceImplementation<T>[]
 }
 
-export function groupBookSourcesByDomain<T extends BookSourceSearchResultRef>(managedSources: readonly ManagedSourceSummary[], bookSources: readonly BookSourceItem[], searchResults: readonly T[], activeEditionKey?: string): BookSourceDomainGroup<T>[] {
+export function groupBookSourcesByDomain<T extends BookSourceSearchResultRef>(managedSources: readonly ReadingSourceSummary[], bookSources: readonly BookSourceItem[], searchResults: readonly T[], activeEditionKey?: string): BookSourceDomainGroup<T>[] {
   const itemsBySourceId = new Map<string, BookSourceItem[]>()
   for (const item of bookSources) {
     const items = itemsBySourceId.get(item.sourceId) ?? []

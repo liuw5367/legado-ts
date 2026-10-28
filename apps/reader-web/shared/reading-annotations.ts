@@ -27,14 +27,14 @@ export interface ReadingMark extends Omit<MarkInput, 'expectedVersion'> {
   createdAt: string; updatedAt: string; deletedAt: string | null; version: number
 }
 export type ReadingMarkSummary = Omit<ReadingMark, 'cachedChapter'> & { hasCachedChapter: boolean }
-export interface MarkSummaryPage { items: ReadingMarkSummary[]; nextCursor: string | null }
+export interface MarkSummaryPage { items: ReadingMarkListItem[]; nextCursor: string | null }
 export function markSummary({ cachedChapter, ...mark }: ReadingMark): ReadingMarkSummary { return { ...mark, hasCachedChapter: cachedChapter !== null } }
-export function markSaveInput(mark: ReadingMarkSummary): MarkInput {
+export function markSaveInput(mark: ReaderMark): MarkInput {
   const { editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, color, note, version } = mark
   return { editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, color, note, expectedVersion: version }
 }
 export const readingMarkSchema = markInputSchema.omit({ expectedVersion: true }).extend({ id: z.uuid(), userId: z.uuid(), bookId: z.uuid(), bookName: z.string(), author: z.string().nullable(), sourceName: z.string().min(1).max(256), cachedChapter: cachedChapterSchema.nullable(), createdAt: z.iso.datetime({ offset: true }), updatedAt: z.iso.datetime({ offset: true }), deletedAt: z.iso.datetime({ offset: true }).nullable(), version: z.number().int().min(0) }).strict()
-export interface MarkQuery { kind: MarkKind; id?: string; order?: 'created' | 'position'; bookId?: string; editionKey?: string; chapterUrl?: string; q?: string; deleted?: boolean; cursor?: string; all?: boolean }
+export interface MarkQuery { view?: 'reader'; kind: MarkKind; id?: string; order?: 'created' | 'position'; bookId?: string; editionKey?: string; chapterUrl?: string; q?: string; deleted?: boolean; cursor?: string; all?: boolean }
 export interface MarkPage { items: ReadingMark[]; nextCursor: string | null }
 export type MarkCommand = { action: 'save'; kind: MarkKind; id: string; bookId: string; input: MarkInput; bookName: string; author: string | null; sourceName: string; cachedChapter: CachedChapter | null } | { action: 'delete' | 'restore'; kind: MarkKind; id: string; bookId: string; expectedVersion: number }
 export class MarkError extends Error { public readonly status: 400 | 404 | 409; constructor(status: 400 | 404 | 409, message: string) { super(message); this.status = status } }
@@ -43,7 +43,7 @@ export function sameChapter(a: Pick<ReadingMark, 'editionKey' | 'chapterUrl' | '
 export function rangesOverlap(a: MarkAnchor, b: MarkAnchor) { return comparePoints(a.start, b.end) < 0 && comparePoints(b.start, a.end) < 0 }
 export function markOrder(query: MarkQuery) { return query.order === 'position' }
 function queryIdentity(query: MarkQuery) { return JSON.stringify([query.kind, query.bookId ?? '', query.editionKey ?? '', query.chapterUrl ?? '', (query.q ?? '').trim(), Boolean(query.deleted), query.order ?? 'created']) }
-export function markCursor(row: Omit<ReadingMark, 'cachedChapter'>, query: MarkQuery) { return encodeURIComponent(JSON.stringify({ scope: queryIdentity(query), id: row.id, time: row.createdAt, chapter: row.chapterIndex, paragraph: row.anchor.start.paragraphIndex, offset: row.anchor.start.offset })) }
+export function markCursor(row: Pick<ReadingMark, 'id' | 'createdAt' | 'chapterIndex'> & { anchor: { start: TextPoint } }, query: MarkQuery) { return encodeURIComponent(JSON.stringify({ scope: queryIdentity(query), id: row.id, time: row.createdAt, chapter: row.chapterIndex, paragraph: row.anchor.start.paragraphIndex, offset: row.anchor.start.offset })) }
 export function parseMarkCursor(query: MarkQuery) {
   if (!query.cursor) return null
   try {
@@ -110,4 +110,16 @@ export function validateMarkCollection(rows: ReadingMark[], kind: MarkKind) {
       previous = row
     }
   }
+}
+
+export type ReaderMark = Omit<MarkInput, 'expectedVersion'> & { id: string; version: number }
+export function readerMark(mark: ReaderMark): ReaderMark {
+  const { id, version, editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, color, note } = mark
+  return { id, version, editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, color, note }
+}
+
+export type ReadingMarkListItem = Pick<ReadingMark, 'id' | 'bookId' | 'bookName' | 'chapterTitle' | 'color' | 'note' | 'createdAt' | 'deletedAt' | 'version'> & { excerpt: string; hasCachedChapter: boolean }
+export function markListItem(mark: ReadingMark): ReadingMarkListItem {
+  const { id, bookId, bookName, chapterTitle, color, note, createdAt, deletedAt, version } = mark
+  return { id, bookId, bookName, chapterTitle, color, note, createdAt, deletedAt, version, excerpt: mark.anchor.exact, hasCachedChapter: mark.cachedChapter !== null }
 }

@@ -1,3 +1,4 @@
+import { markListItem, readerMark } from '../shared/reading-annotations.ts'
 import type { Context, Hono } from 'hono'
 import { z } from 'zod'
 import type { ReaderRepository } from './db/repository.ts'
@@ -16,7 +17,7 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
       return c.json({ error: { code: 'server-error', message: '笔记操作失败，请重试' } }, 500)
     }
   }
-  const querySchema = z.object({ q: z.string().max(200).optional(), bookId: z.uuid().optional(), editionKey: z.string().max(2048).optional(), chapterUrl: z.string().max(8192).optional(), cursor: z.string().max(12000).optional(), deleted: z.enum(['true', 'false']).optional() })
+  const querySchema = z.object({ view: z.enum(['reader']).optional(), q: z.string().max(200).optional(), bookId: z.uuid().optional(), editionKey: z.string().max(2048).optional(), chapterUrl: z.string().max(8192).optional(), cursor: z.string().max(12000).optional(), deleted: z.enum(['true', 'false']).optional() })
   const query = (c: Context): MarkQuery => { const q = querySchema.parse(c.req.query()); return { ...Object.fromEntries(Object.entries(q).filter(([key, value]) => key !== 'deleted' && value !== undefined)), kind: 'annotations', deleted: q.deleted === 'true' } }
   app.get('/api/annotations/books', guard(async (c) => {
     const books = await repository().listReadingMarkBooks(c.get('userId'))
@@ -33,7 +34,19 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
     app.get('/api/books/:bookId/' + kind, guard(async (c) => {
       const bookId = z.uuid().parse(c.req.param('bookId')); const repo = repository(); const userId = c.get('userId')
       if (!await repo.getReadingEntry(userId, bookId)) throw new MarkError(404, '书籍不存在')
-      return c.json(await repo.listReadingMarkSummaries(userId, { ...query(c), bookId, kind }))
+      const params = { ...query(c), bookId, kind }
+      if (params.view === 'reader') {
+        if (!params.editionKey || !params.chapterUrl) throw new MarkError(400, '正文标记查询需要版本和章节地址')
+        return c.json({ items: await repo.listReaderMarks(userId, params), nextCursor: null })
+      }
+      return c.json(await repo.listReadingMarkSummaries(userId, params))
+    }))
+    app.get('/api/books/:bookId/' + kind + '/:id', guard(async (c) => {
+      const bookId = z.uuid().parse(c.req.param('bookId')); const id = z.uuid().parse(c.req.param('id')); const repo = repository(); const userId = c.get('userId')
+      if (!await repo.getReadingEntry(userId, bookId)) throw new MarkError(404, '书籍不存在')
+      const [item] = await repo.listReaderMarks(userId, { kind, bookId, id, all: true })
+      if (!item) throw new MarkError(404, '记录不存在')
+      return c.json({ item })
     }))
     app.put('/api/books/:bookId/' + kind + '/:id', guard(async (c) => {
       const bookId = z.uuid().parse(c.req.param('bookId')); const id = z.uuid().parse(c.req.param('id')); const input = markInputSchema.parse(await c.req.json()); const repo = repository(); const userId = c.get('userId')
@@ -46,10 +59,10 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
       if (current) {
         if (!sameAnchor(current.anchor, input.anchor) || (['editionKey', 'chapterUrl', 'sourceFingerprint', 'chapterId', 'chapterIndex', 'chapterTitle', 'tocRevision'] as const).some((key) => current[key] !== input[key])) throw new MarkError(409, '不能修改原文位置，请重新选择')
       } else {
-        const edition = await repo.getEdition(userId, bookId, input.editionKey)
+        const edition = await repo.getEditionSource(userId, bookId, input.editionKey)
         const toc = edition ? await repo.getChapterContext(userId, bookId, input.editionKey, input.chapterId) : null
         const chapter = toc?.chapter?.chapterUrl === input.chapterUrl ? toc.chapter : undefined
-        const content = toc && chapter ? await repo.getContent(userId, input.editionKey, toc.revision, input.chapterId) : null
+        const content = toc && chapter ? await repo.getContentDisplay(userId, input.editionKey, toc.revision, input.chapterId) : null
         if (!edition || edition.sourceFingerprint !== input.sourceFingerprint || !toc || toc.revision !== input.tocRevision || !chapter || chapter.index !== input.chapterIndex || !content || textFingerprint(content.content.cleaned) !== input.anchor.contentHash) throw new MarkError(409, '正文已变化，请重新加载后选择')
         input.chapterTitle = chapter.title ?? ''
         const chapterContent = content.content
@@ -60,17 +73,19 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
 
       }
       if (!sourceName) {
-        const edition = await repo.getEdition(userId, bookId, input.editionKey)
+        const edition = await repo.getEditionSource(userId, bookId, input.editionKey)
         if (!edition) throw new MarkError(409, '书源已变化，请重新加载后选择')
         sourceName = (await repo.getSourceDisplayName(userId, edition.sourceId) ?? edition.sourceId).trim().slice(0, 256) || edition.sourceId.slice(0, 256)
       }
-      return c.json({ item: await repo.mutateReadingMark(userId, { action: 'save', kind, id, bookId, input, bookName: book.name, author: book.author ?? null, sourceName, cachedChapter }) })
+      const item = await repo.mutateReadingMark(userId, { action: 'save', kind, id, bookId, input, bookName: book.name, author: book.author ?? null, sourceName, cachedChapter })
+      return c.json({ item: c.req.query('view') === 'reader' ? readerMark(item) : c.req.query('view') === 'list' ? markListItem(item) : item })
     }))
     for (const action of ['delete', 'restore'] as const) {
       const handler = guard(async (c) => {
         const bookId = z.uuid().parse(c.req.param('bookId')); const id = z.uuid().parse(c.req.param('id')); const input = z.object({ expectedVersion: z.number().int().min(0) }).strict().parse(await c.req.json()); const repo = repository(); const userId = c.get('userId')
         if (!await repo.getReadingEntry(userId, bookId)) throw new MarkError(404, '书籍不存在')
-        return c.json({ item: await repo.mutateReadingMark(userId, { action, kind, id, bookId, expectedVersion: input.expectedVersion }) })
+        const item = await repo.mutateReadingMark(userId, { action, kind, id, bookId, expectedVersion: input.expectedVersion })
+        return c.json({ item: c.req.query('view') === 'reader' ? readerMark(item) : c.req.query('view') === 'list' ? markListItem(item) : item })
       })
       if (action === 'delete') app.delete('/api/books/:bookId/' + kind + '/:id', handler)
       else app.post('/api/books/:bookId/' + kind + '/:id/restore', handler)

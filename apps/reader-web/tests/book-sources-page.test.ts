@@ -40,7 +40,7 @@ function render(candidates: ApiCandidate[], status = 'done', isTargetedSearch = 
     if (name.includes('time-format')) return { formatSourceRuleDateTime }
     if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
     if (name.includes('use-page-resource')) return { usePageLoadEffect() {} }
-    if (name.includes('use-book-search')) return { useBookSearch: () => ({ candidates, searchId: 'search', status, isTargetedSearch, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
+    if (name.includes('use-book-search')) return { useBookSearch: () => ({ sourceSummaries: [], candidates, searchId: 'search', status, isTargetedSearch, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
     if (name.includes('empty-state')) return { EmptyState: 'empty' }
     if (name.includes('loading-state')) return { LoadingState: 'loading' }
     return {}

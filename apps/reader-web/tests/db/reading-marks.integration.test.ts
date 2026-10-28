@@ -1,3 +1,4 @@
+import { readerMark } from '../../shared/reading-annotations.ts'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -33,6 +34,8 @@ test('真实Postgres新增表RLS、约束、游标、并发与回滚', { skip: !
   const input = markInputSchema.parse({ editionKey: 'edition', sourceFingerprint: 'fp', chapterId: 'chapter', chapterUrl: '/chapter', chapterIndex: 0, chapterTitle: '章', tocRevision: 'rev', anchor: createAnchor(['正文'], { paragraphIndex: 0, offset: 0 }, { paragraphIndex: 0, offset: 2 }, 'hash'), note: '100%_字面' })
   const command = { action: 'save' as const, kind: 'annotations' as const, bookId, id: randomUUID(), input, bookName: '书', author: null, sourceName: '书源', cachedChapter: null }
   const saved = await repo.mutateReadingMark(user, command)
+  assert.deepEqual(await repo.listReaderMarks(user, { kind: 'annotations', bookId, editionKey: input.editionKey, chapterUrl: input.chapterUrl }), [readerMark(saved)])
+  assert.deepEqual(await repo.listReaderMarks(other, { kind: 'annotations', bookId, editionKey: input.editionKey, chapterUrl: input.chapterUrl }), [])
   assert.equal((await repo.listReadingMarks(user, { kind: 'annotations', q: '%_' })).items.length, 1)
   assert.equal((await repo.listReadingMarks(other, { kind: 'annotations' })).items.length, 0)
   await client.begin(async (sql) => { await sql`select set_config('app.user_id', ${other}, true)`; assert.equal((await sql`select * from reader.reading_annotations`).length, 0) })

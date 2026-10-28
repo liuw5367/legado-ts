@@ -75,3 +75,74 @@ test('shared failures reject every waiter and permit an explicit retry', async (
   assert.equal((await queue.retry('b', 'e'))?.version, 9)
   assert.equal(calls, 2)
 })
+
+test('翻页停止两秒后只保存最后位置，每次翻页重新计时', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const calls: PositionWrite[] = []
+  const queue = new ReadingPositionQueue(async (write) => { calls.push(write); return position(write) })
+  const first = queue.enqueueDebounced(input)
+  t.mock.timers.tick(1500)
+  const last = queue.enqueueDebounced({ ...input, paragraphIndex: 9, version: 9 })
+  t.mock.timers.tick(1999)
+  await Promise.resolve()
+  assert.equal(calls.length, 0)
+  t.mock.timers.tick(1)
+  const results = await Promise.all([first, last])
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0]?.paragraphIndex, 9)
+  assert.equal(calls[0]?.version, 9)
+  assert.equal(results[0], results[1])
+})
+
+test('离开阅读页立即提交待保存位置，账号销毁丢弃未发任务', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const calls: PositionWrite[] = []
+  const queue = new ReadingPositionQueue(async (write) => { calls.push(write); return position(write) })
+  const first = queue.enqueueDebounced(input)
+  await queue.flush('b', 'e')
+  assert.equal((await first)?.paragraphIndex, 1)
+  t.mock.timers.tick(2000)
+  assert.equal(calls.length, 1)
+  const discarded = queue.enqueueDebounced({ ...input, paragraphIndex: 5 })
+  queue.dispose()
+  assert.equal(await discarded, undefined)
+  t.mock.timers.tick(2000)
+  assert.equal(calls.length, 1)
+})
+
+test('防抖等待与正在发送的位置串行结算，失败后可立即重试', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const calls: PositionWrite[] = []
+  let release!: () => void
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  let fail = false
+  const queue = new ReadingPositionQueue(async (write) => { calls.push(write); if (calls.length === 1) await hold; if (fail) throw new Error('offline'); return position(write) })
+  const first = queue.enqueue(input)
+  await Promise.resolve()
+  const last = queue.enqueueDebounced({ ...input, paragraphIndex: 4 })
+  t.mock.timers.tick(2000)
+  assert.equal(calls.length, 1)
+  release(); await first; await last
+  assert.deepEqual(calls.map((write) => write.version), [0, 1])
+  fail = true
+  const failed = queue.enqueueDebounced({ ...input, paragraphIndex: 8 })
+  const rejected = assert.rejects(failed, /offline/u)
+  await queue.flush(); await rejected
+  fail = false
+  assert.equal((await queue.retry('b', 'e'))?.paragraphIndex, 8)
+})
+
+test('不同书籍的防抖计时相互独立，不提前保存后进入的书籍', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const calls: PositionWrite[] = []
+  const queue = new ReadingPositionQueue(async (write) => { calls.push(write); return position(write) })
+  const first = queue.enqueueDebounced(input)
+  t.mock.timers.tick(1000)
+  const second = queue.enqueueDebounced({ ...input, bookId: 'other' })
+  t.mock.timers.tick(1000)
+  await first
+  assert.deepEqual(calls.map((write) => write.bookId), ['b'])
+  t.mock.timers.tick(1000)
+  await second
+  assert.deepEqual(calls.map((write) => write.bookId), ['b', 'other'])
+})

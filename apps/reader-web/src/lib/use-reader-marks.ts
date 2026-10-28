@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { comparePoints, markSummary, markSaveInput, type MarkAnchor, type ReadingMark, type ReadingMarkSummary, type MarkInput } from '../../shared/reading-annotations.ts'
+import { comparePoints, readerMark, markSaveInput, type MarkAnchor, type ReadingMark, type ReaderMark, type MarkInput } from '../../shared/reading-annotations.ts'
 import { apiFetch, type ApiContent, type ApiToc } from './api.ts'
 import { usePageActivity, usePageLoadEffect, usePageNavigation } from './use-page-resource.ts'
 import { pageIndexForAnchor, type PageLayout } from './reader-pagination.ts'
 import { createAnchor, rangeForAnchor, resolveAnchor, selectedAnchor, textFingerprint, visibleTextPoint } from './reader-annotations.ts'
 
 export function useReaderMarks({ texts, articleRef, bookId, editionKey, chapterId, content, toc, blocked, paged, layout, pageIndex, positionReady, onRestore, onPage, onInteract }: { texts: string[]; articleRef: RefObject<HTMLElement | null>; bookId: string; editionKey: string; chapterId: string; content: ApiContent | null; toc: ApiToc | null; blocked: boolean; paged: boolean; layout: PageLayout; pageIndex: number; positionReady: boolean; onRestore: (point: MarkAnchor['start']) => void; onPage: (page: number) => void; onInteract: () => void }) {
-  const page = usePageActivity(); const navigation = usePageNavigation(); const userId = navigation?.userId; const [params] = useSearchParams(); const [annotations, setAnnotations] = useState<ReadingMarkSummary[]>([]); const [bookmarks, setBookmarks] = useState<ReadingMarkSummary[]>([]); const [selection, setSelection] = useState<{ anchor: MarkAnchor; rect: DOMRect; mark: ReadingMarkSummary | null } | null>(null); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [retry, setRetry] = useState(0); const [viewportVersion, setViewportVersion] = useState(0)
+  const page = usePageActivity(); const navigation = usePageNavigation(); const userId = navigation?.userId; const [params] = useSearchParams(); const [annotations, setAnnotations] = useState<ReaderMark[]>([]); const [bookmarks, setBookmarks] = useState<ReaderMark[]>([]); const [selection, setSelection] = useState<{ anchor: MarkAnchor; rect: DOMRect; mark: ReaderMark | null } | null>(null); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [retry, setRetry] = useState(0); const [viewportVersion, setViewportVersion] = useState(0)
   const identity = JSON.stringify([bookId, editionKey, chapterId, toc?.sourceFingerprint]); const identityRef = useRef(identity); identityRef.current = identity
   const restoreIdentity = JSON.stringify([identity, page?.location.key ?? '']);
   const preservedSelection = useRef<{ anchor: MarkAnchor; rect: DOMRect } | null>(null)
@@ -22,8 +22,8 @@ export function useReaderMarks({ texts, articleRef, bookId, editionKey, chapterI
   useEffect(() => () => { setSelection(null); setEditing(false) }, [page?.id])
   usePageLoadEffect((settle) => {
     if (!content) { settle(); return }
-    const controller = new AbortController(); const query = '?editionKey=' + encodeURIComponent(editionKey) + '&chapterUrl=' + encodeURIComponent(content.chapter.chapterUrl)
-    void Promise.all(['annotations', 'bookmarks'].map((kind) => apiFetch<{ items: ReadingMarkSummary[] }>('/api/books/' + encodeURIComponent(bookId) + '/' + kind + query, { signal: controller.signal }))).then(([a, b]) => { if (controller.signal.aborted) return; if (articleRef.current && !editing) preservedSelection.current = selectedAnchor(articleRef.current, hash); setAnnotations(a!.items); setBookmarks(b!.items); setError('') }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '读取标记失败') }).finally(() => { if (!controller.signal.aborted) settle() })
+    const controller = new AbortController(); const query = '?view=reader&editionKey=' + encodeURIComponent(editionKey) + '&chapterUrl=' + encodeURIComponent(content.chapter.chapterUrl)
+    void Promise.all(['annotations', 'bookmarks'].map((kind) => apiFetch<{ items: ReaderMark[] }>('/api/books/' + encodeURIComponent(bookId) + '/' + kind + query, { signal: controller.signal }))).then(([a, b]) => { if (controller.signal.aborted) return; if (articleRef.current && !editing) preservedSelection.current = selectedAnchor(articleRef.current, hash); setAnnotations(a!.items); setBookmarks(b!.items); setError('') }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '读取标记失败') }).finally(() => { if (!controller.signal.aborted) settle() })
     return () => controller.abort()
   }, [identity, content?.chapter.chapterUrl, hash, toc?.revision, retry], ['notes'])
   useLayoutEffect(() => {
@@ -85,7 +85,7 @@ export function useReaderMarks({ texts, articleRef, bookId, editionKey, chapterI
   }, [params, bookmarks, annotations, identity, content, toc, texts, hash, paged, layout, positionReady, restoreIdentity, page?.active])
   function inputFor(anchor: MarkAnchor, color: ReadingMark['color'], note: string | null): MarkInput {
     if (!content || !toc) throw new Error('正文尚未就绪')
-    return { editionKey, sourceFingerprint: toc.sourceFingerprint, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, chapterTitle: content.chapter.title, tocRevision: toc.revision, anchor, color, note }
+    return { editionKey, sourceFingerprint: toc.sourceFingerprint, chapterId, chapterUrl: content.chapter.chapterUrl, chapterIndex: content.chapter.index, chapterTitle: content.chapter.title ?? '', tocRevision: toc.revision, anchor, color, note }
   }
 
   async function save(color: ReadingMark['color'], note: string | null, throwError = false) {
@@ -94,23 +94,23 @@ export function useReaderMarks({ texts, articleRef, bookId, editionKey, chapterI
     try {
       const existing = selection.mark; const id = existing?.id ?? selectionId.current ?? crypto.randomUUID(); selectionId.current = id
       const input = existing ? { ...markSaveInput(existing), color, note } : inputFor(selection.anchor, color, note)
-      const result = await apiFetch<{ item: ReadingMark }>('/api/books/' + encodeURIComponent(bookId) + '/annotations/' + id, { method: 'PUT', body: JSON.stringify(input) }, userId)
-      if (identityRef.current === ownIdentity) { setAnnotations((rows) => [...rows.filter((r) => r.id !== result.item.id), markSummary(result.item)]); setSelection(null); window.getSelection()?.removeAllRanges() }
+      const result = await apiFetch<{ item: ReaderMark }>('/api/books/' + encodeURIComponent(bookId) + '/annotations/' + id + '?view=reader', { method: 'PUT', body: JSON.stringify(input) }, userId)
+      if (identityRef.current === ownIdentity) { setAnnotations((rows) => [...rows.filter((r) => r.id !== result.item.id), readerMark(result.item)]); setSelection(null); window.getSelection()?.removeAllRanges() }
     } catch (reason) { if (identityRef.current === ownIdentity) setError(reason instanceof Error ? reason.message : '保存失败'); if (throwError) throw reason } finally { if (identityRef.current === ownIdentity) setBusy(false) }
   }
   async function remove() {
     if (!selection?.mark || busy) return
     const mark = selection.mark; const ownIdentity = identity; setBusy(true); setError('')
-    try { await apiFetch('/api/books/' + encodeURIComponent(bookId) + '/annotations/' + mark.id, { method: 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId); if (identityRef.current !== ownIdentity) return; setAnnotations((rows) => rows.filter((r) => r.id !== mark.id)); setSelection(null); window.getSelection()?.removeAllRanges() } catch (reason) { if (identityRef.current === ownIdentity) setError(reason instanceof Error ? reason.message : '删除失败') } finally { if (identityRef.current === ownIdentity) setBusy(false) }
+    try { await apiFetch('/api/books/' + encodeURIComponent(bookId) + '/annotations/' + mark.id + '?view=reader', { method: 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId); if (identityRef.current !== ownIdentity) return; setAnnotations((rows) => rows.filter((r) => r.id !== mark.id)); setSelection(null); window.getSelection()?.removeAllRanges() } catch (reason) { if (identityRef.current === ownIdentity) setError(reason instanceof Error ? reason.message : '删除失败') } finally { if (identityRef.current === ownIdentity) setBusy(false) }
   }
   async function toggleBookmark() {
     const root = articleRef.current; if (!root || busy) return
     setBusy(true); setError(''); const ownIdentity = identity
     try {
-      if (currentBookmark) { await apiFetch('/api/books/' + encodeURIComponent(bookId) + '/bookmarks/' + currentBookmark.id, { method: 'DELETE', body: JSON.stringify({ expectedVersion: currentBookmark.version }) }, userId); if (identityRef.current !== ownIdentity) return; setBookmarks((rows) => rows.filter((r) => r.id !== currentBookmark.id)); return }
+      if (currentBookmark) { await apiFetch('/api/books/' + encodeURIComponent(bookId) + '/bookmarks/' + currentBookmark.id + '?view=reader', { method: 'DELETE', body: JSON.stringify({ expectedVersion: currentBookmark.version }) }, userId); if (identityRef.current !== ownIdentity) return; setBookmarks((rows) => rows.filter((r) => r.id !== currentBookmark.id)); return }
       const point = visibleTextPoint(root, paged) ?? { paragraphIndex: 0, offset: 0 }; const text = texts[point.paragraphIndex] ?? ''; if (!text.length) throw new Error('当前位置没有可添加书签的文字')
       const start = { ...point, offset: Math.min(point.offset, text.length - 1) }; const end = { ...start, offset: Math.min(start.offset + 80, text.length) }; const anchor = createAnchor(texts, start, end, hash)
-      const result = await apiFetch<{ item: ReadingMark }>('/api/books/' + encodeURIComponent(bookId) + '/bookmarks/' + crypto.randomUUID(), { method: 'PUT', body: JSON.stringify(inputFor(anchor, 'orange', null)) }, userId); if (identityRef.current !== ownIdentity) return; setBookmarks((rows) => [...rows, markSummary(result.item)])
+      const result = await apiFetch<{ item: ReaderMark }>('/api/books/' + encodeURIComponent(bookId) + '/bookmarks/' + crypto.randomUUID() + '?view=reader', { method: 'PUT', body: JSON.stringify(inputFor(anchor, 'orange', null)) }, userId); if (identityRef.current !== ownIdentity) return; setBookmarks((rows) => [...rows, readerMark(result.item)])
     } catch (reason) { if (identityRef.current === ownIdentity) setError(reason instanceof Error ? reason.message : '保存书签失败') } finally { if (identityRef.current === ownIdentity) setBusy(false) }
   }
   function openMark(target: Element) {

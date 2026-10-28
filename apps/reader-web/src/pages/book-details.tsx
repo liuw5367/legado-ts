@@ -31,7 +31,7 @@ export function BookDetailsPage() {
   const [retry, setRetry] = useState(0)
   usePageLoadEffect((settle) => {
     const controller = new AbortController()
-    setData((previous) => previous ?? cache.get(bookId, editionKey)?.details ?? null); setError('')
+    setError('')
     void apiFetch<BookDetailsResponse>('/api/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey), { signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setData(value) })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '详情加载失败') })

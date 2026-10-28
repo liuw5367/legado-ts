@@ -1,7 +1,7 @@
 import { apiFetch, type ApiContent, type ApiPosition, type ApiToc } from './api.ts'
-import type { BookDetailsResponse } from '../../shared/book-details.ts'
+import type { BookReadingInfo } from '../../shared/book-details.ts'
 
-export interface BookSnapshot { toc: ApiToc; details: BookDetailsResponse }
+export interface BookSnapshot { toc: ApiToc; info: BookReadingInfo }
 export type EditionOption = { editionKey: string; sourceId: string; sourceName: string }
 type Loader = (signal: AbortSignal) => Promise<BookSnapshot>
 
@@ -80,10 +80,10 @@ export function loadBookSnapshot(cache: BookCache, bookId: string, editionKey: s
   const path = '/api/books/' + encodeURIComponent(bookId)
   const query = '?editionKey=' + encodeURIComponent(editionKey)
   return cache.load(bookId, editionKey, async (signal) => {
-    const [toc, details] = await Promise.all([
+    const [toc, info] = await Promise.all([
       apiFetch<{ toc: ApiToc }>(path + '/toc' + query + (refresh ? '&refresh=true' : ''), { signal }),
-      apiFetch<BookDetailsResponse>(path + '/details' + query, { signal }),
+      apiFetch<BookReadingInfo>(path + '/reading-info' + query, { signal }),
     ])
-    return { toc: toc.toc, details }
+    return { toc: toc.toc, info }
   }, refresh)
 }

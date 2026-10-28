@@ -74,3 +74,39 @@ test('search finishes after pending sources settle even when a source offers mor
   assert.equal(closed, 2)
   assert.deepEqual(events, ['batch-end', 'batch-end', 'done'])
 })
+
+test('搜索流只为命中来源发送一次精简摘要，不查询全量书源', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { runInNewContext } = await import('node:vm')
+  const { default: ts } = await import('typescript')
+  const { readingSourceSummary } = await import('../shared/source-management.ts')
+  const source = readFileSync(new URL('../server/app.ts', import.meta.url), 'utf8')
+  const code = ts.transpileModule(source.slice(source.indexOf('function streamSearchResponse(')), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  const events: Array<{ event: string; data: string }> = []
+  let queries = 0
+  const summary = { sourceId: 'https://source.test', name: '命中源', enabled: true, customOrder: 0, sourceRevision: 'r1', fingerprint: 'fp', origin: 'account' as const, importDisplayUrl: 'https://private.test/list?token=secret' }
+  const streamSearchResponse = runInNewContext(code + '\nstreamSearchResponse', {
+    AbortController, setInterval, clearInterval, readingSourceSummary,
+    errorResponse(error: unknown) { throw error },
+    streamSSE: (_context: unknown, callback: (stream: unknown) => Promise<void>) => callback({ onAbort() {}, writeSSE: async (event: { event: string; data: string }) => { events.push(event) } }),
+    dependencies: {
+      repository: { async listManagedSources() { queries++; throw new Error('流式传输不得额外查询书源') } },
+      runtime: { async runSearchBatchStream(_user: string, _id: string, listener: (source: unknown, search: unknown, summary?: unknown) => Promise<void>) {
+        const progress = { completed: 1, total: 2 }
+        await listener({ sourceId: 'empty', candidates: [] }, { progress })
+        await listener({ sourceId: summary.sourceId, candidates: [{ candidate: {} }] }, { progress }, readingSourceSummary(summary))
+        await listener({ sourceId: summary.sourceId, candidates: [{ candidate: {} }] }, { progress }, readingSourceSummary(summary))
+        return { sourceResults: [], search: {}, progress }
+      } },
+    },
+  })
+  await streamSearchResponse({}, 'owner', 'search', {})
+  assert.equal(queries, 0)
+  const batches = events.filter((event) => event.event === 'source-result').map((event) => JSON.parse(event.data))
+  assert.equal(batches.length, 3)
+  assert.equal(batches.filter((event) => event.sourceSummary !== undefined).length, 1)
+  assert.equal(batches[1].sourceSummary.name, '命中源')
+  assert.equal('importDisplayUrl' in batches[1].sourceSummary, false)
+  assert.equal('fingerprint' in batches[1].sourceSummary, false)
+  assert.equal(events.some((event) => event.event === 'error'), false)
+})

@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Check, MessageSquare, Trash2 } from 'lucide-react'
-import { MARK_COLORS, type ReadingMarkSummary } from '../../shared/reading-annotations.ts'
+import { MARK_COLORS, type ReaderMark } from '../../shared/reading-annotations.ts'
 
-export function ReaderSelectionToolbar({ rect, mark, busy, onColor, onThought, onDelete, onClose }: { rect: DOMRect; mark: ReadingMarkSummary | null; busy: boolean; onColor: (color: ReadingMarkSummary['color']) => void; onThought: () => void; onDelete: () => void; onClose: () => void }) {
+export function ReaderSelectionToolbar({ rect, mark, busy, onColor, onThought, onDelete, onClose }: { rect: DOMRect; mark: ReaderMark | null; busy: boolean; onColor: (color: ReaderMark['color']) => void; onThought: () => void; onDelete: () => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null); const [position, setPosition] = useState({ left: 12, top: 12 })
   useLayoutEffect(() => {
     function place() {

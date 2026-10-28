@@ -1,6 +1,9 @@
+import { readingContent } from '../../shared/reading-content.ts'
+import { readingSourceSummary } from '../../shared/source-management.ts'
+import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import { normalizeReadingContent, readingParagraphTexts } from '@legado/source-core'
 import { parseReadingHtml } from '@legado/source-node'
-import { changeMark, markPage, markSummary } from '../../shared/reading-annotations.ts'
+import { changeMark, markPage, markSummary, readerMark, markListItem } from '../../shared/reading-annotations.ts'
 import { createCachedChapter } from '../../shared/reading-text.ts'
 import { bookCoverRequestSchema } from '../../shared/book-sources.ts'
 import { MemoryReaderRepository } from '../../server/db/repository.ts'
@@ -282,13 +285,13 @@ function managedSourcePage(url) {
   const filtered = sources.filter((source) => {
     const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
     const matchesStatus = status === 'all' || (status === 'enabled' ? source.enabled : !source.enabled)
-    return matchesQuery && matchesStatus
+    return matchesQuery && matchesStatus && (!url.searchParams.has('domain') || sourceDomainInfo(source.sourceId).key === sourceDomainInfo(url.searchParams.get('domain')).key)
   })
   const all = url.searchParams.get('all') === 'true'
   const page = Math.max(1, Number(url.searchParams.get('page') ?? 1))
   const pageSize = Math.max(1, Math.min(50, Number(url.searchParams.get('pageSize') ?? 50)))
   const pageSources = all ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize)
-  return { sources: pageSources, page: all ? 1 : page, pageSize: all ? filtered.length : pageSize, total: filtered.length, enabledCount: filtered.filter((source) => source.enabled).length }
+  return { sources: url.searchParams.has('domain') ? pageSources.map(readingSourceSummary) : pageSources, page: all ? 1 : page, pageSize: all ? filtered.length : pageSize, total: filtered.length, enabledCount: filtered.filter((source) => source.enabled).length }
 }
 
 function homeSnapshot() {
@@ -398,6 +401,7 @@ function startSearchStream(request, response, search) {
       index += 1
       writeSse(response, 'source-result', {
         source: { sourceId: source.sourceId, status: 'completed', candidates: [candidates.at(-1)] },
+        sourceSummary: readingSourceSummary(source),
         search: { candidates, sourceStates, progress: { completed: index, total: selectedSources.length } },
       })
       timer = setTimeout(sendNext, 80)
@@ -515,7 +519,8 @@ async function handleApi(request, response, url) {
     const kind = markRoute?.[2] ?? 'annotations'; const bookId = markRoute?.[1]; const id = markRoute?.[3]
     const rows = [...readingMarks.values()].filter((r) => r.kind === kind).map(({ kind: _kind, ...r }) => r)
     try {
-      if (method === 'GET') { const page = markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, ...(path === '/api/annotations' ? { order: 'created' } : {}), deleted: url.searchParams.get('deleted') === 'true' }); json(response, { ...page, items: page.items.map(markSummary) }); return }
+      if (method === 'GET' && id) { const item = rows.find((row) => row.id === id && row.bookId === bookId); if (!item) { json(response, { error: { message: '记录不存在' } }, 404); return }; json(response, { item: { ...readerMark(item), sourceName: item.sourceName } }); return }
+      if (method === 'GET') { const page = markPage(rows, { ...Object.fromEntries(url.searchParams), ...(bookId ? { bookId } : {}), kind, ...(path === '/api/annotations' ? { order: 'created' } : {}), deleted: url.searchParams.get('deleted') === 'true' }); json(response, { ...page, items: page.items.map(url.searchParams.get('view') === 'reader' ? readerMark : markListItem) }); return }
       const body = await readJson(request); const book = books.get(bookId)
       if (!book) { json(response, { error: { message: '书籍不存在' } }, 404); return }
       if (method === 'DELETE' && markRoute[4] === 'permanent') {
@@ -535,7 +540,7 @@ async function handleApi(request, response, url) {
         const cachedChapter = kind === 'annotations' ? previous?.cachedChapter ?? createCachedChapter(contentForChapter(chapter).cachedParagraphs, body.anchor) : null
         item = changeMark(rows, USER_ID, { action: 'save', kind, id, bookId, input: body, bookName: book.name, author: book.author ?? null, sourceName, cachedChapter })
       } else item = changeMark(rows, USER_ID, { action: markRoute[4] === 'restore' ? 'restore' : 'delete', kind, id, bookId, expectedVersion: body.expectedVersion })
-      readingMarks.set(kind + ':' + item.id, { ...item, kind }); json(response, { item }); return
+      readingMarks.set(kind + ':' + item.id, { ...item, kind }); json(response, { item: url.searchParams.get('view') === 'reader' ? readerMark(item) : url.searchParams.get('view') === 'list' ? markListItem(item) : item }); return
     } catch (error) { json(response, { error: { message: error.message } }, error.status ?? 500); return }
   }
 
@@ -681,6 +686,13 @@ async function handleApi(request, response, url) {
     const bookId = decodeURIComponent(bookRoute[1] ?? '')
     const tail = bookRoute[2] ?? ''
     const book = books.get(bookId)
+    if (method === 'GET' && tail === 'reading-info') {
+      const details = detailFor(bookId, url.searchParams.get('editionKey') ?? '')
+      if (details === null) { json(response, { error: { code: 'not-found', message: '测试书籍不存在' } }, 404); return }
+      const { id, name, author, activeEditionKey } = details.book
+      json(response, { book: { id, name, author, activeEditionKey }, edition: { editionKey: details.edition.editionKey, name: details.edition.metadata.name } })
+      return
+    }
     if (method === 'GET' && tail === 'details') {
       const details = detailFor(bookId, url.searchParams.get('editionKey') ?? '')
       if (details === null) { json(response, { error: { code: 'not-found', message: '测试书籍不存在' } }, 404); return }
@@ -709,7 +721,7 @@ async function handleApi(request, response, url) {
         const source = sources[index]
         if (source && !saved.some((row) => row.sourceId === source.sourceId)) saved.push({ status: 'discovered', sourceId: source.sourceId, sourceFingerprint: source.fingerprint, name: source.name, bookUrl: longBookUrl(index), sourceEnabled: source.enabled, candidateId: 'cover-source-' + index })
       }
-      json(response, { sources: saved, activeEditionKey: book?.activeEditionKey })
+      json(response, { sources: saved, sourceSummaries: sources.filter((source) => saved.some((item) => item.sourceId === source.sourceId)).map(readingSourceSummary), activeEditionKey: book?.activeEditionKey })
       return
     }
     if (method === 'POST' && /^sources\/[^/]+\/open$/u.test(tail)) {
@@ -738,7 +750,7 @@ async function handleApi(request, response, url) {
       if (book === undefined || editions.get(body.editionKey)?.bookId !== bookId) { json(response, { error: { code: 'not-found', message: '测试书籍版本不存在' } }, 404); return }
       book.activeEditionKey = body.editionKey
       book.updatedAt = now()
-      json(response, { edition: editions.get(body.editionKey) })
+      json(response, { edition: { editionKey: body.editionKey } })
       return
     }
     if ((method === 'PUT' || method === 'DELETE') && tail === 'bookshelf') {
@@ -765,7 +777,7 @@ async function handleApi(request, response, url) {
       const refresh = url.searchParams.get('refresh') === 'true'
       if (refresh) refreshCounts.set(editionKey, (refreshCounts.get(editionKey) ?? 0) + 1)
       const revision = `fixture-toc-${editionKey}-${(refreshCounts.get(editionKey) ?? 0) + 1}`
-      json(response, { toc: { userId: USER_ID, bookId, editionKey, sourceFingerprint: editions.get(editionKey).sourceFingerprint, revision, chapters: chaptersFor(editionKey), bookPatch: { name: book?.name ?? initialBook.name } } })
+      json(response, { toc: { bookId, editionKey, sourceFingerprint: editions.get(editionKey).sourceFingerprint, revision, chapters: chaptersFor(editionKey).map(({ chapterId, chapterUrl, index, title, isVolume, isVip }) => ({ chapterId, chapterUrl, index, title, isVolume, isVip })) } })
       return
     }
     const chapterMatch = tail.match(/^chapters\/([^/]+)$/u)
@@ -778,7 +790,7 @@ async function handleApi(request, response, url) {
       if (refresh) refreshCounts.set(`content:${chapterId}`, (refreshCounts.get(`content:${chapterId}`) ?? 0) + 1)
       const revision = refreshCounts.get(`content:${chapterId}`) ?? 0
       const { content } = contentForChapter(chapter, refresh)
-      json(response, { content: { content, tocRevision: `fixture-toc-${editionKey}-${(refreshCounts.get(editionKey) ?? 0) + 1}` } })
+      json(response, { content: { content: readingContent(content, chapterId), tocRevision: `fixture-toc-${editionKey}-${(refreshCounts.get(editionKey) ?? 0) + 1}` } })
       return
     }
   }

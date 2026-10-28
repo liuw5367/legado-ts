@@ -1,3 +1,4 @@
+import { readingSourceSummary } from '../shared/source-management.ts'
 import { registerReadingMarksApi } from './reading-marks-api.ts'
 import { searchConcurrencySchema } from '../shared/search-settings.ts'
 import { bookCoverRequestSchema } from '../shared/book-sources.ts'
@@ -12,7 +13,7 @@ import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { BackupRestoreError, PostgresReaderRepository, SourceManagementError, type ReaderRepository } from './db/repository.ts'
-import { chapterIdFor, createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
+import { createReaderRuntime, ReaderRuntimeError, type ReaderRuntime, type SearchBatchOptions } from './runtime/reader-runtime.ts'
 import { confirmImport, createImportPreview, listSourceActions, publicImportPreview } from './runtime/source-management.ts'
 import { serveReaderAsset } from './static.ts'
 import { BackupValidationError, countBackupSnapshot, createWebBackup, restoreWebBackup, validateWebBackup } from './backup.ts'
@@ -80,9 +81,9 @@ app.get('/api/source-management/stats', async (context) => {
 app.get('/api/source-management', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
-  const parsed = sourceManagementPageSchema.safeParse({ all: context.req.query('all'), page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status') })
+  const parsed = sourceManagementPageSchema.safeParse({ domain: context.req.query('domain'), all: context.req.query('all'), page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status') })
   if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '书源列表参数无效' } }, 400)
-  try { return context.json(await dependencies.repository.listManagedSources(context.get('userId'), parsed.data)) } catch (error) { return handleError(context, error) }
+  try { const result = await dependencies.repository.listManagedSources(context.get('userId'), parsed.data); return context.json(parsed.data.domain === undefined ? result : { ...result, sources: result.sources.map(readingSourceSummary) }) } catch (error) { return handleError(context, error) }
 })
 
 app.get('/api/discovery/sources', async (context) => {
@@ -394,6 +395,16 @@ app.put('/api/books/:bookId/cover', async (context) => {
   catch (error) { return handleError(context, error) }
 })
 
+app.get('/api/books/:bookId/reading-info', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    const value = await dependencies.repository.getBookReadingInfo(context.get('userId'), context.req.param('bookId'), context.req.query('editionKey'))
+    if (value === null) return context.json({ error: { code: 'not-found', message: '书籍或版本不存在' } }, 404)
+    return context.json(value)
+  } catch (error) { return handleError(context, error) }
+})
+
 app.get('/api/books/:bookId/details', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -437,7 +448,7 @@ app.put('/api/books/:bookId/edition', async (context) => {
   const body = await parseBody(context, activeEditionSchema)
   if (body instanceof Response) return body
   try {
-    const edition = await dependencies.repository.setActiveEdition(context.get('userId'), context.req.param('bookId'), body.editionKey)
+    const edition = await dependencies.repository.activateEdition(context.get('userId'), context.req.param('bookId'), body.editionKey)
     return edition === null ? context.json({ error: { code: 'not-found', message: '书籍版本不存在' } }, 404) : context.json({ edition })
   } catch (error) {
     return handleError(context, error)
@@ -506,8 +517,8 @@ app.get('/api/books/:bookId/toc', async (context) => {
   const editionKey = context.req.query('editionKey')
   if (editionKey === undefined || editionKey.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
   try {
-    const toc = await dependencies.runtime.getOrLoadToc(context.get('userId'), context.req.param('bookId'), editionKey, context.req.query('refresh') === 'true')
-    return context.json({ toc: { ...toc, chapters: toc.chapters.map((chapter) => ({ ...chapter, chapterId: chapterIdFor(chapter) })) } })
+    const toc = await dependencies.runtime.getOrLoadTocSummary(context.get('userId'), context.req.param('bookId'), editionKey, context.req.query('refresh') === 'true')
+    return context.json({ toc })
   } catch (error) {
     return handleError(context, error)
   }
@@ -547,10 +558,8 @@ app.get('/api/books/:bookId/chapters/:chapterId', async (context) => {
   const editionKey = context.req.query('editionKey')
   if (editionKey === undefined || editionKey.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
   try {
-    const content = await dependencies.runtime.getOrLoadContent(context.get('userId'), context.req.param('bookId'), editionKey, context.req.param('chapterId'), context.req.query('refresh') === 'true')
-    const chapter = await dependencies.repository.getChapterContext(context.get('userId'), context.req.param('bookId'), editionKey, context.req.param('chapterId'))
-    const title = chapter?.chapter?.title
-    return context.json({ content: { ...content, content: { ...content.content, chapter: { ...content.content.chapter, chapterId: context.req.param('chapterId'), ...(title === undefined ? {} : { title }) } } } })
+    const content = await dependencies.runtime.getOrLoadContentDisplay(context.get('userId'), context.req.param('bookId'), editionKey, context.req.param('chapterId'), context.req.query('refresh') === 'true')
+    return context.json({ content })
   } catch (error) {
     return handleError(context, error)
   }
@@ -720,13 +729,16 @@ function errorResponse(error: unknown): { body: { error: { code: string; message
 function streamSearchResponse(context: Context<{ Variables: Variables }>, userId: string, searchId: string, options: SearchBatchOptions) {
   return streamSSE(context, async (stream) => {
     let sequence = 0
+    const sentSources = new Set<string>()
     const disconnected = new AbortController()
     stream.onAbort(() => disconnected.abort())
     const heartbeat = setInterval(() => { void stream.write(': heartbeat\n\n').catch(() => undefined) }, 10_000)
     await stream.writeSSE({ event: 'batch-start', data: JSON.stringify({ searchId, seq: sequence++ }) })
     try {
-      const result = await dependencies.runtime.runSearchBatchStream(userId, searchId, async (source, search) => {
-        await stream.writeSSE({ event: 'source-result', data: JSON.stringify({ searchId, seq: sequence++, source, progress: search.progress }) })
+      const result = await dependencies.runtime.runSearchBatchStream(userId, searchId, async (source, search, summary) => {
+        const sourceSummary = source.candidates.length > 0 && !sentSources.has(source.sourceId) ? summary : undefined
+        if (sourceSummary !== undefined) sentSources.add(source.sourceId)
+        await stream.writeSSE({ event: 'source-result', data: JSON.stringify({ searchId, seq: sequence++, source, sourceSummary, progress: search.progress }) })
         await stream.writeSSE({ event: 'progress', data: JSON.stringify({ searchId, seq: sequence++, progress: search.progress }) })
       }, { ...options, signal: disconnected.signal, onProgress: async (progress) => {
         await stream.writeSSE({ event: 'progress', data: JSON.stringify({ searchId, seq: sequence++, progress }) })

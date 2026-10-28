@@ -1,3 +1,4 @@
+import type { ReadingSourceSummary } from '../../shared/source-management.ts'
 import { publishPageMutation } from './page-data.ts'
 import { usePageNavigation } from './use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -9,6 +10,7 @@ export function useBookSearch() {
   const navigation = usePageNavigation()
   const userId = navigation?.userId
   const settleState = useRef<{ status: 'done' | 'error' | 'paused'; message: string } | undefined>(undefined)
+  const [sourceSummaries, setSourceSummaries] = useState<ReadingSourceSummary[]>([])
   const [candidates, setCandidates] = useState<ApiCandidate[]>([])
   const [searchId, setSearchId] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'paused'>('idle')
@@ -43,13 +45,15 @@ export function useBookSearch() {
   async function runSearch(keyword: string, precision: boolean, sourceIds?: string[], resumeId?: string, preserveResults = false): Promise<boolean> {
     if (operation.isRunning || (!resumeId && keyword.trim().length === 0)) return false
     settleState.current = undefined
-    if (!resumeId) { ordering.current = { keyword, precision }; if (!preserveResults) setCandidates([]); setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; setStatus('loading')
+    if (!resumeId) { ordering.current = { keyword, precision }; if (!preserveResults) { setCandidates([]); setSourceSummaries([]) } setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; setStatus('loading')
     let succeeded = true
     if (!resumeId) retainedSourceIds.current = preserveResults ? sourceIds : undefined
     const retainedSources = retainedSourceIds.current
     let currentSearchId = resumeId ?? ''
     let currentCandidates: ApiCandidate[] = resumeId ? candidates.filter((item) => candidateSearchIds.current.get(item) === resumeId) : []
     function updateCandidates(batch: SearchSourceEventData) {
+      const summary = batch.sourceSummary
+      if (summary !== undefined) setSourceSummaries((current) => [...current.filter((source) => source.sourceId !== summary.sourceId), summary])
       currentCandidates = mergeSearchStreamCandidates(currentCandidates, batch, ordering.current)
       // 保留其他搜索的候选时，打开操作仍必须使用候选所属的搜索记录。
       for (const item of currentCandidates) candidateSearchIds.current.set(item, currentSearchId)
@@ -125,5 +129,5 @@ export function useBookSearch() {
     }
     catch (reason) { if (mounted.current) setMessage(reason instanceof Error ? '取消请求失败：' + reason.message : '取消请求失败') }
   }
-  return { candidates, candidateSearchId: (candidate: ApiCandidate) => candidateSearchIds.current.get(candidate) ?? searchId, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, isTargetedSearch: retainedSourceIds.current !== undefined, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
+  return { sourceSummaries, candidates, candidateSearchId: (candidate: ApiCandidate) => candidateSearchIds.current.get(candidate) ?? searchId, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, isTargetedSearch: retainedSourceIds.current !== undefined, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
 }

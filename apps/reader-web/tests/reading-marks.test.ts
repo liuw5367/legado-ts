@@ -233,8 +233,11 @@ test('展示列表不携带缓存原文，单条查询隔离账号并保留编�
     const result = await (await request(url)).json()
     assert.equal(result.items[0].hasCachedChapter, true)
     assert.equal('cachedChapter' in result.items[0], false)
-    assert.equal(markInputSchema.safeParse(markSaveInput(result.items[0])).success, true)
+    assert.equal(result.items[0].excerpt, input.anchor.exact)
+    assert.equal('anchor' in result.items[0], false)
+    assert.equal('editionKey' in result.items[0], false)
   }
+  assert.equal(markInputSchema.safeParse(markSaveInput((await (await request(path)).json()).item)).success, true)
   const choices = await (await request('/api/annotations/books')).json()
   assert.equal(choices.books[0].activeEditionKey, input.editionKey)
   const cachePath = path + '/cached-chapter'
@@ -257,4 +260,50 @@ test('展示列表不携带缓存原文，单条查询隔离账号并保留编�
   const noCachePath = path.replace(current.id, noCache.id) + '/cached-chapter'
   assert.deepEqual(await (await request(noCachePath)).json(), { cachedChapter: null })
   assert.equal((await repo.listReadingMarkSummaries(user, { kind: 'annotations', id: noCache.id })).items[0]?.hasCachedChapter, false)
+})
+
+test('正文标记视图保留锚点与编辑版本，不传展示冗余及缓存原文', async () => {
+  const { repo, input, path, request, bookId } = await setup()
+  const saved = await request(path + '?view=reader', 'PUT', input)
+  assert.equal(saved.status, 200)
+  const item = (await saved.json()).item
+  assert.deepEqual(Object.keys(item).sort(), ['id', 'version', 'editionKey', 'sourceFingerprint', 'chapterId', 'chapterUrl', 'chapterIndex', 'chapterTitle', 'tocRevision', 'anchor', 'color', 'note'].sort())
+  const query = '?view=reader&editionKey=' + encodeURIComponent(input.editionKey) + '&chapterUrl=' + encodeURIComponent(input.chapterUrl)
+  const read = await request(`/api/books/${bookId}/annotations` + query)
+  assert.deepEqual((await read.json()).items, [item])
+  assert.equal((await request(`/api/books/${bookId}/annotations?view=reader`)).status, 400)
+  assert.equal((await request(`/api/books/${bookId}/annotations` + query, 'GET', undefined, 'other')).status, 404)
+  const changed = await request(path + '?view=reader', 'PUT', { ...input, color: 'blue', expectedVersion: item.version })
+  assert.equal(changed.status, 200)
+  assert.equal((await changed.json()).item.color, 'blue')
+  await request(path, 'DELETE', { expectedVersion: item.version + 1 })
+  assert.deepEqual((await (await request(`/api/books/${bookId}/annotations` + query)).json()).items, [])
+  assert.ok((await repo.listReadingMarks(user, { kind: 'annotations', bookId, all: true })).items[0]?.cachedChapter)
+})
+
+test('全局笔记列表只传展示字段，动作信息按单条查询并支持列表编辑删除恢复', async () => {
+  const { input, path, request, bookId } = await setup()
+  const created = await request(path + '?view=list', 'PUT', input)
+  assert.equal(created.status, 200)
+  const item = (await created.json()).item
+  const keys = ['id', 'bookId', 'bookName', 'chapterTitle', 'color', 'note', 'createdAt', 'deletedAt', 'version', 'excerpt', 'hasCachedChapter'].sort()
+  assert.deepEqual(Object.keys(item).sort(), keys)
+  const page = await (await request('/api/annotations')).json()
+  assert.deepEqual(page.items, [item])
+  const detail = (await (await request(path)).json()).item
+  assert.deepEqual(detail.anchor, input.anchor)
+  assert.equal('cachedChapter' in detail, false)
+  assert.equal((await request(path, 'GET', undefined, 'other')).status, 404)
+  assert.equal((await request(path.replace(bookId, randomUUID()))).status, 404)
+  const edited = await request(path + '?view=list', 'PUT', { ...input, note: '新想法', expectedVersion: item.version })
+  const updated = (await edited.json()).item
+  assert.equal(updated.note, '新想法')
+  assert.deepEqual(Object.keys(updated).sort(), keys)
+  const removed = (await (await request(path + '?view=list', 'DELETE', { expectedVersion: updated.version })).json()).item
+  assert.ok(removed.deletedAt)
+  assert.deepEqual(Object.keys(removed).sort(), keys)
+  assert.equal((await (await request(path)).json()).item.id, removed.id)
+  const restored = (await (await request(path + '/restore?view=list', 'POST', { expectedVersion: removed.version })).json()).item
+  assert.equal(restored.deletedAt, null)
+  assert.equal(restored.excerpt, input.anchor.exact)
 })

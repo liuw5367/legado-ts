@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { normalizeIdentity, sameBookIdentity } from '../../shared/book-identity.ts'
-import type { BookDetailsResponse } from '../../shared/book-details.ts'
+import type { BookReadingInfo } from '../../shared/book-details.ts'
 import type { BookSourceItem, BookSourcesResponse } from '../../shared/book-sources.ts'
 import { PageBackButton } from '../components/page-back-button.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
@@ -16,7 +16,7 @@ import { PrecisionToggle } from '../components/precision-toggle.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Sheet } from '../components/ui/sheet.tsx'
-import { apiFetch, type ApiChapter, type ApiEdition, type ApiPosition } from '../lib/api.ts'
+import { apiFetch, type ApiTocChapter, type ApiEdition, type ApiPosition } from '../lib/api.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import { loadBookSnapshot } from '../lib/book-cache.ts'
 import { pageReturnState, readingEntryState } from '../lib/page-navigation.ts'
@@ -25,7 +25,7 @@ import { fallbackChapterForPosition } from '../lib/source-position.ts'
 import { groupBookSourcesByDomain } from '../lib/book-source-groups.ts'
 import { formatSourceRuleDateTime } from '../lib/time-format.ts'
 import { compareSourceManagementOrder, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
-import type { ManagedSourceSummary, SourceManagementPage } from '../../shared/source-management.ts'
+import type { ReadingSourceSummary } from '../../shared/source-management.ts'
 
 export function BookSourcesPage() {
   const { bookId = '' } = useParams()
@@ -33,7 +33,7 @@ export function BookSourcesPage() {
   const location = useLocation()
   const cache = useBookCache()
   const [visibleCount, setVisibleCount] = useState(50)
-  const [book, setBook] = useState<BookDetailsResponse['book'] | null>(null)
+  const [book, setBook] = useState<BookReadingInfo['book'] | null>(null)
   const [data, setData] = useState<BookSourcesResponse | null>(null)
   const [keyword, setKeyword] = useState('')
   const [precision, setPrecision] = useState(true)
@@ -41,18 +41,20 @@ export function BookSourcesPage() {
   const [notice, setNotice] = useState('')
   const [opening, setOpening] = useState<string | null>(null)
   const [switchingSourceId, setSwitchingSourceId] = useState<string | null>(null)
-  const [managedSources, setManagedSources] = useState<ManagedSourceSummary[]>([])
+  const [managedSources, setManagedSources] = useState<ReadingSourceSummary[]>([])
   const [pendingSwitch, setPendingSwitch] = useState<PendingSourceSwitch | null>(null)
   const [retry, setRetry] = useState(0)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [itemSearchError, setItemSearchError] = useState('')
   const listOrderRef = useRef<{ domains: string[]; versions: Map<string, string[]> } | null>(null)
+  const loadedDomains = useRef(new Set<string>())
   const targetedSourceRef = useRef<string | null>(null)
   const controllerRef = useRef<AbortController | null>(null)
-  const { candidates, candidateSearchId, searchId, status, message, progress, cancellationPending, isTargetedSearch, search, replaceSearch, cancelAndWait, cancel, resume } = useBookSearch()
+  const { sourceSummaries, candidates, candidateSearchId, searchId, status, message, progress, cancellationPending, isTargetedSearch, search, replaceSearch, cancelAndWait, cancel, resume } = useBookSearch()
   const prefix = '/books/' + encodeURIComponent(bookId)
-  const managedSourceById = useMemo(() => new Map(managedSources.map((source) => [source.sourceId, source])), [managedSources])
-  const accountDefaults = useMemo(() => new Map(selectOneSourcePerDomain(managedSources.filter((source) => source.enabled), compareSourceManagementOrder).map((source) => [sourceDomainInfo(source.sourceId).key, source])), [managedSources])
+  const displayedSources = useMemo(() => [...new Map([...sourceSummaries, ...managedSources].map((source) => [source.sourceId, source])).values()], [sourceSummaries, managedSources])
+  const managedSourceById = useMemo(() => new Map(displayedSources.map((source) => [source.sourceId, source])), [displayedSources])
+  const accountDefaults = useMemo(() => new Map(selectOneSourcePerDomain(displayedSources.filter((source) => source.enabled), compareSourceManagementOrder).map((source) => [sourceDomainInfo(source.sourceId).key, source])), [displayedSources])
   const matchingResults = useMemo(() => {
     return candidates.flatMap((item, index) => {
       if (book === null) return []
@@ -63,7 +65,7 @@ export function BookSourcesPage() {
       return [{ item, index }]
     })
   }, [book, candidates])
-  const sortedSourceGroups = useMemo(() => groupBookSourcesByDomain(managedSources, data?.sources ?? [], matchingResults.map(({ item, index }) => ({ sourceId: item.sourceId, searchDurationMs: item.searchDurationMs, index, item })), data?.activeEditionKey), [data, managedSources, matchingResults])
+  const sortedSourceGroups = useMemo(() => groupBookSourcesByDomain(displayedSources, data?.sources ?? [], matchingResults.map(({ item, index }) => ({ sourceId: item.sourceId, searchDurationMs: item.searchDurationMs, index, item })), data?.activeEditionKey), [data, displayedSources, matchingResults])
 
   // 定向搜索只更新内容，沿用点击前的分组与实现顺序，避免耗时和默认版本变化移动列表。
   const order = listOrderRef.current
@@ -81,25 +83,31 @@ export function BookSourcesPage() {
     setError(''); setNotice('')
     // 页面内写入由操作处理器更新，避免搜索启用书源触发整页重载。
     void Promise.all([
-      apiFetch<BookDetailsResponse>('/api' + prefix + '/details', { signal: controller.signal }),
+      apiFetch<BookReadingInfo>('/api' + prefix + '/reading-info', { signal: controller.signal }),
       apiFetch<BookSourcesResponse>('/api' + prefix + '/sources', { signal: controller.signal }),
-      apiFetch<SourceManagementPage>('/api/source-management?all=true', { signal: controller.signal }),
-    ]).then(([details, sources, sourceManagement]) => {
+    ]).then(([details, sources]) => {
       if (controller.signal.aborted) return
-      setBook(details.book); setData(sources); setManagedSources(sourceManagement.sources); setKeyword((previous) => previous || details.book.name)
+      setBook(details.book); setData(sources); setManagedSources(sources.sourceSummaries ?? []); setKeyword((previous) => previous || details.book.name)
     }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '书源加载失败') })
       .finally(() => { if (!controller.signal.aborted) settle() })
     return () => controller.abort()
   }, [prefix, retry])
 
   async function refreshSourceLists(signal?: AbortSignal) {
-    const [sourceManagement, sources] = await Promise.all([
-      apiFetch<SourceManagementPage>('/api/source-management?all=true', { signal: signal ?? null }),
-      apiFetch<BookSourcesResponse>('/api' + prefix + '/sources', { signal: signal ?? null }),
-    ])
+    const sources = await apiFetch<BookSourcesResponse>('/api' + prefix + '/sources', { signal: signal ?? null })
     if (signal?.aborted) return
-    setManagedSources(sourceManagement.sources)
+    setManagedSources((current) => [...new Map([...current, ...(sources.sourceSummaries ?? [])].map((source) => [source.sourceId, source])).values()])
     setData(sources)
+  }
+
+  async function loadDomainVersions(sourceId: string) {
+    const signal = controllerRef.current?.signal
+    const domain = sourceDomainInfo(sourceId).key
+    if (loadedDomains.current.has(domain)) return
+    try {
+      const result = await apiFetch<{ sources: ReadingSourceSummary[] }>('/api/source-management?all=true&domain=' + encodeURIComponent(sourceId), { signal: signal ?? null })
+      if (!signal?.aborted) { loadedDomains.current.add(domain); setManagedSources((current) => [...current.filter((source) => sourceDomainInfo(source.sourceId).key !== domain), ...result.sources]) }
+    } catch (reason) { if (!signal?.aborted) setError(reason instanceof Error ? reason.message : '版本列表加载失败') }
   }
 
   async function ensureSourceActive(sourceId: string, signal?: AbortSignal, refreshBookSources = true) {
@@ -110,9 +118,10 @@ export function BookSourcesPage() {
     if (signal?.aborted) return
     await apiFetch('/api/source-management/actions', { method: 'POST', signal: signal ?? null, body: JSON.stringify({ action: 'enable', items: [{ sourceId, expectedSourceRevision: source.sourceRevision }] }) })
     if (refreshBookSources) await refreshSourceLists(signal)
-    else {
-      const sourceManagement = await apiFetch<SourceManagementPage>('/api/source-management?all=true', { signal: signal ?? null })
-      if (!signal?.aborted) setManagedSources(sourceManagement.sources)
+    const sourceManagement = await apiFetch<{ sources: ReadingSourceSummary[] }>('/api/source-management?all=true&domain=' + encodeURIComponent(sourceId), { signal: signal ?? null })
+    if (!signal?.aborted) {
+      loadedDomains.current.add(sourceDomainInfo(sourceId).key)
+      setManagedSources((current) => [...current.filter((item) => sourceDomainInfo(item.sourceId).key !== sourceDomainInfo(sourceId).key), ...sourceManagement.sources])
     }
   }
 
@@ -241,7 +250,7 @@ export function BookSourcesPage() {
             ?? currentVersion?.items.find((item) => item.lastChapter?.trim())?.lastChapter
           const activeBookEditionInGroup = group.versions.some((version) => version.items.some((source) => source.status === 'saved' && source.editionKey === data.activeEditionKey))
           return <article className="book-source-domain" key={group.domainKey}>
-            <details className="book-source-domain-details" open={expandedGroups[group.domainKey] ?? activeBookEditionInGroup} onToggle={(event) => { const open = event.currentTarget.open; setExpandedGroups((current) => current[group.domainKey] === open ? current : { ...current, [group.domainKey]: open }) }}>
+            <details className="book-source-domain-details" open={expandedGroups[group.domainKey] ?? activeBookEditionInGroup} onToggle={(event) => { const open = event.currentTarget.open; if (open && expandedGroups[group.domainKey] !== true && group.versions[0] !== undefined) void loadDomainVersions(group.versions[0].source.sourceId); setExpandedGroups((current) => current[group.domainKey] === open ? current : { ...current, [group.domainKey]: open }) }}>
               <summary className="book-source-domain-summary">
                 <span className="book-source-domain-heading">
                   <span className="book-source-domain-title">
@@ -287,9 +296,9 @@ export function BookSourcesPage() {
   </section>
 }
 
-interface PendingSourceSwitch { key: string; editionKey: string; target: ApiChapter; targetRevision: string; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }
+interface PendingSourceSwitch { key: string; editionKey: string; target: ApiTocChapter; targetRevision: string; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }
 
-async function mapSourcePosition(bookId: string, currentEditionKey: string, targetEditionKey: string, cache: ReturnType<typeof useBookCache>, targetChapters: ApiChapter[], signal?: AbortSignal): Promise<{ target: ApiChapter | undefined; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }> {
+async function mapSourcePosition(bookId: string, currentEditionKey: string, targetEditionKey: string, cache: ReturnType<typeof useBookCache>, targetChapters: ApiTocChapter[], signal?: AbortSignal): Promise<{ target: ApiTocChapter | undefined; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }> {
   const [currentSnapshot, currentPosition, targetPosition] = await Promise.all([
     loadBookSnapshot(cache, bookId, currentEditionKey),
     apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position?editionKey=' + encodeURIComponent(currentEditionKey), signal === undefined ? {} : { signal }),

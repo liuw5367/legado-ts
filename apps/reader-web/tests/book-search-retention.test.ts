@@ -17,7 +17,7 @@ test('targeted searches retain other versions and each candidate keeps its origi
   let searchNumber = 0
   let results: ApiCandidate[] = []
   const candidate = (sourceId: string, duration: number): ApiCandidate => ({ sourceId, sourceFingerprint: sourceId, searchDurationMs: duration, candidate: { sourceId, bookUrl: sourceId + '/book', name: '目标书' } })
-  const module = { exports: {} as { useBookSearch: () => { candidates: ApiCandidate[]; candidateSearchId: (candidate: ApiCandidate) => string; search: (keyword: string, precision: boolean) => Promise<boolean>; replaceSearch: (keyword: string, precision: boolean, sources: string[], preserve: boolean) => Promise<boolean> } } }
+  const module = { exports: {} as { useBookSearch: () => { sourceSummaries: Array<{ sourceId: string; name: string }>; candidates: ApiCandidate[]; candidateSearchId: (candidate: ApiCandidate) => string; search: (keyword: string, precision: boolean) => Promise<boolean>; replaceSearch: (keyword: string, precision: boolean, sources: string[], preserve: boolean) => Promise<boolean> } } }
   class SearchOperation {
     isRunning = false
     hasPendingCancellation = false
@@ -25,6 +25,7 @@ test('targeted searches retain other versions and each candidate keeps its origi
     async start(_keyword: string, _precision: boolean, event: (event: unknown) => void, created: (id: string) => void) {
       const id = 'search-' + ++searchNumber
       created(id)
+      for (const result of results) event({ type: 'source-result', data: { source: { candidates: [result] }, sourceSummary: { sourceId: result.sourceId, name: '名称:' + result.sourceId } } })
       event({ type: 'batch', data: { candidates: results } })
       return { id, cancelled: false }
     }
@@ -50,6 +51,8 @@ test('targeted searches retain other versions and each candidate keeps its origi
   results = [candidate('https://b.example', 50)]
   assert.equal(await hook.replaceSearch('目标书', true, ['https://b.example'], true), true)
   hook = render()
+  assert.equal(hook.sourceSummaries.length, 2)
+  assert.equal(hook.sourceSummaries[1]?.name, '名称:https://b.example')
   assert.equal(hook.candidates.length, 2)
   assert.equal(hook.candidateSearchId(hook.candidates[0]!), 'search-1')
   assert.equal(hook.candidateSearchId(hook.candidates[1]!), 'search-2')
@@ -64,4 +67,7 @@ test('targeted searches retain other versions and each candidate keeps its origi
   hook = render()
   assert.equal(hook.candidates.length, 1)
   assert.equal(hook.candidateSearchId(hook.candidates[0]!), 'search-1')
+  await hook.search('另一本', true)
+  hook = render()
+  assert.equal(hook.sourceSummaries.length, 0)
 })

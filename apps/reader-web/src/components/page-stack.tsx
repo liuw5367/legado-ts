@@ -31,7 +31,7 @@ function AccountPageStack({ children, userId }: { children: ReactNode; userId: s
   const pending = useRef<{ origin: string; target: string; state: unknown; via: string } | undefined>(undefined)
   const positions = useMemo(() => new ReadingPositionQueue(async (input) => {
     const { bookId, ...body } = input
-    const result = await apiFetch<{ position: ApiPosition }>(`/api/books/${encodeURIComponent(bookId)}/position`, { method: 'POST', body: JSON.stringify(body) }, userId)
+    const result = await apiFetch<{ position: ApiPosition }>(`/api/books/${encodeURIComponent(bookId)}/position`, { method: 'POST', body: JSON.stringify(body), keepalive: true }, userId)
     cache.setPosition(bookId, input.editionKey, result.position)
     return result.position
   }), [userId, cache])
@@ -60,6 +60,14 @@ function AccountPageStack({ children, userId }: { children: ReactNode; userId: s
     })
     return () => { unsubscribe(); positions.dispose() }
   }, [userId, cache, positions])
+
+  useEffect(() => {
+    const flush = () => { void positions.flush().catch(() => undefined) }
+    const hidden = () => { if (document.visibilityState === 'hidden') flush() }
+    document.addEventListener('visibilitychange', hidden)
+    window.addEventListener('pagehide', flush)
+    return () => { document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', flush) }
+  }, [positions])
 
   const processReadingNavigation = useEffectEvent(() => {
     const intent = pending.current

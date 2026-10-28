@@ -20,7 +20,7 @@ import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { apiFetch, type ApiBook, type ApiCandidate } from '../lib/api.ts'
 import { sourceDomainInfo } from '../../shared/source-domain.ts'
-import type { ManagedSourceSummary, SourceManagementPage } from '../../shared/source-management.ts'
+import type { ReadingSourceSummary } from '../../shared/source-management.ts'
 
 interface CandidateGroup {
   key: string
@@ -44,14 +44,12 @@ export function SearchPage() {
   const [booksLoaded, setBooksLoaded] = useState(false)
   const [precision, setPrecision] = useState(true)
   const [keyword, setKeyword] = useState(queryKeyword)
-  const { candidates, searchId, status, message: searchMessage, progress, cancellationPending, search, cancel, resume } = useBookSearch()
+  const { sourceSummaries: managedSources, candidates, searchId, status, message: searchMessage, progress, cancellationPending, search, cancel, resume } = useBookSearch()
   const [expandedKey, setExpandedKey] = useState<string>()
   const [selectedByGroup, setSelectedByGroup] = useState<Record<string, string>>({})
   const [message, setMessage] = useState('')
   const [messageTone, setMessageTone] = useState<'info' | 'success' | 'error'>('info')
   const [saving, setSaving] = useState<number | null>(null)
-  const [managedSources, setManagedSources] = useState<ManagedSourceSummary[]>([])
-  const [sourceManagementError, setSourceManagementError] = useState('')
   const saveController = useRef<AbortController | null>(null)
   useEffect(() => () => { saveController.current?.abort() }, [])
   const managedSourceById = useMemo(() => new Map(managedSources.map((source) => [source.sourceId, source])), [managedSources])
@@ -73,16 +71,6 @@ export function SearchPage() {
       .finally(() => { if (active) settle() })
     return () => { active = false }
   }, [], ['candidates', 'home'])
-  usePageLoadEffect((settle) => {
-    let active = true
-    void apiFetch<SourceManagementPage>('/api/source-management?all=true').then((result) => {
-      if (active) { setManagedSources(result.sources); setSourceManagementError('') }
-    }).catch((error: unknown) => {
-      if (active) setSourceManagementError(error instanceof Error ? error.message : '书源列表加载失败')
-    })
-      .finally(() => { if (active) settle() })
-    return () => { active = false }
-  }, [], ['sources'])
   const previousQuery = useRef(queryKeyword)
   useEffect(() => { if (previousQuery.current !== queryKeyword) { previousQuery.current = queryKeyword; setKeyword(queryKeyword) } }, [queryKeyword])
 
@@ -146,7 +134,6 @@ export function SearchPage() {
       <PrecisionToggle checked={precision} disabled={status === 'loading'} onChange={setPrecision} />
     </form>
     {searchMessage.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">{searchMessage}</DismissibleMessage> : null}
-    {sourceManagementError.length > 0 ? <DismissibleMessage className="muted compact-message" role="status">同域版本列表暂不可用：{sourceManagementError}。可在书源管理页切换版本。</DismissibleMessage> : null}
     {message.length > 0 ? <FloatingMessage tone={messageTone} message={message} onDismiss={() => setMessage('')} /> : null}
     {status === 'loading' ? <LoadingState message={'正在搜索书籍…' + (progress === undefined ? '' : ` 书源 ${progress.completed}/${progress.total}${progress.activeSources?.length ? " · " + progress.activeSources.join("、") : ""}`)} variant="inline" /> : null}
     {groups.length === 0 && status === 'done' && !booksLoaded ? <LoadingState message="正在读取已有书籍…" variant="viewport" /> : null}
@@ -158,7 +145,7 @@ export function SearchPage() {
   </section>
 }
 
-function SearchResult({ group, inBookshelf, selectedIndex, expanded, disabled, saving, sourceById, onToggle, onSelect, onSave }: { group: CandidateGroup; inBookshelf: boolean; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; sourceById: Map<string, ManagedSourceSummary>; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory' | 'details' | 'list') => void }) {
+function SearchResult({ group, inBookshelf, selectedIndex, expanded, disabled, saving, sourceById, onToggle, onSelect, onSave }: { group: CandidateGroup; inBookshelf: boolean; selectedIndex: number | undefined; expanded: boolean; disabled: boolean; saving: boolean; sourceById: Map<string, ReadingSourceSummary>; onToggle: () => void; onSelect: (index: number) => void; onSave: (action: 'shelf' | 'directory' | 'details' | 'list') => void }) {
   const selected = group.items.find((item) => item.index === selectedIndex) ?? group.items[0]
   if (selected === undefined) return null
   const selectedSourceName = sourceById.get(selected.item.sourceId)?.name ?? selected.item.sourceId

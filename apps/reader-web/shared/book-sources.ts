@@ -1,3 +1,4 @@
+import type { ReadingSourceSummary } from './source-management.ts'
 import { z } from 'zod'
 
 export interface SourceCacheWarning { code: 'source-cache-failed'; message: string }
@@ -12,7 +13,7 @@ export type BookSourceItem = {
   lastChapter?: string
   searchDurationMs?: number
 } & ({ status: 'saved'; editionKey: string } | { status: 'discovered'; candidateId: string })
-export interface BookSourcesResponse { sources: BookSourceItem[]; activeEditionKey?: string }
+export interface BookSourcesResponse { sources: BookSourceItem[]; sourceSummaries?: ReadingSourceSummary[]; activeEditionKey?: string }
 
 /** 封面只能从当前账号、当前书籍的有效来源中选择；null 恢复跟随书源。 */
 export interface BookCoverSelection { sourceId: string; sourceFingerprint: string; bookUrl: string }
