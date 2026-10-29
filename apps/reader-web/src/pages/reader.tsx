@@ -631,8 +631,7 @@ export function ReaderPage() {
       else if (panel === null) { setControlsVisible(false); articleRef.current?.focus({ preventScroll: true }) }
     }
   }}>
-    {boundaryNotice ? <div className="reader-boundary-notice" role="status" aria-live="polite">{boundaryNotice.text}</div> : null}
-    {contentWarning.length > 0 ? <div className="reader-boundary-notice" role="status" aria-live="polite">{contentWarning}</div> : null}
+    {boundaryNotice ? <FloatingMessage className="reader-floating-message" tone="info" message={boundaryNotice.text} onDismiss={() => setBoundaryNotice(null)} /> : contentWarning.length > 0 ? <FloatingMessage className="reader-floating-message" message={contentWarning} onDismiss={() => setContentWarning('')} /> : null}
     <div className="reader-status reader-status-top" aria-label="当前阅读书籍与章节"><span title={bookName}>{bookName}</span><span title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</span></div>
     <div className="reader-status reader-status-bottom" aria-label="阅读进度"><span>{chapterProgress}</span><span>{paged ? `${pageCounter}${pageLayout.pageCount > 0 ? '页' : ''} ` : ''}{wordCountLabel}</span></div>
     <header className="reader-topbar" hidden={!controlsVisible}><PageBackButton className="reader-back" /><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">

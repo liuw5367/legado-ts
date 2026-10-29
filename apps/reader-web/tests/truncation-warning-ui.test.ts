@@ -16,3 +16,13 @@ test('目录页和阅读页渲染接口返回的截断提示', async () => {
   assert.match(readerPage, /setContentWarning\(/u)
   assert.match(readerPage, /contentWarning\.length > 0/u)
 })
+
+test('阅读浮层与其他操作反馈使用可关闭的公共组件', async () => {
+  const readerPage = await readFile(resolve(sourceRoot, 'pages/reader.tsx'), 'utf8')
+  assert.ok(readerPage.includes('message={contentWarning} onDismiss={() => setContentWarning(\'\')}'))
+  assert.ok(readerPage.includes('tone="info" message={boundaryNotice.text} onDismiss={() => setBoundaryNotice(null)}'))
+  const aboutPage = await readFile(resolve(sourceRoot, 'pages/about-app.tsx'), 'utf8')
+  assert.ok(aboutPage.includes('onDismiss={() => setMessage(\'\')}>{message}</DismissibleMessage>'))
+  const historyPage = await readFile(resolve(sourceRoot, 'pages/source-import-history.tsx'), 'utf8')
+  assert.ok(historyPage.includes('onDismiss={() => setError(\'\')}>{error}</DismissibleMessage>'))
+})

@@ -1,4 +1,5 @@
 import { APP_NAME, APP_TAGLINE } from '../lib/app-config.ts'
+import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { useId, useState } from 'react'
 import { BookOpen, ExternalLink, Share2 } from 'lucide-react'
@@ -43,6 +44,6 @@ export function AboutAppPage() {
       <button className="settings-entry settings-entry-action" type="button" disabled={sharing} onClick={() => void share(`${APP_NAME} 仓库`, repositoryUrl)}><span className="settings-entry-copy"><strong>分享仓库</strong><span className="muted small">分享 GitHub 项目地址</span></span><Share2 aria-hidden="true" /></button>
       <button className="settings-entry settings-entry-action" type="button" disabled={sharing} onClick={() => void share(APP_NAME, window.location.origin)}><span className="settings-entry-copy"><strong>分享应用</strong><span className="muted small">分享当前应用地址</span></span><Share2 aria-hidden="true" /></button>
     </nav>
-    {message ? <p className="muted small" role="status">{message}</p> : null}
+    {message ? <DismissibleMessage className="muted small" role="status" onDismiss={() => setMessage('')}>{message}</DismissibleMessage> : null}
   </section>
 }

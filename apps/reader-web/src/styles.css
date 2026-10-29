@@ -1055,7 +1055,6 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 
 .import-item-reason { grid-column: 3; grid-row: 2; max-width: min(42vw, 240px); justify-self: end; text-align: right; overflow-wrap: anywhere; }
 
-.reader-boundary-notice { position: fixed; z-index: 12; left: 50%; bottom: calc(80px + var(--safe-bottom)); transform: translateX(-50%); max-width: calc(100% - 32px); padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--foreground); color: var(--background); font-size: 14px; pointer-events: none; }
 
 /* 标记颜色同时驱动下划线、浅背景及笔记列表色点。 */
 [data-color="pink"] { --mark-color: #ff8fa8; }
