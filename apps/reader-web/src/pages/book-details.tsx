@@ -1,3 +1,4 @@
+import { DialogPresence } from '../components/ui/animated-dialog.tsx'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
 import { BookCoverPicker } from '../components/book-cover-picker.tsx'
 import { BookListPicker } from '../components/book-list-picker.tsx'
@@ -62,7 +63,7 @@ export function BookDetailsPage() {
       <div className="detail-section"><h3>简介</h3><p className="book-details-intro">{metadata?.intro || data.book.intro || '暂无简介'}</p></div>
       {original === undefined ? null : <a className="link book-original-link" href={original} target="_blank" rel="noopener noreferrer">原地址</a>}
     </>}
-    {data && picker === 'cover' ? <BookCoverPicker data={data} onClose={() => setPicker(null)} onSaved={(book) => { cache.clear(); setData((current) => current ? { ...current, book } : current); setFeedback('已切换封面') }} /> : null}
-    {data && picker === 'join' ? <BookListPicker onSaved={() => setFeedback('已加入书单')} book={data.book} {...(params.get('targetBookListId') ? { defaultListId: params.get('targetBookListId')! } : {})} onClose={() => setPicker(null)} /> : data && picker === 'group' ? <ShelfGroupPicker onSaved={() => setFeedback('已修改分组')} book={data.book} onClose={() => setPicker(null)} /> : null}
+    <DialogPresence>{data && picker === 'cover' ? <BookCoverPicker data={data} onClose={() => setPicker(null)} onSaved={(book) => { cache.clear(); setData((current) => current ? { ...current, book } : current); setFeedback('已切换封面') }} /> : null}</DialogPresence>
+    <DialogPresence>{data && picker === 'join' ? <BookListPicker onSaved={() => setFeedback('已加入书单')} book={data.book} {...(params.get('targetBookListId') ? { defaultListId: params.get('targetBookListId')! } : {})} onClose={() => setPicker(null)} /> : data && picker === 'group' ? <ShelfGroupPicker onSaved={() => setFeedback('已修改分组')} book={data.book} onClose={() => setPicker(null)} /> : null}</DialogPresence>
   </section>
 }

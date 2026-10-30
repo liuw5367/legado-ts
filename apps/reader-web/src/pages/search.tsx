@@ -1,3 +1,4 @@
+import { DialogPresence } from '../components/ui/animated-dialog.tsx'
 import { EmptyState } from '../components/empty-state.tsx'
 import { SearchX } from 'lucide-react'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
@@ -141,7 +142,7 @@ export function SearchPage() {
     {status === 'paused' ? <div className="actions"><Button onClick={() => void resume()}>继续搜索</Button><Button variant="secondary" onClick={() => void cancel()}>停止搜索</Button></div> : null}
     <div className="result-list">{groups.length === 0 && status === 'done' && booksLoaded ? <EmptyState icon={SearchX} title="没有找到匹配书籍" description="尝试其他关键词或书源" /> : groups.slice(0, visibleCount).map((group) => <SearchResult key={group.key} group={group} inBookshelf={shelfBooks.some((book) => sameBookIdentity(book.name, book.author, group.name, group.author))} selectedIndex={selectedCandidateIndex(group.items, selectedByGroup[group.key])} expanded={expandedKey === group.key} disabled={!booksLoaded || saving !== null} sourceById={managedSourceById} onToggle={() => setExpandedKey((current) => current === group.key ? undefined : group.key)} saving={saving !== null && group.items.some((item) => item.index === saving)} onSelect={(index) => { const item = candidates[index]; if (item !== undefined) setSelectedByGroup((current) => ({ ...current, [group.key]: candidateSelectionKey(item) })) }} onSave={(action) => void saveCandidate(group, action)} />)}</div>
     {groups.length > visibleCount ? <Button variant="secondary" onClick={() => setVisibleCount((value) => value + 50)}>继续显示结果</Button> : null}
-    {listCandidate ? <BookListPicker book={books.find((book) => sameBookIdentity(book.name, book.author, listCandidate.group.name, listCandidate.group.author)) ?? { name: listCandidate.group.name, author: listCandidate.group.author }} resolveBook={resolveListBook} {...(targetBookListId ? { defaultListId: targetBookListId } : {})} onClose={() => setListCandidate(null)} onSaved={() => { setMessageTone('success'); setMessage('已加入书单') }} /> : null}
+    <DialogPresence>{listCandidate ? <BookListPicker book={books.find((book) => sameBookIdentity(book.name, book.author, listCandidate.group.name, listCandidate.group.author)) ?? { name: listCandidate.group.name, author: listCandidate.group.author }} resolveBook={resolveListBook} {...(targetBookListId ? { defaultListId: targetBookListId } : {})} onClose={() => setListCandidate(null)} onSaved={() => { setMessageTone('success'); setMessage('已加入书单') }} /> : null}</DialogPresence>
   </section>
 }
 

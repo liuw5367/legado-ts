@@ -1,3 +1,4 @@
+import { Sheet } from '../components/ui/sheet.tsx'
 import { EmptyState } from '../components/empty-state.tsx'
 import { BookOpen, SearchX } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -33,6 +34,7 @@ export function SourcesPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<{ sourceId: string; expectedSourceRevision: string }[] | null>(null)
   const requestRef = useRef<AbortController | null>(null)
   const mounted = useRef(false)
   const actionRef = useRef(false)
@@ -115,16 +117,16 @@ export function SourcesPage() {
     })
   }
 
-  async function apply(action: 'enable' | 'disable' | 'delete', sources?: ManagedSourceSummary[]) {
-    const items = sources === undefined
+  async function apply(action: 'enable' | 'disable' | 'delete', sources?: ManagedSourceSummary[], confirmedItems?: { sourceId: string; expectedSourceRevision: string }[]) {
+    const items = confirmedItems ?? (sources === undefined
       ? [...selected.entries()].map(([sourceId, expectedSourceRevision]) => ({ sourceId, expectedSourceRevision }))
-      : sources.map((source) => ({ sourceId: source.sourceId, expectedSourceRevision: source.sourceRevision }))
+      : sources.map((source) => ({ sourceId: source.sourceId, expectedSourceRevision: source.sourceRevision })))
     if (items.length === 0 || actionRef.current) return
     if (action === 'enable' && new Set(items.map((item) => sourceDomainInfo(item.sourceId).key)).size !== items.length) {
       setError('每个域名只能选择一个实现作为账号默认版本。')
       return
     }
-    if (action === 'delete' && !window.confirm(`确定删除 ${items.length} 个书源实现吗？书架和阅读进度会保留。`)) return
+    if (action === 'delete' && confirmedItems === undefined) { setPendingDelete(items); return }
     actionRef.current = true; setActing(true)
     setMessage(''); setError('')
     try {
@@ -149,6 +151,7 @@ export function SourcesPage() {
     {selected.size > 0 ? <div className="source-bulk-bar"><span>已选 {selected.size} 个实现{enableConflict ? '，同域多选时不能批量启用' : ''}</span><div className="actions"><Button size="sm" type="button" disabled={acting || loading || enableConflict} onClick={() => void apply('enable')}>启用</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('disable')}>禁用</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => void apply('delete')}>删除</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={() => setSelected(new Map())}>清空</Button></div></div> : null}
     {loading ? <LoadingState message={data === null ? '正在加载书源…' : '正在更新书源…'} variant={data === null ? 'viewport' : 'inline'} action={data === null ? <PageBackButton appearance="button" fallback="/account/settings" /> : undefined} /> : null}
     {data === null ? null : visibleGroups.length === 0 ? loading ? null : <EmptyState icon={SearchX} title="没有匹配的书源域名" description="调整筛选条件或导入书源" /> : <><div className="source-list-header"><div className="actions source-selection-actions" role="group" aria-label="书源列表批量选择"><label className="button small secondary source-select-all"><input ref={selectAllRef} type="checkbox" checked={pageSelected} disabled={acting || loading} onChange={(event) => toggleMany(visibleSources, event.target.checked)} /><span>全选</span></label><Button size="sm" variant="secondary" type="button" disabled={acting || loading} onClick={invertVisibleSelection}>反选</Button><Button size="sm" variant="secondary" type="button" disabled={acting || loading || pageSelectedCount === 0} onClick={() => toggleMany(visibleSources, false)}>清空</Button></div><span className="muted small">显示 {visibleGroups.length} 个域名、{visibleSources.length} 个实现</span></div><div className="source-management-list">{visibleGroups.map((group) => <SourceDomainRow key={group.domainKey} group={group} busy={acting || loading} selected={selected} onToggle={(source, checked) => toggle(source, checked)} onToggleGroup={(sources, checked) => toggleMany(sources, checked)} onAction={(source, action) => void apply(action, [source])} />)}</div></>}
+    <Sheet open={pendingDelete !== null} title="确认删除书源" onOpenChange={(open) => { if (!open) setPendingDelete(null) }}><p>确定删除 {pendingDelete?.length ?? 0} 个书源实现吗？书架和阅读进度会保留。</p><div className="actions"><Button variant="secondary" onClick={() => setPendingDelete(null)}>取消</Button><Button onClick={() => { if (pendingDelete) { const items = pendingDelete; setPendingDelete(null); void apply('delete', undefined, items) } }}>确认删除</Button></div></Sheet>
     <SourceImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={(imported) => { setImportOpen(false); cache.clear(); setStatsAttempt((value) => value + 1); setMessage(`已导入 ${imported} 个书源`) }} />
     {message.length > 0 ? <FloatingMessage tone="success" message={message} onDismiss={() => setMessage('')} /> : null}
   </section>

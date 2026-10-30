@@ -1,3 +1,4 @@
+import { DialogPresence } from '../components/ui/animated-dialog.tsx'
 import { hasBookUpdate, setBookUpdate, subscribeBookUpdates } from '../lib/book-updates.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
 import type { RefreshShelfChaptersResponse } from '../../shared/shelf-chapters.ts'
@@ -167,7 +168,7 @@ function BookRow({ onRefreshed, view, item, showRemove, removing, onRemove, onOr
       {showRemove ? <button className="more-menu-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}
     </MoreMenu>
     {refreshError ? <DismissibleMessage className="error book-row-feedback" role="alert" onDismiss={() => setRefreshError('')}>{refreshError}</DismissibleMessage> : null}
-    {picker === 'group' ? <ShelfGroupPicker book={book} onSaved={() => onOrganized('已修改分组')} onClose={() => setPicker(null)} /> : picker ? <BookListPicker book={book} move={picker === 'move'} onSaved={() => onOrganized(picker === 'move' ? '已移入书单并移出书架' : '已加入书单')} onClose={() => setPicker(null)} /> : null}
+    <DialogPresence>{picker === 'group' ? <ShelfGroupPicker book={book} onSaved={() => onOrganized('已修改分组')} onClose={() => setPicker(null)} /> : picker ? <BookListPicker book={book} move={picker === 'move'} onSaved={() => onOrganized(picker === 'move' ? '已移入书单并移出书架' : '已加入书单')} onClose={() => setPicker(null)} /> : null}</DialogPresence>
   </article>
 }
 

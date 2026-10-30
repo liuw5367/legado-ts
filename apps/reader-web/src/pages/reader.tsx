@@ -1,3 +1,4 @@
+import { AnimatedDialog, DialogPresence } from '../components/ui/animated-dialog.tsx'
 import { setBookUpdate } from '../lib/book-updates.ts'
 import { useAuth } from '../lib/auth-context.tsx'
 import { Bookmark, Moon, Sun, X } from 'lucide-react'
@@ -93,7 +94,6 @@ export function ReaderPage() {
   useEffect(() => setBoundaryNotice(null), [chapterId, pageIndex])
   const refreshController = useRef<AbortController | null>(null)
   const articleRef = useRef<HTMLElement>(null)
-  const pageGuideRef = useRef<HTMLDialogElement>(null)
   const pageGuidePreviewRef = useRef<HTMLDivElement>(null)
   const pageGuideDragRef = useRef<PageTapZoneDrag | null>(null)
   const latestPositionRef = useRef<ApiPosition | null>(null)
@@ -302,7 +302,6 @@ export function ReaderPage() {
       refreshController.current?.abort()
       const anchor = settings.readingMode === 'paged' ? anchorFromViewport(articleRef.current) : latestAnchorRef.current
       if (anchor !== null && anchor !== undefined) { latestAnchorRef.current = anchor; paginationAnchorRef.current = anchor; if (!previewActive && !previewActiveRef.current) void persistPosition({ ...anchor, version: positionVersionRef.current + 1 }, false, true) }
-      pageGuideRef.current?.close()
     }
   }, [bookId, chapterId, editionKey, content, settings.readingMode, previewActive])
 
@@ -368,18 +367,6 @@ export function ReaderPage() {
       })
     }
   }, [settings.readingMode])
-
-  useEffect(() => {
-    const dialog = pageGuideRef.current
-    if (dialog === null) return
-    if (pageGuideVisible && visible.current && !dialog.open) {
-      dialog.showModal()
-      // 原生 showModal 也会聚焦首个控件；打开时清除该焦点，避免关闭按钮出现焦点框。
-      const focused = document.activeElement
-      if (focused instanceof HTMLElement && dialog.contains(focused)) focused.blur()
-    } else if (!pageGuideVisible && dialog.open) dialog.close()
-    return () => { if (dialog.open) dialog.close() }
-  }, [pageGuideVisible])
 
   useEffect(() => () => { pageGuideDragRef.current = null }, [])
 
@@ -641,7 +628,7 @@ export function ReaderPage() {
     {boundaryNotice ? <FloatingMessage className="reader-floating-message" tone="info" message={boundaryNotice.text} onDismiss={() => setBoundaryNotice(null)} /> : contentWarning.length > 0 ? <FloatingMessage className="reader-floating-message" message={contentWarning} onDismiss={() => setContentWarning('')} /> : null}
     <div className="reader-status reader-status-top" aria-label="当前阅读书籍与章节"><span title={bookName}>{bookName}</span><span title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</span></div>
     <div className="reader-status reader-status-bottom" aria-label="阅读进度"><span>{chapterProgress}</span><span>{paged ? `${pageCounter}${pageLayout.pageCount > 0 ? '页' : ''} ` : ''}{wordCountLabel}</span></div>
-    <header className="reader-topbar" hidden={!controlsVisible}><PageBackButton className="reader-back" /><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
+    <header className="reader-topbar" data-visible={controlsVisible} inert={!controlsVisible}><PageBackButton className="reader-back" /><div className="reader-title"><strong title={content.chapter.title ?? ''}>{content.chapter.title ?? '正文'}</strong></div><div className="reader-tools"><MoreMenu label="更多阅读操作">
       <Link className="more-menu-item" to={'/books/' + encodeURIComponent(bookId) + '/details?editionKey=' + encodeURIComponent(editionKey)} state={readerReturnState(location)}><Info aria-hidden="true" />书籍详情</Link>
       {paged ? <button className="more-menu-item" type="button" onClick={openPageGuide}><CircleHelp aria-hidden="true" />翻页区域</button> : null}
       {address === undefined ? <span className="more-menu-note muted small">没有可用的原文地址</span> : <a className="more-menu-item" href={address} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />查看原文</a>}
@@ -724,7 +711,7 @@ export function ReaderPage() {
       }}>
       <ReaderBody document={readingContent} marks={marks.resolved} />
     </article>
-    {paged ? <dialog ref={pageGuideRef} id="reader-page-guide" className="reader-page-guide" aria-labelledby="reader-page-guide-title" onCancel={(event) => { event.preventDefault(); closePageGuide() }}>
+    <AnimatedDialog open={paged && pageGuideVisible} id="reader-page-guide" className="reader-page-guide" aria-labelledby="reader-page-guide-title" onCancel={(event) => { event.preventDefault(); closePageGuide() }}>
       <div className="reader-page-guide-shell">
         <header className="reader-page-guide-header"><div><span className="reader-page-guide-kicker">阅读操作</span><h2 id="reader-page-guide-title">翻页区域</h2><p>拖动分割线调整区域，点击中间栏切换操作栏。</p></div><button className="reader-page-guide-close" type="button" data-page-guide-close aria-label="关闭翻页区域设置" disabled={settingsSaving} onClick={closePageGuide}>×</button></header>
         <div className="reader-page-guide-body">
@@ -749,12 +736,12 @@ export function ReaderPage() {
         </div>
         <footer className="reader-page-guide-footer"><Button variant="secondary" type="button" disabled={settingsSaving} onClick={closePageGuide}>关闭</Button><Button type="button" disabled={settingsSaving} onClick={() => void savePageGuide()}>{settingsSaving ? '保存中…' : '保存设置'}</Button></footer>
       </div>
-    </dialog> : null}
+    </AnimatedDialog>
     {paged && paginationError.length > 0 ? <div className="reader-pagination-error" role="alert"><DismissibleMessage onDismiss={() => setPaginationError('')} className="error">{paginationError}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => { setPaginationError(''); setPageLayout({ pageWidth: 0, pageCount: 0 }); setPageIndex(0) }}>重试分页</Button><Button variant="secondary" size="sm" type="button" onClick={() => void switchToScroll()}>切换滚动阅读</Button></div></div> : null}
     {refreshError.length > 0 ? <DismissibleMessage onDismiss={() => setRefreshError('')} className="error reader-position-error" role="alert">{refreshError}<button className="text-button" disabled={refreshing} onClick={() => void refreshChapter()}>重试刷新</button></DismissibleMessage> : null}
     {positionError.length > 0 ? <DismissibleMessage onDismiss={() => setPositionError('')} className="error reader-position-error" role="alert">{positionError}<button className="text-button" type="button" onClick={() => void navigation?.positions.retry(bookId, editionKey).then((result) => { if (result !== undefined) { setPosition(result); setPositionError('') } }, (reason: unknown) => setPositionError(reason instanceof Error ? reason.message : '阅读位置保存失败'))}>重试</button></DismissibleMessage> : null}
     {controlsVisible ? <div className="reader-controls-backdrop" aria-hidden="true" onClick={() => setControlsVisible(false)} onWheel={(event) => event.preventDefault()} onTouchMove={(event) => event.preventDefault()} /> : null}
-    <div className="reader-bottom-bar" hidden={!controlsVisible}>
+    <div className="reader-bottom-bar" data-visible={controlsVisible} inert={!controlsVisible}>
       <div className="reader-exit-row"><PageBackButton className="reader-exit" label="退出阅读" /><button className="reader-theme-toggle" type="button" aria-label={dark ? '切换日间模式' : '切换夜间模式'} title={dark ? '切换日间模式' : '切换夜间模式'} disabled={settingsSaving} onClick={() => void toggleTheme()}>{dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button></div>
       <nav className="reader-chapter-nav" aria-label="章节导航"><button className="reader-nav-button" type="button" disabled={previous === undefined} onClick={() => { if (previous !== undefined) navigate(chapterLink(bookId, previous, editionKey), { replace: true, state: location.state }) }}>上一章</button><span className="reader-word-count" aria-label={paged ? `分页进度 ${pageCounter}，${wordCountLabel}` : '章节字数'}>{paged ? <><span>{pageCounter}</span><span className="reader-word-count-separator" aria-hidden="true">·</span><span>{wordCountLabel}</span></> : wordCountLabel}</span><button className="reader-nav-button" type="button" disabled={next === undefined} onClick={() => { if (next !== undefined) navigate(chapterLink(bookId, next, editionKey), { replace: true, state: location.state }) }}>下一章</button></nav>
       <nav className="reader-shortcuts" aria-label="阅读快捷操作">
@@ -768,7 +755,7 @@ export function ReaderPage() {
     {controlsVisible && panel === null && !pageGuideVisible && !marks.selection && !marks.editing ? <button className="reader-bookmark-float" type="button" aria-label={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} title={marks.currentBookmark ? '取消当前书签' : '添加当前位置书签'} aria-pressed={Boolean(marks.currentBookmark)} disabled={marks.busy} onClick={() => void marks.toggleBookmark()}><Bookmark aria-hidden="true" fill={marks.currentBookmark ? 'currentColor' : 'none'} /></button> : null}
     {marks.error ? <FloatingMessage className="reader-floating-message" message={marks.error} actionLabel="重新加载" onAction={marks.retry} onDismiss={() => marks.setError('')} /> : null}
     {marks.selection && !marks.editing ? <ReaderSelectionToolbar rect={marks.selection.rect} mark={marks.selection.mark} busy={marks.busy} onColor={(color) => void marks.save(color, marks.selection?.mark?.note ?? null)} onThought={marks.startThought} onDelete={() => void marks.remove()} onClose={marks.close} /> : null}
-    {marks.editing && marks.selection ? <ReadingMarkEditor initialNote={marks.selection.mark?.note ?? ''} onClose={marks.stopThought} onSave={(note) => marks.save(marks.selection?.mark?.color ?? 'orange', note, true)} /> : null}
+    <DialogPresence>{marks.editing && marks.selection ? <ReadingMarkEditor initialNote={marks.selection.mark?.note ?? ''} onClose={marks.stopThought} onSave={(note) => marks.save(marks.selection?.mark?.color ?? 'orange', note, true)} /> : null}</DialogPresence>
     {previewActive && !controlsVisible && !marks.selection && !marks.editing ? <div className="reader-progress-choice"><button type="button" onClick={returnToReadingProgress}>返回阅读进度</button><span className="reader-progress-separator" aria-hidden="true" /><button type="button" aria-label="接受当前位置为最新阅读进度" title="将当前位置设为最新阅读进度" onClick={() => void acceptPreviewPosition()}><X aria-hidden="true" /></button></div> : null}
     <Sheet className="reader-marks-sheet" open={panel === 'marks'} onOpenChange={(open) => setPanel(open ? 'marks' : null)} title="书签与笔记"><div className="notes-status-tabs" role="tablist" aria-label="书签与笔记"><button type="button" role="tab" aria-selected={markTab === 'bookmarks'} onClick={() => setMarkTab('bookmarks')}>书签</button><button type="button" role="tab" aria-selected={markTab === 'annotations'} onClick={() => setMarkTab('annotations')}>笔记</button></div>{panel === 'marks' ? <ReadingMarksList key={markTab} kind={markTab} bookId={bookId} readerSheet currentProgressTitle={position?.title ?? content.chapter.title ?? '正文'} onCurrentProgress={openCurrentProgress} currentEditionKey={editionKey} onNavigate={navigateToMark} /> : null}</Sheet>
     <Sheet open={panel === 'toc'} onOpenChange={(open) => setPanel(open ? 'toc' : null)} title="章节目录"><ReaderTocPanel open={panel === 'toc'} bookId={bookId} editionKey={editionKey} chapters={siblings} currentChapterId={chapterId} onNavigate={() => setPanel(null)} /></Sheet>
