@@ -278,7 +278,7 @@ function matchesBookTarget(book: StoredBook, candidate: { name?: string; author?
 async function cacheSearchSources(repository: ReaderRepository, userId: string, candidates: StoredCandidate[], searchId?: string): Promise<{ cacheWarning?: SourceCacheWarning }> {
   try {
     if (searchId !== undefined) candidates = (await repository.getSearch(userId, searchId))?.candidates ?? candidates
-    const home = await repository.getHome(userId)
+    const shelf = await repository.getBookshelf(userId)
     const grouped = new Map<string, StoredCandidate[]>()
     for (const candidate of candidates) {
       const key = bookIdentityKey(candidate.candidate.name, candidate.candidate.author)
@@ -286,7 +286,7 @@ async function cacheSearchSources(repository: ReaderRepository, userId: string, 
       const group = grouped.get(key) ?? []
       group.push(candidate); grouped.set(key, group)
     }
-    for (const { book } of home.bookshelf) {
+    for (const { book } of shelf) {
       const key = bookIdentityKey(book.name, book.author)
       if (key === undefined) continue
       const matches = grouped.get(key)

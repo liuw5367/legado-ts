@@ -7,6 +7,7 @@ export interface ShelfChapterSummary {
 }
 
 export interface RefreshShelfChaptersResponse extends ShelfChapterSummary {
+  position: { chapterId: string; title: string; lastReadAt: string } | null
   previousChapterCount: number | null
   hasNewChapters: boolean
   runtimeWarning?: string

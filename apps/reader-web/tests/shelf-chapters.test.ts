@@ -57,11 +57,14 @@ test('真实目录刷新增加未读数，不修改阅读位置；无新增、�
   assert.equal(refreshed.chapterCount, 5)
   assert.equal(refreshed.hasNewChapters, true)
   assert.equal(refreshed.unreadChapterCount, 4)
+  assert.equal(refreshed.position?.chapterId, before?.chapterId)
   assert.deepEqual(await repository.getPosition('a', book.id, 'e'), before)
   assert.equal((await repository.getHome('a')).bookshelf[0]!.chapters.unreadChapterCount, 4)
   assert.equal((await refreshShelfChapters(repository, runtime, 'a', book.id, 'e')).hasNewChapters, false)
   count = 1
   assert.equal((await refreshShelfChapters(repository, runtime, 'a', book.id, 'e')).hasNewChapters, false)
+  await repository.savePosition('a', { ...before!, chapterUrl: '/missing', chapterIndex: 0, title: '缺失章节', version: 100 })
+  assert.equal((await refreshShelfChapters(repository, runtime, 'a', book.id, 'e')).unreadChapterCount, null)
   const cached = await repository.getTocSummary('a', book.id, 'e')
   fail = true
   await assert.rejects(refreshShelfChapters(repository, runtime, 'a', book.id, 'e'))

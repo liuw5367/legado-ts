@@ -456,15 +456,27 @@ app.put('/api/books/:bookId/edition', async (context) => {
   }
 })
 
-app.get('/api/home', async (context) => {
+app.get('/api/bookshelf', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try { return context.json({ bookshelf: await dependencies.repository.getBookshelf(context.get('userId')) }) }
+  catch (error) { return handleError(context, error) }
+})
+
+app.get('/api/reading-history', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try { return context.json({ reading: await dependencies.repository.getReadingHistory(context.get('userId')) }) }
+  catch (error) { return handleError(context, error) }
+})
+
+app.get('/api/search-history', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
   try {
-    const home = await dependencies.repository.getHome(context.get('userId'))
-    return context.json({ ...home, searchHistory: home.searchHistory.map(({ id, keyword, status, resultCount, summary, updatedAt }) => ({ id, keyword, status, resultCount, ...(summary === undefined ? {} : { summary }), updatedAt })) })
-  } catch (error) {
-    return handleError(context, error)
-  }
+    const history = await dependencies.repository.getSearchHistory(context.get('userId'))
+    return context.json({ searchHistory: history.map(({ id, keyword, status, resultCount, summary, updatedAt }) => ({ id, keyword, status, resultCount, ...(summary === undefined ? {} : { summary }), updatedAt })) })
+  } catch (error) { return handleError(context, error) }
 })
 
 app.put('/api/books/:bookId/bookshelf', async (context) => {

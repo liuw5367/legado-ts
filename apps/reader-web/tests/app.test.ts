@@ -317,3 +317,11 @@ test('章节刷新接口拒绝未登录请求', async () => {
   const response = await app.request('http://localhost/api/books/b/toc/refresh?editionKey=e', { method: 'POST' })
   assert.equal(response.status, 401)
 })
+
+
+test('拆分后的书架、阅读和搜索历史接口分别鉴权', async () => {
+  for (const path of ['/api/bookshelf', '/api/reading-history', '/api/search-history']) {
+    const response = await app.request('http://localhost' + path)
+    assert.equal(response.status, 401)
+  }
+})

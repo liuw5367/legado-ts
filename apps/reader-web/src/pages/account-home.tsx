@@ -8,14 +8,14 @@ import { ShelfGroupPicker } from '../components/shelf-group-picker.tsx'
 import { PageHeader } from '../components/page-header.tsx'
 import { BookOpen, Bookmark, History, LoaderCircle, Search } from 'lucide-react'
 import { EmptyState } from '../components/empty-state.tsx'
-import { usePageLoadEffect, usePageNavigation } from '../lib/use-page-resource.ts'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useHomeResource } from '../lib/use-home-resource.ts'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
 import { MoreMenu } from '../components/more-menu.tsx'
 import { Button } from '../components/ui/button.tsx'
-import { apiFetch, type ApiHome, type ApiShelfGroups } from '../lib/api.ts'
+import { apiFetch, type ApiHome, type ApiShelfGroups, type ApiBookshelf, type ApiReadingHistory, type ApiSearchHistory } from '../lib/api.ts'
 import { formatShanghaiDateTime } from '../lib/time-format.ts'
 import { useAuth } from '../lib/auth-context.tsx'
 import { hasSeenOnboarding } from '../lib/onboarding.ts'
@@ -24,25 +24,36 @@ type BookItem = ApiHome['bookshelf'][number]
 type View = 'bookshelf' | 'reading' | 'history'
 
 export function AccountHomePage() {
-  const navigation = usePageNavigation()
-  const [groupData, setGroupData] = useState<ApiShelfGroups | null>(null)
   const [selectedGroup, setSelectedGroup] = useState('all')
   const groupInitialized = useRef<string | undefined>(undefined)
   const { settings, settingsLoadStatus, retrySettingsLoad, error: settingsError } = useReaderSettings()
-  const [home, setHome] = useState<ApiHome | null>(null)
-  const [loading, setLoading] = useState(true)
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
   const onboardingRedirected = useRef(false)
   const initialView = (location.state as { homeView?: View } | null)?.homeView
   const [view, setView] = useState<View>(initialView === 'reading' || initialView === 'history' ? initialView : 'bookshelf')
+  const tabScroll = useRef<Partial<Record<View, number>>>({})
+  const previousView = useRef(view)
+  function selectView(next: View) {
+    if (next === view) return
+    tabScroll.current[view] = window.scrollY
+    setView(next)
+  }
+  useLayoutEffect(() => {
+    if (previousView.current !== view) window.scrollTo({ top: tabScroll.current[view] ?? 0, behavior: 'auto' })
+    previousView.current = view
+  }, [view])
+  const shelf = useHomeResource<ApiBookshelf>('/api/bookshelf', 'bookshelf', view === 'bookshelf', settings.general.bookshelfSort)
+  const reading = useHomeResource<ApiReadingHistory>('/api/reading-history', 'reading-history', view === 'reading')
+  const history = useHomeResource<ApiSearchHistory>('/api/search-history', 'search-history', view === 'history')
+  const groups = useHomeResource<ApiShelfGroups>('/api/bookshelf-groups', 'groups')
+  const groupData = groups.data
+  const current = view === 'bookshelf' ? shelf : view === 'reading' ? reading : history
   const [feedback, setFeedback] = useState('')
   const [message, setMessage] = useState('')
   const [removing, setRemoving] = useState<string>()
   const [deletingHistory, setDeletingHistory] = useState<string>()
-  const requestIdRef = useRef(0)
-  const controllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!user?.id || onboardingRedirected.current || hasSeenOnboarding(user.id)) return
@@ -57,44 +68,17 @@ export function AccountHomePage() {
     groupInitialized.current = user.id
   }, [user?.id, settingsLoadStatus, settings.general.bookshelfInitialGroup, groupData])
 
-  const loadHome = useCallback(async () => {
-    const requestId = ++requestIdRef.current
-    controllerRef.current?.abort()
-    const controller = new AbortController()
-    controllerRef.current = controller
-    setLoading(true)
-    setMessage('')
-    try {
-      await navigation?.positions.flush()
-      if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      const [result, groups] = await Promise.all([apiFetch<ApiHome>('/api/home', { signal: controller.signal }), apiFetch<ApiShelfGroups>('/api/bookshelf-groups', { signal: controller.signal })])
-      if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      setHome(result); setGroupData(groups)
-      const valid = (id: string) => id === 'all' || id === 'ungrouped' || groups.groups.some((group) => group.id === id)
-      setSelectedGroup((current) => valid(current) ? current : 'all')
-    } catch (error: unknown) {
-      if (controller.signal.aborted || requestId !== requestIdRef.current) return
-      setMessage(error instanceof Error ? error.message : '首页加载失败')
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false)
-        if (controllerRef.current === controller) controllerRef.current = null
-      }
-    }
-  }, [navigation?.positions])
-
-  usePageLoadEffect((settle) => {
-    void loadHome().then(settle)
-    return () => {
-      requestIdRef.current += 1
-      controllerRef.current?.abort()
-      controllerRef.current = null
-    }
-  }, [], ['home', 'groups'])
+  useEffect(() => {
+    if (groupData && selectedGroup !== 'all' && selectedGroup !== 'ungrouped' && !groupData.groups.some((group) => group.id === selectedGroup)) setSelectedGroup('all')
+  }, [groupData, selectedGroup])
 
   const updateBookChapters = useCallback((bookId: string, editionKey: string, chapters: RefreshShelfChaptersResponse) => {
-    setHome((current) => current === null ? null : { ...current, bookshelf: current.bookshelf.map((row) => row.book.id === bookId && row.edition.editionKey === editionKey ? { ...row, chapters } : row) })
-  }, [])
+    shelf.setData((current) => current === null ? null : { ...current, bookshelf: current.bookshelf.map((row) => {
+      if (row.book.id !== bookId || row.edition.editionKey !== editionKey) return row
+      const { position: _position, ...book } = row
+      return { ...book, chapters, ...(chapters.position ? { position: chapters.position } : {}) }
+    }) })
+  }, [shelf.setData])
 
   async function removeBook(bookId: string) {
     setRemoving(bookId); setMessage('')
@@ -109,23 +93,27 @@ export function AccountHomePage() {
     finally { setDeletingHistory(undefined) }
   }
 
-  const bookItems: BookItem[] = home === null ? [] : view === 'bookshelf' ? home.bookshelf.filter((row) => selectedGroup === 'all' || (selectedGroup === 'ungrouped' ? !row.groupId : row.groupId === selectedGroup)) : home.reading
-  const countLabel = home === null ? (loading ? '读取中…' : '暂时无法读取') : view === 'bookshelf' ? `${home.bookshelf.length} 本书` : view === 'reading' ? `${home.reading.length} 条记录` : `${home.searchHistory.length} 条搜索`
+  const allShelf = shelf.data?.bookshelf
+  const bookItems: BookItem[] = view === 'bookshelf' ? (allShelf ?? []).filter((row) => selectedGroup === 'all' || (selectedGroup === 'ungrouped' ? !row.groupId : row.groupId === selectedGroup)) : reading.data?.reading ?? []
+  const count = view === 'bookshelf' ? allShelf?.length : view === 'reading' ? reading.data?.reading.length : history.data?.searchHistory.length
+  const countLabel = count === undefined ? current.loading ? '读取中…' : '暂时无法读取' : view === 'bookshelf' ? `${count} 本书` : view === 'reading' ? `${count} 条记录` : `${count} 条搜索`
   return <section className="page-stack page-narrow">
     <PageHeader title="我的阅读" description={countLabel} actions={<Link className="button small page-action" to="/search"><Search aria-hidden="true" /><span>搜索</span></Link>} />
     {settingsLoadStatus === 'error' ? <DismissibleMessage className="error" role="alert">{settingsError ?? '设置加载失败'}<button type="button" onClick={() => void retrySettingsLoad()}>重试</button></DismissibleMessage> : null}
     <div className="segmented" role="tablist" aria-label="阅读数据视图">
-      <button className={view === 'bookshelf' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'bookshelf'} onClick={() => setView('bookshelf')}>书架 {home === null ? null : <span>{home.bookshelf.length}</span>}</button>
-      <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => setView('reading')}>阅读 {home === null ? null : <span>{home.reading.length}</span>}</button>
-      <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => setView('history')}>搜索 {home === null ? null : <span>{home.searchHistory.length}</span>}</button>
+      <button className={view === 'bookshelf' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'bookshelf'} onClick={() => selectView('bookshelf')}>书架 {allShelf ? <span>{allShelf.length}</span> : null}</button>
+      <button className={view === 'reading' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'reading'} onClick={() => selectView('reading')}>阅读 {reading.data ? <span>{reading.data.reading.length}</span> : null}</button>
+      <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => selectView('history')}>搜索 {history.data ? <span>{history.data.searchHistory.length}</span> : null}</button>
     </div>
+    {view === 'bookshelf' && groups.error ? <DismissibleMessage className="error compact-message" role="alert">分组加载失败：{groups.error}<Button variant="secondary" size="sm" onClick={groups.retry}>重试分组</Button></DismissibleMessage> : null}
     {view === 'bookshelf' && groupData && groupData.groups.length > 0 ? <div className="shelf-group-bar" aria-label="书架分组">{[{ id: 'all', name: '全部' }, { id: 'ungrouped', name: '默认' }, ...groupData.groups].map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div> : null}
-    {view === 'bookshelf' && home && bookItems.length === 0 && selectedGroup !== 'all' ? <EmptyState icon={BookOpen} title="这个分组还没有书" description="搜索书籍后加入分组" /> : null}
-    {loading && home === null ? <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : home === null ? <div className="error-state"><DismissibleMessage className="error" role="alert">{message || '首页加载失败'}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={() => void loadHome()}>重试</Button></div></div> : <>
-      {loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
+    {view === 'bookshelf' && shelf.data && bookItems.length === 0 && selectedGroup !== 'all' ? <EmptyState icon={BookOpen} title="这个分组还没有书" description="搜索书籍后加入分组" /> : null}
+    {current.data === null ? current.error ? <div className="error-state"><DismissibleMessage className="error" role="alert">{current.error}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={current.retry}>重试</Button></div></div> : <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : <>
+      {current.loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
+      {current.error ? <DismissibleMessage className="error compact-message" role="alert">{current.error}<Button variant="secondary" size="sm" onClick={current.retry}>重试</Button></DismissibleMessage> : null}
       {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success compact-message" role="status">{feedback}</DismissibleMessage> : null}
       {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="error compact-message" role="alert">{message}</DismissibleMessage> : null}
-      {view === 'history' ? <SearchHistory items={home.searchHistory} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList onRefreshed={updateBookChapters} onOrganized={setFeedback} view={view} items={bookItems} showRemove={view === 'bookshelf'} hideEmpty={view === 'bookshelf' && selectedGroup !== 'all'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
+      {view === 'history' ? <SearchHistory items={history.data?.searchHistory ?? []} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList onRefreshed={updateBookChapters} onOrganized={setFeedback} view={view} items={bookItems} showRemove={view === 'bookshelf'} hideEmpty={view === 'bookshelf' && selectedGroup !== 'all'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
     </>}
   </section>
 }

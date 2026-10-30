@@ -36,25 +36,25 @@ test('书架恢复时等待离页写入，失效通知只重建等待任务而�
   const queue = new ReadingPositionQueue(async (input) => { await hold; invalidate(); return { ...input, tocRevision: input.tocRevision ?? '', userId: 'user', lastReadAt: '' } })
   const requests: string[] = []
   let load!: (settle: () => void) => () => void
-  const module = { exports: {} as { AccountHomePage: () => unknown } }
-  const homeCode = ts.transpileModule(readFileSync(new URL('../src/pages/account-home.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
+  const module = { exports: {} as { useHomeResource: (path: string, domain: string) => unknown } }
+  const homeCode = ts.transpileModule(readFileSync(new URL('../src/lib/use-home-resource.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
   runInNewContext(homeCode, { AbortController, module, exports: module.exports, require: (name: string) => {
     if (name === 'react') return { useEffect() {}, useRef: (value: unknown) => ({ current: value }), useState: (value: any) => [typeof value === 'function' ? value() : value, () => {}], useCallback: (fn: unknown) => fn }
     if (name === 'react/jsx-runtime') return { jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) }
     if (name === 'react-router-dom') return { useLocation: () => ({ state: null }), useNavigate: () => () => {} }
     if (name.includes('settings-context')) return { useReaderSettings: () => ({ settings: { general: {} }, settingsLoadStatus: 'ready' }) }
     if (name.includes('auth-context')) return { useAuth: () => ({ user: { id: 'user' } }) }
-    if (name.includes('use-page-resource')) return { usePageNavigation: () => ({ positions: queue }), usePageLoadEffect: (effect: typeof load) => { load = effect } }
-    if (name.includes('api.ts')) return { apiFetch: async (path: string) => { requests.push(path); return path === '/api/home' ? { bookshelf: [], reading: [], searchHistory: [] } : { groups: [] } } }
+    if (name.includes('use-page-resource')) return { usePageNavigation: () => ({ positions: queue }), usePageVersion: () => '0', usePageLoadEffect: (effect: typeof load) => { load = effect } }
+    if (name.includes('api.ts')) return { apiFetch: async (path: string) => { requests.push(path); return path === '/api/bookshelf' ? { bookshelf: [], reading: [], searchHistory: [] } : { groups: [] } } }
     return {}
   } })
   const saving = queue.enqueue({ bookId: 'book', editionKey: 'edition', chapterId: 'chapter', chapterUrl: '/chapter', chapterIndex: 0, title: '章节', paragraphIndex: 1, offset: 0, version: 1 })
-  module.exports.AccountHomePage()
+  module.exports.useHomeResource('/api/bookshelf', 'bookshelf')
   const cleanup = load(() => {})
   invalidate = () => { cleanup(); load(() => {}) }
   for (let i = 0; i < 8; i++) await Promise.resolve()
   assert.equal(requests.length, 0)
   release(); await saving
   for (let i = 0; i < 16; i++) await Promise.resolve()
-  assert.deepEqual(requests, ['/api/home', '/api/bookshelf-groups'])
+  assert.deepEqual(requests, ['/api/bookshelf'])
 })

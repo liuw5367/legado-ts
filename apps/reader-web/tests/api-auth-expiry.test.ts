@@ -17,13 +17,13 @@ test('应用认证失效覆盖 JSON、备份和搜索流，其他错误不会退
   runInNewContext(code, { module, exports: module.exports, require: (name: string) => name.endsWith('/auth.ts') ? auth : name.endsWith('/page-data.ts') ? { mutationDomains: () => [], publishPageMutation() {} } : {}, Headers, Response, Blob, DOMException, TextDecoder, URLSearchParams, fetch: fetcher })
   const api = module.exports
   const file = new File(['fixture'], 'fixture.zip')
-  const requests = [() => api.apiFetch('/api/home'), () => api.validateBackup(file), () => api.importBackup(file, []), () => api.downloadBackup(), () => api.streamSearch('id', () => {})]
+  const requests = [() => api.apiFetch('/api/bookshelf'), () => api.validateBackup(file), () => api.importBackup(file, []), () => api.downloadBackup(), () => api.streamSearch('id', () => {})]
   for (const request of requests) await assert.rejects(request(), { message: 'fixture failure' })
   assert.deepEqual(invalidated, Array.from({ length: requests.length }, () => 'fixture-token'))
   status = 403
-  await assert.rejects(api.apiFetch('/api/home'), { message: 'fixture failure' })
+  await assert.rejects(api.apiFetch('/api/bookshelf'), { message: 'fixture failure' })
   status = 401
   codeValue = 'source-login-required'
-  await assert.rejects(api.apiFetch('/api/home'), { message: 'fixture failure' })
+  await assert.rejects(api.apiFetch('/api/bookshelf'), { message: 'fixture failure' })
   assert.equal(invalidated.length, requests.length)
 })

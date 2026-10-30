@@ -220,6 +220,26 @@ test('页面展示查询在驱动层排除原文、规则、执行变量和无�
   await repo.saveToc(user, { userId: user, bookId, editionKey: 'e', sourceFingerprint: 'fp', revision: 'shelf-r2', bookPatch: { lastCheckTime: 0, totalChapterNum: 3 }, chapters: [...shelfChapters, { rawFields: {}, traceRef: 'shelf-test', sourceId: 'https://display.test', bookUrl: '/book', chapterUrl: '/c3', index: 3, title: '第三章' }] })
   assert.deepEqual((await repo.getHome(user)).bookshelf[0]?.chapters, { chapterCount: 3, latestChapterTitle: '第三章', unreadChapterCount: 2 })
   assert.deepEqual((await repo.getHome(other)).bookshelf, [])
+  const largeChapters: Chapter[] = Array.from({ length: 10000 }, (_, index) => ({ rawFields: {}, traceRef: 'large-shelf', sourceId: 'https://display.test', bookUrl: '/book', chapterUrl: index === 0 ? '/c' : `/large/${index}`, index, title: index === 0 ? '第一章' : `第${index + 1}章` }))
+  await repo.saveToc(user, { userId: user, bookId, editionKey: 'e', sourceFingerprint: 'fp', revision: 'large-shelf', chapters: largeChapters, bookPatch: { lastCheckTime: 0, totalChapterNum: 10000 } })
+  const queries: string[] = []
+  const originalDebug = client.options.debug
+  let shelfQuery: { text: string; parameters: string[] } | undefined
+  client.options.debug = (_connection, query, parameters) => { queries.push(query); if (query.includes('from \"reader\".\"bookshelf\"')) shelfQuery = { text: query, parameters: parameters.map(String) } }
+  let shelfOnly
+  try { shelfOnly = await measure(() => repo.getBookshelf(user)) } finally { client.options.debug = originalDebug }
+  assert.equal(shelfOnly.value[0]?.chapters?.chapterCount, 10000)
+  assert.ok(shelfOnly.bytes < 1500)
+  assert.ok(queries.some((query) => query.includes('bookshelf')))
+  assert.ok(queries.every((query) => !query.includes('toc_snapshots') && !query.includes('jsonb_array_elements')))
+  assert.ok(shelfQuery)
+  const newPlan = await admin.unsafe('explain (analyze, buffers, format json) ' + shelfQuery.text, shelfQuery.parameters)
+  const oldPlan = await admin`explain (analyze, buffers, format json) select count(*), (array_agg(item->>'title' order by ordinality desc))[1], count(*) filter (where (item->>'index')::integer > 0) from reader.toc_snapshots t cross join lateral jsonb_array_elements(t.chapters) with ordinality as entries(item, ordinality) where t.user_id=${user} and t.book_id=${bookId} and item->>'isVolume' is distinct from 'true'`
+  const newDetails = newPlan[0]!['QUERY PLAN'][0]
+  const oldDetails = oldPlan[0]!['QUERY PLAN'][0]
+  assert.ok(!JSON.stringify(newDetails).includes('toc_snapshots'))
+  assert.ok(JSON.stringify(oldDetails).includes('jsonb_array_elements'))
+  t.diagnostic(`10000章书架：新查询不访问目录，返回${shelfOnly.bytes}字节；EXPLAIN ANALYZE 执行时间：旧${oldDetails['Execution Time']}ms，新${newDetails['Execution Time']}ms（单次观测，不作为时延阈值）`)
 
   const list = await measure(() => repo.listBookListSummaries(user, '%_', bookId))
   assert.equal(list.value.length, 1); assert.equal(list.value[0]?.bookCount, 1); assert.equal(list.value[0]?.containsBook, true)

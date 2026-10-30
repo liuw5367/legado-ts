@@ -105,9 +105,9 @@ test('shadcn component aliases resolve to shared primitives used by pages', asyn
   assert.match(searchPage, /cancel-button-active/u)
   assert.match(pageSources[6] ?? '', /cancel-button-active/u)
   assert.match(pageSources[6] ?? '', /<PrecisionToggle/u)
-  assert.match(accountHome, /const \[loading, setLoading\]/u)
+  assert.match(await readFile(new URL('../src/lib/use-home-resource.ts', import.meta.url), 'utf8'), /const \[loading, setLoading\]/u)
   assert.match(accountHome, /正在读取你的阅读数据/u)
-  assert.match(accountHome, /loading && home === null/u)
+  assert.doesNotMatch(accountHome, /\/api\/home/u)
   assert.doesNotMatch(accountHome, /if \(home === null\) return/u)
   assert.doesNotMatch(searchPage, /\/api\/sources/u)
   // 搜索页不再按受控 sourceIds 发起检索；书源选择在结果项内展开完成。

@@ -52,9 +52,9 @@ fixture-password
 
 ## 页面保留验收
 
-仅模拟服务暴露 `GET /__fixture/status`，返回按请求方法和路径统计的 `counts`；不记录查询词、请求体或令牌。`POST /__fixture/control` 接受 JSON：`reset: true` 恢复初始数据、计数和失败状态；`route` 指定如 `GET /api/home`，`delay` 设置 0～10000 毫秒延迟，`failures` 设置接下来 0～10 次失败；同时设置 `unauthorized: true` 可模拟应用登录失效的 401 响应。重置后刷新页面，避免继续使用重置前的内存状态。
+仅模拟服务暴露 `GET /__fixture/status`，返回按请求方法和路径统计的 `counts`；不记录查询词、请求体或令牌。`POST /__fixture/control` 接受 JSON：`reset: true` 恢复初始数据、计数和失败状态；`route` 指定如 `GET /api/bookshelf`，`delay` 设置 0～10000 毫秒延迟，`failures` 设置接下来 0～10 次失败；同时设置 `unauthorized: true` 可模拟应用登录失效的 401 响应。重置后刷新页面，避免继续使用重置前的内存状态。
 
-先记录计数，再执行“书架切标签 → 发现 → 设置 → 书架”，检查标签保持且 `/api/home` 未增加。搜索完成后进入详情再返回，检查关键词、候选和展开状态保持，未新增搜索。正文打开详情再返回，检查正文 GET 和活动 edition PUT 未增加；完整目录选章或下一章后，返回不逐章回退。
+先记录计数，再执行“书架切标签 → 发现 → 设置 → 书架”，检查标签保持且 `/api/bookshelf` 未增加。搜索完成后进入详情再返回，检查关键词、候选和展开状态保持，未新增搜索。正文打开详情再返回，检查正文 GET 和活动 edition PUT 未增加；完整目录选章或下一章后，返回不逐章回退。
 
 通过延迟注入检查首次读取时离开、搜索运行时离开和保存时离开；通过失败注入检查错误保留与显式重试。再检查前进后退、九个内容页触发淘汰、窄屏浮层关闭、分页模式切换及第二账号无旧数据。逻辑边界另由 `page-stack.test.ts`、`page-resource.test.ts` 和 `reading-position-queue.test.ts` 覆盖。
 
@@ -91,6 +91,12 @@ node --max-old-space-size=192 --test apps/reader-web/tests/scale/source-search.t
 
 ## 书架刷新验收
 
-从书架条目菜单的“查看目录”下方点击“刷新章节”，首次为当前版本追加3章，之后刷新不再追加。默认第2章阅读位置对应的未读数从28增加到31，最新章节从第30章变为第33章，并出现“更新”。对照 `/__fixture/status` 确认刷新没有新增 `GET /api/home`；重载浏览器后标签仍在，进入阅读页再返回后消失。reset 会清空追加章节状态。
+从书架条目菜单的“查看目录”下方点击“刷新章节”，首次为当前版本追加3章，之后刷新不再追加。默认第2章阅读位置对应的未读数从28增加到31，最新章节从第30章变为第33章，并出现“更新”。对照 `/__fixture/status` 确认刷新没有新增 `GET /api/bookshelf`；重载浏览器后标签仍在，进入阅读页再返回后消失。reset 会清空追加章节状态。
 
 为该书的 `POST /api/books/:bookId/toc/refresh` 注入延迟或失败，检查按钮禁用、书名后加载图标及失败后原数据保留；成功重试后更新摘要。窄屏验收使用320px和390px，检查三行信息在封面旁居中，作者与最新章节同排，未读数位于阅读进度前，长书名及最新章节省略，更新标签保留。
+
+## 首页拆分验收
+
+首次进入书架，`/__fixture/status` 应只有 settings、bookshelf 和 bookshelf-groups 请求，不出现 reading-history、search-history。首次切换另两个 Tab 时各增加一次对应查询，再切回不增加。单本刷新只增加 toc/refresh，书架 GET 次数不变。删除搜索历史不重新读取书架或阅读记录。
+
+给分组和阅读记录 GET 分别注入一次失败：分组失败时书架仍显示，切到阅读时只处理该 Tab 的错误；切回不自动重试，点击对应重试后恢复。分组筛选依赖完整书架数组，不加入分页或滚动加载。模拟服务可用 `READER_WEB_FIXTURE_PORT` 指定独立端口；前端 API 代理和 PUBLIC_SUPABASE_URL 必须同时指向该端口，认证 CORS 仍只允许本地3000端口。

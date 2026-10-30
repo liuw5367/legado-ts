@@ -4,7 +4,7 @@ import type { ShelfChapterSummary } from '../../shared/shelf-chapters.ts'
 
 export function bookChapterState(toc: StoredToc | null, position: StoredPosition | null) {
   const chapters = toc?.chapters.filter((chapter) => !chapter.isVolume)
-  const current = position?.editionKey === toc?.editionKey ? chapters?.findIndex((chapter) => chapter.chapterUrl === position?.chapterUrl) : -1
+  const current = position?.editionKey === toc?.editionKey ? chapters?.findIndex((chapter) => chapter.chapterUrl === position?.chapterUrl && chapter.index === position?.chapterIndex) : -1
   return {
     latestChapterIndex: chapters === undefined ? null : chapters.length - 1,
     latestChapterName: chapters?.at(-1)?.title?.trim() || null,
@@ -25,7 +25,8 @@ export function mapReadingPosition(position: StoredPosition, toc: StoredToc): St
   const normalize = (title: string) => title.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '')
   const title = normalize(position.title)
   const sameEdition = position.editionKey === toc.editionKey
-  const chapter = (sameEdition ? chapters.find((chapter) => chapter.chapterUrl === position.chapterUrl) : undefined)
+  const chapter = (sameEdition ? chapters.find((chapter) => chapter.chapterUrl === position.chapterUrl && chapter.index === position.chapterIndex) : undefined)
+    ?? (sameEdition ? chapters.find((chapter) => chapter.chapterUrl === position.chapterUrl) : undefined)
     ?? (title ? chapters.find((chapter) => normalize(chapter.title ?? '') === title) : undefined)
     ?? (!sameEdition ? chapters.find((chapter) => chapter.index === position.chapterIndex) ?? chapters[Math.min(position.chapterIndex, Math.max(0, chapters.length - 1))] : undefined)
   if (!chapter) return sameEdition ? position : null

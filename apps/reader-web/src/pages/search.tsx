@@ -70,7 +70,7 @@ export function SearchPage() {
     })
       .finally(() => { if (active) settle() })
     return () => { active = false }
-  }, [], ['candidates', 'home'])
+  }, [], ['candidates', 'bookshelf'])
   const previousQuery = useRef(queryKeyword)
   useEffect(() => { if (previousQuery.current !== queryKeyword) { previousQuery.current = queryKeyword; setKeyword(queryKeyword) } }, [queryKeyword])
 

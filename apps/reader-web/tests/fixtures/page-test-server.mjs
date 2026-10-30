@@ -16,7 +16,7 @@ import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
 const HOST = 'localhost'
-const PORT = 8787
+const PORT = Number(process.env.READER_WEB_FIXTURE_PORT ?? 8787)
 const USER_ID = '11111111-1111-4111-8111-111111111111'
 const BOOK_ID = '00000000-0000-0000-0000-000000000002'
 const FIXTURE_EMAIL = 'reader@example.test'
@@ -488,7 +488,9 @@ async function handleApi(request, response, url) {
   // 第二账号使用空账号数据，绝不读取或修改第一账号的书籍与书源。
   if (request.headers.authorization === `Bearer ${ACCESS_TOKEN}-second`) {
     const path = url.pathname
-    if (path === '/api/home') { json(response, { bookshelf: [], reading: [], searchHistory: [] }); return }
+    if (path === '/api/bookshelf') { json(response, { bookshelf: [] }); return }
+    if (path === '/api/reading-history') { json(response, { reading: [] }); return }
+    if (path === '/api/search-history') { json(response, { searchHistory: [] }); return }
     if (path === '/api/me') { json(response, { user: session(true).user }); return }
     if (path === '/api/books') { json(response, { books: [] }); return }
     if (path === '/api/sources' || path === '/api/source-management' || path === '/api/discovery/sources') { json(response, { sources: [] }); return }
@@ -567,7 +569,9 @@ async function handleApi(request, response, url) {
   }
 
   if (method === 'GET' && path === '/api/me') { json(response, { user: { id: USER_ID } }); return }
-  if (method === 'GET' && path === '/api/home') { json(response, homeSnapshot()); return }
+  if (method === 'GET' && path === '/api/bookshelf') { json(response, { bookshelf: homeSnapshot().bookshelf }); return }
+  if (method === 'GET' && path === '/api/reading-history') { json(response, { reading: homeSnapshot().reading }); return }
+  if (method === 'GET' && path === '/api/search-history') { json(response, { searchHistory: homeSnapshot().searchHistory }); return }
   if (method === 'GET' && path === '/api/discovery/sources') {
     json(response, { sources: sources.filter((source) => source.enabled).map(({ sourceId, name, group, fingerprint }) => ({ sourceId, name, group, fingerprint })) }); return
   }
@@ -788,7 +792,7 @@ async function handleApi(request, response, url) {
       const previousChapterCount = chaptersFor(editionKey).length
       shelfRefreshCounts.set(editionKey, (shelfRefreshCounts.get(editionKey) ?? 0) + 1)
       const summary = shelfChapterSummary({ chapters: chaptersFor(editionKey) }, positionFor(bookId, editionKey))
-      json(response, { ...summary, previousChapterCount, hasNewChapters: summary.chapterCount > previousChapterCount })
+      json(response, { ...summary, position: positionFor(bookId, editionKey), previousChapterCount, hasNewChapters: summary.chapterCount > previousChapterCount })
       return
     }
     if (method === 'GET' && tail === 'toc') {

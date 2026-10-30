@@ -19,6 +19,8 @@ React Router 页面与组件
 
 当前接口分为书源管理（列表、导入预览/确认、启用/禁用/删除）、设置、搜索（创建、查询、SSE、续页、取消）、书籍与来源版本、书架、目录、正文和阅读位置。页面通过 `apiFetch` 自动加入当前会话令牌，搜索流使用 `SseDecoder` 逐事件更新候选和进度。`source-result` 在来源首次命中时附带 `sourceSummary`，同一 SSE 响应内每个来源只发送一次摘要；两个页面只在用户提交搜索后，由创建搜索任务接口查询账号的全部可用书源；进入页面不预查搜索范围。流式摘要复用执行该来源时已读取的书源数据，不额外查询管理摘要。本书来源接口用一次按来源 ID 限定的摘要查询完成指纹校验和 `sourceSummaries` 展示信息组装，切换页展开域名时通过 `GET /api/source-management?all=true&domain=<sourceId>` 按账号查询该域名的版本。阅读摘要只包含展示、排序及版本切换需要的字段，不返回导入地址、导入时间和管理指纹。
 
+首页书架、阅读记录和搜索历史分别查询，前端按 Tab 加载与结算，分组独立；接口及失效边界见[首页列表接口](storage-and-cache.md#首页列表接口)。
+
 ## 运行时与会话
 
 `server/runtime/reader-runtime.ts` 只从当前用户的 Repository 读取启用书源，再调用 `@legado/source-core` 的单源工作流。多源 fan-out、进度和搜索状态由 Web runtime 负责，规则解析和候选归并仍由共享 package 负责。每个来源执行期间获取五分钟运行状态租约，恢复加密的 Cookie/变量快照，操作完成后按 fingerprint、lease token 和版本条件保存快照并释放租约。保存失败会阻止旧 session 继续写入。
