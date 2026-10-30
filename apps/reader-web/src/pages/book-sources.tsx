@@ -1,3 +1,4 @@
+import { usePageNavigation } from '../lib/use-page-resource.ts'
 import { EmptyState } from '../components/empty-state.tsx'
 import { SearchX } from 'lucide-react'
 import { DismissibleMessage } from '../components/dismissible-message.tsx'
@@ -28,6 +29,7 @@ import { compareSourceManagementOrder, selectOneSourcePerDomain, sourceDomainInf
 import type { ReadingSourceSummary } from '../../shared/source-management.ts'
 
 export function BookSourcesPage() {
+  const navigation = usePageNavigation()
   const { bookId = '' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -168,6 +170,7 @@ export function BookSourcesPage() {
         navigate(prefix + '/toc' + query, { state: pageReturnState(location) })
         return
       }
+      await navigation?.positions.flush(bookId)
       const targetSnapshot = await loadBookSnapshot(cache, bookId, editionKey)
       if (signal?.aborted) return
       const targetChapters = targetSnapshot.toc.chapters.filter((chapter) => chapter.isVolume !== true)
@@ -179,7 +182,7 @@ export function BookSourcesPage() {
         cache.setPosition(bookId, editionKey, position.position)
         navigate(prefix + '/read/' + encodeURIComponent(target.chapterId) + query, { state: readingEntryState(location) })
       } else {
-        const mapped = await mapSourcePosition(bookId, currentEditionKey, editionKey, cache, targetChapters, signal)
+        const mapped = await mapSourcePosition(bookId, currentEditionKey, cache, targetChapters, signal)
         if (mapped.target === undefined) throw new Error('目标来源目录中没有可阅读的章节')
         setPendingSwitch({ key, editionKey, target: mapped.target, targetRevision: targetSnapshot.toc.revision, currentTitle: mapped.currentTitle, matched: mapped.matched, targetPosition: mapped.targetPosition })
       }
@@ -203,8 +206,8 @@ export function BookSourcesPage() {
     const signal = controllerRef.current?.signal
     setOpening(pending.key); setError('')
     try {
+      await navigation?.positions.flush(bookId)
       const query = '?editionKey=' + encodeURIComponent(pending.editionKey)
-      await apiFetch('/api' + prefix + '/edition', { method: 'PUT', signal: signal ?? null, body: JSON.stringify({ editionKey: pending.editionKey }) })
       const saved = await apiFetch<{ position: ApiPosition } | { position: null }>('/api' + prefix + '/position', { method: 'POST', signal: signal ?? null, body: JSON.stringify({ editionKey: pending.editionKey, chapterId: pending.target.chapterId, chapterUrl: pending.target.chapterUrl, chapterIndex: pending.target.index, title: pending.target.title, tocRevision: pending.targetRevision, paragraphIndex: 0, offset: 0, version: (pending.targetPosition?.version ?? -1) + 1 }) })
       if (signal?.aborted) return
       const position = saved.position
@@ -300,11 +303,10 @@ export function BookSourcesPage() {
 
 interface PendingSourceSwitch { key: string; editionKey: string; target: ApiTocChapter; targetRevision: string; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }
 
-async function mapSourcePosition(bookId: string, currentEditionKey: string, targetEditionKey: string, cache: ReturnType<typeof useBookCache>, targetChapters: ApiTocChapter[], signal?: AbortSignal): Promise<{ target: ApiTocChapter | undefined; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }> {
-  const [currentSnapshot, currentPosition, targetPosition] = await Promise.all([
+async function mapSourcePosition(bookId: string, currentEditionKey: string, cache: ReturnType<typeof useBookCache>, targetChapters: ApiTocChapter[], signal?: AbortSignal): Promise<{ target: ApiTocChapter | undefined; currentTitle: string | undefined; matched: boolean; targetPosition: ApiPosition | null }> {
+  const [currentSnapshot, currentPosition] = await Promise.all([
     loadBookSnapshot(cache, bookId, currentEditionKey),
-    apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position?editionKey=' + encodeURIComponent(currentEditionKey), signal === undefined ? {} : { signal }),
-    apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position?editionKey=' + encodeURIComponent(targetEditionKey), signal === undefined ? {} : { signal }),
+    apiFetch<{ position: ApiPosition | null }>('/api/books/' + encodeURIComponent(bookId) + '/position', signal === undefined ? {} : { signal }),
   ])
   const currentChapter = currentSnapshot.toc.chapters.find((chapter) => chapter.isVolume !== true && chapter.chapterId === currentPosition.position?.chapterId)
   const currentTitle = currentChapter?.title ?? currentPosition.position?.title
@@ -312,7 +314,7 @@ async function mapSourcePosition(bookId: string, currentEditionKey: string, targ
   const matchedChapter = normalizedTitle.length === 0 ? undefined : targetChapters.find((chapter) => normalizeChapterTitle(chapter.title) === normalizedTitle)
   const fallbackIndex = currentChapter?.index ?? currentPosition.position?.chapterIndex ?? 0
   const target = matchedChapter ?? fallbackChapterForPosition(targetChapters, fallbackIndex)
-  return { target, currentTitle, matched: matchedChapter !== undefined, targetPosition: targetPosition.position }
+  return { target, currentTitle, matched: matchedChapter !== undefined, targetPosition: currentPosition.position }
 }
 
 function normalizeChapterTitle(value: string): string { return value.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '') }

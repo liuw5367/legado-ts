@@ -186,6 +186,7 @@ export function ReaderPage() {
     ]).then(async ([contentResult, tocResult, positionResult]) => {
       if (!active || requestId !== requestIdRef.current) return
       if (editionKey.length > 0 && !previewActiveRef.current) await apiFetch(`/api/books/${encodeURIComponent(bookId)}/edition`, { method: 'PUT', signal: controller.signal, body: JSON.stringify({ editionKey }) })
+      if (!previewActiveRef.current && !positionResult.position) positionResult = await apiFetch<{ position: ApiPosition | null }>(`/api/books/${encodeURIComponent(bookId)}/position?editionKey=${encodeURIComponent(editionKey)}`, { signal: controller.signal })
       if (!active || requestId !== requestIdRef.current) return
       restoredPositionRef.current = positionResult.position?.chapterId !== chapterId
       const chapterPosition = positionResult.position?.chapterId === chapterId ? positionResult.position : null

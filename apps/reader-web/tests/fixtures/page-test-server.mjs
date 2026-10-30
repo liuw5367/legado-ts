@@ -147,8 +147,8 @@ function contentForChapter(chapter, refresh = false) {
 
 for (const editionKey of editions.keys()) {
   const chapter = chaptersFor(editionKey)[editionKey === 'edition-a' ? 1 : 3]
-  if (chapter === undefined) continue
-  positions.set(`${BOOK_ID}:${editionKey}`, {
+  if (chapter === undefined || editionKey !== initialBook.activeEditionKey) continue
+  positions.set(BOOK_ID, {
     userId: USER_ID,
     bookId: BOOK_ID,
     editionKey,
@@ -240,7 +240,8 @@ function displayBook(book) {
 }
 
 function positionFor(bookId, editionKey) {
-  return positions.get(`${bookId}:${editionKey}`) ?? null
+  const position = positions.get(bookId)
+  return position && (!editionKey || position.editionKey === editionKey) ? position : null
 }
 
 function editionKeyForSource(sourceId) {
@@ -671,7 +672,7 @@ async function handleApi(request, response, url) {
     book.updatedAt = now()
     if (!positions.has(`${targetBookId}:${editionKey}`)) {
       const chapter = chaptersFor(editionKey)[0]
-      if (chapter !== undefined) positions.set(`${targetBookId}:${editionKey}`, { userId: USER_ID, bookId: targetBookId, editionKey, chapterId: chapter.chapterId, chapterUrl: chapter.chapterUrl, chapterIndex: 0, title: chapter.title, tocRevision: `fixture-toc-${editionKey}-1`, paragraphIndex: 0, offset: 0, version: 0, lastReadAt: now() })
+      if (chapter !== undefined) positions.set(targetBookId, { userId: USER_ID, bookId: targetBookId, editionKey, chapterId: chapter.chapterId, chapterUrl: chapter.chapterUrl, chapterIndex: 0, title: chapter.title, tocRevision: `fixture-toc-${editionKey}-1`, paragraphIndex: 0, offset: 0, version: 0, lastReadAt: now() })
     }
     json(response, { book, edition, cacheWarning: undefined }, 201)
     return
@@ -752,6 +753,11 @@ async function handleApi(request, response, url) {
     if (method === 'PUT' && tail === 'edition') {
       const body = await readJson(request)
       if (book === undefined || editions.get(body.editionKey)?.bookId !== bookId) { json(response, { error: { code: 'not-found', message: '测试书籍版本不存在' } }, 404); return }
+      const previous = positionFor(bookId)
+      if (previous && previous.editionKey !== body.editionKey) {
+        const chapter = chaptersFor(body.editionKey).find((chapter) => chapter.title === previous.title) ?? chaptersFor(body.editionKey)[previous.chapterIndex]
+        if (chapter) positions.set(bookId, { ...previous, editionKey: body.editionKey, chapterId: chapter.chapterId, chapterUrl: chapter.chapterUrl, chapterIndex: chapter.index, title: chapter.title, paragraphIndex: 0, offset: 0, version: previous.version + 1 })
+      }
       book.activeEditionKey = body.editionKey
       book.updatedAt = now()
       json(response, { edition: { editionKey: body.editionKey } })
@@ -771,7 +777,8 @@ async function handleApi(request, response, url) {
     if (method === 'POST' && tail === 'position') {
       const body = await readJson(request)
       const saved = { ...body, userId: USER_ID, bookId, lastReadAt: now() }
-      positions.set(`${bookId}:${body.editionKey}`, saved)
+      book.activeEditionKey = body.editionKey
+      positions.set(bookId, saved)
       json(response, { position: saved })
       return
     }

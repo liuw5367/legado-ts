@@ -5,7 +5,7 @@ import type { ApiPosition } from '../src/lib/api.ts'
 
 const input: PositionWrite = { bookId: 'b', editionKey: 'e', chapterId: 'c', chapterUrl: 'https://example.test/c', chapterIndex: 0, title: 'chapter', paragraphIndex: 1, offset: 0, version: 0 }
 const position = (write: PositionWrite): ApiPosition => ({ ...write, tocRevision: write.tocRevision ?? '', userId: 'a', lastReadAt: '' })
-test('接受新位置后淘汰同版本旧防抖任务，其他版本仍正常保存', async (t) => {
+test('接受新位置后淘汰同来源旧防抖任务，跨来源保存沿用同书递增版本', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const calls: PositionWrite[] = []
   const queue = new ReadingPositionQueue(async (write) => { calls.push(write); return position(write) })
@@ -14,7 +14,7 @@ test('接受新位置后淘汰同版本旧防抖任务，其他版本仍正常�
   await queue.enqueue({ ...input, offset: 100, version: 2 })
   t.mock.timers.tick(2000)
   await queue.flush(); await Promise.all([old, other])
-  assert.deepEqual(calls.map((write) => [write.editionKey, write.offset, write.version]), [['e', 100, 2], ['other', 0, 0]])
+  assert.deepEqual(calls.map((write) => [write.editionKey, write.offset, write.version]), [['e', 100, 2], ['other', 0, 3]])
 })
 test('queued positions are serial and monotonic across chapter changes', async () => {
   const calls: PositionWrite[] = []

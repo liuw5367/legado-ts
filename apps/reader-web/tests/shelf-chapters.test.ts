@@ -87,3 +87,31 @@ test('更新标记按账号和版本隔离，存储不可用时可在会话内�
     assert.equal(changes, 2)
   } finally { unsubscribe() }
 })
+
+test('每书仅一份进度，预览不改状态，换源与切回沿用当前章节并排除卷标题', async () => {
+  const repository = new MemoryReaderRepository()
+  const metadata = { sourceId: 's', bookUrl: 'https://example.test/book', name: '单书状态', rawFields: {}, traceRef: 'test', emptyFields: [], fieldErrors: {} }
+  const { book } = await repository.createBook('a', { candidate: { sourceId: 's', sourceFingerprint: 'f', candidate: metadata }, metadata, editionKey: 'e', sourceFingerprint: 'f' })
+  await repository.createBook('a', { bookId: book.id, candidate: { sourceId: 's2', sourceFingerprint: 'f2', candidate: metadata }, metadata, editionKey: 'e2', sourceFingerprint: 'f2', activateEdition: false })
+  const chapters = toc.chapters.map(({ chapterId: _id, ...chapter }) => ({ ...chapter, rawFields: {}, traceRef: 'test', sourceId: 's', bookUrl: metadata.bookUrl }))
+  await repository.saveToc('a', { userId: 'a', bookId: book.id, editionKey: 'e', sourceFingerprint: 'f', revision: 'r', chapters, bookPatch: { lastCheckTime: 0, totalChapterNum: 3 } })
+  await repository.savePosition('a', { userId: 'a', bookId: book.id, editionKey: 'e', chapterId: 'c1', chapterUrl: '/1', chapterIndex: 1, title: '第一章', paragraphIndex: 3, offset: 4, version: 1 })
+  const initial = await repository.getBook('a', book.id)
+  assert.equal(initial?.latestChapterIndex, 1)
+  assert.equal(initial?.currentChapterIndex, 0)
+  await repository.saveToc('a', { userId: 'a', bookId: book.id, editionKey: 'e2', sourceFingerprint: 'f2', revision: 'r2', chapters: chapters.map((chapter) => ({ ...chapter, chapterUrl: '/other' + chapter.chapterUrl })), bookPatch: { lastCheckTime: 0, totalChapterNum: 3 } })
+  assert.deepEqual(await repository.getBook('a', book.id), initial)
+  await repository.activateEdition('a', book.id, 'e2')
+  assert.equal(await repository.getPosition('a', book.id, 'e'), null)
+  const mapped = (await repository.getPosition('a', book.id, 'e2'))!
+  assert.equal(mapped.title, '第一章')
+  assert.equal(mapped.paragraphIndex, 0)
+  await repository.savePosition('a', { ...mapped, chapterUrl: '/other/2', chapterIndex: 2, title: '第二章', version: mapped.version + 1 })
+  await repository.activateEdition('a', book.id, 'e')
+  const current = (await repository.getPosition('a', book.id, 'e'))!
+  assert.equal(current.title, '第二章')
+  assert.equal((await repository.getBackupSnapshot('a')).positions.length, 1)
+  assert.equal((await repository.getHome('a')).bookshelf[0]!.chapters.unreadChapterCount, 0)
+  await repository.savePosition('a', { ...mapped, version: 0 })
+  assert.equal((await repository.getPosition('a', book.id))!.editionKey, 'e')
+})

@@ -72,6 +72,11 @@ export interface StoredBook {
   /** 用户选择的书籍封面，优先于来源封面；缺省表示跟随书源。 */
   customCoverUrl?: string
   activeEditionKey?: string
+  /** 正文章节从 0 编号，-1 表示已获取空目录；null 表示未知。 */
+  latestChapterIndex?: number | null
+  latestChapterName?: string | null
+  currentChapterIndex?: number | null
+  currentChapterName?: string | null
   createdAt: string
   updatedAt: string
 }

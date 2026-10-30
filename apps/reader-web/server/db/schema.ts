@@ -57,6 +57,10 @@ export const books = readerSchema.table('books', {
   coverUrl: text('cover_url'),
   customCoverUrl: text('custom_cover_url'),
   activeEditionKey: text('active_edition_key'),
+  latestChapterIndex: integer('latest_chapter_index'),
+  latestChapterName: text('latest_chapter_name'),
+  currentChapterIndex: integer('current_chapter_index'),
+  currentChapterName: text('current_chapter_name'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('books_user_updated_idx').on(table.userId, table.updatedAt)])
@@ -143,7 +147,7 @@ export const readingRecords = readerSchema.table('reading_records', {
   offset: integer('offset').notNull().default(0),
   version: integer('version').notNull().default(0),
   lastReadAt: timestamp('last_read_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex('reading_records_user_book_edition_idx').on(table.userId, table.bookId, table.editionKey), index('reading_records_user_recent_idx').on(table.userId, table.lastReadAt)])
+}, (table) => [uniqueIndex('reading_records_user_book_idx').on(table.userId, table.bookId), index('reading_records_user_recent_idx').on(table.userId, table.lastReadAt)])
 
 export const searchRuns = readerSchema.table('search_runs', {
   id: uuid('id').defaultRandom().primaryKey(),

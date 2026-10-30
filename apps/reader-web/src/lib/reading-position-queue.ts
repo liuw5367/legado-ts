@@ -32,7 +32,7 @@ export class ReadingPositionQueue {
     return task
   }
   flush(bookId?: string, editionKey?: string): Promise<void> {
-    const entries = [...this.delayed.entries()].filter(([, entry]) => bookId === undefined || entry.input.bookId === bookId && entry.input.editionKey === editionKey)
+    const entries = [...this.delayed.entries()].filter(([, entry]) => bookId === undefined || entry.input.bookId === bookId && (editionKey === undefined || entry.input.editionKey === editionKey))
     for (const [key] of entries) this.delayed.delete(key)
     return Promise.all([...entries.map(([, entry]) => {
       clearTimeout(entry.timer)
@@ -49,19 +49,19 @@ export class ReadingPositionQueue {
     const pending = this.pending
     if (this.active && pending?.identity === identity) {
       pending.input.version = Math.max(pending.input.version, input.version)
-      if (pending.started) this.versions.set(key, Math.max(this.versions.get(key) ?? -1, input.version))
+      if (pending.started) this.versions.set(input.bookId, Math.max(this.versions.get(input.bookId) ?? -1, input.version))
       return pending.task
     }
     const entry = { identity, input: { ...input }, started: false, task: Promise.resolve<ApiPosition | undefined>(undefined) }
     const task = this.tail.then(async () => {
       if (!this.active) return undefined
       entry.started = true
-      const next = { ...entry.input, version: Math.max(entry.input.version, (this.versions.get(key) ?? -1) + 1) }
-      this.versions.set(key, next.version)
+      const next = { ...entry.input, version: Math.max(entry.input.version, (this.versions.get(input.bookId) ?? -1) + 1) }
+      this.versions.set(input.bookId, next.version)
       try {
         const result = await this.write(next)
         if (!this.active) return undefined
-        this.versions.set(key, Math.max(this.versions.get(key) ?? -1, next.version, result.version)); this.failed.delete(key)
+        this.versions.set(input.bookId, Math.max(this.versions.get(input.bookId) ?? -1, next.version, result.version)); this.failed.delete(key)
         return result
       } catch (error) { if (this.active) this.failed.set(key, next); throw error }
     }).finally(() => { if (this.pending === entry) this.pending = undefined })

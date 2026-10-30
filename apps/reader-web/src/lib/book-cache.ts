@@ -54,8 +54,9 @@ export class BookCache {
   }
   setPosition(bookId: string, editionKey: string, position: ApiPosition | null) {
     if (bookId !== this.bookId) return
-    const current = this.positions.get(editionKey)
+    const current = [...this.positions.values()].find((value) => value !== null)
     if (current !== undefined && current !== null && (position === null || position.version < current.version)) return
+    if (position !== null) this.positions.clear()
     this.positions.set(editionKey, position); this.notify()
   }
   clear() {

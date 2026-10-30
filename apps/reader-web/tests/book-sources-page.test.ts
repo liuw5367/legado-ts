@@ -39,7 +39,7 @@ function render(candidates: ApiCandidate[], status = 'done', isTargetedSearch = 
     if (name.includes('book-source-groups')) return { groupBookSourcesByDomain }
     if (name.includes('time-format')) return { formatSourceRuleDateTime }
     if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
-    if (name.includes('use-page-resource')) return { usePageLoadEffect() {} }
+    if (name.includes('use-page-resource')) return { usePageNavigation: () => null, usePageLoadEffect() {} }
     if (name.includes('use-book-search')) return { useBookSearch: () => ({ sourceSummaries: [], candidates, searchId: 'search', status, isTargetedSearch, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
     if (name.includes('empty-state')) return { EmptyState: 'empty' }
     if (name.includes('loading-state')) return { LoadingState: 'loading' }
@@ -105,7 +105,7 @@ test('重试来源列表后仍可展开已加载的同域版本', async () => {
     if (name.includes('book-source-groups')) return { groupBookSourcesByDomain }
     if (name.includes('time-format')) return { formatSourceRuleDateTime }
     if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
-    if (name.includes('use-page-resource')) return { usePageLoadEffect: (effect: typeof load) => { load = effect } }
+    if (name.includes('use-page-resource')) return { usePageNavigation: () => null, usePageLoadEffect: (effect: typeof load) => { load = effect } }
     if (name.includes('use-book-search')) return { useBookSearch: () => ({ sourceSummaries: [], candidates: [], status: 'idle', message: '' }) }
     if (name.includes('api.ts')) return { apiFetch: async (path: string) => {
       requests.push(path)

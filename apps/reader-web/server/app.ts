@@ -493,7 +493,7 @@ app.get('/api/books/:bookId/position', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
   const editionKey = context.req.query('editionKey')
-  if (editionKey === undefined || editionKey.length === 0) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
+
   try {
     return context.json({ position: await dependencies.repository.getPosition(context.get('userId'), context.req.param('bookId'), editionKey) })
   } catch (error) {

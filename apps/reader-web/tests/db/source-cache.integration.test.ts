@@ -70,6 +70,23 @@ test('real migrations, cache persistence, RLS and authenticated source API', { s
   assert.equal((await repository.getBook(userA, created.book.id))?.name, '测试书')
   assert.equal((await repository.getBook(userA, created.book.id))?.activeEditionKey, 'edition-a')
   assert.equal((await repository.listEditions(userA, created.book.id)).length, 2)
+  await repository.saveToc(userA, { ...savedToc, chapters: [{ ...displayChapter, isVolume: false }] })
+  await repository.savePosition(userA, { userId: userA, bookId: created.book.id, editionKey: 'edition-a', chapterId: displayId, chapterUrl: displayChapter.chapterUrl, chapterIndex: displayChapter.index, title: displayChapter.title!, paragraphIndex: 2, offset: 3, version: 1 })
+  assert.equal((await repository.getBook(userA, created.book.id))?.currentChapterIndex, 0)
+  const otherChapter = { ...displayChapter, isVolume: false, chapterUrl: 'https://8.8.8.8/other/1' }
+  const otherToc = await repository.saveToc(userA, { userId: userA, bookId: created.book.id, editionKey: 'edition-b', sourceFingerprint: 'fp', revision: 'other-r', chapters: [otherChapter], bookPatch: { lastCheckTime: 1, totalChapterNum: 1 } })
+  assert.equal((await repository.getBook(userA, created.book.id))?.activeEditionKey, 'edition-a')
+  await repository.activateEdition(userA, created.book.id, 'edition-b')
+  const switched = (await repository.getPosition(userA, created.book.id))!
+  assert.equal(switched.chapterId, tocSummary(otherToc).chapters[0]!.chapterId)
+  assert.equal(switched.paragraphIndex, 0)
+  assert.equal(await repository.getPosition(userA, created.book.id, 'edition-a'), null)
+  assert.equal((await repository.getBackupSnapshot(userA)).positions.length, 1)
+  await repository.savePosition(userA, { ...switched, paragraphIndex: 5, version: switched.version + 1 })
+  assert.equal((await repository.getPosition(userA, created.book.id))?.paragraphIndex, 5)
+  await repository.activateEdition(userA, created.book.id, 'edition-a')
+  assert.equal((await repository.getPosition(userA, created.book.id))?.editionKey, 'edition-a')
+
   process.env.SUPABASE_URL = 'https://8.8.8.8/auth-fixture'
   process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-public-key'
   process.env.READER_WEB_ENV_FILE = '/private/tmp/nonexistent-reader-test-env'

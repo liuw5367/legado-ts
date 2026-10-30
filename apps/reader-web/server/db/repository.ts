@@ -1,4 +1,5 @@
-import { shelfChapterSummary, type ShelfChapterSummary } from '../../shared/shelf-chapters.ts'
+import { bookChapterState, bookShelfSummary, mapReadingPosition } from '../domain/book-reading-state.ts'
+import type { ShelfChapterSummary } from '../../shared/shelf-chapters.ts'
 import type { BookSourceItem } from '../../shared/book-sources.ts'
 import { readingContent, type CachedReadingContent } from '../../shared/reading-content.ts'
 import type { CachedTocSummary } from '../../shared/toc.ts'
@@ -171,7 +172,7 @@ export interface ReaderRepository {
   saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc>
   getContent(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<StoredContent | null>
   saveContent(userId: string, content: Omit<StoredContent, 'updatedAt'>): Promise<StoredContent>
-  getPosition(userId: string, bookId: string, editionKey: string): Promise<StoredPosition | null>
+  getPosition(userId: string, bookId: string, editionKey?: string): Promise<StoredPosition | null>
   savePosition(userId: string, position: Omit<StoredPosition, 'lastReadAt'> & { lastReadAt?: string }): Promise<StoredPosition>
 }
 
@@ -240,7 +241,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
   public async getDisplayPosition(userId: string, bookId: string, editionKey: string) {
-    return withUser(userId, async (tx) => { const [row] = await tx.select({ title: readingRecords.title, lastReadAt: readingRecords.lastReadAt }).from(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId), eq(readingRecords.editionKey, editionKey))).limit(1); return row ? { title: row.title, lastReadAt: row.lastReadAt.toISOString() } : null })
+    return withUser(userId, async (tx) => { const [row] = await tx.select({ title: readingRecords.title, lastReadAt: readingRecords.lastReadAt }).from(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId), ...(editionKey === undefined ? [] : [eq(readingRecords.editionKey, editionKey)]))).limit(1); return row ? { title: row.title, lastReadAt: row.lastReadAt.toISOString() } : null })
   }
   public listReadingMarkBooks(userId: string) { return withUser(userId, (tx) => tx.selectDistinct({ id: books.id, name: books.name, author: books.author, activeEditionKey: books.activeEditionKey }).from(readingAnnotations).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingAnnotations.bookId))).where(eq(readingAnnotations.userId, userId)).orderBy(books.name, books.id)) }
   public listReadingMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query)) }
@@ -675,6 +676,12 @@ export class PostgresReaderRepository implements ReaderRepository {
         ? await transaction.insert(bookEditions).values(editionValues).returning()
         : await transaction.update(bookEditions).set({ sourceId: editionValues.sourceId, sourceFingerprint: editionValues.sourceFingerprint, bookUrl: editionValues.bookUrl, metadata: editionValues.metadata, ...(input.metadata.variable === undefined ? {} : { variable: input.metadata.variable }), updatedAt: now }).where(and(eq(bookEditions.userId, userId), eq(bookEditions.editionKey, input.editionKey))).returning()
       if (edition === undefined) throw new Error('创建书籍版本失败')
+      if (input.activateEdition !== false) {
+        await writeBookReadingState(transaction, userId, book.id, input.editionKey)
+        const [refreshedBook] = await transaction.select().from(books).where(and(eq(books.userId, userId), eq(books.id, book.id))).limit(1)
+        book = refreshedBook
+        if (!book) throw new Error('书籍不存在')
+      }
       if (input.addToBookshelf !== false) await transaction.insert(bookshelf).values({ userId, bookId: book.id }).onConflictDoNothing({ target: [bookshelf.userId, bookshelf.bookId] })
       return { book: toBook(book), edition: toEdition(edition) }
     })
@@ -750,16 +757,15 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const [settingsRow] = await transaction.select({ sort: sql<unknown>`${readerSettings.preferences}->'general'->>'bookshelfSort'` }).from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
       const sortByReading = settingsRow?.sort === 'lastReadAt'
-      // 章节在数据库内聚合，首页只传摘要，不读取整本目录或完整版本元数据。
-      const chapterSummary = sql<ShelfChapterSummary>`case when ${tocSnapshots.editionKey} is not null then (
-        select jsonb_build_object(
-          'chapterCount', count(*),
-          'latestChapterTitle', coalesce(nullif((array_agg(item->>'title' order by ordinality desc))[1], ''), nullif(${bookEditions.metadata}->>'lastChapter', '')),
-          'unreadChapterCount', count(*) filter (where (item->>'index')::integer > coalesce(${readingRecords.chapterIndex}, -1))
-        ) from jsonb_array_elements(${tocSnapshots.chapters}) with ordinality as entries(item, ordinality)
-        where item->>'isVolume' is distinct from 'true'
-      ) else jsonb_build_object('chapterCount', null, 'latestChapterTitle', nullif(${bookEditions.metadata}->>'lastChapter', ''), 'unreadChapterCount', null) end`
-      const shelfRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, chapters: chapterSummary, addedAt: bookshelf.addedAt, groupId: bookshelf.groupId }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).leftJoin(tocSnapshots, and(eq(tocSnapshots.userId, userId), eq(tocSnapshots.bookId, books.id), eq(tocSnapshots.editionKey, bookEditions.editionKey))).leftJoin(readingRecords, and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, books.id), eq(readingRecords.editionKey, bookEditions.editionKey))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
+      const chapterSummary = sql<ShelfChapterSummary>`jsonb_build_object(
+        'chapterCount', ${books.latestChapterIndex} + 1,
+        'latestChapterTitle', ${books.latestChapterName},
+        'unreadChapterCount', case when ${books.latestChapterIndex} is null then null
+          when ${readingRecords.bookId} is null then ${books.latestChapterIndex} + 1
+          when ${books.currentChapterIndex} is null then null
+          else greatest(0, ${books.latestChapterIndex} - ${books.currentChapterIndex}) end
+      )`
+      const shelfRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, chapters: chapterSummary, position: { chapterId: readingRecords.chapterId, title: readingRecords.title, lastReadAt: readingRecords.lastReadAt }, addedAt: bookshelf.addedAt, groupId: bookshelf.groupId }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).leftJoin(readingRecords, and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, books.id), eq(readingRecords.editionKey, bookEditions.editionKey))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
       let sortedShelfRows = shelfRows
       if (sortByReading && shelfRows.length > 0) {
         const lastReadRows = await transaction.select({ bookId: readingRecords.bookId, lastReadAt: max(readingRecords.lastReadAt) }).from(readingRecords).where(and(eq(readingRecords.userId, userId), inArray(readingRecords.bookId, shelfRows.map((row) => row.book.id)))).groupBy(readingRecords.bookId)
@@ -779,8 +785,7 @@ export class PostgresReaderRepository implements ReaderRepository {
       const latestHistory = latestSearchHistory(historyIdentityRows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }))).slice(0, 50)
       const historyDetails = latestHistory.length === 0 ? [] : await transaction.select({ id: searchHistory.id, searchId: searchHistory.searchId, status: searchHistory.status, resultCount: searchHistory.resultCount, summary: searchHistory.summary, updatedAt: searchHistory.updatedAt }).from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt), inArray(searchHistory.id, latestHistory.map((row) => row.id))))
       const historyDetailsById = new Map(historyDetails.map((row) => [row.id, row]))
-      const positions = new Map(readingRows.map((row) => [`${row.book.id}:${row.edition.editionKey}`, displayPosition(row.position)]))
-      const shelf = sortedShelfRows.map((row) => { const book = displayBook(row.book); const edition = row.edition; const chapters = row.chapters; const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition, chapters, groupId: row.groupId } : { book, edition, chapters, groupId: row.groupId, position } })
+      const shelf = sortedShelfRows.map((row) => { const book = displayBook(row.book); const edition = row.edition; const chapters = row.chapters; const position = row.position ? displayPosition(row.position) : undefined; return position === undefined ? { book, edition, chapters, groupId: row.groupId } : { book, edition, chapters, groupId: row.groupId, position } })
       const seenReadingBooks = new Set<string>()
       const reading = readingRows.filter((row) => { if (seenReadingBooks.has(row.book.id)) return false; seenReadingBooks.add(row.book.id); return true }).map((row) => ({ book: displayBook(row.book), edition: row.edition, position: displayPosition(row.position) }))
       const visibleHistory: HomeSearchHistory[] = latestHistory.flatMap((row) => {
@@ -832,7 +837,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         for (const item of snapshot.books) {
           const targetBookId = bookIdMap.get(item.book.id)
           if (targetBookId === undefined) throw new BackupRestoreError(`书籍映射失败：${item.book.id}`)
-          await transaction.insert(books).values({ id: targetBookId, userId, name: item.book.name, ...(item.book.author === undefined ? {} : { author: item.book.author }), ...(item.book.intro === undefined ? {} : { intro: item.book.intro }), ...(item.book.coverUrl === undefined ? {} : { coverUrl: item.book.coverUrl }), ...(item.book.customCoverUrl === undefined ? {} : { customCoverUrl: item.book.customCoverUrl }), ...(item.book.activeEditionKey === undefined ? {} : { activeEditionKey: item.book.activeEditionKey }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
+          await transaction.insert(books).values({ latestChapterIndex: item.book.latestChapterIndex ?? null, latestChapterName: item.book.latestChapterName ?? null, currentChapterIndex: item.book.currentChapterIndex ?? null, currentChapterName: item.book.currentChapterName ?? null, id: targetBookId, userId, name: item.book.name, ...(item.book.author === undefined ? {} : { author: item.book.author }), ...(item.book.intro === undefined ? {} : { intro: item.book.intro }), ...(item.book.coverUrl === undefined ? {} : { coverUrl: item.book.coverUrl }), ...(item.book.customCoverUrl === undefined ? {} : { customCoverUrl: item.book.customCoverUrl }), ...(item.book.activeEditionKey === undefined ? {} : { activeEditionKey: item.book.activeEditionKey }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
           for (const edition of item.editions) await transaction.insert(bookEditions).values({ id: randomUUID(), userId, bookId: targetBookId, editionKey: edition.editionKey, sourceId: edition.sourceId, sourceFingerprint: edition.sourceFingerprint, bookUrl: edition.bookUrl, metadata: edition.metadata, ...(edition.variable === undefined ? {} : { variable: edition.variable }), createdAt: new Date(item.book.createdAt), updatedAt: new Date(item.book.updatedAt) })
           for (const candidate of item.candidates) await transaction.insert(bookSourceCandidates).values({ id: randomUUID(), userId, bookId: targetBookId, sourceId: candidate.sourceId, sourceFingerprint: candidate.sourceFingerprint, bookUrl: candidate.bookUrl, candidate: candidate.candidate, updatedAt: new Date(candidate.updatedAt) })
         }
@@ -857,7 +862,17 @@ export class PostgresReaderRepository implements ReaderRepository {
         for (const position of snapshot.positions) {
           const bookId = bookIdMap.get(position.bookId)
           if (bookId === undefined) continue
-          await transaction.insert(readingRecords).values({ id: randomUUID(), userId, bookId, editionKey: position.editionKey, chapterId: position.chapterId, chapterUrl: position.chapterUrl, chapterIndex: position.chapterIndex, title: position.title, ...(position.tocRevision === undefined ? {} : { tocRevision: position.tocRevision }), paragraphIndex: position.paragraphIndex, offset: position.offset, version: position.version, lastReadAt: new Date(position.lastReadAt) }).onConflictDoUpdate({ target: [readingRecords.userId, readingRecords.bookId, readingRecords.editionKey], set: { chapterId: position.chapterId, chapterUrl: position.chapterUrl, chapterIndex: position.chapterIndex, title: position.title, tocRevision: position.tocRevision ?? null, paragraphIndex: position.paragraphIndex, offset: position.offset, version: position.version, lastReadAt: new Date(position.lastReadAt) } })
+          await transaction.insert(readingRecords).values({ id: randomUUID(), userId, bookId, editionKey: position.editionKey, chapterId: position.chapterId, chapterUrl: position.chapterUrl, chapterIndex: position.chapterIndex, title: position.title, ...(position.tocRevision === undefined ? {} : { tocRevision: position.tocRevision }), paragraphIndex: position.paragraphIndex, offset: position.offset, version: position.version, lastReadAt: new Date(position.lastReadAt) }).onConflictDoUpdate({ target: [readingRecords.userId, readingRecords.bookId], set: { editionKey: position.editionKey, chapterId: position.chapterId, chapterUrl: position.chapterUrl, chapterIndex: position.chapterIndex, title: position.title, tocRevision: position.tocRevision ?? null, paragraphIndex: position.paragraphIndex, offset: position.offset, version: position.version, lastReadAt: new Date(position.lastReadAt) } })
+        }
+      }
+      if (selected.has('reading')) {
+        await transaction.update(books).set({ currentChapterIndex: null, currentChapterName: null }).where(eq(books.userId, userId))
+        for (const position of snapshot.positions) {
+          const targetId = bookIdMap.get(position.bookId)
+          if (!targetId) continue
+          const imported = snapshot.books.find((item) => item.book.id === position.bookId)?.book
+          await writeBookReadingState(transaction, userId, targetId, position.editionKey)
+          if (imported?.activeEditionKey === position.editionKey) await transaction.update(books).set({ latestChapterIndex: imported.latestChapterIndex ?? null, latestChapterName: imported.latestChapterName ?? null, currentChapterIndex: imported.currentChapterIndex ?? null, currentChapterName: position.title }).where(and(eq(books.userId, userId), eq(books.id, targetId)))
         }
       }
       if (selected.has('reading')) {
@@ -928,8 +943,10 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async activateEdition(userId: string, bookId: string, editionKey: string) {
     return withUser(userId, async (tx) => {
-      const [row] = await tx.update(books).set({ activeEditionKey: editionKey, updatedAt: new Date() }).where(and(eq(books.userId, userId), eq(books.id, bookId), sql`exists (select 1 from ${bookEditions} where ${bookEditions.userId} = ${userId} and ${bookEditions.bookId} = ${bookId} and ${bookEditions.editionKey} = ${editionKey})`)).returning({ editionKey: books.activeEditionKey })
-      return row?.editionKey ? { editionKey: row.editionKey } : null
+      const [edition] = await tx.select({ editionKey: bookEditions.editionKey }).from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId), eq(bookEditions.editionKey, editionKey))).limit(1)
+      if (!edition) return null
+      await writeBookReadingState(tx, userId, bookId, editionKey)
+      return { editionKey }
     })
   }
   public async getEditionSource(userId: string, bookId: string, editionKey: string) {
@@ -954,7 +971,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const [edition] = await transaction.select().from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId), eq(bookEditions.editionKey, editionKey))).limit(1)
       if (edition === undefined) return null
-      await transaction.update(books).set({ activeEditionKey: editionKey, updatedAt: new Date() }).where(and(eq(books.userId, userId), eq(books.id, bookId)))
+      await writeBookReadingState(transaction, userId, bookId, editionKey)
       return toEdition(edition)
     })
   }
@@ -1036,6 +1053,8 @@ export class PostgresReaderRepository implements ReaderRepository {
         updatedAt: new Date(),
       } }).returning()
       if (row === undefined) throw new Error('保存目录失败')
+      const [book] = await transaction.select({ activeEditionKey: books.activeEditionKey }).from(books).where(and(eq(books.userId, userId), eq(books.id, toc.bookId))).for('update')
+      if (book?.activeEditionKey === toc.editionKey) await writeBookReadingState(transaction, userId, toc.bookId, toc.editionKey, undefined, toToc(row))
       return toToc(row)
     })
   }
@@ -1064,41 +1083,19 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async getPosition(userId: string, bookId: string, editionKey: string): Promise<StoredPosition | null> {
+  public async getPosition(userId: string, bookId: string, editionKey?: string): Promise<StoredPosition | null> {
     return withUser(userId, async (transaction) => {
-      const [row] = await transaction.select().from(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId), eq(readingRecords.editionKey, editionKey))).limit(1)
+      const [row] = await transaction.select().from(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId), ...(editionKey === undefined ? [] : [eq(readingRecords.editionKey, editionKey)]))).limit(1)
       return row === undefined ? null : toPosition(row)
     })
   }
 
   public async savePosition(userId: string, position: Omit<StoredPosition, 'lastReadAt'> & { lastReadAt?: string }): Promise<StoredPosition> {
     return withUser(userId, async (transaction) => {
-      const [row] = await transaction.insert(readingRecords).values({
-        userId,
-        bookId: position.bookId,
-        editionKey: position.editionKey,
-        chapterId: position.chapterId,
-        chapterUrl: position.chapterUrl,
-        chapterIndex: position.chapterIndex,
-        title: position.title,
-        ...(position.tocRevision === undefined ? {} : { tocRevision: position.tocRevision }),
-        paragraphIndex: position.paragraphIndex,
-        offset: position.offset,
-        version: position.version,
-        ...(position.lastReadAt === undefined ? {} : { lastReadAt: new Date(position.lastReadAt) }),
-      }).onConflictDoUpdate({ target: [readingRecords.userId, readingRecords.bookId, readingRecords.editionKey], set: {
-        chapterId: position.chapterId,
-        chapterUrl: position.chapterUrl,
-        chapterIndex: position.chapterIndex,
-        title: position.title,
-        ...(position.tocRevision === undefined ? {} : { tocRevision: position.tocRevision }),
-        paragraphIndex: position.paragraphIndex,
-        offset: position.offset,
-        version: position.version,
-        ...(position.lastReadAt === undefined ? { lastReadAt: new Date() } : { lastReadAt: new Date(position.lastReadAt) }),
-      } }).returning()
-      if (row === undefined) throw new Error('保存阅读位置失败')
-      return toPosition(row)
+      const [edition] = await transaction.select({ editionKey: bookEditions.editionKey }).from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, position.bookId), eq(bookEditions.editionKey, position.editionKey))).limit(1)
+      if (!edition) throw new Error('书籍版本不存在')
+      const value = { ...position, userId, lastReadAt: position.lastReadAt ?? new Date().toISOString() }
+      return (await writeBookReadingState(transaction, userId, position.bookId, position.editionKey, value))!
     })
   }
 }
@@ -1352,7 +1349,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     this.searches.set(searchId, next); this.searchLeases.set(searchId, Date.now() + 30000); return next
   }
   public async updateSearch(userId: string, searchId: string, patch: { knownRun?: SearchRunState; status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> { const current = await this.getSearch(userId, searchId); if (current === null || (patch.expectedOperationId !== undefined && current.operationId !== patch.expectedOperationId)) return null; const updated: SearchRunState = { ...current, ...(patch.status === undefined ? {} : { status: patch.status }), ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }), ...(patch.sourceStates === undefined ? {} : { sourceStates: patch.sourceStates }), ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }), ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }), ...(patch.nextCursor === undefined ? {} : { nextCursor: patch.nextCursor }), ...(patch.operationId === undefined || patch.operationId === null ? {} : { operationId: patch.operationId }), ...(patch.progress === undefined ? {} : { progress: patch.progress }), ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }), updatedAt: new Date().toISOString(), version: current.version + 1 }; if (patch.operationId === null) delete updated.operationId; this.searches.set(searchId, updated); if (updated.operationId) this.searchLeases.set(searchId, Date.now() + 30000); else this.searchLeases.delete(searchId); const history = this.history.get(`${userId}:${searchId}`); if (history !== undefined) this.history.set(`${userId}:${searchId}`, { ...history, status: updated.status, resultCount: updated.candidates.length, summary: searchSummary(updated.status, updated.candidates.length), updatedAt: updated.updatedAt }); return updated }
-  public async createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }> { const existing = [...this.books.values()].find((item) => item.book.userId === userId && item.edition.editionKey === input.editionKey); const target = input.bookId === undefined ? undefined : [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === input.bookId); if (input.bookId !== undefined && target === undefined) throw new Error('书籍不存在'); if (existing !== undefined && input.bookId !== undefined && existing.book.id !== input.bookId) throw new Error('书籍版本已经属于其他书籍'); const now = new Date().toISOString(); const book: StoredBook = existing?.book ?? target?.book ?? { id: randomUUID(), userId, name: input.metadata.name ?? input.candidate.candidate.name ?? '未命名书籍', ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), activeEditionKey: input.editionKey, createdAt: now, updatedAt: now }; const activeEditionKey = input.activateEdition === false ? book.activeEditionKey : input.editionKey; const updatedBook = input.activateEdition === false ? book : { ...book, name: input.metadata.name ?? book.name, ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), ...(activeEditionKey === undefined ? {} : { activeEditionKey }), updatedAt: now }; const edition: StoredEdition = { id: existing?.edition.id ?? randomUUID(), userId, bookId: updatedBook.id, editionKey: input.editionKey, sourceId: input.candidate.sourceId, sourceFingerprint: input.sourceFingerprint, bookUrl: input.metadata.bookUrl, metadata: input.metadata, ...(input.metadata.variable === undefined ? {} : { variable: input.metadata.variable }) }; const value = { book: updatedBook, edition }; for (const [key, item] of this.books) if (item.book.id === updatedBook.id && item.book.userId === userId) this.books.set(key, { ...item, book: updatedBook }); this.books.set(`${userId}:${input.editionKey}`, value); if (input.addToBookshelf !== false) this.shelf.set(`${userId}:${updatedBook.id}`, now); return value }
+  public async createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }> { const existing = [...this.books.values()].find((item) => item.book.userId === userId && item.edition.editionKey === input.editionKey); const target = input.bookId === undefined ? undefined : [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === input.bookId); if (input.bookId !== undefined && target === undefined) throw new Error('书籍不存在'); if (existing !== undefined && input.bookId !== undefined && existing.book.id !== input.bookId) throw new Error('书籍版本已经属于其他书籍'); const now = new Date().toISOString(); const book: StoredBook = existing?.book ?? target?.book ?? { id: randomUUID(), userId, name: input.metadata.name ?? input.candidate.candidate.name ?? '未命名书籍', ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), activeEditionKey: input.editionKey, createdAt: now, updatedAt: now }; const activeEditionKey = input.activateEdition === false ? book.activeEditionKey : input.editionKey; const updatedBook = input.activateEdition === false ? book : { ...book, name: input.metadata.name ?? book.name, ...(input.metadata.author === undefined ? {} : { author: input.metadata.author }), ...(input.metadata.intro === undefined ? {} : { intro: input.metadata.intro }), ...(input.metadata.coverUrl === undefined ? {} : { coverUrl: input.metadata.coverUrl }), ...(activeEditionKey === undefined ? {} : { activeEditionKey }), updatedAt: now }; const edition: StoredEdition = { id: existing?.edition.id ?? randomUUID(), userId, bookId: updatedBook.id, editionKey: input.editionKey, sourceId: input.candidate.sourceId, sourceFingerprint: input.sourceFingerprint, bookUrl: input.metadata.bookUrl, metadata: input.metadata, ...(input.metadata.variable === undefined ? {} : { variable: input.metadata.variable }) }; const value = { book: updatedBook, edition }; for (const [key, item] of this.books) if (item.book.id === updatedBook.id && item.book.userId === userId) this.books.set(key, { ...item, book: updatedBook }); this.books.set(`${userId}:${input.editionKey}`, value); if (input.addToBookshelf !== false) this.shelf.set(`${userId}:${updatedBook.id}`, now); if (input.activateEdition !== false) this.writeReadingState(userId, updatedBook.id, input.editionKey); return { ...value, book: (await this.getBook(userId, updatedBook.id))! } }
   public async setCustomCover(userId: string, bookId: string, coverUrl: string | null): Promise<StoredBook | null> {
     const book = await this.getBook(userId, bookId)
     if (book === null) return null
@@ -1418,9 +1415,9 @@ export class MemoryReaderRepository implements ReaderRepository {
       }
       return rightAddedAt.localeCompare(leftAddedAt) || left.book.id.localeCompare(right.book.id)
     })
-    const shelf = shelfValues.map((entry) => { const value = { ...entry, groupId: this.shelfGroups.get(`${userId}:${entry.book.id}`) ?? null }; const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } })
+    const shelf = shelfValues.map((entry) => { const value = { ...entry, groupId: this.shelfGroups.get(`${userId}:${entry.book.id}`) ?? null }; const position = this.positions.get(`${userId}:${value.book.id}`); return position === undefined ? value : { ...value, position } })
     const searchHistory: HomeSearchHistory[] = latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50).map(({ id, searchId, keyword, status, resultCount, summary, createdAt, updatedAt }) => ({ id, searchId, keyword, status, resultCount, ...(summary === undefined ? {} : { summary }), createdAt, updatedAt }))
-    return { bookshelf: shelf.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, chapters: shelfChapterSummary(this.tocs.has(`${userId}:${row.book.id}:${row.edition.editionKey}`) ? tocSummary(this.tocs.get(`${userId}:${row.book.id}:${row.edition.editionKey}`)!) : null, 'position' in row ? row.position : null, row.edition.metadata.lastChapter), groupId: row.groupId, ...('position' in row ? { position: displayPosition(row.position) } : {}) })), reading: reading.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, position: displayPosition(row.position) })), searchHistory }
+    return { bookshelf: shelf.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, chapters: bookShelfSummary(row.book, 'position' in row), groupId: row.groupId, ...('position' in row ? { position: displayPosition(row.position) } : {}) })), reading: reading.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, position: displayPosition(row.position) })), searchHistory }
   }
   public async getBackupSnapshot(userId: string): Promise<ReaderBackupSnapshot> {
     const books = new Map<string, ReaderBackupBook>()
@@ -1504,7 +1501,7 @@ export class MemoryReaderRepository implements ReaderRepository {
       for (const position of snapshot.positions) {
         const bookId = bookIdMap.get(position.bookId)
         if (bookId === undefined) throw new BackupRestoreError(`阅读记录缺少书籍：${position.bookId}`)
-        nextPositions.set(`${userId}:${bookId}:${position.editionKey}`, { ...position, userId, bookId })
+        nextPositions.set(`${userId}:${bookId}`, { ...position, userId, bookId })
       }
     }
     if (selected.has('search')) {
@@ -1549,6 +1546,14 @@ export class MemoryReaderRepository implements ReaderRepository {
     this.userSourceMap.clear(); for (const [key, value] of nextSources) this.userSourceMap.set(key, value)
     this.settings.clear(); for (const [key, value] of nextSettings) this.settings.set(key, value)
     this.runtimeStates.clear(); for (const [key, value] of nextRuntimeStates) this.runtimeStates.set(key, value)
+    if (selected.has('reading') || selected.has('bookshelf')) for (const [key, entry] of this.books) {
+      if (entry.book.userId !== userId) continue
+      const position = this.positions.get(`${userId}:${entry.book.id}`)
+      const imported = snapshot.books.find((item) => (bookIdMap.get(item.book.id) ?? item.book.id) === entry.book.id)?.book
+      const state = position ? { activeEditionKey: position.editionKey, currentChapterName: position.title, currentChapterIndex: imported?.activeEditionKey === position.editionKey ? imported.currentChapterIndex ?? null : null } : { currentChapterIndex: null, currentChapterName: null }
+      this.books.set(key, { ...entry, book: { ...entry.book, ...state } })
+    }
+
   }
   public async deleteSearchHistory(userId: string, historyId: string): Promise<boolean> { const item = [...this.history.entries()].find(([, value]) => value.id === historyId && this.searches.get(value.searchId)?.userId === userId); if (item === undefined) return false; for (const [key, value] of this.history) if (this.searches.get(value.searchId)?.userId === userId && normalizeIdentity(value.keyword) === normalizeIdentity(item[1].keyword)) this.history.delete(key); return true }
   public async listBooks(userId: string): Promise<Array<{ book: StoredBook; edition: StoredEdition }>> { return [...this.books.values()].filter((item) => item.book.userId === userId && item.book.activeEditionKey === item.edition.editionKey).sort((a, b) => b.book.updatedAt.localeCompare(a.book.updatedAt)) }
@@ -1563,7 +1568,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     const cached = this.contents.get(`${userId}:${editionKey}:${tocRevision}:${chapterId}`)
     return cached ? { tocRevision: cached.tocRevision, sourceFingerprint: cached.sourceFingerprint, content: readingContent(cached.content, chapterId), ...(cached.content.truncated === undefined ? {} : { truncated: cached.content.truncated }) } : null
   }
-  public async setActiveEdition(userId: string, bookId: string, editionKey: string): Promise<StoredEdition | null> { const selected = [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId && item.edition.editionKey === editionKey); if (selected === undefined) return null; const updatedBook = { ...selected.book, activeEditionKey: editionKey, updatedAt: new Date().toISOString() }; for (const [key, item] of this.books) if (item.book.userId === userId && item.book.id === bookId) this.books.set(key, { ...item, book: updatedBook }); return selected.edition }
+  public async setActiveEdition(userId: string, bookId: string, editionKey: string): Promise<StoredEdition | null> { const selected = [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId && item.edition.editionKey === editionKey); if (selected === undefined) return null; this.writeReadingState(userId, bookId, editionKey); return selected.edition }
   public async getEdition(userId: string, bookId: string, editionKey?: string): Promise<StoredEdition | null> { const item = [...this.books.values()].find((value) => value.book.userId === userId && value.book.id === bookId && (editionKey === undefined || value.edition.editionKey === editionKey)); return item?.edition ?? null }
   public async getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string, _display?: boolean): Promise<ChapterContext | null> {
     const toc = await this.getToc(userId, bookId, editionKey)
@@ -1576,11 +1581,64 @@ export class MemoryReaderRepository implements ReaderRepository {
     return toc === undefined ? null : tocSummary(toc)
   }
   public async getToc(userId: string, bookId: string, editionKey: string): Promise<StoredToc | null> { return this.tocs.get(`${userId}:${bookId}:${editionKey}`) ?? null }
-  public async saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc> { const value = { ...toc, userId, updatedAt: new Date().toISOString() }; this.tocs.set(`${userId}:${toc.bookId}:${toc.editionKey}`, value); return value }
+  public async saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc> { const value = { ...toc, userId, updatedAt: new Date().toISOString() }; this.tocs.set(`${userId}:${toc.bookId}:${toc.editionKey}`, value); if ((await this.getBook(userId, toc.bookId))?.activeEditionKey === toc.editionKey) this.writeReadingState(userId, toc.bookId, toc.editionKey); return value }
   public async getContent(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<StoredContent | null> { return this.contents.get(`${userId}:${editionKey}:${tocRevision}:${chapterId}`) ?? null }
   public async saveContent(userId: string, content: Omit<StoredContent, 'updatedAt'>): Promise<StoredContent> { const value = { ...content, userId, updatedAt: new Date().toISOString() }; this.contents.set(`${userId}:${content.editionKey}:${content.tocRevision}:${content.chapterId}`, value); return value }
-  public async getPosition(userId: string, bookId: string, editionKey: string): Promise<StoredPosition | null> { return this.positions.get(`${userId}:${bookId}:${editionKey}`) ?? null }
-  public async savePosition(userId: string, position: Omit<StoredPosition, 'lastReadAt'> & { lastReadAt?: string }): Promise<StoredPosition> { const value = { ...position, userId, lastReadAt: position.lastReadAt ?? new Date().toISOString() }; this.positions.set(`${userId}:${position.bookId}:${position.editionKey}`, value); return value }
+  public async getPosition(userId: string, bookId: string, editionKey?: string): Promise<StoredPosition | null> { const position = this.positions.get(`${userId}:${bookId}`); return position && (editionKey === undefined || position.editionKey === editionKey) ? position : null }
+  public async savePosition(userId: string, position: Omit<StoredPosition, 'lastReadAt'> & { lastReadAt?: string }): Promise<StoredPosition> {
+    const value = { ...position, userId, lastReadAt: position.lastReadAt ?? new Date().toISOString() }
+    this.writeReadingState(userId, position.bookId, position.editionKey, value)
+    return this.positions.get(`${userId}:${position.bookId}`)!
+  }
+  private writeReadingState(userId: string, bookId: string, editionKey: string, incoming?: StoredPosition) {
+    const key = `${userId}:${bookId}`
+    const previous = this.positions.get(key) ?? null
+    if (incoming && previous && incoming.version < previous.version) return
+    const toc = this.tocs.get(`${key}:${editionKey}`) ?? null
+    const position = incoming ?? (previous && toc ? mapReadingPosition(previous, toc) : previous?.editionKey === editionKey ? previous : null)
+    if (position) this.positions.set(key, position)
+    else this.positions.delete(key)
+    const state = bookChapterState(toc, position)
+    for (const [entryKey, entry] of this.books) if (entry.book.userId === userId && entry.book.id === bookId) this.books.set(entryKey, { ...entry, book: { ...entry.book, ...state, activeEditionKey: editionKey } })
+  }
+
+}
+
+/** 所有摘要/切源写入按书籍串行，目录预览不得调用此函数。 */
+async function writeBookReadingState(tx: ReaderTransaction, userId: string, bookId: string, editionKey: string, incoming?: StoredPosition, refreshedToc?: StoredToc): Promise<StoredPosition | null> {
+  const [book] = await tx.select({ id: books.id, activeEditionKey: books.activeEditionKey, latestChapterIndex: books.latestChapterIndex, latestChapterName: books.latestChapterName, currentChapterIndex: books.currentChapterIndex, currentChapterName: books.currentChapterName }).from(books).where(and(eq(books.userId, userId), eq(books.id, bookId))).for('update')
+  if (!book) throw new Error('书籍不存在')
+  const [old] = await tx.select().from(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId))).limit(1)
+  const previous = old ? toPosition(old) : null
+  if (incoming && previous && incoming.version < previous.version) return previous
+  if (!incoming && !refreshedToc && book.activeEditionKey === editionKey && book.latestChapterIndex !== null) return previous
+  let position = incoming ?? previous
+  let state: ReturnType<typeof bookChapterState>
+  if (incoming && book.activeEditionKey === editionKey && !refreshedToc) {
+    let currentChapterIndex = book.currentChapterIndex
+    if (previous?.chapterUrl !== incoming.chapterUrl || previous.editionKey !== editionKey || previous.tocRevision !== incoming.tocRevision) {
+      const [ordinal] = await tx.select({ index: sql<number | null>`(
+        select case when bool_or(item->>'chapterUrl' = ${incoming.chapterUrl}) then
+          count(*) filter (where (item->>'index')::integer <= ${incoming.chapterIndex})::integer - 1 else null end
+        from jsonb_array_elements(${tocSnapshots.chapters}) as item where item->>'isVolume' is distinct from 'true'
+      )` }).from(tocSnapshots).where(and(eq(tocSnapshots.userId, userId), eq(tocSnapshots.bookId, bookId), eq(tocSnapshots.editionKey, editionKey))).limit(1)
+      currentChapterIndex = ordinal?.index ?? null
+    }
+    state = { latestChapterIndex: book.latestChapterIndex, latestChapterName: book.latestChapterName, currentChapterIndex, currentChapterName: incoming.title }
+  } else {
+    const [snapshot] = refreshedToc ? [] : await tx.select().from(tocSnapshots).where(and(eq(tocSnapshots.userId, userId), eq(tocSnapshots.bookId, bookId), eq(tocSnapshots.editionKey, editionKey))).limit(1)
+    const toc = refreshedToc ?? (snapshot ? toToc(snapshot) : null)
+    position = incoming ?? (previous && toc ? mapReadingPosition(previous, toc) : previous?.editionKey === editionKey ? previous : null)
+    state = bookChapterState(toc, position)
+  }
+  if (!position) {
+    if (old) await tx.delete(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId)))
+  } else if (incoming || position !== previous) {
+    const fields = { editionKey: position.editionKey, chapterId: position.chapterId, chapterUrl: position.chapterUrl, chapterIndex: position.chapterIndex, title: position.title, tocRevision: position.tocRevision ?? null, paragraphIndex: position.paragraphIndex, offset: position.offset, version: position.version, lastReadAt: new Date(position.lastReadAt) }
+    await tx.insert(readingRecords).values({ userId, bookId, ...fields }).onConflictDoUpdate({ target: [readingRecords.userId, readingRecords.bookId], set: fields })
+  }
+  await tx.update(books).set({ ...state, activeEditionKey: editionKey }).where(and(eq(books.userId, userId), eq(books.id, bookId)))
+  return position
 }
 
 async function lockUserSourceMutations(transaction: ReaderTransaction, userId: string): Promise<void> {
@@ -1717,7 +1775,7 @@ function readPageTapZones(value: unknown): ReaderSettings['pageTapZones'] {
   return { leftWidthPercent, centerWidthPercent, centerTopHeightPercent, centerMiddleHeightPercent, centerTopAction, centerBottomAction }
 }
 function settingsObject(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {} }
-function toBook(row: BookRow): StoredBook { return { id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.customCoverUrl === null ? {} : { customCoverUrl: row.customCoverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
+function toBook(row: BookRow): StoredBook { return { latestChapterIndex: row.latestChapterIndex, latestChapterName: row.latestChapterName, currentChapterIndex: row.currentChapterIndex, currentChapterName: row.currentChapterName, id: row.id, userId: row.userId, name: row.name, ...(row.author === null ? {} : { author: row.author }), ...(row.intro === null ? {} : { intro: row.intro }), ...(row.coverUrl === null ? {} : { coverUrl: row.coverUrl }), ...(row.customCoverUrl === null ? {} : { customCoverUrl: row.customCoverUrl }), ...(row.activeEditionKey === null ? {} : { activeEditionKey: row.activeEditionKey }), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 function toEdition(row: BookEditionRow): StoredEdition { return { id: row.id, userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, bookUrl: row.bookUrl, metadata: row.metadata, ...(row.variable === null ? {} : { variable: row.variable }) } }
 // 结果只存于 candidates；逐源状态保存元数据，读取时共享同一批候选对象，避免 JSON 重复存储和解析。
 function compactSearchStates(states: SourceSearchState[]): SourceSearchState[] { return states.map((state) => ({ ...state, candidates: [] })) }
