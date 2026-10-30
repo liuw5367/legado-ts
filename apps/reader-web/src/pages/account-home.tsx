@@ -154,7 +154,7 @@ function BookRow({ onRefreshed, view, item, showRemove, removing, onRemove, onOr
       <span className={'book-row-info' + (showRemove ? ' shelf-row-info' : '')}>
         <strong className={showRemove ? 'book-row-title' : undefined}>{showRemove ? <><span title={book.name}>{book.name}</span>{refreshing ? <LoaderCircle className="book-refresh-spinner" role="status" aria-label="正在刷新章节" /> : updated ? <span className="book-update-tag">更新</span> : null}</> : book.name}</strong>
         {showRemove ? <span className="shelf-row-author muted"><span title={book.author ?? '作者未知'}>{book.author ?? '作者未知'}</span>{chapters?.latestChapterTitle ? <span className="shelf-row-latest" title={chapters.latestChapterTitle}> · {chapters.latestChapterTitle}</span> : null}</span> : <span className="muted">{book.author ?? '作者未知'}</span>}
-        <span className={position === undefined ? 'muted small' : 'small'}>{showRemove ? chapters?.unreadChapterCount === 0 ? '已读至最新章节' : `${chapters?.unreadChapterCount == null ? '未读数未知' : `${chapters.unreadChapterCount} 章未读`}${position === undefined ? ' · 尚未阅读' : ` · ${position.title}`}` : position === undefined ? '尚未阅读' : `读到：${position.title}`}</span>
+        <span className={position === undefined ? 'muted small' : 'small'}>{position === undefined ? '尚未阅读' : showRemove ? chapters?.unreadChapterCount === 0 ? '已读至最新章节' : `${chapters?.unreadChapterCount == null ? '未读数未知' : `${chapters.unreadChapterCount} 章未读`} · ${position.title}` : `读到：${position.title}`}</span>
       </span>
     </Link>
     <MoreMenu label={`更多操作：${book.name}`}>
