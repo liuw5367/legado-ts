@@ -56,6 +56,14 @@
 
 正文、段评和新建批注的章节校验通过轻量数据库查询读取目录 revision、sourceFingerprint、目标章节和下一章地址，目录数组在数据库内处理，不向后端返回完整目录。章节身份沿用 URL、NUL 分隔符和 index 的 UTF-8 SHA-256；目录不存在与章节不存在分别处理。正文接口校正缓存章节标题时也使用轻量章节查询，保留当前目录标题且不修改缓存正文。目录展示接口只返回 bookId、editionKey、sourceFingerprint、revision、章节摘要及可选 runtimeWarning；章节摘要保留 chapterId、chapterUrl、index、title、isVolume、isVip。缓存命中时，数据库直接从 JSONB 提取章节白名单字段，不向后端传输完整章节对象、bookPatch、bookAfter 或快照时间；同时只读取当前来源摘要进行有效性校验。刷新或缓存失效时仍使用完整书源和快照执行抓取与保存，再生成展示摘要。上述查询不增加跨请求缓存，不修改现有表结构与索引；减少网络传输不代表数据库内部免于读取或处理 JSONB。
 
+## 书架章节摘要与更新标记
+
+`GET /api/home` 的书架条目包含 `chapters`：`chapterCount`、`latestChapterTitle` 和 `unreadChapterCount`。数据库在现有书架查询中聚合目录，排除卷标题；没有目录时两个数量为 null，最新章节回退到版本 metadata 的 lastChapter。首页不触发书源抓取，不读取完整目录或完整 metadata。
+
+`POST /api/books/:bookId/toc/refresh?editionKey=...` 强制刷新指定版本目录，返回同一章节摘要，以及 `previousChapterCount`、`hasNewChapters` 和可选 `runtimeWarning`。未读数按刷新后的目录与当前阅读位置计算，不修改阅读位置。旧目录不存在时 previousChapterCount 为 null，不产生更新标记；只有正文章节数增加时 hasNewChapters 为 true。失败保留旧目录。成功后前端只替换当前书架条目的摘要并使该书目录失效，不重新请求首页。
+
+“更新”标记只保存在浏览器，localStorage 键为 `legado:book-update:v1:` 加账号、书籍与版本的 JSON 数组，值为 `{ version: 1, updated: true }`。再次刷新无新增时保留已有标记，进入对应版本的正常阅读页后清除；目录、详情和阅读位置预览不会清除。存储不可用时在当前会话内保存。该标记不写入数据库，也不随备份同步。
+
 ## 搜索与写入
 
 搜索开始时写入 `search_runs` 和 `search_history`，将来源完成事件合并为每 500ms 至多一次的 sourceStates、候选和进度检查点，批次结算立即保存。领取校验搜索版本和 operationId，并持有 30 秒操作租约；检查点续租，进程异常退出后可重新领取。领取、更新和取消都带用户身份及当前操作条件，防止迟到结果覆盖新状态。最终状态成功保存并释放操作标识后，不再重复发送清理更新；未确认释放的异常路径仍按操作身份清理。候选只在 candidates 保存一份；sourceStates 持久化逐源元数据，读取时按 sourceId 重建共享候选引用，兼容旧记录。已持有且经过操作条件校验的快照在领取和检查点写入时直接复用，数据库不重复返回大结果。搜索历史只记录摘要和数量，不保存 Cookie 或完整请求体。

@@ -312,3 +312,8 @@ test('切换当前版本只返回标识，不读取或返回版本 metadata', as
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), { edition: { editionKey: 'edition' } })
 })
+
+test('章节刷新接口拒绝未登录请求', async () => {
+  const response = await app.request('http://localhost/api/books/b/toc/refresh?editionKey=e', { method: 'POST' })
+  assert.equal(response.status, 401)
+})

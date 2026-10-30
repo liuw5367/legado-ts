@@ -1,3 +1,5 @@
+import { setBookUpdate } from '../lib/book-updates.ts'
+import { useAuth } from '../lib/auth-context.tsx'
 import { Bookmark, Moon, Sun, X } from 'lucide-react'
 import { useReaderMarks } from '../lib/use-reader-marks.ts'
 import { visibleTextPoint } from '../lib/reader-annotations.ts'
@@ -46,6 +48,10 @@ export function ReaderPage() {
   const locationState = location.state !== null && typeof location.state === 'object' ? location.state as ReaderLocationState : {}
   const readingPreview = locationState.readingPreview
   const previewActive = readingPreview !== undefined
+  const { user } = useAuth()
+  useEffect(() => {
+    if (user && pageActivity?.active !== false && !previewActive) setBookUpdate(user.id, bookId, editionKey, false)
+  }, [user?.id, bookId, editionKey, pageActivity?.active, previewActive])
   const previewActiveRef = useRef(previewActive)
   previewActiveRef.current = previewActive
   const positionIdentity = JSON.stringify([bookId, editionKey, chapterId])

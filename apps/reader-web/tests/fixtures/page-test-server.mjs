@@ -1,3 +1,4 @@
+import { shelfChapterSummary } from '../../shared/shelf-chapters.ts'
 import { readingContent } from '../../shared/reading-content.ts'
 import { readingSourceSummary } from '../../shared/source-management.ts'
 import { sourceDomainInfo } from '../../shared/source-domain.ts'
@@ -110,10 +111,12 @@ for (const [index, coverUrl] of [[5, '/api/fixture-cover/1.svg'], [6, '/api/fixt
   editions.set(editionKey, { id: randomUUID(), userId: USER_ID, bookId: BOOK_ID, editionKey, sourceId: source.sourceId, sourceFingerprint: source.fingerprint, bookUrl: longBookUrl(index), metadata: { name: initialBook.name, author: initialBook.author, coverUrl } })
 }
 
+const shelfRefreshCounts = new Map()
+
 function chaptersFor(editionKey) {
   const edition = editions.get(editionKey)
   if (edition === undefined) return []
-  return Array.from({ length: 30 }, (_, index) => {
+  return Array.from({ length: 30 + Math.min(shelfRefreshCounts.get(editionKey) ?? 0, 1) * 3 }, (_, index) => {
     const chapterId = `${editionKey}-chapter-${index + 1}`
     const chapterUrl = `${edition.bookUrl}/chapter/${index + 1}?source-preview=${'long-url-'.repeat(16)}`
     return {
@@ -298,7 +301,8 @@ function homeSnapshot() {
   const visibleBooks = [...books.values()].map(displayBook).filter((value) => value !== undefined)
   const shelfItems = visibleBooks.filter(({ book }) => bookshelf.has(book.id)).map(({ book, edition }) => {
     const position = positionFor(book.id, edition.editionKey)
-    return position === null ? { book, edition, groupId: shelfGroups.get(book.id) ?? null } : { book, edition, position, groupId: shelfGroups.get(book.id) ?? null }
+    const chapters = shelfChapterSummary({ chapters: chaptersFor(edition.editionKey) }, position)
+    return position === null ? { book, edition, chapters, groupId: shelfGroups.get(book.id) ?? null } : { book, edition, chapters, position, groupId: shelfGroups.get(book.id) ?? null }
   })
   const seenReadingBooks = new Set()
   const readingItems = [...positions.values()].sort((left, right) => right.lastReadAt.localeCompare(left.lastReadAt)).flatMap((position) => {
@@ -771,6 +775,15 @@ async function handleApi(request, response, url) {
       json(response, { position: saved })
       return
     }
+    if (method === 'POST' && tail === 'toc/refresh') {
+      const editionKey = url.searchParams.get('editionKey') ?? ''
+      if (editions.get(editionKey)?.bookId !== bookId) { json(response, { error: { code: 'not-found', message: '测试书籍目录不存在' } }, 404); return }
+      const previousChapterCount = chaptersFor(editionKey).length
+      shelfRefreshCounts.set(editionKey, (shelfRefreshCounts.get(editionKey) ?? 0) + 1)
+      const summary = shelfChapterSummary({ chapters: chaptersFor(editionKey) }, positionFor(bookId, editionKey))
+      json(response, { ...summary, previousChapterCount, hasNewChapters: summary.chapterCount > previousChapterCount })
+      return
+    }
     if (method === 'GET' && tail === 'toc') {
       const editionKey = url.searchParams.get('editionKey') ?? ''
       if (editions.get(editionKey)?.bookId !== bookId) { json(response, { error: { code: 'not-found', message: '测试书籍目录不存在' } }, 404); return }
@@ -809,7 +822,7 @@ function resetFixture() {
   for (const [target, original] of [[books, initialState.books], [editions, initialState.editions], [positions, initialState.positions]]) { target.clear(); for (const [key, value] of structuredClone(original)) target.set(key, value) }
   bookshelf.clear(); for (const id of initialState.bookshelf) bookshelf.add(id)
   Object.assign(settings, structuredClone(initialState.settings)); Object.assign(secondSettings, structuredClone(initialState.settings), { userId: session(true).user.id })
-  searches.clear(); searchHistory.splice(0); refreshCounts.clear(); requestCounts.clear(); faults.clear(); searchSequence = 0; discoveryFailure = true; discoveryBookFailure = true
+  searches.clear(); searchHistory.splice(0); refreshCounts.clear(); shelfRefreshCounts.clear(); requestCounts.clear(); faults.clear(); searchSequence = 0; discoveryFailure = true; discoveryBookFailure = true
 }
 
 const server = createServer(async (request, response) => {

@@ -22,6 +22,8 @@ export function mutationDomains(path: string, method: string): string[] {
   if (parts[1] === 'books' && parts[3] === 'sources' && parts.at(-1) === 'open') return ['home', 'candidates', 'booklist-books', `book:${decodeURIComponent(parts[2]!)}`, 'edition-options']
   if (parts[1] === 'books' && parts[3] === 'edition') return ['notes', 'home', 'books', `book:${decodeURIComponent(parts[2]!)}`]
   if (parts[1] === 'books' && parts[3] === 'bookshelf') return ['home', 'groups', 'books']
+  // 刷新结果直接替换书架当前条目，只让该书目录失效，避免重载整个首页。
+  if (parts[1] === 'books' && parts[3] === 'toc' && parts[4] === 'refresh') return [`book:${decodeURIComponent(parts[2]!)}`]
   if (parts[1] !== 'books') return []
   if (parts[3] === 'cover') return ['home', 'books', 'booklists', 'booklist-books', `book:${decodeURIComponent(parts[2]!)}`]
   if (parts[3] === 'position') return ['home', 'booklist-books']

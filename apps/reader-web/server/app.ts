@@ -1,3 +1,4 @@
+import { refreshShelfChapters } from './runtime/shelf-chapters.ts'
 import { readingSourceSummary } from '../shared/source-management.ts'
 import { registerReadingMarksApi } from './reading-marks-api.ts'
 import { searchConcurrencySchema } from '../shared/search-settings.ts'
@@ -506,6 +507,18 @@ app.delete('/api/search-history/:historyId', async (context) => {
   try {
     const removed = await dependencies.repository.deleteSearchHistory(context.get('userId'), context.req.param('historyId'))
     return removed ? context.json({ ok: true }) : context.json({ error: { code: 'not-found', message: '搜索记录不存在' } }, 404)
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
+app.post('/api/books/:bookId/toc/refresh', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const editionKey = context.req.query('editionKey')
+  if (!editionKey) return context.json({ error: { code: 'invalid-input', message: '缺少 editionKey' } }, 400)
+  try {
+    return context.json(await refreshShelfChapters(dependencies.repository, dependencies.runtime, context.get('userId'), context.req.param('bookId'), editionKey))
   } catch (error) {
     return handleError(context, error)
   }

@@ -1,3 +1,4 @@
+import type { ShelfChapterSummary } from '../../shared/shelf-chapters.ts'
 import { DEFAULT_SEARCH_CONCURRENCY } from '../../shared/search-settings.ts'
 import type { SourceCacheWarning } from '../../shared/book-sources.ts'
 import type { BookCandidate, BookMetadata, Chapter, ChapterContent, JsonObject, NormalizedSource, PageCursor, TocBookPatch } from '@legado/source-core'
@@ -143,7 +144,7 @@ export type HomeBook = Pick<StoredBook, 'id' | 'name' | 'author' | 'coverUrl' | 
 export type HomePosition = Pick<StoredPosition, 'chapterId' | 'title' | 'lastReadAt'>
 export type HomeSearchHistory = Pick<SearchHistoryItem, 'id' | 'searchId' | 'keyword' | 'status' | 'resultCount' | 'summary' | 'createdAt' | 'updatedAt'>
 export interface HomeSnapshot {
-  bookshelf: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; groupId?: string | null } & ({ position: HomePosition } | Record<never, never>)>
+  bookshelf: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; groupId?: string | null; chapters: ShelfChapterSummary } & ({ position: HomePosition } | Record<never, never>)>
   reading: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; position: HomePosition }>
   searchHistory: HomeSearchHistory[]
 }

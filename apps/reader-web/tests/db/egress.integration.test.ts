@@ -160,7 +160,7 @@ test('页面展示查询在驱动层排除原文、规则、执行变量和无�
   t.after(async () => {
     client.options.transform.row.from = original
     await closeReaderDb()
-    for (const table of ['source_import_items', 'source_import_batches', 'source_import_links', 'reading_annotations', 'reading_records', 'bookshelf', 'book_list_items', 'book_lists', 'book_editions', 'books', 'user_sources']) await admin`delete from reader.${admin(table)} where user_id = ${user}`
+    for (const table of ['source_import_items', 'source_import_batches', 'source_import_links', 'reading_annotations', 'reading_records', 'toc_snapshots', 'bookshelf', 'book_list_items', 'book_lists', 'book_editions', 'books', 'user_sources']) await admin`delete from reader.${admin(table)} where user_id = ${user}`
     await admin`drop owned by ${admin(role)}`; await admin`drop role ${admin(role)}`; await admin.end()
   })
   const measure = async <T>(read: () => Promise<T>) => {
@@ -209,6 +209,18 @@ test('页面展示查询在驱动层排除原文、规则、执行变量和无�
   const home = await measure(() => repo.getHome(user))
   assert.ok(home.bytes < baseline.bytes * 0.01); assert.equal(home.text.includes('执行字段'), false)
   assert.equal(home.value.bookshelf[0]?.book.customCoverUrl, 'https://cover.test/custom')
+  assert.deepEqual(home.value.bookshelf[0]?.chapters, { chapterCount: null, latestChapterTitle: null, unreadChapterCount: null })
+  const shelfChapters = [
+    { rawFields: {}, traceRef: 'shelf-test', sourceId: 'https://display.test', bookUrl: '/book', chapterUrl: '/c', index: 0, title: '第一章' },
+    { rawFields: {}, traceRef: 'shelf-test', sourceId: 'https://display.test', bookUrl: '/book', chapterUrl: '/volume', index: 1, title: '第二卷', isVolume: true },
+    { rawFields: {}, traceRef: 'shelf-test', sourceId: 'https://display.test', bookUrl: '/book', chapterUrl: '/c2', index: 2, title: '第二章' },
+  ]
+  await repo.saveToc(user, { userId: user, bookId, editionKey: 'e', sourceFingerprint: 'fp', revision: 'shelf-r1', bookPatch: { lastCheckTime: 0, totalChapterNum: 2 }, chapters: shelfChapters })
+  assert.deepEqual((await repo.getHome(user)).bookshelf[0]?.chapters, { chapterCount: 2, latestChapterTitle: '第二章', unreadChapterCount: 1 })
+  await repo.saveToc(user, { userId: user, bookId, editionKey: 'e', sourceFingerprint: 'fp', revision: 'shelf-r2', bookPatch: { lastCheckTime: 0, totalChapterNum: 3 }, chapters: [...shelfChapters, { rawFields: {}, traceRef: 'shelf-test', sourceId: 'https://display.test', bookUrl: '/book', chapterUrl: '/c3', index: 3, title: '第三章' }] })
+  assert.deepEqual((await repo.getHome(user)).bookshelf[0]?.chapters, { chapterCount: 3, latestChapterTitle: '第三章', unreadChapterCount: 2 })
+  assert.deepEqual((await repo.getHome(other)).bookshelf, [])
+
   const list = await measure(() => repo.listBookListSummaries(user, '%_', bookId))
   assert.equal(list.value.length, 1); assert.equal(list.value[0]?.bookCount, 1); assert.equal(list.value[0]?.containsBook, true)
   assert.equal(list.value[0]?.coverBooks?.[0]?.customCoverUrl, 'https://cover.test/custom')

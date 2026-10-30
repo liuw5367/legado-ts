@@ -88,3 +88,9 @@ node --max-old-space-size=192 --test apps/reader-web/tests/scale/source-search.t
 在仓库根目录先构建 source-core 和 source-node，然后在 `apps/reader-web` 运行 `./node_modules/.bin/rsbuild dev --config tests/fixtures/reading-content.config.ts`，打开 `http://127.0.0.1:3001/`。这是独立测试入口，不加载账号、数据库或生产页面；页面显示 PASS 及断言数量，失败显示实际值与预期值。
 
 该入口使用真实浏览器 DOMParser、React 正文和 DOM Range，验证 core 夹具预期、浏览器与 Node 的完整模型一致、跨段 UTF-16 选区、笔记高亮及工具栏更新后的文本节点稳定性。它不替代手机系统长按验收；完整阅读交互仍使用上面的内存模拟服务。
+
+## 书架刷新验收
+
+从书架条目菜单的“查看目录”下方点击“刷新章节”，首次为当前版本追加3章，之后刷新不再追加。默认第2章阅读位置对应的未读数从28增加到31，最新章节从第30章变为第33章，并出现“更新”。对照 `/__fixture/status` 确认刷新没有新增 `GET /api/home`；重载浏览器后标签仍在，进入阅读页再返回后消失。reset 会清空追加章节状态。
+
+为该书的 `POST /api/books/:bookId/toc/refresh` 注入延迟或失败，检查按钮禁用、书名后加载图标及失败后原数据保留；成功重试后更新摘要。窄屏验收使用320px和390px，检查三行信息在封面旁居中，作者与最新章节同排，未读数位于阅读进度前，长书名及最新章节省略，更新标签保留。

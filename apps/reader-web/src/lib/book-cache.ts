@@ -34,6 +34,11 @@ export class BookCache {
   private notify() { this.version++; for (const listener of this.listeners) listener() }
   private select(bookId: string) { if (this.bookId !== bookId) { this.clear(); this.bookId = bookId } }
   get(bookId: string, editionKey: string) { return bookId === this.bookId ? this.snapshots.get(editionKey) : undefined }
+  invalidate(bookId: string, editionKey: string) {
+    if (bookId !== this.bookId) return
+    this.requests.get(editionKey)?.controller.abort()
+    this.requests.delete(editionKey); this.snapshots.delete(editionKey); this.notify()
+  }
   getContent(bookId: string, editionKey: string, chapterId: string) {
     const cached = this.currentContent
     return bookId === this.bookId && cached?.editionKey === editionKey && cached.chapterId === chapterId ? cached.content : undefined

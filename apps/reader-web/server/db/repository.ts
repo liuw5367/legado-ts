@@ -1,3 +1,4 @@
+import { shelfChapterSummary, type ShelfChapterSummary } from '../../shared/shelf-chapters.ts'
 import type { BookSourceItem } from '../../shared/book-sources.ts'
 import { readingContent, type CachedReadingContent } from '../../shared/reading-content.ts'
 import type { CachedTocSummary } from '../../shared/toc.ts'
@@ -749,7 +750,16 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const [settingsRow] = await transaction.select({ sort: sql<unknown>`${readerSettings.preferences}->'general'->>'bookshelfSort'` }).from(readerSettings).where(eq(readerSettings.userId, userId)).limit(1)
       const sortByReading = settingsRow?.sort === 'lastReadAt'
-      const shelfRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, addedAt: bookshelf.addedAt, groupId: bookshelf.groupId }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
+      // 章节在数据库内聚合，首页只传摘要，不读取整本目录或完整版本元数据。
+      const chapterSummary = sql<ShelfChapterSummary>`case when ${tocSnapshots.editionKey} is not null then (
+        select jsonb_build_object(
+          'chapterCount', count(*),
+          'latestChapterTitle', coalesce(nullif((array_agg(item->>'title' order by ordinality desc))[1], ''), nullif(${bookEditions.metadata}->>'lastChapter', '')),
+          'unreadChapterCount', count(*) filter (where (item->>'index')::integer > coalesce(${readingRecords.chapterIndex}, -1))
+        ) from jsonb_array_elements(${tocSnapshots.chapters}) with ordinality as entries(item, ordinality)
+        where item->>'isVolume' is distinct from 'true'
+      ) else jsonb_build_object('chapterCount', null, 'latestChapterTitle', nullif(${bookEditions.metadata}->>'lastChapter', ''), 'unreadChapterCount', null) end`
+      const shelfRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, chapters: chapterSummary, addedAt: bookshelf.addedAt, groupId: bookshelf.groupId }).from(bookshelf).innerJoin(books, and(eq(books.userId, userId), eq(books.id, bookshelf.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, books.id), eq(bookEditions.editionKey, books.activeEditionKey!))).leftJoin(tocSnapshots, and(eq(tocSnapshots.userId, userId), eq(tocSnapshots.bookId, books.id), eq(tocSnapshots.editionKey, bookEditions.editionKey))).leftJoin(readingRecords, and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, books.id), eq(readingRecords.editionKey, bookEditions.editionKey))).where(eq(bookshelf.userId, userId)).orderBy(desc(bookshelf.addedAt))
       let sortedShelfRows = shelfRows
       if (sortByReading && shelfRows.length > 0) {
         const lastReadRows = await transaction.select({ bookId: readingRecords.bookId, lastReadAt: max(readingRecords.lastReadAt) }).from(readingRecords).where(and(eq(readingRecords.userId, userId), inArray(readingRecords.bookId, shelfRows.map((row) => row.book.id)))).groupBy(readingRecords.bookId)
@@ -770,7 +780,7 @@ export class PostgresReaderRepository implements ReaderRepository {
       const historyDetails = latestHistory.length === 0 ? [] : await transaction.select({ id: searchHistory.id, searchId: searchHistory.searchId, status: searchHistory.status, resultCount: searchHistory.resultCount, summary: searchHistory.summary, updatedAt: searchHistory.updatedAt }).from(searchHistory).where(and(eq(searchHistory.userId, userId), isNull(searchHistory.deletedAt), inArray(searchHistory.id, latestHistory.map((row) => row.id))))
       const historyDetailsById = new Map(historyDetails.map((row) => [row.id, row]))
       const positions = new Map(readingRows.map((row) => [`${row.book.id}:${row.edition.editionKey}`, displayPosition(row.position)]))
-      const shelf = sortedShelfRows.map((row) => { const book = displayBook(row.book); const edition = row.edition; const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition, groupId: row.groupId } : { book, edition, groupId: row.groupId, position } })
+      const shelf = sortedShelfRows.map((row) => { const book = displayBook(row.book); const edition = row.edition; const chapters = row.chapters; const position = positions.get(`${row.book.id}:${edition.editionKey}`); return position === undefined ? { book, edition, chapters, groupId: row.groupId } : { book, edition, chapters, groupId: row.groupId, position } })
       const seenReadingBooks = new Set<string>()
       const reading = readingRows.filter((row) => { if (seenReadingBooks.has(row.book.id)) return false; seenReadingBooks.add(row.book.id); return true }).map((row) => ({ book: displayBook(row.book), edition: row.edition, position: displayPosition(row.position) }))
       const visibleHistory: HomeSearchHistory[] = latestHistory.flatMap((row) => {
@@ -1410,7 +1420,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     })
     const shelf = shelfValues.map((entry) => { const value = { ...entry, groupId: this.shelfGroups.get(`${userId}:${entry.book.id}`) ?? null }; const position = this.positions.get(`${userId}:${value.book.id}:${value.edition.editionKey}`); return position === undefined ? value : { ...value, position } })
     const searchHistory: HomeSearchHistory[] = latestSearchHistory([...this.history.values()].filter((item) => this.searches.get(item.searchId)?.userId === userId)).slice(0, 50).map(({ id, searchId, keyword, status, resultCount, summary, createdAt, updatedAt }) => ({ id, searchId, keyword, status, resultCount, ...(summary === undefined ? {} : { summary }), createdAt, updatedAt }))
-    return { bookshelf: shelf.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, groupId: row.groupId, ...('position' in row ? { position: displayPosition(row.position) } : {}) })), reading: reading.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, position: displayPosition(row.position) })), searchHistory }
+    return { bookshelf: shelf.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, chapters: shelfChapterSummary(this.tocs.has(`${userId}:${row.book.id}:${row.edition.editionKey}`) ? tocSummary(this.tocs.get(`${userId}:${row.book.id}:${row.edition.editionKey}`)!) : null, 'position' in row ? row.position : null, row.edition.metadata.lastChapter), groupId: row.groupId, ...('position' in row ? { position: displayPosition(row.position) } : {}) })), reading: reading.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, position: displayPosition(row.position) })), searchHistory }
   }
   public async getBackupSnapshot(userId: string): Promise<ReaderBackupSnapshot> {
     const books = new Map<string, ReaderBackupBook>()

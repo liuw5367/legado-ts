@@ -1,3 +1,4 @@
+import type { ShelfChapterSummary } from '../../shared/shelf-chapters.ts'
 import type { ReadingContent } from '../../shared/reading-content.ts'
 import type { TocSummary, TocChapter } from '../../shared/toc.ts'
 import type { ReadingSourceSummary } from '../../shared/source-management.ts'
@@ -26,7 +27,7 @@ export interface ApiHistory { id: string; searchId: string; keyword: string; sou
 export type ApiHomeBook = Pick<ApiBook, 'id' | 'name' | 'author' | 'coverUrl' | 'customCoverUrl'>
 export type ApiHomePosition = Pick<ApiPosition, 'chapterId' | 'title' | 'lastReadAt'>
 export type ApiHomeHistory = Pick<ApiHistory, 'id' | 'keyword' | 'status' | 'resultCount' | 'summary' | 'updatedAt'>
-export interface ApiHome { bookshelf: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; groupId?: string | null; position?: ApiHomePosition }>; reading: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; position: ApiHomePosition }>; searchHistory: ApiHomeHistory[] }
+export interface ApiHome { bookshelf: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; groupId?: string | null; chapters?: ShelfChapterSummary; position?: ApiHomePosition }>; reading: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; position: ApiHomePosition }>; searchHistory: ApiHomeHistory[] }
 export interface ApiChapter { chapterId: string; sourceId: string; bookUrl: string; chapterUrl: string; index: number; title: string; url?: string; isVolume?: boolean; isVip?: boolean; isPay?: boolean }
 export type ApiTocChapter = TocChapter
 export type ApiToc = TocSummary
