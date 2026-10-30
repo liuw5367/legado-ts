@@ -40,6 +40,13 @@ test('runtime state encryption rejects oversized source state', () => {
   assert.throws(() => encryptRuntimeState({ variables: { oversized: 'x'.repeat(MAX_RUNTIME_STATE_BYTES) } }, secret), /超过大小限制/)
 })
 
+test('runtime state encryption accepts 1024 KiB and rejects one extra byte', () => {
+  const overhead = Buffer.byteLength(JSON.stringify({ variables: { value: '' } }), 'utf8')
+  const snapshot = { variables: { value: 'x'.repeat(1024 * 1024 - overhead) } }
+  assert.deepEqual(decryptRuntimeState(encryptRuntimeState(snapshot, secret), secret), snapshot)
+  assert.throws(() => encryptRuntimeState({ variables: { value: `${snapshot.variables.value}x` } }, secret), /超过大小限制/)
+})
+
 test('source file roots are deterministic but isolated by user, source, fingerprint and deployment key', () => {
   const previousRoot = process.env.SOURCE_FILE_ROOT
   const previousKey = process.env.SOURCE_RUNTIME_STATE_KEY

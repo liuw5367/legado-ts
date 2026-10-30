@@ -6,7 +6,7 @@ import type { RuntimeStateSnapshot } from '../domain/types.ts'
 const FORMAT_VERSION = 'v1'
 const ALGORITHM = 'aes-256-gcm'
 const IV_BYTES = 12
-export const MAX_RUNTIME_STATE_BYTES = 512 * 1024
+export const MAX_RUNTIME_STATE_BYTES = 1024 * 1024
 
 /**
  * Encrypt source cookies and source variables before they leave the process.
