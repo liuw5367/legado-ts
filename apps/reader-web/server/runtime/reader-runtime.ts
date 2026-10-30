@@ -21,6 +21,27 @@ export { ReaderRuntimeError } from './source-session.ts'
 const TRUNCATED_TOC_WARNING = '目录未完整抓取（分页或响应预算上限），已截断；请刷新重试或联系书源作者。'
 const TRUNCATED_CONTENT_WARNING = '正文未完整抓取（分页或预算上限），已截断；请刷新重试。'
 
+/** 数据库包装异常含 SQL 和参数，只提取底层原因；日志和客户端共用脱敏后的摘要。 */
+function sourceStateFailureReason(error: unknown): string {
+  let current = error
+  const seen = new Set<unknown>()
+  for (let depth = 0; depth < 8 && current instanceof Error && current.cause !== undefined && !seen.has(current); depth++) {
+    seen.add(current)
+    current = current.cause
+  }
+  let message = current instanceof Error ? current.message : typeof current === 'string' ? current : '未知错误（异常未提供错误信息）'
+  // Drizzle 的包装消息包含完整 SQL，不能作为错误原因输出。
+  if (/^Failed query:/iu.test(message)) message = '数据库执行失败'
+  // 整体隐藏 URL（包括连接凭证和查询参数），再过滤常见凭证字段的赋值。
+  message = message.replace(/\b[a-z][a-z\d+.-]*:\/\/[^\s<>"']+/giu, '[redacted]')
+    .replace(/\b(password|passwd|pwd|token|secret|authorization|cookie|api[_-]?key)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|(?:Bearer\s+|Basic\s+)?[^\s,;]+)/giu, '$1=[redacted]')
+    .replace(/[\r\n\t]+/gu, ' ').trim().slice(0, 400)
+  const code = typeof current === 'object' && current !== null && 'code' in current ? current.code : undefined
+  // 仅接受常见数据库 SQLSTATE 和网络错误码，避免任意异常字段泄露数据。
+  const prefix = typeof code === 'string' && /^[A-Z0-9_-]{1,40}$/u.test(code) ? `${code}: ` : ''
+  return `${prefix}${message || '未知错误（异常未提供错误信息）'}`
+}
+
 /** 缓存的正文记录本身带 truncated；命中缓存时也要提示，不能只在首次抓取时提示一次。 */
 function withTruncatedContentWarning(content: StoredContent & { runtimeWarning?: string }): StoredContent & { runtimeWarning?: string } {
   if (content.content.truncated !== true || content.runtimeWarning !== undefined) return content
@@ -453,8 +474,10 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
   } catch (error) {
     // 仅保留本次请求已成功保存的正文，不能用旧缓存掩盖抓取或正文写入失败。
     if (loaded === undefined) throw error
-    console.warn('[reader] source-session-finalization-failed', { bookId, chapterId, errorName: error instanceof Error ? error.name : 'UnknownError' })
-    return { ...loaded, runtimeWarning: '正文已加载，但书源运行状态未能保存；后续章节如有异常，请重试。' }
+    const reason = sourceStateFailureReason(error)
+    console.warn('[reader] source-session-finalization-failed', { bookId, chapterId, reason })
+    const warning = `正文已加载，但书源运行状态保存失败：${reason}；后续章节如有异常，请重试。`
+    return { ...loaded, runtimeWarning: loaded.content.truncated === true ? `${TRUNCATED_CONTENT_WARNING}\n${warning}` : warning }
   }
 }
 

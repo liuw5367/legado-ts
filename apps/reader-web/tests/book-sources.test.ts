@@ -255,7 +255,26 @@ test('正文已保存时，书源状态结算失败不阻断首次阅读且释�
   t.mock.method(repository, 'saveSourceRuntimeState', async () => { throw new Error('fixture state persistence failure') })
   const first = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId)
   assert.equal(first.content.cleaned, '第一章正文')
-  assert.equal('runtimeWarning' in first, true)
+  assert.match(first.runtimeWarning ?? '', /fixture state persistence failure/u)
+  for (const [error, expected] of [
+    [new Error('书源运行状态超过大小限制'), '书源运行状态超过大小限制'],
+    [new Error('request failed Authorization: Bearer private-token'), 'request failed Authorization=[redacted]'],
+    [new Error('Failed query: update source_runtime_state\nparams: private-sql-parameter', { cause: Object.assign(new Error('connection timeout postgres://user:private-password@localhost/db password=private-password'), { code: 'ETIMEDOUT' }) }), 'ETIMEDOUT: connection timeout [redacted] password=[redacted]'],
+    [new Error('Failed query: update source_runtime_state\nparams: private-sql-parameter'), '数据库执行失败'],
+    ['unexpected failure', 'unexpected failure'],
+  ] as const) {
+    t.mock.method(repository, 'saveSourceRuntimeState', async () => { throw error })
+    const warnings: unknown[][] = []
+    t.mock.method(console, 'warn', (...args: unknown[]) => { warnings.push(args) })
+    const refreshed = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId, true)
+    assert.equal(refreshed.content.cleaned, '第一章正文')
+    assert.ok(refreshed.runtimeWarning?.includes(expected), refreshed.runtimeWarning)
+    assert.ok(JSON.stringify(warnings).includes(expected))
+    assert.equal(JSON.stringify([refreshed.runtimeWarning, warnings]).includes('private-'), false)
+  }
+  t.mock.method(repository, 'saveSourceRuntimeState', async () => null)
+  const conflict = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId, true)
+  assert.match(conflict.runtimeWarning ?? '', /书源运行状态已被其他请求更新/u)
   const cached = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId)
   assert.equal(cached.content.cleaned, first.content.cleaned)
   t.mock.method(globalThis, 'fetch', async () => { throw new Error('fixture network failure') })
