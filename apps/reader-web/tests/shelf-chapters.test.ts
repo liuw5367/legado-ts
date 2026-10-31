@@ -139,6 +139,7 @@ test('批量刷新限制并发、逐本返回、隔离失败和非书架目标�
         return toc
       },
     } as unknown as Parameters<typeof refreshShelfBatch>[1]
+    repository.getEditionSource = async (_user, bookId) => ({ sourceId: bookId, sourceFingerprint: 'f' })
     repository.isOnBookshelf = async (user, bookId) => user === 'a' && targets.some((target) => target.bookId === bookId)
     repository.getBook = async (user, bookId) => user === 'a' && targets.some((target) => target.bookId === bookId) ? { id: bookId, activeEditionKey: 'e' } as NonNullable<Awaited<ReturnType<typeof repository.getBook>>> : null
     const events: import('../shared/shelf-chapters.ts').ShelfRefreshEvent[] = []
@@ -155,4 +156,71 @@ test('批量刷新限制并发、逐本返回、隔离失败和非书架目标�
     await refreshShelfBatch(repository, runtime, 'other', targets, async (event) => { isolated.push(event) }, new AbortController().signal)
     assert.equal(isolated.filter((event) => event.type === 'book-result').length, 0)
   }
+})
+
+test('真实书源租约下同源目录串行、异源并发，并等待外部占用释放', async (t) => {
+  const { refreshShelfBatch } = await import('../server/runtime/shelf-chapters.ts')
+  const repository = new MemoryReaderRepository()
+  const imported = await importSources({ kind: 'text', text: JSON.stringify(['one', 'two'].map((name) => ({ bookSourceUrl: `https://${name === 'one' ? '8.8.8.8' : '1.1.1.1'}/${name}`, bookSourceName: name, bookSourceType: 0, ruleToc: { chapterList: 'a', chapterName: 'text', chapterUrl: 'href' } }))) })
+  const candidates = compareImportCandidates(imported, new Map())
+  const previewId = randomUUID()
+  await repository.saveImportPreview('a', { previewId, expiresAt: new Date(Date.now() + 60000).toISOString(), candidates, writableCount: 2 }, 'https://8.8.8.8/sources')
+  await repository.commitImportPreview('a', previewId, candidates.map((item) => item.id))
+  const sources = await repository.listSourcesForUser('a')
+  const targets: Array<{ bookId: string; editionKey: string }> = []
+  for (let index = 0; index < 4; index++) {
+    const source = sources[index === 3 ? 1 : 0]!
+    const metadata = { sourceId: source.sourceId, bookUrl: `https://8.8.8.8/book${index}`, tocUrl: `https://8.8.8.8/toc${index}`, name: `书${index}`, rawFields: {}, traceRef: 'test', emptyFields: [], fieldErrors: {} }
+    const created = await repository.createBook('a', { candidate: { sourceId: source.sourceId, sourceFingerprint: source.fingerprint, candidate: metadata }, metadata, editionKey: `edition-${index}`, sourceFingerprint: source.fingerprint, addToBookshelf: true })
+    targets.push({ bookId: created.book.id, editionKey: created.edition.editionKey })
+  }
+  let active = 0
+  let peak = 0
+  t.mock.method(globalThis, 'fetch', async () => {
+    active++; peak = Math.max(active, peak)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    active--
+    return new Response('<a href="/chapter">第一章</a>')
+  })
+  const runtime = createReaderRuntime(repository)
+  const events: import('../shared/shelf-chapters.ts').ShelfRefreshEvent[] = []
+  await refreshShelfBatch(repository, runtime, 'a', targets, async (event) => { events.push(event) }, new AbortController().signal)
+  assert.equal(events.filter((event) => event.type === 'book-error').length, 0)
+  assert.equal(events.filter((event) => event.type === 'book-result').length, 4)
+  assert.equal(peak, 2)
+  const source = sources[0]!
+  await repository.acquireSourceRuntimeLease('a', source.sourceId, source.fingerprint, 'external', 300000)
+  const release = setTimeout(() => { void repository.releaseSourceRuntimeLease('a', source.sourceId, source.fingerprint, 'external') }, 40)
+  t.after(() => clearTimeout(release))
+  const waited: typeof events = []
+  await refreshShelfBatch(repository, runtime, 'a', targets.slice(0, 1), async (event) => { waited.push(event) }, new AbortController().signal)
+  assert.equal(waited.filter((event) => event.type === 'book-result').length, 1)
+  assert.equal(waited.filter((event) => event.type === 'book-error').length, 0)
+})
+
+test('书源等待支持取消、超时，且不会重试保存冲突或外站错误', async (t) => {
+  const { refreshShelfBatch } = await import('../server/runtime/shelf-chapters.ts')
+  const { ReaderRuntimeError, SourceRuntimeLeaseBusyError } = await import('../server/runtime/source-session.ts')
+  const repository = new MemoryReaderRepository()
+  repository.getEditionSource = async () => ({ sourceId: 's', sourceFingerprint: 'f' })
+  repository.isOnBookshelf = async () => true
+  repository.getBook = async () => ({ activeEditionKey: 'e' }) as NonNullable<Awaited<ReturnType<typeof repository.getBook>>>
+  for (const error of [new ReaderRuntimeError('source-busy', '保存冲突'), new Error('外站错误')]) {
+    let calls = 0
+    const runtime = { getOrLoadTocSummary: async () => { calls++; throw error } } as unknown as Parameters<typeof refreshShelfBatch>[1]
+    await refreshShelfBatch(repository, runtime, 'a', [{ bookId: 'b', editionKey: 'e' }], async () => {}, new AbortController().signal)
+    assert.equal(calls, 1)
+  }
+  const controller = new AbortController()
+  const cancelled: import('../shared/shelf-chapters.ts').ShelfRefreshEvent[] = []
+  const runtime = { getOrLoadTocSummary: async () => { setTimeout(() => controller.abort(), 5); throw new SourceRuntimeLeaseBusyError() } } as unknown as Parameters<typeof refreshShelfBatch>[1]
+  await refreshShelfBatch(repository, runtime, 'a', [{ bookId: 'b', editionKey: 'e' }], async (event) => { cancelled.push(event) }, controller.signal)
+  assert.deepEqual(cancelled.map((event) => event.type), ['batch-start'])
+  let now = 0
+  t.mock.method(Date, 'now', () => { now += 15001; return now })
+  const timedOut: typeof cancelled = []
+  const busy = { getOrLoadTocSummary: async () => { throw new SourceRuntimeLeaseBusyError() } } as unknown as Parameters<typeof refreshShelfBatch>[1]
+  await refreshShelfBatch(repository, busy, 'a', [{ bookId: 'b', editionKey: 'e' }], async (event) => { timedOut.push(event) }, new AbortController().signal)
+  assert.ok(timedOut.some((event) => event.type === 'book-error' && event.error.includes('等待书源空闲超时')))
+  assert.equal(timedOut.at(-1)?.type, 'batch-end')
 })

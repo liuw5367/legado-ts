@@ -37,6 +37,11 @@ export class ReaderRuntimeError extends Error {
   public constructor(code: 'not-found' | 'invalid-input' | 'source-failed' | 'configuration' | 'source-busy', message: string) { super(message); this.code = code }
 }
 
+/** 仅表示尚未开始执行的租约争用，允许批量任务等待后安全重试。 */
+export class SourceRuntimeLeaseBusyError extends ReaderRuntimeError {
+  public constructor() { super('source-busy', '该书源正在被其他请求使用，请稍后重试') }
+}
+
 export async function requireSource(repository: ReaderRepository, userId: string, sourceId: string): Promise<StoredSourceRecord> {
   const source = await repository.getSourceForUser(userId, sourceId)
   if (source === null) throw new ReaderRuntimeError('configuration', `书源不可用：${sourceId}`)
@@ -47,7 +52,7 @@ export async function requireSource(repository: ReaderRepository, userId: string
 export async function withPersistentSourceSession<T>(repository: ReaderRepository, userId: string, source: StoredSourceRecord, operation: (session: SourceSession, state: PersistentSourceState) => Promise<T>): Promise<T> {
   const leaseToken = randomUUID()
   const lease = await repository.acquireSourceRuntimeLease(userId, source.sourceId, source.fingerprint, leaseToken, SOURCE_RUNTIME_LEASE_MS)
-  if (lease === null) throw new ReaderRuntimeError('source-busy', '该书源正在被其他请求使用，请稍后重试')
+  if (lease === null) throw new SourceRuntimeLeaseBusyError()
   let session: SourceSession | undefined
   let result!: T
   let primaryError: unknown

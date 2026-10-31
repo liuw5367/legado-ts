@@ -329,7 +329,7 @@ test('拆分后的书架、阅读和搜索历史接口分别鉴权', async () =>
 test('书架批量刷新经过认证和真实 SSE 路由，设置校验范围并保存', async (t) => {
   const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
   const memory = new MemoryReaderRepository()
-  for (const method of ['getSettings', 'saveSettings', 'isOnBookshelf', 'getBook'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  for (const method of ['getSettings', 'saveSettings', 'isOnBookshelf', 'getBook', 'getEditionSource'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
   const oldUrl = process.env.SUPABASE_URL
   const oldKey = process.env.SUPABASE_PUBLISHABLE_KEY
   process.env.SUPABASE_URL = 'https://auth.example.test'
