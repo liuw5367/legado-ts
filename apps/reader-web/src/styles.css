@@ -843,7 +843,8 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .organization-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
 .organization-split-actions { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .book-list-detail-row { padding: 16px 0; border-bottom: 1px solid var(--border); }
-.shelf-group-bar { display: flex; gap: 8px; overflow-x: auto; padding-block: 4px; }
+.shelf-group-bar { display: flex; gap: 8px; overflow-x: auto; padding-block: 4px; scrollbar-width: none; }
+.shelf-group-bar::-webkit-scrollbar { display: none; }
 .shelf-group-bar > button { flex-shrink: 0; }
 
 .startup-loading { display: flex; flex-direction: column; min-height: 100dvh; }
