@@ -118,3 +118,41 @@ test('每书仅一份进度，预览不改状态，换源与切回沿用当前�
   await repository.savePosition('a', { ...mapped, version: 0 })
   assert.equal((await repository.getPosition('a', book.id))!.editionKey, 'e')
 })
+
+test('批量刷新限制并发、逐本返回、隔离失败和非书架目标，断连停止派发', async () => {
+  const { refreshShelfBatch } = await import('../server/runtime/shelf-chapters.ts')
+  const { bookshelfRefreshConcurrencySchema } = await import('../shared/shelf-chapters.ts')
+  assert.equal(bookshelfRefreshConcurrencySchema.safeParse(4).success, false)
+  assert.equal(bookshelfRefreshConcurrencySchema.safeParse(11).success, false)
+  for (const concurrency of [5, 10]) {
+    const repository = new MemoryReaderRepository()
+    await repository.saveSettings('a', { general: { bookshelfRefreshConcurrency: concurrency } })
+    const targets = Array.from({ length: 13 }, (_, index) => ({ bookId: String(index), editionKey: 'e' }))
+    let active = 0
+    let peak = 0
+    const runtime = {
+      async getOrLoadTocSummary(_user: string, bookId: string) {
+        active++; peak = Math.max(peak, active)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        active--
+        if (bookId === '0') throw new Error('外站失败')
+        return toc
+      },
+    } as unknown as Parameters<typeof refreshShelfBatch>[1]
+    repository.isOnBookshelf = async (user, bookId) => user === 'a' && targets.some((target) => target.bookId === bookId)
+    repository.getBook = async (user, bookId) => user === 'a' && targets.some((target) => target.bookId === bookId) ? { id: bookId, activeEditionKey: 'e' } as NonNullable<Awaited<ReturnType<typeof repository.getBook>>> : null
+    const events: import('../shared/shelf-chapters.ts').ShelfRefreshEvent[] = []
+    await refreshShelfBatch(repository, runtime, 'a', [...targets, targets[0]!, { bookId: 'outside', editionKey: 'e' }], async (event) => { events.push(event) }, new AbortController().signal)
+    assert.equal(peak, concurrency)
+    assert.equal(events.filter((event) => event.type === 'book-result').length, 12)
+    assert.equal(events.filter((event) => event.type === 'book-error').length, 2)
+    assert.deepEqual(events.at(-1), { type: 'batch-end', total: 14, succeeded: 12, failed: 2, updated: 0 })
+    const disconnected = new AbortController()
+    let completed = 0
+    await refreshShelfBatch(repository, runtime, 'a', targets, async (event) => { if (event.type === 'book-result' || event.type === 'book-error') { completed++; disconnected.abort() } }, disconnected.signal)
+    assert.equal(completed, 1)
+    const isolated: typeof events = []
+    await refreshShelfBatch(repository, runtime, 'other', targets, async (event) => { isolated.push(event) }, new AbortController().signal)
+    assert.equal(isolated.filter((event) => event.type === 'book-result').length, 0)
+  }
+})

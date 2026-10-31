@@ -325,3 +325,28 @@ test('拆分后的书架、阅读和搜索历史接口分别鉴权', async () =>
     assert.equal(response.status, 401)
   }
 })
+
+test('书架批量刷新经过认证和真实 SSE 路由，设置校验范围并保存', async (t) => {
+  const { MemoryReaderRepository, PostgresReaderRepository } = await import('../server/db/repository.ts')
+  const memory = new MemoryReaderRepository()
+  for (const method of ['getSettings', 'saveSettings', 'isOnBookshelf', 'getBook'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  const oldUrl = process.env.SUPABASE_URL
+  const oldKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.SUPABASE_URL = 'https://auth.example.test'
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
+  t.after(() => { if (oldUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = oldUrl; if (oldKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = oldKey })
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ id: '11111111-1111-4111-8111-111111111111' }), { headers: { 'Content-Type': 'application/json' } }))
+  const request = (path: string, body: unknown, auth = true, method = 'POST') => app.request('http://localhost' + path, { method, headers: { 'Content-Type': 'application/json', ...(auth ? { Authorization: 'Bearer fixture-owner' } : {}) }, body: JSON.stringify(body) })
+  assert.equal((await request('/api/bookshelf/refresh', {}, false)).status, 401)
+  assert.equal((await request('/api/bookshelf/refresh', { books: [] })).status, 400)
+  const response = await request('/api/bookshelf/refresh', { books: [{ bookId: 'outside', editionKey: 'e' }] })
+  assert.match(response.headers.get('Content-Type')!, /text\/event-stream/u)
+  const stream = await response.text()
+  assert.match(stream, /event: batch-start/u)
+  assert.match(stream, /event: book-error/u)
+  assert.match(stream, /event: batch-end/u)
+  for (const value of [4, 11, 5.5]) assert.equal((await request('/api/settings', { general: { bookshelfRefreshConcurrency: value } }, true, 'PUT')).status, 400)
+  const saved = await request('/api/settings', { general: { bookshelfRefreshConcurrency: 10 } }, true, 'PUT')
+  assert.equal(saved.status, 200)
+  assert.equal((await memory.getSettings('11111111-1111-4111-8111-111111111111')).general.bookshelfRefreshConcurrency, 10)
+})

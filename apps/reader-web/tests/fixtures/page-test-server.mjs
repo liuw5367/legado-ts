@@ -174,7 +174,7 @@ const settings = {
   marginRight: 16,
   marginBottom: 16,
   marginLeft: 16,
-  general: { bookshelfSort: 'addedAt', searchConcurrency: 5 },
+  general: { bookshelfSort: 'addedAt', searchConcurrency: 5, bookshelfRefreshConcurrency: 5 },
   pageTapZones: { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' },
   updatedAt: now(),
 }
@@ -569,6 +569,28 @@ async function handleApi(request, response, url) {
   }
 
   if (method === 'GET' && path === '/api/me') { json(response, { user: { id: USER_ID } }); return }
+  if (method === 'POST' && path === '/api/bookshelf/refresh') {
+    const { books: targets } = await readJson(request)
+    response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
+    const emit = (type, data) => response.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`)
+    emit('batch-start', { total: targets.length })
+    let updated = 0
+    let failed = 0
+    for (const target of targets) {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      const { bookId, editionKey } = target
+      if (!homeSnapshot().bookshelf.some((row) => row.book.id === bookId && row.edition.editionKey === editionKey)) { failed++; emit('book-error', { ...target, error: '书籍已移出书架或已切换书源' }); continue }
+      const previousChapterCount = chaptersFor(editionKey).length
+      shelfRefreshCounts.set(editionKey, (shelfRefreshCounts.get(editionKey) ?? 0) + 1)
+      const summary = shelfChapterSummary({ chapters: chaptersFor(editionKey) }, positionFor(bookId, editionKey))
+      const hasNewChapters = summary.chapterCount > previousChapterCount
+      if (hasNewChapters) updated++
+      emit('book-result', { ...target, result: { ...summary, position: positionFor(bookId, editionKey), previousChapterCount, hasNewChapters } })
+    }
+    emit('batch-end', { total: targets.length, succeeded: targets.length - failed, failed, updated })
+    response.end()
+    return
+  }
   if (method === 'GET' && path === '/api/bookshelf') { json(response, { bookshelf: homeSnapshot().bookshelf }); return }
   if (method === 'GET' && path === '/api/reading-history') { json(response, { reading: homeSnapshot().reading }); return }
   if (method === 'GET' && path === '/api/search-history') { json(response, { searchHistory: homeSnapshot().searchHistory }); return }

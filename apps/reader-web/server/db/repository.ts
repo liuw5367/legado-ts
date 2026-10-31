@@ -1,3 +1,4 @@
+import { DEFAULT_BOOKSHELF_REFRESH_CONCURRENCY, bookshelfRefreshConcurrencySchema } from '../../shared/shelf-chapters.ts'
 import { bookChapterState, bookShelfSummary, mapReadingPosition } from '../domain/book-reading-state.ts'
 import type { ShelfChapterSummary } from '../../shared/shelf-chapters.ts'
 import type { BookSourceItem } from '../../shared/book-sources.ts'
@@ -1767,7 +1768,7 @@ function toSettings(row: ReaderSettingsRow): ReaderSettings {
     marginRight: typeof display.marginRight === 'number' && Number.isInteger(display.marginRight) && display.marginRight >= 0 && display.marginRight <= 64 ? display.marginRight : DEFAULT_READER_SETTINGS.marginRight,
     marginBottom: typeof display.marginBottom === 'number' && Number.isInteger(display.marginBottom) && display.marginBottom >= 0 && display.marginBottom <= 64 ? display.marginBottom : DEFAULT_READER_SETTINGS.marginBottom,
     marginLeft: typeof display.marginLeft === 'number' && Number.isInteger(display.marginLeft) && display.marginLeft >= 0 && display.marginLeft <= 64 ? display.marginLeft : DEFAULT_READER_SETTINGS.marginLeft,
-    general: { searchConcurrency: searchConcurrencySchema.catch(DEFAULT_SEARCH_CONCURRENCY).parse(general.searchConcurrency), bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' },
+    general: { bookshelfRefreshConcurrency: bookshelfRefreshConcurrencySchema.catch(DEFAULT_BOOKSHELF_REFRESH_CONCURRENCY).parse(general.bookshelfRefreshConcurrency), searchConcurrency: searchConcurrencySchema.catch(DEFAULT_SEARCH_CONCURRENCY).parse(general.searchConcurrency), bookshelfSort, bookshelfInitialGroup: typeof general.bookshelfInitialGroup === 'string' ? general.bookshelfInitialGroup : 'all' },
     pageTapZones: readPageTapZones(preferences.pageTapZones),
     updatedAt: row.updatedAt.toISOString(),
   }

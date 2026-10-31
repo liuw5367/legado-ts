@@ -12,7 +12,7 @@ export type ApiThemeMode = 'system' | 'light' | 'dark'
 export type ApiReadingMode = 'scroll' | 'paged'
 export type ApiBookshelfSortMode = 'addedAt' | 'lastReadAt'
 export type ApiPageTapAction = 'previous' | 'next'
-export interface ApiGeneralSettings { searchConcurrency: number; bookshelfInitialGroup?: string; bookshelfSort: ApiBookshelfSortMode }
+export interface ApiGeneralSettings { bookshelfRefreshConcurrency?: number; searchConcurrency: number; bookshelfInitialGroup?: string; bookshelfSort: ApiBookshelfSortMode }
 export interface ApiPageTapZones { leftWidthPercent: number; centerWidthPercent: number; centerTopHeightPercent: number; centerMiddleHeightPercent: number; centerTopAction: ApiPageTapAction; centerBottomAction: ApiPageTapAction }
 export const DEFAULT_PAGE_TAP_ZONES: ApiPageTapZones = { leftWidthPercent: 33, centerWidthPercent: 34, centerTopHeightPercent: 33, centerMiddleHeightPercent: 34, centerTopAction: 'previous', centerBottomAction: 'next' }
 export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; marginTop: number; marginRight: number; marginBottom: number; marginLeft: number; general: ApiGeneralSettings; pageTapZones: ApiPageTapZones; updatedAt: string }
@@ -259,3 +259,31 @@ export type ApiBookListDetails = BookListDetails
 export type ApiBookListChoice = BookListChoice
 export interface ApiShelfGroup { id: string; name: string; bookCount: number }
 export interface ApiShelfGroups { groups: ApiShelfGroup[]; ungroupedCount: number }
+
+export async function streamShelfRefresh(books: import('../../shared/shelf-chapters.ts').ShelfRefreshTarget[], onEvent: (event: import('../../shared/shelf-chapters.ts').ShelfRefreshEvent) => void, signal: AbortSignal): Promise<void> {
+  const session = await currentSession()
+  const headers = new Headers({ Accept: 'text/event-stream', 'Content-Type': 'application/json' })
+  if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`)
+  const response = await fetch('/api/bookshelf/refresh', { method: 'POST', headers, body: JSON.stringify({ books }), signal })
+  if (!response.ok || !response.body) {
+    const body = await readJson(response)
+    await handleExpiredSession(response, body, session?.access_token)
+    throw apiErrorFromResponse(response, body, '刷新连接失败')
+  }
+  const reader = response.body.getReader()
+  const decoder = new SseDecoder()
+  let ended = false
+  function consume(event: StreamEvent) {
+    if (event.type === 'error') throw new Error((event.data as { message: string }).message)
+    if (event.type === 'batch-end') ended = true
+    onEvent(event.data as import('../../shared/shelf-chapters.ts').ShelfRefreshEvent)
+  }
+  try {
+    while (!ended) {
+      const chunk = await reader.read()
+      if (chunk.done) { for (const event of decoder.finish()) consume(event); break }
+      for (const event of decoder.push(chunk.value)) consume(event)
+    }
+    if (!ended) throw new Error('检查更新连接中断，部分书籍尚未完成')
+  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+}

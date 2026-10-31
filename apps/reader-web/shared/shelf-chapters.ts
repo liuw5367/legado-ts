@@ -1,4 +1,15 @@
+import { z } from 'zod'
 import type { TocSummary } from './toc.ts'
+
+export const DEFAULT_BOOKSHELF_REFRESH_CONCURRENCY = 5
+export const bookshelfRefreshConcurrencySchema = z.number().int().min(5).max(10)
+export const shelfRefreshRequestSchema = z.object({ books: z.array(z.object({ bookId: z.string().min(1), editionKey: z.string().min(1) })).min(1) })
+export type ShelfRefreshTarget = z.infer<typeof shelfRefreshRequestSchema>['books'][number]
+export type ShelfRefreshEvent =
+  | { type: 'batch-start'; total: number }
+  | { type: 'book-result'; bookId: string; editionKey: string; result: RefreshShelfChaptersResponse }
+  | { type: 'book-error'; bookId: string; editionKey: string; error: string }
+  | { type: 'batch-end'; total: number; succeeded: number; failed: number; updated: number }
 
 export interface ShelfChapterSummary {
   chapterCount: number | null

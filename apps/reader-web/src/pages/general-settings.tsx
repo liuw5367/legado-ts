@@ -19,6 +19,10 @@ export function GeneralSettingsPage() {
         <div><strong>书架排序</strong><p className="muted small">按最近加入或阅读时间排列，未读书籍排在末尾。</p></div>
         <label className="general-setting-select"><span className="sr-only">书架排序</span><Select value={settings.general.bookshelfSort} onChange={(event) => void updateSettings({ general: { bookshelfSort: event.target.value as ApiBookshelfSortMode } }).catch(() => undefined)}><option value="addedAt">加入时间</option><option value="lastReadAt">阅读时间</option></Select></label>
       </div>
+      <div className="reader-setting-row general-setting-row">
+        <div><strong>书架刷新并发数</strong><p className="muted small">同时检查更新的书籍数量，默认 5 个。</p></div>
+        <label className="general-setting-select"><span className="sr-only">书架刷新并发数</span><Select value={settings.general.bookshelfRefreshConcurrency ?? 5} onChange={(event) => void updateSettings({ general: { bookshelfRefreshConcurrency: Number(event.target.value) } }).catch(() => undefined)}>{[5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value} 个</option>)}</Select></label>
+      </div>
     </section>
     <section className="settings-detail-section" aria-labelledby={searchTitleId}>
       <h2 id={searchTitleId}>书源搜索</h2>

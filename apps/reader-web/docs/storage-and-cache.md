@@ -68,6 +68,8 @@
 
 `POST /api/books/:bookId/toc/refresh?editionKey=...` 强制刷新指定版本目录，返回同一章节摘要、当前阅读入口摘要 position（无进度为 null），以及 `previousChapterCount`、`hasNewChapters` 和可选 `runtimeWarning`。未读数按刷新后的目录与当前阅读位置计算；目录重排时按URL和标题校准当前章节身份，保留同一章节内的段落位置。旧目录不存在时 previousChapterCount 为 null，不产生更新标记；只有正文章节数增加时 hasNewChapters 为 true。失败保留旧目录。成功后前端只替换当前书架条目的摘要并使该书目录失效，不重新请求首页。
 
+`POST /api/bookshelf/refresh` 接收 `{ books: [{ bookId, editionKey }] }`，按书籍和来源版本去重后通过 SSE 返回 `batch-start`、逐本 `book-result` 或 `book-error`、最终 `batch-end`。成功事件的 result 与单本刷新响应一致；失败只影响对应书籍。服务端从账号设置 `general.bookshelfRefreshConcurrency` 读取并发上限，默认5，合法整数范围5–10，与搜索并发独立；旧设置缺省为5，设置随账号保存与备份恢复。执行每项前校验书架归属及当前来源版本，不搜索或切换来源。连接断开停止派发剩余项，已开始请求可能完成保存，不提供后台续传。
+
 “更新”标记只保存在浏览器，localStorage 键为 `legado:book-update:v1:` 加账号、书籍与版本的 JSON 数组，值为 `{ version: 1, updated: true }`。再次刷新无新增时保留已有标记，进入对应版本的正常阅读页后清除；目录、详情和阅读位置预览不会清除。存储不可用时在当前会话内保存。该标记不写入数据库，也不随备份同步。
 
 ## 搜索与写入

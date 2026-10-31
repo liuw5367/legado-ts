@@ -1160,3 +1160,8 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 @media (prefers-reduced-motion: reduce) {
   .animated-dialog, .animated-dialog::backdrop { transition: none; }
 }
+
+.shelf-toolbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.shelf-toolbar .shelf-group-bar { flex: 1; min-width: 0; }
+.shelf-refresh-button { flex: none; width: 36px; height: 36px; padding: 8px; }
+.shelf-refresh-button svg { width: 16px; height: 16px; }

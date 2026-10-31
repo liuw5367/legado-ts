@@ -1,4 +1,5 @@
-import { refreshShelfChapters } from './runtime/shelf-chapters.ts'
+import { shelfRefreshRequestSchema, bookshelfRefreshConcurrencySchema } from '../shared/shelf-chapters.ts'
+import { refreshShelfBatch, refreshShelfChapters } from './runtime/shelf-chapters.ts'
 import { readingSourceSummary } from '../shared/source-management.ts'
 import { registerReadingMarksApi } from './reading-marks-api.ts'
 import { searchConcurrencySchema } from '../shared/search-settings.ts'
@@ -524,6 +525,26 @@ app.delete('/api/search-history/:historyId', async (context) => {
   }
 })
 
+app.post('/api/bookshelf/refresh', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const parsed = shelfRefreshRequestSchema.safeParse(await context.req.json().catch(() => null))
+  if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '刷新书籍列表格式无效' } }, 400)
+  const userId = context.get('userId')
+  return streamSSE(context, async (stream) => {
+    const controller = new AbortController()
+    stream.onAbort(() => controller.abort())
+    const heartbeat = setInterval(() => { void stream.write(': heartbeat\n\n').catch(() => controller.abort()) }, 10_000)
+    try {
+      await refreshShelfBatch(dependencies.repository, dependencies.runtime, userId, parsed.data.books, async (event) => {
+        await stream.writeSSE({ event: event.type, data: JSON.stringify(event) })
+      }, controller.signal)
+    } catch (error) {
+      if (!controller.signal.aborted) await stream.writeSSE({ event: 'error', data: JSON.stringify(errorResponse(error).body.error) })
+    } finally { controller.abort(); clearInterval(heartbeat) }
+  })
+})
+
 app.post('/api/books/:bookId/toc/refresh', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
@@ -662,7 +683,7 @@ const settingsSchema = z.object({
   marginRight: z.number().int().min(0).max(64).optional(),
   marginBottom: z.number().int().min(0).max(64).optional(),
   marginLeft: z.number().int().min(0).max(64).optional(),
-  general: z.object({ searchConcurrency: searchConcurrencySchema.optional(), bookshelfInitialGroup: bookshelfInitialGroupSchema.optional(), bookshelfSort: z.enum(['addedAt', 'lastReadAt']).optional() }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个通用设置项' }).optional(),
+  general: z.object({ bookshelfRefreshConcurrency: bookshelfRefreshConcurrencySchema.optional(), searchConcurrency: searchConcurrencySchema.optional(), bookshelfInitialGroup: bookshelfInitialGroupSchema.optional(), bookshelfSort: z.enum(['addedAt', 'lastReadAt']).optional() }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个通用设置项' }).optional(),
   pageTapZones: pageTapZonesSchema.optional(),
 }).refine((value) => Object.keys(value).length > 0, { message: '至少需要一个设置项' })
 const positionSchema = z.object({ editionKey: z.string().min(1).max(128), chapterId: z.string().min(1).max(128), chapterUrl: z.string().min(1).max(4000), chapterIndex: z.number().int().min(0), title: z.string().min(1).max(500), tocRevision: z.string().max(128).optional(), paragraphIndex: z.number().int().min(0).max(1_000_000), offset: z.number().int().min(0).max(1_000_000), version: z.number().int().min(0).max(1_000_000) })
