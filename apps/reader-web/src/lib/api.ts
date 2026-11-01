@@ -18,7 +18,7 @@ export const DEFAULT_PAGE_TAP_ZONES: ApiPageTapZones = { leftWidthPercent: 33, c
 export interface ApiSettings { userId: string; theme: ApiThemeMode; readingMode: ApiReadingMode; fontSize: number; lineHeight: number; marginTop: number; marginRight: number; marginBottom: number; marginLeft: number; general: ApiGeneralSettings; pageTapZones: ApiPageTapZones; updatedAt: string }
 export interface ApiCandidate { sourceOrder?: number; sourceId: string; sourceFingerprint: string; searchDurationMs?: number; candidate: { sourceId: string; bookUrl: string; name?: string; author?: string; intro?: string; coverUrl?: string; kind?: string; lastChapter?: string; updateTime?: string; wordCount?: string } }
 export interface ApiSearchProgress { completed: number; total: number; currentGroup?: string; activeSources?: string[] }
-export interface ApiSearchSourceState { sourceId: string; status: string; nextCursor?: { index: number; token?: string } }
+export interface ApiSearchSourceState { sourceId: string; status: string; diagnostics?: unknown[]; startedAt?: string; completedAt?: string; nextCursor?: { index: number; token?: string } }
 export interface ApiSearch { id: string; keyword: string; sourceId: string; precision?: boolean; status: string; candidates: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean; nextCursor?: { index: number; token?: string } }
 export interface ApiBook { id: string; userId: string; name: string; author?: string; intro?: string; coverUrl?: string; customCoverUrl?: string; activeEditionKey?: string; createdAt: string; updatedAt: string }
 export interface ApiEdition { id: string; userId: string; bookId: string; editionKey: string; sourceId: string; sourceFingerprint: string; bookUrl: string; metadata: Record<string, unknown>; variable?: string }
@@ -48,7 +48,7 @@ export interface BackupPreview { manifest: { createdAt: string; producer: { name
 
 export interface StreamEvent { type: string; data: unknown }
 export interface SearchStreamOptions { nextPage?: boolean; sourceIds?: string[] }
-export interface SearchSourceEventData { sourceSummary?: ReadingSourceSummary; hasPending?: boolean; retryAfterMs?: number; source?: { status?: string; candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
+export interface SearchSourceEventData { sourceSummary?: ReadingSourceSummary; hasPending?: boolean; retryAfterMs?: number; source?: Partial<ApiSearchSourceState> & { candidates?: ApiCandidate[] }; search?: { candidates?: ApiCandidate[]; sourceStates?: ApiSearchSourceState[]; progress?: ApiSearchProgress; cancelled?: boolean }; progress?: ApiSearchProgress; candidates?: ApiCandidate[]; searchId?: string }
 
 export function mergeSearchStreamCandidates(current: ApiCandidate[], event: SearchSourceEventData, ordering?: { keyword: string; precision: boolean }): ApiCandidate[] {
   if (event.search?.candidates !== undefined) return [...event.search.candidates]

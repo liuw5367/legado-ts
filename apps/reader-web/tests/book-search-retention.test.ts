@@ -4,7 +4,7 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { mergeSearchStreamCandidates, searchProgressFromEvent } from '../src/lib/api.ts'
-import type { ApiCandidate } from '../src/lib/api.ts'
+import type { ApiSearchSourceState, ApiCandidate } from '../src/lib/api.ts'
 
 const code = ts.transpileModule(readFileSync(new URL('../src/lib/use-book-search.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
 
@@ -16,8 +16,9 @@ test('targeted searches retain other versions and each candidate keeps its origi
   let initialized = false
   let searchNumber = 0
   let results: ApiCandidate[] = []
+  let sourceStates: ApiSearchSourceState[] = []
   const candidate = (sourceId: string, duration: number): ApiCandidate => ({ sourceId, sourceFingerprint: sourceId, searchDurationMs: duration, candidate: { sourceId, bookUrl: sourceId + '/book', name: '目标书' } })
-  const module = { exports: {} as { useBookSearch: () => { sourceSummaries: Array<{ sourceId: string; name: string }>; candidates: ApiCandidate[]; candidateSearchId: (candidate: ApiCandidate) => string; search: (keyword: string, precision: boolean) => Promise<boolean>; replaceSearch: (keyword: string, precision: boolean, sources: string[], preserve: boolean) => Promise<boolean> } } }
+  const module = { exports: {} as { useBookSearch: () => { failedSources: ApiSearchSourceState[]; message: string; sourceSummaries: Array<{ sourceId: string; name: string }>; candidates: ApiCandidate[]; candidateSearchId: (candidate: ApiCandidate) => string; search: (keyword: string, precision: boolean) => Promise<boolean>; replaceSearch: (keyword: string, precision: boolean, sources: string[], preserve: boolean) => Promise<boolean> } } }
   class SearchOperation {
     isRunning = false
     hasPendingCancellation = false
@@ -26,6 +27,8 @@ test('targeted searches retain other versions and each candidate keeps its origi
       const id = 'search-' + ++searchNumber
       created(id)
       for (const result of results) event({ type: 'source-result', data: { source: { candidates: [result] }, sourceSummary: { sourceId: result.sourceId, name: '名称:' + result.sourceId } } })
+      for (const source of sourceStates) event({ type: 'source-result', data: { source } })
+      event({ type: 'batch-end', data: { search: { sourceStates: sourceStates.map(({ sourceId }) => ({ sourceId })) } } })
       event({ type: 'batch', data: { candidates: results } })
       return { id, cancelled: false }
     }
@@ -45,9 +48,14 @@ test('targeted searches retain other versions and each candidate keeps its origi
   } })
   function render() { stateIndex = 0; refIndex = 0; const hook = module.exports.useBookSearch(); initialized = true; return hook }
   let hook = render()
+  sourceStates = [{ sourceId: 'https://failed.example', status: 'failed', diagnostics: [{ message: '超时' }], startedAt: '2026-11-01T00:00:00Z', completedAt: '2026-11-01T00:00:15Z' }]
   results = [candidate('https://a.example', 100)]
   assert.equal(await hook.search('目标书', true), true)
   hook = render()
+  assert.equal(hook.failedSources[0]?.sourceId, 'https://failed.example')
+  assert.equal(hook.failedSources[0]?.completedAt, '2026-11-01T00:00:15Z')
+  assert.equal(hook.message, '', 'failures appear only in the collapsed list')
+  sourceStates = []
   results = [candidate('https://b.example', 50)]
   assert.equal(await hook.replaceSearch('目标书', true, ['https://b.example'], true), true)
   hook = render()
@@ -70,4 +78,5 @@ test('targeted searches retain other versions and each candidate keeps its origi
   await hook.search('另一本', true)
   hook = render()
   assert.equal(hook.sourceSummaries.length, 0)
+  assert.equal(hook.failedSources.length, 0)
 })

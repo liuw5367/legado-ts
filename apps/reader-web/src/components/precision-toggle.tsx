@@ -6,7 +6,7 @@ export function PrecisionToggle({ checked, disabled = false, onChange }: { check
       <span className="precision-toggle-title">精确匹配</span>
       <span className="precision-toggle-description">仅显示书名、作者或分类命中的结果</span>
     </span>
-    <span className="precision-toggle-state">{checked ? '已开启' : '已关闭'}</span>
     {checked ? <Check aria-hidden="true" /> : null}
+    <span className="precision-toggle-state">{checked ? '已开启' : '已关闭'}</span>
   </button>
 }

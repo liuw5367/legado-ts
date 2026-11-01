@@ -789,7 +789,7 @@ function streamSearchResponse(context: Context<{ Variables: Variables }>, userId
       }, { ...options, signal: disconnected.signal, onProgress: async (progress) => {
         await stream.writeSSE({ event: 'progress', data: JSON.stringify({ searchId, seq: sequence++, progress }) })
       } })
-      await stream.writeSSE({ event: 'batch-end', data: JSON.stringify({ searchId, seq: sequence++, hasPending: result.hasPending, retryAfterMs: result.retryAfterMs, search: { sourceStates: result.sourceResults.map(({ sourceId, nextCursor }) => ({ sourceId, nextCursor })), cancelled: result.search.cancelled }, progress: result.progress }) })
+      await stream.writeSSE({ event: 'batch-end', data: JSON.stringify({ searchId, seq: sequence++, hasPending: result.hasPending, retryAfterMs: result.retryAfterMs, search: { sourceStates: result.sourceResults.map(({ sourceId, status, nextCursor, diagnostics, startedAt, completedAt }) => ({ sourceId, status, nextCursor, diagnostics, startedAt, completedAt })), cancelled: result.search.cancelled }, progress: result.progress }) })
       await stream.writeSSE({ event: 'batch', data: JSON.stringify({ progress: result.progress, cacheWarning: result.cacheWarning }) })
       await stream.writeSSE({ event: 'done', data: JSON.stringify({ search: { id: searchId, status: result.search.status, cancelled: result.search.cancelled }, hasPending: result.hasPending }) })
     } catch (error) {

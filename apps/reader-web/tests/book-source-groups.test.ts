@@ -57,3 +57,18 @@ test('current book source stays first while other domains and implementations fo
   assert.equal(groups[0]?.versions[0]?.isCurrentBookEdition, true)
   assert.equal(groups[1]?.versions[0]?.searchDurationMs, 0)
 })
+
+test('latest chapter information precedes duration except for the active edition', () => {
+  const ids = ['current', 'fast-empty', 'slow-chapter', 'fast-chapter', 'unknown-chapter', 'unknown-empty'].map((name) => `https://${name}.example/source`)
+  const managed = ids.map((id, index) => managedSource(id, true, index))
+  const results = ids.map((sourceId, index) => ({ sourceId, index, searchDurationMs: [500, 1, 100, 10, undefined, undefined][index], lastChapter: index >= 2 && index <= 4 ? '最新一章' : '  ' }))
+  const saved: BookSourceItem[] = [{ sourceId: ids[0]!, sourceFingerprint: 'fingerprint', name: '当前', bookUrl: '/book', sourceEnabled: true, status: 'saved', editionKey: 'active' }]
+  assert.deepEqual(groupBookSourcesByDomain(managed, saved, results, 'active').map((group) => group.versions[0]?.source.sourceId), [ids[0], ids[3], ids[2], ids[4], ids[1], ids[5]])
+})
+
+test('implementations with chapter information outrank faster account defaults', () => {
+  const ids = ['default', 'slow', 'fast', 'empty'].map((name) => `https://book.example/${name}`)
+  const managed = ids.map((id, index) => managedSource(id, index === 0, index))
+  const results = ids.map((sourceId, index) => ({ sourceId, index, searchDurationMs: [1, 100, 10, 2][index], lastChapter: index === 1 || index === 2 ? '最新一章' : '' }))
+  assert.deepEqual(groupBookSourcesByDomain(managed, [], results)[0]?.versions.map((version) => version.source.sourceId), [ids[2], ids[1], ids[0], ids[3]])
+})

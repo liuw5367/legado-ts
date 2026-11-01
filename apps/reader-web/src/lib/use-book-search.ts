@@ -3,13 +3,14 @@ import { publishPageMutation } from './page-data.ts'
 import { usePageNavigation } from './use-page-resource.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SourceCacheWarning } from '../../shared/book-sources.ts'
-import { ApiError, apiFetch, mergeSearchStreamCandidates, searchProgressFromEvent, streamSearchAll, type ApiCandidate, type ApiSearchProgress, type SearchSourceEventData } from './api.ts'
+import { ApiError, apiFetch, mergeSearchStreamCandidates, searchProgressFromEvent, streamSearchAll, type ApiSearchSourceState, type ApiCandidate, type ApiSearchProgress, type SearchSourceEventData } from './api.ts'
 import { SearchOperation } from './search-operation.ts'
 
 export function useBookSearch() {
   const navigation = usePageNavigation()
   const userId = navigation?.userId
   const settleState = useRef<{ status: 'done' | 'error' | 'paused'; message: string } | undefined>(undefined)
+  const [sourceStates, setSourceStates] = useState<ApiSearchSourceState[]>([])
   const [sourceSummaries, setSourceSummaries] = useState<ReadingSourceSummary[]>([])
   const [candidates, setCandidates] = useState<ApiCandidate[]>([])
   const [searchId, setSearchId] = useState('')
@@ -45,13 +46,15 @@ export function useBookSearch() {
   async function runSearch(keyword: string, precision: boolean, sourceIds?: string[], resumeId?: string, preserveResults = false): Promise<boolean> {
     if (operation.isRunning || (!resumeId && keyword.trim().length === 0)) return false
     settleState.current = undefined
-    if (!resumeId) { ordering.current = { keyword, precision }; if (!preserveResults) { setCandidates([]); setSourceSummaries([]) } setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; setStatus('loading')
+    if (!resumeId) { ordering.current = { keyword, precision }; if (!preserveResults) { setCandidates([]); setSourceSummaries([]); setSourceStates([]) } setSearchId('') } setMessage(''); setProgress(undefined); progressRef.current = undefined; setStatus('loading')
     let succeeded = true
-    if (!resumeId) retainedSourceIds.current = preserveResults ? sourceIds : undefined
+    if (!resumeId) { retainedSourceIds.current = preserveResults ? sourceIds : undefined; if (preserveResults && sourceIds) setSourceStates((current) => current.filter((source) => !sourceIds.includes(source.sourceId))) }
     const retainedSources = retainedSourceIds.current
     let currentSearchId = resumeId ?? ''
     let currentCandidates: ApiCandidate[] = resumeId ? candidates.filter((item) => candidateSearchIds.current.get(item) === resumeId) : []
     function updateCandidates(batch: SearchSourceEventData) {
+      const states = batch.search?.sourceStates?.filter((source) => typeof source.status === 'string') ?? (batch.source?.sourceId && batch.source.status ? [{ ...batch.source, sourceId: batch.source.sourceId, status: batch.source.status }] : [])
+      if (states.length > 0) setSourceStates((current) => [...current.filter((source) => !states.some((next) => next.sourceId === source.sourceId)), ...states])
       const summary = batch.sourceSummary
       if (summary !== undefined) setSourceSummaries((current) => [...current.filter((source) => source.sourceId !== summary.sourceId), summary])
       currentCandidates = mergeSearchStreamCandidates(currentCandidates, batch, ordering.current)
@@ -71,7 +74,6 @@ export function useBookSearch() {
             updateCandidates(batch)
             const nextProgress = searchProgressFromEvent(batch)
             if (nextProgress !== undefined) showProgress(nextProgress)
-            if (batch.source?.status === 'failed' || batch.source?.status === 'capability-missing') setMessage('部分书源执行失败，已保留可用结果。')
           }
           if (event.type === 'progress') {
             const nextProgress = searchProgressFromEvent(event.data as SearchSourceEventData)
@@ -129,5 +131,5 @@ export function useBookSearch() {
     }
     catch (reason) { if (mounted.current) setMessage(reason instanceof Error ? '取消请求失败：' + reason.message : '取消请求失败') }
   }
-  return { sourceSummaries, candidates, candidateSearchId: (candidate: ApiCandidate) => candidateSearchIds.current.get(candidate) ?? searchId, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, isTargetedSearch: retainedSourceIds.current !== undefined, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
+  return { failedSources: sourceStates.filter((source) => source.status === 'failed' || source.status === 'capability-missing'), sourceSummaries, candidates, candidateSearchId: (candidate: ApiCandidate) => candidateSearchIds.current.get(candidate) ?? searchId, searchId, status, message, progress, cancellationPending: operation.hasPendingCancellation, isTargetedSearch: retainedSourceIds.current !== undefined, resume: () => runSearch('', false, undefined, searchId), search, replaceSearch, cancelAndWait, cancel }
 }

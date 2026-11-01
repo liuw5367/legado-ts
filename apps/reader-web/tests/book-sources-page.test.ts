@@ -40,7 +40,7 @@ function render(candidates: ApiCandidate[], status = 'done', isTargetedSearch = 
     if (name.includes('time-format')) return { formatSourceRuleDateTime }
     if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
     if (name.includes('use-page-resource')) return { usePageNavigation: () => null, usePageLoadEffect() {} }
-    if (name.includes('use-book-search')) return { useBookSearch: () => ({ sourceSummaries: [], candidates, searchId: 'search', status, isTargetedSearch, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
+    if (name.includes('use-book-search')) return { useBookSearch: () => ({ failedSources: [], sourceSummaries: [], candidates, searchId: 'search', status, isTargetedSearch, message: '', progress: { completed: 0, total: 1, activeSources: ['实时书源'], currentGroup: 'https://import.example/source-list' } }) }
     if (name.includes('empty-state')) return { EmptyState: 'empty' }
     if (name.includes('loading-state')) return { LoadingState: 'loading' }
     return {}
@@ -58,6 +58,7 @@ test('matching an existing source suppresses empty search text and duplicate res
   assert.ok(!content.includes('本次搜索结果'))
   assert.ok(content.includes('25ms'))
   assert.ok(content.includes('测试分组'))
+  assert.ok(!nodes(tree).some((node) => node.type === 'button' && node.props?.children === '账号默认'))
 })
 
 test('empty search text still appears when candidates do not match the book author', () => {
@@ -106,7 +107,7 @@ test('重试来源列表后仍可展开已加载的同域版本', async () => {
     if (name.includes('time-format')) return { formatSourceRuleDateTime }
     if (name.includes('book-cache-context')) return { useBookCache: () => ({}) }
     if (name.includes('use-page-resource')) return { usePageNavigation: () => null, usePageLoadEffect: (effect: typeof load) => { load = effect } }
-    if (name.includes('use-book-search')) return { useBookSearch: () => ({ sourceSummaries: [], candidates: [], status: 'idle', message: '' }) }
+    if (name.includes('use-book-search')) return { useBookSearch: () => ({ failedSources: [], sourceSummaries: [], candidates: [], status: 'idle', message: '' }) }
     if (name.includes('api.ts')) return { apiFetch: async (path: string) => {
       requests.push(path)
       if (path.includes('source-management')) return { sources: [source, alternate] }

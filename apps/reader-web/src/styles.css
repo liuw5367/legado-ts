@@ -1166,3 +1166,14 @@ dialog .button:not(.secondary) { min-width: calc(4em + 20px); }
 .shelf-toolbar .shelf-group-bar { flex: 1; min-width: 0; }
 .shelf-refresh-button { flex: none; width: 36px; height: 36px; padding: 8px; }
 .shelf-refresh-button svg { width: 16px; height: 16px; }
+
+.failed-search-sources { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.failed-search-sources > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.failed-search-sources > summary::-webkit-details-marker { display: none; }
+.failed-search-sources > summary svg { width: 16px; height: 16px; flex-shrink: 0; }
+.failed-search-sources[open] > summary svg { transform: rotate(180deg); }
+.failed-source-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--border); }
+.failed-source-info { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.failed-source-info p { margin: 4px 0 0; }
+.failed-source-item > .button { flex-shrink: 0; }
+.failed-source-error { padding: 0 16px 14px; }

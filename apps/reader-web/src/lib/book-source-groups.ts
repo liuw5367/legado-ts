@@ -5,6 +5,7 @@ import type { ReadingSourceSummary } from '../../shared/source-management.ts'
 export interface BookSourceSearchResultRef {
   sourceId: string
   index: number
+  lastChapter?: string | undefined
   searchDurationMs?: number | undefined
 }
 
@@ -15,6 +16,7 @@ export interface BookSourceImplementation<T extends BookSourceSearchResultRef = 
   searchResults: T[]
   isAccountDefault: boolean
   isCurrentBookEdition: boolean
+  hasLatestChapter: boolean
   searchDurationMs: number | undefined
 }
 
@@ -44,7 +46,6 @@ export function groupBookSourcesByDomain<T extends BookSourceSearchResultRef>(ma
     ...searchResults.map((result) => sourceDomainInfo(result.sourceId).key),
   ])
   const activeSourceId = bookSources.find((item) => item.status === 'saved' && item.editionKey === activeEditionKey)?.sourceId
-  const activeDomainKey = activeSourceId === undefined ? undefined : sourceDomainInfo(activeSourceId).key
   const defaults = new Map(selectOneSourcePerDomain(managedSources.filter((source) => source.enabled), compareSourceManagementOrder).map((source) => [sourceDomainInfo(source.sourceId).key, source]))
 
   return groupSourcesByDomain(managedSources)
@@ -60,13 +61,15 @@ export function groupBookSourcesByDomain<T extends BookSourceSearchResultRef>(ma
         searchResults: searchResultsBySourceId.get(source.sourceId) ?? [],
         isAccountDefault: defaults.get(group.domainKey)?.sourceId === source.sourceId,
         isCurrentBookEdition: source.sourceId === activeSourceId,
+        hasLatestChapter: (searchResultsBySourceId.get(source.sourceId) ?? []).some((result) => Boolean(result.lastChapter?.trim()))
+          || (itemsBySourceId.get(source.sourceId) ?? []).some((item) => Boolean(item.lastChapter?.trim())),
         searchDurationMs: searchResultsBySourceId.get(source.sourceId)?.find((result) => result.searchDurationMs !== undefined)?.searchDurationMs
           ?? itemsBySourceId.get(source.sourceId)?.find((item) => item.searchDurationMs !== undefined)?.searchDurationMs,
       })).sort((left, right) => Number(right.isCurrentBookEdition) - Number(left.isCurrentBookEdition)
-        || (group.domainKey === activeDomainKey ? 0 : Number(right.isAccountDefault) - Number(left.isAccountDefault))
+        || Number(right.hasLatestChapter) - Number(left.hasLatestChapter)
         || (left.searchDurationMs ?? Infinity) - (right.searchDurationMs ?? Infinity)),
     }))
     .sort((left, right) => Number(right.versions.some((version) => version.isCurrentBookEdition)) - Number(left.versions.some((version) => version.isCurrentBookEdition))
-      || ((left.versions.find((version) => version.isCurrentBookEdition || version.isAccountDefault) ?? left.versions[0])?.searchDurationMs ?? Infinity)
-        - ((right.versions.find((version) => version.isCurrentBookEdition || version.isAccountDefault) ?? right.versions[0])?.searchDurationMs ?? Infinity))
+      || Number(right.versions[0]?.hasLatestChapter ?? false) - Number(left.versions[0]?.hasLatestChapter ?? false)
+      || (left.versions[0]?.searchDurationMs ?? Infinity) - (right.versions[0]?.searchDurationMs ?? Infinity))
 }
