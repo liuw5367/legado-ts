@@ -877,6 +877,9 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .book-list-member { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; }
 .book-list-member-actions { display: flex; flex-direction: column; gap: 6px; }
 .book-list-member-actions .button { height: 30px; min-height: 30px; padding: 3px 10px; }
+.book-list-member-actions .button svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.book-list-member-actions .book-list-member-remove { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.book-list-member-actions .book-list-member-remove:hover { background: var(--danger-surface); }
 .book-list-member > .book-row-main { padding: 0; }
 .book-list-member > .organization-prose { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 13px; }
 .group-startup-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

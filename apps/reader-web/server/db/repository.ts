@@ -100,7 +100,7 @@ export class BackupRestoreError extends Error {
 export interface ReaderRepository {
   listBookListSummaries(userId: string, query?: string, bookId?: string, picker?: boolean): Promise<Array<BookListChoice & { createdAt?: string; updatedAt?: string; coverBooks?: BookDisplay[] }>>
   getBookListDetails(userId: string, listId: string): Promise<BookListDetails | null>
-  getShelfGroups(userId: string, bookId?: string): Promise<{ groups: Array<{ id: string; name: string; bookCount: number }>; ungroupedCount: number; onBookshelf?: boolean; currentGroupId?: string | null }>
+  getShelfGroups(userId: string, bookId?: string): Promise<{ groups: Array<{ id: string; name: string }>; onBookshelf?: boolean; currentGroupId?: string | null }>
   listBookIdentities(userId: string): Promise<Array<{ id: string; name: string; author?: string; onBookshelf: boolean }>>
   getBookReadingInfo(userId: string, bookId: string, editionKey?: string): Promise<BookReadingInfo | null>
   getReadingEntry(userId: string, bookId: string): Promise<{ activeEditionKey: string | null } | null>
@@ -209,10 +209,9 @@ export class PostgresReaderRepository implements ReaderRepository {
   }
   public async getShelfGroups(userId: string, bookId?: string) {
     return withUser(userId, async (tx) => {
-      const groups = await tx.select({ id: bookLists.id, name: bookLists.name, bookCount: sql<number>`(select count(*)::int from reader.bookshelf s where s.user_id = ${userId} and s.group_id = ${bookLists.id})` }).from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.type, 'shelf_group'))).orderBy(asc(bookLists.customOrder), asc(bookLists.createdAt), asc(bookLists.id))
-      const [ungrouped] = await tx.select({ value: sql<number>`count(*)::int` }).from(bookshelf).where(and(eq(bookshelf.userId, userId), isNull(bookshelf.groupId)))
+      const groups = await tx.select({ id: bookLists.id, name: bookLists.name }).from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.type, 'shelf_group'))).orderBy(asc(bookLists.customOrder), asc(bookLists.createdAt), asc(bookLists.id))
       const [current] = bookId ? await tx.select({ groupId: bookshelf.groupId }).from(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, bookId))) : []
-      return { groups, ungroupedCount: ungrouped?.value ?? 0, ...(bookId ? { onBookshelf: current !== undefined, currentGroupId: current?.groupId ?? null } : {}) }
+      return { groups, ...(bookId ? { onBookshelf: current !== undefined, currentGroupId: current?.groupId ?? null } : {}) }
     })
   }
   public async listBookIdentities(userId: string) {
@@ -1121,9 +1120,8 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
   public async getShelfGroups(userId: string, bookId?: string) {
     const organization = await this.getBookOrganization(userId, undefined, false)
-    const shelfKeys = [...this.shelf.keys()].filter((key) => key.startsWith(userId + ':'))
-    const groups = organization.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((row) => ({ id: row.id, name: row.name, bookCount: shelfKeys.filter((key) => this.shelfGroups.get(key) === row.id).length }))
-    return { groups, ungroupedCount: shelfKeys.filter((key) => !this.shelfGroups.get(key)).length, ...(bookId ? { onBookshelf: this.shelf.has(`${userId}:${bookId}`), currentGroupId: this.shelfGroups.get(`${userId}:${bookId}`) ?? null } : {}) }
+    const groups = organization.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((row) => ({ id: row.id, name: row.name }))
+    return { groups, ...(bookId ? { onBookshelf: this.shelf.has(`${userId}:${bookId}`), currentGroupId: this.shelfGroups.get(`${userId}:${bookId}`) ?? null } : {}) }
   }
   public async listBookIdentities(userId: string) {
     const rows = [...new Map([...this.books.values()].filter((entry) => entry.book.userId === userId).map(({ book }) => [book.id, book])).values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

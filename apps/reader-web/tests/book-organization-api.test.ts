@@ -88,7 +88,7 @@ test('展示查询使用必要字段，书单选择器省去封面且特殊字�
   assert.equal('edition' in details.items[0], false); assert.equal('position' in details.items[0], false)
   assert.equal('intro' in details.items[0].book, false)
   const groups = await (await request(`/api/bookshelf-groups?bookId=${book.id}`)).json()
-  assert.equal(groups.onBookshelf, true); assert.equal(groups.currentGroupId, null); assert.equal(groups.ungroupedCount, 1)
+  assert.equal(groups.onBookshelf, true); assert.equal(groups.currentGroupId, null); assert.equal('ungroupedCount' in groups, false); assert.ok(groups.groups.every((group: object) => !('bookCount' in group)))
   const identities = await repository.listBookIdentities(userId)
   assert.deepEqual(identities, [{ id: book.id, name: metadata.name, author: metadata.author, onBookshelf: true }])
   assert.deepEqual(await repository.getReadingEntry(userId, book.id), { activeEditionKey: 'edition' })

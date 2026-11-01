@@ -458,9 +458,9 @@ async function handleOrganization(request, response, url) {
   const parts = path.split('/'); const isGroups = parts[2] === 'bookshelf-groups'
   const type = isGroups ? 'shelf_group' : 'booklist'
   const members = (listId) => state.items.filter((row) => row.bookListId === listId).sort((a, b) => b.addedAt.localeCompare(a.addedAt))
-  const groupRows = () => state.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder).map((row) => ({ ...row, bookCount: [...state.shelf.values()].filter((id) => id === row.id).length }))
+  const groupRows = () => state.lists.filter((row) => row.type === 'shelf_group').sort((a, b) => a.customOrder - b.customOrder).map((row) => ({ ...row }))
   if (method === 'GET') {
-    if (isGroups) json(response, { groups: groupRows(), ungroupedCount: [...state.shelf.values()].filter((id) => id === null).length, ...(url.searchParams.has('bookId') ? { onBookshelf: state.shelf.has(url.searchParams.get('bookId')), currentGroupId: state.shelf.get(url.searchParams.get('bookId')) ?? null } : {}) })
+    if (isGroups) json(response, { groups: groupRows(), ...(url.searchParams.has('bookId') ? { onBookshelf: state.shelf.has(url.searchParams.get('bookId')), currentGroupId: state.shelf.get(url.searchParams.get('bookId')) ?? null } : {}) })
     else if (parts.length === 3) json(response, { lists: state.lists.filter((row) => row.type === 'booklist').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((row) => ({ ...row, bookCount: members(row.id).length, ...(url.searchParams.get('purpose') === 'picker' ? {} : { coverBooks: members(row.id).slice(0, 4).map((item) => books.get(item.bookId)) }), containsBook: members(row.id).some((item) => item.bookId === url.searchParams.get('bookId')) })) })
     else { const list = state.lists.find((row) => row.id === parts[3] && row.type === 'booklist'); if (!list) { json(response, { error: { message: '书单不存在' } }, 404); return true } json(response, { list, items: members(list.id).map((row) => ({ ...row, book: books.get(row.bookId), edition: editions.get(books.get(row.bookId)?.activeEditionKey), position: positions.get(row.bookId) })) }) }
     return true

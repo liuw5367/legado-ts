@@ -97,7 +97,7 @@ export class SseDecoder {
   private flushEvent(): StreamEvent | undefined { if (this.dataLines.length === 0) return undefined; const raw = this.dataLines.join('\n'); let data: unknown = raw; try { data = JSON.parse(raw) as unknown } catch { /* 保留文本事件 */ } const event = { type: this.eventType, data }; this.eventType = 'message'; this.dataLines = []; return event }
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}, expectedUserId?: string): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}, expectedUserId?: string, onSuccess?: (result: T) => void): Promise<T> {
   const session = await currentSession()
   if (expectedUserId !== undefined && session?.user.id !== expectedUserId) throw new Error('账号已切换，请重新操作')
   const headers = new Headers(init.headers)
@@ -116,6 +116,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, expected
     await handleExpiredSession(response, body, session?.access_token)
     throw new ApiError(typeof errorRecord?.code === 'string' ? errorRecord.code : 'request-failed', typeof errorRecord?.message === 'string' ? errorRecord.message : '请求失败', response.status)
   }
+  onSuccess?.(body as T)
   if (method !== 'GET' && method !== 'HEAD' && session !== null) publishPageMutation({ userId: session.user.id, path, method })
   return body as T
 }
@@ -257,8 +258,8 @@ export type ApiBookList = BookListSummary
 export type ApiBookListItem = BookListMember
 export type ApiBookListDetails = BookListDetails
 export type ApiBookListChoice = BookListChoice
-export interface ApiShelfGroup { id: string; name: string; bookCount: number }
-export interface ApiShelfGroups { groups: ApiShelfGroup[]; ungroupedCount: number }
+export interface ApiShelfGroup { id: string; name: string }
+export interface ApiShelfGroups { groups: ApiShelfGroup[] }
 
 export async function streamShelfRefresh(books: import('../../shared/shelf-chapters.ts').ShelfRefreshTarget[], onEvent: (event: import('../../shared/shelf-chapters.ts').ShelfRefreshEvent) => void, signal: AbortSignal): Promise<void> {
   const session = await currentSession()

@@ -27,3 +27,16 @@ test('应用认证失效覆盖 JSON、备份和搜索流，其他错误不会退
   await assert.rejects(api.apiFetch('/api/bookshelf'), { message: 'fixture failure' })
   assert.equal(invalidated.length, requests.length)
 })
+
+test('成功回调在失效通知前更新列表，失败请求不调用成功回调', async () => {
+  const events: string[] = []
+  let status = 200
+  const module = { exports: {} as { apiFetch: (path: string, init: RequestInit, user: string, onSuccess: (result: any) => void) => Promise<unknown> } }
+  runInNewContext(code, { module, exports: module.exports, Headers, Response, DOMException, TextDecoder, require: (name: string) => name.endsWith('/auth.ts') ? { currentSession: async () => ({ user: { id: 'user' } }) } : name.endsWith('/page-data.ts') ? { mutationDomains: () => ['notes'], publishPageMutation: () => events.push('invalidate') } : {}, fetch: async () => new Response(JSON.stringify(status === 200 ? { item: { version: 2 } } : { error: { message: '失败' } }), { status }) })
+  const update = (result: any) => { assert.equal(result.item.version, 2); events.push('update') }
+  await module.exports.apiFetch('/api/books/book/annotations/mark', { method: 'DELETE' }, 'user', update)
+  assert.deepEqual(events, ['update', 'invalidate'])
+  status = 409
+  await assert.rejects(module.exports.apiFetch('/api/books/book/annotations/mark', { method: 'DELETE' }, 'user', update), { message: '失败' })
+  assert.deepEqual(events, ['update', 'invalidate'])
+})

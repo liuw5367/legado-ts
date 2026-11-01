@@ -94,25 +94,26 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
   }
   function itemPath(mark: ReadingMarkListItem) { return '/api/books/' + encodeURIComponent(mark.bookId) + '/' + kind + '/' + mark.id }
   function reload() { cachedMarkPages.delete(cacheKey); setRetry((value) => value + 1) }
+  function updateItem(mark: ReadingMarkListItem, updated: ReadingMarkListItem | undefined, ownGeneration: number) {
+    const cached = cachedMarkPages.get(cacheKey)
+    const source = cached?.items ?? items
+    const next = updated ? source.map((row) => row.id === mark.id ? updated : row) : source.filter((row) => row.id !== mark.id)
+    const updatedPage = { items: next, cursor: cached?.cursor ?? cursor }
+    cachedMarkPages.set(cacheKey, updatedPage)
+    // 写入成功通知会递增版本，提前填入新版本缓存，避免当前列表重新请求。
+    cachedMarkPages.set(`${userId ?? ''}:${Number(notesVersion) + 1}:${path}`, updatedPage)
+    if (ownGeneration === generation.current) { setItems(next); setBusy(null); setPurging(null) }
+  }
   async function action(mark: ReadingMarkListItem, restore: boolean) {
-    const actionPath = cacheKey; const ownGeneration = generation.current; setBusy(mark.id); setError('')
+    const ownGeneration = generation.current; setBusy(mark.id); setError('')
     try {
-      const result = await apiFetch<{ item: ReadingMarkListItem }>(itemPath(mark) + (restore ? '/restore' : '') + '?view=list', { method: restore ? 'POST' : 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId)
-      const cached = cachedMarkPages.get(actionPath); const source = cached?.items ?? items
-      const next = readerSheet ? source.map((row) => row.id === result.item.id ? result.item : row) : source.filter((row) => row.id !== mark.id)
-      const page = { items: next, cursor: cached?.cursor ?? cursor }
-      cachedMarkPages.set(actionPath, page)
-      if (readerSheet) cachedMarkPages.set(`${userId ?? ''}:${Number(notesVersion) + 1}:${path}`, page)
-      if (ownGeneration === generation.current) setItems(next)
+      await apiFetch<{ item: ReadingMarkListItem }>(itemPath(mark) + (restore ? '/restore' : '') + '?view=list', { method: restore ? 'POST' : 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId, (result) => updateItem(mark, readerSheet ? result.item : undefined, ownGeneration))
     } catch (reason) { if (ownGeneration === generation.current) setError(reason instanceof Error ? reason.message : '操作失败') } finally { if (ownGeneration === generation.current) setBusy(null) }
   }
   async function purge(mark: ReadingMarkListItem) {
-    const actionPath = cacheKey; const ownGeneration = generation.current; setPurging(mark.id); setError('')
+    const ownGeneration = generation.current; setPurging(mark.id); setError('')
     try {
-      await apiFetch(itemPath(mark) + '/permanent', { method: 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId)
-      const cached = cachedMarkPages.get(actionPath); const next = (cached?.items ?? items).filter((row) => row.id !== mark.id)
-      cachedMarkPages.set(actionPath, { items: next, cursor: cached?.cursor ?? cursor })
-      if (ownGeneration === generation.current) setItems(next)
+      await apiFetch(itemPath(mark) + '/permanent', { method: 'DELETE', body: JSON.stringify({ expectedVersion: mark.version }) }, userId, () => updateItem(mark, undefined, ownGeneration))
     } catch (reason) { if (ownGeneration === generation.current) setError(reason instanceof Error ? reason.message : '删除失败') } finally { if (ownGeneration === generation.current) setPurging(null) }
   }
   function showUnmatched(mark: MarkDetails) {
@@ -190,7 +191,7 @@ export function ReadingMarksList({ kind, bookId, q = '', deleted = false, global
     })}
     {cursor ? <Button variant="secondary" disabled={busy !== null || loading} onClick={() => void more()}>加载更多</Button> : null}
     <Sheet open={pendingPurge !== null} title="确认彻底删除笔记" onOpenChange={(open) => { if (!open) setPendingPurge(null) }}><p>彻底删除后无法恢复。</p><p>书籍：《{pendingPurge?.bookName}》</p><p>原文：“{pendingPurge?.excerpt.slice(0, 100)}{pendingPurge && pendingPurge.excerpt.length > 100 ? '…' : ''}”</p><p>确定彻底删除这条笔记吗？</p><div className="actions"><Button variant="secondary" onClick={() => setPendingPurge(null)}>取消</Button><Button onClick={() => { if (pendingPurge) { const mark = pendingPurge; setPendingPurge(null); void purge(mark) } }}>彻底删除</Button></div></Sheet>
-    <DialogPresence>{editing ? <ReadingMarkEditor key={editing.id} initialNote={editing.note ?? ''} onClose={() => setEditing(null)} onSave={async (note) => { const input = markSaveInput(editing); const result = await apiFetch<{ item: ReadingMarkListItem }>(itemPath(editing) + '?view=list', { method: 'PUT', body: JSON.stringify({ ...input, note, expectedVersion: editing.version }) }, userId); const cached = cachedMarkPages.get(cacheKey); const next = (cached?.items ?? items).map((item) => item.id === result.item.id ? result.item : item); const page = { items: next, cursor: cached?.cursor ?? cursor }; cachedMarkPages.set(cacheKey, page); if (readerSheet) cachedMarkPages.set(`${userId ?? ''}:${Number(notesVersion) + 1}:${path}`, page); setItems(next) }} /> : null}</DialogPresence>
+    <DialogPresence>{editing ? <ReadingMarkEditor key={editing.id} initialNote={editing.note ?? ''} onClose={() => setEditing(null)} onSave={async (note) => { const ownGeneration = generation.current; const input = markSaveInput(editing); await apiFetch<{ item: ReadingMarkListItem }>(itemPath(editing) + '?view=list', { method: 'PUT', body: JSON.stringify({ ...input, note, expectedVersion: editing.version }) }, userId, (result) => updateItem(editing, result.item, ownGeneration)) }} /> : null}</DialogPresence>
     <Sheet className="cached-chapter-sheet" open={cachePreview !== null} onOpenChange={(open) => { if (!open) setCachePreview(null) }} title="当时的章节内容">{previewLoading ? <LoadingState message="正在读取原文…" /> : previewError ? <DismissibleMessage className="error" role="alert" onDismiss={() => setPreviewError('')}>{previewError}<Button variant="secondary" onClick={() => setPreviewRetry((value) => value + 1)}>重试</Button></DismissibleMessage> : cachePreview ? <CachedChapterPreview mark={cachePreview} cached={previewChapter} fontSize={settings.fontSize} lineHeight={settings.lineHeight} /> : null}</Sheet>
   </div>
 }
