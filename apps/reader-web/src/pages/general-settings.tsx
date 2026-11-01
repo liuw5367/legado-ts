@@ -16,19 +16,19 @@ export function GeneralSettingsPage() {
     <section className="settings-detail-section" aria-labelledby={titleId}>
       <h2 id={titleId}>书架</h2>
       <div className="reader-setting-row general-setting-row">
-        <div><strong>书架排序</strong><p className="muted small">按最近加入或阅读时间排列，未读书籍排在末尾。</p></div>
+        <div><strong>书架排序</strong><p className="muted small">按右侧选择方式排列，未读书籍排在末尾</p></div>
         <label className="general-setting-select"><span className="sr-only">书架排序</span><Select value={settings.general.bookshelfSort} onChange={(event) => void updateSettings({ general: { bookshelfSort: event.target.value as ApiBookshelfSortMode } }).catch(() => undefined)}><option value="addedAt">加入时间</option><option value="lastReadAt">阅读时间</option></Select></label>
       </div>
       <div className="reader-setting-row general-setting-row">
-        <div><strong>书架刷新并发数</strong><p className="muted small">同时检查更新的书籍数量，默认 5 个。</p></div>
-        <label className="general-setting-select"><span className="sr-only">书架刷新并发数</span><Select value={settings.general.bookshelfRefreshConcurrency ?? 5} onChange={(event) => void updateSettings({ general: { bookshelfRefreshConcurrency: Number(event.target.value) } }).catch(() => undefined)}>{[5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value} 个</option>)}</Select></label>
+        <div><strong>书架刷新并发数</strong><p className="muted small">同时检查更新的书籍数量</p></div>
+        <label className="general-setting-select"><span className="sr-only">书架刷新并发数</span><Select value={settings.general.bookshelfRefreshConcurrency ?? 5} onChange={(event) => void updateSettings({ general: { bookshelfRefreshConcurrency: Number(event.target.value) } }).catch(() => undefined)}>{[5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value}个{value === 5 ? '（默认）' : ''}</option>)}</Select></label>
       </div>
     </section>
     <section className="settings-detail-section" aria-labelledby={searchTitleId}>
       <h2 id={searchTitleId}>书源搜索</h2>
       <div className="reader-setting-row general-setting-row">
-        <div><strong>搜索并发数</strong><p className="muted small">搜索和切换书源页面并发次数，默认 10 个。</p></div>
-        <label className="general-setting-select"><span className="sr-only">搜索并发数</span><Select value={settings.general.searchConcurrency ?? DEFAULT_SEARCH_CONCURRENCY} onChange={(event) => void updateSettings({ general: { searchConcurrency: Number(event.target.value) } }).catch(() => undefined)}>{Array.from({ length: MAX_SEARCH_CONCURRENCY - MIN_SEARCH_CONCURRENCY + 1 }, (_, index) => MIN_SEARCH_CONCURRENCY + index).map((value) => <option key={value} value={value}>{value} 个</option>)}</Select></label>
+        <div><strong>搜索并发数</strong><p className="muted small">搜索和切换书源页面并发次数</p></div>
+        <label className="general-setting-select"><span className="sr-only">搜索并发数</span><Select value={settings.general.searchConcurrency ?? DEFAULT_SEARCH_CONCURRENCY} onChange={(event) => void updateSettings({ general: { searchConcurrency: Number(event.target.value) } }).catch(() => undefined)}>{Array.from({ length: MAX_SEARCH_CONCURRENCY - MIN_SEARCH_CONCURRENCY + 1 }, (_, index) => MIN_SEARCH_CONCURRENCY + index).map((value) => <option key={value} value={value}>{value}个{value === DEFAULT_SEARCH_CONCURRENCY ? '（默认）' : ''}</option>)}</Select></label>
       </div>
     </section>
     {saving ? <p className="muted small" role="status">正在保存…</p> : null}
