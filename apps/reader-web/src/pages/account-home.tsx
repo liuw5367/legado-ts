@@ -33,7 +33,7 @@ export function AccountHomePage() {
   const [batchErrors, setBatchErrors] = useState<Record<string, string>>({})
   const [retryBooks, setRetryBooks] = useState<Array<{ bookId: string; editionKey: string }>>([])
   const [selectedGroup, setSelectedGroup] = useState('all')
-  const groupInitialized = useRef<string | undefined>(undefined)
+  const [groupInitialized, setGroupInitialized] = useState<string>()
   const { settings, settingsLoadStatus, retrySettingsLoad, error: settingsError } = useReaderSettings()
   const location = useLocation()
   const navigate = useNavigate()
@@ -54,11 +54,13 @@ export function AccountHomePage() {
     if (previousView.current !== view) window.scrollTo({ top: tabScroll.current[view] ?? 0, behavior: 'auto' })
     previousView.current = view
   }, [view])
-  const shelf = useHomeResource<ApiBookshelf>('/api/bookshelf', 'bookshelf', view === 'bookshelf', settings.general.bookshelfSort)
-  const reading = useHomeResource<ApiReadingHistory>('/api/reading-history', 'reading-history', view === 'reading')
-  const history = useHomeResource<ApiSearchHistory>('/api/search-history', 'search-history', view === 'history')
   const groups = useHomeResource<ApiShelfGroups>('/api/bookshelf-groups', 'groups')
   const groupData = groups.data
+  // 先完成分组和设置加载并提交启动分组，避免先显示全部书籍再切到目标分组。
+  const shelfReady = settingsLoadStatus === 'ready' && !groups.loading && groupData !== null && groupInitialized === user?.id
+  const shelf = useHomeResource<ApiBookshelf>('/api/bookshelf', 'bookshelf', view === 'bookshelf' && shelfReady, settings.general.bookshelfSort)
+  const reading = useHomeResource<ApiReadingHistory>('/api/reading-history', 'reading-history', view === 'reading')
+  const history = useHomeResource<ApiSearchHistory>('/api/search-history', 'search-history', view === 'history')
   const current = view === 'bookshelf' ? shelf : view === 'reading' ? reading : history
   const [feedback, setFeedback] = useState('')
   const [message, setMessage] = useState('')
@@ -72,11 +74,11 @@ export function AccountHomePage() {
   }, [navigate, user?.id])
 
   useEffect(() => {
-    if (!user?.id || settingsLoadStatus !== 'ready' || !groupData || groupInitialized.current === user.id) return
+    if (!user?.id || settingsLoadStatus !== 'ready' || !groupData || groupInitialized === user.id) return
     const initial = settings.general.bookshelfInitialGroup ?? 'all'
     setSelectedGroup(initial === 'all' || initial === 'ungrouped' || groupData.groups.some((group) => group.id === initial) ? initial : 'all')
-    groupInitialized.current = user.id
-  }, [user?.id, settingsLoadStatus, settings.general.bookshelfInitialGroup, groupData])
+    setGroupInitialized(user.id)
+  }, [user?.id, settingsLoadStatus, settings.general.bookshelfInitialGroup, groupData, groupInitialized])
 
   useEffect(() => {
     if (groupData && selectedGroup !== 'all' && selectedGroup !== 'ungrouped' && !groupData.groups.some((group) => group.id === selectedGroup)) setSelectedGroup('all')
@@ -151,9 +153,9 @@ export function AccountHomePage() {
       <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => selectView('history')}>搜索 {history.data ? <span>{history.data.searchHistory.length}</span> : null}</button>
     </div>
     {view === 'bookshelf' && groups.error ? <DismissibleMessage className="error compact-message" role="alert">分组加载失败：{groups.error}<Button variant="secondary" size="sm" onClick={groups.retry}>重试分组</Button></DismissibleMessage> : null}
-    {view === 'bookshelf' && groupData ? <div className="shelf-toolbar"><div className="shelf-group-bar" aria-label="书架分组">{[{ id: 'all', name: '全部' }, ...(groupData.groups.length > 0 ? [{ id: 'ungrouped', name: '默认' }, ...groupData.groups] : [])].map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div><Button className="shelf-refresh-button" variant="secondary" size="sm" aria-label={batchBusy ? '正在刷新书架' : '刷新当前分组'} title="刷新当前分组" disabled={batchBusy || singleBusy > 0 || bookItems.length === 0} onClick={() => void refreshGroup()}><RefreshCw className={batchBusy ? 'book-refresh-spinner' : undefined} aria-hidden="true" /></Button></div> : null}
+    {view === 'bookshelf' && groupData && groupInitialized === user?.id ? <div className="shelf-toolbar"><div className="shelf-group-bar" aria-label="书架分组">{[{ id: 'all', name: '全部' }, ...(groupData.groups.length > 0 ? [{ id: 'ungrouped', name: '默认' }, ...groupData.groups] : [])].map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div><Button className="shelf-refresh-button" variant="secondary" size="sm" aria-label={batchBusy ? '正在刷新书架' : '刷新当前分组'} title="刷新当前分组" disabled={batchBusy || singleBusy > 0 || bookItems.length === 0} onClick={() => void refreshGroup()}><RefreshCw className={batchBusy ? 'book-refresh-spinner' : undefined} aria-hidden="true" /></Button></div> : null}
     {view === 'bookshelf' && shelf.data && bookItems.length === 0 && selectedGroup !== 'all' ? <EmptyState icon={BookOpen} title="这个分组还没有书" description="搜索书籍后加入分组" /> : null}
-    {current.data === null ? current.error ? <div className="error-state"><DismissibleMessage className="error" role="alert">{current.error}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={current.retry}>重试</Button></div></div> : <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : <>
+    {current.data === null ? current.error ? <div className="error-state"><DismissibleMessage className="error" role="alert">{current.error}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={current.retry}>重试</Button></div></div> : view === 'bookshelf' && (settingsLoadStatus === 'error' || groups.error) ? null : <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : <>
       {current.loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
       {current.error ? <DismissibleMessage className="error compact-message" role="alert">{current.error}<Button variant="secondary" size="sm" onClick={current.retry}>重试</Button></DismissibleMessage> : null}
       {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success compact-message" role="status">{feedback}</DismissibleMessage> : null}
