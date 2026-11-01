@@ -24,10 +24,24 @@ export function AnimatedDialog({ open, children, className, onClose, ...props }:
   const page = usePageActivity()
   const visible = open && present && page?.active !== false
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const internalCloseEvents = useRef(0)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const [mountedOpen, setMountedOpen] = useState(false)
   const [retained, setRetained] = useState(children)
   if (visible && retained !== children) setRetained(children)
+
+  function closeInternally(dialog: HTMLDialogElement) {
+    // 退出动画和页面隐藏只同步原生状态，不能再次通知业务层关闭新打开的子弹窗。
+    if (!dialog.open) return
+    internalCloseEvents.current++
+    dialog.close()
+  }
+
+  function restoreFocus() {
+    // 新弹窗已打开时，旧弹窗的退出事件与卸载都不能抢回焦点。
+    if (!document.querySelector('dialog[open]:not([inert])')) previousFocusRef.current?.focus({ preventScroll: true })
+    previousFocusRef.current = null
+  }
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current
@@ -43,24 +57,25 @@ export function AnimatedDialog({ open, children, className, onClose, ...props }:
       return
     }
     if (!dialog.open) return
-    if (page?.active === false || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { dialog.close(); return }
-    const timer = window.setTimeout(() => dialog.close(), EXIT_DURATION)
+    if (page?.active === false || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { closeInternally(dialog); return }
+    const timer = window.setTimeout(() => closeInternally(dialog), EXIT_DURATION)
     return () => window.clearTimeout(timer)
   }, [visible, page?.active])
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current
     return () => {
-      if (dialog?.open) dialog.close()
-      previousFocusRef.current?.focus({ preventScroll: true })
+      if (dialog?.open) closeInternally(dialog)
+      restoreFocus()
     }
   }, [])
 
   return <dialog {...props} ref={dialogRef} className={`animated-dialog${className ? ` ${className}` : ''}`} data-visible={visible} inert={!visible} onClose={(event) => {
+    const internal = internalCloseEvents.current > 0
+    if (internal) internalCloseEvents.current--
     if (event.currentTarget.open) return
     setMountedOpen(false)
-    previousFocusRef.current?.focus({ preventScroll: true })
-    previousFocusRef.current = null
-    onClose?.(event)
+    restoreFocus()
+    if (!internal) onClose?.(event)
   }}>{visible || !mountedOpen ? children : retained}</dialog>
 }
