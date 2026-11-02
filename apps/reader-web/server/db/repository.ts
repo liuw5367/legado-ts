@@ -19,7 +19,7 @@ import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { compareSourceManagementOrder, compareSourceVersions, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, getTableColumns, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
 import { editionKey as backupEditionKey, isIsoDateString, type BackupCategory } from '@legado/reader-backup'
 import type { Chapter, NormalizedSource, PageCursor } from '@legado/source-core'
 import { withUser, type ReaderTransaction } from './client.ts'
@@ -409,17 +409,44 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async getSourceManagementStats(userId: string): Promise<SourceManagementStats> {
     return withUser(userId, async (transaction) => {
-      const rows = await transaction.select({ sourceId: userSources.sourceId, enabled: userSources.enabled }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
-      return sourceManagementStats(rows)
-    })
+      const base = and(eq(userSources.userId, userId), eq(userSources.deleted, false))
+      const legacyRows = await transaction.select({ sourceId: userSources.sourceId, enabled: userSources.enabled }).from(userSources).where(and(base, isNull(userSources.domainKey)))
+      const legacy = sourceManagementStats(legacyRows)
+      const legacyKeys = [...new Set(legacyRows.map((row) => sourceDomainInfo(row.sourceId).key))]
+      const enabledLegacyKeys = [...new Set(legacyRows.filter((row) => row.enabled).map((row) => sourceDomainInfo(row.sourceId).key))]
+      const legacyKeyArray = postgresTextArray(legacyKeys)
+      const enabledLegacyKeyArray = postgresTextArray(enabledLegacyKeys)
+      const [aggregated] = await transaction.select({
+        total: sql<number>`count(*)::int`,
+        domainCount: sql<number>`count(distinct ${userSources.domainKey}) filter (where not (${userSources.domainKey} = any(${legacyKeyArray}::text[])))::int`,
+        enabledDomainCount: sql<number>`count(distinct ${userSources.domainKey}) filter (where ${userSources.enabled} and not (${userSources.domainKey} = any(${enabledLegacyKeyArray}::text[])))::int`,
+      }).from(userSources).where(and(base, isNotNull(userSources.domainKey)))
+      return {
+        total: (aggregated?.total ?? 0) + legacy.total,
+        domainCount: (aggregated?.domainCount ?? 0) + legacy.domainCount,
+        enabledDomainCount: (aggregated?.enabledDomainCount ?? 0) + legacy.enabledDomainCount,
+      }
+    }, { isolationLevel: 'repeatable read' })
   }
 
   public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] | undefined }): Promise<SourceManagementPage> {
     return withUser(userId, async (transaction) => {
-      // 域名身份沿用 WHATWG URL 规则；先读最小身份，再收窄带导入关联的摘要查询。
-      const identities = params.domain === undefined ? undefined : await transaction.select({ sourceId: userSources.sourceId, enabled: userSources.enabled }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
-      const sourceIds = identities === undefined ? params.sourceIds : identities.filter((source) => sourceDomainInfo(source.sourceId).key === sourceDomainInfo(params.domain!).key && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId))).map((source) => source.sourceId)
-      const domainEnabledCount = identities?.filter((source) => source.enabled && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId))).length
+      // 已键控记录由索引按域筛选；旧 null 行继续使用 WHATWG URL 解析。
+      let sourceIds = params.sourceIds
+      let domainEnabledCount: number | undefined
+      if (params.domain !== undefined) {
+        if (params.sourceIds?.length === 0) {
+          sourceIds = []
+          domainEnabledCount = 0
+        } else {
+          const domainKey = sourceDomainInfo(params.domain).key
+          const sourceFilter = params.sourceIds === undefined ? undefined : inArray(userSources.sourceId, params.sourceIds)
+          const identities = await transaction.select({ sourceId: userSources.sourceId, domainKey: userSources.domainKey }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false), or(eq(userSources.domainKey, domainKey), isNull(userSources.domainKey)), sourceFilter))
+          sourceIds = identities.filter((source) => source.domainKey === domainKey || sourceDomainInfo(source.sourceId).key === domainKey).map((source) => source.sourceId)
+          const [enabled] = await transaction.select({ value: sql<number>`count(*)::int` }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false), eq(userSources.enabled, true), sourceFilter))
+          domainEnabledCount = enabled?.value ?? 0
+        }
+      }
       if (sourceIds?.length === 0) return { sources: [], page: params.all ? 1 : params.page, pageSize: params.all ? 1 : params.pageSize, total: 0, enabledCount: domainEnabledCount ?? 0 }
       const sourceRows = await transaction.select({ source: { ...sourceListColumns, revision: userSources.revision, author: sql<unknown>`${userSources.normalizedSource}->'author'`, bookSourceAuthor: sql<unknown>`${userSources.normalizedSource}->'bookSourceAuthor'`, lastUpdateTime: sql<unknown>`${userSources.normalizedSource}->'lastUpdateTime'` }, displayUrl: sourceImportLinks.displayUrl, priority: sourceImportLinks.sortOrder, importedAt: sourceImportBatches.importedAt }).from(userSources).leftJoin(sourceImportLinks, and(eq(sourceImportLinks.userId, userId), eq(sourceImportLinks.id, userSources.importLinkId))).leftJoin(sourceImportItems, and(eq(sourceImportItems.userId, userId), eq(sourceImportItems.id, userSources.currentImportItemId))).leftJoin(sourceImportBatches, and(eq(sourceImportBatches.userId, userId), eq(sourceImportBatches.id, sourceImportItems.batchId))).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false), sourceIds === undefined ? undefined : inArray(userSources.sourceId, sourceIds)))
       const allRows = sourceRows.map(({ source: row, displayUrl, priority, importedAt }) => ({ ...managedListSummary(row), ...(displayUrl ? { importDisplayUrl: displayUrl } : {}), ...(priority === null ? {} : { importPriority: priority }), ...(importedAt ? { importedAt: importedAt.toISOString() } : {}) }))
@@ -443,7 +470,10 @@ export class PostgresReaderRepository implements ReaderRepository {
       const targetIds = items.map((item) => item.sourceId)
       const targets = targetIds.length === 0 ? [] : await transaction.select({ sourceId: userSources.sourceId, revision: userSources.revision, enabled: userSources.enabled, deleted: userSources.deleted, normalizedOrder: sql<unknown>`${userSources.normalizedSource}->'customOrder'` }).from(userSources).where(and(eq(userSources.userId, userId), inArray(userSources.sourceId, targetIds))).for('update')
       const targetById = new Map(targets.map((row) => [row.sourceId, row]))
-      const enabledSiblings = action === 'enable' ? await transaction.select({ sourceId: userSources.sourceId, revision: userSources.revision }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false))).for('update') : []
+      const targetDomainKeys = [...new Set(items.map((item) => sourceDomainInfo(item.sourceId).key))]
+      const enabledSiblings = action === 'enable' && targetDomainKeys.length > 0
+        ? await transaction.select({ sourceId: userSources.sourceId, revision: userSources.revision, domainKey: userSources.domainKey }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false), or(inArray(userSources.domainKey, targetDomainKeys), isNull(userSources.domainKey)))).for('update')
+        : []
       const seen = new Set<string>()
       const enabledDomains = new Set<string>()
       const selectedIds = new Set(targetIds)
@@ -466,7 +496,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         }
         if (action === 'enable') {
           for (const sibling of enabledSiblings) {
-            if (selectedIds.has(sibling.sourceId) || sourceDomainInfo(sibling.sourceId).key !== domainKey) continue
+            if (selectedIds.has(sibling.sourceId) || (sibling.domainKey ?? sourceDomainInfo(sibling.sourceId).key) !== domainKey) continue
             const updated = await transaction.update(userSources).set({ enabled: false, revision: randomUUID(), updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sibling.sourceId), eq(userSources.revision, sibling.revision))).returning({ sourceId: userSources.sourceId })
             if (updated.length === 0) throw new SourceManagementError('source-conflict', `同域书源已更新，请刷新后重试：${sibling.sourceId}`)
           }
@@ -548,7 +578,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         const runtimeRows = await transaction.select({ leaseUntil: sourceRuntimeState.leaseUntil }).from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId))).for('update')
         if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${candidate.name}`)
         if (currentSource !== undefined && currentSource.fingerprint !== candidate.fingerprint) await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId)))
-        await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, sourceUuid: history.changes.get(candidate.id)!.sourceUuid, importLinkId: history.linkId, currentImportItemId: history.changes.get(candidate.id)!.itemId, normalizedSource, enabled: importEnabled.get(candidate.id) ?? false, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: history.changes.get(candidate.id)!.revision, updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { importLinkId: history.linkId, currentImportItemId: sql.raw('excluded."current_import_item_id"'), fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
+        await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, domainKey: sourceDomainInfo(candidate.sourceId).key, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, sourceUuid: history.changes.get(candidate.id)!.sourceUuid, importLinkId: history.linkId, currentImportItemId: history.changes.get(candidate.id)!.itemId, normalizedSource, enabled: importEnabled.get(candidate.id) ?? false, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: history.changes.get(candidate.id)!.revision, updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { domainKey: sql.raw('excluded."domain_key"'), importLinkId: history.linkId, currentImportItemId: sql.raw('excluded."current_import_item_id"'), fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
       }
       const result = history.result
       await transaction.update(sourceImportPreviews).set({ consumedCandidateIds: candidateIds, consumedResult: result }).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId)))
@@ -951,7 +981,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         await transaction.delete(sourceRuntimeState).where(eq(sourceRuntimeState.userId, userId))
         for (const item of snapshot.sources) {
           const normalized = { ...item.source.normalizedSource, enabled: item.source.enabled }
-          await transaction.insert(userSources).values({ userId, sourceUuid: identities.get(item.source.sourceId) ?? randomUUID(), sourceId: item.source.sourceId, fingerprint: item.source.fingerprint, rawSource: item.source.rawSource, normalizedSource: normalized, enabled: item.source.enabled, customOrder: readInteger((normalized as Record<string, unknown>).customOrder, 0), deleted: item.deleted === true, revision: randomUUID(), updatedAt: new Date() })
+          await transaction.insert(userSources).values({ userId, sourceUuid: identities.get(item.source.sourceId) ?? randomUUID(), sourceId: item.source.sourceId, domainKey: sourceDomainInfo(item.source.sourceId).key, fingerprint: item.source.fingerprint, rawSource: item.source.rawSource, normalizedSource: normalized, enabled: item.source.enabled, customOrder: readInteger((normalized as Record<string, unknown>).customOrder, 0), deleted: item.deleted === true, revision: randomUUID(), updatedAt: new Date() })
         }
       }
       if (selected.has('bookshelf') && snapshot.organization) {
@@ -2120,6 +2150,10 @@ function sourceManagementStats(sources: Array<{ sourceId: string; enabled: boole
     if (source.enabled) enabledDomains.add(key)
   }
   return { total: sources.length, domainCount: domains.size, enabledDomainCount: enabledDomains.size }
+}
+
+function postgresTextArray(values: string[]): string {
+  return `{${values.map((value) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`).join(',')}}`
 }
 
 export function tocSummary(toc: StoredToc): CachedTocSummary {

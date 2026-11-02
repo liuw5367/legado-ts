@@ -10,6 +10,7 @@ import { closeReaderDb, getReaderDb } from '../../server/db/client.ts'
 import type { StoredCandidate } from '../../server/domain/types.ts'
 import { chapterIdFor, createReaderRuntime } from '../../server/runtime/reader-runtime.ts'
 import { listDiscoverySources } from '../../server/runtime/discovery.ts'
+import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import type { ImportPreviewCandidate } from '../../shared/source-management.ts'
 import type { Chapter } from '@legado/source-core'
 
@@ -21,7 +22,7 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   assert.ok(url)
   const admin = postgres(url, { max: 1, onnotice: () => undefined })
   const role = `egress_${randomUUID().replaceAll('-', '')}`
-  const userId = randomUUID(), otherUser = randomUUID(), bookId = randomUUID()
+  const userId = randomUUID(), otherUser = randomUUID(), legacyUser = randomUUID(), bookId = randomUUID()
   const previousRuntimeKey = process.env.SOURCE_RUNTIME_STATE_KEY
   t.after(async () => {
     await closeReaderDb()
@@ -39,7 +40,7 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
     await admin`delete from reader.source_import_previews where user_id = ${userId}`
     await admin`delete from reader.source_import_links where user_id = ${userId}`
     await admin`delete from reader.source_import_settings where user_id = ${userId}`
-    await admin`delete from reader.user_sources where user_id in (${userId}, ${otherUser})`
+    await admin`delete from reader.user_sources where user_id in (${userId}, ${otherUser}, ${legacyUser})`
     await admin`delete from reader.source_runtime_state where user_id = ${userId}`
     await admin`delete from reader.toc_snapshots where user_id = ${userId}`
     await admin`delete from reader.book_source_candidates where user_id = ${userId}`
@@ -87,8 +88,10 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
     user_id: userId, source_id: `https://source-${i}.example`, fingerprint: `fp-${i}`, revision: `rev-${i}`, enabled: i !== 4, deleted: i === 3, custom_order: i,
     raw_source: { ...rules, marker: 'raw' }, normalized_source: { ...rules, bookSourceUrl: `https://source-${i}.example`, bookSourceName: `书源${i}`, bookSourceGroup: '小说', author: ' 作者 ', customOrder: i, lastUpdateTime: 10, enabledExplore: i !== 2, exploreUrl: i === 1 ? '   ' : 'https://example/explore' },
   }))
-  for (let i = 0; i < definitions.length; i += 100) await admin`insert into reader.user_sources ${admin(definitions.slice(i, i + 100).map((row) => ({ ...row, raw_source: JSON.stringify(row.raw_source), normalized_source: JSON.stringify(row.normalized_source) })))}`
+  for (let i = 0; i < definitions.length; i += 100) await admin`insert into reader.user_sources ${admin(definitions.slice(i, i + 100).map((row) => ({ ...row, domain_key: row.source_id === definitions[1]!.source_id ? null : sourceDomainInfo(row.source_id).key, raw_source: JSON.stringify(row.raw_source), normalized_source: JSON.stringify(row.normalized_source) })))}`
   await admin`insert into reader.user_sources (user_id, source_id, fingerprint, revision, raw_source, normalized_source) values (${otherUser}, 'other-source', 'fp', 'rev', '{}', '{"bookSourceName":"其他用户"}')`
+  const escapedLegacySourceId = 'not a URL, "quoted"\\\\path'
+  await admin`insert into reader.user_sources (user_id, source_id, fingerprint, revision, raw_source, normalized_source) values (${legacyUser}, ${escapedLegacySourceId}, 'fp', 'rev', '{}', '{"bookSourceName":"旧格式来源"}')`
   const params = { page: 1, pageSize: 20, query: '', status: 'all' as const }
   const managedRead = await observe(() => repo.listManagedSources(userId, { ...params, all: true }))
   const all = managedRead.value
@@ -116,10 +119,22 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   const related = relatedRead.value
   assert.equal(related.length, 4)
   assert.equal(related.find((row) => row.sourceId === definitions[4]!.source_id)?.enabled, false)
+  const sourceStatsRead = await observe(() => repo.getSourceManagementStats(userId))
+  assert.deepEqual(sourceStatsRead.value, { total: 999, domainCount: 999, enabledDomainCount: 998 })
+  assert.ok(sourceStatsRead.receivedBytes < 512, '键控书源统计应只读取常量大小聚合结果和旧记录身份')
+  assert.deepEqual(await repo.getSourceManagementStats(legacyUser), { total: 1, domainCount: 1, enabledDomainCount: 1 })
+  t.diagnostic(`键控统计与一条旧 null 记录的回退合计返回 ${sourceStatsRead.receivedBytes} 字节`)
   await admin`update reader.user_sources set normalized_source = jsonb_set(normalized_source, '{bookSourceName}', '"已更新"'), revision = 'new-rev' where user_id = ${userId} and source_id = ${definitions[0]!.source_id}`
   assert.equal((await repo.listSourceSummaries(userId, [definitions[0]!.source_id]))[0]?.name, '已更新')
   // 同域旧数据仍按管理顺序选唯一有效版本，不能先按发现能力过滤再选。
   await admin`insert into reader.user_sources (user_id,source_id,fingerprint,revision,raw_source,normalized_source,custom_order) values (${userId}, ${definitions[1]!.source_id + '/alternate'}, 'fp', 'rev', '{}', '{"bookSourceName":"同域后选","customOrder":1001,"exploreUrl":"url"}', 1001)`
+  const alternateSourceId = definitions[1]!.source_id + '/alternate'
+  await admin`update reader.user_sources set domain_key = ${sourceDomainInfo(alternateSourceId).key} where user_id = ${userId} and source_id = ${alternateSourceId}`
+  const mixedStatsRead = await observe(() => repo.getSourceManagementStats(userId))
+  assert.deepEqual(mixedStatsRead.value, { total: 1000, domainCount: 999, enabledDomainCount: 998 })
+  const mixedDomainRead = await repo.listManagedSources(userId, { ...params, all: true, domain: 'https://SOURCE-1.example:443/other' })
+  assert.deepEqual(mixedDomainRead.sources.map((row) => row.sourceId).sort(), [definitions[1]!.source_id, alternateSourceId].sort())
+  assert.equal(mixedDomainRead.enabledCount, 999)
   assert.equal((await listDiscoverySources(repo, userId)).sources.some((row) => row.sourceId.endsWith('/alternate')), false)
   const oldRows = await admin`select * from reader.user_sources where user_id = ${userId} and not deleted`
   const baseline = bytes(oldRows)

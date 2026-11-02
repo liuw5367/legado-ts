@@ -76,3 +76,13 @@ test('目录截断标记随快照持久化', async () => {
   assert.equal(journal.entries[15].tag, '0015_toc_truncated')
   assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
 })
+
+test('书源域名键保持可空并注册复合索引以兼容旧版本写入', async () => {
+  const migration = await readFile(resolve(import.meta.dirname, '../../server/db/migrations/0017_source_domain_keys.sql'), 'utf8')
+  const journal = JSON.parse(await readFile(resolve(import.meta.dirname, '../../server/db/migrations/meta/_journal.json'), 'utf8'))
+  assert.match(migration, /add column domain_key text;/u)
+  assert.match(migration, /on reader\.user_sources \(user_id, domain_key, enabled\)/u)
+  assert.match(migration, /where deleted = false/u)
+  assert.equal(journal.entries[17].tag, '0017_source_domain_keys')
+  assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when)
+})

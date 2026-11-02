@@ -24,8 +24,9 @@ export function getReaderDb(): ReaderDb {
   return database
 }
 
-export async function withUser<T>(userId: string, operation: (transaction: ReaderTransaction) => Promise<T>): Promise<T> {
+export async function withUser<T>(userId: string, operation: (transaction: ReaderTransaction) => Promise<T>, options: { isolationLevel?: 'repeatable read' } = {}): Promise<T> {
   return getReaderDb().transaction(async (transaction) => {
+    if (options.isolationLevel === 'repeatable read') await transaction.execute(sql`set transaction isolation level repeatable read`)
     await transaction.execute(sql`select set_config('app.user_id', ${userId}, true)`)
     return operation(transaction)
   })

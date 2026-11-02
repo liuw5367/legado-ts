@@ -25,6 +25,13 @@ test('invalid source IDs use their full identity as an independent domain', () =
   assert.notEqual(sourceDomainInfo('not a URL').key, sourceDomainInfo('not another URL').key)
 })
 
+test('domain keys preserve WHATWG normalization for IPv6, Unicode hosts, ports, and invalid IDs', () => {
+  assert.deepEqual(sourceDomainInfo('https://BÜCHER.example:443/path'), { key: 'host:xn--bcher-kva.example', domain: 'xn--bcher-kva.example' })
+  assert.deepEqual(sourceDomainInfo('http://[2001:DB8::1]:80/path'), { key: 'host:[2001:db8::1]', domain: '[2001:db8::1]' })
+  assert.deepEqual(sourceDomainInfo('https://example.com:8443/path'), { key: 'host:example.com:8443', domain: 'example.com:8443' })
+  assert.deepEqual(sourceDomainInfo('relative/path'), { key: 'source:relative/path', domain: 'relative/path' })
+})
+
 test('same-name versions get sourceId-stable numbers while display order uses rule time', () => {
   const sources = [
     { sourceId: 'https://same.example/z', name: '  同名  ', lastUpdateTime: 100 },

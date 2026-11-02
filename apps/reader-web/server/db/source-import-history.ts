@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { ImportBatch, ImportCandidateDisposition, ImportConfirmResult, ImportHistoryItem, ImportHistoryQuery, ImportPreviewCandidate, UndoImportInput, UndoPreviewItem } from '../../shared/source-management.ts'
 import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import type { ReaderTransaction } from './client.ts'
@@ -137,15 +137,15 @@ async function undoContext(tx: ReaderTransaction, userId: string, batchId: strin
   const sourceUuids = [...new Set(selected.flatMap((item) => item.sourceUuid === null ? [] : [item.sourceUuid]))]
   const selectedSourceIds = [...new Set(selected.map((item) => item.sourceId))]
   const currentRows = sourceUuids.length === 0 ? [] : await tx.select({ sourceUuid: userSources.sourceUuid, sourceId: userSources.sourceId, revision: userSources.revision, enabled: userSources.enabled, deleted: userSources.deleted }).from(userSources).where(and(eq(userSources.userId, userId), inArray(userSources.sourceUuid, sourceUuids)))
-  const needsDomainCheck = [...restores.values()].some((before) => before?.enabled === true && !before.deleted)
-  const activeSources = needsDomainCheck ? await tx.select({ sourceUuid: userSources.sourceUuid, sourceId: userSources.sourceId }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false))) : []
+  const restoringDomainKeys = [...new Set(selected.flatMap((item) => { const before = restores.get(item.id); return before?.enabled === true && !before.deleted ? [sourceDomainInfo(item.sourceId).key] : [] }))]
+  const activeSources = restoringDomainKeys.length > 0 ? await tx.select({ sourceUuid: userSources.sourceUuid, sourceId: userSources.sourceId, domainKey: userSources.domainKey }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false), or(inArray(userSources.domainKey, restoringDomainKeys), sql`${userSources.domainKey} is null`))) : []
   const runtime = selectedSourceIds.length === 0 ? [] : await tx.select({ sourceId: sourceRuntimeState.sourceId }).from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), inArray(sourceRuntimeState.sourceId, selectedSourceIds), sql`${sourceRuntimeState.leaseUntil} > now()`))
   const byUuid = new Map(currentRows.map((row) => [row.sourceUuid, row]))
   const busy = new Set(runtime.map((row) => row.sourceId))
   const preview: UndoPreviewItem[] = selected.map((item) => {
     const current = item.sourceUuid ? byUuid.get(item.sourceUuid) : undefined
     const before = restores.get(item.id)
-    const conflict = before?.enabled === true && !before.deleted && activeSources.some((row) => row.sourceUuid !== item.sourceUuid && sourceDomainInfo(row.sourceId).key === sourceDomainInfo(item.sourceId).key)
+    const conflict = before?.enabled === true && !before.deleted && activeSources.some((row) => row.sourceUuid !== item.sourceUuid && (row.domainKey ?? sourceDomainInfo(row.sourceId).key) === sourceDomainInfo(item.sourceId).key)
     const reason = undoReason(item, current, batch.invalidatedReason, busy.has(item.sourceId), conflict)
     return { itemId: item.id, name: item.name, action: item.action, expectedRevision: current?.revision ?? null, canUndo: !reason, reason }
   })
@@ -171,7 +171,7 @@ export async function undoImport(tx: ReaderTransaction, userId: string, batchId:
     const current = context.byUuid.get(item.sourceUuid!)!
     const before = context.restores.get(item.id)
     const revision = randomUUID()
-    await tx.update(userSources).set({ ...(before ?? { deleted: true }), revision, updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceUuid, current.sourceUuid), eq(userSources.revision, expected.get(item.id)!)))
+    await tx.update(userSources).set({ ...(before ?? { deleted: true }), domainKey: sourceDomainInfo(current.sourceId).key, revision, updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceUuid, current.sourceUuid), eq(userSources.revision, expected.get(item.id)!)))
     await tx.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, item.sourceId)))
     await tx.update(items).set({ undoneAt: new Date(), undoRevision: revision }).where(and(eq(items.userId, userId), eq(items.id, item.id)))
   }

@@ -7,7 +7,10 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { GLOBAL_SOURCE_CONCURRENCY, SOURCE_CONCURRENCY } from '../../server/runtime/source-execution.ts'
 import { PostgresReaderRepository } from '../../server/db/repository.ts'
+import { backfillSourceDomainKeys } from '../../server/db/backfill-source-domain-keys.ts'
 import { closeReaderDb } from '../../server/db/client.ts'
+import * as schema from '../../server/db/schema.ts'
+import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import { importBatch, sourceDefinition, verifyImportHistory } from '../fixtures/import-history.ts'
 import { importHistoryQuerySchema } from '../../shared/source-management.ts'
 
@@ -20,7 +23,8 @@ test('real import transactions, UUIDs, encrypted history, RLS and global executi
   const user = randomUUID(); const outsider = randomUUID()
   let client: ReturnType<typeof postgres> | undefined
   t.after(async () => { await closeReaderDb(); await client?.end(); await admin`drop owned by ${admin(role)}`; await admin`drop role ${admin(role)}`; await admin.end() })
-  await migrate(drizzle(admin), { migrationsFolder: fileURLToPath(new URL('../../server/db/migrations', import.meta.url)) })
+  const maintenanceDb = drizzle(admin, { schema })
+  await migrate(maintenanceDb, { migrationsFolder: fileURLToPath(new URL('../../server/db/migrations', import.meta.url)) })
   await admin`create role ${admin(role)} login`
   await admin`grant usage on schema reader to ${admin(role)}`
   await admin`grant select, insert, update, delete on all tables in schema reader to ${admin(role)}`
@@ -30,6 +34,8 @@ test('real import transactions, UUIDs, encrypted history, RLS and global executi
   client = postgres(appUrl.toString(), { max: 1 })
   const repository = new PostgresReaderRepository()
   await verifyImportHistory(repository, user)
+  const [undoneSource] = await admin`select domain_key from reader.user_sources where user_id=${user} and source_id='https://history.example/source'`
+  assert.equal(undoneSource?.domain_key, sourceDomainInfo('https://history.example/source').key)
   const history = await repository.listImportHistory(user, importHistoryQuerySchema.parse({}))
   const stored = await admin`select encrypted_url from reader.source_import_links where user_id=${user}`
   assert.ok(stored.length)
@@ -72,6 +78,8 @@ test('real import transactions, UUIDs, encrypted history, RLS and global executi
   assert.equal((await app.request('/api/source-management/import-links/order', { method: 'POST', headers, body: JSON.stringify({ orderedIds: linkData.links.map((row: { id: string }) => row.id).reverse(), expectedRevision: linkData.revision }) })).status, 200)
   assert.equal((await app.request('/api/source-management/import-links/order', { method: 'POST', headers, body: JSON.stringify({ orderedIds: [], expectedRevision: linkData.revision }) })).status, 409)
   const fresh = await importBatch(repository, user, sourceDefinition('https://fresh.test'), 'https://8.8.8.8/fresh')
+  const [freshDomain] = await admin`select domain_key from reader.user_sources where user_id=${user} and source_id='https://fresh.test'`
+  assert.equal(freshDomain?.domain_key, sourceDomainInfo('https://fresh.test').key)
   await admin`delete from reader.source_import_previews where user_id=${user} and id=${fresh.preview.previewId}`
   assert.deepEqual(await repository.commitImportPreview(user, fresh.preview.previewId, fresh.ids), fresh.result)
   const sourceScope = await repository.listSourcesForUser(user)
@@ -93,7 +101,18 @@ test('real import transactions, UUIDs, encrypted history, RLS and global executi
   const before = await repository.getBackupSnapshot(user)
   const uuidById = new Map(before.sources.map((row) => [row.source.sourceId, row.source.sourceUuid]))
   await repository.restoreBackupSnapshot(user, before, ['sources'])
-  for (const row of await repository.listSourceStatesForUser(user)) assert.equal(row.source.sourceUuid, uuidById.get(row.source.sourceId))
+  for (const row of await repository.listSourceStatesForUser(user)) {
+    assert.equal(row.source.sourceUuid, uuidById.get(row.source.sourceId))
+    const [domain] = await admin`select domain_key from reader.user_sources where user_id=${user} and source_id=${row.source.sourceId}`
+    assert.equal(domain?.domain_key, sourceDomainInfo(row.source.sourceId).key)
+  }
+  const [legacySource] = await admin`select source_id from reader.user_sources where user_id=${user} limit 1`
+  assert.ok(legacySource)
+  await admin`update reader.user_sources set domain_key=null where user_id=${user} and source_id=${legacySource.source_id}`
+  assert.ok(await backfillSourceDomainKeys(maintenanceDb, 1) >= 1)
+  assert.equal(await backfillSourceDomainKeys(maintenanceDb, 1), 0)
+  const [backfilled] = await admin`select domain_key from reader.user_sources where user_id=${user} and source_id=${legacySource.source_id}`
+  assert.equal(backfilled?.domain_key, sourceDomainInfo(legacySource.source_id).key)
   assert.equal((await repository.previewImportUndo(user, fresh.result.batchId)).items[0]!.reason, '备份恢复后不可撤销')
   assert.ok(history.total >= 3)
 })

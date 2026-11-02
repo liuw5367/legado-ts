@@ -21,6 +21,7 @@ export const userSources = readerSchema.table('user_sources', {
   importLinkId: uuid('import_link_id'),
   currentImportItemId: uuid('current_import_item_id'),
   sourceId: text('source_id').notNull(),
+  domainKey: text('domain_key'),
   fingerprint: text('fingerprint').notNull(),
   rawSource: jsonb('raw_source').$type<unknown>().notNull(),
   normalizedSource: jsonb('normalized_source').$type<NormalizedSource>().notNull(),
@@ -29,7 +30,7 @@ export const userSources = readerSchema.table('user_sources', {
   deleted: boolean('deleted').notNull().default(false),
   revision: text('revision').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex('user_sources_uuid_idx').on(table.sourceUuid), uniqueIndex('user_sources_identity_idx').on(table.userId, table.sourceId), index('user_sources_user_enabled_idx').on(table.userId, table.enabled, table.deleted)])
+}, (table) => [uniqueIndex('user_sources_uuid_idx').on(table.sourceUuid), uniqueIndex('user_sources_identity_idx').on(table.userId, table.sourceId), index('user_sources_user_enabled_idx').on(table.userId, table.enabled, table.deleted), index('user_sources_user_domain_enabled_idx').on(table.userId, table.domainKey, table.enabled).where(sql`${table.deleted} = false`)])
 
 export const sourceImportPreviews = readerSchema.table('source_import_previews', {
   id: uuid('id').primaryKey().defaultRandom(),
