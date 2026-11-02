@@ -9,6 +9,7 @@ import { MemoryReaderRepository, PostgresReaderRepository } from '../../server/d
 import { closeReaderDb, getReaderDb } from '../../server/db/client.ts'
 import { chapterIdFor, createReaderRuntime } from '../../server/runtime/reader-runtime.ts'
 import { listDiscoverySources } from '../../server/runtime/discovery.ts'
+import type { ImportPreviewCandidate } from '../../shared/source-management.ts'
 import type { Chapter } from '@legado/source-core'
 
 const url = process.env.READER_WEB_TEST_DATABASE_URL
@@ -23,6 +24,12 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   const previousRuntimeKey = process.env.SOURCE_RUNTIME_STATE_KEY
   t.after(async () => {
     await closeReaderDb()
+    await admin`delete from reader.source_import_undo_operations where user_id = ${userId}`
+    await admin`delete from reader.source_import_items where user_id = ${userId}`
+    await admin`delete from reader.source_import_batches where user_id = ${userId}`
+    await admin`delete from reader.source_import_previews where user_id = ${userId}`
+    await admin`delete from reader.source_import_links where user_id = ${userId}`
+    await admin`delete from reader.source_import_settings where user_id = ${userId}`
     await admin`delete from reader.user_sources where user_id in (${userId}, ${otherUser})`
     await admin`delete from reader.source_runtime_state where user_id = ${userId}`
     await admin`delete from reader.toc_snapshots where user_id = ${userId}`
@@ -111,6 +118,84 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   assert.ok(summaryRead.receivedBytes < baseline * 0.2, '启用摘要数据库返回量应减少至少 80%')
   assert.ok(relatedRead.receivedBytes < baseline * 0.2, '相关来源数据库返回量应减少至少 80%')
   t.diagnostic(`1000 书源结果字节代理值：完整记录 ${baseline}，驱动管理摘要 ${managedRead.receivedBytes}，驱动单域摘要（含身份查询）${domainRead.receivedBytes}，驱动启用摘要 ${summaryRead.receivedBytes}，驱动5来源摘要 ${relatedRead.receivedBytes}`)
+
+  const targetSourceId = definitions[0]!.source_id
+  const targetStatesRead = await observe(() => repo.getSourceStatesForIds(userId, [targetSourceId, definitions[1]!.source_id]))
+  assert.equal(targetStatesRead.value.length, 2)
+  assert.ok(targetStatesRead.receivedBytes < baseline * 0.1, '导入预览的本地状态读取只应返回候选来源规则')
+  const sourcePage = await repo.listManagedSources(userId, { ...params, all: true, sourceIds: [targetSourceId] })
+  const sourceSummary = sourcePage.sources[0]!
+  const disabledRead = await observe(() => repo.applySourceActions(userId, 'disable', [{ sourceId: targetSourceId, expectedSourceRevision: sourceSummary.sourceRevision }]))
+  assert.equal(disabledRead.value.affected, 1)
+  assert.ok(disabledRead.receivedBytes < 512, '禁用一个来源不应返回其他规则')
+  assert.ok(disabledRead.sentParameterBytes < 512, '禁用一个来源不应重传完整规则')
+  const disabledSource = (await repo.getSourceStatesForIds(userId, [targetSourceId]))[0]!
+  const orderedRead = await observe(() => repo.applySourceOrder(userId, [{ sourceId: targetSourceId, expectedSourceRevision: disabledSource.sourceRevision, customOrder: 20000 }]))
+  assert.equal(orderedRead.value.affected, 1)
+  assert.ok(orderedRead.receivedBytes < 512, '单个书源排序只应读取目标身份和版本')
+  assert.ok(orderedRead.sentParameterBytes < 512, '单个书源排序只应写入顺序和版本字段')
+  const reorderedSource = (await repo.getSourceStatesForIds(userId, [targetSourceId]))[0]!
+  assert.equal(reorderedSource.source.enabled, false)
+  assert.equal(reorderedSource.source.normalizedSource.customOrder, 20000)
+  assert.deepEqual(reorderedSource.source.rawSource, definitions[0]!.raw_source)
+  assert.equal(reorderedSource.source.normalizedSource.author, ' 作者 ')
+  const enabledRead = await observe(() => repo.applySourceActions(userId, 'enable', [{ sourceId: targetSourceId, expectedSourceRevision: reorderedSource.sourceRevision }]))
+  assert.equal(enabledRead.value.affected, 1)
+  assert.ok(enabledRead.receivedBytes < baseline * 0.1, '启用单个来源的同域判断只应读取轻量来源身份')
+  assert.ok(enabledRead.sentParameterBytes < 512, '启用单个来源不应重传完整规则')
+  const siblingSourceId = definitions[1]!.source_id + '/alternate'
+  const siblingStates = await repo.getSourceStatesForIds(userId, [definitions[1]!.source_id, siblingSourceId])
+  const selectedSibling = siblingStates.find((row) => row.source.sourceId === siblingSourceId)!
+  const siblingEnableRead = await observe(() => repo.applySourceActions(userId, 'enable', [{ sourceId: siblingSourceId, expectedSourceRevision: selectedSibling.sourceRevision }]))
+  assert.equal(siblingEnableRead.value.affected, 1)
+  const switchedSiblings = await repo.getSourceStatesForIds(userId, [definitions[1]!.source_id, siblingSourceId])
+  assert.equal(switchedSiblings.filter((row) => row.source.enabled && !row.deleted).length, 1, '启用同域来源仍只保留一个活动版本')
+  assert.equal(switchedSiblings.find((row) => row.source.sourceId === siblingSourceId)?.source.enabled, true)
+  const deleteTargetId = definitions[2]!.source_id
+  const deleteTarget = (await repo.getSourceStatesForIds(userId, [deleteTargetId]))[0]!
+  const deleteLease = await repo.acquireSourceRuntimeLease(userId, deleteTargetId, deleteTarget.source.fingerprint, 'delete-guard-lease', 10_000)
+  assert.ok(deleteLease)
+  await assert.rejects(repo.applySourceActions(userId, 'delete', [{ sourceId: deleteTargetId, expectedSourceRevision: deleteTarget.sourceRevision }]), /书源正在使用/u)
+  await repo.releaseSourceRuntimeLease(userId, deleteTargetId, deleteTarget.source.fingerprint, deleteLease.leaseToken)
+  const deletedRead = await observe(() => repo.applySourceActions(userId, 'delete', [{ sourceId: deleteTargetId, expectedSourceRevision: deleteTarget.sourceRevision }]))
+  assert.equal(deletedRead.value.affected, 1)
+  assert.ok(deletedRead.receivedBytes < 512, '删除一个来源只应读取目标状态和租约字段')
+
+  const currentTarget = (await repo.getSourceStatesForIds(userId, [targetSourceId]))[0]!
+  const importCandidates: ImportPreviewCandidate[] = definitions.map((definition, index) => ({
+    id: `egress-candidate-${index}`,
+    sourceId: definition.source_id,
+    name: `导入来源${index}`,
+    group: '小说',
+    fingerprint: definition.fingerprint,
+    normalizedSource: index === 0 ? { ...definition.normalized_source, bookSourceName: '导入后的来源' } : definition.normalized_source,
+    rawSource: definition.raw_source,
+    disposition: index === 0 ? 'update' : 'new',
+    ...(index === 0 ? { sourceRevision: currentTarget.sourceRevision } : {}),
+    reason: '可导入',
+  }))
+  const previewId = randomUUID()
+  await repo.saveImportPreview(userId, { previewId, expiresAt: new Date(Date.now() + 60_000).toISOString(), candidates: importCandidates, writableCount: importCandidates.length }, 'https://large-import.example/list.json')
+  const confirmedImport = await observe(() => repo.commitImportPreview(userId, previewId, [importCandidates[0]!.id]))
+  assert.equal(confirmedImport.value.imported, 1)
+  assert.equal(confirmedImport.value.updatedCount, 1)
+  const [batchCounts] = await admin`select updated_count, unselected_count from reader.source_import_batches where user_id = ${userId} and id = ${confirmedImport.value.batchId}`
+  assert.equal(batchCounts?.updated_count, 1)
+  assert.equal(batchCounts?.unselected_count, definitions.length - 1)
+  assert.ok(confirmedImport.receivedBytes < baseline * 0.2, '确认一个候选不应回传预览里的其余完整规则')
+  const undoPreview = await observe(() => repo.previewImportUndo(userId, confirmedImport.value.batchId))
+  assert.equal(undoPreview.value.items.length, 1)
+  assert.equal(undoPreview.value.items[0]?.canUndo, true)
+  assert.ok(undoPreview.receivedBytes < baseline * 0.2, '撤销预览只应读取目标旧规则快照和轻量冲突状态')
+  const undo = await observe(() => repo.undoImport(userId, confirmedImport.value.batchId, { idempotencyKey: randomUUID(), items: [{ itemId: undoPreview.value.items[0]!.itemId, expectedRevision: undoPreview.value.items[0]!.expectedRevision! }] }))
+  assert.equal(undo.value.affected, 1)
+  assert.equal(undo.value.undoStatus, 'all')
+  assert.ok(undo.receivedBytes < baseline * 0.2, '撤销一个候选不应读取完整书源集合')
+  const restoredTarget = (await repo.getSourceStatesForIds(userId, [targetSourceId]))[0]!
+  assert.deepEqual(restoredTarget.source.rawSource, definitions[0]!.raw_source)
+  assert.equal(restoredTarget.source.normalizedSource.customOrder, 20000)
+  assert.equal(restoredTarget.source.normalizedSource.bookSourceName, '已更新')
+  t.diagnostic(`1000 书源中本地目标状态返回 ${targetStatesRead.receivedBytes} 字节；单项禁用读取 ${disabledRead.receivedBytes}、写入 ${disabledRead.sentParameterBytes} 字节；排序读取 ${orderedRead.receivedBytes}、写入 ${orderedRead.sentParameterBytes} 字节；单候选确认读取 ${confirmedImport.receivedBytes}、写入 ${confirmedImport.sentParameterBytes} 字节；撤销预览读取 ${undoPreview.receivedBytes} 字节，撤销读取 ${undo.receivedBytes} 字节`)
 
   const chapters: Chapter[] = Array.from({ length: 10000 }, (_, index) => ({ sourceId: 'https://example', bookUrl: 'https://example/book', index, chapterUrl: `https://example/章节/${Math.floor(index / 2)}?q=中文📚`, title: `第${index}章`, isVip: false, ...(index === 100 ? { isVolume: true } : {}), rawFields: {}, traceRef: 'fixture' }))
   const savedToc = await observe(() => repo.saveToc(userId, { userId, bookId, editionKey: 'edition', sourceFingerprint: 'fp', revision: 'r1', chapters, bookPatch: { lastCheckTime: 0, totalChapterNum: chapters.length } }))

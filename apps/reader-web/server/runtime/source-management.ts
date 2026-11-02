@@ -45,7 +45,8 @@ export async function createImportPreview(repository: ReaderRepository, userId: 
     candidate.error.message = message
     for (const diagnostic of candidate.diagnostics) if (diagnostic.code === 'reader-failed') diagnostic.message = message
   }
-  const states = await repository.listSourceStatesForUser(userId)
+  const localSourceIds = [...new Set(candidates.flatMap((candidate) => candidate.source?.bookSourceUrl === undefined ? [] : [candidate.source.bookSourceUrl]))]
+  const states = await repository.getSourceStatesForIds(userId, localSourceIds)
   const localById = new Map(states.map((state) => [state.source.sourceId, state]))
   const previewCandidates = compareImportCandidates(candidates, localById)
   for (const candidate of previewCandidates) { const origin = origins.get(candidate.id); if (origin) candidate.originLocation = origin }

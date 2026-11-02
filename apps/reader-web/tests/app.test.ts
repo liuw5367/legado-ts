@@ -141,7 +141,7 @@ test('本地 JSON 导入通过真实认证和路由校验链接、限制请求�
   const { sourceDefinition } = await import('./fixtures/import-history.ts')
   const { IMPORT_FILE_MAX_BYTES, IMPORT_REQUEST_MAX_BYTES } = await import('../shared/source-import-limits.ts')
   const memory = new MemoryReaderRepository()
-  for (const method of ['listSourceStatesForUser', 'saveImportPreview', 'commitImportPreview'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
+  for (const method of ['getSourceStatesForIds', 'saveImportPreview', 'commitImportPreview'] as const) t.mock.method(PostgresReaderRepository.prototype, method, memory[method].bind(memory))
   const previousUrl = process.env.SUPABASE_URL; const previousKey = process.env.SUPABASE_PUBLISHABLE_KEY
   process.env.SUPABASE_URL = 'https://auth.example.test'; process.env.SUPABASE_PUBLISHABLE_KEY = 'fixture-key'
   t.after(() => { if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl; if (previousKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = previousKey })

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
-import type { ImportBatch, ImportConfirmResult, ImportHistoryItem, ImportHistoryQuery, ImportPreview, UndoImportInput, UndoPreviewItem } from '../../shared/source-management.ts'
+import type { ImportBatch, ImportCandidateDisposition, ImportConfirmResult, ImportHistoryItem, ImportHistoryQuery, ImportPreviewCandidate, UndoImportInput, UndoPreviewItem } from '../../shared/source-management.ts'
 import { sourceDomainInfo } from '../../shared/source-domain.ts'
 import type { ReaderTransaction } from './client.ts'
 import { sourceImportBatches as batches, sourceImportItems as items, sourceImportLinks as links, sourceImportSettings as settings, sourceImportUndoOperations as undoOperations, sourceRuntimeState, userSources } from './schema.ts'
@@ -9,6 +9,8 @@ import { decryptImportData, encryptImportData } from './runtime-state-crypto.ts'
 import { SourceManagementError } from './repository.ts'
 
 export type BeforeSource = Pick<UserSourceRow, 'sourceUuid' | 'sourceId' | 'fingerprint' | 'rawSource' | 'normalizedSource' | 'enabled' | 'customOrder' | 'deleted' | 'importLinkId' | 'currentImportItemId'>
+export type ImportHistoryCandidate = Pick<ImportPreviewCandidate, 'id' | 'sourceId' | 'name' | 'reason'> & { group?: string | null; disposition?: ImportCandidateDisposition | null; originLocation?: string | null }
+type PreviousSourceIdentity = Pick<UserSourceRow, 'sourceUuid' | 'sourceId' | 'revision' | 'enabled' | 'deleted'>
 type BatchRow = typeof batches.$inferSelect
 const batchSummaryColumns = { id: batches.id, linkId: batches.linkId, importedAt: batches.importedAt, imported: batches.imported, newCount: batches.newCount, updatedCount: batches.updatedCount, restoredCount: batches.restoredCount, skippedCount: batches.skippedCount, unselectedCount: batches.unselectedCount, undoStatus: batches.undoStatus, undoneAt: batches.undoneAt, invalidatedReason: batches.invalidatedReason }
 export const itemSummaryColumns = { id: items.id, sourceUuid: items.sourceUuid, sourceId: items.sourceId, name: items.name, group: items.group, action: items.action, reason: items.reason, displayUrl: items.displayUrl, afterRevision: items.afterRevision, undoneAt: items.undoneAt }
@@ -56,7 +58,7 @@ export async function committedImport(tx: ReaderTransaction, userId: string, pre
 }
 
 /** 调用者持有账号锁；本函数与实际书源变更必须使用同一事务。 */
-export async function recordImport(tx: ReaderTransaction, userId: string, previewId: string, sourceUrl: string, preview: ImportPreview, candidateIds: string[], previous: UserSourceRow[]) {
+export async function recordImport(tx: ReaderTransaction, userId: string, previewId: string, sourceUrl: string, previewCandidates: readonly ImportHistoryCandidate[], candidateIds: string[], previousIdentities: PreviousSourceIdentity[], selectedPrevious: UserSourceRow[]) {
   const info = importUrlInfo(sourceUrl)
   let [link] = await tx.select().from(links).where(and(eq(links.userId, userId), eq(links.urlKey, info.key)))
   if (!link) {
@@ -67,10 +69,11 @@ export async function recordImport(tx: ReaderTransaction, userId: string, previe
   if (!link) throw new Error('导入来源保存失败')
   const chosen = new Set(candidateIds)
   const counts = { imported: chosen.size, newCount: 0, updatedCount: 0, restoredCount: 0, skippedCount: 0, unselectedCount: 0 }
-  const previousById = new Map(previous.map((row) => [row.sourceId, row]))
+  const previousById = new Map(previousIdentities.map((row) => [row.sourceId, row]))
+  const selectedPreviousById = new Map(selectedPrevious.map((row) => [row.sourceId, row]))
   const batchId = randomUUID()
   const changes = new Map<string, { itemId: string; revision: string; sourceUuid: string }>()
-  const values = preview.candidates.map((candidate) => {
+  const values = previewCandidates.map((candidate) => {
     const selected = chosen.has(candidate.id)
     const action = selected ? candidate.disposition! : candidate.disposition ? 'unselected' as const : 'skipped' as const
     if (action === 'new') counts.newCount++
@@ -82,8 +85,10 @@ export async function recordImport(tx: ReaderTransaction, userId: string, previe
     const id = randomUUID(); const revision = selected ? randomUUID() : null
     const sourceUuid = prior?.sourceUuid ?? (selected ? randomUUID() : null)
     if (selected) changes.set(candidate.id, { itemId: id, revision: revision!, sourceUuid: sourceUuid! })
+    const priorFull = selected && prior !== undefined ? selectedPreviousById.get(candidate.sourceId) : undefined
+    if (selected && prior !== undefined && priorFull === undefined) throw new Error('导入前书源状态缺失')
     const origin = candidate.originLocation ?? sourceUrl
-    return { id, userId, batchId, sourceUuid, sourceId: candidate.sourceId, name: candidate.name, group: candidate.group ?? null, action, reason: candidate.reason, displayUrl: displayImportOrigin(origin), encryptedOrigin: encryptImportData(origin), beforeSnapshot: selected ? encryptImportData(prior ? beforeSource(prior) : null) : null, afterRevision: revision }
+    return { id, userId, batchId, sourceUuid, sourceId: candidate.sourceId, name: candidate.name, group: candidate.group ?? null, action, reason: candidate.reason, displayUrl: displayImportOrigin(origin), encryptedOrigin: encryptImportData(origin), beforeSnapshot: selected ? encryptImportData(priorFull ? beforeSource(priorFull) : null) : null, afterRevision: revision }
   })
   const [batch] = await tx.insert(batches).values({ id: batchId, userId, previewId, linkId: link.id, selection: candidateIds, ...counts }).returning()
   // 分块避免 Postgres 参数数量上限，仍位于同一导入事务中。
@@ -128,15 +133,19 @@ async function undoContext(tx: ReaderTransaction, userId: string, batchId: strin
   const { batch } = await requireBatch(tx, userId, batchId)
   const selected = await tx.select().from(items).where(and(eq(items.userId, userId), eq(items.batchId, batchId), itemIds ? inArray(items.id, itemIds) : inArray(items.action, ['new', 'update', 'restore'])))
   if (itemIds && (new Set(itemIds).size !== itemIds.length || selected.length !== itemIds.length)) throw new SourceManagementError('preview-invalid', '撤销列表包含无效明细')
-  const sources = await tx.select().from(userSources).where(eq(userSources.userId, userId))
-  const runtime = await tx.select({ sourceId: sourceRuntimeState.sourceId }).from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), sql`${sourceRuntimeState.leaseUntil} > now()`))
-  const byUuid = new Map(sources.map((row) => [row.sourceUuid, row]))
-  const busy = new Set(runtime.map((row) => row.sourceId))
   const restores = new Map<string, BeforeSource | null>(selected.map((item) => [item.id, item.beforeSnapshot ? decryptImportData<BeforeSource | null>(item.beforeSnapshot) : null]))
+  const sourceUuids = [...new Set(selected.flatMap((item) => item.sourceUuid === null ? [] : [item.sourceUuid]))]
+  const selectedSourceIds = [...new Set(selected.map((item) => item.sourceId))]
+  const currentRows = sourceUuids.length === 0 ? [] : await tx.select({ sourceUuid: userSources.sourceUuid, sourceId: userSources.sourceId, revision: userSources.revision, enabled: userSources.enabled, deleted: userSources.deleted }).from(userSources).where(and(eq(userSources.userId, userId), inArray(userSources.sourceUuid, sourceUuids)))
+  const needsDomainCheck = [...restores.values()].some((before) => before?.enabled === true && !before.deleted)
+  const activeSources = needsDomainCheck ? await tx.select({ sourceUuid: userSources.sourceUuid, sourceId: userSources.sourceId }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false))) : []
+  const runtime = selectedSourceIds.length === 0 ? [] : await tx.select({ sourceId: sourceRuntimeState.sourceId }).from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), inArray(sourceRuntimeState.sourceId, selectedSourceIds), sql`${sourceRuntimeState.leaseUntil} > now()`))
+  const byUuid = new Map(currentRows.map((row) => [row.sourceUuid, row]))
+  const busy = new Set(runtime.map((row) => row.sourceId))
   const preview: UndoPreviewItem[] = selected.map((item) => {
     const current = item.sourceUuid ? byUuid.get(item.sourceUuid) : undefined
     const before = restores.get(item.id)
-    const conflict = before?.enabled === true && !before.deleted && sources.some((row) => row.sourceUuid !== item.sourceUuid && row.enabled && !row.deleted && sourceDomainInfo(row.sourceId).key === sourceDomainInfo(item.sourceId).key)
+    const conflict = before?.enabled === true && !before.deleted && activeSources.some((row) => row.sourceUuid !== item.sourceUuid && sourceDomainInfo(row.sourceId).key === sourceDomainInfo(item.sourceId).key)
     const reason = undoReason(item, current, batch.invalidatedReason, busy.has(item.sourceId), conflict)
     return { itemId: item.id, name: item.name, action: item.action, expectedRevision: current?.revision ?? null, canUndo: !reason, reason }
   })

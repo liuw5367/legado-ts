@@ -122,6 +122,7 @@ export interface ReaderRepository {
   listSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
   listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
   listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>>
+  getSourceStatesForIds(userId: string, sourceIds: string[]): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>>
   getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null>
   getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined>
   getSourceManagementStats(userId: string): Promise<SourceManagementStats>
@@ -358,6 +359,14 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
+  public async getSourceStatesForIds(userId: string, sourceIds: string[]): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> {
+    if (sourceIds.length === 0) return []
+    return withUser(userId, async (transaction) => {
+      const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), inArray(userSources.sourceId, sourceIds)))
+      return rows.map((row) => ({ source: toUserSource(row), sourceRevision: row.revision, ...(row.deleted ? { deleted: true } : {}) }))
+    })
+  }
+
   public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> {
     return withUser(userId, async (transaction) => {
       const [row] = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sourceId), eq(userSources.enabled, true), eq(userSources.deleted, false))).limit(1)
@@ -405,10 +414,13 @@ export class PostgresReaderRepository implements ReaderRepository {
   public async applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }> {
     return withUser(userId, async (transaction) => {
       await lockUserSourceMutations(transaction, userId)
-      const overrides = await transaction.select().from(userSources).where(eq(userSources.userId, userId)).for('update')
-      const overrideById = new Map(overrides.map((row) => [row.sourceId, row]))
+      const targetIds = items.map((item) => item.sourceId)
+      const targets = targetIds.length === 0 ? [] : await transaction.select({ sourceId: userSources.sourceId, revision: userSources.revision, enabled: userSources.enabled, deleted: userSources.deleted, normalizedOrder: sql<unknown>`${userSources.normalizedSource}->'customOrder'` }).from(userSources).where(and(eq(userSources.userId, userId), inArray(userSources.sourceId, targetIds))).for('update')
+      const targetById = new Map(targets.map((row) => [row.sourceId, row]))
+      const enabledSiblings = action === 'enable' ? await transaction.select({ sourceId: userSources.sourceId, revision: userSources.revision }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.enabled, true), eq(userSources.deleted, false))).for('update') : []
       const seen = new Set<string>()
       const enabledDomains = new Set<string>()
+      const selectedIds = new Set(targetIds)
       for (const item of items) {
         if (seen.has(item.sourceId)) throw new SourceManagementError('source-conflict', '操作列表包含重复书源')
         seen.add(item.sourceId)
@@ -417,36 +429,23 @@ export class PostgresReaderRepository implements ReaderRepository {
           if (enabledDomains.has(domainKey)) throw new SourceManagementError('source-conflict', '同一域名只能启用一个书源版本')
           enabledDomains.add(domainKey)
         }
-        const override = overrideById.get(item.sourceId)
+        const override = targetById.get(item.sourceId)
         if (override === undefined || override.deleted) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
-        const current = toUserSource(override)
         if (override.revision !== item.expectedSourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请刷新后重试：${item.sourceId}`)
         const nextEnabled = action === 'enable'
         if (action === 'delete') {
-          const runtimeRows = await transaction.select().from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, current.sourceId))).for('update')
+          const runtimeRows = await transaction.select({ leaseUntil: sourceRuntimeState.leaseUntil }).from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, item.sourceId))).for('update')
           if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${item.sourceId}`)
-          await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, current.sourceId)))
+          await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, item.sourceId)))
         }
         if (action === 'enable') {
-          const selectedIds = new Set(items.map((entry) => entry.sourceId))
-          for (const sibling of overrides) {
-            if (sibling.deleted || !sibling.enabled || selectedIds.has(sibling.sourceId) || sourceDomainInfo(sibling.sourceId).key !== domainKey) continue
+          for (const sibling of enabledSiblings) {
+            if (selectedIds.has(sibling.sourceId) || sourceDomainInfo(sibling.sourceId).key !== domainKey) continue
             const updated = await transaction.update(userSources).set({ enabled: false, revision: randomUUID(), updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, sibling.sourceId), eq(userSources.revision, sibling.revision))).returning({ sourceId: userSources.sourceId })
             if (updated.length === 0) throw new SourceManagementError('source-conflict', `同域书源已更新，请刷新后重试：${sibling.sourceId}`)
           }
         }
-        await transaction.insert(userSources).values({
-          userId,
-          sourceId: current.sourceId,
-          fingerprint: current.fingerprint,
-          rawSource: current.rawSource,
-          normalizedSource: current.normalizedSource,
-          enabled: action === 'delete' ? current.enabled : nextEnabled,
-          customOrder: readInteger(current.normalizedSource.customOrder, 0),
-          deleted: action === 'delete',
-          revision: randomUUID(),
-          updatedAt: new Date(),
-        }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: sql.raw('excluded."deleted"'), revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
+        await transaction.update(userSources).set({ ...(action === 'delete' ? { deleted: true } : { enabled: nextEnabled }), customOrder: readInteger(override.normalizedOrder, 0), revision: randomUUID(), updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, item.sourceId), eq(userSources.revision, item.expectedSourceRevision)))
       }
       return { affected: items.length }
     })
@@ -455,7 +454,8 @@ export class PostgresReaderRepository implements ReaderRepository {
   public async applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }> {
     return withUser(userId, async (transaction) => {
       await lockUserSourceMutations(transaction, userId)
-      const rows = await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false))).for('update')
+      const targetIds = items.map((item) => item.sourceId)
+      const rows = targetIds.length === 0 ? [] : await transaction.select({ sourceId: userSources.sourceId, revision: userSources.revision }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false), inArray(userSources.sourceId, targetIds))).for('update')
       const byId = new Map(rows.map((row) => [row.sourceId, row]))
       const seen = new Set<string>()
       for (const item of items) {
@@ -464,8 +464,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         const current = byId.get(item.sourceId)
         if (current === undefined) throw new SourceManagementError('source-not-found', `书源不存在：${item.sourceId}`)
         if (current.revision !== item.expectedSourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请刷新后重试：${item.sourceId}`)
-        const normalizedSource = { ...current.normalizedSource, customOrder: item.customOrder }
-        await transaction.update(userSources).set({ customOrder: item.customOrder, normalizedSource, revision: randomUUID(), updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, item.sourceId), eq(userSources.revision, item.expectedSourceRevision)))
+        await transaction.update(userSources).set({ customOrder: item.customOrder, normalizedSource: sql`jsonb_set(${userSources.normalizedSource}, '{customOrder}', to_jsonb(${item.customOrder}::integer), true)`, revision: randomUUID(), updatedAt: new Date() }).where(and(eq(userSources.userId, userId), eq(userSources.sourceId, item.sourceId), eq(userSources.revision, item.expectedSourceRevision)))
       }
       return { affected: items.length }
     })
@@ -491,26 +490,36 @@ export class PostgresReaderRepository implements ReaderRepository {
       await lockUserSourceMutations(transaction, userId)
       const committed = await importHistory.committedImport(transaction, userId, previewId, candidateIds)
       if (committed) return committed
-      const [previewRow] = await transaction.select().from(sourceImportPreviews).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId))).limit(1).for('update')
+      const selectedCandidateFilter = candidateIds.length === 0 ? sql`false` : sql`entry.candidate->>'id' in (${sql.join(candidateIds.map((candidateId) => sql`${candidateId}`), sql`, `)})`
+      const [previewRow] = await transaction.select({
+        id: sourceImportPreviews.id,
+        sourceUrl: sourceImportPreviews.sourceUrl,
+        expiresAt: sourceImportPreviews.expiresAt,
+        consumedCandidateIds: sourceImportPreviews.consumedCandidateIds,
+        selectedCandidates: sql<ImportPreviewCandidate[]>`coalesce((select jsonb_agg(entry.candidate order by entry.ordinality) from jsonb_array_elements(${sourceImportPreviews.candidates}) with ordinality as entry(candidate, ordinality) where ${selectedCandidateFilter}), '[]'::jsonb)`,
+        historyCandidates: sql<importHistory.ImportHistoryCandidate[]>`coalesce((select jsonb_agg(jsonb_build_object('id', entry.candidate->>'id', 'sourceId', entry.candidate->>'sourceId', 'name', entry.candidate->>'name', 'group', entry.candidate->'group', 'disposition', entry.candidate->'disposition', 'reason', entry.candidate->>'reason', 'originLocation', entry.candidate->>'originLocation') order by entry.ordinality) from jsonb_array_elements(${sourceImportPreviews.candidates}) with ordinality as entry(candidate, ordinality)), '[]'::jsonb)`,
+      }).from(sourceImportPreviews).where(and(eq(sourceImportPreviews.userId, userId), eq(sourceImportPreviews.id, previewId))).limit(1).for('update')
       if (previewRow === undefined || previewRow.expiresAt.getTime() <= Date.now()) throw new SourceManagementError('preview-expired', '导入预览已过期，请重新获取')
       const previousIds = previewRow.consumedCandidateIds
       if (previousIds.length > 0) {
         if (sameStringSet(previousIds, candidateIds)) throw new SourceManagementError('preview-invalid', '旧版预览已确认，请查看书源列表')
         throw new SourceManagementError('preview-invalid', '导入预览已经确认过')
       }
-      const candidates = (previewRow.candidates as ImportPreviewCandidate[]).filter((candidate) => candidateIds.includes(candidate.id))
+      const candidates = previewRow.selectedCandidates
       if (candidates.length !== candidateIds.length || candidates.some((candidate) => candidate.disposition === undefined)) throw new SourceManagementError('preview-invalid', '确认列表包含不可导入的书源')
-      const overrides = await transaction.select().from(userSources).where(eq(userSources.userId, userId)).for('update')
-      const overrideById = new Map(overrides.map((row) => [row.sourceId, row]))
-      const importEnabled = decideImportedSourceEnabled(candidates, new Map(overrides.map((row) => [row.sourceId, { enabled: row.enabled, deleted: row.deleted }])))
-      const history = await importHistory.recordImport(transaction, userId, previewId, previewRow.sourceUrl, { previewId, expiresAt: previewRow.expiresAt.toISOString(), candidates: previewRow.candidates as ImportPreviewCandidate[], writableCount: candidates.length }, candidateIds, overrides)
+      const identities = await transaction.select({ sourceId: userSources.sourceId, sourceUuid: userSources.sourceUuid, revision: userSources.revision, enabled: userSources.enabled, deleted: userSources.deleted }).from(userSources).where(eq(userSources.userId, userId)).for('update')
+      const selectedSourceIds = [...new Set(candidates.map((candidate) => candidate.sourceId))]
+      const selectedOverrides = selectedSourceIds.length === 0 ? [] : await transaction.select().from(userSources).where(and(eq(userSources.userId, userId), inArray(userSources.sourceId, selectedSourceIds))).for('update')
+      const overrideById = new Map(selectedOverrides.map((row) => [row.sourceId, row]))
+      const importEnabled = decideImportedSourceEnabled(candidates, new Map(identities.map((row) => [row.sourceId, { enabled: row.enabled, deleted: row.deleted }])))
+      const history = await importHistory.recordImport(transaction, userId, previewId, previewRow.sourceUrl, previewRow.historyCandidates, candidateIds, identities, selectedOverrides)
       for (const candidate of candidates) {
         const current = overrideById.get(candidate.sourceId)
         const currentRevision = current?.revision
         if (candidate.sourceRevision === undefined ? currentRevision !== undefined : currentRevision !== candidate.sourceRevision) throw new SourceManagementError('source-conflict', `书源已更新，请重新获取预览：${candidate.name}`)
         const currentSource = current === undefined ? undefined : toUserSource(current)
         const normalizedSource = mergeImportedSource(currentSource, candidate.normalizedSource as NormalizedSource)
-        const runtimeRows = await transaction.select().from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId))).for('update')
+        const runtimeRows = await transaction.select({ leaseUntil: sourceRuntimeState.leaseUntil }).from(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId))).for('update')
         if (runtimeRows.some((row) => row.leaseUntil !== null && row.leaseUntil.getTime() > Date.now())) throw new SourceManagementError('source-busy', `书源正在使用，请稍后重试：${candidate.name}`)
         if (currentSource !== undefined && currentSource.fingerprint !== candidate.fingerprint) await transaction.delete(sourceRuntimeState).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, candidate.sourceId)))
         await transaction.insert(userSources).values({ userId, sourceId: candidate.sourceId, fingerprint: candidate.fingerprint, rawSource: candidate.rawSource, sourceUuid: history.changes.get(candidate.id)!.sourceUuid, importLinkId: history.linkId, currentImportItemId: history.changes.get(candidate.id)!.itemId, normalizedSource, enabled: importEnabled.get(candidate.id) ?? false, customOrder: readInteger(currentSource?.normalizedSource.customOrder, 0), deleted: false, revision: history.changes.get(candidate.id)!.revision, updatedAt: new Date() }).onConflictDoUpdate({ target: [userSources.userId, userSources.sourceId], set: { importLinkId: history.linkId, currentImportItemId: sql.raw('excluded."current_import_item_id"'), fingerprint: sql.raw('excluded."fingerprint"'), rawSource: sql.raw('excluded."raw_source"'), normalizedSource: sql.raw('excluded."normalized_source"'), enabled: sql.raw('excluded."enabled"'), customOrder: sql.raw('excluded."custom_order"'), deleted: false, revision: sql.raw('excluded."revision"'), updatedAt: new Date() } })
@@ -1276,6 +1285,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async listSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.withPriority(userId, selectOneSourcePerDomain(this.allSources(userId).filter((source) => source.enabled), compareStoredSourceManagementOrder)) }
   public async listAllSourcesForUser(userId: string): Promise<StoredSourceRecord[]> { return this.withPriority(userId, this.allSources(userId)) }
   public async listSourceStatesForUser(userId: string): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { return this.allSourceStates(userId).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), deleted })) }
+  public async getSourceStatesForIds(userId: string, sourceIds: string[]): Promise<Array<{ source: StoredSourceRecord; sourceRevision: string; deleted?: boolean }>> { const selected = new Set(sourceIds); return this.allSourceStates(userId).filter(({ source }) => selected.has(source.sourceId)).map(({ source, deleted }) => ({ source, sourceRevision: this.sourceRevision(userId, source.sourceId), ...(deleted ? { deleted: true } : {}) })) }
   public async getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null> { const row = this.userSourceMap.get(`${userId}:${sourceId}`); if (!row || row.deleted || !row.source.enabled) return null; const priority = this.importHistory.links.get(userId)?.find((link) => link.id === row.source.importLinkId)?.sortOrder ?? Number.MAX_SAFE_INTEGER; return { ...row.source, sourceRevision: row.revision, priority } }
   public async getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined> { return this.allSources(userId).find((source) => source.sourceId === sourceId)?.normalizedSource.bookSourceName }
   public async getSourceManagementStats(userId: string): Promise<SourceManagementStats> {
