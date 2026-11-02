@@ -625,9 +625,12 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async updateSearch(userId: string, searchId: string, patch: { knownRun?: SearchRunState; status?: SearchRunState['status']; candidates?: StoredCandidate[]; sourceStates?: SourceSearchState[]; sourceIds?: string[]; cursor?: PageCursor; nextCursor?: PageCursor; operationId?: string | null; expectedOperationId?: string; progress?: { completed: number; total: number }; cancelled?: boolean }): Promise<SearchRunState | null> {
     return withUser(userId, async (transaction) => {
+      const candidateDelta = patch.candidates === undefined || patch.knownRun === undefined ? undefined : buildSearchCandidateDelta(patch.knownRun.candidates, patch.candidates)
+      const useCandidateDelta = candidateDelta !== undefined
       const [row] = await transaction.update(searchRuns).set({
         ...(patch.status === undefined ? {} : { status: patch.status }),
-        ...(patch.candidates === undefined ? {} : { candidates: patch.candidates }),
+        // 差量中的负整数引用旧 candidates 下标，对象是完整的新候选；SQL 在数据库内按序重组。
+        ...(patch.candidates === undefined ? {} : useCandidateDelta ? { candidates: sql`(select coalesce(jsonb_agg(case when jsonb_typeof(entry.value) = 'number' then ${searchRuns.candidates} -> ((entry.value #>> '{}')::integer * -1 - 1) else entry.value end order by entry.ordinality), '[]'::jsonb) from jsonb_array_elements(${candidateDelta}::jsonb) with ordinality as entry(value, ordinality))` } : { candidates: patch.candidates }),
         ...(patch.sourceStates === undefined ? {} : { sourceStates: compactSearchStates(patch.sourceStates) }),
         ...(patch.sourceIds === undefined ? {} : { sourceIds: patch.sourceIds }),
         ...(patch.cursor === undefined ? {} : { cursor: patch.cursor }),
@@ -637,7 +640,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         ...(patch.cancelled === undefined ? {} : { cancelled: patch.cancelled }),
         updatedAt: new Date(),
         version: sql`${searchRuns.version} + 1`,
-      }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), ...(patch.expectedOperationId === undefined ? [] : [eq(searchRuns.operationId, patch.expectedOperationId)]))).returning({ ...getTableColumns(searchRuns), ...(patch.knownRun ? { candidates: sql<StoredCandidate[]>`'[]'::jsonb`, sourceStates: sql<SourceSearchState[]>`'[]'::jsonb` } : {}) })
+      }).where(and(eq(searchRuns.userId, userId), eq(searchRuns.id, searchId), ...(patch.expectedOperationId === undefined ? [] : [eq(searchRuns.operationId, patch.expectedOperationId)]), ...(useCandidateDelta ? [eq(searchRuns.version, patch.knownRun!.version)] : []))).returning({ ...getTableColumns(searchRuns), ...(patch.knownRun ? { candidates: sql<StoredCandidate[]>`'[]'::jsonb`, sourceStates: sql<SourceSearchState[]>`'[]'::jsonb` } : {}) })
       // 已有快照经过 operationId 条件校验，复用应用持有的数据，避免数据库重复返回整份大结果。
       if (row !== undefined && patch.knownRun) {
         row.candidates = patch.candidates ?? patch.knownRun.candidates
@@ -1838,6 +1841,42 @@ function toBook(row: BookRow): StoredBook { return { latestChapterIndex: row.lat
 function toEdition(row: BookEditionRow): StoredEdition { return { id: row.id, userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceId: row.sourceId, sourceFingerprint: row.sourceFingerprint, bookUrl: row.bookUrl, metadata: row.metadata, ...(row.variable === null ? {} : { variable: row.variable }) } }
 // 结果只存于 candidates；逐源状态保存元数据，读取时共享同一批候选对象，避免 JSON 重复存储和解析。
 function compactSearchStates(states: SourceSearchState[]): SourceSearchState[] { return states.map((state) => ({ ...state, candidates: [] })) }
+// 重复候选按出现次数逐个消费旧下标；仅当差量 JSON 更小时才选择它。
+function buildSearchCandidateDelta(previous: StoredCandidate[], next: StoredCandidate[]): string | undefined {
+  const indicesByCandidate = new Map<string, number[]>()
+  previous.forEach((candidate, index) => {
+    const key = canonicalJson(candidate)
+    const indices = indicesByCandidate.get(key) ?? []
+    indices.push(index)
+    indicesByCandidate.set(key, indices)
+  })
+  const nextIndexByKey = new Map<string, number>()
+  const instructions = next.map((candidate) => {
+    const key = canonicalJson(candidate)
+    const indices = indicesByCandidate.get(key)
+    const offset = nextIndexByKey.get(key) ?? 0
+    if (indices !== undefined && offset < indices.length) {
+      nextIndexByKey.set(key, offset + 1)
+      return -(indices[offset]! + 1)
+    }
+    return candidate
+  })
+  const fullJson = JSON.stringify(next)
+  const deltaJson = JSON.stringify(instructions)
+  return Buffer.byteLength(deltaJson) < Buffer.byteLength(fullJson) ? deltaJson : undefined
+}
+function canonicalJson(value: unknown): string {
+  if (value === null) return 'null'
+  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
+  if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(value) : 'null'
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const entries = Object.keys(record).filter((key) => record[key] !== undefined).sort()
+    return `{${entries.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`
+  }
+  return 'null'
+}
 function toSearch(row: SearchRunRow): SearchRunState {
   const candidatesBySource = new Map<string, StoredCandidate[]>()
   for (const candidate of row.candidates) {

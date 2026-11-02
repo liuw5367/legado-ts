@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { MemoryReaderRepository, PostgresReaderRepository } from '../../server/db/repository.ts'
 import { closeReaderDb, getReaderDb } from '../../server/db/client.ts'
+import type { StoredCandidate } from '../../server/domain/types.ts'
 import { chapterIdFor, createReaderRuntime } from '../../server/runtime/reader-runtime.ts'
 import { listDiscoverySources } from '../../server/runtime/discovery.ts'
 import type { ImportPreviewCandidate } from '../../shared/source-management.ts'
@@ -24,6 +25,8 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   const previousRuntimeKey = process.env.SOURCE_RUNTIME_STATE_KEY
   t.after(async () => {
     await closeReaderDb()
+    await admin`delete from reader.search_history where user_id = ${userId}`
+    await admin`delete from reader.search_runs where user_id = ${userId}`
     await admin`delete from reader.source_import_undo_operations where user_id = ${userId}`
     await admin`delete from reader.source_import_items where user_id = ${userId}`
     await admin`delete from reader.source_import_batches where user_id = ${userId}`
@@ -196,6 +199,81 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   assert.equal(restoredTarget.source.normalizedSource.customOrder, 20000)
   assert.equal(restoredTarget.source.normalizedSource.bookSourceName, '已更新')
   t.diagnostic(`1000 书源中本地目标状态返回 ${targetStatesRead.receivedBytes} 字节；单项禁用读取 ${disabledRead.receivedBytes}、写入 ${disabledRead.sentParameterBytes} 字节；排序读取 ${orderedRead.receivedBytes}、写入 ${orderedRead.sentParameterBytes} 字节；单候选确认读取 ${confirmedImport.receivedBytes}、写入 ${confirmedImport.sentParameterBytes} 字节；撤销预览读取 ${undoPreview.receivedBytes} 字节，撤销读取 ${undo.receivedBytes} 字节`)
+
+  const searchSources = Array.from({ length: 8 }, (_, index) => `https://search-${index}.example/source`)
+  const searchCandidate = (index: number, variant = 'stable'): StoredCandidate => {
+    const sourceId = searchSources[index % searchSources.length]!
+    return {
+      sourceId,
+      sourceFingerprint: `search-fingerprint-${index % searchSources.length}`,
+      searchDurationMs: index + 1,
+      candidate: {
+        sourceId,
+        bookUrl: `https://books.example/${index}`,
+        name: `搜索结果${index}`,
+        author: `作者${index % 5}`,
+        variable: `variable-${index}-${variant}`,
+        rawFields: { payload: '候选原始字段'.repeat(96), marker: `${index}-${variant}` },
+        traceRef: `search-${index}`,
+      },
+    }
+  }
+  const stateFor = (candidates: StoredCandidate[], completedSources = searchSources.length) => searchSources.map((sourceId, index) => ({ sourceId, status: index < completedSources ? 'success' as const : 'pending' as const, candidates: candidates.filter((candidate) => candidate.sourceId === sourceId), diagnostics: [] }))
+  const initialCandidates = Array.from({ length: 72 }, (_, index) => searchCandidate(index))
+  initialCandidates.push(structuredClone(initialCandidates[7]!), structuredClone(initialCandidates[7]!))
+  const search = await repo.createSearch(userId, { keyword: '搜索结果', sourceId: searchSources[0]!, sourceIds: searchSources })
+  const initialStates = stateFor(initialCandidates, 5)
+  const initialRun = (await repo.updateSearch(userId, search.id, { knownRun: search, sourceStates: initialStates, candidates: initialCandidates, status: 'running' }))!
+  assert.deepEqual((await repo.getSearch(userId, search.id))?.candidates, initialCandidates)
+  const operationId = randomUUID()
+  const claimedRun = await repo.claimSearch(userId, search.id, operationId, initialStates, { completed: 5, total: searchSources.length }, initialRun.version, initialRun)
+  assert.ok(claimedRun)
+  const firstFlushCandidates = [...initialCandidates].reverse()
+  firstFlushCandidates[0] = { ...firstFlushCandidates[0]!, candidate: { ...firstFlushCandidates[0]!.candidate, variable: 'variable-7-replaced' } }
+  const sameJsonDifferentKeyOrder = initialCandidates[3]!
+  const reorderedJsonCandidate = {
+    candidate: Object.fromEntries(Object.entries(sameJsonDifferentKeyOrder.candidate).reverse()),
+    searchDurationMs: sameJsonDifferentKeyOrder.searchDurationMs,
+    sourceFingerprint: sameJsonDifferentKeyOrder.sourceFingerprint,
+    sourceId: sameJsonDifferentKeyOrder.sourceId,
+  } as StoredCandidate
+  firstFlushCandidates[firstFlushCandidates.indexOf(sameJsonDifferentKeyOrder)] = reorderedJsonCandidate
+  const sameUrlCandidate = initialCandidates[20]!
+  const sameUrlDifferentVariable = {
+    ...sameUrlCandidate,
+    candidate: { ...sameUrlCandidate.candidate, variable: 'different-variable', rawFields: { ...sameUrlCandidate.candidate.rawFields, changed: 'different raw fields' } },
+  }
+  firstFlushCandidates[firstFlushCandidates.indexOf(sameUrlCandidate)] = sameUrlDifferentVariable
+  firstFlushCandidates.splice(10, 1)
+  firstFlushCandidates.push(searchCandidate(1000))
+  const firstFlushStates = stateFor(firstFlushCandidates, 6)
+  const firstFlush = await observe(() => repo.updateSearch(userId, search.id, { knownRun: claimedRun, expectedOperationId: operationId, operationId, sourceStates: firstFlushStates, candidates: firstFlushCandidates, status: 'running', progress: { completed: 6, total: searchSources.length } }))
+  assert.ok(firstFlush.value)
+  assert.deepEqual(firstFlush.value.candidates, firstFlushCandidates)
+  assert.deepEqual(firstFlush.value.sourceStates, firstFlushStates, '逐来源检查点仍应按完整候选快照恢复')
+  const initialCandidateBytes = bytes(initialCandidates)
+  assert.ok(firstFlush.sentParameterBytes < initialCandidateBytes * 0.25, '多数候选不变时数据库参数应主要包含旧数组索引')
+  assert.ok(firstFlush.receivedBytes < initialCandidateBytes * 0.05, '持有 knownRun 时不应从数据库回读完整候选正文')
+
+  const secondFlushCandidates = [...firstFlushCandidates.slice(12), ...firstFlushCandidates.slice(0, 12), searchCandidate(1001)]
+  const secondFlushStates = stateFor(secondFlushCandidates, 7)
+  const secondFlush = await observe(() => repo.updateSearch(userId, search.id, { knownRun: firstFlush.value!, expectedOperationId: operationId, operationId, sourceStates: secondFlushStates, candidates: secondFlushCandidates, status: 'running', progress: { completed: 7, total: searchSources.length } }))
+  assert.ok(secondFlush.value)
+  assert.deepEqual((await repo.getSearch(userId, search.id))?.candidates, secondFlushCandidates, '第二次来源完成后的快照也必须完整可恢复')
+  assert.deepEqual(secondFlush.value.sourceStates, secondFlushStates)
+
+  const staleDelta = await repo.updateSearch(userId, search.id, { knownRun: claimedRun, expectedOperationId: operationId, candidates: [...initialCandidates, searchCandidate(1002)], status: 'running' })
+  assert.equal(staleDelta, null, 'knownRun 版本过期时不能用旧索引重组或覆盖当前结果')
+  assert.deepEqual((await repo.getSearch(userId, search.id))?.candidates, secondFlushCandidates)
+
+  const fallbackCandidates = [searchCandidate(2000)]
+  const fallbackFlush = await observe(() => repo.updateSearch(userId, search.id, { knownRun: secondFlush.value!, expectedOperationId: operationId, operationId: null, sourceStates: stateFor(fallbackCandidates), candidates: fallbackCandidates, status: 'success', progress: { completed: searchSources.length, total: searchSources.length } }))
+  assert.ok(fallbackFlush.value)
+  assert.ok(fallbackFlush.sentParameterBytes >= bytes(fallbackCandidates), '全量序列化较小时应自动回退完整写入')
+  assert.deepEqual((await repo.getSearch(userId, search.id))?.candidates, fallbackCandidates)
+  const emptyFlush = await repo.updateSearch(userId, search.id, { knownRun: fallbackFlush.value, candidates: [], sourceStates: stateFor([]), status: 'empty' })
+  assert.deepEqual(emptyFlush?.candidates, [], '空搜索结果应明确持久化为空数组')
+  t.diagnostic(`搜索候选 ${initialCandidates.length} 项，完整 JSON 参数 ${initialCandidateBytes} 字节；首次重排增量参数 ${firstFlush.sentParameterBytes} 字节/读取 ${firstFlush.receivedBytes} 字节/耗时 ${firstFlush.elapsedMs.toFixed(1)} ms；第二次增量参数 ${secondFlush.sentParameterBytes} 字节/读取 ${secondFlush.receivedBytes} 字节/耗时 ${secondFlush.elapsedMs.toFixed(1)} ms；全量回退参数 ${fallbackFlush.sentParameterBytes} 字节/耗时 ${fallbackFlush.elapsedMs.toFixed(1)} ms`)
 
   const chapters: Chapter[] = Array.from({ length: 10000 }, (_, index) => ({ sourceId: 'https://example', bookUrl: 'https://example/book', index, chapterUrl: `https://example/章节/${Math.floor(index / 2)}?q=中文📚`, title: `第${index}章`, isVip: false, ...(index === 100 ? { isVolume: true } : {}), rawFields: {}, traceRef: 'fixture' }))
   const savedToc = await observe(() => repo.saveToc(userId, { userId, bookId, editionKey: 'edition', sourceFingerprint: 'fp', revision: 'r1', chapters, bookPatch: { lastCheckTime: 0, totalChapterNum: chapters.length } }))
