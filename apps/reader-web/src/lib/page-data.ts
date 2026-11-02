@@ -12,7 +12,7 @@ export function publishPageMutation(mutation: PageMutation) {
 export function mutationDomains(path: string, method: string): string[] {
   if (method === 'GET' || method === 'HEAD') return []
   const parts = path.split('?')[0]!.split('/').filter(Boolean)
-  if (parts[1] === 'source-management' && (parts[2] === 'import-preview' || parts.at(-1) === 'undo-preview')) return []
+  if (parts[1] === 'source-management' && (parts[2] === 'query' || parts[2] === 'import-preview' || parts.at(-1) === 'undo-preview')) return []
   if (parts[1] === 'source-management' || parts[1] === 'sources') return ['sources', 'discovery', 'bookshelf', 'reading-history', 'books', 'content']
   if (parts[1] === 'searches' || parts[1] === 'search-history') return ['search-history', ...(parts[1] === 'searches' ? ['candidates'] : [])]
   if (parts[1] === 'discovery' && parts[2] === 'books') return ['books', 'candidates']

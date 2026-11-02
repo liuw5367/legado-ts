@@ -9,6 +9,7 @@ export const sourceManagementPageSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(50).default(50),
   query: z.string().trim().max(200).default(''),
   status: sourceManagementStatusSchema.default('all'),
+  sourceIds: z.array(z.string().trim().min(1).max(2000)).max(1000).optional(),
 })
 
 export const sourceActionSchema = z.object({

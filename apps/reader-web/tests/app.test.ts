@@ -43,6 +43,7 @@ test('book details, source summaries, and review endpoints reject unauthenticate
     const response = await app.request('http://localhost' + path)
     assert.equal(response.status, 401)
   }
+  assert.equal((await app.request('http://localhost/api/source-management/query', { method: 'POST', body: '{}' })).status, 401)
 })
 
 test('all discovery endpoints reject unauthenticated requests', async () => {
@@ -262,6 +263,9 @@ test('同域版本接口只返回该账号相关版本的精简摘要', async (t
   assert.equal(page.sources[0].sourceId, source.sourceId)
   assert.equal('fingerprint' in page.sources[0], false)
   assert.equal('importDisplayUrl' in page.sources[0], false)
+  const selected = await app.request('/api/source-management/query', { method: 'POST', headers: { Authorization: 'Bearer owner-domain' }, body: JSON.stringify({ sourceIds: [source.sourceId] }) })
+  assert.equal(selected.status, 200)
+  assert.deepEqual((await selected.json()).sources.map((item: { sourceId: string }) => item.sourceId), [source.sourceId])
   const other = await app.request(path, { headers: { Authorization: 'Bearer other-domain' } })
   assert.deepEqual((await other.json()).sources, [])
   const unrelated = await app.request('/api/source-management?all=true&domain=https%3A%2F%2Funrelated.test', { headers: { Authorization: 'Bearer owner-domain' } })

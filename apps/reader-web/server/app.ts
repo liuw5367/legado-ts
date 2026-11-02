@@ -83,9 +83,19 @@ app.get('/api/source-management/stats', async (context) => {
 app.get('/api/source-management', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected
-  const parsed = sourceManagementPageSchema.safeParse({ domain: context.req.query('domain'), all: context.req.query('all'), page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status') })
+  const sourceIds = context.req.queries('sourceIds')
+  const parsed = sourceManagementPageSchema.safeParse({ domain: context.req.query('domain'), all: context.req.query('all'), page: context.req.query('page'), pageSize: context.req.query('pageSize'), query: context.req.query('query'), status: context.req.query('status'), ...(sourceIds === undefined || sourceIds.length === 0 ? {} : { sourceIds }) })
   if (!parsed.success) return context.json({ error: { code: 'invalid-input', message: '书源列表参数无效' } }, 400)
   try { const result = await dependencies.repository.listManagedSources(context.get('userId'), parsed.data); return context.json(parsed.data.domain === undefined ? result : { ...result, sources: result.sources.map(readingSourceSummary) }) } catch (error) { return handleError(context, error) }
+})
+
+app.post('/api/source-management/query', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  const body = await context.req.json().catch(() => undefined)
+  const parsed = sourceManagementPageSchema.pick({ sourceIds: true }).safeParse(body)
+  if (!parsed.success || parsed.data.sourceIds === undefined || parsed.data.sourceIds.length === 0) return context.json({ error: { code: 'invalid-input', message: '书源列表参数无效' } }, 400)
+  try { return context.json(await dependencies.repository.listManagedSources(context.get('userId'), { page: 1, pageSize: 50, query: '', status: 'all', all: true, sourceIds: parsed.data.sourceIds })) } catch (error) { return handleError(context, error) }
 })
 
 app.get('/api/discovery/sources', async (context) => {

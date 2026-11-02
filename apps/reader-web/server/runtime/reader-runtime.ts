@@ -364,12 +364,12 @@ async function setBookCover(repository: ReaderRepository, userId: string, bookId
 async function openBookSource(repository: ReaderRepository, userId: string, bookId: string, candidateId: string, signal?: AbortSignal): Promise<StoredEdition> {
   signal?.throwIfAborted()
   const book = await repository.getBook(userId, bookId)
-  const cached = (await repository.listBookSourceCandidates(userId, bookId)).find((item) => item.id === candidateId)
-  if (book === null || cached === undefined) throw new ReaderRuntimeError('not-found', '书籍来源不存在')
+  const cached = await repository.getBookSourceCandidate(userId, bookId, candidateId)
+  if (book === null || cached === null) throw new ReaderRuntimeError('not-found', '书籍来源不存在')
   const source = await requireSource(repository, userId, cached.sourceId)
   if (source.fingerprint !== cached.sourceFingerprint) throw new ReaderRuntimeError('configuration', '书源定义已更新，请重新搜索')
-  const existing = (await repository.listEditions(userId, bookId)).find((item) => item.sourceId === cached.sourceId && item.sourceFingerprint === cached.sourceFingerprint && item.bookUrl === cached.bookUrl)
-  if (existing !== undefined) return existing
+  const existing = await repository.getBookEditionBySource(userId, bookId, cached.sourceId, cached.sourceFingerprint, cached.bookUrl)
+  if (existing !== null) return existing
   const lease = await repository.acquireExecutionSlot(userId, randomUUID())
   if (lease === null) throw new ReaderRuntimeError('source-busy', '服务器繁忙，请稍后重试')
   const executionSignal = signal === undefined ? AbortSignal.timeout(SOURCE_EXECUTION_MS) : AbortSignal.any([signal, AbortSignal.timeout(SOURCE_EXECUTION_MS)])

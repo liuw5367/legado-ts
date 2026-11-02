@@ -12,14 +12,16 @@ export function FailedSearchSources({ sources, onDisabled }: { sources: ApiSearc
   const [pending, setPending] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
   const pendingRef = useRef(false)
+  const sourceIdsKey = JSON.stringify([...new Set(sources.map((source) => source.sourceId))])
   useEffect(() => {
-    if (!expanded) return
+    const sourceIds = JSON.parse(sourceIdsKey) as string[]
+    if (!expanded || sourceIds.length === 0) return
     const controller = new AbortController()
-    void apiFetch<SourceManagementPage>('/api/source-management?all=true', { signal: controller.signal })
+    void apiFetch<SourceManagementPage>('/api/source-management/query', { method: 'POST', body: JSON.stringify({ sourceIds }), signal: controller.signal })
       .then((result) => { if (!controller.signal.aborted) { setManagedSources(result.sources); setError('') } })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '书源信息加载失败') })
     return () => controller.abort()
-  }, [retry, expanded])
+  }, [retry, expanded, sourceIdsKey])
   const byId = new Map(managedSources.map((source) => [source.sourceId, source]))
   async function disable(source: ManagedSourceSummary) {
     if (pendingRef.current) return

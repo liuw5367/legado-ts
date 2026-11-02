@@ -13,15 +13,18 @@ import type { Chapter } from '@legado/source-core'
 
 const url = process.env.READER_WEB_TEST_DATABASE_URL
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value))
+const sqlParameterBytes = (values: unknown) => Array.isArray(values) ? values.reduce((total, value) => total + (typeof value === 'string' ? Buffer.byteLength(value) : value instanceof Uint8Array ? value.byteLength : Buffer.byteLength(JSON.stringify(value) ?? '')), 0) : bytes(values)
 
 test('摘要投影与单章目录在真实数据库中保持隔离、版本和顺序并减少返回量', { skip: !url ? '需要独立 READER_WEB_TEST_DATABASE_URL' : false }, async (t) => {
   assert.ok(url)
   const admin = postgres(url, { max: 1, onnotice: () => undefined })
   const role = `egress_${randomUUID().replaceAll('-', '')}`
   const userId = randomUUID(), otherUser = randomUUID(), bookId = randomUUID()
+  const previousRuntimeKey = process.env.SOURCE_RUNTIME_STATE_KEY
   t.after(async () => {
     await closeReaderDb()
     await admin`delete from reader.user_sources where user_id in (${userId}, ${otherUser})`
+    await admin`delete from reader.source_runtime_state where user_id = ${userId}`
     await admin`delete from reader.toc_snapshots where user_id = ${userId}`
     await admin`delete from reader.book_source_candidates where user_id = ${userId}`
     await admin`delete from reader.book_editions where user_id = ${userId}`
@@ -29,6 +32,8 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
     await admin`drop owned by ${admin(role)}`
     await admin`drop role ${admin(role)}`
     await admin.end()
+    if (previousRuntimeKey === undefined) delete process.env.SOURCE_RUNTIME_STATE_KEY
+    else process.env.SOURCE_RUNTIME_STATE_KEY = previousRuntimeKey
   })
   await migrate(drizzle(admin), { migrationsFolder: fileURLToPath(new URL('../../server/db/migrations', import.meta.url)) })
   await admin`create role ${admin(role)} login`
@@ -36,23 +41,29 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   await admin`grant select, insert, update, delete on all tables in schema reader to ${admin(role)}`
   const appUrl = new URL(url); appUrl.username = role
   process.env.DATABASE_URL = appUrl.toString()
+  process.env.SOURCE_RUNTIME_STATE_KEY = 'reader-egress-test-runtime-key-at-least-32-characters'
   const repo = new PostgresReaderRepository()
   const client = (getReaderDb() as ReturnType<typeof getReaderDb> & { $client: ReturnType<typeof postgres> }).$client
   const originalRowTransform = client.options.transform.row.from
-  let receivedBytes = 0, receivedRows = 0, observing = false
+  const originalDebug = client.options.debug
+  let receivedBytes = 0, receivedRows = 0, sentParameterBytes = 0, observing = false
   // 在驱动解析结果后、Drizzle 和仓储映射前计量，避免丢弃大字段后产生虚假的减量结果。
   client.options.transform.row.from = (row) => {
     if (observing) { receivedBytes += bytes(row); receivedRows++ }
     return originalRowTransform ? originalRowTransform(row) : row
   }
-  t.after(() => { client.options.transform.row.from = originalRowTransform })
+  client.options.debug = (connection, query, parameters, paramTypes) => {
+    if (observing) sentParameterBytes += sqlParameterBytes(parameters)
+    if (typeof originalDebug === 'function') originalDebug(connection, query, parameters, paramTypes)
+  }
+  t.after(() => { client.options.transform.row.from = originalRowTransform; client.options.debug = originalDebug })
   const observe = async <T>(operation: () => Promise<T>) => {
-    receivedBytes = 0; receivedRows = 0; observing = true
+    receivedBytes = 0; receivedRows = 0; sentParameterBytes = 0; observing = true
     const started = performance.now()
     try {
       const value = await operation()
       assert.ok(receivedRows > 0, '计量必须包含数据库实际返回的行')
-      return { value, receivedBytes, receivedRows, elapsedMs: performance.now() - started }
+      return { value, receivedBytes, receivedRows, sentParameterBytes, elapsedMs: performance.now() - started }
     } finally { observing = false }
   }
   const rules = { ruleContent: { content: '大规则'.repeat(4096) } }
@@ -101,8 +112,26 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   assert.ok(relatedRead.receivedBytes < baseline * 0.2, '相关来源数据库返回量应减少至少 80%')
   t.diagnostic(`1000 书源结果字节代理值：完整记录 ${baseline}，驱动管理摘要 ${managedRead.receivedBytes}，驱动单域摘要（含身份查询）${domainRead.receivedBytes}，驱动启用摘要 ${summaryRead.receivedBytes}，驱动5来源摘要 ${relatedRead.receivedBytes}`)
 
-  const chapters: Chapter[] = Array.from({ length: 10000 }, (_, index) => ({ sourceId: 'https://example', bookUrl: 'https://example/book', index, chapterUrl: `https://example/章节/${Math.floor(index / 2)}?q=中文📚`, title: `第${index}章`, isVip: false, rawFields: {}, traceRef: 'fixture' }))
-  await repo.saveToc(userId, { userId, bookId, editionKey: 'edition', sourceFingerprint: 'fp', revision: 'r1', chapters, bookPatch: { lastCheckTime: 0, totalChapterNum: chapters.length } })
+  const chapters: Chapter[] = Array.from({ length: 10000 }, (_, index) => ({ sourceId: 'https://example', bookUrl: 'https://example/book', index, chapterUrl: `https://example/章节/${Math.floor(index / 2)}?q=中文📚`, title: `第${index}章`, isVip: false, ...(index === 100 ? { isVolume: true } : {}), rawFields: {}, traceRef: 'fixture' }))
+  const savedToc = await observe(() => repo.saveToc(userId, { userId, bookId, editionKey: 'edition', sourceFingerprint: 'fp', revision: 'r1', chapters, bookPatch: { lastCheckTime: 0, totalChapterNum: chapters.length } }))
+  assert.equal(savedToc.value.chapters.length, chapters.length)
+  assert.ok(savedToc.receivedBytes < 256, '保存目录的 RETURNING 不应传回章节列表和书籍 patch')
+  const chapterCount = await observe(() => repo.getTocChapterCount(userId, bookId, 'edition'))
+  const fullChapterSummary = await observe(() => repo.getTocSummary(userId, bookId, 'edition'))
+  assert.equal(chapterCount.value, 9999)
+  assert.ok(chapterCount.receivedBytes < 128, '目录章节计数只应传回聚合值')
+  assert.ok(chapterCount.receivedBytes < fullChapterSummary.receivedBytes * 0.01, '目录计数返回量应小于完整目录摘要的 1%')
+  assert.equal(await repo.getTocChapterCount(userId, bookId, 'missing-edition'), null)
+  const retainedBookAfter = { sourceId: 'https://example', bookUrl: '/book', name: '书籍详情', rawFields: { large: '详情字段'.repeat(4_000) }, traceRef: 'test', emptyFields: [], fieldErrors: {} }
+  await repo.saveToc(userId, { userId, bookId, editionKey: 'bookafter', sourceFingerprint: 'fp', revision: 'r1', chapters: [], bookPatch: { lastCheckTime: 0, totalChapterNum: 0 }, bookAfter: retainedBookAfter })
+  const preservedBookAfter = await observe(() => repo.saveToc(userId, { userId, bookId, editionKey: 'bookafter', sourceFingerprint: 'fp', revision: 'r2', chapters: [], bookPatch: { lastCheckTime: 0, totalChapterNum: 0 } }))
+  assert.deepEqual(preservedBookAfter.value.bookAfter, retainedBookAfter, '省略 bookAfter 时应保留原有持久化值')
+  assert.ok(preservedBookAfter.receivedBytes >= bytes(retainedBookAfter), '仅在需要保留旧 bookAfter 时才读取该持久化字段')
+  const content = { userId, bookId, editionKey: 'edition', chapterId: 'large-content', tocRevision: 'r1', sourceFingerprint: 'fp', content: { chapter: { sourceId: 'https://example', bookUrl: 'https://example/book', chapterUrl: '/large-content', index: 0 }, contentType: 'text' as const, raw: '正文'.repeat(16_000), cleaned: '清理正文'.repeat(16_000), pages: ['正文'.repeat(16_000)], resources: [] } }
+  const savedContent = await observe(() => repo.saveContent(userId, content))
+  assert.equal(savedContent.value.content.cleaned, content.content.cleaned)
+  assert.ok(savedContent.receivedBytes < 256, '保存正文的 RETURNING 只应传回 updatedAt')
+  t.diagnostic(`目录写入数据库参数 ${savedToc.sentParameterBytes} 字节，RETURNING ${savedToc.receivedBytes} 字节；正文写入参数 ${savedContent.sentParameterBytes} 字节，RETURNING ${savedContent.receivedBytes} 字节；10000 章计数返回 ${chapterCount.receivedBytes} 字节，完整目录摘要返回 ${fullChapterSummary.receivedBytes} 字节`)
   const memory = new MemoryReaderRepository()
   await memory.saveToc(userId, { userId, bookId, editionKey: 'edition', sourceFingerprint: 'fp', revision: 'r1', chapters, bookPatch: { lastCheckTime: 0, totalChapterNum: chapters.length } })
   for (const index of [0, 1, 9999]) {
@@ -132,15 +161,56 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   await repo.saveToc(userId, { userId, bookId, editionKey: 'edition', sourceFingerprint: 'fp2', revision: 'r2', chapters: [], bookPatch: { lastCheckTime: 0, totalChapterNum: 0 } })
   assert.deepEqual(await repo.getChapterContext(userId, bookId, 'edition', chapterIdFor(chapters[0]!)), { revision: 'r2', sourceFingerprint: 'fp2' })
 
+  const runtimeLease = await repo.acquireSourceRuntimeLease(userId, definitions[0]!.source_id, 'fp-0', 'initial-runtime-lease', 10_000)
+  assert.ok(runtimeLease)
+  const runtimeSnapshot = { cookies: 'cookie'.repeat(2000), variables: { session: 'state'.repeat(2000) } }
+  const savedRuntime = await observe(() => repo.saveSourceRuntimeState(userId, definitions[0]!.source_id, 'fp-0', runtimeLease.leaseToken, runtimeLease.version, runtimeSnapshot))
+  assert.deepEqual(savedRuntime.value?.snapshot, runtimeSnapshot)
+  assert.ok(savedRuntime.receivedBytes < 128, '保存运行状态只应传回版本号')
+  const reacquiredRuntime = await observe(() => repo.acquireSourceRuntimeLease(userId, definitions[0]!.source_id, 'fp-0', 'next-runtime-lease', 10_000))
+  assert.deepEqual(reacquiredRuntime.value?.snapshot, runtimeSnapshot)
+  assert.equal(reacquiredRuntime.receivedRows, 2, '已有运行状态的租约获取只应返回 set_config 和条件更新结果')
+  t.diagnostic(`运行状态保存参数 ${savedRuntime.sentParameterBytes} 字节，RETURNING ${savedRuntime.receivedBytes} 字节；租约获取返回 ${reacquiredRuntime.receivedRows} 行、${reacquiredRuntime.receivedBytes} 字节`)
+  await repo.releaseSourceRuntimeLease(userId, definitions[0]!.source_id, 'fp-0', 'next-runtime-lease')
+  const expiringLease = await repo.acquireSourceRuntimeLease(userId, definitions[0]!.source_id, 'fp-0', 'expiring-runtime-lease', 10_000)
+  assert.ok(expiringLease)
+  await admin`update reader.source_runtime_state set lease_until = now() - interval '1 second' where user_id = ${userId} and source_id = ${definitions[0]!.source_id} and source_fingerprint = 'fp-0'`
+  const recoveredLease = await repo.acquireSourceRuntimeLease(userId, definitions[0]!.source_id, 'fp-0', 'recovered-runtime-lease', 10_000)
+  assert.ok(recoveredLease, '过期租约必须能够重新获取')
+  await repo.releaseSourceRuntimeLease(userId, definitions[0]!.source_id, 'fp-0', recoveredLease.leaseToken)
+  const competingLeases = await Promise.all([
+    repo.acquireSourceRuntimeLease(userId, 'https://race.example/source', 'race-fp', 'race-lease-a', 10_000),
+    repo.acquireSourceRuntimeLease(userId, 'https://race.example/source', 'race-fp', 'race-lease-b', 10_000),
+  ])
+  assert.equal(competingLeases.filter(Boolean).length, 1, '首次创建竞争只能授予一个租约')
+  const winningLease = competingLeases.find((lease) => lease !== null)!
+  await repo.releaseSourceRuntimeLease(userId, 'https://race.example/source', 'race-fp', winningLease.leaseToken)
+
   const candidate = { sourceId: definitions[0]!.source_id, sourceFingerprint: 'fp-0', candidate: { sourceId: definitions[0]!.source_id, bookUrl: 'book', name: '书', rawFields: {}, traceRef: 'test' } }
   const metadata = { ...candidate.candidate, emptyFields: [], fieldErrors: {} }
   const created = await repo.createBook(userId, { candidate, metadata, editionKey: 'book-edition', sourceFingerprint: 'fp-0' })
   await repo.saveBookSourceCandidates(userId, created.book.id, [candidate, { ...candidate, sourceFingerprint: 'stale' }])
+  const allCandidateRows = await observe(() => repo.listBookSourceCandidates(userId, created.book.id))
+  const selectedCandidate = allCandidateRows.value.find((row) => row.sourceFingerprint === 'fp-0')!
+  const selectedCandidateRead = await observe(() => repo.getBookSourceCandidate(userId, created.book.id, selectedCandidate.id))
+  assert.deepEqual(selectedCandidateRead.value, selectedCandidate)
+  assert.ok(selectedCandidateRead.receivedBytes < allCandidateRows.receivedBytes * 0.75, '打开单个候选来源只应传回该候选')
   t.mock.method(repo, 'listAllSourcesForUser', async () => { throw new Error('不应全量读取书源') })
   t.mock.method(repo, 'listSourceStatesForUser', async () => { throw new Error('不应全量读取规则状态') })
   const result = await createReaderRuntime(repo).listBookSources(userId, created.book.id)
   assert.equal(result.sources.length, 1)
   assert.equal(result.sources[0]?.name, '已更新')
+  for (let index = 0; index < 4; index++) {
+    const bookUrl = index === 0 ? candidate.candidate.bookUrl : `${candidate.candidate.bookUrl}-${index}`
+    const editionCandidate = { ...candidate, candidate: { ...candidate.candidate, bookUrl } }
+    await repo.saveEdition(userId, created.book.id, { candidate: editionCandidate, metadata: { ...metadata, bookUrl, name: `大版本${index}`.repeat(4096) }, editionKey: `target-edition-${index}`, sourceFingerprint: 'fp-0' })
+  }
+  const fullEditionRead = await observe(() => repo.listEditions(userId, created.book.id))
+  const expectedEdition = fullEditionRead.value.find((edition) => edition.sourceId === candidate.sourceId && edition.sourceFingerprint === candidate.sourceFingerprint && edition.bookUrl === candidate.candidate.bookUrl)!
+  const targetEditionRead = await observe(() => repo.getBookEditionBySource(userId, created.book.id, candidate.sourceId, candidate.sourceFingerprint, candidate.candidate.bookUrl))
+  assert.deepEqual(targetEditionRead.value, expectedEdition)
+  assert.ok(targetEditionRead.receivedBytes < fullEditionRead.receivedBytes * 0.75, '打开单个来源版本只应传回目标版本')
+  t.diagnostic(`5 个书籍版本返回字节代理值：完整列表 ${fullEditionRead.receivedBytes}，目标版本 ${targetEditionRead.receivedBytes}`)
 })
 
 test('页面展示查询在驱动层排除原文、规则、执行变量和无关版本', { skip: !url ? '需要独立 READER_WEB_TEST_DATABASE_URL' : false }, async (t) => {

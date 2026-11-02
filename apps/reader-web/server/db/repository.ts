@@ -26,7 +26,7 @@ import { withUser, type ReaderTransaction } from './client.ts'
 import { readingAnnotations, bookLists, bookListItems, bookSourceCandidates, bookEditions, books, bookshelf, chapterContents, readerSettings, readingRecords, searchHistory, searchRuns, sourceImportBatches, sourceImportLinks, sourceImportItems, sourceImportPreviews, sourceRuntimeState, tocSnapshots, userSources, type BookEditionRow, type BookRow, type ChapterContentRow, type ReaderSettingsRow, type SearchHistoryRow, type SearchRunRow, type SourceRuntimeRow, type TocSnapshotRow, type UserSourceRow } from './schema.ts'
 import type { ImportPreview, ImportPreviewCandidate, ManagedSourceSummary, SourceActionItem, SourceManagementPage, SourceManagementStats, SourceManagementStatus, SourceOrderItem } from '../../shared/source-management.ts'
 import { DEFAULT_READER_SETTINGS, type BookCreationInput, type HomeSnapshot, type HomeSearchHistory, type ReaderSettings, type ReaderSettingsPatch, type ReaderSettingsPreferences, type RuntimeStateSnapshot, type SearchHistoryItem, type SearchInput, type SearchRunState, type SourceSearchState, type SourceSummary, type StoredBookSourceCandidate, type StoredBook, type StoredCandidate, type StoredContent, type StoredEdition, type StoredPosition, type StoredToc } from '../domain/types.ts'
-import { decryptRuntimeState, encryptRuntimeState } from './runtime-state-crypto.ts'
+import { decryptRuntimeState, encryptRuntimeState, normalizeSnapshot } from './runtime-state-crypto.ts'
 
 export type BookSourceEntry = Omit<BookSourceItem, 'name' | 'sourceEnabled' | 'status'> & ({ status: 'saved'; editionKey: string } | { status: 'discovered'; candidateId: string })
 
@@ -125,7 +125,7 @@ export interface ReaderRepository {
   getSourceForUser(userId: string, sourceId: string): Promise<StoredSourceRecord | null>
   getSourceDisplayName(userId: string, sourceId: string): Promise<string | undefined>
   getSourceManagementStats(userId: string): Promise<SourceManagementStats>
-  listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] }): Promise<SourceManagementPage>
+  listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] | undefined }): Promise<SourceManagementPage>
   applySourceActions(userId: string, action: 'enable' | 'disable' | 'delete', items: SourceActionItem[]): Promise<{ affected: number }>
   applySourceOrder(userId: string, items: SourceOrderItem[]): Promise<{ affected: number }>
   saveImportPreview(userId: string, preview: ImportPreview, sourceUrl: string): Promise<void>
@@ -151,6 +151,8 @@ export interface ReaderRepository {
   createBook(userId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<{ book: StoredBook; edition: StoredEdition }>
   listBookSourceEntries(userId: string, bookId: string): Promise<BookSourceEntry[]>
   listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]>
+  getBookSourceCandidate(userId: string, bookId: string, candidateId: string): Promise<StoredBookSourceCandidate | null>
+  getBookEditionBySource(userId: string, bookId: string, sourceId: string, sourceFingerprint: string, bookUrl: string): Promise<StoredEdition | null>
   saveBookSourceCandidates(userId: string, bookId: string, candidates: StoredCandidate[]): Promise<void>
   /** 保存版本用于目录预览，不修改书籍元数据、活动来源或书架关系。 */
   saveEdition(userId: string, bookId: string, input: BookCreationInput & { editionKey: string; sourceFingerprint: string }): Promise<StoredEdition>
@@ -175,6 +177,7 @@ export interface ReaderRepository {
   getEdition(userId: string, bookId: string, editionKey?: string): Promise<StoredEdition | null>
   getChapterContext(userId: string, bookId: string, editionKey: string, chapterId: string, display?: boolean): Promise<ChapterContext | null>
   getTocSummary(userId: string, bookId: string, editionKey: string): Promise<CachedTocSummary | null>
+  getTocChapterCount(userId: string, bookId: string, editionKey: string): Promise<number | null>
   getToc(userId: string, bookId: string, editionKey: string): Promise<StoredToc | null>
   saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc>
   getContent(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<StoredContent | null>
@@ -376,7 +379,7 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
-  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] }): Promise<SourceManagementPage> {
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] | undefined }): Promise<SourceManagementPage> {
     return withUser(userId, async (transaction) => {
       // 域名身份沿用 WHATWG URL 规则；先读最小身份，再收窄带导入关联的摘要查询。
       const identities = params.domain === undefined ? undefined : await transaction.select({ sourceId: userSources.sourceId, enabled: userSources.enabled }).from(userSources).where(and(eq(userSources.userId, userId), eq(userSources.deleted, false)))
@@ -523,20 +526,24 @@ export class PostgresReaderRepository implements ReaderRepository {
       const identity = and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, sourceId), eq(sourceRuntimeState.sourceFingerprint, sourceFingerprint))
       const now = new Date()
       const leaseUntil = new Date(now.getTime() + Math.max(1_000, leaseMs))
-      const [existing] = await transaction.select().from(sourceRuntimeState).where(identity).limit(1)
-      if (existing === undefined) {
-        const [created] = await transaction.insert(sourceRuntimeState).values({ userId, sourceId, sourceFingerprint, encryptedState: encryptRuntimeState({}), leaseToken, leaseUntil, updatedAt: now }).onConflictDoNothing().returning()
-        if (created !== undefined) return toRuntimeLease(created, leaseToken)
+      const available = and(identity, or(isNull(sourceRuntimeState.leaseToken), isNull(sourceRuntimeState.leaseUntil), lt(sourceRuntimeState.leaseUntil, now)))
+      const lease = async () => {
+        const [row] = await transaction.update(sourceRuntimeState).set({ leaseToken, leaseUntil, updatedAt: now }).where(available).returning()
+        return row
       }
-      const [leased] = await transaction.update(sourceRuntimeState).set({ leaseToken, leaseUntil, updatedAt: now }).where(and(identity, or(isNull(sourceRuntimeState.leaseToken), isNull(sourceRuntimeState.leaseUntil), lt(sourceRuntimeState.leaseUntil, now)))).returning()
+      let leased = await lease()
+      if (leased === undefined) {
+        const [created] = await transaction.insert(sourceRuntimeState).values({ userId, sourceId, sourceFingerprint, encryptedState: encryptRuntimeState({}), leaseToken, leaseUntil, updatedAt: now }).onConflictDoNothing().returning()
+        leased = created ?? await lease()
+      }
       return leased === undefined ? null : toRuntimeLease(leased, leaseToken)
     })
   }
 
   public async saveSourceRuntimeState(userId: string, sourceId: string, sourceFingerprint: string, leaseToken: string, expectedVersion: number, snapshot: RuntimeStateSnapshot): Promise<SourceRuntimeStateRecord | null> {
     return withUser(userId, async (transaction) => {
-      const [row] = await transaction.update(sourceRuntimeState).set({ encryptedState: encryptRuntimeState(snapshot), version: sql`${sourceRuntimeState.version} + 1`, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, sourceId), eq(sourceRuntimeState.sourceFingerprint, sourceFingerprint), eq(sourceRuntimeState.leaseToken, leaseToken), eq(sourceRuntimeState.version, expectedVersion))).returning()
-      return row === undefined ? null : toRuntimeState(row)
+      const [row] = await transaction.update(sourceRuntimeState).set({ encryptedState: encryptRuntimeState(snapshot), version: sql`${sourceRuntimeState.version} + 1`, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(and(eq(sourceRuntimeState.userId, userId), eq(sourceRuntimeState.sourceId, sourceId), eq(sourceRuntimeState.sourceFingerprint, sourceFingerprint), eq(sourceRuntimeState.leaseToken, leaseToken), eq(sourceRuntimeState.version, expectedVersion))).returning({ version: sourceRuntimeState.version })
+      return row === undefined ? null : { sourceId, sourceFingerprint, snapshot: normalizeSnapshot(snapshot), version: row.version }
     })
   }
 
@@ -716,6 +723,21 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (transaction) => {
       const rows = await transaction.select().from(bookSourceCandidates).where(and(eq(bookSourceCandidates.userId, userId), eq(bookSourceCandidates.bookId, bookId))).orderBy(desc(bookSourceCandidates.updatedAt), asc(bookSourceCandidates.id))
       return rows.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() }))
+    })
+  }
+
+  public async getBookSourceCandidate(userId: string, bookId: string, candidateId: string): Promise<StoredBookSourceCandidate | null> {
+    if (!isUuid(candidateId)) return null
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.select().from(bookSourceCandidates).where(and(eq(bookSourceCandidates.userId, userId), eq(bookSourceCandidates.bookId, bookId), eq(bookSourceCandidates.id, candidateId))).limit(1)
+      return row === undefined ? null : { ...row, updatedAt: row.updatedAt.toISOString() }
+    })
+  }
+
+  public async getBookEditionBySource(userId: string, bookId: string, sourceId: string, sourceFingerprint: string, bookUrl: string): Promise<StoredEdition | null> {
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.select().from(bookEditions).where(and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, bookId), eq(bookEditions.sourceId, sourceId), eq(bookEditions.sourceFingerprint, sourceFingerprint), eq(bookEditions.bookUrl, bookUrl))).orderBy(desc(bookEditions.updatedAt), asc(bookEditions.createdAt)).limit(1)
+      return row === undefined ? null : toEdition(row)
     })
   }
 
@@ -1020,6 +1042,13 @@ export class PostgresReaderRepository implements ReaderRepository {
     })
   }
 
+  public async getTocChapterCount(userId: string, bookId: string, editionKey: string): Promise<number | null> {
+    return withUser(userId, async (transaction) => {
+      const [row] = await transaction.select({ chapterCount: sql<number>`(select count(*)::int from jsonb_array_elements(${tocSnapshots.chapters}) as entries(item) where item->'isVolume' is distinct from 'true'::jsonb)` }).from(tocSnapshots).where(and(eq(tocSnapshots.userId, userId), eq(tocSnapshots.bookId, bookId), eq(tocSnapshots.editionKey, editionKey))).limit(1)
+      return row?.chapterCount ?? null
+    })
+  }
+
   public async getToc(userId: string, bookId: string, editionKey: string): Promise<StoredToc | null> {
     return withUser(userId, async (transaction) => {
       const [row] = await transaction.select().from(tocSnapshots).where(and(eq(tocSnapshots.userId, userId), eq(tocSnapshots.bookId, bookId), eq(tocSnapshots.editionKey, editionKey))).limit(1)
@@ -1029,6 +1058,11 @@ export class PostgresReaderRepository implements ReaderRepository {
 
   public async saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc> {
     return withUser(userId, async (transaction) => {
+      const returning = {
+        bookId: tocSnapshots.bookId,
+        updatedAt: tocSnapshots.updatedAt,
+        ...(toc.bookAfter === undefined ? { bookAfter: tocSnapshots.bookAfter } : {}),
+      }
       const [row] = await transaction.insert(tocSnapshots).values({
         userId,
         bookId: toc.bookId,
@@ -1048,11 +1082,18 @@ export class PostgresReaderRepository implements ReaderRepository {
         truncated: toc.truncated === true,
         ...(toc.bookAfter === undefined ? {} : { bookAfter: toc.bookAfter }),
         updatedAt: new Date(),
-      } }).returning()
+      } }).returning(returning)
       if (row === undefined) throw new Error('保存目录失败')
       const [book] = await transaction.select({ activeEditionKey: books.activeEditionKey }).from(books).where(and(eq(books.userId, userId), eq(books.id, toc.bookId))).for('update')
-      if (book?.activeEditionKey === toc.editionKey) await writeBookReadingState(transaction, userId, toc.bookId, toc.editionKey, undefined, toToc(row))
-      return toToc(row)
+      const savedBookAfter = toc.bookAfter ?? ('bookAfter' in row ? row.bookAfter ?? undefined : undefined)
+      const saved: StoredToc = {
+        userId, bookId: row.bookId, editionKey: toc.editionKey, sourceFingerprint: toc.sourceFingerprint,
+        revision: toc.revision, chapters: cloneJsonb(toc.chapters), bookPatch: cloneJsonb(toc.bookPatch),
+        ...(savedBookAfter === undefined ? {} : { bookAfter: cloneJsonb(savedBookAfter) }),
+        ...(toc.truncated === true ? { truncated: true } : {}), updatedAt: row.updatedAt.toISOString(),
+      }
+      if (book?.activeEditionKey === toc.editionKey) await writeBookReadingState(transaction, userId, toc.bookId, toc.editionKey, undefined, saved)
+      return saved
     })
   }
 
@@ -1074,9 +1115,9 @@ export class PostgresReaderRepository implements ReaderRepository {
         sourceFingerprint: content.sourceFingerprint,
         content: content.content,
         updatedAt: new Date(),
-      }).onConflictDoUpdate({ target: [chapterContents.userId, chapterContents.editionKey, chapterContents.tocRevision, chapterContents.chapterId], set: { content: content.content, sourceFingerprint: content.sourceFingerprint, updatedAt: new Date() } }).returning()
+      }).onConflictDoUpdate({ target: [chapterContents.userId, chapterContents.editionKey, chapterContents.tocRevision, chapterContents.chapterId], set: { content: content.content, sourceFingerprint: content.sourceFingerprint, updatedAt: new Date() } }).returning({ bookId: chapterContents.bookId, updatedAt: chapterContents.updatedAt })
       if (row === undefined) throw new Error('保存正文失败')
-      return toContent(row)
+      return { ...content, userId, bookId: row.bookId, content: cloneJsonb(content.content), updatedAt: row.updatedAt.toISOString() }
     })
   }
 
@@ -1240,10 +1281,10 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async getSourceManagementStats(userId: string): Promise<SourceManagementStats> {
     return sourceManagementStats(this.allSources(userId))
   }
-  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] }): Promise<SourceManagementPage> {
+  public async listManagedSources(userId: string, params: { page: number; pageSize: number; query: string; status: SourceManagementStatus; all?: boolean; domain?: string | undefined; sourceIds?: string[] | undefined }): Promise<SourceManagementPage> {
     const query = params.query.toLocaleLowerCase()
     const allRows = this.allSources(userId)
-    const enabledCount = allRows.filter((source) => source.enabled).length
+    const enabledCount = allRows.filter((source) => source.enabled && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId))).length
     const rows = allRows.filter((source) => {
       const matchesQuery = query.length === 0 || `${source.name} ${source.group ?? ''} ${source.sourceId}`.toLocaleLowerCase().includes(query)
       return matchesQuery && (params.domain === undefined || sourceDomainInfo(source.sourceId).key === sourceDomainInfo(params.domain).key) && (params.sourceIds === undefined || params.sourceIds.includes(source.sourceId)) && (params.status === 'all' || (params.status === 'enabled' ? source.enabled : !source.enabled))
@@ -1364,6 +1405,8 @@ export class MemoryReaderRepository implements ReaderRepository {
   public async listBookSourceCandidates(userId: string, bookId: string): Promise<StoredBookSourceCandidate[]> {
     return [...this.sourceCandidates.values()].filter((row) => row.userId === userId && row.bookId === bookId).map((row) => structuredClone(row))
   }
+  public async getBookSourceCandidate(userId: string, bookId: string, candidateId: string): Promise<StoredBookSourceCandidate | null> { const row = [...this.sourceCandidates.values()].find((item) => item.userId === userId && item.bookId === bookId && item.id === candidateId); return row === undefined ? null : structuredClone(row) }
+  public async getBookEditionBySource(userId: string, bookId: string, sourceId: string, sourceFingerprint: string, bookUrl: string): Promise<StoredEdition | null> { const row = [...this.books.values()].filter((item) => item.book.userId === userId && item.book.id === bookId && item.edition.sourceId === sourceId && item.edition.sourceFingerprint === sourceFingerprint && item.edition.bookUrl === bookUrl).sort((a, b) => a.edition.editionKey.localeCompare(b.edition.editionKey))[0]; return row?.edition ?? null }
   public async saveBookSourceCandidates(userId: string, bookId: string, candidates: StoredCandidate[]): Promise<void> {
     if (await this.getBook(userId, bookId) === null) throw new Error('书籍不存在')
     for (const candidate of candidates) {
@@ -1585,6 +1628,7 @@ export class MemoryReaderRepository implements ReaderRepository {
     const toc = this.tocs.get(`${userId}:${bookId}:${editionKey}`)
     return toc === undefined ? null : tocSummary(toc)
   }
+  public async getTocChapterCount(userId: string, bookId: string, editionKey: string): Promise<number | null> { const toc = this.tocs.get(`${userId}:${bookId}:${editionKey}`); return toc === undefined ? null : toc.chapters.filter((chapter) => chapter.isVolume !== true).length }
   public async getToc(userId: string, bookId: string, editionKey: string): Promise<StoredToc | null> { return this.tocs.get(`${userId}:${bookId}:${editionKey}`) ?? null }
   public async saveToc(userId: string, toc: Omit<StoredToc, 'updatedAt'>): Promise<StoredToc> { const value = { ...toc, userId, updatedAt: new Date().toISOString() }; this.tocs.set(`${userId}:${toc.bookId}:${toc.editionKey}`, value); if ((await this.getBook(userId, toc.bookId))?.activeEditionKey === toc.editionKey) this.writeReadingState(userId, toc.bookId, toc.editionKey); return value }
   public async getContent(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<StoredContent | null> { return this.contents.get(`${userId}:${editionKey}:${tocRevision}:${chapterId}`) ?? null }
@@ -1808,6 +1852,7 @@ function toHistory(row: SearchHistoryRow): SearchHistoryItem { return { id: row.
 function searchSummary(status: string, count: number): string { if (status === 'success') return `${count} 条结果`; if (status === 'empty') return '没有找到结果'; if (status === 'partial') return `${count} 条结果，部分书源失败`; if (status === 'cancelled') return '已取消'; if (status === 'failed') return '搜索失败'; return status }
 function toToc(row: TocSnapshotRow): StoredToc { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, sourceFingerprint: row.sourceFingerprint, revision: row.revision, chapters: row.chapters, bookPatch: row.bookPatch, ...(row.bookAfter === null || row.bookAfter === undefined ? {} : { bookAfter: row.bookAfter }), ...(row.truncated === true ? { truncated: true } : {}), updatedAt: row.updatedAt.toISOString() } }
 function toContent(row: ChapterContentRow): StoredContent { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, chapterId: row.chapterId, tocRevision: row.tocRevision, sourceFingerprint: row.sourceFingerprint, content: row.content, updatedAt: row.updatedAt.toISOString() } }
+function cloneJsonb<T>(value: T): T { return JSON.parse(JSON.stringify(value)!) as T }
 function toPosition(row: typeof readingRecords.$inferSelect): StoredPosition { return { userId: row.userId, bookId: row.bookId, editionKey: row.editionKey, chapterId: row.chapterId, chapterUrl: row.chapterUrl, chapterIndex: row.chapterIndex, title: row.title, ...(row.tocRevision === null ? {} : { tocRevision: row.tocRevision }), paragraphIndex: row.paragraphIndex, offset: row.offset, version: row.version, lastReadAt: row.lastReadAt.toISOString() } }
 
 function assertBackupSnapshotClosed(snapshot: ReaderBackupSnapshot, userId: string): void {
