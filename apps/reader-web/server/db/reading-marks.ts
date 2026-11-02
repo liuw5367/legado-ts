@@ -3,7 +3,7 @@ import type { ReaderMark } from '../../shared/reading-annotations.ts'
 import { and, eq, sql } from 'drizzle-orm'
 import { books, readingAnnotations, readingBookmarks } from './schema.ts'
 import type { ReaderTransaction } from './client.ts'
-import { changeMark, MarkError, markCursor, markOrder, parseMarkCursor, type MarkCommand, type MarkKind, type MarkQuery, type ReadingMark, type MarkPage, type MarkSummaryPage } from '../../shared/reading-annotations.ts'
+import { evaluateMarkChange, MarkError, markCursor, markOrder, parseMarkCursor, type MarkCommand, type MarkEditIdentity, type MarkKind, type MarkQuery, type MarkValidationState, type ReadingMark, type MarkPage, type MarkSummaryPage } from '../../shared/reading-annotations.ts'
 
 export function readMarks(tx: ReaderTransaction, userId: string, query: MarkQuery): Promise<MarkPage>
 export function readMarks(tx: ReaderTransaction, userId: string, query: MarkQuery, summary: true): Promise<MarkSummaryPage>
@@ -21,16 +21,41 @@ export async function readMarks(tx: ReaderTransaction, userId: string, query: Ma
   const items = rows.map((r) => ({ ...r.data, bookName: r.bookName ?? r.data.bookName, author: r.bookName === null ? r.data.author : r.author }))
   return { items: query.all || query.chapterUrl ? items : items.slice(0, 50), nextCursor: !query.all && !query.chapterUrl && items.length > 50 ? markCursor(items[49]!, query) : null }
 }
+export async function readMarkEditIdentity(tx: ReaderTransaction, userId: string, kind: MarkKind, bookId: string, id: string): Promise<MarkEditIdentity | null> {
+  const table = kind === 'bookmarks' ? readingBookmarks : readingAnnotations
+  const data = table.data
+  const [row] = await tx.select({ identity: sql<MarkEditIdentity>`jsonb_build_object('id', ${data}->'id', 'bookId', ${data}->'bookId', 'editionKey', ${data}->'editionKey', 'sourceFingerprint', ${data}->'sourceFingerprint', 'chapterId', ${data}->'chapterId', 'chapterUrl', ${data}->'chapterUrl', 'chapterIndex', ${data}->'chapterIndex', 'chapterTitle', ${data}->'chapterTitle', 'tocRevision', ${data}->'tocRevision', 'anchor', ${data}->'anchor', 'sourceName', ${data}->'sourceName', 'version', ${data}->'version')` }).from(table).where(and(eq(table.userId, userId), eq(table.bookId, bookId), eq(table.id, id))).limit(1)
+  return row?.identity ?? null
+}
 export async function writeMark(tx: ReaderTransaction, userId: string, command: MarkCommand) {
   // 与备份恢复共用账号锁，避免恢复覆盖正在保存的标记。
   await lockMarks(tx, userId)
   const table = command.kind === 'bookmarks' ? readingBookmarks : readingAnnotations
   const [sameId] = await tx.select({ data: table.data }).from(table).where(and(eq(table.userId, userId), eq(table.id, command.id)))
-  const chapter = command.action === 'save' ? command.input : sameId?.data
-  const before = chapter ? await readMarks(tx, userId, { kind: command.kind, bookId: command.bookId, editionKey: chapter.editionKey, chapterUrl: chapter.chapterUrl, all: true }) : { items: [] }
-  const next = changeMark([...before.items, ...(sameId && !before.items.some((r) => r.id === sameId.data.id) ? [sameId.data] : [])], userId, command)
+  const current = sameId?.data.bookId === command.bookId ? sameId.data : undefined
+  const chapter = command.action === 'save' ? command.input : command.action === 'restore' ? sameId?.data : undefined
+  const states = chapter === undefined ? [] : await readMarkValidationStates(tx, userId, command.kind, command.bookId, chapter.editionKey, chapter.chapterUrl, chapter.sourceFingerprint)
+  if (sameId && !states.some((row) => row.id === sameId.data.id)) states.push(validationState(sameId.data))
+  const effectiveCommand = command.action === 'save' && current !== undefined && command.input.expectedVersion !== undefined ? { ...command, cachedChapter: current.cachedChapter } : command
+  const result = evaluateMarkChange(states, current, userId, effectiveCommand)
+  if (result.kind === 'duplicate') {
+    const [duplicate] = await tx.select({ data: table.data }).from(table).where(and(eq(table.userId, userId), eq(table.bookId, command.bookId), eq(table.id, result.id))).limit(1)
+    if (duplicate === undefined) throw new MarkError(409, '记录已修改，请重新加载')
+    return duplicate.data
+  }
+  const next = result.mark
   await tx.insert(table).values(markValues(next)).onConflictDoUpdate({ target: [table.userId, table.id], set: markValues(next) })
   return next
+}
+async function readMarkValidationStates(tx: ReaderTransaction, userId: string, kind: MarkKind, bookId: string, editionKey: string, chapterUrl: string, sourceFingerprint: string): Promise<MarkValidationState[]> {
+  const table = kind === 'bookmarks' ? readingBookmarks : readingAnnotations
+  const data = table.data
+  const state = sql<MarkValidationState>`jsonb_build_object('id', ${data}->'id', 'bookId', ${data}->'bookId', 'editionKey', ${data}->'editionKey', 'chapterUrl', ${data}->'chapterUrl', 'sourceFingerprint', ${data}->'sourceFingerprint', 'deletedAt', ${data}->'deletedAt', 'version', ${data}->'version', 'anchor', jsonb_build_object('start', ${data}->'anchor'->'start', 'end', ${data}->'anchor'->'end'))`
+  const rows = await tx.select({ state }).from(table).where(and(eq(table.userId, userId), eq(table.bookId, bookId), eq(table.editionKey, editionKey), eq(table.chapterUrl, chapterUrl), sql`${data}->>'sourceFingerprint' = ${sourceFingerprint}`, sql`${data}->>'deletedAt' is null`))
+  return rows.map((row) => row.state)
+}
+function validationState(mark: ReadingMark): MarkValidationState {
+  return { id: mark.id, bookId: mark.bookId, editionKey: mark.editionKey, chapterUrl: mark.chapterUrl, sourceFingerprint: mark.sourceFingerprint, deletedAt: mark.deletedAt, version: mark.version, anchor: { start: mark.anchor.start, end: mark.anchor.end } }
 }
 export async function purgeMark(tx: ReaderTransaction, userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number) {
   await lockMarks(tx, userId)

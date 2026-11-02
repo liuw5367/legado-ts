@@ -31,6 +31,11 @@ export interface BookListOrganizationSnapshot {
   lists: StoredBookList[]
   items: StoredBookListItem[]
 }
+/** 仅包含本次组织变更涉及的书单、成员；分组排序返回全部分组。 */
+export interface BookOrganizationMutationResult {
+  lists: StoredBookList[]
+  items: StoredBookListItem[]
+}
 export type BookListRestore = { description: string; addedAt: string }
 
 export const bookOrganizationBackupSchema = z.object({

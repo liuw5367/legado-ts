@@ -53,10 +53,10 @@ export function registerReadingMarksApi(app: Hono<{ Variables: Variables }>, rep
       const book = await repo.getBook(userId, bookId)
       if (!book) throw new MarkError(404, '书籍不存在')
       // 已有笔记的文字身份不可被编辑请求替换；原文失效后仍允许修改想法和颜色。
-      const current = input.expectedVersion === undefined ? undefined : (await repo.listReadingMarks(userId, { kind, bookId, id, all: true })).items.find((r) => r.id === id)
+      const current = input.expectedVersion === undefined ? undefined : await repo.getReadingMarkIdentity(userId, kind, bookId, id)
       let sourceName = current?.sourceName
       let editionSource: { sourceId: string; sourceFingerprint: string } | null | undefined
-      let cachedChapter: CachedChapter | null = current?.cachedChapter ?? null
+      let cachedChapter: CachedChapter | null = null
       if (current) {
         if (!sameAnchor(current.anchor, input.anchor) || (['editionKey', 'chapterUrl', 'sourceFingerprint', 'chapterId', 'chapterIndex', 'chapterTitle', 'tocRevision'] as const).some((key) => current[key] !== input[key])) throw new MarkError(409, '不能修改原文位置，请重新选择')
       } else {

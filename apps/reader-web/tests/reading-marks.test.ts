@@ -90,20 +90,17 @@ test('改色时锚点 JSON 键顺序变化不应被当作移动原文位置', as
   const created = await request(path, 'PUT', input)
   assert.equal(created.status, 200)
   const mark = (await created.json()).item as ReadingMark
-  const listMarks = repo.listReadingMarks.bind(repo)
-  repo.listReadingMarks = async (userId, query) => {
-    const page = await listMarks(userId, query)
-    return {
-      ...page,
-      items: page.items.map((item) => ({ ...item, anchor: {
-        contentHash: item.anchor.contentHash,
-        suffix: item.anchor.suffix,
-        prefix: item.anchor.prefix,
-        exact: item.anchor.exact,
-        end: item.anchor.end,
-        start: item.anchor.start,
-      } })),
-    }
+  const getIdentity = repo.getReadingMarkIdentity.bind(repo)
+  repo.getReadingMarkIdentity = async (userId, kind, bookId, id) => {
+    const item = await getIdentity(userId, kind, bookId, id)
+    return item ? { ...item, anchor: {
+      contentHash: item.anchor.contentHash,
+      suffix: item.anchor.suffix,
+      prefix: item.anchor.prefix,
+      exact: item.anchor.exact,
+      end: item.anchor.end,
+      start: item.anchor.start,
+    } } : null
   }
   const changed = await request(path, 'PUT', { ...input, color: 'blue', expectedVersion: mark.version })
   assert.equal(changed.status, 200)

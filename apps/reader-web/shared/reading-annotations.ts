@@ -26,6 +26,9 @@ export interface ReadingMark extends Omit<MarkInput, 'expectedVersion'> {
   sourceName: string; cachedChapter: CachedChapter | null
   createdAt: string; updatedAt: string; deletedAt: string | null; version: number
 }
+export type MarkEditIdentity = Pick<ReadingMark, 'id' | 'bookId' | 'editionKey' | 'sourceFingerprint' | 'chapterId' | 'chapterUrl' | 'chapterIndex' | 'chapterTitle' | 'tocRevision' | 'anchor' | 'sourceName' | 'version'>
+export type MarkValidationState = Pick<ReadingMark, 'id' | 'bookId' | 'editionKey' | 'chapterUrl' | 'sourceFingerprint' | 'deletedAt' | 'version'> & { anchor: Pick<MarkAnchor, 'start' | 'end'> }
+export type MarkChangeResolution = { kind: 'mark'; mark: ReadingMark } | { kind: 'duplicate'; id: string }
 export type ReadingMarkSummary = Omit<ReadingMark, 'cachedChapter'> & { hasCachedChapter: boolean }
 export interface MarkSummaryPage { items: ReadingMarkListItem[]; nextCursor: string | null }
 export function markSummary({ cachedChapter, ...mark }: ReadingMark): ReadingMarkSummary { return { ...mark, hasCachedChapter: cachedChapter !== null } }
@@ -40,7 +43,7 @@ export type MarkCommand = { action: 'save'; kind: MarkKind; id: string; bookId: 
 export class MarkError extends Error { public readonly status: 400 | 404 | 409; constructor(status: 400 | 404 | 409, message: string) { super(message); this.status = status } }
 export function comparePoints(a: TextPoint, b: TextPoint) { return a.paragraphIndex - b.paragraphIndex || a.offset - b.offset }
 export function sameChapter(a: Pick<ReadingMark, 'editionKey' | 'chapterUrl' | 'sourceFingerprint'>, b: Pick<ReadingMark, 'editionKey' | 'chapterUrl' | 'sourceFingerprint'>) { return a.editionKey === b.editionKey && a.chapterUrl === b.chapterUrl && a.sourceFingerprint === b.sourceFingerprint }
-export function rangesOverlap(a: MarkAnchor, b: MarkAnchor) { return comparePoints(a.start, b.end) < 0 && comparePoints(b.start, a.end) < 0 }
+export function rangesOverlap(a: Pick<MarkAnchor, 'start' | 'end'>, b: Pick<MarkAnchor, 'start' | 'end'>) { return comparePoints(a.start, b.end) < 0 && comparePoints(b.start, a.end) < 0 }
 export function markOrder(query: MarkQuery) { return query.order === 'position' }
 function queryIdentity(query: MarkQuery) { return JSON.stringify([query.kind, query.bookId ?? '', query.editionKey ?? '', query.chapterUrl ?? '', (query.q ?? '').trim(), Boolean(query.deleted), query.order ?? 'created']) }
 export function markCursor(row: Pick<ReadingMark, 'id' | 'createdAt' | 'chapterIndex'> & { anchor: { start: TextPoint } }, query: MarkQuery) { return encodeURIComponent(JSON.stringify({ scope: queryIdentity(query), id: row.id, time: row.createdAt, chapter: row.chapterIndex, paragraph: row.anchor.start.paragraphIndex, offset: row.anchor.start.offset })) }
@@ -65,19 +68,24 @@ export function markPage(rows: ReadingMark[], query: MarkQuery): MarkPage {
 
 /** 同章变更串行执行；数据库和内存实现共享重复范围、重叠与版本语义。 */
 export function changeMark(rows: ReadingMark[], userId: string, command: MarkCommand): ReadingMark {
-  if (rows.some((r) => r.id === command.id && r.bookId !== command.bookId)) throw new MarkError(409, '记录标识已用于其他书籍')
   const current = rows.find((r) => r.id === command.id && r.bookId === command.bookId)
+  const result = evaluateMarkChange(rows, current, userId, command)
+  return result.kind === 'duplicate' ? rows.find((row) => row.id === result.id)! : result.mark
+}
+/** 数据库可传入省略 cachedChapter 和摘录正文的同章校验投影，并单独提供目标原记录。 */
+export function evaluateMarkChange(rows: readonly MarkValidationState[], current: ReadingMark | undefined, userId: string, command: MarkCommand): MarkChangeResolution {
+  if (rows.some((r) => r.id === command.id && r.bookId !== command.bookId)) throw new MarkError(409, '记录标识已用于其他书籍')
   if (command.action !== 'save') {
     if (!current) throw new MarkError(404, '记录不存在')
     if (current.version !== command.expectedVersion) throw new MarkError(409, '记录已修改，请重新加载')
-    if (command.action === 'restore' && !current.deletedAt) return current
-    if (command.action === 'delete' && current.deletedAt) return current
+    if (command.action === 'restore' && !current.deletedAt) return { kind: 'mark', mark: current }
+    if (command.action === 'delete' && current.deletedAt) return { kind: 'mark', mark: current }
     if (command.action === 'restore') checkOverlap(rows, current, command.kind)
-    return { ...current, deletedAt: command.action === 'delete' ? new Date().toISOString() : null, updatedAt: new Date().toISOString(), version: current.version + 1 }
+    return { kind: 'mark', mark: { ...current, deletedAt: command.action === 'delete' ? new Date().toISOString() : null, updatedAt: new Date().toISOString(), version: current.version + 1 } }
   }
   if (current && !current.deletedAt && command.input.expectedVersion === undefined) {
     const { expectedVersion: _expected, ...requested } = command.input
-    if (sameMarkInput(requested, current)) return current
+    if (sameMarkInput(requested, current)) return { kind: 'mark', mark: current }
   }
   if (current && (current.version !== command.input.expectedVersion || current.deletedAt)) throw new MarkError(409, '记录已修改或删除，请重新加载')
   if (!current && command.input.expectedVersion !== undefined) throw new MarkError(404, '记录不存在')
@@ -85,14 +93,14 @@ export function changeMark(rows: ReadingMark[], userId: string, command: MarkCom
   const now = new Date().toISOString()
   const next: ReadingMark = { ...input, id: command.id, userId, bookId: command.bookId, bookName: command.bookName, author: command.author, sourceName: command.sourceName, cachedChapter: command.cachedChapter, createdAt: current?.createdAt ?? now, updatedAt: now, version: (current?.version ?? -1) + 1, deletedAt: null }
   const duplicate = rows.find((r) => r.id !== next.id && !r.deletedAt && sameChapter(r, next) && comparePoints(r.anchor.start, next.anchor.start) === 0 && (command.kind === 'bookmarks' || comparePoints(r.anchor.end, next.anchor.end) === 0))
-  if (duplicate) return duplicate
+  if (duplicate) return { kind: 'duplicate', id: duplicate.id }
   checkOverlap(rows, next, command.kind)
-  return next
+  return { kind: 'mark', mark: next }
 }
 function sameMarkInput(a: Omit<MarkInput, 'expectedVersion'>, b: ReadingMark) {
   return a.editionKey === b.editionKey && a.sourceFingerprint === b.sourceFingerprint && a.chapterId === b.chapterId && a.chapterUrl === b.chapterUrl && a.chapterIndex === b.chapterIndex && a.chapterTitle === b.chapterTitle && a.tocRevision === b.tocRevision && a.color === b.color && a.note === b.note && a.anchor.start.paragraphIndex === b.anchor.start.paragraphIndex && a.anchor.start.offset === b.anchor.start.offset && a.anchor.end.paragraphIndex === b.anchor.end.paragraphIndex && a.anchor.end.offset === b.anchor.end.offset && a.anchor.exact === b.anchor.exact && a.anchor.prefix === b.anchor.prefix && a.anchor.suffix === b.anchor.suffix && a.anchor.contentHash === b.anchor.contentHash
 }
-function checkOverlap(rows: ReadingMark[], next: ReadingMark, kind: MarkKind) {
+function checkOverlap(rows: readonly MarkValidationState[], next: MarkValidationState, kind: MarkKind) {
   if (rows.some((r) => r.id !== next.id && !r.deletedAt && sameChapter(r, next) && (kind === 'annotations' ? rangesOverlap(r.anchor, next.anchor) : comparePoints(r.anchor.start, next.anchor.start) === 0))) throw new MarkError(409, '与已有标记重叠，请编辑已有标记或重新选择')
 }
 

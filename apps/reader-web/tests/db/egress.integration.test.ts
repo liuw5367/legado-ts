@@ -27,6 +27,12 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
     await closeReaderDb()
     await admin`delete from reader.search_history where user_id = ${userId}`
     await admin`delete from reader.search_runs where user_id = ${userId}`
+    await admin`delete from reader.reading_annotations where user_id = ${userId}`
+    await admin`delete from reader.reading_bookmarks where user_id = ${userId}`
+    await admin`delete from reader.book_list_items where user_id = ${userId}`
+    await admin`delete from reader.book_lists where user_id = ${userId}`
+    await admin`delete from reader.bookshelf where user_id = ${userId}`
+    await admin`delete from reader.reader_settings where user_id = ${userId}`
     await admin`delete from reader.source_import_undo_operations where user_id = ${userId}`
     await admin`delete from reader.source_import_items where user_id = ${userId}`
     await admin`delete from reader.source_import_batches where user_id = ${userId}`
@@ -352,6 +358,41 @@ test('摘要投影与单章目录在真实数据库中保持隔离、版本和�
   const candidate = { sourceId: definitions[0]!.source_id, sourceFingerprint: 'fp-0', candidate: { sourceId: definitions[0]!.source_id, bookUrl: 'book', name: '书', rawFields: {}, traceRef: 'test' } }
   const metadata = { ...candidate.candidate, emptyFields: [], fieldErrors: {} }
   const created = await repo.createBook(userId, { candidate, metadata, editionKey: 'book-edition', sourceFingerprint: 'fp-0' })
+  const { markInputSchema } = await import('../../shared/reading-annotations.ts')
+  const markCachedChapter = { paragraphs: ['a'.repeat(1900)], start: { paragraphIndex: 0, offset: 0 }, end: { paragraphIndex: 0, offset: 1 }, truncatedBefore: false, truncatedAfter: false }
+  const marks: Array<{ id: string; input: ReturnType<typeof markInputSchema.parse>; cachedChapter: typeof markCachedChapter; version: number }> = []
+  for (let index = 0; index < 40; index++) {
+    const start = index * 2
+    const input = markInputSchema.parse({ editionKey: 'book-edition', sourceFingerprint: 'fp-0', chapterId: 'shared-mark-chapter', chapterUrl: '/shared-mark-chapter', chapterIndex: 0, chapterTitle: '共享章节', tocRevision: 'mark-revision', anchor: { start: { paragraphIndex: 0, offset: start }, end: { paragraphIndex: 0, offset: start + 1 }, exact: 'a', prefix: '', suffix: '', contentHash: 'mark-hash' } })
+    const cachedChapter = { ...markCachedChapter, start: input.anchor.start, end: input.anchor.end }
+    const mark = await repo.mutateReadingMark(userId, { action: 'save', kind: 'annotations', id: randomUUID(), bookId: created.book.id, input, bookName: '搜索书', author: null, sourceName: '测试源', cachedChapter })
+    marks.push({ id: mark.id, input, cachedChapter, version: mark.version })
+  }
+  const fullSameChapterMarks = await observe(() => repo.listReadingMarks(userId, { kind: 'annotations', bookId: created.book.id, editionKey: 'book-edition', chapterUrl: '/shared-mark-chapter', all: true }))
+  const targetMark = marks[0]!
+  const markIdentityRead = await observe(() => repo.getReadingMarkIdentity(userId, 'annotations', created.book.id, targetMark.id))
+  assert.ok(markIdentityRead.value)
+  assert.equal('cachedChapter' in markIdentityRead.value, false)
+  assert.ok(markIdentityRead.receivedBytes < bytes(targetMark.cachedChapter) * 0.5, '编辑校验应只读取选中笔记的原文身份投影')
+  const editedMark = await observe(() => repo.mutateReadingMark(userId, { action: 'save', kind: 'annotations', id: targetMark.id, bookId: created.book.id, input: { ...targetMark.input, color: 'blue', expectedVersion: targetMark.version }, bookName: '搜索书', author: null, sourceName: '测试源', cachedChapter: targetMark.cachedChapter }))
+  assert.equal(editedMark.value.color, 'blue')
+  assert.deepEqual(editedMark.value.cachedChapter, targetMark.cachedChapter)
+  assert.ok(editedMark.receivedBytes < fullSameChapterMarks.receivedBytes * 0.2, '编辑单条笔记不应读取同章其他笔记的大缓存')
+  t.diagnostic('同章 40 条笔记含大缓存：完整读取 ' + fullSameChapterMarks.receivedBytes + ' 字节；选中原文身份 ' + markIdentityRead.receivedBytes + ' 字节；编辑单条笔记读取 ' + editedMark.receivedBytes + ' 字节')
+
+  const organizationCreated = await repo.mutateBookOrganization(userId, { kind: 'create', type: 'booklist', name: '目标书单' })
+  const targetList = organizationCreated.lists.find((row) => row.name === '目标书单')!
+  const seededLists = Array.from({ length: 50 }, (_, index) => ({ id: randomUUID(), userId, type: 'booklist' as const, name: '大型书单' + index, description: '书单背景'.repeat(128) }))
+  await admin`insert into reader.book_lists ${admin(seededLists.map(({ id, userId: ownerId, type, name, description }) => ({ id, user_id: ownerId, type, name, description })))} `
+  await admin`insert into reader.book_list_items ${admin(seededLists.map((list) => ({ user_id: userId, book_list_id: list.id, book_id: created.book.id, description: '独立评价'.repeat(128) })))}`
+  await admin`insert into reader.book_list_items (user_id,book_list_id,book_id,description) values (${userId},${targetList.id},${created.book.id},${'目标评价'.repeat(128)})`
+  const fullOrganization = await observe(() => repo.getBookOrganization(userId))
+  const targetedOrganizationUpdate = await observe(() => repo.mutateBookOrganization(userId, { kind: 'review', id: targetList.id, bookId: created.book.id, description: '已修改评价' }))
+  assert.equal(targetedOrganizationUpdate.value.lists.find((row) => row.id === targetList.id)?.id, targetList.id)
+  assert.equal(targetedOrganizationUpdate.value.items.find((row) => row.bookListId === targetList.id)?.description, '已修改评价')
+  assert.ok(targetedOrganizationUpdate.receivedBytes < fullOrganization.receivedBytes * 0.2, '修改一条书单评价不应传输其他书单成员')
+  assert.equal((await repo.getBookOrganization(userId)).items.length, 51, '完整组织读取仍应返回全部书单成员')
+  t.diagnostic('51 个大书单成员完整状态读取 ' + fullOrganization.receivedBytes + ' 字节；单条评价修改读取 ' + targetedOrganizationUpdate.receivedBytes + ' 字节')
   await repo.saveBookSourceCandidates(userId, created.book.id, [candidate, { ...candidate, sourceFingerprint: 'stale' }])
   const allCandidateRows = await observe(() => repo.listBookSourceCandidates(userId, created.book.id))
   const selectedCandidate = allCandidateRows.value.find((row) => row.sourceFingerprint === 'fp-0')!

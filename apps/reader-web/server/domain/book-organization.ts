@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { BookListOrganizationSnapshot, BookListRestore, StoredBookList } from '../../shared/book-lists.ts'
+import type { BookListOrganizationSnapshot, BookListRestore, BookOrganizationMutationResult, StoredBookList } from '../../shared/book-lists.ts'
 import { createBookListSchema, updateBookListSchema, bookListReviewSchema, addBookListItemSchema } from '../../shared/book-lists.ts'
 import { shelfGroupNameSchema, shelfGroupOrderSchema } from '../../shared/bookshelf-groups.ts'
 
@@ -15,7 +15,7 @@ export class OrganizationError extends Error {
   public readonly status: 404 | 409
   public constructor(status: 404 | 409, message: string) { super(message); this.status = status }
 }
-export interface OrganizationState extends BookListOrganizationSnapshot { shelf: Map<string, string | null>; bookIds: Set<string> }
+export interface OrganizationState extends BookListOrganizationSnapshot { shelf: Map<string, string | null>; bookIds: Set<string>; shelfGroupSummaries?: Array<Pick<StoredBookList, 'id' | 'name' | 'customOrder'>> }
 
 /** 调用方只在全部校验通过后提交；数据库与内存仓库共用业务不变量。 */
 export function applyOrganizationCommand(state: OrganizationState, userId: string, command: OrganizationCommand): void {
@@ -25,14 +25,15 @@ export function applyOrganizationCommand(state: OrganizationState, userId: strin
     if (!row) throw new OrganizationError(404, '书单或分组不存在')
     return row
   }
+  const groupSummaries = state.shelfGroupSummaries ?? state.lists.filter((row) => row.type === 'shelf_group')
   const groupName = (name: string, except?: string) => {
     const value = shelfGroupNameSchema.parse(name)
-    if (state.lists.some((row) => row.type === 'shelf_group' && row.name === value && row.id !== except)) throw new OrganizationError(409, '分组名称已存在')
+    if (groupSummaries.some((row) => row.name === value && row.id !== except)) throw new OrganizationError(409, '分组名称已存在')
     return value
   }
   if (command.kind === 'create') {
     const input = command.type === 'booklist' ? createBookListSchema.parse({ name: command.name, description: command.description }) : { name: groupName(command.name), description: '' }
-    state.lists.push({ id: command.id ?? randomUUID(), userId, type: command.type, ...input, isPublic: false, customOrder: command.type === 'booklist' ? 0 : Math.max(-1, ...state.lists.filter((row) => row.type === 'shelf_group').map((row) => row.customOrder)) + 1, createdAt: now, updatedAt: now })
+    state.lists.push({ id: command.id ?? randomUUID(), userId, type: command.type, ...input, isPublic: false, customOrder: command.type === 'booklist' ? 0 : Math.max(-1, ...groupSummaries.map((row) => row.customOrder)) + 1, createdAt: now, updatedAt: now })
     return
   }
   if (command.kind === 'order') {
@@ -79,4 +80,13 @@ export function applyOrganizationCommand(state: OrganizationState, userId: strin
     }
     if (command.kind === 'move') state.shelf.delete(command.bookId)
   }
+}
+
+export function organizationMutationResult(state: OrganizationState, command: OrganizationCommand): BookOrganizationMutationResult {
+  if (command.kind === 'order') return { lists: state.lists.filter((row) => row.type === 'shelf_group'), items: [] }
+  const targetListId = command.kind === 'create' ? command.id ?? state.lists.at(-1)?.id : command.kind === 'assign' ? undefined : command.id
+  const lists = targetListId === undefined ? [] : state.lists.filter((row) => row.id === targetListId)
+  const hasTargetItem = command.kind === 'add' || command.kind === 'remove' || command.kind === 'review' || command.kind === 'move'
+  const items = hasTargetItem ? state.items.filter((row) => row.bookListId === command.id && row.bookId === command.bookId) : []
+  return { lists, items }
 }

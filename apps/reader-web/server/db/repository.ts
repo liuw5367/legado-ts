@@ -5,16 +5,16 @@ import type { BookSourceItem } from '../../shared/book-sources.ts'
 import { readingContent, type CachedReadingContent } from '../../shared/reading-content.ts'
 import type { CachedTocSummary } from '../../shared/toc.ts'
 import type { BookDetailsResponse, BookReadingInfo } from '../../shared/book-details.ts'
-import type { BookDisplay, BookListChoice, BookListDetails } from '../../shared/book-lists.ts'
-import { readReaderMarks, readMarks, writeMark, lockMarks, purgeMark, restoreMarks } from './reading-marks.ts'
-import { markListItem, readerMark, type ReaderMark, validateMarkCollection, readingMarkSchema, changeMark, markPage, MarkError, type MarkKind, type MarkQuery, type MarkCommand, type MarkPage, type MarkSummaryPage, type CachedChapter, type ReadingMark } from '../../shared/reading-annotations.ts'
+import type { BookDisplay, BookListChoice, BookListDetails, BookOrganizationMutationResult } from '../../shared/book-lists.ts'
+import { readReaderMarks, readMarks, readMarkEditIdentity, writeMark, lockMarks, purgeMark, restoreMarks } from './reading-marks.ts'
+import { markListItem, readerMark, type ReaderMark, validateMarkCollection, readingMarkSchema, changeMark, markPage, MarkError, type MarkEditIdentity, type MarkKind, type MarkQuery, type MarkCommand, type MarkPage, type MarkSummaryPage, type CachedChapter, type ReadingMark } from '../../shared/reading-annotations.ts'
 import { DEFAULT_SEARCH_CONCURRENCY, searchConcurrencySchema } from '../../shared/search-settings.ts'
 import { acquireExecutionSlot, releaseExecutionSlot, acquireMemoryExecutionSlot, releaseMemoryExecutionSlot, type ExecutionLease } from '../runtime/source-execution.ts'
 import * as importHistory from './source-import-history.ts'
 import { MemoryImportHistory } from './memory-import-history.ts'
 import type { ImportConfirmResult, ImportHistoryQuery, ImportLinksResponse, ImportHistoryPage, ImportItemsPage, UndoImportInput, UndoImportResult, UndoPreview } from '../../shared/source-management.ts'
 import type { BookListOrganizationSnapshot } from '../../shared/book-lists.ts'
-import { OrganizationError, type OrganizationCommand, applyOrganizationCommand } from '../domain/book-organization.ts'
+import { OrganizationError, type OrganizationCommand, applyOrganizationCommand, organizationMutationResult } from '../domain/book-organization.ts'
 import { latestSearchHistory } from '../../shared/search-history.ts'
 import { normalizeIdentity } from '../../shared/book-identity.ts'
 import { compareSourceManagementOrder, compareSourceVersions, selectOneSourcePerDomain, sourceDomainInfo } from '../../shared/source-domain.ts'
@@ -109,6 +109,7 @@ export interface ReaderRepository {
   getDisplayPosition(userId: string, bookId: string, editionKey: string): Promise<{ title: string; lastReadAt: string } | null>
   listReadingMarkBooks(userId: string): Promise<Array<{ id: string; name: string; author: string | null; activeEditionKey: string | null }>>
   listReadingMarks(userId: string, query: MarkQuery): Promise<MarkPage>
+  getReadingMarkIdentity(userId: string, kind: MarkKind, bookId: string, id: string): Promise<MarkEditIdentity | null>
   listReaderMarks(userId: string, query: MarkQuery): Promise<ReaderMark[]>
   listReadingMarkSummaries(userId: string, query: MarkQuery): Promise<MarkSummaryPage>
   getCachedMarkChapter(userId: string, bookId: string, id: string): Promise<{ cachedChapter: CachedChapter | null } | null>
@@ -116,7 +117,7 @@ export interface ReaderRepository {
   purgeReadingMark(userId: string, kind: MarkKind, bookId: string, id: string, expectedVersion: number): Promise<void>
   getOrganizationLibrary(userId: string, bookIds?: string[], includePositions?: boolean): Promise<{ books: Array<{ book: StoredBook; editions: StoredEdition[] }>; positions: StoredPosition[]; bookshelf: Array<{ bookId: string; groupId: string | null }> }>
   getBookOrganization(userId: string, listId?: string, includeItems?: boolean): Promise<BookListOrganizationSnapshot>
-  mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot>
+  mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookOrganizationMutationResult>
 
   listSourceSummaries(userId: string, sourceIds?: string[]): Promise<SourceListRecord[]>
   listSourcesForUser(userId: string): Promise<StoredSourceRecord[]>
@@ -255,6 +256,7 @@ export class PostgresReaderRepository implements ReaderRepository {
   }
   public listReadingMarkBooks(userId: string) { return withUser(userId, (tx) => tx.selectDistinct({ id: books.id, name: books.name, author: books.author, activeEditionKey: books.activeEditionKey }).from(readingAnnotations).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingAnnotations.bookId))).where(eq(readingAnnotations.userId, userId)).orderBy(books.name, books.id)) }
   public listReadingMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query)) }
+  public getReadingMarkIdentity(userId: string, kind: MarkKind, bookId: string, id: string) { return withUser(userId, (tx) => readMarkEditIdentity(tx, userId, kind, bookId, id)) }
   public listReaderMarks(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readReaderMarks(tx, userId, query)) }
   public listReadingMarkSummaries(userId: string, query: MarkQuery) { return withUser(userId, (tx) => readMarks(tx, userId, query, true)) }
   public getCachedMarkChapter(userId: string, bookId: string, id: string) {
@@ -287,22 +289,46 @@ export class PostgresReaderRepository implements ReaderRepository {
     return withUser(userId, async (tx) => readOrganization(tx, userId, listId, includeItems))
   }
 
-  public async mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot> {
+  public async mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookOrganizationMutationResult> {
     return withUser(userId, async (tx) => {
       // 同账号的分组删除、归属修改及排序共用锁，防止产生悬空关系。
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId + ':book-organization'}, 0))`)
-      const before = await readOrganization(tx, userId)
-      const shelfRows = await tx.select().from(bookshelf).where(eq(bookshelf.userId, userId))
-      const bookRows = await tx.select({ id: books.id }).from(books).where(eq(books.userId, userId))
-      const state = { ...structuredClone(before), shelf: new Map(shelfRows.map((row) => [row.bookId, row.groupId])), bookIds: new Set(bookRows.map((row) => row.id)) }
+      const memberCommand = command.kind === 'add' || command.kind === 'remove' || command.kind === 'review' || command.kind === 'move'
+      const listRows = command.kind === 'order'
+        ? await tx.select().from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.type, 'shelf_group')))
+        : command.kind === 'create'
+          ? []
+          : command.kind === 'assign'
+            ? command.groupId === null ? [] : await tx.select().from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.id, command.groupId), eq(bookLists.type, 'shelf_group')))
+            : await tx.select().from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.id, command.id), 'type' in command ? eq(bookLists.type, command.type) : memberCommand ? eq(bookLists.type, 'booklist') : undefined))
+      const groupSummaries = command.kind === 'create' && command.type === 'shelf_group' || command.kind === 'edit' && command.type === 'shelf_group'
+        ? await tx.select({ id: bookLists.id, name: bookLists.name, customOrder: bookLists.customOrder }).from(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.type, 'shelf_group')))
+        : undefined
+      const itemListId = command.kind === 'delete' || memberCommand ? command.id : undefined
+      const itemRows = itemListId === undefined ? [] : await tx.select().from(bookListItems).where(and(eq(bookListItems.userId, userId), eq(bookListItems.bookListId, itemListId), memberCommand ? eq(bookListItems.bookId, command.bookId) : undefined))
+      const shelfRows = command.kind === 'assign' || command.kind === 'move'
+        ? await tx.select({ bookId: bookshelf.bookId, groupId: bookshelf.groupId }).from(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.bookId, command.bookId)))
+        : command.kind === 'delete' && command.type === 'shelf_group'
+          ? await tx.select({ bookId: bookshelf.bookId, groupId: bookshelf.groupId }).from(bookshelf).where(and(eq(bookshelf.userId, userId), eq(bookshelf.groupId, command.id)))
+          : []
+      const bookRows = memberCommand ? await tx.select({ id: books.id }).from(books).where(and(eq(books.userId, userId), eq(books.id, command.bookId))) : []
+      const beforeLists = listRows.map(toBookList)
+      const beforeItems = itemRows.map(toBookListItem)
+      const state = {
+        lists: structuredClone(beforeLists),
+        items: structuredClone(beforeItems),
+        shelf: new Map(shelfRows.map((row) => [row.bookId, row.groupId])),
+        bookIds: new Set(bookRows.map((row) => row.id)),
+        ...(groupSummaries === undefined ? {} : { shelfGroupSummaries: groupSummaries }),
+      }
       applyOrganizationCommand(state, userId, command)
       const memberKey = (row: { bookListId: string; bookId: string }) => row.bookListId + ':' + row.bookId
-      const previousLists = new Map(before.lists.map((row) => [row.id, row]))
-      const previousItems = new Map(before.items.map((row) => [memberKey(row), row]))
+      const previousLists = new Map(beforeLists.map((row) => [row.id, row]))
+      const previousItems = new Map(beforeItems.map((row) => [memberKey(row), row]))
       const nextLists = new Set(state.lists.map((row) => row.id))
       const nextItems = new Set(state.items.map(memberKey))
-      for (const row of before.items) if (!nextItems.has(memberKey(row))) await tx.delete(bookListItems).where(and(eq(bookListItems.userId, userId), eq(bookListItems.bookListId, row.bookListId), eq(bookListItems.bookId, row.bookId)))
-      for (const row of before.lists) if (!nextLists.has(row.id)) await tx.delete(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.id, row.id)))
+      for (const row of beforeItems) if (!nextItems.has(memberKey(row))) await tx.delete(bookListItems).where(and(eq(bookListItems.userId, userId), eq(bookListItems.bookListId, row.bookListId), eq(bookListItems.bookId, row.bookId)))
+      for (const row of beforeLists) if (!nextLists.has(row.id)) await tx.delete(bookLists).where(and(eq(bookLists.userId, userId), eq(bookLists.id, row.id)))
       for (const row of state.lists) {
         if (JSON.stringify(previousLists.get(row.id)) === JSON.stringify(row)) continue
         const values = { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) }
@@ -321,7 +347,7 @@ export class PostgresReaderRepository implements ReaderRepository {
         const [settings] = await tx.select().from(readerSettings).where(eq(readerSettings.userId, userId)).for('update')
         if (settings?.preferences.general.bookshelfInitialGroup === command.id) await tx.update(readerSettings).set({ preferences: { ...settings.preferences, general: { ...settings.preferences.general, bookshelfInitialGroup: 'all' } }, updatedAt: new Date() }).where(eq(readerSettings.userId, userId))
       }
-      return { lists: state.lists, items: state.items }
+      return organizationMutationResult(state, command)
     })
   }
 
@@ -1209,12 +1235,20 @@ export class MemoryReaderRepository implements ReaderRepository {
     const books = new Map([...this.books.values()].filter(({ book }) => book.userId === userId).map(({ book }) => [book.id, book]))
     return structuredClone(markPage([...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + query.kind + ':')).map(([, row]) => { const book = books.get(row.bookId); return book ? { ...row, bookName: book.name, author: book.author ?? null } : row }), query))
   }
+  public async getReadingMarkIdentity(userId: string, kind: MarkKind, bookId: string, id: string): Promise<MarkEditIdentity | null> {
+    const row = this.readingMarks.get(`${userId}:${kind}:${id}`)
+    if (row === undefined || row.bookId !== bookId) return null
+    const { editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, sourceName, version } = row
+    return structuredClone({ id, bookId, editionKey, sourceFingerprint, chapterId, chapterUrl, chapterIndex, chapterTitle, tocRevision, anchor, sourceName, version })
+  }
   public async listReaderMarks(userId: string, query: MarkQuery) { const page = await this.listReadingMarks(userId, { ...query, deleted: false }); return page.items.map((item) => ({ ...readerMark(item), ...(query.id ? { sourceName: item.sourceName } : {}) })) }
   public async listReadingMarkSummaries(userId: string, query: MarkQuery) { const page = await this.listReadingMarks(userId, query); return { ...page, items: page.items.map(markListItem) } }
   public async getCachedMarkChapter(userId: string, bookId: string, id: string) { const row = this.readingMarks.get(userId + ':annotations:' + id); return row?.bookId === bookId ? structuredClone({ cachedChapter: row.cachedChapter }) : null }
   public async mutateReadingMark(userId: string, command: MarkCommand) {
     const rows = [...this.readingMarks.entries()].filter(([key]) => key.startsWith(userId + ':' + command.kind + ':')).map(([, row]) => row)
-    const next = changeMark(rows, userId, command)
+    const current = command.action === 'save' ? rows.find((row) => row.id === command.id && row.bookId === command.bookId) : undefined
+    const effectiveCommand = command.action === 'save' && current !== undefined && command.input.expectedVersion !== undefined ? { ...command, cachedChapter: current.cachedChapter } : command
+    const next = changeMark(rows, userId, effectiveCommand)
     this.readingMarks.set(userId + ':' + command.kind + ':' + next.id, structuredClone(next))
     return structuredClone(next)
   }
@@ -1236,7 +1270,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   private readonly organizations = new Map<string, BookListOrganizationSnapshot>()
   private readonly shelfGroups = new Map<string, string | null>()
   public async getBookOrganization(userId: string, listId?: string, includeItems = true): Promise<BookListOrganizationSnapshot> { const value = this.organizations.get(userId) ?? { lists: [], items: [] }; return structuredClone({ lists: value.lists.filter((row) => !listId || row.id === listId), items: includeItems ? value.items.filter((row) => !listId || row.bookListId === listId) : [] }) }
-  public async mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookListOrganizationSnapshot> {
+  public async mutateBookOrganization(userId: string, command: OrganizationCommand): Promise<BookOrganizationMutationResult> {
     // 在同步段内校验并提交，内存实现与数据库事务保持相同的失败语义。
     const before = structuredClone(this.organizations.get(userId) ?? { lists: [], items: [] })
     const shelf = new Map([...this.shelf.keys()].filter((key) => key.startsWith(userId + ':')).map((key) => [key.slice(userId.length + 1), this.shelfGroups.get(key) ?? null]))
@@ -1252,7 +1286,7 @@ export class MemoryReaderRepository implements ReaderRepository {
       const current = this.settings.get(userId)
       if (current?.general.bookshelfInitialGroup === command.id) this.settings.set(userId, { ...current, general: { ...current.general, bookshelfInitialGroup: 'all' } })
     }
-    return structuredClone({ lists: state.lists, items: state.items })
+    return structuredClone(organizationMutationResult(state, command))
   }
 
   private readonly userSourceMap = new Map<string, { source: StoredSourceRecord; deleted: boolean; revision: string }>()
@@ -1975,10 +2009,12 @@ function cacheableCandidate(stored: StoredCandidate): StoredCandidate {
   return { sourceId: stored.sourceId, sourceFingerprint: stored.sourceFingerprint, ...(stored.searchDurationMs === undefined ? {} : { searchDurationMs: stored.searchDurationMs }), candidate: { sourceId, bookUrl, ...fields, ...(variable === undefined ? {} : { variable }), rawFields: structuredClone(rawFields), traceRef: 'book-source-cache' } }
 }
 
+function toBookList(row: typeof bookLists.$inferSelect) { return { ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
+function toBookListItem(row: typeof bookListItems.$inferSelect) { return { ...row, addedAt: row.addedAt.toISOString(), updatedAt: row.updatedAt.toISOString() } }
 async function readOrganization(tx: ReaderTransaction, userId: string, listId?: string, includeItems = true): Promise<BookListOrganizationSnapshot> {
   const lists = await tx.select().from(bookLists).where(and(eq(bookLists.userId, userId), listId ? eq(bookLists.id, listId) : undefined))
   const items = includeItems ? await tx.select().from(bookListItems).where(and(eq(bookListItems.userId, userId), listId ? eq(bookListItems.bookListId, listId) : undefined)) : []
-  return { lists: lists.map((row) => ({ ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() })), items: items.map((row) => ({ ...row, addedAt: row.addedAt.toISOString(), updatedAt: row.updatedAt.toISOString() })) }
+  return { lists: lists.map(toBookList), items: items.map(toBookListItem) }
 }
 
 async function readBackupSnapshot(transaction: ReaderTransaction, userId: string): Promise<ReaderBackupSnapshot> {
