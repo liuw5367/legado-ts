@@ -298,6 +298,15 @@ function managedSourcePage(url) {
   return { sources: url.searchParams.has('domain') ? pageSources.map(readingSourceSummary) : pageSources, page: all ? 1 : page, pageSize: all ? filtered.length : pageSize, total: filtered.length, enabledCount: filtered.filter((source) => source.enabled).length }
 }
 
+function managedSourceStats() {
+  const domains = new Map()
+  for (const source of sources) {
+    const key = sourceDomainInfo(source.sourceId).key
+    domains.set(key, (domains.get(key) ?? false) || source.enabled)
+  }
+  return { total: sources.length, domainCount: domains.size, enabledDomainCount: [...domains.values()].filter(Boolean).length }
+}
+
 function homeSnapshot() {
   const visibleBooks = [...books.values()].map(displayBook).filter((value) => value !== undefined)
   const shelfItems = visibleBooks.filter(({ book }) => bookshelf.has(book.id)).map(({ book, edition }) => {
@@ -631,6 +640,7 @@ async function handleApi(request, response, url) {
     json(response, { sources: sources.filter((source) => source.enabled).map(({ sourceId, name, group, fingerprint, enabled }) => ({ sourceId, name, group, fingerprint, enabled })) })
     return
   }
+  if (method === 'GET' && path === '/api/source-management/stats') { json(response, managedSourceStats()); return }
   if (method === 'GET' && path === '/api/source-management') { json(response, managedSourcePage(url)); return }
   if (method === 'POST' && path === '/api/source-management/actions') {
     const body = await readJson(request)
