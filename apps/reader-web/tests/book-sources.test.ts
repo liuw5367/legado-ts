@@ -338,6 +338,34 @@ test('正文分页循环的具体原因在首次抓取及两种缓存读取时�
   assert.equal(chapterRequests, 1)
 })
 
+test('正文清理失败提示规则错误，旧缓存选择器错误不再断言截断', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    if (new URL(String(url)).pathname !== '/chapter-cleanup') return fixtureResponse(url)
+    return new Response('<main>第一章 测试<br>本章正文</main>')
+  })
+  const { repository, runtime, run } = await setup({ content: 'main@text', replaceRegex: '^\\s*正文卷\\s*\\n?@@^\\s*标题\\n?' })
+  await runtime.runSearchBatch('user-a', run.id)
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0)
+  const source = await repository.getSourceForUser('user-a', created.edition.sourceId)
+  assert.ok(source)
+  const chapter = { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: 'https://8.8.8.8/chapter-cleanup', index: 0, title: '第一章', rawFields: {}, traceRef: '' }
+  const { chapterIdFor } = await import('../server/runtime/reader-runtime.ts')
+  const chapterId = chapterIdFor(chapter)
+  await repository.saveToc('user-a', { userId: 'user-a', bookId: created.book.id, editionKey: created.edition.editionKey, sourceFingerprint: source.fingerprint, revision: 'cleanup', chapters: [chapter], bookPatch: { lastCheckTime: 1, totalChapterNum: 1 } })
+  const first = await runtime.getOrLoadContentDisplay('user-a', created.book.id, created.edition.editionKey, chapterId, true)
+  const cached = await runtime.getOrLoadContentDisplay('user-a', created.book.id, created.edition.editionKey, chapterId)
+  for (const result of [first, cached]) {
+    assert.match(result.runtimeWarning ?? '', /正文已提取，但正文清理规则执行失败：CSS 选择器不受支持/u)
+    assert.match(result.content.cleaned, /本章正文/u)
+    assert.equal(result.runtimeWarning?.includes('已截断'), false)
+  }
+  const stored = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId)
+  await repository.saveContent('user-a', { ...stored, content: { ...stored.content, truncationReasons: ['CSS 选择器不受支持：Unmatched selector: ?'] } })
+  const legacy = await runtime.getOrLoadContentDisplay('user-a', created.book.id, created.edition.editionKey, chapterId)
+  assert.match(legacy.runtimeWarning ?? '', /正文处理出现异常：CSS 选择器不受支持/u)
+  assert.equal(legacy.runtimeWarning?.includes('已截断'), false)
+})
+
 test('缓存中的截断目录再次读取时仍返回截断提示', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url: URL | string) => fixtureResponse(url))
   const { repository, runtime, run } = await setup()

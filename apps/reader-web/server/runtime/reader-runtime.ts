@@ -43,7 +43,16 @@ function sourceStateFailureReason(error: unknown): string {
 }
 
 function truncatedContentWarning(reasons?: string[]): string {
-  return reasons?.length ? `正文未完整抓取，已截断：${reasons.join('；')}。请尝试刷新内容或检查书源规则。` : TRUNCATED_CONTENT_WARNING
+  if (!reasons?.length) return TRUNCATED_CONTENT_WARNING
+  const cleanupReasons = reasons.filter((reason) => reason.startsWith('正文清理规则执行失败：'))
+  if (cleanupReasons.length === reasons.length) return `正文已提取，但${cleanupReasons.join('；')}。已保留未完成清理的正文，请检查书源的正文替换规则。`
+  // 旧缓存只有诊断文本，没有失败阶段；选择器错误不能证明正文已截断。
+  if (reasons.every((reason) => reason.startsWith('CSS 选择器不受支持：') || reason.startsWith('XML CSS 选择器不受支持：'))) {
+    return `正文处理出现异常：${reasons.join('；')}。请检查书源规则；可尝试刷新内容以获取最新诊断。`
+  }
+  return cleanupReasons.length
+    ? `正文未完整抓取或处理：${reasons.join('；')}。已保留可用正文，请尝试刷新内容或检查书源规则。`
+    : `正文未完整抓取，已截断：${reasons.join('；')}。请尝试刷新内容或检查书源规则。`
 }
 
 /** 缓存的正文记录本身带 truncated；命中缓存时也要提示，不能只在首次抓取时提示一次。 */
@@ -473,7 +482,7 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
       if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
       // 诊断可能包含书源脚本或请求信息，使用已有脱敏逻辑后再缓存和展示。
       const truncationReasons = result.value.truncated === true
-        ? [...new Set(result.diagnostics.map((item) => sourceStateFailureReason(item.message)))].slice(0, 5)
+        ? [...new Set(result.diagnostics.map((item) => `${item.field === 'replaceRegex' || item.field === 'replacements' ? '正文清理规则执行失败：' : ''}${sourceStateFailureReason(item.message)}`))].slice(0, 5)
         : []
       const content = { ...result.value, ...(truncationReasons.length ? { truncationReasons } : {}) }
       loaded = await repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content })
