@@ -42,10 +42,14 @@ function sourceStateFailureReason(error: unknown): string {
   return `${prefix}${message || '未知错误（异常未提供错误信息）'}`
 }
 
+function truncatedContentWarning(reasons?: string[]): string {
+  return reasons?.length ? `正文未完整抓取，已截断：${reasons.join('；')}。请尝试刷新内容或检查书源规则。` : TRUNCATED_CONTENT_WARNING
+}
+
 /** 缓存的正文记录本身带 truncated；命中缓存时也要提示，不能只在首次抓取时提示一次。 */
 function withTruncatedContentWarning(content: StoredContent & { runtimeWarning?: string }): StoredContent & { runtimeWarning?: string } {
   if (content.content.truncated !== true || content.runtimeWarning !== undefined) return content
-  return { ...content, runtimeWarning: TRUNCATED_CONTENT_WARNING }
+  return { ...content, runtimeWarning: truncatedContentWarning(content.content.truncationReasons) }
 }
 
 /** 目录快照把抓取时的截断状态落库；缓存命中时据此继续提示。 */
@@ -435,7 +439,7 @@ async function getOrLoadContentDisplay(repository: ReaderRepository, userId: str
     if (chapter === null) throw new ReaderRuntimeError('not-found', '目录尚未加载')
     if (!chapter.chapter) throw new ReaderRuntimeError('not-found', '章节不存在')
     const cached = await repository.getContentDisplay(userId, editionKey, chapter.revision, chapterId)
-    if (cached?.sourceFingerprint === source.fingerprint) return { tocRevision: cached.tocRevision, content: { ...cached.content, chapter: { ...cached.content.chapter, ...(chapter.chapter.title === undefined ? {} : { title: chapter.chapter.title }) } }, ...(cached.truncated ? { runtimeWarning: TRUNCATED_CONTENT_WARNING } : {}) }
+    if (cached?.sourceFingerprint === source.fingerprint) return { tocRevision: cached.tocRevision, content: { ...cached.content, chapter: { ...cached.content.chapter, ...(chapter.chapter.title === undefined ? {} : { title: chapter.chapter.title }) } }, ...(cached.truncated ? { runtimeWarning: truncatedContentWarning(cached.truncationReasons) } : {}) }
   }
   const loaded = await getOrLoadContent(repository, userId, bookId, editionKey, chapterId, true)
   const chapter = await repository.getChapterContext(userId, bookId, editionKey, chapterId, true)
@@ -467,9 +471,14 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
         maxOutputBytes: 4 * 1024 * 1024,
       }))
       if (result.value === null) throw new ReaderRuntimeError('source-failed', diagnosticsMessage(result.status, '正文读取失败'))
-      loaded = await repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content: result.value })
+      // 诊断可能包含书源脚本或请求信息，使用已有脱敏逻辑后再缓存和展示。
+      const truncationReasons = result.value.truncated === true
+        ? [...new Set(result.diagnostics.map((item) => sourceStateFailureReason(item.message)))].slice(0, 5)
+        : []
+      const content = { ...result.value, ...(truncationReasons.length ? { truncationReasons } : {}) }
+      loaded = await repository.saveContent(userId, { userId, bookId, editionKey, chapterId, tocRevision: toc.revision, sourceFingerprint: source.fingerprint, content })
       // 截断的正文保留已抓取内容，但必须让客户端知道这不是完整章节。
-      return result.value.truncated === true ? { ...loaded, runtimeWarning: TRUNCATED_CONTENT_WARNING } : loaded
+      return withTruncatedContentWarning(loaded)
     })
   } catch (error) {
     // 仅保留本次请求已成功保存的正文，不能用旧缓存掩盖抓取或正文写入失败。
@@ -477,7 +486,7 @@ async function getOrLoadContent(repository: ReaderRepository, userId: string, bo
     const reason = sourceStateFailureReason(error)
     console.warn('[reader] source-session-finalization-failed', { bookId, chapterId, reason })
     const warning = `正文已加载，但书源运行状态保存失败：${reason}；后续章节如有异常，请重试。`
-    return { ...loaded, runtimeWarning: loaded.content.truncated === true ? `${TRUNCATED_CONTENT_WARNING}\n${warning}` : warning }
+    return { ...loaded, runtimeWarning: loaded.content.truncated === true ? `${truncatedContentWarning(loaded.content.truncationReasons)}\n${warning}` : warning }
   }
 }
 

@@ -10,9 +10,9 @@ import { fallbackChapterForPosition } from '../src/lib/source-position.ts'
 
 process.env.SOURCE_RUNTIME_STATE_KEY = 'book-sources-tests-runtime-state-key-32-bytes'
 
-async function setup() {
+async function setup(ruleContent?: Record<string, string>) {
   const repository = new MemoryReaderRepository()
-  const definitions = ['a', 'b'].map((id) => ({ bookSourceUrl: `https://${id === 'a' ? '8.8.8.8' : '8.8.4.4'}/source`, bookSourceName: `来源${id}`, bookSourceType: 0, lastUpdateTime: 10, searchUrl: `/search-${id}`, ruleSearch: { bookList: 'article', name: 'h2@text', author: '.author@text', bookUrl: 'a@href' }, ruleBookInfo: { name: 'h1@text', author: '.author@text', tocUrl: 'a@href' } }))
+  const definitions = ['a', 'b'].map((id) => ({ bookSourceUrl: `https://${id === 'a' ? '8.8.8.8' : '8.8.4.4'}/source`, bookSourceName: `来源${id}`, ...(ruleContent === undefined ? {} : { ruleContent }), bookSourceType: 0, lastUpdateTime: 10, searchUrl: `/search-${id}`, ruleSearch: { bookList: 'article', name: 'h2@text', author: '.author@text', bookUrl: 'a@href' }, ruleBookInfo: { name: 'h1@text', author: '.author@text', tocUrl: 'a@href' } }))
   const imported = await importSources({ kind: 'text', text: JSON.stringify(definitions) })
   const candidates = compareImportCandidates(imported, new Map())
   const previewId = randomUUID()
@@ -312,6 +312,30 @@ test('缓存中的截断正文再次读取时仍返回截断提示', async (t) =
   const cached = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId)
   assert.equal(cached.content.cleaned, '截断正文')
   assert.match(cached.runtimeWarning ?? '', /截断/u)
+})
+
+test('正文分页循环的具体原因在首次抓取及两种缓存读取时保留', async (t) => {
+  let chapterRequests = 0
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    if (new URL(String(url)).pathname !== '/chapter-loop') return fixtureResponse(url)
+    chapterRequests++
+    return new Response('<main>本章正文</main><a class="next" href="/chapter-loop">下一页</a>')
+  })
+  const { repository, runtime, run } = await setup({ content: 'main@text', nextContentUrl: '.next@href' })
+  await runtime.runSearchBatch('user-a', run.id)
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0)
+  const source = await repository.getSourceForUser('user-a', created.edition.sourceId)
+  assert.ok(source)
+  const chapter = { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: 'https://8.8.8.8/chapter-loop', index: 0, title: '第一章', rawFields: {}, traceRef: '' }
+  const { chapterIdFor } = await import('../server/runtime/reader-runtime.ts')
+  const chapterId = chapterIdFor(chapter)
+  await repository.saveToc('user-a', { userId: 'user-a', bookId: created.book.id, editionKey: created.edition.editionKey, sourceFingerprint: source.fingerprint, revision: 'loop', chapters: [chapter], bookPatch: { lastCheckTime: 1, totalChapterNum: 1 } })
+  const first = await runtime.getOrLoadContentDisplay('user-a', created.book.id, created.edition.editionKey, chapterId, true)
+  const cached = await runtime.getOrLoadContentDisplay('user-a', created.book.id, created.edition.editionKey, chapterId)
+  const full = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId)
+  for (const result of [first, cached, full]) assert.match(result.runtimeWarning ?? '', /正文下一页形成循环/u)
+  assert.equal(first.content.cleaned, '本章正文')
+  assert.equal(chapterRequests, 1)
 })
 
 test('缓存中的截断目录再次读取时仍返回截断提示', async (t) => {

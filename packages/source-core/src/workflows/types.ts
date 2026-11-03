@@ -531,6 +531,8 @@ export interface ChapterContent {
   imgUrl?: string
   /** 正文分页达到页数/预算边界仍有未抓取的内容；宿主应提示而不是当作完整正文。 */
   truncated?: boolean
+  /** 宿主保存的截断原因摘要；供缓存命中时继续提示，不包含原始请求信息。 */
+  truncationReasons?: string[]
 }
 
 export interface ContentInput extends WorkflowOptions {

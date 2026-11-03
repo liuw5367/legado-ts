@@ -1048,9 +1048,11 @@ export class PostgresReaderRepository implements ReaderRepository {
         content: sql<CachedReadingContent['content']>`jsonb_strip_nulls(jsonb_build_object(
           'chapter', jsonb_build_object('chapterId', ${chapterId}::text, 'chapterUrl', ${chapterContents.content}->'chapter'->'chapterUrl', 'index', ${chapterContents.content}->'chapter'->'index', 'title', ${chapterContents.content}->'chapter'->'title'),
           'contentType', ${chapterContents.content}->'contentType', 'cleaned', ${chapterContents.content}->'cleaned', 'resources', ${chapterContents.content}->'resources', 'finalUrl', ${chapterContents.content}->'finalUrl'
-        ))`, truncated: sql<boolean>`${chapterContents.content}->'truncated' = 'true'::jsonb`,
+        ))`, truncationReasons: sql<string[] | null>`${chapterContents.content}->'truncationReasons'`, truncated: sql<boolean>`${chapterContents.content}->'truncated' = 'true'::jsonb`,
       }).from(chapterContents).where(and(eq(chapterContents.userId, userId), eq(chapterContents.editionKey, editionKey), eq(chapterContents.tocRevision, tocRevision), eq(chapterContents.chapterId, chapterId))).limit(1)
-      return row === undefined ? null : { ...row, truncated: row.truncated === true }
+      if (row === undefined) return null
+      const { truncationReasons, ...cached } = row
+      return { ...cached, truncated: row.truncated === true, ...(truncationReasons === null ? {} : { truncationReasons }) }
     })
   }
 
@@ -1691,7 +1693,7 @@ export class MemoryReaderRepository implements ReaderRepository {
   }
   public async getContentDisplay(userId: string, editionKey: string, tocRevision: string, chapterId: string): Promise<CachedReadingContent | null> {
     const cached = this.contents.get(`${userId}:${editionKey}:${tocRevision}:${chapterId}`)
-    return cached ? { tocRevision: cached.tocRevision, sourceFingerprint: cached.sourceFingerprint, content: readingContent(cached.content, chapterId), ...(cached.content.truncated === undefined ? {} : { truncated: cached.content.truncated }) } : null
+    return cached ? { tocRevision: cached.tocRevision, sourceFingerprint: cached.sourceFingerprint, content: readingContent(cached.content, chapterId), ...(cached.content.truncated === undefined ? {} : { truncated: cached.content.truncated }), ...(cached.content.truncationReasons === undefined ? {} : { truncationReasons: cached.content.truncationReasons }) } : null
   }
   public async setActiveEdition(userId: string, bookId: string, editionKey: string): Promise<StoredEdition | null> { const selected = [...this.books.values()].find((item) => item.book.userId === userId && item.book.id === bookId && item.edition.editionKey === editionKey); if (selected === undefined) return null; this.writeReadingState(userId, bookId, editionKey); return selected.edition }
   public async getEdition(userId: string, bookId: string, editionKey?: string): Promise<StoredEdition | null> { const item = [...this.books.values()].find((value) => value.book.userId === userId && value.book.id === bookId && (editionKey === undefined || value.edition.editionKey === editionKey)); return item?.edition ?? null }

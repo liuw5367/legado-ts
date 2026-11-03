@@ -38,11 +38,12 @@ test('real migrations, cache persistence, RLS and authenticated source API', { s
   const displayChapter = { sourceId: candidate.sourceId, bookUrl: metadata.bookUrl, chapterUrl: 'https://8.8.8.8/chapter-中文', index: 0, title: '第一章', isVip: false, isVolume: true, rawFields: { ignored: '内部数据' }, traceRef: 'internal' }
   const savedToc = await repository.saveToc(userA, { userId: userA, bookId: created.book.id, editionKey: 'edition-a', sourceFingerprint: 'fp', revision: 'r1', chapters: [displayChapter], bookPatch: { lastCheckTime: 1, totalChapterNum: 1 }, bookAfter: metadata, truncated: true })
   const displayId = tocSummary(savedToc).chapters[0]!.chapterId
-  await repository.saveContent(userA, { userId: userA, bookId: created.book.id, editionKey: 'edition-a', tocRevision: 'r1', sourceFingerprint: 'fp', chapterId: displayId, content: { chapter: displayChapter, contentType: 'text', raw: '原始正文', cleaned: '展示正文', pages: ['展示正文'], resources: [], truncated: true } })
+  await repository.saveContent(userA, { userId: userA, bookId: created.book.id, editionKey: 'edition-a', tocRevision: 'r1', sourceFingerprint: 'fp', chapterId: displayId, content: { chapter: displayChapter, contentType: 'text', raw: '原始正文', cleaned: '展示正文', pages: ['展示正文'], resources: [], truncated: true, truncationReasons: ['正文下一页形成循环'] } })
   const display = await repository.getContentDisplay(userA, 'edition-a', 'r1', displayId)
   assert.equal(display?.content.cleaned, '展示正文')
   assert.equal(display?.content.chapter.chapterId, displayId)
   assert.equal(display?.truncated, true)
+  assert.deepEqual(display?.truncationReasons, ['正文下一页形成循环'])
   assert.equal('raw' in display!.content, false)
   assert.equal('pages' in display!.content, false)
   assert.equal(await repository.getContentDisplay(userB, 'edition-a', 'r1', displayId), null)

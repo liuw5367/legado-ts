@@ -8,7 +8,7 @@ export interface ReadingContent {
   finalUrl?: string
 }
 export interface ReadingContentResponse { tocRevision: string; content: ReadingContent; runtimeWarning?: string }
-export type CachedReadingContent = ReadingContentResponse & { sourceFingerprint: string; truncated?: boolean }
+export type CachedReadingContent = ReadingContentResponse & { sourceFingerprint: string; truncated?: boolean; truncationReasons?: string[] }
 export function readingContent(content: ChapterContent, chapterId: string, title = (content.chapter as { title?: string }).title): ReadingContent {
   return { chapter: { chapterId, chapterUrl: content.chapter.chapterUrl, index: content.chapter.index, ...(title === undefined ? {} : { title }) },
     contentType: content.contentType as 'text' | 'html', cleaned: content.cleaned, resources: content.resources.map(({ kind, url }) => ({ kind, url })),
