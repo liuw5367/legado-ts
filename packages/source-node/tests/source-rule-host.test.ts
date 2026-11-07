@@ -1841,7 +1841,7 @@ test('未实现的平台能力报告明确能力码，源登录状态可在会�
 test('java.htmlFormat 使用与正文相同的图片和相对地址规则', async () => {
   const result = await evaluate(new SourceRuleHost(), `@js:java.htmlFormat(${JSON.stringify('<p>正文</p><img src="/img/a.png">')}, "https://fixture.invalid/book/1")`, '')
   assert.equal(result.status, 'success')
-  assert.equal(result.value, '　　正文\n　　<img src="https://fixture.invalid/img/a.png">')
+  assert.equal(result.value, '　　　　正文\n　　<img src="https://fixture.invalid/img/a.png">')
 
   const oneArgument = await new SourceRuleHost().evaluate({
     source,
@@ -1852,7 +1852,7 @@ test('java.htmlFormat 使用与正文相同的图片和相对地址规则', asyn
     baseUrl: 'https://fixture.invalid/book/1',
   })
   assert.equal(oneArgument.status, 'success')
-  assert.equal(oneArgument.value, '　　正文\n　　<img src="/img/a.png">')
+  assert.equal(oneArgument.value, '　　　　正文\n　　<img src="/img/a.png">')
 })
 
 test('登录 UI v2 缺少登录脚本时返回明确错误', async () => {

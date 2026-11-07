@@ -3194,7 +3194,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const mediaType = state.source.bookSourceType
     // 只为文本正文恢复块级换行；简介、搜索、媒体地址和已有分段仍遵循 @text 语义。
     if (output !== 'text' || state.request.field !== 'content' || mediaType === 1 || mediaType === 4 || text.includes('\n')) return text
-    const formatted = formatChapterBody(document.read(node, 'html'), state.request.redirectUrl ?? state.request.baseUrl ?? state.source.bookSourceUrl).content
+    // 排除格式化产生的首尾缩进，否则单段也会被误判为存在段落换行。
+    const formatted = formatChapterBody(document.read(node, 'html'), state.request.redirectUrl ?? state.request.baseUrl ?? state.source.bookSourceUrl).content.trim()
     // 仅忽略空白比较文字，防止格式化额外删除内容或将正文中的字面标签误作 HTML。
     const compact = (value: string): string => value.replace(/\s/gu, '')
     return formatted.includes('\n') && compact(formatted) === compact(text) ? formatted : text

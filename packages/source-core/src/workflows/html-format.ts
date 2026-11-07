@@ -19,9 +19,10 @@ function formatText(value: string, htmlTags: RegExp, paragraphIndent: string): s
     .replace(blockTags, '\n')
     .replace(comments, '')
     .replace(htmlTags, '')
-    .replace(/\s*\n+\s*/g, `\n${paragraphIndent}`)
-    .replace(/^[\n\s]+/g, paragraphIndent)
-    .replace(/[\n\s]+$/g, '')
+    // Java Pattern 的 \s 默认只匹配 ASCII 空白，保留全角段落缩进。
+    .replace(/[ \t\n\x0b\f\r]*\n+[ \t\n\x0b\f\r]*/g, `\n${paragraphIndent}`)
+    .replace(/^[ \t\n\x0b\f\r]+/g, paragraphIndent)
+    .replace(/[ \t\n\x0b\f\r]+$/g, '')
 }
 
 /** Android preserves these detail-intro directives for downstream rendering. */

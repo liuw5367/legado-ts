@@ -939,7 +939,7 @@ test('正文格式按 Android 顺序处理块标签、HTML4 实体、usehtml 与
     imageUrls: ['https://cdn.test/chapters/cover.png', 'https://cdn.test/chapters/one/pic.png,{"headers":{"X-Test":"yes"}}'],
   })
   assert.deepEqual(formatChapterBody('<usehtml><p>raw&nbsp;&amp;</p></usehtml>', 'https://source.test/ch/1', { adaptSpecialStyle: false }), {
-    content: '　　raw &',
+    content: '　　　　raw &\n　　',
     imageUrls: [],
   })
   assert.equal(unescapeHtml4('&Alpha; &#169; &#x1F600; &apos; &unknown;'), 'Α © 😀 &apos; &unknown;')
@@ -947,6 +947,10 @@ test('正文格式按 Android 顺序处理块标签、HTML4 实体、usehtml 与
     content: '<img src="HTTPS://Images.test/cover path.png">',
     imageUrls: ['HTTPS://Images.test/cover path.png'],
   })
+})
+
+test('Android 正文格式化保留末尾段落的全角缩进', () => {
+  assert.equal(formatChapterBody('<p>甲</p>', 'https://source.test/c1').content, '　　　　甲\n　　')
 })
 
 test('text contentType 不会跳过 Android 正文格式化；音视频链接保持原文', async () => {
@@ -959,7 +963,7 @@ test('text contentType 不会跳过 Android 正文格式化；音视频链接保
   const text = await loadChapterContent(ports, { source: textSource, chapter })
   assert.equal(text.value?.contentType, 'text')
   assert.equal(text.value?.raw, '<p>Body &copy;</p><img data-src="../img.png">')
-  assert.equal(text.value?.cleaned, '　　Body ©\n　　<img src="https://source.test/img.png">')
+  assert.equal(text.value?.cleaned, '　　　　Body ©\n　　<img src="https://source.test/img.png">')
   assert.deepEqual(text.value?.resources, [{ kind: 'image', url: 'https://source.test/img.png' }])
 
   for (const bookSourceType of [1, 4]) {
@@ -1482,7 +1486,7 @@ test('正文下一页循环时停止并保留已读取内容', async () => {
     },
   }, { source, chapter })
   assert.equal(result.status, 'partial')
-  assert.equal(result.value?.cleaned, '　　Loop')
+  assert.equal(result.value?.cleaned, '　　　　Loop\n　　')
   assert.equal(calls.length, 1)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes('循环')))
 })
@@ -1613,7 +1617,7 @@ test('正文 title 规则提取章节标题并处理标题里的图片', async (
   // Android AppPattern.imgRegex 把「data:/http 到结尾」当作图片地址，标题保留它之前的部分。
   assert.equal(result.value?.title, '第一章 初见<img src="')
   assert.equal(result.value?.imgUrl, 'data:image/png;base64,AAAA">')
-  assert.equal(result.value?.cleaned, '　　正文')
+  assert.equal(result.value?.cleaned, '　　　　正文\n　　')
 
   const plainPorts: ReadingPorts = {
     ...ports,
