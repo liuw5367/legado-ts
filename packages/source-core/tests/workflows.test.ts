@@ -64,6 +64,21 @@ test('发现工作流保留书源内身份、页码起点、去重和 partial �
   assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.code === 'identity-missing'))
 })
 
+test('书源的空字段规则不会把当前节点内容当成书籍字段', async () => {
+  const input = { ...source, ruleSearch: { bookList: 'list', bookName: 'name', bookUrl: 'url', intro: '', wordCount: '' } }
+  const workflowPorts = ports([])
+  const evaluate = workflowPorts.rules.evaluate
+  workflowPorts.rules = {
+    evaluate: async (request) => request.rule === ''
+      ? { status: 'success', value: '整条候选的文本' }
+      : evaluate(request),
+  }
+  const result = await searchBooks(workflowPorts, { source: input, keyword: '书' })
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.items[0]?.intro, undefined)
+  assert.equal(result.value?.items[0]?.wordCount, undefined)
+})
+
 test('发现分类保留 Android ExploreKind 的默认 url 类型', async () => {
   const result = await parseExploreKinds(ports([]), {
     ...source,

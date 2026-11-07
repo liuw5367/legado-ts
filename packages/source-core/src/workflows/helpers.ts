@@ -59,7 +59,11 @@ export function ruleString(source: NormalizedSource, group: string, field: strin
     bookUpdateTime: ['updateTime', 'bookUpdateTime'],
   }
   const keys = aliases[field] ?? [field]
-  for (const key of keys) if (typeof rules[key] === 'string') return rules[key] as string
+  // Android 将显式空规则视为未配置。规范字段的空值仍覆盖旧别名。
+  for (const key of keys) {
+    const value = rules[key]
+    if (typeof value === 'string') return value || undefined
+  }
   return undefined
 }
 
