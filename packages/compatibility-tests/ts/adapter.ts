@@ -36,6 +36,11 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
   const host = new SourceRuleHost()
   switch (item.operation) {
+    case 'rule.bridgeString':
+      return script(host, `java.setBaseUrl(${json('baseUrl')}); java.setRedirectUrl(${json('redirectUrl')});
+        var text = ${json('textRule')}, url = ${json('urlRule')};
+        return {literal:java.getString(text,false),unescaped:java.getString(text,true),fallback:java.getString(text,null,false),
+          url:java.getString(url,null,true),list:java.getStringList(url,null,false),urlList:java.getStringList(url,null,true)}`, i.content)
     case 'rule.split': {
       if (i.code === true) throw new UnsupportedOperation('TS scanner 没有独立 code 模式；代码内规则由实际 JSON/JS 入口验证')
       const operator = str('operator') as '&&' | '||' | '%%'

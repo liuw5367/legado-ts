@@ -1,0 +1,71 @@
+[
+  {
+    "id": "rule.bridgeString.batch-content-overloads",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeString",
+    "input": {
+      "content": "<h1>甲&amp;beta;</h1><a href=\"part?q=1&amp;amp;x=2\">甲</a><a href=\"/second\">乙</a>",
+      "textRule": "h1@text",
+      "urlRule": "a@href",
+      "baseUrl": "https://source.fixture.test/book/",
+      "redirectUrl": "https://redirect.fixture.test/chapters/"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.getString/getStringList + AnalyzeByJSoup"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "literal": "甲&beta;",
+        "unescaped": "甲β",
+        "fallback": "甲β",
+        "url": "https://redirect.fixture.test/chapters/part?q=1&x=2",
+        "list": [
+          "part?q=1&amp;x=2",
+          "/second"
+        ],
+        "urlList": [
+          "https://redirect.fixture.test/chapters/part?q=1&amp;x=2",
+          "https://redirect.fixture.test/second"
+        ]
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeString.batch-empty-overloads",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeString",
+    "input": {
+      "content": "<div>无匹配</div>",
+      "textRule": "h1@text",
+      "urlRule": "a@href",
+      "baseUrl": "https://source.fixture.test/book/",
+      "redirectUrl": "https://redirect.fixture.test/chapters/"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.getString/getStringList + AnalyzeByJSoup"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "error-or-empty"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "literal": "",
+        "unescaped": "",
+        "fallback": "",
+        "url": "https://source.fixture.test/book/",
+        "list": [],
+        "urlList": []
+      }
+    }
+  }
+]

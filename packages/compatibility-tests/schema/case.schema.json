@@ -59,7 +59,8 @@
         "corpus.script",
         "chapter.number",
         "flow.book",
-        "flow.toc"
+        "flow.toc",
+        "rule.bridgeString"
       ]
     },
     "input": {
@@ -1471,6 +1472,47 @@
               },
               "requestLimit": {
                 "type": "integer"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeString"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "textRule",
+              "urlRule",
+              "baseUrl",
+              "redirectUrl"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "textRule": {
+                "type": "string"
+              },
+              "urlRule": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "type": "string"
+              },
+              "redirectUrl": {
+                "type": "string"
               }
             },
             "additionalProperties": false

@@ -27,6 +27,7 @@ private fun execute(item: JsonObject): Any? {
     return when (val operation = item.get("operation").asString) {
         "flow.book" -> executeBookFlow(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
+        "rule.bridgeString" -> analyzeRuleStringOverloads(input)
         "rule.split" -> RuleAnalyzer(text("rule"), input.get("code")?.asBoolean ?: false).splitRule(text("operator"))
         "rule.inner" -> RuleAnalyzer(text("rule"), true).innerRule("{$.") { path -> input.getAsJsonObject("values").get(path)?.asString }
         "regex.first" -> AnalyzeByRegex.getElement(text("text"), input.getAsJsonArray("patterns").map { it.asString }.toTypedArray())

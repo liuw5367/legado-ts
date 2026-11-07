@@ -141,6 +141,8 @@ git diff --check
 - C3 `dcac0bb` 验证 Jayway 过滤、sum/avg 文本和空值后继续；`53d4863` 单独修复 avg 整数丢失小数位，[JSON 报告](../packages/compatibility-tests/output/run-7yh8qE/report.md)。
 - C4 混合局部标志复现命名组编译失败，修复后组名和值一致，[Pattern 报告](../packages/compatibility-tests/output/run-jBXv5a/report.md)。CANON_EQ 继续返回明确能力缺失。
 
+- D1 的 `rule.bridgeString.batch-*` 验证布尔重载、null 回退、首项 URL 和 URL 列表；产品修复使 HTML URL 字符串重载遵循上游 getString0。[修复前](../packages/compatibility-tests/output/run-4ppvuI/report.md)与[复验](../packages/compatibility-tests/output/run-36Hp2E/report.md)。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

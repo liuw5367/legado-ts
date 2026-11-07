@@ -1619,6 +1619,21 @@
         "pattern.matcher.replaceThenFind",
         "pattern.matcher.replaceEmpty"
       ]
+    },
+    {
+      "operation": "rule.bridgeString",
+      "method": "AnalyzeRule.getString/getStringList · HTML 重载分派",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "ts/adapter.ts → rule.bridgeString",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "rule.bridgeString.batch-content-overloads",
+        "rule.bridgeString.batch-empty-overloads"
+      ]
     }
   ]
 }

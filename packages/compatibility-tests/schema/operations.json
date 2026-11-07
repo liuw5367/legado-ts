@@ -425,5 +425,21 @@
       "responses": "object",
       "requestLimit": "integer"
     }
+  },
+  "rule.bridgeString": {
+    "required": [
+      "content",
+      "textRule",
+      "urlRule",
+      "baseUrl",
+      "redirectUrl"
+    ],
+    "properties": {
+      "content": "string",
+      "textRule": "string",
+      "urlRule": "string",
+      "baseUrl": "string",
+      "redirectUrl": "string"
+    }
   }
 }
