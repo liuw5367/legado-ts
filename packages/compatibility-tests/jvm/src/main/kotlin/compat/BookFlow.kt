@@ -108,7 +108,11 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
     } else {
         val searchRule = source.rule("ruleSearch")
         val detailRule = source.rule("ruleBookInfo")
-        val searchPlan = flowSearchRequest(source.text("searchUrl"), input.text("keyword"), headers) { resolve(sourceUrl, it) }
+        val keyword = input.text("keyword")
+        val searchRuleUrl = evaluateFlowSearchUrl(source.text("searchUrl"), keyword) { url ->
+            request("search", resolve(sourceUrl, url)).first
+        }
+        val searchPlan = flowSearchRequest(searchRuleUrl, keyword, headers) { resolve(sourceUrl, it) }
         val (searchBody, searchBase) = request("search", searchPlan)
         val bookUrlPattern = source.text("bookUrlPattern")
         val directDetail = bookUrlPattern.isNotEmpty() && Regex(bookUrlPattern).matches(searchBase)
@@ -131,6 +135,7 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
         val detail = candidate + detailFields + preserved
         tocUrl = detail["tocUrl"] ?: bookUrl
         result("detail", "success", detail + ("tocUrl" to tocUrl))
+        if (input.text("stopAfter") == "detail") return output
 
         // WebBook 在目录 URL 与详情 URL 相同时复用详情响应。
         cachedToc = if (tocUrl == bookUrl) detailBody to bookUrl else null

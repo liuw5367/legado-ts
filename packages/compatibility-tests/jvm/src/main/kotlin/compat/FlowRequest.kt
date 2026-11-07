@@ -3,6 +3,10 @@ package compat
 import com.google.gson.JsonParser
 import io.legado.app.utils.FlowFormEncoding
 import java.net.URLEncoder
+import org.htmlunit.corejs.javascript.BaseFunction
+import org.htmlunit.corejs.javascript.Context
+import org.htmlunit.corejs.javascript.Scriptable
+import org.htmlunit.corejs.javascript.VarScope
 
 internal data class FlowRequest(
     val url: String,
@@ -34,4 +38,26 @@ internal fun flowSearchRequest(
         return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body))
     }
     return FlowRequest(url, requestHeaders, "POST", body)
+}
+
+/** AnalyzeUrl 的 URL 脚本片段，仅提供当前离线案例所需的 GET 与表单关键字编码。 */
+internal fun evaluateFlowSearchUrl(rule: String, keyword: String, ajax: (String) -> String): String {
+    if (!rule.startsWith("@js:", ignoreCase = true)) return rule
+    return Context.enter().use { engine ->
+        val scope = engine.initSafeStandardObjects()
+        engine.setClassShutter { false }
+        val java = engine.newObject(scope)
+        fun bind(name: String, callback: (String) -> String) {
+            java.put(name, java, object : BaseFunction() {
+                override fun call(cx: Context, scope: VarScope, thisObj: Scriptable, args: Array<Any>): Any =
+                    callback(Context.toString(args.single()))
+            })
+        }
+        bind("ajax", ajax)
+        // 固定上游 JsExtensions.encodeURI(String) 使用 UTF-8 URLEncoder。
+        bind("encodeURI") { URLEncoder.encode(it, Charsets.UTF_8) }
+        scope.put("java", scope, java)
+        scope.put("key", scope, keyword)
+        Context.toString(engine.evaluateString(scope, rule.substring(4), "offline-search-url", 1, null))
+    }
 }

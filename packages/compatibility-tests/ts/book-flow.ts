@@ -98,6 +98,7 @@ export async function executeBookFlow(input: Record<string, unknown>, tocOnly = 
     const details = await loadBookDetails(ports, { source: imported, candidates: [candidate] })
     book = details.value?.items[0]
     record(details, book ? bookFields(book) : null, undefined, book)
+    if (input.stopAfter === 'detail') return output
 
   }
   if (!book) return output

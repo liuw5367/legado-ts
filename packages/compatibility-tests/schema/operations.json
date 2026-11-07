@@ -403,7 +403,8 @@
       "requestLimit": "integer",
       "requestEvidence": "boolean",
       "chapterIndex": "integer",
-      "variableKeys": "strings"
+      "variableKeys": "strings",
+      "stopAfter": "string"
     }
   },
   "flow.toc": {

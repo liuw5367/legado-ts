@@ -1414,6 +1414,9 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "stopAfter": {
+                "type": "string"
               }
             },
             "additionalProperties": false

@@ -1,0 +1,309 @@
+[
+  {
+    "id": "flow.yck.siluke.post-json-detail",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl URL 脚本 / BookList / BookInfo"
+    },
+    "tags": [
+      "offline",
+      "post",
+      "jsonpath"
+    ],
+    "flowOrigin": {
+      "collection": "yck-1298",
+      "sourceUrl": "https://www.szndz.com",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceGroup": "阿豪书源 小说",
+        "bookSourceName": "思路客",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.szndz.com",
+        "customButton": false,
+        "customOrder": 5,
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": false,
+        "eventListener": false,
+        "lastUpdateTime": 1790128072809,
+        "respondTime": 180000,
+        "ruleBookInfo": {
+          "author": "meta[property=\"og:novel:author\"]@content",
+          "coverUrl": "meta[property=\"og:image\"]@content",
+          "intro": "meta[property=\"og:description\"]@content",
+          "kind": "meta[property=\"og:novel:category\"]@content",
+          "lastChapter": "meta[property=\"og:novel:latest_chapter_name\"]@content",
+          "name": "meta[property=\"og:novel:book_name\"]@content"
+        },
+        "ruleContent": {
+          "content": "id.htmlContent@html"
+        },
+        "ruleSearch": {
+          "author": "$.author",
+          "bookList": "$.data.search",
+          "bookUrl": "$.book_list_url",
+          "coverUrl": "",
+          "kind": "$.cate_name",
+          "lastChapter": "$.latest_chapter_name",
+          "name": "$.book_name"
+        },
+        "ruleToc": {
+          "chapterList": "#at td.L",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href"
+        },
+        "searchUrl": "@js:\nvar b = 'https://www.szndz.com';\nvar kw = String(key);\nvar sp = b + '/user/search.html?q=' + java.encodeURI(kw);\nvar h = '' + java.ajax(sp);\nvar names = ['vw','abw','ru','jrt','van','fw','cwl','gpr','uyoo','tz','euu','tsn','eju','um','fp','dvm','jpk','deblkx','ht','azy','sna','wqx','fpp','rup','jwj','bgt','qp','yf','cw','wq','sign'];\nvar parts = ['q=' + java.encodeURI(kw)];\nfor (var i = 0; i < names.length; i++) {\n var n = names[i];\n var mk = 'var ' + n;\n var v = '';\n var from = 0;\n var i1 = -1;\n while (true) {\n var i0 = h.indexOf(mk, from);\n if (i0 < 0) break;\n var pe = i0 + mk.length;\n while (pe < h.length && (h.charAt(pe) == ' ' || h.charAt(pe) == '\\t')) pe++;\n if (h.charAt(pe) == '=') { i1 = pe; break; }\n from = i0 + 1;\n }\n if (i1 >= 0) {\n var q1 = h.indexOf('\"', i1);\n var q2 = h.indexOf('\"', q1 + 1);\n v = h.substring(q1 + 1, q2);\n }\n if (n == 'bgt' && v.length > 0) v = v.substring(0, v.length - 1);\n parts.push(n + '=' + java.encodeURI(v));\n}\nb + '/api/search,{\"method\":\"POST\",\"body\":\"' + parts.join('&') + '\"}'",
+        "weight": 0
+      },
+      "keyword": "星河",
+      "responses": {
+        "preflight": {
+          "method": "GET",
+          "url": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHNjcmlwdD52YXIgdncgPSAiVisxIjsgdmFyIGJndCA9ICJibHVlISI7IHZhciBzaWduID0gImxvY2FsIjs8L3NjcmlwdD4="
+          }
+        },
+        "search": {
+          "method": "POST",
+          "url": "https://www.szndz.com/api/search",
+          "body": "q=%E6%98%9F%E6%B2%B3&vw=V%2B1&abw=&ru=&jrt=&van=&fw=&cwl=&gpr=&uyoo=&tz=&euu=&tsn=&eju=&um=&fp=&dvm=&jpk=&deblkx=&ht=&azy=&sna=&wqx=&fpp=&rup=&jwj=&bgt=blue&qp=&yf=&cw=&wq=&sign=local",
+          "response": {
+            "status": 200,
+            "url": "https://www.szndz.com/api/search",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJkYXRhIjp7InNlYXJjaCI6W3siYm9va19uYW1lIjoi5pif5rKz5LiAIiwiYXV0aG9yIjoi55SyIiwiYm9va19saXN0X3VybCI6Ii9ib29rLzEiLCJjYXRlX25hbWUiOm51bGx9LHsiYm9va19uYW1lIjoi5pif5rKz5LqMIiwiYm9va19saXN0X3VybCI6Ii9ib29rLzIiLCJsYXRlc3RfY2hhcHRlcl9uYW1lIjoi56ys5LqM56ugIn1dfX0="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://www.szndz.com/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.szndz.com/book/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1ldGEgcHJvcGVydHk9Im9nOm5vdmVsOmJvb2tfbmFtZSIgY29udGVudD0i5pif5rKz5LiAIj48bWV0YSBwcm9wZXJ0eT0ib2c6ZGVzY3JpcHRpb24iIGNvbnRlbnQ9IuWkueWFt+eugOS7iyI+"
+          }
+        }
+      },
+      "requestLimit": 3,
+      "requestEvidence": true,
+      "stopAfter": "detail"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河一",
+                "author": "甲",
+                "bookUrl": "https://www.szndz.com/book/1"
+              },
+              {
+                "name": "星河二",
+                "bookUrl": "https://www.szndz.com/book/2",
+                "lastChapter": "第二章"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河一",
+              "author": "甲",
+              "bookUrl": "https://www.szndz.com/book/1",
+              "intro": "夹具简介",
+              "tocUrl": "https://www.szndz.com/book/1"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+            "headers": {}
+          },
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.szndz.com/api/search",
+            "body": "q=%E6%98%9F%E6%B2%B3&vw=V%2B1&abw=&ru=&jrt=&van=&fw=&cwl=&gpr=&uyoo=&tz=&euu=&tsn=&eju=&um=&fp=&dvm=&jpk=&deblkx=&ht=&azy=&sna=&wqx=&fpp=&rup=&jwj=&bgt=blue&qp=&yf=&cw=&wq=&sign=local",
+            "bodyBase64": "cT0lRTYlOTglOUYlRTYlQjIlQjMmdnc9ViUyQjEmYWJ3PSZydT0manJ0PSZ2YW49JmZ3PSZjd2w9Jmdwcj0mdXlvbz0mdHo9JmV1dT0mdHNuPSZlanU9JnVtPSZmcD0mZHZtPSZqcGs9JmRlYmxreD0maHQ9JmF6eT0mc25hPSZ3cXg9JmZwcD0mcnVwPSZqd2o9JmJndD1ibHVlJnFwPSZ5Zj0mY3c9JndxPSZzaWduPWxvY2Fs",
+            "responseUrl": "https://www.szndz.com/api/search",
+            "headers": {
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://www.szndz.com/book/1",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.szndz.com/book/1",
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yck.siluke.empty",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl URL 脚本 / BookList / BookInfo"
+    },
+    "tags": [
+      "offline",
+      "post",
+      "jsonpath"
+    ],
+    "flowOrigin": {
+      "collection": "yck-1298",
+      "sourceUrl": "https://www.szndz.com",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceGroup": "阿豪书源 小说",
+        "bookSourceName": "思路客",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.szndz.com",
+        "customButton": false,
+        "customOrder": 5,
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": false,
+        "eventListener": false,
+        "lastUpdateTime": 1790128072809,
+        "respondTime": 180000,
+        "ruleBookInfo": {
+          "author": "meta[property=\"og:novel:author\"]@content",
+          "coverUrl": "meta[property=\"og:image\"]@content",
+          "intro": "meta[property=\"og:description\"]@content",
+          "kind": "meta[property=\"og:novel:category\"]@content",
+          "lastChapter": "meta[property=\"og:novel:latest_chapter_name\"]@content",
+          "name": "meta[property=\"og:novel:book_name\"]@content"
+        },
+        "ruleContent": {
+          "content": "id.htmlContent@html"
+        },
+        "ruleSearch": {
+          "author": "$.author",
+          "bookList": "$.data.search",
+          "bookUrl": "$.book_list_url",
+          "coverUrl": "",
+          "kind": "$.cate_name",
+          "lastChapter": "$.latest_chapter_name",
+          "name": "$.book_name"
+        },
+        "ruleToc": {
+          "chapterList": "#at td.L",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href"
+        },
+        "searchUrl": "@js:\nvar b = 'https://www.szndz.com';\nvar kw = String(key);\nvar sp = b + '/user/search.html?q=' + java.encodeURI(kw);\nvar h = '' + java.ajax(sp);\nvar names = ['vw','abw','ru','jrt','van','fw','cwl','gpr','uyoo','tz','euu','tsn','eju','um','fp','dvm','jpk','deblkx','ht','azy','sna','wqx','fpp','rup','jwj','bgt','qp','yf','cw','wq','sign'];\nvar parts = ['q=' + java.encodeURI(kw)];\nfor (var i = 0; i < names.length; i++) {\n var n = names[i];\n var mk = 'var ' + n;\n var v = '';\n var from = 0;\n var i1 = -1;\n while (true) {\n var i0 = h.indexOf(mk, from);\n if (i0 < 0) break;\n var pe = i0 + mk.length;\n while (pe < h.length && (h.charAt(pe) == ' ' || h.charAt(pe) == '\\t')) pe++;\n if (h.charAt(pe) == '=') { i1 = pe; break; }\n from = i0 + 1;\n }\n if (i1 >= 0) {\n var q1 = h.indexOf('\"', i1);\n var q2 = h.indexOf('\"', q1 + 1);\n v = h.substring(q1 + 1, q2);\n }\n if (n == 'bgt' && v.length > 0) v = v.substring(0, v.length - 1);\n parts.push(n + '=' + java.encodeURI(v));\n}\nb + '/api/search,{\"method\":\"POST\",\"body\":\"' + parts.join('&') + '\"}'",
+        "weight": 0
+      },
+      "keyword": "星河",
+      "responses": {
+        "preflight": {
+          "method": "GET",
+          "url": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHNjcmlwdD52YXIgdncgPSAiVisxIjsgdmFyIGJndCA9ICJibHVlISI7IHZhciBzaWduID0gImxvY2FsIjs8L3NjcmlwdD4="
+          }
+        },
+        "search": {
+          "method": "POST",
+          "url": "https://www.szndz.com/api/search",
+          "body": "q=%E6%98%9F%E6%B2%B3&vw=V%2B1&abw=&ru=&jrt=&van=&fw=&cwl=&gpr=&uyoo=&tz=&euu=&tsn=&eju=&um=&fp=&dvm=&jpk=&deblkx=&ht=&azy=&sna=&wqx=&fpp=&rup=&jwj=&bgt=blue&qp=&yf=&cw=&wq=&sign=local",
+          "response": {
+            "status": 200,
+            "url": "https://www.szndz.com/api/search",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJkYXRhIjp7InNlYXJjaCI6W119fQ=="
+          }
+        }
+      },
+      "requestLimit": 2,
+      "requestEvidence": true,
+      "stopAfter": "detail"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
+            "headers": {}
+          },
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.szndz.com/api/search",
+            "body": "q=%E6%98%9F%E6%B2%B3&vw=V%2B1&abw=&ru=&jrt=&van=&fw=&cwl=&gpr=&uyoo=&tz=&euu=&tsn=&eju=&um=&fp=&dvm=&jpk=&deblkx=&ht=&azy=&sna=&wqx=&fpp=&rup=&jwj=&bgt=blue&qp=&yf=&cw=&wq=&sign=local",
+            "bodyBase64": "cT0lRTYlOTglOUYlRTYlQjIlQjMmdnc9ViUyQjEmYWJ3PSZydT0manJ0PSZ2YW49JmZ3PSZjd2w9Jmdwcj0mdXlvbz0mdHo9JmV1dT0mdHNuPSZlanU9JnVtPSZmcD0mZHZtPSZqcGs9JmRlYmxreD0maHQ9JmF6eT0mc25hPSZ3cXg9JmZwcD0mcnVwPSZqd2o9JmJndD1ibHVlJnFwPSZ5Zj0mY3c9JndxPSZzaWduPWxvY2Fs",
+            "responseUrl": "https://www.szndz.com/api/search",
+            "headers": {
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

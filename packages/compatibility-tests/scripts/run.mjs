@@ -79,11 +79,16 @@ try {
     process.exitCode = results[options.runtime].some((r) => r.execution !== 'completed') ? 2 : 0
   } else {
     for (const runtime of runtimes) assertProvenance((await readJson(join(directory, `${runtime}.json`))).metadata, base)
-    const comparisons = cases.map((item, index) => ({ ...compareCase(item, results.jvm[index], results.ts[index]), operation: item.operation, reference: item.reference, ...(item.origin ? { origin: item.origin } : {}), ...(item.flowOrigin ? { flowOrigin: item.flowOrigin } : {}) }))
+    const comparisons = cases.map((item, index) => ({ ...compareCase(item, results.jvm[index], results.ts[index]), operation: item.operation, ...(item.input.stopAfter ? { stopAfter: item.input.stopAfter } : {}), reference: item.reference, ...(item.origin ? { origin: item.origin } : {}), ...(item.flowOrigin ? { flowOrigin: item.flowOrigin } : {}) }))
     const summary = summarize(comparisons)
     summary.flow.byOperation = Object.fromEntries(['flow.book', 'flow.toc'].map((operation) => {
       const selected = comparisons.filter((item) => item.operation === operation)
       return [operation, { total: selected.length, equal: selected.filter((item) => item.status === 'equal').length }]
+    }))
+    summary.flow.byScope = Object.fromEntries(['complete', 'stage'].map((scope) => {
+      const selected = comparisons.filter((item) => item.contractScope === 'flow'
+        && (item.operation === 'flow.book' && !item.stopAfter ? 'complete' : 'stage') === scope)
+      return [scope, { total: selected.length, equal: selected.filter((item) => item.status === 'equal').length }]
     }))
     const coverage = await readJson(join(root, 'coverage.json'))
     const coverageReport = measureCoverage(coverage.entries, cases, comparisons, results.jvm)
@@ -98,7 +103,7 @@ try {
     await writeFile(join(directory, 'coverage.json'), JSON.stringify({ entries: coverageReport }, null, 2) + '\n')
     await writeFile(join(directory, 'corpus-coverage.json'), JSON.stringify({ dimensions: corpusCoverage, excluded: corpus.excluded }, null, 2) + '\n')
     await writeFile(join(directory, 'report.json'), JSON.stringify({ metadata: base, summary, cases: comparisons }, null, 2) + '\n')
-    const lines = ['# JVM / TS 差异报告', '', `- 总数：${summary.total}`, `- 流程案例：${summary.flow.total}；一致：${summary.flow.equal}；完整流程：${summary.flow.byOperation["flow.book"].total}；目录阶段：${summary.flow.byOperation["flow.toc"].total}`, `- API 契约案例：${summary.api.total}；内部观察：${summary.observations}`, `- 原始差异：${summary.rawDifferent}；异常语义等价：${summary.errorEquivalent}`, `- 一致：${summary.equal}`, `- 差异：${summary.different}`, `- 允许差异：${summary['allowed-difference']}`, `- 未支持：${summary.unsupported}`, `- 执行失败：${summary['runner-failed']}`, '', '| 案例 | 功能族 | 状态 |', '| --- | --- | --- |', ...comparisons.map((c) => `| ${c.id} | ${c.family} | ${c.status} |`), '', '逐字段差异、双方原始结果、异常和版本记录见同目录 JSON 文件。', '']
+    const lines = ['# JVM / TS 差异报告', '', `- 总数：${summary.total}`, `- 流程案例：${summary.flow.total}；一致：${summary.flow.equal}；完整流程：${summary.flow.byScope.complete.total}；阶段用例：${summary.flow.byScope.stage.total}`, `- API 契约案例：${summary.api.total}；内部观察：${summary.observations}`, `- 原始差异：${summary.rawDifferent}；异常语义等价：${summary.errorEquivalent}`, `- 一致：${summary.equal}`, `- 差异：${summary.different}`, `- 允许差异：${summary['allowed-difference']}`, `- 未支持：${summary.unsupported}`, `- 执行失败：${summary['runner-failed']}`, '', '| 案例 | 功能族 | 状态 |', '| --- | --- | --- |', ...comparisons.map((c) => `| ${c.id} | ${c.family} | ${c.status} |`), '', '逐字段差异、双方原始结果、异常和版本记录见同目录 JSON 文件。', '']
     lines.push('## 方法覆盖', '', '| 方法 | 状态 | 缺少维度 |', '| --- | --- | --- |')
     for (const entry of coverageReport) lines.push(`| ${entry.method.replaceAll('|', '\\|')} | ${entry.status} | ${entry.missingDimensions.join(', ') || '—'} |`)
     lines.push('')

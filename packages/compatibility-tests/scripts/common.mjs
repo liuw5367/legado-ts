@@ -140,6 +140,7 @@ function validateFlowCase(item) {
   const { source, responses, requestLimit } = item.input
   const origin = item.flowOrigin
   if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow' || item.allowedDifferences !== undefined
+    || (item.input.stopAfter !== undefined && item.input.stopAfter !== 'detail')
     || (item.input.chapterIndex ?? 0) < 0 || typeof source.bookSourceUrl !== 'string' || requestLimit < 1 || Object.keys(responses).length === 0
     || !origin || (origin.collection !== undefined && !flowCorpora.has(origin.collection)) || (origin.sourceUrl ? !Array.isArray(origin.fields) || origin.fields.length === 0 : typeof origin.fixture !== 'string')) {
     throw new Error(`${item.id}: 流程来源、契约或请求预算无效`)
