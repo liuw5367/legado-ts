@@ -3103,7 +3103,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     try {
       if (rule.kind === 'atom') return this.evaluateAtom(rule, state, content)
-      return this.evaluateSequence(rule, state, content)
+      return this.applyReplacement(await this.evaluateSequence(rule, state, content), rule, state, content)
     } finally {
       state.budget.depth -= 1
     }
@@ -3456,7 +3456,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
   }
 
-  private async applyReplacement(value: unknown, rule: RuleAtom, state: EvaluationState, content: unknown): Promise<unknown> {
+  private async applyReplacement(value: unknown, rule: CompiledRule, state: EvaluationState, content: unknown): Promise<unknown> {
     if (rule.replacement === undefined) return value
     // Android 先对整条规则插值再按 `##` 切分，所以匹配串和替换串里的 {{}} 同样生效。
     const patternText = await this.expandTemplate(rule.replacement.pattern, state, content)

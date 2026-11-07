@@ -78,7 +78,7 @@ function interpolate(input: string, state: EvaluationState): string {
   return result
 }
 
-function applyReplacement(value: RuleValue, atom: RuleAtom, state: EvaluationState): RuleValue {
+function applyReplacement(value: RuleValue, atom: CompiledRule, state: EvaluationState): RuleValue {
   if (atom.replacement === undefined) return value
   const text = textValue(value)
   const patternText = interpolate(atom.replacement.pattern, state)
@@ -168,7 +168,7 @@ function evaluateSequence(sequence: RuleSequence, state: EvaluationState, depth:
 }
 
 function evaluateNode(rule: CompiledRule, state: EvaluationState, depth: number): RuleValue {
-  return rule.kind === 'atom' ? evaluateAtom(rule, state, depth) : evaluateSequence(rule, state, depth)
+  return rule.kind === 'atom' ? evaluateAtom(rule, state, depth) : applyReplacement(evaluateSequence(rule, state, depth), rule, state)
 }
 
 export function evaluateRule(rule: CompiledRule, context: RuleContext, budget: Partial<RuleBudget> = {}): RuleEvaluationResult {

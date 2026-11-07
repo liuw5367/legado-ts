@@ -57,6 +57,8 @@ export interface RuleSequence {
   children: CompiledRule[]
   /** 子规则所需能力的并集。 */
   capabilities: RuleCapability[]
+  /** 在组合结果上执行的替换。 */
+  replacement?: RuleReplacement
 }
 
 export type CompiledRule = RuleAtom | RuleSequence

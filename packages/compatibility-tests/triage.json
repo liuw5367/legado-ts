@@ -762,7 +762,7 @@
         "corpus.source-10.ruleBookInfo.kind"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -770,7 +770,8 @@
       },
       "tsEntry": "compileRule → evaluateSequence",
       "evidence": [
-        "output/run-Ht2nF6/report.json"
+        "output/run-Ht2nF6/report.json",
+        "output/run-HeRT7Z/report.json"
       ]
     }
   ]

@@ -247,3 +247,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C7-NESTED-RESULT 已修复。相同原文同时执行工作流与嵌套 Java bridge；修复前 5 条子规则的 result 继承外层旧值（output/run-wikvEP），修复后 31 个语料用例一致（output/run-cuG8l6）。全量 456 个 API 一致（output/run-XR4YCS）；20 项机制、207 项宿主和流程回归及类型检查通过。
 
 - C7 增加子代复合选择、HTML、init 元素、负索引与正则属性合并样本。36 个语料用例中 35 一致，剩余合并后的整段替换范围差异（output/run-Ht2nF6），登记 C7-SEQUENCE-REPLACE。
+
+- C7-SEQUENCE-REPLACE 已修复。编译器把 ## 放在组合节点上，两套实际求值入口均在组合完成后执行替换。36 个语料用例全部一致（output/run-HeRT7Z），177 项规则、宿主及流程回归和类型检查通过。

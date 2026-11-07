@@ -261,11 +261,15 @@ function compileInternal(input: string, span: RuleSpan, options: RuleCompileOpti
   const trimmed = trimPart(input, span.start, span.end)
   const leadingRegex = (options.allInOne ?? true) && trimmed.text.startsWith(':')
   if (isOpaqueScriptRule(trimmed.text) || (leadingRegex && !trimmed.text.includes('%%'))) return compileAtom(trimmed.text, trimmed.span, options)
+  // ## 属于整条选择表达式。只将替换之前的内容交给组合符扫描。
+  const replacementParts = !leadingRegex && trimmed.text.includes('##') ? splitReplacement(trimmed.text).parts : []
+  const selection = replacementParts[0] ?? trimmed.text
   const precedence: Array<'||' | '%%' | '&&'> = leadingRegex ? ['%%'] : ['||', '%%', '&&']
   for (const operator of precedence) {
-    const split = splitTopLevel(trimmed.text, operator)
+    const split = splitTopLevel(selection, operator)
     if (split.diagnostic !== undefined) return { diagnostics: [{ ...split.diagnostic, span: { start: trimmed.span.start + split.diagnostic.span!.start, end: trimmed.span.start + split.diagnostic.span!.end } }] }
     if (split.parts.length > 1) {
+      if (replacementParts.length > 4) return { diagnostics: [{ code: 'unbalanced-rule', message: '替换表达式最多包含规则、匹配、替换和首项标记四段', span: trimmed.span, canContinue: false }] }
       const children: CompiledRule[] = []
       const diagnostics: RuleDiagnostic[] = []
       for (const part of split.parts) {
@@ -275,6 +279,7 @@ function compileInternal(input: string, span: RuleSpan, options: RuleCompileOpti
       }
       if (diagnostics.length > 0) return { diagnostics }
       const sequence: RuleSequence = { kind: 'sequence', operator, source: trimmed.text, span: trimmed.span, children, capabilities: uniqueCapabilities(children) }
+      if (replacementParts.length >= 2) sequence.replacement = { pattern: replacementParts[1]!, replacement: replacementParts[2] ?? '', firstMatchOnly: replacementParts.length === 4 }
       return { rule: sequence, diagnostics }
     }
   }
