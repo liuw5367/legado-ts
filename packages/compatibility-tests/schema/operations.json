@@ -216,5 +216,56 @@
       "rule": "string",
       "nextRule": "string"
     }
+  },
+  "string.api": {
+    "required": [
+      "text",
+      "method"
+    ],
+    "properties": {
+      "text": "string",
+      "method": "string",
+      "index": "integer",
+      "end": "integer",
+      "value": "string",
+      "charset": "string",
+      "continue": "boolean"
+    }
+  },
+  "integer.parseInt": {
+    "required": [
+      "text",
+      "radix"
+    ],
+    "properties": {
+      "text": "string",
+      "radix": "integer",
+      "outRadix": "integer",
+      "continue": "boolean"
+    }
+  },
+  "integer.parseLongRadix": {
+    "required": [
+      "text",
+      "radix"
+    ],
+    "properties": {
+      "text": "string",
+      "radix": "integer",
+      "outRadix": "integer",
+      "continue": "boolean"
+    }
+  },
+  "integer.bigInteger": {
+    "required": [
+      "text",
+      "radix"
+    ],
+    "properties": {
+      "text": "string",
+      "radix": "integer",
+      "outRadix": "integer",
+      "continue": "boolean"
+    }
   }
 }

@@ -42,7 +42,11 @@
         "json.list",
         "pattern.split",
         "json.read",
-        "json.continue"
+        "json.continue",
+        "string.api",
+        "integer.parseInt",
+        "integer.parseLongRadix",
+        "integer.bigInteger"
       ]
     },
     "input": {
@@ -797,6 +801,155 @@
               },
               "nextRule": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "string.api"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "method"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "index": {
+                "type": "integer"
+              },
+              "end": {
+                "type": "integer"
+              },
+              "value": {
+                "type": "string"
+              },
+              "charset": {
+                "type": "string"
+              },
+              "continue": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "integer.parseInt"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "radix"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "radix": {
+                "type": "integer"
+              },
+              "outRadix": {
+                "type": "integer"
+              },
+              "continue": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "integer.parseLongRadix"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "radix"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "radix": {
+                "type": "integer"
+              },
+              "outRadix": {
+                "type": "integer"
+              },
+              "continue": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "integer.bigInteger"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "radix"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "radix": {
+                "type": "integer"
+              },
+              "outRadix": {
+                "type": "integer"
+              },
+              "continue": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

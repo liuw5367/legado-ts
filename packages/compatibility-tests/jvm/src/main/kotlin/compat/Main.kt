@@ -28,6 +28,33 @@ private fun execute(item: JsonObject): Any? {
         "rule.inner" -> RuleAnalyzer(text("rule"), true).innerRule("{$.") { path -> input.getAsJsonObject("values").get(path)?.asString }
         "regex.first" -> AnalyzeByRegex.getElement(text("text"), input.getAsJsonArray("patterns").map { it.asString }.toTypedArray())
         "regex.all" -> AnalyzeByRegex.getElements(text("text"), input.getAsJsonArray("patterns").map { it.asString }.toTypedArray())
+        "string.api" -> {
+            val value: Any = when (val method = text("method")) {
+                "length" -> text("text").length
+                "charAt" -> text("text")[input.get("index").asInt].toString()
+                "substring" -> text("text").substring(input.get("index").asInt)
+                "substringRange" -> text("text").substring(input.get("index").asInt, input.get("end").asInt)
+                "indexOf" -> text("text").indexOf(text("value"))
+                "indexOfFrom" -> text("text").indexOf(text("value"), input.get("index").asInt)
+                "codePointAt" -> java.lang.String(text("text")).codePointAt(input.get("index").asInt)
+                "codePointCount" -> java.lang.String(text("text")).codePointCount(input.get("index").asInt, input.get("end").asInt)
+                "offsetByCodePoints" -> java.lang.String(text("text")).offsetByCodePoints(input.get("index").asInt, input.get("end").asInt)
+                "getBytes" -> mapOf("type" to "bytes", "base64" to Base64.getEncoder().encodeToString(java.lang.String(text("text")).getBytes(text("charset").ifEmpty { "UTF-8" })))
+                else -> throw Unsupported("未知 String 方法: $method")
+            }
+            if (input.get("continue")?.asBoolean == true) {
+                val next = if (text("method") == "getBytes") java.lang.String(java.lang.String(text("text")).getBytes(text("charset").ifEmpty { "UTF-8" }), text("charset").ifEmpty { "UTF-8" }).toString() else value.toString().length
+                mapOf("value" to value, "next" to next)
+            } else value
+        }
+        "integer.parseInt", "integer.parseLongRadix", "integer.bigInteger" -> {
+            val value: Any = when (operation) {
+                "integer.parseInt" -> java.lang.Integer.parseInt(text("text"), input.get("radix").asInt)
+                "integer.parseLongRadix" -> mapOf("type" to "integer", "decimal" to java.lang.Long.parseLong(text("text"), input.get("radix").asInt).toString())
+                else -> java.math.BigInteger(text("text"), input.get("radix").asInt).toString(input.get("outRadix")?.asInt ?: 10)
+            }
+            if (input.get("continue")?.asBoolean == true) mapOf("value" to value, "next" to "v:${if (value is Map<*, *>) value["decimal"] else value}") else value
+        }
         "pattern.split" -> Pattern.compile(text("pattern")).split(text("text"), input.get("limit").asInt).toList()
         "string.split" -> java.lang.String(text("text")).split(text("pattern"), input.get("limit").asInt).toList()
         "string.replaceAll" -> java.lang.String(text("text")).replaceAll(text("pattern"), text("replacement"))

@@ -43,6 +43,29 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'rule.inner': throw new UnsupportedOperation('TS 没有独立 innerRule API；内嵌 JSON 规则由 json.string/json.list 案例覆盖')
     case 'regex.first':
     case 'regex.all': return script(host, `return java.${item.operation === 'regex.first' ? 'getElement' : 'getElements'}(${JSON.stringify(':' + (i.patterns as string[]).join('&&'))})`, i.text)
+    case 'string.api': {
+      let expression: string
+      switch (str('method')) {
+        case 'length': expression = 'text.length()'; break
+        case 'charAt': expression = `String(text.charAt(${Number(i.index)}))`; break
+        case 'substring': expression = `String(text.substring(${Number(i.index)}))`; break
+        case 'substringRange': expression = `String(text.substring(${Number(i.index)},${Number(i.end)}))`; break
+        case 'indexOf': expression = `text.indexOf(${json('value')})`; break
+        case 'indexOfFrom': expression = `text.indexOf(${json('value')},${Number(i.index)})`; break
+        case 'codePointAt': expression = `text.codePointAt(${Number(i.index)})`; break
+        case 'codePointCount': expression = `text.codePointCount(${Number(i.index)},${Number(i.end)})`; break
+        case 'offsetByCodePoints': expression = `text.offsetByCodePoints(${Number(i.index)},${Number(i.end)})`; break
+        case 'getBytes': return script(host, `var bytes=new Packages.java.lang.String(${json('text')}).getBytes(${JSON.stringify(str('charset') || 'UTF-8')}); var value={type:'bytes',base64:Packages.java.util.Base64.getEncoder().encodeToString(bytes)}; return ${i.continue ? `{value:value,next:String(new Packages.java.lang.String(bytes,${JSON.stringify(str('charset') || 'UTF-8')}))}` : 'value'}`)
+        default: throw new UnsupportedOperation(`未知 String 方法: ${str('method')}`)
+      }
+      return script(host, `var text=new Packages.java.lang.String(${json('text')}); var value=${expression}; return ${i.continue ? '{value:value,next:String(value).length}' : 'value'}`)
+    }
+    case 'integer.parseInt':
+    case 'integer.parseLongRadix':
+    case 'integer.bigInteger': {
+      const expression = item.operation === 'integer.parseInt' ? `Packages.java.lang.Integer.parseInt(${json('text')},${Number(i.radix)})` : item.operation === 'integer.parseLongRadix' ? `{type:'integer',decimal:String(Packages.java.lang.Long.parseLong(${json('text')},${Number(i.radix)}))}` : `String(new Packages.java.math.BigInteger(${json('text')},${Number(i.radix)}).toString(${Number(i.outRadix ?? 10)}))`
+      return script(host, `var value=${expression}; return ${i.continue ? "{value:value,next:'v:'+String(value.decimal===undefined?value:value.decimal)}" : 'value'}`)
+    }
     case 'pattern.split': return script(host, `return Packages.java.util.regex.Pattern.compile(${json('pattern')}).split(${json('text')},${Number(i.limit)}).toArray().map(function(v){return String(v)})`)
     case 'string.split': return script(host, `return new Packages.java.lang.String(${json('text')}).split(${json('pattern')},${Number(i.limit)}).toArray().map(function(v){return String(v)})`)
     case 'string.replaceAll':

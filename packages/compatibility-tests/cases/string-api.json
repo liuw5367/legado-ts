@@ -1,0 +1,1403 @@
+[
+  {
+    "id": "string.api.length.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "length"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.length()"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.length.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "length",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.length()"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.charAt.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "charAt",
+      "index": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.charAt(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.charAt.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "charAt",
+      "continue": true,
+      "index": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.charAt(int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.substring.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substring",
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.substring.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substring",
+      "continue": true,
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.substringRange.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substringRange",
+      "index": 0,
+      "end": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.substringRange.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substringRange",
+      "continue": true,
+      "index": 0,
+      "end": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int,int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.indexOf.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "indexOf",
+      "value": "\ud83d\ude00"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.indexOf.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "indexOf",
+      "continue": true,
+      "value": "\ud83d\ude00"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.indexOfFrom.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "indexOfFrom",
+      "value": "a",
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.indexOfFrom.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "indexOfFrom",
+      "continue": true,
+      "value": "a",
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String,int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.codePointAt.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "codePointAt",
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointAt(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.codePointAt.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "codePointAt",
+      "continue": true,
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointAt(int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.codePointCount.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "codePointCount",
+      "index": 0,
+      "end": 4
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointCount(int,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.codePointCount.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "codePointCount",
+      "continue": true,
+      "index": 0,
+      "end": 4
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointCount(int,int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.offsetByCodePoints.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "offsetByCodePoints",
+      "index": 0,
+      "end": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.offsetByCodePoints(int,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.offsetByCodePoints.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "offsetByCodePoints",
+      "continue": true,
+      "index": 0,
+      "end": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.offsetByCodePoints(int,int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.getBytes.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "getBytes",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.getBytes.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "getBytes",
+      "continue": true,
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.length.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "",
+      "method": "length"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.length()"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.charAt.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "",
+      "method": "charAt",
+      "index": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.charAt(int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "index-bounds",
+      "jvm": [
+        "java.lang.StringIndexOutOfBoundsException",
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.charAt.low-surrogate",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\ud83d\ude00",
+      "method": "charAt",
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.charAt(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.charAt.negative",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "charAt",
+      "index": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.charAt(int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "index-bounds",
+      "jvm": [
+        "java.lang.StringIndexOutOfBoundsException",
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.substring.end",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substring",
+      "index": 4
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.substring.negative",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substring",
+      "index": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "index-bounds",
+      "jvm": [
+        "java.lang.StringIndexOutOfBoundsException",
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.substringRange.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substringRange",
+      "index": 1,
+      "end": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.substringRange.reversed",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "substringRange",
+      "index": 2,
+      "end": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.substring(int,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "index-bounds",
+      "jvm": [
+        "java.lang.StringIndexOutOfBoundsException",
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.indexOf.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "",
+      "method": "indexOf",
+      "value": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.indexOf.missing",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "indexOf",
+      "value": "z"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.indexOfFrom.negative",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "indexOfFrom",
+      "value": "a",
+      "index": -2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.indexOfFrom.beyond",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "indexOfFrom",
+      "value": "",
+      "index": 20
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.codePointAt.low-surrogate",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\ud83d\ude00",
+      "method": "codePointAt",
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointAt(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.codePointAt.beyond",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "codePointAt",
+      "index": 4
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointAt(int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "index-bounds",
+      "jvm": [
+        "java.lang.StringIndexOutOfBoundsException",
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.codePointCount.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "codePointCount",
+      "index": 2,
+      "end": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointCount(int,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.codePointCount.reversed",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "codePointCount",
+      "index": 2,
+      "end": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.codePointCount(int,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "index-bounds",
+      "jvm": [
+        "java.lang.StringIndexOutOfBoundsException",
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.offsetByCodePoints.backward",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "offsetByCodePoints",
+      "index": 4,
+      "end": -2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.offsetByCodePoints(int,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.offsetByCodePoints.beyond",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "offsetByCodePoints",
+      "index": 0,
+      "end": 8
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.offsetByCodePoints(int,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "index-bounds",
+      "jvm": [
+        "java.lang.StringIndexOutOfBoundsException",
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.getBytes.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "",
+      "method": "getBytes",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.getBytes.gbk",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u4e2d\u6587",
+      "method": "getBytes",
+      "charset": "GBK"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.getBytes.unpaired",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\ud800",
+      "method": "getBytes",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseInt.binary",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "101",
+      "radix": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "integer.parseInt.hex",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "-7f",
+      "radix": 16,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "integer.parseInt.radix36",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "zz",
+      "radix": 36
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseInt.signed",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "+42",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseInt.zero",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "0",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseInt.invalid",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "12x",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.parseInt.bad-radix",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "1",
+      "radix": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.parseInt.empty",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.parseLongRadix.binary",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "101",
+      "radix": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "integer.parseLongRadix.hex",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "-7f",
+      "radix": 16,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "integer.parseLongRadix.radix36",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "zz",
+      "radix": 36
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseLongRadix.signed",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "+42",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseLongRadix.zero",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "0",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseLongRadix.invalid",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "12x",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.parseLongRadix.bad-radix",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "1",
+      "radix": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.parseLongRadix.empty",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.bigInteger.binary",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "101",
+      "radix": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "integer.bigInteger.hex",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "-7f",
+      "radix": 16,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "integer.bigInteger.radix36",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "zz",
+      "radix": 36
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.bigInteger.signed",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "+42",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.bigInteger.zero",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "0",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.bigInteger.invalid",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "12x",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.bigInteger.bad-radix",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "1",
+      "radix": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.bigInteger.empty",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.parseInt.max",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "2147483647",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseInt.min",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "-2147483648",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseInt.overflow",
+    "family": "string",
+    "operation": "integer.parseInt",
+    "input": {
+      "text": "2147483648",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Integer.parseInt(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.parseLongRadix.max",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "7fffffffffffffff",
+      "radix": 16
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseLongRadix.min",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "-8000000000000000",
+      "radix": 16
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseLongRadix.overflow",
+    "family": "string",
+    "operation": "integer.parseLongRadix",
+    "input": {
+      "text": "8000000000000000",
+      "radix": 16
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Long.parseLong(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "integer.bigInteger.huge",
+    "family": "string",
+    "operation": "integer.bigInteger",
+    "input": {
+      "text": "123456789012345678901234567890",
+      "radix": 10
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "BigInteger(String,int).toString(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  }
+]

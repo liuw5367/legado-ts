@@ -182,6 +182,7 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 每个批次可独立 revert；没有数据库迁移、部署或外部业务写入。台账、案例和原始报告可保留供复现，回退某个运行时修复不需要删除对应失败案例。异常语义放宽须能回退为 rawComparison 检查，历史原始信息不丢失。
 
 ## 完成记录
+- C2 首批方法/重载测试已建立：字符串族 118 例中 117 行为一致，新增 String/数字方法含 Unicode、边界、radix、返回值继续使用；发现 C2-UTF8 未配对代理字符的 getBytes 差异，作为独立问题保持失败并登记。覆盖表已细分方法签名，尚未将此族全部计 verified。报告 output/run-ddSF7M。
 - B1/R10 已修复：适配器切换真实 getElement/getElements 后暴露首个/全部匹配与正则链错误，现 12/12 一致，累计预算回归及原回归 135/135 通过。阶段二合并执行 193 例，其中 192 API 全部行为一致、1 内部观察不计通过、28 项错误语义等价、0 执行器故障；18 项机制测试通过。报告 output/run-IFYm3y。原 35+1 项已全部归因并处置；阶段三仍待完成。
 - B1/R11 已修复：真实 JSONPath 反斜杠字段组合在 Android 返回甲/乙、旧 TS 返回空，现两端一致；JSON 族 43/43、规则 API 7/7（另 1 内部观察仍不计通过）、原回归 134/134。报告 output/run-ZgBRnu → output/run-yw78Ex / run-F7wifc。
 - B4/R08 已修复：规则 HTML parser 开启自闭合识别，自闭合链接/div 不吞后续兄弟，textNodes 保持顺序。CSS 族 41/41、原回归 164/164 与根类型检查通过。报告 output/run-fMxfCI。
@@ -193,7 +194,7 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - B1/R02 已修复：String.split 与 Pattern.split 共 46 个案例行为通过；旧 helper 在当前构建入口复现 14 个行为差异，修复后为 0。SourceRuleHost 既有 118 项回归通过。报告 output/run-stQAaf → output/run-71mZvL。
 - 校准后发现 SourceRuleHost 通过包名加载 core/dist，原执行入口可能使用旧产物。新增 TS 执行前 core 构建与实际产物摘要；后续修复验证必须经过此入口，不接受旧 dist 结果。
 - 阶段一已实现：保留原 114 例并增加 7 例，校准 String/Pattern、Java Base64、JSON bridge/read 的比较入口；增加 triage/coverage、原始与行为双比较及窄错误标记。121 例执行为 98 一致、22 待修行为差异、1 内部观察未支持、0 执行器故障，15 项异常语义等价；报告 output/run-aY0Xdr/report.md。已确认 String null 为适配影响，List null 仍需产品修复。
-- 本轮完成只读核查和详细草稿；尚未实施阶段一～三。
+- 规划阶段（实施前）：完成源码只读核查与详细草稿，随后按批准范围实施；最新阶段状态见上方执行记录。
 - 已核对本地提交、最新 114 例报告、19 个操作契约和实际调用实现；没有修改运行代码、测试或原 Android 仓库。
 - 官方行为参考：[JDK 21 String](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html)、[JDK 21 URL](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/net/URL.html)、[JDK 21 URLDecoder](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/net/URLDecoder.html)。JDK 规范只用于 Java API；Android 规则以固定源码实际行为为准。
 

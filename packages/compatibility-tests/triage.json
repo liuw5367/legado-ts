@@ -471,6 +471,23 @@
         "output/run-IFYm3y/report.json"
       ],
       "resolution": "保留内部观察，json.string.inner-reference 已以真实 bridge 执行通过；未计入 API 覆盖通过"
+    },
+    {
+      "id": "C2-UTF8",
+      "caseIds": [
+        "string.api.getBytes.unpaired"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "String.getBytes(String)"
+      },
+      "tsEntry": "SourceRuleHost → Java String.getBytes → encode-bytes",
+      "evidence": [
+        "output/run-ddSF7M/report.json"
+      ]
     }
   ]
 }

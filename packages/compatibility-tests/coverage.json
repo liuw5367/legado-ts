@@ -477,6 +477,260 @@
       "caseIds": [
         "json.continue.invalid-path"
       ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.charAt(int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.charAt.unicode",
+        "string.api.charAt.continuation",
+        "string.api.charAt.empty",
+        "string.api.charAt.low-surrogate",
+        "string.api.charAt.negative"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.codePointAt(int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.codePointAt.unicode",
+        "string.api.codePointAt.continuation",
+        "string.api.codePointAt.low-surrogate",
+        "string.api.codePointAt.beyond"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.codePointCount(int,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.codePointCount.unicode",
+        "string.api.codePointCount.continuation",
+        "string.api.codePointCount.empty",
+        "string.api.codePointCount.reversed"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.getBytes(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.getBytes.unicode",
+        "string.api.getBytes.continuation",
+        "string.api.getBytes.empty",
+        "string.api.getBytes.gbk",
+        "string.api.getBytes.unpaired"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.indexOf(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.indexOf.unicode",
+        "string.api.indexOf.continuation",
+        "string.api.indexOf.empty",
+        "string.api.indexOf.missing"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.indexOf(String,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.indexOfFrom.unicode",
+        "string.api.indexOfFrom.continuation",
+        "string.api.indexOfFrom.negative",
+        "string.api.indexOfFrom.beyond"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.length()",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.length.unicode",
+        "string.api.length.continuation",
+        "string.api.length.empty"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.offsetByCodePoints(int,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.offsetByCodePoints.unicode",
+        "string.api.offsetByCodePoints.continuation",
+        "string.api.offsetByCodePoints.backward",
+        "string.api.offsetByCodePoints.beyond"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.substring(int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.substring.unicode",
+        "string.api.substring.continuation",
+        "string.api.substring.end",
+        "string.api.substring.negative"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.substring(int,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.substringRange.unicode",
+        "string.api.substringRange.continuation",
+        "string.api.substringRange.empty",
+        "string.api.substringRange.reversed"
+      ]
+    },
+    {
+      "operation": "integer.parseInt",
+      "method": "Integer.parseInt(String,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → integer.parseInt",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "integer.parseInt.binary",
+        "integer.parseInt.hex",
+        "integer.parseInt.radix36",
+        "integer.parseInt.signed",
+        "integer.parseInt.zero",
+        "integer.parseInt.invalid",
+        "integer.parseInt.bad-radix",
+        "integer.parseInt.empty",
+        "integer.parseInt.max",
+        "integer.parseInt.min",
+        "integer.parseInt.overflow"
+      ]
+    },
+    {
+      "operation": "integer.parseLongRadix",
+      "method": "Long.parseLong(String,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → integer.parseLongRadix",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "integer.parseLongRadix.binary",
+        "integer.parseLongRadix.hex",
+        "integer.parseLongRadix.radix36",
+        "integer.parseLongRadix.signed",
+        "integer.parseLongRadix.zero",
+        "integer.parseLongRadix.invalid",
+        "integer.parseLongRadix.bad-radix",
+        "integer.parseLongRadix.empty",
+        "integer.parseLongRadix.max",
+        "integer.parseLongRadix.min",
+        "integer.parseLongRadix.overflow"
+      ]
+    },
+    {
+      "operation": "integer.bigInteger",
+      "method": "BigInteger(String,int).toString(int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → integer.bigInteger",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "integer.bigInteger.binary",
+        "integer.bigInteger.hex",
+        "integer.bigInteger.radix36",
+        "integer.bigInteger.signed",
+        "integer.bigInteger.zero",
+        "integer.bigInteger.invalid",
+        "integer.bigInteger.bad-radix",
+        "integer.bigInteger.empty",
+        "integer.bigInteger.huge"
+      ]
     }
   ]
 }
