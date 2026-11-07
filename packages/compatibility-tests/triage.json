@@ -633,10 +633,15 @@
     {
       "id": "C6-XPATH-SERIALIZE",
       "caseIds": [
-        "xpath.string.nestedElement"
+        "xpath.string.nestedElement",
+        "xpath.string.blockInline",
+        "xpath.string.preformatted",
+        "xpath.string.inlineRuns",
+        "xpath.string.voidElements",
+        "xpath.string.xmlElement"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -645,7 +650,10 @@
       "tsEntry": "XPathParserAdapter → XmlDocumentView.read",
       "evidence": [
         "output/run-EszpKa/report.json",
-        "output/run-Qf9GoX/report.json"
+        "output/run-Qf9GoX/report.json",
+        "output/run-qJNicm/report.json",
+        "output/run-ORetHs/report.json",
+        "output/run-mMvuUE/report.json"
       ]
     }
   ]

@@ -406,6 +406,8 @@ export interface XPathParser {
   context?(document: HtmlDocument, node: ParserNode): HtmlDocument
   /** 返回节点、标量或列表；adapter 不把所有结果提前转为文本。 */
   evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null
+  /** 将 XPath 节点转换为规则字符串。元素保留外部标记，其他节点返回自身值。 */
+  stringify?(document: HtmlDocument, node: ParserNode): string
 }
 
 export interface JsonPathParser {

@@ -1174,7 +1174,12 @@
         "xpath.string.count",
         "xpath.string.elementString",
         "xpath.string.invalidString",
-        "xpath.string.nestedElement"
+        "xpath.string.nestedElement",
+        "xpath.string.blockInline",
+        "xpath.string.preformatted",
+        "xpath.string.inlineRuns",
+        "xpath.string.voidElements",
+        "xpath.string.xmlElement"
       ]
     },
     {

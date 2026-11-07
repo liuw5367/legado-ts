@@ -368,5 +368,85 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "xpath.string.blockInline",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//div",
+      "content": "<div>  起  <span>中</span><p>  段  <b>粗</b> 尾  </p> 后  </div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.preformatted",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//div",
+      "content": "<div><pre>  A\n B </pre><p>C</p></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.inlineRuns",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//div",
+      "content": "<div><span>A</span> <span>B</span><!--note--><span>C</span></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.voidElements",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//p",
+      "content": "<p>A<br>B<img src=\"/x\">C</p>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.xmlElement",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//Box",
+      "content": "<?xml version=\"1.0\"?><root><Box><Item>  A  </Item><Empty/></Box></root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
   }
 ]

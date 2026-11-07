@@ -43,9 +43,11 @@ class XmlDocumentView implements HtmlDocument {
   private readonly matchTextParents = new WeakMap<object, XmlNode>()
   private nextId = 0
   private readonly root: XmlNode
+  private readonly xml: boolean
 
-  public constructor(root: XmlNode) {
+  public constructor(root: XmlNode, xml: boolean) {
     this.root = root
+    this.xml = xml
   }
 
   public select(selector: string): ParserNode[] {
@@ -99,7 +101,12 @@ class XmlDocumentView implements HtmlDocument {
   }
 
   public child(node: ParserNode): HtmlDocument {
-    return new XmlDocumentView(this.node(node))
+    return new XmlDocumentView(this.node(node), this.xml)
+  }
+
+  public stringify(node: ParserNode): string {
+    const value = this.node(node)
+    return value.nodeType === 1 ? serializeXPathElement(value, this.xml) : this.read(node, 'text')
   }
 
   public describe(node: ParserNode): ParserNodeInfo {
@@ -608,14 +615,15 @@ export class XPathParserAdapter implements XPathParser {
     // Repair ordinary HTML first so unclosed tags, void elements, and unquoted
     // attributes do not make an otherwise useful XPath document disappear.
     let source = input
-    if (!/^\s*<\?xml\b/i.test(source)) {
+    const xml = /^\s*<\?xml\b/i.test(source)
+    if (!xml) {
       if (source.endsWith('</td>')) source = `<tr>${source}</tr>`
       if (source.endsWith('</tr>') || source.endsWith('</tbody>')) source = `<table>${source}</table>`
     }
-    const normalized = /^\s*<\?xml\b/i.test(source)
+    const normalized = xml
       ? source
       : render(parseDocument(source, { recognizeSelfClosing: true }), { xmlMode: true, encodeEntities: true })
-    return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(normalized, 'text/xml') as unknown as XmlNode)
+    return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(normalized, 'text/xml') as unknown as XmlNode, xml)
   }
 
   public evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null {
@@ -632,6 +640,11 @@ export class XPathParserAdapter implements XPathParser {
     const fragment = this.parse(document.read(node, 'all'))
     const root = fragment.children()[0]
     return root === undefined ? fragment : fragment.child(root)
+  }
+
+  public stringify(document: HtmlDocument, node: ParserNode): string {
+    if (!(document instanceof XmlDocumentView)) throw new Error('XPath requires an XML document created by XPathParserAdapter.parse')
+    return document.stringify(node)
   }
 }
 
@@ -653,6 +666,68 @@ function childNodes(value: XmlNode): XmlNode[] {
     if (child !== null && child !== undefined) children.push(child)
   }
   return children
+}
+
+// 标签分组取自 XPath 参考端使用的 Jsoup 1.23.2 HTML TagSet。
+const xpathBlockTags = new Set('html head body frameset script noscript style meta link title frame noframes section nav aside hgroup header footer p h1 h2 h3 h4 h5 h6 dialog search ul ol pre div blockquote hr address figure figcaption form fieldset dl dt dd li table caption thead tfoot tbody colgroup col tr th td details menu plaintext template article main center dir applet marquee listing br'.split(' '))
+const xpathInlineTags = new Set('object base font tt i b u big small em strong dfn code samp kbd var cite abbr time acronym mark ruby rt rp rtc a img wbr map q sub sup bdo iframe embed span input select textarea label audio video canvas optgroup option legend datalist keygen output progress meter area param source track summary command device basefont bgsound menuitem data bdi s strike nobr ins del button picture slot rb'.split(' '))
+const xpathInlineContainers = new Set('title p h1 h2 h3 h4 h5 h6 pre address li th td script style'.split(' '))
+const xpathVoidTags = new Set('meta link base frame img br wbr embed hr input keygen col command device area basefont bgsound menuitem param source track'.split(' '))
+const xpathPreserveSpace = new Set('pre plaintext title textarea script'.split(' '))
+
+function serializeXPathElement(root: XmlNode, xml: boolean): string {
+  const chunks: string[] = []
+  const name = (node: XmlNode): string => node.nodeName ?? ''
+  const isText = (node: XmlNode | undefined): boolean => node?.nodeType === 3
+  // 仅折叠 HTML 空白，避免将不换行空格等正文字符归一化。
+  const htmlSpace = /[\t\n\f\r ]+/gu
+  const blankText = (node: XmlNode): boolean => isText(node) && (node.nodeValue ?? '').replace(htmlSpace, '').length === 0
+  const block = (node: XmlNode | undefined): boolean => {
+    if (node?.nodeType !== 1) return false
+    if (xpathBlockTags.has(name(node))) return true
+    if (xpathInlineTags.has(name(node)) || xpathVoidTags.has(name(node))) return false
+    return node.parentNode?.nodeType === 9 || childNodes(node).filter((child) => child.nodeType === 1).slice(0, 5)
+      .some((child) => xpathBlockTags.has(name(child)) || (!xpathInlineTags.has(name(child)) && !xpathVoidTags.has(name(child))))
+  }
+  const indent = (depth: number): void => { chunks.push('\n', ' '.repeat(Math.min(depth, 30))) }
+  const visit = (node: XmlNode, depth: number, preserve: boolean): void => {
+    if (node.nodeType !== 1) { chunks.push(node.toString?.() ?? ''); return }
+    const tag = name(node)
+    const children = childNodes(node)
+    const head = node.cloneNode?.(false).toString?.().replace(/\/>$/u, '>') ?? `<${tag}>`
+    if (xml && children.length === 0) { chunks.push(head.slice(0, -1), ' />'); return }
+    chunks.push(head)
+    if (!xml && xpathVoidTags.has(tag)) return
+    const pretty = !xml && !preserve && !xpathPreserveSpace.has(tag)
+    const blockParent = pretty && block(node)
+    const breaksAtRuns = blockParent && !xpathInlineContainers.has(tag) && children.slice(0, 5).some((child) => !isText(child))
+    const shouldBreak = (child: XmlNode, previous?: XmlNode): boolean => pretty && !blankText(child)
+      && (block(child) || block(previous) || (breaksAtRuns && (previous === undefined || (previous.nodeType !== 1 && !isText(previous)))))
+    let previous: XmlNode | undefined
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index]!
+      const next = children[index + 1]
+      const lineBreak = shouldBreak(child, previous)
+      if (isText(child) && pretty) {
+        let value = (child.nodeValue ?? '').replace(htmlSpace, ' ')
+        if (blockParent) {
+          if (index === 0 || block(children[index - 1]) || lineBreak) value = value.replace(/^ /u, '')
+          if (next === undefined || (!isText(next) && shouldBreak(next, child))) value = value.replace(/ $/u, '')
+        }
+        if (lineBreak && blockParent && value.length > 0) indent(depth + 1)
+        chunks.push(value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'))
+      } else {
+        if (lineBreak) indent(depth + 1)
+        visit(child, depth + 1, !pretty)
+      }
+      if (!blankText(child)) previous = child
+    }
+    const first = children.find((child) => !blankText(child))
+    if (first !== undefined && shouldBreak(first)) indent(depth)
+    chunks.push(`</${tag}>`)
+  }
+  visit(root, 0, false)
+  return chunks.join('')
 }
 
 function attributeValue(node: XmlNode, name: string): string | undefined {

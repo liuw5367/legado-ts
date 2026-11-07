@@ -3344,7 +3344,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const nodes = value as ParserNode[]
       if (expect === 'nodes') return nodes.map((node) => this.remember(context, node))
       // JXNode 将元素转成外部 HTML，文本节点和属性则返回值。
-      return nodes.map((node) => context.read(node, context.describe?.(node).tagName === undefined ? 'text' : 'all'))
+      return nodes.map((node) => this.xpath.stringify?.(context, node) ?? context.read(node, context.describe?.(node).tagName === undefined ? 'text' : 'all'))
     }
     return value
   }
