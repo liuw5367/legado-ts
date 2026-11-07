@@ -47,7 +47,9 @@
         "integer.parseInt",
         "integer.parseLongRadix",
         "integer.bigInteger",
-        "pattern.matcher"
+        "pattern.matcher",
+        "encoding.java64",
+        "encoding.digest"
       ]
     },
     "input": {
@@ -990,6 +992,77 @@
                 "items": {
                   "type": "string"
                 }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "encoding.java64"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "mode",
+              "action"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "padding": {
+                "type": "boolean"
+              },
+              "continue": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "encoding.digest"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "algorithm"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "algorithm": {
+                "type": "string"
+              },
+              "continue": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

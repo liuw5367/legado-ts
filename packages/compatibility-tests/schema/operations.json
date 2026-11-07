@@ -280,5 +280,30 @@
       "flags": "integer",
       "actions": "strings"
     }
+  },
+  "encoding.java64": {
+    "required": [
+      "text",
+      "mode",
+      "action"
+    ],
+    "properties": {
+      "text": "string",
+      "mode": "string",
+      "action": "string",
+      "padding": "boolean",
+      "continue": "boolean"
+    }
+  },
+  "encoding.digest": {
+    "required": [
+      "text",
+      "algorithm"
+    ],
+    "properties": {
+      "text": "string",
+      "algorithm": "string",
+      "continue": "boolean"
+    }
   }
 }

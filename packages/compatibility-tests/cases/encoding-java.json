@@ -1,0 +1,952 @@
+[
+  {
+    "id": "encoding.java64.basic.empty.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "",
+      "mode": "basic",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.empty.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "",
+      "mode": "basic",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.bytes.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "AH+A//vv",
+      "mode": "basic",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.bytes.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "AH+A//vv",
+      "mode": "basic",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.one.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YQ==",
+      "mode": "basic",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.one.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YQ==",
+      "mode": "basic",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.two.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YWI=",
+      "mode": "basic",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.two.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YWI=",
+      "mode": "basic",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.decode.empty",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "",
+      "mode": "basic",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.decode.normal",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "AP+A/w",
+      "mode": "basic",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.decode.tail",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zh==",
+      "mode": "basic",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.basic.decode.bad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "a",
+      "mode": "basic",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.basic.decode.padding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg=",
+      "mode": "basic",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.basic.decode.wrongAlphabet",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "-_8=",
+      "mode": "basic",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.basic.decode.whitespace",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Z g==",
+      "mode": "basic",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.url.empty.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "",
+      "mode": "url",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.empty.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "",
+      "mode": "url",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.bytes.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "AH+A//vv",
+      "mode": "url",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.bytes.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "AH+A//vv",
+      "mode": "url",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.one.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YQ==",
+      "mode": "url",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.one.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YQ==",
+      "mode": "url",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.two.pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YWI=",
+      "mode": "url",
+      "action": "encode",
+      "padding": true,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.two.no-pad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "YWI=",
+      "mode": "url",
+      "action": "encode",
+      "padding": false,
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.decode.empty",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "",
+      "mode": "url",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.decode.normal",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "AP-A_w",
+      "mode": "url",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.decode.tail",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zh==",
+      "mode": "url",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.url.decode.bad",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "a",
+      "mode": "url",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.url.decode.padding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg=",
+      "mode": "url",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.url.decode.wrongAlphabet",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "+/8=",
+      "mode": "url",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.url.decode.whitespace",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Z g==",
+      "mode": "url",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.empty",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.mime.lines",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Z\r\ng==",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.mime.ignored",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "!Z#g$==!",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.mime.suffix",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg==#",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.java64.mime.badPadding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg=",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.dataAfterPadding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg==a",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.single",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "a",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.digest.MD5.empty",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "MD5",
+      "text": "",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.digest.MD5.abc",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "MD5",
+      "text": "YWJj",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.digest.MD5.bytes",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "MD5",
+      "text": "AH+A/w==",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.digest.MD5.unicode",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "MD5",
+      "text": "5Lit5paH8J+YgA==",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.digest.SHA-256.empty",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "SHA-256",
+      "text": "",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.digest.SHA-256.abc",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "SHA-256",
+      "text": "YWJj",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.digest.SHA-256.bytes",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "SHA-256",
+      "text": "AH+A/w==",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.digest.SHA-256.unicode",
+    "family": "encoding",
+    "operation": "encoding.digest",
+    "input": {
+      "algorithm": "SHA-256",
+      "text": "5Lit5paH8J+YgA==",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "edge"
+    ]
+  }
+]

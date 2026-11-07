@@ -77,6 +77,21 @@ private fun execute(item: JsonObject): Any? {
         "string.replaceFirst" -> java.lang.String(text("text")).replaceFirst(text("pattern"), text("replacement"))
         "pattern.quote" -> Pattern.quote(text("text"))
         "integer.parseLong" -> mapOf("type" to "integer", "decimal" to java.lang.Long.parseLong(text("text")).toString())
+        "encoding.java64" -> {
+            val value = if (text("action") == "encode") {
+                val encoder = when (text("mode")) { "url" -> Base64.getUrlEncoder(); "mime" -> Base64.getMimeEncoder(); else -> Base64.getEncoder() }
+                (if (input.get("padding")?.asBoolean == false) encoder.withoutPadding() else encoder).encodeToString(Base64.getDecoder().decode(text("text")))
+            } else {
+                val decoder = when (text("mode")) { "url" -> Base64.getUrlDecoder(); "mime" -> Base64.getMimeDecoder(); else -> Base64.getDecoder() }
+                Base64.getEncoder().encodeToString(decoder.decode(text("text")))
+            }
+            if (input.get("continue")?.asBoolean == true) mapOf("value" to value, "next" to "v:$value") else value
+        }
+        "encoding.digest" -> {
+            val digest = MessageDigest.getInstance(text("algorithm"))
+            val value = Base64.getEncoder().encodeToString(digest.digest(Base64.getDecoder().decode(text("text"))))
+            if (input.get("continue")?.asBoolean == true) mapOf("value" to value, "next" to Base64.getEncoder().encodeToString(digest.digest())) else value
+        }
         "encoding.base64Encode" -> Base64.getEncoder().encodeToString(text("text").toByteArray(Charsets.UTF_8))
         "encoding.base64Decode" -> mapOf("type" to "bytes", "base64" to Base64.getEncoder().encodeToString(Base64.getDecoder().decode(text("text"))))
         "encoding.urlEncode" -> URLEncoder.encode(text("text"), text("charset").ifEmpty { "UTF-8" })

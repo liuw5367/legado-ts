@@ -73,6 +73,12 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'string.replaceFirst': return script(host, `return String(new Packages.java.lang.String(${json('text')}).${item.operation.slice(7)}(${json('pattern')},${json('replacement')}))`)
     case 'pattern.quote': return script(host, `return Packages.java.util.regex.Pattern.quote(${json('text')})`)
     case 'integer.parseLong': return script(host, `return {type:'integer',decimal:String(Packages.java.lang.Long.parseLong(${json('text')}))}`)
+    case 'encoding.java64': {
+      const factory = str('mode') === 'url' ? 'Url' : str('mode') === 'mime' ? 'Mime' : ''
+      const method = i.action === 'encode' ? `get${factory}Encoder()` : `get${factory}Decoder()`
+      return script(host, `var B=Packages.java.util.Base64; var codec=B.${method}; ${i.padding === false && i.action === 'encode' ? 'codec=codec.withoutPadding();' : ''} var value=${i.action === 'encode' ? `codec.encodeToString(B.getDecoder().decode(${json('text')}))` : `B.getEncoder().encodeToString(codec.decode(${json('text')}))`}; return ${i.continue ? "{value:value,next:'v:'+value}" : 'value'}`)
+    }
+    case 'encoding.digest': return script(host, `var B=Packages.java.util.Base64; var d=Packages.java.security.MessageDigest.getInstance(${json('algorithm')}); var value=B.getEncoder().encodeToString(d.digest(B.getDecoder().decode(${json('text')}))); return ${i.continue ? "{value:value,next:B.getEncoder().encodeToString(d.digest(new Uint8Array()))}" : 'value'}`)
     case 'encoding.base64Encode': return script(host, `return Packages.java.util.Base64.getEncoder().encodeToString(new Packages.java.lang.String(${json('text')}).getBytes('UTF-8'))`)
     case 'encoding.base64Decode': return script(host, `var bytes=Packages.java.util.Base64.getDecoder().decode(${json('text')}); return {type:'bytes',base64:Packages.java.util.Base64.getEncoder().encodeToString(bytes)}`)
     case 'encoding.urlEncode': return script(host, `return Packages.java.net.URLEncoder.encode(${json('text')},${JSON.stringify(str('charset') || 'UTF-8')})`)

@@ -522,6 +522,44 @@
         "output/run-98XhzV/report.json",
         "output/run-ZdUy98/report.json"
       ]
+    },
+    {
+      "id": "C4-BASE64",
+      "caseIds": [
+        "encoding.java64.url.empty.pad",
+        "encoding.java64.url.empty.no-pad",
+        "encoding.java64.url.bytes.pad",
+        "encoding.java64.url.bytes.no-pad",
+        "encoding.java64.url.one.pad",
+        "encoding.java64.url.one.no-pad",
+        "encoding.java64.url.two.pad",
+        "encoding.java64.url.two.no-pad",
+        "encoding.java64.url.decode.empty",
+        "encoding.java64.url.decode.normal",
+        "encoding.java64.url.decode.tail",
+        "encoding.java64.url.decode.bad",
+        "encoding.java64.url.decode.padding",
+        "encoding.java64.url.decode.wrongAlphabet",
+        "encoding.java64.url.decode.whitespace",
+        "encoding.java64.mime.empty",
+        "encoding.java64.mime.lines",
+        "encoding.java64.mime.ignored",
+        "encoding.java64.mime.suffix",
+        "encoding.java64.mime.badPadding",
+        "encoding.java64.mime.dataAfterPadding",
+        "encoding.java64.mime.single"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "Base64 URL/MIME"
+      },
+      "tsEntry": "SourceRuleHost → Java Base64",
+      "evidence": [
+        "output/run-RXj08j/report.json"
+      ]
     }
   ]
 }
