@@ -235,8 +235,8 @@ function translateJavaPattern(pattern: string, inputFlags: string): JavaPatternT
  */
 function translateScopedFlags(source: string, inputFlags: string, initialExtended: boolean, initialUnixLines: boolean, initialUnicodeClasses: boolean, initialUnicodeCase: boolean): { pattern: string; flags: string } | { error: SourcePatternError } {
   const first = findScopedFlagGroup(source, 0)
-  const hasBoundaryEscape = source.includes('\\b') || source.includes('\\B')
-  if (first === undefined && !initialExtended && !initialUnixLines && !initialUnicodeClasses && !hasBoundaryEscape) return { pattern: source, flags: inputFlags }
+  const needsEscapeTranslation = source.includes('\\b') || source.includes('\\B') || source.includes('\\h')
+  if (first === undefined && !initialExtended && !initialUnixLines && !initialUnicodeClasses && !needsEscapeTranslation) return { pattern: source, flags: inputFlags }
   const unsupported = first === undefined ? undefined : `${first.enabled}${first.disabled}`.split('').find((flag) => !'imsxdUu'.includes(flag))
   if (unsupported !== undefined) return { error: { code: 'unsupported-pattern', message: `Java 正则作用域 flag ${unsupported} 暂不支持` } }
   if ((initialUnicodeClasses || initialUnicodeCase) && inputFlags.includes('i')) return { error: { code: 'unsupported-pattern', message: 'Java 正则 Unicode 大小写折叠暂不支持' } }
@@ -300,7 +300,8 @@ function translateScopedSegment(source: string, start: number, end: number, mode
       const raw = source.slice(index, classEnd + 1)
       const normalizedClass = mode.extended ? stripJavaExtendedCharacterClass(raw) : { pattern: raw }
       if ('error' in normalizedClass) return normalizedClass
-      const classPattern = normalizedClass.pattern
+      // 成对扫描转义，避免将字符类中的字面反斜杠 + h 识别为预定义类。
+      const classPattern = normalizedClass.pattern.replace(/\\./gu, (escape) => escape === '\\h' ? javaHorizontalSpace : escape)
       output += mode.ignoreCase ? foldCharacterClass(classPattern) : classPattern
       index = classEnd + 1
       continue
@@ -348,10 +349,13 @@ function translateScopedSegment(source: string, start: number, end: number, mode
 
 const unicodeWordBody = String.raw`\p{Alphabetic}\p{Mark}\p{Decimal_Number}\p{Connector_Punctuation}\p{Join_Control}`
 const unicodeWordClass = `[${unicodeWordBody}]`
+// Java Pattern 的水平空白集合，包含制表符、NBSP 和全角空格。
+const javaHorizontalSpace = String.raw`\t\x20\xA0\u1680\u180E\u2000-\u200A\u202F\u205F\u3000`
 
 /** Java 的边界匹配器使用 Unicode word 集合；U flag 还会把常用预定义类切换到 Unicode。 */
 function translateUnicodeEscape(source: string, index: number, mode: ScopedPatternMode): { pattern: string; unicode: boolean } | undefined {
   const marker = source[index + 1]
+  if (marker === 'h') return { pattern: `[${javaHorizontalSpace}]`, unicode: false }
   if (marker === 'b') {
     return { pattern: `(?:(?<!${unicodeWordClass})(?=${unicodeWordClass})|(?<=${unicodeWordClass})(?!${unicodeWordClass}))`, unicode: true }
   }

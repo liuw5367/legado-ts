@@ -117,7 +117,10 @@
         "string.replaceAll.groups",
         "string.replaceAll.none",
         "string.replaceAll.invalid",
-        "string.replaceAll.bad-group"
+        "string.replaceAll.bad-group",
+        "string.replaceAll.horizontal-space",
+        "string.replaceAll.horizontal-space-in-class",
+        "string.replaceAll.horizontal-escaped-literal"
       ]
     },
     {

@@ -659,10 +659,12 @@
     {
       "id": "C7-REGEX-HSPACE",
       "caseIds": [
-        "corpus.source-5.ruleToc.chapterName"
+        "corpus.source-5.ruleToc.chapterName",
+        "string.replaceAll.horizontal-space",
+        "string.replaceAll.horizontal-space-in-class"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -670,7 +672,9 @@
       },
       "tsEntry": "SourceRuleHost → compileSourcePattern",
       "evidence": [
-        "output/run-1u34kP/report.json"
+        "output/run-1u34kP/report.json",
+        "output/run-QrAmKV/report.json",
+        "output/run-DHjdRZ/report.json"
       ]
     }
   ]

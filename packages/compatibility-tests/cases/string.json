@@ -872,5 +872,68 @@
         "__LEGADO_PATTERN__invalid-pattern"
       ]
     }
+  },
+  {
+    "id": "string.replaceAll.horizontal-space",
+    "family": "string",
+    "operation": "string.replaceAll",
+    "input": {
+      "text": "a\tb c　d\ne h",
+      "pattern": "\\h+",
+      "replacement": "-"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replaceAll(String,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "a-b-c-d\ne-h"
+    }
+  },
+  {
+    "id": "string.replaceAll.horizontal-space-in-class",
+    "family": "string",
+    "operation": "string.replaceAll",
+    "input": {
+      "text": "甲、 乙\n丙",
+      "pattern": "[、\\h]+",
+      "replacement": "-"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replaceAll(String,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "甲-乙\n丙"
+    }
+  },
+  {
+    "id": "string.replaceAll.horizontal-escaped-literal",
+    "family": "string",
+    "operation": "string.replaceAll",
+    "input": {
+      "text": "a\tb\\hc",
+      "pattern": "[\\\\h]+",
+      "replacement": "-"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replaceAll(String,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "a\tb-c"
+    }
   }
 ]

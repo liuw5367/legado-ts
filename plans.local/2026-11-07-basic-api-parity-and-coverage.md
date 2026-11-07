@@ -233,3 +233,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C7 新增 14 个原文规则正例，覆盖五个区段中的节点选择、属性、分组回退、合并、索引顺序、排除索引、后缀属性和 textNodes。节点结果比较标签、文本、ID 与顺序。首轮 textNodes 断言误将同一元素内的文本拆成多项，JVM 与 TS 均返回一个换行拼接项（output/run-oCyAxy），已按接口契约更正。全量 430 个 API 一致，另有 1 个内部观察项（output/run-KwJpjx），20 项机制检查与类型检查通过。含正则替换、插值、脚本的真实规则组合及最终覆盖审计仍待完成。
 
 - C7 新增 10 个选择、替换、插值组合，含章节节点上下文。JVM 适配按固定 AnalyzeRule 的顺序组合原 AnalyzeByJSoup 和 Kotlin Regex。24 个语料用例中 23 一致，唯一剩余差异为 Java 正则 \h 被 JS 解释为字面 h（output/run-1u34kP），登记 C7-REGEX-HSPACE。
+
+- C7-REGEX-HSPACE 已修复。Java \h 按水平空白集合转译，字符类中的转义及字面反斜杠均有 JDK 对比。443 个 API 用例全部一致，另有 1 个内部观察项（output/run-DHjdRZ）。119 项宿主回归和 20 项机制检查通过。
