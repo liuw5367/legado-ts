@@ -3046,7 +3046,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         // while `result` itself is the output of the preceding segment.
         // AnalyzeRule 在插值后从脚本中分离 ##，并对脚本返回值执行替换。
         const [code = '', pattern, replacement = '', ...firstMatch] = (await this.expandTemplate(segment.text, state, content)).split('##')
-        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, result, state.request.signal, { ...state.request, bindings: state.bindings, ruleState: state, mode: 'script' })
+        // 嵌套 bridge 保留外层绑定，但 result 必须来自当前规则链的前一阶段。
+        const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, result, state.request.signal, { ...state.request, bindings: { ...state.bindings, result }, ruleState: state, mode: 'script' })
         if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
         result = this.unwrapCapturedRuleValue(output.value, state)
         if (pattern) result = this.replaceRuleValue(result, { pattern, replacement, firstMatchOnly: firstMatch.length > 0 })

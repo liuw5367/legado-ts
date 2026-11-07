@@ -243,3 +243,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C7-CHAPTER-NUMBER 已修复。toNumChapter 匹配后仅返回转换后的第…章片段，未匹配保持输入。6 个双端用例修复前 3 项不一致（output/run-Lz4QiH），修复后全部一致（output/run-tzLaZT）。119 项宿主回归通过，旧断言按固定上游行为更新。
 
 - C7-NODE-STRING 已修复。桥接元素转字符串读取外部 HTML，text() 保持文本读取。真实目录脚本按 dt/dd 标签筛选成功，31 个语料用例一致（output/run-3iE88H），161 项宿主及流程回归通过。嵌套 java.getString/getElements 的前置规则结果绑定仍有独立差异，需按相同脚本验证。
+
+- C7-NESTED-RESULT 已修复。相同原文同时执行工作流与嵌套 Java bridge；修复前 5 条子规则的 result 继承外层旧值（output/run-wikvEP），修复后 31 个语料用例一致（output/run-cuG8l6）。全量 456 个 API 一致（output/run-XR4YCS）；20 项机制、207 项宿主和流程回归及类型检查通过。

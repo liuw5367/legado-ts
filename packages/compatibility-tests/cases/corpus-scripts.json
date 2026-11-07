@@ -22,7 +22,10 @@
     },
     "expected": {
       "outcome": "return",
-      "value": "false"
+      "value": {
+        "workflow": "false",
+        "bridge": "false"
+      }
     }
   },
   {
@@ -48,7 +51,10 @@
     },
     "expected": {
       "outcome": "return",
-      "value": "<br>正文。<br>第二句"
+      "value": {
+        "workflow": "<br>正文。<br>第二句",
+        "bridge": "<br>正文。<br>第二句"
+      }
     }
   },
   {
@@ -75,18 +81,32 @@
     },
     "expected": {
       "outcome": "return",
-      "value": [
-        {
-          "tag": "dd",
-          "text": "第1章",
-          "id": "a"
-        },
-        {
-          "tag": "dd",
-          "text": "第2章",
-          "id": ""
-        }
-      ]
+      "value": {
+        "workflow": [
+          {
+            "tag": "dd",
+            "text": "第1章",
+            "id": "a"
+          },
+          {
+            "tag": "dd",
+            "text": "第2章",
+            "id": ""
+          }
+        ],
+        "bridge": [
+          {
+            "tag": "dd",
+            "text": "第1章",
+            "id": "a"
+          },
+          {
+            "tag": "dd",
+            "text": "第2章",
+            "id": ""
+          }
+        ]
+      }
     }
   },
   {
@@ -112,7 +132,10 @@
     },
     "expected": {
       "outcome": "return",
-      "value": "第12章•今日"
+      "value": {
+        "workflow": "第12章•今日",
+        "bridge": "第12章•今日"
+      }
     }
   },
   {
@@ -138,7 +161,10 @@
     },
     "expected": {
       "outcome": "return",
-      "value": "第12章 正文 · 今日"
+      "value": {
+        "workflow": "第12章 正文 · 今日",
+        "bridge": "第12章 正文 · 今日"
+      }
     }
   },
   {
@@ -164,7 +190,10 @@
     },
     "expected": {
       "outcome": "return",
-      "value": "第12章･昨日"
+      "value": {
+        "workflow": "第12章･昨日",
+        "bridge": "第12章･昨日"
+      }
     }
   },
   {
@@ -192,18 +221,32 @@
     },
     "expected": {
       "outcome": "return",
-      "value": [
-        {
-          "tag": "a",
-          "text": "第1章",
-          "id": "c1"
-        },
-        {
-          "tag": "a",
-          "text": "第2章",
-          "id": "c2"
-        }
-      ]
+      "value": {
+        "workflow": [
+          {
+            "tag": "a",
+            "text": "第1章",
+            "id": "c1"
+          },
+          {
+            "tag": "a",
+            "text": "第2章",
+            "id": "c2"
+          }
+        ],
+        "bridge": [
+          {
+            "tag": "a",
+            "text": "第1章",
+            "id": "c1"
+          },
+          {
+            "tag": "a",
+            "text": "第2章",
+            "id": "c2"
+          }
+        ]
+      }
     }
   }
 ]

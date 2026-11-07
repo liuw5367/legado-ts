@@ -150,7 +150,11 @@ private fun execute(item: JsonObject): Any? {
             val context = input.get("contextRule")?.asString?.let { AnalyzeByJSoup(content).getElements(it).first() }
             corpusCssString(text("rule"), context ?: content)
         }
-        "corpus.script" -> corpusScriptRule(text("rule"), text("content"), input.get("nodes")?.asBoolean == true, text("custom"))
+        "corpus.script" -> {
+            val result = corpusScriptRule(text("rule"), text("content"), input.get("nodes")?.asBoolean == true, text("custom"))
+            // Android 的工作流与 Java bridge 调用同一个 AnalyzeRule 字段入口。
+            mapOf("workflow" to result, "bridge" to result)
+        }
         "chapter.number" -> io.legado.app.help.CorpusJsExtensions.toNumChapter(input.get("text")?.asString)
         "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
         "json.read" -> {

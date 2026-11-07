@@ -736,6 +736,25 @@
         "output/run-Lz4QiH/report.json",
         "output/run-tzLaZT/report.json"
       ]
+    },
+    {
+      "id": "C7-NESTED-RESULT",
+      "caseIds": [
+        "corpus.source-4.ruleBookInfo.intro",
+        "corpus.source-10.ruleToc.chapterList"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeRule / pinned Rhino"
+      },
+      "tsEntry": "SourceRuleHost → nestedRule → JS result",
+      "evidence": [
+        "output/run-wikvEP/report.json",
+        "output/run-cuG8l6/report.json"
+      ]
     }
   ]
 }

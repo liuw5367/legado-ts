@@ -110,10 +110,15 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'corpus.script': {
       const nodes = i.nodes === true
       const bindings = i.custom === undefined ? undefined : { book: { variable: JSON.stringify({ custom: i.custom }) } }
-      const output = await host.evaluate({ source, stage: nodes ? 'toc' : 'detail', field: 'fixture', rule: str('rule'), content: i.content, expect: nodes ? 'nodes' : 'text', ...(bindings === undefined ? {} : { bindings }) })
+      if (bindings !== undefined) host.setBindings(bindings)
+      const output = await host.evaluate({ source, stage: 'detail', field: nodes ? 'chapterList' : 'fixture', rule: str('rule'), content: i.content, expect: nodes ? 'nodes' : 'text', ...(bindings === undefined ? {} : { bindings }) })
       const value = checked(output)
-      if (nodes) return script(host, 'return java.getElements("<js>result</js>").map(n=>({tag:n.tagName(),text:n.text(),id:n.idName()}))', value)
-      return Array.isArray(value) ? value.map(String).join('\n') : String(value ?? '')
+      const project = '.map(n=>({tag:n.tagName(),text:n.text(),id:n.idName()}))'
+      const workflow = nodes
+        ? await script(host, `return java.getElements("<js>result</js>")${project}`, value)
+        : Array.isArray(value) ? value.map(String).join('\n') : String(value ?? '')
+      const bridge = await script(host, nodes ? `return java.getElements(${json('rule')})${project}` : `return java.getString(${json('rule')})`, i.content)
+      return { workflow, bridge }
     }
     case 'css.string':
     case 'css.list':
