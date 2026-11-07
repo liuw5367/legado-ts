@@ -620,6 +620,7 @@ export class XPathParserAdapter implements XPathParser {
 
   public evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null {
     if (!(document instanceof XmlDocumentView)) throw new Error('XPath requires an XML document created by XPathParserAdapter.parse')
+    if (expression.length === 0) return null
     const result = evaluateXPath(expression, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
     if (result.every(isXmlNode)) return result.map((item) => document.wrap(item))
     if (result.length === 1) return normalizeXPathValue(result[0])
