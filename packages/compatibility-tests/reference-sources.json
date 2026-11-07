@@ -43,7 +43,7 @@
       "sections": [
         [
           25,
-          25
+          28
         ],
         [
           30,
@@ -52,9 +52,13 @@
         [
           134,
           219
+        ],
+        [
+          230,
+          269
         ]
       ],
-      "prefix": "package io.legado.app.utils\n\nobject StringUtils {",
+      "prefix": "package io.legado.app.utils\n\nimport java.text.DecimalFormat\nimport java.util.regex.Pattern\n\nobject StringUtils {",
       "suffix": "}"
     },
     {
@@ -88,6 +92,18 @@
       ],
       "prefix": "package io.legado.app.utils\n\nobject FlowHtmlFormatter {",
       "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/utils/StringExtensions.kt",
+      "sha256": "2b9398875926b2746e63130f79358f55e1aafce74e72ac93a14b3f390de48a51",
+      "sections": [
+        [
+          76,
+          81
+        ]
+      ],
+      "prefix": "package io.legado.app.utils",
+      "suffix": ""
     }
   ],
   "adaptations": [
@@ -148,6 +164,10 @@
     {
       "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeRule.kt",
       "sha256": "5441d6d00064059519add3e5a81d85b1776f575bd0e5d30f3b5763d90af9e8a9"
+    },
+    {
+      "path": "app/src/main/res/values/strings.xml",
+      "sha256": "4337b9d61eef3dad282c40a1571b712aae228d608dd0a6100288e80b6d47852d"
     }
   ]
 }

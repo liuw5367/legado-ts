@@ -6,6 +6,8 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
 import io.legado.app.model.analyzeRule.AnalyzeByJSonPath
 import io.legado.app.utils.FlowHtmlFormatter
+import io.legado.app.utils.StringUtils.wordCountFormat
+import io.legado.app.utils.isTrue
 import org.jsoup.parser.Parser
 import java.net.URL
 import java.net.URLEncoder
@@ -20,6 +22,15 @@ private fun JsonObject.rule(key: String): JsonObject = getAsJsonObject(key) ?: J
 internal fun executeBookFlow(input: JsonObject): Any {
     val source = input.rule("source")
     val sourceUrl = source.text("bookSourceUrl")
+    val unsupported = listOf(
+        source.text("mainJs"), source.text("loginUrl"), source.text("loginCheckJs"),
+        source.text("bookUrlPattern"), source.rule("ruleBookInfo").text("init"),
+        source.rule("ruleToc").text("nextTocUrl"), source.rule("ruleToc").text("formatJs"),
+        source.rule("ruleContent").text("webJs"),
+    )
+    if (unsupported.any(String::isNotBlank) || source.text("bookSourceType") !in setOf("", "0")) {
+        throw Unsupported("JVM 流程参考只实现无需登录的声明式文本书源")
+    }
     val headers = source.text("header").takeIf(String::isNotEmpty)?.let {
         JsonParser.parseString(it).asJsonObject.entrySet().associate { (name, value) -> name.lowercase() to value.asString }
     }.orEmpty()
@@ -49,18 +60,21 @@ internal fun executeBookFlow(input: JsonObject): Any {
         } else corpusCssString(rule, body)
         return if (unescape) Parser.unescapeEntities(value, false).trim() else value
     }
-    fun nodes(rule: String, body: String): List<Any> =
-        if (rule.startsWith("$.") || rule.startsWith("$[")) AnalyzeByJSonPath(body).getList(rule).orEmpty()
-        else AnalyzeByJSoup(body).getElements(rule)
+    fun nodes(rule: String, body: String): List<Any> = when {
+        AppPattern.JS_PATTERN.matcher(rule).find() -> corpusScriptNodes(rule, body)
+        rule.startsWith("$.") || rule.startsWith("$[") -> AnalyzeByJSonPath(body).getList(rule).orEmpty()
+        else -> AnalyzeByJSoup(body).getElements(rule)
+    }
 
     fun fields(rules: JsonObject, body: Any, base: String): Map<String, String> = buildMap {
-        for (key in listOf("name", "author", "bookUrl", "coverUrl", "intro", "kind", "updateTime", "lastChapter", "tocUrl")) {
+        for (key in listOf("name", "author", "bookUrl", "coverUrl", "intro", "kind", "wordCount", "lastChapter", "tocUrl")) {
             val raw = field(rules.text(key), body)
             val value = when {
                 raw.isEmpty() -> ""
                 key in listOf("bookUrl", "coverUrl", "tocUrl") -> resolve(base, raw)
                 key == "name" -> raw.replace(AppPattern.nameRegex, "").trim { it <= ' ' }
                 key == "author" -> raw.replace(AppPattern.authorRegex, "").trim { it <= ' ' }
+                key == "wordCount" -> wordCountFormat(raw)
                 key == "intro" -> FlowHtmlFormatter.formatIntro(raw)
                 else -> raw
             }
@@ -79,7 +93,7 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val candidates = if (fallback) {
         listOf(fields(detailRule, searchBody, searchBase) + ("bookUrl" to searchBase))
     } else {
-        rows.map { (fields(searchRule, it, searchBase) - "updateTime").let { book -> book + ("bookUrl" to (book["bookUrl"] ?: searchBase)) } }
+        rows.map { fields(searchRule, it, searchBase).let { book -> book + ("bookUrl" to (book["bookUrl"] ?: searchBase)) } }
     }.filter { it.containsKey("name") }.distinctBy { it["bookUrl"] }
     result("search", if (candidates.isEmpty()) "empty" else "success", candidates)
     val candidate = candidates.firstOrNull() ?: return output
@@ -99,13 +113,17 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val chapters = nodes(tocRule.text("chapterList"), tocBody).mapNotNull { node ->
         val title = field(tocRule.text("chapterName"), node)
         val url = field(tocRule.text("chapterUrl"), node)
-        if (title.isEmpty() || url.isEmpty()) null else mapOf(
-            "title" to title, "chapterUrl" to resolve(tocBase, url),
-            "isVip" to (field(tocRule.text("isVip"), node) == "true"),
+        val isVolume = field(tocRule.text("isVolume"), node).isTrue()
+        if (isVolume) throw Unsupported("JVM 流程参考尚未实现卷节点")
+        if (title.isEmpty()) null else mapOf(
+            "title" to title, "chapterUrl" to url.ifEmpty { tocUrl }.let { resolve(tocBase, it) },
+            "isVip" to field(tocRule.text("isVip"), node).isTrue(),
+            "isPay" to field(tocRule.text("isPay"), node).isTrue(),
+            "isVolume" to isVolume,
         )
     }.distinctBy { it["chapterUrl"] }
     if (chapters.isEmpty()) {
-        result("toc", "failed", null, mapOf("category" to "toc-empty", "class" to "TocEmptyException", "message" to "目录为空"))
+        result("toc", "failed", null, mapOf("category" to "toc-empty", "class" to "TocEmptyException", "message" to "Chapters is empty"))
         return output
     }
     result("toc", "success", chapters)

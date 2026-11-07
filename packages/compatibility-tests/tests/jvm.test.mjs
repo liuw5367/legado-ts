@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { prepare } from '../scripts/prepare-jvm.mjs'
-import { root } from '../scripts/common.mjs'
+import { root, loadCases } from '../scripts/common.mjs'
 import { spawnSync } from 'node:child_process'
 import { Worker } from '../scripts/worker.mjs'
 let worker
@@ -50,4 +50,17 @@ test('上游 RuleAnalyzer 的 code 参数改变带引号转义规则的结果', 
   const code = await worker.run({ id: 'code', operation: 'rule.split', input: { ...input, code: true } })
   assert.equal(code.outcome, 'return')
   assert.deepEqual(code.value, [String.raw`x[foo("a\"&&b")]`, 'y'])
+})
+
+test('JVM 流程严格匹配 query 和请求预算，失败后重新执行不污染状态', async () => {
+  const [item] = await loadCases({ case: 'flow.yiove.html.success' })
+  const initial = await worker.run(item)
+  assert.equal(initial.execution, 'completed')
+  const missingQuery = structuredClone(item)
+  missingQuery.input.responses.search.url = missingQuery.input.responses.search.url.split('?')[0]
+  assert.equal((await worker.run(missingQuery)).execution, 'runner-failed')
+  const budget = structuredClone(item)
+  budget.input.requestLimit = 1
+  assert.equal((await worker.run(budget)).execution, 'runner-failed')
+  assert.deepEqual(await worker.run(item), initial)
 })

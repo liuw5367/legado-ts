@@ -21,15 +21,15 @@ interface ResponseFixture {
 export class FlowFixtureError extends Error {}
 
 function bookFields(book: BookCandidate) {
-  const { name, author, bookUrl, tocUrl, coverUrl, intro, kind, updateTime, lastChapter } = book
-  return { name, author, bookUrl, tocUrl, coverUrl, intro, kind, updateTime, lastChapter }
+  const { name, author, bookUrl, tocUrl, coverUrl, intro, kind, wordCount, lastChapter } = book
+  return { name, author, bookUrl, tocUrl, coverUrl, intro, kind, wordCount, lastChapter }
 }
 
 export async function executeBookFlow(input: Record<string, unknown>) {
   const imported = (await importSources(JSON.stringify(input.source)))[0]?.source
   if (!imported) throw new FlowFixtureError('流程书源无法导入')
   const responses = input.responses as Record<string, ResponseFixture>
-  const declaredHeaders = typeof imported.header === 'string' ? JSON.parse(imported.header) as Record<string, string> : imported.header
+  const declaredHeaders = typeof imported.header === 'string' ? JSON.parse(imported.header.trim() || '{}') as Record<string, string> : imported.header
   const headerNames = Object.keys(declaredHeaders ?? {}).map((name) => name.toLowerCase())
   const requests: unknown[] = []
   const stages: Record<string, unknown> = {}
@@ -82,7 +82,7 @@ export async function executeBookFlow(input: Record<string, unknown>) {
   stage = 'toc'
   const toc = await loadTableOfContents(ports, { source: imported, book })
   const chapter = toc.value?.items[0]
-  record(toc, toc.value?.items.map(({ title, chapterUrl, isVip }) => ({ title, chapterUrl, isVip: isVip === true })) ?? null, 'toc-empty')
+  record(toc, toc.value?.items.map(({ title, chapterUrl, isVip, isPay, isVolume }) => ({ title, chapterUrl, isVip: isVip === true, isPay: isPay === true, isVolume: isVolume === true })) ?? null, 'toc-empty')
   if (!chapter) return output
 
   stage = 'content'

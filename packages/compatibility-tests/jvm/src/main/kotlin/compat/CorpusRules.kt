@@ -7,6 +7,8 @@ import org.htmlunit.corejs.javascript.BaseFunction
 import org.htmlunit.corejs.javascript.Context
 import org.htmlunit.corejs.javascript.NativeArray
 import org.htmlunit.corejs.javascript.Scriptable
+import org.htmlunit.corejs.javascript.ScriptableObject
+import java.util.IdentityHashMap
 import org.htmlunit.corejs.javascript.VarScope
 import org.jsoup.nodes.Element
 
@@ -45,13 +47,21 @@ private fun replaceCorpusValue(value: String, parts: List<String>): String {
         ?: value.replace(pattern, replacement)
 }
 
-internal fun corpusScriptRule(rule: String, content: String, nodes: Boolean, custom: String): Any? {
+internal fun corpusScriptRule(rule: String, content: String, nodes: Boolean, custom: String): Any? =
+    if (nodes) corpusScriptNodes(rule, content, custom).map { node ->
+        mapOf("tag" to node.tagName(), "text" to node.text(), "id" to node.id())
+    } else runCorpusScript(rule, content, false, custom)
+
+internal fun corpusScriptNodes(rule: String, content: String, custom: String = ""): List<Element> =
+    (runCorpusScript(rule, content, true, custom) as List<*>).map { it as Element }
+
+private fun runCorpusScript(rule: String, content: String, nodes: Boolean, custom: String): Any? {
     val script = AppPattern.JS_PATTERN.matcher(rule)
     require(script.find()) { "缺少离线 JS 规则" }
     val prefix = rule.substring(0, script.start()).trim()
     val parts = (script.group(2) ?: script.group(1)).split("##")
     val parser = AnalyzeByJSoup(content)
-    val selected = linkedMapOf<String, Element>()
+    val selected = IdentityHashMap<Scriptable, Element>()
 
     return Context.enter().use { engine ->
         val scope = engine.initSafeStandardObjects()
@@ -65,8 +75,15 @@ internal fun corpusScriptRule(rule: String, content: String, nodes: Boolean, cus
             })
         }
         fun select(selector: String): Scriptable {
+            // 保留节点引用，避免序列化相同的元素被脚本结果合并。
             val values = parser.getElements(selector).map { element ->
-                element.outerHtml().also { selected[it] = element }
+                val node = object : ScriptableObject() {
+                    override fun getClassName() = "Element"
+                    override fun getDefaultValue(hint: Class<*>?): Any = element.outerHtml()
+                }
+                node.parentScope = scope
+                selected[node] = element
+                node
             }
             return engine.newArray(scope, values.toTypedArray<Any>())
         }
@@ -84,10 +101,7 @@ internal fun corpusScriptRule(rule: String, content: String, nodes: Boolean, cus
         val result = engine.evaluateString(scope, parts.first(), "offline-corpus", 1, null)
         if (nodes) {
             require(result is NativeArray) { "目录脚本必须返回节点列表" }
-            result.map { value ->
-                val node = selected.getValue(Context.toString(value))
-                mapOf("tag" to node.tagName(), "text" to node.text(), "id" to node.id())
-            }
+            result.map { value -> selected.getValue(value as Scriptable) }
         } else replaceCorpusValue(Context.toString(result), parts)
     }
 }

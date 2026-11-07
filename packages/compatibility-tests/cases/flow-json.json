@@ -144,12 +144,16 @@
               {
                 "title": "第一章",
                 "chapterUrl": "https://json.fixture.test/book/1/chapter/1",
-                "isVip": false
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
               },
               {
                 "title": "第二章",
                 "chapterUrl": "https://json.fixture.test/book/1/chapter/2",
-                "isVip": true
+                "isVip": true,
+                "isPay": false,
+                "isVolume": false
               }
             ]
           },
@@ -347,12 +351,16 @@
               {
                 "title": "第一章",
                 "chapterUrl": "https://json.fixture.test/book/1/chapter/1",
-                "isVip": false
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
               },
               {
                 "title": "第二章",
                 "chapterUrl": "https://json.fixture.test/book/1/chapter/2",
-                "isVip": true
+                "isVip": true,
+                "isPay": false,
+                "isVolume": false
               }
             ]
           },
@@ -550,12 +558,16 @@
               {
                 "title": "第一章",
                 "chapterUrl": "https://json.fixture.test/book/1/chapter/1",
-                "isVip": false
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
               },
               {
                 "title": "第二章",
                 "chapterUrl": "https://json.fixture.test/book/1/chapter/2",
-                "isVip": true
+                "isVip": true,
+                "isPay": false,
+                "isVolume": false
               }
             ]
           },

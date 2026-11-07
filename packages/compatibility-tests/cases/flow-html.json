@@ -155,7 +155,6 @@
               "coverUrl": "http://www.xianqihaotianmi.org/cover.jpg",
               "kind": "幻想",
               "intro": "自制详情简介",
-              "updateTime": "2026-02-01",
               "lastChapter": "第二章",
               "tocUrl": "http://www.xianqihaotianmi.org/book/123456/toc/"
             }
@@ -166,12 +165,16 @@
               {
                 "title": "第一章",
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
-                "isVip": false
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
               },
               {
                 "title": "第二章",
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/2.html",
-                "isVip": false
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
               }
             ]
           },
@@ -506,7 +509,6 @@
               "coverUrl": "http://www.xianqihaotianmi.org/cover.jpg",
               "kind": "幻想",
               "intro": "自制详情简介",
-              "updateTime": "2026-02-01",
               "lastChapter": "第二章",
               "tocUrl": "http://www.xianqihaotianmi.org/book/123456/toc/"
             }
@@ -517,12 +519,16 @@
               {
                 "title": "第一章",
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
-                "isVip": false
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
               },
               {
                 "title": "第二章",
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/2.html",
-                "isVip": false
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
               }
             ]
           },

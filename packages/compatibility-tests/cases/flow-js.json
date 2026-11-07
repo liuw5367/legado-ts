@@ -1,0 +1,428 @@
+[
+  {
+    "id": "flow.yiove.js.full-toc",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeByJSoup / Rhino → BookChapterList → BookContent"
+    },
+    "tags": [
+      "html",
+      "offline",
+      "js",
+      "toc"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "http://www.yetianlian.info",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "//2025，2月14号，静白，制作教程接来自：源论坛:ysqbbs.com \n质量较差-模板雷同",
+        "bookSourceGroup": "🌹已检26.10.15",
+        "bookSourceName": "奇怪小说",
+        "bookSourceType": 0,
+        "bookSourceUrl": "http://www.yetianlian.info",
+        "bookUrlPattern": "",
+        "concurrentRate": "",
+        "coverDecodeJs": "",
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": true,
+        "exploreScreen": "",
+        "exploreUrl": "",
+        "header": "",
+        "loginCheckJs": "",
+        "loginUi": "",
+        "loginUrl": "",
+        "ruleBookInfo": {
+          "author": "span.1@text",
+          "canReName": "",
+          "coverUrl": "img@src",
+          "init": "",
+          "intro": "class.intro@text",
+          "kind": "span.2@text",
+          "lastChapter": "span.last.1@text",
+          "name": "h2@text",
+          "tocUrl": "",
+          "wordCount": "span.4@text"
+        },
+        "ruleContent": {
+          "content": "div#content.showtxt@text",
+          "imageStyle": "",
+          "nextContentUrl": "",
+          "replaceRegex": "",
+          "sourceRegex": "",
+          "webJs": ""
+        },
+        "ruleExplore": {
+          "author": "",
+          "bookList": "",
+          "bookUrl": "",
+          "coverUrl": "",
+          "intro": "",
+          "kind": "",
+          "lastChapter": "",
+          "name": "",
+          "wordCount": ""
+        },
+        "ruleSearch": {
+          "author": "class.author@text",
+          "bookList": "class.bookbox",
+          "bookUrl": "a@href",
+          "coverUrl": "img@src",
+          "intro": "",
+          "kind": "class.cat@text",
+          "lastChapter": "class.update@text",
+          "name": "class.bookname@text",
+          "wordCount": ""
+        },
+        "ruleToc": {
+          "chapterList": "@js:\nvar nodes = java.getElements(\"class.listmain@tag.dl@children\");\nvar inFullToc = false;\nnodes.filter(function (node) {\n    var html = String(node);\n    if (/^<dt\\b/i.test(html)) {\n        inFullToc = html.indexOf(\"最新章节\") === -1;\n    }\n    return inFullToc && /^<dd\\b/i.test(html);\n});",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href",
+          "isVip": "",
+          "isVolume": "",
+          "nextTocUrl": "",
+          "updateTime": ""
+        },
+        "searchUrl": "http://www.yetianlian.info/s.php?ie=utf-8&q={{key}}",
+        "variableComment": ""
+      },
+      "keyword": "脚本样书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "http://www.yetianlian.info/s.php?ie=utf-8&q=%E8%84%9A%E6%9C%AC%E6%A0%B7%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.yetianlian.info/s.php?ie=utf-8&q=%E8%84%9A%E6%9C%AC%E6%A0%B7%E4%B9%A6",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9va2JveCI+PGEgaHJlZj0iL2Jvb2svNy8iPjxzcGFuIGNsYXNzPSJib29rbmFtZSI+6ISa5pys5qC35LmmPC9zcGFuPjwvYT48c3BhbiBjbGFzcz0iYXV0aG9yIj7mtYvor5XkvZzogIU8L3NwYW4+PHNwYW4gY2xhc3M9ImNhdCI+5bCP6K+0PC9zcGFuPjxzcGFuIGNsYXNzPSJ1cGRhdGUiPuacgOaWsOS4gOeroDwvc3Bhbj48aW1nIHNyYz0iL3MucG5nIj48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "http://www.yetianlian.info/book/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.yetianlian.info/book/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgyPuiEmuacrOagt+S5pjwvaDI+PHNwYW4+5qCH562+PC9zcGFuPjxzcGFuPua1i+ivleS9nOiAhTwvc3Bhbj48c3Bhbj7lubvmg7M8L3NwYW4+PHNwYW4+6L+e6L29PC9zcGFuPjxzcGFuPjkwMDA8L3NwYW4+PGRpdiBjbGFzcz0iaW50cm8iPuiHquWItueugOS7izwvZGl2PjxpbWcgc3JjPSIvZC5wbmciPjxkaXYgY2xhc3M9Imxpc3RtYWluIj48ZGw+PGR0PuacgOaWsOeroOiKgjwvZHQ+PGRkPjxhIGhyZWY9Ijk5Lmh0bWwiPuacgOaWsOS4gOeroDwvYT48L2RkPjxkdD7lhajpg6jnq6DoioI8L2R0PjxkZD48YSBocmVmPSIxLmh0bWwiPuesrOS4gOeroDwvYT48L2RkPjxkZD48YSBocmVmPSIyLmh0bWwiPuesrOS6jOeroDwvYT48L2RkPjwvZGw+PC9kaXY+"
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "http://www.yetianlian.info/book/7/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.yetianlian.info/book/7/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBpZD0iY29udGVudCIgY2xhc3M9InNob3d0eHQiPuesrOS4gOeroOato+aWhzwvZGl2Pg=="
+          }
+        }
+      },
+      "requestLimit": 3
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "脚本样书",
+                "author": "测试作者",
+                "bookUrl": "http://www.yetianlian.info/book/7/",
+                "coverUrl": "http://www.yetianlian.info/s.png",
+                "kind": "小说",
+                "lastChapter": "最新一章"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "脚本样书",
+              "author": "测试作者",
+              "bookUrl": "http://www.yetianlian.info/book/7/",
+              "coverUrl": "http://www.yetianlian.info/d.png",
+              "kind": "幻想",
+              "lastChapter": "最新一章",
+              "tocUrl": "http://www.yetianlian.info/book/7/",
+              "intro": "自制简介",
+              "wordCount": "9000字"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "http://www.yetianlian.info/book/7/1.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "http://www.yetianlian.info/book/7/2.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "cleaned": "第一章正文",
+              "pageCount": 1
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "http://www.yetianlian.info/s.php?ie=utf-8&q=%E8%84%9A%E6%9C%AC%E6%A0%B7%E4%B9%A6",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "http://www.yetianlian.info/book/7/",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "http://www.yetianlian.info/book/7/1.html",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yiove.js.no-full-toc",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeByJSoup / Rhino → BookChapterList → BookContent"
+    },
+    "tags": [
+      "html",
+      "offline",
+      "js",
+      "toc"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "http://www.yetianlian.info",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "//2025，2月14号，静白，制作教程接来自：源论坛:ysqbbs.com \n质量较差-模板雷同",
+        "bookSourceGroup": "🌹已检26.10.15",
+        "bookSourceName": "奇怪小说",
+        "bookSourceType": 0,
+        "bookSourceUrl": "http://www.yetianlian.info",
+        "bookUrlPattern": "",
+        "concurrentRate": "",
+        "coverDecodeJs": "",
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": true,
+        "exploreScreen": "",
+        "exploreUrl": "",
+        "header": "",
+        "loginCheckJs": "",
+        "loginUi": "",
+        "loginUrl": "",
+        "ruleBookInfo": {
+          "author": "span.1@text",
+          "canReName": "",
+          "coverUrl": "img@src",
+          "init": "",
+          "intro": "class.intro@text",
+          "kind": "span.2@text",
+          "lastChapter": "span.last.1@text",
+          "name": "h2@text",
+          "tocUrl": "",
+          "wordCount": "span.4@text"
+        },
+        "ruleContent": {
+          "content": "div#content.showtxt@text",
+          "imageStyle": "",
+          "nextContentUrl": "",
+          "replaceRegex": "",
+          "sourceRegex": "",
+          "webJs": ""
+        },
+        "ruleExplore": {
+          "author": "",
+          "bookList": "",
+          "bookUrl": "",
+          "coverUrl": "",
+          "intro": "",
+          "kind": "",
+          "lastChapter": "",
+          "name": "",
+          "wordCount": ""
+        },
+        "ruleSearch": {
+          "author": "class.author@text",
+          "bookList": "class.bookbox",
+          "bookUrl": "a@href",
+          "coverUrl": "img@src",
+          "intro": "",
+          "kind": "class.cat@text",
+          "lastChapter": "class.update@text",
+          "name": "class.bookname@text",
+          "wordCount": ""
+        },
+        "ruleToc": {
+          "chapterList": "@js:\nvar nodes = java.getElements(\"class.listmain@tag.dl@children\");\nvar inFullToc = false;\nnodes.filter(function (node) {\n    var html = String(node);\n    if (/^<dt\\b/i.test(html)) {\n        inFullToc = html.indexOf(\"最新章节\") === -1;\n    }\n    return inFullToc && /^<dd\\b/i.test(html);\n});",
+          "chapterName": "a@text",
+          "chapterUrl": "a@href",
+          "isVip": "",
+          "isVolume": "",
+          "nextTocUrl": "",
+          "updateTime": ""
+        },
+        "searchUrl": "http://www.yetianlian.info/s.php?ie=utf-8&q={{key}}",
+        "variableComment": ""
+      },
+      "keyword": "脚本样书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "http://www.yetianlian.info/s.php?ie=utf-8&q=%E8%84%9A%E6%9C%AC%E6%A0%B7%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.yetianlian.info/s.php?ie=utf-8&q=%E8%84%9A%E6%9C%AC%E6%A0%B7%E4%B9%A6",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9va2JveCI+PGEgaHJlZj0iL2Jvb2svNy8iPjxzcGFuIGNsYXNzPSJib29rbmFtZSI+6ISa5pys5qC35LmmPC9zcGFuPjwvYT48c3BhbiBjbGFzcz0iYXV0aG9yIj7mtYvor5XkvZzogIU8L3NwYW4+PHNwYW4gY2xhc3M9ImNhdCI+5bCP6K+0PC9zcGFuPjxzcGFuIGNsYXNzPSJ1cGRhdGUiPuacgOaWsOS4gOeroDwvc3Bhbj48aW1nIHNyYz0iL3MucG5nIj48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "http://www.yetianlian.info/book/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.yetianlian.info/book/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgyPuiEmuacrOagt+S5pjwvaDI+PHNwYW4+5qCH562+PC9zcGFuPjxzcGFuPua1i+ivleS9nOiAhTwvc3Bhbj48c3Bhbj7lubvmg7M8L3NwYW4+PHNwYW4+6L+e6L29PC9zcGFuPjxzcGFuPjkwMDA8L3NwYW4+PGRpdiBjbGFzcz0iaW50cm8iPuiHquWItueugOS7izwvZGl2PjxpbWcgc3JjPSIvZC5wbmciPjxkaXYgY2xhc3M9Imxpc3RtYWluIj48ZGw+PGR0PuacgOaWsOeroOiKgjwvZHQ+PGRkPjxhIGhyZWY9Ijk5Lmh0bWwiPuacgOaWsOS4gOeroDwvYT48L2RkPjwvZGw+PC9kaXY+"
+          }
+        }
+      },
+      "requestLimit": 2
+    },
+    "flowErrorEquivalence": {
+      "stage": "toc",
+      "category": "toc-empty",
+      "jvm": {
+        "class": "TocEmptyException",
+        "message": "Chapters is empty"
+      },
+      "ts": {
+        "class": "empty-page",
+        "message": "目录为空"
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "脚本样书",
+                "author": "测试作者",
+                "bookUrl": "http://www.yetianlian.info/book/7/",
+                "coverUrl": "http://www.yetianlian.info/s.png",
+                "kind": "小说",
+                "lastChapter": "最新一章"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "脚本样书",
+              "author": "测试作者",
+              "bookUrl": "http://www.yetianlian.info/book/7/",
+              "coverUrl": "http://www.yetianlian.info/d.png",
+              "kind": "幻想",
+              "lastChapter": "最新一章",
+              "tocUrl": "http://www.yetianlian.info/book/7/",
+              "intro": "自制简介",
+              "wordCount": "9000字"
+            }
+          },
+          "toc": {
+            "status": "failed",
+            "value": null,
+            "error": {
+              "category": "toc-empty"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "http://www.yetianlian.info/s.php?ie=utf-8&q=%E8%84%9A%E6%9C%AC%E6%A0%B7%E4%B9%A6",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "http://www.yetianlian.info/book/7/",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  }
+]

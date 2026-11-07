@@ -195,7 +195,7 @@ fun main(args: Array<String>) {
             mapOf("id" to id, "execution" to "unsupported", "reason" to error.message)
         } catch (error: Throwable) {
             // 虚拟机资源故障属于执行器失败，不能伪装成被测函数的业务异常。
-            if (error is VirtualMachineError || error is LinkageError) {
+            if (error is VirtualMachineError || error is LinkageError || item.get("operation").asString == "flow.book") {
                 mapOf("id" to id, "execution" to "runner-failed", "reason" to "${error.javaClass.name}: ${error.message}")
             } else {
                 mapOf("id" to id, "execution" to "completed", "outcome" to "throw",
