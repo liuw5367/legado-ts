@@ -111,6 +111,24 @@ test('QuickJS 取消后返回可判别状态', async () => {
   assert.equal(result.status, 'cancelled')
 })
 
+test('QuickJS 桥接请求被内部限时中止时报告预算耗尽', async () => {
+  let bridgeEntered = false
+  const host = new QuickJSJavaScriptHost({
+    request: (_input, signal) => {
+      bridgeEntered = true
+      return new Promise((_resolve, reject) => {
+        const aborted = () => reject(new Error('bridge aborted'))
+        if (signal?.aborted) aborted()
+        else signal?.addEventListener('abort', aborted, { once: true })
+      })
+    },
+  })
+  const result = await host.execute({ code: 'return request({})', stage: 'book', budget: { timeoutMs: 250 } })
+  assert.equal(bridgeEntered, true)
+  assert.equal(result.status, 'budget-exceeded')
+  assert.equal(result.diagnostics[0]?.code, 'budget-exceeded')
+})
+
 test('QuickJS 在 tagged 编码前拒绝超过输入预算的二进制绑定', async () => {
   const host = new QuickJSJavaScriptHost()
   const result = await host.execute({

@@ -240,11 +240,12 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
         diagnostics.push({ code: 'capability-unavailable', message: `JavaScript bridge 不可用: ${capability}`, stage: input.stage, capability })
         return { status: 'capability-missing', value: null, diagnostics, variableChanges: changes(initialVariables, variableValues), trace }
       }
-      if (message.includes('__LEGADO_CANCELLED__') || signal.aborted) {
+      // 调用方取消与内部计时器共用传输信号，只有调用方的信号代表取消。
+      if (message.includes('__LEGADO_CANCELLED__') || input.signal?.aborted === true) {
         diagnostics.push({ code: 'cancelled', message: 'JavaScript 执行已取消', stage: input.stage })
         return { status: 'cancelled', value: null, diagnostics, variableChanges: changes(initialVariables, variableValues), trace }
       }
-      if (message.includes('__LEGADO_BUDGET__') || message.includes('interrupted') || message.includes('out of memory')) {
+      if (timedOut || message.includes('__LEGADO_BUDGET__') || message.includes('interrupted') || message.includes('out of memory')) {
         diagnostics.push({ code: 'budget-exceeded', message, stage: input.stage })
         return { status: 'budget-exceeded', value: null, diagnostics, variableChanges: changes(initialVariables, variableValues), trace }
       }
