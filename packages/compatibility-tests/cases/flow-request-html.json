@@ -191,7 +191,8 @@
                 "chapterUrl": "https://www.dingdian888.com/xiaoshuo/7/1.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 0
               }
             ]
           },
@@ -403,14 +404,16 @@
                 "chapterUrl": "https://www.deqixs.org/book/7/1.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 0
               },
               {
                 "title": "第二章",
                 "chapterUrl": "https://www.deqixs.org/book/7/2.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 1
               }
             ]
           },
@@ -627,14 +630,16 @@
                 "chapterUrl": "https://www.deqixs.org/book/7/1.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 0
               },
               {
                 "title": "第二章",
                 "chapterUrl": "https://www.deqixs.org/book/7/2.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 1
               }
             ]
           },
@@ -851,14 +856,16 @@
                 "chapterUrl": "https://www.deqixs.org/book/7/1.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 0
               },
               {
                 "title": "第二章",
                 "chapterUrl": "https://www.deqixs.org/book/7/2.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 1
               }
             ]
           },

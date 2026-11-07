@@ -200,6 +200,10 @@
     {
       "path": "app/src/main/java/io/legado/app/help/http/OkHttpUtils.kt",
       "sha256": "cba1feb22468363d8b95f22779cb6ab538ae80c64e898fc7fde995b2e699376d"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/BookChapter.kt",
+      "sha256": "2725ee89235677b28e8d4cf1e9ae847212e7524a9b418f7c0a195a4114bdabbd"
     }
   ]
 }

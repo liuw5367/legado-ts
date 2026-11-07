@@ -1404,6 +1404,9 @@
               },
               "requestEvidence": {
                 "type": "boolean"
+              },
+              "chapterIndex": {
+                "type": "integer"
               }
             },
             "additionalProperties": false

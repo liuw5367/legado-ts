@@ -1,0 +1,697 @@
+[
+  {
+    "id": "flow.synthetic.detail.redirect-match",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "tags": [
+      "offline",
+      "toc"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook / BookList / BookChapterList"
+    },
+    "flowOrigin": {
+      "fixture": "TOC-EDGE-001",
+      "path": "fixtures/conformance/cases/TOC-EDGE-001"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc.fixture.test",
+        "bookSourceName": "目录流程夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text",
+          "tocUrl": ".toc@href"
+        },
+        "ruleToc": {
+          "chapterList": ".entry",
+          "chapterName": "text",
+          "chapterUrl": "href"
+        },
+        "ruleContent": {
+          "content": ".content@text"
+        },
+        "bookUrlPattern": "https://toc\\.fixture\\.test/book/7"
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/book/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9InRvYyIgaHJlZj0iL3RvYyI+55uu5b2VPC9hPg=="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImVudHJ5IiBocmVmPSIvY2hhcHRlci8xIj7nrKzkuIDnq6A8L2E+"
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29udGVudCI+56ys5LiA56ug5q2j5paHPC9kaXY+"
+          }
+        }
+      },
+      "requestLimit": 3,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://toc.fixture.test/book/7",
+                "tocUrl": "https://toc.fixture.test/toc"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://toc.fixture.test/book/7",
+              "tocUrl": "https://toc.fixture.test/toc"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc.fixture.test/chapter/1",
+                "index": 0,
+                "isVolume": false,
+                "isVip": false,
+                "isPay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "cleaned": "第一章正文",
+              "pageCount": 1
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "responseUrl": "https://toc.fixture.test/book/7",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc.fixture.test/toc",
+            "responseUrl": "https://toc.fixture.test/toc",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://toc.fixture.test/chapter/1",
+            "responseUrl": "https://toc.fixture.test/chapter/1",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.detail.redirect-miss",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "tags": [
+      "offline",
+      "toc"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook / BookList / BookChapterList"
+    },
+    "flowOrigin": {
+      "fixture": "TOC-EDGE-001",
+      "path": "fixtures/conformance/cases/TOC-EDGE-001"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc.fixture.test",
+        "bookSourceName": "目录流程夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text",
+          "tocUrl": ".toc@href"
+        },
+        "ruleToc": {
+          "chapterList": ".entry",
+          "chapterName": "text",
+          "chapterUrl": "href"
+        },
+        "ruleContent": {
+          "content": ".content@text"
+        },
+        "bookUrlPattern": "https://toc\\.fixture\\.test/book/7"
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/results/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9InRvYyIgaHJlZj0iL3RvYyI+55uu5b2VPC9hPg=="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "responseUrl": "https://toc.fixture.test/results/7",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.paged-volume",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "tags": [
+      "offline",
+      "toc"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook / BookList / BookChapterList"
+    },
+    "flowOrigin": {
+      "fixture": "TOC-EDGE-001",
+      "path": "fixtures/conformance/cases/TOC-EDGE-001"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc.fixture.test",
+        "bookSourceName": "目录流程夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text",
+          "tocUrl": ".toc@href"
+        },
+        "ruleToc": {
+          "chapterList": ".entry",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": ".next@href",
+          "isVolume": "data-volume",
+          "isVip": "data-vip",
+          "isPay": "data-pay"
+        },
+        "ruleContent": {
+          "content": ".content@text"
+        }
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svNyI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/book/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/book/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9InRvYyIgaHJlZj0iL3RvYyI+55uu5b2VPC9hPg=="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImVudHJ5IiBkYXRhLXZvbHVtZT0idHJ1ZSI+5Y235LiAPC9hPjxhIGNsYXNzPSJlbnRyeSIgaHJlZj0iL2NoYXB0ZXIvMSI+56ys5LiA56ugPC9hPjxhIGNsYXNzPSJuZXh0IiBocmVmPSJ0b2M/cGFnZT0yIj7lkI7pobU8L2E+"
+          }
+        },
+        "toc2": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/toc?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/toc?page=2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImVudHJ5IiBocmVmPSIvY2hhcHRlci8xIj7nrKzkuIDnq6Dph43lpI08L2E+PGEgY2xhc3M9ImVudHJ5IiBkYXRhLXZpcD0idHJ1ZSIgZGF0YS1wYXk9InRydWUiIGhyZWY9Ii9jaGFwdGVyLzIiPuesrOS6jOeroDwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0iL3RvYyI+5ZCO6aG1PC9hPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29udGVudCI+56ys5LiA56ug6YeN5aSN5q2j5paHPC9kaXY+"
+          }
+        }
+      },
+      "requestLimit": 5,
+      "requestEvidence": true,
+      "chapterIndex": 1
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://toc.fixture.test/book/7"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://toc.fixture.test/book/7",
+              "tocUrl": "https://toc.fixture.test/toc"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "卷一",
+                "chapterUrl": "卷一0",
+                "index": 0,
+                "isVolume": true,
+                "isVip": false,
+                "isPay": false
+              },
+              {
+                "title": "第一章重复",
+                "chapterUrl": "https://toc.fixture.test/chapter/1",
+                "index": 1,
+                "isVolume": false,
+                "isVip": false,
+                "isPay": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://toc.fixture.test/chapter/2",
+                "index": 2,
+                "isVolume": false,
+                "isVip": true,
+                "isPay": true
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章重复",
+              "cleaned": "第一章重复正文",
+              "pageCount": 1
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "responseUrl": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://toc.fixture.test/book/7",
+            "responseUrl": "https://toc.fixture.test/book/7",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc.fixture.test/toc",
+            "responseUrl": "https://toc.fixture.test/toc",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc.fixture.test/toc?page=2",
+            "responseUrl": "https://toc.fixture.test/toc?page=2",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://toc.fixture.test/chapter/1",
+            "responseUrl": "https://toc.fixture.test/chapter/1",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.toc.paged-reversed",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "tags": [
+      "offline",
+      "toc"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook / BookList / BookChapterList"
+    },
+    "flowOrigin": {
+      "fixture": "TOC-EDGE-001",
+      "path": "fixtures/conformance/cases/TOC-EDGE-001"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://toc.fixture.test",
+        "bookSourceName": "目录流程夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text",
+          "tocUrl": ".toc@href"
+        },
+        "ruleToc": {
+          "chapterList": "-.entry",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": ".next@href",
+          "isVolume": "data-volume",
+          "isVip": "data-vip",
+          "isPay": "data-pay"
+        },
+        "ruleContent": {
+          "content": ".content@text"
+        }
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svNyI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/book/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/book/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9InRvYyIgaHJlZj0iL3RvYyI+55uu5b2VPC9hPg=="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImVudHJ5IiBkYXRhLXZvbHVtZT0idHJ1ZSI+5Y235LiAPC9hPjxhIGNsYXNzPSJlbnRyeSIgaHJlZj0iL2NoYXB0ZXIvMSI+56ys5LiA56ugPC9hPjxhIGNsYXNzPSJuZXh0IiBocmVmPSJ0b2M/cGFnZT0yIj7lkI7pobU8L2E+"
+          }
+        },
+        "toc2": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/toc?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/toc?page=2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImVudHJ5IiBocmVmPSIvY2hhcHRlci8xIj7nrKzkuIDnq6Dph43lpI08L2E+PGEgY2xhc3M9ImVudHJ5IiBkYXRhLXZpcD0idHJ1ZSIgZGF0YS1wYXk9InRydWUiIGhyZWY9Ii9jaGFwdGVyLzIiPuesrOS6jOeroDwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0iL3RvYyI+5ZCO6aG1PC9hPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://toc.fixture.test/chapter/2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://toc.fixture.test/chapter/2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29udGVudCI+56ys5LqM56ug5q2j5paHPC9kaXY+"
+          }
+        }
+      },
+      "requestLimit": 5,
+      "requestEvidence": true,
+      "chapterIndex": 0
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://toc.fixture.test/book/7"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://toc.fixture.test/book/7",
+              "tocUrl": "https://toc.fixture.test/toc"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第二章",
+                "chapterUrl": "https://toc.fixture.test/chapter/2",
+                "index": 0,
+                "isVolume": false,
+                "isVip": true,
+                "isPay": true
+              },
+              {
+                "title": "第一章",
+                "chapterUrl": "https://toc.fixture.test/chapter/1",
+                "index": 1,
+                "isVolume": false,
+                "isVip": false,
+                "isPay": false
+              },
+              {
+                "title": "卷一",
+                "chapterUrl": "卷一0",
+                "index": 2,
+                "isVolume": true,
+                "isVip": false,
+                "isPay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第二章",
+              "cleaned": "第二章正文",
+              "pageCount": 1
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "responseUrl": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://toc.fixture.test/book/7",
+            "responseUrl": "https://toc.fixture.test/book/7",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc.fixture.test/toc",
+            "responseUrl": "https://toc.fixture.test/toc",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://toc.fixture.test/toc?page=2",
+            "responseUrl": "https://toc.fixture.test/toc?page=2",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://toc.fixture.test/chapter/2",
+            "responseUrl": "https://toc.fixture.test/chapter/2",
+            "headers": {},
+            "body": null,
+            "bodyBase64": null
+          }
+        ]
+      }
+    }
+  }
+]

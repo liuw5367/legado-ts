@@ -89,8 +89,10 @@ export async function executeBookFlow(input: Record<string, unknown>) {
 
   stage = 'toc'
   const toc = await loadTableOfContents(ports, { source: imported, book })
-  const chapter = toc.value?.items[0]
-  record(toc, toc.value?.items.map(({ title, chapterUrl, isVip, isPay, isVolume }) => ({ title, chapterUrl, isVip: isVip === true, isPay: isPay === true, isVolume: isVolume === true })) ?? null, 'toc-empty')
+  const chapterIndex = Number(input.chapterIndex ?? 0)
+  const chapter = toc.value?.items[chapterIndex]
+  if (toc.value?.items.length && !chapter) throw new FlowFixtureError(`目录没有指定章节: ${chapterIndex}`)
+  record(toc, toc.value?.items.map(({ title, chapterUrl, index, isVip, isPay, isVolume }) => ({ title, chapterUrl, index, isVip: isVip === true, isPay: isPay === true, isVolume: isVolume === true })) ?? null, 'toc-empty')
   if (!chapter) return output
 
   stage = 'content'

@@ -167,14 +167,16 @@
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 0
               },
               {
                 "title": "第二章",
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/2.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 1
               }
             ]
           },
@@ -521,14 +523,16 @@
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 0
               },
               {
                 "title": "第二章",
                 "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/2.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 1
               }
             ]
           },

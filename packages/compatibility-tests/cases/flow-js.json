@@ -180,14 +180,16 @@
                 "chapterUrl": "http://www.yetianlian.info/book/7/1.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 0
               },
               {
                 "title": "第二章",
                 "chapterUrl": "http://www.yetianlian.info/book/7/2.html",
                 "isVip": false,
                 "isPay": false,
-                "isVolume": false
+                "isVolume": false,
+                "index": 1
               }
             ]
           },

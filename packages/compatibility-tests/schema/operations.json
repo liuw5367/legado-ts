@@ -401,7 +401,8 @@
       "keyword": "string",
       "responses": "object",
       "requestLimit": "integer",
-      "requestEvidence": "boolean"
+      "requestEvidence": "boolean",
+      "chapterIndex": "integer"
     }
   }
 }

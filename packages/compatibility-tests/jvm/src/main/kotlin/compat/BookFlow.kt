@@ -24,7 +24,7 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val unsupported = listOf(
         source.text("mainJs"), source.text("loginUrl"), source.text("loginCheckJs"),
         source.rule("ruleBookInfo").text("init"),
-        source.rule("ruleToc").text("nextTocUrl"), source.rule("ruleToc").text("formatJs"),
+        source.rule("ruleToc").text("formatJs"),
         source.rule("ruleContent").text("webJs"),
     )
     if (unsupported.any(String::isNotBlank) || source.text("bookSourceType") !in setOf("", "0")) {
@@ -94,12 +94,10 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val searchPlan = flowSearchRequest(source.text("searchUrl"), input.text("keyword"), headers) { resolve(sourceUrl, it) }
     val (searchBody, searchBase) = request("search", searchPlan)
     val bookUrlPattern = source.text("bookUrlPattern")
-    if (bookUrlPattern.isNotEmpty() && Regex(bookUrlPattern).matches(searchBase)) {
-        throw Unsupported("JVM 流程参考尚未实现搜索直达详情")
-    }
-    val rows = nodes(searchRule.text("bookList"), searchBody)
+    val directDetail = bookUrlPattern.isNotEmpty() && Regex(bookUrlPattern).matches(searchBase)
+    val rows = if (directDetail) emptyList() else nodes(searchRule.text("bookList"), searchBody)
     // BookList 在列表为空且未声明详情 URL 模式时尝试详情规则。
-    val fallback = rows.isEmpty() && source.text("bookUrlPattern").isEmpty()
+    val fallback = directDetail || (rows.isEmpty() && bookUrlPattern.isEmpty())
     val candidates = if (fallback) {
         listOf(fields(detailRule, searchBody, searchBase) + ("bookUrl" to searchBase))
     } else {
@@ -120,28 +118,55 @@ internal fun executeBookFlow(input: JsonObject): Any {
     // WebBook 仅在目录 URL 与详情 URL 相同时复用详情响应。
     val (tocBody, tocBase) = if (tocUrl == bookUrl) detailBody to bookUrl else request("toc", tocUrl)
     val tocRule = source.rule("ruleToc")
-    val chapters = nodes(tocRule.text("chapterList"), tocBody).mapNotNull { node ->
-        val title = field(tocRule.text("chapterName"), node)
-        val url = field(tocRule.text("chapterUrl"), node)
-        val isVolume = field(tocRule.text("isVolume"), node).isTrue()
-        if (isVolume) throw Unsupported("JVM 流程参考尚未实现卷节点")
-        if (title.isEmpty()) null else mapOf(
-            "title" to title, "chapterUrl" to url.ifEmpty { tocUrl }.let { resolve(tocBase, it) },
-            "isVip" to field(tocRule.text("isVip"), node).isTrue(),
-            "isPay" to field(tocRule.text("isPay"), node).isTrue(),
-            "isVolume" to isVolume,
-        )
-    }.distinctBy { it["chapterUrl"] }
+    val listRule = tocRule.text("chapterList")
+    val chapterRule = listRule.removePrefix("-").removePrefix("+")
+    val nextToc = tocRule.text("nextTocUrl")
+    val candidatesByPage = mutableListOf<Map<String, Any>>()
+    var tocPage = tocBody
+    var pageBase = tocBase
+    var tocRequestUrl = tocUrl
+    val visitedToc = mutableSetOf(tocBase)
+    while (true) {
+        nodes(chapterRule, tocPage).forEachIndexed { index, node ->
+            val title = field(tocRule.text("chapterName"), node)
+            val url = field(tocRule.text("chapterUrl"), node)
+            val isVolume = field(tocRule.text("isVolume"), node).isTrue()
+            val rawUrl = url.ifEmpty { if (isVolume) title + index else tocRequestUrl }
+            if (title.isNotEmpty()) candidatesByPage.add(mapOf(
+                "title" to title, "url" to rawUrl,
+                "chapterUrl" to if (isVolume && rawUrl.startsWith(title)) rawUrl else resolve(pageBase, rawUrl),
+                "isVip" to field(tocRule.text("isVip"), node).isTrue(),
+                "isPay" to field(tocRule.text("isPay"), node).isTrue(),
+                "isVolume" to isVolume,
+            ))
+        }
+        if (nextToc.isEmpty()) break
+        val nextLinks = AnalyzeByJSoup(tocPage).getStringList(nextToc).filter { it.isNotBlank() }
+            .map { resolve(pageBase, it) }.filter { it != pageBase }.distinct()
+        if (nextLinks.size > 1) throw Unsupported("JVM 流程参考只实现单链接目录分页")
+        val target = nextLinks.firstOrNull() ?: break
+        if (!visitedToc.add(target)) break
+        tocPage = request("toc", target).first
+        // Android 串行目录下一页用请求地址作为解析基准，首轮则使用响应最终地址。
+        pageBase = target
+        tocRequestUrl = target
+    }
+    // BookChapter.equals 按原始 url 判等。BookChapterList 先反序、去重，再应用显示顺序。
+    val ordered = if (listRule.startsWith("-")) candidatesByPage else candidatesByPage.asReversed()
+    val chapters = ordered.distinctBy { it["url"] }.asReversed().mapIndexed { index, chapter ->
+        chapter + ("index" to index)
+    }
     if (chapters.isEmpty()) {
         result("toc", "failed", null, mapOf("category" to "toc-empty", "class" to "TocEmptyException", "message" to "Chapters is empty"))
         return output
     }
-    result("toc", "success", chapters)
+    result("toc", "success", chapters.map { it - "url" })
 
-    val chapter = chapters.first()
+    val chapterIndex = input.get("chapterIndex")?.asInt ?: 0
+    val chapter = chapters.getOrNull(chapterIndex) ?: throw FlowFixtureError("目录没有指定章节: $chapterIndex")
     val contentRule = source.rule("ruleContent")
     val nextRule = contentRule.text("nextContentUrl")
-    val nextChapter = chapters.getOrNull(1)?.get("chapterUrl")
+    val nextChapter = chapters[(chapterIndex + 1) % chapters.size]["chapterUrl"]
     val visited = mutableSetOf<String>()
     val pages = mutableListOf<String>()
     var url = chapter.getValue("chapterUrl").toString()
