@@ -369,7 +369,16 @@
         "css.list.composeFallback",
         "css.list.composeIndex",
         "css.list.composeTextNodes",
-        "css.list.composeScoped"
+        "css.list.composeScoped",
+        "corpus.source-0.ruleBookInfo.name",
+        "corpus.source-2.ruleSearch.author",
+        "corpus.source-2.ruleSearch.coverUrl",
+        "corpus.source-2.ruleContent.content",
+        "corpus.source-3.ruleSearch.name",
+        "corpus.source-3.ruleContent.nextContentUrl",
+        "corpus.source-4.ruleSearch.kind",
+        "corpus.source-5.ruleBookInfo.kind",
+        "corpus.source-10.ruleBookInfo.name"
       ]
     },
     {
@@ -1224,6 +1233,23 @@
         "xpath.nodes.spaces",
         "xpath.nodes.selfClosing",
         "xpath.nodes.emptyRule"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "AnalyzeByJSoup.getElements(String)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → java.getElements",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "corpus.source-0.ruleSearch.bookList",
+        "corpus.source-1.ruleSearch.bookList",
+        "corpus.source-2.ruleSearch.bookList",
+        "corpus.source-7.ruleToc.chapterList",
+        "corpus.source-10.ruleExplore.bookList"
       ]
     }
   ]

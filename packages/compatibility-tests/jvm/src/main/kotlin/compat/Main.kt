@@ -142,6 +142,9 @@ private fun execute(item: JsonObject): Any? {
         }
         "css.string" -> AnalyzeByJSoup(text("content")).getString(text("rule"))
         "css.list" -> AnalyzeByJSoup(text("content")).getStringList(text("rule"))
+        "css.nodes" -> AnalyzeByJSoup(text("content")).getElements(text("rule")).map { node ->
+            mapOf("tag" to node.tagName(), "text" to node.text(), "id" to node.id())
+        }
         "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
         "json.read" -> {
             val config = Configuration.defaultConfiguration()

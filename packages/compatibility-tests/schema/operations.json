@@ -349,5 +349,15 @@
       "rule": "string",
       "attribute": "string"
     }
+  },
+  "css.nodes": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
   }
 }

@@ -101,6 +101,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
       if (!Array.isArray(nodes)) throw new UnsupportedOperation('节点案例必须选择节点序列')
       return nodes.map((item) => { const node = item as ParserNode; return { tag: document.describe(node).tagName, text: document.read(node, 'text'), attribute: document.attr(node, str('attribute')) ?? '' } })
     }
+    case 'css.nodes': return script(host, `return java.getElements(${json('rule')}).toArray().map(function(n){return {tag:n.tagName(),text:n.text(),id:n.idName()}})`, i.content)
     case 'css.string':
     case 'css.list':
     {

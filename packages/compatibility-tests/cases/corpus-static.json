@@ -1,0 +1,436 @@
+[
+  {
+    "id": "corpus.source-0.ruleSearch.bookList",
+    "family": "corpus",
+    "operation": "css.nodes",
+    "input": {
+      "rule": "@CSS:.lastupdate ul li",
+      "content": "<div class=\"lastupdate\"><ul><li id=\"a\">书一</li><li>书二</li></ul></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 0,
+      "field": "ruleSearch.bookList"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "li",
+          "text": "书一",
+          "id": "a"
+        },
+        {
+          "tag": "li",
+          "text": "书二",
+          "id": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-1.ruleSearch.bookList",
+    "family": "corpus",
+    "operation": "css.nodes",
+    "input": {
+      "rule": "@css:table#bookcon tr:not(:first-child)",
+      "content": "<table id=\"bookcon\"><tbody><tr><th>书名</th></tr><tr id=\"a\"><td>书一</td></tr><tr><td>书二</td></tr></tbody></table>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 1,
+      "field": "ruleSearch.bookList"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "tr",
+          "text": "书一",
+          "id": "a"
+        },
+        {
+          "tag": "tr",
+          "text": "书二",
+          "id": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-2.ruleSearch.bookList",
+    "family": "corpus",
+    "operation": "css.nodes",
+    "input": {
+      "rule": "id.sitebox@dl",
+      "content": "<div id=\"sitebox\"><dl id=\"a\"><dt>书一</dt></dl><dl><dt>书二</dt></dl></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 2,
+      "field": "ruleSearch.bookList"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "dl",
+          "text": "书一",
+          "id": "a"
+        },
+        {
+          "tag": "dl",
+          "text": "书二",
+          "id": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-7.ruleToc.chapterList",
+    "family": "corpus",
+    "operation": "css.nodes",
+    "input": {
+      "rule": "class.listmain@tag.dd!0:1:2:3:4:5:6:7:8:9:10:11",
+      "content": "<div class=\"listmain\"><dl><dd>第0章</dd><dd>第1章</dd><dd>第2章</dd><dd>第3章</dd><dd>第4章</dd><dd>第5章</dd><dd>第6章</dd><dd>第7章</dd><dd>第8章</dd><dd>第9章</dd><dd>第10章</dd><dd>第11章</dd><dd>第12章</dd><dd>第13章</dd></dl></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 7,
+      "field": "ruleToc.chapterList"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "dd",
+          "text": "第12章",
+          "id": ""
+        },
+        {
+          "tag": "dd",
+          "text": "第13章",
+          "id": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleExplore.bookList",
+    "family": "corpus",
+    "operation": "css.nodes",
+    "input": {
+      "rule": "class.c_row cf",
+      "content": "<div class=\"c_row cf\" id=\"a\">书一</div><div class=\"c_row\">无效</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleExplore.bookList"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "div",
+          "text": "书一",
+          "id": "a"
+        }
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-0.ruleBookInfo.name",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "@CSS:meta[property='og:novel:book_name']@content",
+      "content": "<meta property=\"og:novel:book_name\" content=\"真实规则书名\">"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 0,
+      "field": "ruleBookInfo.name"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "真实规则书名"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-2.ruleSearch.author",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "span.1@text",
+      "content": "<span>标签</span><span>作者甲</span>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 2,
+      "field": "ruleSearch.author"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "作者甲"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-2.ruleSearch.coverUrl",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "img@src",
+      "content": "<img src=\"/cover.png\">"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 2,
+      "field": "ruleSearch.coverUrl"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "/cover.png"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-2.ruleContent.content",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "id.BookText@textNodes",
+      "content": "<div id=\"BookText\">首段<br>次段<b>标签</b>末段</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 2,
+      "field": "ruleContent.content"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "首段\n次段\n末段"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-3.ruleSearch.name",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.h1@tag.a@text||tag.h3@tag.a@text",
+      "content": "<h3><a>书名回退</a></h3>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 3,
+      "field": "ruleSearch.name"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "书名回退"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-3.ruleContent.nextContentUrl",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "text.下一页@href",
+      "content": "<a href=\"/prev\">上一页</a><a href=\"/next\">下一页</a>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 3,
+      "field": "ruleContent.nextContentUrl"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "/next"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-4.ruleSearch.kind",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "span.2:0@text",
+      "content": "<span>甲</span><span>乙</span><span>丙</span>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 4,
+      "field": "ruleSearch.kind"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "丙",
+        "甲"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-5.ruleBookInfo.kind",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "[property=\"og:novel:category\"]@content&&[property=\"og:novel:status\"]@content",
+      "content": "<meta property=\"og:novel:category\" content=\"玄幻\"><meta property=\"og:novel:status\" content=\"连载\">"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 5,
+      "field": "ruleBookInfo.kind"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "玄幻",
+        "连载"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleBookInfo.name",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "[property$=book_name]@content",
+      "content": "<meta property=\"og:novel:book_name\" content=\"后缀书名\">"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleBookInfo.name"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "后缀书名"
+      ]
+    }
+  }
+]
