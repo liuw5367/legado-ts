@@ -501,6 +501,9 @@
             "properties": {
               "text": {
                 "type": "string"
+              },
+              "charset": {
+                "type": "string"
               }
             },
             "additionalProperties": false
@@ -525,6 +528,9 @@
             ],
             "properties": {
               "text": {
+                "type": "string"
+              },
+              "charset": {
                 "type": "string"
               }
             },

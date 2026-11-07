@@ -249,7 +249,19 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-urlencoding",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Illegal URL encoding"
+      ]
+    }
   },
   {
     "id": "encoding.md5.empty",
@@ -303,5 +315,125 @@
     "tags": [
       "normal"
     ]
+  },
+  {
+    "id": "encoding.urlDecode.utf8",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "%E4%B8%AD%E6%96%87",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.gbk",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "%D6%D0%CE%C4",
+      "charset": "GBK"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.replacement",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "%E4",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.literal-plus",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "a%20b%2Bc",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.short-percent",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "a%",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-urlencoding",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Illegal URL encoding"
+      ]
+    }
+  },
+  {
+    "id": "encoding.urlDecode.single-digit",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "a%2",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-urlencoding",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Illegal URL encoding"
+      ]
+    }
   }
 ]

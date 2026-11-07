@@ -36,8 +36,8 @@ private fun execute(item: JsonObject): Any? {
         "integer.parseLong" -> mapOf("type" to "integer", "decimal" to java.lang.Long.parseLong(text("text")).toString())
         "encoding.base64Encode" -> Base64.getEncoder().encodeToString(text("text").toByteArray(Charsets.UTF_8))
         "encoding.base64Decode" -> mapOf("type" to "bytes", "base64" to Base64.getEncoder().encodeToString(Base64.getDecoder().decode(text("text"))))
-        "encoding.urlEncode" -> URLEncoder.encode(text("text"), "UTF-8")
-        "encoding.urlDecode" -> URLDecoder.decode(text("text"), "UTF-8")
+        "encoding.urlEncode" -> URLEncoder.encode(text("text"), text("charset").ifEmpty { "UTF-8" })
+        "encoding.urlDecode" -> URLDecoder.decode(text("text"), text("charset").ifEmpty { "UTF-8" })
         "encoding.md5" -> MessageDigest.getInstance("MD5").digest(text("text").toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
         "url.parts" -> {
             val url = if (input.has("base")) URL(URL(text("base")), text("url")) else URL(text("url"))

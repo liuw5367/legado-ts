@@ -11,7 +11,7 @@
         "encoding.urlDecode.invalid"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -22,8 +22,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-bjlAQq/report.json",
+        "output/run-JRhHMR/report.json"
+      ],
+      "resolution": "增加 URLDecoder form decode bridge；+、百分号字节、UTF-8/GBK 与非法百分号均按 JDK 行为处理"
     },
     {
       "id": "R02",

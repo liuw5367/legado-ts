@@ -113,7 +113,8 @@
       "text"
     ],
     "properties": {
-      "text": "string"
+      "text": "string",
+      "charset": "string"
     }
   },
   "encoding.urlDecode": {
@@ -121,7 +122,8 @@
       "text"
     ],
     "properties": {
-      "text": "string"
+      "text": "string",
+      "charset": "string"
     }
   },
   "encoding.md5": {

@@ -1493,6 +1493,7 @@ const legadoDatatypeConverter = { printHexBinary: (value) => String(request({ ki
 const legadoEncodedKeySpec = function(value, offset, length) { const bytes = value instanceof Uint8Array ? value : Array.isArray(value) ? Uint8Array.from(value) : request({ kind: "base64-decode-bytes", value: String(value ?? "") }); const start = offset === undefined ? 0 : Number(offset); const count = length === undefined ? bytes.length - start : Number(length); if (!Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count < 0 || start + count > bytes.length) throw new RangeError("EncodedKeySpec range out of bounds"); const result = bytes.slice(start, start + count); return { getEncoded: () => result } }
 const legadoKeyFactory = { getInstance: (algorithm) => ({ generatePrivate: (spec) => ({ getEncoded: () => spec?.getEncoded?.(), __legadoPrivateKey: spec?.getEncoded?.(), getAlgorithm: () => String(algorithm) }), generatePublic: (spec) => ({ getEncoded: () => spec?.getEncoded?.(), __legadoPublicKey: spec?.getEncoded?.(), getAlgorithm: () => String(algorithm) }) }) }
 const legadoSignature = { getInstance: (algorithm) => { let privateKey; let publicKey; let chunks = []; const api = { initSign: (key) => { privateKey = key?.getEncoded?.() ?? key?.__legadoPrivateKey ?? key; chunks = []; return api }, initVerify: (key) => { publicKey = key?.getEncoded?.() ?? key?.__legadoPublicKey ?? key; chunks = []; return api }, update: (value) => { chunks.push(legadoBytesValue(value)); return api }, sign: () => { const result = request({ kind: "crypto-sign", operation: "sign", algorithm: String(algorithm), privateKey, value: legadoConcatBytes(chunks), outputEncoding: "bytes" }); chunks = []; return result }, verify: (value) => { const result = request({ kind: "crypto-sign", operation: "verify", algorithm: String(algorithm), publicKey, value: legadoConcatBytes(chunks), signature: legadoBytesValue(value) }); chunks = []; return result }, getAlgorithm: () => String(algorithm), reset: () => { chunks = []; return api } }; return api } }
+const legadoUrlDecoder = { decode: (value, charset) => request({ kind: "decode-form-uri", value: String(value ?? ""), charset: charset === undefined ? "UTF-8" : String(charset) }) }
 const legadoUrlEncoder = { encode: (value, charset) => request({ kind: "encode-uri", value: String(value ?? ""), charset: charset === undefined ? "UTF-8" : String(charset) }) }
 const legadoAndroidBase64 = { DEFAULT: 0, NO_PADDING: 1, NO_WRAP: 2, CRLF: 4, URL_SAFE: 8, NO_CLOSE: 16, encodeToString: (value, flags) => request({ kind: "base64-encode", value, flags: Number(flags ?? 0) }), encode: (value, flags) => legadoJavaString(request({ kind: "base64-encode", value, flags: Number(flags ?? 0) })).getBytes("UTF-8"), decode: (value, flags) => request({ kind: "base64-decode-bytes", value, flags: Number(flags ?? 0) }) }
 const legadoJavaSystemProperties = { "file.encoding": "UTF-8", "file.separator": "/", "line.separator": "\n", "path.separator": ":" }
@@ -1711,6 +1712,7 @@ legadoName(legadoSecretKeySpec, "SecretKeySpec")
 legadoName(legadoMac, "Mac")
 legadoName(legadoDatatypeConverter, "DatatypeConverter")
 legadoName(legadoUrlEncoder, "URLEncoder")
+legadoName(legadoUrlDecoder, "URLDecoder")
 legadoName(legadoAndroidBase64, "Base64")
 const legadoHutoolBase64 = {
   encode: (value) => request({ kind: "base64-encode", value: value instanceof Uint8Array || value instanceof ArrayBuffer ? value : String(value ?? ""), flags: 2 }),
@@ -1830,7 +1832,7 @@ legadoJavaUtil.UUID = legadoJavaUUID
 legadoName(legadoJavaUtil.UUID, "UUID")
 legadoName(legadoJavaSecurity.spec.PKCS8EncodedKeySpec, "PKCS8EncodedKeySpec")
 legadoName(legadoJavaSecurity.spec.X509EncodedKeySpec, "X509EncodedKeySpec")
-const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: { ...legadoJavaUtil, zip: legadoJavaZip }, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Cipher: legadoCipher, Mac: legadoMac, SecretKeyFactory: legadoSecretKeyFactory, spec: { SecretKeySpec: legadoSecretKeySpec, IvParameterSpec: legadoIvParameterSpec, GCMParameterSpec: legadoGcmParameterSpec, OAEPParameterSpec: legadoOaepParameterSpec, PSource: legadoPSource, DESKeySpec: legadoDesKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 }, text: { TextUtils: legadoAndroidTextUtils }, os: { Build: legadoAndroidBuild } }, org: { jsoup: { Jsoup: legadoJsoup, Connection: legadoJsoupConnection, nodes: legadoJsoupNodes } }, okhttp3: legadoOkHttpPackage, cn: { hutool: { core: { codec: { Base64: legadoHutoolBase64 }, util: { StrUtil: legadoHutoolStrUtil, HexUtil: legadoHutoolHexUtil, ZipUtil: legadoHutoolZipUtil } }, crypto: { digest: { DigestUtil: legadoHutoolDigestUtil } } } } }
+const legadoPackages = { java: { lang: legadoJavaLang, math: { BigInteger: legadoBigInteger, BigDecimal: legadoBigDecimal, MathContext: function(precision) { return { precision: Number(precision) } } }, util: { ...legadoJavaUtil, zip: legadoJavaZip }, security: legadoJavaSecurity, nio: { charset: { StandardCharsets: legadoStandardCharsets } }, net: { URLEncoder: legadoUrlEncoder, URLDecoder: legadoUrlDecoder, URL: function(value, base) { return java.toURL(value, base) } }, io: legadoJavaIo }, javax: { crypto: { Cipher: legadoCipher, Mac: legadoMac, SecretKeyFactory: legadoSecretKeyFactory, spec: { SecretKeySpec: legadoSecretKeySpec, IvParameterSpec: legadoIvParameterSpec, GCMParameterSpec: legadoGcmParameterSpec, OAEPParameterSpec: legadoOaepParameterSpec, PSource: legadoPSource, DESKeySpec: legadoDesKeySpec } }, xml: { bind: { DatatypeConverter: legadoDatatypeConverter } }, }, android: { util: { Base64: legadoAndroidBase64 }, text: { TextUtils: legadoAndroidTextUtils }, os: { Build: legadoAndroidBuild } }, org: { jsoup: { Jsoup: legadoJsoup, Connection: legadoJsoupConnection, nodes: legadoJsoupNodes } }, okhttp3: legadoOkHttpPackage, cn: { hutool: { core: { codec: { Base64: legadoHutoolBase64 }, util: { StrUtil: legadoHutoolStrUtil, HexUtil: legadoHutoolHexUtil, ZipUtil: legadoHutoolZipUtil } }, crypto: { digest: { DigestUtil: legadoHutoolDigestUtil } } } } }
 legadoPackages.java.security.spec.MGF1ParameterSpec = legadoMgf1ParameterSpec
 legadoName(legadoPackages.java.nio.charset.StandardCharsets, "StandardCharsets")
 legadoName(legadoPackages.java.net.URL, "URL")
@@ -2233,6 +2235,27 @@ function base64DecodeWithFlags(encoding: EncodingHost, value: unknown, flagsValu
   if (input.length % 4 === 2) input += '=='
   else if (input.length % 4 === 3) input += '='
   return encoding.base64Decode(input)
+}
+
+/** JDK 表单解码：只解码百分号字节，+ 为空格；非法百分号抛错，字符字节交给指定字符集。 */
+function decodeFormUri(encoding: EncodingHost, value: unknown, charset: unknown): string {
+  const input = textValue(value)
+  let result = ''
+  let index = 0
+  while (index < input.length) {
+    if (input[index] === '+') { result += ' '; index += 1; continue }
+    if (input[index] !== '%') { result += input[index]; index += 1; continue }
+    const bytes: number[] = []
+    while (input[index] === '%') {
+      const hex = input.slice(index + 1, index + 3)
+      // 每个百分号后必须恰好有两个 ASCII 十六进制数字，不能让 parseInt 接受部分输入。
+      if (!/^[0-9a-fA-F]{2}$/u.test(hex)) throw new Error('Illegal URL encoding')
+      bytes.push(Number.parseInt(hex, 16))
+      index += 3
+    }
+    result += encoding.decode(Uint8Array.from(bytes), textValue(charset) || 'UTF-8')
+  }
+  return result
 }
 
 function encodeFormUri(encoding: EncodingHost, value: unknown, charset: unknown): string {
@@ -3676,6 +3699,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const iv = this.encoding.encode(textValue(request.iv), 'utf-8')
       return this.crypto.createSymmetricCrypto(textValue(request.transformation), key, iv).decryptText(this.encoding.base64Decode(textValue(request.value)))
     }
+    if (request.kind === 'decode-form-uri') return decodeFormUri(this.encoding, request.value, request.charset)
     if (request.kind === 'encode-uri') return encodeFormUri(this.encoding, request.value, request.charset)
     if (request.kind === 'crypto-symmetric') {
       const operation = textValue(request.operation)

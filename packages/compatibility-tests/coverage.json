@@ -236,7 +236,13 @@
         "encoding.urlDecode.empty",
         "encoding.urlDecode.normal",
         "encoding.urlDecode.escaped",
-        "encoding.urlDecode.invalid"
+        "encoding.urlDecode.invalid",
+        "encoding.urlDecode.utf8",
+        "encoding.urlDecode.gbk",
+        "encoding.urlDecode.replacement",
+        "encoding.urlDecode.literal-plus",
+        "encoding.urlDecode.short-percent",
+        "encoding.urlDecode.single-digit"
       ]
     },
     {
