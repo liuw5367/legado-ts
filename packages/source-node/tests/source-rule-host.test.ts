@@ -1040,7 +1040,7 @@ test('XPath 列表保留节点上下文以便后续读取标题和 href', async 
   assert.ok(first)
   assert.deepEqual((await evaluate(host, '@xpath:.//a/text()', first)).value, ['第一章'])
   assert.deepEqual((await evaluate(host, '@xpath:./@href', first)).value, ['/c/1'])
-  assert.deepEqual((await evaluate(host, '@xpath:ancestor::ul', first)).value, ['第一章第二章'])
+  assert.deepEqual((await evaluate(host, '@xpath:ancestor::ul//a/text()', first)).value, ['第一章', '第二章'])
 })
 
 test('CSS 与 XPath 节点可以按 Android 语义交叉继续查询', async () => {

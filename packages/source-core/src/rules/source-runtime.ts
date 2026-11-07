@@ -3329,9 +3329,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private evaluateXPathContext(context: HtmlDocument, expression: string, expect: WorkflowRuleRequest['expect']): unknown {
     const value = this.xpath.evaluate(context, expression)
     if (Array.isArray(value) && value.every((item) => this.isParserNode(item))) {
-      return expect === 'nodes'
-        ? value.map((item) => this.remember(context, item as ParserNode))
-        : value.map((item) => context.read(item as ParserNode, 'text'))
+      const nodes = value as ParserNode[]
+      if (expect === 'nodes') return nodes.map((node) => this.remember(context, node))
+      // JXNode 将元素转成外部 HTML，文本节点和属性则返回值。
+      return nodes.map((node) => context.read(node, context.describe?.(node).tagName === undefined ? 'text' : 'all'))
     }
     return value
   }

@@ -594,7 +594,7 @@
         "xpath.nodes.emptyRule"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -603,7 +603,10 @@
       "tsEntry": "SourceRuleHost → XPathParserAdapter",
       "evidence": [
         "output/run-ZtCFTs/report.json",
-        "output/run-5xBQqO/report.json"
+        "output/run-5xBQqO/report.json",
+        "output/run-aDFo57/report.json",
+        "output/run-8HSwnE/report.json",
+        "output/run-uf4aRQ/report.json"
       ]
     }
   ]
