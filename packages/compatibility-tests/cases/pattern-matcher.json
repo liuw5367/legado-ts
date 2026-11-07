@@ -805,5 +805,63 @@
         ""
       ]
     }
+  },
+  {
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile(String,int)"
+    },
+    "id": "pattern.matcher.literalRejectsWildcard",
+    "input": {
+      "pattern": "a.b",
+      "text": "axb",
+      "flags": 16,
+      "actions": [
+        "[\"find\"]"
+      ]
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        false
+      ]
+    }
+  },
+  {
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile(String,int)"
+    },
+    "id": "pattern.matcher.invalidFlags",
+    "input": {
+      "pattern": "a",
+      "text": "a",
+      "flags": 512,
+      "actions": [
+        "[\"find\"]"
+      ]
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern-flags",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "Invalid Pattern flags"
+      ]
+    }
   }
 ]

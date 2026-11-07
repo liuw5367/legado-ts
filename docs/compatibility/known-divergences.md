@@ -93,6 +93,8 @@
 | Java/Android 类、物理 androidId、Rhino 对象身份 | 常用 Java 类、导入、字符串、集合、字节/流与稳定设备替代值均优先受控模拟 | 纯 TypeScript/QuickJS 无法凭空产生真实 Activity、Android 系统服务和物理身份；这些具体成员保留真实宿主条件，其他纯接口继续实现 |
 | 多实例持久文件、跨进程锁、后台任务恢复 | 应用可使用现有持久存储与源租约定义范围 | 当前临时磁盘和 Node 进程锁不提供跨实例保证；不能把 Android 单进程语义描述成分布式能力 |
 
+`D21` Pattern 标志补充：Java `Pattern.CANON_EQ` 支持 Unicode 规范等价匹配。QuickJS 的受控 Pattern 对该标志返回 `capability-missing`，非法标志位按输入错误处理。
+
 ### 覆盖范围与未证实事项
 
 本轮逐组检查了导入/字段、规则编译与解析器、URL/网络、声明式五类读取流程及批量、整源 JS、JS 继承公开面及返回对象、Cookie/cache/源状态、发现交互、登录、编码/加密、文件/归档、字体、并发、图片/媒体、段评、付费/事件以及 Web 会话装配。已有的分页、卷/VIP/购买标志、canReName、preUpdateJs、subContent、imageDecode、contentBatch 等入口继续保留“已实现待 Android golden”，没有因为本轮未找到新缺陷而改成完整兼容。

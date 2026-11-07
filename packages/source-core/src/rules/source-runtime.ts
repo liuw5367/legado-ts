@@ -1129,6 +1129,8 @@ const legadoPattern = {
   quote: (pattern) => "\\Q" + String(pattern ?? "").replaceAll("\\E", "\\E\\\\E\\Q") + "\\E",
   compile: (pattern, flags) => {
     const numericFlags = Number(flags ?? 0)
+    if (!Number.isInteger(numericFlags) || numericFlags < 0 || numericFlags > 511) throw new RangeError("Invalid Pattern flags")
+    if ((numericFlags & 128) !== 0) throw new Error("__LEGADO_CAPABILITY__runtime Pattern.CANON_EQ unavailable")
     const patternText = String(pattern ?? "")
     let javaFlags = ""
     if ((numericFlags & 2) !== 0) javaFlags += "i"

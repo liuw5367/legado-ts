@@ -2140,6 +2140,11 @@ test('替换正则仅在语法无效时退回字面替换，安全限制继续�
   assert.match(oversized.message ?? '', /长度上限/u)
 })
 
+test('Java Pattern 显式报告 CANON_EQ 能力缺失', async () => {
+  const result = await evaluate(new SourceRuleHost(), '@js:Packages.java.util.regex.Pattern.compile("é", 128)', '')
+  assert.equal(result.status, 'capability-missing')
+})
+
 test('规则宿主兼容 java.ajax 的对象请求形式', async () => {
   const calls: unknown[] = []
   const host = new SourceRuleHost({ request: async (input) => { calls.push(input); return 'ok' } })

@@ -808,6 +808,24 @@
         "output/run-iaq3UV/report.json",
         "output/run-0LQ0vg/report.json"
       ]
+    },
+    {
+      "id": "C3-PATTERN-FLAGS",
+      "caseIds": [
+        "pattern.matcher.invalidFlags"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "Pattern.compile(String,int)"
+      },
+      "tsEntry": "SourceRuleHost → Pattern.compile",
+      "evidence": [
+        "output/run-b5MwsV/report.json",
+        "output/run-MBAaq9/report.json"
+      ]
     }
   ]
 }

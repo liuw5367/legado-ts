@@ -1366,7 +1366,9 @@
         "pattern.matcher.matchesMultiline",
         "pattern.matcher.matchesAlternative",
         "pattern.matcher.endBounds",
-        "pattern.matcher.replaceEmpty"
+        "pattern.matcher.replaceEmpty",
+        "pattern.matcher.literalRejectsWildcard",
+        "pattern.matcher.invalidFlags"
       ]
     },
     {
@@ -1418,7 +1420,8 @@
         "pattern.matcher.groupBounds",
         "pattern.matcher.startBounds",
         "pattern.matcher.invalidPattern",
-        "pattern.matcher.endBounds"
+        "pattern.matcher.endBounds",
+        "pattern.matcher.literalRejectsWildcard"
       ]
     },
     {

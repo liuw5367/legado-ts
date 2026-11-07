@@ -257,3 +257,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - 覆盖审计改为根据本次双端通过结果生成方法维度证据与缺失项。C3 拆分 Pattern.compile 及各 Matcher 重载，新增全文多行边界、备选分支、end 越界与空替换输入。29 个 Matcher 用例修复前 28 一致，唯一差异为 MULTILINE 下 matches() 错认部分行（output/run-iaq3UV），登记 C3-MATCHER-ANCHOR。
 
 - C3-MATCHER-ANCHOR 已修复。Matcher.matches 与 lookingAt 使用区域绝对边界，保留表达式内部的 MULTILINE 行匹配。29 个用例全部一致，十个签名条目均有完整维度证据（output/run-0LQ0vg），119 项宿主回归通过。
+
+- C3-PATTERN-FLAGS 已修复。非法位 512 在双端按输入错误处理。LITERAL 正反样本确认点号按字面匹配。31 个 Pattern/Matcher 用例一致（output/run-MBAaq9），120 项宿主回归通过。范围外的 CANON_EQ 明确返回能力缺失并登记 D21。
