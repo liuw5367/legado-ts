@@ -394,7 +394,9 @@
         "corpus.source-10.ruleBookInfo.name",
         "corpus.source-1.ruleContent.title",
         "corpus.source-1.ruleContent.content",
-        "corpus.source-10.ruleExplore.kind"
+        "corpus.source-10.ruleExplore.kind",
+        "corpus.source-0.ruleBookInfo.lastChapter",
+        "corpus.source-2.ruleExplore.author"
       ]
     },
     {

@@ -549,5 +549,61 @@
         "乙"
       ]
     }
+  },
+  {
+    "id": "corpus.source-0.ruleBookInfo.lastChapter",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": "@CSS:.border_left_list li:first-child a@text",
+      "content": "<div class=\"border_left_list\"><ul><li><a>第10章</a></li><li><a>第9章</a></li></ul></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 0,
+      "field": "ruleBookInfo.lastChapter"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "第10章"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-2.ruleExplore.author",
+    "family": "corpus",
+    "operation": "css.list",
+    "input": {
+      "rule": ".d1@ownText",
+      "content": "<div class=\"d1\">作者甲<b>附注</b></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 2,
+      "field": "ruleExplore.author"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "作者甲"
+      ]
+    }
   }
 ]

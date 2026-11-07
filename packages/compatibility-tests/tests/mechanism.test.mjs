@@ -38,6 +38,23 @@ test('固定书源规则按原文摘要分组，并保留每个字段及可执�
   const shared = inventory.rules.find((rule) => rule.text === 'img@src')
   assert.equal(shared.origins.length, 7)
   assert.ok(inventory.rules.find((rule) => rule.text === '@CSS:.name a@text').caseIds.includes('corpus.source-0.search-name'))
+  const coverage = await readJson(join(root, 'corpus/coverage.json'))
+  const cases = new Map((await loadCases()).map((item) => [item.id, item]))
+  const sourceCases = new Set(inventory.rules.flatMap((rule) => rule.caseIds))
+  for (const dimension of coverage.dimensions) {
+    assert.ok(dimension.caseIds.length > 0, dimension.syntax)
+    for (const id of dimension.caseIds) {
+      assert.ok(sourceCases.has(id), id)
+      assert.equal(cases.get(id).expected.outcome, 'return', id)
+    }
+  }
+  const allSamples = new Set(coverage.dimensions.flatMap((dimension) => dimension.caseIds))
+  const scriptRules = inventory.rules.filter((rule) => /<js>|@js:/iu.test(rule.text))
+  assert.equal(scriptRules.length, 7)
+  for (const rule of scriptRules) {
+    assert.equal(rule.caseIds.length, 1, rule.sha256)
+    assert.ok(rule.caseIds.some((id) => allSamples.has(id) && cases.get(id).operation === 'corpus.script'), rule.sha256)
+  }
 })
 
 test('比较忽略对象键顺序，保留数组顺序、空值、Unicode 与大整数文本', () => {

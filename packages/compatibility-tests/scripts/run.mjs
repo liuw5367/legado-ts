@@ -83,7 +83,16 @@ try {
     const summary = summarize(comparisons)
     const coverage = await readJson(join(root, 'coverage.json'))
     const coverageReport = measureCoverage(coverage.entries, cases, comparisons, results.jvm)
+    const corpus = await readJson(join(root, 'corpus/coverage.json'))
+    const caseStatus = new Map(comparisons.map(({ id, status }) => [id, status]))
+    const corpusCoverage = corpus.dimensions.map((dimension) => ({
+      ...dimension,
+      status: dimension.caseIds.every((id) => caseStatus.has(id))
+        ? dimension.caseIds.every((id) => caseStatus.get(id) === 'equal') ? 'verified' : 'different'
+        : 'not-run',
+    }))
     await writeFile(join(directory, 'coverage.json'), JSON.stringify({ entries: coverageReport }, null, 2) + '\n')
+    await writeFile(join(directory, 'corpus-coverage.json'), JSON.stringify({ dimensions: corpusCoverage, excluded: corpus.excluded }, null, 2) + '\n')
     await writeFile(join(directory, 'report.json'), JSON.stringify({ metadata: base, summary, cases: comparisons }, null, 2) + '\n')
     const lines = ['# JVM / TS 差异报告', '', `- 总数：${summary.total}`, `- API 契约案例：${summary.api.total}；内部观察：${summary.observations}`, `- 原始差异：${summary.rawDifferent}；异常语义等价：${summary.errorEquivalent}`, `- 一致：${summary.equal}`, `- 差异：${summary.different}`, `- 允许差异：${summary['allowed-difference']}`, `- 未支持：${summary.unsupported}`, `- 执行失败：${summary['runner-failed']}`, '', '| 案例 | 功能族 | 状态 |', '| --- | --- | --- |', ...comparisons.map((c) => `| ${c.id} | ${c.family} | ${c.status} |`), '', '逐字段差异、双方原始结果、异常和版本记录见同目录 JSON 文件。', '']
     lines.push('## 方法覆盖', '', '| 方法 | 状态 | 缺少维度 |', '| --- | --- | --- |')

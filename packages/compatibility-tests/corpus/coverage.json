@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "dimensions": [
+    { "syntax": "显式 CSS 与节点列表", "caseIds": ["corpus.source-0.ruleSearch.bookList", "corpus.source-1.ruleSearch.bookList"] },
+    { "syntax": "后代、直接子代、复合类选择器", "caseIds": ["corpus.source-0.search-name", "corpus.source-1.ruleContent.title", "corpus.source-10.ruleExplore.bookList"] },
+    { "syntax": "位置伪类与否定选择", "caseIds": ["corpus.source-0.ruleBookInfo.lastChapter", "corpus.source-1.search-author", "corpus.source-1.ruleSearch.bookList"] },
+    { "syntax": "属性相等与后缀匹配", "caseIds": ["corpus.source-0.ruleBookInfo.name", "corpus.source-10.ruleBookInfo.name"] },
+    { "syntax": "旧式选择链、初始化选择、匹配自身", "caseIds": ["corpus.source-2.ruleSearch.bookList", "corpus.source-5.ruleBookInfo.init", "corpus.source-5.ruleToc.chapterName"] },
+    { "syntax": "单索引、离散索引、负索引、排除索引", "caseIds": ["corpus.source-2.ruleSearch.author", "corpus.source-4.ruleSearch.kind", "corpus.source-10.ruleExplore.kind", "corpus.source-7.ruleToc.chapterList"] },
+    { "syntax": "文本、直属文本、文本节点与 HTML", "caseIds": ["corpus.source-0.search-name", "corpus.source-2.ruleExplore.author", "corpus.source-2.ruleContent.content", "corpus.source-1.ruleContent.content"] },
+    { "syntax": "属性读取与文本选择后读取链接", "caseIds": ["corpus.source-0.search-bookUrl", "corpus.source-2.ruleSearch.coverUrl", "corpus.source-3.ruleContent.nextContentUrl"] },
+    { "syntax": "回退、合并与合并后替换", "caseIds": ["corpus.source-3.ruleSearch.name", "corpus.source-3.ruleSearch.bookUrl", "corpus.source-5.ruleBookInfo.kind", "corpus.source-10.ruleBookInfo.kind"] },
+    { "syntax": "选择后捕获替换、前后查找、HTML 替换、纯正文替换", "caseIds": ["corpus.source-1.ruleSearch.coverUrl", "corpus.source-5.ruleToc.chapterName", "corpus.source-3.ruleContent.content", "corpus.source-1.ruleContent.replaceRegex"] },
+    { "syntax": "插值、子规则替换和插值后替换", "caseIds": ["corpus.source-10.ruleToc.updateTime", "corpus.source-10.ruleBookInfo.intro"] },
+    { "syntax": "脚本字面值、选择替换后脚本、节点和变量脚本、插值及脚本后替换", "caseIds": ["corpus.source-1.ruleSearch.hasMoreRule", "corpus.source-4.ruleBookInfo.intro", "corpus.source-6.ruleToc.chapterList", "corpus.source-10.ruleToc.chapterList", "corpus.source-10.ruleSearch.lastChapter", "corpus.source-10.ruleExplore.lastChapter", "corpus.source-10.ruleBookInfo.lastChapter"] }
+  ],
+  "excluded": [
+    { "role": "configuration", "reason": "checkKeyWord 为搜索测试输入，imageStyle 为显示配置。" },
+    { "role": "source-regex", "reason": "固定上游 AnalyzeUrl.executeStrRequest 将 sourceRegex 交给 BackstageWebView。属于后续 WebView 流程依赖。" },
+    { "role": "pagination", "literal": "false", "reason": "固定上游 SearchRule 和 ExploreRule 无 hasMoreRule 成员。脚本形式只验证其离线规则求值。" }
+  ]
+}
