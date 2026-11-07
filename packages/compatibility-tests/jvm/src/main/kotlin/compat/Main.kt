@@ -143,7 +143,15 @@ private fun execute(item: JsonObject): Any? {
         "css.string" -> AnalyzeByJSoup(text("content")).getString(text("rule"))
         "css.list" -> AnalyzeByJSoup(text("content")).getStringList(text("rule"))
         "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
-        "json.read" -> JsonPath.using(Configuration.defaultConfiguration().addOptions(Option.ALWAYS_RETURN_LIST)).parse(text("content")).read<Any>(text("rule"))
+        "json.read" -> {
+            val config = Configuration.defaultConfiguration()
+            if (input.get("pathFunction")?.asBoolean == true) {
+                // Jayway 路径函数只能使用默认配置。单个返回值映射为适配器的单项结果序列。
+                listOf(JsonPath.using(config).parse(text("content")).read<Any?>(text("rule")))
+            } else {
+                JsonPath.using(config.addOptions(Option.ALWAYS_RETURN_LIST)).parse(text("content")).read<Any>(text("rule"))
+            }
+        }
         "json.string" -> AnalyzeByJSonPath(text("content")).getString(text("rule"))
         "json.list" -> AnalyzeByJSonPath(text("content")).getStringList(text("rule"))
         else -> throw Unsupported("未注册的操作: $operation")

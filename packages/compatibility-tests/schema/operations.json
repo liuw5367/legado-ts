@@ -202,7 +202,8 @@
     ],
     "properties": {
       "content": "string",
-      "rule": "string"
+      "rule": "string",
+      "pathFunction": "boolean"
     }
   },
   "json.continue": {

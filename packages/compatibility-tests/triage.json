@@ -608,6 +608,42 @@
         "output/run-8HSwnE/report.json",
         "output/run-uf4aRQ/report.json"
       ]
+    },
+    {
+      "id": "C6-JSON-SUM",
+      "caseIds": [
+        "json.string.aggregateSum",
+        "json.list.aggregateSum"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSonPath.getString/getStringList"
+      },
+      "tsEntry": "SourceRuleHost → evaluateJson",
+      "evidence": [
+        "output/run-EszpKa/report.json",
+        "output/run-FkOitC/report.json"
+      ]
+    },
+    {
+      "id": "C6-XPATH-SERIALIZE",
+      "caseIds": [
+        "xpath.string.nestedElement"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByXPath.getString"
+      },
+      "tsEntry": "XPathParserAdapter → XmlDocumentView.read",
+      "evidence": [
+        "output/run-EszpKa/report.json"
+      ]
     }
   ]
 }

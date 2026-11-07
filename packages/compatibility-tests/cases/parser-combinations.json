@@ -1,0 +1,324 @@
+[
+  {
+    "id": "css.string.composeConcat",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.a@ownText&&tag.a@text",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.composeFallback",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.none@text||class.a@text",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.composeIndex",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.a[0,2]@href",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.composeTextNodes",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.a@textNodes",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.composeScoped",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.section@tag.a.-1@href",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.composeConcat",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.a@ownText&&tag.a@text",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.composeFallback",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.none@text||class.a@text",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.composeIndex",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.a[0,2]@href",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.composeTextNodes",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.a@textNodes",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.composeScoped",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.section@tag.a.-1@href",
+      "content": "<section><p class=\"a\">A<b>子</b>B</p><p class=\"a\">C</p><a href=\"/1\">一</a><a href=\"/2\">二</a><a href=\"/3\">三</a></section>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.read.aggregateLength",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "rule": "$.items.length()",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read (default configuration, scalar wrapped as one result)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.read.aggregateSum",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "rule": "$.values.sum()",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read (default configuration, scalar wrapped as one result)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.read.filterRange",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "rule": "$.items[?(@.n >= 2)].name",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Jayway JsonPath.read"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.aggregateLength",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.items.length()",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.aggregateSum",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.values.sum()",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.filterRange",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.items[?(@.n >= 2)].name",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.aggregateLength",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.items.length()",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.aggregateSum",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.values.sum()",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.filterRange",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.items[?(@.n >= 2)].name",
+      "content": "{\"items\":[{\"n\":1,\"name\":\"一\"},{\"n\":2,\"name\":\"二\"},{\"n\":3,\"name\":\"三\"}],\"values\":[1,2,3]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.nestedElement",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//ul",
+      "content": "<ul><li href=/c/1><a>第一章</a></li><li href=/c/2><a>第二章</a></li></ul>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  }
+]

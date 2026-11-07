@@ -324,7 +324,12 @@
         "css.string.legacy-self",
         "css.string.selfclose-text",
         "css.string.selfclose-div",
-        "css.string.selfclose-siblings"
+        "css.string.selfclose-siblings",
+        "css.string.composeConcat",
+        "css.string.composeFallback",
+        "css.string.composeIndex",
+        "css.string.composeTextNodes",
+        "css.string.composeScoped"
       ]
     },
     {
@@ -359,7 +364,12 @@
         "css.list.legacy-self",
         "css.list.selfclose-text",
         "css.list.selfclose-div",
-        "css.list.selfclose-siblings"
+        "css.list.selfclose-siblings",
+        "css.list.composeConcat",
+        "css.list.composeFallback",
+        "css.list.composeIndex",
+        "css.list.composeTextNodes",
+        "css.list.composeScoped"
       ]
     },
     {
@@ -392,7 +402,10 @@
         "json.string.unquoted-key",
         "json.string.single-quote",
         "json.string.trailing-comma",
-        "json.string.escaped-operator"
+        "json.string.escaped-operator",
+        "json.string.aggregateLength",
+        "json.string.aggregateSum",
+        "json.string.filterRange"
       ]
     },
     {
@@ -424,7 +437,10 @@
         "json.list.unquoted-key",
         "json.list.single-quote",
         "json.list.trailing-comma",
-        "json.list.escaped-operator"
+        "json.list.escaped-operator",
+        "json.list.aggregateLength",
+        "json.list.aggregateSum",
+        "json.list.filterRange"
       ]
     },
     {
@@ -466,7 +482,10 @@
       "caseIds": [
         "json.read.scalar",
         "json.read.null",
-        "json.read.list"
+        "json.read.list",
+        "json.read.aggregateLength",
+        "json.read.aggregateSum",
+        "json.read.filterRange"
       ]
     },
     {
@@ -1151,7 +1170,8 @@
         "xpath.string.fallback",
         "xpath.string.count",
         "xpath.string.elementString",
-        "xpath.string.invalidString"
+        "xpath.string.invalidString",
+        "xpath.string.nestedElement"
       ]
     },
     {

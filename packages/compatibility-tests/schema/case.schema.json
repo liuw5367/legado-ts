@@ -775,6 +775,9 @@
               },
               "rule": {
                 "type": "string"
+              },
+              "pathFunction": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false
