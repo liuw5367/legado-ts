@@ -27,3 +27,11 @@ test('解析相对书源地址时保留原始查询和 URL 选项后缀', () => 
   assert.deepEqual(splitSourceRequestUrl(resolved), { url: 'https://source.test/toc?q=中文', options: { charset: 'gbk' } })
   assert.equal(resolveSourceRequestReference('catalog/<1,2>?q=<js>return result</js>', 'https://source.test/book/detail'), 'https://source.test/book/catalog/<1,2>?q=<js>return result</js>')
 })
+
+test('请求 URL 区分缺失查询串与显式空查询串', () => {
+  const base = 'https://fixture.invalid/toc?old=1'
+  assert.equal(resolveSourceRequestUrl('?', base, undefined), 'https://fixture.invalid/toc?')
+  assert.equal(resolveSourceRequestUrl('?page=2', base, undefined), 'https://fixture.invalid/toc?page=2')
+  assert.equal(resolveSourceRequestUrl('/toc?#part', base, undefined), 'https://fixture.invalid/toc?#part')
+  assert.equal(resolveSourceRequestUrl('/toc', base, undefined), 'https://fixture.invalid/toc')
+})

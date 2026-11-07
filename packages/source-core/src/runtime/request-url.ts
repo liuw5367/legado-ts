@@ -90,7 +90,8 @@ export function resolveSourceRequestUrl(
   const queryStart = address.indexOf('?')
   if (queryStart < 0) return new URL(input, baseUrl).toString()
   const absolute = new URL(address.slice(0, queryStart), baseUrl)
-  absolute.search = encodeQuery(address.slice(queryStart + 1), charset, encodeCharset)
+  // URL.search 赋空字符串会删除问号；Android 保留显式空查询。
+  absolute.search = '?' + encodeQuery(address.slice(queryStart + 1), charset, encodeCharset)
   if (fragment.length > 0) absolute.hash = fragment.slice(1)
   return absolute.toString()
 }
