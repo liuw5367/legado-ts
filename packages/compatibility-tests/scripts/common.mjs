@@ -35,33 +35,16 @@ export async function treeHash(directory) {
 }
 export async function loadCases(options = {}) {
   const cases = []
-  let corpus
+  const corpora = new Map()
   for (const path of await files(join(root, 'cases'))) {
     if (!path.endsWith('.json')) continue
     for (const item of await readJson(path)) {
       validateCase(item)
       if (item.flowOrigin?.sourceUrl || item.flowOrigin?.ruleFrom) {
-        if (!corpus) {
-          const manifest = await readJson(join(root, 'corpus/manifest.json'))
-          const snapshot = await readFile(join(root, 'corpus', manifest.file))
-          if (sha256(snapshot) !== manifest.sha256) throw new Error('书源快照摘要变化')
-          corpus = { sources: JSON.parse(snapshot), sha256: manifest.sha256 }
-        }
-        const { sourceUrl, fields, ruleFrom } = item.flowOrigin
-        if (sourceUrl) {
-          const source = corpus.sources.find((s) => s.bookSourceUrl === sourceUrl)
-          if (!source || stable(source) !== stable(item.input.source) || !fields.every((field) => Object.hasOwn(source, field))) {
-            throw new Error(`${item.id}: 流程案例来源与书源快照不一致`)
-          }
-        }
-        if (ruleFrom) {
-          const source = corpus.sources.find((s) => s.bookSourceUrl === ruleFrom.sourceUrl)
-          const readRule = (value) => ruleFrom.field.split('.').reduce((current, field) => current?.[field], value)
-          const rule = readRule(source)
-          if (typeof rule !== 'string' || readRule(item.input.source) !== rule) {
-            throw new Error(`${item.id}: 流程规则片段与书源快照不一致`)
-          }
-        }
+        const collection = item.flowOrigin.collection ?? 'yiove'
+        if (!corpora.has(collection)) corpora.set(collection, await loadFlowCorpus(collection))
+        const corpus = corpora.get(collection)
+        verifyFlowOrigin(item, corpus)
         item.flowOrigin.snapshotSha256 = corpus.sha256
       }
       cases.push(item)
@@ -74,6 +57,53 @@ export async function loadCases(options = {}) {
   }
   return cases.filter((item) => (!options.family || item.family === options.family) && (!options.case || item.id === options.case))
 }
+const flowCorpora = new Map([
+  ['yiove', ['manifest.json', 'yiove-11-sources.json']],
+  ['yck-1298', ['yck-1298-manifest.json', 'yck-1298-sources.json']],
+])
+
+export async function loadFlowCorpus(collection) {
+  const files = flowCorpora.get(collection)
+  if (!files) throw new Error('未知流程书源集合')
+  const [manifestName, snapshotName] = files
+  const manifest = await readJson(join(root, 'corpus', manifestName))
+  if (manifest.file !== snapshotName) throw new Error('流程书源快照不在白名单')
+  const snapshot = await readFile(join(root, 'corpus', snapshotName))
+  return verifyFlowCorpus(manifest, snapshot)
+}
+
+export function verifyFlowCorpus(manifest, snapshot) {
+  if (sha256(snapshot) !== manifest.sha256) throw new Error('书源快照摘要变化')
+  const sources = JSON.parse(snapshot)
+  if (!Array.isArray(sources)) throw new Error('书源快照必须是数组')
+  if (manifest.entries) {
+    const fixtures = manifest.entries.filter((entry) => entry.disposition === 'fixture')
+    if (fixtures.length !== sources.length || !sources.every((source) =>
+      fixtures.some((entry) => entry.sourceUrl === source.bookSourceUrl && entry.definitionSha256 === sha256(stable(source))))) {
+      throw new Error('书源定义摘要与选用索引不一致')
+    }
+  }
+  return { sources, sha256: manifest.sha256 }
+}
+
+export function verifyFlowOrigin(item, corpus) {
+  const { sourceUrl, fields, ruleFrom } = item.flowOrigin
+  if (sourceUrl) {
+    const source = corpus.sources.find((s) => s.bookSourceUrl === sourceUrl)
+    if (!source || stable(source) !== stable(item.input.source) || !fields.every((field) => Object.hasOwn(source, field))) {
+      throw new Error(`${item.id}: 流程案例来源与书源快照不一致`)
+    }
+  }
+  if (ruleFrom) {
+    const source = corpus.sources.find((s) => s.bookSourceUrl === ruleFrom.sourceUrl)
+    const readRule = (value) => ruleFrom.field.split('.').reduce((current, field) => current?.[field], value)
+    const rule = readRule(source)
+    if (typeof rule !== 'string' || readRule(item.input.source) !== rule) {
+      throw new Error(`${item.id}: 流程规则片段与书源快照不一致`)
+    }
+  }
+}
+
 export function validateCase(item) {
   if (!item || !['id', 'family', 'operation'].every((key) => typeof item[key] === 'string' && item[key].length > 0)
       || !item.input || typeof item.input !== 'object' || Array.isArray(item.input)
@@ -111,7 +141,7 @@ function validateFlowCase(item) {
   const origin = item.flowOrigin
   if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow' || item.allowedDifferences !== undefined
     || (item.input.chapterIndex ?? 0) < 0 || typeof source.bookSourceUrl !== 'string' || requestLimit < 1 || Object.keys(responses).length === 0
-    || !origin || (origin.sourceUrl ? !Array.isArray(origin.fields) || origin.fields.length === 0 : typeof origin.fixture !== 'string')) {
+    || !origin || (origin.collection !== undefined && !flowCorpora.has(origin.collection)) || (origin.sourceUrl ? !Array.isArray(origin.fields) || origin.fields.length === 0 : typeof origin.fixture !== 'string')) {
     throw new Error(`${item.id}: 流程来源、契约或请求预算无效`)
   }
   if (origin.ruleFrom !== undefined && (!URL.canParse(origin.ruleFrom?.sourceUrl) || typeof origin.ruleFrom?.field !== 'string')) {

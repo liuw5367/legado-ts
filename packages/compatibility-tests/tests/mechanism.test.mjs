@@ -304,3 +304,32 @@ test('TS 同一 worker 中书籍变量按流程传递并按案例隔离', async 
     await worker.close()
   }
 })
+
+test('YCK 来源索引保留排除项和同 URL 版本，案例必须匹配指定集合与原文', async () => {
+  const { loadFlowCorpus, verifyFlowCorpus, verifyFlowOrigin } = await import('../scripts/common.mjs')
+  const manifest = await readJson(join(root, 'corpus/yck-1298-manifest.json'))
+  const snapshot = await readFile(join(root, 'corpus', manifest.file))
+  const yck = await loadFlowCorpus('yck-1298')
+  assert.equal(manifest.entries.length, 15)
+  assert.equal(manifest.entries.filter(({ disposition }) => disposition !== 'excluded').length, 14)
+  assert.equal(manifest.entries.find(({ name }) => name.includes('起点中文网')).disposition, 'excluded')
+  assert.equal(manifest.entries.find(({ name }) => name === '文桑小说').relatedSnapshot.collection, 'yiove')
+  assert.deepEqual(yck.sources.map(({ bookSourceName }) => bookSourceName), ['思路客', '错层小说', '抖音小说'])
+  const [source] = yck.sources
+  const item = {
+    id: 'yck-test', input: { source }, flowOrigin: {
+      collection: 'yck-1298', sourceUrl: source.bookSourceUrl, fields: ['searchUrl'],
+    },
+  }
+  verifyFlowOrigin(item, yck)
+  assert.throws(() => verifyFlowOrigin({ ...item, input: { source: { ...source, searchUrl: source.searchUrl + ' ' } } }, yck), /来源与书源快照/u)
+  const fragment = {
+    ...item, flowOrigin: { collection: 'yck-1298', ruleFrom: { sourceUrl: source.bookSourceUrl, field: 'searchUrl' } },
+  }
+  verifyFlowOrigin(fragment, yck)
+  assert.throws(() => verifyFlowOrigin({ ...fragment, input: { source: { searchUrl: source.searchUrl + ' ' } } }, yck), /规则片段与书源快照/u)
+  const yiove = await loadFlowCorpus('yiove')
+  assert.throws(() => verifyFlowOrigin(item, yiove), /来源与书源快照/u)
+  assert.throws(() => verifyFlowCorpus(manifest, Buffer.concat([snapshot, Buffer.from(' ')])), /快照摘要变化/u)
+  await assert.rejects(loadFlowCorpus('../other'), /未知流程书源集合/u)
+})

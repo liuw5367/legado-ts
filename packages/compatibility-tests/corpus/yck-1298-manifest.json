@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "sourceUrl": "https://www.yck2026.fun/yuedu/shuyuans/json/id/1298.json",
+  "fetchedAt": "2026-11-07",
+  "rawSha256": "0a1a4d9d7d628aab56893f7e6c298bf5eb4036740e72798cc4c4ce3a9962a58b",
+  "count": 15,
+  "indexedCount": 14,
+  "file": "yck-1298-sources.json",
+  "sha256": "81a4e3363cd781624da88498cf562fe006976427a02c7493b0c0006f47187172",
+  "entries": [
+    {
+      "index": 0,
+      "name": "🎉起点中文网",
+      "sourceUrl": "https://www.qidian.com",
+      "definitionSha256": "e2867cac377a1683075c1c9c4338afd66864406cb81f657827844e581c0d5ddd",
+      "disposition": "excluded",
+      "reason": "按用户要求排除起点中文网"
+    },
+    {
+      "index": 1,
+      "name": "得奇小说网",
+      "sourceUrl": "https://www.deqixs.cc",
+      "definitionSha256": "5c18005cbfe46db7e853f309e78a30838cc92ab8f60a32999af3034596144e61",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 2,
+      "name": "篱笆好文学",
+      "sourceUrl": "https://m.libahao2.com",
+      "definitionSha256": "0623e1a8fb7b0cdb545a08c39f21f646a635afb83c6d727ab1408dd6d4e455aa",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 3,
+      "name": "速读谷",
+      "sourceUrl": "https://www.sudugu.cc",
+      "definitionSha256": "faf6f280cda38f30aa0680d1761ef4e2a2192574e67c4a6a6406c4bab614ec29",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 4,
+      "name": "小原文学网",
+      "sourceUrl": "https://www.min-yuan.com/",
+      "definitionSha256": "360837a80ac6c7b9d3f0f8acea8a9ba877227da528fe5c854f8671aeb8803af3",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 5,
+      "name": "思路客",
+      "sourceUrl": "https://www.szndz.com",
+      "definitionSha256": "601684c3ea031c62e0ae6e7bd85ae6e4e7271b7db2c0b719b9fc73ace3b80da7",
+      "disposition": "fixture",
+      "reason": "受控 GET bridge 生成 POST 选项并解析 JSONPath"
+    },
+    {
+      "index": 6,
+      "name": "错层小说",
+      "sourceUrl": "https://m.cuoceng.com/",
+      "definitionSha256": "234a1d54a13d2991151ba22767a7c94145ca9d03892b0d08373c59d22926d94d",
+      "disposition": "fixture",
+      "reason": "串行目录分页和正文分页"
+    },
+    {
+      "index": 7,
+      "name": "69書吧",
+      "sourceUrl": "69-明月",
+      "definitionSha256": "215c9af0ae126d9bf7c627b1ee8d79d6d3e13aefe2c251cd7bd740d596131b32",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 8,
+      "name": "文桑小说",
+      "sourceUrl": "http://www.wensang.net",
+      "definitionSha256": "0d0aec13cb995893998ddecd2b4cfaad817ce8d9ed9ac1fb93da11ddb0f45e12",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用",
+      "relatedSnapshot": {
+        "collection": "yiove",
+        "definitionSha256": "b4572f7e511cfa14c1bbef345cd0bd13a8f9066e53337b9be5e7fb42eea00b3e"
+      }
+    },
+    {
+      "index": 9,
+      "name": "全本小说网",
+      "sourceUrl": "https://www.quanben.io",
+      "definitionSha256": "24255a9e65c4e738d7fef0f5b842cd40f1f7758e3968999c2a8ced89627ff730",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 10,
+      "name": "抖音小说",
+      "sourceUrl": "https://www.douyinxs.com",
+      "definitionSha256": "1a4d804e9c3bd0c58a05e7ccde4e8b7a20047b2727abcfae66a8aba5927b8b8f",
+      "disposition": "fixture",
+      "reason": "POST 与 Jsoup 选择器、双分页组合"
+    },
+    {
+      "index": 11,
+      "name": "可乐小说",
+      "sourceUrl": "https://www.kelexs.com",
+      "definitionSha256": "f87f3e67c85f244b409bb21855461273599b25f4e530aefe704241c2a0035b66",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 12,
+      "name": "鬼吹灯",
+      "sourceUrl": "http://www.gdbzkz.com",
+      "definitionSha256": "5f25d7980b634972fdb4df6bf2495aad8fb4f70de4e401a19f47b8976b43fd58",
+      "disposition": "indexed",
+      "reason": "保留索引，按后续行为覆盖选用"
+    },
+    {
+      "index": 13,
+      "name": "起点小说",
+      "sourceUrl": "https://www.qidian.com/#on-toc-v2",
+      "definitionSha256": "aa3b739f4a7f9582024e8207940e1fab5b2637c405fd8e0bdf7b3e7c200443a3",
+      "disposition": "indexed",
+      "reason": "独立起点条目，保留索引，涉及真实宿主及大量脚本"
+    },
+    {
+      "index": 14,
+      "name": "魔丸小说",
+      "sourceUrl": "https://www.mowan.lol",
+      "definitionSha256": "52e689de10619b25b49f9742212528fa2cc20b4e3242bc91b8bbcaeb9b67bbfc",
+      "disposition": "indexed",
+      "reason": "登录库仅保留索引，后续只审查所需函数片段"
+    }
+  ]
+}
