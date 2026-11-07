@@ -388,7 +388,8 @@
         "json.string.object",
         "json.string.unquoted-key",
         "json.string.single-quote",
-        "json.string.trailing-comma"
+        "json.string.trailing-comma",
+        "json.string.escaped-operator"
       ]
     },
     {
@@ -419,7 +420,8 @@
         "json.list.object",
         "json.list.unquoted-key",
         "json.list.single-quote",
-        "json.list.trailing-comma"
+        "json.list.trailing-comma",
+        "json.list.escaped-operator"
       ]
     },
     {

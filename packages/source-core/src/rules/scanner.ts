@@ -45,7 +45,9 @@ export function scanTopLevel(input: string): ScanResult {
       continue
     }
     if (current === '\\') {
-      index += 1
+      // RuleAnalyzer 在分组外仍识别反斜杠后的组合符；分组/引号中的转义继续保护字面内容。
+      const pair = input.slice(index + 1, index + 3)
+      if (square !== 0 || round !== 0 || curly !== 0 || interpolation !== 0 || !['&&', '||', '%%'].includes(pair)) index += 1
       continue
     }
     if (current === '#' && next === '#' && interpolation === 0 && square === 0 && round === 0 && curly === 0) {

@@ -243,7 +243,7 @@
         "rule.split.escaped"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-original",
@@ -254,8 +254,12 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-ZgBRnu/report.json",
+        "output/run-yw78Ex/report.json",
+        "output/run-F7wifc/report.json"
+      ],
+      "resolution": "仅在分组外组合符前保留 RuleAnalyzer 的切分；引号/分组内和其他转义不变。实际 JSONPath 的反斜杠键组合由空结果修为甲/乙"
     },
     {
       "id": "E01",

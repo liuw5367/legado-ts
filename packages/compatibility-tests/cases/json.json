@@ -709,5 +709,37 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "json.string.escaped-operator",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.a\\&&$.b",
+      "content": "{\"a\\\\\": \"甲\", \"b\": \"乙\"}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.escaped-operator",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.a\\&&$.b",
+      "content": "{\"a\\\\\": \"甲\", \"b\": \"乙\"}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
   }
 ]
