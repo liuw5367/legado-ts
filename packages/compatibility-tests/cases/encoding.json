@@ -11,7 +11,9 @@
       "method": "java.util.Base64.Encoder.encodeToString(byte[])"
     },
     "tags": [
-      "normal"
+      "normal",
+      "edge",
+      "empty"
     ]
   },
   {
@@ -34,14 +36,15 @@
     "family": "encoding",
     "operation": "encoding.base64Encode",
     "input": {
-      "text": "\u4e2d\u6587\ud83d\ude00"
+      "text": "中文😀"
     },
     "reference": {
       "kind": "jdk-direct",
       "method": "java.util.Base64.Encoder.encodeToString(byte[])"
     },
     "tags": [
-      "normal"
+      "normal",
+      "edge"
     ]
   },
   {
@@ -71,7 +74,8 @@
       "method": "java.util.Base64.Decoder.decode(String)"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {
@@ -151,7 +155,7 @@
     "family": "encoding",
     "operation": "encoding.urlEncode",
     "input": {
-      "text": "a b+c/\u4e2d\u6587"
+      "text": "a b+c/中文"
     },
     "reference": {
       "kind": "jdk-direct",
@@ -211,7 +215,7 @@
     "family": "encoding",
     "operation": "encoding.urlDecode",
     "input": {
-      "text": "a b+c/\u4e2d\u6587"
+      "text": "a b+c/中文"
     },
     "reference": {
       "kind": "jdk-direct",
@@ -275,7 +279,9 @@
       "method": "java.security.MessageDigest.digest(byte[])"
     },
     "tags": [
-      "normal"
+      "normal",
+      "edge",
+      "empty"
     ],
     "expected": {
       "outcome": "return",
@@ -306,14 +312,15 @@
     "family": "encoding",
     "operation": "encoding.md5",
     "input": {
-      "text": "\u4e2d\u6587"
+      "text": "中文"
     },
     "reference": {
       "kind": "jdk-direct",
       "method": "java.security.MessageDigest.digest(byte[])"
     },
     "tags": [
-      "normal"
+      "normal",
+      "edge"
     ]
   },
   {
@@ -623,7 +630,7 @@
     "family": "encoding",
     "operation": "encoding.urlEncode",
     "input": {
-      "text": "a\ud800b\udc00\ud83d\ude00",
+      "text": "a\ud800b\udc00😀",
       "charset": "UTF-8"
     },
     "reference": {

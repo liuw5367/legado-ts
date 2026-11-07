@@ -378,7 +378,8 @@
       "method": "String.length()"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -556,7 +557,8 @@
       "method": "String.indexOf(String)"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -609,7 +611,8 @@
       "method": "String.indexOf(String,int)"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -762,7 +765,8 @@
       "method": "String.getBytes(String)"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {

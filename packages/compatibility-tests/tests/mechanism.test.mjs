@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
-import { compareCase, differences, summarize, assertProvenance } from '../scripts/compare.mjs'
+import { compareCase, differences, summarize, assertProvenance, measureCoverage } from '../scripts/compare.mjs'
 import { root, loadCases, sha256, stable, validateCase, validateResult, treeHash, readJson } from '../scripts/common.mjs'
 import { Worker } from '../scripts/worker.mjs'
 import { collectCorpusRules } from '../scripts/corpus-rules.mjs'
@@ -12,6 +12,21 @@ import { collectCorpusRules } from '../scripts/corpus-rules.mjs'
 const fixture = { id: 'test', family: 'mechanism', operation: 'encoding.md5', input: { text: 'a' }, reference: { kind: 'jdk-direct', method: 'test' }, tags: [] }
 const returned = (value) => ({ id: 'test', execution: 'completed', outcome: 'return', value })
 const thrown = (name, message) => ({ id: 'test', execution: 'completed', outcome: 'throw', error: { class: name, message } })
+
+test('方法覆盖只采用本次双端通过的维度证据', () => {
+  const basic = { ...fixture, tags: ['normal'] }
+  const edge = { ...fixture, id: 'edge', tags: ['boundary'] }
+  const entries = [{ caseIds: [basic.id, edge.id], requiredDimensions: ['normal', 'edge', 'error-or-empty'] }]
+  const success = returned('ok')
+  const empty = { ...returned(''), id: edge.id }
+  const cases = [basic, edge]
+  const actual = measureCoverage(entries, cases, [compareCase(basic, success, success), compareCase(edge, empty, empty)], [success, empty])[0]
+  assert.equal(actual.status, 'verified')
+  assert.deepEqual(actual.dimensionEvidence, { normal: [basic.id], edge: [edge.id], 'error-or-empty': [edge.id] })
+  const gap = measureCoverage(entries, [basic], [compareCase(basic, success, success)], [success])[0]
+  assert.equal(gap.status, 'not-run')
+  assert.deepEqual(gap.missingDimensions, ['edge', 'error-or-empty'])
+})
 
 test('固定书源规则按原文摘要分组，并保留每个字段及可执行案例来源', async () => {
   const inventory = await collectCorpusRules()

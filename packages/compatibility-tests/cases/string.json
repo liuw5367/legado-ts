@@ -282,7 +282,8 @@
       "method": "java.lang.String.replaceFirst(String,String)"
     },
     "tags": [
-      "normal"
+      "normal",
+      "edge"
     ]
   },
   {
@@ -370,7 +371,8 @@
       "method": "java.util.regex.Pattern.quote(String)"
     },
     "tags": [
-      "normal"
+      "normal",
+      "edge"
     ]
   },
   {
@@ -385,7 +387,8 @@
       "method": "java.util.regex.Pattern.quote(String)"
     },
     "tags": [
-      "normal"
+      "normal",
+      "empty"
     ]
   },
   {
@@ -415,7 +418,8 @@
       "method": "java.lang.Long.parseLong(String)"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {

@@ -604,7 +604,8 @@
       "method": "AnalyzeByJSonPath.getStringList → getString"
     },
     "tags": [
-      "edge"
+      "edge",
+      "continuation"
     ],
     "expected": {
       "outcome": "return",
@@ -741,5 +742,26 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "json.read.empty-filter",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"items\":[{\"n\":1,\"name\":\"甲\"}]}",
+      "rule": "$.items[?(@.n > 10)].name"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)"
+    },
+    "tags": [
+      "edge",
+      "empty"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": []
+    }
   }
 ]

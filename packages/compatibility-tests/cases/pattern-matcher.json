@@ -25,7 +25,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -50,7 +52,8 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -73,7 +76,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -98,7 +103,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -121,7 +128,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -142,7 +151,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -196,7 +207,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -219,7 +232,8 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -242,7 +256,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -265,7 +281,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -288,7 +306,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -311,7 +331,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -334,7 +356,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -357,7 +381,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -380,7 +406,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -403,7 +431,9 @@
       "method": "Pattern.compile / Matcher"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal",
+      "continuation"
     ]
   },
   {
@@ -654,6 +684,125 @@
       ],
       "tsMessageIncludes": [
         "__LEGADO_PATTERN__"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.matchesMultiline",
+    "operation": "pattern.matcher",
+    "family": "pattern",
+    "input": {
+      "pattern": "a",
+      "text": "a\nb",
+      "flags": 8,
+      "actions": [
+        "[\"matches\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile(String,int) / Matcher"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        false
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.matchesAlternative",
+    "operation": "pattern.matcher",
+    "family": "pattern",
+    "input": {
+      "pattern": "a|ab",
+      "text": "ab",
+      "flags": 0,
+      "actions": [
+        "[\"matches\"]",
+        "[\"group\", 0]",
+        "[\"start\", 0]",
+        "[\"end\", 0]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile(String,int) / Matcher"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true,
+        "ab",
+        0,
+        2
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.endBounds",
+    "operation": "pattern.matcher",
+    "family": "pattern",
+    "input": {
+      "pattern": "a",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"end\", 2]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile(String,int) / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-index",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "No group"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.replaceEmpty",
+    "operation": "pattern.matcher",
+    "family": "pattern",
+    "input": {
+      "pattern": "a",
+      "text": "",
+      "flags": 0,
+      "actions": [
+        "[\"replaceAll\", \"x\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile(String,int) / Matcher"
+    },
+    "tags": [
+      "edge",
+      "empty"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        ""
       ]
     }
   }

@@ -72,7 +72,8 @@
     },
     "tags": [
       "corpus",
-      "normal"
+      "normal",
+      "edge"
     ],
     "origin": {
       "file": "corpus/yiove-11-sources.json",
@@ -212,7 +213,8 @@
     },
     "tags": [
       "corpus",
-      "normal"
+      "normal",
+      "edge"
     ],
     "origin": {
       "file": "corpus/yiove-11-sources.json",

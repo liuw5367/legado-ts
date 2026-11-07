@@ -15,7 +15,8 @@
       "method": "java.util.Base64"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -91,7 +92,8 @@
       "method": "java.util.Base64"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {
@@ -184,7 +186,8 @@
       "method": "java.util.Base64"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {
@@ -341,7 +344,8 @@
       "method": "java.util.Base64"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -417,7 +421,8 @@
       "method": "java.util.Base64"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {
@@ -510,7 +515,8 @@
       "method": "java.util.Base64"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {
@@ -684,7 +690,8 @@
       "method": "java.util.Base64"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {
@@ -827,7 +834,8 @@
       "method": "MessageDigest.digest(byte[])"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -844,7 +852,8 @@
       "method": "MessageDigest.digest(byte[])"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {
@@ -895,7 +904,8 @@
       "method": "MessageDigest.digest(byte[])"
     },
     "tags": [
-      "edge"
+      "edge",
+      "empty"
     ]
   },
   {
@@ -912,7 +922,8 @@
       "method": "MessageDigest.digest(byte[])"
     },
     "tags": [
-      "edge"
+      "edge",
+      "normal"
     ]
   },
   {

@@ -253,3 +253,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C4 字符集往返已验证。对 getBytes 后以原字符集构造 String 增加 GBK 中文、GBK 无法表示字符和 UTF-8 空输入，保留原 UTF-8 代理对样本。124 个字符串族用例一致（output/run-ewnO46），覆盖表单独登记字节数组构造签名。
 
 - C1 参数反向验证已补齐。同一输入切换 UTF-8/GBK、相对 URL 基准、正则链第二段和 split limit 后得到不同的独立断言结果。纯 JVM 另证实 code=false/true 的引号转义差异，独立 code 模式作为内部观察关联实际 JSON 规则正例。475 个 API 一致、2 个内部观察项单列（output/run-yVxuRu），21 项机制检查通过。
+
+- 覆盖审计改为根据本次双端通过结果生成方法维度证据与缺失项。C3 拆分 Pattern.compile 及各 Matcher 重载，新增全文多行边界、备选分支、end 越界与空替换输入。29 个 Matcher 用例修复前 28 一致，唯一差异为 MULTILINE 下 matches() 错认部分行（output/run-iaq3UV），登记 C3-MATCHER-ANCHOR。

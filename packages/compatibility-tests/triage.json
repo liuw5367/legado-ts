@@ -790,6 +790,23 @@
       "evidence": [
         "output/run-yVxuRu/report.json"
       ]
+    },
+    {
+      "id": "C3-MATCHER-ANCHOR",
+      "caseIds": [
+        "pattern.matcher.matchesMultiline"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "Matcher.matches()"
+      },
+      "tsEntry": "SourceRuleHost → Pattern.matcher.matches",
+      "evidence": [
+        "output/run-iaq3UV/report.json"
+      ]
     }
   ]
 }

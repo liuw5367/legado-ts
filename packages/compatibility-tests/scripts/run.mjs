@@ -4,7 +4,7 @@ import { spawnSync, execFileSync } from 'node:child_process'
 import { root, repository, readJson, sha256, stable, git, treeHash, loadCases } from './common.mjs'
 import { prepare } from './prepare-jvm.mjs'
 import { Worker } from './worker.mjs'
-import { compareCase, summarize, assertProvenance } from './compare.mjs'
+import { compareCase, summarize, assertProvenance, measureCoverage } from './compare.mjs'
 
 const options = {}
 try {
@@ -82,15 +82,13 @@ try {
     const comparisons = cases.map((item, index) => ({ ...compareCase(item, results.jvm[index], results.ts[index]), operation: item.operation, reference: item.reference, ...(item.origin ? { origin: item.origin } : {}) }))
     const summary = summarize(comparisons)
     const coverage = await readJson(join(root, 'coverage.json'))
-    const selectedIds = new Set(cases.map((c) => c.id))
-    const coverageReport = coverage.entries.map((entry) => {
-      const relevant = comparisons.filter((c) => entry.caseIds.includes(c.id))
-      const allSelected = entry.caseIds.every((id) => selectedIds.has(id))
-      return { ...entry, selected: relevant.length, status: !allSelected ? 'not-run' : relevant.some((c) => c.status === 'runner-failed') ? 'blocked' : relevant.some((c) => c.status === 'unsupported') ? 'unsupported' : relevant.some((c) => c.status === 'different') ? 'different' : relevant.some((c) => c.contractScope === 'reference-observation') ? 'reference-observation' : relevant.some((c) => c.errorEquivalent) ? 'error-equivalent' : relevant.some((c) => c.status === 'allowed-difference') ? 'allowed-difference' : 'verified' }
-    })
+    const coverageReport = measureCoverage(coverage.entries, cases, comparisons, results.jvm)
     await writeFile(join(directory, 'coverage.json'), JSON.stringify({ entries: coverageReport }, null, 2) + '\n')
     await writeFile(join(directory, 'report.json'), JSON.stringify({ metadata: base, summary, cases: comparisons }, null, 2) + '\n')
     const lines = ['# JVM / TS 差异报告', '', `- 总数：${summary.total}`, `- API 契约案例：${summary.api.total}；内部观察：${summary.observations}`, `- 原始差异：${summary.rawDifferent}；异常语义等价：${summary.errorEquivalent}`, `- 一致：${summary.equal}`, `- 差异：${summary.different}`, `- 允许差异：${summary['allowed-difference']}`, `- 未支持：${summary.unsupported}`, `- 执行失败：${summary['runner-failed']}`, '', '| 案例 | 功能族 | 状态 |', '| --- | --- | --- |', ...comparisons.map((c) => `| ${c.id} | ${c.family} | ${c.status} |`), '', '逐字段差异、双方原始结果、异常和版本记录见同目录 JSON 文件。', '']
+    lines.push('## 方法覆盖', '', '| 方法 | 状态 | 缺少维度 |', '| --- | --- | --- |')
+    for (const entry of coverageReport) lines.push(`| ${entry.method.replaceAll('|', '\\|')} | ${entry.status} | ${entry.missingDimensions.join(', ') || '—'} |`)
+    lines.push('')
     for (const item of comparisons.filter((c) => c.status !== 'equal')) {
       lines.push(`## ${item.id}`, '', `操作：${item.operation}；参考：${item.reference.kind} / ${item.reference.method}`, '', '```json', JSON.stringify(item, null, 2), '```', '')
     }

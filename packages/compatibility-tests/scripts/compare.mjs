@@ -56,6 +56,34 @@ export function compareCase(item, jvm, ts) {
 export function assertProvenance(metadata, expected) {
   if (metadata.schemaVersion !== 1 || !metadata.inputHash || !metadata.implementationHash || metadata.inputHash !== expected.inputHash || metadata.implementationHash !== expected.implementationHash) throw new Error('产物版本或输入摘要不匹配，拒绝比较过期输出')
 }
+
+export function measureCoverage(entries, cases, comparisons, jvmResults) {
+  const selected = new Map(cases.map((item, index) => [item.id, { item, comparison: comparisons[index], jvm: jvmResults[index] }]))
+  return entries.map((entry) => {
+    const relevant = entry.caseIds.map((id) => selected.get(id)).filter(Boolean)
+    const passed = relevant.filter(({ comparison }) => comparison.contractScope === 'api' && comparison.status === 'equal')
+    const dimensionEvidence = Object.fromEntries(entry.requiredDimensions.map((dimension) => [dimension, passed.filter(({ item, jvm }) => {
+      if (dimension === 'edge') return item.tags.includes('edge') || item.tags.includes('boundary')
+      if (dimension === 'error-or-empty') {
+        const value = jvm.value
+        return jvm.outcome === 'throw' || item.tags.includes('empty') || value === '' || value === null || (Array.isArray(value) && value.length === 0)
+      }
+      return item.tags.includes(dimension)
+    }).map(({ item }) => item.id)]))
+    const missingDimensions = entry.requiredDimensions.filter((name) => dimensionEvidence[name].length === 0)
+    const has = (predicate) => relevant.some(({ comparison }) => predicate(comparison))
+    let status = 'verified'
+    if (relevant.length !== entry.caseIds.length) status = 'not-run'
+    else if (has((c) => c.status === 'runner-failed')) status = 'blocked'
+    else if (has((c) => c.contractScope === 'reference-observation')) status = 'reference-observation'
+    else if (has((c) => c.status === 'unsupported')) status = 'unsupported'
+    else if (has((c) => c.status === 'different')) status = 'different'
+    else if (has((c) => c.status === 'allowed-difference')) status = 'allowed-difference'
+    else if (missingDimensions.length > 0) status = 'incomplete'
+    else if (has((c) => c.errorEquivalent)) status = 'error-equivalent'
+    return { ...entry, selected: relevant.length, status, dimensionEvidence, missingDimensions }
+  })
+}
 export function summarize(cases) {
   const counts = Object.fromEntries(['equal', 'different', 'allowed-difference', 'unsupported', 'runner-failed'].map((status) => [status, cases.filter((c) => c.status === status).length]))
   const api = cases.filter((c) => c.contractScope !== 'reference-observation')
