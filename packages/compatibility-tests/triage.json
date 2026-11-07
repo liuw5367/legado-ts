@@ -704,7 +704,7 @@
         "corpus.source-6.ruleToc.chapterList"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -712,7 +712,8 @@
       },
       "tsEntry": "SourceRuleHost → Java node string conversion",
       "evidence": [
-        "output/run-m2rBgq/report.json"
+        "output/run-m2rBgq/report.json",
+        "output/run-3iE88H/report.json"
       ]
     },
     {

@@ -241,3 +241,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C7-JS-REPLACE 已修复。脚本先插值，再分离 ## 后缀，运行后按原正则守卫替换。工作流字段明确按文本结果传入脚本，保留节点阶段的列表。语料正例实际触发替换并通过（output/run-DZL2TJ），161 项宿主及流程回归通过。两条章节脚本进入 JS 后揭示 toNumChapter 返回范围差异（output/run-WGhS0R），作为独立问题继续。
 
 - C7-CHAPTER-NUMBER 已修复。toNumChapter 匹配后仅返回转换后的第…章片段，未匹配保持输入。6 个双端用例修复前 3 项不一致（output/run-Lz4QiH），修复后全部一致（output/run-tzLaZT）。119 项宿主回归通过，旧断言按固定上游行为更新。
+
+- C7-NODE-STRING 已修复。桥接元素转字符串读取外部 HTML，text() 保持文本读取。真实目录脚本按 dt/dd 标签筛选成功，31 个语料用例一致（output/run-3iE88H），161 项宿主及流程回归通过。嵌套 java.getString/getElements 的前置规则结果绑定仍有独立差异，需按相同脚本验证。
