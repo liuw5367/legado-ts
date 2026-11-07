@@ -50,7 +50,10 @@
         "pattern.matcher",
         "encoding.java64",
         "encoding.digest",
-        "collection.sequence"
+        "collection.sequence",
+        "xpath.string",
+        "xpath.list",
+        "xpath.nodes"
       ]
     },
     "input": {
@@ -1096,6 +1099,102 @@
                 "items": {
                   "type": "string"
                 }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "xpath.string"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "rule"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
+              },
+              "attribute": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "xpath.list"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "rule"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
+              },
+              "attribute": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "xpath.nodes"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "rule"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
+              },
+              "attribute": {
+                "type": "string"
               }
             },
             "additionalProperties": false

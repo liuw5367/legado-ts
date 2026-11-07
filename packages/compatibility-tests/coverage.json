@@ -1131,6 +1131,72 @@
         "collection.sequence.listNormal",
         "collection.sequence.subClear"
       ]
+    },
+    {
+      "operation": "xpath.string",
+      "method": "AnalyzeByXPath.string",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → xpath.string",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "xpath.string.text",
+        "xpath.string.attribute",
+        "xpath.string.empty",
+        "xpath.string.index",
+        "xpath.string.concat",
+        "xpath.string.fallback",
+        "xpath.string.count",
+        "xpath.string.elementString",
+        "xpath.string.invalidString"
+      ]
+    },
+    {
+      "operation": "xpath.list",
+      "method": "AnalyzeByXPath.list",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → xpath.list",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "xpath.list.text",
+        "xpath.list.attribute",
+        "xpath.list.empty",
+        "xpath.list.index",
+        "xpath.list.concat",
+        "xpath.list.fallback",
+        "xpath.list.count",
+        "xpath.list.table",
+        "xpath.list.xmlCase",
+        "xpath.list.elementList",
+        "xpath.list.xmlAttribute",
+        "xpath.list.interleave",
+        "xpath.list.invalid"
+      ]
+    },
+    {
+      "operation": "xpath.nodes",
+      "method": "AnalyzeByXPath.nodes",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → xpath.nodes",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "xpath.nodes.elements",
+        "xpath.nodes.nodesEmpty",
+        "xpath.nodes.spaces",
+        "xpath.nodes.selfClosing",
+        "xpath.nodes.emptyRule"
+      ]
     }
   ]
 }

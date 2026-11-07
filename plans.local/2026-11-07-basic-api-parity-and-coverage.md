@@ -217,3 +217,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C5 首批 18 个序列案例已建立；首批含列表及视图的 16 例通过（output/run-IOuTRv / run-BzKP0n），新增 Map 的 null 与字符串 null 区分、方法同名键复现 2 项差异。根因是键强制 String 且数据与方法共用对象，登记 C5-MAPKEY。
 
 - C5-MAPKEY 已修复：数据与方法分离，null 键独立于字符串 null，保持字符串属性访问及 Map 视图回写。18 个集合序列行为一致（output/run-ehsyMN），全量 361 个 API 一致、1 个内部观察未支持（output/run-UVSWhV）；119 项宿主回归、18 项机制测试和类型检查通过。没有引入并发或 fail-fast 语义，C6/C7 及最终逐方法覆盖审计仍待完成。
+
+- C6 XPath 参考端已接入原样固定源码；TextUtils.join 仅测试适配，4 项 JVM 机制测试含独立 join 边界通过。27 例校准后 23 一致、4 差异（output/run-5xBQqO）：元素字符串序列化、自闭合标签、空节点表达式。节点接口直接调用真实 XPathParserAdapter，与上游解析器接口比较，避免套用 AnalyzeRule 的空规则保持结果语义；非法表达式双端失败按窄错误映射比较，保留原始差异。

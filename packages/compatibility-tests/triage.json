@@ -584,6 +584,27 @@
         "output/run-UVSWhV/report.json",
         "output/run-ehsyMN/report.json"
       ]
+    },
+    {
+      "id": "C6-XPATH",
+      "caseIds": [
+        "xpath.string.elementString",
+        "xpath.list.elementList",
+        "xpath.nodes.selfClosing",
+        "xpath.nodes.emptyRule"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByXPath"
+      },
+      "tsEntry": "SourceRuleHost → XPathParserAdapter",
+      "evidence": [
+        "output/run-ZtCFTs/report.json",
+        "output/run-5xBQqO/report.json"
+      ]
     }
   ]
 }

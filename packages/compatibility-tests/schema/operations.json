@@ -315,5 +315,38 @@
       "kind": "string",
       "actions": "strings"
     }
+  },
+  "xpath.string": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string",
+      "attribute": "string"
+    }
+  },
+  "xpath.list": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string",
+      "attribute": "string"
+    }
+  },
+  "xpath.nodes": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string",
+      "attribute": "string"
+    }
   }
 }

@@ -1,0 +1,509 @@
+[
+  {
+    "id": "xpath.string.text",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//li/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.attribute",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//li/@id",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.empty",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//missing/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.index",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//li[2]/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.concat",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//li[1]/@id&&//li[2]/@id",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.fallback",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//missing/text()||//li/@id",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.count",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//li)",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.text",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//li/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.attribute",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//li/@id",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.empty",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//missing/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.index",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//li[2]/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.concat",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//li[1]/@id&&//li[2]/@id",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.fallback",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//missing/text()||//li/@id",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.count",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "count(//li)",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.nodes.elements",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//li",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.table",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//td/text()",
+      "content": "<td>一</td><td>二</td>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.xmlCase",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//Book/Title/text()",
+      "content": "<?xml version=\"1.0\"?><Root><Book><Title>大写</Title></Book><book><title>小写</title></book></Root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.nodes.nodesEmpty",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//missing",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.string.elementString",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//li",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.elementList",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//li",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.nodes.spaces",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//p",
+      "content": "<p> a   b <b> c </b> d\n e </p>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.nodes.selfClosing",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//item",
+      "content": "<box><item/><item>next</item></box>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.xmlAttribute",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//Book/@ID",
+      "content": "<?xml version=\"1.0\"?><Root><Book ID=\"A\" id=\"b\"/></Root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.interleave",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//li/@id%%//li/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "xpath.list.invalid",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//*[",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-syntax",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "syntax of your xpath"
+      ],
+      "tsMessageIncludes": [
+        "规则分组或插值不平衡"
+      ]
+    }
+  },
+  {
+    "id": "xpath.string.invalidString",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//*[",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-syntax",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "syntax of your xpath"
+      ],
+      "tsMessageIncludes": [
+        "规则分组或插值不平衡"
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.emptyRule",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements"
+    },
+    "tags": [
+      "edge"
+    ]
+  }
+]

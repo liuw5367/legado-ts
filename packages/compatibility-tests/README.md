@@ -38,7 +38,7 @@ CLI 参数错误、空选择、来源失败或执行不完整退出 2；行为�
 
 - `jdk-direct`：执行 JDK String、Pattern、Base64、URL、MessageDigest 等 API，只证明该 API，不扩大为 Android 包装器兼容。
 - `upstream-original`：直接编译原源码，目前为 RuleAnalyzer。
-- `upstream-adapted`：原算法保持原样，额外提供无运行行为的 Keep 注解或 stderr 调试日志适配；当前包括 Regex、CSS、JSONPath。
+- `upstream-adapted`：原算法保持原样，额外提供无运行行为的 Keep 注解或 stderr 调试日志适配；当前包括 Regex、CSS、JSONPath、XPath。XPath 额外使用仅含 Iterable join 的 TextUtils 测试适配，其空集合、null、Unicode 和顺序语义由独立 JVM 测试校验；适配不包含 Android 运行库。
 
 TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 JsonPathParserAdapter。JSON 字符串/列表通过真实 Java bridge 转换；CSS 字段列表按对应接口合并或保留条目顺序；正则链直接调用实际 java.getElement/getElements，覆盖首个与全部匹配及失败终态。不能在参考执行器中重新实现待比较算法。独立 `innerRule` 在 TS 无对应入口，当前显式报告 unsupported；JSONPath 内嵌规则另有双端案例。
 

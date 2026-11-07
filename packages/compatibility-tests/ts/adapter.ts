@@ -1,7 +1,8 @@
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
+import { XPathParserAdapter } from '../../source-node/src/xpath.ts'
 import { JsonPathParserAdapter } from '../../source-node/src/jsonpath.ts'
-import type { NormalizedSource, WorkflowRuleOutput } from '../../source-core/src/index.ts'
+import type { NormalizedSource, WorkflowRuleOutput, ParserNode } from '../../source-core/src/index.ts'
 
 interface CaseInput {
   operation: string
@@ -90,6 +91,16 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'json.read': return new JsonPathParserAdapter().evaluate(JSON.parse(str('content')), str('rule'))
     case 'json.string': return script(host, `return java.getString(${JSON.stringify('@json:' + str('rule'))})`, i.content)
     case 'json.list': return script(host, `return java.getStringList(${JSON.stringify('@json:' + str('rule'))})`, i.content)
+    case 'xpath.string': return script(host, `return java.getString(${JSON.stringify('@xpath:' + str('rule'))})`, i.content)
+    case 'xpath.list': return script(host, `return java.getStringList(${JSON.stringify('@xpath:' + str('rule'))})`, i.content)
+    case 'xpath.nodes': {
+      const parser = new XPathParserAdapter()
+      const document = parser.parse(str('content'))
+      const nodes = parser.evaluate(document, str('rule'))
+      if (nodes === null) return null
+      if (!Array.isArray(nodes)) throw new UnsupportedOperation('节点案例必须选择节点序列')
+      return nodes.map((item) => { const node = item as ParserNode; return { tag: document.describe(node).tagName, text: document.read(node, 'text'), attribute: document.attr(node, str('attribute')) ?? '' } })
+    }
     case 'css.string':
     case 'css.list':
     {

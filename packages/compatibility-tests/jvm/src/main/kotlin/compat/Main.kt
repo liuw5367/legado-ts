@@ -6,6 +6,7 @@ import com.google.gson.JsonParser
 import com.jayway.jsonpath.Configuration
 import com.jayway.jsonpath.JsonPath
 import com.jayway.jsonpath.Option
+import io.legado.app.model.analyzeRule.AnalyzeByXPath
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
 import io.legado.app.model.analyzeRule.AnalyzeByJSonPath
 import io.legado.app.model.analyzeRule.AnalyzeByRegex
@@ -133,6 +134,12 @@ private fun execute(item: JsonObject): Any? {
                 "path" to url.path, "file" to url.file, "query" to url.query, "ref" to url.ref,
                 "authority" to url.authority, "userInfo" to url.userInfo)
         }
+        "xpath.string" -> AnalyzeByXPath(text("content")).getString(text("rule"))
+        "xpath.list" -> AnalyzeByXPath(text("content")).getStringList(text("rule"))
+        "xpath.nodes" -> AnalyzeByXPath(text("content")).getElements(text("rule"))?.map { node ->
+            val element = node.asElement()
+            mapOf("tag" to element.tagName(), "text" to element.text(), "attribute" to element.attr(text("attribute")))
+        }
         "css.string" -> AnalyzeByJSoup(text("content")).getString(text("rule"))
         "css.list" -> AnalyzeByJSoup(text("content")).getStringList(text("rule"))
         "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
@@ -143,7 +150,16 @@ private fun execute(item: JsonObject): Any? {
     }
 }
 
-fun main() {
+fun main(args: Array<String>) {
+    if (args.contentEquals(arrayOf("--test-join"))) {
+        println(gson.toJson(listOf(
+            android.text.TextUtils.join(",", emptyList<Any>()),
+            android.text.TextUtils.join("|", listOf(null, "中文", "😀")),
+            android.text.TextUtils.join("/", listOf(2, 1)),
+            android.text.TextUtils.join(null, listOf("a", "b"))
+        )))
+        return
+    }
     System.setProperty("file.encoding", "UTF-8")
     generateSequence(::readLine).forEach { line ->
         val item = JsonParser.parseString(line).asJsonObject

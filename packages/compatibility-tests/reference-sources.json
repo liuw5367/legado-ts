@@ -27,6 +27,10 @@
     {
       "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByJSonPath.kt",
       "sha256": "ee5ee9ebc95b4f5d6e2d459d6f727fccd10a6bd6a36ce872547f6cee5684109d"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByXPath.kt",
+      "sha256": "b6ee22cc3242313f8d5e3758dc93ff06891eeec7b3ab9ee9267ebac11145d842"
     }
   ],
   "adaptations": [
@@ -37,6 +41,10 @@
     {
       "file": "jvm/src/main/kotlin/io/legado/app/utils/Debug.kt",
       "reason": "原函数异常处理保持原样，调试日志仅输出 stderr，不污染 JSON 结果协议"
+    },
+    {
+      "file": "jvm/src/main/kotlin/android/text/TextUtils.kt",
+      "reason": "仅提供 XPath getString 所需的 Iterable join；保持顺序、分隔符、null/toString 语义，独立测试；不引入 Android 运行库"
     }
   ]
 }

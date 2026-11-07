@@ -4,13 +4,18 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { prepare } from '../scripts/prepare-jvm.mjs'
 import { root } from '../scripts/common.mjs'
+import { spawnSync } from 'node:child_process'
 import { Worker } from '../scripts/worker.mjs'
 let worker
+let java
+let javaClasspath
 before(async () => {
   const build = await prepare()
   const classpath = (await readFile(join(root, 'jvm/target/classpath.txt'), 'utf8')).trim()
   assert.ok(!classpath.includes('android.jar'))
   assert.ok(!classpath.toLowerCase().includes('robolectric'))
+  java = build.java
+  javaClasspath = `${join(root, 'jvm/target/classes')}:${classpath}`
   worker = new Worker(build.java, ['-cp', `${join(root, 'jvm/target/classes')}:${classpath}`, 'compat.MainKt'])
 })
 after(async () => { await worker?.close() })
@@ -29,4 +34,10 @@ test('参考端保持 null 与超过 JS 安全范围的整数', async () => {
   assert.equal(empty.value, null)
   const long = await worker.run({ id: 'long', operation: 'integer.parseLong', input: { text: '9223372036854775807' } })
   assert.deepEqual(long.value, { type: 'integer', decimal: '9223372036854775807' })
+})
+
+test('XPath 专用 join 适配保持空集合、null、Unicode 和顺序', () => {
+  const result = spawnSync(java, ['-cp', javaClasspath, 'compat.MainKt', '--test-join'], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(JSON.parse(result.stdout), ['', 'null|中文|😀', '2/1', 'anullb'])
 })
