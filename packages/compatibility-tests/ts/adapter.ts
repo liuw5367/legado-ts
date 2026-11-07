@@ -102,6 +102,10 @@ export async function execute(item: CaseInput): Promise<unknown> {
       return nodes.map((item) => { const node = item as ParserNode; return { tag: document.describe(node).tagName, text: document.read(node, 'text'), attribute: document.attr(node, str('attribute')) ?? '' } })
     }
     case 'css.nodes': return script(host, `return java.getElements(${json('rule')}).toArray().map(function(n){return {tag:n.tagName(),text:n.text(),id:n.idName()}})`, i.content)
+    case 'corpus.cssString': {
+      const context = i.contextRule === undefined ? '' : `,java.getElements(${json('contextRule')}).first()`
+      return script(host, `return java.getString(${json('rule')}${context})`, i.content)
+    }
     case 'css.string':
     case 'css.list':
     {

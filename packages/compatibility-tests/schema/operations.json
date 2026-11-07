@@ -359,5 +359,16 @@
       "content": "string",
       "rule": "string"
     }
+  },
+  "corpus.cssString": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string",
+      "contextRule": "string"
+    }
   }
 }

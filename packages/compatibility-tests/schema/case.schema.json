@@ -54,7 +54,8 @@
         "xpath.string",
         "xpath.list",
         "xpath.nodes",
-        "css.nodes"
+        "css.nodes",
+        "corpus.cssString"
       ]
     },
     "input": {
@@ -1227,6 +1228,38 @@
                 "type": "string"
               },
               "rule": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "corpus.cssString"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "rule"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
+              },
+              "contextRule": {
                 "type": "string"
               }
             },

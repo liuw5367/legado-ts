@@ -1,0 +1,264 @@
+[
+  {
+    "id": "corpus.source-1.ruleSearch.coverUrl",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "@css:p:nth-of-type(1) a@href##.*/book/((\\d+)\\d{3})\\.html.*##http://www.xianqihaotianmi.org/files/article/image/$2/$1/$1s.jpg",
+      "content": "<p><a href=\"/book/123456.html\">书名</a></p>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 1,
+      "field": "ruleSearch.coverUrl"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "http://www.xianqihaotianmi.org/files/article/image/123/123456/123456s.jpg"
+    }
+  },
+  {
+    "id": "corpus.source-2.ruleSearch.kind",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "span.3:2:0@text##\\s.*",
+      "content": "<span>甲 额外</span><span>乙</span><span>丙 多余</span><span>丁 杂项</span>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 2,
+      "field": "ruleSearch.kind"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "丁"
+    }
+  },
+  {
+    "id": "corpus.source-2.ruleBookInfo.intro",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": ".desc-short@text##(^|[。！？]+[”」）】]?)##$1<br>",
+      "content": "<p class=\"desc-short\">甲。乙！丙</p>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 2,
+      "field": "ruleBookInfo.intro"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "<br>甲。<br>乙！<br>丙"
+    }
+  },
+  {
+    "id": "corpus.source-3.ruleSearch.bookUrl",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "tag.h1@tag.a@href||tag.h3@tag.a@href###dir",
+      "content": "<h3><a href=\"/book/42#dir\">书名</a></h3>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 3,
+      "field": "ruleSearch.bookUrl"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "/book/42"
+    }
+  },
+  {
+    "id": "corpus.source-3.ruleContent.content",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "class.con@html##求书、催更、报错.*?deqixs",
+      "content": "<div class=\"con\">正文求书、催更、报错deqixs</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 3,
+      "field": "ruleContent.content"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "<div class=\"con\">正文</div>"
+    }
+  },
+  {
+    "id": "corpus.source-1.ruleContent.replaceRegex",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "##(?:&nbsp;|\\u00A0){4}##",
+      "content": "起    末"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 1,
+      "field": "ruleContent.replaceRegex"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "起末"
+    }
+  },
+  {
+    "id": "corpus.source-5.ruleToc.chapterName",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "text##(?<=\\d章\\h)\\d+(\\+\\d+)?[，、]|(?<!^|[章卷部集]\\h?|[零一二三四五六七八九十][、\\h])[（［【\\{\\[\\(](?![一二三四五六七八九十]{1,3}\\W$|\\d{1,3}\\D$|[上中下完终续]\\W)[^（［【\\{\\[\\(]+|^(?=请\\w{0,2}假|解释|上架|推封|新书)\\S{2,}$",
+      "content": "<a>第12章 345、真正标题</a>",
+      "contextRule": "@css:a"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 5,
+      "field": "ruleToc.chapterName"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "第12章 真正标题"
+    }
+  },
+  {
+    "id": "corpus.source-7.ruleBookInfo.lastChapter",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "class.info@class.last.1@tag.a@text&&class.info@class.last.0@text##更新时间：|..\\:.*",
+      "content": "<div class=\"info\"><div class=\"last\">更新时间：昨天</div><div class=\"last\"><a>第9章</a></div></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 7,
+      "field": "ruleBookInfo.lastChapter"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "第9章\n昨天"
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleBookInfo.intro",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "🕰  更新时间：\n{{@@.tabvalue@table@tbody@td.2@text##.*：|\\s.*}}\n📜  内容简介：\n{{@@.tabvalue@div@textNodes##本书尚无公告.|\\\\n}}##(^|[。！？……；]+[”」）】]?)##$1<br>",
+      "content": "<div class=\"tabvalue\"><table><tbody><tr><td>书名</td><td>作者</td><td>更新时间：昨天</td></tr></tbody></table><div>第一句。第二句</div></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleBookInfo.intro"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "<br>🕰  更新时间：\n昨天\n📜  内容简介：\n第一句。<br>第二句"
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleToc.updateTime",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "更新时间：{{@@title##更新，共##·章节字数：}}",
+      "content": "<a title=\"昨日更新，共4500\">章名</a>",
+      "contextRule": "@css:a"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS field composition / AnalyzeByJSoup.getString / Kotlin Regex"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleToc.updateTime"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "更新时间：昨日·章节字数：4500"
+    }
+  }
+]

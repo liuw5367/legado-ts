@@ -655,6 +655,23 @@
         "output/run-ORetHs/report.json",
         "output/run-mMvuUE/report.json"
       ]
+    },
+    {
+      "id": "C7-REGEX-HSPACE",
+      "caseIds": [
+        "corpus.source-5.ruleToc.chapterName"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeRule CSS field composition and Kotlin Regex"
+      },
+      "tsEntry": "SourceRuleHost → compileSourcePattern",
+      "evidence": [
+        "output/run-1u34kP/report.json"
+      ]
     }
   ]
 }

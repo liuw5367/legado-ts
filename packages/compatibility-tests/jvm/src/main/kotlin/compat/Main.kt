@@ -145,6 +145,11 @@ private fun execute(item: JsonObject): Any? {
         "css.nodes" -> AnalyzeByJSoup(text("content")).getElements(text("rule")).map { node ->
             mapOf("tag" to node.tagName(), "text" to node.text(), "id" to node.id())
         }
+        "corpus.cssString" -> {
+            val content = text("content")
+            val context = input.get("contextRule")?.asString?.let { AnalyzeByJSoup(content).getElements(it).first() }
+            corpusCssString(text("rule"), context ?: content)
+        }
         "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
         "json.read" -> {
             val config = Configuration.defaultConfiguration()

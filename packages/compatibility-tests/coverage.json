@@ -1251,6 +1251,28 @@
         "corpus.source-7.ruleToc.chapterList",
         "corpus.source-10.ruleExplore.bookList"
       ]
+    },
+    {
+      "operation": "corpus.cssString",
+      "method": "AnalyzeRule.getString CSS 与替换/插值组合",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → java.getString",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "corpus.source-1.ruleSearch.coverUrl",
+        "corpus.source-2.ruleSearch.kind",
+        "corpus.source-2.ruleBookInfo.intro",
+        "corpus.source-3.ruleSearch.bookUrl",
+        "corpus.source-3.ruleContent.content",
+        "corpus.source-1.ruleContent.replaceRegex",
+        "corpus.source-5.ruleToc.chapterName",
+        "corpus.source-7.ruleBookInfo.lastChapter",
+        "corpus.source-10.ruleBookInfo.intro",
+        "corpus.source-10.ruleToc.updateTime"
+      ]
     }
   ]
 }
