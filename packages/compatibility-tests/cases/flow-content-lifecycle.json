@@ -1,0 +1,108 @@
+[
+  {
+    "id": "flow.synthetic.content-lifecycle.primary-cancel",
+    "family": "flow",
+    "operation": "flow.contentLifecycle",
+    "contractScope": "flow",
+    "input": {
+      "fault": "primary-cancel",
+      "chapterBody": "第一段正文",
+      "auxUrl": "https://fixture.invalid/lyrics",
+      "title": "第一章"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook / BookContent 固定控制流与 Kotlin 协程取消"
+    },
+    "tags": [
+      "continuation",
+      "cancellation"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-audio-content-lifecycle"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "cancelled",
+        "delivered": null,
+        "requests": [
+          "chapter"
+        ],
+        "active": 0,
+        "titleEvaluated": false,
+        "auxiliarySaved": false,
+        "auxiliaryFailure": false
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-lifecycle.auxiliary-cancel",
+    "family": "flow",
+    "operation": "flow.contentLifecycle",
+    "contractScope": "flow",
+    "input": {
+      "fault": "auxiliary-cancel",
+      "chapterBody": "第一段正文",
+      "auxUrl": "https://fixture.invalid/lyrics",
+      "title": "第一章"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook / BookContent 固定控制流与 Kotlin 协程取消"
+    },
+    "tags": [
+      "continuation",
+      "cancellation"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-audio-content-lifecycle"
+    },
+    "allowedDifferences": [
+      {
+        "path": "$/value/titleEvaluated",
+        "jvm": true,
+        "ts": false,
+        "reason": "Android 副文 runCatching 吞掉取消后继续尝试标题规则，外层协程仍为取消。TS 立即返回取消。"
+      }
+    ]
+  },
+  {
+    "id": "flow.synthetic.content-lifecycle.auxiliary-failure",
+    "family": "flow",
+    "operation": "flow.contentLifecycle",
+    "contractScope": "flow",
+    "input": {
+      "fault": "auxiliary-failure",
+      "chapterBody": "第一段正文",
+      "auxUrl": "https://fixture.invalid/lyrics",
+      "title": "第一章"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook / BookContent 固定控制流与 Kotlin 协程取消"
+    },
+    "tags": [
+      "continuation",
+      "boundary"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-audio-content-lifecycle"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "delivered": "第一段正文",
+        "requests": [
+          "chapter",
+          "lyrics"
+        ],
+        "active": 0,
+        "titleEvaluated": true,
+        "auxiliarySaved": false,
+        "auxiliaryFailure": true
+      }
+    }
+  }
+]

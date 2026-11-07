@@ -138,7 +138,11 @@ export function validateCase(item) {
       : typeof value === type
     if (!valid) throw new Error(`${item.id}: input.${key} 类型无效`)
   }
-  if (item.operation.startsWith('flow.')) validateFlowCase(item)
+  if (item.operation === 'flow.contentLifecycle') {
+    if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow'
+      || !item.flowOrigin?.fixture || !['primary-cancel', 'auxiliary-cancel', 'auxiliary-failure'].includes(item.input.fault)
+      || !URL.canParse(item.input.auxUrl)) throw new Error('正文生命周期案例无效')
+  } else if (item.operation.startsWith('flow.')) validateFlowCase(item)
   if (item.operation === 'rule.split' && !['&&', '||', '%%'].includes(item.input.operator)) throw new Error('未支持的分隔符')
   if (item.operation.startsWith('regex.') && item.input.patterns.length === 0) throw new Error('patterns 不能为空')
   if (item.errorEquivalence && (typeof item.errorEquivalence.category !== 'string' || !['jvm', 'ts'].every((r) => Array.isArray(item.errorEquivalence[r]) && item.errorEquivalence[r].every((v) => typeof v === 'string')))) throw new Error('异常等价声明无效')

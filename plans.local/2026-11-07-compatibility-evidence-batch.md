@@ -149,6 +149,8 @@ git diff --check
 
 - D4 `rule.sourceState.batch-*` 比较普通缓存、字节、变量及源键值的缺失、空值、覆盖、删除与恢复。Node 实际序列化并恢复会话快照，JVM 按 CacheManager 和 BaseSource 原键语义使用内存存储。原始对照复现缺失缓存读取返回 undefined，`fdc5211` 修复为 null。[修复前](../packages/compatibility-tests/output/run-GzGgcO/report.md) · [一例一致、一例允许差异](../packages/compatibility-tests/output/run-hghUH4/report.md)。CacheManager 定向回归 5/5，应用级缓存和 Node 默认会话隔离差异精确登记。
 
+- E1 `flow.synthetic.content-lifecycle.*` 验证主正文请求取消、歌词请求取消和普通失败。TS 夹具等待实际请求预算的 AbortSignal，JVM 用固定上游同版本 Kotlin 协程按 WebBook/BookContent 调用顺序执行。主正文取消和普通副文失败一致；副文取消时参考函数尝试标题但外层 Deferred 不交付正文，TS 在标题前返回取消，精确登记该路径差异。[流程 42 例，41 一致、1 项允许差异](../packages/compatibility-tests/output/run-A4g1ky/report.md)。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

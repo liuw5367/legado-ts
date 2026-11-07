@@ -478,5 +478,19 @@
       "value": "string",
       "bytes": "string"
     }
+  },
+  "flow.contentLifecycle": {
+    "required": [
+      "fault",
+      "chapterBody",
+      "auxUrl",
+      "title"
+    ],
+    "properties": {
+      "fault": "string",
+      "chapterBody": "string",
+      "auxUrl": "string",
+      "title": "string"
+    }
   }
 }

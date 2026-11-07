@@ -1,3 +1,4 @@
+import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeBookFlow } from './book-flow.ts'
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourceSession } from '../../source-node/src/source-session.ts'
@@ -31,6 +32,7 @@ async function script(host: SourceRuleHost, expression: string, content: unknown
   return result.value
 }
 export async function execute(item: CaseInput): Promise<unknown> {
+  if (item.operation === 'flow.contentLifecycle') return executeContentLifecycle(item.input)
   if (item.operation === 'flow.book' || item.operation === 'flow.toc') return executeBookFlow(item.input, item.operation === 'flow.toc')
   const i = item.input
   const str = (key: string): string => String(i[key] ?? '')

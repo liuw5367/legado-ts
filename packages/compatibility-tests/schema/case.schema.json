@@ -63,7 +63,8 @@
         "rule.bridgeString",
         "rule.bridgeObjects",
         "rule.scriptLibrary",
-        "rule.sourceState"
+        "rule.sourceState",
+        "flow.contentLifecycle"
       ]
     },
     "input": {
@@ -1619,6 +1620,43 @@
                 "type": "string"
               },
               "bytes": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "flow.contentLifecycle"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "fault",
+              "chapterBody",
+              "auxUrl",
+              "title"
+            ],
+            "properties": {
+              "fault": {
+                "type": "string"
+              },
+              "chapterBody": {
+                "type": "string"
+              },
+              "auxUrl": {
+                "type": "string"
+              },
+              "title": {
                 "type": "string"
               }
             },

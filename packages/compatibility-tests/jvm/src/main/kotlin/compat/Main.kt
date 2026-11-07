@@ -26,6 +26,7 @@ private fun execute(item: JsonObject): Any? {
     fun text(key: String) = input.get(key)?.asString ?: ""
     return when (val operation = item.get("operation").asString) {
         "flow.book" -> executeBookFlow(input)
+        "flow.contentLifecycle" -> executeContentLifecycle(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
         "rule.sourceState" -> sourceStateEvidence(input)
         "rule.scriptLibrary" -> scriptLibraryEvidence(input)
