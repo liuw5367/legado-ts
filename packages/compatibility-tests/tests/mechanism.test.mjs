@@ -7,10 +7,23 @@ import { spawnSync } from 'node:child_process'
 import { compareCase, differences, summarize, assertProvenance } from '../scripts/compare.mjs'
 import { root, loadCases, sha256, stable, validateCase, validateResult, treeHash, readJson } from '../scripts/common.mjs'
 import { Worker } from '../scripts/worker.mjs'
+import { collectCorpusRules } from '../scripts/corpus-rules.mjs'
 
 const fixture = { id: 'test', family: 'mechanism', operation: 'encoding.md5', input: { text: 'a' }, reference: { kind: 'jdk-direct', method: 'test' }, tags: [] }
 const returned = (value) => ({ id: 'test', execution: 'completed', outcome: 'return', value })
 const thrown = (name, message) => ({ id: 'test', execution: 'completed', outcome: 'throw', error: { class: name, message } })
+
+test('固定书源规则按原文摘要分组，并保留每个字段及可执行案例来源', async () => {
+  const inventory = await collectCorpusRules()
+  assert.equal(inventory.sourceCount, 11)
+  assert.equal(inventory.rules.length, 177)
+  const origins = inventory.rules.flatMap((rule) => rule.origins)
+  assert.equal(origins.length, 234)
+  assert.equal(new Set(origins.map(({ index, field }) => `${index}:${field}`)).size, origins.length)
+  const shared = inventory.rules.find((rule) => rule.text === 'img@src')
+  assert.equal(shared.origins.length, 7)
+  assert.ok(inventory.rules.find((rule) => rule.text === '@CSS:.name a@text').caseIds.includes('corpus.source-0.search-name'))
+})
 
 test('比较忽略对象键顺序，保留数组顺序、空值、Unicode 与大整数文本', () => {
   assert.equal(compareCase(fixture, returned({ a: 1, b: 2 }), returned({ b: 2, a: 1 })).status, 'equal')
