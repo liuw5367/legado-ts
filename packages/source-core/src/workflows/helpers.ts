@@ -594,7 +594,7 @@ export async function evaluateField(ports: WorkflowPorts, source: NormalizedSour
   trace.push({ stage, event: 'rule', target: field, ...(itemIndex === undefined ? {} : { itemIndex }) })
   let output: WorkflowRuleOutput
   try {
-    output = await ports.rules.evaluate({ source, stage, field, rule, content, ...context, ...(itemIndex === undefined ? {} : { itemIndex }), ...(signal === undefined ? {} : { signal }) })
+    output = await ports.rules.evaluate({ source, stage, field, rule, content, expect: 'text', ...context, ...(itemIndex === undefined ? {} : { itemIndex }), ...(signal === undefined ? {} : { signal }) })
   } catch {
     output = { status: 'failed', value: null, message: '规则宿主失败' }
   }

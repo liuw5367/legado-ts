@@ -237,3 +237,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C7-REGEX-HSPACE 已修复。Java \h 按水平空白集合转译，字符类中的转义及字面反斜杠均有 JDK 对比。443 个 API 用例全部一致，另有 1 个内部观察项（output/run-DHjdRZ）。119 项宿主回归和 20 项机制检查通过。
 
 - C7 已锁定并校验原仓库 Rhino 二进制，纯 JVM 参考使用其安全作用域，原章节数字方法按固定源文件的行区间原样编译。7 条包含 JS 的语料规则均有离线用例。TS 改用工作流实际使用的 SourceRuleHost.evaluate，节点选择结果仅投影标签、文本和 ID。31 个语料用例中 27 一致、4 差异，分别为 JS 替换后缀和节点字符串（output/run-m2rBgq）。初次将完整规则套在嵌套 Java bridge 的结果另存 output/run-2I07j3，不能代替工作流入口证据。
+
+- C7-JS-REPLACE 已修复。脚本先插值，再分离 ## 后缀，运行后按原正则守卫替换。工作流字段明确按文本结果传入脚本，保留节点阶段的列表。语料正例实际触发替换并通过（output/run-DZL2TJ），161 项宿主及流程回归通过。两条章节脚本进入 JS 后揭示 toNumChapter 返回范围差异（output/run-WGhS0R），作为独立问题继续。

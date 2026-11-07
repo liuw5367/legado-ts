@@ -685,7 +685,7 @@
         "corpus.source-10.ruleBookInfo.lastChapter"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -693,7 +693,9 @@
       },
       "tsEntry": "SourceRuleHost → splitSourceRuleSegments",
       "evidence": [
-        "output/run-m2rBgq/report.json"
+        "output/run-m2rBgq/report.json",
+        "output/run-WGhS0R/report.json",
+        "output/run-DZL2TJ/report.json"
       ]
     },
     {

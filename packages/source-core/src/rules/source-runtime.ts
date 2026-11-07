@@ -22,7 +22,7 @@ import type {
 } from '../runtime/contracts.ts'
 import type { JavaScriptHost, JavaScriptVariableScope } from '../runtime/javascript.ts'
 import type { NormalizedSource } from '../model/types.ts'
-import type { CompiledRule, RuleAtom, RuleSequence } from './types.ts'
+import type { CompiledRule, RuleAtom, RuleReplacement, RuleSequence } from './types.ts'
 import type {
   WorkflowRulePort,
   WorkflowRuleRequest,
@@ -3037,16 +3037,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
           result = captureExpansion.changed
             ? await this.evaluateCaptureText(captureExpansion.text, state, result)
             : await this.evaluatePlainText(segment.text, state, result)
+          if (state.expect === 'text' && Array.isArray(result)) result = textValue(result)
           continue
         }
         // `<js></js>` is also used as a separator; an empty body leaves the current result intact.
         if (segment.text.length === 0) continue
         // JS templates are expanded against the content that entered the full rule,
         // while `result` itself is the output of the preceding segment.
-        const code = await this.expandTemplate(segment.text, state, content)
+        // AnalyzeRule 在插值后从脚本中分离 ##，并对脚本返回值执行替换。
+        const [code = '', pattern, replacement = '', ...firstMatch] = (await this.expandTemplate(segment.text, state, content)).split('##')
         const output = await this.runJavaScript(code, this.javascriptStage(state.request.stage), state.source, result, state.request.signal, { ...state.request, bindings: state.bindings, ruleState: state, mode: 'script' })
         if (output.status !== 'success') throw new SourceRuleError(output.status === 'capability-missing' ? 'capability-missing' : output.status === 'cancelled' ? 'cancelled' : 'failed', output.message ?? 'JavaScript 规则执行失败')
         result = this.unwrapCapturedRuleValue(output.value, state)
+        if (pattern) result = this.replaceRuleValue(result, { pattern, replacement, firstMatchOnly: firstMatch.length > 0 })
       }
       return result
     }
@@ -3457,14 +3460,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     // Android 先对整条规则插值再按 `##` 切分，所以匹配串和替换串里的 {{}} 同样生效。
     const patternText = await this.expandTemplate(rule.replacement.pattern, state, content)
     const replacement = await this.expandTemplate(rule.replacement.replacement, state, content)
+    return this.replaceRuleValue(value, { pattern: patternText, replacement, firstMatchOnly: rule.replacement.firstMatchOnly })
+  }
+
+  private replaceRuleValue(value: unknown, rule: RuleReplacement): string {
+    const { pattern: patternText, replacement } = rule
     const text = textValue(value)
     // 源可控正则过长度上限或（对超长输入）命中嵌套量词时明确失败，不让病态配置拖垮求值。
     const compiled = compileSourcePattern(patternText, { flags: 'g' })
     if ('error' in compiled) {
-      if (compiled.error.code === 'invalid-pattern') return rule.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
+      if (compiled.error.code === 'invalid-pattern') return rule.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
       throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
     }
-    if (!rule.replacement.firstMatchOnly) return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
+    if (!rule.firstMatchOnly) return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
     const first = compiled.regex.exec(text)
     if (first === null) return ''
     return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)

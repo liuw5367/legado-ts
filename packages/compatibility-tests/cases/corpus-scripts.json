@@ -121,7 +121,7 @@
     "operation": "corpus.script",
     "input": {
       "rule": "a.3@text\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
-      "content": "<a>甲</a><a>乙</a><a>丙</a><a>第十二章</a>"
+      "content": "<a>甲</a><a>乙</a><a>丙</a><a>第12章正文 · 今日</a>"
     },
     "reference": {
       "kind": "upstream-adapted",
@@ -138,7 +138,7 @@
     },
     "expected": {
       "outcome": "return",
-      "value": "第12章"
+      "value": "第12章 正文 · 今日"
     }
   },
   {
