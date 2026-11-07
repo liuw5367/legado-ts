@@ -475,10 +475,13 @@
     {
       "id": "C2-UTF8",
       "caseIds": [
-        "string.api.getBytes.unpaired"
+        "string.api.getBytes.unpaired",
+        "encoding.urlEncode.unpairedHigh",
+        "encoding.urlEncode.unpairedLow",
+        "encoding.urlEncode.mixedSurrogates"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -486,7 +489,9 @@
       },
       "tsEntry": "SourceRuleHost → Java String.getBytes → encode-bytes",
       "evidence": [
-        "output/run-ddSF7M/report.json"
+        "output/run-ddSF7M/report.json",
+        "output/run-0oHxHu/report.json",
+        "output/run-ZUqpYS/report.json"
       ]
     }
   ]

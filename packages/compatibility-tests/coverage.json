@@ -225,7 +225,10 @@
         "encoding.urlEncode.empty",
         "encoding.urlEncode.normal",
         "encoding.urlEncode.escaped",
-        "encoding.urlEncode.invalid"
+        "encoding.urlEncode.invalid",
+        "encoding.urlEncode.unpairedHigh",
+        "encoding.urlEncode.unpairedLow",
+        "encoding.urlEncode.mixedSurrogates"
       ]
     },
     {

@@ -2293,8 +2293,25 @@ function decodeFormUri(encoding: EncodingHost, value: unknown, charset: unknown)
   return result
 }
 
+function encodeJavaBytes(encoding: EncodingHost, value: string, charset: string): Uint8Array {
+  // JDK 的 UTF-8 编码以问号替换孤立代理字符；有效代理对必须保留。
+  if (charset.toLowerCase().replaceAll('-', '').replaceAll('_', '') === 'utf8') {
+    let normalized = ''
+    for (let index = 0; index < value.length; index += 1) {
+      const unit = value.charCodeAt(index)
+      if (unit >= 0xd800 && unit <= 0xdbff) {
+        const next = value.charCodeAt(index + 1)
+        if (next >= 0xdc00 && next <= 0xdfff) normalized += value[index]! + value[++index]!
+        else normalized += '?'
+      } else normalized += unit >= 0xdc00 && unit <= 0xdfff ? '?' : value[index]!
+    }
+    value = normalized
+  }
+  return encoding.encode(value, charset)
+}
+
 function encodeFormUri(encoding: EncodingHost, value: unknown, charset: unknown): string {
-  const bytes = encoding.encode(textValue(value), textValue(charset) || 'UTF-8')
+  const bytes = encodeJavaBytes(encoding, textValue(value), textValue(charset) || 'UTF-8')
   let result = ''
   for (const byte of bytes) {
     if ((byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a) || (byte >= 0x30 && byte <= 0x39) || byte === 0x2a || byte === 0x2d || byte === 0x2e || byte === 0x5f) result += String.fromCharCode(byte)
@@ -3772,7 +3789,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       if (decoder === undefined) throw new Error('__LEGADO_CAPABILITY__runtime zip-decode unavailable')
       return decoder(byteValue(request.value), signal)
     }
-    if (request.kind === 'encode-bytes') return this.encoding.encode(textValue(request.value), textValue(request.charset) || 'UTF-8')
+    if (request.kind === 'encode-bytes') return encodeJavaBytes(this.encoding, textValue(request.value), textValue(request.charset) || 'UTF-8')
     if (request.kind === 'decode-bytes') return this.encoding.decode(byteValue(request.value), textValue(request.charset) || 'UTF-8')
     if (request.kind === 'to-num-chapter') return toNumChapter(request.value)
     if (request.kind === 'base64-decode-text') return this.encoding.decode(base64DecodeWithFlags(this.encoding, request.value, request.flags), textValue(request.charset) || 'UTF-8')

@@ -34,7 +34,7 @@
     "family": "encoding",
     "operation": "encoding.base64Encode",
     "input": {
-      "text": "中文😀"
+      "text": "\u4e2d\u6587\ud83d\ude00"
     },
     "reference": {
       "kind": "jdk-direct",
@@ -151,7 +151,7 @@
     "family": "encoding",
     "operation": "encoding.urlEncode",
     "input": {
-      "text": "a b+c/中文"
+      "text": "a b+c/\u4e2d\u6587"
     },
     "reference": {
       "kind": "jdk-direct",
@@ -211,7 +211,7 @@
     "family": "encoding",
     "operation": "encoding.urlDecode",
     "input": {
-      "text": "a b+c/中文"
+      "text": "a b+c/\u4e2d\u6587"
     },
     "reference": {
       "kind": "jdk-direct",
@@ -306,7 +306,7 @@
     "family": "encoding",
     "operation": "encoding.md5",
     "input": {
-      "text": "中文"
+      "text": "\u4e2d\u6587"
     },
     "reference": {
       "kind": "jdk-direct",
@@ -585,5 +585,53 @@
         "Base64"
       ]
     }
+  },
+  {
+    "id": "encoding.urlEncode.unpairedHigh",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "\ud800",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "boundary"
+    ]
+  },
+  {
+    "id": "encoding.urlEncode.unpairedLow",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "\udc00",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "boundary"
+    ]
+  },
+  {
+    "id": "encoding.urlEncode.mixedSurrogates",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "a\ud800b\udc00\ud83d\ude00",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "boundary"
+    ]
   }
 ]
