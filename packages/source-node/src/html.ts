@@ -70,7 +70,7 @@ class HtmlDocumentView implements HtmlDocument {
       // script/style descendants from the selected elements.
       const copy = value.cloneNode(true)
       removeScriptAndStyle(copy)
-      return render(copy, { xmlMode: this.xmlMode, encodeEntities: false })
+      return render(copy, { xmlMode: this.xmlMode, encodeEntities: 'utf8' })
     }
     if (output === 'text') return jsoupText(value)
     const children = isDocument(value) || isTag(value) ? getChildren(value) : []

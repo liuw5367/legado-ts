@@ -22,6 +22,11 @@ test('HTML adapter 的 html 输出保留当前元素并移除脚本和样式', (
   assert.equal(document.read(node, 'all'), '<div class="book"><a>A</a><script>bad()</script><style>.bad{}</style></div>')
 })
 
+test('HTML 规则序列化保留正文格式化需要的实体', () => {
+  const document = new HtmlParserAdapter().parse('<p>甲&nbsp;&nbsp;乙 &amp; &lt;</p>')
+  assert.equal(document.read(document.select('p')[0]!, 'html'), '<p>甲&nbsp;&nbsp;乙 &amp; &lt;</p>')
+})
+
 test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
   const document = new HtmlParserAdapter().parse('<main><p class="book">前<b>甲</b></p><p class="book">中<b>乙</b></p><p class="book">后<b>丙</b></p></main>')
   assert.equal(document.select('p.book:eq(1) b')[0] !== undefined, true)
