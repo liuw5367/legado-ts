@@ -572,7 +572,7 @@
         "collection.sequence.methodKeys"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -580,7 +580,9 @@
       },
       "tsEntry": "SourceRuleHost → legadoMap",
       "evidence": [
-        "output/run-BzKP0n/report.json"
+        "output/run-BzKP0n/report.json",
+        "output/run-UVSWhV/report.json",
+        "output/run-ehsyMN/report.json"
       ]
     }
   ]
