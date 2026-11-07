@@ -1441,7 +1441,8 @@
         "pattern.matcher.endBounds",
         "pattern.matcher.replaceEmpty",
         "pattern.matcher.literalRejectsWildcard",
-        "pattern.matcher.invalidFlags"
+        "pattern.matcher.invalidFlags",
+        "pattern.matcher.batch-mixed-local-groups"
       ]
     },
     {

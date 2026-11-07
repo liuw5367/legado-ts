@@ -863,5 +863,44 @@
         "Invalid Pattern flags"
       ]
     }
+  },
+  {
+    "id": "pattern.matcher.batch-mixed-local-groups",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(?i:(?<name>a))(?-i:(b)?)",
+      "text": "Ab aB",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\",\"name\"]",
+        "[\"group\",2]",
+        "[\"find\"]",
+        "[\"group\",\"name\"]",
+        "[\"group\",2]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true,
+        "A",
+        "b",
+        true,
+        "a",
+        null,
+        false
+      ]
+    }
   }
 ]
