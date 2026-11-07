@@ -281,6 +281,15 @@ function translateScopedSegment(source: string, start: number, end: number, mode
       continue
     }
     const current = source[index]!
+    // 局部 i 标志作用于匹配文本；命名组的标识符属于正则结构。
+    if (mode.ignoreCase && source.startsWith('(?<', index)) {
+      const name = /^\(\?<([A-Za-z][A-Za-z0-9]*)>/u.exec(source.slice(index, end))
+      if (name !== null) {
+        output += name[0]
+        index += name[0].length
+        continue
+      }
+    }
     if (current === '\\') {
       const unicodeEscape = translateUnicodeEscape(source, index, mode)
       if (unicodeEscape !== undefined) {

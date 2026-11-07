@@ -342,3 +342,10 @@ test('组合规则的最终输出也遵守 UTF-8 字节预算', () => {
   const interleaved = evaluateRule(compiled(`literal:${chunk}%%literal:${chunk}`), context(''), { maxOutputBytes: 300_000 })
   assert.equal(interleaved.status, 'budget-exceeded')
 })
+
+test('局部大小写标志只折叠匹配原子，保留命名捕获组标识符', () => {
+  const result = compileSourcePattern('(?i:(?<name>a))(?-i:(b)?)', { flags: 'g' })
+  assert.ok('regex' in result)
+  const matches = Array.from('Ab aB'.matchAll(result.regex))
+  assert.deepEqual(matches.map((match) => [match.groups?.name, match[2]]), [['A', 'b'], ['a', undefined]])
+})
