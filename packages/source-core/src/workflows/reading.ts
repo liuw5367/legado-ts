@@ -536,8 +536,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     if (resolvedNextUrls.length === 1) {
       const nextUrl = resolvedNextUrls[0]!
       if (visited.has(nextUrl)) {
+        // Android 已读取的串行分页遇到重复地址时正常结束，正文仍完整可用。
         diagnostics.push({ code: 'item-skipped', stage, field: nextField, message: '正文下一页形成循环', retryable: false })
-        stoppedByLimit = true
       } else if (!pendingPages.some((item) => item.url === nextUrl)) pendingPages.push({ url: nextUrl, followNext: true })
       continue
     }

@@ -1485,7 +1485,8 @@ test('正文下一页循环时停止并保留已读取内容', async () => {
         : { status: 'success', value: '/loop' },
     },
   }, { source, chapter })
-  assert.equal(result.status, 'partial')
+  assert.equal(result.status, 'success')
+  assert.equal(result.value?.truncated, undefined)
   assert.equal(result.value?.cleaned, '　　　　Loop\n　　')
   assert.equal(calls.length, 1)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes('循环')))
