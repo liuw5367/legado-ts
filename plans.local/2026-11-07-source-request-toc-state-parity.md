@@ -1,6 +1,6 @@
 # 书源请求、目录与脚本状态兼容验证
 
-- 状态：approved
+- 状态：completed
 - 创建：2026-11-07
 - 更新：2026-11-07
 - 基线：legado-ts `96b6ecb`，Android `32a87b253e7cc28273c3850de86242caac83f1fd`
@@ -97,11 +97,26 @@ git diff --check
 
 ## 完成记录
 
-已完成仓库、案例样本及固定上游分支核对。实施与验收结果在批准后记录。
+| 阶段 | 提交 | 阶段报告 |
+| --- | --- | --- |
+| A | `7edf1c4` | [12/12](../packages/compatibility-tests/output/run-X0oWGb/report.md)，机制覆盖同 URL 的方法、请求体区分及 Header 覆盖 |
+| B | `4fdea62` | [16/16](../packages/compatibility-tests/output/run-tUBzqZ/report.md)，验证重定向身份、复用、目录反序去重与卷节点 |
+| C | `9e2066b` | [20/20](../packages/compatibility-tests/output/run-tbcznG/report.md)，18 个完整流程与 2 个目录阶段用例，两个 worker 均验证变量隔离 |
+
+阶段 B 首轮发现查询串形式的相对地址 `?page=2` 在桌面 JDK URL 和 TS 中解析不同。目录顺序案例使用两端语义相同的带路径相对地址 `toc?page=2`，保留 query 比较。查询串单独作为相对地址时，需 Android 应用或 Android 运行库证据核定，未计为本轮已验证。三阶段确认的流程行为在现有 TS 实现中均通过，变更集中于参考端、夹具和比较报告。
+
+请求比对发生在离线传输边界。真实客户端注入的默认传输头、非 UTF-8 字符集、Cookie 真实宿主、完整 AnalyzeUrl/JS 重载、在线登录及设备行为分别取证。原 Android 工作区参考源码无改动。
+
+### 最终验收
+
+- [全量报告](../packages/compatibility-tests/output/run-QMpfyH/report.md) 共 506 条，484/484 基础契约与 20/20 流程类案例一致。另有 2 条原参考观察。流程没有意外差异、独立预期失败或执行器失败。
+- 两次复跑 [第一次](../packages/compatibility-tests/output/run-TlmYzu/report.md) 和 [第二次](../packages/compatibility-tests/output/run-ouPSHR/report.md) 的 JVM、TS 逐例结果、请求轨迹和比较报告一致。[显式 Content-Type POST 单例](../packages/compatibility-tests/output/run-s3DRDL/report.md) 独立通过。
+- 纯 JVM 准备、29 条机制和参考测试、203 条书源测试、694 条全仓测试、构建、类型检查及 `git diff --check` 通过。全仓测试使用本机环回夹具。无生产代码、依赖或上游参考仓库改动。
 
 ## 变更记录
 
 - 2026-11-07 建立三阶段草稿，区分全流程、目录阶段与真实宿主证据。
+- 2026-11-07 三阶段实施和验收完成，记录逐阶段提交、复跑产物与查询地址的证据边界。
 
 ## 批准记录
 
