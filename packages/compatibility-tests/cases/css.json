@@ -714,5 +714,81 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "css.nodes.batch-table-has-not-eq",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<table><tr id=\"r0\"><td><a class=\"item hot\" href=\"/a\">甲</a></td></tr><tr id=\"r1\"><td><a class=\"item hot\">乙</a></td></tr><tr id=\"r2\"><td><a class=\"item hot\" href=\"/a\">丙</a></td></tr><tr id=\"r3\" class=\"ignore\"><td><a class=\"item hot\" href=\"/b\">丁</a></td></tr><tr id=\"r4\"><td><a class=\"item hot\" href=\"/c\">戊</a></td></tr></table>",
+      "rule": "@css:tr:has(a.item.hot):not(.ignore):eq(2)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "tr",
+          "text": "丙",
+          "id": "r2"
+        }
+      ]
+    }
+  },
+  {
+    "id": "css.list.batch-table-attributes",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "content": "<table><tr id=\"r0\"><td><a class=\"item hot\" href=\"/a\">甲</a></td></tr><tr id=\"r1\"><td><a class=\"item hot\">乙</a></td></tr><tr id=\"r2\"><td><a class=\"item hot\" href=\"/a\">丙</a></td></tr><tr id=\"r3\" class=\"ignore\"><td><a class=\"item hot\" href=\"/b\">丁</a></td></tr><tr id=\"r4\"><td><a class=\"item hot\" href=\"/c\">戊</a></td></tr></table>",
+      "rule": "@css:tr:has(a.item.hot):not(.ignore) a.item.hot@href"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "/a",
+        "/c"
+      ]
+    }
+  },
+  {
+    "id": "css.list.batch-legacy-multi-class",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "content": "<table><tr id=\"r0\"><td><a class=\"item hot\" href=\"/a\">甲</a></td></tr><tr id=\"r1\"><td><a class=\"item hot\">乙</a></td></tr><tr id=\"r2\"><td><a class=\"item hot\" href=\"/a\">丙</a></td></tr><tr id=\"r3\" class=\"ignore\"><td><a class=\"item hot\" href=\"/b\">丁</a></td></tr><tr id=\"r4\"><td><a class=\"item hot\" href=\"/c\">戊</a></td></tr></table>",
+      "rule": "class.item hot@href"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "/a",
+        "/b",
+        "/c"
+      ]
+    }
   }
 ]

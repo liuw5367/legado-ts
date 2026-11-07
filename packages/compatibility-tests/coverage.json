@@ -402,7 +402,9 @@
         "corpus.source-1.ruleContent.content",
         "corpus.source-10.ruleExplore.kind",
         "corpus.source-0.ruleBookInfo.lastChapter",
-        "corpus.source-2.ruleExplore.author"
+        "corpus.source-2.ruleExplore.author",
+        "css.list.batch-table-attributes",
+        "css.list.batch-legacy-multi-class"
       ]
     },
     {
@@ -1283,7 +1285,8 @@
         "corpus.source-2.ruleSearch.bookList",
         "corpus.source-7.ruleToc.chapterList",
         "corpus.source-10.ruleExplore.bookList",
-        "corpus.source-5.ruleBookInfo.init"
+        "corpus.source-5.ruleBookInfo.init",
+        "css.nodes.batch-table-has-not-eq"
       ]
     },
     {
