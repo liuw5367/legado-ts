@@ -163,7 +163,12 @@ function validateFlowCase(item) {
       || !response.headers || Object.values(response.headers).some((value) => typeof value !== 'string')) {
       throw new Error(`${item.id}: 离线响应无效`)
     }
-    const key = stable([entry.method, entry.url, entry.body])
+    const matchHeaders = entry.requestHeaders ?? {}
+    if (typeof matchHeaders !== 'object' || Array.isArray(matchHeaders) || Object.entries(matchHeaders).some(([name, value]) =>
+      name !== name.toLowerCase() || (value !== null && typeof value !== 'string'))) {
+      throw new Error(`${item.id}: 离线请求头匹配无效`)
+    }
+    const key = stable([entry.method, entry.url, entry.body, matchHeaders])
     if (keys.has(key)) throw new Error(`${item.id}: 离线请求重复声明`)
     keys.add(key)
   }

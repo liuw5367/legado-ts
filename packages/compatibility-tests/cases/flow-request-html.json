@@ -218,7 +218,8 @@
               "content-type": "application/x-www-form-urlencoded; charset=UTF-8"
             },
             "bodyBase64": "cz3mmJ/msrMmc3VibWl0PQ==",
-            "responseUrl": "https://www.dingdian888.com/s.php"
+            "responseUrl": "https://www.dingdian888.com/s.php",
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -231,7 +232,8 @@
               "referer": "https://www.dingdian888.com/"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.dingdian888.com/xiaoshuo/7/"
+            "responseUrl": "https://www.dingdian888.com/xiaoshuo/7/",
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -244,7 +246,8 @@
               "referer": "https://www.dingdian888.com/"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.dingdian888.com/xiaoshuo/7/1.html"
+            "responseUrl": "https://www.dingdian888.com/xiaoshuo/7/1.html",
+            "responseStatus": 200
           }
         ]
       }
@@ -437,7 +440,8 @@
               "content-type": "application/x-www-form-urlencoded"
             },
             "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZhY3Rpb249bG9naW4mc2VhcmNodHlwZT1hcnRpY2xlbmFtZQ==",
-            "responseUrl": "https://www.deqixs.org/modules/article/search.php"
+            "responseUrl": "https://www.deqixs.org/modules/article/search.php",
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -448,7 +452,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/"
+            "responseUrl": "https://www.deqixs.org/book/7/",
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -459,7 +464,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/1.html"
+            "responseUrl": "https://www.deqixs.org/book/7/1.html",
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -470,7 +476,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/1_2.html"
+            "responseUrl": "https://www.deqixs.org/book/7/1_2.html",
+            "responseStatus": 200
           }
         ]
       }
@@ -663,7 +670,8 @@
               "content-type": "application/x-www-form-urlencoded"
             },
             "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZhY3Rpb249bG9naW4mc2VhcmNodHlwZT1hcnRpY2xlbmFtZQ==",
-            "responseUrl": "https://www.deqixs.org/modules/article/search.php"
+            "responseUrl": "https://www.deqixs.org/modules/article/search.php",
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -674,7 +682,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/"
+            "responseUrl": "https://www.deqixs.org/book/7/",
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -685,7 +694,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/1.html"
+            "responseUrl": "https://www.deqixs.org/book/7/1.html",
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -696,7 +706,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/1_2.html"
+            "responseUrl": "https://www.deqixs.org/book/7/1_2.html",
+            "responseStatus": 200
           }
         ]
       }
@@ -889,7 +900,8 @@
               "content-type": "application/x-www-form-urlencoded"
             },
             "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZhY3Rpb249bG9naW4mc2VhcmNodHlwZT1hcnRpY2xlbmFtZQ==",
-            "responseUrl": "https://www.deqixs.org/modules/article/search.php"
+            "responseUrl": "https://www.deqixs.org/modules/article/search.php",
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -900,7 +912,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/"
+            "responseUrl": "https://www.deqixs.org/book/7/",
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -911,7 +924,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/1.html"
+            "responseUrl": "https://www.deqixs.org/book/7/1.html",
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -922,7 +936,8 @@
               "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             },
             "bodyBase64": null,
-            "responseUrl": "https://www.deqixs.org/book/7/1_2.html"
+            "responseUrl": "https://www.deqixs.org/book/7/1_2.html",
+            "responseStatus": 200
           }
         ]
       }

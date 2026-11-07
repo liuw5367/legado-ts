@@ -10,6 +10,7 @@ interface ResponseFixture {
   method: string
   url: string
   body: string | null
+  requestHeaders?: Record<string, string | null>
   response: {
     status: number
     url: string
@@ -50,14 +51,17 @@ export async function executeBookFlow(input: Record<string, unknown>, tocOnly = 
       const headers = Object.fromEntries(Object.entries(plan.headers).filter(([name]) => headerNames.has(name.toLowerCase()))
         .map(([name, value]) => [name.toLowerCase(), value]))
       const trace = { stage, method, url, body, headers }
-      const entry = Object.values(responses).find((candidate) => candidate.method === method && candidate.url === url && candidate.body === body)
+      const matching = Object.values(responses).filter((candidate) => candidate.method === method && candidate.url === url
+        && candidate.body === body && Object.entries(candidate.requestHeaders ?? {}).every(([name, value]) =>
+          (headers[name] ?? null) === value))
+      const entry = matching.length === 1 ? matching[0] : undefined
       if (requests.length >= Number(input.requestLimit) || !entry) {
         fault ??= new FlowFixtureError(`离线请求超限或缺少响应: ${stage} ${method} ${url}`)
         throw fault
       }
       const { response } = entry
       requests.push(input.requestEvidence === true ? {
-        ...trace, bodyBase64: plan.body === undefined ? null : Buffer.from(plan.body).toString('base64'), responseUrl: response.url,
+        ...trace, bodyBase64: plan.body === undefined ? null : Buffer.from(plan.body).toString('base64'), responseUrl: response.url, responseStatus: response.status,
       } : trace)
       return { url: response.url, status: response.status, headers: response.headers, bytes: Buffer.from(response.base64, 'base64'), redirected: response.url !== url }
     },

@@ -24,7 +24,7 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
     val source = input.rule("source")
     val sourceUrl = source.text("bookSourceUrl")
     val unsupported = listOf(
-        source.text("mainJs"), source.text("loginUrl"), source.text("loginCheckJs"),
+        source.text("mainJs"), source.text("loginUrl"),
         source.rule("ruleBookInfo").text("init"),
         source.rule("ruleToc").text("formatJs"),
         source.rule("ruleContent").text("webJs"),
@@ -53,33 +53,40 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
         return URL(URL(base), relative).toString()
     }
     val requestEvidence = input.get("requestEvidence")?.asBoolean == true
-    fun request(stage: String, plan: FlowRequest): Pair<String, String> {
-        val response = input.rule("responses").entrySet().map { it.value.asJsonObject }.firstOrNull {
+    val loginCheck = source.text("loginCheckJs")
+    fun fetch(stage: String, plan: FlowRequest): FlowHttpResponse {
+        val actualHeaders = dynamicHeaders() + plan.headers
+        val responses = input.rule("responses").entrySet().map { it.value.asJsonObject }.filter {
             it.text("method") == plan.method && it.text("url") == plan.url && it.get("body").let { body ->
                 (if (body.isJsonNull) null else body.asString) == plan.body
+            } && it.rule("requestHeaders").entrySet().all { (name, expected) ->
+                actualHeaders[name] == if (expected.isJsonNull) null else expected.asString
             }
-        }?.rule("response")
+        }
+        val response = responses.singleOrNull()?.rule("response")
         if (response == null || requests.size >= input.get("requestLimit").asInt) {
             throw FlowFixtureError("离线请求超限或缺少响应: $stage ${plan.method} ${plan.url}")
         }
-        val actualHeaders = dynamicHeaders() + plan.headers
         val trace = mapOf("stage" to stage, "method" to plan.method, "url" to plan.url, "body" to plan.body, "headers" to actualHeaders)
         requests.add(if (requestEvidence) trace + mapOf(
             "bodyBase64" to plan.body?.let { Base64.getEncoder().encodeToString(it.toByteArray(Charsets.UTF_8)) },
             "responseUrl" to response.text("url"),
+            "responseStatus" to response.get("status").asInt,
         ) else trace)
-        if (response.get("status").asInt != 200) throw Unsupported("JVM 流程参考只实现 HTTP 200")
+        val status = response.get("status").asInt
+        if (status != 200 && (loginCheck.isEmpty() || stage != "search")) throw Unsupported("JVM 流程参考缺少该响应状态分支")
         val bytes = Base64.getDecoder().decode(response.text("base64"))
         val decoded = bytes.toString(Charsets.UTF_8)
         // AnalyzeUrl 传入已解码的响应正文，bodyJs 不修改已经发出的请求体。
         val body = plan.bodyScript?.let { script ->
             evaluateFlowRequestScript(script, keyword, decoded) { child ->
-                request(stage, FlowRequest(resolve(sourceUrl, child), headers)).first
+                fetch(stage, FlowRequest(resolve(sourceUrl, child), headers)).body
             }
         } ?: decoded
-        return body to response.text("url")
+        return FlowHttpResponse(body, response.text("url"), status)
     }
-    fun request(stage: String, url: String) = request(stage, FlowRequest(url, headers))
+    fun request(stage: String, url: String): Pair<String, String> =
+        fetch(stage, FlowRequest(url, headers)).let { it.body to it.url }
     fun result(stage: String, status: String, value: Any?, error: Map<String, String>? = null) {
         stages[stage] = buildMap {
             put("status", status)
@@ -133,7 +140,17 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
             request("search", resolve(sourceUrl, url)).first
         }
         val searchPlan = flowSearchRequest(searchRuleUrl, keyword, headers) { resolve(sourceUrl, it) }
-        val (searchBody, searchBase) = request("search", searchPlan)
+        val initial = fetch("search", searchPlan)
+        val searchResponse = if (loginCheck.isEmpty()) initial else {
+            evaluateFlowLoginCheck(loginCheck, initial, searchPlan.headers) { updated ->
+                fetch("search", searchPlan.copy(headers = updated))
+            } ?: run {
+                result("search", "failed", null)
+                return output
+            }
+        }
+        val searchBody = searchResponse.body
+        val searchBase = searchResponse.url
         val bookUrlPattern = source.text("bookUrlPattern")
         val directDetail = bookUrlPattern.isNotEmpty() && Regex(bookUrlPattern).matches(searchBase)
         val rows = if (directDetail) emptyList() else nodes(searchRule.text("bookList"), searchBody)
@@ -148,7 +165,19 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
         val candidate = candidates.firstOrNull() ?: return output
 
         val bookUrl = candidate.getValue("bookUrl")
-        val (detailBody, detailBase) = if (fallback || bookUrl == searchBase) searchBody to bookUrl else request("detail", bookUrl)
+        val (detailBody, detailBase) = if (fallback || bookUrl == searchBase) searchBody to bookUrl else {
+            val plan = FlowRequest(bookUrl, headers)
+            val detailResponse = fetch("detail", plan)
+            val checked = if (loginCheck.isEmpty()) detailResponse else {
+                evaluateFlowLoginCheck(loginCheck, detailResponse, plan.headers) { updated ->
+                    fetch("detail", plan.copy(headers = updated))
+                } ?: run {
+                    result("detail", "empty", null)
+                    return output
+                }
+            }
+            checked.body to checked.url
+        }
         // BookInfo 需要显式配置 canReName，才能覆盖已有书名和作者。
         val detailFields = fields(detailRule, detailBody, detailBase)
         val preserved = if (detailRule.text("canReName").isBlank()) candidate.filterKeys { it == "name" || it == "author" } else emptyMap()

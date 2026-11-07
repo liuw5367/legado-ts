@@ -137,7 +137,8 @@
             "responseUrl": "https://toc.fixture.test/book/7",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -146,7 +147,8 @@
             "responseUrl": "https://toc.fixture.test/toc",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -155,7 +157,8 @@
             "responseUrl": "https://toc.fixture.test/chapter/1",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           }
         ]
       }
@@ -238,7 +241,8 @@
             "responseUrl": "https://toc.fixture.test/results/7",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           }
         ]
       }
@@ -427,7 +431,8 @@
             "responseUrl": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -436,7 +441,8 @@
             "responseUrl": "https://toc.fixture.test/book/7",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -445,7 +451,8 @@
             "responseUrl": "https://toc.fixture.test/toc",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -454,7 +461,8 @@
             "responseUrl": "https://toc.fixture.test/toc?page=2",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -463,7 +471,8 @@
             "responseUrl": "https://toc.fixture.test/chapter/1",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           }
         ]
       }
@@ -652,7 +661,8 @@
             "responseUrl": "https://toc.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -661,7 +671,8 @@
             "responseUrl": "https://toc.fixture.test/book/7",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -670,7 +681,8 @@
             "responseUrl": "https://toc.fixture.test/toc",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -679,7 +691,8 @@
             "responseUrl": "https://toc.fixture.test/toc?page=2",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -688,7 +701,8 @@
             "responseUrl": "https://toc.fixture.test/chapter/2",
             "headers": {},
             "body": null,
-            "bodyBase64": null
+            "bodyBase64": null,
+            "responseStatus": 200
           }
         ]
       }

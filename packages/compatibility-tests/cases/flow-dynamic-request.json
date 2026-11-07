@@ -112,7 +112,8 @@
             "headers": {
               "x-flow": "prepared",
               "content-type": "application/x-www-form-urlencoded"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "search",
@@ -123,7 +124,8 @@
             "responseUrl": "https://dynamic.fixture.test/child",
             "headers": {
               "x-flow": "prepared"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -134,7 +136,8 @@
             "responseUrl": "https://dynamic.fixture.test/book/1",
             "headers": {
               "x-flow": "prepared"
-            }
+            },
+            "responseStatus": 200
           }
         ]
       }
@@ -227,7 +230,8 @@
             "headers": {
               "x-flow": "prepared",
               "content-type": "application/x-www-form-urlencoded"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "search",
@@ -238,7 +242,8 @@
             "responseUrl": "https://dynamic.fixture.test/child",
             "headers": {
               "x-flow": "prepared"
-            }
+            },
+            "responseStatus": 200
           }
         ]
       }

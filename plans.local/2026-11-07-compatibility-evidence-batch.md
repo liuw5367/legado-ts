@@ -2,7 +2,7 @@
 
 - 状态：approved
 - 创建：2026-11-07
-- 更新：2026-11-07
+- 更新：2026-11-08
 - 基线：legado-ts `fb87d93`，Android `32a87b253e7cc28273c3850de86242caac83f1fd`
 
 ## 方案
@@ -132,6 +132,8 @@ git diff --check
 - B2 的 `flow.synthetic.gbk.get/post` 验证“星 河+”的 query、表单和请求体 Base64；未知字符集分别验证 JVM 未支持和 TS 能力缺失且无请求。[34/34 流程对照](../packages/compatibility-tests/output/run-rW2eNu/report.md)，32 条机制及参考端测试通过。
 
 - B3 的 `flow.synthetic.dynamic-body.*` 验证动态 Header、bridge 子请求与 `bodyJs` 响应改写，[36/36 流程](../packages/compatibility-tests/output/run-HBb8Br/report.md)。另执行现有 TS 深层重入限界测试。更深层的 Android 比较证据单列。
+
+- B4 `flow.synthetic.login-check.*` 验证两次 POST 的同 URL、同字节请求体、头变化、401→200/503 及详情继续条件。原样返回正常 StrResponse 的序列化问题由 `fa4a886` 单独修复，[修复前](../packages/compatibility-tests/output/run-QleLG9/report.md)及[修复后 38/38](../packages/compatibility-tests/output/run-tOeBHb/report.md)。
 
 ## 变更记录
 

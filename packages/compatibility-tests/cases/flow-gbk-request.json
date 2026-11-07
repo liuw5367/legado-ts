@@ -62,7 +62,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://charset.fixture.test/search?q=%D0%C7%20%BA%D3+",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           }
         ]
       }
@@ -133,7 +134,8 @@
             "responseUrl": "https://charset.fixture.test/search",
             "headers": {
               "content-type": "application/x-www-form-urlencoded"
-            }
+            },
+            "responseStatus": 200
           }
         ]
       }

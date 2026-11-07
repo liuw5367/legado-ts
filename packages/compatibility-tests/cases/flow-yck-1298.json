@@ -148,7 +148,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "search",
@@ -159,7 +160,8 @@
             "responseUrl": "https://www.szndz.com/api/search",
             "headers": {
               "content-type": "application/x-www-form-urlencoded"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -168,7 +170,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://www.szndz.com/book/1",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           }
         ]
       }
@@ -289,7 +292,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://www.szndz.com/user/search.html?q=%E6%98%9F%E6%B2%B3",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "search",
@@ -300,7 +304,8 @@
             "responseUrl": "https://www.szndz.com/api/search",
             "headers": {
               "content-type": "application/x-www-form-urlencoded"
-            }
+            },
+            "responseStatus": 200
           }
         ]
       }
@@ -528,7 +533,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/book/so/%E6%98%9F%E6%B2%B3.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -537,7 +543,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/book/7/",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -546,7 +553,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/toc/7/",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -555,7 +563,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/toc/7/2.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -564,7 +573,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/c/1.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -573,7 +583,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/c/1-2.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           }
         ]
       }
@@ -801,7 +812,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/book/so/%E6%98%9F%E6%B2%B3.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -810,7 +822,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/book/7/",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -819,7 +832,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/toc/7/",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -828,7 +842,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/toc/7/2.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -837,7 +852,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/c/1.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -846,7 +862,8 @@
             "body": null,
             "bodyBase64": null,
             "responseUrl": "https://m.cuoceng.com/c/1-2.html",
-            "headers": {}
+            "headers": {},
+            "responseStatus": 200
           }
         ]
       }
@@ -1059,7 +1076,8 @@
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
               "content-type": "application/x-www-form-urlencoded"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -1070,7 +1088,8 @@
             "responseUrl": "https://www.douyinxs.com/book/7/",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -1081,7 +1100,8 @@
             "responseUrl": "https://www.douyinxs.com/toc/7/2.html",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -1092,7 +1112,8 @@
             "responseUrl": "https://www.douyinxs.com/c/1.html",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -1103,7 +1124,8 @@
             "responseUrl": "https://www.douyinxs.com/c/1-2.html",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           }
         ]
       }
@@ -1316,7 +1338,8 @@
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
               "content-type": "application/x-www-form-urlencoded"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "detail",
@@ -1327,7 +1350,8 @@
             "responseUrl": "https://www.douyinxs.com/book/7/",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "toc",
@@ -1338,7 +1362,8 @@
             "responseUrl": "https://www.douyinxs.com/toc/7/2.html",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -1349,7 +1374,8 @@
             "responseUrl": "https://www.douyinxs.com/c/1.html",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           },
           {
             "stage": "content",
@@ -1360,7 +1386,8 @@
             "responseUrl": "https://www.douyinxs.com/c/1-2.html",
             "headers": {
               "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            }
+            },
+            "responseStatus": 200
           }
         ]
       }

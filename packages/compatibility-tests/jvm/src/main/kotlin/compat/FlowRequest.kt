@@ -3,11 +3,13 @@ package compat
 import com.google.gson.JsonParser
 import io.legado.app.utils.FlowFormEncoding
 import java.net.URLEncoder
+import java.util.IdentityHashMap
 import java.nio.charset.Charset
 import org.htmlunit.corejs.javascript.BaseFunction
 import org.htmlunit.corejs.javascript.Context
 import org.htmlunit.corejs.javascript.Scriptable
 import org.htmlunit.corejs.javascript.VarScope
+import org.htmlunit.corejs.javascript.JavaScriptException
 
 internal data class FlowRequest(
     val url: String,
@@ -89,5 +91,61 @@ internal fun evaluateFlowRequestScript(code: String, keyword: String, content: S
         scope.put("key", scope, keyword)
         scope.put("result", scope, content)
         Context.toString(engine.evaluateString(scope, code, "offline-request-script", 1, null))
+    }
+}
+
+internal data class FlowHttpResponse(val body: String, val url: String, val status: Int)
+
+/** WebBook 的登录检查片段。仅暴露本案例读取的响应成员及同一请求的重取。 */
+internal fun evaluateFlowLoginCheck(
+    code: String,
+    initial: FlowHttpResponse,
+    headers: Map<String, String>,
+    refetch: (Map<String, String>) -> FlowHttpResponse,
+): FlowHttpResponse? {
+    val mutableHeaders = headers.toMutableMap()
+    return Context.enter().use { engine ->
+        engine.setClassShutter { false }
+        val scope = engine.initSafeStandardObjects()
+        val java = engine.newObject(scope)
+        val headerMap = engine.newObject(scope)
+        val responses = IdentityHashMap<Scriptable, FlowHttpResponse>()
+        fun bind(target: Scriptable, name: String, callback: (Array<Any>) -> Any?) {
+            target.put(name, target, object : BaseFunction() {
+                override fun call(cx: Context, scope: VarScope, thisObj: Scriptable, args: Array<Any>): Any? = callback(args)
+            })
+        }
+        fun wrap(response: FlowHttpResponse): Scriptable {
+            val objectValue = engine.newObject(scope)
+            responses[objectValue] = response
+            bind(objectValue, "code") { response.status }
+            bind(objectValue, "body") { response.body }
+            bind(objectValue, "url") { response.url }
+            return objectValue
+        }
+        bind(headerMap, "put") { args ->
+            mutableHeaders.put(Context.toString(args[0]).lowercase(), Context.toString(args[1]))
+        }
+        bind(java, "getHeaderMap") { headerMap }
+        bind(java, "getStrResponse") { args ->
+            require(args.size == 3 && args[0] == null && args[1] == null && args[2] == false) {
+                "离线参考仅支持 getStrResponse(null, null, false)"
+            }
+            wrap(refetch(mutableHeaders.toMap()))
+        }
+        scope.put("java", scope, java)
+        scope.put("result", scope, wrap(initial))
+        try {
+            val returned = engine.evaluateString(scope, code, "offline-login-check", 1, null)
+            responses[returned]
+        } catch (_: JavaScriptException) {
+            // WebBook 在脚本抛错后用错误响应再调用；本案例的 500 分支不发请求。
+            scope.put("result", scope, wrap(FlowHttpResponse("", initial.url, 500)))
+            try {
+                responses[engine.evaluateString(scope, code, "offline-login-error", 1, null)]?.takeUnless { it.status == 500 }
+            } catch (_: JavaScriptException) {
+                null
+            }
+        }
     }
 }
