@@ -2284,3 +2284,13 @@ test('正则 getElement 只取首个捕获组，getElements 保持全部匹配�
   assert.equal(budget.status, 'failed')
   assert.match(budget.message ?? '', /步数/)
 })
+
+test('默认 UTF-8 表单编码保留 Java 字节语义，连续调用不占用宿主桥接预算', async () => {
+  const output = await new SourceRuleHost().executeJavaScript(
+    String.raw`JSON.stringify(Array.from({ length: 40 }, () => java.encodeURI("星 +!~😀\uD800")))`,
+    'search',
+    source,
+  )
+  assert.equal(output.status, 'success', output.message)
+  assert.deepEqual(JSON.parse(String(output.value)), Array(40).fill('%E6%98%9F+%2B%21%7E%F0%9F%98%80%3F'))
+})
