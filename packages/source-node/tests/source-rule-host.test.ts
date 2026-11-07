@@ -2269,3 +2269,13 @@ test('JSON 响应下无模式前缀的规则按 JSON 求值（Android isJSON 语
   assert.equal((await evaluate(host, 'data.books', '<data class="books">x</data>')).status, 'empty')
   assert.deepEqual((await evaluate(host, 'div@text', '<div>正文</div>')).value, ['正文'])
 })
+
+test('正则 getElement 只取首个捕获组，getElements 保持全部匹配并继承预算', async () => {
+  const host = new SourceRuleHost()
+  const output = await host.executeJavaScript('JSON.stringify([java.getElement(":([a-z])(\\\\d+)"), java.getElements(":([a-z])(\\\\d+)"), java.getElement(":[a-z]\\\\d+&&([0-9]+)")])', 'content', source, 'a1 b22')
+  assert.equal(output.status, 'success', output.message)
+  assert.deepEqual(JSON.parse(String(output.value)), [['a1', 'a', '1'], [['a1', 'a', '1'], ['b22', 'b', '22']], ['1', '1']])
+  const budget = await new SourceRuleHost({ maxSteps: 2 }).executeJavaScript('java.getElement(":a"); java.getElement(":a"); java.getElement(":a")', 'content', source, 'a')
+  assert.equal(budget.status, 'failed')
+  assert.match(budget.message ?? '', /步数/)
+})

@@ -70,7 +70,19 @@
     },
     "tags": [
       "edge"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "unmatched-group",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Unmatched regex group"
+      ]
+    }
   },
   {
     "id": "regex.first.invalid",
@@ -95,10 +107,10 @@
         "java.util.regex.PatternSyntaxException"
       ],
       "ts": [
-        "compile-error"
+        "Error"
       ],
       "tsMessageIncludes": [
-        "invalid-regex"
+        "__LEGADO_PATTERN__invalid-pattern"
       ]
     }
   },
@@ -216,10 +228,10 @@
         "java.util.regex.PatternSyntaxException"
       ],
       "ts": [
-        "compile-error"
+        "Error"
       ],
       "tsMessageIncludes": [
-        "invalid-regex"
+        "__LEGADO_PATTERN__invalid-pattern"
       ]
     }
   },

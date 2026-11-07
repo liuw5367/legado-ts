@@ -1,7 +1,4 @@
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
-import { compileRule } from '../../source-core/src/rules/compiler.ts'
-import { evaluateRule } from '../../source-core/src/rules/evaluator.ts'
-import { MemoryVariableView } from '../../source-core/src/rules/variables.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
 import { JsonPathParserAdapter } from '../../source-node/src/jsonpath.ts'
 import type { NormalizedSource, WorkflowRuleOutput } from '../../source-core/src/index.ts'
@@ -45,20 +42,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
     }
     case 'rule.inner': throw new UnsupportedOperation('TS 没有独立 innerRule API；内嵌 JSON 规则由 json.string/json.list 案例覆盖')
     case 'regex.first':
-    case 'regex.all': {
-      const patterns = i.patterns as string[]
-      let content = str('text')
-      let rows: unknown[][] = []
-      for (const pattern of patterns) {
-        const compiled = compileRule(`:${pattern}`, { allInOne: true })
-        if (!compiled.rule) throw new ObservedError('compile-error', JSON.stringify(compiled.diagnostics))
-        const output = evaluateRule(compiled.rule, { requestId: 'compatibility', source, content, variables: new MemoryVariableView() })
-        if (output.status !== 'success' && output.status !== 'empty') throw new ObservedError(output.status, JSON.stringify(output.diagnostics))
-        rows = (output.value ?? []) as unknown[][]
-        content = rows.map((row) => row[0]).join('')
-      }
-      return item.operation === 'regex.first' ? rows[0] ?? null : rows
-    }
+    case 'regex.all': return script(host, `return java.${item.operation === 'regex.first' ? 'getElement' : 'getElements'}(${JSON.stringify(':' + (i.patterns as string[]).join('&&'))})`, i.text)
     case 'pattern.split': return script(host, `return Packages.java.util.regex.Pattern.compile(${json('pattern')}).split(${json('text')},${Number(i.limit)}).toArray().map(function(v){return String(v)})`)
     case 'string.split': return script(host, `return new Packages.java.lang.String(${json('text')}).split(${json('pattern')},${Number(i.limit)}).toArray().map(function(v){return String(v)})`)
     case 'string.replaceAll':

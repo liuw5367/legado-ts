@@ -24,7 +24,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-bjlAQq/report.json",
-        "output/run-JRhHMR/report.json"
+        "output/run-JRhHMR/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "增加 URLDecoder form decode bridge；+、百分号字节、UTF-8/GBK 与非法百分号均按 JDK 行为处理"
     },
@@ -47,7 +48,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-stQAaf/report.json",
-        "output/run-71mZvL/report.json"
+        "output/run-71mZvL/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "按匹配位置实现 Java split，保持原文尾段且忽略捕获分隔符；空输入和零宽边界与 JDK 一致"
     },
@@ -71,7 +73,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-AElWIJ/report.json",
-        "output/run-SLgG2e/report.json"
+        "output/run-SLgG2e/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "Java getter 区分 hostname/host，authority 保留用户信息，query/ref 的缺失与显式空值分别处理；JS 属性未改"
     },
@@ -95,7 +98,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-czHTcO/report.json",
-        "output/run-Gn82X4/report.json"
+        "output/run-Gn82X4/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "区分标量 null、数组 null、字符串 null 和 Java 集合文本；实际 bridge 结果一致"
     },
@@ -119,7 +123,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-czHTcO/report.json",
-        "output/run-Gn82X4/report.json"
+        "output/run-Gn82X4/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "使用宽松数据语法解析器，真正解析失败终止；不回退为字符串查询"
     },
@@ -143,7 +148,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-czHTcO/report.json",
-        "output/run-Gn82X4/report.json"
+        "output/run-Gn82X4/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "JSON 字符串接口对结构性非法路径返回空值，后续字段仍执行，其他模式预检与预算不变"
     },
@@ -167,7 +173,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-UqDuxv/report.json",
-        "output/run-QZIG4E/report.json"
+        "output/run-QZIG4E/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "双端证明 XML 下 legacy 和显式 CSS 标签均按 normalName 匹配；保留属性与 DOM 大小写；legacy tag 查询包含当前根元素"
     },
@@ -191,7 +198,8 @@
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
         "output/run-UqDuxv/report.json",
-        "output/run-fMxfCI/report.json"
+        "output/run-fMxfCI/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "规则 HTML parser 显式识别自闭合标签，节点/兄弟边界与原 parseSourceHtml 一致；正文 reading parser 未修改"
     },
@@ -213,7 +221,8 @@
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
-        "output/run-zWcPVn/report.json"
+        "output/run-zWcPVn/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "Java 基本 Base64 单独校验字母表/长度/补位并规范末尾无用位；NodeEncodingHost 严格策略未改变"
     },
@@ -223,7 +232,7 @@
         "regex.first.optional"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -234,8 +243,12 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-gPSgmU/report.json",
+        "output/run-dqw9iO/report.json",
+        "output/run-IFYm3y/report.json"
+      ],
+      "resolution": "对照改为真实 java.getElement/getElements；修复首个/全部匹配与正则链差异。最终未参与组保持原失败终态但不模拟 NPE 类名；继承累计规则预算"
     },
     {
       "id": "R11",
@@ -257,7 +270,8 @@
         "output/run-aY0Xdr/report.json",
         "output/run-ZgBRnu/report.json",
         "output/run-yw78Ex/report.json",
-        "output/run-F7wifc/report.json"
+        "output/run-F7wifc/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "仅在分组外组合符前保留 RuleAnalyzer 的切分；引号/分组内和其他转义不变。实际 JSONPath 的反斜杠键组合由空结果修为甲/乙"
     },
@@ -279,7 +293,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -299,7 +314,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -320,7 +336,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -340,7 +357,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -362,7 +380,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -383,7 +402,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -404,7 +424,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -425,7 +446,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ]
     },
     {
@@ -445,7 +467,8 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-IFYm3y/report.json"
       ],
       "resolution": "保留内部观察，json.string.inner-reference 已以真实 bridge 执行通过；未计入 API 覆盖通过"
     }

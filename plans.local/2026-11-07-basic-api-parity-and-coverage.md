@@ -182,6 +182,7 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 每个批次可独立 revert；没有数据库迁移、部署或外部业务写入。台账、案例和原始报告可保留供复现，回退某个运行时修复不需要删除对应失败案例。异常语义放宽须能回退为 rawComparison 检查，历史原始信息不丢失。
 
 ## 完成记录
+- B1/R10 已修复：适配器切换真实 getElement/getElements 后暴露首个/全部匹配与正则链错误，现 12/12 一致，累计预算回归及原回归 135/135 通过。阶段二合并执行 193 例，其中 192 API 全部行为一致、1 内部观察不计通过、28 项错误语义等价、0 执行器故障；18 项机制测试通过。报告 output/run-IFYm3y。原 35+1 项已全部归因并处置；阶段三仍待完成。
 - B1/R11 已修复：真实 JSONPath 反斜杠字段组合在 Android 返回甲/乙、旧 TS 返回空，现两端一致；JSON 族 43/43、规则 API 7/7（另 1 内部观察仍不计通过）、原回归 134/134。报告 output/run-ZgBRnu → output/run-yw78Ex / run-F7wifc。
 - B4/R08 已修复：规则 HTML parser 开启自闭合识别，自闭合链接/div 不吞后续兄弟，textNodes 保持顺序。CSS 族 41/41、原回归 164/164 与根类型检查通过。报告 output/run-fMxfCI。
 - B4/R07 已修复：原解析器证据确认 XML 的 legacy 与显式 CSS 标签查询均忽略大小写，属性名/DOM 保留大小写，legacy 根元素参与匹配；纠正对应旧断言后 164 项回归通过。41 例 CSS 族的 35 例一致，余 6 例均为单独 R08 自闭合问题；报告 output/run-UqDuxv → output/run-QZIG4E。

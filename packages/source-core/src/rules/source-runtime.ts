@@ -2077,8 +2077,18 @@ const __legadoElementsGraph = (values) => {
   })
   return list
 }
-java.getElement = (rule) => { if (rule == null || String(rule).trim().length === 0) return null; const result = evaluateRule(String(rule), { expect: "nodes", content: legadoContent }); return Array.isArray(result) ? __legadoElementsGraph(result) : __legadoNodeGraph(result) }
-java.getElements = (rule) => rule == null || String(rule).trim().length === 0 ? [] : __legadoElementsGraph(evaluateRule(String(rule), { expect: "nodes", content: legadoContent }))
+java.getElement = (rule) => {
+  if (rule == null || String(rule).trim().length === 0) return null
+  const text = String(rule).trim()
+  if (text.startsWith(":")) { const value = request({ kind: "regex-extract", pattern: text.slice(1), value: legadoContent, operation: "first" }); return value == null ? null : __legadoElementsGraph(value) }
+  const result = evaluateRule(String(rule), { expect: "nodes", content: legadoContent })
+  return Array.isArray(result) ? __legadoElementsGraph(result) : __legadoNodeGraph(result)
+}
+java.getElements = (rule) => {
+  if (rule == null || String(rule).trim().length === 0) return []
+  const text = String(rule).trim()
+  return __legadoElementsGraph(text.startsWith(":") ? request({ kind: "regex-extract", pattern: text.slice(1), value: legadoContent, operation: "all" }) : evaluateRule(String(rule), { expect: "nodes", content: legadoContent }))
+}
 `
 
 interface SelectedNode {
@@ -3241,10 +3251,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return value
   }
 
-  private evaluateRegex(expression: string, content: unknown, sourceId: string): unknown {
+  private evaluateRegex(expression: string, content: unknown, sourceId: string, first = false): unknown {
     const text = textValue(content)
     const compiled = compileSourcePattern(expression, { flags: 'g' })
-    if ('error' in compiled) throw new SourceRuleError('failed', `${compiled.error.message}：${expression.slice(0, 40)}`)
+    if ('error' in compiled) throw new SourceRuleError('failed', `__LEGADO_PATTERN__${compiled.error.code}: ${compiled.error.message}`)
+    if (first) {
+      const match = compiled.regex.exec(text)
+      if (match === null) return null
+      // 原 getElement 的最终捕获组必须参与匹配；getElements 则用空串表示未参与的组。
+      if (match.slice(1).some((item) => item === undefined)) throw new SourceRuleError('failed', 'Unmatched regex group')
+      const row = [...match]
+      this.captureRows.set(row, sourceId)
+      return row
+    }
     return [...text.matchAll(compiled.regex)].map((match) => {
       const row = [match[0] ?? '', ...match.slice(1).map((item) => item ?? '')]
       this.captureRows.set(row, sourceId)
@@ -3550,7 +3569,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             && ['network', 'network-all', 'network-response', 'url-context-response', 'file'].includes(String((payload as SourceRuleBridgeRequest).kind))
             ? { ...(payload as SourceRuleBridgeRequest), budget: { ...context.requestBudget, ...((payload as SourceRuleBridgeRequest).budget ?? {}) } }
             : payload
-          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState, context?.requestBudget)
+          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState, context?.requestBudget, ruleState)
         },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal),
       })
@@ -3681,7 +3700,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
   }
 
-  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver, jsLibOwner?: object, requestBudget?: Partial<RequestBudget>): Promise<unknown> {
+  private async handleBridge(input: unknown, signal: AbortSignal, source: NormalizedSource, workflowStage: WorkflowStage, currentBindings: Readonly<Record<string, unknown>> = this.bindings, workflowActions?: WorkflowJavaScriptRequest['workflowActions'], requestObserver?: RequestObserver, jsLibOwner?: object, requestBudget?: Partial<RequestBudget>, ruleState?: EvaluationState): Promise<unknown> {
     if (typeof input !== 'object' || input === null) throw new Error('书源 bridge 请求必须是对象')
     const request = input as SourceRuleBridgeRequest
     if (request.kind === 'node-info' || request.kind === 'node-mutate' || request.kind === 'node-match') {
@@ -3719,6 +3738,20 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     }
     if (request.kind === 'resolve-url') return resolveSourceUrl(request.url, request.value)
     if (request.kind === 'resolve-urls') return resolveSourceUrls(request.url, request.urls)
+    if (request.kind === 'regex-extract') {
+      const patterns = textValue(request.pattern).split('&&').filter((pattern) => pattern.trim().length > 0)
+      if (patterns.length > this.maxSteps) throw new SourceRuleError('failed', '规则求值步数超过限制')
+      let content = request.value
+      for (const [index, pattern] of patterns.entries()) {
+        if (ruleState !== undefined) this.check(ruleState)
+        if (signal.aborted) throw new SourceRuleError('cancelled', '规则求值已取消')
+        if (index === patterns.length - 1) return this.evaluateRegex(pattern, content, source.bookSourceUrl, request.operation === 'first')
+        const rows = this.evaluateRegex(pattern, content, source.bookSourceUrl) as string[][]
+        if (rows.length === 0) return request.operation === 'first' ? null : []
+        content = rows.map((row) => row[0]).join('')
+      }
+      return request.operation === 'first' ? null : []
+    }
     if (request.kind === 'pattern-compile') {
       const compiled = compileSourcePattern(textValue(request.pattern), { flags: textValue(request.flags) })
       if ('error' in compiled) throw new Error(`__LEGADO_PATTERN__${compiled.error.code}: ${compiled.error.message}`)
