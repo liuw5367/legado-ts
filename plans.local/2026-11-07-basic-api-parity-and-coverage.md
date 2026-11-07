@@ -213,3 +213,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C4 首批新增 45 例：编码族 79 例中 57 一致、22 差异，缺少 Java Base64 URL 编解码与 MIME 解码入口（output/run-RXj08j）。MD5/SHA-256 固定字节向量及 digest 后重置继续使用通过；尚未宣告 C4 全部完成。
 
 - C4-BASE64 已修复：增加 getUrlEncoder/getUrlDecoder/getMimeDecoder，URL 模式拒绝基本模式字母表，MIME 保留补位结构且允许终止后的非数据字节；共享 encoder 支持重复 withoutPadding。额外六个 MIME 边界中复现两项差异（output/run-Lyt9Bm），修复后全量 343 个 API 行为一致、1 个内部观察未支持、0 执行器故障（output/run-SHLeN1）；119 项宿主回归、18 项机制测试、类型检查通过。覆盖表已按 Base64 工厂/编解码签名细分，字符集往返与 C5～C7 仍需继续。
+
+- C5 首批 18 个序列案例已建立；列表及视图 16 例通过（output/run-IOuTRv / run-BzKP0n），新增 Map 的 null 与字符串 null 区分、方法同名键复现 2 项差异。根因是键强制 String 且数据与方法共用对象，登记 C5-MAPKEY。

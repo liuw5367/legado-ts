@@ -305,5 +305,15 @@
       "algorithm": "string",
       "continue": "boolean"
     }
+  },
+  "collection.sequence": {
+    "required": [
+      "kind",
+      "actions"
+    ],
+    "properties": {
+      "kind": "string",
+      "actions": "strings"
+    }
   }
 }

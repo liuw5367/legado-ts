@@ -55,6 +55,36 @@ private fun execute(item: JsonObject): Any? {
             }
             if (input.get("continue")?.asBoolean == true) mapOf("value" to value, "next" to "v:${if (value is Map<*, *>) value["decimal"] else value}") else value
         }
+        "collection.sequence" -> {
+            val map = java.util.HashMap<String?, String?>()
+            val list = java.util.ArrayList<String?>()
+            var view: MutableList<String?> = list
+            input.getAsJsonArray("actions").map { raw ->
+                val action = JsonParser.parseString(raw.asString).asJsonArray
+                fun value(index: Int): String? = if (action[index].isJsonNull) null else action[index].asString
+                if (text("kind") == "map") when (action[0].asString) {
+                    "put" -> map.put(value(1), value(2))
+                    "get" -> map[value(1)]
+                    "containsKey" -> map.containsKey(value(1))
+                    "remove" -> map.remove(value(1))
+                    "size" -> map.size
+                    "clear" -> { map.clear(); null }
+                    else -> throw Unsupported("未知 Map 操作")
+                } else when (action[0].asString) {
+                    "add" -> view.add(value(1))
+                    "get" -> view[action[1].asInt]
+                    "set" -> view.set(action[1].asInt, value(2))
+                    "remove" -> view.removeAt(action[1].asInt)
+                    "size" -> view.size
+                    "subList" -> { view = view.subList(action[1].asInt, action[2].asInt); view.toList() }
+                    "root" -> { view = list; view.toList() }
+                    "rootSet" -> list.set(action[1].asInt, value(2))
+                    "snapshot" -> view.toList()
+                    "clear" -> { view.clear(); null }
+                    else -> throw Unsupported("未知 List 操作")
+                }
+            }
+        }
         "pattern.matcher" -> {
             val matcher = Pattern.compile(text("pattern"), input.get("flags")?.asInt ?: 0).matcher(text("text"))
             input.getAsJsonArray("actions").map { raw ->

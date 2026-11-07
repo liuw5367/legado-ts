@@ -564,6 +564,24 @@
         "output/run-Lyt9Bm/report.json",
         "output/run-SHLeN1/report.json"
       ]
+    },
+    {
+      "id": "C5-MAPKEY",
+      "caseIds": [
+        "collection.sequence.nullDistinct",
+        "collection.sequence.methodKeys"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "HashMap"
+      },
+      "tsEntry": "SourceRuleHost → legadoMap",
+      "evidence": [
+        "output/run-BzKP0n/report.json"
+      ]
     }
   ]
 }

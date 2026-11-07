@@ -901,6 +901,236 @@
         "encoding.digest.SHA-256.bytes",
         "encoding.digest.SHA-256.unicode"
       ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "HashMap.put",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.mapValues",
+        "collection.sequence.mapNull",
+        "collection.sequence.mapKeys",
+        "collection.sequence.nullDistinct",
+        "collection.sequence.methodKeys"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "HashMap.get",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.mapMissing",
+        "collection.sequence.mapValues",
+        "collection.sequence.mapNull",
+        "collection.sequence.mapKeys",
+        "collection.sequence.nullDistinct",
+        "collection.sequence.methodKeys"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "HashMap.containsKey",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.mapMissing",
+        "collection.sequence.mapValues",
+        "collection.sequence.mapNull",
+        "collection.sequence.methodKeys"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "HashMap.remove",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.mapMissing",
+        "collection.sequence.mapValues",
+        "collection.sequence.mapNull",
+        "collection.sequence.methodKeys"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "HashMap.clear",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.mapMissing",
+        "collection.sequence.mapNull",
+        "collection.sequence.methodKeys"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "HashMap.size",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.mapMissing",
+        "collection.sequence.mapValues",
+        "collection.sequence.mapNull",
+        "collection.sequence.mapKeys",
+        "collection.sequence.nullDistinct",
+        "collection.sequence.methodKeys"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "ArrayList.add",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.listNormal",
+        "collection.sequence.subView",
+        "collection.sequence.nestedSubView",
+        "collection.sequence.subClear",
+        "collection.sequence.emptySubView",
+        "collection.sequence.getNegative",
+        "collection.sequence.setEnd",
+        "collection.sequence.removeEnd"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "ArrayList.get",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.listNormal",
+        "collection.sequence.subView",
+        "collection.sequence.getEmpty",
+        "collection.sequence.getNegative"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "ArrayList.set",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.listNormal",
+        "collection.sequence.subView",
+        "collection.sequence.nestedSubView",
+        "collection.sequence.setEnd"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "ArrayList.remove",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.listNormal",
+        "collection.sequence.subView",
+        "collection.sequence.nestedSubView",
+        "collection.sequence.removeEnd"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "ArrayList.subList",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.subView",
+        "collection.sequence.nestedSubView",
+        "collection.sequence.subClear",
+        "collection.sequence.emptySubView",
+        "collection.sequence.subReverse",
+        "collection.sequence.subNegative",
+        "collection.sequence.subPastEnd"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "ArrayList.size",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.listNormal",
+        "collection.sequence.subView",
+        "collection.sequence.subClear",
+        "collection.sequence.emptySubView"
+      ]
+    },
+    {
+      "operation": "collection.sequence",
+      "method": "ArrayList.clear",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → collection.sequence",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "collection.sequence.listNormal",
+        "collection.sequence.subClear"
+      ]
     }
   ]
 }

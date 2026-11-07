@@ -1,0 +1,506 @@
+[
+  {
+    "id": "collection.sequence.mapMissing",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "map",
+      "actions": [
+        "[\"size\"]",
+        "[\"get\", \"missing\"]",
+        "[\"containsKey\", \"missing\"]",
+        "[\"remove\", \"missing\"]",
+        "[\"clear\"]",
+        "[\"size\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "HashMap"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.mapValues",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "map",
+      "actions": [
+        "[\"put\", \"a\", \"中文\"]",
+        "[\"put\", \"a\", \"😀\"]",
+        "[\"get\", \"a\"]",
+        "[\"containsKey\", \"a\"]",
+        "[\"size\"]",
+        "[\"remove\", \"a\"]",
+        "[\"containsKey\", \"a\"]",
+        "[\"size\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "HashMap"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.mapNull",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "map",
+      "actions": [
+        "[\"put\", \"a\", null]",
+        "[\"containsKey\", \"a\"]",
+        "[\"get\", \"a\"]",
+        "[\"put\", \"a\", \"next\"]",
+        "[\"remove\", \"a\"]",
+        "[\"put\", \"\", null]",
+        "[\"get\", \"\"]",
+        "[\"clear\"]",
+        "[\"containsKey\", \"\"]",
+        "[\"size\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "HashMap"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.mapKeys",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "map",
+      "actions": [
+        "[\"put\", null, \"null-key\"]",
+        "[\"get\", null]",
+        "[\"put\", \"__proto__\", \"safe\"]",
+        "[\"get\", \"__proto__\"]",
+        "[\"size\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "HashMap"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.listNormal",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"size\"]",
+        "[\"add\", \"a\"]",
+        "[\"add\", null]",
+        "[\"add\", \"😀\"]",
+        "[\"get\", 1]",
+        "[\"set\", 0, \"b\"]",
+        "[\"get\", 0]",
+        "[\"remove\", 1]",
+        "[\"size\"]",
+        "[\"snapshot\"]",
+        "[\"clear\"]",
+        "[\"size\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.subView",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"add\", \"a\"]",
+        "[\"add\", \"b\"]",
+        "[\"add\", \"c\"]",
+        "[\"add\", \"d\"]",
+        "[\"subList\", 1, 3]",
+        "[\"rootSet\", 1, \"B\"]",
+        "[\"get\", 0]",
+        "[\"set\", 1, \"C\"]",
+        "[\"add\", \"x\"]",
+        "[\"size\"]",
+        "[\"remove\", 0]",
+        "[\"snapshot\"]",
+        "[\"root\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.nestedSubView",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"add\", \"a\"]",
+        "[\"add\", \"b\"]",
+        "[\"add\", \"c\"]",
+        "[\"add\", \"d\"]",
+        "[\"subList\", 1, 4]",
+        "[\"subList\", 1, 2]",
+        "[\"set\", 0, \"C\"]",
+        "[\"add\", \"x\"]",
+        "[\"remove\", 0]",
+        "[\"snapshot\"]",
+        "[\"root\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.subClear",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"add\", \"a\"]",
+        "[\"add\", \"b\"]",
+        "[\"add\", \"c\"]",
+        "[\"add\", \"d\"]",
+        "[\"subList\", 1, 3]",
+        "[\"clear\"]",
+        "[\"size\"]",
+        "[\"root\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.emptySubView",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"add\", \"a\"]",
+        "[\"add\", \"b\"]",
+        "[\"add\", \"c\"]",
+        "[\"add\", \"d\"]",
+        "[\"subList\", 2, 2]",
+        "[\"size\"]",
+        "[\"add\", \"x\"]",
+        "[\"snapshot\"]",
+        "[\"root\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.getEmpty",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"get\", 0]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "list-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException",
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "List index out of bounds"
+      ]
+    }
+  },
+  {
+    "id": "collection.sequence.getNegative",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"add\", \"a\"]",
+        "[\"get\", -1]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "list-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException",
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "List index out of bounds"
+      ]
+    }
+  },
+  {
+    "id": "collection.sequence.setEnd",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"add\", \"a\"]",
+        "[\"set\", 1, \"b\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "list-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException",
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "List index out of bounds"
+      ]
+    }
+  },
+  {
+    "id": "collection.sequence.removeEnd",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"add\", \"a\"]",
+        "[\"remove\", 1]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "list-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException",
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "List index out of bounds"
+      ]
+    }
+  },
+  {
+    "id": "collection.sequence.subReverse",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"subList\", 1, 0]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "list-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException",
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "List index out of bounds"
+      ]
+    }
+  },
+  {
+    "id": "collection.sequence.subNegative",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"subList\", -1, 0]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "list-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException",
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "List index out of bounds"
+      ]
+    }
+  },
+  {
+    "id": "collection.sequence.subPastEnd",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "list",
+      "actions": [
+        "[\"subList\", 0, 1]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "ArrayList/subList"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "list-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException",
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "List index out of bounds"
+      ]
+    }
+  },
+  {
+    "id": "collection.sequence.nullDistinct",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "map",
+      "actions": [
+        "[\"put\", null, \"nil\"]",
+        "[\"put\", \"null\", \"text\"]",
+        "[\"get\", null]",
+        "[\"get\", \"null\"]",
+        "[\"size\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "HashMap"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "collection.sequence.methodKeys",
+    "family": "collection",
+    "operation": "collection.sequence",
+    "input": {
+      "kind": "map",
+      "actions": [
+        "[\"containsKey\", \"get\"]",
+        "[\"get\", \"size\"]",
+        "[\"put\", \"get\", \"value\"]",
+        "[\"get\", \"get\"]",
+        "[\"put\", \"size\", null]",
+        "[\"containsKey\", \"size\"]",
+        "[\"size\"]",
+        "[\"remove\", \"get\"]",
+        "[\"clear\"]",
+        "[\"size\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "HashMap"
+    },
+    "tags": [
+      "edge"
+    ]
+  }
+]

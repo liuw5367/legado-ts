@@ -49,7 +49,8 @@
         "integer.bigInteger",
         "pattern.matcher",
         "encoding.java64",
-        "encoding.digest"
+        "encoding.digest",
+        "collection.sequence"
       ]
     },
     "input": {
@@ -1063,6 +1064,38 @@
               },
               "continue": {
                 "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "collection.sequence"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "kind",
+              "actions"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": false
