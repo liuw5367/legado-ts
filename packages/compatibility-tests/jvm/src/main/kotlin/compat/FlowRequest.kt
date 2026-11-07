@@ -3,6 +3,7 @@ package compat
 import com.google.gson.JsonParser
 import io.legado.app.utils.FlowFormEncoding
 import java.net.URLEncoder
+import java.nio.charset.Charset
 import org.htmlunit.corejs.javascript.BaseFunction
 import org.htmlunit.corejs.javascript.Context
 import org.htmlunit.corejs.javascript.Scriptable
@@ -24,18 +25,39 @@ internal fun flowSearchRequest(
     // AnalyzeUrl.paramPattern 分隔 URL 和选项，静态关键字在解析选项前展开。
     val separator = Regex("\\s*,\\s*(?=\\{)").find(rule)
         ?: return FlowRequest(resolve(rule.replace("{{key}}", URLEncoder.encode(keyword, Charsets.UTF_8))), headers)
-    val url = resolve(rule.substring(0, separator.range.first))
+    val address = rule.substring(0, separator.range.first).replace("{{key}}", keyword)
     val options = JsonParser.parseString(rule.substring(separator.range.last + 1).replace("{{key}}", keyword)).asJsonObject
-    if (options.keySet().any { it !in setOf("method", "body", "charset", "headers") }
-        || options.get("method")?.asString?.uppercase() != "POST"
-        || options.get("charset")?.asString?.equals("UTF-8", ignoreCase = true) == false
-    ) throw Unsupported("离线请求仅支持静态 UTF-8 POST 选项")
+    val method = options.get("method")?.asString?.uppercase() ?: "GET"
+    if (options.keySet().any { it !in setOf("method", "body", "charset", "headers") } || method !in setOf("GET", "POST")) {
+        throw Unsupported("离线请求仅支持静态 GET 或表单 POST 选项")
+    }
+    val charsetName = options.get("charset")?.asString?.takeIf(String::isNotEmpty)
+    val charset = try {
+        charsetName?.let(Charset::forName) ?: Charsets.UTF_8
+    } catch (_: IllegalArgumentException) {
+        throw Unsupported("JDK 缺少请求字符集: $charsetName")
+    }
     val requestHeaders = headers + options.getAsJsonObject("headers")?.entrySet()
         .orEmpty().associate { (name, value) -> name.lowercase() to value.asString }
+    if (method == "GET") {
+        // AnalyzeUrl 的查询编码保留 RFC3986 UNRESERVED 和固定的查询分隔字符。
+        val querySafe = "-._~!$%&()*+,/:;=?@[\\]^`{|}"
+        val url = if ('?' !in address) resolve(address) else {
+            val query = address.substringAfter('?').toByteArray(charset).joinToString("") { byte ->
+                val unsigned = byte.toInt() and 255
+                val char = unsigned.toChar()
+                if (char in 'A'..'Z' || char in 'a'..'z' || char in '0'..'9' || char in querySafe) char.toString()
+                else "%%%02X".format(unsigned)
+            }
+            resolve(address.substringBefore('?') + "?" + query)
+        }
+        return FlowRequest(url, requestHeaders)
+    }
+    val url = resolve(address)
     val body = options.get("body")?.asString.orEmpty()
     if (requestHeaders["content-type"].isNullOrEmpty()) {
         if (body.startsWith("{") || body.startsWith("[") || body.startsWith("<")) throw Unsupported("离线请求仅支持表单 POST")
-        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body))
+        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body, charset, checkEncoded = charsetName == null))
     }
     return FlowRequest(url, requestHeaders, "POST", body)
 }

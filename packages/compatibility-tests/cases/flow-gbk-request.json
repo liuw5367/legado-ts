@@ -1,0 +1,142 @@
+[
+  {
+    "id": "flow.synthetic.gbk.get",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl.encodeParams / JDK GBK"
+    },
+    "tags": [
+      "offline",
+      "charset"
+    ],
+    "flowOrigin": {
+      "fixture": "gbk-search-query-form"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://charset.fixture.test",
+        "bookSourceName": "字符集离线夹具",
+        "searchUrl": "/search?q={{key}},{\"charset\":\"GBK\"}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        }
+      },
+      "keyword": "星 河+",
+      "requestEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://charset.fixture.test/search?q=%D0%C7%20%BA%D3+",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://charset.fixture.test/search?q=%D0%C7%20%BA%D3+",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": ""
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://charset.fixture.test/search?q=%D0%C7%20%BA%D3+",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://charset.fixture.test/search?q=%D0%C7%20%BA%D3+",
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.gbk.post",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl.encodeParams / JDK GBK"
+    },
+    "tags": [
+      "offline",
+      "charset"
+    ],
+    "flowOrigin": {
+      "fixture": "gbk-search-query-form"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://charset.fixture.test",
+        "bookSourceName": "字符集离线夹具",
+        "searchUrl": "/search,{\"method\":\"POST\",\"charset\":\"GBK\",\"body\":\"q={{key}}\"}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        }
+      },
+      "keyword": "星 河+",
+      "requestEvidence": true,
+      "requestLimit": 1,
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://charset.fixture.test/search",
+          "body": "q=%D0%C7+%BA%D3%2B",
+          "response": {
+            "status": 200,
+            "url": "https://charset.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": ""
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://charset.fixture.test/search",
+            "body": "q=%D0%C7+%BA%D3%2B",
+            "bodyBase64": "cT0lRDAlQzcrJUJBJUQzJTJC",
+            "responseUrl": "https://charset.fixture.test/search",
+            "headers": {
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

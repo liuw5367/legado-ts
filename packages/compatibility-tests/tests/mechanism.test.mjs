@@ -333,3 +333,17 @@ test('YCK 来源索引保留排除项和同 URL 版本，案例必须匹配指�
   assert.throws(() => verifyFlowCorpus(manifest, Buffer.concat([snapshot, Buffer.from(' ')])), /快照摘要变化/u)
   await assert.rejects(loadFlowCorpus('../other'), /未知流程书源集合/u)
 })
+
+test('TS 未知请求字符集报告能力缺失且不发请求', async () => {
+  const [item] = await loadCases({ case: 'flow.synthetic.gbk.post' })
+  item.input.source.searchUrl = item.input.source.searchUrl.replace('GBK', 'GBK-NOT-A-CHARSET')
+  const worker = new Worker(process.execPath, [join(root, 'scripts/ts-worker.mjs')])
+  try {
+    const result = await worker.run(item)
+    assert.equal(result.execution, 'completed')
+    assert.equal(result.value.stages.search.status, 'capability-missing')
+    assert.deepEqual(result.value.requests, [])
+  } finally {
+    await worker.close()
+  }
+})

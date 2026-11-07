@@ -94,3 +94,11 @@ test('Rhino 在同一 worker 中传递书籍变量，并隔离每次流程', asy
   assert.deepEqual(stage.variables, { custom: '' })
   assert.equal(stage.value.length, 4)
 })
+
+test('JVM 未知请求字符集报告未支持', async () => {
+  const [item] = await loadCases({ case: 'flow.synthetic.gbk.post' })
+  item.input.source.searchUrl = item.input.source.searchUrl.replace('GBK', 'GBK-NOT-A-CHARSET')
+  const result = await worker.run(item)
+  assert.equal(result.execution, 'unsupported')
+  assert.match(result.reason, /GBK-NOT-A-CHARSET/u)
+})

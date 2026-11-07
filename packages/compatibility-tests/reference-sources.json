@@ -130,7 +130,7 @@
           375
         ]
       ],
-      "prefix": "package io.legado.app.utils\nimport java.net.URLEncoder\nimport java.nio.charset.Charset\nobject FlowFormEncoding {\n    private fun StringBuilder.appendEncoded(value: String, checkEncoded: Boolean, charset: Charset) {\n        append(if (checkEncoded && FlowEncodedForm.encodedForm(value)) value else URLEncoder.encode(value, charset))\n    }\n    fun encodeForm(params: String): String {\n        val checkEncoded = true\n        val charset = Charsets.UTF_8",
+      "prefix": "package io.legado.app.utils\nimport java.net.URLEncoder\nimport java.nio.charset.Charset\nobject FlowFormEncoding {\n    private fun StringBuilder.appendEncoded(value: String, checkEncoded: Boolean, charset: Charset) {\n        append(if (checkEncoded && FlowEncodedForm.encodedForm(value)) value else URLEncoder.encode(value, charset))\n    }\n    fun encodeForm(params: String, charset: Charset = Charsets.UTF_8, checkEncoded: Boolean = true): String {",
       "suffix": "}"
     }
   ],
