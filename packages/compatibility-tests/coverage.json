@@ -589,7 +589,10 @@
         "string.api.getBytes.continuation",
         "string.api.getBytes.empty",
         "string.api.getBytes.gbk",
-        "string.api.getBytes.unpaired"
+        "string.api.getBytes.unpaired",
+        "string.api.getBytes.gbk-round-trip",
+        "string.api.getBytes.gbk-replacement",
+        "string.api.getBytes.utf8-empty-round-trip"
       ]
     },
     {
@@ -1317,6 +1320,23 @@
         "chapter.number.invalid",
         "chapter.number.noMatch",
         "chapter.number.null"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String(byte[],String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → Java String(bytes,charset)",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.getBytes.continuation",
+        "string.api.getBytes.gbk-round-trip",
+        "string.api.getBytes.gbk-replacement",
+        "string.api.getBytes.utf8-empty-round-trip"
       ]
     }
   ]

@@ -1399,5 +1399,62 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "string.api.getBytes.gbk-round-trip",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "method": "getBytes",
+      "text": "\u4e2d\u6587",
+      "charset": "GBK",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String) / new String(byte[],String)"
+    },
+    "tags": [
+      "edge",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.getBytes.gbk-replacement",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "method": "getBytes",
+      "text": "\u4e2d\u6587\ud83d\ude00",
+      "charset": "GBK",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String) / new String(byte[],String)"
+    },
+    "tags": [
+      "edge",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.getBytes.utf8-empty-round-trip",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "method": "getBytes",
+      "text": "",
+      "charset": "UTF-8",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.getBytes(String) / new String(byte[],String)"
+    },
+    "tags": [
+      "edge",
+      "continuation"
+    ]
   }
 ]

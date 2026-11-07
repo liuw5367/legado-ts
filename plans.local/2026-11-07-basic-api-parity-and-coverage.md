@@ -249,3 +249,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C7 增加子代复合选择、HTML、init 元素、负索引与正则属性合并样本。36 个语料用例中 35 一致，剩余合并后的整段替换范围差异（output/run-Ht2nF6），登记 C7-SEQUENCE-REPLACE。
 
 - C7-SEQUENCE-REPLACE 已修复。编译器把 ## 放在组合节点上，两套实际求值入口均在组合完成后执行替换。36 个语料用例全部一致（output/run-HeRT7Z），177 项规则、宿主及流程回归和类型检查通过。
+
+- C4 字符集往返已验证。对 getBytes 后以原字符集构造 String 增加 GBK 中文、GBK 无法表示字符和 UTF-8 空输入，保留原 UTF-8 代理对样本。124 个字符串族用例一致（output/run-ewnO46），覆盖表单独登记字节数组构造签名。
