@@ -202,7 +202,7 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       if (bridge.evaluateRule !== undefined) {
         installAsync('__legadoEvaluateRule', async (...args) => {
           const rule = context!.getString(args[0]!)
-          const options = args[1] === undefined ? {} : decodeJavaScriptValue(context!.getString(args[1]!)) as { expect?: 'text' | 'nodes'; content?: unknown }
+          const options = args[1] === undefined ? {} : decodeJavaScriptValue(context!.getString(args[1]!)) as { expect?: 'text' | 'nodes'; content?: unknown; firstDefault?: boolean }
           const value = await callBridge('evaluateRule', () => bridge.evaluateRule!(rule, signal, options))
           return context!.newString(encodeJavaScriptValue(value))
         })

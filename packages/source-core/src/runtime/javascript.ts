@@ -28,7 +28,7 @@ export interface JavaScriptBridge {
   /** 执行一条已由宿主进一步校验的请求计划。 */
   request?: (input: unknown, signal: AbortSignal) => unknown | Promise<unknown>
   /** 在当前书源上下文中执行一条声明式规则。 */
-  evaluateRule?: (rule: string, signal: AbortSignal, options?: { expect?: 'text' | 'nodes'; content?: unknown }) => unknown | Promise<unknown>
+  evaluateRule?: (rule: string, signal: AbortSignal, options?: { expect?: 'text' | 'nodes'; content?: unknown; firstDefault?: boolean }) => unknown | Promise<unknown>
 }
 
 export interface JavaScriptExecutionInput {

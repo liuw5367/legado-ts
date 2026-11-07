@@ -2302,3 +2302,15 @@ test('Jayway avg 的整数结果保留 Double 文本小数位', async () => {
   assert.equal(output.status, 'success', output.message)
   assert.equal(output.value, '3.0')
 })
+
+test('AnalyzeRule 的 HTML URL 字符串重载使用首项，URL 列表保持所有项', async () => {
+  const output = await evaluate(new SourceRuleHost(), `@js:
+    java.setRedirectUrl("https://fixture.invalid/dir/");
+    JSON.stringify([java.getString("a@href", null, true), java.getStringList("a@href", null, true)])
+  `, '<a href="first">甲</a><a href="second">乙</a>')
+  assert.equal(output.status, 'success', output.message)
+  assert.deepEqual(JSON.parse(String(output.value)), [
+    'https://fixture.invalid/dir/first',
+    ['https://fixture.invalid/dir/first', 'https://fixture.invalid/dir/second'],
+  ])
+})
