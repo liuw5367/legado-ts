@@ -1,0 +1,132 @@
+[
+  {
+    "id": "rule.split.normal",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "a&&b&&c",
+      "operator": "&&"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "rule.split.quoted",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "a[x=\"a&&b\"]&&c",
+      "operator": "&&"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "rule.split.nested",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "a:contains(x||y)||b",
+      "operator": "||"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "rule.split.escaped",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "a\\&&b&&c",
+      "operator": "&&"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "rule.split.empty",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "",
+      "operator": "&&"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "rule.split.unclosed",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "a[x&&b",
+      "operator": "&&"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "rule.split.interleave",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "a%%b",
+      "operator": "%%"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "rule.inner.basic",
+    "family": "rule",
+    "operation": "rule.inner",
+    "input": {
+      "rule": "x{$.name}",
+      "values": {
+        "$.name": "中文"
+      }
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.innerRule(String,Int,Int,callback)"
+    },
+    "tags": [
+      "unsupported"
+    ]
+  }
+]

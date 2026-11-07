@@ -1,0 +1,220 @@
+[
+  {
+    "id": "regex.first.groups",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "([a-z])(\\d+)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "regex.first.none",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "abc",
+      "patterns": [
+        "\\d+"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "regex.first.chain",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "[a-z]\\d+",
+        "(\\d+)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "regex.first.optional",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "a ab",
+      "patterns": [
+        "a(b)?"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "regex.first.invalid",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "x",
+      "patterns": [
+        "["
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "regex.first.empty",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "",
+      "patterns": [
+        "x"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "regex.all.groups",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "([a-z])(\\d+)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements(String,Array<String>,Int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "regex.all.none",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "abc",
+      "patterns": [
+        "\\d+"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements(String,Array<String>,Int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "regex.all.chain",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "[a-z]\\d+",
+        "(\\d+)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements(String,Array<String>,Int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "regex.all.optional",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "a ab",
+      "patterns": [
+        "a(b)?"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements(String,Array<String>,Int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "regex.all.invalid",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "x",
+      "patterns": [
+        "["
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements(String,Array<String>,Int)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "regex.all.empty",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "",
+      "patterns": [
+        "x"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements(String,Array<String>,Int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "name": "@legado/compatibility-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:jvm": "node scripts/prepare-jvm.mjs",
+    "test": "node --test tests/*.test.mjs && node scripts/run.mjs",
+    "test:mechanism": "node --test tests/mechanism.test.mjs",
+    "test:ts": "node scripts/run.mjs --runtime ts",
+    "test:jvm": "node scripts/run.mjs --runtime jvm",
+    "test:reference": "node --test tests/jvm.test.mjs"
+  }
+}

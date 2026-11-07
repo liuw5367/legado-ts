@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "sourceUrl": "https://shuyuan-api.yiove.com/import/book-source-collection/577a3024-7ac3-49e9-9c49-7f2de6d2c6a9",
+  "fetchedAt": "2026-11-06",
+  "rawSha256": "1f05c07b38a991a32e2590b55425c3a200a9a7ce7a7806a60c73054f84fb72f4",
+  "file": "yiove-11-sources.json",
+  "sha256": "8b94dacd91c079762161fe728a308d09cd3270da29355c7a27d0864a78eaab34",
+  "count": 11,
+  "removedFields": [
+    {
+      "index": 0,
+      "field": "customOrder"
+    },
+    {
+      "index": 0,
+      "field": "respondTime"
+    },
+    {
+      "index": 0,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 0,
+      "field": "weight"
+    },
+    {
+      "index": 2,
+      "field": "customOrder"
+    },
+    {
+      "index": 2,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 2,
+      "field": "respondTime"
+    },
+    {
+      "index": 2,
+      "field": "weight"
+    },
+    {
+      "index": 3,
+      "field": "customOrder"
+    },
+    {
+      "index": 3,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 3,
+      "field": "respondTime"
+    },
+    {
+      "index": 3,
+      "field": "weight"
+    },
+    {
+      "index": 4,
+      "field": "customOrder"
+    },
+    {
+      "index": 4,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 4,
+      "field": "respondTime"
+    },
+    {
+      "index": 4,
+      "field": "weight"
+    },
+    {
+      "index": 5,
+      "field": "customOrder"
+    },
+    {
+      "index": 5,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 5,
+      "field": "respondTime"
+    },
+    {
+      "index": 5,
+      "field": "weight"
+    },
+    {
+      "index": 6,
+      "field": "customOrder"
+    },
+    {
+      "index": 6,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 6,
+      "field": "respondTime"
+    },
+    {
+      "index": 6,
+      "field": "weight"
+    },
+    {
+      "index": 7,
+      "field": "customOrder"
+    },
+    {
+      "index": 7,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 7,
+      "field": "respondTime"
+    },
+    {
+      "index": 7,
+      "field": "weight"
+    },
+    {
+      "index": 8,
+      "field": "customOrder"
+    },
+    {
+      "index": 8,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 8,
+      "field": "respondTime"
+    },
+    {
+      "index": 8,
+      "field": "weight"
+    },
+    {
+      "index": 9,
+      "field": "customOrder"
+    },
+    {
+      "index": 9,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 9,
+      "field": "respondTime"
+    },
+    {
+      "index": 9,
+      "field": "weight"
+    },
+    {
+      "index": 10,
+      "field": "customOrder"
+    },
+    {
+      "index": 10,
+      "field": "lastUpdateTime"
+    },
+    {
+      "index": 10,
+      "field": "respondTime"
+    },
+    {
+      "index": 10,
+      "field": "weight"
+    }
+  ],
+  "execution": "not-run",
+  "note": "仅书源定义；未运行脚本或访问目标站点，不是完整流程证据"
+}

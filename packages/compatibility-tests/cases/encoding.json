@@ -1,0 +1,295 @@
+[
+  {
+    "id": "encoding.base64Encode.empty",
+    "family": "encoding",
+    "operation": "encoding.base64Encode",
+    "input": {
+      "text": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Encoder.encodeToString(byte[])"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.base64Encode.ascii",
+    "family": "encoding",
+    "operation": "encoding.base64Encode",
+    "input": {
+      "text": "hello"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Encoder.encodeToString(byte[])"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.base64Encode.unicode",
+    "family": "encoding",
+    "operation": "encoding.base64Encode",
+    "input": {
+      "text": "中文😀"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Encoder.encodeToString(byte[])"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.base64Decode.empty",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.base64Decode.normal",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "aGVsbG8="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.base64Decode.unpadded",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "YQ"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.base64Decode.invalid",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "%%"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "encoding.base64Decode.tail-bits",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "YR=="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.urlEncode.empty",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.urlEncode.normal",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "a b+c/中文"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.urlEncode.escaped",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "a+b%2Bc"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.urlEncode.invalid",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "%ZZ"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.empty",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.normal",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "a b+c/中文"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.escaped",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "a+b%2Bc"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.urlDecode.invalid",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "%ZZ"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "encoding.md5.empty",
+    "family": "encoding",
+    "operation": "encoding.md5",
+    "input": {
+      "text": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.security.MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "normal"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  {
+    "id": "encoding.md5.normal",
+    "family": "encoding",
+    "operation": "encoding.md5",
+    "input": {
+      "text": "abc"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.security.MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "normal"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "900150983cd24fb0d6963f7d28e17f72"
+    }
+  },
+  {
+    "id": "encoding.md5.unicode",
+    "family": "encoding",
+    "operation": "encoding.md5",
+    "input": {
+      "text": "中文"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.security.MessageDigest.digest(byte[])"
+    },
+    "tags": [
+      "normal"
+    ]
+  }
+]

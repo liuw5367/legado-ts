@@ -171,6 +171,8 @@ importers:
         specifier: ^4.19.0
         version: 4.23.15
 
+  packages/compatibility-tests: {}
+
   packages/reader-backup: {}
 
   packages/source-core: {}

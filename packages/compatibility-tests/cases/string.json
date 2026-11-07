@@ -1,0 +1,377 @@
+[
+  {
+    "id": "string.split.limit.0",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "a,b,,",
+      "pattern": ",",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.split(String,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.split.limit.1",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "a,b,,",
+      "pattern": ",",
+      "limit": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.split(String,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.split.limit.2",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "a,b,,",
+      "pattern": ",",
+      "limit": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.split(String,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.split.limit.-1",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "a,b,,",
+      "pattern": ",",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.split(String,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.split.empty",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "",
+      "pattern": "x",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.zero-width",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "😀a",
+      "pattern": "",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.invalid",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "x",
+      "pattern": "[",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.split(String,int)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "string.replaceAll.groups",
+    "family": "string",
+    "operation": "string.replaceAll",
+    "input": {
+      "text": "a1 b2",
+      "pattern": "([a-z])(\\d)",
+      "replacement": "$2$1"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceAll(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.replaceAll.none",
+    "family": "string",
+    "operation": "string.replaceAll",
+    "input": {
+      "text": "abc",
+      "pattern": "z",
+      "replacement": "x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceAll(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.replaceAll.invalid",
+    "family": "string",
+    "operation": "string.replaceAll",
+    "input": {
+      "text": "x",
+      "pattern": "[",
+      "replacement": "x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceAll(String,String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "string.replaceAll.bad-group",
+    "family": "string",
+    "operation": "string.replaceAll",
+    "input": {
+      "text": "a",
+      "pattern": "(a)",
+      "replacement": "$9"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceAll(String,String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "string.replaceFirst.groups",
+    "family": "string",
+    "operation": "string.replaceFirst",
+    "input": {
+      "text": "a1 b2",
+      "pattern": "([a-z])(\\d)",
+      "replacement": "$2$1"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceFirst(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.replaceFirst.none",
+    "family": "string",
+    "operation": "string.replaceFirst",
+    "input": {
+      "text": "abc",
+      "pattern": "z",
+      "replacement": "x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceFirst(String,String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.replaceFirst.invalid",
+    "family": "string",
+    "operation": "string.replaceFirst",
+    "input": {
+      "text": "x",
+      "pattern": "[",
+      "replacement": "x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceFirst(String,String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "string.replaceFirst.bad-group",
+    "family": "string",
+    "operation": "string.replaceFirst",
+    "input": {
+      "text": "a",
+      "pattern": "(a)",
+      "replacement": "$9"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.String.replaceFirst(String,String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "pattern.quote.normal",
+    "family": "string",
+    "operation": "pattern.quote",
+    "input": {
+      "text": "a+b"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.regex.Pattern.quote(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "pattern.quote.embedded-end",
+    "family": "string",
+    "operation": "pattern.quote",
+    "input": {
+      "text": "a\\E+b"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.regex.Pattern.quote(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "pattern.quote.empty",
+    "family": "string",
+    "operation": "pattern.quote",
+    "input": {
+      "text": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.regex.Pattern.quote(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "pattern.quote.unicode",
+    "family": "string",
+    "operation": "pattern.quote",
+    "input": {
+      "text": "😀一"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.util.regex.Pattern.quote(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "integer.parseLong.safe",
+    "family": "string",
+    "operation": "integer.parseLong",
+    "input": {
+      "text": "42"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.Long.parseLong(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseLong.max",
+    "family": "string",
+    "operation": "integer.parseLong",
+    "input": {
+      "text": "9223372036854775807"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.Long.parseLong(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "integer.parseLong.overflow",
+    "family": "string",
+    "operation": "integer.parseLong",
+    "input": {
+      "text": "9223372036854775808"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.Long.parseLong(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "integer.parseLong.invalid",
+    "family": "string",
+    "operation": "integer.parseLong",
+    "input": {
+      "text": "12x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.lang.Long.parseLong(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  }
+]

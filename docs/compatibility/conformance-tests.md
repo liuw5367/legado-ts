@@ -1,5 +1,13 @@
 # 一致性测试基线
 
+## 独立纯 JVM 差异测试机制
+
+基础工具 API 和解析器的同输入验证由私有包 [`@legado/compatibility-tests`](../../packages/compatibility-tests/README.md) 执行。共享案例、Kotlin/JVM 参考执行器、TS 真实实现适配器、比较器和书源快照均保存在该包；参考源码从固定提交按白名单读取，不修改原 Android 工作树，不依赖 Android SDK 或运行环境。执行 `pnpm --filter @legado/compatibility-tests test` 生成双方实际结果和逐字段差异；机制自身验证使用该包的 `test:mechanism` 与 `test:reference`。
+
+新机制区分 JDK 直接调用、原源码直接编译和带注解/日志适配的原源码证据。结果区分一致、差异、允许差异、未支持和执行器失败；输入与源码摘要随运行保存，执行器不读取 expected。异常映射与允许差异只能逐案例声明。完整协议、命令和适配边界以包 README 为准。
+
+用户提供的 11 源集合已作为固定语料保存，部分真实规则配合合成 HTML 形成基础案例；完整流程与真实站点可用性尚未验证。本机制不会改变下文旧 conformance 案例的 Android 执行状态。新机制稳定并确认等价覆盖后，才能分批删除被替代的旧测试；独有安全、生命周期和缺陷回归继续保留。
+
 ## 当前已有证据
 
 仓库中与书源运行时直接相关的测试包括：

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Runtime result",
+  "type": "object",
+  "required": [
+    "id",
+    "execution"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "execution": {
+      "enum": [
+        "completed",
+        "unsupported",
+        "runner-failed"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "return",
+        "throw"
+      ]
+    },
+    "value": {},
+    "error": {
+      "type": "object",
+      "required": [
+        "class",
+        "message"
+      ],
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "execution": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "outcome"
+        ],
+        "oneOf": [
+          {
+            "properties": {
+              "outcome": {
+                "const": "return"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          },
+          {
+            "properties": {
+              "outcome": {
+                "const": "throw"
+              }
+            },
+            "required": [
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "execution": {
+            "enum": [
+              "unsupported",
+              "runner-failed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reason"
+        ]
+      }
+    }
+  ]
+}

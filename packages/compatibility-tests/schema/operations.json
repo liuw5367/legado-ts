@@ -1,0 +1,184 @@
+{
+  "rule.split": {
+    "required": [
+      "rule",
+      "operator"
+    ],
+    "properties": {
+      "rule": "string",
+      "operator": "string",
+      "code": "boolean"
+    }
+  },
+  "rule.inner": {
+    "required": [
+      "rule",
+      "values"
+    ],
+    "properties": {
+      "rule": "string",
+      "values": "object"
+    }
+  },
+  "regex.first": {
+    "required": [
+      "text",
+      "patterns"
+    ],
+    "properties": {
+      "text": "string",
+      "patterns": "strings"
+    }
+  },
+  "regex.all": {
+    "required": [
+      "text",
+      "patterns"
+    ],
+    "properties": {
+      "text": "string",
+      "patterns": "strings"
+    }
+  },
+  "string.split": {
+    "required": [
+      "text",
+      "pattern",
+      "limit"
+    ],
+    "properties": {
+      "text": "string",
+      "pattern": "string",
+      "limit": "integer"
+    }
+  },
+  "string.replaceAll": {
+    "required": [
+      "text",
+      "pattern",
+      "replacement"
+    ],
+    "properties": {
+      "text": "string",
+      "pattern": "string",
+      "replacement": "string"
+    }
+  },
+  "string.replaceFirst": {
+    "required": [
+      "text",
+      "pattern",
+      "replacement"
+    ],
+    "properties": {
+      "text": "string",
+      "pattern": "string",
+      "replacement": "string"
+    }
+  },
+  "pattern.quote": {
+    "required": [
+      "text"
+    ],
+    "properties": {
+      "text": "string"
+    }
+  },
+  "integer.parseLong": {
+    "required": [
+      "text"
+    ],
+    "properties": {
+      "text": "string"
+    }
+  },
+  "encoding.base64Encode": {
+    "required": [
+      "text"
+    ],
+    "properties": {
+      "text": "string"
+    }
+  },
+  "encoding.base64Decode": {
+    "required": [
+      "text"
+    ],
+    "properties": {
+      "text": "string"
+    }
+  },
+  "encoding.urlEncode": {
+    "required": [
+      "text"
+    ],
+    "properties": {
+      "text": "string"
+    }
+  },
+  "encoding.urlDecode": {
+    "required": [
+      "text"
+    ],
+    "properties": {
+      "text": "string"
+    }
+  },
+  "encoding.md5": {
+    "required": [
+      "text"
+    ],
+    "properties": {
+      "text": "string"
+    }
+  },
+  "url.parts": {
+    "required": [
+      "url"
+    ],
+    "properties": {
+      "url": "string",
+      "base": "string"
+    }
+  },
+  "css.string": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
+  },
+  "css.list": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
+  },
+  "json.string": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
+  },
+  "json.list": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
+  }
+}

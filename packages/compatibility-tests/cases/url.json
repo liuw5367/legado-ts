@@ -1,0 +1,108 @@
+[
+  {
+    "id": "url.parts.normal",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "https://example.test/p?q=1#x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "url.parts.no-query",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "https://user:pass@example.test/p"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "url.parts.relative",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "../next?q=2",
+      "base": "https://example.test/a/b"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "url.parts.ipv6",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "https://[2001:db8::1]:8080/p"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "url.parts.ftp",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "ftp://example.test/file"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "url.parts.invalid",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "not a URL"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "url.parts.empty",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "error"
+    ]
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "commit": "32a87b253e7cc28273c3850de86242caac83f1fd",
+  "versions": {
+    "kotlin": "2.4.10",
+    "gson": "2.14.0",
+    "jsoup": "1.23.2",
+    "jsonPath": "3.0.0",
+    "jsoupxpath": "2.5.3"
+  },
+  "files": [
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/RuleAnalyzer.kt",
+      "sha256": "74ab0152bce9d5e014cc69d9c6974cbb093d8353200f1452066f7d05102265a7"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByRegex.kt",
+      "sha256": "b3d8e3266516415ecd0709cca952965704898682ef61179ddff383ef27e0c321"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByJSoup.kt",
+      "sha256": "9889421f76a8fda62b0b874e70d0535f2b781b59a9c84fa797af695a9f8cccfa"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/SourceHtmlParser.kt",
+      "sha256": "252630eef2545dc71b3c30905accc93dc834b78bfff2f207769e2aabfd3ed19a"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByJSonPath.kt",
+      "sha256": "ee5ee9ebc95b4f5d6e2d459d6f727fccd10a6bd6a36ce872547f6cee5684109d"
+    }
+  ],
+  "adaptations": [
+    {
+      "file": "jvm/src/main/kotlin/androidx/annotation/Keep.kt",
+      "reason": "构建期注解，无 Android 运行行为"
+    },
+    {
+      "file": "jvm/src/main/kotlin/io/legado/app/utils/Debug.kt",
+      "reason": "原函数异常处理保持原样，调试日志仅输出 stderr，不污染 JSON 结果协议"
+    }
+  ]
+}

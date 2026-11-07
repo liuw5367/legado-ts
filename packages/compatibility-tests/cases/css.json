@@ -1,0 +1,438 @@
+[
+  {
+    "id": "css.string.legacy",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.book@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.legacy",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.book@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.css",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "@css:a.book@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.css",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "@css:a.book@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.negative",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.book.-1@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.negative",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.book.-1@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.textNodes",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.book.0@textNodes",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.textNodes",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.book.0@textNodes",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.attribute",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.book@href",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.attribute",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.book@href",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.none",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "class.missing@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.none",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "class.missing@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.xml",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.Item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item>甲</Item><item>乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.xml",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.Item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item>甲</Item><item>乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.selfclose",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.a@text",
+      "content": "<a href=\"/a\"/><div>正文</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.selfclose",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.a@text",
+      "content": "<a href=\"/a\"/><div>正文</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.invalid",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "@css:???@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "css.list.invalid",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "@css:???@text",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "css.string.quoted-at",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "a[href=\"@\"]@text",
+      "content": "<a href=\"@\">地址</a>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.quoted-at",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "a[href=\"@\"]@text",
+      "content": "<a href=\"@\">地址</a>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.string.empty-rule",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "css.list.empty-rule",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "",
+      "content": "<main><a class=\"book hot\" href=\"/a\">甲<b>子</b>尾</a><a class=\"book\" href=\"/b\">乙</a></main>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "corpus.source-0.search-name",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "@CSS:.name a@text",
+      "content": "<li><span class=\"name\"><a href=\"/book/1\">测试书名</a></span></li>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 0,
+      "field": "ruleSearch.name"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "测试书名"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-0.search-bookUrl",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "@CSS:.name a@href",
+      "content": "<li><span class=\"name\"><a href=\"/book/1\">测试书名</a></span></li>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 0,
+      "field": "ruleSearch.bookUrl"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "/book/1"
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-1.search-author",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "@css:p:nth-of-type(2) a@text",
+      "content": "<tr><td><p><a>书名</a></p><p><a>测试作者</a></p></td></tr>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 1,
+      "field": "ruleSearch.author"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "测试作者"
+      ]
+    }
+  }
+]

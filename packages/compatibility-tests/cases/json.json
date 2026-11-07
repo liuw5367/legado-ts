@@ -1,0 +1,322 @@
+[
+  {
+    "id": "json.string.scalar",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.scalar",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.list",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.items[*].name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.list",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.items[*].name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.missing",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.missing",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.missing",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.missing",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.null",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.nil",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.null",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.nil",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.empty",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.empty",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.empty",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.empty",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.filter",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.items[?(@.n > 1)].name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.filter",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.items[?(@.n > 1)].name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.combined",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.name&&$.items[0].name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.combined",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.name&&$.items[0].name",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.inline",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "前{$.name}后",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.list.inline",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "前{$.name}后",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "json.string.invalid-json",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.name",
+      "content": "{"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "json.list.invalid-json",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.name",
+      "content": "{"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "json.string.invalid-path",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.[",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  },
+  {
+    "id": "json.list.invalid-path",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.[",
+      "content": "{\"name\": \"中文\", \"nil\": null, \"items\": [{\"name\": \"甲\", \"n\": 1}, {\"name\": \"乙\", \"n\": 2}], \"empty\": []}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "error"
+    ]
+  }
+]

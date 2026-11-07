@@ -1,0 +1,71 @@
+# JVM / TypeScript 兼容测试
+
+这个私有工作区包让 Kotlin/Java 参考端和当前 TypeScript 实现执行同一份 JSON 输入，逐字段报告结果差异。基础 API、解析器、执行器和案例都保存在本包；原 Android 仓库只提供固定提交的只读源码，不存放测试代码。
+
+参考端使用普通 JDK 21、Maven 和 Kotlin/JVM，不使用 Android SDK、android.jar、Android Gradle Plugin、Robolectric 或设备。Maven 使用包内公开 Central 配置、包内依赖缓存和进程内 Kotlin 编译，避免读取个人镜像凭证或启动 Kotlin 后台服务。
+
+## 执行
+
+在已安装本仓库 Node 依赖的根目录执行：
+
+```sh
+pnpm --filter @legado/compatibility-tests prepare:jvm
+pnpm --filter @legado/compatibility-tests test
+pnpm --filter @legado/compatibility-tests test --family regex
+pnpm --filter @legado/compatibility-tests test --case string.split.empty
+```
+
+`test` 先验证测试机制与 JVM 协议，再执行所选双端案例。首次 JVM 编译需要下载 Maven 依赖；后续在源码、编译设置和依赖摘要匹配时复用构建产物。准备源码默认读取本仓库父目录，也可给 `prepare:jvm` 或 `test` 传入 `--upstream /path/to/legado`。只要求该本地 Git 仓库含锁定提交，不要求工作树处于对应版本；未提交改动不进入参考端。
+
+使用 `JAVA_HOME` 指定独立 JDK 21；本机默认候选为 `/Applications/Android Studio.app/Contents/jbr/Contents/Home`，只使用其中的 Java 可执行文件。其他机器需要设置 `JAVA_HOME`。Maven 的 `mvn` 需要在 PATH 中。
+
+可以分别执行 `test:mechanism`、`test:reference`、`test:ts`、`test:jvm`。单端命令只生成该端结果，不报告跨端通过。本机当前 pnpm 的依赖状态检查会尝试重建现有 node_modules，尚未执行该清理；可使用 `pnpm --config.verifyDepsBeforeRun=false --filter @legado/compatibility-tests test`。也可以直接执行等价入口，使用现有依赖：
+
+```sh
+node --test packages/compatibility-tests/tests/*.test.mjs
+node packages/compatibility-tests/scripts/run.mjs --family css
+```
+
+CLI 参数错误、空选择、来源失败或执行不完整退出 2；行为差异退出 1；全部一致或符合明确允许差异退出 0。未支持不计通过。当前基础案例仍有差异及未支持项，全量差异测试返回非零是预期的诊断结果。不要通过删除案例或自动更新预期获得全绿。
+
+## 输入和参考端
+
+`cases/*.json` 中每条案例包含稳定 id、family、operation、input、reference 和 tags。输入形态由 `schema/operations.json` 声明，加载时校验；JSON Schema 供编辑器或其他执行器使用。规则、文本和字节都使用明确类型；字节结果为 `{ "type": "bytes", "base64": "AA==" }`，Long 为 `{ "type": "integer", "decimal": "9223372036854775807" }`，防止经过 JS number 丢失精度。UTF-16 代理代码单元保留为 JSON Unicode 转义。
+
+`reference-sources.json` 固定上游提交、文件摘要、依赖版本和适配说明。准备脚本用 `git show` 读取白名单文件，校验后原样生成到 `jvm/target/reference/`。原源码的许可证声明保留，原项目许可证见来源仓库的 LICENSE；生成源码、依赖和编译产物不进入版本控制。
+
+参考证据分为三类：
+
+- `jdk-direct`：执行 JDK String、Pattern、Base64、URL、MessageDigest 等 API，只证明该 API，不扩大为 Android 包装器兼容。
+- `upstream-original`：直接编译原源码，目前为 RuleAnalyzer。
+- `upstream-adapted`：原算法保持原样，额外提供无运行行为的 Keep 注解或 stderr 调试日志适配；当前包括 Regex、CSS、JSONPath。
+
+TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 NodeEncodingHost。适配器只映射调用和接口结果形态：字符串接口将字段列表按换行合并，列表接口保留条目顺序；正则链调用真实 evaluator 并传递匹配结果。不能在参考执行器中重新实现待比较算法。独立 `innerRule` 在 TS 无对应入口，当前显式报告 unsupported；JSONPath 内嵌规则另有双端案例。
+
+本包初期只覆盖纯函数和轻依赖解析器。AnalyzeRule、AnalyzeUrl、WebBook 等应用入口没有被整体编译。JVM 与 TS 的可观察入口不同，输出差异需要结合适配边界判断，不能将报告中的全部条目直接视为已确认缺陷。
+
+## 输出和比较
+
+每次运行在 `output/run-*` 下生成独立目录：
+
+- `cases.json`：实际所选输入。
+- `metadata.json`：输入摘要、双方源码身份、Node 版本、命令和时间。
+- `jvm.json` / `ts.json`：实际结果与各端元数据；JVM 记录 JDK、原源码、适配、依赖及编译产物摘要。
+- `*.stderr.log`：参考库或执行器的原始日志。
+- `report.json` / `report.md`：总体统计、每例状态、JSON 路径和双方值。基础机制先报告结果和异常，原库吞掉的异常可能只出现在 stderr。
+
+结果先区分 `completed`、`unsupported`、`runner-failed`，正常执行再区分 `return` 和 `throw`。每例超时 5 秒；超时、异常退出或协议损坏后关闭进程，下一例重新启动。普通函数异常保留为被测结果并继续后续案例。函数族适配器为每例创建新宿主；持久缓存、全局状态和并发 API 尚不在此隔离承诺内。构建命令应串行执行，不同时修改或准备同一包的 JVM 构建目录。
+
+默认只忽略对象键顺序；保留数组顺序、query、null、缺失、空串、空数组及错误原始类别和文本。双方类别名不同的异常仍报告差异；需要比较错误语义时，在具体案例声明 `errorEquivalence.category/jvm/ts`，原始输出仍保留。
+
+允许差异通过 `allowedDifferences` 指定 JSON 路径、jvm 值、ts 值及原因，三者必须精确匹配才生效；没有全局忽略项。`expected` 为可选的额外独立断言，使用 `{ "outcome": "return", "value": ... }` 形态。两端执行器不读取它。当前 MD5 固定向量及真实书源规则案例有额外断言。失败案例仍保留实际输出。
+
+每次双端运行都重新生成结果，比较前核对输入与实现摘要，不复用任意旧输出。构建缓存还会校验实际 class 文件与依赖 JAR 摘要。`output/` 和 `jvm/target/` 可在停止测试后清理，运行命令会重新生成。
+
+## 书源语料和后续流程
+
+`corpus/manifest.json` 保存用户提供的 Yiove 集合来源、采集日期、原始/处理后摘要及字段处理记录；`yiove-11-sources.json` 保存 11 个书源定义。快照排除本地排序、权重、更新时间等字段，不执行脚本、不自动请求书源网站。3 个 `corpus.source-*` 案例使用其中的真实规则和合成 HTML，origin 指回书源及具体字段。
+
+完整搜索、详情、目录、正文流程尚未实现。后续增加对应操作时，继续使用共享案例与结果协议，并补充离线响应、请求轨迹和上下文；只有书源定义不能证明完整流程通过。
+
+旧测试继续保留。新机制稳定后，按旧断言到新案例的覆盖映射分批删除重复测试；独有安全、取消、资源释放和历史缺陷回归必须保留或迁移，删除前执行受影响验证。
