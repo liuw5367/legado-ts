@@ -6,7 +6,8 @@
     "jsoup": "1.23.2",
     "jsonPath": "3.0.0",
     "jsoupxpath": "2.5.3",
-    "htmlunitCoreJs": "5.3.0-legado.4"
+    "htmlunitCoreJs": "5.3.0-legado.4",
+    "okhttp": "5.4.0"
   },
   "files": [
     {
@@ -132,6 +133,10 @@
       ],
       "prefix": "package io.legado.app.utils\nimport java.net.URLEncoder\nimport java.nio.charset.Charset\nobject FlowFormEncoding {\n    private fun StringBuilder.appendEncoded(value: String, checkEncoded: Boolean, charset: Charset) {\n        append(if (checkEncoded && FlowEncodedForm.encodedForm(value)) value else URLEncoder.encode(value, charset))\n    }\n    fun encodeForm(params: String, charset: Charset = Charsets.UTF_8, checkEncoded: Boolean = true): String {",
       "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/help/http/StrResponse.kt",
+      "sha256": "99b7138e4657eec7f7d546aa6ebf4fa5d7a7497d6f3cf79e2dd310fbd9cf722c"
     }
   ],
   "adaptations": [

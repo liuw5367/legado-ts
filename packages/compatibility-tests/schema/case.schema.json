@@ -60,7 +60,8 @@
         "chapter.number",
         "flow.book",
         "flow.toc",
-        "rule.bridgeString"
+        "rule.bridgeString",
+        "rule.bridgeObjects"
       ]
     },
     "input": {
@@ -1513,6 +1514,40 @@
               },
               "redirectUrl": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeObjects"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "headers": {
+                "type": "object"
               }
             },
             "additionalProperties": false

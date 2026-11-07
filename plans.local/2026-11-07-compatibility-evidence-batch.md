@@ -143,6 +143,8 @@ git diff --check
 
 - D1 的 `rule.bridgeString.batch-*` 验证布尔重载、null 回退、首项 URL 和 URL 列表；产品修复使 HTML URL 字符串重载遵循上游 getString0。[修复前](../packages/compatibility-tests/output/run-4ppvuI/report.md)与[复验](../packages/compatibility-tests/output/run-36Hp2E/report.md)。
 
+- D2 的 `rule.bridgeObjects.batch-*` 验证 JDK Map/List、固定上游 Jsoup 节点和原始 StrResponse 配固定 OkHttp 的后续方法调用。规则桥接族 [6/6 一致](../packages/compatibility-tests/output/run-bZpber/report.md)，机制与参考协议 32/32。覆盖范围限于该组具体方法和返回值。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

@@ -1,6 +1,11 @@
 package compat
 
 import com.google.gson.JsonObject
+import io.legado.app.help.http.StrResponse
+import okhttp3.Headers
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
 import org.jsoup.parser.Parser
 import java.net.URL
@@ -24,4 +29,38 @@ internal fun analyzeRuleStringOverloads(input: JsonObject): Any {
         "list" to urls,
         "urlList" to urls.map { URL(redirect, it).toString() }.distinct(),
     )
+}
+
+internal fun bridgeReturnedObjects(input: JsonObject): Any {
+    fun text(key: String) = input.get(key).asString
+    return when (text("kind")) {
+        "map" -> {
+            val map = HashMap<String, String>()
+            val missing = map["item"]
+            val first = map.put("item", "甲")
+            val second = map.put("item", "乙")
+            mapOf("missing" to missing, "first" to first, "second" to second, "current" to map["item"], "size" to map.size)
+        }
+        "list" -> {
+            val list = arrayListOf("甲", null, "乙")
+            mapOf("index" to list[1], "last" to list[2], "items" to list.toArray())
+        }
+        "node" -> {
+            val node = AnalyzeByJSoup(text("content")).getElements(".item")[0]
+            mapOf("text" to node.text(), "selected" to node.select("a").attr("href"))
+        }
+        "response" -> {
+            val headers = Headers.Builder()
+            for ((name, values) in input.getAsJsonObject("headers").entrySet()) {
+                for (value in values.asJsonArray) headers.add(name, value.asString)
+            }
+            val raw = Response.Builder().request(Request.Builder().url(text("url")).build())
+                .protocol(Protocol.HTTP_1_1).code(206).message("Partial Content").headers(headers.build()).build()
+            val response = StrResponse(raw, text("content"))
+            val observed = response.headers()
+            mapOf("body" to response.body(), "status" to response.code(), "missing" to observed["missing"],
+                "last" to observed["x-test"], "all" to observed.values("X-Test"))
+        }
+        else -> throw Unsupported("未知返回对象案例")
+    }
 }

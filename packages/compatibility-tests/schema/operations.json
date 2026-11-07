@@ -441,5 +441,16 @@
       "baseUrl": "string",
       "redirectUrl": "string"
     }
+  },
+  "rule.bridgeObjects": {
+    "required": [
+      "kind"
+    ],
+    "properties": {
+      "kind": "string",
+      "content": "string",
+      "url": "string",
+      "headers": "object"
+    }
   }
 }

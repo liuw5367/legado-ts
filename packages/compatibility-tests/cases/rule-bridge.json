@@ -67,5 +67,124 @@
         "urlList": []
       }
     }
+  },
+  {
+    "id": "rule.bridgeObjects.batch-map",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "map"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JDK HashMap.get/put"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "missing": null,
+        "first": null,
+        "second": "甲",
+        "current": "乙",
+        "size": 1
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeObjects.batch-list",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "list"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JDK ArrayList.get/toArray"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "index": null,
+        "last": "乙",
+        "items": [
+          "甲",
+          null,
+          "乙"
+        ]
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeObjects.batch-node",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "node",
+      "content": "<div class=\"item\"><a href=\"/one\">甲</a><a href=\"/two\">乙</a></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements / Jsoup Element.select"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "text": "甲乙",
+        "selected": "/one"
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeObjects.batch-response",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "response",
+      "url": "https://fixture.invalid/response",
+      "content": "响应体",
+      "headers": {
+        "X-Test": [
+          "first",
+          "second"
+        ]
+      }
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "StrResponse / OkHttp Headers"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "body": "响应体",
+        "status": 206,
+        "missing": null,
+        "last": "second",
+        "all": [
+          "first",
+          "second"
+        ]
+      }
+    }
   }
 ]

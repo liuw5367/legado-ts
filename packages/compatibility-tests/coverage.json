@@ -1634,6 +1634,23 @@
         "rule.bridgeString.batch-content-overloads",
         "rule.bridgeString.batch-empty-overloads"
       ]
+    },
+    {
+      "operation": "rule.bridgeObjects",
+      "method": "AnalyzeRule 返回对象 · Map/List/Element/StrResponse",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → rule.bridgeObjects",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeObjects.batch-map",
+        "rule.bridgeObjects.batch-list",
+        "rule.bridgeObjects.batch-node",
+        "rule.bridgeObjects.batch-response"
+      ]
     }
   ]
 }

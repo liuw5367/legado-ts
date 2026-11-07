@@ -36,6 +36,23 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
   const host = new SourceRuleHost()
   switch (item.operation) {
+    case 'rule.bridgeObjects': {
+      switch (str('kind')) {
+        case 'map': return script(host, 'var m = new Packages.java.util.HashMap(); var missing=m.get("item"); var first=m.put("item","甲"); var second=m.put("item","乙"); return {missing:missing,first:first,second:second,current:m.get("item"),size:m.size()};')
+        case 'list': return script(host, 'var l = new Packages.java.util.ArrayList(); l.add("甲"); l.add(null); l.add("乙"); return {index:l.get(1),last:l.get(2),items:l.toArray()};')
+        case 'node': return script(host, 'var n=java.getElements(".item").get(0); return {text:n.text(),selected:n.select("a").attr("href")};', i.content)
+        case 'response': {
+          const url = str('url')
+          const bridge = new SourceRuleHost({ request: async () => ({ url, status: 206, body: str('content'), headers: i.headers }) })
+          const output = await bridge.executeWorkflowJavaScript({
+            source, stage: 'search', content: '', bindings: { __legadoUrlContext: { url, method: 'GET', headerMap: {} } },
+            code: 'var r=java.getStrResponse(null,null,false); var h=r.headers(); JSON.stringify({body:r.body(),status:r.code(),missing:h.get("missing"),last:h.get("x-test"),all:h.values("X-Test")})',
+          })
+          return JSON.parse(String(checked(output)))
+        }
+        default: throw new UnsupportedOperation('未知返回对象案例')
+      }
+    }
     case 'rule.bridgeString':
       return script(host, `java.setBaseUrl(${json('baseUrl')}); java.setRedirectUrl(${json('redirectUrl')});
         var text = ${json('textRule')}, url = ${json('urlRule')};
