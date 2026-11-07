@@ -435,5 +435,155 @@
         "Illegal URL encoding"
       ]
     }
+  },
+  {
+    "id": "encoding.base64Decode.three-tail-bits",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "YWJ="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "encoding.base64Decode.missing-pad",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "YQ="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-base64",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.base64Decode.single",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "Y"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-base64",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.base64Decode.space",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "Y Q=="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-base64",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.base64Decode.too-many-pad",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "YQ==="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-base64",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.base64Decode.padding-only",
+    "family": "encoding",
+    "operation": "encoding.base64Decode",
+    "input": {
+      "text": "=="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.Decoder.decode(String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-base64",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Base64"
+      ]
+    }
   }
 ]

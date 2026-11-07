@@ -182,6 +182,7 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 每个批次可独立 revert；没有数据库迁移、部署或外部业务写入。台账、案例和原始报告可保留供复现，回退某个运行时修复不需要删除对应失败案例。异常语义放宽须能回退为 rawComparison 检查，历史原始信息不丢失。
 
 ## 完成记录
+- B2/R09 已修复：Java 基本 Base64 与 Node 严格宿主解码分离；31 个编码族案例行为一致（含两类尾位、非法补位/空白），148 项宿主/adapter 回归通过。报告 output/run-zWcPVn。
 - B2/R03 已修复：URL 方法 12/12 行为一致，含 userInfo、IPv6、端口、空 query/ref；保留 JS 属性语义。修正一个旧宿主断言，其 getAuthority 预期遗漏用户信息，独立 JDK 证据确认后更新；118 项回归通过。报告 output/run-AElWIJ → output/run-SLgG2e。
 - B2/R01 已修复：新增 URLDecoder 与指定字符集表单解码。修复前缺入口，修复后 10 个解码案例通过，含 GBK 和不完整 UTF-8 的替换语义；编码族剩余 Base64 尾位一项属于下一问题。原宿主 118 项回归通过。报告 output/run-bjlAQq → output/run-JRhHMR。
 - B1/R02 已修复：String.split 与 Pattern.split 共 46 个案例行为通过；旧 helper 在当前构建入口复现 14 个行为差异，修复后为 0。SourceRuleHost 既有 118 项回归通过。报告 output/run-stQAaf → output/run-71mZvL。

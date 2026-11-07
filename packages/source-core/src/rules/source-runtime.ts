@@ -1240,7 +1240,7 @@ const legadoPattern = {
 const legadoMatcher = { quoteReplacement: (value) => String(value ?? "").replace(/[\\$]/gu, "\\$&") }
 const legadoBase64 = {
   getEncoder: () => { const flags = 2; const encoder = { encodeToString: (value) => request({ kind: "base64-encode", value, flags }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags })).getBytes("UTF-8"), withoutPadding: () => { const noPadding = 3; return { encodeToString: (value) => request({ kind: "base64-encode", value, flags: noPadding }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags: noPadding })).getBytes("UTF-8") } } }; return encoder },
-  getDecoder: () => ({ decode: (value) => request({ kind: "base64-decode-bytes", value: String(value) }) }),
+  getDecoder: () => ({ decode: (value) => request({ kind: "java-base64-decode", value }) }),
 }
 const legadoByteArrayInputStream = function(input, offset, length) {
   const bytes = legadoBytesValue(input)
@@ -2239,6 +2239,25 @@ function base64DecodeWithFlags(encoding: EncodingHost, value: unknown, flagsValu
   if (input.length % 4 === 2) input += '=='
   else if (input.length % 4 === 3) input += '='
   return encoding.base64Decode(input)
+}
+
+/** Java 基本 Base64 接受末尾未使用位，但严格验证字符、长度和补位；不放宽宿主编码器。 */
+function decodeJavaBase64(encoding: EncodingHost, value: unknown): Uint8Array {
+  const input = typeof value === 'string' ? value : encoding.decode(byteValue(value), 'ISO-8859-1')
+  // 基本模式不允许空白或 URL-safe 字符；补位只能出现在结尾。
+  if (!/^[A-Za-z0-9+/]*={0,2}$/u.test(input)) throw new Error('invalid Base64 input')
+  const padding = input.indexOf('=')
+  const data = padding < 0 ? input : input.slice(0, padding)
+  const remainder = data.length % 4
+  if (remainder === 1 || (padding >= 0 && (input.length % 4 !== 0 || remainder < 2 || input.length - data.length !== 4 - remainder))) throw new Error('invalid Base64 input')
+  let canonical = data
+  if (remainder === 2 || remainder === 3) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    const last = alphabet.indexOf(data[data.length - 1]!)
+    canonical = data.slice(0, -1) + alphabet[last & (remainder === 2 ? 48 : 60)]!
+    canonical += '='.repeat(4 - remainder)
+  }
+  return encoding.base64Decode(canonical)
 }
 
 /** JDK 表单解码：只解码百分号字节，+ 为空格；非法百分号抛错，字符字节交给指定字符集。 */
@@ -3672,6 +3691,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return { source: compiled.regex.source, flags: compiled.regex.flags }
     }
     if (request.kind === 'base64-encode') return base64EncodeWithFlags(this.encoding, request.value instanceof Uint8Array || request.value instanceof ArrayBuffer ? byteValue(request.value) : textValue(request.value), request.flags)
+    if (request.kind === 'java-base64-decode') return decodeJavaBase64(this.encoding, request.value)
     if (request.kind === 'base64-decode-bytes') {
       return base64DecodeWithFlags(this.encoding, request.value, request.flags)
     }

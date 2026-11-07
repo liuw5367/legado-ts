@@ -187,7 +187,7 @@
         "encoding.base64Decode.tail-bits"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -198,8 +198,10 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-zWcPVn/report.json"
+      ],
+      "resolution": "Java 基本 Base64 单独校验字母表/长度/补位并规范末尾无用位；NodeEncodingHost 严格策略未改变"
     },
     {
       "id": "R10",

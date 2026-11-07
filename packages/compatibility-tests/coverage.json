@@ -202,7 +202,13 @@
         "encoding.base64Decode.normal",
         "encoding.base64Decode.unpadded",
         "encoding.base64Decode.invalid",
-        "encoding.base64Decode.tail-bits"
+        "encoding.base64Decode.tail-bits",
+        "encoding.base64Decode.three-tail-bits",
+        "encoding.base64Decode.missing-pad",
+        "encoding.base64Decode.single",
+        "encoding.base64Decode.space",
+        "encoding.base64Decode.too-many-pad",
+        "encoding.base64Decode.padding-only"
       ]
     },
     {
