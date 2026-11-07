@@ -278,7 +278,12 @@
         "url.parts.ipv6",
         "url.parts.ftp",
         "url.parts.invalid",
-        "url.parts.empty"
+        "url.parts.empty",
+        "url.parts.explicit-port",
+        "url.parts.userinfo-ipv6",
+        "url.parts.empty-query",
+        "url.parts.empty-fragment",
+        "url.parts.empty-query-fragment"
       ]
     },
     {

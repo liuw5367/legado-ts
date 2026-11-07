@@ -128,5 +128,80 @@
         "Malformed URL"
       ]
     }
+  },
+  {
+    "id": "url.parts.explicit-port",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "http://example.test:8080/p"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "url.parts.userinfo-ipv6",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "https://user:pass@[2001:db8::1]:8080/p?q=1#x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "url.parts.empty-query",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "https://example.test/p?"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "url.parts.empty-fragment",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "https://example.test/p#"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "url.parts.empty-query-fragment",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "https://example.test/p?#"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "java.net.URL getters"
+    },
+    "tags": [
+      "edge"
+    ]
   }
 ]

@@ -996,7 +996,7 @@ test('jsLib 等待队列取消后会释放后续执行', async () => {
 test('java.toURL 保留 IPv6 authority 和已编码查询参数名', async () => {
   const result = await evaluate(new SourceRuleHost(), '@js:JSON.stringify((() => { const url = java.toURL("https://[2001:db8::1]:8080/p?a%20b=x+y#frag"); const noQuery = java.toURL("https://user:pass@example.test/p"); return [url.host, url.hostname, url.port, url.origin, url.search, url.searchParams.get("a%20b"), url.searchParams.toString(), noQuery.searchParams === null, noQuery.getProtocol(), noQuery.getHost(), noQuery.getPort(), noQuery.getDefaultPort(), noQuery.getPath(), noQuery.getFile(), noQuery.getQuery(), noQuery.getRef(), noQuery.getAuthority(), noQuery.getUserInfo()]; })())', '')
   assert.equal(result.status, 'success', result.message)
-  assert.deepEqual(JSON.parse(String(result.value)), ['[2001:db8::1]:8080', '[2001:db8::1]', '8080', 'https://[2001:db8::1]:8080', '?a%20b=x+y', 'x y', 'a%20b=x+y', true, 'https', 'example.test', -1, 443, '/p', '/p', null, null, 'example.test', 'user:pass'])
+  assert.deepEqual(JSON.parse(String(result.value)), ['[2001:db8::1]:8080', '[2001:db8::1]', '8080', 'https://[2001:db8::1]:8080', '?a%20b=x+y', 'x y', 'a%20b=x+y', true, 'https', 'example.test', -1, 443, '/p', '/p', null, null, 'user:pass@example.test', 'user:pass'])
 })
 
 test('java.toURL 对无基址非法地址抛出可识别异常并提供 FTP 默认端口', async () => {

@@ -58,7 +58,7 @@
         "url.parts.ipv6"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -69,8 +69,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-AElWIJ/report.json",
+        "output/run-SLgG2e/report.json"
+      ],
+      "resolution": "Java getter 区分 hostname/host，authority 保留用户信息，query/ref 的缺失与显式空值分别处理；JS 属性未改"
     },
     {
       "id": "R04",

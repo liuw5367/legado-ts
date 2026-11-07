@@ -1953,19 +1953,23 @@ java.toURL = (value, base) => {
       result.origin = __legadoProtocol.length === 0 ? "" : __legadoProtocol + "//" + __legadoAuthority
     }
   }
+  const __legadoFragmentIndex = __legadoURLText.indexOf("#")
+  const __legadoQueryIndex = __legadoURLText.indexOf("?")
+  const __legadoHasQuery = __legadoQueryIndex >= 0 && (__legadoFragmentIndex < 0 || __legadoQueryIndex < __legadoFragmentIndex)
+  const __legadoRawQuery = __legadoHasQuery ? __legadoURLText.slice(__legadoQueryIndex + 1, __legadoFragmentIndex < 0 ? undefined : __legadoFragmentIndex) : null
   const __legadoURLPort = String(result.port ?? "")
   const __legadoURLProtocol = String(result.protocol ?? "").toLowerCase()
   const __legadoURLDefaultPort = __legadoURLProtocol === "http:" ? 80 : __legadoURLProtocol === "https:" ? 443 : __legadoURLProtocol === "ftp:" ? 21 : -1
   Object.assign(result, {
     getProtocol: () => String(result.protocol ?? "").replace(/:$/u, ""),
-    getHost: () => String(result.host ?? ""),
+    getHost: () => String(result.hostname ?? result.host ?? ""),
     getPort: () => __legadoURLPort.length === 0 ? -1 : Number(__legadoURLPort),
     getDefaultPort: () => __legadoURLDefaultPort,
     getPath: () => String(result.pathname ?? ""),
-    getQuery: () => String(result.query ?? "") || null,
-    getRef: () => { const value = String(result.hash ?? ""); return value.length > 0 ? value.slice(1) : null },
-    getFile: () => String(result.file ?? String(result.pathname ?? "") + String(result.search ?? "")),
-    getAuthority: () => String(result.authority ?? result.host ?? ""),
+    getQuery: () => __legadoRawQuery,
+    getRef: () => __legadoFragmentIndex < 0 ? null : __legadoURLText.slice(__legadoFragmentIndex + 1),
+    getFile: () => String(result.pathname ?? "") + (__legadoHasQuery ? "?" + __legadoRawQuery : ""),
+    getAuthority: () => String(__legadoAuthorityMatch?.[2] ?? result.authority ?? result.host ?? ""),
     getUserInfo: () => String(result.userInfo ?? "") || null,
   })
   const query = String(result.query ?? "")
