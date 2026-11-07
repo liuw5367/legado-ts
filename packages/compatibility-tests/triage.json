@@ -676,6 +676,42 @@
         "output/run-QrAmKV/report.json",
         "output/run-DHjdRZ/report.json"
       ]
+    },
+    {
+      "id": "C7-JS-REPLACE",
+      "caseIds": [
+        "corpus.source-10.ruleSearch.lastChapter",
+        "corpus.source-10.ruleExplore.lastChapter",
+        "corpus.source-10.ruleBookInfo.lastChapter"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeRule / pinned Rhino"
+      },
+      "tsEntry": "SourceRuleHost → splitSourceRuleSegments",
+      "evidence": [
+        "output/run-m2rBgq/report.json"
+      ]
+    },
+    {
+      "id": "C7-NODE-STRING",
+      "caseIds": [
+        "corpus.source-6.ruleToc.chapterList"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeRule / pinned Rhino"
+      },
+      "tsEntry": "SourceRuleHost → Java node string conversion",
+      "evidence": [
+        "output/run-m2rBgq/report.json"
+      ]
     }
   ]
 }

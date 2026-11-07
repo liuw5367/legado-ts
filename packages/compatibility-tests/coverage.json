@@ -1276,6 +1276,25 @@
         "corpus.source-10.ruleBookInfo.intro",
         "corpus.source-10.ruleToc.updateTime"
       ]
+    },
+    {
+      "operation": "corpus.script",
+      "method": "AnalyzeRule.getString/getElements / evalJS",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → java.getString/getElements",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "corpus.source-1.ruleSearch.hasMoreRule",
+        "corpus.source-4.ruleBookInfo.intro",
+        "corpus.source-6.ruleToc.chapterList",
+        "corpus.source-10.ruleSearch.lastChapter",
+        "corpus.source-10.ruleExplore.lastChapter",
+        "corpus.source-10.ruleBookInfo.lastChapter",
+        "corpus.source-10.ruleToc.chapterList"
+      ]
     }
   ]
 }

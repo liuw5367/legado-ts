@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile, access, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { root, readJson, sha256, stable, git, treeHash } from './common.mjs'
 
@@ -22,9 +22,18 @@ export async function prepare(upstream) {
     if (sha256(text) !== entry.sha256) throw new Error(`参考源码摘要变化: ${entry.path}`)
     const destination = join(directory, 'reference', entry.path)
     await mkdir(resolve(destination, '..'), { recursive: true })
-    await writeFile(destination, text)
+    const generated = entry.sections === undefined ? text : [
+      entry.prefix,
+      ...entry.sections.map(([start, end]) => text.split('\n').slice(start - 1, end).join('\n')),
+      entry.suffix,
+    ].join('\n')
+    await writeFile(destination, generated)
     manifest.push(entry)
   }
+  // 原 Android 工程已随固定提交锁定 Rhino 分支的二进制。
+  const engine = execFileSync('git', ['-C', sourceRoot, 'show', `${lock.commit}:${lock.scriptEngine.path}`], { maxBuffer: 32 * 1024 * 1024 })
+  if (sha256(engine) !== lock.scriptEngine.sha256) throw new Error('Rhino 参考引擎摘要变化')
+  await writeFile(join(directory, 'reference/rhino.jar'), engine)
   const versions = git(sourceRoot, 'show', `${lock.commit}:gradle/libs.versions.toml`)
   for (const [key, version] of Object.entries(lock.versions)) {
     if (!versions.split('\n').some((line) => line.trim() === `${key} = "${version}"`)) throw new Error(`上游版本不匹配: ${key}`)
@@ -60,7 +69,7 @@ export async function prepare(upstream) {
       else reject(new Error(`Maven 构建失败 (${code})，查看 ${join(directory, 'build.log')}`))
     })
   })
-  const metadata = { fingerprint, artifactsHash: await artifactsHash(directory), commit: lock.commit, sources: manifest, adaptations: lock.adaptations, versions: lock.versions, jvmHash, javaHome }
+  const metadata = { fingerprint, artifactsHash: await artifactsHash(directory), commit: lock.commit, sources: manifest, scriptEngine: lock.scriptEngine, adaptations: lock.adaptations, versions: lock.versions, jvmHash, javaHome }
   await writeFile(metadataPath, JSON.stringify(metadata, null, 2) + '\n')
   return { ...metadata, java }
 }

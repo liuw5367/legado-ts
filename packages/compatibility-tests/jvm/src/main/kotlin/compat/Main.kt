@@ -150,6 +150,7 @@ private fun execute(item: JsonObject): Any? {
             val context = input.get("contextRule")?.asString?.let { AnalyzeByJSoup(content).getElements(it).first() }
             corpusCssString(text("rule"), context ?: content)
         }
+        "corpus.script" -> corpusScriptRule(text("rule"), text("content"), input.get("nodes")?.asBoolean == true, text("custom"))
         "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
         "json.read" -> {
             val config = Configuration.defaultConfiguration()

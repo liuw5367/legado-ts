@@ -1,0 +1,209 @@
+[
+  {
+    "id": "corpus.source-1.ruleSearch.hasMoreRule",
+    "family": "corpus",
+    "operation": "corpus.script",
+    "input": {
+      "rule": "<js>false</js>",
+      "content": "<p>页</p>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule offline script stages / upstream Rhino"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 1,
+      "field": "ruleSearch.hasMoreRule"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "false"
+    }
+  },
+  {
+    "id": "corpus.source-4.ruleBookInfo.intro",
+    "family": "corpus",
+    "operation": "corpus.script",
+    "input": {
+      "rule": "id.bookintro@p.0@text##(^|[。！？]+[”」）】]?)##$1<br>@js:result.replace(/最新.*关于：/g,\"\")",
+      "content": "<div id=\"bookintro\"><p>最新公告关于：正文。第二句</p></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule offline script stages / upstream Rhino"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 4,
+      "field": "ruleBookInfo.intro"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "<br>正文。<br>第二句"
+    }
+  },
+  {
+    "id": "corpus.source-6.ruleToc.chapterList",
+    "family": "corpus",
+    "operation": "corpus.script",
+    "input": {
+      "rule": "@js:\nvar nodes = java.getElements(\"class.listmain@tag.dl@children\");\nvar inFullToc = false;\nnodes.filter(function (node) {\n    var html = String(node);\n    if (/^<dt\\b/i.test(html)) {\n        inFullToc = html.indexOf(\"最新章节\") === -1;\n    }\n    return inFullToc && /^<dd\\b/i.test(html);\n});",
+      "content": "<div class=\"listmain\"><dl><dt>最新章节</dt><dd>忽略</dd><dt>正文</dt><dd id=\"a\">第1章</dd><dd>第2章</dd></dl></div>",
+      "nodes": true
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule offline script stages / upstream Rhino"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 6,
+      "field": "ruleToc.chapterList"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "dd",
+          "text": "第1章",
+          "id": "a"
+        },
+        {
+          "tag": "dd",
+          "text": "第2章",
+          "id": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleSearch.lastChapter",
+    "family": "corpus",
+    "operation": "corpus.script",
+    "input": {
+      "rule": "{{@@.c_value.4@text}}•{{@@.c_value.5@text}}\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+      "content": "<span class=\"c_value\">甲</span><span class=\"c_value\">乙</span><span class=\"c_value\">丙</span><span class=\"c_value\">丁</span><span class=\"c_value\">第十二章</span><span class=\"c_value\">今日</span>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule offline script stages / upstream Rhino"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleSearch.lastChapter"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "第12章•今日"
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleExplore.lastChapter",
+    "family": "corpus",
+    "operation": "corpus.script",
+    "input": {
+      "rule": "a.3@text\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+      "content": "<a>甲</a><a>乙</a><a>丙</a><a>第十二章</a>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule offline script stages / upstream Rhino"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleExplore.lastChapter"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "第12章"
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleBookInfo.lastChapter",
+    "family": "corpus",
+    "operation": "corpus.script",
+    "input": {
+      "rule": "{{@@h3@text}}･{{@@.tabvalue@table@tbody@td.2@text##.*：|\\s.*}}\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+      "content": "<h3>第十二章</h3><div class=\"tabvalue\"><table><tbody><tr><td>甲</td><td>乙</td><td>更新时间：昨日</td></tr></tbody></table></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule offline script stages / upstream Rhino"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleBookInfo.lastChapter"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "第12章･昨日"
+    }
+  },
+  {
+    "id": "corpus.source-10.ruleToc.chapterList",
+    "family": "corpus",
+    "operation": "corpus.script",
+    "input": {
+      "rule": "li.chapter@a\n<js>\nvar r=result;\nvar v=book.getVariable(\"custom\")\nvar b=[];\nif(v!=\"\"){\n        for(i=0;i<r.length-v;i++){\n                b.push(r[i]);\n                }\n                result=b;\n        }\n        result\n</js>",
+      "content": "<ul><li class=\"chapter\"><a id=\"c1\">第1章</a></li><li class=\"chapter\"><a id=\"c2\">第2章</a></li><li class=\"chapter\"><a id=\"c3\">第3章</a></li></ul>",
+      "nodes": true,
+      "custom": "1"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule offline script stages / upstream Rhino"
+    },
+    "tags": [
+      "corpus",
+      "normal"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleToc.chapterList"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "tag": "a",
+          "text": "第1章",
+          "id": "c1"
+        },
+        {
+          "tag": "a",
+          "text": "第2章",
+          "id": "c2"
+        }
+      ]
+    }
+  }
+]

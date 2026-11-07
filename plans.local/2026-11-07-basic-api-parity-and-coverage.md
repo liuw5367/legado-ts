@@ -235,3 +235,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C7 新增 10 个选择、替换、插值组合，含章节节点上下文。JVM 适配按固定 AnalyzeRule 的顺序组合原 AnalyzeByJSoup 和 Kotlin Regex。24 个语料用例中 23 一致，唯一剩余差异为 Java 正则 \h 被 JS 解释为字面 h（output/run-1u34kP），登记 C7-REGEX-HSPACE。
 
 - C7-REGEX-HSPACE 已修复。Java \h 按水平空白集合转译，字符类中的转义及字面反斜杠均有 JDK 对比。443 个 API 用例全部一致，另有 1 个内部观察项（output/run-DHjdRZ）。119 项宿主回归和 20 项机制检查通过。
+
+- C7 已锁定并校验原仓库 Rhino 二进制，纯 JVM 参考使用其安全作用域，原章节数字方法按固定源文件的行区间原样编译。7 条包含 JS 的语料规则均有离线用例。TS 改用工作流实际使用的 SourceRuleHost.evaluate，节点选择结果仅投影标签、文本和 ID。31 个语料用例中 27 一致、4 差异，分别为 JS 替换后缀和节点字符串（output/run-m2rBgq）。初次将完整规则套在嵌套 Java bridge 的结果另存 output/run-2I07j3，不能代替工作流入口证据。

@@ -5,7 +5,8 @@
     "gson": "2.14.0",
     "jsoup": "1.23.2",
     "jsonPath": "3.0.0",
-    "jsoupxpath": "2.5.3"
+    "jsoupxpath": "2.5.3",
+    "htmlunitCoreJs": "5.3.0-legado.4"
   },
   "files": [
     {
@@ -31,6 +32,42 @@
     {
       "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByXPath.kt",
       "sha256": "b6ee22cc3242313f8d5e3758dc93ff06891eeec7b3ab9ee9267ebac11145d842"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/constant/AppPattern.kt",
+      "sha256": "ddf4dd291c8f6f092783673a8f7ed81af6e8eb6fc02271c42220baa00a5b1ae8"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/utils/StringUtils.kt",
+      "sha256": "cbff908efad61e25163862e2b5ee90281a381f22afd4f3eea6adfcd48b988676",
+      "sections": [
+        [
+          25,
+          25
+        ],
+        [
+          30,
+          51
+        ],
+        [
+          134,
+          219
+        ]
+      ],
+      "prefix": "package io.legado.app.utils\n\nobject StringUtils {",
+      "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/help/JsExtensions.kt",
+      "sha256": "b587bd35e58898a0197abedb352a2acbe8c1a3c5c24573d77d2b7a98b6d7be6c",
+      "sections": [
+        [
+          1167,
+          1175
+        ]
+      ],
+      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\n\nobject CorpusJsExtensions {",
+      "suffix": "}"
     }
   ],
   "adaptations": [
@@ -45,6 +82,14 @@
     {
       "file": "jvm/src/main/kotlin/android/text/TextUtils.kt",
       "reason": "仅提供 XPath getString 所需的 Iterable join；保持顺序、分隔符、null/toString 语义，独立测试；不引入 Android 运行库"
+    },
+    {
+      "file": "scripts/prepare-jvm.mjs",
+      "reason": "从校验过原文件摘要的 StringUtils 和 JsExtensions 提取纯章节数字方法，函数体原样编译。"
     }
-  ]
+  ],
+  "scriptEngine": {
+    "path": "third_party/maven/org/htmlunit/htmlunit-core-js/5.3.0-legado.4/htmlunit-core-js-5.3.0-legado.4.jar",
+    "sha256": "d720f34285515025e4ccc80a5b92aed42cb26c03a7715ca53583d2c74ae51df7"
+  }
 }

@@ -370,5 +370,17 @@
       "rule": "string",
       "contextRule": "string"
     }
+  },
+  "corpus.script": {
+    "required": [
+      "rule",
+      "content"
+    ],
+    "properties": {
+      "rule": "string",
+      "content": "string",
+      "nodes": "boolean",
+      "custom": "string"
+    }
   }
 }

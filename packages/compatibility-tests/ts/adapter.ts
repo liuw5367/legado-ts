@@ -106,6 +106,14 @@ export async function execute(item: CaseInput): Promise<unknown> {
       const context = i.contextRule === undefined ? '' : `,java.getElements(${json('contextRule')}).first()`
       return script(host, `return java.getString(${json('rule')}${context})`, i.content)
     }
+    case 'corpus.script': {
+      const nodes = i.nodes === true
+      const bindings = i.custom === undefined ? undefined : { book: { variable: JSON.stringify({ custom: i.custom }) } }
+      const output = await host.evaluate({ source, stage: nodes ? 'toc' : 'detail', field: 'fixture', rule: str('rule'), content: i.content, expect: nodes ? 'nodes' : 'text', ...(bindings === undefined ? {} : { bindings }) })
+      const value = checked(output)
+      if (nodes) return script(host, 'return java.getElements("<js>result</js>").map(n=>({tag:n.tagName(),text:n.text(),id:n.idName()}))', value)
+      return Array.isArray(value) ? value.map(String).join('\n') : String(value ?? '')
+    }
     case 'css.string':
     case 'css.list':
     {
