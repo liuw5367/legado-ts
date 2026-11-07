@@ -71,6 +71,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'encoding.urlDecode': return script(host, `return Packages.java.net.URLDecoder.decode(${json('text')},${JSON.stringify(str('charset') || 'UTF-8')})`)
     case 'encoding.md5': return script(host, `return java.md5Encode(${json('text')})`)
     case 'url.parts': return script(host, `var u=java.toURL(${json('url')}${i.base === undefined ? '' : `,${json('base')}`}); return {protocol:u.getProtocol(),host:u.getHost(),port:u.getPort(),defaultPort:u.getDefaultPort(),path:u.getPath(),file:u.getFile(),query:u.getQuery(),ref:u.getRef(),authority:u.getAuthority(),userInfo:u.getUserInfo()}`)
+    case 'json.continue': return script(host, `return {first:java.getStringList(${JSON.stringify('@json:' + str('rule'))}),next:java.getString(${JSON.stringify('@json:' + str('nextRule'))})}`, i.content)
     case 'json.read': return new JsonPathParserAdapter().evaluate(JSON.parse(str('content')), str('rule'))
     case 'json.string': return script(host, `return java.getString(${JSON.stringify('@json:' + str('rule'))})`, i.content)
     case 'json.list': return script(host, `return java.getStringList(${JSON.stringify('@json:' + str('rule'))})`, i.content)

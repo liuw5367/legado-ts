@@ -41,7 +41,8 @@
         "json.string",
         "json.list",
         "pattern.split",
-        "json.read"
+        "json.read",
+        "json.continue"
       ]
     },
     "input": {
@@ -762,6 +763,39 @@
                 "type": "string"
               },
               "rule": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "json.continue"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "rule",
+              "nextRule"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
+              },
+              "nextRule": {
                 "type": "string"
               }
             },

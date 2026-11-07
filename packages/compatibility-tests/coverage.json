@@ -364,7 +364,15 @@
         "json.string.inline",
         "json.string.invalid-json",
         "json.string.invalid-path",
-        "json.string.inner-reference"
+        "json.string.inner-reference",
+        "json.string.string-null",
+        "json.string.array-null",
+        "json.string.array-empty",
+        "json.string.number",
+        "json.string.object",
+        "json.string.unquoted-key",
+        "json.string.single-quote",
+        "json.string.trailing-comma"
       ]
     },
     {
@@ -387,7 +395,15 @@
         "json.list.combined",
         "json.list.inline",
         "json.list.invalid-json",
-        "json.list.invalid-path"
+        "json.list.invalid-path",
+        "json.list.string-null",
+        "json.list.array-null",
+        "json.list.array-empty",
+        "json.list.number",
+        "json.list.object",
+        "json.list.unquoted-key",
+        "json.list.single-quote",
+        "json.list.trailing-comma"
       ]
     },
     {
@@ -430,6 +446,18 @@
         "json.read.scalar",
         "json.read.null",
         "json.read.list"
+      ]
+    },
+    {
+      "operation": "json.continue",
+      "method": "AnalyzeByJSonPath.getStringList → getString",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → json.continue",
+      "requiredDimensions": [
+        "continuation"
+      ],
+      "caseIds": [
+        "json.continue.invalid-path"
       ]
     }
   ]

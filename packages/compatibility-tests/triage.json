@@ -82,7 +82,7 @@
         "json.list.null"
       ],
       "classification": "adapter-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -93,9 +93,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
+        "output/run-aY0Xdr/report.json",
+        "output/run-czHTcO/report.json",
+        "output/run-Gn82X4/report.json"
       ],
-      "resolution": "字符串 null 的差异来自适配器；列表 null 仍有实际边界差异，保持 open"
+      "resolution": "区分标量 null、数组 null、字符串 null 和 Java 集合文本；实际 bridge 结果一致"
     },
     {
       "id": "R05",
@@ -104,7 +106,7 @@
         "json.list.invalid-json"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -115,8 +117,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-czHTcO/report.json",
+        "output/run-Gn82X4/report.json"
+      ],
+      "resolution": "使用宽松数据语法解析器，真正解析失败终止；不回退为字符串查询"
     },
     {
       "id": "R06",
@@ -125,7 +130,7 @@
         "json.list.invalid-path"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -136,8 +141,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-czHTcO/report.json",
+        "output/run-Gn82X4/report.json"
+      ],
+      "resolution": "JSON 字符串接口对结构性非法路径返回空值，后续字段仍执行，其他模式预检与预算不变"
     },
     {
       "id": "R07",

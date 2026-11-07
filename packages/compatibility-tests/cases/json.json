@@ -269,7 +269,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-json",
+      "jvm": [
+        "com.jayway.jsonpath.InvalidJsonException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid JSON input"
+      ]
+    }
   },
   {
     "id": "json.list.invalid-json",
@@ -285,7 +297,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-json",
+      "jvm": [
+        "com.jayway.jsonpath.InvalidJsonException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid JSON input"
+      ]
+    }
   },
   {
     "id": "json.string.invalid-path",
@@ -405,5 +429,285 @@
         "乙"
       ]
     }
+  },
+  {
+    "id": "json.string.string-null",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"value\":\"null\"}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.string-null",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"value\":\"null\"}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.array-null",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"value\":[null,\"x\"]}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.array-null",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"value\":[null,\"x\"]}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.array-empty",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"value\":[\"\",\"x\"]}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.array-empty",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"value\":[\"\",\"x\"]}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.number",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"value\":42}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.number",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"value\":42}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.object",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"value\":{\"a\":1}}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.object",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"value\":{\"a\":1}}",
+      "rule": "$.value"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.continue.invalid-path",
+    "family": "json",
+    "operation": "json.continue",
+    "input": {
+      "content": "{\"name\":\"后续值\"}",
+      "rule": "$.[",
+      "nextRule": "$.name"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList → getString"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "first": [],
+        "next": "后续值"
+      }
+    }
+  },
+  {
+    "id": "json.string.unquoted-key",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.value",
+      "content": "{value: \"甲\"}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.unquoted-key",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.value",
+      "content": "{value: \"甲\"}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.single-quote",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.value",
+      "content": "{'value':'甲'}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.single-quote",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.value",
+      "content": "{'value':'甲'}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.trailing-comma",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.value",
+      "content": "{\"value\":\"甲\",}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.list.trailing-comma",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.value",
+      "content": "{\"value\":\"甲\",}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
   }
 ]

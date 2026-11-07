@@ -47,6 +47,7 @@ private fun execute(item: JsonObject): Any? {
         }
         "css.string" -> AnalyzeByJSoup(text("content")).getString(text("rule"))
         "css.list" -> AnalyzeByJSoup(text("content")).getStringList(text("rule"))
+        "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
         "json.read" -> JsonPath.using(Configuration.defaultConfiguration().addOptions(Option.ALWAYS_RETURN_LIST)).parse(text("content")).read<Any>(text("rule"))
         "json.string" -> AnalyzeByJSonPath(text("content")).getString(text("rule"))
         "json.list" -> AnalyzeByJSonPath(text("content")).getStringList(text("rule"))

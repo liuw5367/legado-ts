@@ -2191,7 +2191,7 @@ test('空规则在字段规则里是空，在列表规则里沿用上一份内�
   // 带 ## 替换的空规则是例外：Android 保留内容再应用替换（语料里 replaceRegex 常写成 `##模式`）。
   assert.equal((await evaluate(host, '##正文##', '<div>正文</div>')).value, '<div></div>')
   // 列表规则走 getStringList：`if (rule.isNotEmpty())` 不成立，result 保持整页内容。
-  const list = await host.evaluate({ source, stage: 'detail', field: 'chapterList', rule: '@put:{"savebid":"$.id"}', content: '<div>目录</div>', expect: 'nodes' })
+  const list = await host.evaluate({ source, stage: 'detail', field: 'chapterList', rule: '@put:{"savebid":"$.id"}', content: JSON.stringify({ id: 1, name: '目录' }), expect: 'nodes' })
   assert.notEqual(list.status, 'empty')
   assert.ok(String(list.value).includes('目录'))
 })

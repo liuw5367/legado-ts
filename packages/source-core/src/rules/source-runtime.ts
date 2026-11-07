@@ -1,7 +1,9 @@
 import { compileRule } from './compiler.ts'
+import { scanTopLevel } from './scanner.ts'
 import { compileSourcePattern, replaceWithJavaReplacement } from './pattern-guard.ts'
 import { MemoryVariableView } from './variables.ts'
 import { sourceDefinitionFingerprint } from '../codec/identity.ts'
+import { parseRelaxedJson } from '../codec/relaxed-json.ts'
 import { MemorySourceScriptCache } from '../runtime/source-session.ts'
 import { replaceFont } from '../runtime/font.ts'
 import type {
@@ -2382,12 +2384,18 @@ function isVariableScope(value: unknown): value is JavaScriptVariableScope {
 
 function jsonInput(value: unknown): unknown {
   if (typeof value !== 'string') return value
-  try {
-    // JSON 文本可能带 UTF-8 BOM；先移除 BOM 再解析。
-    return JSON.parse(value.replace(/^\uFEFF/, '')) as unknown
-  } catch {
-    return value
-  }
+  // Jayway 接受单引号、未引号键和尾逗号；复用数据语法解析器，不把解析失败作为字符串查询。
+  const parsed = parseRelaxedJson(value)
+  if (parsed === undefined) throw new SourceRuleError('failed', 'invalid JSON input')
+  return parsed
+}
+
+/** Jayway 字符串读取使用 Java 集合的 toString；保留数组内 null 与对象字段顺序。 */
+function javaJsonText(value: unknown): string {
+  if (value === null || value === undefined) return 'null'
+  if (Array.isArray(value)) return `[${value.map(javaJsonText).join(', ')}]`
+  if (typeof value === 'object') return `{${Object.entries(value).map(([key, item]) => `${key}=${javaJsonText(item)}`).join(', ')}}`
+  return String(value)
 }
 
 function isNodeRef(value: unknown): value is NodeRef {
@@ -2975,7 +2983,15 @@ export class SourceRuleRuntime implements WorkflowRulePort {
 
   private async evaluatePlainText(rule: string, state: EvaluationState, content: unknown): Promise<unknown> {
     const compiled = compileRule(rule, { defaultMode: jsonContent(content) ? 'Json' : 'Default' })
-    if (compiled.rule === undefined) throw new SourceRuleError('failed', compiled.diagnostics[0]?.message ?? '规则编译失败')
+    if (compiled.rule === undefined) {
+      // 原 JSON 字符串接口捕获路径语法错误后返回空值；输入 JSON 解析失败仍须终止。
+      const trimmed = rule.trim()
+      const explicitJson = /^@json:/iu.test(trimmed)
+      if (state.expect === 'text' && compiled.diagnostics[0]?.code === 'unbalanced-rule' && (explicitJson || (!trimmed.startsWith('@') && jsonContent(content)))) {
+        return this.evaluateJson(explicitJson ? trimmed.slice(6) : trimmed, state, content)
+      }
+      throw new SourceRuleError('failed', compiled.diagnostics[0]?.message ?? '规则编译失败')
+    }
     return this.evaluateNode(compiled.rule, state, content)
   }
 
@@ -3161,6 +3177,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   private async evaluateJson(expression: string, state: EvaluationState, content: unknown): Promise<unknown> {
+    const parsed = jsonInput(content)
+    if (state.expect === 'text' && scanTopLevel(expression).diagnostic?.code === 'unbalanced-rule') return []
     const inlineRules = [...expression.matchAll(/\{(\$\.[^{}]+)\}/gu)]
     if (inlineRules.length > 0) {
       let expanded = expression
@@ -3171,11 +3189,16 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       }
       return expanded
     }
-    const value = this.json.evaluate(jsonInput(content), expression)
+    const value = this.json.evaluate(parsed, expression)
     // Android 的确定路径直接返回数组本身，jsonpath-plus 的 wrap 会再包一层；
     // 不拆开会让 `data.books` 这类列表规则只拿到一个「数组项」。
     // 通配/递归/过滤路径的结果本身就是「元素列表」，数组元素是条目而不是外层包装，不能拆。
-    return isDefiniteJsonPath(expression) && Array.isArray(value) && value.length === 1 && Array.isArray(value[0]) ? value[0] : value
+    const definite = isDefiniteJsonPath(expression)
+    const normalized = definite && Array.isArray(value) && value.length === 1 && Array.isArray(value[0]) ? value[0] : value
+    if (state.expect !== 'text') return normalized
+    // 标量 null 在原实现触发可捕获的空结果；数组内 null 则逐项输出文本 null。
+    if (definite && Array.isArray(value) && value.length === 1 && value[0] === null) return []
+    return Array.isArray(normalized) ? normalized.map(javaJsonText) : normalized == null ? [] : [javaJsonText(normalized)]
   }
 
   private evaluateXPath(expression: string, content: unknown, expect: WorkflowRuleRequest['expect']): unknown {

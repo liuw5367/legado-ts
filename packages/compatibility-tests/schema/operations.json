@@ -204,5 +204,17 @@
       "content": "string",
       "rule": "string"
     }
+  },
+  "json.continue": {
+    "required": [
+      "content",
+      "rule",
+      "nextRule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string",
+      "nextRule": "string"
+    }
   }
 }
