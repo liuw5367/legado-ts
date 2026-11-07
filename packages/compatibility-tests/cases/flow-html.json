@@ -1,0 +1,582 @@
+[
+  {
+    "id": "flow.yiove.html.success",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BookList → BookInfo → BookChapterList → BookContent"
+    },
+    "tags": [
+      "html",
+      "offline"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "http://www.xianqihaotianmi.org",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "言情小说阁",
+        "bookSourceUrl": "http://www.xianqihaotianmi.org",
+        "bookSourceType": 0,
+        "bookSourceGroup": "自制书源",
+        "bookSourceComment": "修复表格行被独立解析后 tr/td 标签丢失导致搜索字段为空；该站 HTTPS 证书与域名不匹配，必须使用 HTTP。",
+        "enabled": true,
+        "enabledExplore": false,
+        "enabledCookieJar": false,
+        "concurrentRate": "2",
+        "header": "{\"User-Agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36\",\"Referer\":\"http://www.xianqihaotianmi.org/\"}",
+        "searchUrl": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey={{key}}",
+        "ruleSearch": {
+          "bookList": "@css:table#bookcon tr:not(:first-child)",
+          "name": "@css:p:nth-of-type(1) a@text",
+          "author": "@css:p:nth-of-type(2) a@text",
+          "coverUrl": "@css:p:nth-of-type(1) a@href##.*/book/((\\d+)\\d{3})\\.html.*##http://www.xianqihaotianmi.org/files/article/image/$2/$1/$1s.jpg",
+          "updateTime": "@css:p:nth-of-type(3)@text",
+          "kind": "@css:p:nth-of-type(4)@text",
+          "bookUrl": "@css:p:nth-of-type(1) a@href",
+          "hasMoreRule": "<js>false</js>"
+        },
+        "ruleBookInfo": {
+          "name": "@css:meta[property=\"og:novel:book_name\"]@content",
+          "author": "@css:meta[property=\"og:novel:author\"]@content",
+          "coverUrl": "@css:meta[property=\"og:image\"]@content",
+          "intro": "@css:meta[property=\"og:description\"]@content",
+          "kind": "@css:meta[property=\"og:novel:category\"]@content",
+          "lastChapter": "@css:meta[property=\"og:novel:latest_chapter_name\"]@content",
+          "updateTime": "@css:meta[property=\"og:novel:update_time\"]@content",
+          "tocUrl": "@css:meta[property=\"og:novel:read_url\"]@content"
+        },
+        "ruleToc": {
+          "chapterList": "@css:ul.list-charts li",
+          "chapterName": "@css:a@text",
+          "chapterUrl": "@css:a@href"
+        },
+        "ruleContent": {
+          "title": "@css:div.panel.panel-default > div.panel-heading@text",
+          "content": "@css:div.content-body@html",
+          "replaceRegex": "##(?:&nbsp;|\\u00A0){4}##"
+        }
+      },
+      "keyword": "离线样书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHRhYmxlIGlkPSJib29rY29uIj48dHI+PHRoPuS5puWQjTwvdGg+PC90cj48dHI+PHRkPjxwPjxhIGhyZWY9Imh0dHA6Ly93d3cueGlhbnFpaGFvdGlhbm1pLm9yZy9ib29rLzEyMzQ1Ni5odG1sIj7nprvnur/moLfkuaY8L2E+PC9wPjxwPjxhPuemu+e6v+S9nOiAhTwvYT48L3A+PHA+MjAyNi0wMS0wMTwvcD48cD7lsI/or7Q8L3A+PC90ZD48L3RyPjx0cj48dGQ+PHA+PGEgaHJlZj0iaHR0cDovL3d3dy54aWFucWloYW90aWFubWkub3JnL2Jvb2svMjM0NTY3Lmh0bWwiPuWPpuS4gOWGjDwvYT48L3A+PHA+PGE+56a757q/5L2c6ICFPC9hPjwvcD48cD4yMDI2LTAxLTAxPC9wPjxwPuWwj+ivtDwvcD48L3RkPjwvdHI+PC90YWJsZT4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/book/123456.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/book/123456.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1ldGEgcHJvcGVydHk9Im9nOm5vdmVsOmJvb2tfbmFtZSIgY29udGVudD0i56a757q/5qC35Lmm6K+m54mIIj48bWV0YSBwcm9wZXJ0eT0ib2c6bm92ZWw6YXV0aG9yIiBjb250ZW50PSLor6bmg4XkvZzogIUiPjxtZXRhIHByb3BlcnR5PSJvZzppbWFnZSIgY29udGVudD0iL2NvdmVyLmpwZyI+PG1ldGEgcHJvcGVydHk9Im9nOmRlc2NyaXB0aW9uIiBjb250ZW50PSLoh6rliLbor6bmg4XnroDku4siPjxtZXRhIHByb3BlcnR5PSJvZzpub3ZlbDpjYXRlZ29yeSIgY29udGVudD0i5bm75oOzIj48bWV0YSBwcm9wZXJ0eT0ib2c6bm92ZWw6bGF0ZXN0X2NoYXB0ZXJfbmFtZSIgY29udGVudD0i56ys5LqM56ugIj48bWV0YSBwcm9wZXJ0eT0ib2c6bm92ZWw6dXBkYXRlX3RpbWUiIGNvbnRlbnQ9IjIwMjYtMDItMDEiPjxtZXRhIHByb3BlcnR5PSJvZzpub3ZlbDpyZWFkX3VybCIgY29udGVudD0iL2Jvb2svMTIzNDU2L3RvYy8iPg=="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/book/123456/toc/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsIGNsYXNzPSJsaXN0LWNoYXJ0cyI+PGxpPjxhIGhyZWY9IjEuaHRtbCI+56ys5LiA56ugPC9hPjwvbGk+PGxpPjxhIGhyZWY9IjIuaHRtbCI+56ys5LqM56ugPC9hPjwvbGk+PC91bD4="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0icGFuZWwgcGFuZWwtZGVmYXVsdCI+PGRpdiBjbGFzcz0icGFuZWwtaGVhZGluZyI+5q2j5paH5qCH6aKYPC9kaXY+PC9kaXY+PGRpdiBjbGFzcz0iY29udGVudC1ib2R5Ij7nrKzkuIDmrrUmbmJzcDsmbmJzcDsmbmJzcDsmbmJzcDvnlLI8YnI+56ys5LqM5q61PC9kaXY+"
+          }
+        }
+      },
+      "requestLimit": 4
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "离线样书",
+                "author": "离线作者",
+                "bookUrl": "http://www.xianqihaotianmi.org/book/123456.html",
+                "coverUrl": "http://www.xianqihaotianmi.org/files/article/image/123/123456/123456s.jpg",
+                "kind": "小说"
+              },
+              {
+                "name": "另一册",
+                "author": "离线作者",
+                "bookUrl": "http://www.xianqihaotianmi.org/book/234567.html",
+                "coverUrl": "http://www.xianqihaotianmi.org/files/article/image/234/234567/234567s.jpg",
+                "kind": "小说"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "离线样书",
+              "author": "离线作者",
+              "bookUrl": "http://www.xianqihaotianmi.org/book/123456.html",
+              "coverUrl": "http://www.xianqihaotianmi.org/cover.jpg",
+              "kind": "幻想",
+              "intro": "自制详情简介",
+              "updateTime": "2026-02-01",
+              "lastChapter": "第二章",
+              "tocUrl": "http://www.xianqihaotianmi.org/book/123456/toc/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+                "isVip": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/2.html",
+                "isVip": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "正文标题",
+              "pageCount": 1,
+              "cleaned": "　　第一段 甲\n　　第二段\n　　"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/book/123456.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yiove.html.search-empty",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BookList → BookInfo → BookChapterList → BookContent"
+    },
+    "tags": [
+      "html",
+      "offline"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "http://www.xianqihaotianmi.org",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "言情小说阁",
+        "bookSourceUrl": "http://www.xianqihaotianmi.org",
+        "bookSourceType": 0,
+        "bookSourceGroup": "自制书源",
+        "bookSourceComment": "修复表格行被独立解析后 tr/td 标签丢失导致搜索字段为空；该站 HTTPS 证书与域名不匹配，必须使用 HTTP。",
+        "enabled": true,
+        "enabledExplore": false,
+        "enabledCookieJar": false,
+        "concurrentRate": "2",
+        "header": "{\"User-Agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36\",\"Referer\":\"http://www.xianqihaotianmi.org/\"}",
+        "searchUrl": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey={{key}}",
+        "ruleSearch": {
+          "bookList": "@css:table#bookcon tr:not(:first-child)",
+          "name": "@css:p:nth-of-type(1) a@text",
+          "author": "@css:p:nth-of-type(2) a@text",
+          "coverUrl": "@css:p:nth-of-type(1) a@href##.*/book/((\\d+)\\d{3})\\.html.*##http://www.xianqihaotianmi.org/files/article/image/$2/$1/$1s.jpg",
+          "updateTime": "@css:p:nth-of-type(3)@text",
+          "kind": "@css:p:nth-of-type(4)@text",
+          "bookUrl": "@css:p:nth-of-type(1) a@href",
+          "hasMoreRule": "<js>false</js>"
+        },
+        "ruleBookInfo": {
+          "name": "@css:meta[property=\"og:novel:book_name\"]@content",
+          "author": "@css:meta[property=\"og:novel:author\"]@content",
+          "coverUrl": "@css:meta[property=\"og:image\"]@content",
+          "intro": "@css:meta[property=\"og:description\"]@content",
+          "kind": "@css:meta[property=\"og:novel:category\"]@content",
+          "lastChapter": "@css:meta[property=\"og:novel:latest_chapter_name\"]@content",
+          "updateTime": "@css:meta[property=\"og:novel:update_time\"]@content",
+          "tocUrl": "@css:meta[property=\"og:novel:read_url\"]@content"
+        },
+        "ruleToc": {
+          "chapterList": "@css:ul.list-charts li",
+          "chapterName": "@css:a@text",
+          "chapterUrl": "@css:a@href"
+        },
+        "ruleContent": {
+          "title": "@css:div.panel.panel-default > div.panel-heading@text",
+          "content": "@css:div.content-body@html",
+          "replaceRegex": "##(?:&nbsp;|\\u00A0){4}##"
+        }
+      },
+      "keyword": "离线样书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHRhYmxlIGlkPSJib29rY29uIj48dHI+PHRoPuS5puWQjTwvdGg+PC90cj48L3RhYmxlPg=="
+          }
+        }
+      },
+      "requestLimit": 1
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yiove.html.content-empty",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BookList → BookInfo → BookChapterList → BookContent"
+    },
+    "tags": [
+      "html",
+      "offline"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "http://www.xianqihaotianmi.org",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "言情小说阁",
+        "bookSourceUrl": "http://www.xianqihaotianmi.org",
+        "bookSourceType": 0,
+        "bookSourceGroup": "自制书源",
+        "bookSourceComment": "修复表格行被独立解析后 tr/td 标签丢失导致搜索字段为空；该站 HTTPS 证书与域名不匹配，必须使用 HTTP。",
+        "enabled": true,
+        "enabledExplore": false,
+        "enabledCookieJar": false,
+        "concurrentRate": "2",
+        "header": "{\"User-Agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36\",\"Referer\":\"http://www.xianqihaotianmi.org/\"}",
+        "searchUrl": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey={{key}}",
+        "ruleSearch": {
+          "bookList": "@css:table#bookcon tr:not(:first-child)",
+          "name": "@css:p:nth-of-type(1) a@text",
+          "author": "@css:p:nth-of-type(2) a@text",
+          "coverUrl": "@css:p:nth-of-type(1) a@href##.*/book/((\\d+)\\d{3})\\.html.*##http://www.xianqihaotianmi.org/files/article/image/$2/$1/$1s.jpg",
+          "updateTime": "@css:p:nth-of-type(3)@text",
+          "kind": "@css:p:nth-of-type(4)@text",
+          "bookUrl": "@css:p:nth-of-type(1) a@href",
+          "hasMoreRule": "<js>false</js>"
+        },
+        "ruleBookInfo": {
+          "name": "@css:meta[property=\"og:novel:book_name\"]@content",
+          "author": "@css:meta[property=\"og:novel:author\"]@content",
+          "coverUrl": "@css:meta[property=\"og:image\"]@content",
+          "intro": "@css:meta[property=\"og:description\"]@content",
+          "kind": "@css:meta[property=\"og:novel:category\"]@content",
+          "lastChapter": "@css:meta[property=\"og:novel:latest_chapter_name\"]@content",
+          "updateTime": "@css:meta[property=\"og:novel:update_time\"]@content",
+          "tocUrl": "@css:meta[property=\"og:novel:read_url\"]@content"
+        },
+        "ruleToc": {
+          "chapterList": "@css:ul.list-charts li",
+          "chapterName": "@css:a@text",
+          "chapterUrl": "@css:a@href"
+        },
+        "ruleContent": {
+          "title": "@css:div.panel.panel-default > div.panel-heading@text",
+          "content": "@css:div.content-body@html",
+          "replaceRegex": "##(?:&nbsp;|\\u00A0){4}##"
+        }
+      },
+      "keyword": "离线样书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHRhYmxlIGlkPSJib29rY29uIj48dHI+PHRoPuS5puWQjTwvdGg+PC90cj48dHI+PHRkPjxwPjxhIGhyZWY9Imh0dHA6Ly93d3cueGlhbnFpaGFvdGlhbm1pLm9yZy9ib29rLzEyMzQ1Ni5odG1sIj7nprvnur/moLfkuaY8L2E+PC9wPjxwPjxhPuemu+e6v+S9nOiAhTwvYT48L3A+PHA+MjAyNi0wMS0wMTwvcD48cD7lsI/or7Q8L3A+PC90ZD48L3RyPjx0cj48dGQ+PHA+PGEgaHJlZj0iaHR0cDovL3d3dy54aWFucWloYW90aWFubWkub3JnL2Jvb2svMjM0NTY3Lmh0bWwiPuWPpuS4gOWGjDwvYT48L3A+PHA+PGE+56a757q/5L2c6ICFPC9hPjwvcD48cD4yMDI2LTAxLTAxPC9wPjxwPuWwj+ivtDwvcD48L3RkPjwvdHI+PC90YWJsZT4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/book/123456.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/book/123456.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1ldGEgcHJvcGVydHk9Im9nOm5vdmVsOmJvb2tfbmFtZSIgY29udGVudD0i56a757q/5qC35Lmm6K+m54mIIj48bWV0YSBwcm9wZXJ0eT0ib2c6bm92ZWw6YXV0aG9yIiBjb250ZW50PSLor6bmg4XkvZzogIUiPjxtZXRhIHByb3BlcnR5PSJvZzppbWFnZSIgY29udGVudD0iL2NvdmVyLmpwZyI+PG1ldGEgcHJvcGVydHk9Im9nOmRlc2NyaXB0aW9uIiBjb250ZW50PSLoh6rliLbor6bmg4XnroDku4siPjxtZXRhIHByb3BlcnR5PSJvZzpub3ZlbDpjYXRlZ29yeSIgY29udGVudD0i5bm75oOzIj48bWV0YSBwcm9wZXJ0eT0ib2c6bm92ZWw6bGF0ZXN0X2NoYXB0ZXJfbmFtZSIgY29udGVudD0i56ys5LqM56ugIj48bWV0YSBwcm9wZXJ0eT0ib2c6bm92ZWw6dXBkYXRlX3RpbWUiIGNvbnRlbnQ9IjIwMjYtMDItMDEiPjxtZXRhIHByb3BlcnR5PSJvZzpub3ZlbDpyZWFkX3VybCIgY29udGVudD0iL2Jvb2svMTIzNDU2L3RvYy8iPg=="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/book/123456/toc/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsIGNsYXNzPSJsaXN0LWNoYXJ0cyI+PGxpPjxhIGhyZWY9IjEuaHRtbCI+56ys5LiA56ugPC9hPjwvbGk+PGxpPjxhIGhyZWY9IjIuaHRtbCI+56ys5LqM56ugPC9hPjwvbGk+PC91bD4="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29udGVudC1ib2R5Ij48L2Rpdj4="
+          }
+        }
+      },
+      "requestLimit": 4
+    },
+    "flowErrorEquivalence": {
+      "stage": "content",
+      "category": "content-empty",
+      "jvm": {
+        "class": "ContentEmptyException",
+        "message": "内容为空"
+      },
+      "ts": {
+        "class": "empty-page",
+        "message": "正文为空"
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "离线样书",
+                "author": "离线作者",
+                "bookUrl": "http://www.xianqihaotianmi.org/book/123456.html",
+                "coverUrl": "http://www.xianqihaotianmi.org/files/article/image/123/123456/123456s.jpg",
+                "kind": "小说"
+              },
+              {
+                "name": "另一册",
+                "author": "离线作者",
+                "bookUrl": "http://www.xianqihaotianmi.org/book/234567.html",
+                "coverUrl": "http://www.xianqihaotianmi.org/files/article/image/234/234567/234567s.jpg",
+                "kind": "小说"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "离线样书",
+              "author": "离线作者",
+              "bookUrl": "http://www.xianqihaotianmi.org/book/123456.html",
+              "coverUrl": "http://www.xianqihaotianmi.org/cover.jpg",
+              "kind": "幻想",
+              "intro": "自制详情简介",
+              "updateTime": "2026-02-01",
+              "lastChapter": "第二章",
+              "tocUrl": "http://www.xianqihaotianmi.org/book/123456/toc/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+                "isVip": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "http://www.xianqihaotianmi.org/book/123456/toc/2.html",
+                "isVip": false
+              }
+            ]
+          },
+          "content": {
+            "status": "failed",
+            "value": null,
+            "error": {
+              "category": "content-empty"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/modules/article/search.php?searchkey=%E7%A6%BB%E7%BA%BF%E6%A0%B7%E4%B9%A6",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/book/123456.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "http://www.xianqihaotianmi.org/book/123456/toc/1.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "referer": "http://www.xianqihaotianmi.org/"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

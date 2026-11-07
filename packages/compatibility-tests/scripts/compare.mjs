@@ -20,7 +20,17 @@ export function differences(jvm, ts, path = '$') {
   return [{ path, jvm, ts }]
 }
 function observed(result, item, runtime, raw = false) {
-  if (result.outcome === 'return') return { outcome: 'return', value: result.value }
+  if (result.outcome === 'return') {
+    const mapping = raw ? undefined : item.flowErrorEquivalence
+    const stage = mapping && result.value?.stages?.[mapping.stage]
+    const error = stage?.error
+    if (stage?.status === 'failed' && error?.category === mapping.category
+      && stable(error) === stable({ category: mapping.category, ...mapping[runtime] })) {
+      const value = { ...result.value, stages: { ...result.value.stages, [mapping.stage]: { ...stage, error: { category: mapping.category } } } }
+      return { outcome: 'return', value }
+    }
+    return { outcome: 'return', value: result.value }
+  }
   const mapping = raw ? undefined : item.errorEquivalence
   const matches = mapping?.[runtime]?.includes(result.error.class) && (mapping[`${runtime}MessageIncludes`] ?? []).every((text) => result.error.message.includes(text))
   const category = matches ? mapping.category : result.error.class
@@ -51,7 +61,7 @@ export function compareCase(item, jvm, ts) {
       for (const difference of differences(item.expected, result)) expectedFailures.push({ runtime, ...difference })
     }
   }
-  return { id: item.id, family: item.family, contractScope: item.contractScope ?? 'api', rawComparison: rawDelta.length ? 'different' : 'equal', rawDifferences: rawDelta, errorEquivalent: rawDelta.length > 0 && delta.length === 0 && left.outcome === 'throw', behaviorComparison: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', status: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', differences: unexpected, allowed, expectedFailures }
+  return { id: item.id, family: item.family, contractScope: item.contractScope ?? 'api', rawComparison: rawDelta.length ? 'different' : 'equal', rawDifferences: rawDelta, errorEquivalent: rawDelta.length > 0 && delta.length === 0 && (left.outcome === 'throw' || item.flowErrorEquivalence !== undefined), behaviorComparison: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', status: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', differences: unexpected, allowed, expectedFailures }
 }
 export function assertProvenance(metadata, expected) {
   if (metadata.schemaVersion !== 1 || !metadata.inputHash || !metadata.implementationHash || metadata.inputHash !== expected.inputHash || metadata.implementationHash !== expected.implementationHash) throw new Error('产物版本或输入摘要不匹配，拒绝比较过期输出')
@@ -86,7 +96,9 @@ export function measureCoverage(entries, cases, comparisons, jvmResults) {
 }
 export function summarize(cases) {
   const counts = Object.fromEntries(['equal', 'different', 'allowed-difference', 'unsupported', 'runner-failed'].map((status) => [status, cases.filter((c) => c.status === status).length]))
-  const api = cases.filter((c) => c.contractScope !== 'reference-observation')
+  const api = cases.filter((c) => c.contractScope === undefined || c.contractScope === 'api')
   const apiCounts = Object.fromEntries(Object.keys(counts).map((status) => [status, api.filter((c) => c.status === status).length]))
-  return { total: cases.length, ...counts, api: { total: api.length, ...apiCounts }, observations: cases.length - api.length, rawDifferent: cases.filter((c) => c.rawComparison === 'different').length, errorEquivalent: cases.filter((c) => c.errorEquivalent).length, exitCode: counts['runner-failed'] || apiCounts.unsupported ? 2 : apiCounts.different ? 1 : 0 }
+  const flows = cases.filter((c) => c.contractScope === 'flow')
+  const flowCounts = Object.fromEntries(Object.keys(counts).map((status) => [status, flows.filter((c) => c.status === status).length]))
+  return { flow: { total: flows.length, ...flowCounts }, total: cases.length, ...counts, api: { total: api.length, ...apiCounts }, observations: cases.length - api.length - flows.length, rawDifferent: cases.filter((c) => c.rawComparison === 'different').length, errorEquivalent: cases.filter((c) => c.errorEquivalent).length, exitCode: counts['runner-failed'] || apiCounts.unsupported || flowCounts.unsupported ? 2 : apiCounts.different || flowCounts.different ? 1 : 0 }
 }

@@ -19,12 +19,13 @@ import java.util.Base64
 import java.util.regex.Pattern
 
 private val gson = GsonBuilder().serializeNulls().disableHtmlEscaping().create()
-private class Unsupported(message: String) : RuntimeException(message)
+internal class Unsupported(message: String) : RuntimeException(message)
 
 private fun execute(item: JsonObject): Any? {
     val input = item.getAsJsonObject("input")
     fun text(key: String) = input.get(key)?.asString ?: ""
     return when (val operation = item.get("operation").asString) {
+        "flow.book" -> executeBookFlow(input)
         "rule.split" -> RuleAnalyzer(text("rule"), input.get("code")?.asBoolean ?: false).splitRule(text("operator"))
         "rule.inner" -> RuleAnalyzer(text("rule"), true).innerRule("{$.") { path -> input.getAsJsonObject("values").get(path)?.asString }
         "regex.first" -> AnalyzeByRegex.getElement(text("text"), input.getAsJsonArray("patterns").map { it.asString }.toTypedArray())
@@ -188,6 +189,8 @@ fun main(args: Array<String>) {
         val id = item.get("id").asString
         val result = try {
             mapOf("id" to id, "execution" to "completed", "outcome" to "return", "value" to execute(item))
+        } catch (error: FlowFixtureError) {
+            mapOf("id" to id, "execution" to "runner-failed", "reason" to error.message)
         } catch (error: Unsupported) {
             mapOf("id" to id, "execution" to "unsupported", "reason" to error.message)
         } catch (error: Throwable) {

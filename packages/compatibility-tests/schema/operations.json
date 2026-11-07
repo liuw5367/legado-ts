@@ -388,5 +388,19 @@
     "properties": {
       "text": "string"
     }
+  },
+  "flow.book": {
+    "required": [
+      "source",
+      "keyword",
+      "responses",
+      "requestLimit"
+    ],
+    "properties": {
+      "source": "object",
+      "keyword": "string",
+      "responses": "object",
+      "requestLimit": "integer"
+    }
   }
 }

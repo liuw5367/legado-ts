@@ -30,6 +30,9 @@ export async function prepare(upstream) {
     await writeFile(destination, generated)
     manifest.push(entry)
   }
+  for (const entry of lock.flowEvidence) {
+    if (sha256(git(sourceRoot, 'show', `${lock.commit}:${entry.path}`)) !== entry.sha256) throw new Error(`流程参考源码摘要变化: ${entry.path}`)
+  }
   // 原 Android 工程已随固定提交锁定 Rhino 分支的二进制。
   const engine = execFileSync('git', ['-C', sourceRoot, 'show', `${lock.commit}:${lock.scriptEngine.path}`], { maxBuffer: 32 * 1024 * 1024 })
   if (sha256(engine) !== lock.scriptEngine.sha256) throw new Error('Rhino 参考引擎摘要变化')
@@ -69,7 +72,7 @@ export async function prepare(upstream) {
       else reject(new Error(`Maven 构建失败 (${code})，查看 ${join(directory, 'build.log')}`))
     })
   })
-  const metadata = { fingerprint, artifactsHash: await artifactsHash(directory), commit: lock.commit, sources: manifest, scriptEngine: lock.scriptEngine, adaptations: lock.adaptations, versions: lock.versions, jvmHash, javaHome }
+  const metadata = { fingerprint, artifactsHash: await artifactsHash(directory), commit: lock.commit, sources: manifest, flowEvidence: lock.flowEvidence, scriptEngine: lock.scriptEngine, adaptations: lock.adaptations, versions: lock.versions, jvmHash, javaHome }
   await writeFile(metadataPath, JSON.stringify(metadata, null, 2) + '\n')
   return { ...metadata, java }
 }

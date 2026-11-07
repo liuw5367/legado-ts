@@ -57,7 +57,8 @@
         "css.nodes",
         "corpus.cssString",
         "corpus.script",
-        "chapter.number"
+        "chapter.number",
+        "flow.book"
       ]
     },
     "input": {
@@ -74,7 +75,8 @@
           "enum": [
             "jdk-direct",
             "upstream-original",
-            "upstream-adapted"
+            "upstream-adapted",
+            "upstream-guided-flow"
           ]
         },
         "method": {
@@ -133,6 +135,46 @@
         }
       }
     },
+    "flowOrigin": {
+      "type": "object"
+    },
+    "flowErrorEquivalence": {
+      "type": "object",
+      "required": [
+        "stage",
+        "category",
+        "jvm",
+        "ts"
+      ],
+      "properties": {
+        "stage": {
+          "enum": [
+            "search",
+            "detail",
+            "toc",
+            "content"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "jvm": {
+          "type": "object",
+          "required": [
+            "class",
+            "message"
+          ]
+        },
+        "ts": {
+          "type": "object",
+          "required": [
+            "class",
+            "message"
+          ]
+        }
+      }
+    },
     "allowedDifferences": {
       "type": "array",
       "items": {
@@ -159,7 +201,8 @@
     "contractScope": {
       "enum": [
         "api",
-        "reference-observation"
+        "reference-observation",
+        "flow"
       ]
     },
     "observationReason": {
@@ -1321,6 +1364,43 @@
             "properties": {
               "text": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "flow.book"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "source",
+              "keyword",
+              "responses",
+              "requestLimit"
+            ],
+            "properties": {
+              "source": {
+                "type": "object"
+              },
+              "keyword": {
+                "type": "string"
+              },
+              "responses": {
+                "type": "object"
+              },
+              "requestLimit": {
+                "type": "integer"
               }
             },
             "additionalProperties": false

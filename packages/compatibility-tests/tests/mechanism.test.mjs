@@ -195,7 +195,7 @@ test('输入 schema、覆盖清单和差异台账与实际案例一致', async (
   const coverage = await readJson(join(root, 'coverage.json'))
   const manifest = await readJson(join(root, '../../fixtures/compatibility/method-manifest.json'))
   const memberIds = new Set(manifest.entries.flatMap((entry) => entry.members.map(({ id }) => id)))
-  assert.deepEqual([...new Set(coverage.entries.map((e) => e.operation))].sort(), Object.keys(operations).sort())
+  assert.deepEqual([...new Set(coverage.entries.map((e) => e.operation))].sort(), Object.keys(operations).filter((operation) => operation !== 'flow.book').sort())
   const assigned = new Set()
   for (const entry of coverage.entries) {
     assert.ok(entry.caseIds.length > 0)
@@ -206,7 +206,7 @@ test('输入 schema、覆盖清单和差异台账与实际案例一致', async (
       assigned.add(id)
     }
   }
-  assert.equal(assigned.size, cases.length)
+  assert.equal(assigned.size, cases.filter((item) => item.contractScope !== 'flow').length)
   const triage = await readJson(join(root, 'triage.json'))
   const observed = new Set()
   for (const entry of triage.entries) {
@@ -218,4 +218,50 @@ test('输入 schema、覆盖清单和差异台账与实际案例一致', async (
   }
   assert.equal(triage.entries.filter((e) => /^[REO][0-9]/u.test(e.id)).flatMap((e) => e.caseIds).length, 36)
   assert.ok(observed.size >= 36)
+})
+
+test('流程严格比较请求顺序和阶段结果，只逐例映射原始错误', () => {
+  const item = {
+    ...fixture,
+    contractScope: 'flow',
+    flowErrorEquivalence: {
+      stage: 'content', category: 'content-empty',
+      jvm: { class: 'ContentEmptyException', message: '内容为空' },
+      ts: { class: 'empty-page', message: '正文为空' },
+    },
+  }
+  const { category, jvm, ts } = item.flowErrorEquivalence
+  const result = (raw, requests = ['detail', 'content']) => returned({
+    stages: { content: { status: 'failed', value: null, error: { category, ...raw } } }, requests,
+  })
+  const equal = compareCase(item, result(jvm), result(ts))
+  assert.equal(equal.status, 'equal')
+  assert.equal(equal.errorEquivalent, true)
+  assert.equal(equal.rawDifferences[0].path, '$/value/stages/content/error/class')
+  const different = compareCase(item, result(jvm), result(ts, ['content', 'detail']))
+  assert.equal(different.status, 'different')
+  assert.equal(different.differences[0].path, '$/value/requests/0')
+  assert.equal(compareCase(item, result(jvm), result({ ...ts, message: '网络失败' })).status, 'different')
+  assert.equal(summarize([equal, different]).flow.total, 2)
+  assert.equal(summarize([equal, different]).api.total, 0)
+  assert.equal(summarize([different]).exitCode, 1)
+  assert.equal(summarize([{ ...different, status: 'runner-failed' }]).exitCode, 2)
+})
+
+test('TS 流程宿主拒绝未声明的完整请求与超预算请求，随后可以重新执行', async () => {
+  const item = (await loadCases({ case: 'flow.yiove.html.success' }))[0]
+  const worker = new Worker(process.execPath, [join(root, 'scripts/ts-worker.mjs')])
+  try {
+    const initial = await worker.run(item)
+    assert.equal(initial.execution, 'completed')
+    const missingQuery = structuredClone(item)
+    missingQuery.input.responses.search.url = missingQuery.input.responses.search.url.split('?')[0]
+    assert.equal((await worker.run(missingQuery)).execution, 'runner-failed')
+    const budget = structuredClone(item)
+    budget.input.requestLimit = 1
+    assert.equal((await worker.run(budget)).execution, 'runner-failed')
+    assert.deepEqual(await worker.run(item), initial)
+  } finally {
+    await worker.close()
+  }
 })

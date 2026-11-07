@@ -35,10 +35,24 @@ export async function treeHash(directory) {
 }
 export async function loadCases(options = {}) {
   const cases = []
+  let corpus
   for (const path of await files(join(root, 'cases'))) {
     if (!path.endsWith('.json')) continue
     for (const item of await readJson(path)) {
       validateCase(item)
+      if (item.flowOrigin?.sourceUrl) {
+        if (!corpus) {
+          const manifest = await readJson(join(root, 'corpus/manifest.json'))
+          const snapshot = await readFile(join(root, 'corpus', manifest.file))
+          if (sha256(snapshot) !== manifest.sha256) throw new Error('书源快照摘要变化')
+          corpus = { sources: JSON.parse(snapshot), sha256: manifest.sha256 }
+        }
+        const source = corpus.sources.find((s) => s.bookSourceUrl === item.flowOrigin.sourceUrl)
+        if (!source || stable(source) !== stable(item.input.source) || !item.flowOrigin.fields.every((field) => Object.hasOwn(source, field))) {
+          throw new Error(`${item.id}: 流程案例来源与书源快照不一致`)
+        }
+        item.flowOrigin.snapshotSha256 = corpus.sha256
+      }
       cases.push(item)
     }
   }
@@ -52,9 +66,9 @@ export async function loadCases(options = {}) {
 export function validateCase(item) {
   if (!item || !['id', 'family', 'operation'].every((key) => typeof item[key] === 'string' && item[key].length > 0)
       || !item.input || typeof item.input !== 'object' || Array.isArray(item.input)
-      || !item.reference || !['jdk-direct', 'upstream-original', 'upstream-adapted'].includes(item.reference.kind)
+      || !item.reference || !['jdk-direct', 'upstream-original', 'upstream-adapted', 'upstream-guided-flow'].includes(item.reference.kind)
       || typeof item.reference.method !== 'string' || !Array.isArray(item.tags)) throw new Error('案例协议无效')
-  if (item.contractScope !== undefined && !['api', 'reference-observation'].includes(item.contractScope)) throw new Error('契约范围无效')
+  if (item.contractScope !== undefined && !['api', 'reference-observation', 'flow'].includes(item.contractScope)) throw new Error('契约范围无效')
   if (item.contractScope === 'reference-observation' && !(typeof item.observationReason === 'string' && item.observationReason.length > 0 && Array.isArray(item.relatedCases) && item.relatedCases.length > 0)) throw new Error('内部观察必须说明原因并关联可执行规则案例')
   for (const runtime of ['jvm', 'ts']) {
     const values = item.errorEquivalence?.[`${runtime}MessageIncludes`]
@@ -73,6 +87,7 @@ export function validateCase(item) {
       : typeof value === type
     if (!valid) throw new Error(`${item.id}: input.${key} 类型无效`)
   }
+  if (item.operation === 'flow.book') validateFlowCase(item)
   if (item.operation === 'rule.split' && !['&&', '||', '%%'].includes(item.input.operator)) throw new Error('未支持的分隔符')
   if (item.operation.startsWith('regex.') && item.input.patterns.length === 0) throw new Error('patterns 不能为空')
   if (item.errorEquivalence && (typeof item.errorEquivalence.category !== 'string' || !['jvm', 'ts'].every((r) => Array.isArray(item.errorEquivalence[r]) && item.errorEquivalence[r].every((v) => typeof v === 'string')))) throw new Error('异常等价声明无效')
@@ -80,6 +95,36 @@ export function validateCase(item) {
     if (!Array.isArray(item.allowedDifferences) || !item.allowedDifferences.every((d) => typeof d.path === 'string' && d.reason?.length > 0 && Object.hasOwn(d, 'jvm') && Object.hasOwn(d, 'ts'))) throw new Error('允许差异必须指定路径、双方值和原因')
   }
 }
+function validateFlowCase(item) {
+  const { source, responses, requestLimit } = item.input
+  const origin = item.flowOrigin
+  if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow' || item.allowedDifferences !== undefined
+    || typeof source.bookSourceUrl !== 'string' || requestLimit < 1 || Object.keys(responses).length === 0
+    || !origin || (origin.sourceUrl ? !Array.isArray(origin.fields) || origin.fields.length === 0 : typeof origin.fixture !== 'string')) {
+    throw new Error(`${item.id}: 流程来源、契约或请求预算无效`)
+  }
+  const keys = new Set()
+  for (const entry of Object.values(responses)) {
+    const response = entry?.response
+    if (!['GET', 'POST'].includes(entry?.method) || !URL.canParse(entry.url) || (entry.body !== null && typeof entry.body !== 'string')
+      || !response || !URL.canParse(response.url) || !Number.isInteger(response.status)
+      || typeof response.base64 !== 'string' || Buffer.from(response.base64, 'base64').toString('base64') !== response.base64
+      || !response.headers || Object.values(response.headers).some((value) => typeof value !== 'string')) {
+      throw new Error(`${item.id}: 离线响应无效`)
+    }
+    const key = stable([entry.method, entry.url, entry.body])
+    if (keys.has(key)) throw new Error(`${item.id}: 离线请求重复声明`)
+    keys.add(key)
+  }
+  if (item.flowErrorEquivalence !== undefined) {
+    const { stage, category, jvm, ts } = item.flowErrorEquivalence
+    if (!['search', 'detail', 'toc', 'content'].includes(stage) || typeof category !== 'string' || !category
+      || ![jvm, ts].every((error) => error && typeof error.class === 'string' && typeof error.message === 'string')) {
+      throw new Error(`${item.id}: 流程错误等价声明无效`)
+    }
+  }
+}
+
 export function validateResult(result, id) {
   if (!result || result.id !== id || !['completed', 'unsupported', 'runner-failed'].includes(result.execution)) throw new Error('执行结果协议无效')
   if (result.execution === 'completed') {

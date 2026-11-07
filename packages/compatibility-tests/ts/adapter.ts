@@ -1,3 +1,4 @@
+import { executeBookFlow } from './book-flow.ts'
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
 import { XPathParserAdapter } from '../../source-node/src/xpath.ts'
@@ -29,6 +30,7 @@ async function script(host: SourceRuleHost, expression: string, content: unknown
   return result.value
 }
 export async function execute(item: CaseInput): Promise<unknown> {
+  if (item.operation === 'flow.book') return executeBookFlow(item.input)
   const i = item.input
   const str = (key: string): string => String(i[key] ?? '')
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
