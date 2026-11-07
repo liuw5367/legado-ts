@@ -61,6 +61,8 @@
 
 新增兼容测试机制的要求：以独立测试包保存纯 Kotlin/JVM 或 Java 参考端、TypeScript 执行端和共享案例，从基础工具 API 逐步扩展至书源流程；不依赖 Android 运行环境，不修改或提前拆分原 Android 工程。用户提供的多书源集合用于首批语料；新机制验证稳定且确认等价覆盖后，再清理重复旧测试，保留独有的安全、生命周期与历史缺陷断言。测试与证据规则见[一致性测试基线](compatibility/conformance-tests.md)，独立基础测试机制已实现，入口和使用方式见 [`compatibility-tests`](../packages/compatibility-tests/README.md)；完整流程仍待扩展。
 
+后续基础兼容工作按“差异归因与比较入口校准 → 按根因修复 → 扩大方法/重载及真实规则样本覆盖”推进。核心验收为 Android 能成功处理的规则在 TS 中得到相同结果、顺序和继续/终止行为；异常类别、文案和堆栈仅在不影响可观察行为时允许按错误语义放宽，Android 合法空结果不能被 TS 抛错替代。纯 JVM、原仓库只读与既有安全边界继续保留；执行规则见[一致性测试基线](compatibility/conformance-tests.md)和[兼容政策](contracts/compatibility-policy.md)。
+
 - **源码事实**：可以从当前源码或已有测试核验的行为。
 - **兼容要求**：TypeScript 实现必须保持的行为，包括已有书源依赖的历史语义。
 - **目标设计**：为独立库、Node、浏览器或 SSR 增加的边界，不能改变规则结果。
