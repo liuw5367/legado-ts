@@ -2294,3 +2294,11 @@ test('默认 UTF-8 表单编码保留 Java 字节语义，连续调用不占用�
   assert.equal(output.status, 'success', output.message)
   assert.deepEqual(JSON.parse(String(output.value)), Array(40).fill('%E6%98%9F+%2B%21%7E%F0%9F%98%80%3F'))
 })
+
+test('Jayway avg 的整数结果保留 Double 文本小数位', async () => {
+  const output = await new SourceRuleHost().executeJavaScript(
+    'java.getString("@json:$.numbers.avg()")', 'search', source, '{"numbers":[2,4]}',
+  )
+  assert.equal(output.status, 'success', output.message)
+  assert.equal(output.value, '3.0')
+})

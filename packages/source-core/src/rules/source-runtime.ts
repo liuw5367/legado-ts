@@ -3313,8 +3313,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     // 标量 null 在原实现触发可捕获的空结果；数组内 null 则逐项输出文本 null。
     if (definite && Array.isArray(value) && value.length === 1 && value[0] === null) return []
     const items = Array.isArray(normalized) ? normalized : normalized == null ? [] : [normalized]
-    if (!expression.trimEnd().endsWith('.sum()')) return items.map(javaJsonText)
-    // Jayway sum 返回 Double，整数和科学计数法仍需保留小数位。
+    // Jayway 的 sum 和 avg 返回 Double。
+    if (!/\.(?:sum|avg)\(\)$/u.test(expression.trimEnd())) return items.map(javaJsonText)
+    // 整数结果与科学计数法仍需保留小数位。
     return items.map((item) => {
       if (typeof item !== 'number' || !Number.isFinite(item)) return javaJsonText(item)
       const magnitude = Math.abs(item)
