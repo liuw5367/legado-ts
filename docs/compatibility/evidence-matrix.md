@@ -27,6 +27,8 @@
 
 未完成项、差异项和完成后的删除线记录统一维护在[状态总览](status.md)。本矩阵继续维护五维兼容证据；`implementation=absent/partial` 和 `execution=not-run` 的含义以状态总览为准。
 
+独立基础测试包记录固定上游 Kotlin/JVM、JDK 和当前 TS 的同输入执行证据。方法签名和用例关联见[基础覆盖表](../../packages/compatibility-tests/coverage.json)，真实规则组合及来源见[语料覆盖表](../../packages/compatibility-tests/corpus/coverage.json)。双端报告只证明所列签名与执行场景。应用级 Android 流程的执行状态仍由对应 fixture 记录。
+
 当前 TS/Node 回归的执行证据集中在 `packages/source-core/tests/` 与 `packages/source-node/tests/`：构建后包入口、7 条 import manifest、5 条历史 conformance manifest 和 6 个真实规则离线回放 case 均已实际执行；2026-10-23 P38 的发现/工作流定向回归为 60/60，完整 source 回归为 186/186，根回归为 638/638，静态 corpus 为 20,226/20,231（5 条已知源文本错误），TypeScript conformance 为 6/6。比较器中的 6 条 Android 输出仍为 `not-run`。P38 只把发现 `exploreUrl` 成员验证更新为 `ts-passed`，方法清单仍为 259 个成员（82 `implemented`、133 `partial`、44 `simulated`），仍待处理 177 个；验证统计为 154 `ts-passed`、40 `ts-diff`、65 `unverified`。静态 corpus 审计覆盖 943 个候选源和 20,231 条规则，20,226 条编译成功，5 条仅按 manifest 的稳定 hash/诊断白名单归为已知源文本问题。Android 当前快照也已运行完整 app JVM 单测集，但 Android 同输入 golden 仍未逐条生成。因此本矩阵中的“实现见 source-core/source-node”只表示实现和 TS 证据存在，不能单独改写为 Android 兼容已验证。
 
 2026-10-23 P38 新增的跨层事实是：Android 发现请求的分类 URL 由调用方传入，source-core 现在通过 `DiscoveryInput.url` 保留该边界；未传入时才读取 source 定义中的 `exploreUrl`。JSON/文本分类的 core 结果显式保留 `type: "url"`，Web 对外分类仍按原有安全投影隐藏可执行 URL。Node 书源式回归覆盖零地址不请求和分类 URL 选择；Android 同输入 golden 仍未生成。

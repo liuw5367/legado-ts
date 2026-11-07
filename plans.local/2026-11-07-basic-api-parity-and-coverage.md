@@ -1,5 +1,5 @@
 # 基础 API 行为兼容修复与测试覆盖扩展
-- 状态：approved
+- 状态：completed
 - 创建：2026-11-07
 - 更新：2026-11-07
 - 实施基线：b602ad0（独立 JVM/TS 差异测试机制）
@@ -259,3 +259,26 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C3-MATCHER-ANCHOR 已修复。Matcher.matches 与 lookingAt 使用区域绝对边界，保留表达式内部的 MULTILINE 行匹配。29 个用例全部一致，十个签名条目均有完整维度证据（output/run-0LQ0vg），119 项宿主回归通过。
 
 - C3-PATTERN-FLAGS 已修复。非法位 512 在双端按输入错误处理。LITERAL 正反样本确认点号按字面匹配。31 个 Pattern/Matcher 用例一致（output/run-MBAaq9），120 项宿主回归通过。范围外的 CANON_EQ 明确返回能力缺失并登记 D21。
+
+
+## 最终验收
+
+最终报告位于 `packages/compatibility-tests/output/run-iHTk4O/`。本次执行 486 个案例，484 个 API 契约全部行为一致。2 个独立内部观察分别为 RuleAnalyzer.innerRule 与 code=true 切分模式，已关联公开 JSON 字段案例。81 个异常类别或文案差异均有逐例语义映射，保留双端原始输出。无 API 未支持、行为差异或执行器故障。
+
+| 阶段 | 验收证据 |
+| --- | --- |
+| 阶段一 | 保留基线 114 个案例的 ID、操作和输入。原 35 项差异与 1 项内部观察均有唯一归属。测试机制校验案例、来源、产物摘要及原始与行为差异区分。 |
+| 阶段二 | split、URL、编码、JSONPath、CSS、规则组合与正则链问题分根因提交。差异台账所有组均已处理。 |
+| C1 | 相同输入切换 limit、charset、base 和正则链第二段得到不同的独立断言结果。code 模式在纯 JVM 端有对照，实际 JSON 字段验证带转义引号和组合符的规则。 |
+| C2 | String 和数字解析按签名记录正常、边界、适用的错误与连续调用。 |
+| C3 | 31 个 Pattern/Matcher 用例通过。各签名的结果、位置、匹配状态、替换和 flags 分别保留证据。CANON_EQ 属既定支持范围外，宿主测试验证明确能力缺失。 |
+| C4 | UTF-8/GBK 往返、基本与 URL-safe Base64、MIME 解码及 MD5/SHA-256 向量通过。 |
+| C5 | Map 与 List 的有限连续调用、旧值、空值、缺失键、越界和子视图回写通过。 |
+| C6 | CSS、JSONPath、XPath 的字段、列表与节点场景通过。固定 Kotlin/JVM XPath 参考的 join 适配有独立测试。旧命名空间正文夹具显式选择 text()，保留命名空间解析与正文提取验证。 |
+| C7 | 固定 11 源扫描 234 处字段，按原文摘要归为 177 组。41 个原文用例覆盖语料清单所列 12 类基础组合。7 条脚本分别在工作流与嵌套 bridge 验证。配置、旧分页字面量及 WebView 依赖按语料清单分类。 |
+
+方法覆盖报告包含 73 个条目。其中 71 个 API 签名条目均有完整维度证据，30 项为 verified，41 项为 error-equivalent。18 个条目关联既有方法清单的重叠成员，原 259 成员的状态口径保持独立。两个观察项单列。
+
+验收命令包括独立机制测试 22/22、单例 string.split.empty、各受影响功能族、全量双端、TypeScript 类型检查、完整构建、根回归 690/690 与 git diff --check。根回归在允许本地回环监听的环境执行。参考端使用 JDK 21.0.4、Maven 3.9.9、固定 Kotlin/JVM 源码和校验摘要的 Rhino 引擎。已核对原 Android 参考文件无工作区差异。
+
+应用级完整流程、真实站点、WebView、登录、文件副作用和旧测试清理仍按原计划的范围边界独立处理。

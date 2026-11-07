@@ -105,6 +105,9 @@
         "string.split.zero-end",
         "string.split.unicode-zero",
         "string.split.invalid-limit-one"
+      ],
+      "manifestMembers": [
+        "java-collections-string::007-string-split"
       ]
     },
     {
@@ -159,6 +162,9 @@
         "pattern.quote.embedded-end",
         "pattern.quote.empty",
         "pattern.quote.unicode"
+      ],
+      "manifestMembers": [
+        "parser-regex::005-quote"
       ]
     },
     {
@@ -567,6 +573,9 @@
         "string.api.codePointAt.continuation",
         "string.api.codePointAt.low-surrogate",
         "string.api.codePointAt.beyond"
+      ],
+      "manifestMembers": [
+        "java-collections-string::011-string-codepointat"
       ]
     },
     {
@@ -585,6 +594,9 @@
         "string.api.codePointCount.continuation",
         "string.api.codePointCount.empty",
         "string.api.codePointCount.reversed"
+      ],
+      "manifestMembers": [
+        "java-collections-string::013-string-codepointcount"
       ]
     },
     {
@@ -607,6 +619,9 @@
         "string.api.getBytes.gbk-round-trip",
         "string.api.getBytes.gbk-replacement",
         "string.api.getBytes.utf8-empty-round-trip"
+      ],
+      "manifestMembers": [
+        "java-collections-string::009-string-getbytes"
       ]
     },
     {
@@ -660,6 +675,9 @@
         "string.api.length.unicode",
         "string.api.length.continuation",
         "string.api.length.empty"
+      ],
+      "manifestMembers": [
+        "java-collections-string::006-string-length"
       ]
     },
     {
@@ -678,6 +696,9 @@
         "string.api.offsetByCodePoints.continuation",
         "string.api.offsetByCodePoints.backward",
         "string.api.offsetByCodePoints.beyond"
+      ],
+      "manifestMembers": [
+        "java-collections-string::014-string-offsetbycodepoints"
       ]
     },
     {
@@ -739,6 +760,9 @@
         "integer.parseInt.max",
         "integer.parseInt.min",
         "integer.parseInt.overflow"
+      ],
+      "manifestMembers": [
+        "java-primitive-overloads::003-integer-parseint"
       ]
     },
     {
@@ -764,6 +788,9 @@
         "integer.parseLongRadix.max",
         "integer.parseLongRadix.min",
         "integer.parseLongRadix.overflow"
+      ],
+      "manifestMembers": [
+        "java-primitive-overloads::004-long-parselong"
       ]
     },
     {
@@ -787,6 +814,9 @@
         "integer.bigInteger.bad-radix",
         "integer.bigInteger.empty",
         "integer.bigInteger.huge"
+      ],
+      "manifestMembers": [
+        "java-primitive-overloads::005-biginteger-radix"
       ]
     },
     {
@@ -934,6 +964,9 @@
         "collection.sequence.mapKeys",
         "collection.sequence.nullDistinct",
         "collection.sequence.methodKeys"
+      ],
+      "manifestMembers": [
+        "java-collections-string::002-map-put"
       ]
     },
     {
@@ -953,6 +986,9 @@
         "collection.sequence.mapKeys",
         "collection.sequence.nullDistinct",
         "collection.sequence.methodKeys"
+      ],
+      "manifestMembers": [
+        "java-collections-string::001-map-get"
       ]
     },
     {
@@ -1060,6 +1096,9 @@
         "collection.sequence.subView",
         "collection.sequence.getEmpty",
         "collection.sequence.getNegative"
+      ],
+      "manifestMembers": [
+        "java-collections-string::004-list-get"
       ]
     },
     {
@@ -1131,6 +1170,9 @@
         "collection.sequence.subView",
         "collection.sequence.subClear",
         "collection.sequence.emptySubView"
+      ],
+      "manifestMembers": [
+        "java-collections-string::005-list-size"
       ]
     },
     {
@@ -1200,6 +1242,9 @@
         "xpath.list.xmlAttribute",
         "xpath.list.interleave",
         "xpath.list.invalid"
+      ],
+      "manifestMembers": [
+        "parser-xpath::002-getstringlist"
       ]
     },
     {
@@ -1218,6 +1263,9 @@
         "xpath.nodes.spaces",
         "xpath.nodes.selfClosing",
         "xpath.nodes.emptyRule"
+      ],
+      "manifestMembers": [
+        "parser-xpath::001-getelements"
       ]
     },
     {
@@ -1422,6 +1470,9 @@
         "pattern.matcher.invalidPattern",
         "pattern.matcher.endBounds",
         "pattern.matcher.literalRejectsWildcard"
+      ],
+      "manifestMembers": [
+        "parser-regex::001-find"
       ]
     },
     {
@@ -1457,6 +1508,9 @@
         "pattern.matcher.replaceThenGroup",
         "pattern.matcher.groupBounds",
         "pattern.matcher.matchesAlternative"
+      ],
+      "manifestMembers": [
+        "parser-regex::003-group"
       ]
     },
     {

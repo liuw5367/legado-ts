@@ -301,3 +301,6 @@ P59 最终门禁：完整 Node 回归 **663/663**、书源回归 **199/199**、�
 ```
 
 机器清单中的 fixture ID 保持稳定，不删除历史记录；它们的 `execution` 字段由[一致性测试基线](conformance-tests.md)维护。
+## 基础签名双端验证
+
+固定 Kotlin/JVM 和 TypeScript 的基础差异测试已提供逐签名场景证据。覆盖表的 `manifestMembers` 关联存在重叠的既有成员，关联范围以对应重载和案例为准。参见[基础覆盖表](../../packages/compatibility-tests/coverage.json)和[执行说明](../../packages/compatibility-tests/README.md)。

@@ -193,10 +193,13 @@ test('输入 schema、覆盖清单和差异台账与实际案例一致', async (
     for (const related of item.relatedCases ?? []) assert.ok(ids.has(related), related)
   }
   const coverage = await readJson(join(root, 'coverage.json'))
+  const manifest = await readJson(join(root, '../../fixtures/compatibility/method-manifest.json'))
+  const memberIds = new Set(manifest.entries.flatMap((entry) => entry.members.map(({ id }) => id)))
   assert.deepEqual([...new Set(coverage.entries.map((e) => e.operation))].sort(), Object.keys(operations).sort())
   const assigned = new Set()
   for (const entry of coverage.entries) {
     assert.ok(entry.caseIds.length > 0)
+    for (const member of entry.manifestMembers ?? []) assert.ok(memberIds.has(member), member)
     for (const id of entry.caseIds) {
       assert.ok(ids.has(id), id)
       assert.equal(cases.find((c) => c.id === id).operation, entry.operation)

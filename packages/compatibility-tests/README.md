@@ -26,7 +26,7 @@ node --test packages/compatibility-tests/tests/*.test.mjs
 node packages/compatibility-tests/scripts/run.mjs --family css
 ```
 
-CLI 参数错误、空选择、来源失败或执行不完整退出 2；行为差异退出 1；全部一致或符合明确允许差异退出 0。未支持不计通过。当前基础案例仍有差异及未支持项，全量差异测试返回非零是预期的诊断结果。不要通过删除案例或自动更新预期获得全绿。
+CLI 参数错误、空选择、来源失败或 API 执行不完整退出 2。API 行为差异退出 1，全部一致或符合逐例允许差异时退出 0。报告单列参考端内部观察。方法覆盖表另行显示场景缺口。
 
 ## 输入和参考端
 
@@ -39,6 +39,8 @@ CLI 参数错误、空选择、来源失败或执行不完整退出 2；行为�
 - `jdk-direct`：执行 JDK String、Pattern、Base64、URL、MessageDigest 等 API，只证明该 API，不扩大为 Android 包装器兼容。
 - `upstream-original`：直接编译原源码，目前为 RuleAnalyzer。
 - `upstream-adapted`：原算法保持原样，额外提供无运行行为的 Keep 注解或 stderr 调试日志适配；当前包括 Regex、CSS、JSONPath、XPath。XPath 额外使用仅含 Iterable join 的 TextUtils 测试适配，其空集合、null、Unicode 和顺序语义由独立 JVM 测试校验；适配不包含 Android 运行库。
+
+书源脚本用例使用固定上游提交中的 Rhino 二进制，执行前验证摘要。JVM 参考按上游顺序组合解析、替换和脚本求值，节点与书籍变量来自离线夹具。纯章节数字方法从校验过摘要的上游文件提取并编译。
 
 TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 JsonPathParserAdapter。JSON 字符串/列表通过真实 Java bridge 转换；CSS 字段列表按对应接口合并或保留条目顺序；正则链直接调用实际 java.getElement/getElements，覆盖首个与全部匹配及失败终态。不能在参考执行器中重新实现待比较算法。独立 `innerRule` 在 TS 无对应入口，当前显式报告 unsupported；JSONPath 内嵌规则另有双端案例。
 
@@ -68,13 +70,15 @@ TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJ
 
 运行 `node packages/compatibility-tests/scripts/corpus-rules.mjs` 可生成规则清单。命令校验快照摘要，按完整原文的 SHA-256 合并重复规则，并保留每个字段的位置、用途和已关联的案例 ID。用例的规则原文必须与来源字段逐字一致。
 
+`corpus/coverage.json` 将基础语法组合与原文用例关联，并记录配置字段及 WebView 依赖。执行器生成 `corpus-coverage.json` 以区分本次通过、差异和未运行。
+
 完整搜索、详情、目录、正文流程尚未实现。后续增加对应操作时，继续使用共享案例与结果协议，并补充离线响应、请求轨迹和上下文；只有书源定义不能证明完整流程通过。
 
 旧测试继续保留。新机制稳定后，按旧断言到新案例的覆盖映射分批删除重复测试；独有安全、取消、资源释放和历史缺陷回归必须保留或迁移，删除前执行受影响验证。
 
 ## 行为兼容判定与覆盖台账
 
-`triage.json` 为原始差异的处理记录，`coverage.json` 按方法/操作列出案例与必要维度。每次运行额外生成 `output/run-*/coverage.json`，状态由本次实际结果导出；选中案例不完整时为 not-run，不把历史通过当作本次证据。
+`triage.json` 为原始差异的处理记录，`coverage.json` 按方法和重载列出案例与必要维度。每次运行生成 `output/run-*/coverage.json`，其中 `dimensionEvidence` 引用本次双端一致的案例，`missingDimensions` 列出缺口。选中案例不完整时状态为 `not-run`，已执行但场景不足时为 `incomplete`。
 
 报告分别显示 rawComparison 与 behaviorComparison。错误语义映射可带 jvmMessageIncludes / tsMessageIncludes，要求相应异常类别与消息标记同时匹配；方法不存在与非法输入不能等价。异常等价案例单独统计，原始差异和原始异常不丢失。Android 合法返回而 TS 中止始终是行为差异。
 
