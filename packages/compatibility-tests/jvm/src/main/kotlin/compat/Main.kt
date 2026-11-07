@@ -55,6 +55,22 @@ private fun execute(item: JsonObject): Any? {
             }
             if (input.get("continue")?.asBoolean == true) mapOf("value" to value, "next" to "v:${if (value is Map<*, *>) value["decimal"] else value}") else value
         }
+        "pattern.matcher" -> {
+            val matcher = Pattern.compile(text("pattern"), input.get("flags")?.asInt ?: 0).matcher(text("text"))
+            input.getAsJsonArray("actions").map { raw ->
+                val action = JsonParser.parseString(raw.asString).asJsonArray
+                when (action[0].asString) {
+                    "find" -> if (action.size() > 1) matcher.find(action[1].asInt) else matcher.find()
+                    "matches" -> matcher.matches()
+                    "group" -> if (action.size() < 2) matcher.group() else if (action[1].asJsonPrimitive.isString) matcher.group(action[1].asString) else matcher.group(action[1].asInt)
+                    "start" -> if (action.size() < 2) matcher.start() else if (action[1].asJsonPrimitive.isString) matcher.start(action[1].asString) else matcher.start(action[1].asInt)
+                    "end" -> if (action.size() < 2) matcher.end() else if (action[1].asJsonPrimitive.isString) matcher.end(action[1].asString) else matcher.end(action[1].asInt)
+                    "reset" -> { if (action.size() > 1) matcher.reset(action[1].asString) else matcher.reset(); "reset" }
+                    "replaceAll" -> matcher.replaceAll(action[1].asString)
+                    else -> throw Unsupported("未知 Matcher 操作")
+                }
+            }
+        }
         "pattern.split" -> Pattern.compile(text("pattern")).split(text("text"), input.get("limit").asInt).toList()
         "string.split" -> java.lang.String(text("text")).split(text("pattern"), input.get("limit").asInt).toList()
         "string.replaceAll" -> java.lang.String(text("text")).replaceAll(text("pattern"), text("replacement"))

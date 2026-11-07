@@ -46,7 +46,8 @@
         "string.api",
         "integer.parseInt",
         "integer.parseLongRadix",
-        "integer.bigInteger"
+        "integer.bigInteger",
+        "pattern.matcher"
       ]
     },
     "input": {
@@ -950,6 +951,45 @@
               },
               "continue": {
                 "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "pattern.matcher"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "pattern",
+              "actions"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "flags": {
+                "type": "integer"
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": false

@@ -734,6 +734,44 @@
         "integer.bigInteger.empty",
         "integer.bigInteger.huge"
       ]
+    },
+    {
+      "operation": "pattern.matcher",
+      "method": "Pattern.compile(String,int); Matcher find/matches/group/start/end/reset/replaceAll",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → Java Pattern/Matcher",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "pattern.matcher.groups",
+        "pattern.matcher.zeroWidth",
+        "pattern.matcher.findStart",
+        "pattern.matcher.resetInput",
+        "pattern.matcher.resetState",
+        "pattern.matcher.matchesThenFind",
+        "pattern.matcher.replaceThenGroup",
+        "pattern.matcher.replaceThenFind",
+        "pattern.matcher.empty",
+        "pattern.matcher.case",
+        "pattern.matcher.multiline",
+        "pattern.matcher.dotall",
+        "pattern.matcher.literal",
+        "pattern.matcher.comments",
+        "pattern.matcher.unicode",
+        "pattern.matcher.unicodeClass",
+        "pattern.matcher.unixLines",
+        "pattern.matcher.groupBeforeFind",
+        "pattern.matcher.startBeforeFind",
+        "pattern.matcher.groupAfterFailedFind",
+        "pattern.matcher.findNegative",
+        "pattern.matcher.findPastEnd",
+        "pattern.matcher.groupBounds",
+        "pattern.matcher.startBounds",
+        "pattern.matcher.invalidPattern"
+      ]
     }
   ]
 }

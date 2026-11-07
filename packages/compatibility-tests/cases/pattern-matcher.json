@@ -1,0 +1,648 @@
+[
+  {
+    "id": "pattern.matcher.groups",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(?<word>a)(b)?",
+      "text": "a ab",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\", 0]",
+        "[\"group\", \"word\"]",
+        "[\"group\", 2]",
+        "[\"start\", 2]",
+        "[\"end\", 2]",
+        "[\"find\"]",
+        "[\"start\", 1]",
+        "[\"end\", 2]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.zeroWidth",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(?=a)",
+      "text": "aa",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"find\"]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.findStart",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "aba",
+      "flags": 0,
+      "actions": [
+        "[\"find\", 2]",
+        "[\"start\"]",
+        "[\"find\", 0]",
+        "[\"start\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.resetInput",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"reset\", \"b aa\"]",
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"find\"]",
+        "[\"start\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.resetState",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "aba",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"reset\"]",
+        "[\"find\"]",
+        "[\"start\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.matchesThenFind",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"matches\"]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.replaceThenGroup",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(a)",
+      "text": "a a",
+      "flags": 0,
+      "actions": [
+        "[\"replaceAll\", \"$1!\"]",
+        "[\"group\", 1]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.replaceThenFind",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "aba",
+      "flags": 0,
+      "actions": [
+        "[\"replaceAll\", \"x\"]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.empty",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "",
+      "text": "",
+      "flags": 0,
+      "actions": [
+        "[\"matches\"]",
+        "[\"reset\", \"\"]",
+        "[\"find\"]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.case",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "abc",
+      "text": "ABC",
+      "flags": 2,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.multiline",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "^b",
+      "text": "a\nb",
+      "flags": 8,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.dotall",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a.b",
+      "text": "a\nb",
+      "flags": 32,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.literal",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a.b",
+      "text": "a.b",
+      "flags": 16,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.comments",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a #comment\n b",
+      "text": "ab",
+      "flags": 4,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.unicode",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "ä",
+      "text": "Ä",
+      "flags": 66,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.unicodeClass",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "\\w+",
+      "text": "中文",
+      "flags": 256,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.unixLines",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a.b",
+      "text": "a\rb",
+      "flags": 1,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.matcher.groupBeforeFind",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"group\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-state",
+      "jvm": [
+        "java.lang.IllegalStateException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "No match"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.startBeforeFind",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"start\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-state",
+      "jvm": [
+        "java.lang.IllegalStateException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "No match"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.groupAfterFailedFind",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "b",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-state",
+      "jvm": [
+        "java.lang.IllegalStateException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "No match"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.findNegative",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(a)",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"find\", -1]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "Error",
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.findPastEnd",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(a)",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"find\", 2]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "Error",
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.groupBounds",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(a)",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\", 2]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "Error",
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.startBounds",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(a)",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"start\", 2]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "matcher-bounds",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "Error",
+        "RangeError"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.invalidPattern",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "[",
+      "text": "a",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "__LEGADO_PATTERN__"
+      ]
+    }
+  }
+]

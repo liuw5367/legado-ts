@@ -493,6 +493,33 @@
         "output/run-0oHxHu/report.json",
         "output/run-ZUqpYS/report.json"
       ]
+    },
+    {
+      "id": "C3-MATCHER",
+      "caseIds": [
+        "pattern.matcher.findStart",
+        "pattern.matcher.resetInput",
+        "pattern.matcher.matchesThenFind",
+        "pattern.matcher.replaceThenGroup",
+        "pattern.matcher.replaceThenFind",
+        "pattern.matcher.groupBeforeFind",
+        "pattern.matcher.startBeforeFind",
+        "pattern.matcher.groupAfterFailedFind",
+        "pattern.matcher.findNegative",
+        "pattern.matcher.findPastEnd",
+        "pattern.matcher.startBounds"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "Pattern/Matcher"
+      },
+      "tsEntry": "SourceRuleHost → Java Pattern.matcher",
+      "evidence": [
+        "output/run-fBBDNu/report.json"
+      ]
     }
   ]
 }

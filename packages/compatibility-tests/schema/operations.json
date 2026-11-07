@@ -267,5 +267,18 @@
       "outRadix": "integer",
       "continue": "boolean"
     }
+  },
+  "pattern.matcher": {
+    "required": [
+      "text",
+      "pattern",
+      "actions"
+    ],
+    "properties": {
+      "text": "string",
+      "pattern": "string",
+      "flags": "integer",
+      "actions": "strings"
+    }
   }
 }

@@ -205,3 +205,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - 2026-11-07：用户明确要求将规划写入 plan 文档，并按阶段、按修复问题 commit、完成所有内容；批准本计划全部三阶段及其范围内的实现、验证和本地提交，不包含 push。
 
 - C2-UTF8 已修复：Java bridge 的 UTF-8 字节编码在编码前将孤立代理字符替换为 JDK 的问号，保留有效代理对；String.getBytes 与 URLEncoder 共用入口。新增 URL 编码三例在修复前全部失败（output/run-0oHxHu），修复后全量 267 个 API 行为一致、1 个内部观察未支持、0 执行器故障（output/run-ZUqpYS）；18 项机制测试和类型检查通过。C3～C7 仍未完成。
+
+- C3 首批 25 例已执行：14 一致、11 差异、0 执行器故障（output/run-fBBDNu）。已复现 find(start)、reset(input)、匹配状态与替换后状态缺口，登记 C3-MATCHER，尚未修复。
