@@ -3304,7 +3304,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (state.expect !== 'text') return normalized
     // 标量 null 在原实现触发可捕获的空结果；数组内 null 则逐项输出文本 null。
     if (definite && Array.isArray(value) && value.length === 1 && value[0] === null) return []
-    return Array.isArray(normalized) ? normalized.map(javaJsonText) : normalized == null ? [] : [javaJsonText(normalized)]
+    const items = Array.isArray(normalized) ? normalized : normalized == null ? [] : [normalized]
+    if (!expression.trimEnd().endsWith('.sum()')) return items.map(javaJsonText)
+    // Jayway sum 返回 Double，整数和科学计数法仍需保留小数位。
+    return items.map((item) => {
+      if (typeof item !== 'number' || !Number.isFinite(item)) return javaJsonText(item)
+      const magnitude = Math.abs(item)
+      if (magnitude >= 1e7 || (magnitude > 0 && magnitude < 1e-3)) {
+        const [mantissa, exponent] = item.toExponential().split('e') as [string, string]
+        return `${mantissa.includes('.') ? mantissa : `${mantissa}.0`}E${Number(exponent)}`
+      }
+      if (Object.is(item, -0)) return '-0.0'
+      return Number.isInteger(item) ? `${item}.0` : String(item)
+    })
   }
 
   private evaluateXPath(expression: string, content: unknown, expect: WorkflowRuleRequest['expect']): unknown {

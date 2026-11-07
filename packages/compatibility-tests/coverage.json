@@ -405,7 +405,10 @@
         "json.string.escaped-operator",
         "json.string.aggregateLength",
         "json.string.aggregateSum",
-        "json.string.filterRange"
+        "json.string.filterRange",
+        "json.string.sum.fraction",
+        "json.string.sum.large",
+        "json.string.sum.small"
       ]
     },
     {

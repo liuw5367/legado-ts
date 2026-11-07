@@ -223,3 +223,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C6-XPATH 原 4 项差异已修复。自闭合标签和空节点表达式分别由 31c0763、83c1414 提交。元素字符串按节点类型读取外部 HTML 或节点值，原 27 例行为一致（output/run-uf4aRQ）。旧宿主的祖先上下文断言改为显式选择后代文本节点。嵌套元素的 Jsoup 缩进序列化另有实测差异，需补共享案例并单独修复。
 
 - C6 新增 18 个组合与聚合案例。CSS 组合、索引、属性和 textNodes 全部一致。校准 json.read 的聚合参考配置后，JSON 52 例中 50 一致、2 项 sum() 字符串差异（output/run-FkOitC）。嵌套 XPath 元素的 Jsoup 外部 HTML 缩进仍不同（output/run-EszpKa）。两项均登记为待修。
+
+- C6-JSON-SUM 已修复。sum() 的文本输出保留 Double 小数位和科学计数法表示，55 个 JSON 用例一致（output/run-KUhZ8W）。全量 411 个 API 用例中 410 一致，剩余 1 项嵌套 XPath 元素序列化差异，另有 1 个内部观察项（output/run-Qf9GoX）。19 项机制检查、119 项宿主回归与类型检查通过。

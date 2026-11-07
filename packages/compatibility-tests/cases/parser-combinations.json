@@ -320,5 +320,53 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "json.string.sum.fraction",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.values.sum()",
+      "content": "{\"values\": [0.1, 0.2]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.sum.large",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.values.sum()",
+      "content": "{\"values\": [10000000]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "json.string.sum.small",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "rule": "$.values.sum()",
+      "content": "{\"values\": [-0.0001]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString"
+    },
+    "tags": [
+      "edge"
+    ]
   }
 ]

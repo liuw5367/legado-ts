@@ -616,7 +616,7 @@
         "json.list.aggregateSum"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -625,7 +625,9 @@
       "tsEntry": "SourceRuleHost → evaluateJson",
       "evidence": [
         "output/run-EszpKa/report.json",
-        "output/run-FkOitC/report.json"
+        "output/run-FkOitC/report.json",
+        "output/run-KUhZ8W/report.json",
+        "output/run-Qf9GoX/report.json"
       ]
     },
     {
@@ -642,7 +644,8 @@
       },
       "tsEntry": "XPathParserAdapter → XmlDocumentView.read",
       "evidence": [
-        "output/run-EszpKa/report.json"
+        "output/run-EszpKa/report.json",
+        "output/run-Qf9GoX/report.json"
       ]
     }
   ]
