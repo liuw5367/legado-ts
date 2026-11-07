@@ -164,7 +164,19 @@
     },
     "tags": [
       "edge"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "matcher-state",
+      "jvm": [
+        "java.lang.IllegalStateException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "No match"
+      ]
+    }
   },
   {
     "id": "pattern.matcher.replaceThenFind",

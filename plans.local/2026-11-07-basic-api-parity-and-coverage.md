@@ -207,3 +207,5 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 - C2-UTF8 已修复：Java bridge 的 UTF-8 字节编码在编码前将孤立代理字符替换为 JDK 的问号，保留有效代理对；String.getBytes 与 URLEncoder 共用入口。新增 URL 编码三例在修复前全部失败（output/run-0oHxHu），修复后全量 267 个 API 行为一致、1 个内部观察未支持、0 执行器故障（output/run-ZUqpYS）；18 项机制测试和类型检查通过。C3～C7 仍未完成。
 
 - C3 首批 25 例已执行：14 一致、11 差异、0 执行器故障（output/run-fBBDNu）。已复现 find(start)、reset(input)、匹配状态与替换后状态缺口，登记 C3-MATCHER，尚未修复。
+
+- C3-MATCHER 已修复：find(start) 与 reset(input) 使用实参并重置区域；matches/lookingAt 更新搜索位置；group/start/end 校验有效匹配与组索引；replaceAll 恢复完整输入并保留替换后无有效匹配的状态。25 个新案例全部行为一致（output/run-98XhzV），全量 292 个 API 行为一致、1 个内部观察未支持、0 执行器故障（output/run-ZdUy98）；18 项机制测试、119 项宿主回归和类型检查通过。C3 方法覆盖清单细化及 C4～C7 仍需继续。

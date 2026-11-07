@@ -1151,7 +1151,7 @@ const legadoPattern = {
       flags: () => numericFlags,
       split: (value, limit) => legadoList(legadoJavaSplit(String(value), makeRegex(false), limit)),
       matcher: (value) => {
-      const input = String(value ?? "")
+      let input = String(value ?? "")
       const regex = makeRegex(true)
       let last = null
       let lastOffset = 0
@@ -1159,9 +1159,12 @@ const legadoPattern = {
       let regionEnd = input.length
       let advanceEmpty = false
       const groupBounds = (index) => {
-        if (last === null) return [-1, -1]
+        if (last === null) throw new Error("No match found")
         const named = typeof index === "string" && index.length > 0
         const groupIndex = named ? undefined : Number(index ?? 0)
+        if (named) {
+          if (last.groups === undefined || !Object.prototype.hasOwnProperty.call(last.groups, index)) throw new Error("No group with name <" + index + ">")
+        } else if (!Number.isInteger(groupIndex) || groupIndex < 0 || groupIndex > patternGroupCount) throw new Error("No group " + groupIndex)
         const group = named ? last.groups?.[index] : last[groupIndex]
         if (group === undefined) return [-1, -1]
         const bounds = named ? last.indices?.groups?.[index] : last.indices?.[groupIndex]
@@ -1174,11 +1177,27 @@ const legadoPattern = {
       const scopedText = () => input.slice(regionStart, regionEnd)
       const scopedRegex = (prefix, suffix) => new RegExp(prefix + compiled.source + suffix, compiledFlags.replace("d", "") + (compiledFlags.includes("d") ? "d" : ""))
       const replaceInRegion = (replacement, replaceAll) => {
-        const value = legadoJavaReplace(scopedText(), makeRegex(false), replacement, replaceAll)
-        return input.slice(0, regionStart) + value + input.slice(regionEnd)
+        // Java 替换从完整输入重新匹配；replaceAll 会搜索至失败，后续 group 因而没有有效匹配。
+        regionStart = 0
+        regionEnd = input.length
+        clear()
+        const value = legadoJavaReplace(input, makeRegex(false), replacement, replaceAll)
+        if (replaceAll) {
+          while (api.find()) { /* 保留 Java 替换后的搜索状态。 */ }
+          regex.lastIndex = input.length + 1
+        } else api.find()
+        return value
       }
       const api = {
-        find: () => {
+        find: (start) => {
+          if (start !== undefined) {
+            const offset = Number(start)
+            if (!Number.isInteger(offset) || offset < 0 || offset > input.length) throw new RangeError("Matcher start out of bounds")
+            regionStart = 0
+            regionEnd = input.length
+            clear()
+            regex.lastIndex = offset
+          }
           if (advanceEmpty) {
             regex.lastIndex = Math.min(regionEnd + 1, regex.lastIndex + 1)
             advanceEmpty = false
@@ -1195,6 +1214,8 @@ const legadoPattern = {
           if (match === null) { last = null; return false }
           last = match
           lastOffset = regionStart
+          regex.lastIndex = lastOffset + match.index + match[0].length
+          advanceEmpty = match[0].length === 0
           return true
         },
         lookingAt: () => {
@@ -1202,10 +1223,12 @@ const legadoPattern = {
           if (match === null) { last = null; return false }
           last = match
           lastOffset = regionStart
+          regex.lastIndex = lastOffset + match.index + match[0].length
+          advanceEmpty = match[0].length === 0
           return true
         },
         group: (index) => {
-          if (last === null) return null
+          if (last === null) throw new Error("No match found")
           if (typeof index === "string" && index.length > 0) {
             if (last.groups === undefined || !Object.prototype.hasOwnProperty.call(last.groups, index)) throw new Error("No group with name <" + index + ">")
             return last.groups[index] ?? null
@@ -1230,7 +1253,14 @@ const legadoPattern = {
         },
         regionStart: () => regionStart,
         regionEnd: () => regionEnd,
-        reset: () => { clear(); return api },
+        reset: (value) => {
+          if (value !== undefined) input = String(value)
+          // Java reset 同时恢复完整输入区域，且清除上一次匹配。
+          regionStart = 0
+          regionEnd = input.length
+          clear()
+          return api
+        },
       }
       regex.lastIndex = regionStart
       return api

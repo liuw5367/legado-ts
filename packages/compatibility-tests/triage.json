@@ -510,7 +510,7 @@
         "pattern.matcher.startBounds"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -518,7 +518,9 @@
       },
       "tsEntry": "SourceRuleHost → Java Pattern.matcher",
       "evidence": [
-        "output/run-fBBDNu/report.json"
+        "output/run-fBBDNu/report.json",
+        "output/run-98XhzV/report.json",
+        "output/run-ZdUy98/report.json"
       ]
     }
   ]
