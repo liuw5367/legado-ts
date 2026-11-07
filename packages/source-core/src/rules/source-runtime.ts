@@ -1224,7 +1224,8 @@ const legadoPattern = {
           return true
         },
         matches: () => {
-          const match = scopedRegex("^(?:", ")$").exec(scopedText())
+          // Matcher.matches 必须覆盖整个区域，外层边界不受 MULTILINE 影响。
+          const match = scopedRegex("(?<![\\s\\S])(?:", ")(?![\\s\\S])").exec(scopedText())
           if (match === null) { last = null; return false }
           last = match
           lastOffset = regionStart
@@ -1233,7 +1234,7 @@ const legadoPattern = {
           return true
         },
         lookingAt: () => {
-          const match = scopedRegex("^(?:", ")").exec(scopedText())
+          const match = scopedRegex("(?<![\\s\\S])(?:", ")").exec(scopedText())
           if (match === null) { last = null; return false }
           last = match
           lastOffset = regionStart

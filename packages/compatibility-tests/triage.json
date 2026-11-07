@@ -797,7 +797,7 @@
         "pattern.matcher.matchesMultiline"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -805,7 +805,8 @@
       },
       "tsEntry": "SourceRuleHost → Pattern.matcher.matches",
       "evidence": [
-        "output/run-iaq3UV/report.json"
+        "output/run-iaq3UV/report.json",
+        "output/run-0LQ0vg/report.json"
       ]
     }
   ]
