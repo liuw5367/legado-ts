@@ -11,6 +11,14 @@
   },
   "files": [
     {
+      "path": "modules/rhino/src/main/java/org/htmlunit/corejs/javascript/ConcurrentNativeObject.java",
+      "sha256": "0591a86897f52ecc453a09b468c2a5ba8fdd3c5ac2e5ea645d284fb115a0b8bf"
+    },
+    {
+      "path": "modules/rhino/src/main/java/com/script/ScriptBindings.kt",
+      "sha256": "21ef4a04db05695463af9051f7c5457f67654c5c1d354f048e626fc295926b9c"
+    },
+    {
       "path": "app/src/main/java/io/legado/app/model/analyzeRule/RuleAnalyzer.kt",
       "sha256": "74ab0152bce9d5e014cc69d9c6974cbb093d8353200f1452066f7d05102265a7"
     },
@@ -140,6 +148,7 @@
     }
   ],
   "adaptations": [
+    "ScriptBindings.kt 保持原样，测试适配只提供 RhinoScriptEngine.initialize 空入口。纯 JVM 直接配置 Rhino Context，按 BaseSource 和 SharedJsScope 的调用顺序验证内存状态，不覆盖应用缓存与调度。",
     {
       "file": "jvm/src/main/kotlin/androidx/annotation/Keep.kt",
       "reason": "构建期注解，无 Android 运行行为"
@@ -162,6 +171,14 @@
     "sha256": "d720f34285515025e4ccc80a5b92aed42cb26c03a7715ca53583d2c74ae51df7"
   },
   "flowEvidence": [
+    {
+      "path": "app/src/main/java/io/legado/app/help/source/BaseSourceExtensions.kt",
+      "sha256": "96f90ee5e8919a6763cd7fa9c9bbaa08f7c279e437828f607bff0389f56dccce"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/SharedJsScope.kt",
+      "sha256": "9bb5bc9d4e39bd788a68605f04287f4079b7dbb1c75510aba24b8cdacd97016e"
+    },
     {
       "path": "app/src/main/java/io/legado/app/model/webBook/BookList.kt",
       "sha256": "c61c495972c900cc5702e5d9c4aa56413ce9928a885df3b96f11d6e8084f1051"

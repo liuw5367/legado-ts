@@ -36,6 +36,29 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
   const host = new SourceRuleHost()
   switch (item.operation) {
+    case 'rule.scriptLibrary': {
+      const kind = str('kind')
+      const first = { ...source, jsLib: str('library') }
+      const second = { ...first, bookSourceUrl: 'https://second.fixture.invalid' }
+      const executeLibrary = async (current: NormalizedSource, code = str('program')) => {
+        const result = await host.executeWorkflowJavaScript({ source: current, stage: 'detail', code, content: '' })
+        return JSON.parse(String(checked(result)))
+      }
+      if (kind === 'date') {
+        const previousTimeZone = process.env.TZ
+        process.env.TZ = 'UTC'
+        try {
+          return await executeLibrary(first)
+        } finally {
+          if (previousTimeZone === undefined) delete process.env.TZ
+          else process.env.TZ = previousTimeZone
+        }
+      }
+      if (kind !== 'scope' && kind !== 'peer-refresh') throw new UnsupportedOperation('未知 jsLib 案例')
+      const beforeRefresh = [await executeLibrary(first), await executeLibrary(first), await executeLibrary(second)]
+      await executeLibrary(first, 'source.refreshJSLib(); JSON.stringify(null)')
+      return [...beforeRefresh, await executeLibrary(kind === 'scope' ? first : second)]
+    }
     case 'rule.bridgeObjects': {
       switch (str('kind')) {
         case 'map': return script(host, 'var m = new Packages.java.util.HashMap(); var missing=m.get("item"); var first=m.put("item","甲"); var second=m.put("item","乙"); return {missing:missing,first:first,second:second,current:m.get("item"),size:m.size()};')

@@ -130,7 +130,17 @@
       "sourceUrl": "https://www.mowan.lol",
       "definitionSha256": "52e689de10619b25b49f9742212528fa2cc20b4e3242bc91b8bbcaeb9b67bbfc",
       "disposition": "indexed",
-      "reason": "登录库仅保留索引，后续只审查所需函数片段"
+      "reason": "登录库仅保留索引，后续只审查所需函数片段",
+      "fragments": [
+        {
+          "caseId": "rule.scriptLibrary.batch-yck-format-date",
+          "field": "jsLib",
+          "symbol": "formatDate",
+          "start": 4056,
+          "end": 4681,
+          "sha256": "97c26a3f1527942013c84abb2f3c7ac6755a67d8ac927064eab5a9833504617b"
+        }
+      ]
     }
   ]
 }

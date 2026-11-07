@@ -145,6 +145,8 @@ git diff --check
 
 - D2 的 `rule.bridgeObjects.batch-*` 验证 JDK Map/List、固定上游 Jsoup 节点和原始 StrResponse 配固定 OkHttp 的后续方法调用。规则桥接族 [6/6 一致](../packages/compatibility-tests/output/run-bZpber/report.md)，机制与参考协议 32/32。覆盖范围限于该组具体方法和返回值。
 
+- D3 固定 YCK 魔丸小说 `jsLib.formatDate` 的原文位置与摘要，UTC 下对照默认格式、自定义格式和非法输入。原样执行 `ScriptBindings.kt` 和 `ConcurrentNativeObject.java`，验证同源累加、切源隔离与刷新复位。相同库的跨源刷新由 `rule.scriptLibrary.batch-peer-refresh` 精确记录 Android 清零而 TS 保持隔离的差异。[两例一致、一例允许差异](../packages/compatibility-tests/output/run-CCqbkI/report.md)。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

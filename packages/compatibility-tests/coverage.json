@@ -1651,6 +1651,24 @@
         "rule.bridgeObjects.batch-node",
         "rule.bridgeObjects.batch-response"
       ]
+    },
+    {
+      "operation": "rule.scriptLibrary",
+      "method": "jsLib 纯函数与来源级全局状态",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "SourceRuleHost.executeWorkflowJavaScript",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "state",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.scriptLibrary.batch-yck-format-date",
+        "rule.scriptLibrary.batch-source-scope",
+        "rule.scriptLibrary.batch-peer-refresh"
+      ]
     }
   ]
 }

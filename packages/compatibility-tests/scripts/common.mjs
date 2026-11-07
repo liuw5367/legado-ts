@@ -36,6 +36,7 @@ export async function treeHash(directory) {
 export async function loadCases(options = {}) {
   const cases = []
   const corpora = new Map()
+  let yckManifest
   for (const path of await files(join(root, 'cases'))) {
     if (!path.endsWith('.json')) continue
     for (const item of await readJson(path)) {
@@ -46,6 +47,15 @@ export async function loadCases(options = {}) {
         const corpus = corpora.get(collection)
         verifyFlowOrigin(item, corpus)
         item.flowOrigin.snapshotSha256 = corpus.sha256
+      }
+      if (item.operation === 'rule.scriptLibrary' && item.input.kind === 'date') {
+        yckManifest ??= await readJson(join(root, 'corpus/yck-1298-manifest.json'))
+        const source = yckManifest.entries.find((entry) => entry.fragments?.some((fragment) => fragment.caseId === item.id))
+        const fragment = source?.fragments.find((fragment) => fragment.caseId === item.id)
+        if (!fragment || fragment.sha256 !== sha256(item.input.library)) {
+          throw new Error(`${item.id}: YCK jsLib 片段摘要与来源索引不一致`)
+        }
+        item.scriptOrigin = { sourceUrl: source.sourceUrl, sourceIndex: source.index, snapshotSha256: yckManifest.rawSha256, ...fragment }
       }
       cases.push(item)
     }

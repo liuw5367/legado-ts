@@ -16,7 +16,9 @@
       <executions><execution><id>compile</id><phase>compile</phase><goals><goal>compile</goal></goals></execution></executions>
       <configuration><jvmTarget>21</jvmTarget><sourceDirs><sourceDir>${project.basedir}/src/main/kotlin</sourceDir><sourceDir>${project.basedir}/target/reference</sourceDir></sourceDirs></configuration>
     </plugin>
-    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.1</version></plugin>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.1</version>
+      <configuration><compileSourceRoots><compileSourceRoot>${project.basedir}/target/reference</compileSourceRoot></compileSourceRoots></configuration>
+    </plugin>
     <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>3.8.1</version></plugin>
   </plugins></build>
 </project>

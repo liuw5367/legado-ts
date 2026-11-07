@@ -1,0 +1,83 @@
+[
+  {
+    "id": "rule.scriptLibrary.batch-yck-format-date",
+    "family": "script-library",
+    "operation": "rule.scriptLibrary",
+    "input": {
+      "kind": "date",
+      "library": "function formatDate(input, fmt) {\n    if (fmt === undefined) fmt = 'YYYY-MM-DD HH:mm:ss';\n    var date = (input instanceof Date) ? input : new Date(input);\n    if (isNaN(date.getTime())) return '';\n\n    function pad(n) {\n        var s = String(n);\n        return s.length < 2 ? '0' + s : s;\n    }\n\n    var map = {\n        YYYY: date.getFullYear(),\n        MM: pad(date.getMonth() + 1),\n        DD: pad(date.getDate()),\n        HH: pad(date.getHours()),\n        mm: pad(date.getMinutes()),\n        ss: pad(date.getSeconds())\n    };\n\n    return fmt.replace(/YYYY|MM|DD|HH|mm|ss/g, function(m) {\n        return map[m];\n    });\n}",
+      "program": "var instant = new Date(1706933106000); JSON.stringify([instant.getTimezoneOffset(), formatDate(instant), formatDate(instant, \"DD/MM/YYYY\"), formatDate(NaN)])"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "YCK 1298 魔丸小说 jsLib.formatDate + 固定 Legado Rhino (UTC)"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "empty"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        0,
+        "2024-02-03 04:05:06",
+        "03/02/2024",
+        ""
+      ]
+    }
+  },
+  {
+    "id": "rule.scriptLibrary.batch-source-scope",
+    "family": "script-library",
+    "operation": "rule.scriptLibrary",
+    "input": {
+      "kind": "scope",
+      "library": "function nextCount(value) { return (value || 0) + 1; }",
+      "program": "globalThis.fixtureCounter = nextCount(globalThis.fixtureCounter); JSON.stringify(globalThis.fixtureCounter)"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "ScriptBindings 原始共享状态实现 + BaseSource.evalJS 与 SharedJsScope.remove 离线调用顺序"
+    },
+    "tags": [
+      "state",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        1,
+        2,
+        1,
+        1
+      ]
+    }
+  },
+  {
+    "id": "rule.scriptLibrary.batch-peer-refresh",
+    "family": "script-library",
+    "operation": "rule.scriptLibrary",
+    "input": {
+      "kind": "peer-refresh",
+      "library": "function nextCount(value) { return (value || 0) + 1; }",
+      "program": "globalThis.fixtureCounter = nextCount(globalThis.fixtureCounter); JSON.stringify(globalThis.fixtureCounter)"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "ScriptBindings 原始共享状态实现 + BaseSource.evalJS 与 SharedJsScope.remove 离线调用顺序"
+    },
+    "tags": [
+      "state",
+      "boundary"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value/3",
+        "jvm": 1,
+        "ts": 2,
+        "reason": "Android 按库摘要清除所有引用该库的来源级状态。TS 保留其他书源会话的独立状态。"
+      }
+    ]
+  }
+]

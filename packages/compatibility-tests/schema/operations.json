@@ -452,5 +452,17 @@
       "url": "string",
       "headers": "object"
     }
+  },
+  "rule.scriptLibrary": {
+    "required": [
+      "kind",
+      "library",
+      "program"
+    ],
+    "properties": {
+      "kind": "string",
+      "library": "string",
+      "program": "string"
+    }
   }
 }
