@@ -120,7 +120,11 @@ git diff --check
 
 ## 完成记录
 
-规划已核对当前基线、源集合与原差异分类。实施和验收证据在批准后记录。
+- A1 `eaee1d5` 固定来源索引、3 条选用原定义及来源校验；[原流程基线](../packages/compatibility-tests/output/run-7jCG4E/report.md)通过。
+- F1 `11dbd41` 为 D1–D44 逐项登记复测分类。
+- A2 `fbf4037` 增加思路客正常和空结果案例。[修复前](../packages/compatibility-tests/output/run-bGqJlc/report.md)显示默认 UTF-8 表单编码耗尽宿主桥接预算；`7dac5d7` 单独修复，[修复后 22/22](../packages/compatibility-tests/output/run-BnD3O7/report.md)。
+- A3 `0dbcc31` 增加错层小说目录与正文双分页、下一章停止用例，[24/24](../packages/compatibility-tests/output/run-CxKhk2/report.md)。
+- A4 增加抖音小说 POST、两个分页及尾部不匹配链接用例，[26/26](../packages/compatibility-tests/output/run-FTlpEm/report.md)。
 
 ## 变更记录
 

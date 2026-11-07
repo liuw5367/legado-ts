@@ -851,5 +851,519 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.yck.douyin.paged",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl / BookList / BookInfo / BookChapterList / BookContent"
+    },
+    "tags": [
+      "offline",
+      "pagination"
+    ],
+    "flowOrigin": {
+      "collection": "yck-1298",
+      "sourceUrl": "https://www.douyinxs.com",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "抖音小说 www.douyinxs.com 书源（笔趣阁架构）。正文 article#content 直出无广告，但章节分页(_2.html)且目录分页(_2/)；目录每页 dt 前重复「最新10章」块，用 dt ~ dd 兄弟选择器排除。搜索 POST /search/，120秒限流1次(IP级，与PC同公网IP共享额度)——搜索失败等2分钟再试；关键词过短(约<4汉字)报「关键字最少10个字符」。创建于2026-09-19。",
+        "bookSourceGroup": "阿豪书源 小说",
+        "bookSourceName": "抖音小说",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.douyinxs.com",
+        "customButton": false,
+        "customOrder": 20,
+        "enabled": true,
+        "enabledCookieJar": false,
+        "enabledExplore": true,
+        "eventListener": false,
+        "header": "{\"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36\"}",
+        "lastUpdateTime": 1790525733289,
+        "respondTime": 180000,
+        "ruleBookInfo": {
+          "author": "@css:meta[property='og:novel:author']@content",
+          "coverUrl": "@css:meta[property='og:image']@content",
+          "intro": "@css:meta[property='og:description']@content",
+          "kind": "@css:meta[property='og:novel:category']@content",
+          "lastChapter": "@css:meta[property='og:novel:lastest_chapter_name']@content",
+          "name": "@css:meta[property='og:novel:book_name']@content"
+        },
+        "ruleContent": {
+          "content": "@css:#content p@text",
+          "nextContentUrl": "@css:a#next:contains(下一页)@href"
+        },
+        "ruleExplore": {},
+        "ruleSearch": {
+          "author": "@css:.s4@text",
+          "bookList": "@css:.novelslist2 ul li:has(a)",
+          "bookUrl": "@css:.s2 a@href",
+          "kind": "@css:.s1@text##\\[|\\]",
+          "lastChapter": "@css:.s3 a@text",
+          "name": "@css:.s2 a@text"
+        },
+        "ruleToc": {
+          "chapterList": "@css:#list dt:contains(正文) ~ dd a",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "@css:.index-container a:contains(下一页)@href"
+        },
+        "searchUrl": "https://www.douyinxs.com/search/,{\"method\": \"POST\", \"body\": \"searchkey={{key}}&submit=\"}",
+        "weight": 0
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://www.douyinxs.com/search/",
+          "body": "searchkey=%E6%98%9F%E6%B2%B3&submit=",
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/search/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0ibm92ZWxzbGlzdDIiPjx1bD48bGk+PHNwYW4gY2xhc3M9InMyIj48YSBocmVmPSIvYm9vay83LyI+5pif5rKzPC9hPjwvc3Bhbj48c3BhbiBjbGFzcz0iczQiPueUsjwvc3Bhbj48c3BhbiBjbGFzcz0iczEiPlvlsI/or7RdPC9zcGFuPjwvbGk+PGxpPuW5v+WRijwvbGk+PC91bD48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/book/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/book/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1ldGEgcHJvcGVydHk9Im9nOm5vdmVsOmJvb2tfbmFtZSIgY29udGVudD0i5pif5rKzIj48ZGwgaWQ9Imxpc3QiPjxkdD7mraPmloc8L2R0PjxkZD48YSBocmVmPSIvYy8xLmh0bWwiPuesrOS4gOeroDwvYT48L2RkPjwvZGw+PG5hdiBjbGFzcz0iaW5kZXgtY29udGFpbmVyIj48YSBocmVmPSIvdG9jLzcvMi5odG1sIj7kuIvkuIDpobU8L2E+PC9uYXY+"
+          }
+        },
+        "toc2": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/toc/7/2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/toc/7/2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRsIGlkPSJsaXN0Ij48ZHQ+5q2j5paHPC9kdD48ZGQ+PGEgaHJlZj0iL2MvMi5odG1sIj7nrKzkuoznq6A8L2E+PC9kZD48L2RsPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/c/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/c/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBpZD0iY29udGVudCI+PHA+55Sy6aG1PC9wPjwvZGl2PjxhIGlkPSJuZXh0IiBocmVmPSIvYy8xLTIuaHRtbCI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "content2": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/c/1-2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/c/1-2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBpZD0iY29udGVudCI+PHA+5LmZ6aG1PC9wPjwvZGl2Pg=="
+          }
+        }
+      },
+      "requestLimit": 5,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "author": "甲",
+                "bookUrl": "https://www.douyinxs.com/book/7/",
+                "kind": "小说"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "author": "甲",
+              "bookUrl": "https://www.douyinxs.com/book/7/",
+              "kind": "小说",
+              "tocUrl": "https://www.douyinxs.com/book/7/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://www.douyinxs.com/c/1.html",
+                "index": 0,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://www.douyinxs.com/c/2.html",
+                "index": 1,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "cleaned": "甲页\n乙页",
+              "pageCount": 2
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.douyinxs.com/search/",
+            "body": "searchkey=%E6%98%9F%E6%B2%B3&submit=",
+            "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZzdWJtaXQ9",
+            "responseUrl": "https://www.douyinxs.com/search/",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/book/7/",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/book/7/",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/toc/7/2.html",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/toc/7/2.html",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/c/1.html",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/c/1.html",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/c/1-2.html",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/c/1-2.html",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yck.douyin.ignore-decoy",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl / BookList / BookInfo / BookChapterList / BookContent"
+    },
+    "tags": [
+      "offline",
+      "pagination"
+    ],
+    "flowOrigin": {
+      "collection": "yck-1298",
+      "sourceUrl": "https://www.douyinxs.com",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "抖音小说 www.douyinxs.com 书源（笔趣阁架构）。正文 article#content 直出无广告，但章节分页(_2.html)且目录分页(_2/)；目录每页 dt 前重复「最新10章」块，用 dt ~ dd 兄弟选择器排除。搜索 POST /search/，120秒限流1次(IP级，与PC同公网IP共享额度)——搜索失败等2分钟再试；关键词过短(约<4汉字)报「关键字最少10个字符」。创建于2026-09-19。",
+        "bookSourceGroup": "阿豪书源 小说",
+        "bookSourceName": "抖音小说",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.douyinxs.com",
+        "customButton": false,
+        "customOrder": 20,
+        "enabled": true,
+        "enabledCookieJar": false,
+        "enabledExplore": true,
+        "eventListener": false,
+        "header": "{\"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36\"}",
+        "lastUpdateTime": 1790525733289,
+        "respondTime": 180000,
+        "ruleBookInfo": {
+          "author": "@css:meta[property='og:novel:author']@content",
+          "coverUrl": "@css:meta[property='og:image']@content",
+          "intro": "@css:meta[property='og:description']@content",
+          "kind": "@css:meta[property='og:novel:category']@content",
+          "lastChapter": "@css:meta[property='og:novel:lastest_chapter_name']@content",
+          "name": "@css:meta[property='og:novel:book_name']@content"
+        },
+        "ruleContent": {
+          "content": "@css:#content p@text",
+          "nextContentUrl": "@css:a#next:contains(下一页)@href"
+        },
+        "ruleExplore": {},
+        "ruleSearch": {
+          "author": "@css:.s4@text",
+          "bookList": "@css:.novelslist2 ul li:has(a)",
+          "bookUrl": "@css:.s2 a@href",
+          "kind": "@css:.s1@text##\\[|\\]",
+          "lastChapter": "@css:.s3 a@text",
+          "name": "@css:.s2 a@text"
+        },
+        "ruleToc": {
+          "chapterList": "@css:#list dt:contains(正文) ~ dd a",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "@css:.index-container a:contains(下一页)@href"
+        },
+        "searchUrl": "https://www.douyinxs.com/search/,{\"method\": \"POST\", \"body\": \"searchkey={{key}}&submit=\"}",
+        "weight": 0
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://www.douyinxs.com/search/",
+          "body": "searchkey=%E6%98%9F%E6%B2%B3&submit=",
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/search/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0ibm92ZWxzbGlzdDIiPjx1bD48bGk+PHNwYW4gY2xhc3M9InMyIj48YSBocmVmPSIvYm9vay83LyI+5pif5rKzPC9hPjwvc3Bhbj48c3BhbiBjbGFzcz0iczQiPueUsjwvc3Bhbj48c3BhbiBjbGFzcz0iczEiPlvlsI/or7RdPC9zcGFuPjwvbGk+PGxpPuW5v+WRijwvbGk+PC91bD48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/book/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/book/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1ldGEgcHJvcGVydHk9Im9nOm5vdmVsOmJvb2tfbmFtZSIgY29udGVudD0i5pif5rKzIj48ZGwgaWQ9Imxpc3QiPjxkdD7mraPmloc8L2R0PjxkZD48YSBocmVmPSIvYy8xLmh0bWwiPuesrOS4gOeroDwvYT48L2RkPjwvZGw+PG5hdiBjbGFzcz0iaW5kZXgtY29udGFpbmVyIj48YSBocmVmPSIvdG9jLzcvMi5odG1sIj7kuIvkuIDpobU8L2E+PC9uYXY+"
+          }
+        },
+        "toc2": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/toc/7/2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/toc/7/2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRsIGlkPSJsaXN0Ij48ZHQ+5q2j5paHPC9kdD48ZGQ+PGEgaHJlZj0iL2MvMi5odG1sIj7nrKzkuoznq6A8L2E+PC9kZD48L2RsPjxuYXYgY2xhc3M9ImluZGV4LWNvbnRhaW5lciI+PGEgaHJlZj0iL2lnbm9yZS10b2MiPuacq+mhtTwvYT48L25hdj4="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/c/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/c/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBpZD0iY29udGVudCI+PHA+55Sy6aG1PC9wPjwvZGl2PjxhIGlkPSJuZXh0IiBocmVmPSIvYy8xLTIuaHRtbCI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "content2": {
+          "method": "GET",
+          "url": "https://www.douyinxs.com/c/1-2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.douyinxs.com/c/1-2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBpZD0iY29udGVudCI+PHA+5LmZ6aG1PC9wPjwvZGl2PjxhIGlkPSJuZXh0IiBocmVmPSIvaWdub3JlLWNvbnRlbnQiPuebruW9lTwvYT4="
+          }
+        }
+      },
+      "requestLimit": 5,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "author": "甲",
+                "bookUrl": "https://www.douyinxs.com/book/7/",
+                "kind": "小说"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "author": "甲",
+              "bookUrl": "https://www.douyinxs.com/book/7/",
+              "kind": "小说",
+              "tocUrl": "https://www.douyinxs.com/book/7/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://www.douyinxs.com/c/1.html",
+                "index": 0,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://www.douyinxs.com/c/2.html",
+                "index": 1,
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "cleaned": "甲页\n乙页",
+              "pageCount": 2
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.douyinxs.com/search/",
+            "body": "searchkey=%E6%98%9F%E6%B2%B3&submit=",
+            "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZzdWJtaXQ9",
+            "responseUrl": "https://www.douyinxs.com/search/",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/book/7/",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/book/7/",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/toc/7/2.html",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/toc/7/2.html",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/c/1.html",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/c/1.html",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.douyinxs.com/c/1-2.html",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://www.douyinxs.com/c/1-2.html",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+            }
+          }
+        ]
+      }
+    }
   }
 ]
