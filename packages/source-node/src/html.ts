@@ -648,7 +648,7 @@ function relinkChildren(parent: AnyNode): void {
 
 export class HtmlParserAdapter implements HtmlParser {
   public parse(input: string, mode: 'html' | 'xml' = 'html'): HtmlDocument {
-    return new HtmlDocumentView(parseDocument(input, { xmlMode: mode === 'xml' }), mode === 'xml')
+    return new HtmlDocumentView(parseDocument(input, { xmlMode: mode === 'xml', recognizeSelfClosing: true }), mode === 'xml')
   }
 }
 

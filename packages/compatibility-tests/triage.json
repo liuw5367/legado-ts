@@ -178,7 +178,7 @@
         "css.list.selfclose"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -189,8 +189,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-UqDuxv/report.json",
+        "output/run-fMxfCI/report.json"
+      ],
+      "resolution": "规则 HTML parser 显式识别自闭合标签，节点/兄弟边界与原 parseSourceHtml 一致；正文 reading parser 未修改"
     },
     {
       "id": "R09",
