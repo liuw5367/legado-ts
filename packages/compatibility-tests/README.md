@@ -34,10 +34,11 @@ CLI 参数错误、空选择、来源失败或 API 执行不完整退出 2。API
 
 `reference-sources.json` 固定上游提交、文件摘要、依赖版本和适配说明。准备脚本用 `git show` 读取白名单文件，校验后原样生成到 `jvm/target/reference/`。原源码的许可证声明保留，原项目许可证见来源仓库的 LICENSE；生成源码、依赖和编译产物不进入版本控制。
 
-参考证据分为三类：
+参考证据分为四类：
 
 - `jdk-direct`：执行 JDK String、Pattern、Base64、URL、MessageDigest 等 API，只证明该 API，不扩大为 Android 包装器兼容。
 - `upstream-original`：直接编译原源码，目前为 RuleAnalyzer。
+- `upstream-guided-flow`：固定上游解析器与 Kotlin 离线流程编排，单列流程覆盖；原样执行与按源码编排的边界见下文。
 - `upstream-adapted`：原算法保持原样，额外提供无运行行为的 Keep 注解或 stderr 调试日志适配；当前包括 Regex、CSS、JSONPath、XPath。XPath 额外使用仅含 Iterable join 的 TextUtils 测试适配，其空集合、null、Unicode 和顺序语义由独立 JVM 测试校验；适配不包含 Android 运行库。
 
 书源脚本用例使用固定上游提交中的 Rhino 二进制，执行前验证摘要。JVM 参考按上游顺序组合解析、替换和脚本求值，节点与书籍变量来自离线夹具。纯章节数字方法从校验过摘要的上游文件提取并编译。
@@ -72,7 +73,24 @@ TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJ
 
 `corpus/coverage.json` 将基础语法组合与原文用例关联，并记录配置字段及 WebView 依赖。执行器生成 `corpus-coverage.json` 以区分本次通过、差异和未运行。
 
-完整搜索、详情、目录、正文流程尚未实现。后续增加对应操作时，继续使用共享案例与结果协议，并补充离线响应、请求轨迹和上下文；只有书源定义不能证明完整流程通过。
+### 离线书源流程
+
+在仓库根目录执行：
+
+```sh
+node packages/compatibility-tests/scripts/run.mjs --family flow
+node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
+```
+
+`flow.book` 让两端用同一书源、关键字和 UTF-8 响应字节执行。TS 调用真实搜索、详情、目录和正文入口，网络由夹具提供。JVM 直接执行固定的 Jsoup/JSONPath 解析器、Rhino 和从上游提取的格式化、字数、布尔规则代码；其余阶段顺序、回退和分页终止由 `BookFlow.kt` 按锁定的上游文件编排。证据记录在 `reference-sources.json` 的 `files`、`flowEvidence` 与产物 JVM 元数据中。Android 应用本体、线上站点、动态登录、WebView、跨阶段脚本持久化及并发分页属于独立证据范围。
+
+| 案例组 | 来源与比较范围 |
+| --- | --- |
+| `flow.yiove.html.*` | 「言情小说阁」原始规则与合成 HTML。验证搜索顺序、相对链接、独立目录地址、正文替换、合法空搜索和空正文失败 |
+| `flow.synthetic.json.*` | 从 `JSON-FLOW-001` 复制规则和素材。验证过滤、VIP 标记、两个正文页的拼接，以及无下一页、下一章、重复地址三类停止条件 |
+| `flow.yiove.js.*` | 「奇怪小说」原始目录脚本与合成 HTML。验证详情响应复用、排除“最新章节”组、保留节点顺序、读取脚本选中的章节和空目录失败 |
+
+响应按方法、完整 URL 和请求体匹配。请求超限或缺夹具会报告执行失败。逐阶段比较身份、已声明的书籍字段、章节顺序及标记、正文标题、页数、最终正文和请求轨迹。原始中间 HTML 的序列化字节及 TS 专有的元数据投影不属于流程断言，例如当前固定上游未读取的 `updateTime`。逐例的错误等价只映射指定阶段的精确类别和文案，仍比较终态和后续请求，并保留原始结果。
 
 旧测试继续保留。新机制稳定后，按旧断言到新案例的覆盖映射分批删除重复测试；独有安全、取消、资源释放和历史缺陷回归必须保留或迁移，删除前执行受影响验证。
 
