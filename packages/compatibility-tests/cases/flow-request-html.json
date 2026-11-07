@@ -1,0 +1,924 @@
+[
+  {
+    "id": "flow.yiove.post.explicit-header",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl → BookList → BookInfo → BookChapterList → BookContent"
+    },
+    "tags": [
+      "offline",
+      "html",
+      "post"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "https://www.dingdian888.com",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "顶点小说（dingdian888）",
+        "bookSourceUrl": "https://www.dingdian888.com",
+        "bookSourceGroup": "",
+        "bookSourceComment": "2026-09-01 实测：POST 搜索、详情、完整目录与正文均为静态 HTML；无需 WebView。",
+        "bookSourceType": 0,
+        "bookUrlPattern": "https?://(?:www\\.)?dingdian888\\.com/xiaoshuo/\\d+/?",
+        "enabled": true,
+        "enabledExplore": false,
+        "enabledCookieJar": false,
+        "enabledReview": false,
+        "searchUrl": "https://www.dingdian888.com/s.php,{\"method\":\"POST\",\"body\":\"s={{key}}&submit=\",\"charset\":\"UTF-8\",\"headers\":{\"Content-Type\":\"application/x-www-form-urlencoded; charset=UTF-8\"}}",
+        "exploreUrl": "",
+        "concurrentRate": "4",
+        "header": "{\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36\",\"Accept-Language\":\"zh-CN,zh;q=0.9\",\"Referer\":\"https://www.dingdian888.com/\"}",
+        "loginUrl": "",
+        "loginUi": "",
+        "loginCheckJs": "",
+        "variableComment": "",
+        "exploreScreen": "",
+        "coverDecodeJs": "",
+        "jsLib": "",
+        "ruleSearch": {
+          "checkKeyWord": "斗破苍穹",
+          "bookList": "@CSS:.lastupdate ul li",
+          "name": "@CSS:.name a@text",
+          "author": "@CSS:.zuo a@text",
+          "coverUrl": "",
+          "intro": "",
+          "bookUrl": "@CSS:.name a@href",
+          "wordCount": "",
+          "lastChapter": "@CSS:.jie a@text",
+          "updateTime": "@CSS:.time@text",
+          "kind": "@CSS:.lei a@text",
+          "hasMoreRule": "false"
+        },
+        "ruleExplore": {
+          "bookList": "",
+          "name": "",
+          "author": "",
+          "intro": "",
+          "kind": "",
+          "lastChapter": "",
+          "updateTime": "",
+          "bookUrl": "",
+          "coverUrl": "",
+          "wordCount": "",
+          "hasMoreRule": "false"
+        },
+        "ruleBookInfo": {
+          "init": "",
+          "name": "@CSS:meta[property='og:novel:book_name']@content",
+          "author": "@CSS:meta[property='og:novel:author']@content",
+          "coverUrl": "@CSS:meta[property='og:image']@content",
+          "intro": "@CSS:meta[property='og:description']@content",
+          "kind": "@CSS:meta[property='og:novel:category']@content",
+          "wordCount": "",
+          "lastChapter": "@CSS:.border_left_list li:first-child a@text",
+          "updateTime": "@CSS:meta[property='og:novel:update_time']@content",
+          "tocUrl": "",
+          "canReName": "",
+          "downloadUrls": "",
+          "ttsDice": ""
+        },
+        "ruleToc": {
+          "preUpdateJs": "",
+          "chapterList": "@CSS:.border_chapter li",
+          "chapterName": "@CSS:a@text",
+          "chapterUrl": "@CSS:a@href",
+          "formatJs": "",
+          "isVolume": "",
+          "isVip": "",
+          "isPay": "",
+          "updateTime": "",
+          "nextTocUrl": ""
+        },
+        "ruleContent": {
+          "content": "@CSS:#txt@text",
+          "title": "@CSS:h1@text",
+          "nextContentUrl": "",
+          "webJs": "",
+          "sourceRegex": "<div\\s+id=[\"']txt[\"']",
+          "replaceRegex": "",
+          "imageStyle": "",
+          "imageDecode": "",
+          "payAction": ""
+        },
+        "ruleReview": {
+          "review": ""
+        }
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://www.dingdian888.com/s.php",
+          "body": "s=星河&submit=",
+          "response": {
+            "status": 200,
+            "url": "https://www.dingdian888.com/s.php",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0ibGFzdHVwZGF0ZSI+PHVsPjxsaT48c3BhbiBjbGFzcz0ibmFtZSI+PGEgaHJlZj0iL3hpYW9zaHVvLzcvIj7mmJ/msrM8L2E+PC9zcGFuPjxzcGFuIGNsYXNzPSJ6dW8iPjxhPua1i+ivleS9nOiAhTwvYT48L3NwYW4+PC9saT48L3VsPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://www.dingdian888.com/xiaoshuo/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.dingdian888.com/xiaoshuo/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1ldGEgcHJvcGVydHk9Im9nOm5vdmVsOmJvb2tfbmFtZSIgY29udGVudD0i5pif5rKzIj48dWwgY2xhc3M9ImJvcmRlcl9jaGFwdGVyIj48bGk+PGEgaHJlZj0iMS5odG1sIj7nrKzkuIDnq6A8L2E+PC9saT48L3VsPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://www.dingdian888.com/xiaoshuo/7/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.dingdian888.com/xiaoshuo/7/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuesrOS4gOeroDwvaDE+PGRpdiBpZD0idHh0Ij7nrKzkuIDnq6DmraPmloc8L2Rpdj4="
+          }
+        }
+      },
+      "requestLimit": 3,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "author": "测试作者",
+                "bookUrl": "https://www.dingdian888.com/xiaoshuo/7/"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "author": "测试作者",
+              "bookUrl": "https://www.dingdian888.com/xiaoshuo/7/",
+              "tocUrl": "https://www.dingdian888.com/xiaoshuo/7/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://www.dingdian888.com/xiaoshuo/7/1.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "pageCount": 1,
+              "cleaned": "第一章正文"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.dingdian888.com/s.php",
+            "body": "s=星河&submit=",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+              "accept-language": "zh-CN,zh;q=0.9",
+              "referer": "https://www.dingdian888.com/",
+              "content-type": "application/x-www-form-urlencoded; charset=UTF-8"
+            },
+            "bodyBase64": "cz3mmJ/msrMmc3VibWl0PQ==",
+            "responseUrl": "https://www.dingdian888.com/s.php"
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://www.dingdian888.com/xiaoshuo/7/",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+              "accept-language": "zh-CN,zh;q=0.9",
+              "referer": "https://www.dingdian888.com/"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.dingdian888.com/xiaoshuo/7/"
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.dingdian888.com/xiaoshuo/7/1.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+              "accept-language": "zh-CN,zh;q=0.9",
+              "referer": "https://www.dingdian888.com/"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.dingdian888.com/xiaoshuo/7/1.html"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yiove.html-paging.page-end",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl → BookList → BookInfo → BookChapterList → BookContent"
+    },
+    "tags": [
+      "offline",
+      "html",
+      "post"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "https://www.deqixs.org",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "得奇小说网 www.deqixs.org（杰奇CMS）。支持模糊搜索（书名包含关键词即命中，全部结果单页返回）；注意同一会话约10秒内连续搜索会被网站静默拦截返回空结果，稍等再搜即可。精确命中书名时网站直接返回详情页，模糊时返回列表页，两种布局已用||兜底兼容。正文有章节内分页（已自动拼接），页尾推广行已净化。UTF-8 编码。",
+        "bookSourceGroup": "🌹已检26.10.15",
+        "bookSourceName": "📂得奇小说网",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.deqixs.org",
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": false,
+        "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36\"}",
+        "ruleBookInfo": {
+          "author": "class.itemtxt@tag.p.1@tag.a@text##^作者：",
+          "coverUrl": "class.item@tag.img@src",
+          "intro": "class.des.0@textNodes",
+          "kind": "class.itemtxt@tag.p.0@tag.span@text",
+          "lastChapter": "class.itemtxt@tag.ul@tag.li.0@tag.a@text",
+          "name": "class.itemtxt@tag.h1@tag.a@text",
+          "wordCount": "class.itemtxt@tag.p.0@tag.span.2@text"
+        },
+        "ruleContent": {
+          "content": "class.con@html##求书、催更、报错.*?deqixs",
+          "nextContentUrl": "text.下一页@href"
+        },
+        "ruleExplore": {},
+        "ruleSearch": {
+          "author": "class.itemtxt@tag.p.1@tag.a@text||class.itemtxt@tag.ul@tag.li.0@text##^作者：",
+          "bookList": "class.item",
+          "bookUrl": "tag.h1@tag.a@href||tag.h3@tag.a@href###dir",
+          "coverUrl": "tag.img@src",
+          "intro": "class.itemtxt@tag.p.0@text##^简介：\\s*|^连载中.*",
+          "kind": "class.itemtxt@tag.p.0@tag.span@text",
+          "lastChapter": "class.itemtxt@tag.ul@tag.li.0@tag.a@text||class.itemtxt@tag.ul@tag.li.2@tag.a@text",
+          "name": "tag.h1@tag.a@text||tag.h3@tag.a@text",
+          "wordCount": "class.itemtxt@tag.p.0@tag.span.2@text"
+        },
+        "ruleToc": {
+          "chapterList": "id.list@tag.li",
+          "chapterName": "tag.a@text",
+          "chapterUrl": "tag.a@href"
+        },
+        "searchUrl": "https://www.deqixs.org/modules/article/search.php,{\"method\":\"POST\",\"body\":\"searchkey={{key}}&action=login&searchtype=articlename\"}"
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://www.deqixs.org/modules/article/search.php",
+          "body": "searchkey=%E6%98%9F%E6%B2%B3&action=login&searchtype=articlename",
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/modules/article/search.php",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iaXRlbSI+PGgxPjxhIGhyZWY9Ii9ib29rLzcvIj7mmJ/msrM8L2E+PC9oMT48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iaXRlbXR4dCI+PGgxPuaYn+ayszwvaDE+PC9kaXY+PHVsIGlkPSJsaXN0Ij48bGk+PGEgaHJlZj0iMS5odG1sIj7nrKzkuIDnq6A8L2E+PC9saT48bGk+PGEgaHJlZj0iMi5odG1sIj7nrKzkuoznq6A8L2E+PC9saT48L3VsPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29uIj7nrKzkuIDmrrXmsYLkuabjgIHlgqzmm7TjgIHmiqXplJlkZXFpeHM8L2Rpdj48YSBocmVmPSIxXzIuaHRtbCI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "page2": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/1_2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/1_2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29uIj7nrKzkuozmrrU8L2Rpdj4="
+          }
+        }
+      },
+      "requestLimit": 4,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://www.deqixs.org/book/7/"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://www.deqixs.org/book/7/",
+              "tocUrl": "https://www.deqixs.org/book/7/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://www.deqixs.org/book/7/1.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://www.deqixs.org/book/7/2.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "pageCount": 2,
+              "cleaned": "　　　　第一段\n　　\n　　　　第二段\n　　"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.deqixs.org/modules/article/search.php",
+            "body": "searchkey=%E6%98%9F%E6%B2%B3&action=login&searchtype=articlename",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+              "content-type": "application/x-www-form-urlencoded"
+            },
+            "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZhY3Rpb249bG9naW4mc2VhcmNodHlwZT1hcnRpY2xlbmFtZQ==",
+            "responseUrl": "https://www.deqixs.org/modules/article/search.php"
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/"
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/1.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/1.html"
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/1_2.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/1_2.html"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yiove.html-paging.repeated-page",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl → BookList → BookInfo → BookChapterList → BookContent"
+    },
+    "tags": [
+      "offline",
+      "html",
+      "post"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "https://www.deqixs.org",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "得奇小说网 www.deqixs.org（杰奇CMS）。支持模糊搜索（书名包含关键词即命中，全部结果单页返回）；注意同一会话约10秒内连续搜索会被网站静默拦截返回空结果，稍等再搜即可。精确命中书名时网站直接返回详情页，模糊时返回列表页，两种布局已用||兜底兼容。正文有章节内分页（已自动拼接），页尾推广行已净化。UTF-8 编码。",
+        "bookSourceGroup": "🌹已检26.10.15",
+        "bookSourceName": "📂得奇小说网",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.deqixs.org",
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": false,
+        "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36\"}",
+        "ruleBookInfo": {
+          "author": "class.itemtxt@tag.p.1@tag.a@text##^作者：",
+          "coverUrl": "class.item@tag.img@src",
+          "intro": "class.des.0@textNodes",
+          "kind": "class.itemtxt@tag.p.0@tag.span@text",
+          "lastChapter": "class.itemtxt@tag.ul@tag.li.0@tag.a@text",
+          "name": "class.itemtxt@tag.h1@tag.a@text",
+          "wordCount": "class.itemtxt@tag.p.0@tag.span.2@text"
+        },
+        "ruleContent": {
+          "content": "class.con@html##求书、催更、报错.*?deqixs",
+          "nextContentUrl": "text.下一页@href"
+        },
+        "ruleExplore": {},
+        "ruleSearch": {
+          "author": "class.itemtxt@tag.p.1@tag.a@text||class.itemtxt@tag.ul@tag.li.0@text##^作者：",
+          "bookList": "class.item",
+          "bookUrl": "tag.h1@tag.a@href||tag.h3@tag.a@href###dir",
+          "coverUrl": "tag.img@src",
+          "intro": "class.itemtxt@tag.p.0@text##^简介：\\s*|^连载中.*",
+          "kind": "class.itemtxt@tag.p.0@tag.span@text",
+          "lastChapter": "class.itemtxt@tag.ul@tag.li.0@tag.a@text||class.itemtxt@tag.ul@tag.li.2@tag.a@text",
+          "name": "tag.h1@tag.a@text||tag.h3@tag.a@text",
+          "wordCount": "class.itemtxt@tag.p.0@tag.span.2@text"
+        },
+        "ruleToc": {
+          "chapterList": "id.list@tag.li",
+          "chapterName": "tag.a@text",
+          "chapterUrl": "tag.a@href"
+        },
+        "searchUrl": "https://www.deqixs.org/modules/article/search.php,{\"method\":\"POST\",\"body\":\"searchkey={{key}}&action=login&searchtype=articlename\"}"
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://www.deqixs.org/modules/article/search.php",
+          "body": "searchkey=%E6%98%9F%E6%B2%B3&action=login&searchtype=articlename",
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/modules/article/search.php",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iaXRlbSI+PGgxPjxhIGhyZWY9Ii9ib29rLzcvIj7mmJ/msrM8L2E+PC9oMT48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iaXRlbXR4dCI+PGgxPuaYn+ayszwvaDE+PC9kaXY+PHVsIGlkPSJsaXN0Ij48bGk+PGEgaHJlZj0iMS5odG1sIj7nrKzkuIDnq6A8L2E+PC9saT48bGk+PGEgaHJlZj0iMi5odG1sIj7nrKzkuoznq6A8L2E+PC9saT48L3VsPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29uIj7nrKzkuIDmrrXmsYLkuabjgIHlgqzmm7TjgIHmiqXplJlkZXFpeHM8L2Rpdj48YSBocmVmPSIxXzIuaHRtbCI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "page2": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/1_2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/1_2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29uIj7nrKzkuozmrrU8L2Rpdj48YSBocmVmPSIxXzIuaHRtbCI+5LiL5LiA6aG1PC9hPg=="
+          }
+        }
+      },
+      "requestLimit": 4,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://www.deqixs.org/book/7/"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://www.deqixs.org/book/7/",
+              "tocUrl": "https://www.deqixs.org/book/7/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://www.deqixs.org/book/7/1.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://www.deqixs.org/book/7/2.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "pageCount": 2,
+              "cleaned": "　　　　第一段\n　　\n　　　　第二段\n　　"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.deqixs.org/modules/article/search.php",
+            "body": "searchkey=%E6%98%9F%E6%B2%B3&action=login&searchtype=articlename",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+              "content-type": "application/x-www-form-urlencoded"
+            },
+            "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZhY3Rpb249bG9naW4mc2VhcmNodHlwZT1hcnRpY2xlbmFtZQ==",
+            "responseUrl": "https://www.deqixs.org/modules/article/search.php"
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/"
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/1.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/1.html"
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/1_2.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/1_2.html"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yiove.html-paging.next-chapter",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl → BookList → BookInfo → BookChapterList → BookContent"
+    },
+    "tags": [
+      "offline",
+      "html",
+      "post"
+    ],
+    "flowOrigin": {
+      "sourceUrl": "https://www.deqixs.org",
+      "fields": [
+        "searchUrl",
+        "ruleSearch",
+        "ruleBookInfo",
+        "ruleToc",
+        "ruleContent"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "得奇小说网 www.deqixs.org（杰奇CMS）。支持模糊搜索（书名包含关键词即命中，全部结果单页返回）；注意同一会话约10秒内连续搜索会被网站静默拦截返回空结果，稍等再搜即可。精确命中书名时网站直接返回详情页，模糊时返回列表页，两种布局已用||兜底兼容。正文有章节内分页（已自动拼接），页尾推广行已净化。UTF-8 编码。",
+        "bookSourceGroup": "🌹已检26.10.15",
+        "bookSourceName": "📂得奇小说网",
+        "bookSourceType": 0,
+        "bookSourceUrl": "https://www.deqixs.org",
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": false,
+        "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36\"}",
+        "ruleBookInfo": {
+          "author": "class.itemtxt@tag.p.1@tag.a@text##^作者：",
+          "coverUrl": "class.item@tag.img@src",
+          "intro": "class.des.0@textNodes",
+          "kind": "class.itemtxt@tag.p.0@tag.span@text",
+          "lastChapter": "class.itemtxt@tag.ul@tag.li.0@tag.a@text",
+          "name": "class.itemtxt@tag.h1@tag.a@text",
+          "wordCount": "class.itemtxt@tag.p.0@tag.span.2@text"
+        },
+        "ruleContent": {
+          "content": "class.con@html##求书、催更、报错.*?deqixs",
+          "nextContentUrl": "text.下一页@href"
+        },
+        "ruleExplore": {},
+        "ruleSearch": {
+          "author": "class.itemtxt@tag.p.1@tag.a@text||class.itemtxt@tag.ul@tag.li.0@text##^作者：",
+          "bookList": "class.item",
+          "bookUrl": "tag.h1@tag.a@href||tag.h3@tag.a@href###dir",
+          "coverUrl": "tag.img@src",
+          "intro": "class.itemtxt@tag.p.0@text##^简介：\\s*|^连载中.*",
+          "kind": "class.itemtxt@tag.p.0@tag.span@text",
+          "lastChapter": "class.itemtxt@tag.ul@tag.li.0@tag.a@text||class.itemtxt@tag.ul@tag.li.2@tag.a@text",
+          "name": "tag.h1@tag.a@text||tag.h3@tag.a@text",
+          "wordCount": "class.itemtxt@tag.p.0@tag.span.2@text"
+        },
+        "ruleToc": {
+          "chapterList": "id.list@tag.li",
+          "chapterName": "tag.a@text",
+          "chapterUrl": "tag.a@href"
+        },
+        "searchUrl": "https://www.deqixs.org/modules/article/search.php,{\"method\":\"POST\",\"body\":\"searchkey={{key}}&action=login&searchtype=articlename\"}"
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://www.deqixs.org/modules/article/search.php",
+          "body": "searchkey=%E6%98%9F%E6%B2%B3&action=login&searchtype=articlename",
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/modules/article/search.php",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iaXRlbSI+PGgxPjxhIGhyZWY9Ii9ib29rLzcvIj7mmJ/msrM8L2E+PC9oMT48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iaXRlbXR4dCI+PGgxPuaYn+ayszwvaDE+PC9kaXY+PHVsIGlkPSJsaXN0Ij48bGk+PGEgaHJlZj0iMS5odG1sIj7nrKzkuIDnq6A8L2E+PC9saT48bGk+PGEgaHJlZj0iMi5odG1sIj7nrKzkuoznq6A8L2E+PC9saT48L3VsPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29uIj7nrKzkuIDmrrXmsYLkuabjgIHlgqzmm7TjgIHmiqXplJlkZXFpeHM8L2Rpdj48YSBocmVmPSIxXzIuaHRtbCI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "page2": {
+          "method": "GET",
+          "url": "https://www.deqixs.org/book/7/1_2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://www.deqixs.org/book/7/1_2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29uIj7nrKzkuozmrrU8L2Rpdj48YSBocmVmPSIyLmh0bWwiPuS4i+S4gOmhtTwvYT4="
+          }
+        }
+      },
+      "requestLimit": 4,
+      "requestEvidence": true
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://www.deqixs.org/book/7/"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://www.deqixs.org/book/7/",
+              "tocUrl": "https://www.deqixs.org/book/7/"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://www.deqixs.org/book/7/1.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://www.deqixs.org/book/7/2.html",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "pageCount": 2,
+              "cleaned": "　　　　第一段\n　　\n　　　　第二段\n　　"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://www.deqixs.org/modules/article/search.php",
+            "body": "searchkey=%E6%98%9F%E6%B2%B3&action=login&searchtype=articlename",
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+              "content-type": "application/x-www-form-urlencoded"
+            },
+            "bodyBase64": "c2VhcmNoa2V5PSVFNiU5OCU5RiVFNiVCMiVCMyZhY3Rpb249bG9naW4mc2VhcmNodHlwZT1hcnRpY2xlbmFtZQ==",
+            "responseUrl": "https://www.deqixs.org/modules/article/search.php"
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/"
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/1.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/1.html"
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://www.deqixs.org/book/7/1_2.html",
+            "body": null,
+            "headers": {
+              "user-agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://www.deqixs.org/book/7/1_2.html"
+          }
+        ]
+      }
+    }
+  }
+]

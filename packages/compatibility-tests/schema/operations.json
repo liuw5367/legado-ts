@@ -400,7 +400,8 @@
       "source": "object",
       "keyword": "string",
       "responses": "object",
-      "requestLimit": "integer"
+      "requestLimit": "integer",
+      "requestEvidence": "boolean"
     }
   }
 }

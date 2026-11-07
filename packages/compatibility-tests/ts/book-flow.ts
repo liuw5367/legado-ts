@@ -30,7 +30,12 @@ export async function executeBookFlow(input: Record<string, unknown>) {
   if (!imported) throw new FlowFixtureError('流程书源无法导入')
   const responses = input.responses as Record<string, ResponseFixture>
   const declaredHeaders = typeof imported.header === 'string' ? JSON.parse(imported.header.trim() || '{}') as Record<string, string> : imported.header
-  const headerNames = Object.keys(declaredHeaders ?? {}).map((name) => name.toLowerCase())
+  const headerNames = new Set(Object.keys(declaredHeaders ?? {}).map((name) => name.toLowerCase()))
+  if (input.requestEvidence === true) {
+    headerNames.add('content-type')
+    const options = typeof imported.searchUrl === 'string' ? /,\s*(\{.*\})$/su.exec(imported.searchUrl)?.[1] : undefined
+    if (options) for (const name of Object.keys(JSON.parse(options).headers ?? {})) headerNames.add(name.toLowerCase())
+  }
   const requests: unknown[] = []
   const stages: Record<string, unknown> = {}
   let stage = 'search'
@@ -39,15 +44,18 @@ export async function executeBookFlow(input: Record<string, unknown>) {
     request: async (plan) => {
       const { method, url } = plan
       const body = typeof plan.body === 'string' ? plan.body : plan.body ? Buffer.from(plan.body).toString('utf8') : null
-      const headers = Object.fromEntries(Object.entries(plan.headers).filter(([name]) => headerNames.includes(name.toLowerCase()))
+      const headers = Object.fromEntries(Object.entries(plan.headers).filter(([name]) => headerNames.has(name.toLowerCase()))
         .map(([name, value]) => [name.toLowerCase(), value]))
-      requests.push({ stage, method, url, body, headers })
+      const trace = { stage, method, url, body, headers }
       const entry = Object.values(responses).find((candidate) => candidate.method === method && candidate.url === url && candidate.body === body)
-      if (requests.length > Number(input.requestLimit) || !entry) {
+      if (requests.length >= Number(input.requestLimit) || !entry) {
         fault ??= new FlowFixtureError(`离线请求超限或缺少响应: ${stage} ${method} ${url}`)
         throw fault
       }
       const { response } = entry
+      requests.push(input.requestEvidence === true ? {
+        ...trace, bodyBase64: plan.body === undefined ? null : Buffer.from(plan.body).toString('base64'), responseUrl: response.url,
+      } : trace)
       return { url: response.url, status: response.status, headers: response.headers, bytes: Buffer.from(response.base64, 'base64'), redirected: response.url !== url }
     },
   }

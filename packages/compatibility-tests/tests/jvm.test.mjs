@@ -64,3 +64,18 @@ test('JVM 流程严格匹配 query 和请求预算，失败后重新执行不污
   assert.equal((await worker.run(budget)).execution, 'runner-failed')
   assert.deepEqual(await worker.run(item), initial)
 })
+
+test('静态 POST 的 options 覆盖源级同名 Header，请求体保持实际字节', async () => {
+  const [item] = await loadCases({ case: 'flow.yiove.post.explicit-header' })
+  const source = item.input.source
+  source.header = JSON.stringify({ ...JSON.parse(source.header), 'Content-Type': 'text/plain' })
+  const search = item.input.responses.search
+  item.input.responses.otherBody = { ...search, body: 's=错误&submit=' }
+  item.input.responses.otherMethod = { ...search, method: 'GET' }
+  const result = await worker.run(item)
+  assert.equal(result.execution, 'completed')
+  assert.equal(result.value.requests[0].headers['content-type'], 'application/x-www-form-urlencoded; charset=UTF-8')
+  assert.equal(result.value.requests[0].bodyBase64, Buffer.from('s=星河&submit=').toString('base64'))
+  delete item.input.responses.search
+  assert.equal((await worker.run(item)).execution, 'runner-failed')
+})

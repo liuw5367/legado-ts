@@ -10,7 +10,6 @@ import io.legado.app.utils.StringUtils.wordCountFormat
 import io.legado.app.utils.isTrue
 import org.jsoup.parser.Parser
 import java.net.URL
-import java.net.URLEncoder
 import java.util.Base64
 
 internal class FlowFixtureError(message: String) : RuntimeException(message)
@@ -24,7 +23,7 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val sourceUrl = source.text("bookSourceUrl")
     val unsupported = listOf(
         source.text("mainJs"), source.text("loginUrl"), source.text("loginCheckJs"),
-        source.text("bookUrlPattern"), source.rule("ruleBookInfo").text("init"),
+        source.rule("ruleBookInfo").text("init"),
         source.rule("ruleToc").text("nextTocUrl"), source.rule("ruleToc").text("formatJs"),
         source.rule("ruleContent").text("webJs"),
     )
@@ -38,18 +37,26 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val requests = mutableListOf<Map<String, Any?>>()
     val output = mapOf("stages" to stages, "requests" to requests)
     fun resolve(base: String, link: String) = URL(URL(base), link.trim()).toString()
-    fun request(stage: String, url: String): Pair<String, String> {
-        requests.add(mapOf("stage" to stage, "method" to "GET", "url" to url, "body" to null, "headers" to headers))
+    val requestEvidence = input.get("requestEvidence")?.asBoolean == true
+    fun request(stage: String, plan: FlowRequest): Pair<String, String> {
         val response = input.rule("responses").entrySet().map { it.value.asJsonObject }.firstOrNull {
-            it.text("method") == "GET" && it.text("url") == url && it.get("body").isJsonNull
+            it.text("method") == plan.method && it.text("url") == plan.url && it.get("body").let { body ->
+                (if (body.isJsonNull) null else body.asString) == plan.body
+            }
         }?.rule("response")
-        if (response == null || requests.size > input.get("requestLimit").asInt) {
-            throw FlowFixtureError("离线请求超限或缺少响应: $stage GET $url")
+        if (response == null || requests.size >= input.get("requestLimit").asInt) {
+            throw FlowFixtureError("离线请求超限或缺少响应: $stage ${plan.method} ${plan.url}")
         }
+        val trace = mapOf("stage" to stage, "method" to plan.method, "url" to plan.url, "body" to plan.body, "headers" to plan.headers)
+        requests.add(if (requestEvidence) trace + mapOf(
+            "bodyBase64" to plan.body?.let { Base64.getEncoder().encodeToString(it.toByteArray(Charsets.UTF_8)) },
+            "responseUrl" to response.text("url"),
+        ) else trace)
         if (response.get("status").asInt != 200) throw Unsupported("JVM 流程参考只实现 HTTP 200")
         val bytes = Base64.getDecoder().decode(response.text("base64"))
         return bytes.toString(Charsets.UTF_8) to response.text("url")
     }
+    fun request(stage: String, url: String) = request(stage, FlowRequest(url, headers))
     fun result(stage: String, status: String, value: Any?, error: Map<String, String>? = null) {
         stages[stage] = mapOf("status" to status, "value" to value) + (error?.let { mapOf("error" to it) } ?: emptyMap())
     }
@@ -84,9 +91,12 @@ internal fun executeBookFlow(input: JsonObject): Any {
 
     val searchRule = source.rule("ruleSearch")
     val detailRule = source.rule("ruleBookInfo")
-    val searchUrl = source.text("searchUrl")
-    if (searchUrl.contains(",{")) throw Unsupported("JVM 流程参考只实现普通 GET")
-    val (searchBody, searchBase) = request("search", resolve(sourceUrl, searchUrl.replace("{{key}}", URLEncoder.encode(input.text("keyword"), Charsets.UTF_8))))
+    val searchPlan = flowSearchRequest(source.text("searchUrl"), input.text("keyword"), headers) { resolve(sourceUrl, it) }
+    val (searchBody, searchBase) = request("search", searchPlan)
+    val bookUrlPattern = source.text("bookUrlPattern")
+    if (bookUrlPattern.isNotEmpty() && Regex(bookUrlPattern).matches(searchBase)) {
+        throw Unsupported("JVM 流程参考尚未实现搜索直达详情")
+    }
     val rows = nodes(searchRule.text("bookList"), searchBody)
     // BookList 在列表为空且未声明详情 URL 模式时尝试详情规则。
     val fallback = rows.isEmpty() && source.text("bookUrlPattern").isEmpty()
@@ -146,7 +156,7 @@ internal fun executeBookFlow(input: JsonObject): Any {
         val next = when {
             nextRule.isEmpty() -> emptyList()
             nextRule.startsWith("$.") || nextRule.startsWith("$[") -> AnalyzeByJSonPath(body).getStringList(nextRule)
-            else -> throw Unsupported("JVM 流程参考只实现 JSON 下一页规则")
+            else -> AnalyzeByJSoup(body).getStringList(nextRule)
         }.filter { it.isNotBlank() }.map { resolve(responseUrl, it) }
         if (next.size > 1) throw Unsupported("JVM 流程参考只实现单链接正文分页")
         val target = next.firstOrNull()

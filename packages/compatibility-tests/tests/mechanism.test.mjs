@@ -265,3 +265,21 @@ test('TS 流程宿主拒绝未声明的完整请求与超预算请求，随后�
     await worker.close()
   }
 })
+
+test('POST 离线夹具按方法、完整地址和请求体匹配，并记录实际请求字节', async () => {
+  const [item] = await loadCases({ case: 'flow.yiove.post.explicit-header' })
+  const worker = new Worker(process.execPath, [join(root, 'scripts/ts-worker.mjs')])
+  try {
+    const { search } = item.input.responses
+    item.input.responses.otherBody = { ...search, body: 's=错误&submit=' }
+    item.input.responses.otherMethod = { ...search, method: 'GET' }
+    validateCase(item)
+    const result = await worker.run(item)
+    assert.equal(result.execution, 'completed')
+    assert.equal(result.value.requests[0].bodyBase64, Buffer.from('s=星河&submit=').toString('base64'))
+    delete item.input.responses.search
+    assert.equal((await worker.run(item)).execution, 'runner-failed')
+  } finally {
+    await worker.close()
+  }
+})

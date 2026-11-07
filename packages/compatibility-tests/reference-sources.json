@@ -104,6 +104,34 @@
       ],
       "prefix": "package io.legado.app.utils",
       "suffix": ""
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/utils/NetworkUtils.kt",
+      "sha256": "4309414b51161896e589132e025476d0e79d174844a1cf4cf132867dfe132442",
+      "sections": [
+        [
+          76,
+          91
+        ],
+        [
+          125,
+          156
+        ]
+      ],
+      "prefix": "package io.legado.app.utils\nimport java.util.BitSet\nobject FlowEncodedForm {",
+      "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeUrl.kt",
+      "sha256": "f7ba074137c8e3a847dc7bbf9465c7fd9318646c5670c144300e7959fb931a9b",
+      "sections": [
+        [
+          346,
+          375
+        ]
+      ],
+      "prefix": "package io.legado.app.utils\nimport java.net.URLEncoder\nimport java.nio.charset.Charset\nobject FlowFormEncoding {\n    private fun StringBuilder.appendEncoded(value: String, checkEncoded: Boolean, charset: Charset) {\n        append(if (checkEncoded && FlowEncodedForm.encodedForm(value)) value else URLEncoder.encode(value, charset))\n    }\n    fun encodeForm(params: String): String {\n        val checkEncoded = true\n        val charset = Charsets.UTF_8",
+      "suffix": "}"
     }
   ],
   "adaptations": [
@@ -168,6 +196,10 @@
     {
       "path": "app/src/main/res/values/strings.xml",
       "sha256": "4337b9d61eef3dad282c40a1571b712aae228d608dd0a6100288e80b6d47852d"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/help/http/OkHttpUtils.kt",
+      "sha256": "cba1feb22468363d8b95f22779cb6ab538ae80c64e898fc7fde995b2e699376d"
     }
   ]
 }
