@@ -87,7 +87,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
       const first = { ...source, jsLib: str('library') }
       const second = { ...first, bookSourceUrl: 'https://second.fixture.invalid' }
       const executeLibrary = async (current: NormalizedSource, code = str('program')) => {
-        const result = await host.executeWorkflowJavaScript({ source: current, stage: 'detail', code, content: '' })
+        const result = await host.executeWorkflowJavaScript({ source: current, stage: 'book', code, content: '' })
         return JSON.parse(String(checked(result)))
       }
       if (kind === 'date') {
