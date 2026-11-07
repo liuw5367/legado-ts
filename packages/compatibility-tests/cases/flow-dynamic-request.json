@@ -1,0 +1,247 @@
+[
+  {
+    "id": "flow.synthetic.dynamic-body.child-result",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl.bodyJs / JsExtensions.ajax"
+    },
+    "tags": [
+      "offline",
+      "dynamic-request"
+    ],
+    "flowOrigin": {
+      "fixture": "dynamic-body-ajax"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://dynamic.fixture.test",
+        "bookSourceName": "动态请求夹具",
+        "header": "@js:JSON.stringify({\"X-Flow\":\"pre\" + \"pared\"})",
+        "searchUrl": "/search,{\"method\":\"POST\",\"body\":\"q={{key}}\",\"bodyJs\":\"String(result) + java.ajax(\\\"https://dynamic.fixture.test/child\\\")\"}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        }
+      },
+      "keyword": "star",
+      "stopAfter": "detail",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://dynamic.fixture.test/search",
+          "body": "q=star",
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdj7ljp/lk43lupQ8L2Rpdj4="
+          }
+        },
+        "child": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/child",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/child",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svMSI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/book/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+"
+          }
+        }
+      },
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "X-Flow"
+      ],
+      "requestLimit": 3
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://dynamic.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://dynamic.fixture.test/book/1",
+              "tocUrl": "https://dynamic.fixture.test/book/1"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://dynamic.fixture.test/search",
+            "body": "q=star",
+            "bodyBase64": "cT1zdGFy",
+            "responseUrl": "https://dynamic.fixture.test/search",
+            "headers": {
+              "x-flow": "prepared",
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          },
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://dynamic.fixture.test/child",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://dynamic.fixture.test/child",
+            "headers": {
+              "x-flow": "prepared"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://dynamic.fixture.test/book/1",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://dynamic.fixture.test/book/1",
+            "headers": {
+              "x-flow": "prepared"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.dynamic-body.child-empty",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl.bodyJs / JsExtensions.ajax"
+    },
+    "tags": [
+      "offline",
+      "dynamic-request"
+    ],
+    "flowOrigin": {
+      "fixture": "dynamic-body-ajax"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://dynamic.fixture.test",
+        "bookSourceName": "动态请求夹具",
+        "header": "@js:JSON.stringify({\"X-Flow\":\"pre\" + \"pared\"})",
+        "searchUrl": "/search,{\"method\":\"POST\",\"body\":\"q={{key}}\",\"bodyJs\":\"String(result) + java.ajax(\\\"https://dynamic.fixture.test/child\\\")\"}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        }
+      },
+      "keyword": "star",
+      "stopAfter": "detail",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://dynamic.fixture.test/search",
+          "body": "q=star",
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdj7ljp/lk43lupQ8L2Rpdj4="
+          }
+        },
+        "child": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/child",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/child",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdj7ml6DlgJnpgIk8L2Rpdj4="
+          }
+        }
+      },
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "X-Flow"
+      ],
+      "requestLimit": 2
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://dynamic.fixture.test/search",
+            "body": "q=star",
+            "bodyBase64": "cT1zdGFy",
+            "responseUrl": "https://dynamic.fixture.test/search",
+            "headers": {
+              "x-flow": "prepared",
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          },
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://dynamic.fixture.test/child",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://dynamic.fixture.test/child",
+            "headers": {
+              "x-flow": "prepared"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

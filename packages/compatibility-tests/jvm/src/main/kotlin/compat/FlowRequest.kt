@@ -14,6 +14,7 @@ internal data class FlowRequest(
     val headers: Map<String, String>,
     val method: String = "GET",
     val body: String? = null,
+    val bodyScript: String? = null,
 )
 
 internal fun flowSearchRequest(
@@ -28,7 +29,7 @@ internal fun flowSearchRequest(
     val address = rule.substring(0, separator.range.first).replace("{{key}}", keyword)
     val options = JsonParser.parseString(rule.substring(separator.range.last + 1).replace("{{key}}", keyword)).asJsonObject
     val method = options.get("method")?.asString?.uppercase() ?: "GET"
-    if (options.keySet().any { it !in setOf("method", "body", "charset", "headers") } || method !in setOf("GET", "POST")) {
+    if (options.keySet().any { it !in setOf("method", "body", "charset", "headers", "bodyJs") } || method !in setOf("GET", "POST")) {
         throw Unsupported("离线请求仅支持静态 GET 或表单 POST 选项")
     }
     val charsetName = options.get("charset")?.asString?.takeIf(String::isNotEmpty)
@@ -39,6 +40,7 @@ internal fun flowSearchRequest(
     }
     val requestHeaders = headers + options.getAsJsonObject("headers")?.entrySet()
         .orEmpty().associate { (name, value) -> name.lowercase() to value.asString }
+    val bodyScript = options.get("bodyJs")?.asString?.takeIf(String::isNotBlank)
     if (method == "GET") {
         // AnalyzeUrl 的查询编码保留 RFC3986 UNRESERVED 和固定的查询分隔字符。
         val querySafe = "-._~!$%&()*+,/:;=?@[\\]^`{|}"
@@ -51,23 +53,28 @@ internal fun flowSearchRequest(
             }
             resolve(address.substringBefore('?') + "?" + query)
         }
-        return FlowRequest(url, requestHeaders)
+        return FlowRequest(url, requestHeaders, bodyScript = bodyScript)
     }
     val url = resolve(address)
     val body = options.get("body")?.asString.orEmpty()
     if (requestHeaders["content-type"].isNullOrEmpty()) {
         if (body.startsWith("{") || body.startsWith("[") || body.startsWith("<")) throw Unsupported("离线请求仅支持表单 POST")
-        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body, charset, checkEncoded = charsetName == null))
+        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body, charset, checkEncoded = charsetName == null), bodyScript)
     }
-    return FlowRequest(url, requestHeaders, "POST", body)
+    return FlowRequest(url, requestHeaders, "POST", body, bodyScript)
 }
 
 /** AnalyzeUrl 的 URL 脚本片段，仅提供当前离线案例所需的 GET 与表单关键字编码。 */
 internal fun evaluateFlowSearchUrl(rule: String, keyword: String, ajax: (String) -> String): String {
     if (!rule.startsWith("@js:", ignoreCase = true)) return rule
+    return evaluateFlowRequestScript(rule.substring(4), keyword, "", ajax)
+}
+
+internal fun evaluateFlowRequestScript(code: String, keyword: String, content: String, ajax: (String) -> String): String {
+    val newContext = Context.getCurrentContext() == null
     return Context.enter().use { engine ->
+        if (newContext) engine.setClassShutter { false }
         val scope = engine.initSafeStandardObjects()
-        engine.setClassShutter { false }
         val java = engine.newObject(scope)
         fun bind(name: String, callback: (String) -> String) {
             java.put(name, java, object : BaseFunction() {
@@ -80,6 +87,7 @@ internal fun evaluateFlowSearchUrl(rule: String, keyword: String, ajax: (String)
         bind("encodeURI") { URLEncoder.encode(it, Charsets.UTF_8) }
         scope.put("java", scope, java)
         scope.put("key", scope, keyword)
-        Context.toString(engine.evaluateString(scope, rule.substring(4), "offline-search-url", 1, null))
+        scope.put("result", scope, content)
+        Context.toString(engine.evaluateString(scope, code, "offline-request-script", 1, null))
     }
 }

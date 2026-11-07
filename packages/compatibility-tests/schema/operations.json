@@ -404,7 +404,8 @@
       "requestEvidence": "boolean",
       "chapterIndex": "integer",
       "variableKeys": "strings",
-      "stopAfter": "string"
+      "stopAfter": "string",
+      "requestHeaderNames": "strings"
     }
   },
   "flow.toc": {

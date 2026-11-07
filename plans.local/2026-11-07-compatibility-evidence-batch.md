@@ -53,7 +53,7 @@ JVM 纯请求行为放 `FlowRequest.kt`，JDK URL 成员复用现有 API 案例�
 | --- | --- | --- |
 | **B1 仅查询串相对地址** | 基准 `https://fixture.test/toc` 和 `https://fixture.test/toc/`，输入 `?page=2`、`?`、`toc?page=2`。先保留桌面 JDK/TS 结果，核对固定 Android `NetworkUtils.getAbsoluteURL` 及该平台使用的 URL 解析实现。优先复现可独立运行的 Android 解析代码；如依赖平台运行时，用固定 Android 版本的同输入产物。 | 有 Android 证据时按该证据处理 TS 差异并锁定回归；只有桌面 JDK 时发布三方矩阵中的缺证据状态，不据此改变 TS。关联 D22、D42。 |
 | **B2 非 UTF-8** | 用合成 `charset=GBK` 请求规则，关键词“星 河+”，固定包含空格和加号的搜索 query 与表单 POST，另测不受支持字符集。JVM 执行原编码纯算法与对应 charset。 | 比较编码后的 URL、实际 body 字节、空格和加号区分；无有效编码器时单列明确能力结果。 |
-| **B3 动态请求和重入** | 用固定 Rhino 和同一脚本依次改写 body、输出头并发起桥接子请求。夹具令首层与嵌套头各有可辨识的值，再设深层有界案例。沿用 TS 请求宿主和预算。 | 首层、嵌套的请求分别比较，动态脚本运行次数可查。平台无法证实的重入边界单列，安全预算按既定策略验证。关联 D9、D22。 |
+| **B3 动态请求和重入** | 用固定 Rhino 和同一脚本验证请求头计算、bridge 子请求和 `bodyJs` 改写响应正文。原上游的 `bodyJs` 在收到响应后执行。夹具令首层与嵌套头各有可辨识的值，再设深层有界案例。沿用 TS 请求宿主和预算。 | 首层、嵌套的请求分别比较，动态脚本运行次数可查。平台无法证实的重入边界单列，安全预算按既定策略验证。关联 D9、D22。 |
 | **B4 登录检查重取** | 初始 POST 的离线响应包含可识别的未登录标识；`loginCheckJs` 使用固定的虚构凭据头重取，第二响应为合法数据。另给重取失败结果。通过可注入传输记录两次方法、字节、头、最终 URL 和状态。 | 正常路径继续解析，失败路径按上游终态停止或保留结果。真实站点、Cookie 持久化和网页登录由 F3 单列。关联 D5、D22、D27。 |
 
 #### 4. 解析器及规则组合
@@ -130,6 +130,8 @@ git diff --check
 - B1 的 [修复前报告](../packages/compatibility-tests/output/run-Kd83M2/report.md) 显示 TS 只在显式空查询时丢掉 `?`，导致目录第二页被识别为已访问。修复 `d784fec` 单独提交，六个 `flow.synthetic.android15-query.*` 及 [32/32 流程对照](../packages/compatibility-tests/output/run-7Kqd9M/report.md) 通过。
 
 - B2 的 `flow.synthetic.gbk.get/post` 验证“星 河+”的 query、表单和请求体 Base64；未知字符集分别验证 JVM 未支持和 TS 能力缺失且无请求。[34/34 流程对照](../packages/compatibility-tests/output/run-rW2eNu/report.md)，32 条机制及参考端测试通过。
+
+- B3 的 `flow.synthetic.dynamic-body.*` 验证动态 Header、bridge 子请求与 `bodyJs` 响应改写，[36/36 流程](../packages/compatibility-tests/output/run-HBb8Br/report.md)。另执行现有 TS 深层重入限界测试。更深层的 Android 比较证据单列。
 
 ## 变更记录
 

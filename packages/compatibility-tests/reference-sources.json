@@ -220,6 +220,10 @@
     {
       "path": "app/src/main/java/io/legado/app/model/analyzeRule/RuleDataInterface.kt",
       "sha256": "4cec4e15b2769f9e1daf03e933a8198d5650a6053f023d499bee3e856ad4db56"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/BaseSource.kt",
+      "sha256": "080160e06a23fdfc7f4dbe5975a370473eee5d13ad0638b46aa2075276516243"
     }
   ]
 }

@@ -29,8 +29,11 @@ export async function executeBookFlow(input: Record<string, unknown>, tocOnly = 
   const imported = (await importSources(JSON.stringify(input.source)))[0]?.source
   if (!imported) throw new FlowFixtureError('流程书源无法导入')
   const responses = input.responses as Record<string, ResponseFixture>
-  const declaredHeaders = typeof imported.header === 'string' ? JSON.parse(imported.header.trim() || '{}') as Record<string, string> : imported.header
+  const declaredHeaders = typeof imported.header === 'string'
+    ? (imported.header.trim().startsWith('{') ? JSON.parse(imported.header) as Record<string, string> : undefined)
+    : imported.header
   const headerNames = new Set(Object.keys(declaredHeaders ?? {}).map((name) => name.toLowerCase()))
+  for (const name of (input.requestHeaderNames as string[] | undefined) ?? []) headerNames.add(name.toLowerCase())
   if (input.requestEvidence === true) {
     headerNames.add('content-type')
     const options = typeof imported.searchUrl === 'string' ? /,\s*(\{.*\})$/su.exec(imported.searchUrl)?.[1] : undefined

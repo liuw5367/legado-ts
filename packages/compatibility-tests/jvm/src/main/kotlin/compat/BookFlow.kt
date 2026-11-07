@@ -16,6 +16,8 @@ internal class FlowFixtureError(message: String) : RuntimeException(message)
 
 private fun JsonObject.text(key: String): String = get(key)?.takeUnless { it.isJsonNull }?.asString.orEmpty()
 private fun JsonObject.rule(key: String): JsonObject = getAsJsonObject(key) ?: JsonObject()
+private fun flowHeaders(text: String): Map<String, String> =
+    JsonParser.parseString(text).asJsonObject.entrySet().associate { (name, value) -> name.lowercase() to value.asString }
 
 /** 只覆盖声明式、离线的文本书源分支。应用宿主编排以固定源码为依据。 */
 internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
@@ -30,9 +32,15 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
     if (unsupported.any(String::isNotBlank) || source.text("bookSourceType") !in setOf("", "0")) {
         throw Unsupported("JVM 流程参考只实现无需登录的声明式文本书源")
     }
-    val headers = source.text("header").takeIf(String::isNotEmpty)?.let {
-        JsonParser.parseString(it).asJsonObject.entrySet().associate { (name, value) -> name.lowercase() to value.asString }
-    }.orEmpty()
+    val headerRule = source.text("header")
+    val keyword = input.text("keyword")
+    val headers = headerRule.takeUnless { it.startsWith("@js:", ignoreCase = true) || it.isEmpty() }
+        ?.let(::flowHeaders).orEmpty()
+    fun dynamicHeaders(): Map<String, String> =
+        if (!headerRule.startsWith("@js:", ignoreCase = true)) emptyMap()
+        else flowHeaders(evaluateFlowRequestScript(headerRule.substring(4), keyword, "") {
+            throw Unsupported("离线 JVM 参考不模拟动态头脚本内再次请求")
+        })
     val variables = input.rule("bookVariables").entrySet().associate { (key, value) -> key to value.asString }.toMutableMap()
     val variableKeys = input.getAsJsonArray("variableKeys")?.map { it.asString }
     val stages = linkedMapOf<String, Any>()
@@ -54,14 +62,22 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
         if (response == null || requests.size >= input.get("requestLimit").asInt) {
             throw FlowFixtureError("离线请求超限或缺少响应: $stage ${plan.method} ${plan.url}")
         }
-        val trace = mapOf("stage" to stage, "method" to plan.method, "url" to plan.url, "body" to plan.body, "headers" to plan.headers)
+        val actualHeaders = dynamicHeaders() + plan.headers
+        val trace = mapOf("stage" to stage, "method" to plan.method, "url" to plan.url, "body" to plan.body, "headers" to actualHeaders)
         requests.add(if (requestEvidence) trace + mapOf(
             "bodyBase64" to plan.body?.let { Base64.getEncoder().encodeToString(it.toByteArray(Charsets.UTF_8)) },
             "responseUrl" to response.text("url"),
         ) else trace)
         if (response.get("status").asInt != 200) throw Unsupported("JVM 流程参考只实现 HTTP 200")
         val bytes = Base64.getDecoder().decode(response.text("base64"))
-        return bytes.toString(Charsets.UTF_8) to response.text("url")
+        val decoded = bytes.toString(Charsets.UTF_8)
+        // AnalyzeUrl 传入已解码的响应正文，bodyJs 不修改已经发出的请求体。
+        val body = plan.bodyScript?.let { script ->
+            evaluateFlowRequestScript(script, keyword, decoded) { child ->
+                request(stage, FlowRequest(resolve(sourceUrl, child), headers)).first
+            }
+        } ?: decoded
+        return body to response.text("url")
     }
     fun request(stage: String, url: String) = request(stage, FlowRequest(url, headers))
     fun result(stage: String, status: String, value: Any?, error: Map<String, String>? = null) {
@@ -113,7 +129,6 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
     } else {
         val searchRule = source.rule("ruleSearch")
         val detailRule = source.rule("ruleBookInfo")
-        val keyword = input.text("keyword")
         val searchRuleUrl = evaluateFlowSearchUrl(source.text("searchUrl"), keyword) { url ->
             request("search", resolve(sourceUrl, url)).first
         }

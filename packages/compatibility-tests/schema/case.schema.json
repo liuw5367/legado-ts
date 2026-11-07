@@ -1417,6 +1417,12 @@
               },
               "stopAfter": {
                 "type": "string"
+              },
+              "requestHeaderNames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": false
