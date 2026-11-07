@@ -948,5 +948,185 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "encoding.java64.mime.extraPadding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg===",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.getMimeDecoder().decode(String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.splitPadding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg=!=",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.getMimeDecoder().decode(String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.leadingPadding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "=Zg==",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.getMimeDecoder().decode(String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.emptyPadding",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "===",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.getMimeDecoder().decode(String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.ignoredTail",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg==!",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.getMimeDecoder().decode(String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
+  },
+  {
+    "id": "encoding.java64.mime.alphabetTail",
+    "family": "encoding",
+    "operation": "encoding.java64",
+    "input": {
+      "text": "Zg==!A",
+      "mode": "mime",
+      "action": "decode",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Base64.getMimeDecoder().decode(String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "errorEquivalence": {
+      "category": "base64-input",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "invalid Base64"
+      ]
+    }
   }
 ]

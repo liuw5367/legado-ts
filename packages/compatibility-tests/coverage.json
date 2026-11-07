@@ -775,7 +775,7 @@
     },
     {
       "operation": "encoding.java64",
-      "method": "Base64 modes",
+      "method": "Base64.getEncoder().encodeToString(byte[]) / withoutPadding()",
       "reference": "jdk-direct",
       "tsEntry": "ts/adapter.ts → encoding.java64",
       "requiredDimensions": [
@@ -791,14 +791,40 @@
         "encoding.java64.basic.one.pad",
         "encoding.java64.basic.one.no-pad",
         "encoding.java64.basic.two.pad",
-        "encoding.java64.basic.two.no-pad",
+        "encoding.java64.basic.two.no-pad"
+      ]
+    },
+    {
+      "operation": "encoding.java64",
+      "method": "Base64.getDecoder().decode(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.java64",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
         "encoding.java64.basic.decode.empty",
         "encoding.java64.basic.decode.normal",
         "encoding.java64.basic.decode.tail",
         "encoding.java64.basic.decode.bad",
         "encoding.java64.basic.decode.padding",
         "encoding.java64.basic.decode.wrongAlphabet",
-        "encoding.java64.basic.decode.whitespace",
+        "encoding.java64.basic.decode.whitespace"
+      ]
+    },
+    {
+      "operation": "encoding.java64",
+      "method": "Base64.getUrlEncoder().encodeToString(byte[]) / withoutPadding()",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.java64",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
         "encoding.java64.url.empty.pad",
         "encoding.java64.url.empty.no-pad",
         "encoding.java64.url.bytes.pad",
@@ -806,21 +832,53 @@
         "encoding.java64.url.one.pad",
         "encoding.java64.url.one.no-pad",
         "encoding.java64.url.two.pad",
-        "encoding.java64.url.two.no-pad",
+        "encoding.java64.url.two.no-pad"
+      ]
+    },
+    {
+      "operation": "encoding.java64",
+      "method": "Base64.getUrlDecoder().decode(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.java64",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
         "encoding.java64.url.decode.empty",
         "encoding.java64.url.decode.normal",
         "encoding.java64.url.decode.tail",
         "encoding.java64.url.decode.bad",
         "encoding.java64.url.decode.padding",
         "encoding.java64.url.decode.wrongAlphabet",
-        "encoding.java64.url.decode.whitespace",
+        "encoding.java64.url.decode.whitespace"
+      ]
+    },
+    {
+      "operation": "encoding.java64",
+      "method": "Base64.getMimeDecoder().decode(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.java64",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
         "encoding.java64.mime.empty",
         "encoding.java64.mime.lines",
         "encoding.java64.mime.ignored",
         "encoding.java64.mime.suffix",
         "encoding.java64.mime.badPadding",
         "encoding.java64.mime.dataAfterPadding",
-        "encoding.java64.mime.single"
+        "encoding.java64.mime.single",
+        "encoding.java64.mime.extraPadding",
+        "encoding.java64.mime.splitPadding",
+        "encoding.java64.mime.leadingPadding",
+        "encoding.java64.mime.emptyPadding",
+        "encoding.java64.mime.ignoredTail",
+        "encoding.java64.mime.alphabetTail"
       ]
     },
     {

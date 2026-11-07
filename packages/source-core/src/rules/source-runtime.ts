@@ -1270,9 +1270,17 @@ const legadoPattern = {
   }
 }
 const legadoMatcher = { quoteReplacement: (value) => String(value ?? "").replace(/[\\$]/gu, "\\$&") }
+const legadoBase64Encoder = (flags) => ({
+  encodeToString: (value) => request({ kind: "base64-encode", value, flags }),
+  encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags })).getBytes("UTF-8"),
+  withoutPadding: () => legadoBase64Encoder(flags | 1),
+})
 const legadoBase64 = {
-  getEncoder: () => { const flags = 2; const encoder = { encodeToString: (value) => request({ kind: "base64-encode", value, flags }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags })).getBytes("UTF-8"), withoutPadding: () => { const noPadding = 3; return { encodeToString: (value) => request({ kind: "base64-encode", value, flags: noPadding }), encode: (value) => legadoJavaString(request({ kind: "base64-encode", value, flags: noPadding })).getBytes("UTF-8") } } }; return encoder },
+  getEncoder: () => legadoBase64Encoder(2),
+  getUrlEncoder: () => legadoBase64Encoder(10),
   getDecoder: () => ({ decode: (value) => request({ kind: "java-base64-decode", value }) }),
+  getUrlDecoder: () => ({ decode: (value) => request({ kind: "java-base64-decode", value, action: "url" }) }),
+  getMimeDecoder: () => ({ decode: (value) => request({ kind: "java-base64-decode", value, action: "mime" }) }),
 }
 const legadoByteArrayInputStream = function(input, offset, length) {
   const bytes = legadoBytesValue(input)
@@ -2284,8 +2292,24 @@ function base64DecodeWithFlags(encoding: EncodingHost, value: unknown, flagsValu
 }
 
 /** Java 基本 Base64 接受末尾未使用位，但严格验证字符、长度和补位；不放宽宿主编码器。 */
-function decodeJavaBase64(encoding: EncodingHost, value: unknown): Uint8Array {
-  const input = typeof value === 'string' ? value : encoding.decode(byteValue(value), 'ISO-8859-1')
+function decodeJavaBase64(encoding: EncodingHost, value: unknown, mode: unknown): Uint8Array {
+  let input = typeof value === 'string' ? value : encoding.decode(byteValue(value), 'ISO-8859-1')
+  if (mode === 'url') {
+    // URL 模式使用独立字母表，不能同时接受基本模式的加号、斜杠。
+    if (input.includes('+') || input.includes('/')) throw new Error('invalid Base64 input')
+    input = input.replaceAll('-', '+').replaceAll('_', '/')
+  } else if (mode === 'mime') {
+    // MIME 忽略数据中的非字母表字节，但两字符尾部需要连续的 ==；结束后只容许非数据字节。
+    const paddingAt = input.indexOf('=')
+    if (paddingAt < 0) input = input.replace(/[^A-Za-z0-9+/]/gu, '')
+    else {
+      const data = input.slice(0, paddingAt).replace(/[^A-Za-z0-9+/]/gu, '')
+      const remaining = data.length % 4
+      const paddingLength = remaining === 2 ? 2 : remaining === 3 ? 1 : 0
+      if (paddingLength === 0 || (paddingLength === 2 && input[paddingAt + 1] !== '=') || /[A-Za-z0-9+/]/u.test(input.slice(paddingAt + paddingLength))) throw new Error('invalid Base64 input')
+      input = data + '='.repeat(paddingLength)
+    }
+  }
   // 基本模式不允许空白或 URL-safe 字符；补位只能出现在结尾。
   if (!/^[A-Za-z0-9+/]*={0,2}$/u.test(input)) throw new Error('invalid Base64 input')
   const padding = input.indexOf('=')
@@ -3805,7 +3829,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return { source: compiled.regex.source, flags: compiled.regex.flags }
     }
     if (request.kind === 'base64-encode') return base64EncodeWithFlags(this.encoding, request.value instanceof Uint8Array || request.value instanceof ArrayBuffer ? byteValue(request.value) : textValue(request.value), request.flags)
-    if (request.kind === 'java-base64-decode') return decodeJavaBase64(this.encoding, request.value)
+    if (request.kind === 'java-base64-decode') return decodeJavaBase64(this.encoding, request.value, request.action)
     if (request.kind === 'base64-decode-bytes') {
       return base64DecodeWithFlags(this.encoding, request.value, request.flags)
     }

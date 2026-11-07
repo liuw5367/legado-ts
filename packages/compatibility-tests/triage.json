@@ -547,10 +547,12 @@
         "encoding.java64.mime.suffix",
         "encoding.java64.mime.badPadding",
         "encoding.java64.mime.dataAfterPadding",
-        "encoding.java64.mime.single"
+        "encoding.java64.mime.single",
+        "encoding.java64.mime.extraPadding",
+        "encoding.java64.mime.splitPadding"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -558,7 +560,9 @@
       },
       "tsEntry": "SourceRuleHost → Java Base64",
       "evidence": [
-        "output/run-RXj08j/report.json"
+        "output/run-RXj08j/report.json",
+        "output/run-Lyt9Bm/report.json",
+        "output/run-SHLeN1/report.json"
       ]
     }
   ]
