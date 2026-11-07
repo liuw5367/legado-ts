@@ -1364,3 +1364,22 @@ test('正文段落兜底保留单段和已有换行，不改变媒体正文或�
     assert.deepEqual(result.value?.cleaned.split('\n').map((line) => line.trim()), expected)
   }
 })
+
+test('loginCheckJs 原样返回正常响应时仍可解析详情', async () => {
+  const source = {
+    bookSourceUrl: 'https://login-pass.fixture.test',
+    bookSourceName: '登录检查回归',
+    loginCheckJs: 'if (result.code() !== 200) throw new Error("unexpected status"); result',
+    ruleBookInfo: { name: 'h1@text' },
+  } as unknown as NormalizedSource
+  const network: NetworkHost = {
+    request: async (plan) => response(plan.url, '<h1>正常详情</h1>'),
+  }
+  const ruleHost = new SourceRuleHost()
+  const result = await loadBookDetails({ network, rules: ruleHost }, {
+    source,
+    candidates: [{ sourceId: source.bookSourceUrl, bookUrl: source.bookSourceUrl + '/book', rawFields: {}, traceRef: 'login-pass' }],
+  })
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.equal(result.value?.items[0]?.name, '正常详情')
+})
