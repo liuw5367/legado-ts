@@ -27,6 +27,7 @@ private fun execute(item: JsonObject): Any? {
     return when (val operation = item.get("operation").asString) {
         "flow.book" -> executeBookFlow(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
+        "rule.sourceState" -> sourceStateEvidence(input)
         "rule.scriptLibrary" -> scriptLibraryEvidence(input)
         "rule.bridgeObjects" -> bridgeReturnedObjects(input)
         "rule.bridgeString" -> analyzeRuleStringOverloads(input)

@@ -1669,6 +1669,23 @@
         "rule.scriptLibrary.batch-source-scope",
         "rule.scriptLibrary.batch-peer-refresh"
       ]
+    },
+    {
+      "operation": "rule.sourceState",
+      "method": "CacheManager 普通/字节缓存与 BaseSource 源变量",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "createNodeSourceSession → SourceRuleHost 与会话快照",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "state",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.sourceState.batch-roundtrip",
+        "rule.sourceState.batch-isolation"
+      ]
     }
   ]
 }

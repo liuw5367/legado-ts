@@ -62,7 +62,8 @@
         "flow.toc",
         "rule.bridgeString",
         "rule.bridgeObjects",
-        "rule.scriptLibrary"
+        "rule.scriptLibrary",
+        "rule.sourceState"
       ]
     },
     "input": {
@@ -1581,6 +1582,43 @@
                 "type": "string"
               },
               "program": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.sourceState"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "kind",
+              "key",
+              "value",
+              "bytes"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "bytes": {
                 "type": "string"
               }
             },

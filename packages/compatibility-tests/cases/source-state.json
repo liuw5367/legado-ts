@@ -1,0 +1,109 @@
+[
+  {
+    "family": "source-state",
+    "operation": "rule.sourceState",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "CacheManager / BaseSource 按原键语义编排的内存参考；Node 快照对照恢复后的值"
+    },
+    "id": "rule.sourceState.batch-roundtrip",
+    "input": {
+      "key": "sample",
+      "value": "复写",
+      "bytes": "AP8=",
+      "kind": "roundtrip"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "empty",
+      "state",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "missing": {
+          "cached": null,
+          "bytes": null,
+          "variable": "",
+          "storedVariable": null,
+          "key": ""
+        },
+        "empty": {
+          "cached": "",
+          "bytes": [
+            0,
+            255
+          ],
+          "variable": "",
+          "storedVariable": "",
+          "key": ""
+        },
+        "overwritten": {
+          "cached": "复写",
+          "bytes": [
+            0,
+            255
+          ],
+          "variable": "复写",
+          "storedVariable": "复写",
+          "key": "复写"
+        },
+        "restored": {
+          "cached": "复写",
+          "bytes": [
+            0,
+            255
+          ],
+          "variable": "复写",
+          "storedVariable": "复写",
+          "key": "复写"
+        },
+        "deleted": {
+          "cached": null,
+          "bytes": null,
+          "variable": "",
+          "storedVariable": null,
+          "key": "复写"
+        }
+      }
+    }
+  },
+  {
+    "family": "source-state",
+    "operation": "rule.sourceState",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "CacheManager / BaseSource 按原键语义编排的内存参考；Node 快照对照恢复后的值"
+    },
+    "id": "rule.sourceState.batch-isolation",
+    "input": {
+      "key": "sample",
+      "value": "复写",
+      "bytes": "AP8=",
+      "kind": "isolation"
+    },
+    "tags": [
+      "state",
+      "boundary"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value/other/cached",
+        "jvm": "复写",
+        "ts": null,
+        "reason": "Android CacheManager 普通缓存使用应用级原始键，Node 默认会话按书源隔离缓存。"
+      },
+      {
+        "path": "$/value/other/bytes",
+        "jvm": [
+          0,
+          255
+        ],
+        "ts": null,
+        "reason": "Android ACache 字节使用应用级原始键，Node 默认会话按书源隔离缓存。"
+      }
+    ]
+  }
+]

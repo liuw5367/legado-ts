@@ -147,6 +147,8 @@ git diff --check
 
 - D3 固定 YCK 魔丸小说 `jsLib.formatDate` 的原文位置与摘要，UTC 下对照默认格式、自定义格式和非法输入。原样执行 `ScriptBindings.kt` 和 `ConcurrentNativeObject.java`，验证同源累加、切源隔离与刷新复位。相同库的跨源刷新由 `rule.scriptLibrary.batch-peer-refresh` 精确记录 Android 清零而 TS 保持隔离的差异。[两例一致、一例允许差异](../packages/compatibility-tests/output/run-CCqbkI/report.md)。
 
+- D4 `rule.sourceState.batch-*` 比较普通缓存、字节、变量及源键值的缺失、空值、覆盖、删除与恢复。Node 实际序列化并恢复会话快照，JVM 按 CacheManager 和 BaseSource 原键语义使用内存存储。原始对照复现缺失缓存读取返回 undefined，`fdc5211` 修复为 null。[修复前](../packages/compatibility-tests/output/run-GzGgcO/report.md) · [一例一致、一例允许差异](../packages/compatibility-tests/output/run-hghUH4/report.md)。CacheManager 定向回归 5/5，应用级缓存和 Node 默认会话隔离差异精确登记。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

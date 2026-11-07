@@ -464,5 +464,19 @@
       "library": "string",
       "program": "string"
     }
+  },
+  "rule.sourceState": {
+    "required": [
+      "kind",
+      "key",
+      "value",
+      "bytes"
+    ],
+    "properties": {
+      "kind": "string",
+      "key": "string",
+      "value": "string",
+      "bytes": "string"
+    }
   }
 }

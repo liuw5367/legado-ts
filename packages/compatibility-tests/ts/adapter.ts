@@ -1,5 +1,6 @@
 import { executeBookFlow } from './book-flow.ts'
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
+import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourceSession } from '../../source-node/src/source-session.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
 import { XPathParserAdapter } from '../../source-node/src/xpath.ts'
 import { JsonPathParserAdapter } from '../../source-node/src/jsonpath.ts'
@@ -36,6 +37,51 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
   const host = new SourceRuleHost()
   switch (item.operation) {
+    case 'rule.sourceState': {
+      const key = json('key')
+      const value = json('value')
+      const bytes = JSON.stringify([...Buffer.from(str('bytes'), 'base64')])
+      const executeState = async (session: NodeSourceSession, code: string) => {
+        const result = await session.run((ports) => ports.rules.evaluate({
+          source: session.source, stage: 'search', field: 'fixture', rule: `@js:${code}`, content: '',
+        }))
+        return JSON.parse(String(checked(result)))
+      }
+      const observe = async (session: NodeSourceSession, setup = '') => {
+        const observed = await executeState(session, `${setup}
+          var bytes = cache.getByteArray(${key});
+          JSON.stringify({ cached: cache.get(${key}), bytes: bytes == null ? bytes : Array.from(bytes), variable: source.getVariable(), key: source.get(${key}) });
+        `)
+        return { ...observed, storedVariable: session.snapshotRuntimeState().sourceVariables?.[session.source.bookSourceUrl] ?? null }
+      }
+      const first = createNodeSourceSession(source)
+      try {
+        const missing = await observe(first)
+        const empty = await observe(first, `cache.put(${key}, ""); cache.put(${key}, Uint8Array.from(${bytes})); source.putVariable("");`)
+        const overwritten = await observe(first, `cache.put(${key}, ${value}); source.putVariable(${value}); source.put(${key}, ${value});`)
+        const snapshot = JSON.parse(JSON.stringify(first.snapshotRuntimeState())) as NodeSourceRuntimeSnapshot
+        const kind = str('kind')
+        if (kind === 'isolation') {
+          const other = createNodeSourceSession({ ...source, bookSourceUrl: 'https://second.fixture.invalid' }, { initialRuntimeState: snapshot })
+          try {
+            return { first: overwritten, other: await observe(other), unchanged: await observe(first) }
+          } finally {
+            other.close()
+          }
+        }
+        if (kind !== 'roundtrip') throw new UnsupportedOperation('未知源状态案例')
+        const restoredSession = createNodeSourceSession(source, { initialRuntimeState: snapshot })
+        try {
+          const restored = await observe(restoredSession)
+          const deleted = await observe(restoredSession, `cache.delete(${key}); source.putVariable(null);`)
+          return { missing, empty, overwritten, restored, deleted }
+        } finally {
+          restoredSession.close()
+        }
+      } finally {
+        first.close()
+      }
+    }
     case 'rule.scriptLibrary': {
       const kind = str('kind')
       const first = { ...source, jsLib: str('library') }
