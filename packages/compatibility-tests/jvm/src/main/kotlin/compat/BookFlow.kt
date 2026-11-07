@@ -38,7 +38,12 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
     val stages = linkedMapOf<String, Any>()
     val requests = mutableListOf<Map<String, Any?>>()
     val output = mapOf("stages" to stages, "requests" to requests)
-    fun resolve(base: String, link: String) = URL(URL(base), link.trim()).toString()
+    fun resolve(base: String, link: String): String {
+        val relative = link.trim()
+        // Android 15 libcore URLStreamHandler.parseURL 移除了 query-only 分支的路径截断。
+        if (relative.startsWith("?")) return base.substringBefore('#').substringBefore('?') + relative
+        return URL(URL(base), relative).toString()
+    }
     val requestEvidence = input.get("requestEvidence")?.asBoolean == true
     fun request(stage: String, plan: FlowRequest): Pair<String, String> {
         val response = input.rule("responses").entrySet().map { it.value.asJsonObject }.firstOrNull {

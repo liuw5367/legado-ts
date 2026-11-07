@@ -1,0 +1,668 @@
+[
+  {
+    "id": "flow.synthetic.android15-query.path.query",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android 15 libcore URLStreamHandler.parseURL / NetworkUtils.getAbsoluteURL / BookChapterList"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "android15-url"
+    ],
+    "flowOrigin": {
+      "fixture": "android-15.0.0_r1-query-relative"
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "查询串相对地址夹具",
+        "bookSourceUrl": "https://fixture.test",
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "a.next@href"
+        }
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "https://fixture.test/book/7",
+        "tocUrl": "https://fixture.test/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "requestLimit": 2,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://fixture.test/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzEiPueUsjwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0iP3BhZ2U9MiI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "next": {
+          "method": "GET",
+          "url": "https://fixture.test/toc?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc?page=2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzIiPuS5mTwvYT4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "甲",
+                "index": 0,
+                "chapterUrl": "https://fixture.test/c/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "乙",
+                "index": 1,
+                "chapterUrl": "https://fixture.test/c/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc",
+            "headers": {},
+            "body": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc?page=2",
+            "headers": {},
+            "body": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.android15-query.path.empty-query",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android 15 libcore URLStreamHandler.parseURL / NetworkUtils.getAbsoluteURL / BookChapterList"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "android15-url"
+    ],
+    "flowOrigin": {
+      "fixture": "android-15.0.0_r1-query-relative"
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "查询串相对地址夹具",
+        "bookSourceUrl": "https://fixture.test",
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "a.next@href"
+        }
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "https://fixture.test/book/7",
+        "tocUrl": "https://fixture.test/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "requestLimit": 2,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://fixture.test/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzEiPueUsjwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0iPyI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "next": {
+          "method": "GET",
+          "url": "https://fixture.test/toc?",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc?",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzIiPuS5mTwvYT4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "甲",
+                "index": 0,
+                "chapterUrl": "https://fixture.test/c/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "乙",
+                "index": 1,
+                "chapterUrl": "https://fixture.test/c/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc",
+            "headers": {},
+            "body": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc?",
+            "headers": {},
+            "body": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.android15-query.path.path",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android 15 libcore URLStreamHandler.parseURL / NetworkUtils.getAbsoluteURL / BookChapterList"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "android15-url"
+    ],
+    "flowOrigin": {
+      "fixture": "android-15.0.0_r1-query-relative"
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "查询串相对地址夹具",
+        "bookSourceUrl": "https://fixture.test",
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "a.next@href"
+        }
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "https://fixture.test/book/7",
+        "tocUrl": "https://fixture.test/toc"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "requestLimit": 2,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://fixture.test/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzEiPueUsjwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0idG9jP3BhZ2U9MiI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "next": {
+          "method": "GET",
+          "url": "https://fixture.test/toc?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc?page=2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzIiPuS5mTwvYT4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "甲",
+                "index": 0,
+                "chapterUrl": "https://fixture.test/c/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "乙",
+                "index": 1,
+                "chapterUrl": "https://fixture.test/c/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc",
+            "headers": {},
+            "body": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc?page=2",
+            "headers": {},
+            "body": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.android15-query.directory.query",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android 15 libcore URLStreamHandler.parseURL / NetworkUtils.getAbsoluteURL / BookChapterList"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "android15-url"
+    ],
+    "flowOrigin": {
+      "fixture": "android-15.0.0_r1-query-relative"
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "查询串相对地址夹具",
+        "bookSourceUrl": "https://fixture.test",
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "a.next@href"
+        }
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "https://fixture.test/book/7",
+        "tocUrl": "https://fixture.test/toc/"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "requestLimit": 2,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://fixture.test/toc/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzEiPueUsjwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0iP3BhZ2U9MiI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "next": {
+          "method": "GET",
+          "url": "https://fixture.test/toc/?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc/?page=2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzIiPuS5mTwvYT4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "甲",
+                "index": 0,
+                "chapterUrl": "https://fixture.test/c/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "乙",
+                "index": 1,
+                "chapterUrl": "https://fixture.test/c/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc/",
+            "headers": {},
+            "body": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc/?page=2",
+            "headers": {},
+            "body": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.android15-query.directory.empty-query",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android 15 libcore URLStreamHandler.parseURL / NetworkUtils.getAbsoluteURL / BookChapterList"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "android15-url"
+    ],
+    "flowOrigin": {
+      "fixture": "android-15.0.0_r1-query-relative"
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "查询串相对地址夹具",
+        "bookSourceUrl": "https://fixture.test",
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "a.next@href"
+        }
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "https://fixture.test/book/7",
+        "tocUrl": "https://fixture.test/toc/"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "requestLimit": 2,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://fixture.test/toc/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzEiPueUsjwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0iPyI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "next": {
+          "method": "GET",
+          "url": "https://fixture.test/toc/?",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc/?",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzIiPuS5mTwvYT4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "甲",
+                "index": 0,
+                "chapterUrl": "https://fixture.test/c/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "乙",
+                "index": 1,
+                "chapterUrl": "https://fixture.test/c/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc/",
+            "headers": {},
+            "body": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc/?",
+            "headers": {},
+            "body": null
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.android15-query.directory.path",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "Android 15 libcore URLStreamHandler.parseURL / NetworkUtils.getAbsoluteURL / BookChapterList"
+    },
+    "tags": [
+      "offline",
+      "toc",
+      "android15-url"
+    ],
+    "flowOrigin": {
+      "fixture": "android-15.0.0_r1-query-relative"
+    },
+    "input": {
+      "source": {
+        "bookSourceName": "查询串相对地址夹具",
+        "bookSourceUrl": "https://fixture.test",
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "nextTocUrl": "a.next@href"
+        }
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "https://fixture.test/book/7",
+        "tocUrl": "https://fixture.test/toc/"
+      },
+      "bookVariables": {},
+      "variableKeys": [],
+      "requestLimit": 2,
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "https://fixture.test/toc/",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc/",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzEiPueUsjwvYT48YSBjbGFzcz0ibmV4dCIgaHJlZj0idG9jP3BhZ2U9MiI+5LiL5LiA6aG1PC9hPg=="
+          }
+        },
+        "next": {
+          "method": "GET",
+          "url": "https://fixture.test/toc/toc?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://fixture.test/toc/toc?page=2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jLzIiPuS5mTwvYT4="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "甲",
+                "index": 0,
+                "chapterUrl": "https://fixture.test/c/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              },
+              {
+                "title": "乙",
+                "index": 1,
+                "chapterUrl": "https://fixture.test/c/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc/",
+            "headers": {},
+            "body": null
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://fixture.test/toc/toc?page=2",
+            "headers": {},
+            "body": null
+          }
+        ]
+      }
+    }
+  }
+]

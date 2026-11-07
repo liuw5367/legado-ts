@@ -126,6 +126,9 @@ git diff --check
 - A3 `0dbcc31` 增加错层小说目录与正文双分页、下一章停止用例，[24/24](../packages/compatibility-tests/output/run-CxKhk2/report.md)。
 - A4 增加抖音小说 POST、两个分页及尾部不匹配链接用例，[26/26](../packages/compatibility-tests/output/run-FTlpEm/report.md)。
 
+- B1 从 [Android 15 libcore 固定版本](https://android.googlesource.com/platform/libcore/+/refs/tags/android-15.0.0_r1/ojluni/src/main/java/java/net/URLStreamHandler.java) 取证，源码 SHA-256 为 `eeaff8bfe6a809c67e973dd356deadc28949e554cc390f24eaa6916c6a18490e`。用桌面 JDK 的自定义 URL handler 原样执行该文件的 `parseURL` 方法，单列 Android 原方法证据。基准 `/toc` 下 Android 保留 `/toc?page=2` 与 `/toc?`，桌面 JDK 得到 `/?page=2` 与 `/?`；基准 `/toc/` 下两端保留相同路径。普通 `toc?page=2` 分别得到 `/toc?page=2` 与 `/toc/toc?page=2`，两端一致。该取证未执行 Android 应用。
+- B1 的 [修复前报告](../packages/compatibility-tests/output/run-Kd83M2/report.md) 显示 TS 只在显式空查询时丢掉 `?`，导致目录第二页被识别为已访问。修复 `d784fec` 单独提交，六个 `flow.synthetic.android15-query.*` 及 [32/32 流程对照](../packages/compatibility-tests/output/run-7Kqd9M/report.md) 通过。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。
