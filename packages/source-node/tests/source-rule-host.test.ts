@@ -1085,7 +1085,7 @@ test('规则宿主支持 Android 的章节数字和字节编码重载', async ()
     ])`, '')
   assert.equal(result.status, 'success')
   assert.deepEqual(JSON.parse(String(result.value)), [
-    '第11章：开端',
+    '第11章',
     '第12章',
     '没有章节号',
     null,

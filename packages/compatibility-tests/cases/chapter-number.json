@@ -1,0 +1,114 @@
+[
+  {
+    "id": "chapter.number.titleSuffix",
+    "family": "chapter",
+    "operation": "chapter.number",
+    "input": {
+      "text": "前言 第十一章：开端"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsExtensions.toNumChapter"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "第11章"
+    }
+  },
+  {
+    "id": "chapter.number.firstOnly",
+    "family": "chapter",
+    "operation": "chapter.number",
+    "input": {
+      "text": "第十二章・第十三章"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsExtensions.toNumChapter"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "第12章"
+    }
+  },
+  {
+    "id": "chapter.number.fullWidth",
+    "family": "chapter",
+    "operation": "chapter.number",
+    "input": {
+      "text": "第１２章"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsExtensions.toNumChapter"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "第12章"
+    }
+  },
+  {
+    "id": "chapter.number.invalid",
+    "family": "chapter",
+    "operation": "chapter.number",
+    "input": {
+      "text": "第未知章 标题"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsExtensions.toNumChapter"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "第-1章"
+    }
+  },
+  {
+    "id": "chapter.number.noMatch",
+    "family": "chapter",
+    "operation": "chapter.number",
+    "input": {
+      "text": "没有章节号"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsExtensions.toNumChapter"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "没有章节号"
+    }
+  },
+  {
+    "id": "chapter.number.null",
+    "family": "chapter",
+    "operation": "chapter.number",
+    "input": {},
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsExtensions.toNumChapter"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": null
+    }
+  }
+]

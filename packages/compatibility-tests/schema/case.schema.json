@@ -56,7 +56,8 @@
         "xpath.nodes",
         "css.nodes",
         "corpus.cssString",
-        "corpus.script"
+        "corpus.script",
+        "chapter.number"
       ]
     },
     "input": {
@@ -1296,6 +1297,29 @@
                 "type": "boolean"
               },
               "custom": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "chapter.number"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [],
+            "properties": {
+              "text": {
                 "type": "string"
               }
             },

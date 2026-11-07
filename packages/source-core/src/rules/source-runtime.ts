@@ -2463,7 +2463,7 @@ function toNumChapter(value: unknown): string | null {
       number = -1
     }
   }
-  return text.slice(0, match.index + 1) + String(number) + text.slice(match.index + match[0].length - 1)
+  return `第${number}章`
 }
 
 function nonEmpty(value: unknown): boolean {

@@ -151,6 +151,7 @@ private fun execute(item: JsonObject): Any? {
             corpusCssString(text("rule"), context ?: content)
         }
         "corpus.script" -> corpusScriptRule(text("rule"), text("content"), input.get("nodes")?.asBoolean == true, text("custom"))
+        "chapter.number" -> io.legado.app.help.CorpusJsExtensions.toNumChapter(input.get("text")?.asString)
         "json.continue" -> { val parser = AnalyzeByJSonPath(text("content")); mapOf("first" to parser.getStringList(text("rule")), "next" to parser.getString(text("nextRule"))) }
         "json.read" -> {
             val config = Configuration.defaultConfiguration()

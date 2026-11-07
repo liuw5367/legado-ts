@@ -1295,6 +1295,24 @@
         "corpus.source-10.ruleBookInfo.lastChapter",
         "corpus.source-10.ruleToc.chapterList"
       ]
+    },
+    {
+      "operation": "chapter.number",
+      "method": "JsExtensions.toNumChapter(String?)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → java.toNumChapter",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "chapter.number.titleSuffix",
+        "chapter.number.firstOnly",
+        "chapter.number.fullWidth",
+        "chapter.number.invalid",
+        "chapter.number.noMatch",
+        "chapter.number.null"
+      ]
     }
   ]
 }

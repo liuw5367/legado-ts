@@ -106,6 +106,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
       const context = i.contextRule === undefined ? '' : `,java.getElements(${json('contextRule')}).first()`
       return script(host, `return java.getString(${json('rule')}${context})`, i.content)
     }
+    case 'chapter.number': return script(host, `return java.toNumChapter(${i.text === undefined ? 'null' : json('text')})`)
     case 'corpus.script': {
       const nodes = i.nodes === true
       const bindings = i.custom === undefined ? undefined : { book: { variable: JSON.stringify({ custom: i.custom }) } }

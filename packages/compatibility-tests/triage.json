@@ -714,6 +714,27 @@
       "evidence": [
         "output/run-m2rBgq/report.json"
       ]
+    },
+    {
+      "id": "C7-CHAPTER-NUMBER",
+      "caseIds": [
+        "chapter.number.titleSuffix",
+        "chapter.number.firstOnly",
+        "chapter.number.invalid"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "JsExtensions.toNumChapter"
+      },
+      "tsEntry": "SourceRuleHost → java.toNumChapter",
+      "evidence": [
+        "output/run-WGhS0R/report.json",
+        "output/run-Lz4QiH/report.json",
+        "output/run-tzLaZT/report.json"
+      ]
     }
   ]
 }
