@@ -1,0 +1,700 @@
+[
+  {
+    "id": "flow.yiove.toc-variable.unset",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "tags": [
+      "offline",
+      "js",
+      "variables"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule / Book / BookChapterList"
+    },
+    "flowOrigin": {
+      "sourceUrl": "http://www.kk169.org#🎃",
+      "fields": [
+        "ruleToc"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "",
+        "bookSourceGroup": "🌹已检26.10.15",
+        "bookSourceName": "穿越小说🎃",
+        "bookSourceType": 0,
+        "bookSourceUrl": "http://www.kk169.org#🎃",
+        "enabled": true,
+        "enabledCookieJar": false,
+        "enabledExplore": true,
+        "exploreUrl": "[\n{\"title\":\"玄幻·魔法\",\"url\":\"book/sort1/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"武侠·修真\",\"url\":\"book/sort2/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"都市·言情\",\"url\":\"book/sort3/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"历史·军事\",\"url\":\"book/sort4/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"穿越·架空\",\"url\":\"book/sort5/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"游戏·竞技\",\"url\":\"book/sort6/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n]",
+        "ruleBookInfo": {
+          "author": "[property$=author]@content",
+          "coverUrl": "[property$=image]@content",
+          "intro": "🕰  更新时间：\n{{@@.tabvalue@table@tbody@td.2@text##.*：|\\s.*}}\n📜  内容简介：\n{{@@.tabvalue@div@textNodes##本书尚无公告.|\\\\n}}##(^|[。！？……；]+[”」）】]?)##$1<br>",
+          "kind": "[property~=category|status|update_time]@content&&.tabvalue@table@tbody@td.2@text##.*：|\\s.*",
+          "lastChapter": "{{@@h3@text}}･{{@@.tabvalue@table@tbody@td.2@text##.*：|\\s.*}}\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+          "name": "[property$=book_name]@content",
+          "tocUrl": "text.点击阅读@href"
+        },
+        "ruleContent": {
+          "content": "#acontent@textNodes",
+          "nextContentUrl": "",
+          "replaceRegex": "##\\(穿越小说.*www.*\\)|穿越小说.*www.*|正在手打.*|.本章完."
+        },
+        "ruleExplore": {
+          "author": ".c_value.0@text",
+          "bookList": "class.c_row cf",
+          "bookUrl": "a.0@href",
+          "coverUrl": "img@src",
+          "intro": "class.c_description@text",
+          "kind": "span.-1:-3@text",
+          "lastChapter": "a.3@text\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+          "name": "a.2@text"
+        },
+        "ruleSearch": {
+          "author": ".c_value.0@text",
+          "bookList": "class.c_row",
+          "bookUrl": "a.0@href",
+          "checkKeyWord": "我的模拟长生路",
+          "coverUrl": "img@src",
+          "kind": ".c_value.1@text&&.c_value.3@text&&.c_value.5@text",
+          "lastChapter": "{{@@.c_value.4@text}}•{{@@.c_value.5@text}}\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+          "name": "a.1@text"
+        },
+        "ruleToc": {
+          "chapterList": "li.chapter@a\n<js>\nvar r=result;\nvar v=book.getVariable(\"custom\")\nvar b=[];\nif(v!=\"\"){\n        for(i=0;i<r.length-v;i++){\n                b.push(r[i]);\n                }\n                result=b;\n        }\n        result\n</js>",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "updateTime": "更新时间：{{@@title##更新，共##·章节字数：}}"
+        },
+        "searchUrl": "modules/article/search.php?q={{key}}"
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "http://www.kk169.org/book/7",
+        "tocUrl": "http://www.kk169.org/toc/7"
+      },
+      "bookVariables": {},
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "http://www.kk169.org/toc/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.kk169.org/toc/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvMSIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDHnq6A8L2E+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhIGhyZWY9Ii9jaGFwdGVyLzIiIHRpdGxlPSLmm7TmlrDvvIzlhbExMDAwIj7nrKwy56ugPC9hPjwvbGk+PGxpIGNsYXNzPSJjaGFwdGVyIj48YSBocmVmPSIvY2hhcHRlci8zIiB0aXRsZT0i5pu05paw77yM5YWxMTAwMCI+56ysM+eroDwvYT48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvNCIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDTnq6A8L2E+PC9saT48L3VsPg=="
+          }
+        }
+      },
+      "variableKeys": [
+        "custom"
+      ],
+      "requestLimit": 1
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第1章",
+                "chapterUrl": "http://www.kk169.org/chapter/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 0
+              },
+              {
+                "title": "第2章",
+                "chapterUrl": "http://www.kk169.org/chapter/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 1
+              },
+              {
+                "title": "第3章",
+                "chapterUrl": "http://www.kk169.org/chapter/3",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 2
+              },
+              {
+                "title": "第4章",
+                "chapterUrl": "http://www.kk169.org/chapter/4",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 3
+              }
+            ],
+            "variables": {}
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "http://www.kk169.org/toc/7",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.yiove.toc-variable.trim-tail",
+    "family": "flow",
+    "operation": "flow.toc",
+    "contractScope": "flow",
+    "tags": [
+      "offline",
+      "js",
+      "variables"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule / Book / BookChapterList"
+    },
+    "flowOrigin": {
+      "sourceUrl": "http://www.kk169.org#🎃",
+      "fields": [
+        "ruleToc"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "",
+        "bookSourceGroup": "🌹已检26.10.15",
+        "bookSourceName": "穿越小说🎃",
+        "bookSourceType": 0,
+        "bookSourceUrl": "http://www.kk169.org#🎃",
+        "enabled": true,
+        "enabledCookieJar": false,
+        "enabledExplore": true,
+        "exploreUrl": "[\n{\"title\":\"玄幻·魔法\",\"url\":\"book/sort1/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"武侠·修真\",\"url\":\"book/sort2/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"都市·言情\",\"url\":\"book/sort3/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"历史·军事\",\"url\":\"book/sort4/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"穿越·架空\",\"url\":\"book/sort5/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n{\"title\":\"游戏·竞技\",\"url\":\"book/sort6/0/{{page}}.html\",\"style\":{\"layout_flexGrow\":1,\"layout_flexBasisPercent\":0.25}},\n]",
+        "ruleBookInfo": {
+          "author": "[property$=author]@content",
+          "coverUrl": "[property$=image]@content",
+          "intro": "🕰  更新时间：\n{{@@.tabvalue@table@tbody@td.2@text##.*：|\\s.*}}\n📜  内容简介：\n{{@@.tabvalue@div@textNodes##本书尚无公告.|\\\\n}}##(^|[。！？……；]+[”」）】]?)##$1<br>",
+          "kind": "[property~=category|status|update_time]@content&&.tabvalue@table@tbody@td.2@text##.*：|\\s.*",
+          "lastChapter": "{{@@h3@text}}･{{@@.tabvalue@table@tbody@td.2@text##.*：|\\s.*}}\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+          "name": "[property$=book_name]@content",
+          "tocUrl": "text.点击阅读@href"
+        },
+        "ruleContent": {
+          "content": "#acontent@textNodes",
+          "nextContentUrl": "",
+          "replaceRegex": "##\\(穿越小说.*www.*\\)|穿越小说.*www.*|正在手打.*|.本章完."
+        },
+        "ruleExplore": {
+          "author": ".c_value.0@text",
+          "bookList": "class.c_row cf",
+          "bookUrl": "a.0@href",
+          "coverUrl": "img@src",
+          "intro": "class.c_description@text",
+          "kind": "span.-1:-3@text",
+          "lastChapter": "a.3@text\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+          "name": "a.2@text"
+        },
+        "ruleSearch": {
+          "author": ".c_value.0@text",
+          "bookList": "class.c_row",
+          "bookUrl": "a.0@href",
+          "checkKeyWord": "我的模拟长生路",
+          "coverUrl": "img@src",
+          "kind": ".c_value.1@text&&.c_value.3@text&&.c_value.5@text",
+          "lastChapter": "{{@@.c_value.4@text}}•{{@@.c_value.5@text}}\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
+          "name": "a.1@text"
+        },
+        "ruleToc": {
+          "chapterList": "li.chapter@a\n<js>\nvar r=result;\nvar v=book.getVariable(\"custom\")\nvar b=[];\nif(v!=\"\"){\n        for(i=0;i<r.length-v;i++){\n                b.push(r[i]);\n                }\n                result=b;\n        }\n        result\n</js>",
+          "chapterName": "text",
+          "chapterUrl": "href",
+          "updateTime": "更新时间：{{@@title##更新，共##·章节字数：}}"
+        },
+        "searchUrl": "modules/article/search.php?q={{key}}"
+      },
+      "book": {
+        "name": "星河",
+        "bookUrl": "http://www.kk169.org/book/7",
+        "tocUrl": "http://www.kk169.org/toc/7"
+      },
+      "bookVariables": {
+        "custom": "2"
+      },
+      "responses": {
+        "toc": {
+          "method": "GET",
+          "url": "http://www.kk169.org/toc/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.kk169.org/toc/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvMSIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDHnq6A8L2E+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhIGhyZWY9Ii9jaGFwdGVyLzIiIHRpdGxlPSLmm7TmlrDvvIzlhbExMDAwIj7nrKwy56ugPC9hPjwvbGk+PGxpIGNsYXNzPSJjaGFwdGVyIj48YSBocmVmPSIvY2hhcHRlci8zIiB0aXRsZT0i5pu05paw77yM5YWxMTAwMCI+56ysM+eroDwvYT48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvNCIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDTnq6A8L2E+PC9saT48L3VsPg=="
+          }
+        }
+      },
+      "variableKeys": [
+        "custom"
+      ],
+      "requestLimit": 1
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第1章",
+                "chapterUrl": "http://www.kk169.org/chapter/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 0
+              },
+              {
+                "title": "第2章",
+                "chapterUrl": "http://www.kk169.org/chapter/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 1
+              }
+            ],
+            "variables": {
+              "custom": "2"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "http://www.kk169.org/toc/7",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.book-variable.write-read",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "tags": [
+      "offline",
+      "js",
+      "variables"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule / Book / BookChapterList"
+    },
+    "flowOrigin": {
+      "fixture": "synthetic-book-variable",
+      "ruleFrom": {
+        "sourceUrl": "http://www.kk169.org#🎃",
+        "field": "ruleToc.chapterList"
+      }
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://variable.fixture.test",
+        "bookSourceName": "变量流程夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text<js>book.putVariable(\"custom\",\"2\"); result</js>",
+          "tocUrl": ".toc@href"
+        },
+        "ruleToc": {
+          "chapterList": "li.chapter@a\n<js>\nvar r=result;\nvar v=book.getVariable(\"custom\")\nvar b=[];\nif(v!=\"\"){\n        for(i=0;i<r.length-v;i++){\n                b.push(r[i]);\n                }\n                result=b;\n        }\n        result\n</js>",
+          "chapterName": "text",
+          "chapterUrl": "href"
+        },
+        "ruleContent": {
+          "content": ".content@text"
+        }
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svNyI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/book/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/book/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9InRvYyIgaHJlZj0iL3RvYy83Ij7nm67lvZU8L2E+"
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/toc/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/toc/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvMSIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDHnq6A8L2E+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhIGhyZWY9Ii9jaGFwdGVyLzIiIHRpdGxlPSLmm7TmlrDvvIzlhbExMDAwIj7nrKwy56ugPC9hPjwvbGk+PGxpIGNsYXNzPSJjaGFwdGVyIj48YSBocmVmPSIvY2hhcHRlci8zIiB0aXRsZT0i5pu05paw77yM5YWxMTAwMCI+56ysM+eroDwvYT48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvNCIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDTnq6A8L2E+PC9saT48L3VsPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/chapter/2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/chapter/2",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29udGVudCI+56ysMueroOato+aWhzwvZGl2Pg=="
+          }
+        }
+      },
+      "chapterIndex": 1,
+      "variableKeys": [
+        "custom"
+      ],
+      "requestLimit": 4
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://variable.fixture.test/book/7"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://variable.fixture.test/book/7",
+              "tocUrl": "https://variable.fixture.test/toc/7"
+            },
+            "variables": {
+              "custom": "2"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第1章",
+                "chapterUrl": "https://variable.fixture.test/chapter/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 0
+              },
+              {
+                "title": "第2章",
+                "chapterUrl": "https://variable.fixture.test/chapter/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 1
+              }
+            ],
+            "variables": {
+              "custom": "2"
+            }
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第2章",
+              "cleaned": "第2章正文",
+              "pageCount": 1
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://variable.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://variable.fixture.test/book/7",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://variable.fixture.test/toc/7",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://variable.fixture.test/chapter/2",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.book-variable.no-write",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "tags": [
+      "offline",
+      "js",
+      "variables"
+    ],
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule / Book / BookChapterList"
+    },
+    "flowOrigin": {
+      "fixture": "synthetic-book-variable",
+      "ruleFrom": {
+        "sourceUrl": "http://www.kk169.org#🎃",
+        "field": "ruleToc.chapterList"
+      }
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://variable.fixture.test",
+        "bookSourceName": "变量流程夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text",
+          "tocUrl": ".toc@href"
+        },
+        "ruleToc": {
+          "chapterList": "li.chapter@a\n<js>\nvar r=result;\nvar v=book.getVariable(\"custom\")\nvar b=[];\nif(v!=\"\"){\n        for(i=0;i<r.length-v;i++){\n                b.push(r[i]);\n                }\n                result=b;\n        }\n        result\n</js>",
+          "chapterName": "text",
+          "chapterUrl": "href"
+        },
+        "ruleContent": {
+          "content": ".content@text"
+        }
+      },
+      "keyword": "星河",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svNyI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/book/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/book/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9InRvYyIgaHJlZj0iL3RvYy83Ij7nm67lvZU8L2E+"
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/toc/7",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/toc/7",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHVsPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvMSIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDHnq6A8L2E+PC9saT48bGkgY2xhc3M9ImNoYXB0ZXIiPjxhIGhyZWY9Ii9jaGFwdGVyLzIiIHRpdGxlPSLmm7TmlrDvvIzlhbExMDAwIj7nrKwy56ugPC9hPjwvbGk+PGxpIGNsYXNzPSJjaGFwdGVyIj48YSBocmVmPSIvY2hhcHRlci8zIiB0aXRsZT0i5pu05paw77yM5YWxMTAwMCI+56ysM+eroDwvYT48L2xpPjxsaSBjbGFzcz0iY2hhcHRlciI+PGEgaHJlZj0iL2NoYXB0ZXIvNCIgdGl0bGU9IuabtOaWsO+8jOWFsTEwMDAiPuesrDTnq6A8L2E+PC9saT48L3VsPg=="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://variable.fixture.test/chapter/4",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://variable.fixture.test/chapter/4",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iY29udGVudCI+56ysNOeroOato+aWhzwvZGl2Pg=="
+          }
+        }
+      },
+      "chapterIndex": 3,
+      "variableKeys": [
+        "custom"
+      ],
+      "requestLimit": 4
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://variable.fixture.test/book/7"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://variable.fixture.test/book/7",
+              "tocUrl": "https://variable.fixture.test/toc/7"
+            },
+            "variables": {}
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第1章",
+                "chapterUrl": "https://variable.fixture.test/chapter/1",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 0
+              },
+              {
+                "title": "第2章",
+                "chapterUrl": "https://variable.fixture.test/chapter/2",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 1
+              },
+              {
+                "title": "第3章",
+                "chapterUrl": "https://variable.fixture.test/chapter/3",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 2
+              },
+              {
+                "title": "第4章",
+                "chapterUrl": "https://variable.fixture.test/chapter/4",
+                "isVip": false,
+                "isPay": false,
+                "isVolume": false,
+                "index": 3
+              }
+            ],
+            "variables": {}
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第4章",
+              "cleaned": "第4章正文",
+              "pageCount": 1
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://variable.fixture.test/search?q=%E6%98%9F%E6%B2%B3",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://variable.fixture.test/book/7",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://variable.fixture.test/toc/7",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://variable.fixture.test/chapter/4",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  }
+]

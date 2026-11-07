@@ -204,6 +204,22 @@
     {
       "path": "app/src/main/java/io/legado/app/data/entities/BookChapter.kt",
       "sha256": "2725ee89235677b28e8d4cf1e9ae847212e7524a9b418f7c0a195a4114bdabbd"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/Book.kt",
+      "sha256": "b737391f3eec2404314212490f0efd7e9f18c114b51aaf9f4566c8f41cfe4338"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/RuleData.kt",
+      "sha256": "ff9a0782fb27dfa69f8e914d2738afd6a14cbe77b6fe0d646c4c091f652fd311"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/BaseBook.kt",
+      "sha256": "a27896e273ec222f1bfa626067e8827632868e5182022c18d179749bb87448b2"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/RuleDataInterface.kt",
+      "sha256": "4cec4e15b2769f9e1daf03e933a8198d5650a6053f023d499bee3e856ad4db56"
     }
   ]
 }

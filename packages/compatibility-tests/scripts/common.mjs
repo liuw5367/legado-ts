@@ -40,16 +40,27 @@ export async function loadCases(options = {}) {
     if (!path.endsWith('.json')) continue
     for (const item of await readJson(path)) {
       validateCase(item)
-      if (item.flowOrigin?.sourceUrl) {
+      if (item.flowOrigin?.sourceUrl || item.flowOrigin?.ruleFrom) {
         if (!corpus) {
           const manifest = await readJson(join(root, 'corpus/manifest.json'))
           const snapshot = await readFile(join(root, 'corpus', manifest.file))
           if (sha256(snapshot) !== manifest.sha256) throw new Error('书源快照摘要变化')
           corpus = { sources: JSON.parse(snapshot), sha256: manifest.sha256 }
         }
-        const source = corpus.sources.find((s) => s.bookSourceUrl === item.flowOrigin.sourceUrl)
-        if (!source || stable(source) !== stable(item.input.source) || !item.flowOrigin.fields.every((field) => Object.hasOwn(source, field))) {
-          throw new Error(`${item.id}: 流程案例来源与书源快照不一致`)
+        const { sourceUrl, fields, ruleFrom } = item.flowOrigin
+        if (sourceUrl) {
+          const source = corpus.sources.find((s) => s.bookSourceUrl === sourceUrl)
+          if (!source || stable(source) !== stable(item.input.source) || !fields.every((field) => Object.hasOwn(source, field))) {
+            throw new Error(`${item.id}: 流程案例来源与书源快照不一致`)
+          }
+        }
+        if (ruleFrom) {
+          const source = corpus.sources.find((s) => s.bookSourceUrl === ruleFrom.sourceUrl)
+          const readRule = (value) => ruleFrom.field.split('.').reduce((current, field) => current?.[field], value)
+          const rule = readRule(source)
+          if (typeof rule !== 'string' || readRule(item.input.source) !== rule) {
+            throw new Error(`${item.id}: 流程规则片段与书源快照不一致`)
+          }
         }
         item.flowOrigin.snapshotSha256 = corpus.sha256
       }
@@ -87,7 +98,7 @@ export function validateCase(item) {
       : typeof value === type
     if (!valid) throw new Error(`${item.id}: input.${key} 类型无效`)
   }
-  if (item.operation === 'flow.book') validateFlowCase(item)
+  if (item.operation.startsWith('flow.')) validateFlowCase(item)
   if (item.operation === 'rule.split' && !['&&', '||', '%%'].includes(item.input.operator)) throw new Error('未支持的分隔符')
   if (item.operation.startsWith('regex.') && item.input.patterns.length === 0) throw new Error('patterns 不能为空')
   if (item.errorEquivalence && (typeof item.errorEquivalence.category !== 'string' || !['jvm', 'ts'].every((r) => Array.isArray(item.errorEquivalence[r]) && item.errorEquivalence[r].every((v) => typeof v === 'string')))) throw new Error('异常等价声明无效')
@@ -102,6 +113,15 @@ function validateFlowCase(item) {
     || (item.input.chapterIndex ?? 0) < 0 || typeof source.bookSourceUrl !== 'string' || requestLimit < 1 || Object.keys(responses).length === 0
     || !origin || (origin.sourceUrl ? !Array.isArray(origin.fields) || origin.fields.length === 0 : typeof origin.fixture !== 'string')) {
     throw new Error(`${item.id}: 流程来源、契约或请求预算无效`)
+  }
+  if (origin.ruleFrom !== undefined && (!URL.canParse(origin.ruleFrom?.sourceUrl) || typeof origin.ruleFrom?.field !== 'string')) {
+    throw new Error(`${item.id}: 书源规则片段来源无效`)
+  }
+  if (item.operation === 'flow.toc') {
+    const { book, bookVariables } = item.input
+    if (!URL.canParse(book.bookUrl) || !URL.canParse(book.tocUrl) || Object.values(bookVariables).some((value) => typeof value !== 'string')) {
+      throw new Error(`${item.id}: 目录阶段书籍身份或初始变量无效`)
+    }
   }
   const keys = new Set()
   for (const entry of Object.values(responses)) {

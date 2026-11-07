@@ -50,12 +50,18 @@ private fun replaceCorpusValue(value: String, parts: List<String>): String {
 internal fun corpusScriptRule(rule: String, content: String, nodes: Boolean, custom: String): Any? =
     if (nodes) corpusScriptNodes(rule, content, custom).map { node ->
         mapOf("tag" to node.tagName(), "text" to node.text(), "id" to node.id())
-    } else runCorpusScript(rule, content, false, custom)
+    } else corpusScriptString(rule, content, mutableMapOf("custom" to custom))
 
-internal fun corpusScriptNodes(rule: String, content: String, custom: String = ""): List<Element> =
-    (runCorpusScript(rule, content, true, custom) as List<*>).map { it as Element }
+internal fun corpusScriptNodes(rule: String, content: String, custom: String): List<Element> =
+    corpusScriptNodes(rule, content, mutableMapOf("custom" to custom))
 
-private fun runCorpusScript(rule: String, content: String, nodes: Boolean, custom: String): Any? {
+internal fun corpusScriptNodes(rule: String, content: String, variables: MutableMap<String, String>): List<Element> =
+    (runCorpusScript(rule, content, true, variables) as List<*>).map { it as Element }
+
+internal fun corpusScriptString(rule: String, content: Any, variables: MutableMap<String, String>): String =
+    runCorpusScript(rule, content, false, variables) as String
+
+private fun runCorpusScript(rule: String, content: Any, nodes: Boolean, variables: MutableMap<String, String>): Any? {
     val script = AppPattern.JS_PATTERN.matcher(rule)
     require(script.find()) { "缺少离线 JS 规则" }
     val prefix = rule.substring(0, script.start()).trim()
@@ -68,10 +74,10 @@ private fun runCorpusScript(rule: String, content: String, nodes: Boolean, custo
         engine.setClassShutter { false }
         val java = engine.newObject(scope)
         val book = engine.newObject(scope)
-        fun bind(target: Scriptable, name: String, callback: (String) -> Any?) {
+        fun bindArgs(target: Scriptable, name: String, callback: (Array<Any>) -> Any?) {
             target.put(name, target, object : BaseFunction() {
                 override fun call(cx: Context, scope: VarScope, thisObj: Scriptable, args: Array<Any>): Any? =
-                    callback(Context.toString(args.firstOrNull() ?: ""))
+                    callback(args)
             })
         }
         fun select(selector: String): Scriptable {
@@ -87,9 +93,20 @@ private fun runCorpusScript(rule: String, content: String, nodes: Boolean, custo
             }
             return engine.newArray(scope, values.toTypedArray<Any>())
         }
+        fun bind(target: Scriptable, name: String, callback: (String) -> Any?) {
+            bindArgs(target, name) { args -> callback(Context.toString(args.firstOrNull() ?: "")) }
+        }
         bind(java, "getElements", ::select)
         bind(java, "toNumChapter", CorpusJsExtensions::toNumChapter)
-        bind(book, "getVariable") { if (it == "custom") custom else "" }
+        bind(book, "getVariable") { variables[it].orEmpty() }
+        bindArgs(book, "putVariable") { args ->
+            require(args.size == 2) { "离线 book.putVariable 需要键和值" }
+            // RuleDataInterface 只把短字符串保存在本地变量表，其余行为依赖宿主存储。
+            val value = args[1] as? CharSequence ?: throw Unsupported("离线 book.putVariable 只支持短字符串")
+            if (value.length >= 10000) throw Unsupported("离线 book.putVariable 不支持大变量存储")
+            variables[Context.toString(args[0])] = value.toString()
+            true
+        }
         scope.put("java", scope, java)
         scope.put("book", scope, book)
         val initial = when {

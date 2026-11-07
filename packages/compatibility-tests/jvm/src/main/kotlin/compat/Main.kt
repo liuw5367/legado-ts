@@ -26,6 +26,7 @@ private fun execute(item: JsonObject): Any? {
     fun text(key: String) = input.get(key)?.asString ?: ""
     return when (val operation = item.get("operation").asString) {
         "flow.book" -> executeBookFlow(input)
+        "flow.toc" -> executeBookFlow(input, tocOnly = true)
         "rule.split" -> RuleAnalyzer(text("rule"), input.get("code")?.asBoolean ?: false).splitRule(text("operator"))
         "rule.inner" -> RuleAnalyzer(text("rule"), true).innerRule("{$.") { path -> input.getAsJsonObject("values").get(path)?.asString }
         "regex.first" -> AnalyzeByRegex.getElement(text("text"), input.getAsJsonArray("patterns").map { it.asString }.toTypedArray())
@@ -195,7 +196,7 @@ fun main(args: Array<String>) {
             mapOf("id" to id, "execution" to "unsupported", "reason" to error.message)
         } catch (error: Throwable) {
             // 虚拟机资源故障属于执行器失败，不能伪装成被测函数的业务异常。
-            if (error is VirtualMachineError || error is LinkageError || item.get("operation").asString == "flow.book") {
+            if (error is VirtualMachineError || error is LinkageError || item.get("operation").asString.startsWith("flow.")) {
                 mapOf("id" to id, "execution" to "runner-failed", "reason" to "${error.javaClass.name}: ${error.message}")
             } else {
                 mapOf("id" to id, "execution" to "completed", "outcome" to "throw",

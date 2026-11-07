@@ -11,7 +11,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   } catch (error) {
     result = error instanceof UnsupportedOperation
       ? { id: item.id, execution: 'unsupported', reason: error.message }
-      : item.operation === 'flow.book' || error instanceof FlowFixtureError
+      : item.operation.startsWith('flow.') || error instanceof FlowFixtureError
       ? { id: item.id, execution: 'runner-failed', reason: error.message }
       : { id: item.id, execution: 'completed', outcome: 'throw', error: { class: error instanceof ObservedError ? error.rawClass : error.name, message: error.message } }
   }

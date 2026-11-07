@@ -18,7 +18,7 @@ private fun JsonObject.text(key: String): String = get(key)?.takeUnless { it.isJ
 private fun JsonObject.rule(key: String): JsonObject = getAsJsonObject(key) ?: JsonObject()
 
 /** 只覆盖声明式、离线的文本书源分支。应用宿主编排以固定源码为依据。 */
-internal fun executeBookFlow(input: JsonObject): Any {
+internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
     val source = input.rule("source")
     val sourceUrl = source.text("bookSourceUrl")
     val unsupported = listOf(
@@ -33,6 +33,8 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val headers = source.text("header").takeIf(String::isNotEmpty)?.let {
         JsonParser.parseString(it).asJsonObject.entrySet().associate { (name, value) -> name.lowercase() to value.asString }
     }.orEmpty()
+    val variables = input.rule("bookVariables").entrySet().associate { (key, value) -> key to value.asString }.toMutableMap()
+    val variableKeys = input.getAsJsonArray("variableKeys")?.map { it.asString }
     val stages = linkedMapOf<String, Any>()
     val requests = mutableListOf<Map<String, Any?>>()
     val output = mapOf("stages" to stages, "requests" to requests)
@@ -58,17 +60,26 @@ internal fun executeBookFlow(input: JsonObject): Any {
     }
     fun request(stage: String, url: String) = request(stage, FlowRequest(url, headers))
     fun result(stage: String, status: String, value: Any?, error: Map<String, String>? = null) {
-        stages[stage] = mapOf("status" to status, "value" to value) + (error?.let { mapOf("error" to it) } ?: emptyMap())
+        stages[stage] = buildMap {
+            put("status", status)
+            put("value", value)
+            if (error != null) put("error", error)
+            if (variableKeys != null && (stage == "detail" || stage == "toc")) {
+                put("variables", variables.filterKeys { it in variableKeys })
+            }
+        }
     }
     fun field(rule: String, body: Any, unescape: Boolean = true): String {
         if (rule.isEmpty()) return ""
-        val value = if (rule.startsWith("$.") || rule.startsWith("$[")) {
-            AnalyzeByJSonPath(body).getString(rule).orEmpty()
-        } else corpusCssString(rule, body)
+        val value = when {
+            AppPattern.JS_PATTERN.matcher(rule).find() -> corpusScriptString(rule, body, variables)
+            rule.startsWith("$.") || rule.startsWith("$[") -> AnalyzeByJSonPath(body).getString(rule).orEmpty()
+            else -> corpusCssString(rule, body)
+        }
         return if (unescape) Parser.unescapeEntities(value, false).trim() else value
     }
     fun nodes(rule: String, body: String): List<Any> = when {
-        AppPattern.JS_PATTERN.matcher(rule).find() -> corpusScriptNodes(rule, body)
+        AppPattern.JS_PATTERN.matcher(rule).find() -> corpusScriptNodes(rule, body, variables)
         rule.startsWith("$.") || rule.startsWith("$[") -> AnalyzeByJSonPath(body).getList(rule).orEmpty()
         else -> AnalyzeByJSoup(body).getElements(rule)
     }
@@ -89,34 +100,42 @@ internal fun executeBookFlow(input: JsonObject): Any {
         }
     }
 
-    val searchRule = source.rule("ruleSearch")
-    val detailRule = source.rule("ruleBookInfo")
-    val searchPlan = flowSearchRequest(source.text("searchUrl"), input.text("keyword"), headers) { resolve(sourceUrl, it) }
-    val (searchBody, searchBase) = request("search", searchPlan)
-    val bookUrlPattern = source.text("bookUrlPattern")
-    val directDetail = bookUrlPattern.isNotEmpty() && Regex(bookUrlPattern).matches(searchBase)
-    val rows = if (directDetail) emptyList() else nodes(searchRule.text("bookList"), searchBody)
-    // BookList 在列表为空且未声明详情 URL 模式时尝试详情规则。
-    val fallback = directDetail || (rows.isEmpty() && bookUrlPattern.isEmpty())
-    val candidates = if (fallback) {
-        listOf(fields(detailRule, searchBody, searchBase) + ("bookUrl" to searchBase))
+    val tocUrl: String
+    val cachedToc: Pair<String, String>?
+    if (tocOnly) {
+        tocUrl = input.rule("book").text("tocUrl")
+        cachedToc = null
     } else {
-        rows.map { fields(searchRule, it, searchBase).let { book -> book + ("bookUrl" to (book["bookUrl"] ?: searchBase)) } }
-    }.filter { it.containsKey("name") }.distinctBy { it["bookUrl"] }
-    result("search", if (candidates.isEmpty()) "empty" else "success", candidates)
-    val candidate = candidates.firstOrNull() ?: return output
+        val searchRule = source.rule("ruleSearch")
+        val detailRule = source.rule("ruleBookInfo")
+        val searchPlan = flowSearchRequest(source.text("searchUrl"), input.text("keyword"), headers) { resolve(sourceUrl, it) }
+        val (searchBody, searchBase) = request("search", searchPlan)
+        val bookUrlPattern = source.text("bookUrlPattern")
+        val directDetail = bookUrlPattern.isNotEmpty() && Regex(bookUrlPattern).matches(searchBase)
+        val rows = if (directDetail) emptyList() else nodes(searchRule.text("bookList"), searchBody)
+        // BookList 在列表为空且未声明详情 URL 模式时尝试详情规则。
+        val fallback = directDetail || (rows.isEmpty() && bookUrlPattern.isEmpty())
+        val candidates = if (fallback) {
+            listOf(fields(detailRule, searchBody, searchBase) + ("bookUrl" to searchBase))
+        } else {
+            rows.map { fields(searchRule, it, searchBase).let { book -> book + ("bookUrl" to (book["bookUrl"] ?: searchBase)) } }
+        }.filter { it.containsKey("name") }.distinctBy { it["bookUrl"] }
+        result("search", if (candidates.isEmpty()) "empty" else "success", candidates)
+        val candidate = candidates.firstOrNull() ?: return output
 
-    val bookUrl = candidate.getValue("bookUrl")
-    val (detailBody, detailBase) = if (fallback || bookUrl == searchBase) searchBody to bookUrl else request("detail", bookUrl)
-    // BookInfo 需要显式配置 canReName，才能覆盖已有书名和作者。
-    val detailFields = fields(detailRule, detailBody, detailBase)
-    val preserved = if (detailRule.text("canReName").isBlank()) candidate.filterKeys { it == "name" || it == "author" } else emptyMap()
-    val detail = candidate + detailFields + preserved
-    val tocUrl = detail["tocUrl"] ?: bookUrl
-    result("detail", "success", detail + ("tocUrl" to tocUrl))
+        val bookUrl = candidate.getValue("bookUrl")
+        val (detailBody, detailBase) = if (fallback || bookUrl == searchBase) searchBody to bookUrl else request("detail", bookUrl)
+        // BookInfo 需要显式配置 canReName，才能覆盖已有书名和作者。
+        val detailFields = fields(detailRule, detailBody, detailBase)
+        val preserved = if (detailRule.text("canReName").isBlank()) candidate.filterKeys { it == "name" || it == "author" } else emptyMap()
+        val detail = candidate + detailFields + preserved
+        tocUrl = detail["tocUrl"] ?: bookUrl
+        result("detail", "success", detail + ("tocUrl" to tocUrl))
 
-    // WebBook 仅在目录 URL 与详情 URL 相同时复用详情响应。
-    val (tocBody, tocBase) = if (tocUrl == bookUrl) detailBody to bookUrl else request("toc", tocUrl)
+        // WebBook 在目录 URL 与详情 URL 相同时复用详情响应。
+        cachedToc = if (tocUrl == bookUrl) detailBody to bookUrl else null
+    }
+    val (tocBody, tocBase) = cachedToc ?: request("toc", tocUrl)
     val tocRule = source.rule("ruleToc")
     val listRule = tocRule.text("chapterList")
     val chapterRule = listRule.removePrefix("-").removePrefix("+")
@@ -161,6 +180,7 @@ internal fun executeBookFlow(input: JsonObject): Any {
         return output
     }
     result("toc", "success", chapters.map { it - "url" })
+    if (tocOnly) return output
 
     val chapterIndex = input.get("chapterIndex")?.asInt ?: 0
     val chapter = chapters.getOrNull(chapterIndex) ?: throw FlowFixtureError("目录没有指定章节: $chapterIndex")

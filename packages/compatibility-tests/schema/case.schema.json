@@ -58,7 +58,8 @@
         "corpus.cssString",
         "corpus.script",
         "chapter.number",
-        "flow.book"
+        "flow.book",
+        "flow.toc"
       ]
     },
     "input": {
@@ -1406,6 +1407,60 @@
                 "type": "boolean"
               },
               "chapterIndex": {
+                "type": "integer"
+              },
+              "variableKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "flow.toc"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "source",
+              "book",
+              "bookVariables",
+              "variableKeys",
+              "responses",
+              "requestLimit"
+            ],
+            "properties": {
+              "source": {
+                "type": "object"
+              },
+              "book": {
+                "type": "object"
+              },
+              "bookVariables": {
+                "type": "object"
+              },
+              "variableKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "responses": {
+                "type": "object"
+              },
+              "requestLimit": {
                 "type": "integer"
               }
             },

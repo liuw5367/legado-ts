@@ -402,7 +402,26 @@
       "responses": "object",
       "requestLimit": "integer",
       "requestEvidence": "boolean",
-      "chapterIndex": "integer"
+      "chapterIndex": "integer",
+      "variableKeys": "strings"
+    }
+  },
+  "flow.toc": {
+    "required": [
+      "source",
+      "book",
+      "bookVariables",
+      "variableKeys",
+      "responses",
+      "requestLimit"
+    ],
+    "properties": {
+      "source": "object",
+      "book": "object",
+      "bookVariables": "object",
+      "variableKeys": "strings",
+      "responses": "object",
+      "requestLimit": "integer"
     }
   }
 }

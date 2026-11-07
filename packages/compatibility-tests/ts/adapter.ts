@@ -30,7 +30,7 @@ async function script(host: SourceRuleHost, expression: string, content: unknown
   return result.value
 }
 export async function execute(item: CaseInput): Promise<unknown> {
-  if (item.operation === 'flow.book') return executeBookFlow(item.input)
+  if (item.operation === 'flow.book' || item.operation === 'flow.toc') return executeBookFlow(item.input, item.operation === 'flow.toc')
   const i = item.input
   const str = (key: string): string => String(i[key] ?? '')
   const json = (key: string): string => JSON.stringify(i[key] ?? '')

@@ -79,3 +79,18 @@ test('静态 POST 的 options 覆盖源级同名 Header，请求体保持实际�
   delete item.input.responses.search
   assert.equal((await worker.run(item)).execution, 'runner-failed')
 })
+
+test('Rhino 在同一 worker 中传递书籍变量，并隔离每次流程', async () => {
+  const all = await loadCases()
+  const write = all.find(({ id }) => id === 'flow.synthetic.book-variable.write-read')
+  const noWrite = all.find(({ id }) => id === 'flow.synthetic.book-variable.no-write')
+  const first = await worker.run(write)
+  assert.deepEqual(first.value, write.expected.value)
+  assert.deepEqual((await worker.run(noWrite)).value, noWrite.expected.value)
+  assert.deepEqual(await worker.run(write), first)
+  const explicitEmpty = structuredClone(all.find(({ id }) => id === 'flow.yiove.toc-variable.unset'))
+  explicitEmpty.input.bookVariables.custom = ''
+  const stage = (await worker.run(explicitEmpty)).value.stages.toc
+  assert.deepEqual(stage.variables, { custom: '' })
+  assert.equal(stage.value.length, 4)
+})

@@ -195,7 +195,7 @@ test('输入 schema、覆盖清单和差异台账与实际案例一致', async (
   const coverage = await readJson(join(root, 'coverage.json'))
   const manifest = await readJson(join(root, '../../fixtures/compatibility/method-manifest.json'))
   const memberIds = new Set(manifest.entries.flatMap((entry) => entry.members.map(({ id }) => id)))
-  assert.deepEqual([...new Set(coverage.entries.map((e) => e.operation))].sort(), Object.keys(operations).filter((operation) => operation !== 'flow.book').sort())
+  assert.deepEqual([...new Set(coverage.entries.map((e) => e.operation))].sort(), Object.keys(operations).filter((operation) => !operation.startsWith('flow.')).sort())
   const assigned = new Set()
   for (const entry of coverage.entries) {
     assert.ok(entry.caseIds.length > 0)
@@ -279,6 +279,27 @@ test('POST 离线夹具按方法、完整地址和请求体匹配，并记录实
     assert.equal(result.value.requests[0].bodyBase64, Buffer.from('s=星河&submit=').toString('base64'))
     delete item.input.responses.search
     assert.equal((await worker.run(item)).execution, 'runner-failed')
+  } finally {
+    await worker.close()
+  }
+})
+
+test('TS 同一 worker 中书籍变量按流程传递并按案例隔离', async () => {
+  const all = await loadCases()
+  const write = all.find(({ id }) => id === 'flow.synthetic.book-variable.write-read')
+  const noWrite = all.find(({ id }) => id === 'flow.synthetic.book-variable.no-write')
+  const unset = all.find(({ id }) => id === 'flow.yiove.toc-variable.unset')
+  const worker = new Worker(process.execPath, [join(root, 'scripts/ts-worker.mjs')])
+  try {
+    const first = await worker.run(write)
+    assert.deepEqual(first.value, write.expected.value)
+    assert.deepEqual((await worker.run(noWrite)).value, noWrite.expected.value)
+    assert.deepEqual(await worker.run(write), first)
+    const explicitEmpty = structuredClone(unset)
+    explicitEmpty.input.bookVariables.custom = ''
+    const stage = (await worker.run(explicitEmpty)).value.stages.toc
+    assert.deepEqual(stage.variables, { custom: '' })
+    assert.equal(stage.value.length, 4)
   } finally {
     await worker.close()
   }
