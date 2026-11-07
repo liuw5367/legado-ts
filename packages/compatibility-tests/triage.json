@@ -31,7 +31,7 @@
         "string.split.empty"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "jdk-direct",
@@ -42,8 +42,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-stQAaf/report.json",
+        "output/run-71mZvL/report.json"
+      ],
+      "resolution": "按匹配位置实现 Java split，保持原文尾段且忽略捕获分隔符；空输入和零宽边界与 JDK 一致"
     },
     {
       "id": "R03",

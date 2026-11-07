@@ -508,5 +508,369 @@
     "tags": [
       "normal"
     ]
+  },
+  {
+    "id": "string.split.empty-negative",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "",
+      "pattern": ",",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.empty-positive",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "",
+      "pattern": ",",
+      "limit": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.no-match",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "abc",
+      "pattern": "z",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.captured-delimiter",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "a1b22c",
+      "pattern": "(\\d+)",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.positive-regex-tail",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "a1b22c",
+      "pattern": "\\d+",
+      "limit": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.zero-start",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "abc",
+      "pattern": "(?=a)",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.zero-middle",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "abc",
+      "pattern": "(?=b)",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.zero-end",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "abc",
+      "pattern": "$",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.unicode-zero",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "😀一",
+      "pattern": "",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.split.invalid-limit-one",
+    "family": "string",
+    "operation": "string.split",
+    "input": {
+      "text": "a",
+      "pattern": "[",
+      "limit": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.split(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "__LEGADO_PATTERN__invalid-pattern"
+      ]
+    }
+  },
+  {
+    "id": "pattern.split.empty-negative",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "",
+      "pattern": ",",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.empty-positive",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "",
+      "pattern": ",",
+      "limit": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.no-match",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "abc",
+      "pattern": "z",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.captured-delimiter",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "a1b22c",
+      "pattern": "(\\d+)",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.positive-regex-tail",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "a1b22c",
+      "pattern": "\\d+",
+      "limit": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.zero-start",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "abc",
+      "pattern": "(?=a)",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.zero-middle",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "abc",
+      "pattern": "(?=b)",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.zero-end",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "abc",
+      "pattern": "$",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.unicode-zero",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "😀一",
+      "pattern": "",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "pattern.split.invalid-limit-one",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "a",
+      "pattern": "[",
+      "limit": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "__LEGADO_PATTERN__invalid-pattern"
+      ]
+    }
   }
 ]

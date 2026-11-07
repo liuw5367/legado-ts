@@ -90,7 +90,17 @@
         "string.split.limit.-1",
         "string.split.empty",
         "string.split.zero-width",
-        "string.split.invalid"
+        "string.split.invalid",
+        "string.split.empty-negative",
+        "string.split.empty-positive",
+        "string.split.no-match",
+        "string.split.captured-delimiter",
+        "string.split.positive-regex-tail",
+        "string.split.zero-start",
+        "string.split.zero-middle",
+        "string.split.zero-end",
+        "string.split.unicode-zero",
+        "string.split.invalid-limit-one"
       ]
     },
     {
@@ -376,7 +386,17 @@
       "caseIds": [
         "pattern.split.limit.-1",
         "pattern.split.limit.0",
-        "pattern.split.limit.2"
+        "pattern.split.limit.2",
+        "pattern.split.empty-negative",
+        "pattern.split.empty-positive",
+        "pattern.split.no-match",
+        "pattern.split.captured-delimiter",
+        "pattern.split.positive-regex-tail",
+        "pattern.split.zero-start",
+        "pattern.split.zero-middle",
+        "pattern.split.zero-end",
+        "pattern.split.unicode-zero",
+        "pattern.split.invalid-limit-one"
       ]
     },
     {

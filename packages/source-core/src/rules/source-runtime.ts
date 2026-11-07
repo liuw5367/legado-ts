@@ -506,10 +506,22 @@ const legadoJavaReplace = (input, regex, replacement, replaceAll) => {
 }
 const legadoJavaSplit = (text, separator, limit) => {
   const max = limit === undefined ? 0 : Number(limit)
-  if (max === 1) return [text]
-  const regex = legadoJavaRegex(separator)
-  let values = text.split(regex)
-  if (max > 0 && values.length > max) values = values.slice(0, max - 1).concat(values.slice(max - 1).join(String(separator)))
+  const compiled = separator instanceof RegExp ? separator : legadoJavaRegex(separator)
+  const regex = new RegExp(compiled.source, compiled.flags.includes("g") ? compiled.flags : compiled.flags + "g")
+  const values = []
+  let cursor = 0
+  let match
+  // Java 不把捕获分隔符写入结果；正数 limit 的尾段必须保留原文，零宽起始匹配不产生首空串。
+  while ((match = regex.exec(text)) !== null) {
+    if (!(match.index === 0 && match[0].length === 0)) {
+      if (max > 0 && values.length === max - 1) break
+      values.push(text.slice(cursor, match.index))
+      cursor = match.index + match[0].length
+    }
+    if (match[0].length === 0) regex.lastIndex = match.index + 1
+  }
+  if (cursor === 0 && values.length === 0) return [text]
+  values.push(text.slice(cursor))
   if (max === 0) while (values.length > 0 && values[values.length - 1] === "") values.pop()
   return values
 }
@@ -1135,6 +1147,7 @@ const legadoPattern = {
     const patternApi = {
       pattern: () => patternText,
       flags: () => numericFlags,
+      split: (value, limit) => legadoList(legadoJavaSplit(String(value), makeRegex(false), limit)),
       matcher: (value) => {
       const input = String(value ?? "")
       const regex = makeRegex(true)
