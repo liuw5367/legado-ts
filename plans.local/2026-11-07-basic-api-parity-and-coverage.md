@@ -106,7 +106,7 @@
 | E08 | url.parts.invalid/empty，2 例 | 语义 malformed-url；无请求、副作用或旧值覆盖 |
 | O01 | rule.inner.basic，1 个未支持项 | 内部方法观察保留；通过实际内嵌规则验证，不新增只供测试的公开 API |
 
-R01～R11 覆盖 19 个非纯错误表达差异；E01～E08 覆盖 16 个双方抛错项；O01 对应唯一 unsupported。归因校准可能改变其中归类，但必须记录证据与原因，不能删除原记录。
+R01～R11 覆盖 20 项根因任务（包含双方抛错但原因不同的 URLDecoder.invalid）；E01～E08 覆盖 15 项纯错误表达任务；O01 对应唯一 unsupported。归因校准可能改变其中归类，但必须记录证据与原因，不能删除原记录。
 
 #### 四、阶段二：按根因修复基础行为（4～6 人日）
 
@@ -182,6 +182,7 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 每个批次可独立 revert；没有数据库迁移、部署或外部业务写入。台账、案例和原始报告可保留供复现，回退某个运行时修复不需要删除对应失败案例。异常语义放宽须能回退为 rawComparison 检查，历史原始信息不丢失。
 
 ## 完成记录
+- 阶段一已实现：保留原 114 例并增加 7 例，校准 String/Pattern、Java Base64、JSON bridge/read 的比较入口；增加 triage/coverage、原始与行为双比较及窄错误标记。121 例执行为 98 一致、22 待修行为差异、1 内部观察未支持、0 执行器故障，15 项异常语义等价；报告 output/run-aY0Xdr/report.md。已确认 String null 为适配影响，List null 仍需产品修复。
 - 本轮完成只读核查和详细草稿；尚未实施阶段一～三。
 - 已核对本地提交、最新 114 例报告、19 个操作契约和实际调用实现；没有修改运行代码、测试或原 Android 仓库。
 - 官方行为参考：[JDK 21 String](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html)、[JDK 21 URL](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/net/URL.html)、[JDK 21 URLDecoder](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/net/URLDecoder.html)。JDK 规范只用于 Java API；Android 规则以固定源码实际行为为准。

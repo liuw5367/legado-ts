@@ -116,7 +116,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "__LEGADO_PATTERN__invalid-pattern"
+      ]
+    }
   },
   {
     "id": "string.replaceAll.groups",
@@ -167,7 +179,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "__LEGADO_PATTERN__invalid-pattern"
+      ]
+    }
   },
   {
     "id": "string.replaceAll.bad-group",
@@ -184,7 +208,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-group",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "No group"
+      ]
+    }
   },
   {
     "id": "string.replaceFirst.groups",
@@ -235,7 +271,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "__LEGADO_PATTERN__invalid-pattern"
+      ]
+    }
   },
   {
     "id": "string.replaceFirst.bad-group",
@@ -252,7 +300,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-group",
+      "jvm": [
+        "java.lang.IndexOutOfBoundsException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "No group"
+      ]
+    }
   },
   {
     "id": "pattern.quote.normal",
@@ -357,7 +417,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "overflow",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "out of range"
+      ]
+    }
   },
   {
     "id": "integer.parseLong.invalid",
@@ -372,6 +444,69 @@
     },
     "tags": [
       "error"
+    ],
+    "errorEquivalence": {
+      "category": "invalid-number",
+      "jvm": [
+        "java.lang.NumberFormatException"
+      ],
+      "ts": [
+        "RangeError"
+      ],
+      "tsMessageIncludes": [
+        "invalid integer"
+      ]
+    }
+  },
+  {
+    "id": "pattern.split.limit.-1",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "a,b,,",
+      "pattern": ",",
+      "limit": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "pattern.split.limit.0",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "a,b,,",
+      "pattern": ",",
+      "limit": 0
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "pattern.split.limit.2",
+    "family": "string",
+    "operation": "pattern.split",
+    "input": {
+      "text": "a,b,,",
+      "pattern": ",",
+      "limit": 2
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.split(CharSequence,int)"
+    },
+    "tags": [
+      "normal"
     ]
   }
 ]

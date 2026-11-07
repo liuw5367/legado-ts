@@ -3,6 +3,9 @@ package compat
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.jayway.jsonpath.Configuration
+import com.jayway.jsonpath.JsonPath
+import com.jayway.jsonpath.Option
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
 import io.legado.app.model.analyzeRule.AnalyzeByJSonPath
 import io.legado.app.model.analyzeRule.AnalyzeByRegex
@@ -25,9 +28,10 @@ private fun execute(item: JsonObject): Any? {
         "rule.inner" -> RuleAnalyzer(text("rule"), true).innerRule("{$.") { path -> input.getAsJsonObject("values").get(path)?.asString }
         "regex.first" -> AnalyzeByRegex.getElement(text("text"), input.getAsJsonArray("patterns").map { it.asString }.toTypedArray())
         "regex.all" -> AnalyzeByRegex.getElements(text("text"), input.getAsJsonArray("patterns").map { it.asString }.toTypedArray())
-        "string.split" -> Pattern.compile(text("pattern")).split(text("text"), input.get("limit").asInt).toList()
-        "string.replaceAll" -> Pattern.compile(text("pattern")).matcher(text("text")).replaceAll(text("replacement"))
-        "string.replaceFirst" -> Pattern.compile(text("pattern")).matcher(text("text")).replaceFirst(text("replacement"))
+        "pattern.split" -> Pattern.compile(text("pattern")).split(text("text"), input.get("limit").asInt).toList()
+        "string.split" -> java.lang.String(text("text")).split(text("pattern"), input.get("limit").asInt).toList()
+        "string.replaceAll" -> java.lang.String(text("text")).replaceAll(text("pattern"), text("replacement"))
+        "string.replaceFirst" -> java.lang.String(text("text")).replaceFirst(text("pattern"), text("replacement"))
         "pattern.quote" -> Pattern.quote(text("text"))
         "integer.parseLong" -> mapOf("type" to "integer", "decimal" to java.lang.Long.parseLong(text("text")).toString())
         "encoding.base64Encode" -> Base64.getEncoder().encodeToString(text("text").toByteArray(Charsets.UTF_8))
@@ -43,6 +47,7 @@ private fun execute(item: JsonObject): Any? {
         }
         "css.string" -> AnalyzeByJSoup(text("content")).getString(text("rule"))
         "css.list" -> AnalyzeByJSoup(text("content")).getStringList(text("rule"))
+        "json.read" -> JsonPath.using(Configuration.defaultConfiguration().addOptions(Option.ALWAYS_RETURN_LIST)).parse(text("content")).read<Any>(text("rule"))
         "json.string" -> AnalyzeByJSonPath(text("content")).getString(text("rule"))
         "json.list" -> AnalyzeByJSonPath(text("content")).getStringList(text("rule"))
         else -> throw Unsupported("未注册的操作: $operation")

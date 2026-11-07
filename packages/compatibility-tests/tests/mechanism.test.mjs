@@ -113,3 +113,60 @@ test('真实 CLI 拒绝无效参数和空选择，返回执行不完整状态', 
     assert.equal(result.status, 2, result.stderr)
   }
 })
+
+test('行为等价保留原始差异，且错误标记不能匹配缺失方法', () => {
+  const item = { ...fixture, errorEquivalence: { category: 'invalid-pattern', jvm: ['PatternSyntaxException'], ts: ['Error'], tsMessageIncludes: ['__LEGADO_PATTERN__invalid-pattern'] } }
+  const jvm = thrown('PatternSyntaxException', 'Unclosed class')
+  const equal = compareCase(item, jvm, thrown('Error', '__LEGADO_PATTERN__invalid-pattern: bad pattern'))
+  assert.equal(equal.status, 'equal')
+  assert.equal(equal.rawComparison, 'different')
+  assert.equal(equal.errorEquivalent, true)
+  assert.ok(equal.rawDifferences.length > 0)
+  assert.equal(compareCase(item, jvm, thrown('Error', 'method is not defined')).status, 'different')
+  assert.equal(compareCase(item, returned([]), thrown('Error', '__LEGADO_PATTERN__invalid-pattern')).status, 'different')
+})
+test('内部观察未执行不计入 API 通过，执行器故障始终失败', () => {
+  const item = { ...fixture, contractScope: 'reference-observation' }
+  const result = compareCase(item, returned(1), { id: 'test', execution: 'unsupported', reason: '没有独立入口' })
+  const summary = summarize([result])
+  assert.equal(summary.observations, 1)
+  assert.equal(summary.equal, 0)
+  assert.equal(summary.api.total, 0)
+  assert.equal(summary.unsupported, 1)
+  assert.equal(summary.exitCode, 0)
+  assert.equal(summarize([{ ...result, status: 'runner-failed' }]).exitCode, 2)
+})
+test('输入 schema、覆盖清单和差异台账与实际案例一致', async () => {
+  const { operationSchemas } = await import('../scripts/sync-case-schema.mjs')
+  const operations = await readJson(join(root, 'schema/operations.json'))
+  const schema = await readJson(join(root, 'schema/case.schema.json'))
+  assert.deepEqual(schema.allOf, operationSchemas(operations))
+  assert.deepEqual(schema.properties.operation.enum, Object.keys(operations))
+  const cases = await loadCases()
+  const ids = new Set(cases.map((c) => c.id))
+  for (const item of cases) {
+    for (const related of item.relatedCases ?? []) assert.ok(ids.has(related), related)
+  }
+  const coverage = await readJson(join(root, 'coverage.json'))
+  assert.deepEqual(coverage.entries.map((e) => e.operation).sort(), Object.keys(operations).sort())
+  const assigned = new Set()
+  for (const entry of coverage.entries) {
+    assert.ok(entry.caseIds.length > 0)
+    for (const id of entry.caseIds) {
+      assert.ok(ids.has(id), id)
+      assert.equal(cases.find((c) => c.id === id).operation, entry.operation)
+      assigned.add(id)
+    }
+  }
+  assert.equal(assigned.size, cases.length)
+  const triage = await readJson(join(root, 'triage.json'))
+  const observed = new Set()
+  for (const entry of triage.entries) {
+    for (const id of entry.caseIds) {
+      assert.ok(ids.has(id), id)
+      assert.equal(observed.has(id), false, id)
+      observed.add(id)
+    }
+  }
+  assert.equal(observed.size, 36)
+})

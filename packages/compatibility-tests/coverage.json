@@ -1,0 +1,399 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "operation": "rule.split",
+      "method": "RuleAnalyzer.splitRule(String...)",
+      "reference": "upstream-original",
+      "tsEntry": "ts/adapter.ts → rule.split",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "rule.split.normal",
+        "rule.split.quoted",
+        "rule.split.nested",
+        "rule.split.escaped",
+        "rule.split.empty",
+        "rule.split.unclosed",
+        "rule.split.interleave"
+      ]
+    },
+    {
+      "operation": "rule.inner",
+      "method": "RuleAnalyzer.innerRule(String,Int,Int,callback)",
+      "reference": "upstream-original",
+      "tsEntry": "ts/adapter.ts → rule.inner",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "rule.inner.basic"
+      ]
+    },
+    {
+      "operation": "regex.first",
+      "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → regex.first",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "regex.first.groups",
+        "regex.first.none",
+        "regex.first.chain",
+        "regex.first.optional",
+        "regex.first.invalid",
+        "regex.first.empty"
+      ]
+    },
+    {
+      "operation": "regex.all",
+      "method": "AnalyzeByRegex.getElements(String,Array<String>,Int)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → regex.all",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "regex.all.groups",
+        "regex.all.none",
+        "regex.all.chain",
+        "regex.all.optional",
+        "regex.all.invalid",
+        "regex.all.empty"
+      ]
+    },
+    {
+      "operation": "string.split",
+      "method": "java.lang.String.split(String,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.split",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.split.limit.0",
+        "string.split.limit.1",
+        "string.split.limit.2",
+        "string.split.limit.-1",
+        "string.split.empty",
+        "string.split.zero-width",
+        "string.split.invalid"
+      ]
+    },
+    {
+      "operation": "string.replaceAll",
+      "method": "java.lang.String.replaceAll(String,String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.replaceAll",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.replaceAll.groups",
+        "string.replaceAll.none",
+        "string.replaceAll.invalid",
+        "string.replaceAll.bad-group"
+      ]
+    },
+    {
+      "operation": "string.replaceFirst",
+      "method": "java.lang.String.replaceFirst(String,String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.replaceFirst",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.replaceFirst.groups",
+        "string.replaceFirst.none",
+        "string.replaceFirst.invalid",
+        "string.replaceFirst.bad-group"
+      ]
+    },
+    {
+      "operation": "pattern.quote",
+      "method": "java.util.regex.Pattern.quote(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → pattern.quote",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "pattern.quote.normal",
+        "pattern.quote.embedded-end",
+        "pattern.quote.empty",
+        "pattern.quote.unicode"
+      ]
+    },
+    {
+      "operation": "integer.parseLong",
+      "method": "java.lang.Long.parseLong(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → integer.parseLong",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "integer.parseLong.safe",
+        "integer.parseLong.max",
+        "integer.parseLong.overflow",
+        "integer.parseLong.invalid"
+      ]
+    },
+    {
+      "operation": "encoding.base64Encode",
+      "method": "java.util.Base64.Encoder.encodeToString(byte[])",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.base64Encode",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "encoding.base64Encode.empty",
+        "encoding.base64Encode.ascii",
+        "encoding.base64Encode.unicode"
+      ]
+    },
+    {
+      "operation": "encoding.base64Decode",
+      "method": "java.util.Base64.Decoder.decode(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.base64Decode",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "encoding.base64Decode.empty",
+        "encoding.base64Decode.normal",
+        "encoding.base64Decode.unpadded",
+        "encoding.base64Decode.invalid",
+        "encoding.base64Decode.tail-bits"
+      ]
+    },
+    {
+      "operation": "encoding.urlEncode",
+      "method": "java.net.URLEncoder.encode(String,String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.urlEncode",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "encoding.urlEncode.empty",
+        "encoding.urlEncode.normal",
+        "encoding.urlEncode.escaped",
+        "encoding.urlEncode.invalid"
+      ]
+    },
+    {
+      "operation": "encoding.urlDecode",
+      "method": "java.net.URLDecoder.decode(String,String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.urlDecode",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "encoding.urlDecode.empty",
+        "encoding.urlDecode.normal",
+        "encoding.urlDecode.escaped",
+        "encoding.urlDecode.invalid"
+      ]
+    },
+    {
+      "operation": "encoding.md5",
+      "method": "java.security.MessageDigest.digest(byte[])",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → encoding.md5",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "encoding.md5.empty",
+        "encoding.md5.normal",
+        "encoding.md5.unicode"
+      ]
+    },
+    {
+      "operation": "url.parts",
+      "method": "java.net.URL getters",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → url.parts",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "url.parts.normal",
+        "url.parts.no-query",
+        "url.parts.relative",
+        "url.parts.ipv6",
+        "url.parts.ftp",
+        "url.parts.invalid",
+        "url.parts.empty"
+      ]
+    },
+    {
+      "operation": "css.string",
+      "method": "AnalyzeByJSoup.getString(String)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → css.string",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.string.legacy",
+        "css.string.css",
+        "css.string.negative",
+        "css.string.textNodes",
+        "css.string.attribute",
+        "css.string.none",
+        "css.string.xml",
+        "css.string.selfclose",
+        "css.string.invalid",
+        "css.string.quoted-at",
+        "css.string.empty-rule"
+      ]
+    },
+    {
+      "operation": "css.list",
+      "method": "AnalyzeByJSoup.getStringList(String)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → css.list",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.list.legacy",
+        "css.list.css",
+        "css.list.negative",
+        "css.list.textNodes",
+        "css.list.attribute",
+        "css.list.none",
+        "css.list.xml",
+        "css.list.selfclose",
+        "css.list.invalid",
+        "css.list.quoted-at",
+        "css.list.empty-rule",
+        "corpus.source-0.search-name",
+        "corpus.source-0.search-bookUrl",
+        "corpus.source-1.search-author"
+      ]
+    },
+    {
+      "operation": "json.string",
+      "method": "AnalyzeByJSonPath.getString(String)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → json.string",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.string.scalar",
+        "json.string.list",
+        "json.string.missing",
+        "json.string.null",
+        "json.string.empty",
+        "json.string.filter",
+        "json.string.combined",
+        "json.string.inline",
+        "json.string.invalid-json",
+        "json.string.invalid-path",
+        "json.string.inner-reference"
+      ]
+    },
+    {
+      "operation": "json.list",
+      "method": "AnalyzeByJSonPath.getStringList(String)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → json.list",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.list.scalar",
+        "json.list.list",
+        "json.list.missing",
+        "json.list.null",
+        "json.list.empty",
+        "json.list.filter",
+        "json.list.combined",
+        "json.list.inline",
+        "json.list.invalid-json",
+        "json.list.invalid-path"
+      ]
+    },
+    {
+      "operation": "pattern.split",
+      "method": "Pattern.split(CharSequence,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → pattern.split",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "pattern.split.limit.-1",
+        "pattern.split.limit.0",
+        "pattern.split.limit.2"
+      ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → json.read",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.scalar",
+        "json.read.null",
+        "json.read.list"
+      ]
+    }
+  ]
+}

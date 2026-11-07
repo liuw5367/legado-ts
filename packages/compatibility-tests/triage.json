@@ -1,0 +1,424 @@
+{
+  "version": 1,
+  "baselineCommit": "b602ad0",
+  "entries": [
+    {
+      "id": "R01",
+      "caseIds": [
+        "encoding.urlDecode.empty",
+        "encoding.urlDecode.normal",
+        "encoding.urlDecode.escaped",
+        "encoding.urlDecode.invalid"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.net.URLDecoder.decode(String,String)"
+      },
+      "tsEntry": "ts/adapter.ts → encoding.urlDecode",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R02",
+      "caseIds": [
+        "string.split.empty"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.lang.String.split(String,int)"
+      },
+      "tsEntry": "ts/adapter.ts → string.split",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R03",
+      "caseIds": [
+        "url.parts.no-query",
+        "url.parts.ipv6"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.net.URL getters"
+      },
+      "tsEntry": "ts/adapter.ts → url.parts",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R04",
+      "caseIds": [
+        "json.string.null",
+        "json.list.null"
+      ],
+      "classification": "adapter-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSonPath.getString(String)"
+      },
+      "tsEntry": "ts/adapter.ts → json.string",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ],
+      "resolution": "字符串 null 的差异来自适配器；列表 null 仍有实际边界差异，保持 open"
+    },
+    {
+      "id": "R05",
+      "caseIds": [
+        "json.string.invalid-json",
+        "json.list.invalid-json"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSonPath.getString(String)"
+      },
+      "tsEntry": "ts/adapter.ts → json.string",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R06",
+      "caseIds": [
+        "json.string.invalid-path",
+        "json.list.invalid-path"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSonPath.getString(String)"
+      },
+      "tsEntry": "ts/adapter.ts → json.string",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R07",
+      "caseIds": [
+        "css.string.xml",
+        "css.list.xml"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSoup.getString(String)"
+      },
+      "tsEntry": "ts/adapter.ts → css.string",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R08",
+      "caseIds": [
+        "css.string.selfclose",
+        "css.list.selfclose"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSoup.getString(String)"
+      },
+      "tsEntry": "ts/adapter.ts → css.string",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R09",
+      "caseIds": [
+        "encoding.base64Decode.tail-bits"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.util.Base64.Decoder.decode(String)"
+      },
+      "tsEntry": "ts/adapter.ts → encoding.base64Decode",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R10",
+      "caseIds": [
+        "regex.first.optional"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+      },
+      "tsEntry": "ts/adapter.ts → regex.first",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "R11",
+      "caseIds": [
+        "rule.split.escaped"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-original",
+        "method": "RuleAnalyzer.splitRule(String...)"
+      },
+      "tsEntry": "ts/adapter.ts → rule.split",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E01",
+      "caseIds": [
+        "css.string.invalid",
+        "css.list.invalid"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSoup.getString(String)"
+      },
+      "tsEntry": "ts/adapter.ts → css.string",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E02",
+      "caseIds": [
+        "encoding.base64Decode.invalid"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.util.Base64.Decoder.decode(String)"
+      },
+      "tsEntry": "ts/adapter.ts → encoding.base64Decode",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E03",
+      "caseIds": [
+        "regex.first.invalid",
+        "regex.all.invalid"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByRegex.getElement(String,Array<String>,Int)"
+      },
+      "tsEntry": "ts/adapter.ts → regex.first",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E04",
+      "caseIds": [
+        "rule.split.unclosed"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-original",
+        "method": "RuleAnalyzer.splitRule(String...)"
+      },
+      "tsEntry": "ts/adapter.ts → rule.split",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E05",
+      "caseIds": [
+        "string.split.invalid",
+        "string.replaceAll.invalid",
+        "string.replaceFirst.invalid"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.lang.String.split(String,int)"
+      },
+      "tsEntry": "ts/adapter.ts → string.split",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E06",
+      "caseIds": [
+        "string.replaceAll.bad-group",
+        "string.replaceFirst.bad-group"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.lang.String.replaceAll(String,String)"
+      },
+      "tsEntry": "ts/adapter.ts → string.replaceAll",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E07",
+      "caseIds": [
+        "integer.parseLong.overflow",
+        "integer.parseLong.invalid"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.lang.Long.parseLong(String)"
+      },
+      "tsEntry": "ts/adapter.ts → integer.parseLong",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "E08",
+      "caseIds": [
+        "url.parts.invalid",
+        "url.parts.empty"
+      ],
+      "classification": "error-equivalent",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "java.net.URL getters"
+      },
+      "tsEntry": "ts/adapter.ts → url.parts",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ]
+    },
+    {
+      "id": "O01",
+      "caseIds": [
+        "rule.inner.basic"
+      ],
+      "classification": "reference-observation",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-original",
+        "method": "RuleAnalyzer.innerRule(String,Int,Int,callback)"
+      },
+      "tsEntry": "ts/adapter.ts → rule.inner",
+      "evidence": [
+        "output/run-YJF6TX/report.json",
+        "output/run-YJF6TX/jvm.json",
+        "output/run-YJF6TX/ts.json",
+        "output/run-aY0Xdr/report.json"
+      ],
+      "resolution": "保留内部观察，json.string.inner-reference 已以真实 bridge 执行通过；未计入 API 覆盖通过"
+    }
+  ]
+}

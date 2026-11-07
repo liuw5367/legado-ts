@@ -39,7 +39,9 @@
         "css.string",
         "css.list",
         "json.string",
-        "json.list"
+        "json.list",
+        "pattern.split",
+        "json.read"
       ]
     },
     "input": {
@@ -98,6 +100,20 @@
           "items": {
             "type": "string"
           }
+        },
+        "jvmMessageIncludes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tsMessageIncludes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -123,6 +139,23 @@
           }
         }
       }
+    },
+    "contractScope": {
+      "enum": [
+        "api",
+        "reference-observation"
+      ]
+    },
+    "observationReason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "relatedCases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
     }
   },
   "allOf": [
@@ -645,6 +678,68 @@
         "properties": {
           "operation": {
             "const": "json.list"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "rule"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "pattern.split"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "text",
+              "pattern",
+              "limit"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "json.read"
           }
         }
       },

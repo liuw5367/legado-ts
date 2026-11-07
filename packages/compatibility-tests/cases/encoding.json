@@ -102,7 +102,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-base64",
+      "jvm": [
+        "java.lang.IllegalArgumentException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Base64"
+      ]
+    }
   },
   {
     "id": "encoding.base64Decode.tail-bits",

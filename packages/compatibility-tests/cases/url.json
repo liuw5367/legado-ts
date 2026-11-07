@@ -88,7 +88,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "malformed-url",
+      "jvm": [
+        "java.net.MalformedURLException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Malformed URL"
+      ]
+    }
   },
   {
     "id": "url.parts.empty",
@@ -103,6 +115,18 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "malformed-url",
+      "jvm": [
+        "java.net.MalformedURLException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "tsMessageIncludes": [
+        "Malformed URL"
+      ]
+    }
   }
 ]

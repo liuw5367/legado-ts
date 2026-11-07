@@ -318,5 +318,92 @@
     "tags": [
       "error"
     ]
+  },
+  {
+    "id": "json.string.inner-reference",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"name\":\"中文\"}",
+      "rule": "x{$.name}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "normal"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "x中文"
+    }
+  },
+  {
+    "id": "json.read.scalar",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"name\":\"中文\",\"nil\":null,\"items\":[\"甲\",\"乙\"]}",
+      "rule": "$.name"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)"
+    },
+    "tags": [
+      "normal"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "中文"
+      ]
+    }
+  },
+  {
+    "id": "json.read.null",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"name\":\"中文\",\"nil\":null,\"items\":[\"甲\",\"乙\"]}",
+      "rule": "$.nil"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)"
+    },
+    "tags": [
+      "normal"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        null
+      ]
+    }
+  },
+  {
+    "id": "json.read.list",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"name\":\"中文\",\"nil\":null,\"items\":[\"甲\",\"乙\"]}",
+      "rule": "$.items[*]"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)"
+    },
+    "tags": [
+      "normal"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "甲",
+        "乙"
+      ]
+    }
   }
 ]

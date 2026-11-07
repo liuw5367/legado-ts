@@ -54,6 +54,12 @@ export function validateCase(item) {
       || !item.input || typeof item.input !== 'object' || Array.isArray(item.input)
       || !item.reference || !['jdk-direct', 'upstream-original', 'upstream-adapted'].includes(item.reference.kind)
       || typeof item.reference.method !== 'string' || !Array.isArray(item.tags)) throw new Error('案例协议无效')
+  if (item.contractScope !== undefined && !['api', 'reference-observation'].includes(item.contractScope)) throw new Error('契约范围无效')
+  if (item.contractScope === 'reference-observation' && !(typeof item.observationReason === 'string' && item.observationReason.length > 0 && Array.isArray(item.relatedCases) && item.relatedCases.length > 0)) throw new Error('内部观察必须说明原因并关联可执行规则案例')
+  for (const runtime of ['jvm', 'ts']) {
+    const values = item.errorEquivalence?.[`${runtime}MessageIncludes`]
+    if (values !== undefined && (!Array.isArray(values) || !values.every((v) => typeof v === 'string' && v.length > 0))) throw new Error('错误语义标记无效')
+  }
   const shape = inputShapes[item.operation]
   if (!shape) throw new Error(`未声明操作输入契约: ${item.operation}`)
   for (const key of shape.required) {

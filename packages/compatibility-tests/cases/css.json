@@ -269,7 +269,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-selector",
+      "jvm": [
+        "org.jsoup.select.Selector$SelectorParseException"
+      ],
+      "ts": [
+        "failed"
+      ],
+      "tsMessageIncludes": [
+        "CSS"
+      ]
+    }
   },
   {
     "id": "css.list.invalid",
@@ -285,7 +297,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-selector",
+      "jvm": [
+        "org.jsoup.select.Selector$SelectorParseException"
+      ],
+      "ts": [
+        "failed"
+      ],
+      "tsMessageIncludes": [
+        "CSS"
+      ]
+    }
   },
   {
     "id": "css.string.quoted-at",

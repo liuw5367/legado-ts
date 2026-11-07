@@ -40,7 +40,7 @@ CLI 参数错误、空选择、来源失败或执行不完整退出 2；行为�
 - `upstream-original`：直接编译原源码，目前为 RuleAnalyzer。
 - `upstream-adapted`：原算法保持原样，额外提供无运行行为的 Keep 注解或 stderr 调试日志适配；当前包括 Regex、CSS、JSONPath。
 
-TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 NodeEncodingHost。适配器只映射调用和接口结果形态：字符串接口将字段列表按换行合并，列表接口保留条目顺序；正则链调用真实 evaluator 并传递匹配结果。不能在参考执行器中重新实现待比较算法。独立 `innerRule` 在 TS 无对应入口，当前显式报告 unsupported；JSONPath 内嵌规则另有双端案例。
+TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 JsonPathParserAdapter。JSON 字符串/列表通过真实 Java bridge 转换；CSS 字段列表按对应接口合并或保留条目顺序；正则链调用真实 evaluator 并传递匹配结果。不能在参考执行器中重新实现待比较算法。独立 `innerRule` 在 TS 无对应入口，当前显式报告 unsupported；JSONPath 内嵌规则另有双端案例。
 
 本包初期只覆盖纯函数和轻依赖解析器。AnalyzeRule、AnalyzeUrl、WebBook 等应用入口没有被整体编译。JVM 与 TS 的可观察入口不同，输出差异需要结合适配边界判断，不能将报告中的全部条目直接视为已确认缺陷。
 
@@ -69,3 +69,13 @@ TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJ
 完整搜索、详情、目录、正文流程尚未实现。后续增加对应操作时，继续使用共享案例与结果协议，并补充离线响应、请求轨迹和上下文；只有书源定义不能证明完整流程通过。
 
 旧测试继续保留。新机制稳定后，按旧断言到新案例的覆盖映射分批删除重复测试；独有安全、取消、资源释放和历史缺陷回归必须保留或迁移，删除前执行受影响验证。
+
+## 行为兼容判定与覆盖台账
+
+`triage.json` 为原始差异的处理记录，`coverage.json` 按方法/操作列出案例与必要维度。每次运行额外生成 `output/run-*/coverage.json`，状态由本次实际结果导出；选中案例不完整时为 not-run，不把历史通过当作本次证据。
+
+报告分别显示 rawComparison 与 behaviorComparison。错误语义映射可带 jvmMessageIncludes / tsMessageIncludes，要求相应异常类别与消息标记同时匹配；方法不存在与非法输入不能等价。异常等价案例单独统计，原始差异和原始异常不丢失。Android 合法返回而 TS 中止始终是行为差异。
+
+`contractScope=reference-observation` 仅用于没有等价产品入口的内部观察，必须填写 observationReason 与 relatedCases。观察项保持原始状态，不计 API 通过；可执行的关联规则案例继续严格验收。观察项的执行器故障仍会导致整体失败，不支持仅从产品契约分母分离，不隐藏。
+
+JSON 字符串/列表直接调用实际 Java bridge；json.read 使用 Jayway ALWAYS_RETURN_LIST 与真实 TS JsonPath adapter 观察原值。Java Base64 对照使用 Packages.java.util.Base64，NodeEncodingHost 的严格输入策略由原 TS 测试单独验证。新增 operation 后运行 `node packages/compatibility-tests/scripts/sync-case-schema.mjs` 同步编辑器 schema；一致性测试验证它与 operations.json 无漂移。

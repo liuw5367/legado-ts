@@ -3,7 +3,7 @@ import { compileRule } from '../../source-core/src/rules/compiler.ts'
 import { evaluateRule } from '../../source-core/src/rules/evaluator.ts'
 import { MemoryVariableView } from '../../source-core/src/rules/variables.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
-import { NodeEncodingHost } from '../../source-node/src/encoding.ts'
+import { JsonPathParserAdapter } from '../../source-node/src/jsonpath.ts'
 import type { NormalizedSource, WorkflowRuleOutput } from '../../source-core/src/index.ts'
 
 interface CaseInput {
@@ -22,10 +22,10 @@ function checked(output: WorkflowRuleOutput): unknown {
   if (output.status !== 'success' && output.status !== 'empty') throw new ObservedError(output.status, output.message ?? output.status)
   return output.value
 }
-async function script(host: SourceRuleHost, expression: string): Promise<unknown> {
+async function script(host: SourceRuleHost, expression: string, content: unknown = ''): Promise<unknown> {
   // 在真正的 QuickJS/Java bridge 内捕获异常，保留原始错误；不把宿主包装状态误当 API 返回值。
   const code = `JSON.stringify((function(){try{return {outcome:'return',value:(function(){${expression}})()}}catch(e){return {outcome:'throw',error:{class:String(e.name||'Error'),message:String(e.message||e)}}}})())`
-  const raw = checked(await host.executeJavaScript(code, 'content', source))
+  const raw = checked(await host.executeJavaScript(code, 'content', source, content))
   const result = JSON.parse(String(raw)) as { outcome: string; value?: unknown; error?: { class: string; message: string } }
   if (result.outcome === 'throw') throw new ObservedError(result.error!.class, result.error!.message)
   return result.value
@@ -37,6 +37,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const host = new SourceRuleHost()
   switch (item.operation) {
     case 'rule.split': {
+      if (i.code === true) throw new UnsupportedOperation('TS scanner 没有独立 code 模式；代码内规则由实际 JSON/JS 入口验证')
       const operator = str('operator') as '&&' | '||' | '%%'
       const result = splitTopLevel(str('rule'), operator)
       if (result.diagnostic) throw new ObservedError(result.diagnostic.code, result.diagnostic.message)
@@ -58,23 +59,26 @@ export async function execute(item: CaseInput): Promise<unknown> {
       }
       return item.operation === 'regex.first' ? rows[0] ?? null : rows
     }
+    case 'pattern.split': return script(host, `return Packages.java.util.regex.Pattern.compile(${json('pattern')}).split(${json('text')},${Number(i.limit)}).toArray().map(function(v){return String(v)})`)
     case 'string.split': return script(host, `return new Packages.java.lang.String(${json('text')}).split(${json('pattern')},${Number(i.limit)}).toArray().map(function(v){return String(v)})`)
     case 'string.replaceAll':
     case 'string.replaceFirst': return script(host, `return String(new Packages.java.lang.String(${json('text')}).${item.operation.slice(7)}(${json('pattern')},${json('replacement')}))`)
     case 'pattern.quote': return script(host, `return Packages.java.util.regex.Pattern.quote(${json('text')})`)
     case 'integer.parseLong': return script(host, `return {type:'integer',decimal:String(Packages.java.lang.Long.parseLong(${json('text')}))}`)
-    case 'encoding.base64Encode': return new NodeEncodingHost().base64Encode(str('text'))
-    case 'encoding.base64Decode': return { type: 'bytes', base64: Buffer.from(new NodeEncodingHost().base64Decode(str('text'))).toString('base64') }
+    case 'encoding.base64Encode': return script(host, `return Packages.java.util.Base64.getEncoder().encodeToString(new Packages.java.lang.String(${json('text')}).getBytes('UTF-8'))`)
+    case 'encoding.base64Decode': return script(host, `var bytes=Packages.java.util.Base64.getDecoder().decode(${json('text')}); return {type:'bytes',base64:Packages.java.util.Base64.getEncoder().encodeToString(bytes)}`)
     case 'encoding.urlEncode': return script(host, `return Packages.java.net.URLEncoder.encode(${json('text')},'UTF-8')`)
     case 'encoding.urlDecode': return script(host, `return Packages.java.net.URLDecoder.decode(${json('text')},'UTF-8')`)
     case 'encoding.md5': return script(host, `return java.md5Encode(${json('text')})`)
     case 'url.parts': return script(host, `var u=java.toURL(${json('url')}${i.base === undefined ? '' : `,${json('base')}`}); return {protocol:u.getProtocol(),host:u.getHost(),port:u.getPort(),defaultPort:u.getDefaultPort(),path:u.getPath(),file:u.getFile(),query:u.getQuery(),ref:u.getRef(),authority:u.getAuthority(),userInfo:u.getUserInfo()}`)
+    case 'json.read': return new JsonPathParserAdapter().evaluate(JSON.parse(str('content')), str('rule'))
+    case 'json.string': return script(host, `return java.getString(${JSON.stringify('@json:' + str('rule'))})`, i.content)
+    case 'json.list': return script(host, `return java.getStringList(${JSON.stringify('@json:' + str('rule'))})`, i.content)
     case 'css.string':
     case 'css.list':
-    case 'json.string':
-    case 'json.list': {
+    {
       // 只做公共接口形态映射：text 字段列表按换行合并，合法空结果分别映射为 null/[] 或空串。
-      const output = await host.evaluate({ source, stage: 'detail', field: 'fixture', rule: item.operation.startsWith('json.') ? `@json:${str('rule')}` : str('rule'), content: i.content })
+      const output = await host.evaluate({ source, stage: 'detail', field: 'fixture', rule: str('rule'), content: i.content })
       const value = checked(output)
       if (item.operation.endsWith('.string')) {
         if (value === null || value === undefined) return item.operation.startsWith('css') ? null : ''

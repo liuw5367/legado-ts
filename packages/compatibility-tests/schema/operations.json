@@ -180,5 +180,27 @@
       "content": "string",
       "rule": "string"
     }
+  },
+  "pattern.split": {
+    "required": [
+      "text",
+      "pattern",
+      "limit"
+    ],
+    "properties": {
+      "text": "string",
+      "pattern": "string",
+      "limit": "integer"
+    }
+  },
+  "json.read": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
   }
 }

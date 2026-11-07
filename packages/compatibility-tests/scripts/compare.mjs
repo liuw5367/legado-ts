@@ -19,20 +19,22 @@ export function differences(jvm, ts, path = '$') {
   }
   return [{ path, jvm, ts }]
 }
-function observed(result, item, runtime) {
+function observed(result, item, runtime, raw = false) {
   if (result.outcome === 'return') return { outcome: 'return', value: result.value }
-  const mapping = item.errorEquivalence
-  const category = mapping?.[runtime]?.includes(result.error.class) ? mapping.category : result.error.class
+  const mapping = raw ? undefined : item.errorEquivalence
+  const matches = mapping?.[runtime]?.includes(result.error.class) && (mapping[`${runtime}MessageIncludes`] ?? []).every((text) => result.error.message.includes(text))
+  const category = matches ? mapping.category : result.error.class
   // 原始异常与日志仍完整保存在 results；仅逐案例声明的异常类别参与语义映射。
-  return mapping?.[runtime]?.includes(result.error.class) ? { outcome: 'throw', errorClass: category } : { outcome: 'throw', errorClass: category, message: result.error.message }
+  return matches ? { outcome: 'throw', errorClass: category } : { outcome: 'throw', errorClass: category, message: result.error.message }
 }
 export function compareCase(item, jvm, ts) {
   try { validateResult(jvm, item.id); validateResult(ts, item.id) } catch (error) {
     return { id: item.id, family: item.family, status: 'runner-failed', reason: error.message }
   }
   if (jvm.execution !== 'completed' || ts.execution !== 'completed') {
-    return { id: item.id, family: item.family, status: [jvm.execution, ts.execution].includes('runner-failed') ? 'runner-failed' : 'unsupported', jvm, ts }
+    return { id: item.id, family: item.family, contractScope: item.contractScope ?? 'api', rawComparison: 'not-run', behaviorComparison: 'not-run', status: [jvm.execution, ts.execution].includes('runner-failed') ? 'runner-failed' : 'unsupported', jvm, ts }
   }
+  const rawDelta = differences(observed(jvm, item, 'jvm', true), observed(ts, item, 'ts', true))
   const left = observed(jvm, item, 'jvm')
   const right = observed(ts, item, 'ts')
   const delta = differences(left, right)
@@ -49,12 +51,14 @@ export function compareCase(item, jvm, ts) {
       for (const difference of differences(item.expected, result)) expectedFailures.push({ runtime, ...difference })
     }
   }
-  return { id: item.id, family: item.family, status: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', differences: unexpected, allowed, expectedFailures }
+  return { id: item.id, family: item.family, contractScope: item.contractScope ?? 'api', rawComparison: rawDelta.length ? 'different' : 'equal', rawDifferences: rawDelta, errorEquivalent: rawDelta.length > 0 && delta.length === 0 && left.outcome === 'throw', behaviorComparison: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', status: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', differences: unexpected, allowed, expectedFailures }
 }
 export function assertProvenance(metadata, expected) {
   if (metadata.schemaVersion !== 1 || !metadata.inputHash || !metadata.implementationHash || metadata.inputHash !== expected.inputHash || metadata.implementationHash !== expected.implementationHash) throw new Error('产物版本或输入摘要不匹配，拒绝比较过期输出')
 }
 export function summarize(cases) {
   const counts = Object.fromEntries(['equal', 'different', 'allowed-difference', 'unsupported', 'runner-failed'].map((status) => [status, cases.filter((c) => c.status === status).length]))
-  return { total: cases.length, ...counts, exitCode: counts.unsupported || counts['runner-failed'] ? 2 : counts.different ? 1 : 0 }
+  const api = cases.filter((c) => c.contractScope !== 'reference-observation')
+  const apiCounts = Object.fromEntries(Object.keys(counts).map((status) => [status, api.filter((c) => c.status === status).length]))
+  return { total: cases.length, ...counts, api: { total: api.length, ...apiCounts }, observations: cases.length - api.length, rawDifferent: cases.filter((c) => c.rawComparison === 'different').length, errorEquivalent: cases.filter((c) => c.errorEquivalent).length, exitCode: counts['runner-failed'] || apiCounts.unsupported ? 2 : apiCounts.different ? 1 : 0 }
 }

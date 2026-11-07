@@ -88,7 +88,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "compile-error"
+      ],
+      "tsMessageIncludes": [
+        "invalid-regex"
+      ]
+    }
   },
   {
     "id": "regex.first.empty",
@@ -197,7 +209,19 @@
     },
     "tags": [
       "error"
-    ]
+    ],
+    "errorEquivalence": {
+      "category": "invalid-pattern",
+      "jvm": [
+        "java.util.regex.PatternSyntaxException"
+      ],
+      "ts": [
+        "compile-error"
+      ],
+      "tsMessageIncludes": [
+        "invalid-regex"
+      ]
+    }
   },
   {
     "id": "regex.all.empty",
