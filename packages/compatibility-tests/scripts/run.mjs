@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile, mkdtemp } from 'node:fs/promises'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawnSync, execFileSync } from 'node:child_process'
 import { root, repository, readJson, sha256, stable, git, treeHash, loadCases } from './common.mjs'
 import { prepare } from './prepare-jvm.mjs'
 import { Worker } from './worker.mjs'
@@ -25,9 +25,16 @@ try {
   await mkdir(join(root, 'output'), { recursive: true })
   directory = await mkdtemp(join(root, 'output/run-'))
   await writeFile(join(directory, 'cases.json'), JSON.stringify(cases, null, 2) + '\n')
+  let coreBuildHash
+  if (options.runtime !== 'jvm') {
+    // SourceRuleHost 通过包导出加载 core/dist；先构建并记录产物，防止执行旧 JS 却声明新源码。
+    execFileSync(process.execPath, [join(repository, 'node_modules/typescript/bin/tsc'), '-p', join(repository, 'tsconfig.build.json')], { cwd: repository, stdio: 'pipe' })
+    coreBuildHash = await treeHash(join(repository, 'packages/source-core/dist'))
+  }
   const lock = await readJson(join(root, 'reference-sources.json'))
   const base = {
     schemaVersion: 1,
+    ...(coreBuildHash ? { coreBuildHash } : {}),
     inputHash: sha256(stable(cases)),
     implementationHash: sha256(stable([await treeHash(root), await treeHash(join(repository, 'packages/source-core/src')), await treeHash(join(repository, 'packages/source-node/src')), sha256(await readFile(join(repository, 'pnpm-lock.yaml')))])),
     tsCommit: git(repository, 'rev-parse', 'HEAD').trim(),

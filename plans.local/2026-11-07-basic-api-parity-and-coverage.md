@@ -182,6 +182,7 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 每个批次可独立 revert；没有数据库迁移、部署或外部业务写入。台账、案例和原始报告可保留供复现，回退某个运行时修复不需要删除对应失败案例。异常语义放宽须能回退为 rawComparison 检查，历史原始信息不丢失。
 
 ## 完成记录
+- 校准后发现 SourceRuleHost 通过包名加载 core/dist，原执行入口可能使用旧产物。新增 TS 执行前 core 构建与实际产物摘要；后续修复验证必须经过此入口，不接受旧 dist 结果。
 - 阶段一已实现：保留原 114 例并增加 7 例，校准 String/Pattern、Java Base64、JSON bridge/read 的比较入口；增加 triage/coverage、原始与行为双比较及窄错误标记。121 例执行为 98 一致、22 待修行为差异、1 内部观察未支持、0 执行器故障，15 项异常语义等价；报告 output/run-aY0Xdr/report.md。已确认 String null 为适配影响，List null 仍需产品修复。
 - 本轮完成只读核查和详细草稿；尚未实施阶段一～三。
 - 已核对本地提交、最新 114 例报告、19 个操作契约和实际调用实现；没有修改运行代码、测试或原 Android 仓库。

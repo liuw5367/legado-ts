@@ -79,3 +79,5 @@ TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJ
 `contractScope=reference-observation` 仅用于没有等价产品入口的内部观察，必须填写 observationReason 与 relatedCases。观察项保持原始状态，不计 API 通过；可执行的关联规则案例继续严格验收。观察项的执行器故障仍会导致整体失败，不支持仅从产品契约分母分离，不隐藏。
 
 JSON 字符串/列表直接调用实际 Java bridge；json.read 使用 Jayway ALWAYS_RETURN_LIST 与真实 TS JsonPath adapter 观察原值。Java Base64 对照使用 Packages.java.util.Base64，NodeEncodingHost 的严格输入策略由原 TS 测试单独验证。新增 operation 后运行 `node packages/compatibility-tests/scripts/sync-case-schema.mjs` 同步编辑器 schema；一致性测试验证它与 operations.json 无漂移。
+
+TS 执行前会使用仓库本地 TypeScript 编译 core，保证 SourceRuleHost 包导出加载的是当前源码的 dist；metadata.coreBuildHash 记录实际构建产物摘要。core 构建失败时退出 2，不使用旧 dist 继续比较。
