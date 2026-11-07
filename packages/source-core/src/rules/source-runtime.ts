@@ -4043,7 +4043,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const value = request.onlyDisk === true
         ? await this.cache.getFromDisk!(textValue(request.key), signal)
         : await this.cache.get(textValue(request.key), signal)
-      return decodeSourceCacheValue(this.encoding, value)
+      return decodeSourceCacheValue(this.encoding, value) ?? null
     }
     if (request.kind === 'cache-put') {
       const key = textValue(request.key)
@@ -4061,7 +4061,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       await this.file?.invalidateCacheFile?.(key, signal, source)
       return undefined
     }
-    if (request.kind === 'cache-memory-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFromMemory(textValue(request.key)))
+    if (request.kind === 'cache-memory-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFromMemory(textValue(request.key))) ?? null
     if (request.kind === 'cache-memory-put') {
       await this.cache.putMemory(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), signal)
       return undefined
@@ -4071,12 +4071,12 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       return undefined
     }
     if (request.kind === 'cache-bytes-get') {
-      if (this.cache.getByteArray !== undefined) return this.cache.getByteArray(textValue(request.key), signal)
+      if (this.cache.getByteArray !== undefined) return await this.cache.getByteArray(textValue(request.key), signal) ?? null
       const value = await this.cache.get(textValue(request.key), signal)
       const decoded = decodeSourceCacheValue(this.encoding, value)
-      return decoded instanceof Uint8Array ? decoded : undefined
+      return decoded instanceof Uint8Array ? decoded : null
     }
-    if (request.kind === 'cache-file-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFile(textValue(request.key)))
+    if (request.kind === 'cache-file-get') return decodeSourceCacheValue(this.encoding, await this.cache.getFile(textValue(request.key))) ?? null
     if (request.kind === 'cache-file-put') {
       await this.cache.putFile(textValue(request.key), encodeSourceCacheValue(this.encoding, request.value), Number(request.saveTime) || 0, signal)
       return undefined

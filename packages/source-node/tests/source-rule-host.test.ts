@@ -1760,6 +1760,9 @@ test('JavaScript CacheManager bridge 支持普通、内存和文件缓存', asyn
   const deleted = await evaluate(host, "@js:cache.delete('disk'); cache.get('disk')", '')
   assert.equal(deleted.status, 'empty')
 
+  const missing = await evaluate(host, '@js:JSON.stringify([cache.get("disk") === null, cache.get("disk", true) === null, cache.getFromMemory("missing") === null, cache.getFile("missing") === null, cache.getByteArray("missing") === null])', '')
+  assert.deepEqual(JSON.parse(String(missing.value)), [true, true, true, true, true])
+
   const overwritten = await evaluate(host, "@js:cache.putMemory('ttl', 'stale'); cache.put('ttl', 'fresh', 60); cache.getFromMemory('ttl')", '')
   assert.equal(overwritten.status, 'empty', '带过期时间的普通缓存会清除旧的永久内存副本')
 })
