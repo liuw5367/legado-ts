@@ -160,15 +160,15 @@ test('书源规则支持 matchText 伪元素的同级位置后缀', async () => 
   assert.deepEqual(result.value, ['C'])
 })
 
-test('带 XML 声明的默认规则保持 Android XML 大小写语义', async () => {
+test('XML 标签选择遵循 Jsoup normalName，属性名保留原大小写', async () => {
   const host = new SourceRuleHost()
   const xml = '<?xml version="1.0"?><Root><Item ID="upper">大写</Item><item id="lower">小写</item></Root>'
   const upper = await evaluate(host, 'tag.Item@text', xml)
   assert.equal(upper.status, 'success')
-  assert.deepEqual(upper.value, ['大写'])
+  assert.deepEqual(upper.value, ['大写', '小写'])
   const lower = await evaluate(host, 'tag.item@text', xml)
   assert.equal(lower.status, 'success')
-  assert.deepEqual(lower.value, ['小写'])
+  assert.deepEqual(lower.value, ['大写', '小写'])
   const attribute = await evaluate(host, 'tag.Item@ID', xml)
   assert.equal(attribute.status, 'success')
   assert.deepEqual(attribute.value, ['upper'])

@@ -2606,7 +2606,7 @@ function positionedIndexes(selection: PositionSelection, length: number): number
   return indexes
 }
 
-function applyPositionSelection(nodes: ParserNode[], selection: PositionSelection | undefined): ParserNode[] {
+function applyPositionSelection<T>(nodes: T[], selection: PositionSelection | undefined): T[] {
   if (selection === undefined) return nodes
   const indexes = positionedIndexes(selection, nodes.length)
   if (selection.excluded) {
@@ -3127,7 +3127,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     if (expanded.startsWith('literal:')) return expanded.slice('literal:'.length)
     // 列表规则整条是选择器链；字段规则的末段是输出标记或属性名。
     const plan: DefaultPlan = state.expect === 'nodes' ? { selector: expanded } : lastOutput(expanded)
-    const selectorParts = splitSelectorChain(plan.selector).map(normalizeSelector)
+    const originalSelectors = splitSelectorChain(plan.selector)
+    const selectorParts = originalSelectors.map(normalizeSelector)
     let current: Array<{ document: HtmlDocument; node?: ParserNode }> = storedNodes.length === 0
       ? [{ document: this.html.parse(textValue(content), htmlDocumentMode(textValue(content))) }]
       : storedNodes
@@ -3144,10 +3145,20 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const values = current.filter((item): item is SelectedNode => item.node !== undefined).map((item) => this.readDefaultNode(item.document, item.node, plan.output!, state))
       return values.length === 1 ? values[0] : values
     }
-    for (const selector of selectorParts) {
+    for (const [selectorIndex, selector] of selectorParts.entries()) {
       const next: SelectedNode[] = []
       for (const root of current) {
         const view = root.node === undefined ? root.document : root.document.child(root.node)
+        const original = originalSelectors[selectorIndex]!
+        if (original.startsWith('tag.') && view.describe !== undefined && (!original.includes('[') || parseBracketSelection(original) !== undefined)) {
+          const selection = parseBracketSelection(original) ?? parseLegacySelection(original)
+          const name = (selection?.base ?? original).slice(4).toLowerCase()
+          const matching = view.select('*').filter((node) => view.describe!(node).tagName?.toLowerCase() === name).map((node) => ({ document: view, node }))
+          // getElementsByTag 包含当前根元素；显式 CSS 的后代选择仍保持各自语义。
+          if (root.node !== undefined && root.document.describe?.(root.node).tagName?.toLowerCase() === name) matching.unshift({ document: root.document, node: root.node })
+          next.push(...applyPositionSelection(matching, selection))
+          continue
+        }
         const textSelection = parseBracketSelection(selector) ?? parseLegacySelection(selector)
         const textSelector = textSelection?.base ?? selector
         if (textSelector.startsWith('text.')) {

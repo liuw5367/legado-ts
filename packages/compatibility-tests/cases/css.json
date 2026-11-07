@@ -458,5 +458,261 @@
         "测试作者"
       ]
     }
+  },
+  {
+    "id": "css.string.xml-legacy-lower",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.xml-legacy-lower",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.xml-explicit-upper",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "@css:Item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.xml-explicit-upper",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "@css:Item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.xml-explicit-lower",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "@css:item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.xml-explicit-lower",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "@css:item@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.xml-legacy-negative",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.Item.-1@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.xml-legacy-negative",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.Item.-1@text",
+      "content": "<?xml version=\"1.0\"?><Root><Item ID=\"one\">甲</Item><item id=\"two\">乙</item></Root>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.legacy-self",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.div@tag.div@ownText",
+      "content": "<div>外<div>内</div></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.legacy-self",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.div@tag.div@ownText",
+      "content": "<div>外<div>内</div></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.selfclose-text",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.div@textNodes",
+      "content": "<div>甲<a href=\"/a\"/>乙<b>子</b>丙</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.selfclose-text",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.div@textNodes",
+      "content": "<div>甲<a href=\"/a\"/>乙<b>子</b>丙</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.selfclose-div",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.div@text",
+      "content": "<div/>后<div>另</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.selfclose-div",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.div@text",
+      "content": "<div/>后<div>另</div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.string.selfclose-siblings",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "rule": "tag.a@href",
+      "content": "<a href=\"/a\"/><a href=\"/b\">乙</a>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "css.list.selfclose-siblings",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "rule": "tag.a@href",
+      "content": "<a href=\"/a\"/><a href=\"/b\">乙</a>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge"
+    ]
   }
 ]

@@ -156,11 +156,13 @@ test('HTML adapter 按 Jsoup 归一化普通文本空白并保留 pre 空白', (
   assert.equal(document.read(pre, 'text'), 'A\u00a0B\n C')
 })
 
-test('HTML adapter 的 XML 模式保留大小写并报告无效选择器', () => {
+test('HTML adapter 的 XML 标签查询按 Jsoup 忽略大小写，属性和 DOM 保留大小写', () => {
   const document = new HtmlParserAdapter().parse('<Root><Item ID="x">Hi</Item></Root>', 'xml')
   assert.equal(document.select('Item').length, 1)
-  assert.equal(document.select('item').length, 0)
+  assert.equal(document.select('item').length, 1)
   assert.equal(document.select('[ID="x"]').length, 1)
+  assert.equal(document.select('[id="x"]').length, 0)
+  assert.equal(document.describe?.(document.select('item')[0]!).tagName, 'Item')
   assert.throws(
     () => document.select('Item['),
     (error: unknown) => error instanceof Error && 'code' in error && error.code === 'unsupported-selector',

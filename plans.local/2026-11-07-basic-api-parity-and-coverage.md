@@ -182,6 +182,7 @@ Maven/上游本地源码不可用时，报告 runner-failed 或 blocked，不改
 每个批次可独立 revert；没有数据库迁移、部署或外部业务写入。台账、案例和原始报告可保留供复现，回退某个运行时修复不需要删除对应失败案例。异常语义放宽须能回退为 rawComparison 检查，历史原始信息不丢失。
 
 ## 完成记录
+- B4/R07 已修复：原解析器证据确认 XML 的 legacy 与显式 CSS 标签查询均忽略大小写，属性名/DOM 保留大小写，legacy 根元素参与匹配；纠正对应旧断言后 164 项回归通过。41 例 CSS 族的 35 例一致，余 6 例均为单独 R08 自闭合问题；报告 output/run-UqDuxv → output/run-QZIG4E。
 - B3/R04～R06 已修复：41 个 JSON 族案例一致，含标量/数组 null、Java Map 文本、非法输入与路径后继续执行、原 Jayway 接受的单引号/未引号键/尾逗号；164 项原规则/宿主/adapter 回归通过。调整一个旧空规则回归的输入为合法 JSON，使其 @put 的 JSONPath 不再依赖错误输入被吞掉。报告 output/run-czHTcO → output/run-Gn82X4。
 - B2/R09 已修复：Java 基本 Base64 与 Node 严格宿主解码分离；31 个编码族案例行为一致（含两类尾位、非法补位/空白），148 项宿主/adapter 回归通过。报告 output/run-zWcPVn。
 - B2/R03 已修复：URL 方法 12/12 行为一致，含 userInfo、IPv6、端口、空 query/ref；保留 JS 属性语义。修正一个旧宿主断言，其 getAuthority 预期遗漏用户信息，独立 JDK 证据确认后更新；118 项回归通过。报告 output/run-AElWIJ → output/run-SLgG2e。

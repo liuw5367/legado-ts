@@ -1,9 +1,13 @@
 import { parseDocument } from 'htmlparser2'
 import { Element, Text, isCDATA, isComment, isDocument, isText, isTag, type AnyNode } from 'domhandler'
 import { getAttributeValue, getChildren, getText } from 'domutils'
+import * as domutils from 'domutils'
 import { is as matchesSelector, selectAll } from 'css-select'
 import { render } from 'dom-serializer'
 import { compileSourcePattern, ParserAdapterError, type HtmlDocument, type HtmlParser, type ParserNode, type ParserNodeInfo, type ParserNodeMutation, type ReadingHtmlNode } from '@legado/source-core'
+
+// Jsoup 的标签选择使用 normalName，XML 标签也忽略大小写；属性名和原 DOM 大小写仍保留。
+const jsoupCssAdapter = { ...domutils, isTag, getName: (element: Element): string => element.name.toLowerCase() }
 
 class HtmlDocumentView implements HtmlDocument {
   private readonly ids = new Map<string, AnyNode>()
@@ -23,20 +27,23 @@ class HtmlDocumentView implements HtmlDocument {
     try {
       const normalized = normalizeHtmlSelector(selector)
       if (!normalized.matchTextTopLevel) {
-        return selectAll(normalized.selector, this.root, { xmlMode: this.xmlMode, pseudos: normalized.pseudos }).map((node) => this.wrap(node))
+        return selectAll(normalized.selector, this.root, { adapter: jsoupCssAdapter, xmlMode: this.xmlMode, lowerCaseTags: true, pseudos: normalized.pseudos }).map((node) => this.wrap(node))
       }
       const split = splitTopLevelMatchText(selector)
       if (split === undefined) throw new ParserAdapterError('unsupported-selector', ':matchText 复杂组合选择器暂不受支持')
       const ownerSelector = split.prefix.trim() || '*'
       const ownerNormalized = normalizeHtmlSelector(ownerSelector)
       if (ownerNormalized.matchTextTopLevel) throw new ParserAdapterError('unsupported-selector', ':matchText 不能重复出现在同一选择器分支')
-      const owners = selectAll(ownerNormalized.selector, this.root, { xmlMode: this.xmlMode, pseudos: ownerNormalized.pseudos })
+      const owners = selectAll(ownerNormalized.selector, this.root, { adapter: jsoupCssAdapter, xmlMode: this.xmlMode, lowerCaseTags: true, pseudos: ownerNormalized.pseudos })
       const matched = this.matchTextNodes(owners)
       const suffix = split.suffix.trim()
       if (suffix.length === 0) return matched
       const suffixNormalized = normalizeHtmlSelector(suffix)
       if (suffixNormalized.matchTextTopLevel) throw new ParserAdapterError('unsupported-selector', ':matchText 不能嵌套在同一选择器分支')
-      return matched.filter((node) => matchesSelector(this.node(node), suffixNormalized.selector, { xmlMode: this.xmlMode, pseudos: suffixNormalized.pseudos }))
+      return matched.filter((node) => {
+        const element = this.node(node)
+        return isTag(element) && matchesSelector<AnyNode, Element>(element, suffixNormalized.selector, { adapter: jsoupCssAdapter, xmlMode: this.xmlMode, lowerCaseTags: true, pseudos: suffixNormalized.pseudos })
+      })
     } catch (error) {
       if (error instanceof ParserAdapterError) throw error
       const message = error instanceof Error ? error.message : String(error)

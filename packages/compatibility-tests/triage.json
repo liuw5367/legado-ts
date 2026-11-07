@@ -154,7 +154,7 @@
         "css.list.xml"
       ],
       "classification": "runtime-fix",
-      "state": "open",
+      "state": "resolved",
       "owner": "implementation-agent",
       "reference": {
         "kind": "upstream-adapted",
@@ -165,8 +165,11 @@
         "output/run-YJF6TX/report.json",
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
-        "output/run-aY0Xdr/report.json"
-      ]
+        "output/run-aY0Xdr/report.json",
+        "output/run-UqDuxv/report.json",
+        "output/run-QZIG4E/report.json"
+      ],
+      "resolution": "双端证明 XML 下 legacy 和显式 CSS 标签均按 normalName 匹配；保留属性与 DOM 大小写；legacy tag 查询包含当前根元素"
     },
     {
       "id": "R08",

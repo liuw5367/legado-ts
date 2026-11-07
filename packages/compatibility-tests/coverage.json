@@ -313,7 +313,15 @@
         "css.string.selfclose",
         "css.string.invalid",
         "css.string.quoted-at",
-        "css.string.empty-rule"
+        "css.string.empty-rule",
+        "css.string.xml-legacy-lower",
+        "css.string.xml-explicit-upper",
+        "css.string.xml-explicit-lower",
+        "css.string.xml-legacy-negative",
+        "css.string.legacy-self",
+        "css.string.selfclose-text",
+        "css.string.selfclose-div",
+        "css.string.selfclose-siblings"
       ]
     },
     {
@@ -340,7 +348,15 @@
         "css.list.empty-rule",
         "corpus.source-0.search-name",
         "corpus.source-0.search-bookUrl",
-        "corpus.source-1.search-author"
+        "corpus.source-1.search-author",
+        "css.list.xml-legacy-lower",
+        "css.list.xml-explicit-upper",
+        "css.list.xml-explicit-lower",
+        "css.list.xml-legacy-negative",
+        "css.list.legacy-self",
+        "css.list.selfclose-text",
+        "css.list.selfclose-div",
+        "css.list.selfclose-siblings"
       ]
     },
     {
