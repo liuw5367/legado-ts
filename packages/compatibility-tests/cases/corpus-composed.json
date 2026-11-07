@@ -260,5 +260,31 @@
       "outcome": "return",
       "value": "更新时间：昨日·章节字数：4500"
     }
+  },
+  {
+    "id": "corpus.source-10.ruleBookInfo.kind",
+    "family": "corpus",
+    "operation": "corpus.cssString",
+    "input": {
+      "rule": "[property~=category|status|update_time]@content&&.tabvalue@table@tbody@td.2@text##.*：|\\s.*",
+      "content": "<meta property=\"og:novel:category\" content=\"玄幻\"><div class=\"tabvalue\"><table><tbody><tr><td>甲</td><td>乙</td><td>更新时间：昨日</td></tr></tbody></table></div>"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule CSS composition"
+    },
+    "tags": [
+      "corpus",
+      "edge"
+    ],
+    "origin": {
+      "file": "corpus/yiove-11-sources.json",
+      "index": 10,
+      "field": "ruleBookInfo.kind"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": "玄幻"
+    }
   }
 ]

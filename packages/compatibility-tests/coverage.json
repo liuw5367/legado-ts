@@ -381,7 +381,10 @@
         "corpus.source-3.ruleContent.nextContentUrl",
         "corpus.source-4.ruleSearch.kind",
         "corpus.source-5.ruleBookInfo.kind",
-        "corpus.source-10.ruleBookInfo.name"
+        "corpus.source-10.ruleBookInfo.name",
+        "corpus.source-1.ruleContent.title",
+        "corpus.source-1.ruleContent.content",
+        "corpus.source-10.ruleExplore.kind"
       ]
     },
     {
@@ -1252,7 +1255,8 @@
         "corpus.source-1.ruleSearch.bookList",
         "corpus.source-2.ruleSearch.bookList",
         "corpus.source-7.ruleToc.chapterList",
-        "corpus.source-10.ruleExplore.bookList"
+        "corpus.source-10.ruleExplore.bookList",
+        "corpus.source-5.ruleBookInfo.init"
       ]
     },
     {
@@ -1274,7 +1278,8 @@
         "corpus.source-5.ruleToc.chapterName",
         "corpus.source-7.ruleBookInfo.lastChapter",
         "corpus.source-10.ruleBookInfo.intro",
-        "corpus.source-10.ruleToc.updateTime"
+        "corpus.source-10.ruleToc.updateTime",
+        "corpus.source-10.ruleBookInfo.kind"
       ]
     },
     {

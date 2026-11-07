@@ -755,6 +755,23 @@
         "output/run-wikvEP/report.json",
         "output/run-cuG8l6/report.json"
       ]
+    },
+    {
+      "id": "C7-SEQUENCE-REPLACE",
+      "caseIds": [
+        "corpus.source-10.ruleBookInfo.kind"
+      ],
+      "classification": "runtime-fix",
+      "state": "open",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeRule.getString / AnalyzeByJSoup"
+      },
+      "tsEntry": "compileRule → evaluateSequence",
+      "evidence": [
+        "output/run-Ht2nF6/report.json"
+      ]
     }
   ]
 }
