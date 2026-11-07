@@ -790,5 +790,93 @@
         "/c"
       ]
     }
+  },
+  {
+    "id": "css.string.batch-mixed-text",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><span id=\"probe\">甲&nbsp;<b>乙</b><br>丙<script>window.x=1</script></span><pre id=\"literal\">  丁\n 戊 </pre></main>",
+      "rule": "@css:#probe@text"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "甲 乙 丙"
+    }
+  },
+  {
+    "id": "css.string.batch-mixed-own-text",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><span id=\"probe\">甲&nbsp;<b>乙</b><br>丙<script>window.x=1</script></span><pre id=\"literal\">  丁\n 戊 </pre></main>",
+      "rule": "@css:#probe@ownText"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "甲 丙"
+    }
+  },
+  {
+    "id": "css.string.batch-mixed-html",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><span id=\"probe\">甲&nbsp;<b>乙</b><br>丙<script>window.x=1</script></span><pre id=\"literal\">  丁\n 戊 </pre></main>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value",
+        "jvm": "<span id=\"probe\">甲&nbsp;<b>乙</b>\n <br>丙</span>",
+        "ts": "<span id=\"probe\">甲&nbsp;<b>乙</b><br>丙</span>",
+        "reason": "此输入的直接正文格式化等价由 flow.synthetic.html-br.display 核实。原始序列化差异保留，脚本或正则消费该字符串的场景另行验收。"
+      }
+    ]
+  },
+  {
+    "id": "css.string.batch-pre-text",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><span id=\"probe\">甲&nbsp;<b>乙</b><br>丙<script>window.x=1</script></span><pre id=\"literal\">  丁\n 戊 </pre></main>",
+      "rule": "@css:#literal@text"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "丁\n 戊"
+    }
   }
 ]

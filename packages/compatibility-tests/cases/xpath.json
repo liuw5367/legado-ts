@@ -505,5 +505,67 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "xpath.string.batch-mixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "content": "<main><span id=\"probe\">甲&nbsp;<b>乙</b><br>丙<script>window.x=1</script></span><pre id=\"literal\">  丁\n 戊 </pre></main>",
+      "rule": "//span/@id",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "probe"
+    }
+  },
+  {
+    "id": "xpath.string.batch-mixed-element",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "content": "<main><span id=\"probe\">甲&nbsp;<b>乙</b><br>丙<script>window.x=1</script></span><pre id=\"literal\">  丁\n 戊 </pre></main>",
+      "rule": "//b",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<b>乙</b>"
+    }
+  },
+  {
+    "id": "xpath.string.batch-mixed-text-nodes",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "content": "<main><span id=\"probe\">甲&nbsp;<b>乙</b><br>丙<script>window.x=1</script></span><pre id=\"literal\">  丁\n 戊 </pre></main>",
+      "rule": "//span/text()",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ]
   }
 ]

@@ -135,6 +135,9 @@ git diff --check
 
 - B4 `flow.synthetic.login-check.*` 验证两次 POST 的同 URL、同字节请求体、头变化、401→200/503 及详情继续条件。原样返回正常 StrResponse 的序列化问题由 `fa4a886` 单独修复，[修复前](../packages/compatibility-tests/output/run-QleLG9/report.md)及[修复后 38/38](../packages/compatibility-tests/output/run-tOeBHb/report.md)。
 
+- C1 `97e3d70` 验证表格选择器及缺失/重复属性，[CSS 报告](../packages/compatibility-tests/output/run-iGHdnL/report.md)。
+- C2 验证混合 DOM 的文本与 XPath。原始 `@html` 的 `br` 前换行有精确差异，`flow.synthetic.html-br.display` 验证该输入直接进入正文时结果相同；脚本或正则直接消费序列化字符串未取得等价证据。[正文](../packages/compatibility-tests/output/run-nv7JZd/report.md) · [CSS](../packages/compatibility-tests/output/run-KweGbX/report.md) · [XPath](../packages/compatibility-tests/output/run-MsOROm/report.md)。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

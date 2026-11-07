@@ -348,7 +348,22 @@
         "css.string.composeFallback",
         "css.string.composeIndex",
         "css.string.composeTextNodes",
-        "css.string.composeScoped"
+        "css.string.composeScoped",
+        "css.string.batch-mixed-text",
+        "css.string.batch-mixed-own-text",
+        "css.string.batch-pre-text"
+      ]
+    },
+    {
+      "operation": "css.string",
+      "method": "AnalyzeByJSoup.getString(String) · @html 的 br 序列化",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → css.string",
+      "requiredDimensions": [
+        "edge"
+      ],
+      "caseIds": [
+        "css.string.batch-mixed-html"
       ]
     },
     {
@@ -1217,7 +1232,10 @@
         "xpath.string.preformatted",
         "xpath.string.inlineRuns",
         "xpath.string.voidElements",
-        "xpath.string.xmlElement"
+        "xpath.string.xmlElement",
+        "xpath.string.batch-mixed-attribute",
+        "xpath.string.batch-mixed-element",
+        "xpath.string.batch-mixed-text-nodes"
       ]
     },
     {
