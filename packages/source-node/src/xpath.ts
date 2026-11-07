@@ -614,7 +614,7 @@ export class XPathParserAdapter implements XPathParser {
     }
     const normalized = /^\s*<\?xml\b/i.test(source)
       ? source
-      : render(parseDocument(source), { xmlMode: true, encodeEntities: true })
+      : render(parseDocument(source, { recognizeSelfClosing: true }), { xmlMode: true, encodeEntities: true })
     return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(normalized, 'text/xml') as unknown as XmlNode)
   }
 
