@@ -1,0 +1,297 @@
+[
+  {
+    "id": "encoding.urlEncode.contrast.UTF-8",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "中文",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "%E4%B8%AD%E6%96%87"
+    }
+  },
+  {
+    "id": "encoding.urlEncode.contrast.GBK",
+    "family": "encoding",
+    "operation": "encoding.urlEncode",
+    "input": {
+      "text": "中文",
+      "charset": "GBK"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLEncoder.encode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "%D6%D0%CE%C4"
+    }
+  },
+  {
+    "id": "encoding.urlDecode.contrast.UTF-8",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "%C3%A9",
+      "charset": "UTF-8"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "é"
+    }
+  },
+  {
+    "id": "encoding.urlDecode.contrast.GBK",
+    "family": "encoding",
+    "operation": "encoding.urlDecode",
+    "input": {
+      "text": "%C3%A9",
+      "charset": "GBK"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URLDecoder.decode(String,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "茅"
+    }
+  },
+  {
+    "id": "url.parts.contrast.a.test",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "../next?q=2",
+      "base": "https://a.test/left/right/index"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URL(URL,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "protocol": "https",
+        "host": "a.test",
+        "port": -1,
+        "defaultPort": 443,
+        "path": "/left/next",
+        "file": "/left/next?q=2",
+        "query": "q=2",
+        "ref": null,
+        "authority": "a.test",
+        "userInfo": null
+      }
+    }
+  },
+  {
+    "id": "url.parts.contrast.b.test",
+    "family": "url",
+    "operation": "url.parts",
+    "input": {
+      "url": "../next?q=2",
+      "base": "https://b.test/other/branch/index"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "URL(URL,String)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "protocol": "https",
+        "host": "b.test",
+        "port": -1,
+        "defaultPort": 443,
+        "path": "/other/next",
+        "file": "/other/next?q=2",
+        "query": "q=2",
+        "ref": null,
+        "authority": "b.test",
+        "userInfo": null
+      }
+    }
+  },
+  {
+    "id": "regex.first.contrast.one",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "[a-z]\\d+",
+        "(1)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "1",
+        "1"
+      ]
+    }
+  },
+  {
+    "id": "regex.first.contrast.two",
+    "family": "regex",
+    "operation": "regex.first",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "[a-z]\\d+",
+        "(22)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElement"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "22",
+        "22"
+      ]
+    }
+  },
+  {
+    "id": "regex.all.contrast.one",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "[a-z]\\d+",
+        "(1)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        [
+          "1",
+          "1"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "regex.all.contrast.two",
+    "family": "regex",
+    "operation": "regex.all",
+    "input": {
+      "text": "a1 b22",
+      "patterns": [
+        "[a-z]\\d+",
+        "(22)"
+      ]
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByRegex.getElements"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        [
+          "22",
+          "22"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "json.list.escaped-quote-code",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"items\": [{\"name\": \"a\\\"&&b\"}, {\"name\": \"排除\"}], \"other\": \"后续\"}",
+      "rule": "$.items[?(@.name == \"a\\\"&&b\")].name&&$.other"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a\"&&b",
+        "后续"
+      ]
+    }
+  },
+  {
+    "id": "rule.split.code-mode",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "x[foo(\"a\\\"&&b\")]&&y",
+      "operator": "&&",
+      "code": true
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer.splitRule(String...)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "contractScope": "reference-observation",
+    "observationReason": "原 RuleAnalyzer 独立 code 模式的转义规则没有等价 TS 参数，实际 JSON 入口覆盖引号和组合符。",
+    "relatedCases": [
+      "json.list.escaped-quote-code"
+    ]
+  }
+]

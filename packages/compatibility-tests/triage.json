@@ -773,6 +773,23 @@
         "output/run-Ht2nF6/report.json",
         "output/run-HeRT7Z/report.json"
       ]
+    },
+    {
+      "id": "C1-CODE-OBSERVATION",
+      "caseIds": [
+        "rule.split.code-mode"
+      ],
+      "classification": "reference-observation",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-original",
+        "method": "RuleAnalyzer(code=true).splitRule(String...)"
+      },
+      "tsEntry": "关联 json.list.escaped-quote-code",
+      "evidence": [
+        "output/run-yVxuRu/report.json"
+      ]
     }
   ]
 }

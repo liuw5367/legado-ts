@@ -14,7 +14,14 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a",
+        "b"
+      ]
+    }
   },
   {
     "id": "string.split.limit.1",
@@ -31,7 +38,13 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a,b,,"
+      ]
+    }
   },
   {
     "id": "string.split.limit.2",
@@ -48,7 +61,14 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a",
+        "b,,"
+      ]
+    }
   },
   {
     "id": "string.split.limit.-1",
@@ -65,7 +85,16 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a",
+        "b",
+        "",
+        ""
+      ]
+    }
   },
   {
     "id": "string.split.empty",
@@ -473,7 +502,16 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a",
+        "b",
+        "",
+        ""
+      ]
+    }
   },
   {
     "id": "pattern.split.limit.0",
@@ -490,7 +528,14 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a",
+        "b"
+      ]
+    }
   },
   {
     "id": "pattern.split.limit.2",
@@ -507,7 +552,14 @@
     },
     "tags": [
       "normal"
-    ]
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "a",
+        "b,,"
+      ]
+    }
   },
   {
     "id": "string.split.empty-negative",

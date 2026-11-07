@@ -51,7 +51,9 @@
         "regex.first.chain",
         "regex.first.optional",
         "regex.first.invalid",
-        "regex.first.empty"
+        "regex.first.empty",
+        "regex.first.contrast.one",
+        "regex.first.contrast.two"
       ]
     },
     {
@@ -70,7 +72,9 @@
         "regex.all.chain",
         "regex.all.optional",
         "regex.all.invalid",
-        "regex.all.empty"
+        "regex.all.empty",
+        "regex.all.contrast.one",
+        "regex.all.contrast.two"
       ]
     },
     {
@@ -231,7 +235,9 @@
         "encoding.urlEncode.invalid",
         "encoding.urlEncode.unpairedHigh",
         "encoding.urlEncode.unpairedLow",
-        "encoding.urlEncode.mixedSurrogates"
+        "encoding.urlEncode.mixedSurrogates",
+        "encoding.urlEncode.contrast.UTF-8",
+        "encoding.urlEncode.contrast.GBK"
       ]
     },
     {
@@ -254,7 +260,9 @@
         "encoding.urlDecode.replacement",
         "encoding.urlDecode.literal-plus",
         "encoding.urlDecode.short-percent",
-        "encoding.urlDecode.single-digit"
+        "encoding.urlDecode.single-digit",
+        "encoding.urlDecode.contrast.UTF-8",
+        "encoding.urlDecode.contrast.GBK"
       ]
     },
     {
@@ -295,7 +303,9 @@
         "url.parts.userinfo-ipv6",
         "url.parts.empty-query",
         "url.parts.empty-fragment",
-        "url.parts.empty-query-fragment"
+        "url.parts.empty-query-fragment",
+        "url.parts.contrast.a.test",
+        "url.parts.contrast.b.test"
       ]
     },
     {
@@ -458,7 +468,8 @@
         "json.list.escaped-operator",
         "json.list.aggregateLength",
         "json.list.aggregateSum",
-        "json.list.filterRange"
+        "json.list.filterRange",
+        "json.list.escaped-quote-code"
       ]
     },
     {
@@ -1337,6 +1348,18 @@
         "string.api.getBytes.gbk-round-trip",
         "string.api.getBytes.gbk-replacement",
         "string.api.getBytes.utf8-empty-round-trip"
+      ]
+    },
+    {
+      "operation": "rule.split",
+      "method": "RuleAnalyzer(code=true).splitRule(String...)",
+      "reference": "upstream-original",
+      "tsEntry": "JSON 字段入口关联验证",
+      "requiredDimensions": [
+        "edge"
+      ],
+      "caseIds": [
+        "rule.split.code-mode"
       ]
     }
   ]

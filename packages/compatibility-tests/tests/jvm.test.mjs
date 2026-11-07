@@ -41,3 +41,13 @@ test('XPath 专用 join 适配保持空集合、null、Unicode 和顺序', () =>
   assert.equal(result.status, 0, result.stderr)
   assert.deepEqual(JSON.parse(result.stdout), ['', 'null|中文|😀', '2/1', 'anullb'])
 })
+
+test('上游 RuleAnalyzer 的 code 参数改变带引号转义规则的结果', async () => {
+  const input = { rule: String.raw`x[foo("a\"&&b")]&&y`, operator: '&&' }
+  const plain = await worker.run({ id: 'plain', operation: 'rule.split', input: { ...input, code: false } })
+  assert.equal(plain.outcome, 'throw')
+  assert.match(plain.error.message, /未平衡/u)
+  const code = await worker.run({ id: 'code', operation: 'rule.split', input: { ...input, code: true } })
+  assert.equal(code.outcome, 'return')
+  assert.deepEqual(code.value, [String.raw`x[foo("a\"&&b")]`, 'y'])
+})
