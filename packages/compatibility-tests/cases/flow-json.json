@@ -1,0 +1,611 @@
+[
+  {
+    "id": "flow.synthetic.json.page-end",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BookContent.analyzeContent 顺序分页"
+    },
+    "flowOrigin": {
+      "fixture": "JSON-FLOW-001",
+      "path": "fixtures/conformance/cases/JSON-FLOW-001"
+    },
+    "tags": [
+      "json",
+      "offline",
+      "pagination"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://json.fixture.test",
+        "bookSourceName": "JSON fixture",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": "$.books[*]",
+          "name": "$.name",
+          "author": "$.author",
+          "bookUrl": "$.url"
+        },
+        "ruleBookInfo": {
+          "name": "$.name",
+          "author": "$.author",
+          "tocUrl": "$.toc"
+        },
+        "ruleToc": {
+          "chapterList": "$.chapters[?(@.grade > 1)]",
+          "chapterName": "$.title",
+          "chapterUrl": "$.url",
+          "isVip": "$.vip"
+        },
+        "ruleContent": {
+          "content": "$.content",
+          "nextContentUrl": "$.next"
+        },
+        "contentType": "text"
+      },
+      "keyword": "JSON书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IkpTT07kuaYiLCJhdXRob3IiOiLkvZzogIUiLCJ1cmwiOiIvYm9vay8xIn1dfQ=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJuYW1lIjoiSlNPTuS5piIsImF1dGhvciI6IuS9nOiAhSIsInRvYyI6Ii9ib29rLzEvdG9jIn0="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/toc",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjaGFwdGVycyI6W3siZ3JhZGUiOjEsInRpdGxlIjoi5Y235LiAIiwidXJsIjoidm9sdW1lIiwidmlwIjpmYWxzZX0seyJncmFkZSI6MiwidGl0bGUiOiLnrKzkuIDnq6AiLCJ1cmwiOiIvYm9vay8xL2NoYXB0ZXIvMSIsInZpcCI6ZmFsc2V9LHsiZ3JhZGUiOjMsInRpdGxlIjoi56ys5LqM56ugIiwidXJsIjoiL2Jvb2svMS9jaGFwdGVyLzIiLCJ2aXAiOnRydWV9XX0="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/chapter/1",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjb250ZW50Ijoi5q2j5paH5LiAIiwibmV4dCI6Ii9ib29rLzEvY2hhcHRlci8xP3BhZ2U9MiJ9"
+          }
+        },
+        "page2": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjb250ZW50Ijoi5q2j5paH5LqMIn0="
+          }
+        }
+      },
+      "requestLimit": 5
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "JSON书",
+                "author": "作者",
+                "bookUrl": "https://json.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "JSON书",
+              "author": "作者",
+              "bookUrl": "https://json.fixture.test/book/1",
+              "tocUrl": "https://json.fixture.test/book/1/toc"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://json.fixture.test/book/1/chapter/1",
+                "isVip": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://json.fixture.test/book/1/chapter/2",
+                "isVip": true
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "cleaned": "正文一\n正文二",
+              "pageCount": 2
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/toc",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/chapter/1",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.json.next-chapter",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BookContent.analyzeContent 顺序分页"
+    },
+    "flowOrigin": {
+      "fixture": "JSON-FLOW-001",
+      "path": "fixtures/conformance/cases/JSON-FLOW-001"
+    },
+    "tags": [
+      "json",
+      "offline",
+      "pagination"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://json.fixture.test",
+        "bookSourceName": "JSON fixture",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": "$.books[*]",
+          "name": "$.name",
+          "author": "$.author",
+          "bookUrl": "$.url"
+        },
+        "ruleBookInfo": {
+          "name": "$.name",
+          "author": "$.author",
+          "tocUrl": "$.toc"
+        },
+        "ruleToc": {
+          "chapterList": "$.chapters[?(@.grade > 1)]",
+          "chapterName": "$.title",
+          "chapterUrl": "$.url",
+          "isVip": "$.vip"
+        },
+        "ruleContent": {
+          "content": "$.content",
+          "nextContentUrl": "$.next"
+        },
+        "contentType": "text"
+      },
+      "keyword": "JSON书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IkpTT07kuaYiLCJhdXRob3IiOiLkvZzogIUiLCJ1cmwiOiIvYm9vay8xIn1dfQ=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJuYW1lIjoiSlNPTuS5piIsImF1dGhvciI6IuS9nOiAhSIsInRvYyI6Ii9ib29rLzEvdG9jIn0="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/toc",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjaGFwdGVycyI6W3siZ3JhZGUiOjEsInRpdGxlIjoi5Y235LiAIiwidXJsIjoidm9sdW1lIiwidmlwIjpmYWxzZX0seyJncmFkZSI6MiwidGl0bGUiOiLnrKzkuIDnq6AiLCJ1cmwiOiIvYm9vay8xL2NoYXB0ZXIvMSIsInZpcCI6ZmFsc2V9LHsiZ3JhZGUiOjMsInRpdGxlIjoi56ys5LqM56ugIiwidXJsIjoiL2Jvb2svMS9jaGFwdGVyLzIiLCJ2aXAiOnRydWV9XX0="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/chapter/1",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjb250ZW50Ijoi5q2j5paH5LiAIiwibmV4dCI6Ii9ib29rLzEvY2hhcHRlci8xP3BhZ2U9MiJ9"
+          }
+        },
+        "page2": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjb250ZW50Ijoi5q2j5paH5LqMIiwibmV4dCI6Ii9ib29rLzEvY2hhcHRlci8yIn0="
+          }
+        }
+      },
+      "requestLimit": 5
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "JSON书",
+                "author": "作者",
+                "bookUrl": "https://json.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "JSON书",
+              "author": "作者",
+              "bookUrl": "https://json.fixture.test/book/1",
+              "tocUrl": "https://json.fixture.test/book/1/toc"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://json.fixture.test/book/1/chapter/1",
+                "isVip": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://json.fixture.test/book/1/chapter/2",
+                "isVip": true
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "cleaned": "正文一\n正文二",
+              "pageCount": 2
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/toc",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/chapter/1",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.json.repeated-page",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BookContent.analyzeContent 顺序分页"
+    },
+    "flowOrigin": {
+      "fixture": "JSON-FLOW-001",
+      "path": "fixtures/conformance/cases/JSON-FLOW-001"
+    },
+    "tags": [
+      "json",
+      "offline",
+      "pagination"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://json.fixture.test",
+        "bookSourceName": "JSON fixture",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": "$.books[*]",
+          "name": "$.name",
+          "author": "$.author",
+          "bookUrl": "$.url"
+        },
+        "ruleBookInfo": {
+          "name": "$.name",
+          "author": "$.author",
+          "tocUrl": "$.toc"
+        },
+        "ruleToc": {
+          "chapterList": "$.chapters[?(@.grade > 1)]",
+          "chapterName": "$.title",
+          "chapterUrl": "$.url",
+          "isVip": "$.vip"
+        },
+        "ruleContent": {
+          "content": "$.content",
+          "nextContentUrl": "$.next"
+        },
+        "contentType": "text"
+      },
+      "keyword": "JSON书",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IkpTT07kuaYiLCJhdXRob3IiOiLkvZzogIUiLCJ1cmwiOiIvYm9vay8xIn1dfQ=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJuYW1lIjoiSlNPTuS5piIsImF1dGhvciI6IuS9nOiAhSIsInRvYyI6Ii9ib29rLzEvdG9jIn0="
+          }
+        },
+        "toc": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/toc",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/toc",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjaGFwdGVycyI6W3siZ3JhZGUiOjEsInRpdGxlIjoi5Y235LiAIiwidXJsIjoidm9sdW1lIiwidmlwIjpmYWxzZX0seyJncmFkZSI6MiwidGl0bGUiOiLnrKzkuIDnq6AiLCJ1cmwiOiIvYm9vay8xL2NoYXB0ZXIvMSIsInZpcCI6ZmFsc2V9LHsiZ3JhZGUiOjMsInRpdGxlIjoi56ys5LqM56ugIiwidXJsIjoiL2Jvb2svMS9jaGFwdGVyLzIiLCJ2aXAiOnRydWV9XX0="
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/chapter/1",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjb250ZW50Ijoi5q2j5paH5LiAIiwibmV4dCI6Ii9ib29rLzEvY2hhcHRlci8xP3BhZ2U9MiJ9"
+          }
+        },
+        "page2": {
+          "method": "GET",
+          "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJjb250ZW50Ijoi5q2j5paH5LqMIiwibmV4dCI6Ii9ib29rLzEvY2hhcHRlci8xP3BhZ2U9MiJ9"
+          }
+        }
+      },
+      "requestLimit": 5
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "JSON书",
+                "author": "作者",
+                "bookUrl": "https://json.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "JSON书",
+              "author": "作者",
+              "bookUrl": "https://json.fixture.test/book/1",
+              "tocUrl": "https://json.fixture.test/book/1/toc"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://json.fixture.test/book/1/chapter/1",
+                "isVip": false
+              },
+              {
+                "title": "第二章",
+                "chapterUrl": "https://json.fixture.test/book/1/chapter/2",
+                "isVip": true
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "cleaned": "正文一\n正文二",
+              "pageCount": 2
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://json.fixture.test/search?q=JSON%E4%B9%A6",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "toc",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/toc",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/chapter/1",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://json.fixture.test/book/1/chapter/1?page=2",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  }
+]

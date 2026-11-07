@@ -4,6 +4,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.legado.app.constant.AppPattern
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
+import io.legado.app.model.analyzeRule.AnalyzeByJSonPath
 import io.legado.app.utils.FlowHtmlFormatter
 import org.jsoup.parser.Parser
 import java.net.URL
@@ -43,9 +44,15 @@ internal fun executeBookFlow(input: JsonObject): Any {
     }
     fun field(rule: String, body: Any, unescape: Boolean = true): String {
         if (rule.isEmpty()) return ""
-        val value = corpusCssString(rule, body)
+        val value = if (rule.startsWith("$.") || rule.startsWith("$[")) {
+            AnalyzeByJSonPath(body).getString(rule).orEmpty()
+        } else corpusCssString(rule, body)
         return if (unescape) Parser.unescapeEntities(value, false).trim() else value
     }
+    fun nodes(rule: String, body: String): List<Any> =
+        if (rule.startsWith("$.") || rule.startsWith("$[")) AnalyzeByJSonPath(body).getList(rule).orEmpty()
+        else AnalyzeByJSoup(body).getElements(rule)
+
     fun fields(rules: JsonObject, body: Any, base: String): Map<String, String> = buildMap {
         for (key in listOf("name", "author", "bookUrl", "coverUrl", "intro", "kind", "updateTime", "lastChapter", "tocUrl")) {
             val raw = field(rules.text(key), body)
@@ -66,7 +73,7 @@ internal fun executeBookFlow(input: JsonObject): Any {
     val searchUrl = source.text("searchUrl")
     if (searchUrl.contains(",{")) throw Unsupported("JVM 流程参考只实现普通 GET")
     val (searchBody, searchBase) = request("search", resolve(sourceUrl, searchUrl.replace("{{key}}", URLEncoder.encode(input.text("keyword"), Charsets.UTF_8))))
-    val rows = AnalyzeByJSoup(searchBody).getElements(searchRule.text("bookList"))
+    val rows = nodes(searchRule.text("bookList"), searchBody)
     // BookList 在列表为空且未声明详情 URL 模式时尝试详情规则。
     val fallback = rows.isEmpty() && source.text("bookUrlPattern").isEmpty()
     val candidates = if (fallback) {
@@ -89,10 +96,13 @@ internal fun executeBookFlow(input: JsonObject): Any {
     // WebBook 仅在目录 URL 与详情 URL 相同时复用详情响应。
     val (tocBody, tocBase) = if (tocUrl == bookUrl) detailBody to bookUrl else request("toc", tocUrl)
     val tocRule = source.rule("ruleToc")
-    val chapters = AnalyzeByJSoup(tocBody).getElements(tocRule.text("chapterList")).mapNotNull { node ->
+    val chapters = nodes(tocRule.text("chapterList"), tocBody).mapNotNull { node ->
         val title = field(tocRule.text("chapterName"), node)
         val url = field(tocRule.text("chapterUrl"), node)
-        if (title.isEmpty() || url.isEmpty()) null else mapOf("title" to title, "chapterUrl" to resolve(tocBase, url), "isVip" to false)
+        if (title.isEmpty() || url.isEmpty()) null else mapOf(
+            "title" to title, "chapterUrl" to resolve(tocBase, url),
+            "isVip" to (field(tocRule.text("isVip"), node) == "true"),
+        )
     }.distinctBy { it["chapterUrl"] }
     if (chapters.isEmpty()) {
         result("toc", "failed", null, mapOf("category" to "toc-empty", "class" to "TocEmptyException", "message" to "目录为空"))
@@ -101,11 +111,31 @@ internal fun executeBookFlow(input: JsonObject): Any {
     result("toc", "success", chapters)
 
     val chapter = chapters.first()
-    val (contentBody, _) = request("content", chapter.getValue("chapterUrl").toString())
     val contentRule = source.rule("ruleContent")
-    val raw = field(contentRule.text("content"), contentBody, unescape = false)
-    if (raw.contains("<img", ignoreCase = true) || raw.contains("<usehtml>")) throw Unsupported("JVM 流程参考只实现普通文本格式化")
-    var cleaned = Parser.unescapeEntities(FlowHtmlFormatter.format(raw), false)
+    val nextRule = contentRule.text("nextContentUrl")
+    val nextChapter = chapters.getOrNull(1)?.get("chapterUrl")
+    val visited = mutableSetOf<String>()
+    val pages = mutableListOf<String>()
+    var url = chapter.getValue("chapterUrl").toString()
+    var contentBody = ""
+    // BookContent 的单地址分支顺序追加正文，并在遇到下一章或已访问地址时停止。
+    while (visited.add(url)) {
+        val (body, responseUrl) = request("content", url)
+        if (pages.isEmpty()) contentBody = body
+        val raw = field(contentRule.text("content"), body, unescape = false)
+        if (raw.contains("<img", ignoreCase = true) || raw.contains("<usehtml>")) throw Unsupported("JVM 流程参考只实现普通文本格式化")
+        pages.add(Parser.unescapeEntities(FlowHtmlFormatter.format(raw), false))
+        val next = when {
+            nextRule.isEmpty() -> emptyList()
+            nextRule.startsWith("$.") || nextRule.startsWith("$[") -> AnalyzeByJSonPath(body).getStringList(nextRule)
+            else -> throw Unsupported("JVM 流程参考只实现 JSON 下一页规则")
+        }.filter { it.isNotBlank() }.map { resolve(responseUrl, it) }
+        if (next.size > 1) throw Unsupported("JVM 流程参考只实现单链接正文分页")
+        val target = next.firstOrNull()
+        if (target == null || target == nextChapter) break
+        url = target
+    }
+    var cleaned = pages.joinToString("\n")
     val replaceRule = contentRule.text("replaceRegex")
     if (replaceRule.isNotEmpty()) {
         // BookContent 在逐页格式化与拼接之后执行正文替换，再恢复在线文本缩进。
@@ -117,6 +147,6 @@ internal fun executeBookFlow(input: JsonObject): Any {
         return output
     }
     val title = field(contentRule.text("title"), contentBody).ifEmpty { chapter.getValue("title").toString() }
-    result("content", "success", mapOf("title" to title, "pageCount" to 1, "cleaned" to cleaned))
+    result("content", "success", mapOf("title" to title, "pageCount" to pages.size, "cleaned" to cleaned))
     return output
 }
