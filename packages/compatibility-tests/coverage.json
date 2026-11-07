@@ -458,7 +458,9 @@
         "json.string.filterRange",
         "json.string.sum.fraction",
         "json.string.sum.large",
-        "json.string.sum.small"
+        "json.string.sum.small",
+        "json.string.batch-aggregate-sum",
+        "json.string.batch-aggregate-average"
       ]
     },
     {
@@ -494,7 +496,8 @@
         "json.list.aggregateLength",
         "json.list.aggregateSum",
         "json.list.filterRange",
-        "json.list.escaped-quote-code"
+        "json.list.escaped-quote-code",
+        "json.list.batch-filter-number-string"
       ]
     },
     {
@@ -552,7 +555,8 @@
         "continuation"
       ],
       "caseIds": [
-        "json.continue.invalid-path"
+        "json.continue.invalid-path",
+        "json.continue.batch-empty-then-name"
       ]
     },
     {

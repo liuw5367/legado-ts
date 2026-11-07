@@ -763,5 +763,96 @@
       "outcome": "return",
       "value": []
     }
+  },
+  {
+    "id": "json.list.batch-filter-number-string",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"items\":[{\"id\":\"nil\",\"value\":null},{\"id\":\"missing\"},{\"id\":\"text\",\"value\":\"2\"},{\"id\":\"numeric\",\"value\":2}],\"numbers\":[2,4],\"empty\":[],\"nil\":null,\"name\":\"继续\"}",
+      "rule": "$.items[?(@.value == 2)].id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "text",
+        "numeric"
+      ]
+    }
+  },
+  {
+    "id": "json.string.batch-aggregate-sum",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"items\":[{\"id\":\"nil\",\"value\":null},{\"id\":\"missing\"},{\"id\":\"text\",\"value\":\"2\"},{\"id\":\"numeric\",\"value\":2}],\"numbers\":[2,4],\"empty\":[],\"nil\":null,\"name\":\"继续\"}",
+      "rule": "$.numbers.sum()"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "6.0"
+    }
+  },
+  {
+    "id": "json.string.batch-aggregate-average",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"items\":[{\"id\":\"nil\",\"value\":null},{\"id\":\"missing\"},{\"id\":\"text\",\"value\":\"2\"},{\"id\":\"numeric\",\"value\":2}],\"numbers\":[2,4],\"empty\":[],\"nil\":null,\"name\":\"继续\"}",
+      "rule": "$.numbers.avg()"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "3.0"
+    }
+  },
+  {
+    "id": "json.continue.batch-empty-then-name",
+    "family": "json",
+    "operation": "json.continue",
+    "input": {
+      "content": "{\"items\":[{\"id\":\"nil\",\"value\":null},{\"id\":\"missing\"},{\"id\":\"text\",\"value\":\"2\"},{\"id\":\"numeric\",\"value\":2}],\"numbers\":[2,4],\"empty\":[],\"nil\":null,\"name\":\"继续\"}",
+      "rule": "$.empty[*]",
+      "nextRule": "$.name"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList → getString"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "first": [],
+        "next": "继续"
+      }
+    }
   }
 ]
