@@ -2034,5 +2034,145 @@
     "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XValue.asString for empty selection" },
     "tags": ["compatibility-recheck","custom-function","xpath-string","empty-selection","edge","empty"],
     "expected": { "outcome": "return", "value": "" }
+  },
+  {
+    "id": "xpath.string.substring-ex.basic",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef',2,4)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubStringEx / Commons Lang StringUtils.substring" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","normal"],
+    "expected": { "outcome": "return", "value": "cd" }
+  },
+  {
+    "id": "xpath.string.substring-ex.negative-start",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef',-2,6)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubStringEx / Commons Lang StringUtils.substring" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "ef" }
+  },
+  {
+    "id": "xpath.string.substring-ex.negative-end",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef',1,-1)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubStringEx / Commons Lang StringUtils.substring" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "bcde" }
+  },
+  {
+    "id": "xpath.string.substring-ex.start-out-of-range",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abc',9,10)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubStringEx / Commons Lang StringUtils.substring" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","empty"],
+    "expected": { "outcome": "return", "value": "" }
+  },
+  {
+    "id": "xpath.string.substring-ex.end-before-start",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef',4,2)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubStringEx / Commons Lang StringUtils.substring" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","empty"],
+    "expected": { "outcome": "return", "value": "" }
+  },
+  {
+    "id": "xpath.string.substring-ex.number-truncation",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef',2.9,5.9)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XValue.asLong Number.longValue" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "cde" }
+  },
+  {
+    "id": "xpath.string.substring-ex.string-half-up",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef','2.5','4.5')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XValue.asLong BigDecimal.setScale(HALF_UP)" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "de" }
+  },
+  {
+    "id": "xpath.string.substring-ex.int-wrap",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef',4294967298,4294967300)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XValue.asLong Long.intValue" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "cd" }
+  },
+  {
+    "id": "xpath.string.substring-ex.utf16-index",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('a😀b',1,3)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Commons Lang StringUtils.substring uses Java UTF-16 indices" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","unicode"],
+    "expected": { "outcome": "return", "value": "😀" }
+  },
+  {
+    "id": "xpath.string.substring-ex.element-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex(//p,1,3)", "content": "<root><p>A<b>B</b></p><p>DE</p></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XValue.asString for Elements" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","node-sequence","edge"],
+    "expected": { "outcome": "return", "value": "DE" }
+  },
+  {
+    "id": "xpath.string.substring-ex.attribute-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex(//@code,1,4)", "content": "<root><p code='ab'/><p code='xy'/></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XValue.asString for attribute lists" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","attribute-sequence","edge"],
+    "expected": { "outcome": "return", "value": "b,x" }
+  },
+  {
+    "id": "xpath.string.substring-ex.empty-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex(//missing,1,3)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XValue.asString for empty selection" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","empty-selection","edge","empty"],
+    "expected": { "outcome": "return", "value": "" }
+  },
+  {
+    "id": "xpath.string.substring-ex.invalid-string-index",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef','oops',4)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XValue.asLong BigDecimal parse failure" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","error"],
+    "errorEquivalence": {
+      "category": "xpath-substring-ex-index-conversion",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NumberFormatException"],
+      "tsMessageIncludes": ["substring-ex index is not a decimal"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-substring-ex-index-conversion" }
+  },
+  {
+    "id": "xpath.string.substring-ex.two-args.android-error",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-ex('abcdef',2)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubStringEx.call fixed two-argument IndexOutOfBoundsException" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","error"],
+    "errorEquivalence": {
+      "category": "xpath-substring-ex-two-argument-runtime-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["IndexOutOfBoundsException: Index: 2, Size: 2"],
+      "tsMessageIncludes": ["substring-ex with arity of 2"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-substring-ex-two-argument-runtime-error" }
   }
 ]

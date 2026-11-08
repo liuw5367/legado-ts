@@ -1484,7 +1484,21 @@
         "xpath.string.substring-after-last.element-sequence",
         "xpath.string.substring-before-last.attribute-sequence",
         "xpath.string.substring-after-last.attribute-sequence",
-        "xpath.string.substring-before-last.empty-sequence"
+        "xpath.string.substring-before-last.empty-sequence",
+        "xpath.string.substring-ex.basic",
+        "xpath.string.substring-ex.negative-start",
+        "xpath.string.substring-ex.negative-end",
+        "xpath.string.substring-ex.start-out-of-range",
+        "xpath.string.substring-ex.end-before-start",
+        "xpath.string.substring-ex.number-truncation",
+        "xpath.string.substring-ex.string-half-up",
+        "xpath.string.substring-ex.int-wrap",
+        "xpath.string.substring-ex.utf16-index",
+        "xpath.string.substring-ex.element-sequence",
+        "xpath.string.substring-ex.attribute-sequence",
+        "xpath.string.substring-ex.empty-sequence",
+        "xpath.string.substring-ex.invalid-string-index",
+        "xpath.string.substring-ex.two-args.android-error"
       ],
       "manifestMembers": [
         "parser-xpath::003-text",

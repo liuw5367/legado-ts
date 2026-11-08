@@ -28,6 +28,11 @@ registerCustomXPathFunction({ localName: 'substring-after-last', namespaceURI: X
   return index < 0 ? '' : sourceString.slice(index + separatorString.length)
 })
 
+registerCustomXPathFunction({ localName: 'substring-ex', namespaceURI: XPATH_FUNCTIONS_NAMESPACE }, ['item()*', 'item()*', 'item()*'], 'xs:string', (_context, source, start, end) => {
+  const sourceString = androidXPathValueAsString(source)
+  return sourceString.slice(androidXPathValueAsInt(start), androidXPathValueAsInt(end))
+})
+
 type XmlNode = {
   nodeType: number
   nodeName?: string
@@ -804,7 +809,7 @@ function maskXPathLiterals(expression: string): string {
 
 function rewriteAndroidXPathAttributeFunctionArguments(expression: string): string {
   const masked = maskXPathLiterals(expression)
-  const functionPattern = /substring-(?:before|after)-last\s*\(/g
+  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex)\s*\(/g
   let match: RegExpExecArray | null
   while ((match = functionPattern.exec(masked)) !== null) {
     const previous = masked[match.index - 1]
@@ -814,7 +819,8 @@ function rewriteAndroidXPathAttributeFunctionArguments(expression: string): stri
     const close = xpathCallEnd(masked, open)
     if (close === undefined) continue
     const ranges = xpathCallArgumentRanges(masked, open, close)
-    if (ranges.length !== 2) continue
+    const expectedArity = match[1] === 'substring-ex' ? 3 : 2
+    if (ranges.length !== expectedArity) continue
 
     const args = ranges.map(([start, end]) => {
       const argument = expression.slice(start, end).trim()
@@ -911,6 +917,54 @@ function androidXPathValueAsString(value: unknown): string {
   // for each element. Attribute and other node lists use XValue's comma join.
   if (items.every((item) => isXmlNode(item) && item.nodeType === 1)) return items.map(itemString).join('')
   return items.map(itemString).join(',')
+}
+
+function androidXPathValueAsInt(value: unknown): number {
+  const items = Array.isArray(value) ? value : [value]
+  if (items.length !== 1) throw new Error('substring-ex index must resolve to one value')
+  const item = items[0]
+  if (typeof item === 'number') {
+    let asLong: bigint
+    if (Number.isNaN(item)) asLong = 0n
+    else if (item >= 2 ** 63) asLong = 9_223_372_036_854_775_807n
+    else if (item <= -(2 ** 63)) asLong = -9_223_372_036_854_775_808n
+    else asLong = BigInt(Math.trunc(item))
+    return Number(BigInt.asIntN(32, asLong))
+  }
+  if (typeof item === 'string') return androidDecimalStringAsInt(item)
+  throw new Error(`substring-ex index cannot be converted to Long: ${String(item)}`)
+}
+
+function androidDecimalStringAsInt(value: string): number {
+  const decimal = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/.exec(value)
+  if (decimal === null) throw new Error(`substring-ex index is not a decimal: ${value}`)
+
+  const negative = decimal[1] === '-'
+  const whole = decimal[2] ?? ''
+  const fraction = decimal[3] ?? decimal[4] ?? ''
+  const exponentText = decimal[5] ?? '0'
+  const exponent = Number(exponentText)
+  if (!Number.isInteger(exponent) || exponent < -2_147_483_648 || exponent > 2_147_483_647) {
+    throw new Error(`substring-ex index exponent is outside BigDecimal range: ${value}`)
+  }
+
+  const digits = `${whole}${fraction}` || '0'
+  const coefficient = BigInt(digits)
+  const scale = BigInt(fraction.length) - BigInt(exponent)
+  let rounded: bigint
+  if (scale <= 0n) {
+    const shift = -scale
+    rounded = shift >= 32n ? 0n : coefficient * 10n ** shift
+  } else if (scale > BigInt(digits.length)) {
+    rounded = 0n
+  } else {
+    const divisor = 10n ** scale
+    const quotient = coefficient / divisor
+    const remainder = coefficient % divisor
+    rounded = remainder * 2n >= divisor ? quotient + 1n : quotient
+  }
+  if (negative) rounded = -rounded
+  return Number(BigInt.asIntN(32, rounded))
 }
 
 function normalizeXPathValue(value: unknown): RuleValue {
