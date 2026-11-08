@@ -1,6 +1,6 @@
 # 非 WebView 书源兼容实施规划
 
-- 状态：approved
+- 状态：completed
 - 创建：2026-11-08
 - 更新：2026-11-08
 
@@ -61,10 +61,19 @@ git diff --check
 - N4 固定 Rhino 与原始 JsSourceMarshaller，使用 JVM 实体及 HTTP(S) 地址解析适配，复用旧目录脚本。搜索/发现交付、同名策略、字段投影、正文与失败终态 5 例均一致。额外诊断保留在 TS 单侧验证，未映射为 Android 应用状态。报告 `run-Nu9hyj`。
 - N5 原 InfoMap 与实际 Node 发现链确认删除键未传播，修复后 3 例保存、请求及模拟快照一致，reader-web 发现回归 17/17。固定 Rhino 的同源闭包在第二次调用为 2，QuickJS 为 1，刷新后两端为 1。逐例登记闭包差异。报告 `run-soljEt`、`run-6O9K69`、`run-Jko1tK`。
 - N6 固定 BouncyCastle 和 OpenSSL 向量对照 GCM AAD、认证失败、同摘要 OAEP。独立 MGF1 摘要按实际 provider 能力逐例登记。固定合成 TrueType 经原 QueryTTF 与 replaceFont 对照，字形、缺失值和过滤一致。报告 `run-BaOMzm`、`run-hdAScc`。
+- 验收补充使用固定 Jsoup 复测两条旧 HTML 预期，保留自身文本、外层元素及 script/style 断言。ZIP 增加脚本有符号字节直接传给 `java.bytesToStr` 的覆盖，修复 QuickJS 到宿主的八位字节传输。报告 `run-Sf0bKr`、`run-vItSWL`。
+- 任务提交为 N1 `b19b036`，N2 `0428e7d`、`d2abb07`、`19496cc`，N3 `3d922f2`、`cbeafab`，N4 `d5cd6a5`，N5 `6a5cdd2`，N6 `232bd49`。N7 更新本记录和差异登记。
+
+最终 [run-XvobEA](../packages/compatibility-tests/output/run-XvobEA/report.md) 共 634 例，其中 568 个 API、64 个流程和 2 个未支持的内部观察。626 例一致、6 例逐例允许差异、0 意外差异、0 执行器故障。84 例异常语义等价。上一批全部 604 个案例和原允许差异路径与值保留，本批新增闭包词法状态和不同 MGF1 摘要两项允许差异。
+
+[run-BdudNp](../packages/compatibility-tests/output/run-BdudNp/report.md) 与最终报告的 `jvm.json.results`、`ts.json.results`、`report.json.cases` 严格一致，输入、实现、core 产物和参考提交摘要一致。参考源码保持在 `32a87b253e7cc28273c3850de86242caac83f1fd`，原仓库参考范围无差异。两份报告之后的 HTML 适配器提交只更新项目回归断言。
+
+JVM 准备、机制测试 33/33、流程功能族 64 例、书源回归 207/207、根测试 700/700、reader-web 发现回归 17/17、根与 Web 类型检查、构建及 `git diff --check` 均通过。真实 Android 宿主、站点可用性、通用 Jsoup 序列化及其他字体格式仍按既有边界分别验证。
 
 ## 变更记录
 
 - 2026-11-08 新建非 WebView 兼容批次规划。
+- 2026-11-08 完成 N1–N7，记录分任务提交、全量验收及保留的差异。
 
 ## 批准记录
 
