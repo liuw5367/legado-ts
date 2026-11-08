@@ -460,7 +460,12 @@
         "json.string.sum.large",
         "json.string.sum.small",
         "json.string.batch-aggregate-sum",
-        "json.string.batch-aggregate-average"
+        "json.string.batch-aggregate-average",
+        "json.string.nested-fallback-null",
+        "json.string.nested-fallback-missing",
+        "json.string.nested-fallback-empty",
+        "json.string.nested-fallback-non-empty",
+        "json.string.nested-fallback-array-null"
       ]
     },
     {
@@ -497,7 +502,12 @@
         "json.list.aggregateSum",
         "json.list.filterRange",
         "json.list.escaped-quote-code",
-        "json.list.batch-filter-number-string"
+        "json.list.batch-filter-number-string",
+        "json.list.nested-fallback-null",
+        "json.list.nested-fallback-missing",
+        "json.list.nested-fallback-empty",
+        "json.list.nested-fallback-non-empty",
+        "json.list.nested-fallback-array-null"
       ]
     },
     {
@@ -1442,7 +1452,10 @@
         "pattern.matcher.replaceEmpty",
         "pattern.matcher.literalRejectsWildcard",
         "pattern.matcher.invalidFlags",
-        "pattern.matcher.batch-mixed-local-groups"
+        "pattern.matcher.batch-mixed-local-groups",
+        "pattern.matcher.scoped-restore",
+        "pattern.matcher.scoped-zero-width-replace",
+        "pattern.matcher.scoped-zero-width-no-match"
       ]
     },
     {

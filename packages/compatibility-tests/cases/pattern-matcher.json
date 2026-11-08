@@ -902,5 +902,118 @@
         false
       ]
     }
+  },
+  {
+    "id": "pattern.matcher.scoped-restore",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(?i:a)b",
+      "text": "Ab AB ab aB",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"find\"]",
+        "[\"replaceAll\",\"X\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher.find,start,end,replaceAll"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true,
+        0,
+        2,
+        true,
+        6,
+        8,
+        false,
+        "X AB X aB"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.scoped-zero-width-replace",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(?i:(?=a))|(?=b)",
+      "text": "Ab aB",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"find\"]",
+        "[\"replaceAll\",\"|\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher.find,start,end,replaceAll"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true,
+        0,
+        0,
+        true,
+        1,
+        true,
+        3,
+        false,
+        "|A|b |aB"
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.scoped-zero-width-no-match",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(?i:(?=a))|(?=b)",
+      "text": "BB",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"replaceAll\",\"|\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher.find,start,end,replaceAll"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        false,
+        "BB"
+      ]
+    }
   }
 ]

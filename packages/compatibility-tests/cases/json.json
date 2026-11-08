@@ -854,5 +854,226 @@
         "next": "继续"
       }
     }
+  },
+  {
+    "id": "json.list.nested-fallback-null",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][0].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "second"
+      ]
+    }
+  },
+  {
+    "id": "json.string.nested-fallback-null",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][0].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "second"
+    }
+  },
+  {
+    "id": "json.list.nested-fallback-missing",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][1].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "second"
+      ]
+    }
+  },
+  {
+    "id": "json.string.nested-fallback-missing",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][1].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "second"
+    }
+  },
+  {
+    "id": "json.list.nested-fallback-empty",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][2].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "second"
+      ]
+    }
+  },
+  {
+    "id": "json.string.nested-fallback-empty",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][2].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "second"
+    }
+  },
+  {
+    "id": "json.list.nested-fallback-non-empty",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][3].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "left",
+        "null"
+      ]
+    }
+  },
+  {
+    "id": "json.string.nested-fallback-non-empty",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][3].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "left\nnull"
+    }
+  },
+  {
+    "id": "json.list.nested-fallback-array-null",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][4].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "null"
+      ]
+    }
+  },
+  {
+    "id": "json.string.nested-fallback-array-null",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][4].data||$.fallback"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList/getString · Jayway 返回值与后备选择"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "null"
+    }
   }
 ]
