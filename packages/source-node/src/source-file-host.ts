@@ -293,7 +293,11 @@ export class NodeSourceFileHost implements SourceFileHost {
   private async archiveContent(urlOrHex: string, path: string, format: 'zip' | 'rar' | '7z', signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<Uint8Array | undefined> {
     const bytes = /^https?:\/\//iu.test(urlOrHex) ? await this.downloadBytes(urlOrHex, signal, source, budget) : this.binaryEncoding.hexDecode(urlOrHex)
     const entries = await this.archive.extract(bytes, format, {}, signal)
-    return entries.find((entry) => entry.path === safeRelative(path))?.data
+    const target = safeRelative(path)
+    const entry = entries.find((candidate) => candidate.path === target)
+    // Android 的 ZIP 循环把 EOF 的 null 赋给非空 ZipEntry，缺失条目使脚本失败。
+    if (format === 'zip' && entry === undefined) throw new Error('zip entry not found')
+    return entry?.data
   }
 
   private async downloadBytes(url: string, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<Uint8Array> {
