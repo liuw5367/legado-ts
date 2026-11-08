@@ -64,6 +64,40 @@ test('reader-web search parses Android balanced inline JSONPath in a source resp
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
 
+test('reader-web search handles an HTML fragment with the Android XPath position rule', async (t) => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.10'
+  const rows = [
+    '<tr><th>书名</th></tr>',
+    '<tr><td><a href="/book/1">第一本</a></td></tr>',
+    '<tr><td><a href="/book/2">第二本</a></td></tr>',
+    '<tr><td><a href="/book/3">第三本</a></td></tr>',
+  ].join('')
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    searchUrl: `${base}/search?q={{key}}`,
+    ruleSearch: {
+      bookList: '@xpath://*[@id="bookcon"]//tr[position()>1 and position() < 12]',
+      name: 'td@text',
+      bookUrl: 'a@href',
+    },
+  }])
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    assert.equal(new URL(String(url)).pathname, '/search')
+    return new Response(`<div id="bookcon"><table><tbody>${rows}</tbody></table></div><aside>分页说明</aside>`)
+  })
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.deepEqual(result.candidates.map(({ candidate }) => ({ name: candidate.name, bookUrl: candidate.bookUrl })), [
+    { name: '第一本', bookUrl: `${base}/book/1` },
+    { name: '第二本', bookUrl: `${base}/book/2` },
+    { name: '第三本', bookUrl: `${base}/book/3` },
+  ])
+})
+
 test('global and account execution slots are shared by concurrent operations and release by token', async () => {
   const repository = new MemoryReaderRepository(); const user = randomUUID(); const other = randomUUID()
   const leases = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY + 1 }, () => repository.acquireExecutionSlot(user, randomUUID())))

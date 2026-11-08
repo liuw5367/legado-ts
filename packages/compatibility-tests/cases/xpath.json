@@ -1804,5 +1804,136 @@
       "outcome": "throw",
       "errorClass": "xpath-count-attribute-cast"
     }
+  },
+  {
+    "id": "xpath.nodes.html-fragment-position-predicate",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//*[@id=\"bookcon\"]//tr[position()>1 and position() < 12]",
+      "content": "<div id=\"bookcon\"><table><tbody><tr id=\"r1\"><td>1</td></tr><tr id=\"r2\"><td>2</td></tr><tr id=\"r3\"><td>3</td></tr><tr id=\"r4\"><td>4</td></tr><tr id=\"r5\"><td>5</td></tr><tr id=\"r6\"><td>6</td></tr><tr id=\"r7\"><td>7</td></tr><tr id=\"r8\"><td>8</td></tr><tr id=\"r9\"><td>9</td></tr><tr id=\"r10\"><td>10</td></tr><tr id=\"r11\"><td>11</td></tr><tr id=\"r12\"><td>12</td></tr><tr id=\"r13\"><td>13</td></tr><tr id=\"r14\"><td>14</td></tr></tbody></table></div><div class=\"row\" id=\"d1\">one</div><div class=\"row\" id=\"d2\">two</div><div class=\"row\" id=\"d3\">three</div>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath actual bookList XPath pattern from a saved source rule; fixed Jsoup HTML parsing and JsoupXpath 2.5.3"
+    },
+    "tags": [
+      "book-source",
+      "compatibility-recheck",
+      "position",
+      "html-fragment"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "2",
+          "attribute": "r2"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "3",
+          "attribute": "r3"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "4",
+          "attribute": "r4"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "5",
+          "attribute": "r5"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "6",
+          "attribute": "r6"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "7",
+          "attribute": "r7"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "8",
+          "attribute": "r8"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "9",
+          "attribute": "r9"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "10",
+          "attribute": "r10"
+        },
+        {
+          "kind": "element",
+          "tag": "tr",
+          "text": "11",
+          "attribute": "r11"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.string.html-fragment-document-root",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//body/div[@id=\"bookcon\"])",
+      "content": "<div id=\"bookcon\"><table><tbody><tr id=\"r1\"><td>1</td></tr><tr id=\"r2\"><td>2</td></tr><tr id=\"r3\"><td>3</td></tr><tr id=\"r4\"><td>4</td></tr><tr id=\"r5\"><td>5</td></tr><tr id=\"r6\"><td>6</td></tr><tr id=\"r7\"><td>7</td></tr><tr id=\"r8\"><td>8</td></tr><tr id=\"r9\"><td>9</td></tr><tr id=\"r10\"><td>10</td></tr><tr id=\"r11\"><td>11</td></tr><tr id=\"r12\"><td>12</td></tr><tr id=\"r13\"><td>13</td></tr><tr id=\"r14\"><td>14</td></tr></tbody></table></div><div class=\"row\" id=\"d1\">one</div><div class=\"row\" id=\"d2\">two</div><div class=\"row\" id=\"d3\">three</div>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath Jsoup HTML body wrapper for fragment"
+    },
+    "tags": [
+      "compatibility-recheck",
+      "html-fragment",
+      "document-root"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "1"
+    }
+  },
+  {
+    "id": "xpath.string.html-document-trailing-body-content",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//body/aside[@id='trailing'])",
+      "content": "<html><head><title>题</title></head><body><div id='inside'>正文</div></body><aside id='trailing'>说明</aside></html>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath Jsoup HTML parser moves trailing HTML body content into body"
+    },
+    "tags": [
+      "compatibility-recheck",
+      "html-document",
+      "body-content"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "1"
+    }
   }
 ]

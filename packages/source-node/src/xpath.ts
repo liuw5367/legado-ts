@@ -1,6 +1,7 @@
 import { DOMParser } from '@xmldom/xmldom'
 import { is as matchesSelector, selectAll } from 'css-select'
 import fontoxpath from 'fontoxpath'
+import type { Element } from 'domhandler'
 import { parseDocument } from 'htmlparser2'
 import { render } from 'dom-serializer'
 import { compileSourcePattern, ParserAdapterError } from '@legado/source-core'
@@ -630,7 +631,7 @@ export class XPathParserAdapter implements XPathParser {
     }
     const normalized = ensureXmlPrefixDeclarations(xml
       ? source
-      : render(parseDocument(source, { recognizeSelfClosing: true }), { xmlMode: true, encodeEntities: true }))
+      : serializeXPathHtmlDocument(parseDocument(source, { recognizeSelfClosing: true })))
     const parsed = new DOMParser({ onError: () => undefined }).parseFromString(normalized.source, 'text/xml') as unknown as XmlNode
     if (normalized.syntheticPrefixes.length > 0) {
       const root = parsed.nodeType === 9 ? childNodes(parsed).find((node) => node.nodeType === 1) : parsed
@@ -661,6 +662,44 @@ export class XPathParserAdapter implements XPathParser {
     if (!(document instanceof XmlDocumentView)) throw new Error('XPath requires an XML document created by XPathParserAdapter.parse')
     return document.stringify(node)
   }
+}
+
+// Jsoup 会把 HTML 片段解析到 html/body；送入 xmldom 前也必须生成单根文档并归并正文节点。
+function serializeXPathHtmlDocument(document: ReturnType<typeof parseDocument>): string {
+  const children = document.children
+  const doctypeNodes = children.filter((node) => node.type === 'directive' && node.name.toLowerCase() === '!doctype')
+  const findTag = (nodes: typeof children, name: string): Element | undefined => nodes.find((node): node is Element => node.type === 'tag' && node.name.toLowerCase() === name)
+  const html = findTag(children, 'html')
+  const isDocumentTrivia = (node: (typeof children)[number]): boolean => node.type === 'comment' || (node.type === 'text' && node.data.trim().length === 0)
+  const extraNodes = children.filter((node) => node !== html && !doctypeNodes.includes(node) && !isDocumentTrivia(node))
+  const htmlChildren = html?.children ?? []
+  const head = findTag([...htmlChildren, ...children], 'head')
+  const body = findTag([...htmlChildren, ...children], 'body')
+  const rootContent = htmlChildren.filter((node) => node !== head && node !== body)
+  const externalContent = children.filter((node) => node !== html && node !== head && node !== body && !doctypeNodes.includes(node) && !isDocumentTrivia(node))
+
+  if (html !== undefined && extraNodes.length === 0 && rootContent.length === 0 && head !== undefined && body !== undefined) {
+    return render(document, { xmlMode: true, encodeEntities: true })
+  }
+
+  const renderNodes = (nodes: typeof children): string => nodes.map((node) => render(node, { xmlMode: true, encodeEntities: true })).join('')
+  const bodyContent = [
+    ...(body?.children ?? []),
+    ...rootContent,
+    ...externalContent,
+  ]
+  const leadingHtmlContent = children.filter((node) => isDocumentTrivia(node))
+  const documentPrefix = renderNodes([...doctypeNodes, ...leadingHtmlContent])
+  const headMarkup = head === undefined ? '<head></head>' : render(head, { xmlMode: true, encodeEntities: true })
+  let bodyElement = body
+  if (bodyElement !== undefined && (rootContent.length > 0 || externalContent.length > 0)) {
+    bodyElement = bodyElement.cloneNode(false)
+    bodyElement.children = bodyContent
+  }
+  const bodyMarkup = bodyElement === undefined
+    ? `<body>${renderNodes(bodyContent)}</body>`
+    : render(bodyElement, { xmlMode: true, encodeEntities: true })
+  return `${documentPrefix}<html>${headMarkup}${bodyMarkup}</html>`
 }
 
 function ensureXmlPrefixDeclarations(source: string): { source: string; syntheticPrefixes: string[] } {

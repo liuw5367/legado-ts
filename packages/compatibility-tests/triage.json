@@ -631,7 +631,10 @@
         "xpath.string.xml-count-prefixed-attribute-from-prefixed-element",
         "xpath.string.xml-count-unprefixed-attribute",
         "xpath.nodes.xml-prefixed-attribute-only",
-        "xpath.nodes.xml-prefixed-attribute-predicate"
+        "xpath.nodes.xml-prefixed-attribute-predicate",
+        "xpath.nodes.html-fragment-position-predicate",
+        "xpath.string.html-fragment-document-root",
+        "xpath.string.html-document-trailing-body-content"
       ],
       "classification": "runtime-fix",
       "state": "resolved",
@@ -650,7 +653,9 @@
         "output/run-DJ9vqI/report.json",
         "output/run-Zjj7Ag/report.json",
         "output/run-fuqsC0/report.json",
-        "output/run-cWqU1z/report.json"
+        "output/run-cWqU1z/report.json",
+        "output/run-R6nQUI/report.json",
+        "output/run-qCAKmE/report.json"
       ]
     },
     {

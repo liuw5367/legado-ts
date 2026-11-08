@@ -1471,7 +1471,9 @@
         "xpath.string.xml-count-prefixed-attribute-only",
         "xpath.string.xml-count-wildcard-prefixed-attribute",
         "xpath.string.xml-count-prefixed-attribute-from-prefixed-element",
-        "xpath.string.xml-count-unprefixed-attribute"
+        "xpath.string.xml-count-unprefixed-attribute",
+        "xpath.string.html-fragment-document-root",
+        "xpath.string.html-document-trailing-body-content"
       ],
       "manifestMembers": [
         "parser-xpath::003-text",
@@ -1551,7 +1553,8 @@
         "xpath.nodes.xml-wildcard-prefixed-attribute",
         "xpath.nodes.xml-wildcard-plain-attribute",
         "xpath.nodes.xml-prefixed-attribute-only",
-        "xpath.nodes.xml-prefixed-attribute-predicate"
+        "xpath.nodes.xml-prefixed-attribute-predicate",
+        "xpath.nodes.html-fragment-position-predicate"
       ],
       "manifestMembers": [
         "parser-xpath::001-getelements"
