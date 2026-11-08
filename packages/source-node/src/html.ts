@@ -70,7 +70,7 @@ class HtmlDocumentView implements HtmlDocument {
       // script/style descendants from the selected elements.
       const copy = value.cloneNode(true)
       removeScriptAndStyle(copy)
-      if (!this.xmlMode) indentHtmlBreaks(copy, 0)
+      if (!this.xmlMode && !preservesWhitespace(value.parent)) formatHtmlBlocks(copy, 0)
       return render(copy, { xmlMode: this.xmlMode, encodeEntities: 'utf8' })
     }
     if (output === 'text') return jsoupText(value)
@@ -638,15 +638,35 @@ function removeScriptAndStyle(node: AnyNode): void {
   })
 }
 
-function indentHtmlBreaks(node: AnyNode, depth: number): void {
+const inlineContainers = new Set(['address', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'p', 'pre', 'td', 'th', 'title'])
+
+function formatHtmlBlocks(node: AnyNode, depth: number): void {
   if (!isTag(node) || preservesWhitespace(node)) return
+  const block = (child: AnyNode | undefined): boolean => child !== undefined && isTag(child) && blockElements.has(child.name)
+  const blockParent = block(node)
+  const indentFirst = blockParent && !inlineContainers.has(node.name) && node.children.some((child) => !isText(child))
   const children: AnyNode[] = []
-  for (const child of node.children) {
-    // Jsoup 的 HTML 序列化在 br 前按元素深度换行，保留空白的元素除外。
-    if (isTag(child) && child.name === 'br') children.push(new Text(`\n${' '.repeat(depth + 1)}`))
-    indentHtmlBreaks(child, depth + 1)
+  let previous: AnyNode | undefined
+  let indentClose = false
+  for (const [index, child] of node.children.entries()) {
+    const text = isText(child)
+    // Jsoup 在普通块的边界收缩 HTML 空白。NBSP 和保留空白的节点保持原值。
+    if (text && blockParent) {
+      child.data = child.data.replace(/[ \t\n\f\r]+/gu, ' ')
+      if (previous === undefined || block(previous)) child.data = child.data.replace(/^ /u, '')
+      if (index === node.children.length - 1 || block(node.children[index + 1])) child.data = child.data.replace(/ $/u, '')
+      if (child.data.length === 0) continue
+    }
+    // br 按块处理。内联父节点下的普通文本继续紧接在块节点之后。
+    const meaningful = !text || /[^ \t\n\f\r]/u.test(child.data)
+    const indent = meaningful && (block(child) || ((!text || blockParent) && (block(previous) || (previous === undefined && indentFirst))))
+    if (previous === undefined && meaningful) indentClose = indent
+    if (indent) children.push(new Text(`\n${' '.repeat(depth + 1)}`))
+    formatHtmlBlocks(child, depth + 1)
     children.push(child)
+    if (meaningful) previous = child
   }
+  if (indentClose) children.push(new Text(`\n${' '.repeat(depth)}`))
   node.children = children
 }
 

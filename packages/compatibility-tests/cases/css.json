@@ -874,5 +874,131 @@
       "outcome": "return",
       "value": "丁\n 戊"
     }
+  },
+  {
+    "id": "css.string.block-html-div",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<div id=\"probe\">a<br>b</div>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) / Jsoup outerHtml"
+    },
+    "tags": [
+      "edge",
+      "html-block-output"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<div id=\"probe\">\n a\n <br>\n b\n</div>"
+    }
+  },
+  {
+    "id": "css.string.block-html-paragraph",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<p id=\"probe\">a<br>b</p>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) / Jsoup outerHtml"
+    },
+    "tags": [
+      "edge",
+      "html-block-output"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<p id=\"probe\">a\n <br>\n b</p>"
+    }
+  },
+  {
+    "id": "css.string.block-html-nested",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<div id=\"probe\">a<section> b<br> c</section>d</div>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) / Jsoup outerHtml"
+    },
+    "tags": [
+      "edge",
+      "html-block-output"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<div id=\"probe\">\n a\n <section>\n  b\n  <br>\n  c\n </section>\n d\n</div>"
+    }
+  },
+  {
+    "id": "css.string.block-html-inline-boundary",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<div id=\"probe\"> a <span>b</span> c </div>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) / Jsoup outerHtml"
+    },
+    "tags": [
+      "edge",
+      "html-block-output"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<div id=\"probe\">\n a <span>b</span> c\n</div>"
+    }
+  },
+  {
+    "id": "css.string.block-html-pre",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<pre id=\"probe\"> a\n  <br>b </pre>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) / Jsoup outerHtml"
+    },
+    "tags": [
+      "edge",
+      "html-block-output"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<pre id=\"probe\"> a\n  <br>b </pre>"
+    }
+  },
+  {
+    "id": "css.string.block-html-xml",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<?xml version=\"1.0\"?><root><item id=\"probe\">a</item></root>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) / Jsoup outerHtml"
+    },
+    "tags": [
+      "edge",
+      "html-block-output"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<item id=\"probe\">a</item>"
+    }
   }
 ]

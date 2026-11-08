@@ -363,7 +363,13 @@
         "edge"
       ],
       "caseIds": [
-        "css.string.batch-mixed-html"
+        "css.string.batch-mixed-html",
+        "css.string.block-html-div",
+        "css.string.block-html-paragraph",
+        "css.string.block-html-nested",
+        "css.string.block-html-inline-boundary",
+        "css.string.block-html-pre",
+        "css.string.block-html-xml"
       ]
     },
     {

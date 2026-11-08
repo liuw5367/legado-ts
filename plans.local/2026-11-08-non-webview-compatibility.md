@@ -56,6 +56,7 @@ git diff --check
 核对当前提交、两套固定语料、差异台账、固定 Android 源码和 Jsoup 块级序列化探针。进入 N1–N7 实施。
 
 - N1 组装和重取用例通过，环回传输确认普通头三条独立值及顺序。请求/网络回归 59/59，类型检查通过。修复前报告为 `run-HYGsb0`、`run-k08EZk`，修复后为 `run-8rzubl`、`run-2xhBzy`。
+- N2 修复前 CSS 四个块级分支及 JS 分支有差异，见 `run-GHeVgo`、`run-ddpuS7`。修复后 CSS、flow、XPath、corpus 功能族与类型检查通过。
 
 ## 变更记录
 
