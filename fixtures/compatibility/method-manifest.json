@@ -573,7 +573,13 @@
         "max()",
         "avg()",
         "sum()",
-        "filter"
+        "filter",
+        "stddev()",
+        "first()",
+        "last()",
+        "index()",
+        "concat()",
+        "append()"
       ],
       "tsPaths": [
         "packages/source-node/src/jsonpath.ts"
@@ -591,7 +597,10 @@
       ],
       "errorCodes": [
         "unsupported-jsonpath",
-        "rule-failed"
+        "rule-failed",
+        "empty-aggregate",
+        "sequence-empty",
+        "sequence-index"
       ],
       "members": [
         {
@@ -773,6 +782,116 @@
             "unsupported-jsonpath",
             "rule-failed"
           ]
+        },
+        {
+          "id": "parser-jsonpath::010-stddev",
+          "owner": "AnalyzeByJSonPath",
+          "name": "stddev()",
+          "signature": "stddev()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "empty-aggregate"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::011-first",
+          "owner": "AnalyzeByJSonPath",
+          "name": "first()",
+          "signature": "first()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "sequence-empty"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::012-last",
+          "owner": "AnalyzeByJSonPath",
+          "name": "last()",
+          "signature": "last()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "sequence-empty"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::013-index",
+          "owner": "AnalyzeByJSonPath",
+          "name": "index()",
+          "signature": "index()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": [
+            "sequence-index"
+          ]
+        },
+        {
+          "id": "parser-jsonpath::014-concat",
+          "owner": "AnalyzeByJSonPath",
+          "name": "concat()",
+          "signature": "concat()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": []
+        },
+        {
+          "id": "parser-jsonpath::015-append",
+          "owner": "AnalyzeByJSonPath",
+          "name": "append()",
+          "signature": "append()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "partial",
+          "verification": "ts-passed",
+          "feasibility": "conditional",
+          "decision": "fix",
+          "fixtures": [
+            "JSON-FLOW-001",
+            "SCH-005"
+          ],
+          "errorCodes": []
         }
       ]
     },
@@ -4314,9 +4433,15 @@
       "verification": "ts-passed",
       "feasibility": "simulatable",
       "decision": "verify",
-      "divergences": ["D34"],
-      "fixtures": ["JS-005"],
-      "errorCodes": ["rule-failed"],
+      "divergences": [
+        "D34"
+      ],
+      "fixtures": [
+        "JS-005"
+      ],
+      "errorCodes": [
+        "rule-failed"
+      ],
       "members": [
         {
           "id": "java-primitive-overloads::001-string-valueof",
@@ -4329,7 +4454,9 @@
           "verification": "ts-passed",
           "feasibility": "simulatable",
           "decision": "verify",
-          "fixtures": ["JS-005"],
+          "fixtures": [
+            "JS-005"
+          ],
           "errorCodes": []
         },
         {
@@ -4343,7 +4470,9 @@
           "verification": "ts-passed",
           "feasibility": "simulatable",
           "decision": "verify",
-          "fixtures": ["JS-005"],
+          "fixtures": [
+            "JS-005"
+          ],
           "errorCodes": []
         },
         {
@@ -4357,7 +4486,9 @@
           "verification": "ts-passed",
           "feasibility": "simulatable",
           "decision": "verify",
-          "fixtures": ["JS-005"],
+          "fixtures": [
+            "JS-005"
+          ],
           "errorCodes": []
         },
         {
@@ -4371,7 +4502,9 @@
           "verification": "ts-passed",
           "feasibility": "simulatable",
           "decision": "verify",
-          "fixtures": ["JS-005"],
+          "fixtures": [
+            "JS-005"
+          ],
           "errorCodes": []
         },
         {
@@ -4385,7 +4518,9 @@
           "verification": "ts-passed",
           "feasibility": "simulatable",
           "decision": "verify",
-          "fixtures": ["JS-005"],
+          "fixtures": [
+            "JS-005"
+          ],
           "errorCodes": []
         }
       ]
@@ -5976,5 +6111,5 @@
       ]
     }
   ],
-  "memberCount": 259
+  "memberCount": 265
 }

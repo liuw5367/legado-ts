@@ -189,10 +189,66 @@ function parseJsonPathArguments(root: unknown, value: string): unknown[] {
     // JSON parameters. Bare booleans/null are ignored instead of becoming
     // stringified values in concat or numeric arguments.
     if (/^(?:true|false|null)$/u.test(part)) return undefined
+    if (part.startsWith('[')) return parseJaywayArrayParameter(part)
     const parsed = parseRelaxedJsonPreservingKeyOrder(part)
     if (parsed === undefined) throw new ParserAdapterError('unsupported-jsonpath', `JSONPath 函数参数无法解析：${part}`)
     return parsed
   })
+}
+
+/**
+ * Jayway 3.0's PathCompiler does not classify `[` as the start of a JSON
+ * function parameter. It skips opening brackets until it sees a string,
+ * number, or object, then parses the remaining suffix as one lenient JSON
+ * value. Preserve that observable behavior for array-looking parameters.
+ */
+function parseJaywayArrayParameter(value: string): unknown {
+  let start = 1
+  while (start < value.length) {
+    while (/\s/u.test(value[start] ?? '')) start += 1
+    if (value[start] !== '[') break
+    start += 1
+  }
+  const first = value[start]
+  if (first === '"') {
+    let escaped = false
+    for (let end = start + 1; end < value.length; end += 1) {
+      const current = value[end]!
+      if (escaped) escaped = false
+      else if (current === '\\') escaped = true
+      else if (current === '"') return JSON.parse(value.slice(start, end + 1)) as unknown
+    }
+    throw new ParserAdapterError('unsupported-jsonpath', `JSONPath 函数参数无法解析：${value}`)
+  }
+  if (first === '{') {
+    let depth = 0
+    let quote: '"' | "'" | undefined
+    let escaped = false
+    for (let end = start; end < value.length; end += 1) {
+      const current = value[end]!
+      if (quote !== undefined) {
+        if (escaped) escaped = false
+        else if (current === '\\') escaped = true
+        else if (current === quote) quote = undefined
+        continue
+      }
+      if (current === '"' || current === "'") quote = current
+      else if (current === '{') depth += 1
+      else if (current === '}' && --depth === 0) {
+        const parsed = parseRelaxedJsonPreservingKeyOrder(value.slice(start, end + 1))
+        if (parsed === undefined) throw new ParserAdapterError('unsupported-jsonpath', `JSONPath 函数参数无法解析：${value}`)
+        return parsed
+      }
+    }
+    throw new ParserAdapterError('unsupported-jsonpath', `JSONPath 函数参数无法解析：${value}`)
+  }
+  // JsonSmart returns an unquoted numeric suffix with its trailing bracket as
+  // a String (for example `[2,3]` becomes `2,3]`). Number aggregators ignore
+  // it, while append/concat observe the string value.
+  if (first === '-' || (first !== undefined && /[0-9]/u.test(first))) return value.slice(start)
+  // Jayway's parameter scanner leaves bare true/false/null and empty arrays
+  // without a JSON parameter.
+  return undefined
 }
 
 function isFunctionPathArgument(value: string): boolean {
@@ -262,12 +318,22 @@ function applyJsonPathFunction(name: string, path: string, value: unknown, args:
     return input[index]
   }
   if (name === 'index') {
-    if (args.length !== 1 || typeof args[0] !== 'number' || !Number.isInteger(args[0])) throw new Error('index 需要一个整数参数')
-    const index = args[0] < 0 ? input.length + args[0] : args[0]
-    if (index < 0 || index >= input.length) throw new Error(`index 目标索引超出范围：${args[0]}`)
+    const parameters = numberArguments(args)
+    if (parameters.length === 0) throw new Error('index 需要一个数字参数')
+    const requestedIndex = javaJsonPathIntValue(parameters[0]!)
+    const index = requestedIndex < 0 ? input.length + requestedIndex : requestedIndex
+    if (index < 0 || index >= input.length) throw new Error(`index 目标索引超出范围：${requestedIndex}`)
     return input[index]
   }
   throw new Error(`${name} 只能用于数组`)
+}
+
+function javaJsonPathIntValue(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  if (Number.isInteger(value)) return value | 0
+  if (value >= 2_147_483_647) return 2_147_483_647
+  if (value <= -2_147_483_648) return -2_147_483_648
+  return Math.trunc(value)
 }
 
 function numberArguments(args: unknown[]): number[] {

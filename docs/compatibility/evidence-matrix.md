@@ -91,11 +91,11 @@
 
 ## 2026-11-09 P2：JSONPath 函数与对象键顺序
 
-固定 Android Java/Kotlin 源码和依赖的 Kotlin/JVM 参考端，对 TypeScript 执行相同输入。新增 25 个 JSONPath 案例覆盖常用函数的普通输入、混合类型、空集合、对象键顺序，以及 `AnalyzeByJSonPath.getString/getStringList` 的结果转换。`coverage.json` 将 `read`、`filter` 和 `length/size/keys/min/max/avg/sum` 逐项关联到通过案例；`method-manifest.json` 中对应的 9 个成员均为 `ts-passed`。JSONPath 总计 **105/105 行为相等**；空聚合的四个函数两端都抛错，异常类和文案按 `empty-aggregate` 等价，原始结果仍保存在报告中。
+固定 Android Java/Kotlin 源码和 Jayway JsonPath 3.0.0 依赖的 Kotlin/JVM 参考端，对 TypeScript 执行相同输入。首批 25 个 JSONPath 案例覆盖常用函数和对象键顺序；后续增加 29 个案例覆盖 `stddev/first/last/index/concat/append`、数组参数扫描、Java 数值截断，以及 `getString/getStringList` 的 append 列表转换。`coverage.json` 逐项关联 `read/filter` 与 15 个路径函数成员，`method-manifest.json` 中这 15 个成员均为 `ts-passed`。JSON family 总计 **134/134 行为相等**；空聚合、空序列和索引越界两端均失败，错误类或文案差异按显式等价类别记录，原始输出保存在报告中。
 
 | 范围 | evidence | spec | implementation | execution | priority |
 | --- | --- | --- | --- | --- | --- |
-| D20 `read/filter/length/size/keys/min/max/avg/sum` | Android source + 固定 Kotlin/JVM 与 TS 同输入执行 | defined（coverage 所列案例） | partial | 105/105 行为相等；完整 JSONPath 方言、`stddev/first/last/index/concat/append`、复杂参数与动态表达式未覆盖，Android app/设备仍 not-run | required |
+| D20 `read/filter` 与 15 个路径函数成员 | Android source + 固定 Kotlin/JVM 与 TS 同输入执行 | defined（coverage 所列案例） | partial | JSON family 134/134 行为相等；完整 JSONPath 方言、复杂集合和动态表达式仍未覆盖；Android app/设备仍 not-run | required |
 
 ## Android 证据索引
 
@@ -132,7 +132,7 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 
 | 案例范围 | evidence | spec | implementation | execution | priority |
 | --- | --- | --- | --- | --- | --- |
-| D18/D19/D20：Jsoup 选择器、HTML 文本和 JSONPath 函数/正则过滤 | Android source + TS 最小输入执行 | defined（表中列出的输入） | partial | TS 观察到失败/差异；D18 已确认 CSS `:eq/:lt/:gt` 的负数在 Jsoup 解析期被拒绝，并覆盖正数位置边界，D19 已补普通文本 NBSP/换行归一化、`br`/`pre`/`textarea` 边界和 script/style DataNode 排除，D20 已补 Jayway `empty`/空聚合/文本函数边界；Android not-run | required |
+| D18/D19/D20：Jsoup 选择器、HTML 文本和 JSONPath 函数/正则过滤 | Android source + 固定 Kotlin/JVM 与 TS 同输入执行 | defined（表中列出的输入） | partial | D18 已确认 CSS `:eq/:lt/:gt` 的负数在 Jsoup 解析期被拒绝并覆盖正数位置；D19 已补文本空白与节点边界；D20 的固定 JVM JSON family 现为 134/134，逐项覆盖 15 个 JSONPath 成员。Android app/设备仍 not-run | required |
 | D22/D23：java.url/ruleUrl/headerMap、响应 Headers、getString 布尔重载和缺失成员 | Android source/内置帮助 + TS 请求桩/脚本执行 | defined（列出的成员、Headers 重复值/索引和重载） | D22 的 `url/headerMap/getHeaderMap/getStrResponse/getResponse/bodyJs/loginCheckJs` 已有 TS 实现，`ruleUrl/initUrl` 为部分实现；D23 overload semantics implemented | D22 的 response/StrResponse 方法与属性、OkHttp/Jsoup Headers 查询、重复值、索引、映射、敏感头脱敏和 HTTP-date `getDate/getInstant` 已有 `source-rule-host` 回归；P36 新增 `ruleUrl`、`initUrl` 地址恢复、Java Map 常用方法和 loginCheckJs 上下文回写回归；完整 Android URL 生命周期重解析、Map live view、WebView 和 Android golden not-run；D23 的 `unescape` 布尔重载、`content`/`isUrl` 位置、null 内容回退、HTML 解码、URL 解析和 list 去重已有 TS 回归 | required |
 | D24～D28/D31/D32/D34：对象方法、重建 session、InfoMap、AES 返回类型和 StrResponse 构造 | Android source + TS 脚本/session 执行 | defined（具体差异输入） | D31 的 InfoMap 缺失键、set/save/saveNow 返回值和保存 TTL 已由 P40 收口；缓存对象身份、其余 Java 对象和跨端状态仍为 partial | P40 Node 回归通过；Android not-run | required |
 | D29/D30/D35～D40：文件命名空间、下载、字体、工具、宿主配置、导入、库状态和游标签名 | source | 部分 defined；完整语言/平台等价仍 blocked | partial 或 absent，详见状态表 | 组合路径 not-run，不能写 pass | required/host |

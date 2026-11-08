@@ -1674,5 +1674,271 @@
     },
     "tags": ["edge"],
     "expected": {"outcome": "return", "value": "[z, a, 10, 2]"}
+  },
+  {
+    "id": "json.read.stddev.values",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3,4]}", "rule": "$.values.stddev()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function stddev()"},
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [1.118033988749895]}
+  },
+  {
+    "id": "json.read.stddev.mixed",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,\"2\",null,3]}", "rule": "$.values.stddev()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function stddev()"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [1]}
+  },
+  {
+    "id": "json.read.stddev.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[]}", "rule": "$.values.stddev()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function stddev()"},
+    "tags": ["edge", "empty", "error"],
+    "errorEquivalence": {"category": "empty-aggregate", "jvm": ["com.jayway.jsonpath.JsonPathException"], "ts": ["ParserAdapterError"], "tsMessageIncludes": ["没有可聚合的数字"]},
+    "expected": {"outcome": "throw", "errorClass": "empty-aggregate"}
+  },
+  {
+    "id": "json.read.first.values",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.first()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function first()"},
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [1]}
+  },
+  {
+    "id": "json.read.first.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[]}", "rule": "$.values.first()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function first()"},
+    "tags": ["edge", "empty", "error"],
+    "errorEquivalence": {"category": "sequence-empty", "jvm": ["java.lang.IndexOutOfBoundsException"], "ts": ["ParserAdapterError"], "tsMessageIncludes": ["first 不能用于空数组"]},
+    "expected": {"outcome": "throw", "errorClass": "sequence-empty"}
+  },
+  {
+    "id": "json.read.last.values",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.last()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function last()"},
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [3]}
+  },
+  {
+    "id": "json.read.last.single",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1]}", "rule": "$.values.last()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function last()"},
+    "tags": ["edge", "error"],
+    "errorEquivalence": {"category": "sequence-empty", "jvm": ["com.jayway.jsonpath.JsonPathException"], "ts": ["ParserAdapterError"], "tsMessageIncludes": ["last 目标索引超出范围"]},
+    "expected": {"outcome": "throw", "errorClass": "sequence-empty"}
+  },
+  {
+    "id": "json.read.last.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[]}", "rule": "$.values.last()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function last()"},
+    "tags": ["edge", "empty", "error"],
+    "errorEquivalence": {"category": "sequence-empty", "jvm": ["com.jayway.jsonpath.JsonPathException"], "ts": ["ParserAdapterError"], "tsMessageIncludes": ["last 目标索引超出范围"]},
+    "expected": {"outcome": "throw", "errorClass": "sequence-empty"}
+  },
+  {
+    "id": "json.read.index.positive",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.index(1)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function index()"},
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [2]}
+  },
+  {
+    "id": "json.read.index.negative",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.index(-1)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function index()"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [3]}
+  },
+  {
+    "id": "json.read.index.fraction",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.index(1.5)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function index()"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [2]}
+  },
+  {
+    "id": "json.read.index.path-array",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3],\"indices\":[1,2]}", "rule": "$.values.index($.indices)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function index() with path parameter"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [2]}
+  },
+  {
+    "id": "json.read.index.out-of-range",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.index(4)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function index()"},
+    "tags": ["edge", "error"],
+    "errorEquivalence": {"category": "sequence-index", "jvm": ["java.lang.IndexOutOfBoundsException"], "ts": ["ParserAdapterError"], "tsMessageIncludes": ["index 目标索引超出范围"]},
+    "expected": {"outcome": "throw", "errorClass": "sequence-index"}
+  },
+  {
+    "id": "json.read.concat.target-array",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[\"A\",1,\"B\"]}", "rule": "$.values.concat(\"!\")", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function concat()"},
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": ["AB!"]}
+  },
+  {
+    "id": "json.read.concat.array-strings",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"text\":\"x\"}", "rule": "$.text.concat([\"?\",\"x\"])", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function concat() with array literal"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["?"]}
+  },
+  {
+    "id": "json.read.concat.array-numbers",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"text\":\"x\"}", "rule": "$.text.concat([2,3])", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function concat() with array literal"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["2,3]"]}
+  },
+  {
+    "id": "json.read.concat.array-objects",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"text\":\"x\"}", "rule": "$.text.concat([{key:1},{flag:true}])", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function concat() with array literal"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["{key=1}"]}
+  },
+  {
+    "id": "json.read.concat.path-array",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"text\":\"x\",\"extra\":[4,5]}", "rule": "$.text.concat($.extra)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function concat() with path parameter"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["45"]}
+  },
+  {
+    "id": "json.read.concat.argument-types",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"text\":\"x\"}", "rule": "$.text.concat(\"!\",2,true,[\"?\",\"x\"])", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function concat() parameter coercion"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["!2?"]}
+  },
+  {
+    "id": "json.read.concat.no-arguments",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"text\":\"x\"}", "rule": "$.text.concat()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function concat()"},
+    "tags": ["edge", "empty"],
+    "expected": {"outcome": "return", "value": [""]}
+  },
+  {
+    "id": "json.read.append.array",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2]}", "rule": "$.values.append(3)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function append()"},
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [[1,2,3]]}
+  },
+  {
+    "id": "json.read.append.multiple",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2]}", "rule": "$.values.append(3,4)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function append()"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [[1,2,3,4]]}
+  },
+  {
+    "id": "json.read.append.array-parameter",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2]}", "rule": "$.values.append([3,4])", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function append() with array literal"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [[1,2,"3,4]"]]}
+  },
+  {
+    "id": "json.read.append.empty-array",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[]}", "rule": "$.values.append(3)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function append()"},
+    "tags": ["edge", "empty"],
+    "expected": {"outcome": "return", "value": [[3]]}
+  },
+  {
+    "id": "json.read.append.no-arguments",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2]}", "rule": "$.values.append()", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function append()"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [[1,2]]}
+  },
+  {
+    "id": "json.read.append.scalar",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"text\":\"abc\"}", "rule": "$.text.append(1)", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function append()"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["abc"]}
+  },
+  {
+    "id": "json.read.sum.array-parameter",
+    "family": "json",
+    "operation": "json.read",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.sum([4,5])", "pathFunction": true},
+    "reference": {"kind": "jdk-direct", "method": "Jayway JsonPath path function sum() with array literal"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [6]}
+  },
+  {
+    "id": "json.list.append.array",
+    "family": "json",
+    "operation": "json.list",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.append(4)"},
+    "reference": {"kind": "upstream-adapted", "method": "AnalyzeByJSonPath.getStringList(String) · append List result"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["1", "2", "3", "4"]}
+  },
+  {
+    "id": "json.string.append.array",
+    "family": "json",
+    "operation": "json.string",
+    "input": {"content": "{\"values\":[1,2,3]}", "rule": "$.values.append(4)"},
+    "reference": {"kind": "upstream-adapted", "method": "AnalyzeByJSonPath.getString(String) · append List result"},
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": "1\n2\n3\n4"}
   }
 ]

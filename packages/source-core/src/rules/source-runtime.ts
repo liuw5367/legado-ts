@@ -3304,6 +3304,13 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const inlineRules = await replaceBalancedInnerRules(expression, '{$.', async (path) => textValue(await this.evaluateText(path, state, content)))
     if (inlineRules.replaced) return inlineRules.text
     const value = this.json.evaluate(parsed, expression)
+    const appendFunction = /^(.*)\.append\((.*)\)$/su.exec(expression.trim())
+    // Jayway append() returns the JSON array itself. AnalyzeByJSonPath then
+    // treats that List as the getStringList/getString result, rather than as a
+    // single nested JSONPath match.
+    if (state.expect === 'text' && appendFunction !== null && Array.isArray(value) && value.length === 1 && Array.isArray(value[0])) {
+      return value[0].map(javaJsonText)
+    }
     // Android 的确定路径直接返回数组本身，jsonpath-plus 的 wrap 会再包一层；
     // 不拆开会让 `data.books` 这类列表规则只拿到一个「数组项」。
     // 通配/递归/过滤路径的结果本身就是「元素列表」，数组元素是条目而不是外层包装，不能拆。

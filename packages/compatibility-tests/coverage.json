@@ -506,7 +506,8 @@
         "json.string.nested-fallback-empty",
         "json.string.nested-fallback-non-empty",
         "json.string.nested-fallback-array-null",
-        "json.string.keys.object-order"
+        "json.string.keys.object-order",
+        "json.string.append.array"
       ]
     },
     {
@@ -551,7 +552,8 @@
         "json.list.nested-fallback-empty",
         "json.list.nested-fallback-non-empty",
         "json.list.nested-fallback-array-null",
-        "json.list.keys.object-order"
+        "json.list.keys.object-order",
+        "json.list.append.array"
       ]
     },
     {
@@ -623,7 +625,9 @@
         "json.read.length.text",
         "json.read.length.empty"
       ],
-      "manifestMembers": ["parser-jsonpath::002-length"]
+      "manifestMembers": [
+        "parser-jsonpath::002-length"
+      ]
     },
     {
       "operation": "json.read",
@@ -641,7 +645,9 @@
         "json.read.size.text",
         "json.read.size.empty"
       ],
-      "manifestMembers": ["parser-jsonpath::003-size"]
+      "manifestMembers": [
+        "parser-jsonpath::003-size"
+      ]
     },
     {
       "operation": "json.read",
@@ -658,7 +664,9 @@
         "json.read.keys.empty",
         "json.read.keys.scalar"
       ],
-      "manifestMembers": ["parser-jsonpath::004-keys"]
+      "manifestMembers": [
+        "parser-jsonpath::004-keys"
+      ]
     },
     {
       "operation": "json.read",
@@ -675,7 +683,9 @@
         "json.read.min.mixed",
         "json.read.min.empty"
       ],
-      "manifestMembers": ["parser-jsonpath::005-min"]
+      "manifestMembers": [
+        "parser-jsonpath::005-min"
+      ]
     },
     {
       "operation": "json.read",
@@ -692,7 +702,9 @@
         "json.read.max.mixed",
         "json.read.max.empty"
       ],
-      "manifestMembers": ["parser-jsonpath::006-max"]
+      "manifestMembers": [
+        "parser-jsonpath::006-max"
+      ]
     },
     {
       "operation": "json.read",
@@ -709,7 +721,9 @@
         "json.read.avg.mixed",
         "json.read.avg.empty"
       ],
-      "manifestMembers": ["parser-jsonpath::007-avg"]
+      "manifestMembers": [
+        "parser-jsonpath::007-avg"
+      ]
     },
     {
       "operation": "json.read",
@@ -724,9 +738,12 @@
       "caseIds": [
         "json.read.sum.numbers",
         "json.read.sum.mixed",
-        "json.read.sum.empty"
+        "json.read.sum.empty",
+        "json.read.sum.array-parameter"
       ],
-      "manifestMembers": ["parser-jsonpath::008-sum"]
+      "manifestMembers": [
+        "parser-jsonpath::008-sum"
+      ]
     },
     {
       "operation": "json.continue",
@@ -2172,8 +2189,14 @@
       "method": "InfoMap.save(time, need) / saveNow / remove",
       "reference": "upstream-adapted",
       "tsEntry": "executeExploreAction / parseExploreKinds / discoverBooks",
-      "requiredDimensions": ["edge"],
-      "caseIds": ["rule.infoMap.immediate", "rule.infoMap.deferred", "rule.infoMap.suppressed"]
+      "requiredDimensions": [
+        "edge"
+      ],
+      "caseIds": [
+        "rule.infoMap.immediate",
+        "rule.infoMap.deferred",
+        "rule.infoMap.suppressed"
+      ]
     },
     {
       "operation": "rule.sourceState",
@@ -2260,7 +2283,10 @@
       "method": "OkHttpClient · HTTP 重定向请求传输",
       "reference": "upstream-adapted",
       "tsEntry": "NodeNetworkHost.request",
-      "requiredDimensions": ["edge", "error-or-empty"],
+      "requiredDimensions": [
+        "edge",
+        "error-or-empty"
+      ],
       "caseIds": [
         "request.redirect.same-origin-302",
         "request.redirect.same-origin-307",
@@ -2305,16 +2331,26 @@
       "method": "Cipher.init / updateAAD / doFinal · GCM 与 OAEP 参数",
       "reference": "jdk-direct",
       "tsEntry": "QuickJS Java Cipher bridge",
-      "requiredDimensions": ["edge"],
-      "caseIds": ["rule.providerCrypto.gcm-authentication", "rule.providerCrypto.oaep-same-mgf", "rule.providerCrypto.oaep-distinct-mgf"]
+      "requiredDimensions": [
+        "edge"
+      ],
+      "caseIds": [
+        "rule.providerCrypto.gcm-authentication",
+        "rule.providerCrypto.oaep-same-mgf",
+        "rule.providerCrypto.oaep-distinct-mgf"
+      ]
     },
     {
       "operation": "rule.font",
       "method": "QueryTTF 字形查询 / JsExtensions.replaceFont",
       "reference": "upstream-adapted",
       "tsEntry": "java.queryBase64TTF / java.replaceFont",
-      "requiredDimensions": ["edge"],
-      "caseIds": ["rule.font.ttf-glyph-mapping"]
+      "requiredDimensions": [
+        "edge"
+      ],
+      "caseIds": [
+        "rule.font.ttf-glyph-mapping"
+      ]
     },
     {
       "operation": "rule.legacyCrypto",
@@ -2330,6 +2366,128 @@
       "caseIds": [
         "rule.legacyCrypto.batch-aes-legacy",
         "rule.legacyCrypto.batch-aes-factory"
+      ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function stddev()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → stddev()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.stddev.values",
+        "json.read.stddev.mixed",
+        "json.read.stddev.empty"
+      ],
+      "manifestMembers": [
+        "parser-jsonpath::010-stddev"
+      ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function first()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → first()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.first.values",
+        "json.read.first.empty"
+      ],
+      "manifestMembers": [
+        "parser-jsonpath::011-first"
+      ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function last()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → last()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.last.values",
+        "json.read.last.single",
+        "json.read.last.empty"
+      ],
+      "manifestMembers": [
+        "parser-jsonpath::012-last"
+      ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function index()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → index()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.index.positive",
+        "json.read.index.negative",
+        "json.read.index.fraction",
+        "json.read.index.path-array",
+        "json.read.index.out-of-range"
+      ],
+      "manifestMembers": [
+        "parser-jsonpath::013-index"
+      ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function concat()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → concat()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.concat.target-array",
+        "json.read.concat.array-strings",
+        "json.read.concat.array-numbers",
+        "json.read.concat.array-objects",
+        "json.read.concat.path-array",
+        "json.read.concat.argument-types",
+        "json.read.concat.no-arguments"
+      ],
+      "manifestMembers": [
+        "parser-jsonpath::014-concat"
+      ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function append()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → append()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.append.array",
+        "json.read.append.multiple",
+        "json.read.append.array-parameter",
+        "json.read.append.empty-array",
+        "json.read.append.no-arguments",
+        "json.read.append.scalar"
+      ],
+      "manifestMembers": [
+        "parser-jsonpath::015-append"
       ]
     }
   ]

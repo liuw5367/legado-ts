@@ -328,6 +328,7 @@ test('JSONPath adapter 对齐 Jayway 的集合等价、空值和聚合函数语�
   assert.deepEqual(parser.evaluate(value, '$.numbers.first()'), [1])
   assert.deepEqual(parser.evaluate(value, '$.numbers.last()'), [null])
   assert.deepEqual(parser.evaluate(value, '$.numbers.index(1)'), ['2'])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.index(1.5)'), ['2'])
   assert.deepEqual(parser.evaluate(value, '$.text.length()'), [null])
   assert.throws(
     () => parser.evaluate(value, '$.missing.length()'),
@@ -360,13 +361,15 @@ test('JSONPath adapter 对齐 Jayway 的标量 empty、空聚合和文本函数�
   assert.throws(() => parser.evaluate(value, '$.numbers.stddev()'), /没有可聚合的数字/u)
   assert.throws(() => parser.evaluate(value, '$.numbers.sum()'), /没有可聚合的数字/u)
   assert.deepEqual(parser.evaluate(value, '$.text.concat("!", 2, true, ["?"])'), ['!2?'])
-  assert.deepEqual(parser.evaluate(value, '$.text.concat([{key:1}, [2, {flag:true}], null])'), ['{key=1}[2, {flag=true}]'])
+  assert.deepEqual(parser.evaluate(value, '$.text.concat([{key:1}, [2, {flag:true}], null])'), ['{key=1}'])
+  assert.deepEqual(parser.evaluate(value, '$.text.concat(["?", "x"])'), ['?'])
   assert.deepEqual(parser.evaluate(value, '$.text.append(1)'), ['abc'])
+  assert.deepEqual(parser.evaluate({ numbers: [1, 2] }, '$.numbers.append([3,4])'), [[1, 2, '3,4]']])
 })
 
 test('JSONPath adapter 支持 Jayway 函数的路径参数和聚合参数', () => {
   const parser = new JsonPathParserAdapter()
-  const value = { numbers: [1, 2, 3], extra: [4, 5], text: 'x', nested: { value: [6, 7] } }
+  const value = { numbers: [1, 2, 3], extra: [4, 5], indices: [1, 2], text: 'x', nested: { value: [6, 7] } }
 
   assert.deepEqual(parser.evaluate(value, '$.text.concat($.extra)'), ['45'])
   assert.deepEqual(parser.evaluate(value, '$.text.concat(@.extra)'), ['45'])
@@ -376,6 +379,8 @@ test('JSONPath adapter 支持 Jayway 函数的路径参数和聚合参数', () =
   assert.deepEqual(parser.evaluate(value, '$.numbers.min(4, 5)'), [1])
   assert.deepEqual(parser.evaluate(value, '$.numbers.max(4, 5)'), [5])
   assert.deepEqual(parser.evaluate(value, '$.numbers.sum($.extra)'), [15])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.sum([4,5])'), [6])
+  assert.deepEqual(parser.evaluate(value, '$.numbers.index($.indices)'), [2])
   assert.deepEqual(parser.evaluate(value, '$.text.sum(4, 5)'), [9])
   assert.throws(() => parser.evaluate(value, '$.numbers.length($.extra)'), /length 不接受参数/u)
 })
