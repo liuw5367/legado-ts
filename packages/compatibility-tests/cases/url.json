@@ -203,5 +203,360 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "url.options.strict",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search?q=a,b,{\"method\":\"POST\",\"headers\":{\"X-Probe\":\"fixture\"}}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search?q=a,b",
+        "options": {
+          "method": "POST",
+          "headers": {
+            "X-Probe": "fixture"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.unquoted",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method:POST,headers:{X-Probe:fixture}}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "headers": {
+            "X-Probe": "fixture"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.equals-semicolon",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method=>POST;headers:{X-Probe:fixture}}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "headers": {
+            "X-Probe": "fixture"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.hash-comment",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{# legacy URL options\nmethod:POST,headers:{X-Probe:fixture}}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "headers": {
+            "X-Probe": "fixture"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.missing-array-item",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method:POST,values:[a,,b]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "values": [
+            "a",
+            null,
+            "b"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.trailing-object-separator",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method:POST,}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": null
+      }
+    }
+  },
+  {
+    "id": "url.options.unclosed-object",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method:POST"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": null
+      }
+    }
+  },
+  {
+    "id": "url.options.proto-key",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{\"__proto__\":{\"polluted\":true},\"method\":\"POST\"}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "__proto__": {
+            "polluted": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.single-quoted",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{'method':'POST','headers':{'X-Probe':'fixture'}}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "headers": {
+            "X-Probe": "fixture"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.block-comment",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{/* legacy */ method:POST,headers:{X-Probe:fixture}}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "headers": {
+            "X-Probe": "fixture"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.case-insensitive-literal",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method:POST,enabled:TrUe,disabled:FaLsE,empty:NuLl}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "enabled": true,
+          "disabled": false,
+          "empty": null
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.trailing-array-separator",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method:POST,values:[a,]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "values": [
+            "a",
+            null
+          ]
+        }
+      }
+    }
+  },
+  {
+    "id": "url.options.unquoted-call-shaped-value",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search,{method:POST,body:foo()}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": [
+      "url-options",
+      "lenient-json"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search",
+        "options": {
+          "method": "POST",
+          "body": "foo()"
+        }
+      }
+    }
   }
 ]

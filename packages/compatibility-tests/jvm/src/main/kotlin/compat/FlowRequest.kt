@@ -1,6 +1,8 @@
 package compat
 
-import com.google.gson.JsonParser
+import com.google.gson.JsonObject
+import com.google.gson.GsonBuilder
+import com.google.gson.Strictness
 import io.legado.app.utils.FlowFormEncoding
 import java.net.URLEncoder
 import java.util.IdentityHashMap
@@ -10,6 +12,13 @@ import org.htmlunit.corejs.javascript.Context
 import org.htmlunit.corejs.javascript.Scriptable
 import org.htmlunit.corejs.javascript.VarScope
 import org.htmlunit.corejs.javascript.JavaScriptException
+
+private val strictUrlOptionsGson = GsonBuilder().setStrictness(Strictness.STRICT).create()
+
+internal fun parseFlowUrlOptions(value: String): JsonObject? {
+    return runCatching { strictUrlOptionsGson.fromJson(value, JsonObject::class.java) }.getOrNull()
+        ?: runCatching { io.legado.app.utils.GSON.fromJson(value, JsonObject::class.java) }.getOrNull()
+}
 
 internal data class FlowRequest(
     val url: String,
@@ -30,7 +39,8 @@ internal fun flowSearchRequest(
     val separator = Regex("\\s*,\\s*(?=\\{)").find(rule)
         ?: return FlowRequest(resolve(rule.replace("{{key}}", URLEncoder.encode(keyword, Charsets.UTF_8))), headers)
     val address = rule.substring(0, separator.range.first).replace("{{key}}", keyword)
-    val options = JsonParser.parseString(rule.substring(separator.range.last + 1).replace("{{key}}", keyword)).asJsonObject
+    val optionText = rule.substring(separator.range.last + 1).replace("{{key}}", keyword)
+    val options = parseFlowUrlOptions(optionText) ?: JsonObject()
     val method = options.get("method")?.asString?.uppercase() ?: "GET"
     if (options.keySet().any { it !in setOf("method", "body", "charset", "headers", "bodyJs") } || method !in setOf("GET", "POST")) {
         throw Unsupported("离线请求仅支持静态 GET 或表单 POST 选项")

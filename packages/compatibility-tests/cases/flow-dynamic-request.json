@@ -724,5 +724,186 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.url-options.gson-lenient-method",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl.bodyJs / JsExtensions.ajax"
+    },
+    "tags": [
+      "offline",
+      "url-options",
+      "lenient-json"
+    ],
+    "flowOrigin": {
+      "fixture": "android-gson-lenient-url-options"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://dynamic.fixture.test",
+        "bookSourceName": "动态请求夹具",
+        "searchUrl": "https://dynamic.fixture.test/search,{method:POST,headers:{X-Probe:fixture}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        }
+      },
+      "keyword": "star",
+      "stopAfter": "detail",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://dynamic.fixture.test/search",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svMSI+5pif5rKzPC9hPjwvZGl2Pg=="
+          },
+          "requestHeaders": {
+            "x-probe": "fixture"
+          }
+        },
+        "child": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/child",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/child",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svMSI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/book/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+"
+          }
+        },
+        "ts-malformed": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/search,%7Bmethod:POST,headers:%7BX-Probe:fixture%7D%7D",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svMSI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "android-empty-post": {
+          "method": "POST",
+          "url": "https://dynamic.fixture.test/search",
+          "body": "",
+          "requestHeaders": {
+            "x-probe": "fixture"
+          },
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svMSI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        }
+      },
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "X-Probe"
+      ],
+      "requestLimit": 3
+    }
+  },
+  {
+    "id": "flow.synthetic.url-options.invalid-default-get",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl.bodyJs / JsExtensions.ajax"
+    },
+    "tags": [
+      "offline",
+      "url-options",
+      "invalid-options"
+    ],
+    "flowOrigin": {
+      "fixture": "android-invalid-url-options-default-request"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://dynamic.fixture.test",
+        "bookSourceName": "动态请求夹具",
+        "searchUrl": "https://dynamic.fixture.test/search,{method:POST,}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        }
+      },
+      "keyword": "star",
+      "stopAfter": "detail",
+      "responses": {
+        "android-default-get": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/search",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2svMSI+5pif5rKzPC9hPjwvZGl2Pg=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://dynamic.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://dynamic.fixture.test/book/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+"
+          }
+        }
+      },
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "X-Probe"
+      ],
+      "requestLimit": 2
+    }
   }
 ]

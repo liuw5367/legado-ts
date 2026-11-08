@@ -38,7 +38,13 @@ export async function executeBookFlow(input: Record<string, unknown>, mode: 'boo
   if (input.requestEvidence === true) {
     headerNames.add('content-type')
     const options = typeof imported.searchUrl === 'string' ? /,\s*(\{.*\})$/su.exec(imported.searchUrl)?.[1] : undefined
-    if (options) for (const name of Object.keys(JSON.parse(options).headers ?? {})) headerNames.add(name.toLowerCase())
+    if (options) {
+      try {
+        for (const name of Object.keys(JSON.parse(options).headers ?? {})) headerNames.add(name.toLowerCase())
+      } catch {
+        // 宽松 URL 选项用例会在 input.requestHeaderNames 中声明观察字段。
+      }
+    }
   }
   const requests: unknown[] = []
   const stages: Record<string, unknown> = {}

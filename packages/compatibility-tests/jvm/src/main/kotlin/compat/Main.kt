@@ -31,6 +31,15 @@ private fun execute(item: JsonObject): Any? {
         "flow.discover" -> executeBookFlow(input, discover = true)
         "flow.contentLifecycle" -> executeContentLifecycle(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
+        "url.options" -> {
+            val raw = text("url")
+            val separator = Regex("\\s*,\\s*(?=\\{)").find(raw)
+            if (separator == null) mapOf("url" to raw.trim(), "options" to null)
+            else mapOf(
+                "url" to raw.substring(0, separator.range.first).trim(),
+                "options" to parseFlowUrlOptions(raw.substring(separator.range.last + 1).trim()),
+            )
+        }
         "rule.providerCrypto" -> providerCryptoEvidence(input)
         "rule.font" -> fontEvidence(input)
         "rule.legacyCrypto" -> legacyCryptoEvidence(input)

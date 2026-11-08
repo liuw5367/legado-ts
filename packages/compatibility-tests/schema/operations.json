@@ -143,6 +143,14 @@
       "base": "string"
     }
   },
+  "url.options": {
+    "required": [
+      "url"
+    ],
+    "properties": {
+      "url": "string"
+    }
+  },
   "css.string": {
     "required": [
       "content",

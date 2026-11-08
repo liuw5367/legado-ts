@@ -3,6 +3,7 @@ import { executeMainJsFlow } from './main-js-flow.ts'
 import { executeRedirect } from './redirect.ts'
 import { executeZipDownload } from './zip-download.ts'
 import { decodeImage } from '../../source-core/src/index.ts'
+import { splitSourceRequestUrl } from '../../source-core/src/runtime/request-url.ts'
 import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeBookFlow } from './book-flow.ts'
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
@@ -265,6 +266,10 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'encoding.urlDecode': return script(host, `return Packages.java.net.URLDecoder.decode(${json('text')},${JSON.stringify(str('charset') || 'UTF-8')})`)
     case 'encoding.md5': return script(host, `return java.md5Encode(${json('text')})`)
     case 'url.parts': return script(host, `var u=java.toURL(${json('url')}${i.base === undefined ? '' : `,${json('base')}`}); return {protocol:u.getProtocol(),host:u.getHost(),port:u.getPort(),defaultPort:u.getDefaultPort(),path:u.getPath(),file:u.getFile(),query:u.getQuery(),ref:u.getRef(),authority:u.getAuthority(),userInfo:u.getUserInfo()}`)
+    case 'url.options': {
+      const parsed = splitSourceRequestUrl(str('url'))
+      return { url: parsed.url, options: parsed.options ?? null }
+    }
     case 'json.continue': return script(host, `return {first:java.getStringList(${JSON.stringify('@json:' + str('rule'))}),next:java.getString(${JSON.stringify('@json:' + str('nextRule'))})}`, i.content)
     case 'json.read': return new JsonPathParserAdapter().evaluate(JSON.parse(str('content')), str('rule'))
     case 'json.string': return script(host, `return java.getString(${JSON.stringify('@json:' + str('rule'))})`, i.content)

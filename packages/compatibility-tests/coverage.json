@@ -315,6 +315,32 @@
       ]
     },
     {
+      "operation": "url.options",
+      "method": "AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → url.options → source-core/runtime/request-url.ts",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "url.options.strict",
+        "url.options.unquoted",
+        "url.options.equals-semicolon",
+        "url.options.hash-comment",
+        "url.options.missing-array-item",
+        "url.options.trailing-object-separator",
+        "url.options.unclosed-object",
+        "url.options.proto-key",
+        "url.options.single-quoted",
+        "url.options.block-comment",
+        "url.options.case-insensitive-literal",
+        "url.options.trailing-array-separator",
+        "url.options.unquoted-call-shaped-value"
+      ]
+    },
+    {
       "operation": "css.string",
       "method": "AnalyzeByJSoup.getString(String)",
       "reference": "upstream-adapted",
