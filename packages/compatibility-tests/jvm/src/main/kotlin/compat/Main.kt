@@ -117,17 +117,22 @@ private fun execute(item: JsonObject): Any? {
             }
         }
         "pattern.matcher" -> {
-            val matcher = Pattern.compile(text("pattern"), input.get("flags")?.asInt ?: 0).matcher(text("text"))
+            val pattern = Pattern.compile(text("pattern"), input.get("flags")?.asInt ?: 0)
+            val matcher = pattern.matcher(text("text"))
             input.getAsJsonArray("actions").map { raw ->
                 val action = JsonParser.parseString(raw.asString).asJsonArray
                 when (action[0].asString) {
                     "find" -> if (action.size() > 1) matcher.find(action[1].asInt) else matcher.find()
                     "matches" -> matcher.matches()
+                    "lookingAt" -> matcher.lookingAt()
                     "group" -> if (action.size() < 2) matcher.group() else if (action[1].asJsonPrimitive.isString) matcher.group(action[1].asString) else matcher.group(action[1].asInt)
                     "start" -> if (action.size() < 2) matcher.start() else if (action[1].asJsonPrimitive.isString) matcher.start(action[1].asString) else matcher.start(action[1].asInt)
                     "end" -> if (action.size() < 2) matcher.end() else if (action[1].asJsonPrimitive.isString) matcher.end(action[1].asString) else matcher.end(action[1].asInt)
+                    "region" -> { matcher.region(action[1].asInt, action[2].asInt); "region" }
                     "reset" -> { if (action.size() > 1) matcher.reset(action[1].asString) else matcher.reset(); "reset" }
                     "replaceAll" -> matcher.replaceAll(action[1].asString)
+                    "replaceFirst" -> matcher.replaceFirst(action[1].asString)
+                    "split" -> pattern.split(text("text"), if (action.size() > 1) action[1].asInt else 0).toList()
                     else -> throw Unsupported("未知 Matcher 操作")
                 }
             }

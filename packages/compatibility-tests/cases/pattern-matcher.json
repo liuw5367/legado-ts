@@ -1156,5 +1156,186 @@
         false
       ]
     }
+  },
+  {
+    "id": "pattern.matcher.canonEq.composed",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "\u00e5",
+      "text": "a\u030a",
+      "flags": 128,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher CANON_EQ"
+    },
+    "tags": [
+      "normal",
+      "unicode",
+      "canonical-equivalence"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true,
+        "a\u030a",
+        0,
+        2
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.canonEq.decomposedPattern",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a\u030a",
+      "text": "x\u00e5y\u00e5",
+      "flags": 128,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher CANON_EQ"
+    },
+    "tags": ["normal", "unicode", "canonical-equivalence"],
+    "expected": {
+      "outcome": "return",
+      "value": [true, "\u00e5", 1, 2, true, "\u00e5", 3, 4, false]
+    }
+  },
+  {
+    "id": "pattern.matcher.canonEq.partialDecomposition",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "a\u030a and \u00e5",
+      "flags": 128,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher CANON_EQ"
+    },
+    "tags": ["edge", "unicode", "canonical-equivalence"],
+    "expected": {
+      "outcome": "return",
+      "value": [true, "a", 0, 1, true, "a", 3, 4, false]
+    }
+  },
+  {
+    "id": "pattern.matcher.canonEq.noPartialComposed",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a",
+      "text": "\u00e5",
+      "flags": 128,
+      "actions": ["[\"find\"]"]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher CANON_EQ"
+    },
+    "tags": ["edge", "unicode", "canonical-equivalence"],
+    "expected": {"outcome": "return", "value": [false]}
+  },
+  {
+    "id": "pattern.matcher.canonEq.literalMode",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "a.+\u00e5",
+      "text": "x a.+a\u030ay",
+      "flags": 144,
+      "actions": ["[\"find\"]"]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher CANON_EQ | LITERAL"
+    },
+    "tags": ["edge", "unicode", "literal", "canonical-equivalence"],
+    "expected": {"outcome": "return", "value": [false]}
+  },
+  {
+    "id": "pattern.matcher.canonEq.replaceAll",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "\u00e5",
+      "text": "\u00e5/a\u030a",
+      "flags": 128,
+      "actions": ["[\"replaceAll\",\"$0!\"]"]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher CANON_EQ"
+    },
+    "tags": ["normal", "unicode", "canonical-equivalence", "replacement"],
+    "expected": {"outcome": "return", "value": ["\u00e5!/a\u030a!"]}
+  },
+  {
+    "id": "pattern.matcher.canonEq.matcherApi",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "\u00e5",
+      "text": "a\u030a/x \u00e5",
+      "flags": 128,
+      "actions": [
+        "[\"lookingAt\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"region\",5,6]",
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"reset\",\"x\\u00e5y\"]",
+        "[\"find\"]",
+        "[\"start\"]",
+        "[\"end\"]",
+        "[\"replaceFirst\",\"$0!\"]",
+        "[\"split\",0]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher CANON_EQ"
+    },
+    "tags": ["edge", "unicode", "canonical-equivalence", "matcher-state", "replacement", "split"],
+    "expected": {
+      "outcome": "return",
+      "value": [true, "a\u030a", 0, 2, "region", true, "\u00e5", 5, 6, "reset", true, 1, 2, "x\u00e5!y", ["", "/x "]]
+    }
   }
 ]

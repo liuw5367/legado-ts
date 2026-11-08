@@ -2180,9 +2180,47 @@ test('替换正则仅在语法无效时退回字面替换，安全限制继续�
   assert.match(oversized.message ?? '', /长度上限/u)
 })
 
-test('Java Pattern 显式报告 CANON_EQ 能力缺失', async () => {
-  const result = await evaluate(new SourceRuleHost(), '@js:Packages.java.util.regex.Pattern.compile("é", 128)', '')
-  assert.equal(result.status, 'capability-missing')
+test('Java Pattern CANON_EQ 保留原文下标并限制未支持的正则语法', async () => {
+  const supported = await evaluate(new SourceRuleHost(), `@js:
+    var Pattern = Packages.java.util.regex.Pattern;
+    var pattern = Pattern.compile('å', 128);
+    var matcher = pattern.matcher('å/å');
+    var matches = [];
+    while (matcher.find()) matches.push([matcher.group(), matcher.start(), matcher.end()]);
+    var replaced = pattern.matcher('å/å').replaceAll('$0!');
+    var split = pattern.split('xåyåz').toArray();
+    var whole = Pattern.compile('å', 128).matcher('å');
+    var wholeMatch = [whole.matches(), whole.group(), whole.start(), whole.end()];
+    var looking = Pattern.compile('å', 128).matcher('å/x');
+    var lookingAt = [looking.lookingAt(), looking.group(), looking.start(), looking.end()];
+    var region = Pattern.compile('å', 128).matcher('x/åy').region(2, 4);
+    var regionFind = [region.find(), region.group(), region.start(), region.end()];
+    var fromOffset = Pattern.compile('å', 128).matcher('å å');
+    var offsetFind = [fromOffset.find(2), fromOffset.group(), fromOffset.start(), fromOffset.end()];
+    var reset = Pattern.compile('å', 128).matcher('x').reset('å');
+    var resetFind = [reset.find(), reset.group(), reset.start(), reset.end()];
+    var firstReplace = pattern.matcher('å/å').replaceFirst('$0!');
+    JSON.stringify({ matches: matches, replaced: replaced, split: split, wholeMatch: wholeMatch, lookingAt: lookingAt, regionFind: regionFind, offsetFind: offsetFind, resetFind: resetFind, firstReplace: firstReplace });
+  `, '')
+  assert.equal(supported.status, 'success', String(supported.message ?? supported.value))
+  assert.deepEqual(JSON.parse(String(supported.value)), {
+    matches: [['å', 0, 1], ['å', 2, 4]],
+    replaced: 'å!/å!',
+    split: ['x', 'y', 'z'],
+    wholeMatch: [true, 'å', 0, 1],
+    lookingAt: [true, 'å', 0, 2],
+    regionFind: [true, 'å', 2, 4],
+    offsetFind: [true, 'å', 2, 3],
+    resetFind: [true, 'å', 0, 2],
+    firstReplace: 'å!/å',
+  })
+
+  const unsupported = await evaluate(new SourceRuleHost(), '@js:Packages.java.util.regex.Pattern.compile("(é)+", 128)', '')
+  assert.equal(unsupported.status, 'capability-missing')
+  const reordered = await evaluate(new SourceRuleHost(), `@js:Packages.java.util.regex.Pattern.compile('a', 128).matcher('à̕').find()`, '')
+  assert.equal(reordered.status, 'capability-missing')
+  const combinedFlag = await evaluate(new SourceRuleHost(), '@js:Packages.java.util.regex.Pattern.compile("é", 130)', '')
+  assert.equal(combinedFlag.status, 'capability-missing')
 })
 
 test('规则宿主兼容 java.ajax 的对象请求形式', async () => {

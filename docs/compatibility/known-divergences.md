@@ -93,7 +93,7 @@
 | Java/Android 类、物理 androidId、Rhino 对象身份 | 常用 Java 类、导入、字符串、集合、字节/流与稳定设备替代值均优先受控模拟 | 纯 TypeScript/QuickJS 无法凭空产生真实 Activity、Android 系统服务和物理身份；这些具体成员保留真实宿主条件，其他纯接口继续实现 |
 | 多实例持久文件、跨进程锁、后台任务恢复 | 应用可使用现有持久存储与源租约定义范围 | 当前临时磁盘和 Node 进程锁不提供跨实例保证；不能把 Android 单进程语义描述成分布式能力 |
 
-`D21` Pattern 标志补充：Java `Pattern.CANON_EQ` 支持 Unicode 规范等价匹配。QuickJS 的受控 Pattern 对该标志返回 `capability-missing`，非法标志位按输入错误处理。
+`D21` Pattern 标志补充（P61）：JBR 21 的直接对照确认，`Pattern.CANON_EQ` 会对不含正则元字符的字面 pattern 按 NFD 规范等价匹配；QuickJS 现在映射 `Matcher.find/matches/lookingAt/region/reset/group/start/end/replaceFirst/replaceAll` 和 `Pattern.split` 的匹配文本及 UTF-16 下标，并由 7 条 JVM/TS 案例验证。`Pattern.LITERAL | CANON_EQ` 保留 JDK 观察到的字面匹配行为，不执行归一化。当前受控实现只接纳 `CANON_EQ` 单标志下、不需要跨原始码点重排的字面 pattern；含正则元字符、与其他标志组合、规范顺序重排以及超过 1 MiB 的匹配输入仍按明确的能力/运行边界处理。JDK 文档提示 `CANON_EQ` 可能带来较高开销和内存风险（[Java SE Pattern API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/regex/Pattern.html)）；Android app/设备 golden 尚未执行，不能把 JBR 21 对照描述成 Android 实机证据。
 
 `D21` 正则替换回退补充（P60）：固定 Android `AnalyzeRule.kt:544–560` 后，source-core evaluator 与 `SourceRuleRuntime` 对齐其 `runCatching` 结果。全量 `result.replace(regex, replacement)` 失败会退回 `result.replace(regexText, replacement)` 字面替换；首项替换在已命中但 replacement 引用无效时返回 replacement 原文，无匹配时返回空串。JVM/TS 固定案例 `regex.ruleReplace.invalidGroup.*`、`regex.ruleReplace.namedAndUnmatchedGroups`、`regex.ruleReplace.invalidPattern.*` 均通过；reader-web 正文工作流另有真实 runtime 入口回归。D21 仍为部分实现：复杂 Java Pattern 方言和 Android app/设备 golden 没有因此宣称完成。
 

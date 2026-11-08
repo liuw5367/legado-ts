@@ -1133,8 +1133,21 @@ const legadoPattern = {
   compile: (pattern, flags) => {
     const numericFlags = Number(flags ?? 0)
     if (!Number.isInteger(numericFlags) || numericFlags < 0 || numericFlags > 511) throw new RangeError("Invalid Pattern flags")
-    if ((numericFlags & 128) !== 0) throw new Error("__LEGADO_CAPABILITY__runtime Pattern.CANON_EQ unavailable")
     const patternText = String(pattern ?? "")
+    const literalMode = (numericFlags & 16) !== 0
+    // OpenJDK 在 Pattern.LITERAL 模式下不执行 CANON_EQ 归一化，保留字面匹配语义。
+    const canonEq = (numericFlags & 128) !== 0 && !literalMode
+    if (canonEq) {
+      // CANON_EQ 的完整语法需要让正则引擎保留原文字符边界；当前受控实现只接纳可严格映射的字面模式。
+      if ((numericFlags & ~(128 | 16)) !== 0) throw new Error("__LEGADO_CAPABILITY__runtime Pattern.CANON_EQ flag combination unavailable")
+      if (patternText.length > 2048) throw new Error("__LEGADO_PATTERN__pattern-too-long:CANON_EQ pattern exceeds runtime limit")
+      const regexMetacharacters = ["\\", ".", "^", "$", "|", "?", "*", "+", "(", ")", "[", "]", "{", "}"]
+      if (Array.from(patternText).some((character) => regexMetacharacters.includes(character))) throw new Error("__LEGADO_CAPABILITY__runtime Pattern.CANON_EQ regex syntax unavailable")
+      const decomposedPattern = patternText.normalize("NFD")
+      let perCharacterPattern = ""
+      for (const character of patternText) perCharacterPattern += character.normalize("NFD")
+      if (decomposedPattern !== perCharacterPattern) throw new Error("__LEGADO_CAPABILITY__runtime Pattern.CANON_EQ reordered pattern unavailable")
+    }
     let javaFlags = ""
     if ((numericFlags & 2) !== 0) javaFlags += "i"
     if ((numericFlags & 8) !== 0) javaFlags += "m"
@@ -1144,7 +1157,8 @@ const legadoPattern = {
     if ((numericFlags & 4) !== 0) prefix += "x"
     if ((numericFlags & 256) !== 0) prefix += "U"
     if ((numericFlags & 64) !== 0) prefix += "u"
-    const patternSource = (prefix.length === 0 ? "" : "(?" + prefix + ")") + ((numericFlags & 16) !== 0 ? legadoPattern.quote(patternText) : patternText)
+    const patternValue = canonEq ? patternText.normalize("NFD") : patternText
+    const patternSource = (prefix.length === 0 ? "" : "(?" + prefix + ")") + (literalMode ? legadoPattern.quote(patternValue) : patternValue)
     const compiled = request({ kind: "pattern-compile", pattern: patternSource, flags: javaFlags + "d" })
     const compiledFlags = String(compiled.flags ?? "")
     const makeRegex = (global) => new RegExp(String(compiled.source), compiledFlags + (global && !compiledFlags.includes("g") ? "g" : ""))
@@ -1168,9 +1182,65 @@ const legadoPattern = {
     const patternApi = {
       pattern: () => patternText,
       flags: () => numericFlags,
-      split: (value, limit) => legadoList(legadoJavaSplit(String(value), makeRegex(false), limit)),
+      split: (value, limit) => {
+        if (!canonEq) return legadoList(legadoJavaSplit(String(value), makeRegex(false), limit))
+        const text = String(value ?? "")
+        const max = limit === undefined ? 0 : Number(limit)
+        const matcher = patternApi.matcher(text)
+        const values = []
+        let cursor = 0
+        while (matcher.find()) {
+          const start = matcher.start()
+          const end = matcher.end()
+          if (start === 0 && end === 0) continue
+          if (max > 0 && values.length === max - 1) break
+          values.push(text.slice(cursor, start))
+          cursor = end
+        }
+        if (cursor === 0 && values.length === 0) return legadoList([text])
+        values.push(text.slice(cursor))
+        if (max === 0) while (values.length > 0 && values[values.length - 1] === "") values.pop()
+        return legadoList(values)
+      },
       matcher: (value) => {
       let input = String(value ?? "")
+      const createCanonicalMap = (text) => {
+        if (text.length > 1048576) throw new RangeError("Pattern CANON_EQ input exceeds runtime limit")
+        const normalized = text.normalize("NFD")
+        if (normalized.length > 1048576) throw new RangeError("Pattern CANON_EQ input exceeds runtime limit")
+        const sourceToNormalized = new Int32Array(text.length + 1)
+        const normalizedToSource = new Int32Array(normalized.length + 1)
+        sourceToNormalized.fill(-1)
+        normalizedToSource.fill(-1)
+        sourceToNormalized[0] = 0
+        normalizedToSource[0] = 0
+        let sourceIndex = 0
+        let normalizedIndex = 0
+        let perCharacter = ""
+        for (const character of text) {
+          const part = character.normalize("NFD")
+          perCharacter += part
+          sourceIndex += character.length
+          normalizedIndex += part.length
+          sourceToNormalized[sourceIndex] = normalizedIndex
+          normalizedToSource[normalizedIndex] = sourceIndex
+        }
+        if (perCharacter !== normalized) throw new Error("__LEGADO_CAPABILITY__runtime Pattern.CANON_EQ reordered input unavailable")
+        return { text: normalized, sourceToNormalized, normalizedToSource }
+      }
+      let canonicalMap = canonEq ? createCanonicalMap(input) : null
+      const matcherText = () => canonicalMap?.text ?? input
+      const toNormalized = (index) => {
+        if (canonicalMap === null) return index
+        const mapped = canonicalMap.sourceToNormalized[index]
+        if (mapped === undefined || mapped < 0) throw new Error("__LEGADO_CAPABILITY__runtime Pattern.CANON_EQ boundary splits a code point")
+        return mapped
+      }
+      const toSource = (index) => {
+        if (canonicalMap === null) return index
+        const mapped = canonicalMap.normalizedToSource[index]
+        return mapped === undefined ? -1 : mapped
+      }
       const regex = makeRegex(true)
       let last = null
       let lastOffset = 0
@@ -1187,19 +1257,45 @@ const legadoPattern = {
         const group = named ? last.groups?.[index] : last[groupIndex]
         if (group === undefined) return [-1, -1]
         const bounds = named ? last.indices?.groups?.[index] : last.indices?.[groupIndex]
-        if (Array.isArray(bounds)) return [bounds[0] + lastOffset, bounds[1] + lastOffset]
-        if (groupIndex === 0) return [last.index + lastOffset, last.index + lastOffset + group.length]
+        if (Array.isArray(bounds)) {
+          const start = bounds[0] + lastOffset
+          const end = bounds[1] + lastOffset
+          return canonEq ? [toSource(start), toSource(end)] : [start, end]
+        }
+        if (groupIndex === 0) {
+          const start = last.index + lastOffset
+          const end = start + group.length
+          return canonEq ? [toSource(start), toSource(end)] : [start, end]
+        }
         const local = String(last[0]).indexOf(String(group))
-        return local < 0 ? [-1, -1] : [last.index + lastOffset + local, last.index + lastOffset + local + String(group).length]
+        if (local < 0) return [-1, -1]
+        const start = last.index + lastOffset + local
+        const end = start + String(group).length
+        return canonEq ? [toSource(start), toSource(end)] : [start, end]
       }
-      const clear = () => { last = null; lastOffset = 0; advanceEmpty = false; regex.lastIndex = regionStart }
-      const scopedText = () => input.slice(regionStart, regionEnd)
+      const clear = () => { last = null; lastOffset = 0; advanceEmpty = false; regex.lastIndex = toNormalized(regionStart) }
+      const scopedText = () => matcherText().slice(toNormalized(regionStart), toNormalized(regionEnd))
       const scopedRegex = (prefix, suffix) => new RegExp(prefix + compiled.source + suffix, compiledFlags.replace("d", "") + (compiledFlags.includes("d") ? "d" : ""))
       const replaceInRegion = (replacement, replaceAll) => {
         // Java 替换从完整输入重新匹配；replaceAll 会搜索至失败，后续 group 因而没有有效匹配。
         regionStart = 0
         regionEnd = input.length
         clear()
+        if (canonEq) {
+          let output = ""
+          let cursor = 0
+          let replaced = false
+          while (api.find()) {
+            const start = api.start()
+            const end = api.end()
+            output += input.slice(cursor, start) + legadoJavaReplacement(replacement, [input.slice(start, end)])
+            cursor = end
+            replaced = true
+            if (!replaceAll) break
+          }
+          if (replaceAll) regex.lastIndex = matcherText().length + 1
+          return replaced ? output + input.slice(cursor) : input
+        }
         const value = legadoJavaReplace(input, makeRegex(false), replacement, replaceAll)
         if (replaceAll) {
           while (api.find()) { /* 保留 Java 替换后的搜索状态。 */ }
@@ -1215,34 +1311,44 @@ const legadoPattern = {
             regionStart = 0
             regionEnd = input.length
             clear()
-            regex.lastIndex = offset
+            regex.lastIndex = toNormalized(offset)
           }
           if (advanceEmpty) {
-            regex.lastIndex = Math.min(regionEnd + 1, regex.lastIndex + 1)
+            regex.lastIndex = Math.min(toNormalized(regionEnd) + 1, regex.lastIndex + 1)
             advanceEmpty = false
           }
-          const match = regex.exec(input)
-          if (match === null || match.index + match[0].length > regionEnd) { last = null; return false }
-          last = match
-          lastOffset = 0
-          advanceEmpty = match[0].length === 0
-          return true
+          const searchEnd = toNormalized(regionEnd)
+          let match
+          while ((match = regex.exec(matcherText())) !== null) {
+            const matchEnd = match.index + match[0].length
+            if (matchEnd > searchEnd) { last = null; return false }
+            if (canonEq && (toSource(match.index) < 0 || toSource(matchEnd) < 0)) {
+              regex.lastIndex = match.index + 1
+              continue
+            }
+            last = match
+            lastOffset = 0
+            advanceEmpty = match[0].length === 0
+            return true
+          }
+          last = null
+          return false
         },
         matches: () => {
           // Matcher.matches 必须覆盖整个区域，外层边界不受 MULTILINE 影响。
           const match = scopedRegex("(?<![\\s\\S])(?:", ")(?![\\s\\S])").exec(scopedText())
-          if (match === null) { last = null; return false }
+          if (match === null || (canonEq && toSource(toNormalized(regionStart) + match.index + match[0].length) < 0)) { last = null; return false }
           last = match
-          lastOffset = regionStart
+          lastOffset = toNormalized(regionStart)
           regex.lastIndex = lastOffset + match.index + match[0].length
           advanceEmpty = match[0].length === 0
           return true
         },
         lookingAt: () => {
           const match = scopedRegex("(?<![\\s\\S])(?:", ")").exec(scopedText())
-          if (match === null) { last = null; return false }
+          if (match === null || (canonEq && toSource(toNormalized(regionStart) + match.index + match[0].length) < 0)) { last = null; return false }
           last = match
-          lastOffset = regionStart
+          lastOffset = toNormalized(regionStart)
           regex.lastIndex = lastOffset + match.index + match[0].length
           advanceEmpty = match[0].length === 0
           return true
@@ -1255,6 +1361,10 @@ const legadoPattern = {
           }
           const groupIndex = Number(index ?? 0)
           if (!Number.isInteger(groupIndex) || groupIndex < 0 || groupIndex > patternGroupCount) throw new Error("No group " + groupIndex)
+          if (canonEq && groupIndex === 0) {
+            const [start, end] = groupBounds(0)
+            return start < 0 || end < 0 ? null : input.slice(start, end)
+          }
           return last[groupIndex] ?? null
         },
         groupCount: () => patternGroupCount,
@@ -1266,6 +1376,8 @@ const legadoPattern = {
           const from = Number(start)
           const to = Number(end)
           if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > input.length) throw new RangeError("Matcher region out of bounds")
+          toNormalized(from)
+          toNormalized(to)
           regionStart = from
           regionEnd = to
           clear()
@@ -1274,7 +1386,10 @@ const legadoPattern = {
         regionStart: () => regionStart,
         regionEnd: () => regionEnd,
         reset: (value) => {
-          if (value !== undefined) input = String(value)
+          if (value !== undefined) {
+            input = String(value)
+            canonicalMap = canonEq ? createCanonicalMap(input) : null
+          }
           // Java reset 同时恢复完整输入区域，且清除上一次匹配。
           regionStart = 0
           regionEnd = input.length
@@ -1282,7 +1397,7 @@ const legadoPattern = {
           return api
         },
       }
-      regex.lastIndex = regionStart
+      regex.lastIndex = toNormalized(regionStart)
       return api
     },
     }
