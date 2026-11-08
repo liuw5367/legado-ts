@@ -1783,7 +1783,9 @@
         "date-bridge.week-year-boundary",
         "date-bridge.quoted-and-unclosed-literal",
         "date-bridge.invalid-pattern-catch-and-continue",
+        "date-bridge.invalid-pattern-propagates",
         "date-bridge.local-time-format",
+        "date-bridge.local-zone-daylight-saving",
         "date-bridge.positive-half-hour-and-midnight",
         "date-bridge.java-long-int-argument-coercion",
         "date-bridge.simple-date-format-token-widths"
