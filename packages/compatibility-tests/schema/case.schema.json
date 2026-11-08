@@ -72,6 +72,7 @@
         "rule.infoMap",
         "rule.sourceState",
         "flow.contentLifecycle",
+        "flow.contentBatch",
         "rule.coverStream",
         "rule.zipDownload",
         "rule.providerCrypto",
@@ -1917,6 +1918,58 @@
               },
               "title": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "flow.contentBatch"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "source",
+              "book",
+              "chapters",
+              "mode",
+              "program",
+              "responses",
+              "requestLimit"
+            ],
+            "properties": {
+              "source": {
+                "type": "object"
+              },
+              "book": {
+                "type": "object"
+              },
+              "chapters": {
+                "type": "object"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "program": {
+                "type": "string"
+              },
+              "responses": {
+                "type": "object"
+              },
+              "requestLimit": {
+                "type": "integer"
+              },
+              "faults": {
+                "type": "object"
               }
             },
             "additionalProperties": false

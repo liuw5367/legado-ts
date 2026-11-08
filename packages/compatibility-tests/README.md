@@ -47,6 +47,8 @@ TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJ
 
 `date-bridge` 族通过固定 Rhino 调用锁定 `JsExtensions.kt` 的 `timeFormat/timeFormatUTC`，TS 则执行实际 QuickJS `java.timeFormat/timeFormatUTC` bridge 和 Node formatter。每条案例固定 JVM 默认 Locale/TimeZone，并在 TS 配置相同值；它比较 pattern 输出及 JS `catch` 后续行为，不把 JDK 结果外推为所有 Android 设备 Locale、时区或 WebView Java bridge 的 golden。
 
+`flow.contentBatch` 族的 TS 端调用真实 `loadChapterContentBatch`、QuickJS bridge、RequestHost 和单章正文入口。JVM 端原样编译摘要锁定的 `BatchContentContext.kt` 与 `JsExtensions.cacheContent` 方法；`BookContent.kt`、`JsSourceBook.kt`、`CacheBook.kt` 锁定流程顺序。只把 `BookHelp` 磁盘保存替换为可观察、可注入旧版本的内存 sink。该 guided flow 不覆盖 Android 磁盘、下载队列调度或设备并发。
+
 本包初期只覆盖纯函数和轻依赖解析器。AnalyzeRule、AnalyzeUrl、WebBook 等应用入口没有被整体编译。JVM 与 TS 的可观察入口不同，输出差异需要结合适配边界判断，不能将报告中的全部条目直接视为已确认缺陷。
 
 ## 输出和比较
@@ -91,6 +93,7 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 | `flow.synthetic.main-js.*` | 复用旧整源目录脚本并增加搜索、发现、详情及正文。JVM 使用固定 Rhino、原 JsSourceMarshaller 和离线实体，比较交付、字段、请求与终态 |
 | `flow.yiove.wensang.discovery-empty-page` | 「文桑小说」原始发现分类和字段规则。比较两个有序结果、空页终态和实际请求顺序 |
 | `flow.synthetic.content-fallback.*` | 合成正文响应。分别验证主规则命中、合法为空后回退、两边均空的终态 |
+| `flow.synthetic.content-batch.*` | 14 条合成双端流程。验证章节对象、相对/唯一/歧义 URL、纯数字拒绝、空正文、重复回存、部分写入后脚本失败、旧缓存令牌拒写、取消、`<js>`/`@js:`/裸脚本及 JS 源 `getContentBatch`；比较批次结果、保存调用和缺章单章请求 |
 | `flow.yiove.html.*` | 「言情小说阁」原始规则与合成 HTML。验证搜索顺序、相对链接、独立目录地址、正文替换、合法空搜索和空正文失败 |
 | `flow.synthetic.json.*` | 从 `JSON-FLOW-001` 复制规则和素材。验证过滤、VIP 标记、两个正文页的拼接，以及无下一页、下一章、重复地址三类停止条件 |
 | `flow.yiove.js.*` | 「奇怪小说」原始目录脚本与合成 HTML。验证详情响应复用、排除“最新章节”组、保留节点顺序、读取脚本选中的章节和空目录失败 |

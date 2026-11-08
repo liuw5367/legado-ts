@@ -1,0 +1,1633 @@
+[
+  {
+    "id": "flow.synthetic.content-batch.object-and-unique-url",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"batch-object\"); java.cacheContent(chapters[1].url, \"batch-url\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"batch-object\"); java.cacheContent(chapters[1].url, \"batch-url\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-object-and-unique-url"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "batch-object",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "batch-url",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "batch-object",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "batch-url",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.duplicate-url-is-ambiguous",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0].url, \"must-not-save\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/shared"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/shared"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0].url, \"must-not-save\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/shared",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/shared",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stc2hhcmVkPC9ib2R5Pg=="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-duplicate-url-is-ambiguous"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "failed",
+        "items": [
+          {
+            "index": 0,
+            "content": "fallback-shared",
+            "saved": true,
+            "via": "single"
+          },
+          {
+            "index": 1,
+            "content": "fallback-shared",
+            "saved": true,
+            "via": "single"
+          }
+        ],
+        "requests": [
+          "https://batch.fixture/chapter/shared",
+          "https://batch.fixture/chapter/shared"
+        ],
+        "writes": [
+          {
+            "index": 0,
+            "content": "fallback-shared",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "fallback-shared",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.numeric-identifier-is-rejected",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(0, \"must-not-save\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(0, \"must-not-save\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-numeric-identifier-is-rejected"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "failed",
+        "items": [
+          {
+            "index": 0,
+            "content": "fallback-0",
+            "saved": true,
+            "via": "single"
+          },
+          {
+            "index": 1,
+            "content": "fallback-1",
+            "saved": true,
+            "via": "single"
+          }
+        ],
+        "requests": [
+          "https://batch.fixture/chapter/0",
+          "https://batch.fixture/chapter/1"
+        ],
+        "writes": [
+          {
+            "index": 0,
+            "content": "fallback-0",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "fallback-1",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.partial-save-survives-script-error",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"batch-0\"); throw new Error(\"after first save\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"batch-0\"); throw new Error(\"after first save\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-partial-save-survives-script-error"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "failed",
+        "items": [
+          {
+            "index": 0,
+            "content": "batch-0",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "fallback-1",
+            "saved": true,
+            "via": "single"
+          }
+        ],
+        "requests": [
+          "https://batch.fixture/chapter/1"
+        ],
+        "writes": [
+          {
+            "index": 0,
+            "content": "batch-0",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "fallback-1",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.blank-save-falls-back",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"   \");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"   \");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-blank-save-falls-back"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "fallback-0",
+            "saved": true,
+            "via": "single"
+          },
+          {
+            "index": 1,
+            "content": "fallback-1",
+            "saved": true,
+            "via": "single"
+          }
+        ],
+        "requests": [
+          "https://batch.fixture/chapter/0",
+          "https://batch.fixture/chapter/1"
+        ],
+        "writes": [
+          {
+            "index": 0,
+            "content": "fallback-0",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "fallback-1",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.duplicate-save-keeps-latest",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"first\"); java.cacheContent(chapters[0].url, \"latest\"); java.cacheContent(chapters[1], \"second\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"first\"); java.cacheContent(chapters[0].url, \"latest\"); java.cacheContent(chapters[1], \"second\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-duplicate-save-keeps-latest"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "latest",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "second",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "first",
+            "accepted": true
+          },
+          {
+            "index": 0,
+            "content": "latest",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "second",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.stale-token-rejects-overwrite",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"stale\"); java.cacheContent(chapters[1], \"batch-1\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"stale\"); java.cacheContent(chapters[1], \"batch-1\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      },
+      "faults": {
+        "staleIndexes": [
+          0
+        ]
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-stale-token-rejects-overwrite"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "partial",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "saved": false,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "batch-1",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "stale",
+            "accepted": false
+          },
+          {
+            "index": 1,
+            "content": "batch-1",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.cancel-after-first-save",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"batch-0\"); java.cacheContent(chapters[1], \"must-not-run\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"batch-0\"); java.cacheContent(chapters[1], \"must-not-run\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      },
+      "faults": {
+        "cancelAfterIndex": 0
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-cancel-after-first-save"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "cancelled",
+        "batchCount": 1,
+        "batchOutcome": "cancelled",
+        "items": [
+          {
+            "index": 0,
+            "content": "batch-0",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "saved": false,
+            "via": "none"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "batch-0",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.javascript-source-batch-function",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "maxBatchSize": 2
+        },
+        "mainJs": "function getContentBatch(chapters, book) { if (book.name !== \"批量测试书\") throw new Error(\"book missing\"); java.cacheContent(chapters[0], \"js-0\"); java.cacheContent(chapters[1].url, \"js-1\"); }"
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "javascript",
+      "program": "function getContentBatch(chapters, book) { if (!book) throw new Error(\"book missing\"); java.cacheContent(chapters[0], \"js-0\"); java.cacheContent(chapters[1].url, \"js-1\"); }",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-javascript-source-batch-function"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "js-0",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "js-1",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "js-0",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "js-1",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.wrapped-multiple-js-blocks",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "<js>java.cacheContent(chapters[0], \"wrapped-0\");</js><js>java.cacheContent(chapters[1], \"wrapped-1\");</js>",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "<js>java.cacheContent(chapters[0], \"wrapped-0\");</js><js>java.cacheContent(chapters[1], \"wrapped-1\");</js>",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-wrapped-multiple-js-blocks"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "wrapped-0",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "wrapped-1",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "wrapped-0",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "wrapped-1",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.relative-url-normalization",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"relative-object\"); java.cacheContent(chapters[1].url, \"relative-url\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "chapter/0",
+            "baseUrl": "https://batch.fixture/toc/index.html"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "chapter/1",
+            "baseUrl": "https://batch.fixture/toc/index.html"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"relative-object\"); java.cacheContent(chapters[1].url, \"relative-url\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-relative-url-normalization"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "relative-object",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "relative-url",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "relative-object",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "relative-url",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.empty-replace-rule-is-no-op",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "java.cacheContent(chapters[0], \"batch-object\"); java.cacheContent(chapters[1].url, \"batch-url\");",
+          "maxBatchSize": 2,
+          "replaceRegex": ""
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "java.cacheContent(chapters[0], \"batch-object\"); java.cacheContent(chapters[1].url, \"batch-url\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-empty-replace-rule-is-no-op"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "batch-object",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "batch-url",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "batch-object",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "batch-url",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.at-js-prefix",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "@js:java.cacheContent(chapters[0], \"at-js-0\"); java.cacheContent(chapters[1], \"at-js-1\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "@js:java.cacheContent(chapters[0], \"at-js-0\"); java.cacheContent(chapters[1], \"at-js-1\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-at-js-prefix"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "at-js-0",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "at-js-1",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "at-js-0",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "at-js-1",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.content-batch.bare-js-literal-marker",
+    "family": "flow",
+    "operation": "flow.contentBatch",
+    "contractScope": "flow",
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://batch.fixture/source",
+        "bookSourceName": "批量正文兼容夹具",
+        "bookSourceType": 0,
+        "ruleContent": {
+          "content": "body@text",
+          "contentBatch": "var marker = \"<js>\"; java.cacheContent(chapters[0], marker); java.cacheContent(chapters[1], \"bare\");",
+          "maxBatchSize": 2
+        }
+      },
+      "book": {
+        "bookUrl": "https://batch.fixture/book",
+        "tocUrl": "https://batch.fixture/toc/index.html",
+        "name": "批量测试书",
+        "isOnlineText": false
+      },
+      "requestLimit": 4,
+      "chapters": {
+        "items": [
+          {
+            "index": 0,
+            "title": "第1章",
+            "url": "https://batch.fixture/chapter/0"
+          },
+          {
+            "index": 1,
+            "title": "第2章",
+            "url": "https://batch.fixture/chapter/1"
+          }
+        ]
+      },
+      "mode": "declarative",
+      "program": "var marker = \"<js>\"; java.cacheContent(chapters[0], marker); java.cacheContent(chapters[1], \"bare\");",
+      "responses": {
+        "chapter-0": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/0",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/0",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMDwvYm9keT4="
+          }
+        },
+        "chapter-1": {
+          "method": "GET",
+          "url": "https://batch.fixture/chapter/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://batch.fixture/chapter/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGJvZHk+ZmFsbGJhY2stMTwvYm9keT4="
+          }
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BatchContentContext / JsExtensions.cacheContent / BookContent / CacheBook"
+    },
+    "tags": [
+      "batch-content",
+      "cache",
+      "fallback"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-content-batch-bare-js-literal-marker"
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "batchCount": 1,
+        "batchOutcome": "success",
+        "items": [
+          {
+            "index": 0,
+            "content": "<js>",
+            "saved": true,
+            "via": "batch"
+          },
+          {
+            "index": 1,
+            "content": "bare",
+            "saved": true,
+            "via": "batch"
+          }
+        ],
+        "requests": [],
+        "writes": [
+          {
+            "index": 0,
+            "content": "<js>",
+            "accepted": true
+          },
+          {
+            "index": 1,
+            "content": "bare",
+            "accepted": true
+          }
+        ]
+      }
+    }
+  }
+]

@@ -16,28 +16,28 @@
     {
       "path": "app/src/main/java/io/legado/app/model/analyzeRule/QueryTTF.java",
       "sha256": "09be94396c2ac0ad85c8a8619cb7220f56156c8fcc0ea0f6ce3607c536961709",
-      "sections": [[1, 2], [5, 10], [12, 1055]],
+      "sections": [[1,2],[5,10],[12,1055]],
       "prefix": "",
       "suffix": ""
     },
     {
       "path": "app/src/main/java/io/legado/app/utils/InfoMap.kt",
       "sha256": "f46d78a6d97419308061a64814553be14f9f85b06b8a8ad0751bce7682a3a3a0",
-      "sections": [[1, 2], [4, 8], [10, 55]],
+      "sections": [[1,2],[4,8],[10,55]],
       "prefix": "",
       "suffix": ""
     },
     {
       "path": "app/src/main/java/io/legado/app/help/http/CookieStore.kt",
       "sha256": "9890bbf76428c05601981af7b3148fe87944d788f0a082a50cd4a3b591956a8e",
-      "sections": [[73, 80], [118, 148]],
+      "sections": [[73,80],[118,148]],
       "prefix": "package compat\n\nimport io.legado.app.constant.AppPattern.equalsRegex\nimport io.legado.app.constant.AppPattern.semicolonRegex\n\ninternal interface CookieMapReferenceInterface {\n    fun cookieToMap(cookie: String): MutableMap<String, String>\n    fun mapToCookie(cookieMap: Map<String, String>?): String?\n}\n\ninternal object CookieMapReference : CookieMapReferenceInterface {",
       "suffix": "}"
     },
     {
       "path": "app/src/main/java/io/legado/app/constant/BookType.kt",
       "sha256": "a7bcb044192cb6844bc2a63e59261e94e701090f6c4dd6a127764fc3f98a14ef",
-      "sections": [[1, 2], [5, 55], [60, 78]],
+      "sections": [[1,2],[5,55],[60,78]],
       "prefix": "",
       "suffix": ""
     },
@@ -88,120 +88,42 @@
     {
       "path": "app/src/main/java/io/legado/app/utils/StringUtils.kt",
       "sha256": "cbff908efad61e25163862e2b5ee90281a381f22afd4f3eea6adfcd48b988676",
-      "sections": [
-        [
-          25,
-          28
-        ],
-        [
-          30,
-          51
-        ],
-        [
-          134,
-          219
-        ],
-        [
-          230,
-          269
-        ]
-      ],
+      "sections": [[25,28],[30,51],[134,219],[230,269]],
       "prefix": "package io.legado.app.utils\n\nimport java.text.DecimalFormat\nimport java.util.regex.Pattern\n\nobject StringUtils {",
       "suffix": "}"
     },
     {
       "path": "app/src/main/java/io/legado/app/help/JsExtensions.kt",
       "sha256": "b587bd35e58898a0197abedb352a2acbe8c1a3c5c24573d77d2b7a98b6d7be6c",
-      "sections": [
-        [
-          990,
-          1000
-        ],
-        [
-          1003,
-          1004
-        ],
-        [
-          1117,
-          1147
-        ],
-        [
-          1167,
-          1175
-        ],
-        [
-          735,
-          741
-        ],
-        [
-          747,
-          749
-        ]
-      ],
-      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\nimport io.legado.app.utils.toStringArray\nimport io.legado.app.model.analyzeRule.QueryTTF\n\nimport org.apache.commons.lang3.time.FastDateFormat\nimport java.io.ByteArrayInputStream\nimport java.io.ByteArrayOutputStream\nimport java.util.Date\nimport java.util.Locale\nimport java.util.SimpleTimeZone\nimport java.util.TimeZone\nimport java.text.SimpleDateFormat\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipInputStream\n\nobject CorpusJsExtensions {\n    private val dateFormat: FastDateFormat\n        get() = FastDateFormat.getInstance(\"yyyy/MM/dd HH:mm\", TimeZone.getDefault(), Locale.getDefault())\n\n    fun zipBytes(bytes: ByteArray, path: String): ByteArray? {",
+      "sections": [[990,1000],[1003,1004],[1117,1147],[1167,1175],[735,741],[747,749],[149,155]],
+      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\nimport io.legado.app.utils.toStringArray\nimport io.legado.app.model.analyzeRule.QueryTTF\n\nimport org.apache.commons.lang3.time.FastDateFormat\nimport java.io.ByteArrayInputStream\nimport java.io.ByteArrayOutputStream\nimport java.util.Date\nimport java.util.Locale\nimport java.util.SimpleTimeZone\nimport java.util.TimeZone\nimport java.text.SimpleDateFormat\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipInputStream\nimport io.legado.app.model.BatchContentContext\nimport io.legado.app.exception.NoStackTraceException\nimport kotlinx.coroutines.ensureActive\nimport org.htmlunit.corejs.javascript.Wrapper\nimport kotlin.coroutines.CoroutineContext\nimport kotlin.coroutines.EmptyCoroutineContext\n\nobject CorpusJsExtensions {\n    private var rhinoContextOrNull: CoroutineContext? = EmptyCoroutineContext\n    private var batchContext: BatchContentContext? = null\n    fun attachBatchContext(context: BatchContentContext?, coroutineContext: CoroutineContext = EmptyCoroutineContext) {\n        batchContext = context\n        rhinoContextOrNull = coroutineContext\n    }\n    fun getBatchContext(): BatchContentContext? = batchContext\n    private val dateFormat: FastDateFormat\n        get() = FastDateFormat.getInstance(\"yyyy/MM/dd HH:mm\", TimeZone.getDefault(), Locale.getDefault())\n\n    fun zipBytes(bytes: ByteArray, path: String): ByteArray? {",
       "suffix": "}"
     },
     {
       "path": "app/src/main/java/io/legado/app/utils/HtmlFormatter.kt",
       "sha256": "760ff7a6cad39aae273fb80f846c7eaf1d18a2abd6664c6a421d0bed071c366a",
-      "sections": [
-        [
-          9,
-          13
-        ],
-        [
-          15,
-          15
-        ],
-        [
-          20,
-          51
-        ]
-      ],
+      "sections": [[9,13],[15,15],[20,51]],
       "prefix": "package io.legado.app.utils\n\nobject FlowHtmlFormatter {",
       "suffix": "}"
     },
     {
       "path": "app/src/main/java/io/legado/app/utils/StringExtensions.kt",
       "sha256": "2b9398875926b2746e63130f79358f55e1aafce74e72ac93a14b3f390de48a51",
-      "sections": [
-        [
-          76,
-          81
-        ],
-        [
-          83,
-          87
-        ]
-      ],
+      "sections": [[76,81],[83,87]],
       "prefix": "package io.legado.app.utils",
       "suffix": ""
     },
     {
       "path": "app/src/main/java/io/legado/app/utils/NetworkUtils.kt",
       "sha256": "4309414b51161896e589132e025476d0e79d174844a1cf4cf132867dfe132442",
-      "sections": [
-        [
-          76,
-          91
-        ],
-        [
-          125,
-          156
-        ]
-      ],
+      "sections": [[76,91],[125,156]],
       "prefix": "package io.legado.app.utils\nimport java.util.BitSet\nobject FlowEncodedForm {",
       "suffix": "}"
     },
     {
       "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeUrl.kt",
       "sha256": "f7ba074137c8e3a847dc7bbf9465c7fd9318646c5670c144300e7959fb931a9b",
-      "sections": [
-        [
-          346,
-          375
-        ]
-      ],
+      "sections": [[346,375]],
       "prefix": "package io.legado.app.utils\nimport java.net.URLEncoder\nimport java.nio.charset.Charset\nobject FlowFormEncoding {\n    private fun StringBuilder.appendEncoded(value: String, checkEncoded: Boolean, charset: Charset) {\n        append(if (checkEncoded && FlowEncodedForm.encodedForm(value)) value else URLEncoder.encode(value, charset))\n    }\n    fun encodeForm(params: String, charset: Charset = Charsets.UTF_8, checkEncoded: Boolean = true): String {",
       "suffix": "}"
     },
@@ -212,20 +134,7 @@
     {
       "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetDetector.java",
       "sha256": "98988942b54f8fc841e440e821b126b2cb4afc32808cc3d1a6872add4e7de226",
-      "sections": [
-        [
-          1,
-          10
-        ],
-        [
-          17,
-          101
-        ],
-        [
-          113,
-          587
-        ]
-      ],
+      "sections": [[1,10],[17,101],[113,587]],
       "prefix": "",
       "suffix": "@interface NonNull {}\n@interface Nullable {}"
     },
@@ -260,26 +169,17 @@
     {
       "path": "app/src/main/java/io/legado/app/help/JsEncodeUtils.kt",
       "sha256": "4213330217d095a55e2a509775e9479780946836bb446b5514e1d9541eff4b0a",
-      "sections": [
-        [
-          45,
-          76
-        ],
-        [
-          223,
-          227
-        ],
-        [
-          240,
-          244
-        ]
-      ],
+      "sections": [[45,76],[223,227],[240,244]],
       "prefix": "package io.legado.app.help\n\nimport cn.hutool.crypto.symmetric.SymmetricCrypto\nimport io.legado.app.help.crypto.SymmetricCryptoAndroid\n\nobject CorpusJsEncodeUtils {",
       "suffix": "}"
     },
     {
       "path": "app/src/main/java/io/legado/app/help/crypto/SymmetricCryptoAndroid.kt",
       "sha256": "7931f52d94435f9fdca29b6a060f668a51341890422ba49847d412295d9f2db7"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/BatchContentContext.kt",
+      "sha256": "270b131144e96910fbdbcfd80499c61f8f86486dab6cfdaeb8533f7d014dcaf6"
     }
   ],
   "adaptations": [
@@ -311,6 +211,10 @@
     {
       "file": "reference-sources.json",
       "reason": "提取锁定的 JsExtensions 日期方法；测试前缀用 AppConst.kt 的 yyyy/MM/dd HH:mm 模式构造按固定设备 Locale/TimeZone 取值的 FastDateFormat，隔离同一 JVM worker 内不同 fixture 的默认配置。"
+    },
+    {
+      "file": "jvm/src/main/kotlin/compat/FlowContentBatchEvidence.kt",
+      "reason": "批量正文对照锁定并原样编译 BatchContentContext 与 JsExtensions.cacheContent；仅把 BookHelp 磁盘缓存替换为带版本令牌的内存 sink，并按固定 BookContent/CacheBook 顺序执行脚本、保留部分成功和对缺章单章兜底。"
     }
   ],
   "scriptEngine": {
@@ -433,6 +337,14 @@
     {
       "path": "app/src/main/java/io/legado/app/data/entities/BaseSource.kt",
       "sha256": "080160e06a23fdfc7f4dbe5975a370473eee5d13ad0638b46aa2075276516243"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/CacheBook.kt",
+      "sha256": "62aa225c68a024f749cee07b104b617a90111d2d152d797468456523083276a6"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/BookSource.kt",
+      "sha256": "6f2e9b400f2417dc17e19969c386607097bc00c2dbde3e03ba8cad23811c8a3d"
     }
   ]
 }

@@ -563,6 +563,27 @@
       "title": "string"
     }
   },
+  "flow.contentBatch": {
+    "required": [
+      "source",
+      "book",
+      "chapters",
+      "mode",
+      "program",
+      "responses",
+      "requestLimit"
+    ],
+    "properties": {
+      "source": "object",
+      "book": "object",
+      "chapters": "object",
+      "mode": "string",
+      "program": "string",
+      "responses": "object",
+      "requestLimit": "integer",
+      "faults": "object"
+    }
+  },
   "rule.coverStream": {
     "required": [
       "bytes",

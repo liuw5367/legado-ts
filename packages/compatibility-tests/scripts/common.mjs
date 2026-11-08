@@ -142,12 +142,56 @@ export function validateCase(item) {
     if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow'
       || !item.flowOrigin?.fixture || !['primary-cancel', 'auxiliary-cancel', 'auxiliary-failure'].includes(item.input.fault)
       || !URL.canParse(item.input.auxUrl)) throw new Error('正文生命周期案例无效')
+  } else if (item.operation === 'flow.contentBatch') {
+    validateContentBatchCase(item)
   } else if (item.operation.startsWith('flow.')) validateFlowCase(item)
   if (item.operation === 'rule.split' && !['&&', '||', '%%'].includes(item.input.operator)) throw new Error('未支持的分隔符')
   if (item.operation.startsWith('regex.') && item.input.patterns.length === 0) throw new Error('patterns 不能为空')
   if (item.errorEquivalence && (typeof item.errorEquivalence.category !== 'string' || !['jvm', 'ts'].every((r) => Array.isArray(item.errorEquivalence[r]) && item.errorEquivalence[r].every((v) => typeof v === 'string')))) throw new Error('异常等价声明无效')
   if (item.allowedDifferences !== undefined) {
     if (!Array.isArray(item.allowedDifferences) || !item.allowedDifferences.every((d) => typeof d.path === 'string' && d.reason?.length > 0 && Object.hasOwn(d, 'jvm') && Object.hasOwn(d, 'ts'))) throw new Error('允许差异必须指定路径、双方值和原因')
+  }
+}
+function validateContentBatchCase(item) {
+  const { input } = item
+  const { source, book, chapters, mode, program, responses, requestLimit, faults = {} } = input
+  const chapterItems = chapters?.items
+  if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow'
+    || typeof item.flowOrigin?.fixture !== 'string' || !['declarative', 'javascript'].includes(mode)
+    || typeof program !== 'string' || !URL.canParse(source.bookSourceUrl)
+    || !URL.canParse(book.bookUrl) || (book.tocUrl !== undefined && !URL.canParse(book.tocUrl))
+    || !Array.isArray(chapterItems) || chapterItems.length < 2
+    || !Number.isSafeInteger(requestLimit) || requestLimit < 1
+    || !responses || typeof responses !== 'object' || Array.isArray(responses) || Object.keys(responses).length === 0) {
+    throw new Error(`${item.id}: 批量正文流程案例无效`)
+  }
+  const indexes = new Set()
+  for (const chapter of chapterItems) {
+    const baseUrl = chapter?.baseUrl ?? book.tocUrl ?? source.bookSourceUrl
+    if (!chapter || !Number.isSafeInteger(chapter.index) || chapter.index < 0 || indexes.has(chapter.index)
+      || typeof chapter.title !== 'string' || chapter.title.length === 0
+      || typeof chapter.url !== 'string' || !URL.canParse(chapter.url, baseUrl)) {
+      throw new Error(`${item.id}: 批量正文章节无效`)
+    }
+    indexes.add(chapter.index)
+  }
+  for (const entry of Object.values(responses)) {
+    const response = entry?.response
+    if (!['GET', 'POST'].includes(entry?.method) || !URL.canParse(entry.url)
+      || (entry.body !== null && typeof entry.body !== 'string')
+      || !response || !URL.canParse(response.url) || !Number.isInteger(response.status)
+      || typeof response.base64 !== 'string' || Buffer.from(response.base64, 'base64').toString('base64') !== response.base64
+      || !response.headers || typeof response.headers !== 'object' || Array.isArray(response.headers)
+      || Object.values(response.headers).some((value) => typeof value !== 'string')) {
+      throw new Error(`${item.id}: 批量正文响应无效`)
+    }
+  }
+  if (faults.staleIndexes !== undefined && (!Array.isArray(faults.staleIndexes)
+    || !faults.staleIndexes.every((index) => Number.isSafeInteger(index) && indexes.has(index)))) {
+    throw new Error(`${item.id}: 批量正文旧令牌注入无效`)
+  }
+  if (faults.cancelAfterIndex !== undefined && !indexes.has(faults.cancelAfterIndex)) {
+    throw new Error(`${item.id}: 批量正文取消注入无效`)
   }
 }
 function validateFlowCase(item) {

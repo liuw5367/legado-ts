@@ -81,7 +81,7 @@ try {
     for (const runtime of runtimes) assertProvenance((await readJson(join(directory, `${runtime}.json`))).metadata, base)
     const comparisons = cases.map((item, index) => ({ ...compareCase(item, results.jvm[index], results.ts[index]), operation: item.operation, ...(item.input.stopAfter ? { stopAfter: item.input.stopAfter } : {}), reference: item.reference, ...(item.origin ? { origin: item.origin } : {}), ...(item.flowOrigin ? { flowOrigin: item.flowOrigin } : {}) }))
     const summary = summarize(comparisons)
-    summary.flow.byOperation = Object.fromEntries(['flow.book', 'flow.toc', 'flow.contentLifecycle', 'flow.discover', 'flow.mainJs'].map((operation) => {
+    summary.flow.byOperation = Object.fromEntries(['flow.book', 'flow.toc', 'flow.contentLifecycle', 'flow.contentBatch', 'flow.discover', 'flow.mainJs'].map((operation) => {
       const selected = comparisons.filter((item) => item.operation === operation)
       return [operation, { total: selected.length, equal: selected.filter((item) => item.status === 'equal').length }]
     }))
