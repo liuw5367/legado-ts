@@ -20,7 +20,7 @@ private fun flowHeaders(text: String): Map<String, String> =
     JsonParser.parseString(text).asJsonObject.entrySet().associate { (name, value) -> name.lowercase() to value.asString }
 
 /** 只覆盖声明式、离线的文本书源分支。应用宿主编排以固定源码为依据。 */
-internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
+internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discover: Boolean = false): Any {
     val source = input.rule("source")
     val sourceUrl = source.text("bookSourceUrl")
     val unsupported = listOf(
@@ -136,6 +136,35 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
             }
             if (value.isNotEmpty()) put(key, value)
         }
+    }
+
+    if (discover) {
+        val category = JsonParser.parseString(source.text("exploreUrl")).asJsonArray
+            .map { it.asJsonObject }.single { it.text("title") == input.text("selectedCategory") }
+        val template = category.text("url")
+        val listRule = source.rule("ruleExplore").takeUnless { it.text("bookList").isBlank() }
+            ?: source.rule("ruleSearch")
+        val selector = listRule.text("bookList")
+        val pages = mutableListOf<Map<String, Any>>()
+        val seen = mutableSetOf<String>()
+        // WebBook 将选中的分类地址和页码交给 AnalyzeUrl，列表为空时发现页面结束分页。
+        for (page in 1..input.get("requestLimit").asInt + 1) {
+            val address = resolve(sourceUrl, template.replace("{{page}}", page.toString()))
+            val (body, base) = request("discover", address)
+            val rows = nodes(selector.removePrefix("-").removePrefix("+"), body)
+            val books = if (rows.isEmpty() && source.text("bookUrlPattern").isEmpty()) {
+                listOf(fields(source.rule("ruleBookInfo"), body, base) + ("bookUrl" to base))
+            } else rows.map {
+                val extracted = fields(listRule, it, base)
+                extracted + ("bookUrl" to (extracted["bookUrl"] ?: base))
+            }
+            val items = books.filter { it.containsKey("name") }.distinctBy { it["bookUrl"] }
+                .let { if (selector.startsWith("-")) it.reversed() else it }
+            val hasMore = seen.addAll(items.map { it.getValue("bookUrl") })
+            pages.add(mapOf("page" to page, "status" to if (items.isEmpty()) "empty" else "success", "items" to items, "hasMore" to hasMore))
+            if (!hasMore) break
+        }
+        return mapOf("pages" to pages, "requests" to requests)
     }
 
     val tocUrl: String

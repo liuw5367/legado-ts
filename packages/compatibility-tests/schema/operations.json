@@ -417,6 +417,15 @@
       "requestDefaults": "object"
     }
   },
+  "flow.discover": {
+    "required": ["source", "selectedCategory", "responses", "requestLimit"],
+    "properties": {
+      "source": "object",
+      "selectedCategory": "string",
+      "responses": "object",
+      "requestLimit": "integer"
+    }
+  },
   "flow.toc": {
     "required": [
       "source",

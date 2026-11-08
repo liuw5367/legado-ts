@@ -27,6 +27,7 @@ private fun execute(item: JsonObject): Any? {
     return when (val operation = item.get("operation").asString) {
         "request.redirect" -> redirectEvidence(input)
         "flow.book" -> executeBookFlow(input)
+        "flow.discover" -> executeBookFlow(input, discover = true)
         "flow.contentLifecycle" -> executeContentLifecycle(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
         "rule.legacyCrypto" -> legacyCryptoEvidence(input)

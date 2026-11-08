@@ -1,7 +1,7 @@
 import {
-  importSources, loadBookDetails, loadChapterContent, loadTableOfContents, nextChapterUrlFor, searchBooks,
+  discoverBooks, importSources, parseExploreKinds, loadBookDetails, loadChapterContent, loadTableOfContents, nextChapterUrlFor, searchBooks,
 } from '../../source-core/src/index.ts'
-import type { BookCandidate, BookMetadata, NetworkHost, RuntimeResult, WorkflowPorts } from '../../source-core/src/index.ts'
+import type { BookCandidate, BookMetadata, NetworkHost, PageCursor, RuntimeResult, WorkflowPorts } from '../../source-core/src/index.ts'
 import { NodeCookieStore } from '../../source-node/src/cookies.ts'
 import { SourceRequestHost } from '../../source-node/src/source-request-host.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
@@ -26,7 +26,7 @@ function bookFields(book: BookCandidate) {
   return { name, author, bookUrl, tocUrl, coverUrl, intro, kind, wordCount, lastChapter }
 }
 
-export async function executeBookFlow(input: Record<string, unknown>, tocOnly = false) {
+export async function executeBookFlow(input: Record<string, unknown>, mode: 'book' | 'toc' | 'discover' = 'book') {
   const imported = (await importSources(JSON.stringify(input.source)))[0]?.source
   if (!imported) throw new FlowFixtureError('流程书源无法导入')
   const responses = input.responses as Record<string, ResponseFixture>
@@ -75,6 +75,22 @@ export async function executeBookFlow(input: Record<string, unknown>, tocOnly = 
   const ports: WorkflowPorts = {
     network, rules, request: (input) => request.request(input), decodeResponse: (input) => request.decodeResponse(input),
   }
+  if (mode === 'discover') {
+    stage = 'discover'
+    const categories = await parseExploreKinds(ports, imported)
+    const category = categories.kinds.find(({ title }) => title === input.selectedCategory)
+    if (!category?.url) throw new FlowFixtureError('离线夹具缺少发现分类 URL')
+    const pages: unknown[] = []
+    let cursor: PageCursor | undefined
+    do {
+      const result = await discoverBooks(ports, { source: imported, url: category.url, ...(cursor ? { cursor } : {}) })
+      if (fault) throw fault
+      const value = result.value
+      pages.push({ page: value?.cursor.index ?? cursor?.index ?? 1, status: result.status, items: value?.items.map(bookFields) ?? [], hasMore: value?.nextCursor !== undefined })
+      cursor = value?.nextCursor
+    } while (cursor !== undefined)
+    return { pages, requests }
+  }
   const variableKeys = input.variableKeys as string[] | undefined
   function record<T>(result: RuntimeResult<T>, value: unknown, emptyCategory?: string, book?: BookMetadata) {
     if (fault) throw fault
@@ -92,7 +108,7 @@ export async function executeBookFlow(input: Record<string, unknown>, tocOnly = 
   }
   const output = { stages, requests }
   let book: BookMetadata | undefined
-  if (tocOnly) {
+  if (mode === 'toc') {
     const initial = input.book as Pick<BookMetadata, 'bookUrl' | 'tocUrl' | 'name'>
     book = {
       ...initial, sourceId: imported.bookSourceUrl, rawFields: {}, traceRef: 'flow.toc',
@@ -119,7 +135,7 @@ export async function executeBookFlow(input: Record<string, unknown>, tocOnly = 
   const chapter = toc.value?.items[chapterIndex]
   if (toc.value?.items.length && !chapter) throw new FlowFixtureError(`目录没有指定章节: ${chapterIndex}`)
   record(toc, toc.value?.items.map(({ title, chapterUrl, index, isVip, isPay, isVolume }) => ({ title, chapterUrl, index, isVip: isVip === true, isPay: isPay === true, isVolume: isVolume === true })) ?? null, 'toc-empty', toc.value?.bookAfter ?? book)
-  if (tocOnly || !chapter) return output
+  if (mode === 'toc' || !chapter) return output
 
   stage = 'content'
   const next = nextChapterUrlFor(toc.value?.items, chapter)

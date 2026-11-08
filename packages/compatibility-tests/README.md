@@ -86,6 +86,8 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 
 | 案例组 | 来源与比较范围 |
 | --- | --- |
+| `flow.yiove.wensang.discovery-empty-page` | 「文桑小说」原始发现分类和字段规则。比较两个有序结果、空页终态和实际请求顺序 |
+| `flow.synthetic.content-fallback.*` | 合成正文响应。分别验证主规则命中、合法为空后回退、两边均空的终态 |
 | `flow.yiove.html.*` | 「言情小说阁」原始规则与合成 HTML。验证搜索顺序、相对链接、独立目录地址、正文替换、合法空搜索和空正文失败 |
 | `flow.synthetic.json.*` | 从 `JSON-FLOW-001` 复制规则和素材。验证过滤、VIP 标记、两个正文页的拼接，以及无下一页、下一章、重复地址三类停止条件 |
 | `flow.yiove.js.*` | 「奇怪小说」原始目录脚本与合成 HTML。验证详情响应复用、排除“最新章节”组、保留节点顺序、读取脚本选中的章节和空目录失败 |
@@ -93,7 +95,7 @@ node packages/compatibility-tests/scripts/run.mjs --case flow.yiove.html.success
 | `flow.synthetic.detail.*` 与 `flow.synthetic.toc.*` | 合成夹具。验证重定向后的详情识别和响应复用、目录分页、原始 URL 去重、倒序、卷节点与正文选择 |
 | `flow.yiove.toc-variable.*` 与 `flow.synthetic.book-variable.*` | 「穿越小说🎃」原始目录规则。验证初始变量、详情写入后目录读取、选章和同一 worker 中的案例隔离 |
 
-`flow.toc` 只运行目录阶段，显式输入书籍身份与初始变量。报告单列完整流程和目录阶段的计数。请求案例通过 `requestEvidence` 比较离线传输边界的请求体 Base64 和响应最终地址。变量用例通过 `variableKeys` 比较指定键的实际阶段快照，保留未设置与空字符串的区别。
+`flow.toc` 只运行目录阶段，显式输入书籍身份与初始变量。`flow.discover` 根据固定书源的分类标题选择原地址，通过真实 TS 发现入口分页。报告分列完整流程和阶段用例。请求案例通过 `requestEvidence` 比较离线传输边界的请求体 Base64 和响应最终地址。变量用例通过 `variableKeys` 比较指定键的实际阶段快照，保留未设置与空字符串的区别。
 
 响应按方法、完整 URL 和请求体匹配。请求超限或缺夹具会报告执行失败。逐阶段比较身份、已声明的书籍字段、章节顺序及标记、正文标题、页数、最终正文和请求轨迹。原始中间 HTML 的序列化字节及 TS 专有的元数据投影不属于流程断言，例如当前固定上游未读取的 `updateTime`。逐例的错误等价只映射指定阶段的精确类别和文案，仍比较终态和后续请求，并保留原始结果。
 

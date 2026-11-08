@@ -1,0 +1,156 @@
+[
+  {
+    "id": "flow.yiove.wensang.discovery-empty-page",
+    "family": "flow",
+    "operation": "flow.discover",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook.exploreBookAwait / BookList.analyzeBookList / ExploreShowViewModel"
+    },
+    "tags": [
+      "offline",
+      "discovery",
+      "pagination"
+    ],
+    "flowOrigin": {
+      "collection": "yiove",
+      "sourceUrl": "http://www.wensang.net",
+      "fields": [
+        "exploreUrl",
+        "ruleExplore"
+      ]
+    },
+    "input": {
+      "source": {
+        "bookSourceComment": "// 搜索修复：http://www.wlwx.la ——> http://www.wensang.net @by: syiism",
+        "bookSourceGroup": "阿豪书源 小说",
+        "bookSourceName": "文桑小说",
+        "bookSourceType": 0,
+        "bookSourceUrl": "http://www.wensang.net",
+        "enabled": true,
+        "enabledCookieJar": true,
+        "enabledExplore": true,
+        "exploreUrl": "[{\"title\":\"奇幻玄幻\",\"url\":\"/xuanhuan/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"武侠仙侠\",\"url\":\"/xiuzhen/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"都市言情\",\"url\":\"/dushi/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"历史军事\",\"url\":\"/lishi/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"网游竞技\",\"url\":\"/wangyou/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"科幻悬疑\",\"url\":\"/kehuan/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"女生小说\",\"url\":\"/nvpin/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"青春校园\",\"url\":\"/qingchun/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"耽美同人\",\"url\":\"/bl/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"乡村小说\",\"url\":\"/xiangcun/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"其它小说\",\"url\":\"/qita/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"文桑视界\",\"url\":\"/wensang/page_{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}}]",
+        "ruleBookInfo": {
+          "author": ".field@a.0@text",
+          "coverUrl": "id.bookCover@img@src",
+          "intro": ".desc-short@text##(^|[。！？]+[”」）】]?)##$1<br>",
+          "kind": ".field@span.1:2:5@text##.*：|\\s..:.*",
+          "lastChapter": ".logs@a.1@text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+          "name": ".infos@h1@text"
+        },
+        "ruleContent": {
+          "content": "id.BookText@textNodes"
+        },
+        "ruleExplore": {
+          "author": ".d1@ownText",
+          "bookList": ".filter-ret@li",
+          "bookUrl": "a.1@href",
+          "coverUrl": "img@src",
+          "intro": ".d2@text",
+          "lastChapter": "a.2@text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+          "name": "a.1@text"
+        },
+        "ruleSearch": {
+          "author": "span.1@text",
+          "bookList": "id.sitebox@dl",
+          "bookUrl": "a.1@href",
+          "checkKeyWord": "系统",
+          "coverUrl": "img@src",
+          "kind": "span.3:2:0@text##\\s.*",
+          "lastChapter": "a.4@text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+          "name": "a.1@text"
+        },
+        "ruleToc": {
+          "chapterList": "#allChapter .chapter li a",
+          "chapterName": "text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+          "chapterUrl": "href"
+        },
+        "searchUrl": "/home/search,{\n  \"method\": \"POST\",\n  \"body\": \"action=search&q={{key}}\"\n}"
+      },
+      "selectedCategory": "奇幻玄幻",
+      "responses": {
+        "first": {
+          "method": "GET",
+          "url": "http://www.wensang.net/xuanhuan/page_1.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.wensang.net/xuanhuan/page_1.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1haW4+PHVsIGNsYXNzPSJmaWx0ZXItcmV0Ij48bGk+PGEgaHJlZj0iL2lnbm9yZWQtYSI+5bCB6Z2iPC9hPjxhIGhyZWY9Ii9ib29rcy9iIj7nq7nmtbc8L2E+PGE+56ysMueroDwvYT48c3BhbiBjbGFzcz0iZDEiPuS5mTwvc3Bhbj48c3BhbiBjbGFzcz0iZDIiPuesrOS6jOacrDwvc3Bhbj48aW1nIHNyYz0iL2IuanBnIj48L2xpPjxsaT48YSBocmVmPSIvaWdub3JlZC1iIj7lsIHpnaI8L2E+PGEgaHJlZj0iL2Jvb2tzL2EiPuaYn+ayszwvYT48YT7nrKwx56ugPC9hPjxzcGFuIGNsYXNzPSJkMSI+55SyPC9zcGFuPjxzcGFuIGNsYXNzPSJkMiI+56ys5LiA5pysPC9zcGFuPjxpbWcgc3JjPSIvYS5qcGciPjwvbGk+PC91bD48L21haW4+"
+          }
+        },
+        "second": {
+          "method": "GET",
+          "url": "http://www.wensang.net/xuanhuan/page_2.html",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "http://www.wensang.net/xuanhuan/page_2.html",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1haW4+PHVsIGNsYXNzPSJmaWx0ZXItcmV0Ij48L3VsPjwvbWFpbj4="
+          }
+        }
+      },
+      "requestLimit": 2
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "pages": [
+          {
+            "page": 1,
+            "status": "success",
+            "items": [
+              {
+                "name": "竹海",
+                "author": "乙",
+                "bookUrl": "http://www.wensang.net/books/b",
+                "coverUrl": "http://www.wensang.net/b.jpg",
+                "intro": "第二本",
+                "lastChapter": "第2章"
+              },
+              {
+                "name": "星河",
+                "author": "甲",
+                "bookUrl": "http://www.wensang.net/books/a",
+                "coverUrl": "http://www.wensang.net/a.jpg",
+                "intro": "第一本",
+                "lastChapter": "第1章"
+              }
+            ],
+            "hasMore": true
+          },
+          {
+            "page": 2,
+            "status": "empty",
+            "items": [],
+            "hasMore": false
+          }
+        ],
+        "requests": [
+          {
+            "stage": "discover",
+            "method": "GET",
+            "url": "http://www.wensang.net/xuanhuan/page_1.html",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "discover",
+            "method": "GET",
+            "url": "http://www.wensang.net/xuanhuan/page_2.html",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  }
+]

@@ -38,7 +38,8 @@ export async function execute(item: CaseInput): Promise<unknown> {
   if (item.operation === 'request.redirect') return executeRedirect(item.input)
   if (item.operation === 'rule.zipDownload') return executeZipDownload(item.input)
   if (item.operation === 'flow.contentLifecycle') return executeContentLifecycle(item.input)
-  if (item.operation === 'flow.book' || item.operation === 'flow.toc') return executeBookFlow(item.input, item.operation === 'flow.toc')
+  if (item.operation === 'flow.discover') return executeBookFlow(item.input, 'discover')
+  if (item.operation === 'flow.book' || item.operation === 'flow.toc') return executeBookFlow(item.input, item.operation === 'flow.toc' ? 'toc' : 'book')
   const i = item.input
   const str = (key: string): string => String(i[key] ?? '')
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
