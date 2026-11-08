@@ -45,6 +45,8 @@ CLI 参数错误、空选择、来源失败或 API 执行不完整退出 2。API
 
 TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 JsonPathParserAdapter。JSON 字符串/列表通过真实 Java bridge 转换；CSS 字段列表按对应接口合并或保留条目顺序；正则链直接调用实际 java.getElement/getElements，覆盖首个与全部匹配及失败终态。不能在参考执行器中重新实现待比较算法。独立 `innerRule` 在 TS 无对应入口，当前显式报告 unsupported；JSONPath 内嵌规则另有双端案例。
 
+`date-bridge` 族通过固定 Rhino 调用锁定 `JsExtensions.kt` 的 `timeFormat/timeFormatUTC`，TS 则执行实际 QuickJS `java.timeFormat/timeFormatUTC` bridge 和 Node formatter。每条案例固定 JVM 默认 Locale/TimeZone，并在 TS 配置相同值；它比较 pattern 输出及 JS `catch` 后续行为，不把 JDK 结果外推为所有 Android 设备 Locale、时区或 WebView Java bridge 的 golden。
+
 本包初期只覆盖纯函数和轻依赖解析器。AnalyzeRule、AnalyzeUrl、WebBook 等应用入口没有被整体编译。JVM 与 TS 的可观察入口不同，输出差异需要结合适配边界判断，不能将报告中的全部条目直接视为已确认缺陷。
 
 ## 输出和比较

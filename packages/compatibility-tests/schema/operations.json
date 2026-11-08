@@ -163,6 +163,18 @@
       "url": "string"
     }
   },
+  "rule.dateBridge": {
+    "required": [
+      "locale",
+      "timeZone",
+      "program"
+    ],
+    "properties": {
+      "locale": "string",
+      "timeZone": "string",
+      "program": "string"
+    }
+  },
   "css.string": {
     "required": [
       "content",

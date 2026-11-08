@@ -7,6 +7,7 @@ import { splitSourceRequestUrl } from '../../source-core/src/runtime/request-url
 import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeBookFlow } from './book-flow.ts'
 import { executeCookieMap } from './cookie-map.ts'
+import { executeDateBridge } from './date-bridge.ts'
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourceSession } from '../../source-node/src/source-session.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
@@ -40,6 +41,7 @@ async function script(host: SourceRuleHost, expression: string, content: unknown
 }
 export async function execute(item: CaseInput): Promise<unknown> {
   if (item.operation === 'rule.cookieMap') return executeCookieMap(item.input)
+  if (item.operation === 'rule.dateBridge') return executeDateBridge(item.input)
   if (item.operation === 'request.redirect') return executeRedirect(item.input)
   if (item.operation === 'rule.zipDownload') return executeZipDownload(item.input)
   if (item.operation === 'flow.contentLifecycle') return executeContentLifecycle(item.input)

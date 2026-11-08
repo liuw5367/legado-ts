@@ -128,9 +128,17 @@
         [
           1167,
           1175
+        ],
+        [
+          735,
+          741
+        ],
+        [
+          747,
+          749
         ]
       ],
-      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\nimport io.legado.app.utils.toStringArray\nimport io.legado.app.model.analyzeRule.QueryTTF\n\nimport java.io.ByteArrayInputStream\nimport java.io.ByteArrayOutputStream\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipInputStream\n\nobject CorpusJsExtensions {\n    fun zipBytes(bytes: ByteArray, path: String): ByteArray? {",
+      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\nimport io.legado.app.utils.toStringArray\nimport io.legado.app.model.analyzeRule.QueryTTF\n\nimport org.apache.commons.lang3.time.FastDateFormat\nimport java.io.ByteArrayInputStream\nimport java.io.ByteArrayOutputStream\nimport java.util.Date\nimport java.util.Locale\nimport java.util.SimpleTimeZone\nimport java.util.TimeZone\nimport java.text.SimpleDateFormat\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipInputStream\n\nobject CorpusJsExtensions {\n    private val dateFormat: FastDateFormat\n        get() = FastDateFormat.getInstance(\"yyyy/MM/dd HH:mm\", TimeZone.getDefault(), Locale.getDefault())\n\n    fun zipBytes(bytes: ByteArray, path: String): ByteArray? {",
       "suffix": "}"
     },
     {
@@ -299,6 +307,10 @@
     {
       "file": "jvm/src/main/kotlin/io/legado/app/utils/EncoderUtils.kt",
       "reason": "SymmetricCryptoAndroid 的 Android Base64.NO_WRAP 使用等价的 JDK Base64 encoder；参考端保留原类和上游 Hutool 版本。"
+    },
+    {
+      "file": "reference-sources.json",
+      "reason": "提取锁定的 JsExtensions 日期方法；测试前缀用 AppConst.kt 的 yyyy/MM/dd HH:mm 模式构造按固定设备 Locale/TimeZone 取值的 FastDateFormat，隔离同一 JVM worker 内不同 fixture 的默认配置。"
     }
   ],
   "scriptEngine": {
@@ -306,6 +318,10 @@
     "sha256": "d720f34285515025e4ccc80a5b92aed42cb26c03a7715ca53583d2c74ae51df7"
   },
   "flowEvidence": [
+    {
+      "path": "app/src/main/java/io/legado/app/constant/AppConst.kt",
+      "sha256": "cc6e077d75494e16275dee2d193bec603641ec933725d6d0e1deba392c8aa5f9"
+    },
     {
       "path": "app/src/main/java/io/legado/app/model/jsSource/JsSourceEngine.kt",
       "sha256": "d573951db173800f8738b48b1bb38ff5ef9d46b0282dcc553a7ba898bbc2f37b"

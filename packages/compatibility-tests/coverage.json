@@ -1766,6 +1766,30 @@
       ]
     },
     {
+      "operation": "rule.dateBridge",
+      "method": "JsExtensions.timeFormat/timeFormatUTC · SimpleDateFormat 与 AppConst.dateFormat",
+      "reference": "upstream-original",
+      "tsEntry": "QuickJS java.timeFormat/timeFormatUTC → SourceRuleHost date formatter",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "locale",
+        "timezone"
+      ],
+      "caseIds": [
+        "date-bridge.offset-tokens-en-us",
+        "date-bridge.locale-zh-cn",
+        "date-bridge.week-year-boundary",
+        "date-bridge.quoted-and-unclosed-literal",
+        "date-bridge.invalid-pattern-catch-and-continue",
+        "date-bridge.local-time-format",
+        "date-bridge.positive-half-hour-and-midnight",
+        "date-bridge.java-long-int-argument-coercion",
+        "date-bridge.simple-date-format-token-widths"
+      ]
+    },
+    {
       "operation": "rule.coverStream",
       "method": "ImageUtils.decode(InputStream) · 封面流读取与清理",
       "reference": "upstream-guided-flow",

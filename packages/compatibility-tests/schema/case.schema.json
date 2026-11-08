@@ -38,6 +38,7 @@
         "url.parts",
         "url.options",
         "rule.cookieMap",
+        "rule.dateBridge",
         "css.string",
         "css.list",
         "json.string",
@@ -722,6 +723,39 @@
                 "type": "string"
               },
               "url": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.dateBridge"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "locale",
+              "timeZone",
+              "program"
+            ],
+            "properties": {
+              "locale": {
+                "type": "string"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "program": {
                 "type": "string"
               }
             },

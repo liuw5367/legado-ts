@@ -37,10 +37,9 @@ export interface SourceRuleHostOptions extends Omit<SourceRuleRuntimeOptions, 'e
   timeZone?: string
 }
 
-const dateTokenMaximum: Readonly<Record<string, number>> = { G: 5, y: Number.POSITIVE_INFINITY, Y: Number.POSITIVE_INFINITY, u: 1, M: 4, L: 4, d: 2, D: 3, H: 2, k: 2, K: 2, h: 2, m: 2, s: 2, S: 3, E: 5, a: 1, w: 2, W: 1, F: 1, z: 4, Z: 5, X: 3 }
+const javaDatePatternLetters = new Set('GyYuMLwdDHkKhmsSEFaWzZX')
 
 function validJavaDatePattern(pattern: string): boolean {
-  if (pattern.length > 512) return false
   let quoted = false
   for (let index = 0; index < pattern.length;) {
     const character = pattern[index]!
@@ -51,8 +50,7 @@ function validJavaDatePattern(pattern: string): boolean {
     if (quoted || !/[A-Za-z]/u.test(character)) { index += 1; continue }
     let end = index + 1
     while (end < pattern.length && pattern[end] === character) end += 1
-    const maximum = dateTokenMaximum[character]
-    if (maximum === undefined || end - index > maximum) return false
+    if (!javaDatePatternLetters.has(character) || (character === 'X' && end - index > 3)) return false
     index = end
   }
   return !quoted
@@ -95,8 +93,11 @@ function javaWeekFields(year: number, month: number, day: number, locale: string
 
 function formatJavaDate(time: number, pattern: string, offsetMs?: number, locale = 'en-US'): string | null {
   if (!Number.isFinite(time) || !Number.isFinite(offsetMs ?? 0)) return null
-  if (!validJavaDatePattern(pattern)) return null
-  const date = new Date(time + (offsetMs ?? 0))
+  if (!validJavaDatePattern(pattern)) throw new RangeError(`Illegal SimpleDateFormat pattern: ${pattern}`)
+  // Rhino coerces the bridge's Long/Int parameters before invoking the Android method.
+  const timeMillis = Math.trunc(time)
+  const fixedOffsetMs = offsetMs === undefined ? undefined : Math.trunc(offsetMs) | 0
+  const date = new Date(timeMillis + (fixedOffsetMs ?? 0))
   if (Number.isNaN(date.getTime())) return null
   const utc = offsetMs !== undefined
   const year = utc ? date.getUTCFullYear() : date.getFullYear()
@@ -107,14 +108,23 @@ function formatJavaDate(time: number, pattern: string, offsetMs?: number, locale
   const second = utc ? date.getUTCSeconds() : date.getSeconds()
   const millis = utc ? date.getUTCMilliseconds() : date.getMilliseconds()
   const weekday = utc ? date.getUTCDay() : date.getDay()
-  const offsetMinutes = Math.trunc((offsetMs ?? -date.getTimezoneOffset() * 60_000) / 60_000)
+  const offsetMinutes = Math.trunc((fixedOffsetMs ?? -date.getTimezoneOffset() * 60_000) / 60_000)
   const offset = `${offsetMinutes < 0 ? '-' : '+'}${String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, '0')}${String(Math.abs(offsetMinutes) % 60).padStart(2, '0')}`
   // 按 Java SimpleDateFormat 常用日期字段展开，单引号包围的文字原样保留。
   const dayOfYear = Math.floor((date.getTime() - (utc ? Date.UTC(year, 0, 1) : new Date(year, 0, 1).getTime())) / 86_400_000) + 1
   const weeks = javaWeekFields(year, month, day, locale)
   const dayOfWeek = weekday === 0 ? 7 : weekday
-  const timezoneName = utc ? 'UTC' : new Intl.DateTimeFormat(locale, { timeZoneName: 'short' }).formatToParts(date).find((item) => item.type === 'timeZoneName')?.value ?? offset
-  return pattern.replace(/'([^']|'')*'|Y+|y+|M+|L+|d+|D+|H+|k+|K+|h+|m+|s+|S+|E+|u+|a|w+|W+|F+|z+|G+|Z+|X+/gu, (token) => {
+  const timeZone = utc ? 'UTC' : undefined
+  const timeZoneName = (style: 'short' | 'long'): string => new Intl.DateTimeFormat(locale, {
+    ...(timeZone === undefined ? {} : { timeZone }),
+    timeZoneName: style,
+  }).formatToParts(date).find((item) => item.type === 'timeZoneName')?.value ?? offset
+  const dayPeriod = new Intl.DateTimeFormat(locale, {
+    ...(timeZone === undefined ? {} : { timeZone }),
+    hour: 'numeric',
+    hour12: true,
+  }).formatToParts(date).find((item) => item.type === 'dayPeriod')?.value ?? (hour < 12 ? 'AM' : 'PM')
+  return pattern.replace(/'([^']|'')*'|Y+|y+|M+|L+|d+|D+|H+|k+|K+|h+|m+|s+|S+|E+|u+|a+|w+|W+|F+|z+|G+|Z+|X+/gu, (token) => {
     if (token === "''") return "'"
     if (token.startsWith("'")) return token.slice(1, -1).replaceAll("''", "'")
     if (token[0] === 'Y') return token.length === 2 ? String(weeks.weekYear % 100).padStart(2, '0') : String(weeks.weekYear).padStart(token.length, '0')
@@ -136,13 +146,13 @@ function formatJavaDate(time: number, pattern: string, offsetMs?: number, locale
     if (token[0] === 'S') return String(millis).padStart(token.length, '0')
     if (token[0] === 'E') return new Intl.DateTimeFormat(locale, { weekday: token.length >= 4 ? 'long' : 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2020, 5, 7 + weekday)))
     if (token[0] === 'u') return token.length === 1 ? String(dayOfWeek) : String(dayOfWeek).padStart(token.length, '0')
-    if (token === 'a') return hour < 12 ? 'AM' : 'PM'
+    if (token[0] === 'a') return dayPeriod
     if (token[0] === 'w') return token.length === 1 ? String(weeks.weekOfYear) : String(weeks.weekOfYear).padStart(token.length, '0')
-    if (token[0] === 'W') return String(weeks.weekOfMonth)
-    if (token[0] === 'F') return String(Math.floor((day - 1) / 7) + 1)
-    if (token[0] === 'z') return timezoneName
+    if (token[0] === 'W') return String(weeks.weekOfMonth).padStart(token.length, '0')
+    if (token[0] === 'F') return String(Math.floor((day - 1) / 7) + 1).padStart(token.length, '0')
+    if (token[0] === 'z') return timeZoneName(token.length >= 4 ? 'long' : 'short')
     if (token[0] === 'G') return token.length >= 4 ? 'AD' : 'AD'
-    if (token === 'Z') return offset
+    if (token[0] === 'Z') return offset
     if (token[0] === 'X') {
       if (offsetMinutes === 0) return 'Z'
       if (token.length === 1) return offset.slice(0, 3)

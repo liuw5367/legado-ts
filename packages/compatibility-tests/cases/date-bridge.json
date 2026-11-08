@@ -1,0 +1,146 @@
+[
+  {
+    "id": "date-bridge.offset-tokens-en-us",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "America/Los_Angeles",
+      "program": "return {value:java.timeFormatUTC(0, 'yyyy-MM-dd HH:mm:ss.SSS a Z/ZZ/ZZZZ/ZZZZZ z/zzzz X/XX/XXX', -1800000)};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC(SimpleDateFormat/SimpleTimeZone)"
+    },
+    "tags": ["normal", "edge", "locale", "offset", "timezone-pattern"],
+    "expected": {"outcome":"return","value":{"value":"1969-12-31 23:30:00.000 PM -0030/-0030/-0030/-0030 UTC/Coordinated Universal Time -00/-0030/-00:30"}}
+  },
+  {
+    "id": "date-bridge.locale-zh-cn",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "zh-CN",
+      "timeZone": "Asia/Shanghai",
+      "program": "return {value:java.timeFormatUTC(0, 'yyyy-MM-dd MMMM MMM EEEE E a h:mm', 19800000), week:java.timeFormatUTC(1546214400000, \"YYYY-'W'ww-u\", 0)};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC(SimpleDateFormat/SimpleTimeZone)"
+    },
+    "tags": ["normal", "locale", "offset", "localized-names"],
+    "expected": {"outcome":"return","value":{"value":"1970-01-01 一月 1月 星期四 周四 上午 5:30","week":"2019-W01-1"}}
+  },
+  {
+    "id": "date-bridge.week-year-boundary",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "UTC",
+      "program": "return {value:java.timeFormatUTC(1546214400000, \"YYYY-'W'ww-u/yyyy-MM-dd D W F\", 0)};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC(SimpleDateFormat/SimpleTimeZone)"
+    },
+    "tags": ["edge", "locale", "week-year", "year-boundary"],
+    "expected": {"outcome":"return","value":{"value":"2019-W01-1/2018-12-31 365 6 5"}}
+  },
+  {
+    "id": "date-bridge.quoted-and-unclosed-literal",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "UTC",
+      "program": "function capture(pattern) { try { return {caught:false, value:java.timeFormatUTC(0, pattern, 0)}; } catch (error) { return {caught:true, continued:java.timeFormatUTC(0, 'yyyy', 0)}; } } return {quoted:java.timeFormatUTC(0, \"yyyy-MM-dd 'at' HH 'o''clock' ''\", 0), unclosed:capture(\"yyyy-MM-dd 'open\")};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC(SimpleDateFormat quote parsing)"
+    },
+    "tags": ["edge", "quote", "literal"],
+    "expected": {"outcome":"return","value":{"quoted":"1970-01-01 at 00 o'clock '","unclosed":{"caught":true,"continued":"1970"}}}
+  },
+  {
+    "id": "date-bridge.invalid-pattern-catch-and-continue",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "UTC",
+      "program": "function capture(pattern) { try { return {caught:false, value:java.timeFormatUTC(0, pattern, 0)}; } catch (error) { return {caught:true, continued:java.timeFormatUTC(0, 'yyyy', 0)}; } } return {unknown: capture('yyyy-QQQ'), longX: capture('XXXX'), after:java.timeFormatUTC(0, 'yyyy-MM-dd', 0)};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC invalid SimpleDateFormat pattern propagation"
+    },
+    "tags": ["edge", "error-or-empty", "catch", "continuation"],
+    "expected": {"outcome":"return","value":{"unknown":{"caught":true,"continued":"1970"},"longX":{"caught":true,"continued":"1970"},"after":"1970-01-01"}}
+  },
+  {
+    "id": "date-bridge.local-time-format",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "Asia/Shanghai",
+      "program": "return {value:java.timeFormat(0)};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormat(AppConst.dateFormat yyyy/MM/dd HH:mm)"
+    },
+    "tags": ["normal", "local-time", "default-timezone"],
+    "expected": {"outcome":"return","value":{"value":"1970/01/01 08:00"}}
+  },
+  {
+    "id": "date-bridge.positive-half-hour-and-midnight",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "UTC",
+      "program": "return {value:java.timeFormatUTC(1577836800000, 'yyyy-MM-dd HH:mm Z/ZZZZ X/XX/XXX zzzz', 19800000)};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC(SimpleTimeZone raw millisecond offset)"
+    },
+    "tags": ["edge", "offset", "midnight", "year-boundary"],
+    "expected": {"outcome":"return","value":{"value":"2020-01-01 05:30 +0530/+0530 +05/+0530/+05:30 Coordinated Universal Time"}}
+  },
+  {
+    "id": "date-bridge.java-long-int-argument-coercion",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "UTC",
+      "program": "return {value:java.timeFormatUTC(0.9, 'yyyy-MM-dd HH:mm:ss.SSS Z', 90001.9)};"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC(Long/Int Rhino bridge coercion)"
+    },
+    "tags": ["edge", "argument-coercion", "millisecond"],
+    "expected": {"outcome":"return","value":{"value":"1970-01-01 00:01:30.001 +0001"}}
+  },
+  {
+    "id": "date-bridge.simple-date-format-token-widths",
+    "family": "date-bridge",
+    "operation": "rule.dateBridge",
+    "input": {
+      "locale": "en-US",
+      "timeZone": "UTC",
+      "program": "var patterns=['yyyyy','MMMMM','LLLLL','ddddd','DDDD','SSSS','EEEEE','aaaa','wwww','WWW','FFF','zzzzz','ZZZZZZ']; return patterns.map(function(pattern){try{return {pattern:pattern,value:java.timeFormatUTC(978,pattern,0)};}catch(error){return {pattern:pattern,caught:true};}});"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "JsExtensions.timeFormatUTC(SimpleDateFormat repeated pattern widths)"
+    },
+    "tags": ["edge", "token-width", "locale", "timezone-pattern"],
+    "expected": {"outcome":"return","value":[{"pattern":"yyyyy","value":"01970"},{"pattern":"MMMMM","value":"January"},{"pattern":"LLLLL","value":"January"},{"pattern":"ddddd","value":"00001"},{"pattern":"DDDD","value":"0001"},{"pattern":"SSSS","value":"0978"},{"pattern":"EEEEE","value":"Thursday"},{"pattern":"aaaa","value":"AM"},{"pattern":"wwww","value":"0001"},{"pattern":"WWW","value":"001"},{"pattern":"FFF","value":"001"},{"pattern":"zzzzz","value":"Coordinated Universal Time"},{"pattern":"ZZZZZZ","value":"+0000"}]}
+  }
+]

@@ -1896,9 +1896,19 @@ test('Node 时间格式桥接支持 Android 常用周年份、星期序号和独
 })
 
 test('Node 时间格式桥接不把 SimpleDateFormat 未知字母静默当作字面量', async () => {
-  const result = await evaluate(new SourceRuleHost(), `@js:java.timeFormatUTC(0, "yyyy-QQQ", 0)`, '')
-  assert.equal(result.status, 'empty')
-  assert.equal(result.value, null)
+  const result = await evaluate(new SourceRuleHost(), `@js:JSON.stringify((function() {
+    function capture(pattern) {
+      try { return { caught: false, value: java.timeFormatUTC(0, pattern, 0) } }
+      catch (error) { return { caught: true, continued: java.timeFormatUTC(0, 'yyyy', 0) } }
+    }
+    return [capture('yyyy-QQQ'), capture('XXXX'), capture("yyyy-MM-dd 'open")]
+  })())`, '')
+  assert.equal(result.status, 'success')
+  assert.deepEqual(JSON.parse(String(result.value)), [
+    { caught: true, continued: '1970' },
+    { caught: true, continued: '1970' },
+    { caught: true, continued: '1970' },
+  ])
 })
 
 test('Node 日期格式处理引号、locale、时区和周年份边界', async () => {
@@ -1907,14 +1917,14 @@ test('Node 日期格式处理引号、locale、时区和周年份边界', async 
     java.timeFormatUTC(Date.UTC(2018, 11, 31), "YYYY-w 'at' HH 'o''clock'", 0),
     java.timeFormatUTC(0, "MMMM EEEE", 0),
     java.timeFormat(0),
-    java.timeFormatUTC(0, "XXXX", 0)
+    (function() { try { java.timeFormatUTC(0, "XXXX", 0); return false } catch (error) { return true } })()
   ])`, '')
   assert.equal(result.status, 'success', result.message)
   const values = JSON.parse(String(result.value)) as string[]
   assert.equal(values[0], '2019-1 at 00 o\'clock')
   assert.equal(values[1], 'January Thursday')
   assert.equal(values[2], '1970/01/01 08:00')
-  assert.equal(values[3], null)
+  assert.equal(values[3], true)
 })
 
 test('source、book、chapter 变量分别写入所属 DTO，通用读取遵循 chapter 优先级', async () => {
