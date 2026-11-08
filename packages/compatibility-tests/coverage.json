@@ -1722,6 +1722,22 @@
         "rule.zipDownload.batch-corrupt",
         "rule.zipDownload.batch-transport-failure"
       ]
+    },
+    {
+      "operation": "rule.legacyCrypto",
+      "method": "JsEncodeUtils AES 历史重载和 createSymmetricCrypto 状态",
+      "reference": "upstream-adapted",
+      "tsEntry": "SourceRuleHost → java AES / 工厂 bridge",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "state",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.legacyCrypto.batch-aes-legacy",
+        "rule.legacyCrypto.batch-aes-factory"
+      ]
     }
   ]
 }

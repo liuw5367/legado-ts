@@ -8,7 +8,9 @@
     "jsoupxpath": "2.5.3",
     "htmlunitCoreJs": "5.3.0-legado.4",
     "okhttp": "5.4.0",
-    "coroutines": "1.11.0"
+    "coroutines": "1.11.0",
+    "hutool": "5.8.22",
+    "bouncycastle": "1.85.2"
   },
   "files": [
     {
@@ -118,6 +120,10 @@
         [
           76,
           81
+        ],
+        [
+          83,
+          87
         ]
       ],
       "prefix": "package io.legado.app.utils",
@@ -202,6 +208,30 @@
     {
       "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetRecognizer.java",
       "sha256": "e0d5d65501b92a7a56352034989603da2be08fd6c4b34275b957fb3e9a2a4e38"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/help/JsEncodeUtils.kt",
+      "sha256": "4213330217d095a55e2a509775e9479780946836bb446b5514e1d9541eff4b0a",
+      "sections": [
+        [
+          45,
+          76
+        ],
+        [
+          223,
+          227
+        ],
+        [
+          240,
+          244
+        ]
+      ],
+      "prefix": "package io.legado.app.help\n\nimport cn.hutool.crypto.symmetric.SymmetricCrypto\nimport io.legado.app.help.crypto.SymmetricCryptoAndroid\n\nobject CorpusJsEncodeUtils {",
+      "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/help/crypto/SymmetricCryptoAndroid.kt",
+      "sha256": "7931f52d94435f9fdca29b6a060f668a51341890422ba49847d412295d9f2db7"
     }
   ],
   "adaptations": [
@@ -225,6 +255,10 @@
     {
       "file": "reference-sources.json",
       "reason": "ICU CharsetDetector 原样保留字节与普通 InputStream 检测。排除只接受 Android ParcelFileDescriptor 的重载，非空注解用同包无行为声明替代。"
+    },
+    {
+      "file": "jvm/src/main/kotlin/io/legado/app/utils/EncoderUtils.kt",
+      "reason": "SymmetricCryptoAndroid 的 Android Base64.NO_WRAP 使用等价的 JDK Base64 encoder；参考端保留原类和上游 Hutool 版本。"
     }
   ],
   "scriptEngine": {

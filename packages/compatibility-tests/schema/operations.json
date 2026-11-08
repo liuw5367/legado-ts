@@ -522,5 +522,23 @@
       "finalUrl": "string",
       "authorization": "string"
     }
+  },
+  "rule.legacyCrypto": {
+    "required": [
+      "kind",
+      "key",
+      "iv",
+      "changedIv",
+      "plaintext",
+      "ciphertext"
+    ],
+    "properties": {
+      "kind": "string",
+      "key": "string",
+      "iv": "string",
+      "changedIv": "string",
+      "plaintext": "string",
+      "ciphertext": "string"
+    }
   }
 }

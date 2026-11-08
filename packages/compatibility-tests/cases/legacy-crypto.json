@@ -1,0 +1,137 @@
+[
+  {
+    "operation": "rule.legacyCrypto",
+    "family": "legacy-crypto",
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsEncodeUtils 原方法、SymmetricCryptoAndroid 原类和固定 Hutool"
+    },
+    "id": "rule.legacyCrypto.batch-aes-legacy",
+    "input": {
+      "kind": "legacy",
+      "key": "1234567890123456",
+      "iv": "abcdefghijklmnop",
+      "changedIv": "ponmlkjihgfedcba",
+      "plaintext": "兼容性",
+      "ciphertext": "gd92OahnLuUE7i0U6VVTJw=="
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "plaintext": "兼容性",
+        "base64Bytes": [
+          103,
+          100,
+          57,
+          50,
+          79,
+          97,
+          104,
+          110,
+          76,
+          117,
+          85,
+          69,
+          55,
+          105,
+          48,
+          85,
+          54,
+          86,
+          86,
+          84,
+          74,
+          119,
+          61,
+          61
+        ]
+      }
+    }
+  },
+  {
+    "operation": "rule.legacyCrypto",
+    "family": "legacy-crypto",
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "JsEncodeUtils 原方法、SymmetricCryptoAndroid 原类和固定 Hutool"
+    },
+    "id": "rule.legacyCrypto.batch-aes-factory",
+    "input": {
+      "kind": "factory",
+      "key": "1234567890123456",
+      "iv": "abcdefghijklmnop",
+      "changedIv": "ponmlkjihgfedcba",
+      "plaintext": "兼容性",
+      "ciphertext": "gd92OahnLuUE7i0U6VVTJw=="
+    },
+    "tags": [
+      "state",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "first": [
+          129,
+          223,
+          118,
+          57,
+          168,
+          103,
+          46,
+          229,
+          4,
+          238,
+          45,
+          20,
+          233,
+          85,
+          83,
+          39
+        ],
+        "second": [
+          30,
+          39,
+          195,
+          132,
+          78,
+          75,
+          7,
+          7,
+          164,
+          72,
+          44,
+          224,
+          209,
+          74,
+          149,
+          184
+        ],
+        "independent": [
+          129,
+          223,
+          118,
+          57,
+          168,
+          103,
+          46,
+          229,
+          4,
+          238,
+          45,
+          20,
+          233,
+          85,
+          83,
+          39
+        ],
+        "decrypted": "兼容性",
+        "sameInstance": true
+      }
+    }
+  }
+]

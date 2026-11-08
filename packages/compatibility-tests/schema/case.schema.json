@@ -66,7 +66,8 @@
         "rule.sourceState",
         "flow.contentLifecycle",
         "rule.coverStream",
-        "rule.zipDownload"
+        "rule.zipDownload",
+        "rule.legacyCrypto"
       ]
     },
     "input": {
@@ -1737,6 +1738,51 @@
                 "type": "string"
               },
               "authorization": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.legacyCrypto"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "kind",
+              "key",
+              "iv",
+              "changedIv",
+              "plaintext",
+              "ciphertext"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "iv": {
+                "type": "string"
+              },
+              "changedIv": {
+                "type": "string"
+              },
+              "plaintext": {
+                "type": "string"
+              },
+              "ciphertext": {
                 "type": "string"
               }
             },

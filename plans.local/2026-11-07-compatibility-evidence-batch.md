@@ -155,6 +155,8 @@ git diff --check
 
 - E3 从固定 JsExtensions 原样提取 ZIP 条目循环，使用同一上游 ICU 实现探测原始字节。TS 经真实 Node 会话和文件脚本入口访问受控传输，断言 GET、虚构认证、允许重定向、最终地址与目录无残留；文件宿主专项另验证部分写入后失败/取消的清理。BOM 和缺条目分别由 `a25dce5`、`dc57a10` 修复。[修复前](../packages/compatibility-tests/output/run-OiLxGh/report.md) · [5/5 一致](../packages/compatibility-tests/output/run-sO4wNF/report.md)。重定向在传输边界模拟，未执行真实 HTTP 或 Android 应用。
 
+- E4 原样提取 JsEncodeUtils 的历史 AES 和工厂方法，编译原始 SymmetricCryptoAndroid 与固定 Hutool 5.8.22、BC 1.85.2。独立 OpenSSL 向量验证解密方向、Base64 文本 bytes、同对象更新 IV、另一个对象保持初始状态及解密回读。[两例一致](../packages/compatibility-tests/output/run-iC8onq/report.md)。仅用默认桌面 provider 时参考端出现 InvalidKeyException，锁定上游 provider 后消失；其他模式和 provider 单列。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

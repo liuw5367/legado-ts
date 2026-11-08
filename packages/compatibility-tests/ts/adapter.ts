@@ -42,6 +42,25 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
   const host = new SourceRuleHost()
   switch (item.operation) {
+    case 'rule.legacyCrypto': {
+      const bindings = `const transformation = "AES/CBC/PKCS5Padding", key = ${json('key')}, iv = ${json('iv')}, plaintext = ${json('plaintext')};`
+      if (str('kind') === 'legacy') return script(host, `${bindings}
+        return {
+          plaintext: java.aesEncodeToString(${json('ciphertext')}, key, transformation, iv),
+          base64Bytes: Array.from(java.aesEncodeToBase64ByteArray(plaintext, key, transformation, iv))
+        };
+      `)
+      if (str('kind') !== 'factory') throw new UnsupportedOperation('未知加密兼容案例')
+      return script(host, `${bindings}
+        const first = java.createSymmetricCrypto(transformation, key, iv);
+        const second = java.createSymmetricCrypto(transformation, key, iv);
+        const original = first.encrypt(plaintext);
+        const changed = first.setIv(java.strToBytes(${json('changedIv')}));
+        const updated = first.encrypt(plaintext);
+        return { first: Array.from(original), second: Array.from(updated), independent: Array.from(second.encrypt(plaintext)),
+          decrypted: first.decryptStr(updated), sameInstance: changed === first };
+      `)
+    }
     case 'rule.coverStream': {
       let inputCloseCalls = 0
       const rules = new SourceRuleHost({ logger: (level, value) => {
