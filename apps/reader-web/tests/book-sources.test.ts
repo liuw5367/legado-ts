@@ -314,7 +314,7 @@ test('缓存中的截断正文再次读取时仍返回截断提示', async (t) =
   assert.match(cached.runtimeWarning ?? '', /截断/u)
 })
 
-test('正文分页循环的具体原因在首次抓取及两种缓存读取时保留', async (t) => {
+test('重复的正文下一页地址正常结束分页且不产生截断告警', async (t) => {
   let chapterRequests = 0
   t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
     if (new URL(String(url)).pathname !== '/chapter-loop') return fixtureResponse(url)
@@ -333,7 +333,7 @@ test('正文分页循环的具体原因在首次抓取及两种缓存读取时�
   const first = await runtime.getOrLoadContentDisplay('user-a', created.book.id, created.edition.editionKey, chapterId, true)
   const cached = await runtime.getOrLoadContentDisplay('user-a', created.book.id, created.edition.editionKey, chapterId)
   const full = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId)
-  for (const result of [first, cached, full]) assert.match(result.runtimeWarning ?? '', /正文下一页形成循环/u)
+  for (const result of [first, cached, full]) assert.equal(result.runtimeWarning, undefined)
   assert.equal(first.content.cleaned, '本章正文')
   assert.equal(chapterRequests, 1)
 })
