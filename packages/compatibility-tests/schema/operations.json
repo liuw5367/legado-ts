@@ -394,7 +394,8 @@
     "properties": {
       "status": "integer",
       "crossOrigin": "boolean",
-      "missingLocation": "boolean"
+      "missingLocation": "boolean",
+      "probeHeaders": "object"
     }
   },
   "flow.book": {
@@ -414,7 +415,8 @@
       "variableKeys": "strings",
       "stopAfter": "string",
       "requestHeaderNames": "strings",
-      "requestDefaults": "object"
+      "requestDefaults": "object",
+      "exactRequestHeaders": "boolean"
     }
   },
   "flow.discover": {

@@ -4,6 +4,7 @@ import { NodeNetworkHost } from '../../source-node/src/http.ts'
 import { FlowFixtureError } from './book-flow.ts'
 
 export async function executeRedirect(input: Record<string, unknown>) {
+  const probeHeaders = input.probeHeaders as Record<string, string> | undefined
   const requests: unknown[] = []
   const servers: Server[] = []
   async function listen(redirect?: string): Promise<string> {
@@ -15,6 +16,10 @@ export async function executeRedirect(input: Record<string, unknown>) {
         userAgent: request.headers['user-agent'] ?? null,
         authorization: request.headers.authorization ?? null,
         cookie: request.headers.cookie ?? null, contentType: request.headers['content-type'] ?? null,
+        ...(probeHeaders === undefined ? {} : {
+          probeValues: request.rawHeaders.flatMap((name, index) =>
+            index % 2 === 0 && name.toLowerCase() === 'x-probe' ? [request.rawHeaders[index + 1]] : []),
+        }),
       })
       if (request.url === '/start' && redirect !== undefined) response.writeHead(Number(input.status), input.missingLocation === true ? {} : { Location: redirect })
       else response.writeHead(200)
@@ -36,7 +41,7 @@ export async function executeRedirect(input: Record<string, unknown>) {
       url: `${origin}/start`, baseUrl: origin, method: 'POST', body: 'fixture body',
       headers: {
         'User-Agent': 'fixture-redirect', Authorization: 'Bearer fixture', Cookie: 'session=fixture',
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'text/plain; charset=utf-8', ...probeHeaders,
       },
     })
     if (!request.plan) throw new Error(request.error?.message ?? '重定向请求计划无效')

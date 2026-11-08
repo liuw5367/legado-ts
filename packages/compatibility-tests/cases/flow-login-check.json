@@ -427,5 +427,170 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.header-variants.refetch",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook.loginCheckJs / AnalyzeUrl.getHeaderMap/getStrResponse"
+    },
+    "tags": [
+      "offline",
+      "login-check"
+    ],
+    "flowOrigin": {
+      "fixture": "synthetic-header-spelling"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://login-refresh.fixture.test",
+        "bookSourceName": "离线登录检查夹具",
+        "searchUrl": "/search,{\"method\":\"POST\",\"body\":\"q=fixture\",\"bodyJs\":\"result.replace(\\\"原始\\\", \\\"处理\\\")\",\"headers\":{\"X-PROBE\":\"option\",\"content-type\":\"application/x-www-form-urlencoded\"}}",
+        "loginCheckJs": "if (result.code() === 401) { if (java.getHeaderMap().get(\"X-Probe\") !== \"source\" || java.getHeaderMap().get(\"x-probe\") !== \"login\" || java.getHeaderMap().get(\"X-PROBE\") !== \"option\") throw new Error(\"header variants\"); java.getHeaderMap().put(\"X-Refresh\", \"fixture\"); var next = java.getStrResponse(null, null, false); if (next.code() !== 200) throw new Error(\"fixture retry failed\"); next } else result",
+        "ruleSearch": {
+          "bookList": "$.books[*]",
+          "name": "$.name",
+          "bookUrl": "$.url"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "header": "{\"X-Probe\":\"source\"}"
+      },
+      "keyword": "fixture",
+      "stopAfter": "detail",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://login-refresh.fixture.test/search",
+          "body": "q=fixture",
+          "requestHeaders": {
+            "x-refresh": null
+          },
+          "response": {
+            "status": 401,
+            "url": "https://login-refresh.fixture.test/search",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "e30="
+          }
+        },
+        "retry": {
+          "method": "POST",
+          "url": "https://login-refresh.fixture.test/search",
+          "body": "q=fixture",
+          "requestHeaders": {
+            "x-refresh": "fixture"
+          },
+          "response": {
+            "status": 200,
+            "url": "https://login-refresh.fixture.test/search",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IuWOn+WniyIsInVybCI6Ii9ib29rLzEifV19"
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://login-refresh.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://login-refresh.fixture.test/book/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuWkhOeQhjwvaDE+"
+          }
+        }
+      },
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "x-probe",
+        "x-refresh"
+      ],
+      "requestLimit": 3,
+      "exactRequestHeaders": true,
+      "requestDefaults": {
+        "loginHeaders": {
+          "x-probe": "login"
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "处理",
+                "bookUrl": "https://login-refresh.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "处理",
+              "bookUrl": "https://login-refresh.fixture.test/book/1",
+              "tocUrl": "https://login-refresh.fixture.test/book/1"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://login-refresh.fixture.test/search",
+            "body": "q=fixture",
+            "bodyBase64": "cT1maXh0dXJl",
+            "responseUrl": "https://login-refresh.fixture.test/search",
+            "responseStatus": 401,
+            "headers": {
+              "X-Probe": "source",
+              "x-probe": "login",
+              "X-PROBE": "option",
+              "content-type": "application/x-www-form-urlencoded"
+            }
+          },
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://login-refresh.fixture.test/search",
+            "body": "q=fixture",
+            "bodyBase64": "cT1maXh0dXJl",
+            "responseUrl": "https://login-refresh.fixture.test/search",
+            "responseStatus": 200,
+            "headers": {
+              "X-Probe": "source",
+              "x-probe": "login",
+              "X-PROBE": "option",
+              "content-type": "application/x-www-form-urlencoded",
+              "X-Refresh": "fixture"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://login-refresh.fixture.test/book/1",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://login-refresh.fixture.test/book/1",
+            "responseStatus": 200,
+            "headers": {
+              "X-Probe": "source",
+              "x-probe": "login"
+            }
+          }
+        ]
+      }
+    }
   }
 ]

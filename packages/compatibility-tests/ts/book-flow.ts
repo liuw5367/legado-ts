@@ -52,11 +52,14 @@ export async function executeBookFlow(input: Record<string, unknown>, mode: 'boo
       const { method, url } = plan
       const body = typeof plan.body === 'string' ? plan.body : plan.body ? Buffer.from(plan.body).toString('utf8') : null
       const headers = Object.fromEntries(Object.entries(plan.headers).filter(([name]) => headerNames.has(name.toLowerCase()))
-        .map(([name, value]) => [name.toLowerCase(), value]))
+        .map(([name, value]) => [input.exactRequestHeaders === true ? name : name.toLowerCase(), value]))
+      const matchHeaders = input.exactRequestHeaders === true
+        ? Object.fromEntries(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]))
+        : headers
       const trace = { stage, method, url, body, headers }
       const matching = Object.values(responses).filter((candidate) => candidate.method === method && candidate.url === url
         && candidate.body === body && Object.entries(candidate.requestHeaders ?? {}).every(([name, value]) =>
-          (headers[name] ?? null) === value))
+          (matchHeaders[name] ?? null) === value))
       const entry = matching.length === 1 ? matching[0] : undefined
       if (requests.length >= Number(input.requestLimit) || !entry) {
         fault ??= new FlowFixtureError(`离线请求超限或缺少响应: ${stage} ${method} ${url}`)

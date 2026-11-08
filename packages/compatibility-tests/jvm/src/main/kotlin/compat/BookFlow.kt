@@ -16,8 +16,8 @@ internal class FlowFixtureError(message: String) : RuntimeException(message)
 
 private fun JsonObject.text(key: String): String = get(key)?.takeUnless { it.isJsonNull }?.asString.orEmpty()
 private fun JsonObject.rule(key: String): JsonObject = getAsJsonObject(key) ?: JsonObject()
-private fun flowHeaders(text: String): Map<String, String> =
-    JsonParser.parseString(text).asJsonObject.entrySet().associate { (name, value) -> name.lowercase() to value.asString }
+private fun flowHeaders(text: String, exact: Boolean): Map<String, String> =
+    JsonParser.parseString(text).asJsonObject.entrySet().associate { (name, value) -> (if (exact) name else name.lowercase()) to value.asString }
 
 /** 只覆盖声明式、离线的文本书源分支。应用宿主编排以固定源码为依据。 */
 internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discover: Boolean = false): Any {
@@ -32,11 +32,12 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
     if (unsupported.any(String::isNotBlank) || source.text("bookSourceType") !in setOf("", "0")) {
         throw Unsupported("JVM 流程参考只实现无需登录的声明式文本书源")
     }
+    val exactHeaders = input.get("exactRequestHeaders")?.asBoolean == true
     val headerRule = source.text("header")
     val keyword = input.text("keyword")
     val requestDefaults = input.rule("requestDefaults")
     val headers = headerRule.takeUnless { it.startsWith("@js:", ignoreCase = true) || it.isEmpty() }
-        ?.let(::flowHeaders).orEmpty()
+        ?.let { flowHeaders(it, exactHeaders) }.orEmpty()
     fun applyRequestDefaults(address: String, sourceHeaders: Map<String, String>): Map<String, String> {
         if (requestDefaults.size() == 0) return sourceHeaders
         val userAgent = requestDefaults.text("userAgent")
@@ -44,14 +45,14 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
         val sourceHost = URL(sourceUrl).host
         val requestHost = URL(URL(sourceUrl), address.substringBefore(",{")).host
         val login = if (sourceHost == requestHost) requestDefaults.rule("loginHeaders").entrySet()
-            .associate { (key, value) -> key.lowercase() to value.asString } else emptyMap()
+            .associate { (key, value) -> (if (exactHeaders) key else key.lowercase()) to value.asString } else emptyMap()
         return sourceHeaders + defaultHeaders + login
     }
     fun dynamicHeaders(): Map<String, String> =
         if (!headerRule.startsWith("@js:", ignoreCase = true)) emptyMap()
         else flowHeaders(evaluateFlowRequestScript(headerRule.substring(4), keyword, "") {
             throw Unsupported("离线 JVM 参考不模拟动态头脚本内再次请求")
-        })
+        }, exactHeaders)
     val variables = input.rule("bookVariables").entrySet().associate { (key, value) -> key to value.asString }.toMutableMap()
     val variableKeys = input.getAsJsonArray("variableKeys")?.map { it.asString }
     val stages = linkedMapOf<String, Any>()
@@ -67,11 +68,12 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
     val loginCheck = source.text("loginCheckJs")
     fun fetch(stage: String, plan: FlowRequest): FlowHttpResponse {
         val actualHeaders = dynamicHeaders() + plan.headers
+        val matchHeaders = if (exactHeaders) actualHeaders.mapKeys { it.key.lowercase() } else actualHeaders
         val responses = input.rule("responses").entrySet().map { it.value.asJsonObject }.filter {
             it.text("method") == plan.method && it.text("url") == plan.url && it.get("body").let { body ->
                 (if (body.isJsonNull) null else body.asString) == plan.body
             } && it.rule("requestHeaders").entrySet().all { (name, expected) ->
-                actualHeaders[name] == if (expected.isJsonNull) null else expected.asString
+                matchHeaders[name] == if (expected.isJsonNull) null else expected.asString
             }
         }
         val response = responses.singleOrNull()?.rule("response")
@@ -180,10 +182,10 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
             request("search", resolve(sourceUrl, url)).first
         }
         val searchHeaders = applyRequestDefaults(searchRuleUrl, headers)
-        val searchPlan = flowSearchRequest(searchRuleUrl, keyword, searchHeaders) { resolve(sourceUrl, it) }
+        val searchPlan = flowSearchRequest(searchRuleUrl, keyword, searchHeaders, exactHeaders) { resolve(sourceUrl, it) }
         val initial = fetch("search", searchPlan)
         val searchResponse = if (loginCheck.isEmpty()) initial else {
-            evaluateFlowLoginCheck(loginCheck, initial, searchPlan.headers) { updated ->
+            evaluateFlowLoginCheck(loginCheck, initial, searchPlan.headers, exactHeaders) { updated ->
                 fetch("search", searchPlan.copy(headers = updated))
             } ?: run {
                 result("search", "failed", null)
@@ -210,7 +212,7 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
             val plan = FlowRequest(bookUrl, applyRequestDefaults(bookUrl, headers))
             val detailResponse = fetch("detail", plan)
             val checked = if (loginCheck.isEmpty()) detailResponse else {
-                evaluateFlowLoginCheck(loginCheck, detailResponse, plan.headers) { updated ->
+                evaluateFlowLoginCheck(loginCheck, detailResponse, plan.headers, exactHeaders) { updated ->
                     fetch("detail", plan.copy(headers = updated))
                 } ?: run {
                     result("detail", "empty", null)

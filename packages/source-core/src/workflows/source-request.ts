@@ -196,10 +196,17 @@ function relaxedJson(input: string): string {
   return result
 }
 
+const singleRequestHeaders = new Set([
+  'authorization', 'proxy-authorization', 'cookie', 'proxy', 'user-agent', 'host',
+  'content-type', 'content-length', 'transfer-encoding', 'connection', 'expect', 'upgrade',
+])
+
 function mergeHeaders(...values: Array<Readonly<Record<string, string>> | undefined>): Readonly<Record<string, string>> | undefined {
-  const result: Record<string, string> = {}
+  const result: Record<string, string> = Object.create(null)
   for (const value of values) if (value !== undefined) for (const [key, item] of Object.entries(value)) {
-    const existing = Object.keys(result).find((candidate) => candidate.toLowerCase() === key.toLowerCase())
+    // AnalyzeUrl 对普通请求头按原拼写更新 Map。凭据与传输控制头继续只保留一个值。
+    const lower = key.toLowerCase()
+    const existing = singleRequestHeaders.has(lower) ? Object.keys(result).find((candidate) => candidate.toLowerCase() === lower) : undefined
     result[existing ?? key] = item
   }
   return Object.keys(result).length === 0 ? undefined : result

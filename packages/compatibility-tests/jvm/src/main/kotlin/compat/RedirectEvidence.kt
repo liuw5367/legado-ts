@@ -15,6 +15,7 @@ internal fun redirectEvidence(input: JsonObject): Any {
     val status = input.get("status").asInt
     val crossOrigin = input.get("crossOrigin").asBoolean
     val missingLocation = input.get("missingLocation")?.asBoolean == true
+    val probeHeaders = input.getAsJsonObject("probeHeaders")
     val requests = CopyOnWriteArrayList<Map<String, Any?>>()
     val servers = mutableListOf<HttpServer>()
     val client = OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()
@@ -36,7 +37,7 @@ internal fun redirectEvidence(input: JsonObject): Any {
                     "authorization" to exchange.requestHeaders.getFirst("Authorization"),
                     "cookie" to exchange.requestHeaders.getFirst("Cookie"),
                     "contentType" to exchange.requestHeaders.getFirst("Content-Type"),
-                ))
+                ) + (if (probeHeaders == null) emptyMap() else mapOf("probeValues" to exchange.requestHeaders["X-Probe"].orEmpty())))
                 val location = redirect?.takeIf { exchange.requestURI.path == "/start" }
                 if (location != null && !missingLocation) exchange.responseHeaders.set("Location", location)
                 exchange.sendResponseHeaders(if (location != null) status else 200, -1)
@@ -52,7 +53,8 @@ internal fun redirectEvidence(input: JsonObject): Any {
             .header("User-Agent", "fixture-redirect")
             .header("Authorization", "Bearer fixture")
             .header("Cookie", "session=fixture")
-            .post("fixture body".toRequestBody("text/plain; charset=utf-8".toMediaType())).build()
+            .post("fixture body".toRequestBody("text/plain; charset=utf-8".toMediaType()))
+            .apply { probeHeaders?.entrySet()?.forEach { (name, value) -> addHeader(name, value.asString) } }.build()
         return client.newCall(request).execute().use { response ->
             mapOf("status" to response.code, "finalPath" to response.request.url.encodedPath, "requests" to requests)
         }

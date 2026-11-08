@@ -1407,6 +1407,9 @@
               },
               "missingLocation": {
                 "type": "boolean"
+              },
+              "probeHeaders": {
+                "type": "object"
               }
             },
             "additionalProperties": false
@@ -1468,6 +1471,9 @@
               },
               "requestDefaults": {
                 "type": "object"
+              },
+              "exactRequestHeaders": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

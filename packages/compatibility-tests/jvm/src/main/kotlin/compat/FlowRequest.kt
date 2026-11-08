@@ -23,6 +23,7 @@ internal fun flowSearchRequest(
     rule: String,
     keyword: String,
     headers: Map<String, String>,
+    exactHeaders: Boolean = false,
     resolve: (String) -> String,
 ): FlowRequest {
     // AnalyzeUrl.paramPattern 分隔 URL 和选项，静态关键字在解析选项前展开。
@@ -41,7 +42,7 @@ internal fun flowSearchRequest(
         throw Unsupported("JDK 缺少请求字符集: $charsetName")
     }
     val requestHeaders = headers + options.getAsJsonObject("headers")?.entrySet()
-        .orEmpty().associate { (name, value) -> name.lowercase() to value.asString }
+        .orEmpty().associate { (name, value) -> (if (exactHeaders) name else name.lowercase()) to value.asString }
     val bodyScript = options.get("bodyJs")?.asString?.takeIf(String::isNotBlank)
     if (method == "GET") {
         // AnalyzeUrl 的查询编码保留 RFC3986 UNRESERVED 和固定的查询分隔字符。
@@ -101,6 +102,7 @@ internal fun evaluateFlowLoginCheck(
     code: String,
     initial: FlowHttpResponse,
     headers: Map<String, String>,
+    exactHeaders: Boolean,
     refetch: (Map<String, String>) -> FlowHttpResponse,
 ): FlowHttpResponse? {
     val mutableHeaders = headers.toMutableMap()
@@ -123,9 +125,9 @@ internal fun evaluateFlowLoginCheck(
             bind(objectValue, "url") { response.url }
             return objectValue
         }
-        bind(headerMap, "put") { args ->
-            mutableHeaders.put(Context.toString(args[0]).lowercase(), Context.toString(args[1]))
-        }
+        fun headerName(value: Any): String = Context.toString(value).let { if (exactHeaders) it else it.lowercase() }
+        bind(headerMap, "get") { args -> mutableHeaders[headerName(args[0])] }
+        bind(headerMap, "put") { args -> mutableHeaders.put(headerName(args[0]), Context.toString(args[1])) }
         bind(java, "getHeaderMap") { headerMap }
         bind(java, "getStrResponse") { args ->
             require(args.size == 3 && args[0] == null && args[1] == null && args[2] == false) {

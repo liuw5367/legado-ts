@@ -5,7 +5,7 @@ import type { ConnectionOptions } from 'node:tls'
 import { SourceRequestError } from '@legado/source-core'
 import type { NetworkHost, NetworkResponse, RequestPlan } from '@legado/source-core'
 import iconv from 'iconv-lite'
-import { Agent, ProxyAgent } from 'undici'
+import { Agent, getGlobalDispatcher, ProxyAgent, type Dispatcher } from 'undici'
 import { getPublicSuffix } from 'tough-cookie'
 import { NodeCookieStore } from './cookies.ts'
 import type { CookieStore, NodeNetworkOptions } from './types.ts'
@@ -60,6 +60,47 @@ function parseDnsIpAddresses(value: string): DnsAddress[] {
 }
 
 type RequestDispatcher = Agent | ProxyAgent
+
+const transportSingletonHeaders = new Set([
+  'authorization', 'proxy-authorization', 'cookie', 'proxy', 'user-agent', 'host',
+  'content-type', 'content-length', 'transfer-encoding', 'connection', 'expect', 'upgrade',
+])
+
+function dispatchWithHeaderVariants(
+  dispatcher: Dispatcher | undefined,
+  configured: Readonly<Record<string, string>>,
+  headers: Headers,
+): Pick<Dispatcher, 'dispatch'> | undefined {
+  const variants = new Map<string, string[]>()
+  for (const [name, value] of Object.entries(configured)) {
+    const lower = name.toLowerCase()
+    if (transportSingletonHeaders.has(lower)) continue
+    const values = variants.get(lower) ?? []
+    values.push(value.trim())
+    variants.set(lower, values)
+  }
+  for (const [name, values] of variants) {
+    if (values.length < 2 || headers.get(name) !== values.join(', ')) variants.delete(name)
+  }
+  if (variants.size === 0) return dispatcher
+  const target = dispatcher ?? getGlobalDispatcher()
+  return {
+    dispatch(options, handler) {
+      // Fetch 合并同名值。只还原当前跳中未被改写的普通头，并沿用同一 dispatcher。
+      const sent = options.headers
+      if (sent == null) return target.dispatch(options, handler)
+      const entries: Array<[string, string | string[] | undefined]> = Array.isArray(sent)
+        ? Array.from({ length: sent.length / 2 }, (_, index) => [sent[index * 2]!, sent[index * 2 + 1]])
+        : Symbol.iterator in sent ? [...sent] : Object.entries(sent)
+      const restored = Object.fromEntries(entries.map(([name, value]) => {
+        const values = variants.get(name.toLowerCase())
+        return [name, values !== undefined && value === values.join(', ') ? values : value]
+      }))
+      return target.dispatch({ ...options, headers: restored }, handler)
+    },
+  }
+}
+
 
 function parseProxyUrl(proxy: string): URL {
   let url: URL
@@ -301,7 +342,8 @@ export class NodeNetworkHost implements NetworkHost {
           : Uint8Array.from(currentBody)
       if (body !== undefined && (typeof body === 'string' ? new TextEncoder().encode(body).byteLength : body.byteLength) > plan.budget.maxRequestBodyBytes) throw new Error('request body exceeds byte budget')
       const signal = timeoutSignal(plan)
-      const init = { method: currentMethod, headers, redirect: 'manual', signal, ...(dispatcher === undefined ? {} : { dispatcher }) } as RequestInit
+      const requestDispatcher = dispatchWithHeaderVariants(dispatcher, plan.headers, headers)
+      const init = { method: currentMethod, headers, redirect: 'manual', signal, ...(requestDispatcher === undefined ? {} : { dispatcher: requestDispatcher }) } as RequestInit
       if (body !== undefined) init.body = body as BodyInit
       const response = await fetch(currentUrl, init)
       const headersRecord = responseHeaders(response)
