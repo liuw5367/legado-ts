@@ -70,6 +70,7 @@ class HtmlDocumentView implements HtmlDocument {
       // script/style descendants from the selected elements.
       const copy = value.cloneNode(true)
       removeScriptAndStyle(copy)
+      if (!this.xmlMode) indentHtmlBreaks(copy, 0)
       return render(copy, { xmlMode: this.xmlMode, encodeEntities: 'utf8' })
     }
     if (output === 'text') return jsoupText(value)
@@ -635,6 +636,18 @@ function removeScriptAndStyle(node: AnyNode): void {
     removeScriptAndStyle(child)
     return true
   })
+}
+
+function indentHtmlBreaks(node: AnyNode, depth: number): void {
+  if (!isTag(node) || preservesWhitespace(node)) return
+  const children: AnyNode[] = []
+  for (const child of node.children) {
+    // Jsoup 的 HTML 序列化在 br 前按元素深度换行，保留空白的元素除外。
+    if (isTag(child) && child.name === 'br') children.push(new Text(`\n${' '.repeat(depth + 1)}`))
+    indentHtmlBreaks(child, depth + 1)
+    children.push(child)
+  }
+  node.children = children
 }
 
 function relinkChildren(parent: AnyNode): void {

@@ -149,5 +149,458 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.html-br.regex",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeByJSoup.getString / HtmlFormatter.format"
+    },
+    "tags": [
+      "offline",
+      "html-display"
+    ],
+    "flowOrigin": {
+      "fixture": "css.string.batch-mixed-html"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://html-display.fixture.test",
+        "bookSourceName": "正文换行夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href"
+        },
+        "ruleContent": {
+          "content": "#probe@html##(?m)^ +<br>.*$##<br>命中</span>"
+        }
+      },
+      "keyword": "star",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/search?q=star",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/search?q=star",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2siPuaYn+ayszwvYT48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/book",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/book",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jaGFwdGVyIj7nrKzkuIDnq6A8L2E+"
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/chapter",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/chapter",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1haW4+PHNwYW4gaWQ9InByb2JlIj7nlLImbmJzcDs8Yj7kuZk8L2I+PGJyPuS4mTxzY3JpcHQ+d2luZG93Lng9MTwvc2NyaXB0Pjwvc3Bhbj48cHJlIGlkPSJsaXRlcmFsIj4gIOS4gQog5oiKIDwvcHJlPjwvbWFpbj4="
+          }
+        }
+      },
+      "requestLimit": 3
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://html-display.fixture.test/book"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://html-display.fixture.test/book",
+              "tocUrl": "https://html-display.fixture.test/book"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://html-display.fixture.test/chapter",
+                "index": 0,
+                "isVolume": false,
+                "isVip": false,
+                "isPay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "pageCount": 1,
+              "cleaned": "甲 乙\n　　命中"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/search?q=star",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/book",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/chapter",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.html-br.js",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeByJSoup.getString / HtmlFormatter.format"
+    },
+    "tags": [
+      "offline",
+      "html-display"
+    ],
+    "flowOrigin": {
+      "fixture": "css.string.batch-mixed-html"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://html-display.fixture.test",
+        "bookSourceName": "正文换行夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href"
+        },
+        "ruleContent": {
+          "content": "#probe@html<js>String(result).split(\"\\n\").length === 2 ? \"两行\" : \"一行\"</js>"
+        }
+      },
+      "keyword": "star",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/search?q=star",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/search?q=star",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2siPuaYn+ayszwvYT48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/book",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/book",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jaGFwdGVyIj7nrKzkuIDnq6A8L2E+"
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/chapter",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/chapter",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1haW4+PHNwYW4gaWQ9InByb2JlIj7nlLImbmJzcDs8Yj7kuZk8L2I+PGJyPuS4mTxzY3JpcHQ+d2luZG93Lng9MTwvc2NyaXB0Pjwvc3Bhbj48cHJlIGlkPSJsaXRlcmFsIj4gIOS4gQog5oiKIDwvcHJlPjwvbWFpbj4="
+          }
+        }
+      },
+      "requestLimit": 3
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://html-display.fixture.test/book"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://html-display.fixture.test/book",
+              "tocUrl": "https://html-display.fixture.test/book"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://html-display.fixture.test/chapter",
+                "index": 0,
+                "isVolume": false,
+                "isVip": false,
+                "isPay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "pageCount": 1,
+              "cleaned": "两行"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/search?q=star",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/book",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/chapter",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.html-br.js-no-break",
+    "family": "flow",
+    "contractScope": "flow",
+    "operation": "flow.book",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeByJSoup.getString / HtmlFormatter.format"
+    },
+    "tags": [
+      "offline",
+      "html-display"
+    ],
+    "flowOrigin": {
+      "fixture": "css.string.batch-mixed-html"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://html-display.fixture.test",
+        "bookSourceName": "正文换行夹具",
+        "searchUrl": "/search?q={{key}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "a@text",
+          "bookUrl": "a@href"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "ruleToc": {
+          "chapterList": "a.chapter",
+          "chapterName": "text",
+          "chapterUrl": "href"
+        },
+        "ruleContent": {
+          "content": "#probe@html<js>String(result).split(\"\\n\").length === 2 ? \"两行\" : \"一行\"</js>"
+        }
+      },
+      "keyword": "star",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/search?q=star",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/search?q=star",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGRpdiBjbGFzcz0iYm9vayI+PGEgaHJlZj0iL2Jvb2siPuaYn+ayszwvYT48L2Rpdj4="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/book",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/book",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuaYn+ayszwvaDE+PGEgY2xhc3M9ImNoYXB0ZXIiIGhyZWY9Ii9jaGFwdGVyIj7nrKzkuIDnq6A8L2E+"
+          }
+        },
+        "content": {
+          "method": "GET",
+          "url": "https://html-display.fixture.test/chapter",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://html-display.fixture.test/chapter",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PG1haW4+PHNwYW4gaWQ9InByb2JlIj7nlLImbmJzcDs8Yj7kuZk8L2I+5LiZPHNjcmlwdD53aW5kb3cueD0xPC9zY3JpcHQ+PC9zcGFuPjxwcmUgaWQ9ImxpdGVyYWwiPiAg5LiBCiDmiIogPC9wcmU+PC9tYWluPg=="
+          }
+        }
+      },
+      "requestLimit": 3
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "星河",
+                "bookUrl": "https://html-display.fixture.test/book"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "星河",
+              "bookUrl": "https://html-display.fixture.test/book",
+              "tocUrl": "https://html-display.fixture.test/book"
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "第一章",
+                "chapterUrl": "https://html-display.fixture.test/chapter",
+                "index": 0,
+                "isVolume": false,
+                "isVip": false,
+                "isPay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": {
+              "title": "第一章",
+              "pageCount": 1,
+              "cleaned": "一行"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/search?q=star",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/book",
+            "body": null,
+            "headers": {}
+          },
+          {
+            "stage": "content",
+            "method": "GET",
+            "url": "https://html-display.fixture.test/chapter",
+            "body": null,
+            "headers": {}
+          }
+        ]
+      }
+    }
   }
 ]
