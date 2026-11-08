@@ -594,7 +594,7 @@ export async function requestPage(ports: WorkflowPorts, source: NormalizedSource
   return (await requestPageResponse(ports, source, url, stage, options, diagnostics, trace))?.content
 }
 
-export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined, context?: { baseUrl?: string; redirectUrl?: string; expect?: 'text' | 'nodes'; bindings?: Readonly<Record<string, unknown>>; captureBindings?: readonly string[] }): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
+export async function evaluateField(ports: WorkflowPorts, source: NormalizedSource, stage: WorkflowStage, field: string, rule: string, content: unknown, itemIndex: number | undefined, trace: WorkflowTraceEntry[], signal: AbortSignal | undefined, context?: { baseUrl?: string; redirectUrl?: string; expect?: 'text' | 'nodes'; bindings?: Readonly<Record<string, unknown>>; captureBindings?: readonly string[]; continueAfterCancellation?: boolean }): Promise<{ state: 'value' | 'empty' | 'missing' | 'failed' | 'cancelled' | 'capability-missing'; value?: unknown; message?: string }> {
   trace.push({ stage, event: 'rule', target: field, ...(itemIndex === undefined ? {} : { itemIndex }) })
   let output: WorkflowRuleOutput
   try {
@@ -602,7 +602,7 @@ export async function evaluateField(ports: WorkflowPorts, source: NormalizedSour
   } catch {
     output = { status: 'failed', value: null, message: '规则宿主失败' }
   }
-  if (output.status === 'cancelled' || (signal !== undefined && signal.aborted)) return output.message === undefined ? { state: 'cancelled' } : { state: 'cancelled', message: output.message }
+  if (output.status === 'cancelled' || (context?.continueAfterCancellation !== true && signal !== undefined && signal.aborted)) return output.message === undefined ? { state: 'cancelled' } : { state: 'cancelled', message: output.message }
   if (output.status === 'capability-missing') return output.message === undefined ? { state: 'capability-missing' } : { state: 'capability-missing', message: output.message }
   if (output.status === 'failed') return { state: 'failed', message: output.message ?? '规则解析失败' }
   if (output.status === 'empty' || output.value === null || output.value === undefined) return { state: output.status === 'empty' ? 'empty' : 'missing', value: output.value }

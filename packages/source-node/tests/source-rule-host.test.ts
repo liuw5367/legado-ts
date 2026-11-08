@@ -179,6 +179,33 @@ test('没有会话限流写端时 source.putConcurrent 显式报告缺失能力'
   assert.equal(output.status, 'capability-missing')
 })
 
+test('副内容取消后可继续同步规则，但 title bridge 网络仍遵守原取消信号', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  let bridgeCalls = 0
+  let networkStarted = false
+  const host = new SourceRuleHost({
+    request: async (_input, signal) => {
+      bridgeCalls += 1
+      if (signal.aborted) throw new Error('__LEGADO_CANCELLED__')
+      networkStarted = true
+      return ''
+    },
+  })
+  const output = await host.evaluate({
+    source,
+    stage: 'detail',
+    field: 'title',
+    rule: '@js:java.ajax("https://fixture.invalid/title")',
+    content: '',
+    signal: controller.signal,
+    continueAfterCancellation: true,
+  })
+  assert.equal(bridgeCalls, 1)
+  assert.equal(networkStarted, false)
+  assert.equal(output.status, 'cancelled')
+})
+
 test('Android JsExtensions 和 BaseSource 方法清单全部注册到 JS 运行时', async () => {
   const javaNames = [
     'getSource', 'getTag', 'getSourceNavigationContext', 'getBatchContext', 'cacheContent', 'refreshBookInfo', 'refreshBookToc', 'refreshContent',

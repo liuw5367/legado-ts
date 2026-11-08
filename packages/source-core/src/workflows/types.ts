@@ -230,6 +230,8 @@ export interface WorkflowRuleRequest {
   redirectUrl?: string
   itemIndex?: number
   signal?: AbortSignal
+  /** 仅用于 Android 捕获可选正文请求取消后的同步规则续跑；宿主 bridge 仍使用原取消信号。 */
+  continueAfterCancellation?: boolean
   /** 期望的返回形态：列表规则取 `nodes`（元素节点），字段规则保持 `text`。 */
   expect?: 'text' | 'nodes'
   /** 本次求值附加的 JS 绑定，例如 URL 展开需要的 `key`、`page`。 */

@@ -6,13 +6,14 @@ import { FlowFixtureError } from './book-flow.ts'
 export async function executeContentLifecycle(input: Record<string, unknown>) {
   const source: NormalizedSource = {
     bookSourceUrl: 'https://fixture.invalid', bookSourceName: 'content-lifecycle', bookSourceType: 1,
-    ruleContent: { content: '@js:result', subContent: `@js:${JSON.stringify(input.auxUrl)}`, title: `@js:${JSON.stringify(input.title)}` },
+    ruleContent: { content: '@js:result', subContent: `@js:${JSON.stringify(input.auxUrl)}`, ...(typeof input.replaceRule === 'string' ? { replaceRegex: input.replaceRule } : {}), title: typeof input.titleRule === 'string' ? input.titleRule : `@js:${JSON.stringify(input.title)}` },
   }
   const chapterUrl = 'https://fixture.invalid/chapter'
   const controller = new AbortController()
   const requests: string[] = []
   let active = 0
   let titleEvaluated = false
+  let replaceEvaluated = false
   let fixtureFault: FlowFixtureError | undefined
   const network: NetworkHost = {
     request: async (plan) => {
@@ -52,6 +53,7 @@ export async function executeContentLifecycle(input: Record<string, unknown>) {
     rules: {
       evaluate: async (item) => {
         if (item.field === 'title') titleEvaluated = true
+        if (item.field === 'replaceRegex') replaceEvaluated = true
         return rules.evaluate(item)
       },
     },
@@ -66,6 +68,7 @@ export async function executeContentLifecycle(input: Record<string, unknown>) {
     requests,
     active,
     titleEvaluated,
+    replaceEvaluated,
     auxiliarySaved: result.value?.auxiliary !== undefined,
     auxiliaryFailure: result.diagnostics.some(({ field, code }) => field === 'subContent' && (code === 'cancelled' || code === 'request-failed')),
   }

@@ -1919,6 +1919,12 @@
               },
               "title": {
                 "type": "string"
+              },
+              "replaceRule": {
+                "type": "string"
+              },
+              "titleRule": {
+                "type": "string"
               }
             },
             "additionalProperties": false

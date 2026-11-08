@@ -608,6 +608,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
     stoppedByLimit = true
   }
   let auxiliary: ChapterContent['auxiliary']
+  let cancelledAfterAuxiliary = false
   const subContentRule = ruleString(input.source, 'ruleContent', 'subContent')
   if (subContentRule !== undefined && firstPage !== undefined) {
     const field = await evaluateField(ports, input.source, stage, 'subContent', subContentRule, firstPage.body, undefined, trace, input.signal, { ...firstPage.context, bindings: ruleBindings })
@@ -635,9 +636,12 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
         const requestDiagnostics = diagnostics.slice(beforeRequest)
         for (const diagnostic of requestDiagnostics) if (diagnostic.field === undefined) diagnostic.field = 'subContent'
         if (isSignalAborted(input.signal) || requestDiagnostics.some((item) => item.code === 'cancelled')) {
-          return cancelled('正文副内容请求已取消', diagnostics, trace)
-        }
-        if (response === undefined) {
+          // Android catches cancellation around the optional subContent request
+          // and continues its synchronous replace/title rules. The original
+          // signal remains attached to host bridge calls below.
+          cancelledAfterAuxiliary = true
+          storeAuxiliary = false
+        } else if (response === undefined) {
           storeAuxiliary = false
         } else {
           const responseBytes = new TextEncoder().encode(response.content).byteLength
@@ -666,7 +670,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   let sourceReplaced = joined
   if (replaceRule !== undefined) {
     const trimmed = joined.split('\n').map((line) => line.trim()).join('\n')
-    const field = await evaluateField(ports, input.source, stage, 'replaceRegex', replaceRule, trimmed, undefined, trace, input.signal, firstPage?.context === undefined ? { bindings: ruleBindings } : { ...firstPage.context, bindings: ruleBindings })
+    const field = await evaluateField(ports, input.source, stage, 'replaceRegex', replaceRule, trimmed, undefined, trace, input.signal, { ...(firstPage?.context ?? {}), bindings: ruleBindings, ...(cancelledAfterAuxiliary ? { continueAfterCancellation: true } : {}) })
     if (field.state === 'cancelled') return cancelled('正文替换规则执行已取消', diagnostics, trace)
     const replacementSucceeded = field.state === 'value' || field.state === 'empty'
     if (replacementSucceeded) sourceReplaced = textValue(field.value)
@@ -690,8 +694,8 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
   let title: string | undefined
   let imgUrl: string | undefined
   if (titleRule !== undefined && firstPage !== undefined) {
-    const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, { ...firstPage.context, bindings: ruleBindings })
-    if (field.state === 'cancelled') return cancelled('章节标题规则执行已取消', diagnostics, trace)
+    const field = await evaluateField(ports, input.source, stage, 'title', titleRule, firstPage.body, undefined, trace, input.signal, { ...firstPage.context, bindings: ruleBindings, ...(cancelledAfterAuxiliary ? { continueAfterCancellation: true } : {}) })
+    if (field.state === 'cancelled' && !cancelledAfterAuxiliary) return cancelled('章节标题规则执行已取消', diagnostics, trace)
     if (field.state === 'value') {
       const projection = chapterTitleProjection(textValue(field.value), resultChapter.title)
       title = projection.title
@@ -702,6 +706,7 @@ export async function loadChapterContent(ports: ReadingPorts, input: ContentInpu
       diagnostics.push({ code: field.state === 'capability-missing' ? 'capability-missing' : 'item-skipped', stage, field: 'title', message: field.message ?? '章节标题规则失败', retryable: false })
     }
   }
+  if (cancelledAfterAuxiliary) return { status: 'cancelled', value: null, diagnostics, trace }
   const outputBytes = new TextEncoder().encode(cleaned).byteLength
   if (outputBytes > maxOutputBytes) {
     diagnostics.push({ code: 'item-skipped', stage, message: '正文清洗结果超过输出预算', retryable: false })

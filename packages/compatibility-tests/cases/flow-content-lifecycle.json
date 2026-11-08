@@ -31,6 +31,7 @@
         ],
         "active": 0,
         "titleEvaluated": false,
+        "replaceEvaluated": false,
         "auxiliarySaved": false,
         "auxiliaryFailure": false
       }
@@ -45,7 +46,8 @@
       "fault": "auxiliary-cancel",
       "chapterBody": "第一段正文",
       "auxUrl": "https://fixture.invalid/lyrics",
-      "title": "第一章"
+      "title": "第一章",
+      "replaceRule": "@js:result + '｜替换'"
     },
     "reference": {
       "kind": "upstream-guided-flow",
@@ -58,14 +60,19 @@
     "flowOrigin": {
       "fixture": "synthetic-audio-content-lifecycle"
     },
-    "allowedDifferences": [
-      {
-        "path": "$/value/titleEvaluated",
-        "jvm": true,
-        "ts": false,
-        "reason": "Android 副文 runCatching 吞掉取消后继续尝试标题规则，外层协程仍为取消。TS 立即返回取消。"
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "cancelled",
+        "delivered": null,
+        "requests": ["chapter", "lyrics"],
+        "active": 0,
+        "titleEvaluated": true,
+        "replaceEvaluated": true,
+        "auxiliarySaved": false,
+        "auxiliaryFailure": true
       }
-    ]
+    }
   },
   {
     "id": "flow.synthetic.content-lifecycle.auxiliary-failure",
@@ -100,6 +107,7 @@
         ],
         "active": 0,
         "titleEvaluated": true,
+        "replaceEvaluated": false,
         "auxiliarySaved": false,
         "auxiliaryFailure": true
       }

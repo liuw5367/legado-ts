@@ -2916,9 +2916,10 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   private async nestedRule(rule: string, state: EvaluationState, content: unknown, expect: WorkflowRuleRequest['expect'], signal: AbortSignal, firstDefault = false): Promise<unknown> {
+    const nestedSignal = state.request.continueAfterCancellation === true ? state.request.signal ?? signal : signal
     const nestedState: EvaluationState = {
       ...state,
-      request: { ...state.request, signal },
+      request: { ...state.request, signal: nestedSignal },
       budget: state.budget,
     }
     this.check(nestedState)
@@ -3019,7 +3020,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   public async evaluate(request: WorkflowRuleRequest): Promise<WorkflowRuleOutput> {
-    if (request.signal?.aborted === true) return { status: 'cancelled', value: null, message: '规则求值已取消' }
+    if (request.signal?.aborted === true && request.continueAfterCancellation !== true) return { status: 'cancelled', value: null, message: '规则求值已取消' }
     const bindings = { ...this.bindings, ...(request.bindings ?? {}) }
     const state: EvaluationState = { request: { ...request, bindings }, source: request.source, content: request.content, bindings, budget: { steps: 0, depth: 0 }, expect: request.expect }
     try {
@@ -3491,7 +3492,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)
   }
 
-  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; jsLibOwner?: object; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; requestBudget?: Partial<RequestBudget>; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver }): Promise<WorkflowRuleOutput> {
+  private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; jsLibOwner?: object; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; requestBudget?: Partial<RequestBudget>; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver; continueAfterCancellation?: boolean }): Promise<WorkflowRuleOutput> {
     const explicitBindings = context?.bindings ?? {}
     let bindings: Readonly<Record<string, unknown>> = {
       ...this.bindings,
@@ -3681,6 +3682,9 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const ruleState = context?.ruleState ?? this.createJavaScriptRuleState(source, stage, content, bindings, signal)
     const jsLibOwner = context?.jsLibOwner ?? ruleState
     const runSignal = signal ?? new AbortController().signal
+    // Android can resume synchronous rules after runCatching catches
+    // CancellationException. Keep host bridge calls tied to the original signal.
+    const executionSignal = context?.continueAfterCancellation === true && signal?.aborted === true ? undefined : signal
     let jsLibStateRelease: (() => void) | undefined
     let ownsJsLibStateLock = false
     try {
@@ -3721,7 +3725,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         ...(context?.captureBindings === undefined ? {} : { captureBindings: context.captureBindings }),
         ...(context?.mutableBindings === undefined ? {} : { mutableBindings: context.mutableBindings }),
         ...(context?.captureGlobals === true || jsLibStateKey !== undefined ? { captureGlobals: true } : {}),
-        ...(signal === undefined ? {} : { signal }),
+        ...(executionSignal === undefined ? {} : { signal: executionSignal }),
       }, {
         getVariable: async (name, _bridgeSignal, scope) => {
           if (scope !== undefined && !isVariableScope(scope)) throw new Error('书源变量作用域无效')
@@ -3733,18 +3737,19 @@ export class SourceRuleRuntime implements WorkflowRulePort {
         },
         ...(this.setConcurrentRate === undefined ? {} : { setConcurrentRate: this.setConcurrentRate }),
         request: (payload, bridgeSignal) => {
+          const hostSignal = context?.continueAfterCancellation === true ? signal ?? bridgeSignal : bridgeSignal
           if (typeof payload === 'object' && payload !== null && (payload as SourceRuleBridgeRequest).kind === 'workflow-action') {
             const actionRequest = payload as SourceRuleBridgeRequest
             const name = textValue(actionRequest.action)
             const action = context?.workflowActions?.[name]
             if (action === undefined) throw new Error(`__LEGADO_CAPABILITY__runtime ${name} unavailable`)
-            return action(bridgeSignal, actionRequest.input)
+            return action(hostSignal, actionRequest.input)
           }
           const bridged = typeof payload === 'object' && payload !== null && context?.requestBudget !== undefined
             && ['network', 'network-all', 'network-response', 'url-context-response', 'file'].includes(String((payload as SourceRuleBridgeRequest).kind))
             ? { ...(payload as SourceRuleBridgeRequest), budget: { ...context.requestBudget, ...((payload as SourceRuleBridgeRequest).budget ?? {}) } }
             : payload
-          return this.handleBridge(bridged, bridgeSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState, context?.requestBudget, ruleState)
+          return this.handleBridge(bridged, hostSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState, context?.requestBudget, ruleState)
         },
         evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal, options?.firstDefault === true),
       })
@@ -4408,7 +4413,7 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   }
 
   private check(state: EvaluationState): void {
-    if (state.request.signal?.aborted === true) throw new SourceRuleError('cancelled', '规则求值已取消')
+    if (state.request.signal?.aborted === true && state.request.continueAfterCancellation !== true) throw new SourceRuleError('cancelled', '规则求值已取消')
     state.budget.steps += 1
     if (state.budget.steps > this.maxSteps) throw new SourceRuleError('failed', '规则求值步数超过限制')
   }

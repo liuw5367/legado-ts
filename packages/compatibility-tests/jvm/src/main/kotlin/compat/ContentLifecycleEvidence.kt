@@ -16,6 +16,7 @@ internal fun executeContentLifecycle(input: JsonObject): Any = runBlocking {
     val requestStarted = CompletableDeferred<Unit>()
     var active = 0
     var titleEvaluated = false
+    var replaceEvaluated = false
     var auxiliarySaved = false
     var auxiliaryFailure = false
 
@@ -46,6 +47,7 @@ internal fun executeContentLifecycle(input: JsonObject): Any = runBlocking {
         }.onFailure {
             auxiliaryFailure = true
         }
+        replaceEvaluated = input.has("replaceRule")
         titleEvaluated = true
         body
     }
@@ -65,6 +67,7 @@ internal fun executeContentLifecycle(input: JsonObject): Any = runBlocking {
         "requests" to requests,
         "active" to active,
         "titleEvaluated" to titleEvaluated,
+        "replaceEvaluated" to replaceEvaluated,
         "auxiliarySaved" to auxiliarySaved,
         "auxiliaryFailure" to auxiliaryFailure,
     )
