@@ -750,59 +750,15 @@
     "tags": [
       "edge"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/value/0/attribute",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": "1",
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
-      },
-      {
-        "path": "$/value/0/kind",
-        "jvm": "scalar",
-        "ts": "element",
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
-      },
-      {
-        "path": "$/value/0/tag",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": "bk:book",
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
-      },
-      {
-        "path": "$/value/0/text",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": "一 章",
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
-      },
-      {
-        "path": "$/value/0/value",
-        "jvm": "bk:book",
-        "ts": {
-          "type": "missing"
-        },
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
-      },
-      {
-        "path": "$/value/1",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": {
-          "kind": "element",
-          "tag": "bk:book",
-          "text": "二章",
-          "attribute": "2"
-        },
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
-      }
-    ]
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "bk:book"
+        }
+      ]
+    }
   },
   {
     "id": "xpath.nodes.xml-fragment-no-declaration",
@@ -855,14 +811,10 @@
       "edge",
       "compatibility-recheck"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/value",
-        "jvm": "bk:book",
-        "ts": "<bk:book id=\"1\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\"> 一 章 </bk:title></bk:book>\n<bk:book id=\"2\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\">二章</bk:title></bk:book>",
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回字面标量；TS 的 xmlns 解析器序列化两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
-      }
-    ]
+    "expected": {
+      "outcome": "return",
+      "value": "bk:book"
+    }
   },
   {
     "id": "xpath.list.xml-fragment-ns",
@@ -881,22 +833,12 @@
       "edge",
       "compatibility-recheck"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/value/0",
-        "jvm": "bk:book",
-        "ts": "<bk:book id=\"1\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\"> 一 章 </bk:title></bk:book>",
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回单个字面标量；TS 的 xmlns 解析器返回两个元素字符串，保留 TS 的 XML 命名空间扩展能力。"
-      },
-      {
-        "path": "$/value/1",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": "<bk:book id=\"2\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\">二章</bk:title></bk:book>",
-        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回单个字面标量；TS 的 xmlns 解析器返回两个元素字符串，保留 TS 的 XML 命名空间扩展能力。"
-      }
-    ]
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "bk:book"
+      ]
+    }
   },
   {
     "id": "xpath.nodes.xml-fragment-local-name",
@@ -915,51 +857,25 @@
       "edge",
       "compatibility-recheck"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/errorClass",
-        "jvm": "org.seimicrawler.xpath.exception.XpathSyntaxErrorException",
-        "ts": {
-          "type": "missing"
-        },
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      },
-      {
-        "path": "$/message",
-        "jvm": "Please check the syntax of your xpath expr or commit a Issue. NoSuchFunctionException: not support function: local-name",
-        "ts": {
-          "type": "missing"
-        },
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      },
-      {
-        "path": "$/outcome",
-        "jvm": "throw",
-        "ts": "return",
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      },
-      {
-        "path": "$/value",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": [
-          {
-            "kind": "element",
-            "tag": "bk:book",
-            "text": "一 章",
-            "attribute": "1"
-          },
-          {
-            "kind": "element",
-            "tag": "bk:book",
-            "text": "二章",
-            "attribute": "2"
-          }
-        ],
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      }
-    ]
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function-local-name",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "NoSuchFunctionException: not support function: local-name"
+      ],
+      "tsMessageIncludes": [
+        "NoSuchFunctionException: not support function: local-name"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-unsupported-function-local-name"
+    }
   },
   {
     "id": "xpath.list.xml-fragment-local-name",
@@ -978,41 +894,25 @@
       "edge",
       "compatibility-recheck"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/errorClass",
-        "jvm": "org.seimicrawler.xpath.exception.XpathSyntaxErrorException",
-        "ts": {
-          "type": "missing"
-        },
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      },
-      {
-        "path": "$/message",
-        "jvm": "Please check the syntax of your xpath expr or commit a Issue. NoSuchFunctionException: not support function: local-name",
-        "ts": {
-          "type": "missing"
-        },
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      },
-      {
-        "path": "$/outcome",
-        "jvm": "throw",
-        "ts": "return",
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      },
-      {
-        "path": "$/value",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": [
-          "<bk:book id=\"1\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\"> 一 章 </bk:title></bk:book>",
-          "<bk:book id=\"2\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\">二章</bk:title></bk:book>"
-        ],
-        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
-      }
-    ]
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function-local-name",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "NoSuchFunctionException: not support function: local-name"
+      ],
+      "tsMessageIncludes": [
+        "NoSuchFunctionException: not support function: local-name"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-unsupported-function-local-name"
+    }
   },
   {
     "id": "xpath.nodes.xml-fragment-prefixed-attribute",
@@ -1031,25 +931,15 @@
       "edge",
       "compatibility-recheck"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/value/0/value",
-        "jvm": "",
-        "ts": "1",
-        "reason": "固定 Android JsoupXpath 2.5.3 对带前缀属性路径返回一个空标量；TS 的 xmlns 解析器返回两个属性值，保留 TS 的 XML 命名空间扩展能力。"
-      },
-      {
-        "path": "$/value/1",
-        "jvm": {
-          "type": "missing"
-        },
-        "ts": {
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
           "kind": "scalar",
-          "value": "2"
-        },
-        "reason": "固定 Android JsoupXpath 2.5.3 对带前缀属性路径返回一个空标量；TS 的 xmlns 解析器返回两个属性值，保留 TS 的 XML 命名空间扩展能力。"
-      }
-    ]
+          "value": ""
+        }
+      ]
+    }
   },
   {
     "id": "xpath.nodes.attribute-nodes",
@@ -1137,6 +1027,782 @@
     "expected": {
       "outcome": "return",
       "value": "<Book id=\"1\"><Title> 一 章 </Title></Book>\n<Book id=\"2\"><Title>二章</Title></Book>"
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-predicate",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book[@id='1']",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace probe //bk:book[@id='1']"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "bk:book"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-text",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book/bk:title/text()",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace probe //bk:book/bk:title/text()"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": []
+    }
+  },
+  {
+    "id": "xpath.string.xml-fragment-prefixed-count",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//bk:book)",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace probe count(//bk:book)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-prefixed-count-cast",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "ClassCastException"
+      ],
+      "tsMessageIncludes": [
+        "ClassCastException"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-prefixed-count-cast"
+    }
+  },
+  {
+    "id": "xpath.string.xml-fragment-prefixed-string",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "string(//bk:title)",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace probe string(//bk:title)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function-string",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "NoSuchFunctionException: not support function: string"
+      ],
+      "tsMessageIncludes": [
+        "NoSuchFunctionException: not support function: string"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-unsupported-function-string"
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-attribute-qname",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book/@bk:code",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace probe //bk:book/@bk:code"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-default-namespace-unprefixed",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//book",
+      "content": "<?xml version=\"1.0\"?><root xmlns=\"urn:book\"><book id=\"1\"><title>一章</title></book><book id=\"2\"><title>二章</title></book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace probe //book"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "book",
+          "text": "一章",
+          "attribute": ""
+        },
+        {
+          "kind": "element",
+          "tag": "book",
+          "text": "二章",
+          "attribute": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-title",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:title",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace/function probe //bk:title"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "bk:title"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-child",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book/bk:title",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace/function probe //bk:book/bk:title"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "bk:title"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-plain-attribute",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book/@id",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace/function probe //bk:book/@id"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-own-text",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book/text()",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace/function probe //bk:book/text()"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": []
+    }
+  },
+  {
+    "id": "xpath.string.xml-fragment-string-function-plain",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "string(//title)",
+      "content": "<?xml version=\"1.0\"?><root><title>一章</title></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath namespace/function probe string(//title)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function-string",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "NoSuchFunctionException: not support function: string"
+      ],
+      "tsMessageIncludes": [
+        "NoSuchFunctionException: not support function: string"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-unsupported-function-string"
+    }
+  },
+  {
+    "id": "xpath.nodes.html-fragment-prefixed-qname",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book",
+      "content": "<root><bk:book id=\"1\">一章</bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath prefixed QName in HTML parser mode"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "bk:book"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.string.xml-fragment-prefixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//bk:book/@id",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\">一章</bk:book><bk:book id=\"2\">二章</bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath prefixed attribute value projection"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": ""
+    }
+  },
+  {
+    "id": "xpath.list.xml-fragment-prefixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//bk:book/@id",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\">一章</bk:book><bk:book id=\"2\">二章</bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath prefixed attribute value projection"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        ""
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-prefixed-attribute-only",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//@bk:code",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath prefixed attribute probe //@bk:code"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "A"
+        },
+        {
+          "kind": "scalar",
+          "value": "B"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-wildcard-prefixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//*/@bk:code",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath prefixed attribute probe //*/@bk:code"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": ""
+        },
+        {
+          "kind": "scalar",
+          "value": "A"
+        },
+        {
+          "kind": "scalar",
+          "value": ""
+        },
+        {
+          "kind": "scalar",
+          "value": "B"
+        },
+        {
+          "kind": "scalar",
+          "value": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-prefixed-attribute-predicate",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book[@bk:code='A']",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath prefixed attribute probe //bk:book[@bk:code='A']"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "bk:book"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-wildcard-plain-attribute",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//*/@id",
+      "content": "<?xml version=\"1.0\"?><root><book id=\"1\"><title>一章</title></book><book id=\"2\"><title>二章</title></book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath wildcard attribute axis and missing values"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": ""
+        },
+        {
+          "kind": "scalar",
+          "value": "1"
+        },
+        {
+          "kind": "scalar",
+          "value": ""
+        },
+        {
+          "kind": "scalar",
+          "value": "2"
+        },
+        {
+          "kind": "scalar",
+          "value": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.string.xml-wildcard-plain-attribute",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//*/@id",
+      "content": "<?xml version=\"1.0\"?><root><book id=\"1\"><title>一章</title></book><book id=\"2\"><title>二章</title></book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath wildcard attribute projection"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "\n1\n\n2\n"
+    }
+  },
+  {
+    "id": "xpath.list.xml-wildcard-plain-attribute",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//*/@id",
+      "content": "<?xml version=\"1.0\"?><root><book id=\"1\"><title>一章</title></book><book id=\"2\"><title>二章</title></book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath wildcard attribute projection"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "",
+        "1",
+        "",
+        "2",
+        ""
+      ]
+    }
+  },
+  {
+    "id": "xpath.list.xml-wildcard-prefixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//*/@bk:code",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath wildcard attribute projection"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "",
+        "A",
+        "",
+        "B",
+        ""
+      ]
+    }
+  },
+  {
+    "id": "xpath.string.xml-count-prefixed-attribute-only",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//@bk:code)",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath count and attribute path probe count(//@bk:code)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-count-attribute-cast",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "ClassCastException",
+        "java.util.LinkedList"
+      ],
+      "tsMessageIncludes": [
+        "ClassCastException",
+        "java.util.LinkedList"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-count-attribute-cast"
+    }
+  },
+  {
+    "id": "xpath.string.xml-count-wildcard-prefixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//*/@bk:code)",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath count and attribute path probe count(//*/@bk:code)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-count-attribute-cast",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "ClassCastException",
+        "java.util.LinkedList"
+      ],
+      "tsMessageIncludes": [
+        "ClassCastException",
+        "java.util.LinkedList"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-count-attribute-cast"
+    }
+  },
+  {
+    "id": "xpath.string.xml-count-prefixed-attribute-from-prefixed-element",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//bk:book/@bk:code)",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath count and attribute path probe count(//bk:book/@bk:code)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-prefixed-count-cast",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "ClassCastException",
+        "java.lang.String"
+      ],
+      "tsMessageIncludes": [
+        "ClassCastException",
+        "java.lang.String"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-prefixed-count-cast"
+    }
+  },
+  {
+    "id": "xpath.string.xml-count-unprefixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//@id)",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\" bk:code=\"A\"><bk:title>一章</bk:title></bk:book><bk:book id=\"2\" bk:code=\"B\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath count and attribute path probe count(//@id)"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "errorEquivalence": {
+      "category": "xpath-count-attribute-cast",
+      "jvm": [
+        "org.seimicrawler.xpath.exception.XpathSyntaxErrorException"
+      ],
+      "ts": [
+        "Error"
+      ],
+      "jvmMessageIncludes": [
+        "ClassCastException",
+        "java.util.LinkedList"
+      ],
+      "tsMessageIncludes": [
+        "ClassCastException",
+        "java.util.LinkedList"
+      ]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "xpath-count-attribute-cast"
     }
   }
 ]

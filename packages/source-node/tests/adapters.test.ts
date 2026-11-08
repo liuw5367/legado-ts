@@ -201,14 +201,24 @@ test('HTML/XPath textNodes 去除每个文本节点首尾 ASCII 控制空白并�
   assert.equal(xml.read(xmlNode[0]!, 'textNodes'), 'A\nB')
 })
 
-test('XPath XML 文档解析 xmlns 前缀并保留标准函数求值', () => {
+test('XPath XML 命名空间与函数行为匹配 Android JsoupXpath', () => {
   const xpath = new XPathParserAdapter()
   const xml = xpath.parse('<?xml version="1.0"?><feed xmlns:atom="urn:atom"><atom:entry id="1"><atom:title>第一章</atom:title></atom:entry></feed>')
-  const entries = xpath.evaluate(xml, '//atom:entry') as ParserNode[]
-  assert.equal(entries.length, 1)
-  assert.equal(xpath.evaluate(xml, 'count(//atom:entry)'), 1)
-  assert.equal(xpath.evaluate(xml, 'string(//atom:title)'), '第一章')
-  assert.equal(xml.attr(entries[0]!, 'id'), '1')
+  assert.equal(xpath.evaluate(xml, '//atom:entry'), 'atom:entry')
+  assert.deepEqual(xpath.evaluate(xml, '//atom:entry/atom:title/text()'), [])
+  assert.equal(xpath.evaluate(xml, '//atom:entry/@id'), '')
+  assert.throws(() => xpath.evaluate(xml, '//*[local-name()="entry"]'), {
+    name: 'org.seimicrawler.xpath.exception.XpathSyntaxErrorException',
+    message: 'Please check the syntax of your xpath expr or commit a Issue. NoSuchFunctionException: not support function: local-name',
+  })
+  assert.throws(() => xpath.evaluate(xml, 'string(//atom:title)'), {
+    name: 'org.seimicrawler.xpath.exception.XpathSyntaxErrorException',
+    message: 'Please check the syntax of your xpath expr or commit a Issue. NoSuchFunctionException: not support function: string',
+  })
+  const htmlFragment = xpath.parse('<feed><atom:entry id="1"/></feed>')
+  assert.equal(xpath.evaluate(htmlFragment, '//atom:entry'), 'atom:entry')
+  const htmlElements = xpath.evaluate(htmlFragment, '//*') as ParserNode[]
+  assert.equal(htmlFragment.attr(htmlElements[0]!, 'xmlns:atom'), undefined)
 })
 
 test('JSONPath adapter 保留列表和空选择', () => {

@@ -1649,6 +1649,9 @@
               },
               "chapterIndex": {
                 "type": "integer"
+              },
+              "searchBookEvidence": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

@@ -628,15 +628,22 @@ export class XPathParserAdapter implements XPathParser {
       if (source.endsWith('</td>')) source = `<tr>${source}</tr>`
       if (source.endsWith('</tr>') || source.endsWith('</tbody>')) source = `<table>${source}</table>`
     }
-    const normalized = xml
+    const normalized = ensureXmlPrefixDeclarations(xml
       ? source
-      : render(parseDocument(source, { recognizeSelfClosing: true }), { xmlMode: true, encodeEntities: true })
-    return new XmlDocumentView(new DOMParser({ onError: () => undefined }).parseFromString(normalized, 'text/xml') as unknown as XmlNode, xml)
+      : render(parseDocument(source, { recognizeSelfClosing: true }), { xmlMode: true, encodeEntities: true }))
+    const parsed = new DOMParser({ onError: () => undefined }).parseFromString(normalized.source, 'text/xml') as unknown as XmlNode
+    if (normalized.syntheticPrefixes.length > 0) {
+      const root = parsed.nodeType === 9 ? childNodes(parsed).find((node) => node.nodeType === 1) : parsed
+      for (const prefix of normalized.syntheticPrefixes) root?.removeAttribute?.(`xmlns:${prefix}`)
+    }
+    return new XmlDocumentView(parsed, xml)
   }
 
   public evaluate(document: HtmlDocument, expression: string): RuleValue | ParserNode[] | null {
     if (!(document instanceof XmlDocumentView)) throw new Error('XPath requires an XML document created by XPathParserAdapter.parse')
     if (expression.length === 0) return null
+    const androidResult = evaluateAndroidXPathCompatibility(document, expression)
+    if (androidResult !== undefined) return androidResult
     const result = evaluateXPath(expression, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
     if (result.every(isXmlNode)) return result.map((item) => document.wrap(item))
     if (result.length === 1) return normalizeXPathValue(result[0])
@@ -654,6 +661,92 @@ export class XPathParserAdapter implements XPathParser {
     if (!(document instanceof XmlDocumentView)) throw new Error('XPath requires an XML document created by XPathParserAdapter.parse')
     return document.stringify(node)
   }
+}
+
+function ensureXmlPrefixDeclarations(source: string): { source: string; syntheticPrefixes: string[] } {
+  const prefixes = new Set([...source.matchAll(/<\/?([A-Za-z_][\w.-]*):[A-Za-z_][\w.-]*(?=[\s/>])/g)].map((match) => match[1]!))
+  if (prefixes.size === 0) return { source, syntheticPrefixes: [] }
+  for (const match of source.matchAll(/xmlns:([A-Za-z_][\w.-]*)\s*=/g)) prefixes.delete(match[1]!)
+  if (prefixes.size === 0) return { source, syntheticPrefixes: [] }
+
+  const root = /<[A-Za-z_][\w:.-]*/g.exec(source)
+  if (root === null) return { source, syntheticPrefixes: [] }
+  let end = root.index + root[0].length
+  let quote: '"' | "'" | undefined
+  while (end < source.length) {
+    const char = source[end]!
+    if (quote === undefined && (char === '"' || char === "'")) quote = char
+    else if (quote === char) quote = undefined
+    else if (quote === undefined && char === '>') break
+    end += 1
+  }
+  if (end >= source.length) return { source, syntheticPrefixes: [] }
+
+  const insertAt = source[end - 1] === '/' ? end - 1 : end
+  const syntheticPrefixes = [...prefixes]
+  const declarations = syntheticPrefixes.map((prefix) => ` xmlns:${prefix}="urn:legado:unbound-prefix:${prefix}"`).join('')
+  return { source: source.slice(0, insertAt) + declarations + source.slice(insertAt), syntheticPrefixes }
+}
+
+function evaluateAndroidXPathCompatibility(document: XmlDocumentView, expression: string): RuleValue | ParserNode[] | null | undefined {
+  const masked = maskXPathLiterals(expression)
+  const functions = [...masked.matchAll(/([A-Za-z_][\w.-]*)\s*\(/g)].map((match) => match[1]!.toLowerCase())
+  const unsupportedFunction = functions.find((name) => name === 'local-name' || name === 'string')
+  if (unsupportedFunction !== undefined) {
+    return throwAndroidXPathSyntaxError(`NoSuchFunctionException: not support function: ${unsupportedFunction}`)
+  }
+
+  const qualifiedSteps = [...masked.matchAll(/\/{1,2}\s*([A-Za-z_][\w.-]*:[A-Za-z_][\w.-]*)/g)].map((match) => match[1]!)
+  if (functions.includes('count') && qualifiedSteps.length > 0) {
+    return throwAndroidXPathSyntaxError('ClassCastException: class java.lang.String cannot be cast to class org.jsoup.select.Elements')
+  }
+  if (functions.includes('count') && /(?:^|\/)\s*@/.test(masked)) {
+    return throwAndroidXPathSyntaxError('ClassCastException: class java.util.LinkedList cannot be cast to class org.jsoup.select.Elements')
+  }
+
+  const wildcardAttribute = /^\s*\/\/\s*\*\s*\/\s*@\s*([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\s*$/.exec(masked)
+  if (wildcardAttribute !== null) {
+    const elements = evaluateXPath('//*', document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
+    return elements.filter(isXmlNode).map((element) => attributeValue(element, wildcardAttribute[1]!) ?? '')
+  }
+
+  if (qualifiedSteps.length === 0) return undefined
+
+  // JsoupXpath 2.5.3 does not bind XML prefixes to namespace URIs. Its parser
+  // exposes the last prefixed step as a scalar; text() yields no JXNodes, while
+  // attribute axes yield the empty scalar. Match that observable contract here.
+  if (/\/(?:\s*)@/.test(masked)) return ''
+  if (/\/\s*text\s*\(\s*\)\s*$/i.test(masked)) return []
+  return qualifiedSteps.at(-1)!
+}
+
+function maskXPathLiterals(expression: string): string {
+  let output = ''
+  let quote: '"' | "'" | undefined
+  for (let index = 0; index < expression.length; index += 1) {
+    const char = expression[index]!
+    if (quote === undefined) {
+      if (char === '"' || char === "'") {
+        quote = char
+        output += ' '
+      } else output += char
+      continue
+    }
+    output += ' '
+    if (char === quote) {
+      if (expression[index + 1] === quote) {
+        output += ' '
+        index += 1
+      } else quote = undefined
+    }
+  }
+  return output
+}
+
+function throwAndroidXPathSyntaxError(detail: string): never {
+  const error = new Error(`Please check the syntax of your xpath expr or commit a Issue. ${detail}`)
+  error.name = 'org.seimicrawler.xpath.exception.XpathSyntaxErrorException'
+  throw error
 }
 
 function parserNodeKind(node: XmlNode): ParserNode['kind'] {

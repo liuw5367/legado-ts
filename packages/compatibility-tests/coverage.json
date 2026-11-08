@@ -1462,7 +1462,16 @@
         "xpath.string.batch-mixed-text-nodes",
         "xpath.string.xmlElement",
         "xpath.string.xml-fragment",
-        "xpath.string.xml-fragment-ns"
+        "xpath.string.xml-fragment-ns",
+        "xpath.string.xml-fragment-prefixed-count",
+        "xpath.string.xml-fragment-prefixed-string",
+        "xpath.string.xml-fragment-string-function-plain",
+        "xpath.string.xml-fragment-prefixed-attribute",
+        "xpath.string.xml-wildcard-plain-attribute",
+        "xpath.string.xml-count-prefixed-attribute-only",
+        "xpath.string.xml-count-wildcard-prefixed-attribute",
+        "xpath.string.xml-count-prefixed-attribute-from-prefixed-element",
+        "xpath.string.xml-count-unprefixed-attribute"
       ],
       "manifestMembers": [
         "parser-xpath::003-text",
@@ -1495,7 +1504,10 @@
         "xpath.list.interleave",
         "xpath.list.invalid",
         "xpath.list.xml-fragment-ns",
-        "xpath.list.xml-fragment-local-name"
+        "xpath.list.xml-fragment-local-name",
+        "xpath.list.xml-fragment-prefixed-attribute",
+        "xpath.list.xml-wildcard-plain-attribute",
+        "xpath.list.xml-wildcard-prefixed-attribute"
       ],
       "manifestMembers": [
         "parser-xpath::002-getstringlist"
@@ -1526,7 +1538,20 @@
         "xpath.nodes.xml-fragment-local-name",
         "xpath.nodes.xml-fragment-prefixed-attribute",
         "xpath.nodes.attribute-nodes",
-        "xpath.nodes.text-nodes"
+        "xpath.nodes.text-nodes",
+        "xpath.nodes.xml-fragment-prefixed-predicate",
+        "xpath.nodes.xml-fragment-prefixed-text",
+        "xpath.nodes.xml-fragment-prefixed-attribute-qname",
+        "xpath.nodes.xml-default-namespace-unprefixed",
+        "xpath.nodes.xml-fragment-prefixed-title",
+        "xpath.nodes.xml-fragment-prefixed-child",
+        "xpath.nodes.xml-fragment-prefixed-plain-attribute",
+        "xpath.nodes.xml-fragment-prefixed-own-text",
+        "xpath.nodes.html-fragment-prefixed-qname",
+        "xpath.nodes.xml-wildcard-prefixed-attribute",
+        "xpath.nodes.xml-wildcard-plain-attribute",
+        "xpath.nodes.xml-prefixed-attribute-only",
+        "xpath.nodes.xml-prefixed-attribute-predicate"
       ],
       "manifestMembers": [
         "parser-xpath::001-getelements"
