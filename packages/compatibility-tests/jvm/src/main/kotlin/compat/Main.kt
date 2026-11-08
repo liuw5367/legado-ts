@@ -166,8 +166,12 @@ private fun execute(item: JsonObject): Any? {
         "xpath.string" -> AnalyzeByXPath(text("content")).getString(text("rule"))
         "xpath.list" -> AnalyzeByXPath(text("content")).getStringList(text("rule"))
         "xpath.nodes" -> AnalyzeByXPath(text("content")).getElements(text("rule"))?.map { node ->
-            val element = node.asElement()
-            mapOf("tag" to element.tagName(), "text" to element.text(), "attribute" to element.attr(text("attribute")))
+            if (node.isElement) {
+                val element = node.asElement()
+                mapOf("kind" to "element", "tag" to element.tagName(), "text" to element.text(), "attribute" to element.attr(text("attribute")))
+            } else {
+                mapOf("kind" to "scalar", "value" to node.asString())
+            }
         }
         "css.string" -> AnalyzeByJSoup(text("content")).getString(text("rule"))
         "css.list" -> AnalyzeByJSoup(text("content")).getStringList(text("rule"))

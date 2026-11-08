@@ -567,5 +567,576 @@
       "edge",
       "compatibility-recheck"
     ]
+  },
+  {
+    "id": "xpath.nodes.compose-concat",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//a&&//b",
+      "content": "<root><a id=\"a1\">A1</a><b id=\"b1\">B1</b><a id=\"a2\">A2</a><b id=\"b2\">B2</b><c id=\"c1\">C</c></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements && composition"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "a",
+          "text": "A1",
+          "attribute": "a1"
+        },
+        {
+          "kind": "element",
+          "tag": "a",
+          "text": "A2",
+          "attribute": "a2"
+        },
+        {
+          "kind": "element",
+          "tag": "b",
+          "text": "B1",
+          "attribute": "b1"
+        },
+        {
+          "kind": "element",
+          "tag": "b",
+          "text": "B2",
+          "attribute": "b2"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.compose-fallback",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//missing||//b||//a",
+      "content": "<root><a id=\"a1\">A1</a><b id=\"b1\">B1</b><a id=\"a2\">A2</a><b id=\"b2\">B2</b><c id=\"c1\">C</c></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements || fallback"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "b",
+          "text": "B1",
+          "attribute": "b1"
+        },
+        {
+          "kind": "element",
+          "tag": "b",
+          "text": "B2",
+          "attribute": "b2"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.compose-interleave",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//a%%//b",
+      "content": "<root><a id=\"a1\">A1</a><b id=\"b1\">B1</b><a id=\"a2\">A2</a><b id=\"b2\">B2</b><c id=\"c1\">C</c></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements %% composition"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "a",
+          "text": "A1",
+          "attribute": "a1"
+        },
+        {
+          "kind": "element",
+          "tag": "b",
+          "text": "B1",
+          "attribute": "b1"
+        },
+        {
+          "kind": "element",
+          "tag": "a",
+          "text": "A2",
+          "attribute": "a2"
+        },
+        {
+          "kind": "element",
+          "tag": "b",
+          "text": "B2",
+          "attribute": "b2"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.compose-interleave-uneven",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//a%%//c",
+      "content": "<root><a id=\"a1\">A1</a><b id=\"b1\">B1</b><a id=\"a2\">A2</a><b id=\"b2\">B2</b><c id=\"c1\">C</c></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements %% unequal result lengths"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "a",
+          "text": "A1",
+          "attribute": "a1"
+        },
+        {
+          "kind": "element",
+          "tag": "c",
+          "text": "C",
+          "attribute": "c1"
+        },
+        {
+          "kind": "element",
+          "tag": "a",
+          "text": "A2",
+          "attribute": "a2"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-ns",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title> 一 章 </bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath XML fragment and namespace"
+    },
+    "tags": [
+      "edge"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value/0/attribute",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": "1",
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
+      },
+      {
+        "path": "$/value/0/kind",
+        "jvm": "scalar",
+        "ts": "element",
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
+      },
+      {
+        "path": "$/value/0/tag",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": "bk:book",
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
+      },
+      {
+        "path": "$/value/0/text",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": "一 章",
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
+      },
+      {
+        "path": "$/value/0/value",
+        "jvm": "bk:book",
+        "ts": {
+          "type": "missing"
+        },
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
+      },
+      {
+        "path": "$/value/1",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": {
+          "kind": "element",
+          "tag": "bk:book",
+          "text": "二章",
+          "attribute": "2"
+        },
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回标量；TS 的 xmlns 解析器返回两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
+      }
+    ]
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-no-declaration",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//book",
+      "content": "<Root><Book id=\"1\">一章</Book><Book id=\"2\">二章</Book></Root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath XML-like fragment without declaration"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "book",
+          "text": "一章",
+          "attribute": "1"
+        },
+        {
+          "kind": "element",
+          "tag": "book",
+          "text": "二章",
+          "attribute": "2"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.string.xml-fragment-ns",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//bk:book",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title> 一 章 </bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString prefixed XML element"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value",
+        "jvm": "bk:book",
+        "ts": "<bk:book id=\"1\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\"> 一 章 </bk:title></bk:book>\n<bk:book id=\"2\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\">二章</bk:title></bk:book>",
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回字面标量；TS 的 xmlns 解析器序列化两个匹配元素，保留 TS 的 XML 命名空间扩展能力。"
+      }
+    ]
+  },
+  {
+    "id": "xpath.list.xml-fragment-ns",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//bk:book",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title> 一 章 </bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList prefixed XML element"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value/0",
+        "jvm": "bk:book",
+        "ts": "<bk:book id=\"1\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\"> 一 章 </bk:title></bk:book>",
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回单个字面标量；TS 的 xmlns 解析器返回两个元素字符串，保留 TS 的 XML 命名空间扩展能力。"
+      },
+      {
+        "path": "$/value/1",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": "<bk:book id=\"2\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\">二章</bk:title></bk:book>",
+        "reason": "固定 Android JsoupXpath 2.5.3 对这个带前缀 QName 的查询返回单个字面标量；TS 的 xmlns 解析器返回两个元素字符串，保留 TS 的 XML 命名空间扩展能力。"
+      }
+    ]
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-local-name",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//*[local-name()='book']",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title> 一 章 </bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements local-name XML element"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/errorClass",
+        "jvm": "org.seimicrawler.xpath.exception.XpathSyntaxErrorException",
+        "ts": {
+          "type": "missing"
+        },
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      },
+      {
+        "path": "$/message",
+        "jvm": "Please check the syntax of your xpath expr or commit a Issue. NoSuchFunctionException: not support function: local-name",
+        "ts": {
+          "type": "missing"
+        },
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      },
+      {
+        "path": "$/outcome",
+        "jvm": "throw",
+        "ts": "return",
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      },
+      {
+        "path": "$/value",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": [
+          {
+            "kind": "element",
+            "tag": "bk:book",
+            "text": "一 章",
+            "attribute": "1"
+          },
+          {
+            "kind": "element",
+            "tag": "bk:book",
+            "text": "二章",
+            "attribute": "2"
+          }
+        ],
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      }
+    ]
+  },
+  {
+    "id": "xpath.list.xml-fragment-local-name",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": {
+      "rule": "//*[local-name()='book']",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title> 一 章 </bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getStringList local-name XML element"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/errorClass",
+        "jvm": "org.seimicrawler.xpath.exception.XpathSyntaxErrorException",
+        "ts": {
+          "type": "missing"
+        },
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      },
+      {
+        "path": "$/message",
+        "jvm": "Please check the syntax of your xpath expr or commit a Issue. NoSuchFunctionException: not support function: local-name",
+        "ts": {
+          "type": "missing"
+        },
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      },
+      {
+        "path": "$/outcome",
+        "jvm": "throw",
+        "ts": "return",
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      },
+      {
+        "path": "$/value",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": [
+          "<bk:book id=\"1\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\"> 一 章 </bk:title></bk:book>",
+          "<bk:book id=\"2\" xmlns:bk=\"urn:book\"><bk:title xmlns:bk=\"urn:book\">二章</bk:title></bk:book>"
+        ],
+        "reason": "固定 Android JsoupXpath 2.5.3 不支持 local-name() 并抛 NoSuchFunctionException；TS 支持该 XPath 函数，保留 TS 的函数扩展能力。"
+      }
+    ]
+  },
+  {
+    "id": "xpath.nodes.xml-fragment-prefixed-attribute",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//bk:book/@id",
+      "content": "<?xml version=\"1.0\"?><root xmlns:bk=\"urn:book\"><bk:book id=\"1\"><bk:title> 一 章 </bk:title></bk:book><bk:book id=\"2\"><bk:title>二章</bk:title></bk:book></root>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements prefixed XML attribute"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value/0/value",
+        "jvm": "",
+        "ts": "1",
+        "reason": "固定 Android JsoupXpath 2.5.3 对带前缀属性路径返回一个空标量；TS 的 xmlns 解析器返回两个属性值，保留 TS 的 XML 命名空间扩展能力。"
+      },
+      {
+        "path": "$/value/1",
+        "jvm": {
+          "type": "missing"
+        },
+        "ts": {
+          "kind": "scalar",
+          "value": "2"
+        },
+        "reason": "固定 Android JsoupXpath 2.5.3 对带前缀属性路径返回一个空标量；TS 的 xmlns 解析器返回两个属性值，保留 TS 的 XML 命名空间扩展能力。"
+      }
+    ]
+  },
+  {
+    "id": "xpath.nodes.attribute-nodes",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//li/@id",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements attribute JXNode"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "scalar",
+          "value": "a"
+        },
+        {
+          "kind": "scalar",
+          "value": "b"
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.nodes.text-nodes",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": {
+      "rule": "//li/text()",
+      "content": "<ul><li id=\"a\">一<b>章</b></li><li id=\"b\">二章</li></ul>",
+      "attribute": "id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getElements text JXNode"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        {
+          "kind": "element",
+          "tag": "JX_TEXT",
+          "text": "一",
+          "attribute": ""
+        },
+        {
+          "kind": "element",
+          "tag": "JX_TEXT",
+          "text": "二章",
+          "attribute": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "xpath.string.xml-fragment",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "//Book",
+      "content": "<?xml version=\"1.0\"?><Root><Book id=\"1\"><Title> 一 章 </Title></Book><Book id=\"2\"><Title>二章</Title></Book></Root>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath.getString XML fragment"
+    },
+    "tags": [
+      "edge",
+      "compatibility-recheck"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "<Book id=\"1\"><Title> 一 章 </Title></Book>\n<Book id=\"2\"><Title>二章</Title></Book>"
+    }
   }
 ]

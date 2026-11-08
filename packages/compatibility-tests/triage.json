@@ -593,7 +593,14 @@
         "xpath.string.elementString",
         "xpath.list.elementList",
         "xpath.nodes.selfClosing",
-        "xpath.nodes.emptyRule"
+        "xpath.nodes.emptyRule",
+        "xpath.nodes.compose-concat",
+        "xpath.nodes.compose-fallback",
+        "xpath.nodes.compose-interleave",
+        "xpath.nodes.compose-interleave-uneven",
+        "xpath.nodes.xml-fragment-no-declaration",
+        "xpath.nodes.attribute-nodes",
+        "xpath.nodes.text-nodes"
       ],
       "classification": "runtime-fix",
       "state": "resolved",
@@ -608,7 +615,8 @@
         "output/run-5xBQqO/report.json",
         "output/run-aDFo57/report.json",
         "output/run-8HSwnE/report.json",
-        "output/run-uf4aRQ/report.json"
+        "output/run-uf4aRQ/report.json",
+        "output/run-DJ9vqI/report.json"
       ]
     },
     {
@@ -640,7 +648,8 @@
         "xpath.string.preformatted",
         "xpath.string.inlineRuns",
         "xpath.string.voidElements",
-        "xpath.string.xmlElement"
+        "xpath.string.xmlElement",
+        "xpath.string.xml-fragment"
       ],
       "classification": "runtime-fix",
       "state": "resolved",
@@ -655,7 +664,8 @@
         "output/run-Qf9GoX/report.json",
         "output/run-qJNicm/report.json",
         "output/run-ORetHs/report.json",
-        "output/run-mMvuUE/report.json"
+        "output/run-mMvuUE/report.json",
+        "output/run-DJ9vqI/report.json"
       ]
     },
     {

@@ -129,6 +129,7 @@ class XmlDocumentView implements HtmlDocument {
       previousSibling: siblingIndex > 0 ? this.wrap(elementSiblings[siblingIndex - 1]!) : null,
       nextSibling: siblingIndex >= 0 && siblingIndex + 1 < elementSiblings.length ? this.wrap(elementSiblings[siblingIndex + 1]!) : null,
     }
+    if (value.nodeType === 3) info.tagName = 'JX_TEXT'
     if (value.nodeType === 1) {
       info.tagName = value.nodeName ?? ''
       info.id = attributeValue(value, 'id') ?? ''
@@ -206,11 +207,11 @@ class XmlDocumentView implements HtmlDocument {
 
   public wrap(value: XmlNode): ParserNode {
     const existing = this.reverse.get(value)
-    if (existing !== undefined) return { id: existing, kind: value.nodeType === 3 ? 'text' : value.nodeType === 9 ? 'document' : 'element' }
+    if (existing !== undefined) return { id: existing, kind: parserNodeKind(value) }
     const id = `x${this.nextId++}`
     this.reverse.set(value, id)
     this.ids.set(id, value)
-    return { id, kind: value.nodeType === 3 ? 'text' : value.nodeType === 9 ? 'document' : 'element' }
+    return { id, kind: parserNodeKind(value) }
   }
 
   private matchTextParent(owner: XmlNode): XmlNode {
@@ -653,6 +654,13 @@ export class XPathParserAdapter implements XPathParser {
     if (!(document instanceof XmlDocumentView)) throw new Error('XPath requires an XML document created by XPathParserAdapter.parse')
     return document.stringify(node)
   }
+}
+
+function parserNodeKind(node: XmlNode): ParserNode['kind'] {
+  if (node.nodeType === 2) return 'attribute'
+  if (node.nodeType === 3) return 'text'
+  if (node.nodeType === 9) return 'document'
+  return 'element'
 }
 
 function isXmlNode(value: unknown): value is XmlNode {

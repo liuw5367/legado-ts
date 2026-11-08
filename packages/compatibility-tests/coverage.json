@@ -1435,10 +1435,17 @@
         "xpath.string.preformatted",
         "xpath.string.inlineRuns",
         "xpath.string.voidElements",
-        "xpath.string.xmlElement",
         "xpath.string.batch-mixed-attribute",
         "xpath.string.batch-mixed-element",
-        "xpath.string.batch-mixed-text-nodes"
+        "xpath.string.batch-mixed-text-nodes",
+        "xpath.string.xmlElement",
+        "xpath.string.xml-fragment",
+        "xpath.string.xml-fragment-ns"
+      ],
+      "manifestMembers": [
+        "parser-xpath::003-text",
+        "parser-xpath::004-attr",
+        "parser-xpath::005-xml-fragment"
       ]
     },
     {
@@ -1464,7 +1471,9 @@
         "xpath.list.elementList",
         "xpath.list.xmlAttribute",
         "xpath.list.interleave",
-        "xpath.list.invalid"
+        "xpath.list.invalid",
+        "xpath.list.xml-fragment-ns",
+        "xpath.list.xml-fragment-local-name"
       ],
       "manifestMembers": [
         "parser-xpath::002-getstringlist"
@@ -1485,7 +1494,17 @@
         "xpath.nodes.nodesEmpty",
         "xpath.nodes.spaces",
         "xpath.nodes.selfClosing",
-        "xpath.nodes.emptyRule"
+        "xpath.nodes.emptyRule",
+        "xpath.nodes.compose-concat",
+        "xpath.nodes.compose-fallback",
+        "xpath.nodes.compose-interleave",
+        "xpath.nodes.compose-interleave-uneven",
+        "xpath.nodes.xml-fragment-ns",
+        "xpath.nodes.xml-fragment-no-declaration",
+        "xpath.nodes.xml-fragment-local-name",
+        "xpath.nodes.xml-fragment-prefixed-attribute",
+        "xpath.nodes.attribute-nodes",
+        "xpath.nodes.text-nodes"
       ],
       "manifestMembers": [
         "parser-xpath::001-getelements"

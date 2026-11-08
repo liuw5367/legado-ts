@@ -337,7 +337,7 @@ export interface ParserNode {
   /** 文档内稳定节点身份。 */
   readonly id: string
   /** 节点类型；核心不依赖第三方 DOM 类。 */
-  readonly kind: 'element' | 'text' | 'document'
+  readonly kind: 'element' | 'attribute' | 'text' | 'document'
 }
 
 /** 供 JavaScript 书源读取的受控节点关系；不暴露 adapter 的原始 DOM 对象。 */

@@ -3358,9 +3358,13 @@ export class SourceRuleRuntime implements WorkflowRulePort {
     const value = this.xpath.evaluate(context, expression)
     if (Array.isArray(value) && value.every((item) => this.isParserNode(item))) {
       const nodes = value as ParserNode[]
-      if (expect === 'nodes') return nodes.map((node) => this.remember(context, node))
-      // JXNode 将元素转成外部 HTML，文本节点和属性则返回值。
-      return nodes.map((node) => this.xpath.stringify?.(context, node) ?? context.read(node, context.describe?.(node).tagName === undefined ? 'text' : 'all'))
+      const stringify = (node: ParserNode): string => this.xpath.stringify?.(context, node) ?? context.read(node, context.describe?.(node).tagName === undefined ? 'text' : 'all')
+      if (expect === 'nodes') {
+        // JsoupXpath exposes XPath attributes as scalar JXNodes while text nodes remain node-backed JX_TEXT values.
+        return nodes.map((node) => node.kind === 'attribute' ? stringify(node) : this.remember(context, node))
+      }
+      // JXNode serializes elements as outer HTML and returns text/attribute node values.
+      return nodes.map(stringify)
     }
     return value
   }

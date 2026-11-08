@@ -13,9 +13,8 @@ import { executeDateBridge } from './date-bridge.ts'
 import { replaceBalancedInnerRules, splitCodeBalanced, splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourceSession } from '../../source-node/src/source-session.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
-import { XPathParserAdapter } from '../../source-node/src/xpath.ts'
 import { JsonPathParserAdapter } from '../../source-node/src/jsonpath.ts'
-import type { NormalizedSource, WorkflowRuleOutput, ParserNode } from '../../source-core/src/index.ts'
+import type { NormalizedSource, WorkflowRuleOutput } from '../../source-core/src/index.ts'
 
 interface CaseInput {
   operation: string
@@ -295,12 +294,9 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'xpath.string': return script(host, `return java.getString(${JSON.stringify('@xpath:' + str('rule'))})`, i.content)
     case 'xpath.list': return script(host, `return java.getStringList(${JSON.stringify('@xpath:' + str('rule'))})`, i.content)
     case 'xpath.nodes': {
-      const parser = new XPathParserAdapter()
-      const document = parser.parse(str('content'))
-      const nodes = parser.evaluate(document, str('rule'))
-      if (nodes === null) return null
-      if (!Array.isArray(nodes)) throw new UnsupportedOperation('节点案例必须选择节点序列')
-      return nodes.map((item) => { const node = item as ParserNode; return { tag: document.describe(node).tagName, text: document.read(node, 'text'), attribute: document.attr(node, str('attribute')) ?? '' } })
+      // Android getElements 会先按 &&/||/%% 拆分 XPath 规则；直接调 parser.evaluate 会漏掉这层可观察语义。
+      if (str('rule').length === 0) return null
+      return script(host, `return java.getElements(${json('rule')}).map(function(node){if(node!=null&&typeof node.tagName==="function")return {kind:"element",tag:node.tagName(),text:node.text(),attribute:node.attr(${json('attribute')})};return {kind:"scalar",value:node==null?"":String(node)}})`, i.content)
     }
     case 'css.nodes': return script(host, `return java.getElements(${json('rule')}).toArray().map(function(n){return {tag:n.tagName(),text:n.text(),id:n.idName()}})`, i.content)
     case 'corpus.cssString': {

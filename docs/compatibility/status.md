@@ -2,6 +2,14 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-09 P2：XPath 节点结果与 Android 对照入口
+
+`xpath.nodes` 的 TS 对照现在通过真实 `SourceRuleHost → java.getElements` 执行，因此 `&&` 拼接、`||` 回退和 `%%` 交错规则会经过生产规则路径；此前直接调用 `XPathParserAdapter.evaluate` 会漏掉这层 Android 可见行为。生产适配器也已区分 XPath 属性节点与文本节点：属性结果作为标量字符串返回，文本节点在 `java.getElements` 中暴露为 `JX_TEXT`，两种返回形态都有固定 JVM 预期值。
+
+XPath family 共 **50 项：44 项行为相等、6 项精确登记的允许差异，0 项未登记差异、unsupported 或 runner failure**。6 项差异只涉及锁定的 Android JsoupXpath 2.5.3 的 XML 命名空间边界：Android 对带前缀 QName 返回字面/空标量，并不支持 `local-name()`；TS 解析 `xmlns` 并支持该函数，保留这项扩展能力。`coverage.json` 已关联 `parser-xpath` 的 5 个 manifest 成员，并有普通、边界及空/错误维度证据；XPath 的命名空间及完整函数矩阵仍保持 partial。详细反例见 [D19 差异登记](known-divergences.md) 和[固定案例](../../packages/compatibility-tests/cases/xpath.json)。
+
+本次全量 JVM/TS 对照共 **780 项：769 项相等、11 项逐例允许差异、0 项未登记差异、0 项 unsupported、0 项执行失败**；流程 **81/81 一致**。根测试 **710/710**，`test:source` **208/208**，compatibility-tests 机制 **23/23**，类型检查通过。环回 HTTP 用例在本机临时服务环境下运行。参考端为锁定 Android Java/Kotlin 源码与依赖的纯 JVM 执行，不代表 Android app 或设备实测。
+
 ## 2026-11-09 P2：JSONPath 键顺序与函数双端覆盖
 
 固定 Kotlin/JVM 参考端与 TS 的 JSONPath family 有 **105/105 案例行为相等**。新增 25 条案例覆盖 `length/size/keys/min/max/avg/sum` 的普通值、边界值和空输入；`coverage.json` 已逐项关联 `read`、过滤及 7 个函数成员。`parser-jsonpath` 的 9 个成员现在均为 `ts-passed`。D20 仍为 `partial`，因为 `stddev/first/last/index/concat/append`、复杂集合、provider 版本边界和动态表达式还没有完整双端矩阵。
