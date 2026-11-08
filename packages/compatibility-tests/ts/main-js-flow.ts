@@ -43,8 +43,17 @@ export async function executeMainJsFlow(input: Record<string, unknown>) {
       const search = await searchBooks(ports, { source, keyword: String(input.keyword) })
       // Android 返回书籍列表。保留交付的条目和继续条件，TS 额外诊断由本端回归验证。
       function delivered(name: string, result: RuntimeResult<WorkflowPage<BookCandidate>>) {
-        stage(name, result.value?.items.length ? 'delivered' : result.status, result.value?.items.map(({ name, bookUrl, type, variable }) =>
-          ({ name, bookUrl, type, variable: variable ?? null })) ?? null)
+        stage(name, result.value?.items.length ? 'delivered' : result.status, result.value?.items.map((book) => {
+          const value: Record<string, unknown> = {
+            name: book.name, bookUrl: book.bookUrl, type: book.type, variable: book.variable ?? null,
+          }
+          if (input.searchBookEvidence === true) Object.assign(value, {
+            author: book.author ?? '', kind: book.kind ?? null, intro: book.intro ?? null,
+            coverUrl: book.coverUrl ?? null, wordCount: book.wordCount ?? null,
+            latestChapterTitle: book.lastChapter ?? null, tocUrl: book.tocUrl ?? '',
+          })
+          return value
+        }) ?? null)
       }
       delivered('search', search)
       const first = search.value?.items[0]

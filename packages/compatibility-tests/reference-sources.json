@@ -243,6 +243,10 @@
       "sha256": "a18ca4a97402e014b2786108fa1355c2f98eb48e92545b1b38f4f00e48ed99f8"
     },
     {
+      "path": "app/src/main/java/io/legado/app/utils/GsonExtensions.kt",
+      "sha256": "f1150a4f0d11f911dc3c32394144e954a6ca609cd6ab668c458bca3113a31379"
+    },
+    {
       "path": "app/src/main/java/io/legado/app/data/entities/BookChapter.kt",
       "sha256": "2725ee89235677b28e8d4cf1e9ae847212e7524a9b418f7c0a195a4114bdabbd"
     },

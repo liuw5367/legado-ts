@@ -73,7 +73,21 @@ internal fun executeMainJsFlow(input: JsonObject): Any {
     } ?: return output
     fun delivered(name: String, books: List<SearchBook>) {
         stage(name, if (books.isEmpty()) "empty" else "delivered", books.map {
-            mapOf("name" to it.name, "bookUrl" to it.bookUrl, "type" to it.type, "variable" to it.variable)
+            buildMap {
+                put("name", it.name)
+                put("bookUrl", it.bookUrl)
+                put("type", it.type)
+                put("variable", it.variable)
+                if (input.get("searchBookEvidence")?.asBoolean == true) {
+                    put("author", it.author)
+                    put("kind", it.kind)
+                    put("intro", it.intro)
+                    put("coverUrl", it.coverUrl)
+                    put("wordCount", it.wordCount)
+                    put("latestChapterTitle", it.latestChapterTitle)
+                    put("tocUrl", it.tocUrl)
+                }
+            }
         })
     }
     delivered("search", rows)
@@ -82,16 +96,11 @@ internal fun executeMainJsFlow(input: JsonObject): Any {
         JsSourceMarshaller.parseSearchBooks(call("explore", linkedMapOf("url" to "/category", "page" to 1)), source)
     } ?: return output
     delivered("discover", found)
-    val book = Book().apply {
-        name = first.name
-        author = first.author
-        bookUrl = first.bookUrl
-        type = BookType.text
-        variable = first.variable
-    }
-    execute("detail") {
-        JsSourceMarshaller.mergeBookInfo(book, call("getBookInfo", mapOf("book" to book), optional = true), source, false)
-        if (book.tocUrl.isBlank()) book.tocUrl = book.bookUrl
+    val book = execute("detail") {
+        val selectedBook = first.toBook().apply { type = BookType.text }
+        JsSourceMarshaller.mergeBookInfo(selectedBook, call("getBookInfo", mapOf("book" to selectedBook), optional = true), source, false)
+        if (selectedBook.tocUrl.isBlank()) selectedBook.tocUrl = selectedBook.bookUrl
+        selectedBook
     } ?: return output
     fun variables() = book.variable?.let { JsonParser.parseString(it) }
     stage("detail", "success", mapOf("name" to book.name, "bookUrl" to book.bookUrl, "tocUrl" to book.tocUrl,

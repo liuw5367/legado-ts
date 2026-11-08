@@ -287,30 +287,35 @@ async function javascriptListWorkflow(ports: WorkflowPorts, source: NormalizedSo
       diagnostics.push({ code: 'item-skipped', stage, field: invalidField, itemIndex, message: `JS 书源结果的 ${invalidField} 类型无法按 SearchBook 反序列化`, retryable: false })
       continue
     }
-    const nameValue = primitiveText(record.name)?.trim() ?? ''
-    const rawBookUrl = primitiveText(record.bookUrl)?.trim()
+    const nullRequiredField = record.name === null ? 'name' : record.bookUrl === null ? 'bookUrl' : undefined
+    if (nullRequiredField !== undefined) {
+      diagnostics.push({ code: 'rule-failed', stage, field: nullRequiredField, itemIndex, message: `JS 书源结果的 ${nullRequiredField} 为 null，Android SearchBook 非空字段访问失败`, retryable: false })
+      return { status: 'failed', value: null, diagnostics, trace }
+    }
+    const nameValue = gsonString(record.name)?.trim() ?? ''
+    const rawBookUrl = gsonString(record.bookUrl)?.trim()
     const bookUrl = rawBookUrl === undefined || rawBookUrl.length === 0 ? undefined : resolveCandidateUrl(rawBookUrl, source.bookSourceUrl)
     if (nameValue.length === 0 || bookUrl === undefined || bookUrl.length === 0) {
       diagnostics.push({ code: 'item-skipped', stage, itemIndex, message: 'JS 书源结果缺少 name 或 bookUrl', retryable: false })
       continue
     }
-    const author = primitiveText(record.author)?.trim() ?? ''
-    const kind = primitiveText(record.kind)?.trim() ?? ''
+    const author = gsonString(record.author)?.trim() ?? ''
+    const kind = gsonString(record.kind)?.trim() ?? ''
     try {
       if (acceptSearchFields !== undefined && !acceptSearchFields({ name: formatBookName(nameValue), ...(author.length === 0 ? {} : { author: formatBookAuthor(author) }), ...(kind.length === 0 ? {} : { kind }) })) continue
     } catch (error) {
       diagnostics.push({ code: 'invalid-input', stage, field: 'candidatePolicy', itemIndex, message: error instanceof Error ? error.message : '候选策略执行失败', retryable: false })
       return { status: 'failed', value: null, diagnostics, trace }
     }
-    const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name: formatBookName(nameValue), type: validBookType(record.type) ?? androidBookType(undefined, source), rawFields: jsonValue(record) as JsonObject, traceRef: `${stage}:${books.length}` }
+    const candidate: BookCandidate = { sourceId: source.bookSourceUrl, bookUrl, name: formatBookName(nameValue), type: validBookType(androidSearchBookType(record.type)) ?? androidBookType(undefined, source), rawFields: jsonValue(record) as JsonObject, traceRef: `${stage}:${books.length}` }
     if (author.length > 0) candidate.author = formatBookAuthor(author)
-    setOptionalText(candidate, 'intro', record.intro)
-    setOptionalText(candidate, 'kind', record.kind)
-    setOptionalText(candidate, 'wordCount', record.wordCount)
-    setOptionalText(candidate, 'lastChapter', record.latestChapterTitle ?? record.lastChapter)
-    setOptionalText(candidate, 'updateTime', record.updateTime)
-    setOptionalText(candidate, 'coverUrl', record.coverUrl, source.bookSourceUrl)
-    setOptionalText(candidate, 'tocUrl', record.tocUrl, bookUrl)
+    setOptionalText(candidate, 'intro', gsonString(record.intro))
+    setOptionalText(candidate, 'kind', gsonString(record.kind))
+    setOptionalText(candidate, 'wordCount', gsonString(record.wordCount))
+    setOptionalText(candidate, 'lastChapter', gsonString(record.latestChapterTitle ?? record.lastChapter))
+    setOptionalText(candidate, 'updateTime', gsonString(record.updateTime))
+    setOptionalText(candidate, 'coverUrl', gsonString(record.coverUrl), source.bookSourceUrl)
+    setOptionalText(candidate, 'tocUrl', gsonString(record.tocUrl), bookUrl)
     const searchVariable = normalizeSearchVariable(record.variable)
     if (!searchVariable.valid) {
       diagnostics.push({ code: 'item-skipped', stage, field: 'variable', itemIndex, message: 'JS 书源结果的 variable 必须是字符串或基础类型', retryable: false })
@@ -920,12 +925,19 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
   const cursor = input.cursor ?? { index: 0 }
   const items: BookMetadata[] = []
   const maxItems = input.maxItems ?? input.candidates.length
+  let hasSearchBookConversionFailure = false
   for (let itemIndex = cursor.index; itemIndex < input.candidates.length && items.length < maxItems; itemIndex += 1) {
     if (input.signal?.aborted === true) {
       diagnostics.push({ code: 'cancelled', stage: 'detail', message: '详情工作流已取消', retryable: false })
       return { status: 'cancelled', value: null, diagnostics, trace }
     }
     const candidate = input.candidates[itemIndex]!
+    const nullBookConstructorField = ['author', 'tocUrl'].find((field) => candidate.rawFields[field] === null)
+    if (nullBookConstructorField !== undefined) {
+      hasSearchBookConversionFailure = true
+      diagnostics.push({ code: 'rule-failed', stage: 'detail', field: nullBookConstructorField, itemIndex, message: `Android SearchBook.toBook() 的 Book.${nullBookConstructorField} 非空参数收到 null`, retryable: false })
+      continue
+    }
     // Android getBookInfoAwait 进入脚本前会清掉旧位标记，再写回书源对应的 BookType。
     const sourceType = androidBookType(undefined, input.source)
     const resetType = resetAndroidBookType(candidate, input.source)
@@ -1000,7 +1012,7 @@ async function javascriptBookDetails(ports: WorkflowPorts, input: DetailInput): 
     items.push(metadata)
     trace.push({ stage: 'detail', event: 'candidate', target: `book:${itemIndex}`, itemIndex })
   }
-  if (items.length === 0) diagnostics.push({ code: 'empty-page', stage: 'detail', message: '没有可补全的详情', retryable: false })
+  if (items.length === 0 && !hasSearchBookConversionFailure) diagnostics.push({ code: 'empty-page', stage: 'detail', message: '没有可补全的详情', retryable: false })
   const endIndex = Math.min(input.candidates.length, cursor.index + maxItems)
   const value: WorkflowPage<BookMetadata> = { items, cursor, ...(endIndex < input.candidates.length ? { nextCursor: { index: endIndex } } : {}) }
   return { status: statusFromDiagnostics(diagnostics, items.length), value, diagnostics, trace }
@@ -1010,47 +1022,25 @@ function primitiveText(value: unknown): string | undefined {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined
 }
 
-const SEARCH_BOOK_TEXT_FIELDS = [
-  'bookUrl',
-  'origin',
-  'originName',
-  'name',
-  'author',
-  'kind',
-  'coverUrl',
-  'intro',
-  'wordCount',
-  'latestChapterTitle',
-  'tocUrl',
-  'variable',
-  'chapterWordCountText',
-] as const
-
-const SEARCH_BOOK_INT_FIELDS = ['type', 'originOrder', 'chapterWordCount', 'respondTime'] as const
-const SEARCH_BOOK_LONG_FIELDS = ['time'] as const
 const GSON_INT_MIN = -(2n ** 31n)
 const GSON_INT_MAX = (2n ** 31n) - 1n
 const GSON_LONG_MIN = -(2n ** 63n)
 const GSON_LONG_MAX = (2n ** 63n) - 1n
 
-/** Android Gson 的 SearchBook 先按字段类型反序列化；未知字段忽略，但已声明字段的对象/数组会令整条候选失败。 */
-function invalidSearchBookField(record: Record<string, unknown>): string | undefined {
-  for (const field of SEARCH_BOOK_TEXT_FIELDS) {
-    const value = record[field]
-    if (value !== null && value !== undefined && primitiveText(value) === undefined) return field
-  }
-  for (const field of SEARCH_BOOK_INT_FIELDS) {
-    const value = record[field]
-    if (value !== null && value !== undefined && !gsonIntegral(value, GSON_INT_MIN, GSON_INT_MAX)) return field
-  }
-  for (const field of SEARCH_BOOK_LONG_FIELDS) {
-    const value = record[field]
-    if (value !== null && value !== undefined && !gsonIntegral(value, GSON_LONG_MIN, GSON_LONG_MAX)) return field
-  }
-  return undefined
+/** Android GsonExtensions 的 StringJsonDeserializer 将对象/数组按紧凑 JSON 文本写入 String 字段。 */
+function gsonString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try { return JSON.stringify(value) } catch { return undefined }
 }
 
-/** Gson nextInt/nextLong 接受整数文本和能精确转换为整数的十进制/指数文本；对象、数组、布尔和溢出值会失败。 */
+/** Android IntJsonDeserializer 对非数字 primitive 返回 null；SearchBook 的 Int 字段保留构造默认值。只有 time(Long) 解析失败会跳过条目。 */
+function invalidSearchBookField(record: Record<string, unknown>): string | undefined {
+  const value = record.time
+  return value !== null && value !== undefined && !gsonIntegral(value, GSON_LONG_MIN, GSON_LONG_MAX) ? 'time' : undefined
+}
+
+/** Android Gson Long adapter 接受整数及可精确转整的十进制/指数文本；对象、数组、布尔和溢出值会失败。 */
 function gsonIntegral(value: unknown, min: bigint, max: bigint): boolean {
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || !Number.isInteger(value)) return false
@@ -1073,32 +1063,60 @@ function gsonIntegral(value: unknown, min: bigint, max: bigint): boolean {
   return Number.isFinite(numeric) && Number.isInteger(numeric) && numeric >= Number(min) && numeric <= Number(max)
 }
 
-/** Android SearchBook.variable 是 Gson 的 String? 字段；对象/数组类型会令该候选反序列化失败。 */
-function normalizeSearchVariable(value: unknown): { valid: boolean; value?: string } {
-  if (value === null || value === undefined) return { valid: true }
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return { valid: true, value: String(value) }
-  return { valid: false }
+/** Android SearchBook.type 最终由 JsonElement.asInt 解析，不能按 IntJsonDeserializer 字段值直接读取。 */
+function androidSearchBookType(value: unknown): number | undefined {
+  return gsonElementAsInt(value)
 }
 
-/**
- * Android mergeVariable 只接受 JSON 对象（或包含 JSON 对象的字符串），并按 Map<String,String>
- * 重新序列化；嵌套对象/数组会令整个变量更新被忽略，不能只保留可转换的字段。
- */
+function gsonElementAsInt(value: unknown): number | undefined {
+  if (typeof value === 'number') return gsonNumberIntValue(value)
+  if (typeof value === 'string' && /^[+-]?\d+$/u.test(value)) {
+    try {
+      const integer = BigInt(value)
+      return integer >= GSON_INT_MIN && integer <= GSON_INT_MAX ? Number(integer) : undefined
+    } catch { return undefined }
+  }
+  if (Array.isArray(value) && value.length === 1) return gsonElementAsInt(value[0])
+  return undefined
+}
+
+/** JsonPrimitive.asInt() uses Number.intValue() for numbers, including decimal truncation and 32-bit wraparound. */
+function gsonNumberIntValue(value: number): number | undefined {
+  if (!Number.isFinite(value)) return undefined
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/u.exec(String(value))
+  if (match === null) return undefined
+  const fraction = match[3] ?? ''
+  const exponent = Number(match[4] ?? '0')
+  if (!Number.isFinite(exponent)) return undefined
+  const digits = `${match[2]}${fraction}`.replace(/^0+/u, '') || '0'
+  let integer = BigInt(digits)
+  const scale = fraction.length - exponent
+  if (scale > 0) integer = scale >= digits.length ? 0n : integer / (10n ** BigInt(scale))
+  else if (scale < 0) integer *= 10n ** BigInt(-scale)
+  if (match[1] === '-') integer = -integer
+  return Number(BigInt.asIntN(32, integer))
+}
+
+/** Android SearchBook.variable 使用自定义 String adapter；对象/数组会转为紧凑 JSON 字符串。 */
+function normalizeSearchVariable(value: unknown): { valid: boolean; value?: string } {
+  if (value === null || value === undefined) return { valid: true }
+  const normalized = gsonString(value)
+  return normalized === undefined ? { valid: false } : { valid: true, value: normalized }
+}
+
+/** Android mergeVariable 按 Map<String,String> 读取；自定义 String adapter 会把嵌套值写成 JSON 文本，null 项在默认 Gson 序列化时省略。 */
 function normalizeDetailVariable(value: unknown): string | undefined {
   let parsed: unknown = value
   if (typeof parsed === 'string') {
     try { parsed = JSON.parse(parsed) as unknown } catch { return undefined }
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
-  const normalized: Record<string, string | null> = Object.create(null) as Record<string, string | null>
+  const normalized: Record<string, string> = Object.create(null) as Record<string, string>
   for (const [key, item] of Object.entries(parsed as Record<string, unknown>)) {
-    if (item === null) {
-      normalized[key] = null
-    } else if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
-      normalized[key] = String(item)
-    } else {
-      return undefined
-    }
+    if (item === null) continue
+    const text = gsonString(item)
+    if (text === undefined) return undefined
+    normalized[key] = text
   }
   return JSON.stringify(normalized)
 }

@@ -579,42 +579,48 @@ test('JavaScript 书源变量按 Android marshaller 区分搜索字段与详情�
     mainJs: [
       'function search() { return [{ name: "字符串", bookUrl: "/string", variable: "raw" }, { name: "数字", bookUrl: "/number", variable: 7 }, { name: "布尔", bookUrl: "/boolean", variable: true }, { name: "空值", bookUrl: "/null", variable: null }, { name: "对象", bookUrl: "/object", variable: { bad: "skip" } }, { name: "数组", bookUrl: "/array", variable: ["skip"] }]; }',
       'function explore() { return search(); }',
-      'function getBookInfo(book) { if (book.bookUrl.endsWith("/string")) return { variable: { token: "ok", count: 2, enabled: true, empty: null } }; if (book.bookUrl.endsWith("/number")) return { variable: "{\\"replaced\\":false,\\"count\\":3,\\"empty\\":null}" }; if (book.bookUrl.endsWith("/boolean")) return { variable: { nested: { bad: "skip" } } }; return { variable: ["invalid"] }; }',
+      'function getBookInfo(book) { if (book.bookUrl.endsWith("/string")) return { variable: { token: "ok", count: 2, enabled: true, empty: null, nested: { id: 1 }, values: ["x", false] } }; if (book.bookUrl.endsWith("/number")) return { variable: "{\\"replaced\\":false,\\"count\\":3,\\"empty\\":null}" }; if (book.bookUrl.endsWith("/boolean")) return { variable: { nested: { bad: "skip" } } }; return { variable: ["invalid"] }; }',
     ].join('\n'),
   } as unknown as NormalizedSource
   const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
 
   const search = await searchBooks(ports, { source, keyword: '变量' })
-  assert.equal(search.status, 'partial')
+  assert.equal(search.status, 'success')
   assert.deepEqual(search.value?.items.map((item) => [item.name, item.variable]), [
     ['字符串', 'raw'],
     ['数字', '7'],
     ['布尔', 'true'],
     ['空值', undefined],
+    ['对象', '{"bad":"skip"}'],
+    ['数组', '["skip"]'],
   ])
-  assert.deepEqual(search.diagnostics.filter((item) => item.field === 'variable').map((item) => item.itemIndex), [4, 5])
+  assert.equal(search.diagnostics.filter((item) => item.field === 'variable').length, 0)
 
   const explore = await discoverBooks(ports, { source })
-  assert.equal(explore.status, 'partial')
+  assert.equal(explore.status, 'success')
   assert.deepEqual(explore.value?.items.map((item) => [item.name, item.variable]), [
     ['字符串', 'raw'],
     ['数字', '7'],
     ['布尔', 'true'],
     ['空值', undefined],
+    ['对象', '{"bad":"skip"}'],
+    ['数组', '["skip"]'],
   ])
-  assert.deepEqual(explore.diagnostics.filter((item) => item.field === 'variable').map((item) => item.itemIndex), [4, 5])
+  assert.equal(explore.diagnostics.filter((item) => item.field === 'variable').length, 0)
 
   const details = await loadBookDetails(ports, { source, candidates: search.value!.items })
   assert.equal(details.status, 'success', JSON.stringify(details.diagnostics))
   assert.deepEqual(details.value?.items.map((item) => [item.name, item.variable]), [
-    ['字符串', '{"token":"ok","count":"2","enabled":"true","empty":null}'],
-    ['数字', '{"replaced":"false","count":"3","empty":null}'],
-    ['布尔', 'true'],
+    ['字符串', '{"token":"ok","count":"2","enabled":"true","nested":"{\\"id\\":1}","values":"[\\"x\\",false]"}'],
+    ['数字', '{"replaced":"false","count":"3"}'],
+    ['布尔', '{"nested":"{\\"bad\\":\\"skip\\"}"}'],
     ['空值', undefined],
+    ['对象', '{"bad":"skip"}'],
+    ['数组', '["skip"]'],
   ])
 })
 
-test('JavaScript 书源搜索与发现按 SearchBook Gson 字段形态跳过无效候选', async () => {
+test('JavaScript 书源搜索与发现遵循 Android 自定义 SearchBook Gson adapters', async () => {
   const source = {
     bookSourceUrl: 'https://js-search-book-shape.test',
     bookSourceName: 'JS SearchBook Shape',
@@ -627,20 +633,87 @@ test('JavaScript 书源搜索与发现按 SearchBook Gson 字段形态跳过无�
   } as unknown as NormalizedSource
   const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
 
-  const expectedInvalidFields = ['origin', 'originName', 'author', 'type', 'time', 'time', 'chapterWordCount', 'chapterWordCount', 'intro', 'coverUrl', 'tocUrl', 'variable', 'chapterWordCountText', 'kind', 'wordCount', 'latestChapterTitle', 'originOrder', 'respondTime', 'respondTime', 'name', 'bookUrl']
+  const expectedInvalidFields = ['time', 'time']
   const search = await searchBooks(ports, { source, keyword: '字段' })
   assert.equal(search.status, 'partial', JSON.stringify(search.diagnostics))
-  assert.equal(search.value?.items.length, 1)
+  assert.equal(search.value?.items.length, 20)
   assert.equal(search.value?.items[0]?.name, '有效')
-  assert.equal(search.value?.items[0]?.type, 4)
+  assert.equal(search.value?.items[0]?.type, 8, '字符串 4.0 经 Android JsonPrimitive.asInt 失败后回退书源文本类型')
   assert.deepEqual(search.diagnostics.filter((item) => item.field !== undefined).map((item) => item.field), expectedInvalidFields)
   assert.deepEqual(search.value?.items[0]?.rawFields.unknown, { keep: true })
+  assert.deepEqual(search.value?.items.slice(-2).map((item) => item.name), ['{}', '地址对象'])
 
   const explore = await discoverBooks(ports, { source })
   assert.equal(explore.status, 'partial', JSON.stringify(explore.diagnostics))
-  assert.equal(explore.value?.items.length, 1)
+  assert.equal(explore.value?.items.length, 20)
   assert.equal(explore.value?.items[0]?.name, '有效')
   assert.deepEqual(explore.diagnostics.filter((item) => item.field !== undefined).map((item) => item.field), expectedInvalidFields)
+})
+
+test('JS SearchBook.type 按 Android JsonElement.asInt 处理布尔和数值溢出', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-search-book-type-as-int.test',
+    bookSourceName: 'JS SearchBook Type asInt',
+    exploreUrl: '/explore',
+    mainJs: [
+      'function rows() { return [{ name: "布尔类型", bookUrl: "/boolean", type: true }, { name: "32位回绕", bookUrl: "/wrapped", type: 4294967300 }]; }',
+      'function search() { return rows(); }',
+      'function explore() { return rows(); }',
+    ].join('\n'),
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+
+  const search = await searchBooks(ports, { source, keyword: '类型' })
+  assert.equal(search.status, 'success')
+  assert.deepEqual(search.value?.items.map((item) => [item.name, item.type]), [['布尔类型', 8], ['32位回绕', 4]])
+
+  const explore = await discoverBooks(ports, { source })
+  assert.equal(explore.status, 'success')
+  assert.deepEqual(explore.value?.items.map((item) => [item.name, item.type]), [['布尔类型', 8], ['32位回绕', 4]])
+})
+
+test('JS SearchBook 的 name/bookUrl 显式 null 按 Android 非空字段访问失败整页', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-search-book-null.test',
+    bookSourceName: 'JS SearchBook Null',
+    exploreUrl: '/explore',
+    mainJs: [
+      'function search() { return [{ name: null, bookUrl: "/bad-name" }, { name: "后续候选", bookUrl: "/later" }]; }',
+      'function explore() { return [{ name: "bad-url", bookUrl: null }, { name: "后续候选", bookUrl: "/later" }]; }',
+    ].join('\n'),
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+
+  const search = await searchBooks(ports, { source, keyword: '字段' })
+  assert.equal(search.status, 'failed')
+  assert.equal(search.value, null)
+  assert.equal(search.diagnostics[0]?.field, 'name')
+
+  const explore = await discoverBooks(ports, { source })
+  assert.equal(explore.status, 'failed')
+  assert.equal(explore.value, null)
+  assert.equal(explore.diagnostics[0]?.field, 'bookUrl')
+})
+
+test('JS SearchBook 的 author/tocUrl 显式 null 在 Android toBook 阶段失败', async () => {
+  const source = {
+    bookSourceUrl: 'https://js-search-book-null-constructor.test',
+    bookSourceName: 'JS SearchBook Null Constructor',
+    mainJs: [
+      'function search() { return [{ name: "作者为空", bookUrl: "/author", author: null }, { name: "目录为空", bookUrl: "/toc", tocUrl: null }]; }',
+      'function getBookInfo() { throw new Error("SearchBook.toBook should fail first"); }',
+    ].join('\n'),
+  } as unknown as NormalizedSource
+  const ports: WorkflowPorts = { network: { request: async (plan) => response(plan.url, '') }, rules: new SourceRuleHost() }
+
+  const search = await searchBooks(ports, { source, keyword: '字段' })
+  assert.equal(search.status, 'success')
+  assert.deepEqual(search.value?.items.map((item) => item.name), ['作者为空', '目录为空'])
+
+  const details = await loadBookDetails(ports, { source, candidates: search.value!.items })
+  assert.equal(details.status, 'failed')
+  assert.equal(details.value?.items.length, 0)
+  assert.deepEqual(details.diagnostics.map((item) => item.field), ['author', 'tocUrl'])
 })
 
 test('JS 书源重置详情、目录和正文类型时保留 Android 状态位', async () => {

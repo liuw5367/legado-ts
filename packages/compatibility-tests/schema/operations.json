@@ -468,7 +468,8 @@
       "keyword": "string",
       "responses": "object",
       "requestLimit": "integer",
-      "chapterIndex": "integer"
+      "chapterIndex": "integer",
+      "searchBookEvidence": "boolean"
     }
   },
   "flow.discover": {

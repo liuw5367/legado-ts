@@ -54,6 +54,12 @@
                 "variable": "true"
               },
               {
+                "name": "{\"bad\":1}",
+                "bookUrl": "https://js.fixture.test/skip",
+                "type": 8,
+                "variable": null
+              },
+              {
                 "name": "第二本",
                 "bookUrl": "https://js.fixture.test/book/2",
                 "type": 8,
@@ -178,6 +184,12 @@
                 "bookUrl": "https://js.fixture.test/book/1",
                 "type": 8,
                 "variable": "true"
+              },
+              {
+                "name": "{\"bad\":1}",
+                "bookUrl": "https://js.fixture.test/skip",
+                "type": 8,
+                "variable": null
               },
               {
                 "name": "第二本",
@@ -306,6 +318,12 @@
                 "variable": "true"
               },
               {
+                "name": "{\"bad\":1}",
+                "bookUrl": "https://js.fixture.test/skip",
+                "type": 8,
+                "variable": null
+              },
+              {
                 "name": "第二本",
                 "bookUrl": "https://js.fixture.test/book/2",
                 "type": 8,
@@ -430,6 +448,12 @@
                 "bookUrl": "https://js.fixture.test/book/1",
                 "type": 8,
                 "variable": "true"
+              },
+              {
+                "name": "{\"bad\":1}",
+                "bookUrl": "https://js.fixture.test/skip",
+                "type": 8,
+                "variable": null
               },
               {
                 "name": "第二本",

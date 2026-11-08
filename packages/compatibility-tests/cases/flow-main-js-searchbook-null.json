@@ -1,0 +1,130 @@
+[
+  {
+    "id": "flow.synthetic.main-js.searchbook-null-name",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / SearchBook 非空 name 字段"
+    },
+    "flowOrigin": {
+      "fixture": "Android Gson SearchBook null required fields"
+    },
+    "tags": ["offline", "main-js", "edge"],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "SearchBook null fixture",
+        "mainJs": "function search(){return [{name:null,bookUrl:'https://js.fixture.test/book/1'}];} function explore(){return [];}"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 0,
+      "requestLimit": 1,
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js.fixture.test/unused",
+          "body": null,
+          "response": {"status": 200, "url": "https://js.fixture.test/unused", "headers": {}, "base64": ""}
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.searchbook-null-url",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / SearchBook 非空 bookUrl 字段"
+    },
+    "flowOrigin": {
+      "fixture": "Android Gson SearchBook null required fields"
+    },
+    "tags": ["offline", "main-js", "edge"],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "SearchBook null fixture",
+        "mainJs": "function search(){return [{name:'有效名称',bookUrl:null}];} function explore(){return [];}"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 0,
+      "requestLimit": 1,
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js.fixture.test/unused",
+          "body": null,
+          "response": {"status": 200, "url": "https://js.fixture.test/unused", "headers": {}, "base64": ""}
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.searchbook-null-author-to-book",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / JsSourceMarshaller / SearchBook.toBook 与 Book 非空 author 参数"
+    },
+    "flowOrigin": {
+      "fixture": "Android SearchBook toBook non-null constructor fields"
+    },
+    "tags": ["offline", "main-js", "edge"],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "SearchBook null fixture",
+        "mainJs": "function search(){return [{name:'作者为空',bookUrl:'https://js.fixture.test/book/author',author:null}];} function explore(){return [];} function getBookInfo(){throw new Error('toBook should fail before getBookInfo');}"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 0,
+      "requestLimit": 1,
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js.fixture.test/unused",
+          "body": null,
+          "response": {"status": 200, "url": "https://js.fixture.test/unused", "headers": {}, "base64": ""}
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.searchbook-null-tocurl-to-book",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / JsSourceMarshaller / SearchBook.toBook 与 Book 非空 tocUrl 参数"
+    },
+    "flowOrigin": {
+      "fixture": "Android SearchBook toBook non-null constructor fields"
+    },
+    "tags": ["offline", "main-js", "edge"],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "SearchBook null fixture",
+        "mainJs": "function search(){return [{name:'目录为空',bookUrl:'https://js.fixture.test/book/toc',tocUrl:null}];} function explore(){return [];} function getBookInfo(){throw new Error('toBook should fail before getBookInfo');}"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 0,
+      "requestLimit": 1,
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js.fixture.test/unused",
+          "body": null,
+          "response": {"status": 200, "url": "https://js.fixture.test/unused", "headers": {}, "base64": ""}
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,76 @@
+[
+  {
+    "id": "flow.synthetic.main-js.searchbook-gson",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / SearchBook 实体与 Android Gson String/Int adapters"
+    },
+    "flowOrigin": {
+      "fixture": "D46-D47 SearchBook Gson marshalling"
+    },
+    "tags": [
+      "offline",
+      "main-js",
+      "edge"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "SearchBook Gson fixture",
+        "mainJs": "function rows(){ return [{name:{title:'JSON 名称'},bookUrl:'https://js.fixture.test/book/object',author:{name:'JSON 作者'},kind:{tag:'类型'},coverUrl:'https://js.fixture.test/cover',intro:{html:'简介'},wordCount:['10万','字'],latestChapterTitle:7,tocUrl:'https://js.fixture.test/toc',time:'1700000000',type:'4.0',variable:{token:1},originOrder:{ignored:true},chapterWordCount:'not-a-number',respondTime:true,chapterWordCountText:[1,2],infoHtml:{html:'详情'},tocHtml:['目录'],unknown:{keep:true}},{name:'时间布尔',bookUrl:'https://js.fixture.test/book/time-bool',time:true},{name:'Long 边界文本',bookUrl:'https://js.fixture.test/book/long-boundary-text',time:'9223372036854775808'},{name:'Long 边界数值',bookUrl:'https://js.fixture.test/book/long-boundary-number',time:9223372036854775808},{name:'单项数组类型',bookUrl:'https://js.fixture.test/book/type-array',type:[4]},{name:'整数文本类型',bookUrl:'https://js.fixture.test/book/type-string',type:'4'},{name:'小数类型截断',bookUrl:'https://js.fixture.test/book/type-decimal',type:4.5,chapterWordCount:2.5},{name:'Int 默认值',bookUrl:'https://js.fixture.test/book/int-default',type:'4.0',chapterWordCount:'bad',respondTime:'2.5',originOrder:[]}]; } function search(){return rows();} function explore(){return rows();} function getBookInfo(book){return {tocUrl:'https://js.fixture.test/toc/detail',variable:{outer:{leaf:1},list:[1,true],nil:null}};} function getChapters(){return [{title:'第一章',url:'https://js.fixture.test/chapter/1'}];} function getContent(){return '正文';}"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 0,
+      "requestLimit": 1,
+      "searchBookEvidence": true,
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js.fixture.test/unused",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js.fixture.test/unused",
+            "headers": {},
+            "base64": ""
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.searchbook-type-as-int",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Gson JsonPrimitive.asInt / SearchBook type resolveType"
+    },
+    "flowOrigin": {
+      "fixture": "Android SearchBook type JsonElement.asInt boolean and Number.intValue"
+    },
+    "tags": ["offline", "main-js", "edge"],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "SearchBook type asInt fixture",
+        "mainJs": "function rows(){return [{name:'布尔类型',bookUrl:'https://js.fixture.test/book/boolean',type:true},{name:'32位回绕',bookUrl:'https://js.fixture.test/book/wrapped',type:4294967300}];} function search(){return rows();} function explore(){return rows();} function getBookInfo(){return {};} function getChapters(){return [{title:'第一章',url:'https://js.fixture.test/chapter/1'}];} function getContent(){return '正文';}"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 0,
+      "requestLimit": 1,
+      "responses": {
+        "unused": {
+          "method": "GET",
+          "url": "https://js.fixture.test/unused",
+          "body": null,
+          "response": {"status": 200, "url": "https://js.fixture.test/unused", "headers": {}, "base64": ""}
+        }
+      }
+    }
+  }
+]
