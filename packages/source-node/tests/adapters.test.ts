@@ -41,6 +41,16 @@ test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
   assert.equal(document.read(document.select('main')[0]!, 'text'), '前甲 中乙 后丙')
 })
 
+test('HTML adapter 保留 Jsoup matches 伪类中的 Java Pattern 转义', () => {
+  const document = new HtmlParserAdapter().parse('<main><p id="direct">Alpha <b>ignored</b> Beta</p><p id="descendant"><b>Alpha Beta</b></p><p id="plain">alpha   beta</p></main>')
+  const rule = '(?i)^alpha\\s+beta$'
+
+  assert.deepEqual(document.select(`p:matches(${rule})`).map((node) => document.attr(node, 'id')), ['descendant', 'plain'])
+  assert.deepEqual(document.select(`p:matchesOwn(${rule})`).map((node) => document.attr(node, 'id')), ['direct', 'plain'])
+  assert.deepEqual(document.select(`p:matchesWholeText(${rule})`).map((node) => document.attr(node, 'id')), ['descendant', 'plain'])
+  assert.deepEqual(document.select(`p:matchesWholeOwnText(${rule})`).map((node) => document.attr(node, 'id')), ['direct', 'plain'])
+})
+
 test('HTML adapter 的 containsOwn 按 Jsoup 归一化搜索空白并忽略大小写', () => {
   const document = new HtmlParserAdapter().parse('<main><p>Alpha  Beta</p><p>beta</p><p>Gamma</p></main>')
   assert.equal(document.select('p:containsOwn(ALPHA)').length, 1)

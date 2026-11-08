@@ -1363,7 +1363,89 @@
         "css.nodes.batch-table-has-not-eq",
         "css.nodes.nested-matchtext-not",
         "css.nodes.nested-matchtext-is",
-        "css.nodes.matchtext-order-after-nested-evaluation"
+        "css.nodes.matchtext-order-after-nested-evaluation",
+        "css.nodes.pseudo-contains-own",
+        "css.nodes.pseudo-contains-own-empty",
+        "css.nodes.pseudo-matches-own",
+        "css.nodes.pseudo-matches-own-empty",
+        "css.nodes.pseudo-matches",
+        "css.nodes.pseudo-matches-whole-text",
+        "css.nodes.pseudo-matches-whole-own-text"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.ContainsOwnText",
+      "reference": "upstream-adapted",
+      "tsEntry": "source-node/src/html.ts → :containsOwn",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.nodes.pseudo-contains-own",
+        "css.nodes.pseudo-contains-own-empty"
+      ],
+      "manifestMembers": [
+        "parser-default-css::012-containsown"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.MatchesOwn",
+      "reference": "upstream-adapted",
+      "tsEntry": "source-node/src/html.ts → :matchesOwn",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.nodes.pseudo-matches-own",
+        "css.nodes.pseudo-matches-own-empty"
+      ],
+      "manifestMembers": [
+        "parser-default-css::013-matchesown"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.Matches",
+      "reference": "upstream-adapted",
+      "tsEntry": "source-node/src/html.ts → :matches",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.nodes.pseudo-matches"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.MatchesWholeText",
+      "reference": "upstream-adapted",
+      "tsEntry": "source-node/src/html.ts → :matchesWholeText",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.nodes.pseudo-matches-whole-text"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.MatchesWholeOwnText",
+      "reference": "upstream-adapted",
+      "tsEntry": "source-node/src/html.ts → :matchesWholeOwnText",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.nodes.pseudo-matches-whole-own-text"
       ]
     },
     {

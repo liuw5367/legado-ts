@@ -386,7 +386,11 @@ function normalizeHtmlSelector(selector: string, matchTextEvaluator: (element: A
       const argumentStart = index + pseudo[0].length
       const argumentEnd = findSelectorParenthesisEnd(selector, argumentStart - 1)
       if (argumentEnd !== undefined) {
-        output += selector.slice(argumentStart, argumentEnd)
+        const argument = selector.slice(argumentStart, argumentEnd)
+        // css-what unescapes custom pseudo data twice; encode each slash twice so Java Pattern escapes such as \s survive.
+        output += pseudo[1]!.toLowerCase().startsWith('matches')
+          ? argument.split('\\').join('\\5c 5c ')
+          : argument
         output += ')'
         index = argumentEnd + 1
       } else {

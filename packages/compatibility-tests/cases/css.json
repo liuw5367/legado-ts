@@ -808,6 +808,141 @@
     }
   },
   {
+    "id": "css.nodes.pseudo-contains-own",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha <b>ignored</b> Beta</p><p id=\"descendant\"><b>Alpha Beta</b></p><p id=\"plain\">alpha   beta</p></main>",
+      "rule": "@css:p:containsOwn(ALPHA   BETA)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.ContainsOwnText"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "Alpha ignored Beta", "id": "direct" },
+        { "tag": "p", "text": "alpha beta", "id": "plain" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.pseudo-contains-own-empty",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha <b>ignored</b> Beta</p><p id=\"descendant\"><b>Alpha Beta</b></p><p id=\"plain\">alpha   beta</p></main>",
+      "rule": "@css:p:containsOwn(Nomatch)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.ContainsOwnText"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [] }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-own",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha <b>ignored</b> Beta</p><p id=\"descendant\"><b>Alpha Beta</b></p><p id=\"plain\">alpha   beta</p></main>",
+      "rule": "@css:p:matchesOwn((?i)^alpha\\s+beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.MatchesOwn"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "Alpha ignored Beta", "id": "direct" },
+        { "tag": "p", "text": "alpha beta", "id": "plain" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-own-empty",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha <b>ignored</b> Beta</p><p id=\"descendant\"><b>Alpha Beta</b></p><p id=\"plain\">alpha   beta</p></main>",
+      "rule": "@css:p:matchesOwn(^nomatch$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.MatchesOwn"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [] }
+  },
+  {
+    "id": "css.nodes.pseudo-matches",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha <b>ignored</b> Beta</p><p id=\"descendant\"><b>Alpha Beta</b></p><p id=\"plain\">alpha   beta</p></main>",
+      "rule": "@css:p:matches((?i)^alpha\\s+beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.Matches"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "Alpha Beta", "id": "descendant" },
+        { "tag": "p", "text": "alpha beta", "id": "plain" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-whole-text",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha <b>ignored</b> Beta</p><p id=\"descendant\"><b>Alpha Beta</b></p><p id=\"plain\">alpha   beta</p></main>",
+      "rule": "@css:p:matchesWholeText((?i)^alpha\\s+beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.MatchesWholeText"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "Alpha Beta", "id": "descendant" },
+        { "tag": "p", "text": "alpha beta", "id": "plain" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-whole-own-text",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha <b>ignored</b> Beta</p><p id=\"descendant\"><b>Alpha Beta</b></p><p id=\"plain\">alpha   beta</p></main>",
+      "rule": "@css:p:matchesWholeOwnText((?i)^alpha\\s+beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.MatchesWholeOwnText"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "Alpha ignored Beta", "id": "direct" },
+        { "tag": "p", "text": "alpha beta", "id": "plain" }
+      ]
+    }
+  },
+  {
     "id": "css.list.batch-table-attributes",
     "family": "css",
     "operation": "css.list",

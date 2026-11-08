@@ -408,7 +408,7 @@
           "parameters": [],
           "returnType": "unknown",
           "implementation": "partial",
-          "verification": "ts-diff",
+          "verification": "ts-passed",
           "feasibility": "conditional",
           "decision": "fix",
           "fixtures": [
@@ -429,7 +429,7 @@
           "parameters": [],
           "returnType": "unknown",
           "implementation": "partial",
-          "verification": "ts-diff",
+          "verification": "ts-passed",
           "feasibility": "conditional",
           "decision": "fix",
           "fixtures": [

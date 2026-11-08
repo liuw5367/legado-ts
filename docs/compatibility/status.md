@@ -2,6 +2,12 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-08 P2：Jsoup `:matches*` 保留 Java Pattern 转义
+
+新增 JVM/TS 同输入案例后，`:matchesOwn((?i)^alpha\s+beta$)` 在固定 Android/JVM 参考端命中直接文本，TS 返回空列表。根因在 `css-what@8`：自定义伪类参数在 `readValueWithParenthesis` 和伪类分支中会连续解码两次，Java Pattern 的 `\s` 因此变成字面 `s`。`normalizeHtmlSelector` 现在把 `:matches`、`:matchesOwn`、`:matchesWholeText`、`:matchesWholeOwnText` 参数中的反斜杠编码为两层 CSS 十六进制转义，再由 css-what 还原为原始正则。
+
+双端案例覆盖四种 `:matches*` 的 `\s` 空白匹配，并为 `:containsOwn` 补了大小写、空白归一化和空结果用例；C10 将差异、TS 修复与 JVM 运行报告关联。CSS family **75/75 双端一致**；完整兼容集 **698 项，693 一致、5 条已登记允许差异、0 different、0 unsupported、0 runner failure**，其中 **81/81 流程全等**。完整 Node 测试 **709/709**、compatibility-tests 自身 **33/33**、source-node adapter **33/33**，typecheck 通过。五条允许差异仍是 OAEP 独立 MGF1 摘要、跨源 302 显式 Cookie、jsLib 跨源刷新、闭包跨调用、CacheManager 跨源隔离。本结果是固定 Kotlin/JVM 参考端与 TS 的证据，不是 Android app 或设备实测；D18 的完整 Jsoup 方言仍保持 partial。
+
 ## 2026-11-08 P2：Jsoup `:matchText` 嵌套选择器
 
 Android/JVM 对照显示，Jsoup 的 `:matchText` evaluator 会在检查原元素时把直接文本节点改写成同标签、同属性的伪元素，并对原元素返回 `false`；后续 `:not`、`:is` 和顶层 `:matchText` 都基于改写后的节点树求值。TS 原先使用脱离真实树的虚拟节点，导致嵌套选择结果与 Android 不同。`HtmlDocumentView.matchTextEvaluator` 现在按该行为改写真实 DOM，保留伪元素文本、属性、删除映射和文档顺序。
@@ -181,7 +187,7 @@ Jsoup 的 `:blank` 与 `:empty` 不同：它只判断当前元素的直接文本
 
 Jsoup 的 `:matchText` 会把匹配元素的每个直接 `TextNode` 包装成带父元素标签和属性的伪元素，并保持文档顺序；它也能作为 `:has`、`:not` 等组合选择器的子选择器。HTML/XML adapter 现在提供 `:matchText` 自定义伪类、伪元素文本/属性/HTML 读取和删除映射，并用虚拟同级节点保留 `:first-child`、`:last-child`、`:nth-child`、`:eq/:lt/:gt` 等位置后缀语义；常见 `:has` 组合保留父元素结果，复杂 `:not/:is` 的伪元素输出仍按差异登记。HTML 还按 Jsoup `textNodes()` 规则排除 script/style DataNode；新增全局、限定元素、同级位置、嵌套 `:has`、DataNode 边界、文本伪类参数字面量和文档顺序回归。定向 adapter **30/30**、source-rule-host **118/118**、类型检查通过；XML 修复算法、复杂伪元素变换、完整 Jsoup 版本和 Android golden 仍保持待验证，不把可实现的伪元素子集误标为完整 Jsoup 等价。
 
-P59 后机器清单仍为 **259 个成员**：**124 implemented、36 partial、99 simulated**；验证为 **230 ts-passed、25 ts-diff、4 unverified**。按“尚未完全等价或尚未验证”统计，当前还有 **40 个成员**：36 个属于 CSS/XPath/JSONPath/Java Pattern 的条件语义，4 个属于真实 WebView、浏览器和验证码宿主；本轮没有遗留可直接修复成员。`fixable/conditional/simulatable/real-host` 是能力属性，不能相加当作待处理数量；Android golden 仍需外部 runner，不能把 TS 通过替换成双端通过。
+P59 后机器清单仍为 **259 个成员**：**124 implemented、36 partial、99 simulated**；验证为 **232 ts-passed、23 ts-diff、4 unverified**。按“尚未完全等价或尚未验证”统计，当前还有 **40 个成员**：36 个属于 CSS/XPath/JSONPath/Java Pattern 的条件语义，4 个属于真实 WebView、浏览器和验证码宿主；本轮没有遗留可直接修复成员。`fixable/conditional/simulatable/real-host` 是能力属性，不能相加当作待处理数量；Android golden 仍需外部 runner，不能把 TS 通过替换成双端通过。
 
 P59 最终门禁：完整 Node 回归 **663/663**、书源回归 **199/199**、适配器 **30/30**、source-rule-host **118/118**、TypeScript conformance **6/6**、静态书源审计 **943/943**（20,231 条规则中 20,226 编译成功、5 条已知源文本错误）；`pnpm test:source:compare` 的 Android 6 条和 `run-source-conformance-android` 仍为 **not-run**，原因已在证据矩阵记录。
 

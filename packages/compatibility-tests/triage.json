@@ -870,6 +870,27 @@
         "output/run-ycxUhX/report.json"
       ],
       "resolution": "按 Android/JVM 观察到的 Jsoup evaluator 行为，将直接 TextNode 改写为真实同级伪元素；原元素 evaluator 返回 false，生成伪元素匹配 :matchText。嵌套 :not/:is 与改写后的文档顺序均有双端案例。"
+    },
+    {
+      "id": "C10-CSS-PATTERN-PSEUDO-ESCAPE",
+      "caseIds": [
+        "css.nodes.pseudo-matches-own",
+        "css.nodes.pseudo-matches",
+        "css.nodes.pseudo-matches-whole-text",
+        "css.nodes.pseudo-matches-whole-own-text"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSoup.getElements(String) · Jsoup Evaluator.Matches*"
+      },
+      "tsEntry": "packages/source-node/src/html.ts → normalizeHtmlSelector",
+      "evidence": [
+        "output/run-u5W1uz/report.json"
+      ],
+      "resolution": "Android/JVM 对照确认 Java Pattern 的 \\s 应在四种 :matches* 伪类中按空白匹配。css-what 对自定义伪类参数连续解码两次；TS 现在使用两层 CSS 十六进制转义保留正则反斜杠，四条共享输入案例均双端一致。"
     }
   ]
 }
