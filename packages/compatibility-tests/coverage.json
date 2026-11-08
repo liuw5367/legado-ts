@@ -553,7 +553,10 @@
         "json.read.aggregateLength",
         "json.read.aggregateSum",
         "json.read.filterRange",
-        "json.read.empty-filter"
+        "json.read.empty-filter",
+        "json.read.nested-fallback-null",
+        "json.read.nested-fallback-empty",
+        "json.read.nested-fallback-non-empty"
       ]
     },
     {

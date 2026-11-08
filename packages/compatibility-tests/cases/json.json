@@ -1075,5 +1075,74 @@
       "outcome": "return",
       "value": "null"
     }
+  },
+  {
+    "id": "json.read.nested-fallback-null",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][0].data"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        null
+      ]
+    }
+  },
+  {
+    "id": "json.read.nested-fallback-empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][2].data"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        []
+      ]
+    }
+  },
+  {
+    "id": "json.read.nested-fallback-non-empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"rows\":[[{\"data\":null},{},{\"data\":[]},{\"data\":[\"left\",null]},{\"data\":[null]}]],\"fallback\":[\"second\"]}",
+      "rule": "$.rows[0][3].data"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath.read(ALWAYS_RETURN_LIST)"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        [
+          "left",
+          null
+        ]
+      ]
+    }
   }
 ]
