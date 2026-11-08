@@ -131,7 +131,7 @@
     },
     "tags": [
       "offline",
-      "error-or-empty"
+      "empty"
     ],
     "expected": {
       "outcome": "return",

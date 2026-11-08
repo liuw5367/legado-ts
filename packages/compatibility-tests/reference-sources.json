@@ -267,6 +267,14 @@
   },
   "flowEvidence": [
     {
+      "path": "app/src/main/java/io/legado/app/data/entities/BaseSource.kt",
+      "sha256": "080160e06a23fdfc7f4dbe5975a370473eee5d13ad0638b46aa2075276516243"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/help/http/OkHttpUtils.kt",
+      "sha256": "cba1feb22468363d8b95f22779cb6ab538ae80c64e898fc7fde995b2e699376d"
+    },
+    {
       "path": "app/src/main/java/io/legado/app/ui/book/explore/ExploreShowViewModel.kt",
       "sha256": "9d92d1839011b3b62c7713bc9ec4df4fe5b0b0c2da2992f32ccc57e8d51c3d3f"
     },

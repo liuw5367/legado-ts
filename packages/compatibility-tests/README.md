@@ -26,7 +26,7 @@ node --test packages/compatibility-tests/tests/*.test.mjs
 node packages/compatibility-tests/scripts/run.mjs --family css
 ```
 
-CLI 参数错误、空选择、来源失败或 API 执行不完整退出 2。API 行为差异退出 1，全部一致或符合逐例允许差异时退出 0。报告单列参考端内部观察。方法覆盖表另行显示场景缺口。
+CLI 参数错误、空选择、来源失败或 API 执行不完整退出 2。API 行为差异退出 1，全部一致或符合逐例允许差异时退出 0。 `request-transport` 功能族使用 JVM 和 Node 各自的本机环回 HTTP 夹具，运行环境需允许监听并连接临时环回端口。报告单列参考端内部观察。方法覆盖表另行显示场景缺口。
 
 ## 输入和参考端
 

@@ -1,6 +1,6 @@
 # 下一批书源兼容开发规划
 
-- 状态：approved
+- 状态：completed
 - 创建：2026-11-08
 - 更新：2026-11-08
 
@@ -53,11 +53,25 @@ git diff --check
 
 ## 完成记录
 
-已核对上一批最终报告、固定参考 SHA、现有 ZIP 读取实现、Yiove 发现规则及已有案例位置。本次交付为规划草稿，进入 H1–H6 实施。
+| 任务 | 提交及验收证据 |
+| --- | --- |
+| H1 | `2156dda`。修复前 [JS](../packages/compatibility-tests/output/run-4LtMav/report.md) 返回“两行”与“一行”，[正则](../packages/compatibility-tests/output/run-mjn4O9/report.md) 的正文也不同。修复后直接显示、正则、JS 和无 br 对照一致，原始 HTML 的逐例允许差异已删除。CSS 与 XPath 功能族通过。 |
+| H2 | `011a89b`。[修复前](../packages/compatibility-tests/output/run-ISdKZg/report.md) 第二条目在 JVM 失败、TS 返回内容。修复后 [ZIP 12/12](../packages/compatibility-tests/output/run-srQj9x/report.md)，文件宿主 9/9。字节用例比较原始八位内容，Java 脚本读取带符号字节的行为独立于此证据。 |
+| H3 | `f5b6998`、`b45a84f`。同名头组装、缺响应故障、登录重取均通过。修复前 [302 保留了请求体描述头](../packages/compatibility-tests/output/run-pHhTOY/report.md)，修复后固定 OkHttp 与 Node 环回 4 例，3 例一致、1 例跨主机 Cookie 差异按安全策略保留。逐跳比较 127.0.0.1 与 localhost、方法、路径、请求体和 Authorization。 |
+| H4 | `7810ee6`、`c440075`。JSON 字段后备与同一输入的 Jayway 原值分开断言，JSON 功能族 74/74。正则功能族通过，新增局部标志恢复、零宽替换和无匹配对照。 |
+| H5 | `e12a3ef`、`6c1359f`。「文桑小说」第一页两本书顺序一致，第二页为空并终止，固定快照与上游发现逻辑已核验。三个合成正文案例分别对照主分支、回退和正文为空。发现流程单列，单规则语料统计保持原范围。 |
+| H6 | 已复验 D5、D6、D8、D19、D20、D21、D22、D30、D40 的本批相关分支，更新状态、差异与固定源码摘要。上一批三个旧流程夹具及其独有断言保留。 |
+
+[最终报告](../packages/compatibility-tests/output/run-H2YdXx/report.md) 为 604 例。547 例 API 中 544 例一致、3 例逐例允许差异。55 例流程中 54 例一致、1 例逐例允许差异，包含 36 条完整流程及 19 条阶段用例。另有 2 项未支持的内部观察。意外差异和执行器故障均为 0，84 项异常语义等价。上一批 564 个案例全部保留，只有原 HTML 例外变为一致。
+
+两次全量 [run-x1eUfo](../packages/compatibility-tests/output/run-x1eUfo/report.md) 与 [run-H2YdXx](../packages/compatibility-tests/output/run-H2YdXx/report.md) 的 `jvm.json.results`、`ts.json.results`、`report.json.cases` 严格一致。输入、实现、core 产物和上游摘要核对一致。参考 SHA 仍为 `32a87b253e7cc28273c3850de86242caac83f1fd`，原仓库参考范围无差异。
+
+JVM 准备、机制测试 33/33、流程定向 55 例、书源回归 207/207、项目回归 700/700、类型检查、构建及 `git diff --check` 均通过。真实 Android 应用宿主、完整 Jsoup 序列化、ZIP 畸形输入及请求头大小写变体继续按各自证据边界记录。
 
 ## 变更记录
 
 - 2026-11-08 以已完成批次替换上一版草稿的过时进度，新增多条目 ZIP 验证，固定发现规则来源及回退分支的验证方式。
+- 2026-11-08 完成 H1–H6，记录可复验报告、分任务提交和未验证边界。
 
 ## 批准记录
 
