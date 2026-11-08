@@ -634,7 +634,18 @@
         "xpath.nodes.xml-prefixed-attribute-predicate",
         "xpath.nodes.html-fragment-position-predicate",
         "xpath.string.html-fragment-document-root",
-        "xpath.string.html-document-trailing-body-content"
+        "xpath.string.html-document-trailing-body-content",
+        "xpath.string.substring-before-last.repeated",
+        "xpath.string.substring-after-last.repeated",
+        "xpath.string.substring-before-last.missing-separator",
+        "xpath.string.substring-after-last.missing-separator",
+        "xpath.string.substring-before-last.empty-separator",
+        "xpath.string.substring-after-last.empty-separator",
+        "xpath.string.substring-before-last.element-sequence",
+        "xpath.string.substring-after-last.element-sequence",
+        "xpath.string.substring-before-last.attribute-sequence",
+        "xpath.string.substring-after-last.attribute-sequence",
+        "xpath.string.substring-before-last.empty-sequence"
       ],
       "classification": "runtime-fix",
       "state": "resolved",
@@ -655,7 +666,8 @@
         "output/run-fuqsC0/report.json",
         "output/run-cWqU1z/report.json",
         "output/run-R6nQUI/report.json",
-        "output/run-qCAKmE/report.json"
+        "output/run-qCAKmE/report.json",
+        "output/run-x5ZNNY/report.json"
       ]
     },
     {

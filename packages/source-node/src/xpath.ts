@@ -8,6 +8,25 @@ import { compileSourcePattern, ParserAdapterError } from '@legado/source-core'
 import type { HtmlDocument, ParserNode, ParserNodeInfo, ParserNodeMutation, RuleValue, XPathParser } from '@legado/source-core'
 
 const { evaluateXPath, ReturnType } = fontoxpath
+const { registerCustomXPathFunction } = fontoxpath
+
+const XPATH_FUNCTIONS_NAMESPACE = 'http://www.w3.org/2005/xpath-functions'
+
+registerCustomXPathFunction({ localName: 'substring-before-last', namespaceURI: XPATH_FUNCTIONS_NAMESPACE }, ['item()*', 'item()*'], 'xs:string', (_context, source, separator) => {
+  const sourceString = androidXPathValueAsString(source)
+  const separatorString = androidXPathValueAsString(separator)
+  if (separatorString.length === 0) return sourceString
+  const index = sourceString.lastIndexOf(separatorString)
+  return index < 0 ? sourceString : sourceString.slice(0, index)
+})
+
+registerCustomXPathFunction({ localName: 'substring-after-last', namespaceURI: XPATH_FUNCTIONS_NAMESPACE }, ['item()*', 'item()*'], 'xs:string', (_context, source, separator) => {
+  const sourceString = androidXPathValueAsString(source)
+  const separatorString = androidXPathValueAsString(separator)
+  if (separatorString.length === 0) return ''
+  const index = sourceString.lastIndexOf(separatorString)
+  return index < 0 ? '' : sourceString.slice(index + separatorString.length)
+})
 
 type XmlNode = {
   nodeType: number
@@ -645,7 +664,8 @@ export class XPathParserAdapter implements XPathParser {
     if (expression.length === 0) return null
     const androidResult = evaluateAndroidXPathCompatibility(document, expression)
     if (androidResult !== undefined) return androidResult
-    const result = evaluateXPath(expression, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
+    const compatibleExpression = rewriteAndroidXPathAttributeFunctionArguments(expression)
+    const result = evaluateXPath(compatibleExpression, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
     if (result.every(isXmlNode)) return result.map((item) => document.wrap(item))
     if (result.length === 1) return normalizeXPathValue(result[0])
     return result.map(normalizeXPathValue)
@@ -782,6 +802,83 @@ function maskXPathLiterals(expression: string): string {
   return output
 }
 
+function rewriteAndroidXPathAttributeFunctionArguments(expression: string): string {
+  const masked = maskXPathLiterals(expression)
+  const functionPattern = /substring-(?:before|after)-last\s*\(/g
+  let match: RegExpExecArray | null
+  while ((match = functionPattern.exec(masked)) !== null) {
+    const previous = masked[match.index - 1]
+    if (previous !== undefined && /[\w:.-]/.test(previous)) continue
+
+    const open = match.index + match[0].lastIndexOf('(')
+    const close = xpathCallEnd(masked, open)
+    if (close === undefined) continue
+    const ranges = xpathCallArgumentRanges(masked, open, close)
+    if (ranges.length !== 2) continue
+
+    const args = ranges.map(([start, end]) => {
+      const argument = expression.slice(start, end).trim()
+      return isXPathAttributeSequence(argument)
+        ? `string-join(${argument}, ',')`
+        : rewriteAndroidXPathAttributeFunctionArguments(argument)
+    })
+    return `${expression.slice(0, open + 1)}${args.join(',')})${rewriteAndroidXPathAttributeFunctionArguments(expression.slice(close + 1))}`
+  }
+  return expression
+}
+
+function xpathCallEnd(masked: string, open: number): number | undefined {
+  let depth = 0
+  for (let index = open; index < masked.length; index += 1) {
+    if (masked[index] === '(') depth += 1
+    else if (masked[index] === ')') {
+      depth -= 1
+      if (depth === 0) return index
+    }
+  }
+  return undefined
+}
+
+function xpathCallArgumentRanges(masked: string, open: number, close: number): Array<[number, number]> {
+  const ranges: Array<[number, number]> = []
+  let start = open + 1
+  let parentheses = 0
+  let brackets = 0
+  let braces = 0
+  for (let index = start; index < close; index += 1) {
+    const char = masked[index]
+    if (char === '(') parentheses += 1
+    else if (char === ')') parentheses -= 1
+    else if (char === '[') brackets += 1
+    else if (char === ']') brackets -= 1
+    else if (char === '{') braces += 1
+    else if (char === '}') braces -= 1
+    else if (char === ',' && parentheses === 0 && brackets === 0 && braces === 0) {
+      ranges.push([start, index])
+      start = index + 1
+    }
+  }
+  ranges.push([start, close])
+  return ranges
+}
+
+function isXPathAttributeSequence(expression: string): boolean {
+  let candidate = expression.trim()
+  while (candidate.startsWith('(') && candidate.endsWith(')')) {
+    const masked = maskXPathLiterals(candidate)
+    if (xpathCallEnd(masked, 0) !== candidate.length - 1) break
+    candidate = candidate.slice(1, -1).trim()
+  }
+  const masked = maskXPathLiterals(candidate).trim()
+  const attribute = /@(?:\*|[A-Za-z_][\w.:-]*)(?:\s*\[[^\]]*\])*\s*$/.exec(masked)
+  if (attribute === null) return false
+
+  const rawPrefix = masked.slice(0, attribute.index)
+  if (rawPrefix.length > 0 && !/\/\s*$/.test(rawPrefix)) return false
+  const steps = rawPrefix.trim().replace(/\/+$/, '').split(/\/+|(?<=::)/).filter(Boolean)
+  return steps.every((step) => step === '.' || step === '..' || /^[\w*.-]+(?:::\*?)?(?:\[[^\]]*\])*$/.test(step))
+}
+
 function throwAndroidXPathSyntaxError(detail: string): never {
   const error = new Error(`Please check the syntax of your xpath expr or commit a Issue. ${detail}`)
   error.name = 'org.seimicrawler.xpath.exception.XpathSyntaxErrorException'
@@ -797,6 +894,23 @@ function parserNodeKind(node: XmlNode): ParserNode['kind'] {
 
 function isXmlNode(value: unknown): value is XmlNode {
   return typeof value === 'object' && value !== null && 'nodeType' in value
+}
+
+function androidXPathValueAsString(value: unknown): string {
+  const items = Array.isArray(value) ? value : [value]
+  if (items.length === 0) return ''
+
+  const itemString = (item: unknown): string => {
+    if (!isXmlNode(item)) return trimAndroidWhitespace(String(item))
+    if (item.nodeType === 1) return normalizeXmlText(xmlWholeOwnText(item))
+    if (item.nodeType === 2 || item.nodeType === 3 || item.nodeType === 4) return trimAndroidWhitespace(item.nodeValue ?? '')
+    return trimAndroidWhitespace(item.textContent ?? item.nodeValue ?? String(item))
+  }
+
+  // JsoupXpath exposes an element result as Elements and concatenates ownText()
+  // for each element. Attribute and other node lists use XValue's comma join.
+  if (items.every((item) => isXmlNode(item) && item.nodeType === 1)) return items.map(itemString).join('')
+  return items.map(itemString).join(',')
 }
 
 function normalizeXPathValue(value: unknown): RuleValue {

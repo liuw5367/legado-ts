@@ -1935,5 +1935,104 @@
       "outcome": "return",
       "value": "1"
     }
+  },
+  {
+    "id": "xpath.string.substring-before-last.repeated",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-before-last('a/b/c','/')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 substring-before-last / Commons Lang StringUtils" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","normal","edge"],
+    "expected": { "outcome": "return", "value": "a/b" }
+  },
+  {
+    "id": "xpath.string.substring-after-last.repeated",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-after-last('a/b/c','/')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 substring-after-last / Commons Lang StringUtils" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","normal","edge"],
+    "expected": { "outcome": "return", "value": "c" }
+  },
+  {
+    "id": "xpath.string.substring-before-last.missing-separator",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-before-last('abc','/')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 substring-before-last / Commons Lang StringUtils" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "abc" }
+  },
+  {
+    "id": "xpath.string.substring-after-last.missing-separator",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-after-last('abc','/')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 substring-after-last / Commons Lang StringUtils" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "" }
+  },
+  {
+    "id": "xpath.string.substring-before-last.empty-separator",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-before-last('abc','')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 substring-before-last / Commons Lang StringUtils" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "abc" }
+  },
+  {
+    "id": "xpath.string.substring-after-last.empty-separator",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-after-last('abc','')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 substring-after-last / Commons Lang StringUtils" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "" }
+  },
+  {
+    "id": "xpath.string.substring-before-last.element-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-before-last(//p, 'D')", "content": "<root><p>A<b>B</b></p><p>D</p></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XValue.asString for Elements" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","node-sequence","edge"],
+    "expected": { "outcome": "return", "value": "A" }
+  },
+  {
+    "id": "xpath.string.substring-after-last.element-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-after-last(//p, 'A')", "content": "<root><p>A<b>B</b></p><p>D</p></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XValue.asString for Elements" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","node-sequence","edge"],
+    "expected": { "outcome": "return", "value": "D" }
+  },
+  {
+    "id": "xpath.string.substring-before-last.attribute-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-before-last(//@code, ',')", "content": "<root><p code='ab'/><p code='xy'/></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XValue.asString for attribute lists" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","attribute-sequence","edge"],
+    "expected": { "outcome": "return", "value": "ab" }
+  },
+  {
+    "id": "xpath.string.substring-after-last.attribute-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-after-last(//@code, ',')", "content": "<root><p code='ab'/><p code='xy'/></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XValue.asString for attribute lists" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","attribute-sequence","edge"],
+    "expected": { "outcome": "return", "value": "xy" }
+  },
+  {
+    "id": "xpath.string.substring-before-last.empty-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-before-last(//missing, '-')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XValue.asString for empty selection" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","empty-selection","edge","empty"],
+    "expected": { "outcome": "return", "value": "" }
   }
 ]
