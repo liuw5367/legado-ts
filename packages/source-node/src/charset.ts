@@ -12,9 +12,9 @@ export class NodeCharsetCodec implements CharsetCodec {
     return Uint8Array.from(iconv.encode(text, normalized))
   }
 
-  public decode(bytes: Uint8Array, charset: string): string {
+  public decode(bytes: Uint8Array, charset: string, stripBOM = true): string {
     const normalized = normalizeCharset(charset)
     if (!iconv.encodingExists(normalized)) throw new Error(`unsupported charset: ${charset}`)
-    return iconv.decode(Buffer.from(bytes), normalized)
+    return iconv.decode(Buffer.from(bytes), normalized, { stripBOM })
   }
 }

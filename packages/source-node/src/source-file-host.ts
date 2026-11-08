@@ -106,7 +106,9 @@ export class NodeSourceFileHost implements SourceFileHost {
       const bytes = await this.archiveContent(text(input.url), text(input.path), format, signal, source, budget)
       if (bytes === undefined) return ''
       const charset = charsetOf(input.charset) ?? detectCharset(bytes)
-      return this.encoding.decode(bytes, charset)
+      // Java 的 UTF-8 和显式字节序解码保留 BOM；UTF-16/32 根据 BOM 选择字节序。
+      const detectsByteOrder = /^(?:utf[-_\s]?16|utf[-_\s]?32)$/iu.test(charset)
+      return this.encoding.decode(bytes, charset, format !== 'zip' || detectsByteOrder)
     }
     if (operation === 'getZipByteArrayContent' || operation === 'getRarByteArrayContent' || operation === 'get7zByteArrayContent') {
       const format = operation.startsWith('getZip') ? 'zip' : operation.startsWith('getRar') ? 'rar' : '7z'
