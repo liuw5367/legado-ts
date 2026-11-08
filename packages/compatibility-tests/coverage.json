@@ -1746,6 +1746,26 @@
       ]
     },
     {
+      "operation": "rule.cookieMap",
+      "method": "CookieStore.cookieToMap/mapToCookie/mergeCookieValues",
+      "reference": "upstream-original / upstream-guided-flow",
+      "tsEntry": "cookie bridge → NodeCookieStore / SourceRequestHost",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "state",
+        "continuation"
+      ],
+      "caseIds": [
+        "cookie-map.android-map-shapes",
+        "cookie-map.kotlin-whitespace",
+        "cookie-map.empty-map",
+        "cookie-map.replace-and-next-request",
+        "cookie-map.empty-replacement-preserves-cookie"
+      ]
+    },
+    {
       "operation": "rule.coverStream",
       "method": "ImageUtils.decode(InputStream) · 封面流读取与清理",
       "reference": "upstream-guided-flow",

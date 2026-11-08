@@ -28,6 +28,13 @@
       "suffix": ""
     },
     {
+      "path": "app/src/main/java/io/legado/app/help/http/CookieStore.kt",
+      "sha256": "9890bbf76428c05601981af7b3148fe87944d788f0a082a50cd4a3b591956a8e",
+      "sections": [[73, 80], [118, 148]],
+      "prefix": "package compat\n\nimport io.legado.app.constant.AppPattern.equalsRegex\nimport io.legado.app.constant.AppPattern.semicolonRegex\n\ninternal interface CookieMapReferenceInterface {\n    fun cookieToMap(cookie: String): MutableMap<String, String>\n    fun mapToCookie(cookieMap: Map<String, String>?): String?\n}\n\ninternal object CookieMapReference : CookieMapReferenceInterface {",
+      "suffix": "}"
+    },
+    {
       "path": "app/src/main/java/io/legado/app/constant/BookType.kt",
       "sha256": "a7bcb044192cb6844bc2a63e59261e94e701090f6c4dd6a127764fc3f98a14ef",
       "sections": [[1, 2], [5, 55], [60, 78]],

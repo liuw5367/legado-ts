@@ -151,6 +151,18 @@
       "url": "string"
     }
   },
+  "rule.cookieMap": {
+    "required": [
+      "kind"
+    ],
+    "properties": {
+      "kind": "string",
+      "cookie": "string",
+      "oldCookie": "string",
+      "newCookie": "string",
+      "url": "string"
+    }
+  },
   "css.string": {
     "required": [
       "content",

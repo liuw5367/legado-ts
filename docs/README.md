@@ -61,11 +61,11 @@
 
 新增兼容测试机制的要求：以独立测试包保存纯 Kotlin/JVM 或 Java 参考端、TypeScript 执行端和共享案例，从基础工具 API 逐步扩展至书源流程；不依赖 Android 运行环境，不修改或提前拆分原 Android 工程。用户提供的多书源集合用于首批语料；新机制验证稳定且确认等价覆盖后，再清理重复旧测试，保留独有的安全、生命周期与历史缺陷断言。测试与证据规则见[一致性测试基线](compatibility/conformance-tests.md)，独立基础测试机制已实现，入口和使用方式见 [`compatibility-tests`](../packages/compatibility-tests/README.md)；离线 HTML 流程、JSON 分页和真实目录脚本已覆盖搜索、详情、目录、正文及请求轨迹，Kotlin/JVM 离线参考的证据范围单列。
 
-后续基础兼容工作按“差异归因与比较入口校准 → 按根因修复 → 扩大方法/重载及真实规则样本覆盖”推进。核心验收为 Android 能成功处理的规则在 TS 中得到相同结果、顺序和继续/终止行为；异常类别、文案和堆栈仅在不影响可观察行为时允许按错误语义放宽，Android 合法空结果不能被 TS 抛错替代。纯 JVM、原仓库只读与既有安全边界继续保留；执行规则见[一致性测试基线](compatibility/conformance-tests.md)和[兼容政策](contracts/compatibility-policy.md)。
+后续基础兼容工作按“差异归因与比较入口校准 → 按根因修复 → 扩大方法/重载及真实规则样本覆盖”推进。兼容性修复以固定 Android Java/Kotlin 源码的可观察行为为验收基准，并修改 TS 生产实现；纯 JVM 参考端只用于执行和观察 Android 行为，不作为 TS 功能实现。核心验收为 Android 能成功处理的规则在 TS 中得到相同结果、顺序和继续/终止行为；异常类别、文案和堆栈仅在不影响可观察行为时允许按错误语义放宽，Android 合法空结果不能被 TS 抛错替代。原 Android 仓库保持只读，纯 JVM 与既有安全边界继续保留；执行规则见[一致性测试基线](compatibility/conformance-tests.md)和[兼容政策](contracts/compatibility-policy.md)。
 
 双端流程覆盖静态与动态 POST、HTML 正文分页、重定向详情识别、目录排序与去重、跨阶段书籍变量。脚本状态、取消和部分二进制行为已有离线证据。后续按已有差异的下游影响、缺失的 API 分支及真实规则组合，从固定语料选取案例。历史差异按分支关联同输入结果和参考出处，真实宿主证据单列。执行和证据范围见[一致性测试基线](compatibility/conformance-tests.md)。
 
-非 WebView 兼容性继续覆盖宽松 URL 请求选项、Cookie Map、日期脚本接口、批量正文回存及登录凭据生命周期。各项按同输入验证实际请求、脚本分支或交付结果，证据范围和保留差异见[已知差异](compatibility/known-divergences.md)。
+非 WebView 兼容性覆盖宽松 URL 请求选项、Cookie Map、日期脚本接口、批量正文回存及登录凭据生命周期。URL 请求选项与 Cookie Map 已有共享案例和固定 Android JVM 参考端对照；日期、正文回存与登录凭据仍待实施。各项按同输入验证实际请求、脚本分支或交付结果，证据范围和保留差异见[已知差异](compatibility/known-divergences.md)。
 
 基础双端验证按方法和重载生成场景证据。固定书源语料保留原文、摘要及全部来源位置，脚本片段使用固定上游 Rhino 与离线夹具。复现命令、覆盖分母和观察项说明见[双端测试包](../packages/compatibility-tests/README.md)。
 

@@ -37,6 +37,7 @@
         "encoding.md5",
         "url.parts",
         "url.options",
+        "rule.cookieMap",
         "css.string",
         "css.list",
         "json.string",
@@ -683,6 +684,43 @@
               "url"
             ],
             "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.cookieMap"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "cookie": {
+                "type": "string"
+              },
+              "oldCookie": {
+                "type": "string"
+              },
+              "newCookie": {
+                "type": "string"
+              },
               "url": {
                 "type": "string"
               }

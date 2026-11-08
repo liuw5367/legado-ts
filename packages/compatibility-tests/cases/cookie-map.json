@@ -1,0 +1,145 @@
+[
+  {
+    "id": "cookie-map.android-map-shapes",
+    "family": "cookie-map",
+    "operation": "rule.cookieMap",
+    "input": {
+      "kind": "convert",
+      "cookie": "3=three; 1=one; =empty; __proto__=literal; constructor=ctor; sid=a=b; sid=last; blank=; emptyNull= null "
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "CookieStore.cookieToMap/mapToCookie"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "map-order",
+      "special-keys"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "keys": ["3", "1", "", "__proto__", "constructor", "sid", "emptyNull"],
+        "values": ["three", "one", "empty", "literal", "ctor", "last", "null"],
+        "size": 7,
+        "emptyPresent": true,
+        "prototypePresent": true,
+        "constructorPresent": true,
+        "cookie": "3=three; 1=one; =empty; __proto__=literal; constructor=ctor; sid=last; emptyNull=null"
+      }
+    }
+  },
+  {
+    "id": "cookie-map.kotlin-whitespace",
+    "family": "cookie-map",
+    "operation": "rule.cookieMap",
+    "input": {
+      "kind": "convert",
+      "cookie": "asciiKey\t= \t value \t;nbspKey\u00a0=value\u00a0;onlyBlank=\u00a0;asciiBlank=\t ;literalNull=\t null \t;feffValue=\ufeff;"
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "CookieStore.cookieToMap"
+    },
+    "tags": [
+      "edge",
+      "whitespace"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "keys": ["asciiKey", "nbspKey\u00a0", "literalNull", "feffValue"],
+        "values": ["value", "value\u00a0", "null", "\ufeff"],
+        "size": 4,
+        "emptyPresent": false,
+        "prototypePresent": false,
+        "constructorPresent": false,
+        "cookie": "asciiKey=value; nbspKey\u00a0=value\u00a0; literalNull=null; feffValue=\ufeff"
+      }
+    }
+  },
+  {
+    "id": "cookie-map.empty-map",
+    "family": "cookie-map",
+    "operation": "rule.cookieMap",
+    "input": {
+      "kind": "convert",
+      "cookie": ""
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "CookieStore.cookieToMap/mapToCookie"
+    },
+    "tags": [
+      "empty",
+      "return-value"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "keys": [],
+        "values": [],
+        "size": 0,
+        "emptyPresent": false,
+        "prototypePresent": false,
+        "constructorPresent": false,
+        "cookie": null
+      }
+    }
+  },
+  {
+    "id": "cookie-map.replace-and-next-request",
+    "family": "cookie-map",
+    "operation": "rule.cookieMap",
+    "input": {
+      "kind": "merge-request",
+      "url": "http://127.0.0.1/probe",
+      "oldCookie": "sid=old; theme=night",
+      "newCookie": "sid=new; token=x"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "CookieStore.replaceCookie/mergeCookieValues followed by request Cookie header"
+    },
+    "tags": [
+      "state",
+      "continuation",
+      "request"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "cookie": "sid=new; theme=night; token=x",
+        "requestCookie": "sid=new; theme=night; token=x"
+      }
+    }
+  },
+  {
+    "id": "cookie-map.empty-replacement-preserves-cookie",
+    "family": "cookie-map",
+    "operation": "rule.cookieMap",
+    "input": {
+      "kind": "merge-request",
+      "url": "http://127.0.0.1/probe",
+      "oldCookie": "sid=old; theme=night",
+      "newCookie": ""
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "CookieStore.replaceCookie empty-input guard followed by request Cookie header"
+    },
+    "tags": [
+      "edge",
+      "state",
+      "request"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "cookie": "sid=old; theme=night",
+        "requestCookie": "sid=old; theme=night"
+      }
+    }
+  }
+]

@@ -6,6 +6,7 @@ import { decodeImage } from '../../source-core/src/index.ts'
 import { splitSourceRequestUrl } from '../../source-core/src/runtime/request-url.ts'
 import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeBookFlow } from './book-flow.ts'
+import { executeCookieMap } from './cookie-map.ts'
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourceSession } from '../../source-node/src/source-session.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
@@ -38,6 +39,7 @@ async function script(host: SourceRuleHost, expression: string, content: unknown
   return result.value
 }
 export async function execute(item: CaseInput): Promise<unknown> {
+  if (item.operation === 'rule.cookieMap') return executeCookieMap(item.input)
   if (item.operation === 'request.redirect') return executeRedirect(item.input)
   if (item.operation === 'rule.zipDownload') return executeZipDownload(item.input)
   if (item.operation === 'flow.contentLifecycle') return executeContentLifecycle(item.input)

@@ -1,6 +1,10 @@
 import { CookieJar, getPublicSuffix } from 'tough-cookie'
 import type { CookieStore } from './types.ts'
 
+type CookieMapEntries = readonly (readonly [string, string])[]
+
+const cookieMapEntries = new WeakMap<object, CookieMapEntries>()
+
 export class NodeCookieStore implements CookieStore {
   private readonly jar: CookieJar
 
@@ -36,9 +40,10 @@ export class NodeCookieStore implements CookieStore {
   }
 
   public async replaceCookie(url: string, cookie: string): Promise<void> {
-    if (url.trim().length === 0 || cookie.trim().length === 0) return
-    const merged = { ...cookieToMap(await this.get(url) ?? ''), ...cookieToMap(cookie) }
-    await this.set(url, mapToCookie(merged) ?? '')
+    if (url.length === 0 || cookie.length === 0) return
+    const merged = new Map(cookieMapEntriesOf(cookieToMap(await this.get(url) ?? '')))
+    for (const [key, value] of cookieMapEntriesOf(cookieToMap(cookie))) merged.set(key, value)
+    await this.set(url, serializeCookieMap(merged) ?? '')
   }
 
   public cookieToMap(cookie: string): Record<string, string> {
@@ -100,20 +105,58 @@ function sameAndroidDomain(domain: string, target: string): boolean {
 }
 
 function cookieToMap(cookie: string): Record<string, string> {
-  const result: Record<string, string> = {}
-  if (cookie.trim().length === 0) return result
+  const entries = new Map<string, string>()
+  if (isAndroidBlank(cookie)) return cookieMapRecord(entries)
   for (const part of cookie.split(';')) {
     const separator = part.indexOf('=')
-    if (separator <= 0) continue
-    const key = part.slice(0, separator).trim()
-    const value = part.slice(separator + 1).trim()
-    if (key.length > 0 && (value.length > 0 || value === 'null')) result[key] = value
+    if (separator < 0) continue
+    const key = trimAndroidCookieText(part.slice(0, separator))
+    const rawValue = part.slice(separator + 1)
+    const value = trimAndroidCookieText(rawValue)
+    if (isAndroidNotBlank(rawValue) || value === 'null') entries.set(key, value)
   }
-  return result
+  return cookieMapRecord(entries)
 }
 
 function mapToCookie(cookie: Readonly<Record<string, string>> | null | undefined): string | undefined {
   if (cookie === null || cookie === undefined) return undefined
-  const entries = Object.entries(cookie)
-  return entries.length === 0 ? undefined : entries.map(([key, value]) => `${key}=${value}`).join('; ')
+  return serializeCookieMap(cookieMapEntriesOf(cookie))
 }
+
+function cookieMapRecord(entries: Iterable<readonly [string, string]>): Record<string, string> {
+  const result: Record<string, string> = {}
+  const orderedEntries = [...entries]
+  for (const [key, value] of orderedEntries) {
+    Object.defineProperty(result, key, { value, configurable: true, enumerable: true, writable: true })
+  }
+  cookieMapEntries.set(result, orderedEntries)
+  return result
+}
+
+function cookieMapEntriesOf(cookie: Readonly<Record<string, string>>): CookieMapEntries {
+  return cookieMapEntries.get(cookie) ?? Object.entries(cookie)
+}
+
+function serializeCookieMap(entries: Iterable<readonly [string, string]>): string | undefined {
+  const values = [...entries]
+  return values.length === 0 ? undefined : values.map(([key, value]) => `${key}=${value}`).join('; ')
+}
+
+function trimAndroidCookieText(value: string): string {
+  let start = 0
+  let end = value.length
+  while (start < end && value.charCodeAt(start) <= 0x20) start += 1
+  while (end > start && value.charCodeAt(end - 1) <= 0x20) end -= 1
+  return value.slice(start, end)
+}
+
+function isAndroidNotBlank(value: string): boolean {
+  return Array.from(value).some((character) => !androidWhitespace.test(character))
+}
+
+function isAndroidBlank(value: string): boolean {
+  return !isAndroidNotBlank(value)
+}
+
+// Kotlin Char.isWhitespace() is Character.isWhitespace() or Character.isSpaceChar(); FEFF is not blank there.
+const androidWhitespace = /^[\u0009-\u000d\u001c-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]$/u
