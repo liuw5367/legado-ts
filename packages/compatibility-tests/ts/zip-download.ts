@@ -29,7 +29,7 @@ export async function executeZipDownload(input: Record<string, unknown>) {
   try {
     const code = `JSON.stringify(java.getZipStringContent(${JSON.stringify(url)}, ${JSON.stringify(input.path)}))`
     const result = await session.run((ports) => ports.rules.evaluate({
-      source, stage: 'content', field: 'fixture', rule: `@js:${code}`, content: '',
+      source, stage: 'detail', field: 'fixture', rule: `@js:${code}`, content: '',
     }))
     return {
       text: result.status === 'success' ? JSON.parse(String(result.value)) : null,
