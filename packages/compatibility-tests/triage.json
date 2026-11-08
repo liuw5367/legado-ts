@@ -891,6 +891,29 @@
         "output/run-u5W1uz/report.json"
       ],
       "resolution": "Android/JVM 对照确认 Java Pattern 的 \\s 应在四种 :matches* 伪类中按空白匹配。css-what 对自定义伪类参数连续解码两次；TS 现在使用两层 CSS 十六进制转义保留正则反斜杠，四条共享输入案例均双端一致。"
+    },
+    {
+      "id": "C11-CSS-NEGATIVE-INDEX-REJECTION",
+      "caseIds": [
+        "css.nodes.xml-index-eq-negative",
+        "css.nodes.batch-index-eq-negative",
+        "css.nodes.batch-index-lt-negative",
+        "css.nodes.batch-index-gt-negative"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSoup.getElements(String) · Jsoup QueryParser.consumeIndex"
+      },
+      "tsEntry": "packages/source-node/src/html.ts → pseudoNumber; packages/source-node/src/xpath.ts → xmlPseudoNumber",
+      "evidence": [
+        "output/run-H9Sf3s/report.json",
+        "output/run-EhVUDR/report.json",
+        "output/run-eOc0JJ/report.json"
+      ],
+      "resolution": "固定 Jsoup 1.23.2 的 QueryParser.consumeIndex 对参数执行 StringUtil.isNumeric 并解析为 Int，CSS :eq/:lt/:gt 的负数不是倒数索引或空/全匹配，而是 SelectorParseException。HTML 和 XML adapter 现在接受经过 Java 字符串空白裁剪的非负 ASCII Int，并拒绝负数、非数字和 Int 溢出；legacy tag.a.-1 属于另一套规则索引语法，不受此限制。四个负值选择器（含 XML 模式）均由 JVM/TS 同输入案例验证为拒绝。"
     }
   ]
 }

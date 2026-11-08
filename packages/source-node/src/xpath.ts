@@ -302,8 +302,15 @@ function xmlSiblingIndex(node: XmlNode): number {
 }
 
 function xmlPseudoNumber(value: string | null | undefined): number {
-  const number = Number.parseInt(value ?? '', 10)
-  if (!Number.isSafeInteger(number)) throw new Error(`invalid pseudo index: ${value ?? ''}`)
+  const source = value ?? ''
+  let start = 0
+  let end = source.length
+  while (start < end && source.charCodeAt(start) <= 0x20) start += 1
+  while (end > start && source.charCodeAt(end - 1) <= 0x20) end -= 1
+  const index = source.slice(start, end)
+  if (index.length === 0 || [...index].some((character) => character < '0' || character > '9')) throw new Error(`invalid pseudo index: ${value ?? ''}`)
+  const number = Number(index)
+  if (!Number.isInteger(number) || number > 2_147_483_647) throw new Error(`invalid pseudo index: ${value ?? ''}`)
   return number
 }
 
@@ -353,7 +360,7 @@ function xmlData(element: XmlNode): string {
 }
 
 const xmlPseudos: Record<string, (element: XmlNode, value?: string | null) => boolean> = {
-  // 与 Jsoup Evaluator.Index* 一致：负数不表示从末尾倒数。
+  // Jsoup CSS Index* only accepts a non-negative ASCII Int; negative indexes are selector errors.
   legadoeq: (element, value) => xmlSiblingIndex(element) === xmlPseudoNumber(value),
   legadolt: (element, value) => xmlSiblingIndex(element) < xmlPseudoNumber(value),
   legadogt: (element, value) => xmlSiblingIndex(element) > xmlPseudoNumber(value),

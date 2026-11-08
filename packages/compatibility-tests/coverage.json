@@ -377,7 +377,8 @@
         "css.string.composeScoped",
         "css.string.batch-mixed-text",
         "css.string.batch-mixed-own-text",
-        "css.string.batch-pre-text"
+        "css.string.batch-pre-text",
+        "css.string.all-preserves-script"
       ]
     },
     {
@@ -452,7 +453,9 @@
         "corpus.source-0.ruleBookInfo.lastChapter",
         "corpus.source-2.ruleExplore.author",
         "css.list.batch-table-attributes",
-        "css.list.batch-legacy-multi-class"
+        "css.list.batch-legacy-multi-class",
+        "css.string.legacy-text-own-normalized",
+        "css.list.id-empty"
       ]
     },
     {
@@ -1370,7 +1373,12 @@
         "css.nodes.pseudo-matches-own-empty",
         "css.nodes.pseudo-matches",
         "css.nodes.pseudo-matches-whole-text",
-        "css.nodes.pseudo-matches-whole-own-text"
+        "css.nodes.pseudo-matches-whole-own-text",
+        "css.nodes.batch-index-lt",
+        "css.nodes.batch-index-gt",
+        "css.nodes.batch-index-eq-negative",
+        "css.nodes.batch-index-lt-negative",
+        "css.nodes.batch-index-gt-negative"
       ]
     },
     {
@@ -1446,6 +1454,225 @@
       ],
       "caseIds": [
         "css.nodes.pseudo-matches-whole-own-text"
+      ]
+    },
+    {
+      "operation": "css.list",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · class",
+      "reference": "upstream-adapted",
+      "tsEntry": "source-core/src/rules/source-runtime.ts → normalizeSelector(class.*)",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.list.legacy",
+        "css.list.batch-legacy-multi-class",
+        "css.list.none"
+      ],
+      "manifestMembers": [
+        "parser-default-css::001-class"
+      ]
+    },
+    {
+      "operation": "css.list",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · tag",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-core/src/rules/source-runtime.ts → normalizeSelector(tag.*)",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.list.xml",
+        "css.list.selfclose",
+        "css.list.xml-legacy-lower",
+        "css.list.xml-explicit-upper",
+        "css.list.xml-explicit-lower",
+        "css.list.xml-legacy-negative"
+      ],
+      "manifestMembers": [
+        "parser-default-css::002-tag"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · id",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-core/src/rules/source-runtime.ts → normalizeSelector(id.*)",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "corpus.source-2.ruleSearch.bookList",
+        "css.nodes.id-special-id"
+      ],
+      "manifestMembers": [
+        "parser-default-css::003-id"
+      ]
+    },
+    {
+      "operation": "css.list",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · id empty",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-core/src/rules/source-runtime.ts → normalizeSelector(id.*)",
+      "requiredDimensions": [
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.list.id-empty"
+      ],
+      "manifestMembers": [
+        "parser-default-css::003-id"
+      ]
+    },
+    {
+      "operation": "css.list",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · text",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-core/src/rules/source-runtime.ts → text.* selector",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.string.legacy-text-own-normalized",
+        "corpus.source-3.ruleContent.nextContentUrl"
+      ],
+      "manifestMembers": [
+        "parser-default-css::004-text"
+      ]
+    },
+    {
+      "operation": "css.list",
+      "method": "AnalyzeByJSoup.getResultLast · textNodes",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-node/src/html.ts → read(textNodes)",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.list.textNodes",
+        "css.list.selfclose-text"
+      ],
+      "manifestMembers": [
+        "parser-default-css::005-textnodes"
+      ]
+    },
+    {
+      "operation": "css.string",
+      "method": "AnalyzeByJSoup.getResultLast · ownText",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-node/src/html.ts → read(ownText)",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.string.own-text-normal",
+        "css.string.batch-mixed-own-text",
+        "css.string.legacy-self"
+      ],
+      "manifestMembers": [
+        "parser-default-css::006-owntext"
+      ]
+    },
+    {
+      "operation": "css.string",
+      "method": "AnalyzeByJSoup.getResultLast · html",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-node/src/html.ts → read(html)",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.string.html-normal",
+        "css.string.batch-mixed-html",
+        "css.string.block-html-div",
+        "css.string.block-html-paragraph",
+        "css.string.block-html-nested",
+        "css.string.block-html-inline-boundary",
+        "css.string.block-html-pre",
+        "css.string.block-html-xml"
+      ],
+      "manifestMembers": [
+        "parser-default-css::007-html"
+      ]
+    },
+    {
+      "operation": "css.string",
+      "method": "AnalyzeByJSoup.getResultLast · all",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-node/src/html.ts → read(all)",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.string.all-normal",
+        "css.string.all-preserves-script"
+      ],
+      "manifestMembers": [
+        "parser-default-css::008-all"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.IndexEquals",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-node/src/html.ts → :eq",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.nodes.batch-index-eq",
+        "css.nodes.batch-table-has-not-eq",
+        "css.nodes.xml-index-eq-negative",
+        "css.nodes.batch-index-eq-negative"
+      ],
+      "manifestMembers": [
+        "parser-default-css::009-eq"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.IndexLessThan",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-node/src/html.ts → :lt",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "css.nodes.batch-index-lt",
+        "css.nodes.batch-index-lt-negative"
+      ],
+      "manifestMembers": [
+        "parser-default-css::010-lt"
+      ]
+    },
+    {
+      "operation": "css.nodes",
+      "method": "Jsoup Evaluator.IndexGreaterThan",
+      "reference": "upstream-adapted",
+      "tsEntry": "packages/source-node/src/html.ts → :gt",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "css.nodes.batch-index-gt",
+        "css.nodes.batch-index-gt-negative"
+      ],
+      "manifestMembers": [
+        "parser-default-css::011-gt"
       ]
     },
     {

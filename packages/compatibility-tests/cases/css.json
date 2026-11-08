@@ -1223,5 +1223,259 @@
         "<div class=\"outer\">\n needle<span>nested</span>\n <p><b>needle descendant</b></p>\n</div>"
       ]
     }
+  },
+  {
+    "id": "css.string.legacy-text-own-normalized",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "content": "<main><div id=\"first\">Needle</div><div id=\"second\">Other needle</div><div id=\"descendant\"><span>Needle</span></div></main>",
+      "rule": "text.NEEDLE@id"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · getElementsContainingOwnText"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": ["first", "second"]
+    }
+  },
+  {
+    "id": "css.list.id-empty",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "content": "<main><div id=\"present\">value</div></main>",
+      "rule": "id.missing@text"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · Evaluator.Id"
+    },
+    "tags": ["edge", "error-or-empty", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [] }
+  },
+  {
+    "id": "css.string.all-preserves-script",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><span id=\"probe\">A<script>bad()</script><style>.bad{}</style><b>B</b></span></main>",
+      "rule": "@css:#probe@all"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getResultLast · Elements.outerHtml"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": "<span id=\"probe\">A\n <script>bad()</script>\n <style>.bad{}</style>\n <b>B</b></span>"
+    }
+  },
+  {
+    "id": "css.nodes.batch-index-lt",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<ul><li id=\"a\">A</li><li id=\"b\">B</li><li id=\"c\">C</li><li id=\"d\">D</li></ul>",
+      "rule": "@css:li:lt(2)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Jsoup Evaluator.IndexLessThan"
+    },
+    "tags": ["normal", "edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "li", "text": "A", "id": "a" },
+        { "tag": "li", "text": "B", "id": "b" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.batch-index-gt",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<ul><li id=\"a\">A</li><li id=\"b\">B</li><li id=\"c\">C</li><li id=\"d\">D</li></ul>",
+      "rule": "@css:li:gt(1)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Jsoup Evaluator.IndexGreaterThan"
+    },
+    "tags": ["normal", "edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "li", "text": "C", "id": "c" },
+        { "tag": "li", "text": "D", "id": "d" }
+      ]
+    }
+  },
+  {
+    "id": "css.string.own-text-normal",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><div id=\"probe\">alpha beta</div></main>",
+      "rule": "@css:#probe@ownText"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) · Element.ownText"
+    },
+    "tags": ["normal"],
+    "expected": { "outcome": "return", "value": "alpha beta" }
+  },
+  {
+    "id": "css.string.html-normal",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><div id=\"probe\">alpha<b>beta</b></div></main>",
+      "rule": "@css:#probe@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) · Element.outerHtml"
+    },
+    "tags": ["normal"],
+    "expected": { "outcome": "return", "value": "<div id=\"probe\">\n alpha<b>beta</b>\n</div>" }
+  },
+  {
+    "id": "css.string.all-normal",
+    "family": "css",
+    "operation": "css.string",
+    "input": {
+      "content": "<main><div id=\"probe\">alpha<b>beta</b></div></main>",
+      "rule": "@css:#probe@all"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getString(String) · Elements.outerHtml"
+    },
+    "tags": ["normal"],
+    "expected": { "outcome": "return", "value": "<div id=\"probe\">\n alpha<b>beta</b>\n</div>" }
+  },
+  {
+    "id": "css.nodes.batch-index-eq",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<ul><li id=\"a\">A</li><li id=\"b\">B</li><li id=\"c\">C</li><li id=\"d\">D</li></ul>",
+      "rule": "@css:li:eq(2)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Jsoup Evaluator.IndexEquals"
+    },
+    "tags": ["normal"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "li", "text": "C", "id": "c" }]
+    }
+  },
+  {
+    "id": "css.nodes.id-special-id",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><div id=\"part:one\">Matched</div><div id=\"part\">Other</div></main>",
+      "rule": "id.part:one"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.ElementsSingle.getElementsSingle · Evaluator.Id"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "div", "text": "Matched", "id": "part:one" }]
+    }
+  },
+  {
+    "id": "css.nodes.xml-index-eq-negative",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<?xml version=\"1.0\"?><root><item id=\"a\">A</item></root>",
+      "rule": "@css:item:eq(-1)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Jsoup Evaluator.IndexEquals XML mode"
+    },
+    "tags": ["edge", "error", "compatibility-recheck"],
+    "errorEquivalence": {
+      "category": "invalid-selector",
+      "jvm": ["org.jsoup.select.Selector$SelectorParseException"],
+      "ts": ["Error"],
+      "tsMessageIncludes": ["CSS"]
+    }
+  },
+  {
+    "id": "css.nodes.batch-index-eq-negative",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<ul><li id=\"a\">A</li><li id=\"b\">B</li><li id=\"c\">C</li><li id=\"d\">D</li></ul>",
+      "rule": "@css:li:eq(-1)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Jsoup Evaluator.IndexEquals"
+    },
+    "tags": ["edge", "error", "compatibility-recheck"],
+    "errorEquivalence": {
+      "category": "invalid-selector",
+      "jvm": ["org.jsoup.select.Selector$SelectorParseException"],
+      "ts": ["Error"],
+      "tsMessageIncludes": ["CSS"]
+    }
+  },
+  {
+    "id": "css.nodes.batch-index-lt-negative",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<ul><li id=\"a\">A</li><li id=\"b\">B</li><li id=\"c\">C</li><li id=\"d\">D</li></ul>",
+      "rule": "@css:li:lt(-1)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Jsoup Evaluator.IndexLessThan"
+    },
+    "tags": ["edge", "error", "compatibility-recheck"],
+    "errorEquivalence": {
+      "category": "invalid-selector",
+      "jvm": ["org.jsoup.select.Selector$SelectorParseException"],
+      "ts": ["Error"],
+      "tsMessageIncludes": ["CSS"]
+    }
+  },
+  {
+    "id": "css.nodes.batch-index-gt-negative",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<ul><li id=\"a\">A</li><li id=\"b\">B</li><li id=\"c\">C</li><li id=\"d\">D</li></ul>",
+      "rule": "@css:li:gt(-1)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Jsoup Evaluator.IndexGreaterThan"
+    },
+    "tags": ["edge", "error", "compatibility-recheck"],
+    "errorEquivalence": {
+      "category": "invalid-selector",
+      "jvm": ["org.jsoup.select.Selector$SelectorParseException"],
+      "ts": ["Error"],
+      "tsMessageIncludes": ["CSS"]
+    }
   }
 ]

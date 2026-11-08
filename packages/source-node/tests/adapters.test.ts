@@ -19,7 +19,7 @@ test('HTML adapter 的 html 输出保留当前元素并移除脚本和样式', (
   const node = document.select('div.book')[0]!
 
   assert.equal(document.read(node, 'html'), '<div class="book">\n <a>A</a>\n</div>')
-  assert.equal(document.read(node, 'all'), '<div class="book"><a>A</a><script>bad()</script><style>.bad{}</style></div>')
+  assert.equal(document.read(node, 'all'), '<div class="book">\n <a>A</a>\n <script>bad()</script>\n <style>.bad{}</style>\n</div>')
 })
 
 test('HTML 规则序列化保留正文格式化需要的实体', () => {
@@ -32,9 +32,9 @@ test('HTML adapter 支持 Jsoup 位置、ownText 和正则伪类', () => {
   assert.equal(document.select('p.book:eq(1) b')[0] !== undefined, true)
   assert.equal(document.select('p.book:lt(2)').length, 2)
   assert.equal(document.select('p.book:gt(1)').length, 1)
-  assert.equal(document.select('p.book:eq(-1)').length, 0)
-  assert.equal(document.select('p.book:lt(-1)').length, 0)
-  assert.equal(document.select('p.book:gt(-1)').length, 3)
+  assert.throws(() => document.select('p.book:eq(-1)'))
+  assert.throws(() => document.select('p.book:lt(-1)'))
+  assert.throws(() => document.select('p.book:gt(-1)'))
   assert.equal(document.select('p:containsOwn(中)').length, 1)
   assert.equal(document.select('p:matchesOwn(/^中/u)').length, 1)
   assert.equal(document.select('p:matchesOwn((?i)^前$)').length, 1)
@@ -417,9 +417,9 @@ test('XPath XML 文档的 CSS 选择器保留 Jsoup 常用位置和文本伪类'
   const parser = new XPathParserAdapter()
   const document = parser.parse('<?xml version="1.0"?><root><item>A<b>甲</b></item><item>B<b>乙</b></item></root>')
   assert.equal(document.select('item:eq(1)').length, 1)
-  assert.equal(document.select('item:eq(-1)').length, 0)
-  assert.equal(document.select('item:lt(-1)').length, 0)
-  assert.equal(document.select('item:gt(-1)').length, 2)
+  assert.throws(() => document.select('item:eq(-1)'))
+  assert.throws(() => document.select('item:lt(-1)'))
+  assert.throws(() => document.select('item:gt(-1)'))
   assert.equal(document.select('item:containsOwn(B)').length, 1)
   assert.equal(document.select('item:matchesOwn(/^B/u)').length, 1)
   assert.equal(document.select('item:matches(/乙/)').length, 1)

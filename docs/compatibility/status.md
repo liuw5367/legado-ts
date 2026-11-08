@@ -2,6 +2,14 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-09 P2：补齐 CSS 默认解析器成员覆盖并对齐索引解析
+
+机器清单中的 CSS 默认解析器 `class/tag/id/text/textNodes/ownText/html/all/eq/lt/gt` 共 11 个成员此前虽有部分散落用例，却没有逐成员关联，仍标为 `ts-diff`。现在 `coverage.json` 为每个成员关联了通过的 JVM/TS 案例，覆盖普通结果、XML/legacy 选择器、空结果、文本/HTML 输出及位置边界；`method-manifest.json` 只将这些已覆盖的成员更新为 `ts-passed`，父级 CSS 方言仍为 `partial`。
+
+JVM 对照还纠正了旧的负索引假设：Jsoup `QueryParser.consumeIndex` 只接受裁剪后的非负 ASCII `Int`，`eq/lt/gt` 的负参数会抛 `SelectorParseException`，并非空结果或倒数索引。HTML 与 XML adapter 现在采用相同校验；legacy `tag.a.-1` 属于不同的规则位置语法，语义保持独立。`@all` 输出则按 Android `Elements.outerHtml()` 保留 `script/style`，并使用格式化序列化。C11 的四条负值案例覆盖 HTML 的 `eq/lt/gt` 和 XML 的 `eq`。
+
+CSS family **89/89 双端一致**；完整兼容集 **712 项，707 一致、5 条已登记允许差异、0 different、0 unsupported、0 runner failure**，其中 **81/81 流程全等**。根测试 **709/709**、compatibility-tests 机制 **33/33**、类型检查通过。机器清单仍有 259 个成员：**243 ts-passed、12 ts-diff、4 unverified**；实现状态仍为 **124 implemented、36 partial、99 simulated**。本证据来自锁定 Kotlin/JVM 参考端与 TS 的同输入执行，不代表 Android app/设备实测；D18 的完整 Jsoup 方言仍保持 partial。
+
 ## 2026-11-08 P2：Jsoup `:matches*` 保留 Java Pattern 转义
 
 新增 JVM/TS 同输入案例后，`:matchesOwn((?i)^alpha\s+beta$)` 在固定 Android/JVM 参考端命中直接文本，TS 返回空列表。根因在 `css-what@8`：自定义伪类参数在 `readValueWithParenthesis` 和伪类分支中会连续解码两次，Java Pattern 的 `\s` 因此变成字面 `s`。`normalizeHtmlSelector` 现在把 `:matches`、`:matchesOwn`、`:matchesWholeText`、`:matchesWholeOwnText` 参数中的反斜杠编码为两层 CSS 十六进制转义，再由 css-what 还原为原始正则。

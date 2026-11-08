@@ -64,7 +64,12 @@ class HtmlDocumentView implements HtmlDocument {
     const value = this.node(node)
     const matchText = this.matchTextMeta.get(value)
     if (matchText !== undefined && (output === 'html' || output === 'all')) return render(matchText.text, { xmlMode: this.xmlMode, encodeEntities: false })
-    if (output === 'all') return render(value, { xmlMode: this.xmlMode, encodeEntities: false })
+    if (output === 'all') {
+      // Android's Elements.outerHtml keeps script/style and uses Jsoup's formatted HTML serialization.
+      const copy = value.cloneNode(true)
+      if (!this.xmlMode && !preservesWhitespace(value.parent)) formatHtmlBlocks(copy, 0, true)
+      return render(copy, { xmlMode: this.xmlMode, encodeEntities: 'utf8' })
+    }
     if (output === 'html') {
       // Android's Jsoup branch returns outerHtml for `html`, after removing
       // script/style descendants from the selected elements.
@@ -314,8 +319,10 @@ function elementSiblingIndex(node: AnyNode): number {
 }
 
 function pseudoNumber(value: string | null | undefined): number {
-  const number = Number.parseInt(value ?? '', 10)
-  if (!Number.isSafeInteger(number)) throw new Error(`invalid pseudo index: ${value ?? ''}`)
+  const source = trimAndroidWhitespace(value ?? '')
+  if (source.length === 0 || [...source].some((character) => character < '0' || character > '9')) throw new Error(`invalid pseudo index: ${value ?? ''}`)
+  const number = Number(source)
+  if (!Number.isInteger(number) || number > 2_147_483_647) throw new Error(`invalid pseudo index: ${value ?? ''}`)
   return number
 }
 
@@ -341,8 +348,8 @@ function normalizeContainsValue(value: string | null | undefined): string {
 }
 
 const htmlPseudos: Record<string, (element: AnyNode, value?: string | null) => boolean> = {
-  // Jsoup 的 eq/lt/gt 使用元素在同级元素中的 0 基索引，不使用筛选结果集合索引。
-  // Jsoup 不把负数转换为“倒数索引”；负数只会产生自然的空/全匹配结果。
+  // Jsoup 的 CSS eq/lt/gt 使用同级元素 0 基索引，只接受非负 ASCII Int；负数是非法 CSS selector。
+  // legacy tag.a.-1 的负索引是另一套规则语法，由 source-core 的位置选择器处理。
   eq: (element, value) => elementSiblingIndex(element) === pseudoNumber(value),
   lt: (element, value) => elementSiblingIndex(element) < pseudoNumber(value),
   gt: (element, value) => elementSiblingIndex(element) > pseudoNumber(value),
@@ -636,9 +643,9 @@ function removeScriptAndStyle(node: AnyNode): void {
 
 const inlineContainers = new Set(['address', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'p', 'pre', 'td', 'th', 'title'])
 
-function formatHtmlBlocks(node: AnyNode, depth: number): void {
+function formatHtmlBlocks(node: AnyNode, depth: number, includeScriptStyle = false): void {
   if (!isTag(node) || preservesWhitespace(node)) return
-  const block = (child: AnyNode | undefined): boolean => child !== undefined && isTag(child) && blockElements.has(child.name)
+  const block = (child: AnyNode | undefined): boolean => child !== undefined && isTag(child) && (blockElements.has(child.name) || (includeScriptStyle && (child.name === 'script' || child.name === 'style')))
   const blockParent = block(node)
   const indentFirst = blockParent && !inlineContainers.has(node.name) && node.children.some((child) => !isText(child))
   const children: AnyNode[] = []
@@ -658,7 +665,7 @@ function formatHtmlBlocks(node: AnyNode, depth: number): void {
     const indent = meaningful && (block(child) || ((!text || blockParent) && (block(previous) || (previous === undefined && indentFirst))))
     if (previous === undefined && meaningful) indentClose = indent
     if (indent) children.push(new Text(`\n${' '.repeat(depth + 1)}`))
-    formatHtmlBlocks(child, depth + 1)
+    formatHtmlBlocks(child, depth + 1, includeScriptStyle)
     children.push(child)
     if (meaningful) previous = child
   }
