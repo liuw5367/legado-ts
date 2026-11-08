@@ -1689,8 +1689,17 @@
       "caseIds": [
         "rule.scriptLibrary.batch-yck-format-date",
         "rule.scriptLibrary.batch-source-scope",
-        "rule.scriptLibrary.batch-peer-refresh"
+        "rule.scriptLibrary.batch-peer-refresh",
+        "rule.scriptLibrary.closure-across-calls"
       ]
+    },
+    {
+      "operation": "rule.infoMap",
+      "method": "InfoMap.save(time, need) / saveNow / remove",
+      "reference": "upstream-adapted",
+      "tsEntry": "executeExploreAction / parseExploreKinds / discoverBooks",
+      "requiredDimensions": ["edge"],
+      "caseIds": ["rule.infoMap.immediate", "rule.infoMap.deferred", "rule.infoMap.suppressed"]
     },
     {
       "operation": "rule.sourceState",

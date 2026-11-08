@@ -66,6 +66,7 @@
         "rule.bridgeString",
         "rule.bridgeObjects",
         "rule.scriptLibrary",
+        "rule.infoMap",
         "rule.sourceState",
         "flow.contentLifecycle",
         "rule.coverStream",
@@ -1708,6 +1709,39 @@
                 "type": "string"
               },
               "program": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.infoMap"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "initial",
+              "action",
+              "category"
+            ],
+            "properties": {
+              "initial": {
+                "type": "object"
+              },
+              "action": {
+                "type": "string"
+              },
+              "category": {
                 "type": "string"
               }
             },

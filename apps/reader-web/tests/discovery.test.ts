@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { randomUUID } from 'node:crypto'
-import { importSources } from '@legado/source-core'
+import { executeExploreAction, importSources } from '@legado/source-core'
 import { MemoryReaderRepository, type StoredSourceRecord } from '../server/db/repository.ts'
 import { compareImportCandidates } from '../server/runtime/source-comparison.ts'
 import { getDiscoveryCategories, listDiscoverySources, loadDiscoveryPage, openDiscoveryBook, parseDiscoveryCategories, updateDiscoveryControl } from '../server/runtime/discovery.ts'
 import { discoveryBookSchema, discoveryPageSchema } from '../shared/discovery.ts'
+import { withPersistentSourceSession } from '../server/runtime/source-session.ts'
 
 process.env.SOURCE_RUNTIME_STATE_KEY = 'discovery-tests-existing-runtime-state-key'
 const definition = {
@@ -71,6 +72,32 @@ test('dynamic discovery categories execute with a persistent infoMap and then re
   const page = await loadDiscoveryPage(repository, 'user-a', { sourceId: source.sourceId, fingerprint: source.fingerprint, categoryId })
   assert.equal(page.items[0]?.name, '目标书1')
   assert.match(calls[0]!, /dynamic\?count=1/u)
+})
+
+test('发现筛选保存删除后的快照，并在秒级到期边界清除', async (t) => {
+  const { repository, source } = await setup()
+  let now = Date.now()
+  t.mock.method(Date, 'now', () => now)
+  const run = <T>(operation: Parameters<typeof withPersistentSourceSession<T>>[3]) =>
+    withPersistentSourceSession(repository, 'user-a', source, operation)
+  await run(async (_session, state) => {
+    state.applyInfoMapSave({ infoMap: { old: 'remove', filter: 'first' }, time: 0, need: true, now: true })
+  })
+  await run(async (session, state) => {
+    const result = await session.run((ports) => executeExploreAction(
+      ports, source.normalizedSource,
+      'infoMap.remove("old"); infoMap.put("filter", "new"); infoMap.save(2, true)',
+      { infoMap: state.infoMap },
+    ))
+    assert.deepEqual(result.diagnostics, [])
+    assert.ok(result.saveRequest)
+    state.replaceInfoMap(result.infoMap)
+    state.applyInfoMapSave(result.saveRequest)
+  })
+  now += 1999
+  assert.deepEqual(await run(async (_session, state) => state.infoMap), { filter: 'new' })
+  now += 1
+  assert.deepEqual(await run(async (_session, state) => state.infoMap), {})
 })
 
 test('discovery controls validate values, execute actions and refresh the selected list without exposing scripts', async (t) => {

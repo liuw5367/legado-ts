@@ -14,6 +14,13 @@
   },
   "files": [
     {
+      "path": "app/src/main/java/io/legado/app/utils/InfoMap.kt",
+      "sha256": "f46d78a6d97419308061a64814553be14f9f85b06b8a8ad0751bce7682a3a3a0",
+      "sections": [[1, 2], [4, 8], [10, 55]],
+      "prefix": "",
+      "suffix": ""
+    },
+    {
       "path": "app/src/main/java/io/legado/app/constant/BookType.kt",
       "sha256": "a7bcb044192cb6844bc2a63e59261e94e701090f6c4dd6a127764fc3f98a14ef",
       "sections": [[1, 2], [5, 55], [60, 78]],

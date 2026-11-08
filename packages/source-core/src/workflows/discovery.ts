@@ -50,10 +50,7 @@ export async function parseExploreKinds(ports: WorkflowPorts, source: Normalized
     // Rhino/Rhino-like hosts return JSONArray directly for scripts that return an
     // array. Preserve JSON structure instead of flattening objects into lines.
     text = Array.isArray(rawValue) ? JSON.stringify(rawValue) ?? '' : textValue(rawValue).trim()
-    const captured = wrapper?.__legadoWorkflowBindings?.infoMap
-    if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) {
-      for (const [key, value] of Object.entries(captured)) if (typeof value === 'string') infoMap[key] = value
-    }
+    replaceCapturedInfoMap(infoMap, wrapper?.__legadoWorkflowBindings?.infoMap)
   }
   try {
     return { kinds: parseExploreKindText(text), infoMap, saveRequested, saveRequest: saveTracker.request, diagnostics }
@@ -115,10 +112,7 @@ export async function executeExploreAction(ports: WorkflowPorts, source: Normali
   }
   if (result.state !== 'value' && result.state !== 'empty') diagnostics.push({ code: 'rule-failed', stage: 'discover', field: 'exploreAction', message: result.message ?? '发现控件动作执行失败', retryable: false })
   const wrapper = result.value as { __legadoWorkflowBindings?: Record<string, unknown> } | null
-  const captured = wrapper?.__legadoWorkflowBindings?.infoMap
-  if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) {
-    for (const [key, value] of Object.entries(captured)) if (typeof value === 'string') infoMap[key] = value
-  }
+  replaceCapturedInfoMap(infoMap, wrapper?.__legadoWorkflowBindings?.infoMap)
   return { infoMap, saveRequested, saveRequest: saveTracker.request, refreshRequested, diagnostics }
 }
 
@@ -144,9 +138,18 @@ export async function evaluateExploreViewName(ports: WorkflowPorts, source: Norm
   const wrapper = result.value as { __legadoWorkflowValue?: unknown; __legadoWorkflowBindings?: Record<string, unknown> } | null
   const raw = wrapper?.__legadoWorkflowValue ?? result.value
   const value = textValue(raw).trim()
-  const captured = wrapper?.__legadoWorkflowBindings?.infoMap
-  if (captured !== undefined && typeof captured === 'object' && captured !== null && !Array.isArray(captured)) for (const [key, item] of Object.entries(captured)) if (typeof item === 'string') infoMap[key] = item
+  replaceCapturedInfoMap(infoMap, wrapper?.__legadoWorkflowBindings?.infoMap)
   return { value: value.length === 0 ? (diagnostics.length === 0 ? 'null' : 'err') : value, infoMap, saveRequest: saveTracker.request, diagnostics }
+}
+
+function replaceCapturedInfoMap(infoMap: Record<string, string>, captured: unknown): void {
+  if (typeof captured !== 'object' || captured === null || Array.isArray(captured)) return
+  // 脚本返回完整 Map 快照，已删除的键不能继续进入发现请求。
+  const entries = Object.entries(captured)
+  for (const key of Object.keys(infoMap)) delete infoMap[key]
+  for (const [key, value] of entries) {
+    if (typeof value === 'string') Object.defineProperty(infoMap, key, { value, enumerable: true, configurable: true, writable: true })
+  }
 }
 
 function createInfoMapSaveTracker(infoMap: Readonly<Record<string, string>>): { capture: (input: unknown) => void; readonly request?: InfoMapSaveRequest | undefined } {

@@ -34,6 +34,7 @@ private fun execute(item: JsonObject): Any? {
         "rule.legacyCrypto" -> legacyCryptoEvidence(input)
         "rule.zipDownload" -> zipDownloadEvidence(input)
         "rule.coverStream" -> coverStreamEvidence(input)
+        "rule.infoMap" -> infoMapEvidence(input)
         "rule.sourceState" -> sourceStateEvidence(input)
         "rule.scriptLibrary" -> scriptLibraryEvidence(input)
         "rule.bridgeObjects" -> bridgeReturnedObjects(input)

@@ -1,3 +1,4 @@
+import { executeInfoMap } from './info-map.ts'
 import { executeMainJsFlow } from './main-js-flow.ts'
 import { executeRedirect } from './redirect.ts'
 import { executeZipDownload } from './zip-download.ts'
@@ -39,6 +40,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
   if (item.operation === 'request.redirect') return executeRedirect(item.input)
   if (item.operation === 'rule.zipDownload') return executeZipDownload(item.input)
   if (item.operation === 'flow.contentLifecycle') return executeContentLifecycle(item.input)
+  if (item.operation === 'rule.infoMap') return executeInfoMap(item.input)
   if (item.operation === 'flow.mainJs') return executeMainJsFlow(item.input)
   if (item.operation === 'flow.discover') return executeBookFlow(item.input, 'discover')
   if (item.operation === 'flow.book' || item.operation === 'flow.toc') return executeBookFlow(item.input, item.operation === 'flow.toc' ? 'toc' : 'book')
@@ -142,6 +144,11 @@ export async function execute(item: CaseInput): Promise<unknown> {
           if (previousTimeZone === undefined) delete process.env.TZ
           else process.env.TZ = previousTimeZone
         }
+      }
+      if (kind === 'closure') {
+        const beforeRefresh = [await executeLibrary(first), await executeLibrary(first)]
+        await executeLibrary(first, 'source.refreshJSLib(); JSON.stringify(null)')
+        return [...beforeRefresh, await executeLibrary(first)]
       }
       if (kind !== 'scope' && kind !== 'peer-refresh') throw new UnsupportedOperation('未知 jsLib 案例')
       const beforeRefresh = [await executeLibrary(first), await executeLibrary(first), await executeLibrary(second)]

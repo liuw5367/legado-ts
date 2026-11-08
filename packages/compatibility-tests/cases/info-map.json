@@ -1,0 +1,135 @@
+[
+  {
+    "id": "rule.infoMap.immediate",
+    "family": "info-map",
+    "operation": "rule.infoMap",
+    "input": {
+      "initial": {
+        "old": "removed",
+        "filter": "first"
+      },
+      "action": "infoMap.remove(\"old\"); infoMap.put(\"filter\", \"new\"); infoMap.save(2,false); infoMap.saveNow()",
+      "category": "\"/rank?filter=\" + infoMap.get(\"filter\") + \"&old=\" + (infoMap.get(\"old\") || \"\")"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "固定 InfoMap 与 Rhino / 固定时钟的 CacheManager 边界"
+    },
+    "tags": [
+      "edge",
+      "offline"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "live": {
+          "filter": "new"
+        },
+        "beforeCommit": {
+          "filter": "new"
+        },
+        "needSave": false,
+        "afterCommit": {
+          "filter": "new"
+        },
+        "beforeExpiry": {
+          "filter": "new"
+        },
+        "afterExpiry": {},
+        "savedSeconds": 2,
+        "requestUrl": "https://infomap.fixture.invalid/rank?filter=new&old="
+      }
+    }
+  },
+  {
+    "id": "rule.infoMap.deferred",
+    "family": "info-map",
+    "operation": "rule.infoMap",
+    "input": {
+      "initial": {
+        "old": "removed",
+        "filter": "first"
+      },
+      "action": "infoMap.remove(\"old\"); infoMap.put(\"filter\", \"new\"); infoMap.save(2,true)",
+      "category": "\"/rank?filter=\" + infoMap.get(\"filter\") + \"&old=\" + (infoMap.get(\"old\") || \"\")"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "固定 InfoMap 与 Rhino / 固定时钟的 CacheManager 边界"
+    },
+    "tags": [
+      "edge",
+      "offline"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "live": {
+          "filter": "new"
+        },
+        "beforeCommit": {
+          "old": "removed",
+          "filter": "first"
+        },
+        "needSave": true,
+        "afterCommit": {
+          "filter": "new"
+        },
+        "beforeExpiry": {
+          "filter": "new"
+        },
+        "afterExpiry": {},
+        "savedSeconds": 2,
+        "requestUrl": "https://infomap.fixture.invalid/rank?filter=new&old="
+      }
+    }
+  },
+  {
+    "id": "rule.infoMap.suppressed",
+    "family": "info-map",
+    "operation": "rule.infoMap",
+    "input": {
+      "initial": {
+        "old": "removed",
+        "filter": "first"
+      },
+      "action": "infoMap.remove(\"old\"); infoMap.put(\"filter\", \"new\"); infoMap.save(2,false)",
+      "category": "\"/rank?filter=\" + infoMap.get(\"filter\") + \"&old=\" + (infoMap.get(\"old\") || \"\")"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "固定 InfoMap 与 Rhino / 固定时钟的 CacheManager 边界"
+    },
+    "tags": [
+      "edge",
+      "offline"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "live": {
+          "filter": "new"
+        },
+        "beforeCommit": {
+          "old": "removed",
+          "filter": "first"
+        },
+        "needSave": false,
+        "afterCommit": {
+          "old": "removed",
+          "filter": "first"
+        },
+        "beforeExpiry": {
+          "old": "removed",
+          "filter": "first"
+        },
+        "afterExpiry": {
+          "old": "removed",
+          "filter": "first"
+        },
+        "savedSeconds": 0,
+        "requestUrl": "https://infomap.fixture.invalid/rank?filter=new&old="
+      }
+    }
+  }
+]

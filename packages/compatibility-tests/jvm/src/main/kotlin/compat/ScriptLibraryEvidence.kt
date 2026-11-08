@@ -35,6 +35,12 @@ internal fun scriptLibraryEvidence(input: JsonObject): Any {
         try {
             when (kind) {
                 "date" -> evaluate("a")
+                "closure" -> {
+                    val beforeRefresh = listOf(evaluate("a"), evaluate("a"))
+                    ScriptBindings.removeSharedGlobalStates(prefix)
+                    libraryScope = loadLibrary()
+                    beforeRefresh + evaluate("a")
+                }
                 "scope", "peer-refresh" -> {
                     val beforeRefresh = listOf(evaluate("a"), evaluate("a"), evaluate("b"))
                     // SharedJsScope.remove 用库摘要前缀使来源状态失效，并丢弃缓存库作用域。

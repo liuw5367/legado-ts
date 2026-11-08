@@ -79,5 +79,31 @@
         "reason": "Android 按库摘要清除所有引用该库的来源级状态。TS 保留其他书源会话的独立状态。"
       }
     ]
+  },
+  {
+    "id": "rule.scriptLibrary.closure-across-calls",
+    "family": "script-library",
+    "operation": "rule.scriptLibrary",
+    "input": {
+      "kind": "closure",
+      "library": "var fixtureNext = (() => { let count = 0; return () => ++count; })();",
+      "program": "JSON.stringify(fixtureNext())"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "固定 Rhino ScriptBindings 链和 SharedJsScope 刷新"
+    },
+    "tags": [
+      "edge",
+      "offline"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value/1",
+        "jvm": 2,
+        "ts": 1,
+        "reason": "Android 固定 Rhino 保留函数闭包的词法状态。TS 隔离 QuickJS 执行并只恢复可序列化状态，闭包跨调用需要宿主方案。两端刷新后均重新初始化。"
+      }
+    ]
   }
 ]
