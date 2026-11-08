@@ -1,3 +1,4 @@
+import { decodeImage } from '../../source-core/src/index.ts'
 import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeBookFlow } from './book-flow.ts'
 import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
@@ -39,6 +40,20 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
   const host = new SourceRuleHost()
   switch (item.operation) {
+    case 'rule.coverStream': {
+      let inputCloseCalls = 0
+      const rules = new SourceRuleHost({ logger: (level, value) => {
+        if (level === 'log' && value === 'input-closed') inputCloseCalls++
+      } })
+      const result = await decodeImage({
+        rules,
+        network: { request: async () => { throw new Error('离线封面解密不得发起请求') } },
+      }, {
+        source: { ...source, coverDecodeJs: str('script') }, src: str('src'),
+        bytes: Buffer.from(str('bytes'), 'base64'), isCover: true,
+      })
+      return { status: result.status, bytes: result.value === null ? null : Buffer.from(result.value).toString('base64'), inputCloseCalls }
+    }
     case 'rule.sourceState': {
       const key = json('key')
       const value = json('value')

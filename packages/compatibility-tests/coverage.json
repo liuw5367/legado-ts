@@ -1686,6 +1686,23 @@
         "rule.sourceState.batch-roundtrip",
         "rule.sourceState.batch-isolation"
       ]
+    },
+    {
+      "operation": "rule.coverStream",
+      "method": "ImageUtils.decode(InputStream) · 封面流读取与清理",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "decodeImage → SourceRuleHost.executeImageDecodeScript",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "failure"
+      ],
+      "caseIds": [
+        "rule.coverStream.batch-offset",
+        "rule.coverStream.batch-empty",
+        "rule.coverStream.batch-fail"
+      ]
     }
   ]
 }

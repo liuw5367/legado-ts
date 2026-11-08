@@ -151,6 +151,8 @@ git diff --check
 
 - E1 `flow.synthetic.content-lifecycle.*` 验证主正文请求取消、歌词请求取消和普通失败。TS 夹具等待实际请求预算的 AbortSignal，JVM 用固定上游同版本 Kotlin 协程按 WebBook/BookContent 调用顺序执行。主正文取消和普通副文失败一致；副文取消时参考函数尝试标题但外层 Deferred 不交付正文，TS 在标题前返回取消，精确登记该路径差异。[流程 42 例，41 一致、1 项允许差异](../packages/compatibility-tests/output/run-A4g1ky/report.md)。
 
+- E2 `rule.coverStream.batch-*` 由固定 Rhino 和 JDK ByteArrayInputStream 与实际 TS `decodeImage` 执行同一脚本。验证单字节、偏移缓冲区、空输入 EOF、输出字节与正常或异常的脚本 close。Android 参考按 ImageUtils 将脚本 ByteArray 包成输出流，TS 直接交付字节。原始下载流和 Glide 清理未在此验证。[封面流 3/3 一致](../packages/compatibility-tests/output/run-9bk8hH/report.md)，既有封面回归 9/9，类型检查通过。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。

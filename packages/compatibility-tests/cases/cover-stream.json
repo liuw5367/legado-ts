@@ -1,0 +1,80 @@
+[
+  {
+    "id": "rule.coverStream.batch-offset",
+    "family": "cover-stream",
+    "operation": "rule.coverStream",
+    "input": {
+      "src": "https://fixture.invalid/offset",
+      "bytes": "fyoN",
+      "script": "var out = java.base64DecodeToByteArray(\"CQkJCQkJCQk=\");\ntry {\n    out[0] = result.read() & 127;\n    out[1] = result.read(out, 3, 2) + 1;\n    out[5] = result.read() + 1;\n    out[6] = result.available();\n    if (src.endsWith(\"/fail\")) throw new Error(\"fixture failure\");\n} finally {\n    result.close();\n    java.log(\"input-closed\");\n}\nout;"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "ImageUtils.decode InputStream 重载 + 固定 Rhino 与真实 JDK ByteArrayInputStream"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "bytes": "fwMJKg0AAAk=",
+        "inputCloseCalls": 1
+      }
+    }
+  },
+  {
+    "id": "rule.coverStream.batch-empty",
+    "family": "cover-stream",
+    "operation": "rule.coverStream",
+    "input": {
+      "src": "https://fixture.invalid/empty",
+      "bytes": "",
+      "script": "var out = java.base64DecodeToByteArray(\"CQkJCQkJCQk=\");\ntry {\n    out[0] = result.read() & 127;\n    out[1] = result.read(out, 3, 2) + 1;\n    out[5] = result.read() + 1;\n    out[6] = result.available();\n    if (src.endsWith(\"/fail\")) throw new Error(\"fixture failure\");\n} finally {\n    result.close();\n    java.log(\"input-closed\");\n}\nout;"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "ImageUtils.decode InputStream 重载 + 固定 Rhino 与真实 JDK ByteArrayInputStream"
+    },
+    "tags": [
+      "edge",
+      "empty"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "bytes": "fwAJCQkAAAk=",
+        "inputCloseCalls": 1
+      }
+    }
+  },
+  {
+    "id": "rule.coverStream.batch-fail",
+    "family": "cover-stream",
+    "operation": "rule.coverStream",
+    "input": {
+      "src": "https://fixture.invalid/fail",
+      "bytes": "fyoN",
+      "script": "var out = java.base64DecodeToByteArray(\"CQkJCQkJCQk=\");\ntry {\n    out[0] = result.read() & 127;\n    out[1] = result.read(out, 3, 2) + 1;\n    out[5] = result.read() + 1;\n    out[6] = result.available();\n    if (src.endsWith(\"/fail\")) throw new Error(\"fixture failure\");\n} finally {\n    result.close();\n    java.log(\"input-closed\");\n}\nout;"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "ImageUtils.decode InputStream 重载 + 固定 Rhino 与真实 JDK ByteArrayInputStream"
+    },
+    "tags": [
+      "failure",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "failed",
+        "bytes": null,
+        "inputCloseCalls": 1
+      }
+    }
+  }
+]

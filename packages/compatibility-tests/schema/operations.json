@@ -492,5 +492,17 @@
       "auxUrl": "string",
       "title": "string"
     }
+  },
+  "rule.coverStream": {
+    "required": [
+      "bytes",
+      "script",
+      "src"
+    ],
+    "properties": {
+      "bytes": "string",
+      "script": "string",
+      "src": "string"
+    }
   }
 }

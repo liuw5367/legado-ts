@@ -246,7 +246,7 @@ P59 最终门禁：完整 Node 回归 **663/663**、书源回归 **199/199**、�
 | D9 | 请求差异 | bridge 子请求的动态 Header 重入 | 已修正（Node 有界模拟） | [差异登记](known-divergences.md)，D9 | 首层网络、AnalyzeUrl、批量、响应及文件/字体/归档 bridge 重算动态头，深层跳过并共享 deadline/取消和最大深度；Android golden 与非 Node 宿主仍待验证 | `flow.synthetic.dynamic-body.*` 验证首层动态头；深层限界保留 TS 证据 |
 | D10 | 生命周期差异 | `preUpdateJs` 执行时限 | 有意保留差异（P07） | [差异登记](known-divergences.md)，D10；`source-request.test.ts`、`source-request-host.test.ts` | 请求链共享 30 秒默认绝对 deadline，显式值最多 30 分钟；JS action 仍保留 TS 30 秒安全上限，Android 30 分钟仅作为未验证差异 | 安全时限保留，单列宿主取证 |
 | D11 | 生命周期差异 | `subContent` 取消语义 | 差异待处理 | [差异登记](known-divergences.md)，D11 | 主正文、诊断和最终状态完成 Android 对照与取舍记录 | E1 对照主正文取消、副文取消和普通副文失败。取消时均不向案例调用方交付，副文取消后的标题步骤差异见 D11 差异登记。 |
-| D12 | 二进制差异 | 封面解密 InputStream 互操作 | 部分实现 | [差异登记](known-divergences.md)，D12 | 所需重载和 bytes 边界都有跨端 fixture | 封面流部分实现，E2 验证 |
+| D12 | 二进制差异 | 封面解密 InputStream 互操作 | 部分实现 | [差异登记](known-divergences.md)，D12 | 所需重载和 bytes 边界都有跨端 fixture | E2 对照单字节、偏移读取、EOF、返回字节与正常/异常的脚本 close，案例 `rule.coverStream.batch-*`。真实下载流的宿主清理由设备证据验证。 |
 | D13 | 二进制差异 | 图片脚本执行预算 | 部分实现 | [差异登记](known-divergences.md)，D13 | 预算、取消、资源释放和大输入行为都有跨端 fixture | TS 图片预算，设备和资源释放证据待拆分 |
 | D14 | JavaScript bridge | JavaScript bridge 逐重载覆盖 | 部分实现 | [差异登记](known-divergences.md)，D14；SourceLoginJsExtensions 纯动作入口、book/chapter 媒体更新和变量已有 Node 回归；JS 源 marshaller 已补搜索/发现 `type` 校验回退、详情前重置类型、文件源类型合并和 `downloadUrls` 归一化 | 真实书源方法逐重载通过；剪贴板、搜索/书架、图片/导航 UI 仅记录结构化动作，平台 UI、浏览器和 Android golden 仍待验证 | 按签名核对，D1/D2 覆盖可执行子项 |
 | D15 | 应用边界差异 | 目录统计标题的应用替换规则 | 有意保留 | [差异登记](known-divergences.md)，D15；`toc-reconcile.ts` | source-core 保持纯函数；应用提供标题替换规则快照或投影回调后再做跨端 fixture | 应用投影保留 |

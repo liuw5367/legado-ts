@@ -64,7 +64,8 @@
         "rule.bridgeObjects",
         "rule.scriptLibrary",
         "rule.sourceState",
-        "flow.contentLifecycle"
+        "flow.contentLifecycle",
+        "rule.coverStream"
       ]
     },
     "input": {
@@ -1657,6 +1658,39 @@
                 "type": "string"
               },
               "title": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.coverStream"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "bytes",
+              "script",
+              "src"
+            ],
+            "properties": {
+              "bytes": {
+                "type": "string"
+              },
+              "script": {
+                "type": "string"
+              },
+              "src": {
                 "type": "string"
               }
             },

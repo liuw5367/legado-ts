@@ -173,6 +173,10 @@
   },
   "flowEvidence": [
     {
+      "path": "app/src/main/java/io/legado/app/utils/ImageUtils.kt",
+      "sha256": "cd8850a71d79593fb9f26248e5257f08a1c188d33bf146cb03ab4e48797ab8b7"
+    },
+    {
       "path": "app/src/main/java/io/legado/app/help/CacheManager.kt",
       "sha256": "c280f649202c23391e9d6455f901ed7ca4e842beaef3932c138e8faef0d98474"
     },
