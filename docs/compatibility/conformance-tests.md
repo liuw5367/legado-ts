@@ -301,6 +301,22 @@ fixture 生成器必须支持从 Android 输出生成 golden，并对 Cookie、T
 
 测试资源必须在每个需要资源的用例结束时释放；纯值转换应记录 `cleanup=not-applicable`。网络真实站点只用于人工诊断，不作为稳定 golden 来源。任何兼容性结论都要同时注明 Android 证据和 TypeScript 断言，不能只依赖文档示例或人工截图。
 
+## 真实 Android 宿主取证
+
+纯 JVM 报告只证明对应原算法或离线流程。以下行为以实际 Android 应用运行结果为证据，默认离线回归保持独立。每次运行用固定源规则、输入和虚构响应，记录 Android 上游 commit、应用构建号、系统版本和 API level。WebView 案例还要记录提供程序版本。准备独立测试会话，验证后清除测试账号、Cookie 和存储。
+
+| 宿主边界 | 固定输入与动作 | 采集的可观察结果 | 采集限制 |
+| --- | --- | --- | --- |
+| WebView、`@webjs` | 受控页面，延迟写入 DOM，执行加载、脚本、资源嗅探、超时和主动取消 | 阶段顺序、最终地址、脱敏结果、超时或取消分类、页面与请求是否释放 | 固定页面响应和 WebView 版本，输出地址只保留脱敏后的路径及查询键 |
+| 验证码 | 测试页面分别返回挑战、通过、失败和取消，使用人工测试账号 | 挑战出现、继续条件、重试数、终态、会话是否清理 | 只记录挑战类型与通过/失败，排除挑战响应、验证码值和页面截图中的凭据 |
+| 真实登录 | 固定未登录、已登录和失效会话，触发登录和重取请求 | 状态顺序、重取次数、头和 Cookie 键是否存在、最终书源结果、注销后状态 | 只保留字段名和是否设置，排除 token、密码、Cookie 值与认证头值 |
+| 设备值与资源 | 固定设备或模拟器版本，分别读取设备能力并取消封面下载 | 返回类型、空值或支持状态、同一会话值是否稳定、流和请求是否释放 | 设备标识只比较同次运行内的占位身份，排除原值、序列号和账号 |
+| 跨进程状态 | 测试源 A/B 使用相同键。写入空串、字节和删除标记后终止进程并重启 | 写入/读取顺序、空与缺失、恢复后的值、跨源隔离与取消后状态 | 使用合成值和临时测试状态，排除生产数据库及真实用户数据 |
+
+采集完成后由实际执行端写出 `<fixtureId>.json`，使用 [runner 输出协议](../../fixtures/conformance/runner-result.schema.json) 的 `schemaVersion`、`fixtureId`、`status` 和 `result`。另存独立的 `<fixtureId>.metadata.json`，记录上述版本、输入摘要、脱敏规则和采集时间，便于复核，避免把元数据混入比较字段。结果来自实际执行，预期文件只供比较。收集缺失时保持 `not-run`；应用已执行但不提供该能力时用 `unsupported`；执行器崩溃时用 `runner-failed`。应用正常观察到的业务失败写入 `result`，与执行器状态分开。
+
+有实际产物时，先将同输入 fixture、预期和 TS 实际断言纳入 `fixtures/conformance/manifest.json` 与 `source-cross-runtime.test.ts`。离线验收执行 `node scripts/compare-source-conformance.mjs --android <脱敏产物目录> --require-android`，保留比较器输出及运行元数据。现有比较器只处理已登记的 `source-cross-runtime.test.ts` fixture，新增宿主用例须先接入该入口。`run-source-conformance-android.mjs` 只检查产物可用性，当前没有逐例 Android 适配器。宿主结果独立归档到兼容性状态表，纯 JVM 报告中的通过数保持独立。
+
 ## 具体状态与交叉案例
 
 下表全部为设计案例，当前未执行。`fixture.invalid` 由 fake HTTP 提供，A/B 为两个不同 sourceId，s1/s2 为不同会话，v1/v2 为保存版本。缺省前置条件：预算充足、无预存数据、无用户凭据；表中“无写入”指领域存储，网络已发生等事实另外记录。有资源的案例结束均断言 operation closed、无在途请求与脚本句柄；纯值转换案例改为断言 `cleanup=not-applicable`。

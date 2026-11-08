@@ -159,6 +159,8 @@ git diff --check
 
 - F2 核对 D1–D44 的历史行及本批分类，按可执行分支关联稳定案例 ID、参考文件和任务报告。已比较的范围限于对应案例；真实宿主、仅 TS、计划外枚举和已确认差异保留独立状态。Android 基线与原算法、编排和依赖类型由 `reference-sources.json` 及实际报告记录。
 
+- F3 [真实 Android 宿主取证协议](../docs/compatibility/conformance-tests.md#真实-android-宿主取证) 列出五类宿主边界、固定输入、版本、可观察输出、脱敏和离线导入方法。用空产物目录验证 preflight 与 `--require-android` 均返回退出码 2，现有六例保持 `not-run`。未执行设备采集。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。
