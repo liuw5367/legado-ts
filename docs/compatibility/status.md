@@ -2,6 +2,14 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-08 D11：副正文取消后的同步规则续跑
+
+本轮以 Android `BookContent.analyzeContent` 的实际控制流为基准。可选 `subContent` 请求和保存位于 Kotlin `runCatching` 中；请求抛出 `CancellationException` 后，代码仍会同步执行正文 `replaceRegex` 和章节 `title` 规则，而外层协程仍保持取消，最终不会交付正文。TypeScript 原先在副文请求取消时立即返回，漏掉了这两个同步规则步骤。
+
+source-core 现在在可选副文 HTTP 请求取消后继续尝试本地替换和标题规则，记录取消结果，并在流程出口保持 `cancelled`、不交付正文。这个窄范围续跑只放宽本地规则求值的取消检查；所有宿主 bridge 仍收到原始 `AbortSignal`。兼容性 fixture 已移除原来的允许差异，改为断言取消后的 replace/title 尝试及最终取消状态；E1 正文生命周期 Kotlin/JVM guided flow 与 TS 案例 **3/3 全等**。
+
+提交：`f03d06a`（`fix(compatibility): continue Android content rules after subcontent cancellation`）。验证：`pnpm --config.verifyDepsBeforeRun=false test` **704/704**；`pnpm --config.verifyDepsBeforeRun=false run typecheck` 通过；`node packages/compatibility-tests/scripts/run.mjs --family flow` **81/81 全等**；全套兼容性集 **680 项，673 equal、5 allowed-difference、2 unsupported、0 different、0 runner-failed**。这仍是固定 Kotlin/JVM guided flow 与 TS 的证据，不是 Android app/设备实测；取消时远程 jsLib 和应用宿主状态仍未覆盖。
+
 ## 2026-10-22 P13 最终审核
 
 本轮剩余可修复和可模拟的书源规则/请求能力已完成代码与 TypeScript 回归，Android 逐 fixture 对照单独标为受阻：
@@ -245,7 +253,7 @@ P59 最终门禁：完整 Node 回归 **663/663**、书源回归 **199/199**、�
 | D8 | 安全差异 | HTTP、协议、本地地址和代理限制 | 部分实现、待 Android 验证 | [差异登记](known-divergences.md)，D8；`packages/source-node/tests/network.test.ts` | HTTP/HTTPS/SOCKS/SOCKS5 代理、URL/显式认证、代理失败不直连、`dnsIp` 冲突和 SSRF 边界有 Node 回归；待 Android 同输入 golden，安全限制继续保留 | 安全边界保留，代理已有 TS 证据 |
 | D9 | 请求差异 | bridge 子请求的动态 Header 重入 | 已修正（Node 有界模拟） | [差异登记](known-divergences.md)，D9 | 首层网络、AnalyzeUrl、批量、响应及文件/字体/归档 bridge 重算动态头，深层跳过并共享 deadline/取消和最大深度；Android golden 与非 Node 宿主仍待验证 | `flow.synthetic.dynamic-body.*` 验证首层动态头；深层限界保留 TS 证据 |
 | D10 | 生命周期差异 | `preUpdateJs` 执行时限 | 有意保留差异（P07） | [差异登记](known-divergences.md)，D10；`source-request.test.ts`、`source-request-host.test.ts` | 请求链共享 30 秒默认绝对 deadline，显式值最多 30 分钟；JS action 仍保留 TS 30 秒安全上限，Android 30 分钟仅作为未验证差异 | 安全时限保留，单列宿主取证 |
-| D11 | 生命周期差异 | `subContent` 取消语义 | 差异待处理 | [差异登记](known-divergences.md)，D11 | 主正文、诊断和最终状态完成 Android 对照与取舍记录 | E1 `flow.synthetic.content-lifecycle.*` 对照主正文取消、副文取消和普通副文失败。两端取消时不向案例调用方交付，标题步骤差异见 D11 差异登记。 |
+| D11 | 生命周期差异 | `subContent` 取消语义 | 已修正，Kotlin/JVM guided flow 与 TS 全等（f03d06a） | [差异登记](known-divergences.md)，D11 | Android `runCatching` 捕获可选副文请求取消后仍同步尝试 `replaceRegex/title`；TS 保持这两步并在出口保留取消状态，宿主 bridge 使用原取消信号 | E1 `flow.synthetic.content-lifecycle.*` **3/3 全等**，覆盖主正文取消、副文取消和普通副文失败；Android app/设备实际入口、远程 jsLib 与应用宿主状态仍待验证 |
 | D12 | 二进制差异 | 封面解密 InputStream 互操作 | 部分实现 | [差异登记](known-divergences.md)，D12 | 所需重载和 bytes 边界都有跨端 fixture | E2 对照单字节、偏移读取、EOF、返回字节与正常/异常的脚本 close，案例 `rule.coverStream.batch-*`。真实下载流的宿主清理由设备证据验证。 |
 | D13 | 二进制差异 | 图片脚本执行预算 | 部分实现 | [差异登记](known-divergences.md)，D13 | 预算、取消、资源释放和大输入行为都有跨端 fixture | TS 图片预算，设备和资源释放证据待拆分 |
 | D14 | JavaScript bridge | JavaScript bridge 逐重载覆盖 | 部分实现 | [差异登记](known-divergences.md)，D14；SourceLoginJsExtensions 纯动作入口、book/chapter 媒体更新和变量已有 Node 回归；JS 源 marshaller 已补搜索/发现 `type` 校验回退、详情前重置类型、文件源类型合并和 `downloadUrls` 归一化 | 真实书源方法逐重载通过；剪贴板、搜索/书架、图片/导航 UI 仅记录结构化动作，平台 UI、浏览器和 Android golden 仍待验证 | D1 `rule.bridgeString.batch-*` 与 D2 `rule.bridgeObjects.batch-*` 已对照对应重载及返回对象；其他签名按基础覆盖表。 |
