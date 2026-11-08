@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { createRequestPlan, splitSourceRequestUrl } from '@legado/source-core'
 import type { ArchiveHost, NetworkHost, NormalizedSource, RequestBudget, SourceFileHost, SourceFileOperation } from '@legado/source-core'
 import chardet from 'chardet'
-import { NodeArchiveHost } from './archive.ts'
+import { NodeArchiveHost, readSourceZipEntry } from './archive.ts'
 import { NodeCharsetCodec } from './charset.ts'
 import { NodeEncodingHost } from './encoding.ts'
 
@@ -76,6 +76,7 @@ export class NodeSourceFileHost implements SourceFileHost {
   private readonly encoding: NodeCharsetCodec
   private readonly binaryEncoding: NodeEncodingHost
   private readonly archive: ArchiveHost
+  private readonly usesDefaultArchive: boolean
 
   public constructor(options: NodeSourceFileHostOptions) {
     this.root = resolve(options.root ?? join(tmpdir(), 'legado-source-cache'))
@@ -84,6 +85,7 @@ export class NodeSourceFileHost implements SourceFileHost {
     this.encoding = options.encoding ?? new NodeCharsetCodec()
     this.binaryEncoding = new NodeEncodingHost()
     this.archive = options.archive ?? new NodeArchiveHost()
+    this.usesDefaultArchive = options.archive === undefined
   }
 
   public async execute(operation: SourceFileOperation, input: Readonly<Record<string, unknown>>, signal: AbortSignal, source: NormalizedSource): Promise<unknown> {
@@ -292,12 +294,13 @@ export class NodeSourceFileHost implements SourceFileHost {
 
   private async archiveContent(urlOrHex: string, path: string, format: 'zip' | 'rar' | '7z', signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<Uint8Array | undefined> {
     const bytes = /^https?:\/\//iu.test(urlOrHex) ? await this.downloadBytes(urlOrHex, signal, source, budget) : this.binaryEncoding.hexDecode(urlOrHex)
-    const entries = await this.archive.extract(bytes, format, {}, signal)
     const target = safeRelative(path)
-    const entry = entries.find((candidate) => candidate.path === target)
+    const data = format === 'zip' && this.usesDefaultArchive
+      ? readSourceZipEntry(bytes, path, signal)
+      : (await this.archive.extract(bytes, format, {}, signal)).find((entry) => entry.path === target)?.data
     // Android 的 ZIP 循环把 EOF 的 null 赋给非空 ZipEntry，缺失条目使脚本失败。
-    if (format === 'zip' && entry === undefined) throw new Error('zip entry not found')
-    return entry?.data
+    if (format === 'zip' && data === undefined) throw new Error('zip entry not found')
+    return data
   }
 
   private async downloadBytes(url: string, signal: AbortSignal, source: NormalizedSource, budget?: Partial<RequestBudget>): Promise<Uint8Array> {

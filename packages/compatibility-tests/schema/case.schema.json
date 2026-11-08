@@ -1739,6 +1739,12 @@
               },
               "authorization": {
                 "type": "string"
+              },
+              "binary": {
+                "type": "boolean"
+              },
+              "hex": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

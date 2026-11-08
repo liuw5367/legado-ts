@@ -520,7 +520,9 @@
       "archive": "string",
       "url": "string",
       "finalUrl": "string",
-      "authorization": "string"
+      "authorization": "string",
+      "binary": "boolean",
+      "hex": "boolean"
     }
   },
   "rule.legacyCrypto": {

@@ -94,7 +94,7 @@ function findEndOfCentralDirectory(bytes: Uint8Array): number {
   throw new Error('zip end of central directory is missing')
 }
 
-function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSignal, includeDirectories = false): ArchiveEntry[] {
+function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSignal, includeDirectories = false, localOrder = false): ArchiveEntry[] {
   const end = findEndOfCentralDirectory(input)
   ensureRange(input, end, 22, 'zip end of central directory is truncated')
   const count = u16(input, end + 10)
@@ -104,6 +104,7 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSign
   ensureRange(input, directoryOffset, directorySize, 'zip central directory is truncated')
   if (directoryOffset + directorySize > end) throw new Error('zip central directory is invalid')
   const result: ArchiveEntry[] = []
+  const localOffsets = localOrder ? new Map<ArchiveEntry, number>() : undefined
   let cursor = directoryOffset
   let total = 0
   let entryCount = 0
@@ -142,14 +143,23 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSign
     const data = directory ? new Uint8Array() : method === 0 ? Uint8Array.from(compressed) : method === 8 ? inflateLimited(compressed, limits.maxEntryBytes) : (() => { throw new Error(`zip compression method is unsupported: ${method}`) })()
     if (data.byteLength !== uncompressedSize || crc32(data) !== expectedCrc) throw new Error('zip entry integrity check failed')
     total += data.byteLength
-    result.push({ path: directory ? `${path}/` : path, data, compressedSize, size: uncompressedSize, crc: expectedCrc, method, ...(comment.length === 0 ? {} : { comment }) })
+    const entry = { path: directory ? `${path}/` : path, data, compressedSize, size: uncompressedSize, crc: expectedCrc, method, ...(comment.length === 0 ? {} : { comment }) }
+    result.push(entry)
+    localOffsets?.set(entry, localOffset)
   }
+  if (localOffsets !== undefined) result.sort((left, right) => localOffsets.get(left)! - localOffsets.get(right)!)
   return result
 }
 
 /** Java ZipInputStream 使用的同步解析入口；预算与普通 Node 归档宿主保持一致。 */
 export function decodeZipEntries(input: Uint8Array, signal?: AbortSignal): ArchiveEntry[] {
   return extractZip(input, defaults, signal, true)
+}
+
+/** 书源的 ZIP 单条目读取按本地记录顺序检查第 1、3、5… 个条目。 */
+export function readSourceZipEntry(input: Uint8Array, path: string, signal: AbortSignal): Uint8Array | undefined {
+  const entries = extractZip(input, defaults, signal, true, true)
+  return entries.find((entry, index) => index % 2 === 0 && entry.path === path)?.data
 }
 
 export class NodeArchiveHost implements ArchiveHost {

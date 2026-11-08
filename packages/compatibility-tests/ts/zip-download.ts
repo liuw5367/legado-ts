@@ -27,7 +27,10 @@ export async function executeZipDownload(input: Record<string, unknown>) {
     },
   })
   try {
-    const code = `JSON.stringify(java.getZipStringContent(${JSON.stringify(url)}, ${JSON.stringify(input.path)}))`
+    const archive = input.hex === true ? Buffer.from(String(input.archive), 'base64').toString('hex') : url
+    const args = `${JSON.stringify(archive)}, ${JSON.stringify(input.path)}`
+    const value = input.binary === true ? `Array.from(java.getZipByteArrayContent(${args}))` : `java.getZipStringContent(${args})`
+    const code = `JSON.stringify(${value})`
     const result = await session.run((ports) => ports.rules.evaluate({
       source, stage: 'detail', field: 'fixture', rule: `@js:${code}`, content: '',
     }))

@@ -1706,9 +1706,9 @@
     },
     {
       "operation": "rule.zipDownload",
-      "method": "getZipStringContent 远程下载和自动字符集",
+      "method": "getZipStringContent / getZipByteArrayContent · 下载、字符集和条目顺序",
       "reference": "upstream-guided-flow",
-      "tsEntry": "createNodeSourceSession → java.getZipStringContent",
+      "tsEntry": "createNodeSourceSession → java.getZipStringContent / java.getZipByteArrayContent",
       "requiredDimensions": [
         "normal",
         "edge",
@@ -1720,7 +1720,14 @@
         "rule.zipDownload.batch-bom",
         "rule.zipDownload.batch-missing",
         "rule.zipDownload.batch-corrupt",
-        "rule.zipDownload.batch-transport-failure"
+        "rule.zipDownload.batch-transport-failure",
+        "rule.zipDownload.multi-entry-1",
+        "rule.zipDownload.multi-entry-2",
+        "rule.zipDownload.multi-entry-3",
+        "rule.zipDownload.multi-entry-4",
+        "rule.zipDownload.multi-entry-5",
+        "rule.zipDownload.multi-entry-directory",
+        "rule.zipDownload.multi-entry-local-order"
       ]
     },
     {
