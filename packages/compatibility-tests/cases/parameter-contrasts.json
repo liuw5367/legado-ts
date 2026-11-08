@@ -289,9 +289,45 @@
       "edge"
     ],
     "contractScope": "reference-observation",
-    "observationReason": "原 RuleAnalyzer 独立 code 模式的转义规则没有等价 TS 参数，实际 JSON 入口覆盖引号和组合符。",
+    "observationReason": "TS 用独立 code-balanced 扫描器执行内部观察；真实 JSONPath 入口另由双端案例覆盖。",
     "relatedCases": [
       "json.list.escaped-quote-code"
     ]
+  },
+  {
+    "id": "rule.split.code-mode-or",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "x[foo(\"a\\\"||b\")]||y||z",
+      "operator": "||",
+      "code": true
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer(code=true).splitRule(String...)"
+    },
+    "tags": ["edge"],
+    "contractScope": "reference-observation",
+    "observationReason": "独立 code-balanced 切分的 || 运算符内部观察；用户规则入口由 JSONPath 流程案例验收。",
+    "relatedCases": ["json.string.combined"]
+  },
+  {
+    "id": "rule.split.code-mode-interleave",
+    "family": "rule",
+    "operation": "rule.split",
+    "input": {
+      "rule": "x[foo(\"a\\\"%%b\")]%%y%%z",
+      "operator": "%%",
+      "code": true
+    },
+    "reference": {
+      "kind": "upstream-original",
+      "method": "RuleAnalyzer(code=true).splitRule(String...)"
+    },
+    "tags": ["edge"],
+    "contractScope": "reference-observation",
+    "observationReason": "独立 code-balanced 切分的 %% 运算符内部观察；实际列表交错由 json.list 双端案例验收。",
+    "relatedCases": ["json.list.code-interleave"]
   }
 ]

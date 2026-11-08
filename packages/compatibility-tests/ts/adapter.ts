@@ -10,7 +10,7 @@ import { executeLoginHeaderFlow } from './login-header-flow.ts'
 import { executeBookFlow } from './book-flow.ts'
 import { executeCookieMap } from './cookie-map.ts'
 import { executeDateBridge } from './date-bridge.ts'
-import { splitTopLevel } from '../../source-core/src/rules/scanner.ts'
+import { replaceBalancedInnerRules, splitCodeBalanced, splitTopLevel } from '../../source-core/src/rules/scanner.ts'
 import { createNodeSourceSession, type NodeSourceRuntimeSnapshot, type NodeSourceSession } from '../../source-node/src/source-session.ts'
 import { SourceRuleHost } from '../../source-node/src/source-rule-host.ts'
 import { XPathParserAdapter } from '../../source-node/src/xpath.ts'
@@ -222,13 +222,18 @@ export async function execute(item: CaseInput): Promise<unknown> {
         return {literal:java.getString(text,false),unescaped:java.getString(text,true),fallback:java.getString(text,null,false),
           url:java.getString(url,null,true),list:java.getStringList(url,null,false),urlList:java.getStringList(url,null,true)}`, i.content)
     case 'rule.split': {
-      if (i.code === true) throw new UnsupportedOperation('TS scanner 没有独立 code 模式；代码内规则由实际 JSON/JS 入口验证')
       const operator = str('operator') as '&&' | '||' | '%%'
-      const result = splitTopLevel(str('rule'), operator)
+      const result = i.code === true ? splitCodeBalanced(str('rule'), operator) : splitTopLevel(str('rule'), operator)
       if (result.diagnostic) throw new ObservedError(result.diagnostic.code, result.diagnostic.message)
       return result.parts.map((p) => p.text)
     }
-    case 'rule.inner': throw new UnsupportedOperation('TS 没有独立 innerRule API；内嵌 JSON 规则由 json.string/json.list 案例覆盖')
+    case 'rule.inner': {
+      const values = (i.values ?? {}) as Record<string, unknown>
+      return (await replaceBalancedInnerRules(str('rule'), '{$.', (path) => {
+        const value = Object.hasOwn(values, path) ? values[path] : undefined
+        return value === undefined || value === null ? undefined : String(value)
+      })).text
+    }
     case 'regex.first':
     case 'regex.all': return script(host, `return java.${item.operation === 'regex.first' ? 'getElement' : 'getElements'}(${JSON.stringify(':' + (i.patterns as string[]).join('&&'))})`, i.text)
     case 'string.api': {

@@ -35,6 +35,35 @@ test('search workers follow link priority, refill across groups and skip stale s
   assert.equal(paths.length, groupSize * 2)
 })
 
+test('reader-web search parses Android balanced inline JSONPath in a source response', async (t) => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.9'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    searchUrl: `${base}/search?q={{key}}`,
+    ruleSearch: {
+      bookList: '$.items[*]',
+      name: "@JSON:书名：{$.labels['title}raw']}",
+      bookUrl: '@JSON:$.url',
+    },
+  }])
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    assert.equal(new URL(String(url)).pathname, '/search')
+    return new Response(JSON.stringify({ items: [{ labels: { 'title}raw': '第一章' }, url: '/book' }] }), {
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    })
+  })
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates.length, 1)
+  assert.equal(result.candidates[0]?.candidate.name, '书名：第一章')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})
+
 test('global and account execution slots are shared by concurrent operations and release by token', async () => {
   const repository = new MemoryReaderRepository(); const user = randomUUID(); const other = randomUUID()
   const leases = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY + 1 }, () => repository.acquireExecutionSlot(user, randomUUID())))

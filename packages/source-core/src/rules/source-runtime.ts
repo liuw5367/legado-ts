@@ -1,5 +1,5 @@
 import { compileRule } from './compiler.ts'
-import { scanTopLevel } from './scanner.ts'
+import { replaceBalancedInnerRules, scanTopLevel } from './scanner.ts'
 import { compileSourcePattern, replaceWithJavaReplacement } from './pattern-guard.ts'
 import { MemoryVariableView } from './variables.ts'
 import { sourceDefinitionFingerprint } from '../codec/identity.ts'
@@ -3301,16 +3301,8 @@ export class SourceRuleRuntime implements WorkflowRulePort {
   private async evaluateJson(expression: string, state: EvaluationState, content: unknown): Promise<unknown> {
     const parsed = jsonInput(content)
     if (state.expect === 'text' && scanTopLevel(expression).diagnostic?.code === 'unbalanced-rule') return []
-    const inlineRules = [...expression.matchAll(/\{(\$\.[^{}]+)\}/gu)]
-    if (inlineRules.length > 0) {
-      let expanded = expression
-      for (const match of inlineRules.reverse()) {
-        const value = await this.evaluateText(match[1]!, state, content)
-        const start = match.index!
-        expanded = `${expanded.slice(0, start)}${textValue(value)}${expanded.slice(start + match[0].length)}`
-      }
-      return expanded
-    }
+    const inlineRules = await replaceBalancedInnerRules(expression, '{$.', async (path) => textValue(await this.evaluateText(path, state, content)))
+    if (inlineRules.replaced) return inlineRules.text
     const value = this.json.evaluate(parsed, expression)
     // Android 的确定路径直接返回数组本身，jsonpath-plus 的 wrap 会再包一层；
     // 不拆开会让 `data.books` 这类列表规则只拿到一个「数组项」。

@@ -106,6 +106,136 @@ export function splitTopLevel(input: string, operator: '&&' | '||' | '%%'): { pa
   return { parts }
 }
 
+/**
+ * 按 Android `RuleAnalyzer(code=true).splitRule(...)` 的代码平衡规则切分。
+ * 只在遇到方括号/圆括号时进入代码平衡组；组内由引号与反斜线保护内容，
+ * 花括号不作为外层组合符的平衡组。Android 先选择最早出现的组合符，
+ * 再按该组合符切分当前层，剩余组合符由递归调用处理。
+ */
+export function splitCodeBalancedAny(
+  input: string,
+  operators: readonly ('&&' | '||' | '%%')[],
+): { operator?: '&&' | '||' | '%%'; parts: Array<{ text: string; start: number; end: number }>; diagnostic?: RuleDiagnostic } {
+  const findNext = (from: number, selected: readonly ('&&' | '||' | '%%')[]) => {
+    let cursor = from
+    while (cursor < input.length) {
+      let groupStart = -1
+      for (let index = cursor; index < input.length; index += 1) {
+        if (input[index] === '[' || input[index] === '(') {
+          groupStart = index
+          break
+        }
+      }
+      let delimiter = -1
+      let delimiterOperator: '&&' | '||' | '%%' | undefined
+      for (let index = cursor; index < input.length; index += 1) {
+        const found = selected.find((operator) => input.startsWith(operator, index))
+        if (found !== undefined) {
+          delimiter = index
+          delimiterOperator = found
+          break
+        }
+      }
+      if (delimiter < 0) return { delimiter, delimiterOperator }
+      if (groupStart < 0 || delimiter < groupStart) return { delimiter, delimiterOperator }
+      const end = chompCodeBalancedEnd(input, groupStart, input[groupStart] as '[' | '(')
+      if (end === undefined) return { delimiter: -1, diagnostic: diagnostic('代码规则分组不平衡', { start: groupStart, end: input.length }) }
+      cursor = end
+    }
+    return { delimiter: -1, delimiterOperator: undefined }
+  }
+
+  const first = findNext(0, operators)
+  if (first.diagnostic !== undefined) return { parts: [], diagnostic: first.diagnostic }
+  if (first.delimiter < 0 || first.delimiterOperator === undefined) {
+    return { parts: [{ text: input, start: 0, end: input.length }] }
+  }
+
+  const operator = first.delimiterOperator
+  const parts: Array<{ text: string; start: number; end: number }> = []
+  let start = 0
+  let next = first.delimiter
+  while (next >= 0) {
+    parts.push({ text: input.slice(start, next), start, end: next })
+    start = next + operator.length
+    const found = findNext(start, [operator])
+    if (found.diagnostic !== undefined) return { parts: [], diagnostic: found.diagnostic }
+    next = found.delimiter
+  }
+  parts.push({ text: input.slice(start), start, end: input.length })
+  return { operator, parts }
+}
+
+/** 按指定组合符直接观察 Android `RuleAnalyzer(code=true).splitRule(operator)`。 */
+export function splitCodeBalanced(input: string, operator: '&&' | '||' | '%%'): { parts: Array<{ text: string; start: number; end: number }>; diagnostic?: RuleDiagnostic } {
+  const result = splitCodeBalancedAny(input, [operator])
+  return { parts: result.parts, ...(result.diagnostic === undefined ? {} : { diagnostic: result.diagnostic }) }
+}
+
+/** 与 RuleAnalyzer.chompCodeBalanced 一致，返回平衡分组的 UTF-16 结束偏移。 */
+function chompCodeBalancedEnd(input: string, start: number, open: '[' | '(' | '{', close = open === '[' ? ']' : open === '(' ? ')' : '}'): number | undefined {
+  let index = start
+  let squareDepth = 0
+  let groupDepth = 0
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  do {
+    if (index >= input.length) break
+    const current = input[index++]!
+    if (current !== '\\') {
+      if (current === "'" && !inDoubleQuote) inSingleQuote = !inSingleQuote
+      else if (current === '"' && !inSingleQuote) inDoubleQuote = !inDoubleQuote
+      if (inSingleQuote || inDoubleQuote) continue
+      if (current === '[') squareDepth += 1
+      else if (current === ']') squareDepth -= 1
+      else if (squareDepth === 0) {
+        if (current === open) groupDepth += 1
+        else if (current === close) groupDepth -= 1
+      }
+    } else index += 1
+  } while (squareDepth > 0 || groupDepth > 0)
+  return squareDepth > 0 || groupDepth > 0 ? undefined : index
+}
+
+/**
+ * 使用 Android JSONPath `innerRule("{$.")` 的代码平衡边界替换内嵌路径。
+ * 空回调结果不计为替换，并按 Android 继续前移起始标记长度；若之后仍找到成功项，
+ * 未命中项原样保留；若全未命中，调用方收到 `replaced: false` 并回退为整条 JSONPath 查询。
+ */
+export async function replaceBalancedInnerRules(
+  input: string,
+  inner: string,
+  resolve: (expression: string) => string | null | undefined | Promise<string | null | undefined>,
+  startStep = 1,
+  endStep = 1,
+): Promise<{ text: string; replaced: boolean }> {
+  let output = ''
+  let outputStart = 0
+  let searchFrom = 0
+  let replaced = false
+  while (searchFrom < input.length) {
+    const start = input.indexOf(inner, searchFrom)
+    if (start < 0) break
+    const end = chompCodeBalancedEnd(input, start, '{')
+    if (end === undefined) {
+      searchFrom = start + inner.length
+      continue
+    }
+    const expression = input.slice(start + startStep, end - endStep)
+    const value = await resolve(expression)
+    if (value !== null && value !== undefined && value.length > 0) {
+      output += input.slice(outputStart, start) + value
+      outputStart = end
+      replaced = true
+      searchFrom = end
+    } else {
+      // Android 在空回调后仍从当前位置额外前移 inner.length；紧邻的标记可能因此被跳过。
+      searchFrom = end + inner.length
+    }
+  }
+  return replaced ? { text: output + input.slice(outputStart), replaced: true } : { text: '', replaced: false }
+}
+
 export function splitReplacement(input: string): { parts: string[]; diagnostic?: RuleDiagnostic } {
   const scanned = scanTopLevel(input)
   if (scanned.diagnostic !== undefined) return { parts: [], diagnostic: scanned.diagnostic }

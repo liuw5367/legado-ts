@@ -224,6 +224,42 @@
     ]
   },
   {
+    "id": "json.list.code-interleave",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.left[*].name%%$.right[*]",
+      "content": "{\"left\":[{\"name\":\"甲\"},{\"name\":\"乙\"}],\"right\":[\"丙\",\"丁\",\"戊\"]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String) · RuleAnalyzer code-balanced %% composition"
+    },
+    "tags": ["edge", "code-mode", "composition"],
+    "expected": {
+      "outcome": "return",
+      "value": ["甲", "丙", "乙", "丁"]
+    }
+  },
+  {
+    "id": "json.list.code-composition-left-first",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "rule": "$.left[*].name&&$.middle[*].name||$.right[*].name",
+      "content": "{\"left\":[{\"name\":\"甲\"}],\"middle\":[],\"right\":[{\"name\":\"丙\"}]}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String) · first code-balanced operator and recursive branch evaluation"
+    },
+    "tags": ["edge", "code-mode", "composition"],
+    "expected": {
+      "outcome": "return",
+      "value": ["甲", "丙"]
+    }
+  },
+  {
     "id": "json.string.inline",
     "family": "json",
     "operation": "json.string",
@@ -361,6 +397,78 @@
     "expected": {
       "outcome": "return",
       "value": "x中文"
+    }
+  },
+  {
+    "id": "json.string.inner-brace-in-quoted-key",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"chapter\":{\"title}raw\":\"第一章\"}}",
+      "rule": "书名：{$.chapter['title}raw']}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String) · RuleAnalyzer.innerRule code-balanced key"
+    },
+    "tags": ["edge", "inner-rule"],
+    "expected": {
+      "outcome": "return",
+      "value": "书名：第一章"
+    }
+  },
+  {
+    "id": "json.string.inner-empty-callback-skips-adjacent",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"name\":\"中文\"}",
+      "rule": "{$.missing}+{$.name}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String) · innerRule empty callback advances marker length"
+    },
+    "tags": ["edge", "inner-rule", "empty"],
+    "expected": {
+      "outcome": "return",
+      "value": ""
+    }
+  },
+  {
+    "id": "json.string.inner-empty-callback-resumes-after-gap",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"name\":\"中文\"}",
+      "rule": "{$.missing}----{$.name}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String) · innerRule resumes beyond marker advance"
+    },
+    "tags": ["edge", "inner-rule", "empty"],
+    "expected": {
+      "outcome": "return",
+      "value": "{$.missing}----中文"
+    }
+  },
+  {
+    "id": "json.string.inner-all-unresolved",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"name\":\"中文\"}",
+      "rule": "前缀{$.missing}"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String) · innerRule fallback to direct path"
+    },
+    "tags": ["edge", "inner-rule", "empty"],
+    "expected": {
+      "outcome": "return",
+      "value": ""
     }
   },
   {

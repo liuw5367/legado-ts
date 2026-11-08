@@ -43,7 +43,7 @@ CLI 参数错误、空选择、来源失败或 API 执行不完整退出 2。API
 
 书源脚本用例使用固定上游提交中的 Rhino 二进制，执行前验证摘要。JVM 参考按上游顺序组合解析、替换和脚本求值，节点与书籍变量来自离线夹具。纯章节数字方法从校验过摘要的上游文件提取并编译。
 
-TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 JsonPathParserAdapter。JSON 字符串/列表通过真实 Java bridge 转换；CSS 字段列表按对应接口合并或保留条目顺序；正则链直接调用实际 java.getElement/getElements，覆盖首个与全部匹配及失败终态。不能在参考执行器中重新实现待比较算法。独立 `innerRule` 在 TS 无对应入口，当前显式报告 unsupported；JSONPath 内嵌规则另有双端案例。
+TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJS Java bridge 与 JsonPathParserAdapter。JSON 字符串/列表通过真实 Java bridge 转换；CSS 字段列表按对应接口合并或保留条目顺序；正则链直接调用实际 java.getElement/getElements，覆盖首个与全部匹配及失败终态。不能在参考执行器中重新实现待比较算法。`innerRule` 是 Android 内部方法，TS 用生产扫描器的同一平衡替换算法执行参考观察；用户可见行为仍以真实 `json.string`/`json.list` bridge 案例验收。`splitRule(code=true)` 使用独立代码平衡扫描器，JSON 组合编译也按 Android 首个组合符递归处理，并由生产入口案例覆盖。
 
 `date-bridge` 族通过固定 Rhino 调用锁定 `JsExtensions.kt` 的 `timeFormat/timeFormatUTC`，TS 则执行实际 QuickJS `java.timeFormat/timeFormatUTC` bridge 和 Node formatter。每条案例固定 JVM 默认 Locale/TimeZone，并在 TS 配置相同值；它比较 pattern 输出及 JS `catch` 后续行为，不把 JDK 结果外推为所有 Android 设备 Locale、时区或 WebView Java bridge 的 golden。
 

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { compileRule, compileSourcePattern, evaluateRule, inspectRuleCapabilities, MemoryVariableView } from '../src/index.ts'
 import type { CompiledRule, NormalizedSource, RuleContext } from '../src/index.ts'
+import { replaceBalancedInnerRules, splitCodeBalanced } from '../src/rules/scanner.ts'
 
 const source = { bookSourceUrl: 'https://example.test', bookSourceName: 'Example' } as NormalizedSource
 
@@ -21,6 +22,55 @@ test('顶层组合符避开括号、方括号、字符串和模板插值', () =>
   assert.deepEqual(result.diagnostics, [])
   assert.equal(result.rule?.kind, 'sequence')
   assert.equal(result.rule?.kind === 'sequence' ? result.rule.children.length : 0, 2)
+})
+
+test('Android 内嵌规则扫描保留平衡边界、替换顺序和空结果语义', async () => {
+  const values = { '$.name': '中文', '$.chapter.title': '第一章', "$.a['b}c']": '括号内的花括号' }
+  const resolve = (expression: string) => values[expression as keyof typeof values] ?? ''
+
+  assert.deepEqual(await replaceBalancedInnerRules('书名{$.name}', '{$.', resolve), {
+    text: '书名中文',
+    replaced: true,
+  })
+  assert.deepEqual(await replaceBalancedInnerRules('书名{$.name} / {$.missing}', '{$.', resolve), {
+    text: '书名中文 / {$.missing}',
+    replaced: true,
+  })
+  assert.deepEqual(await replaceBalancedInnerRules('{$.missing}+{$.name}', '{$.', resolve), {
+    text: '',
+    replaced: false,
+  })
+  assert.deepEqual(await replaceBalancedInnerRules('{$.missing}----{$.name}', '{$.', resolve), {
+    text: '{$.missing}----中文',
+    replaced: true,
+  })
+  assert.deepEqual(await replaceBalancedInnerRules("x{$.a['b}c']}y", '{$.', resolve), {
+    text: 'x括号内的花括号y',
+    replaced: true,
+  })
+  assert.deepEqual(await replaceBalancedInnerRules('x{$.missing}', '{$.', resolve), {
+    text: '',
+    replaced: false,
+  })
+  assert.deepEqual(await replaceBalancedInnerRules('x{$.name', '{$.', resolve), {
+    text: '',
+    replaced: false,
+  })
+})
+
+test('代码平衡切分与 Android RuleAnalyzer.splitRule 一致', () => {
+  const result = splitCodeBalanced('x[foo("a\\"&&b")]&&y', '&&')
+  assert.deepEqual(result.parts.map((part) => part.text), ['x[foo("a\\"&&b")]', 'y'])
+})
+
+test('JSON 组合规则按 Android 首个组合符递归编译', () => {
+  const result = compileRule('$.left[*].name&&$.middle[*].name||$.right[*].name')
+  assert.deepEqual(result.diagnostics, [])
+  assert.equal(result.rule?.kind, 'sequence')
+  if (result.rule?.kind !== 'sequence') return
+  assert.equal(result.rule.operator, '&&')
+  assert.equal(result.rule.children[1]?.kind, 'sequence')
+  if (result.rule.children[1]?.kind === 'sequence') assert.equal(result.rule.children[1].operator, '||')
 })
 
 test('模式识别按前缀大小写和 allInOne 规则工作', () => {

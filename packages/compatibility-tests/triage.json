@@ -468,9 +468,11 @@
         "output/run-YJF6TX/jvm.json",
         "output/run-YJF6TX/ts.json",
         "output/run-aY0Xdr/report.json",
-        "output/run-IFYm3y/report.json"
+        "output/run-IFYm3y/report.json",
+        "output/run-ZKJgwG/report.json",
+        "output/run-qLggeb/report.json"
       ],
-      "resolution": "保留内部观察，json.string.inner-reference 已以真实 bridge 执行通过；未计入 API 覆盖通过"
+      "resolution": "TS 已实现 Android 相同的平衡边界与空回调前移语义；该内部方法仍标记为参考观察，真实 json.string 内嵌路径案例负责验证产品入口。"
     },
     {
       "id": "C2-UTF8",
@@ -775,9 +777,30 @@
       ]
     },
     {
+      "id": "C8-JSON-COMPOSITION",
+      "caseIds": [
+        "json.list.code-composition-left-first"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSonPath.getStringList(String) · RuleAnalyzer(code=true)"
+      },
+      "tsEntry": "compileRule → splitCodeBalancedAny → SourceRuleRuntime JSON evaluation",
+      "evidence": [
+        "output/run-z5tPKj/report.json",
+        "output/run-qLggeb/report.json"
+      ],
+      "resolution": "按 Android 首个顶层组合符切分并递归求值；空列表不会提前终止外层组合规则。"
+    },
+    {
       "id": "C1-CODE-OBSERVATION",
       "caseIds": [
-        "rule.split.code-mode"
+        "rule.split.code-mode",
+        "rule.split.code-mode-or",
+        "rule.split.code-mode-interleave"
       ],
       "classification": "reference-observation",
       "state": "resolved",
@@ -786,9 +809,10 @@
         "kind": "upstream-original",
         "method": "RuleAnalyzer(code=true).splitRule(String...)"
       },
-      "tsEntry": "关联 json.list.escaped-quote-code",
+      "tsEntry": "source-core/src/rules/scanner.ts → splitCodeBalancedAny；JSON 生产编译入口",
       "evidence": [
-        "output/run-yVxuRu/report.json"
+        "output/run-ZKJgwG/report.json",
+        "output/run-qLggeb/report.json"
       ]
     },
     {

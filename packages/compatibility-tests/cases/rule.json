@@ -138,10 +138,10 @@
       "method": "RuleAnalyzer.innerRule(String,Int,Int,callback)"
     },
     "tags": [
-      "unsupported"
+      "edge"
     ],
     "contractScope": "reference-observation",
-    "observationReason": "原 RuleAnalyzer 内部回调方法无对应公开 TS API，规则能力由相同 name 值的 JSON 内嵌案例验证",
+    "observationReason": "innerRule 是 Android 内部方法；TS 用相同扫描器算法执行此观察，产品入口由 JSONPath 双端案例验证。",
     "relatedCases": [
       "json.string.inner-reference"
     ]

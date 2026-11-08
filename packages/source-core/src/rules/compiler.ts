@@ -1,4 +1,4 @@
-import { splitReplacement, splitTopLevel } from './scanner.ts'
+import { splitCodeBalancedAny, splitReplacement, splitTopLevel } from './scanner.ts'
 import { compileSourcePattern } from './pattern-guard.ts'
 import type {
   CompiledRule,
@@ -264,6 +264,28 @@ function compileInternal(input: string, span: RuleSpan, options: RuleCompileOpti
   // ## 属于整条选择表达式。只将替换之前的内容交给组合符扫描。
   const replacementParts = !leadingRegex && trimmed.text.includes('##') ? splitReplacement(trimmed.text).parts : []
   const selection = replacementParts[0] ?? trimmed.text
+  const jsonSelection = modeOf(selection, options.allInOne ?? true, options.defaultMode).mode === 'Json'
+  const hasRuleDirectives = /@(?:put|get):/iu.test(selection) || selection.includes('{{')
+  if (jsonSelection && !hasRuleDirectives) {
+    const split = splitCodeBalancedAny(selection, ['&&', '||', '%%'])
+    if (split.diagnostic !== undefined) {
+      return { diagnostics: [{ ...split.diagnostic, span: { start: trimmed.span.start + split.diagnostic.span!.start, end: trimmed.span.start + split.diagnostic.span!.end } }] }
+    }
+    if (split.operator !== undefined) {
+      if (replacementParts.length > 4) return { diagnostics: [{ code: 'unbalanced-rule', message: '替换表达式最多包含规则、匹配、替换和首项标记四段', span: trimmed.span, canContinue: false }] }
+      const children: CompiledRule[] = []
+      const diagnostics: RuleDiagnostic[] = []
+      for (const part of split.parts) {
+        const child = compileInternal(part.text, { start: trimmed.span.start + part.start, end: trimmed.span.start + part.end }, options)
+        diagnostics.push(...child.diagnostics)
+        if (child.rule !== undefined) children.push(child.rule)
+      }
+      if (diagnostics.length > 0) return { diagnostics }
+      const sequence: RuleSequence = { kind: 'sequence', operator: split.operator, source: trimmed.text, span: trimmed.span, children, capabilities: uniqueCapabilities(children) }
+      if (replacementParts.length >= 2) sequence.replacement = { pattern: replacementParts[1]!, replacement: replacementParts[2] ?? '', firstMatchOnly: replacementParts.length === 4 }
+      return { rule: sequence, diagnostics }
+    }
+  }
   const precedence: Array<'||' | '%%' | '&&'> = leadingRegex ? ['%%'] : ['||', '%%', '&&']
   for (const operator of precedence) {
     const split = splitTopLevel(selection, operator)

@@ -477,6 +477,10 @@
         "json.string.invalid-json",
         "json.string.invalid-path",
         "json.string.inner-reference",
+        "json.string.inner-brace-in-quoted-key",
+        "json.string.inner-empty-callback-skips-adjacent",
+        "json.string.inner-empty-callback-resumes-after-gap",
+        "json.string.inner-all-unresolved",
         "json.string.string-null",
         "json.string.array-null",
         "json.string.array-empty",
@@ -519,6 +523,8 @@
         "json.list.empty",
         "json.list.filter",
         "json.list.combined",
+        "json.list.code-interleave",
+        "json.list.code-composition-left-first",
         "json.list.inline",
         "json.list.invalid-json",
         "json.list.invalid-path",
@@ -1443,7 +1449,9 @@
         "edge"
       ],
       "caseIds": [
-        "rule.split.code-mode"
+        "rule.split.code-mode",
+        "rule.split.code-mode-or",
+        "rule.split.code-mode-interleave"
       ]
     },
     {
