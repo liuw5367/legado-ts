@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { exportSource, importSources, normalizeRelaxedJson, parseRelaxedJson, sameSourceDefinition } from '../src/index.ts'
+import { exportSource, importSources, normalizeRelaxedJson, parseRelaxedJson, parseRelaxedJsonPreservingKeyOrder, sameSourceDefinition } from '../src/index.ts'
 
 const source = {
   bookSourceUrl: 'https://example.test/books',
@@ -95,6 +95,19 @@ test('宽松 JSON 只在字符串外处理注释、尾逗号和单引号转义',
     text: 'literal ,} {raw: value} // keep',
     nested: '{notAKey: 1,}',
   })
+})
+
+test('JSONPath 输入保留对象文本中的键顺序', () => {
+  const value = parseRelaxedJsonPreservingKeyOrder('{"record":{"z":1,"a":2,"10":10,"2":2},"rows":[{"b":1,"1":1,"a":2}]}') as {
+    record: Record<string, unknown>
+    rows: Array<Record<string, unknown>>
+  }
+  assert.deepEqual(Object.keys(value.record), ['z', 'a', '10', '2'])
+  assert.deepEqual(Object.keys(value.rows[0]!), ['b', '1', 'a'])
+  assert.deepEqual(parseRelaxedJsonPreservingKeyOrder("{record:{z:1,a:2,'10':10,'2':2,}}"), {
+    record: { z: 1, a: 2, 10: 10, 2: 2 },
+  })
+  assert.equal(parseRelaxedJsonPreservingKeyOrder('{record:'), undefined)
 })
 
 test('宽松 JSON 拒绝未闭合块注释和字符串，但保留行注释到文本末尾', () => {

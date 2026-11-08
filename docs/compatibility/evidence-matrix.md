@@ -89,6 +89,14 @@
 | 音频、图片、视频和文件结果 | 目标必须兼容 | `BookSource.bookSourceType`、`Book`、`BookChapter`、相关调用点 | 音视频声明式正文跳过文本格式化，`subContent` 歌词/弹幕已写入章节变量并返回辅助结果；图片解密由 `decodeImage` 执行，实际下载/缓存及文件下载由宿主负责 |
 | 编辑器预览与诊断 | 目标设计 | `modules/web` 配置和测试 | 仅规划，未实现独立编辑器 |
 
+## 2026-11-09 P2：JSONPath 函数与对象键顺序
+
+固定 Android Java/Kotlin 源码和依赖的 Kotlin/JVM 参考端，对 TypeScript 执行相同输入。新增 25 个 JSONPath 案例覆盖常用函数的普通输入、混合类型、空集合、对象键顺序，以及 `AnalyzeByJSonPath.getString/getStringList` 的结果转换。`coverage.json` 将 `read`、`filter` 和 `length/size/keys/min/max/avg/sum` 逐项关联到通过案例；`method-manifest.json` 中对应的 9 个成员均为 `ts-passed`。JSONPath 总计 **105/105 行为相等**；空聚合的四个函数两端都抛错，异常类和文案按 `empty-aggregate` 等价，原始结果仍保存在报告中。
+
+| 范围 | evidence | spec | implementation | execution | priority |
+| --- | --- | --- | --- | --- | --- |
+| D20 `read/filter/length/size/keys/min/max/avg/sum` | Android source + 固定 Kotlin/JVM 与 TS 同输入执行 | defined（coverage 所列案例） | partial | 105/105 行为相等；完整 JSONPath 方言、`stddev/first/last/index/concat/append`、复杂参数与动态表达式未覆盖，Android app/设备仍 not-run | required |
+
 ## Android 证据索引
 
 能力 ID 以 [能力清单的稳定索引](capabilities.md#稳定能力索引) 为准。上表是阅读摘要，不能替代逐字段/逐方法审计。TypeScript 实现已存在；未跑的对照案例仍为 `execution=not-run`。“目标必须兼容”不等于规格已完整。订阅、状态隔离与部署策略是 Web 目标设计，分别由 SUB、STATE、DEP 案例验证。

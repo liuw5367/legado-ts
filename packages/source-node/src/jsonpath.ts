@@ -1,5 +1,5 @@
 import { JSONPath } from 'jsonpath-plus'
-import { parseRelaxedJson, ParserAdapterError, type JsonPathParser, type RuleValue } from '@legado/source-core'
+import { parseRelaxedJson, parseRelaxedJsonPreservingKeyOrder, ParserAdapterError, type JsonPathParser, type RuleValue } from '@legado/source-core'
 
 export class JsonPathParserAdapter implements JsonPathParser {
   public evaluate(value: unknown, expression: string): RuleValue | null {
@@ -189,7 +189,7 @@ function parseJsonPathArguments(root: unknown, value: string): unknown[] {
     // JSON parameters. Bare booleans/null are ignored instead of becoming
     // stringified values in concat or numeric arguments.
     if (/^(?:true|false|null)$/u.test(part)) return undefined
-    const parsed = parseRelaxedJson(part)
+    const parsed = parseRelaxedJsonPreservingKeyOrder(part)
     if (parsed === undefined) throw new ParserAdapterError('unsupported-jsonpath', `JSONPath 函数参数无法解析：${part}`)
     return parsed
   })

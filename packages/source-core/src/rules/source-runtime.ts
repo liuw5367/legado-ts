@@ -3,7 +3,7 @@ import { replaceBalancedInnerRules, scanTopLevel } from './scanner.ts'
 import { compileSourcePattern, replaceWithJavaReplacement } from './pattern-guard.ts'
 import { MemoryVariableView } from './variables.ts'
 import { sourceDefinitionFingerprint } from '../codec/identity.ts'
-import { parseRelaxedJson } from '../codec/relaxed-json.ts'
+import { parseRelaxedJsonPreservingKeyOrder } from '../codec/relaxed-json.ts'
 import { MemorySourceScriptCache } from '../runtime/source-session.ts'
 import { replaceFont } from '../runtime/font.ts'
 import type {
@@ -2486,7 +2486,7 @@ function isVariableScope(value: unknown): value is JavaScriptVariableScope {
 function jsonInput(value: unknown): unknown {
   if (typeof value !== 'string') return value
   // Jayway 接受单引号、未引号键和尾逗号；复用数据语法解析器，不把解析失败作为字符串查询。
-  const parsed = parseRelaxedJson(value)
+  const parsed = parseRelaxedJsonPreservingKeyOrder(value)
   if (parsed === undefined) throw new SourceRuleError('failed', 'invalid JSON input')
   return parsed
 }

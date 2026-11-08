@@ -2,7 +2,7 @@ import { executeInfoMap } from './info-map.ts'
 import { executeMainJsFlow } from './main-js-flow.ts'
 import { executeRedirect } from './redirect.ts'
 import { executeZipDownload } from './zip-download.ts'
-import { decodeImage } from '../../source-core/src/index.ts'
+import { decodeImage, parseRelaxedJsonPreservingKeyOrder } from '../../source-core/src/index.ts'
 import { splitSourceRequestUrl } from '../../source-core/src/runtime/request-url.ts'
 import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeContentBatchFlow } from './content-batch-flow.ts'
@@ -284,7 +284,12 @@ export async function execute(item: CaseInput): Promise<unknown> {
       return { url: parsed.url, options: parsed.options ?? null }
     }
     case 'json.continue': return script(host, `return {first:java.getStringList(${JSON.stringify('@json:' + str('rule'))}),next:java.getString(${JSON.stringify('@json:' + str('nextRule'))})}`, i.content)
-    case 'json.read': return new JsonPathParserAdapter().evaluate(JSON.parse(str('content')), str('rule'))
+    case 'json.read': {
+      const content = str('content')
+      const parsed = parseRelaxedJsonPreservingKeyOrder(content)
+      if (parsed === undefined) throw new Error('invalid JSON input')
+      return new JsonPathParserAdapter().evaluate(parsed, str('rule'))
+    }
     case 'json.string': return script(host, `return java.getString(${JSON.stringify('@json:' + str('rule'))})`, i.content)
     case 'json.list': return script(host, `return java.getStringList(${JSON.stringify('@json:' + str('rule'))})`, i.content)
     case 'xpath.string': return script(host, `return java.getString(${JSON.stringify('@xpath:' + str('rule'))})`, i.content)

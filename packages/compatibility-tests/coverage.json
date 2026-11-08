@@ -505,7 +505,8 @@
         "json.string.nested-fallback-missing",
         "json.string.nested-fallback-empty",
         "json.string.nested-fallback-non-empty",
-        "json.string.nested-fallback-array-null"
+        "json.string.nested-fallback-array-null",
+        "json.string.keys.object-order"
       ]
     },
     {
@@ -549,7 +550,8 @@
         "json.list.nested-fallback-missing",
         "json.list.nested-fallback-empty",
         "json.list.nested-fallback-non-empty",
-        "json.list.nested-fallback-array-null"
+        "json.list.nested-fallback-array-null",
+        "json.list.keys.object-order"
       ]
     },
     {
@@ -599,7 +601,132 @@
         "json.read.nested-fallback-null",
         "json.read.nested-fallback-empty",
         "json.read.nested-fallback-non-empty"
+      ],
+      "manifestMembers": [
+        "parser-jsonpath::001-read",
+        "parser-jsonpath::009-filter"
       ]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function length()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → length()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.length.array",
+        "json.read.length.object",
+        "json.read.length.text",
+        "json.read.length.empty"
+      ],
+      "manifestMembers": ["parser-jsonpath::002-length"]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function size()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → size()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.size.array",
+        "json.read.size.object",
+        "json.read.size.text",
+        "json.read.size.empty"
+      ],
+      "manifestMembers": ["parser-jsonpath::003-size"]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function keys()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → keys()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.keys.object-order",
+        "json.read.keys.empty",
+        "json.read.keys.scalar"
+      ],
+      "manifestMembers": ["parser-jsonpath::004-keys"]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function min()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → min()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.min.numbers",
+        "json.read.min.mixed",
+        "json.read.min.empty"
+      ],
+      "manifestMembers": ["parser-jsonpath::005-min"]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function max()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → max()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.max.numbers",
+        "json.read.max.mixed",
+        "json.read.max.empty"
+      ],
+      "manifestMembers": ["parser-jsonpath::006-max"]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function avg()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → avg()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.avg.fraction",
+        "json.read.avg.mixed",
+        "json.read.avg.empty"
+      ],
+      "manifestMembers": ["parser-jsonpath::007-avg"]
+    },
+    {
+      "operation": "json.read",
+      "method": "JsonPath path function sum()",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-node/src/jsonpath.ts → sum()",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "json.read.sum.numbers",
+        "json.read.sum.mixed",
+        "json.read.sum.empty"
+      ],
+      "manifestMembers": ["parser-jsonpath::008-sum"]
     },
     {
       "operation": "json.continue",

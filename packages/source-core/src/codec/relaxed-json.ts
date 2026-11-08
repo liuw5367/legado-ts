@@ -9,6 +9,124 @@ export function parseRelaxedJson(input: string): unknown {
   try { return JSON.parse(normalizeRelaxedJson(trimmed)) as unknown } catch { return undefined }
 }
 
+/** 解析 JSONPath 输入并保留 JSON 文本中的对象键顺序，包括整数样式的键。 */
+export function parseRelaxedJsonPreservingKeyOrder(input: string): unknown {
+  const trimmed = input.replace(/^\uFEFF/u, '').trim()
+  let normalized = trimmed
+  try {
+    JSON.parse(normalized)
+  } catch {
+    try {
+      normalized = normalizeRelaxedJson(trimmed)
+      JSON.parse(normalized)
+    } catch {
+      return undefined
+    }
+  }
+  const value = parseRelaxedJson(input)
+  if (value === undefined) return undefined
+  return restoreJsonKeyOrder(value, parseJsonOrderShape(normalized))
+}
+
+type JsonOrderShape =
+  | { kind: 'object'; keys: string[]; children: Map<string, JsonOrderShape> }
+  | { kind: 'array'; children: JsonOrderShape[] }
+  | undefined
+
+/** 记录每个 JSON 对象的文本键序，供 Proxy 枚举时覆盖 JS 的整数键排序。 */
+function parseJsonOrderShape(input: string): JsonOrderShape {
+  let offset = 0
+  const skipWhitespace = (): void => {
+    while (/\s/u.test(input[offset] ?? '')) offset += 1
+  }
+  const readString = (): string => {
+    const start = offset
+    offset += 1
+    let escaped = false
+    while (offset < input.length) {
+      const current = input[offset++]!
+      if (escaped) escaped = false
+      else if (current === '\\') escaped = true
+      else if (current === '"') return JSON.parse(input.slice(start, offset)) as string
+    }
+    throw new SyntaxError('JSON 对象键未闭合')
+  }
+  const readValue = (): JsonOrderShape => {
+    skipWhitespace()
+    const current = input[offset]
+    if (current === '{') {
+      offset += 1
+      const keys: string[] = []
+      const children = new Map<string, JsonOrderShape>()
+      skipWhitespace()
+      if (input[offset] === '}') { offset += 1; return { kind: 'object', keys, children } }
+      while (offset < input.length) {
+        skipWhitespace()
+        const key = readString()
+        skipWhitespace()
+        if (input[offset] !== ':') throw new SyntaxError('JSON 对象键缺少冒号')
+        offset += 1
+        const child = readValue()
+        if (!children.has(key)) keys.push(key)
+        children.set(key, child)
+        skipWhitespace()
+        if (input[offset] === '}') { offset += 1; return { kind: 'object', keys, children } }
+        if (input[offset] !== ',') throw new SyntaxError('JSON 对象成员缺少逗号')
+        offset += 1
+      }
+      throw new SyntaxError('JSON 对象未闭合')
+    }
+    if (current === '[') {
+      offset += 1
+      const children: JsonOrderShape[] = []
+      skipWhitespace()
+      if (input[offset] === ']') { offset += 1; return { kind: 'array', children } }
+      while (offset < input.length) {
+        children.push(readValue())
+        skipWhitespace()
+        if (input[offset] === ']') { offset += 1; return { kind: 'array', children } }
+        if (input[offset] !== ',') throw new SyntaxError('JSON 数组成员缺少逗号')
+        offset += 1
+      }
+      throw new SyntaxError('JSON 数组未闭合')
+    }
+    if (current === '"') { readString(); return undefined }
+    const start = offset
+    // 字符串由前一分支处理；标量在空白或 JSON 结构分隔符处结束。
+    while (offset < input.length && !/[\s,}\]]/u.test(input[offset]!)) offset += 1
+    if (offset === start) throw new SyntaxError('JSON 值为空')
+    return undefined
+  }
+  const shape = readValue()
+  skipWhitespace()
+  if (offset !== input.length) throw new SyntaxError('JSON 文本包含多余内容')
+  return shape
+}
+
+function restoreJsonKeyOrder(value: unknown, shape: JsonOrderShape): unknown {
+  if (shape?.kind === 'array' && Array.isArray(value)) {
+    return value.map((item, index) => restoreJsonKeyOrder(item, shape.children[index]))
+  }
+  if (shape?.kind !== 'object' || value === null || typeof value !== 'object' || Array.isArray(value)) return value
+
+  const source = value as Record<string, unknown>
+  const target = Object.create(Object.getPrototypeOf(value)) as Record<string, unknown>
+  for (const key of Object.keys(source)) {
+    Object.defineProperty(target, key, {
+      value: restoreJsonKeyOrder(source[key], shape.children.get(key)),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+  }
+  return new Proxy(target, {
+    ownKeys(current) {
+      const known = shape.keys.filter((key) => Object.hasOwn(current, key))
+      return [...known, ...Reflect.ownKeys(current).filter((key) => typeof key !== 'string' || !known.includes(key))]
+    },
+  })
+}
+
 export function normalizeRelaxedJson(input: string): string {
   let result = ''
   let quote: 'single' | 'double' | null = null

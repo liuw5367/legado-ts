@@ -1252,5 +1252,427 @@
         ]
       ]
     }
+  },
+  {
+    "id": "json.read.length.array",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,4,6]}",
+      "rule": "$.values.length()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [3]}
+  },
+  {
+    "id": "json.read.length.object",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"record\":{\"z\":1,\"a\":2}}",
+      "rule": "$.record.length()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [2]}
+  },
+  {
+    "id": "json.read.length.text",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"text\":\"abc\"}",
+      "rule": "$.text.length()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [null]}
+  },
+  {
+    "id": "json.read.length.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[]}",
+      "rule": "$.values.length()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge", "empty"],
+    "expected": {"outcome": "return", "value": [0]}
+  },
+  {
+    "id": "json.read.size.array",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,4,6]}",
+      "rule": "$.values.size()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [3]}
+  },
+  {
+    "id": "json.read.size.object",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"record\":{\"z\":1,\"a\":2}}",
+      "rule": "$.record.size()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [2]}
+  },
+  {
+    "id": "json.read.size.text",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"text\":\"abc\"}",
+      "rule": "$.text.size()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [null]}
+  },
+  {
+    "id": "json.read.size.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[]}",
+      "rule": "$.values.size()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge", "empty"],
+    "expected": {"outcome": "return", "value": [0]}
+  },
+  {
+    "id": "json.read.keys.object-order",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"record\":{\"z\":1,\"a\":2,\"10\":10,\"2\":2}}",
+      "rule": "$.record.keys()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["normal", "edge"],
+    "expected": {"outcome": "return", "value": [["z", "a", "10", "2"]]}
+  },
+  {
+    "id": "json.read.keys.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"record\":{}}",
+      "rule": "$.record.keys()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge", "empty"],
+    "expected": {"outcome": "return", "value": [[]]}
+  },
+  {
+    "id": "json.read.keys.scalar",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"record\":5}",
+      "rule": "$.record.keys()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [null]}
+  },
+  {
+    "id": "json.read.min.numbers",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,4,6]}",
+      "rule": "$.values.min()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [2]}
+  },
+  {
+    "id": "json.read.min.mixed",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,\"4\",null,1]}",
+      "rule": "$.values.min()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [1]}
+  },
+  {
+    "id": "json.read.min.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[]}",
+      "rule": "$.values.min()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge", "empty", "error"],
+    "errorEquivalence": {
+      "category": "empty-aggregate",
+      "jvm": ["com.jayway.jsonpath.JsonPathException"],
+      "ts": ["ParserAdapterError"],
+      "tsMessageIncludes": ["没有可聚合的数字"]
+    },
+    "expected": {"outcome": "throw", "errorClass": "empty-aggregate"}
+  },
+  {
+    "id": "json.read.max.numbers",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,4,6]}",
+      "rule": "$.values.max()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [6]}
+  },
+  {
+    "id": "json.read.max.mixed",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,\"4\",null,6]}",
+      "rule": "$.values.max()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [6]}
+  },
+  {
+    "id": "json.read.max.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[]}",
+      "rule": "$.values.max()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge", "empty", "error"],
+    "errorEquivalence": {
+      "category": "empty-aggregate",
+      "jvm": ["com.jayway.jsonpath.JsonPathException"],
+      "ts": ["ParserAdapterError"],
+      "tsMessageIncludes": ["没有可聚合的数字"]
+    },
+    "expected": {"outcome": "throw", "errorClass": "empty-aggregate"}
+  },
+  {
+    "id": "json.read.avg.fraction",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[0.1,0.2]}",
+      "rule": "$.values.avg()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["normal", "edge"],
+    "expected": {"outcome": "return", "value": [0.15000000000000002]}
+  },
+  {
+    "id": "json.read.avg.mixed",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,\"4\",null,6]}",
+      "rule": "$.values.avg()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [4]}
+  },
+  {
+    "id": "json.read.avg.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[]}",
+      "rule": "$.values.avg()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge", "empty", "error"],
+    "errorEquivalence": {
+      "category": "empty-aggregate",
+      "jvm": ["com.jayway.jsonpath.JsonPathException"],
+      "ts": ["ParserAdapterError"],
+      "tsMessageIncludes": ["没有可聚合的数字"]
+    },
+    "expected": {"outcome": "throw", "errorClass": "empty-aggregate"}
+  },
+  {
+    "id": "json.read.sum.numbers",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,4,6]}",
+      "rule": "$.values.sum()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["normal"],
+    "expected": {"outcome": "return", "value": [12]}
+  },
+  {
+    "id": "json.read.sum.mixed",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[2,\"4\",null,6]}",
+      "rule": "$.values.sum()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": [8]}
+  },
+  {
+    "id": "json.read.sum.empty",
+    "family": "json",
+    "operation": "json.read",
+    "input": {
+      "content": "{\"values\":[]}",
+      "rule": "$.values.sum()",
+      "pathFunction": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "JsonPath path-function result"
+    },
+    "tags": ["edge", "empty", "error"],
+    "errorEquivalence": {
+      "category": "empty-aggregate",
+      "jvm": ["com.jayway.jsonpath.JsonPathException"],
+      "ts": ["ParserAdapterError"],
+      "tsMessageIncludes": ["没有可聚合的数字"]
+    },
+    "expected": {"outcome": "throw", "errorClass": "empty-aggregate"}
+  },
+  {
+    "id": "json.list.keys.object-order",
+    "family": "json",
+    "operation": "json.list",
+    "input": {
+      "content": "{\"record\":{\"z\":1,\"a\":2,\"10\":10,\"2\":2}}",
+      "rule": "$.record.keys()"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getStringList(String) · Jayway keys() 顺序"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": ["[z, a, 10, 2]"]}
+  },
+  {
+    "id": "json.string.keys.object-order",
+    "family": "json",
+    "operation": "json.string",
+    "input": {
+      "content": "{\"record\":{\"z\":1,\"a\":2,\"10\":10,\"2\":2}}",
+      "rule": "$.record.keys()"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSonPath.getString(String) · Jayway keys() 顺序"
+    },
+    "tags": ["edge"],
+    "expected": {"outcome": "return", "value": "[z, a, 10, 2]"}
   }
 ]

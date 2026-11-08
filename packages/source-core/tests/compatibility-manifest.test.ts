@@ -79,7 +79,10 @@ test('兼容方法清单具有唯一 ID、四维状态和可追踪入口', async
     for (const fixture of entry.fixtures ?? []) assert.ok(fixture.length > 0)
   }
 
-  assert.ok(manifest.entries.some((entry) => entry.id === 'parser-jsonpath' && entry.verification === 'ts-diff'))
+  const jsonPath = manifest.entries.find((entry) => entry.id === 'parser-jsonpath')
+  assert.ok(jsonPath)
+  assert.equal(jsonPath.verification, 'ts-passed')
+  assert.ok(jsonPath.members.every((member) => member.verification === 'ts-passed'))
   assert.ok(manifest.entries.some((entry) => entry.id === 'host-webview-device' && entry.feasibility === 'real-host'))
   assert.ok(manifest.entries.some((entry) => entry.id === 'runtime-observation' && entry.decision === 'verify'))
 })
