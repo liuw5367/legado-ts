@@ -60,6 +60,7 @@
         "chapter.number",
         "request.redirect",
         "flow.book",
+        "flow.mainJs",
         "flow.discover",
         "flow.toc",
         "rule.bridgeString",
@@ -1474,6 +1475,47 @@
               },
               "exactRequestHeaders": {
                 "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "flow.mainJs"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "source",
+              "keyword",
+              "responses",
+              "requestLimit",
+              "chapterIndex"
+            ],
+            "properties": {
+              "source": {
+                "type": "object"
+              },
+              "keyword": {
+                "type": "string"
+              },
+              "responses": {
+                "type": "object"
+              },
+              "requestLimit": {
+                "type": "integer"
+              },
+              "chapterIndex": {
+                "type": "integer"
               }
             },
             "additionalProperties": false

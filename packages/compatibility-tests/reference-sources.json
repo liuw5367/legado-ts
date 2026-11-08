@@ -14,6 +14,21 @@
   },
   "files": [
     {
+      "path": "app/src/main/java/io/legado/app/constant/BookType.kt",
+      "sha256": "a7bcb044192cb6844bc2a63e59261e94e701090f6c4dd6a127764fc3f98a14ef",
+      "sections": [[1, 2], [5, 55], [60, 78]],
+      "prefix": "",
+      "suffix": ""
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/exception/NoStackTraceException.kt",
+      "sha256": "d9d91f93c5bd189de2f22bc15d5ffa4e9873e41a7cd0546e92cc5b57afa38b10"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/jsSource/JsSourceMarshaller.kt",
+      "sha256": "225c8c11d0b7a38fe29575a720556b731bda02c454e523d97206bd89f4d8711b"
+    },
+    {
       "path": "modules/rhino/src/main/java/org/htmlunit/corejs/javascript/ConcurrentNativeObject.java",
       "sha256": "0591a86897f52ecc453a09b468c2a5ba8fdd3c5ac2e5ea645d284fb115a0b8bf"
     },
@@ -266,6 +281,22 @@
     "sha256": "d720f34285515025e4ccc80a5b92aed42cb26c03a7715ca53583d2c74ae51df7"
   },
   "flowEvidence": [
+    {
+      "path": "app/src/main/java/io/legado/app/model/jsSource/JsSourceEngine.kt",
+      "sha256": "d573951db173800f8738b48b1bb38ff5ef9d46b0282dcc553a7ba898bbc2f37b"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/jsSource/JsSourceBook.kt",
+      "sha256": "76e88af75aca59b47d76d0d452f4bc68677bda3f8f23d2d171972e8be5ec64fd"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/SearchBook.kt",
+      "sha256": "a18ca4a97402e014b2786108fa1355c2f98eb48e92545b1b38f4f00e48ed99f8"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/BookChapter.kt",
+      "sha256": "2725ee89235677b28e8d4cf1e9ae847212e7524a9b418f7c0a195a4114bdabbd"
+    },
     {
       "path": "app/src/main/java/io/legado/app/data/entities/BaseSource.kt",
       "sha256": "080160e06a23fdfc7f4dbe5975a370473eee5d13ad0638b46aa2075276516243"

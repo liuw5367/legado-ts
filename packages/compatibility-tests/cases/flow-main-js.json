@@ -1,0 +1,560 @@
+[
+  {
+    "id": "flow.synthetic.main-js.success",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / JsSourceBook 阶段编排"
+    },
+    "flowOrigin": {
+      "fixture": "JS-TOC-001"
+    },
+    "tags": [
+      "offline",
+      "main-js"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "JavaScript TOC fixture",
+        "mainJs": "var fixtureInit = (typeof fixtureInit === \"number\" ? fixtureInit : 0) + 1;\nfunction search(key,page){ if(page !== 1 || fixtureInit !== 1) throw new Error(\"search scope\"); return JSON.parse(java.ajax(baseUrl + \"/search?key=\" + key)); }\nfunction getBookInfo(book){ return {name:\"不应重命名\",intro:\"detail-\" + fixtureInit,tocUrl:baseUrl + \"/toc/list\",variable:{slot:7,active:true},type:8}; }\nfunction getChapters(book) { return [{ title: '卷一', url: '卷一', isVolume: true }, { title: '第一章', url: './chapter/1', isVip: true, isPay: false }]; }\n\nfunction getContent(chapter,book,nextChapterUrl){ return chapter.title + \"|\" + nextChapterUrl + \"|\" + fixtureInit; }\nfunction explore(url,page){ if(url!==\"/category\" || page!==1) throw new Error(\"explore args\"); return [{name:\"发现-\"+fixtureInit,bookUrl:baseUrl+\"/found\",type:4,variable:12}]; }"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 1,
+      "requestLimit": 1,
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://js.fixture.test/search?key=fixture",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js.fixture.test/search?key=fixture",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "W3sibmFtZSI6MTIzLCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3QvYm9vay8xIiwidHlwZSI6MCwidmFyaWFibGUiOnRydWV9LHsibmFtZSI6eyJiYWQiOjF9LCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3Qvc2tpcCJ9LHsibmFtZSI6IuesrOS6jOacrCIsImJvb2tVcmwiOiJodHRwczovL2pzLmZpeHR1cmUudGVzdC9ib29rLzIiLCJ0eXBlIjo4LCJ2YXJpYWJsZSI6InN0YXRlIn0seyJuYW1lIjoi57y65Zyw5Z2AIn1d"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "123",
+                "bookUrl": "https://js.fixture.test/book/1",
+                "type": 8,
+                "variable": "true"
+              },
+              {
+                "name": "第二本",
+                "bookUrl": "https://js.fixture.test/book/2",
+                "type": 8,
+                "variable": "state"
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现-1",
+                "bookUrl": "https://js.fixture.test/found",
+                "type": 4,
+                "variable": "12"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "123",
+              "bookUrl": "https://js.fixture.test/book/1",
+              "tocUrl": "https://js.fixture.test/toc/list",
+              "type": 8,
+              "intro": "detail-1",
+              "variable": {
+                "slot": "7",
+                "active": "true"
+              }
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "卷一",
+                "url": "卷一",
+                "index": 0,
+                "volume": true,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "第一章",
+                "url": "https://js.fixture.test/toc/chapter/1",
+                "index": 1,
+                "volume": false,
+                "vip": true,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "success",
+            "value": "第一章|卷一|1"
+          }
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://js.fixture.test/search?key=fixture"
+          }
+        ],
+        "variableAfterContent": {
+          "slot": "7",
+          "active": "true"
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.volume",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / JsSourceBook 阶段编排"
+    },
+    "flowOrigin": {
+      "fixture": "JS-TOC-001"
+    },
+    "tags": [
+      "offline",
+      "main-js"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "JavaScript TOC fixture",
+        "mainJs": "var fixtureInit = (typeof fixtureInit === \"number\" ? fixtureInit : 0) + 1;\nfunction search(key,page){ if(page !== 1 || fixtureInit !== 1) throw new Error(\"search scope\"); return JSON.parse(java.ajax(baseUrl + \"/search?key=\" + key)); }\nfunction getBookInfo(book){ return {name:\"不应重命名\",intro:\"detail-\" + fixtureInit,tocUrl:baseUrl + \"/toc/list\",variable:{slot:7,active:true},type:8}; }\nfunction getChapters(book) { return [{ title: '卷一', url: '卷一', isVolume: true }, { title: '第一章', url: './chapter/1', isVip: true, isPay: false }]; }\n\nfunction getContent(){ throw new Error(\"volume must not execute\"); }\nfunction explore(url,page){ if(url!==\"/category\" || page!==1) throw new Error(\"explore args\"); return [{name:\"发现-\"+fixtureInit,bookUrl:baseUrl+\"/found\",type:4,variable:12}]; }"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 0,
+      "requestLimit": 1,
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://js.fixture.test/search?key=fixture",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js.fixture.test/search?key=fixture",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "W3sibmFtZSI6MTIzLCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3QvYm9vay8xIiwidHlwZSI6MCwidmFyaWFibGUiOnRydWV9LHsibmFtZSI6eyJiYWQiOjF9LCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3Qvc2tpcCJ9LHsibmFtZSI6IuesrOS6jOacrCIsImJvb2tVcmwiOiJodHRwczovL2pzLmZpeHR1cmUudGVzdC9ib29rLzIiLCJ0eXBlIjo4LCJ2YXJpYWJsZSI6InN0YXRlIn0seyJuYW1lIjoi57y65Zyw5Z2AIn1d"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "123",
+                "bookUrl": "https://js.fixture.test/book/1",
+                "type": 8,
+                "variable": "true"
+              },
+              {
+                "name": "第二本",
+                "bookUrl": "https://js.fixture.test/book/2",
+                "type": 8,
+                "variable": "state"
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现-1",
+                "bookUrl": "https://js.fixture.test/found",
+                "type": 4,
+                "variable": "12"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "123",
+              "bookUrl": "https://js.fixture.test/book/1",
+              "tocUrl": "https://js.fixture.test/toc/list",
+              "type": 8,
+              "intro": "detail-1",
+              "variable": {
+                "slot": "7",
+                "active": "true"
+              }
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "卷一",
+                "url": "卷一",
+                "index": 0,
+                "volume": true,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "第一章",
+                "url": "https://js.fixture.test/toc/chapter/1",
+                "index": 1,
+                "volume": false,
+                "vip": true,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "empty",
+            "value": ""
+          }
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://js.fixture.test/search?key=fixture"
+          }
+        ],
+        "variableAfterContent": {
+          "slot": "7",
+          "active": "true"
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.empty-content",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / JsSourceBook 阶段编排"
+    },
+    "flowOrigin": {
+      "fixture": "JS-TOC-001"
+    },
+    "tags": [
+      "offline",
+      "main-js"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "JavaScript TOC fixture",
+        "mainJs": "var fixtureInit = (typeof fixtureInit === \"number\" ? fixtureInit : 0) + 1;\nfunction search(key,page){ if(page !== 1 || fixtureInit !== 1) throw new Error(\"search scope\"); return JSON.parse(java.ajax(baseUrl + \"/search?key=\" + key)); }\nfunction getBookInfo(book){ return {name:\"不应重命名\",intro:\"detail-\" + fixtureInit,tocUrl:baseUrl + \"/toc/list\",variable:{slot:7,active:true},type:8}; }\nfunction getChapters(book) { return [{ title: '卷一', url: '卷一', isVolume: true }, { title: '第一章', url: './chapter/1', isVip: true, isPay: false }]; }\n\nfunction getContent(){ return null; }\nfunction explore(url,page){ if(url!==\"/category\" || page!==1) throw new Error(\"explore args\"); return [{name:\"发现-\"+fixtureInit,bookUrl:baseUrl+\"/found\",type:4,variable:12}]; }"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 1,
+      "requestLimit": 1,
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://js.fixture.test/search?key=fixture",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js.fixture.test/search?key=fixture",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "W3sibmFtZSI6MTIzLCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3QvYm9vay8xIiwidHlwZSI6MCwidmFyaWFibGUiOnRydWV9LHsibmFtZSI6eyJiYWQiOjF9LCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3Qvc2tpcCJ9LHsibmFtZSI6IuesrOS6jOacrCIsImJvb2tVcmwiOiJodHRwczovL2pzLmZpeHR1cmUudGVzdC9ib29rLzIiLCJ0eXBlIjo4LCJ2YXJpYWJsZSI6InN0YXRlIn0seyJuYW1lIjoi57y65Zyw5Z2AIn1d"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "123",
+                "bookUrl": "https://js.fixture.test/book/1",
+                "type": 8,
+                "variable": "true"
+              },
+              {
+                "name": "第二本",
+                "bookUrl": "https://js.fixture.test/book/2",
+                "type": 8,
+                "variable": "state"
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现-1",
+                "bookUrl": "https://js.fixture.test/found",
+                "type": 4,
+                "variable": "12"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "123",
+              "bookUrl": "https://js.fixture.test/book/1",
+              "tocUrl": "https://js.fixture.test/toc/list",
+              "type": 8,
+              "intro": "detail-1",
+              "variable": {
+                "slot": "7",
+                "active": "true"
+              }
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "卷一",
+                "url": "卷一",
+                "index": 0,
+                "volume": true,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "第一章",
+                "url": "https://js.fixture.test/toc/chapter/1",
+                "index": 1,
+                "volume": false,
+                "vip": true,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "failed",
+            "value": null
+          }
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://js.fixture.test/search?key=fixture"
+          }
+        ],
+        "variableAfterContent": {
+          "slot": "7",
+          "active": "true"
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.failed-content",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / JsSourceBook 阶段编排"
+    },
+    "flowOrigin": {
+      "fixture": "JS-TOC-001"
+    },
+    "tags": [
+      "offline",
+      "main-js"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "JavaScript TOC fixture",
+        "mainJs": "var fixtureInit = (typeof fixtureInit === \"number\" ? fixtureInit : 0) + 1;\nfunction search(key,page){ if(page !== 1 || fixtureInit !== 1) throw new Error(\"search scope\"); return JSON.parse(java.ajax(baseUrl + \"/search?key=\" + key)); }\nfunction getBookInfo(book){ return {name:\"不应重命名\",intro:\"detail-\" + fixtureInit,tocUrl:baseUrl + \"/toc/list\",variable:{slot:7,active:true},type:8}; }\nfunction getChapters(book) { return [{ title: '卷一', url: '卷一', isVolume: true }, { title: '第一章', url: './chapter/1', isVip: true, isPay: false }]; }\n\nfunction getContent(){ throw new Error(\"fixture failure\"); }\nfunction explore(url,page){ if(url!==\"/category\" || page!==1) throw new Error(\"explore args\"); return [{name:\"发现-\"+fixtureInit,bookUrl:baseUrl+\"/found\",type:4,variable:12}]; }"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 1,
+      "requestLimit": 1,
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://js.fixture.test/search?key=fixture",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js.fixture.test/search?key=fixture",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "W3sibmFtZSI6MTIzLCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3QvYm9vay8xIiwidHlwZSI6MCwidmFyaWFibGUiOnRydWV9LHsibmFtZSI6eyJiYWQiOjF9LCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3Qvc2tpcCJ9LHsibmFtZSI6IuesrOS6jOacrCIsImJvb2tVcmwiOiJodHRwczovL2pzLmZpeHR1cmUudGVzdC9ib29rLzIiLCJ0eXBlIjo4LCJ2YXJpYWJsZSI6InN0YXRlIn0seyJuYW1lIjoi57y65Zyw5Z2AIn1d"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "123",
+                "bookUrl": "https://js.fixture.test/book/1",
+                "type": 8,
+                "variable": "true"
+              },
+              {
+                "name": "第二本",
+                "bookUrl": "https://js.fixture.test/book/2",
+                "type": 8,
+                "variable": "state"
+              }
+            ]
+          },
+          "discover": {
+            "status": "delivered",
+            "value": [
+              {
+                "name": "发现-1",
+                "bookUrl": "https://js.fixture.test/found",
+                "type": 4,
+                "variable": "12"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "123",
+              "bookUrl": "https://js.fixture.test/book/1",
+              "tocUrl": "https://js.fixture.test/toc/list",
+              "type": 8,
+              "intro": "detail-1",
+              "variable": {
+                "slot": "7",
+                "active": "true"
+              }
+            }
+          },
+          "toc": {
+            "status": "success",
+            "value": [
+              {
+                "title": "卷一",
+                "url": "卷一",
+                "index": 0,
+                "volume": true,
+                "vip": false,
+                "pay": false
+              },
+              {
+                "title": "第一章",
+                "url": "https://js.fixture.test/toc/chapter/1",
+                "index": 1,
+                "volume": false,
+                "vip": true,
+                "pay": false
+              }
+            ]
+          },
+          "content": {
+            "status": "failed",
+            "value": null
+          }
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://js.fixture.test/search?key=fixture"
+          }
+        ],
+        "variableAfterContent": {
+          "slot": "7",
+          "active": "true"
+        }
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.main-js.invalid-search",
+    "family": "flow",
+    "operation": "flow.mainJs",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "固定 Rhino / 原 JsSourceMarshaller / JsSourceBook 阶段编排"
+    },
+    "flowOrigin": {
+      "fixture": "JS-TOC-001"
+    },
+    "tags": [
+      "offline",
+      "main-js"
+    ],
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://js.fixture.test",
+        "bookSourceName": "JavaScript TOC fixture",
+        "mainJs": "var fixtureInit = (typeof fixtureInit === \"number\" ? fixtureInit : 0) + 1;\nfunction search(key,page){ if(page !== 1 || fixtureInit !== 1) throw new Error(\"search scope\"); return JSON.parse(java.ajax(baseUrl + \"/search?key=\" + key)); }\nfunction getBookInfo(book){ return {name:\"不应重命名\",intro:\"detail-\" + fixtureInit,tocUrl:baseUrl + \"/toc/list\",variable:{slot:7,active:true},type:8}; }\nfunction getChapters(book) { return [{ title: '卷一', url: '卷一', isVolume: true }, { title: '第一章', url: './chapter/1', isVip: true, isPay: false }]; }\n\nfunction search(){ return {bad:1}; }\nfunction explore(url,page){ if(url!==\"/category\" || page!==1) throw new Error(\"explore args\"); return [{name:\"发现-\"+fixtureInit,bookUrl:baseUrl+\"/found\",type:4,variable:12}]; }"
+      },
+      "keyword": "fixture",
+      "chapterIndex": 1,
+      "requestLimit": 1,
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://js.fixture.test/search?key=fixture",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://js.fixture.test/search?key=fixture",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "W3sibmFtZSI6MTIzLCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3QvYm9vay8xIiwidHlwZSI6MCwidmFyaWFibGUiOnRydWV9LHsibmFtZSI6eyJiYWQiOjF9LCJib29rVXJsIjoiaHR0cHM6Ly9qcy5maXh0dXJlLnRlc3Qvc2tpcCJ9LHsibmFtZSI6IuesrOS6jOacrCIsImJvb2tVcmwiOiJodHRwczovL2pzLmZpeHR1cmUudGVzdC9ib29rLzIiLCJ0eXBlIjo4LCJ2YXJpYWJsZSI6InN0YXRlIn0seyJuYW1lIjoi57y65Zyw5Z2AIn1d"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "failed",
+            "value": null
+          }
+        },
+        "requests": []
+      }
+    }
+  }
+]

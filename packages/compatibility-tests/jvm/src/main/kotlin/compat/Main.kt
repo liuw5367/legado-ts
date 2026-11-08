@@ -26,6 +26,7 @@ private fun execute(item: JsonObject): Any? {
     fun text(key: String) = input.get(key)?.asString ?: ""
     return when (val operation = item.get("operation").asString) {
         "request.redirect" -> redirectEvidence(input)
+        "flow.mainJs" -> executeMainJsFlow(input)
         "flow.book" -> executeBookFlow(input)
         "flow.discover" -> executeBookFlow(input, discover = true)
         "flow.contentLifecycle" -> executeContentLifecycle(input)

@@ -419,6 +419,16 @@
       "exactRequestHeaders": "boolean"
     }
   },
+  "flow.mainJs": {
+    "required": ["source", "keyword", "responses", "requestLimit", "chapterIndex"],
+    "properties": {
+      "source": "object",
+      "keyword": "string",
+      "responses": "object",
+      "requestLimit": "integer",
+      "chapterIndex": "integer"
+    }
+  },
   "flow.discover": {
     "required": ["source", "selectedCategory", "responses", "requestLimit"],
     "properties": {

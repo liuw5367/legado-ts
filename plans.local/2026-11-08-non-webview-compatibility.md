@@ -58,6 +58,7 @@ git diff --check
 - N1 组装和重取用例通过，环回传输确认普通头三条独立值及顺序。请求/网络回归 59/59，类型检查通过。修复前报告为 `run-HYGsb0`、`run-k08EZk`，修复后为 `run-8rzubl`、`run-2xhBzy`。
 - N2 修复前 CSS 四个块级分支及 JS 分支有差异，见 `run-GHeVgo`、`run-ddpuS7`。修复后 CSS、flow、XPath、corpus 功能族与类型检查通过。
 - N3 修复前目标后损坏导致 TS 提前失败，且脚本读取 0x80/0xff 为无符号值，见 `run-Yl8E2q`。修复后 ZIP 差分 17/17，文件相关测试 14/14，类型检查通过。报告 `run-Pcqx8H`。
+- N4 固定 Rhino 与原始 JsSourceMarshaller，使用 JVM 实体及 HTTP(S) 地址解析适配，复用旧目录脚本。搜索/发现交付、同名策略、字段投影、正文与失败终态 5 例均一致。额外诊断保留在 TS 单侧验证，未映射为 Android 应用状态。报告 `run-Nu9hyj`。
 
 ## 变更记录
 
