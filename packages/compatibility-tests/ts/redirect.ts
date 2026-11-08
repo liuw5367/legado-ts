@@ -11,7 +11,7 @@ export async function executeRedirect(input: Record<string, unknown>) {
       const chunks: Buffer[] = []
       for await (const chunk of request) chunks.push(Buffer.from(chunk))
       requests.push({
-        path: request.url, method: request.method, body: Buffer.concat(chunks).toString('utf8'),
+        path: request.url, host: request.headers.host?.split(':')[0], method: request.method, body: Buffer.concat(chunks).toString('utf8'),
         userAgent: request.headers['user-agent'] ?? null,
         authorization: request.headers.authorization ?? null,
         cookie: request.headers.cookie ?? null, contentType: request.headers['content-type'] ?? null,
@@ -30,7 +30,7 @@ export async function executeRedirect(input: Record<string, unknown>) {
     return `http://127.0.0.1:${address.port}`
   }
   try {
-    const target = input.crossOrigin === true ? await listen() : ''
+    const target = input.crossOrigin === true ? (await listen()).replace('127.0.0.1', 'localhost') : ''
     const origin = await listen(`${target}/target`)
     const request = createRequestPlan({
       url: `${origin}/start`, baseUrl: origin, method: 'POST', body: 'fixture body',

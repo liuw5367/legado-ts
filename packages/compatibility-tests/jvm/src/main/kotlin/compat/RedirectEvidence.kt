@@ -29,6 +29,7 @@ internal fun redirectEvidence(input: JsonObject): Any {
             exchange.use {
                 requests.add(mapOf(
                     "path" to exchange.requestURI.path,
+                    "host" to exchange.requestHeaders.getFirst("Host").substringBefore(':'),
                     "method" to exchange.requestMethod,
                     "body" to exchange.requestBody.readAllBytes().toString(Charsets.UTF_8),
                     "userAgent" to exchange.requestHeaders.getFirst("User-Agent"),
@@ -45,7 +46,7 @@ internal fun redirectEvidence(input: JsonObject): Any {
         return "http://127.0.0.1:${server.address.port}"
     }
     try {
-        val target = if (crossOrigin) listen("/target") else ""
+        val target = if (crossOrigin) listen("/target").replace("127.0.0.1", "localhost") else ""
         val origin = listen("/", "$target/target")
         val request = Request.Builder().url("$origin/start")
             .header("User-Agent", "fixture-redirect")

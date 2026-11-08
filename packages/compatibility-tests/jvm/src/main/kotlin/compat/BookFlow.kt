@@ -38,6 +38,7 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
     val headers = headerRule.takeUnless { it.startsWith("@js:", ignoreCase = true) || it.isEmpty() }
         ?.let(::flowHeaders).orEmpty()
     fun applyRequestDefaults(address: String, sourceHeaders: Map<String, String>): Map<String, String> {
+        if (requestDefaults.size() == 0) return sourceHeaders
         val userAgent = requestDefaults.text("userAgent")
         val defaultHeaders = if ("user-agent" !in sourceHeaders && userAgent.isNotEmpty()) mapOf("user-agent" to userAgent) else emptyMap()
         val sourceHost = URL(sourceUrl).host
@@ -90,13 +91,13 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
         // AnalyzeUrl 传入已解码的响应正文，bodyJs 不修改已经发出的请求体。
         val body = plan.bodyScript?.let { script ->
             evaluateFlowRequestScript(script, keyword, decoded) { child ->
-                fetch(stage, FlowRequest(resolve(sourceUrl, child), headers)).body
+                resolve(sourceUrl, child).let { fetch(stage, FlowRequest(it, applyRequestDefaults(it, headers))).body }
             }
         } ?: decoded
         return FlowHttpResponse(body, response.text("url"), status)
     }
     fun request(stage: String, url: String): Pair<String, String> =
-        fetch(stage, FlowRequest(url, headers)).let { it.body to it.url }
+        fetch(stage, FlowRequest(url, applyRequestDefaults(url, headers))).let { it.body to it.url }
     fun result(stage: String, status: String, value: Any?, error: Map<String, String>? = null) {
         stages[stage] = buildMap {
             put("status", status)
@@ -178,7 +179,7 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
         val searchRuleUrl = evaluateFlowSearchUrl(source.text("searchUrl"), keyword) { url ->
             request("search", resolve(sourceUrl, url)).first
         }
-        val searchHeaders = if (requestDefaults.size() == 0) headers else applyRequestDefaults(searchRuleUrl, headers)
+        val searchHeaders = applyRequestDefaults(searchRuleUrl, headers)
         val searchPlan = flowSearchRequest(searchRuleUrl, keyword, searchHeaders) { resolve(sourceUrl, it) }
         val initial = fetch("search", searchPlan)
         val searchResponse = if (loginCheck.isEmpty()) initial else {
@@ -206,7 +207,7 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
 
         val bookUrl = candidate.getValue("bookUrl")
         val (detailBody, detailBase) = if (fallback || bookUrl == searchBase) searchBody to bookUrl else {
-            val plan = FlowRequest(bookUrl, headers)
+            val plan = FlowRequest(bookUrl, applyRequestDefaults(bookUrl, headers))
             val detailResponse = fetch("detail", plan)
             val checked = if (loginCheck.isEmpty()) detailResponse else {
                 evaluateFlowLoginCheck(loginCheck, detailResponse, plan.headers) { updated ->

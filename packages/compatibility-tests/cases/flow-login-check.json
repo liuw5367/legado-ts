@@ -258,5 +258,174 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.login-check.options-after-login-refetch",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook.loginCheckJs / AnalyzeUrl.getHeaderMap/getStrResponse"
+    },
+    "tags": [
+      "offline",
+      "login-check"
+    ],
+    "flowOrigin": {
+      "fixture": "login-check-header-precedence"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://login-refresh.fixture.test",
+        "bookSourceName": "离线登录检查夹具",
+        "searchUrl": "/search,{\"method\":\"POST\",\"body\":\"q=fixture\",\"bodyJs\":\"result.replace(\\\"原始\\\", \\\"处理\\\")\",\"headers\":{\"Authorization\":\"Bearer options\"}}",
+        "loginCheckJs": "if (result.code() === 401) { java.getHeaderMap().put(\"X-Refresh\", \"fixture\"); var next = java.getStrResponse(null, null, false); if (next.code() !== 200) throw new Error(\"fixture retry failed\"); next } else result",
+        "ruleSearch": {
+          "bookList": "$.books[*]",
+          "name": "$.name",
+          "bookUrl": "$.url"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "header": "{\"Authorization\":\"Bearer source\"}"
+      },
+      "keyword": "fixture",
+      "stopAfter": "detail",
+      "responses": {
+        "search": {
+          "method": "POST",
+          "url": "https://login-refresh.fixture.test/search",
+          "body": "q=fixture",
+          "requestHeaders": {
+            "x-refresh": null,
+            "authorization": "Bearer options"
+          },
+          "response": {
+            "status": 401,
+            "url": "https://login-refresh.fixture.test/search",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "e30="
+          }
+        },
+        "retry": {
+          "method": "POST",
+          "url": "https://login-refresh.fixture.test/search",
+          "body": "q=fixture",
+          "requestHeaders": {
+            "x-refresh": "fixture",
+            "authorization": "Bearer options"
+          },
+          "response": {
+            "status": 200,
+            "url": "https://login-refresh.fixture.test/search",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IuWOn+WniyIsInVybCI6Ii9ib29rLzEifV19"
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://login-refresh.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://login-refresh.fixture.test/book/1",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuWkhOeQhjwvaDE+"
+          },
+          "requestHeaders": {
+            "authorization": "Bearer login"
+          }
+        }
+      },
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "X-Refresh",
+        "user-agent",
+        "authorization"
+      ],
+      "requestLimit": 3,
+      "requestDefaults": {
+        "userAgent": "fixture-default",
+        "loginHeaders": {
+          "Authorization": "Bearer login"
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "处理",
+                "bookUrl": "https://login-refresh.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "处理",
+              "bookUrl": "https://login-refresh.fixture.test/book/1",
+              "tocUrl": "https://login-refresh.fixture.test/book/1"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://login-refresh.fixture.test/search",
+            "body": "q=fixture",
+            "bodyBase64": "cT1maXh0dXJl",
+            "responseUrl": "https://login-refresh.fixture.test/search",
+            "responseStatus": 401,
+            "headers": {
+              "content-type": "application/x-www-form-urlencoded",
+              "user-agent": "fixture-default",
+              "authorization": "Bearer options"
+            }
+          },
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://login-refresh.fixture.test/search",
+            "body": "q=fixture",
+            "bodyBase64": "cT1maXh0dXJl",
+            "responseUrl": "https://login-refresh.fixture.test/search",
+            "responseStatus": 200,
+            "headers": {
+              "content-type": "application/x-www-form-urlencoded",
+              "x-refresh": "fixture",
+              "user-agent": "fixture-default",
+              "authorization": "Bearer options"
+            }
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://login-refresh.fixture.test/book/1",
+            "body": null,
+            "bodyBase64": null,
+            "responseUrl": "https://login-refresh.fixture.test/book/1",
+            "responseStatus": 200,
+            "headers": {
+              "user-agent": "fixture-default",
+              "authorization": "Bearer login"
+            }
+          }
+        ]
+      }
+    }
   }
 ]
