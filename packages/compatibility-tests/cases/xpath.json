@@ -2251,5 +2251,237 @@
       "tsMessageIncludes": ["no-such-function"]
     },
     "expected": { "outcome": "throw", "errorClass": "xpath-first-last-argument-evaluation-error" }
+  },
+  {
+    "id": "xpath.string.format-date.basic",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 13:05:06','yyyy-MM-dd HH:mm:ss')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date"]
+  },
+  {
+    "id": "xpath.string.format-date.locale-month",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('29 Feb 2024 13:05:06','dd MMM yyyy HH:mm:ss','en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat Locale.forLanguageTag" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","locale"]
+  },
+  {
+    "id": "xpath.string.format-date.invalid-date",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('not a date','yyyy')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate ParseException" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","error"],
+    "errorEquivalence": {
+      "category": "xpath-format-date-parse-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["Unparseable date"],
+      "tsMessageIncludes": ["date format exception"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-format-date-parse-error" }
+  },
+  {
+    "id": "xpath.string.format-date.ignores-extra-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('29 Feb 2024 13:05:06','dd MMM yyyy HH:mm:ss','en-US',99)", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate reads first three arguments" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","arity"]
+  },
+  {
+    "id": "xpath.string.format-date.missing-second-argument",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate argument indexing" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","arity","error"],
+    "errorEquivalence": {
+      "category": "xpath-format-date-argument-index-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["IndexOutOfBoundsException: Index: 1, Size: 1"],
+      "tsMessageIncludes": ["Index 1 out of bounds for length 1"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-format-date-argument-index-error" }
+  },
+  {
+    "id": "xpath.string.format-date.no-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date()", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate argument indexing" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","arity","error"],
+    "errorEquivalence": {
+      "category": "xpath-format-date-argument-index-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["IndexOutOfBoundsException: Index: 0, Size: 0"],
+      "tsMessageIncludes": ["Index 0 out of bounds for length 0"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-format-date-argument-index-error" }
+  },
+  {
+    "id": "xpath.string.format-date.evaluates-extra-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('29 Feb 2024 13:05:06','dd MMM yyyy HH:mm:ss','en-US',no-such-function())", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XpathProcessor.visitFunctionCall evaluates all arguments first" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","arity","error"],
+    "errorEquivalence": {
+      "category": "xpath-format-date-extra-argument-evaluation-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException"],
+      "tsMessageIncludes": ["no-such-function"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-format-date-extra-argument-evaluation-error" }
+  },
+  {
+    "id": "xpath.string.format-date.adjacent-numeric-fields",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('20240229130506','yyyyMMddHHmmss')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat adjacent numeric fields" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.am-pm",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 01:05:06 PM','yyyy-MM-dd hh:mm:ss a')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat rejects AM-PM input in this pinned version" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","pattern","error"],
+    "errorEquivalence": {
+      "category": "xpath-format-date-parse-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["Unparseable date"],
+      "tsMessageIncludes": ["date format exception"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-format-date-parse-error" }
+  },
+  {
+    "id": "xpath.string.format-date.am-pm.locale-overload",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 01:05:06 PM','yyyy-MM-dd hh:mm:ss a','en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat locale overload" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","locale","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.short-am-pm.fast-date-format",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 1 PM','yyyy-MM-dd h a')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat AM-PM parser probe" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","pattern","error"],
+    "errorEquivalence": {
+      "category": "xpath-format-date-parse-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["Unparseable date"],
+      "tsMessageIncludes": ["date format exception"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-format-date-parse-error" }
+  },
+  {
+    "id": "xpath.string.format-date.numeric-timezone",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 13:05:06 +0800','yyyy-MM-dd HH:mm:ss Z')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat numeric timezone field" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","timezone"]
+  },
+  {
+    "id": "xpath.string.format-date.weekday",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('Thu, 29 Feb 2024 13:05:06','EEE, dd MMM yyyy HH:mm:ss','en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat locale weekday field" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","locale"]
+  },
+  {
+    "id": "xpath.string.format-date.day-of-year",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024 060 13:05:06','yyyy D HH:mm:ss')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat day-of-year field" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.week-of-year",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024 09 Thu','yyyy ww E','en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat week-of-year fields" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","locale","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.week-of-month",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02 5 Thu','yyyy-MM W E','en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat week-of-month fields" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","locale","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.day-of-week-in-month",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02 5 Thu','yyyy-MM F E','en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat day-of-week-in-month fields" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","locale","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.millisecond-overflow",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 13:05:06.1000','yyyy-MM-dd HH:mm:ss.SSSS')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat millisecond field" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.gmt-zone-name",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 13:05:06 GMT+08:00','yyyy-MM-dd HH:mm:ss z')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat named GMT offset" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","timezone"]
+  },
+  {
+    "id": "xpath.string.format-date.iso-zone",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29T13:05:06+08:00',\"yyyy-MM-dd'T'HH:mm:ssXXX\",'en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat ISO-8601 timezone field" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","timezone","locale"]
+  },
+  {
+    "id": "xpath.string.format-date.quoted-literal",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29T13:05:06',\"yyyy-MM-dd'T'HH:mm:ss\",'en-US')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / SimpleDateFormat quoted literal" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","locale","pattern"]
+  },
+  {
+    "id": "xpath.string.format-date.lenient-day-overflow",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-31','yyyy-MM-dd')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / FastDateFormat lenient Calendar parsing" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","edge"]
+  },
+  {
+    "id": "xpath.string.format-date.trailing-input",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "format-date('2024-02-29 trailing','yyyy-MM-dd')", "content": "<root/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 FormatDate / DateFormat.parse prefix consumption" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","date","edge"]
   }
 ]

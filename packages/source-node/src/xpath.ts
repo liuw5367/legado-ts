@@ -5,12 +5,28 @@ import type { Element } from 'domhandler'
 import { parseDocument } from 'htmlparser2'
 import { render } from 'dom-serializer'
 import { compileSourcePattern, ParserAdapterError } from '@legado/source-core'
+import { androidXPathFormatDate } from './xpath-date.ts'
 import type { HtmlDocument, ParserNode, ParserNodeInfo, ParserNodeMutation, RuleValue, XPathParser } from '@legado/source-core'
 
 const { evaluateXPath, ReturnType } = fontoxpath
 const { registerCustomXPathFunction } = fontoxpath
 
 const XPATH_FUNCTIONS_NAMESPACE = 'http://www.w3.org/2005/xpath-functions'
+const ANDROID_XPATH_FUNCTIONS_NAMESPACE = 'urn:legado:android-xpath-functions'
+const registeredAndroidFormatDateArities = new Set<number>()
+
+function registerAndroidFormatDateArity(arity: number): void {
+  if (registeredAndroidFormatDateArities.has(arity)) return
+  registeredAndroidFormatDateArities.add(arity)
+  registerCustomXPathFunction({ localName: `format-date-${arity}`, namespaceURI: ANDROID_XPATH_FUNCTIONS_NAMESPACE }, Array.from({ length: arity }, () => 'item()*'), 'xs:string', (_context, ...args) => {
+    if (args.length < 2) throw new Error(`Index ${args.length} out of bounds for length ${args.length}`)
+    return androidXPathFormatDate(
+      androidXPathValueAsString(args[0]),
+      androidXPathValueAsString(args[1]),
+      args.length < 3 ? undefined : args[2],
+    )
+  })
+}
 
 // JsoupXpath 的 First.call 固定返回整数 1；last() 由 XPath 引擎提供并通过 JVM sibling-scope 案例验证。
 registerCustomXPathFunction({ localName: 'first', namespaceURI: XPATH_FUNCTIONS_NAMESPACE }, [], 'xs:integer', () => 1)
@@ -813,7 +829,7 @@ function maskXPathLiterals(expression: string): string {
 function rewriteAndroidXPathFunctionArguments(expression: string): string {
   const masked = maskXPathLiterals(expression)
   // 仅匹配这些函数的独立调用；前缀 QName 和更长函数名不应被改写。
-  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex|first|last)\s*\(/g
+  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex|format-date|first|last)\s*\(/g
   let match: RegExpExecArray | null
   while ((match = functionPattern.exec(masked)) !== null) {
     const previous = masked[match.index - 1]
@@ -823,6 +839,15 @@ function rewriteAndroidXPathFunctionArguments(expression: string): string {
     const close = xpathCallEnd(masked, open)
     if (close === undefined) continue
     const ranges = xpathCallArgumentRanges(masked, open, close)
+
+    if (match[1] === 'format-date') {
+      const noArguments = ranges.length === 1 && expression.slice(ranges[0]![0], ranges[0]![1]).trim() === ''
+      const args = noArguments ? [] : ranges.map(([start, end]) => rewriteAndroidXPathFunctionArguments(expression.slice(start, end).trim()))
+      registerAndroidFormatDateArity(args.length)
+      const functionName = `Q{${ANDROID_XPATH_FUNCTIONS_NAMESPACE}}format-date-${args.length}`
+      const compatibleCall = `${functionName}(${args.join(',')})`
+      return `${expression.slice(0, match.index)}${compatibleCall}${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
+    }
 
     if (match[1] === 'first' || match[1] === 'last') {
       const noArguments = ranges.length === 1 && expression.slice(ranges[0]![0], ranges[0]![1]).trim() === ''

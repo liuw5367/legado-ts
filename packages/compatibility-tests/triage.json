@@ -666,7 +666,30 @@
         "xpath.string.first.ignores-argument",
         "xpath.string.last.ignores-argument",
         "xpath.string.first.evaluates-arguments",
-        "xpath.string.last.evaluates-arguments"
+        "xpath.string.last.evaluates-arguments",
+        "xpath.string.format-date.basic",
+        "xpath.string.format-date.locale-month",
+        "xpath.string.format-date.invalid-date",
+        "xpath.string.format-date.ignores-extra-arguments",
+        "xpath.string.format-date.missing-second-argument",
+        "xpath.string.format-date.no-arguments",
+        "xpath.string.format-date.evaluates-extra-arguments",
+        "xpath.string.format-date.adjacent-numeric-fields",
+        "xpath.string.format-date.am-pm",
+        "xpath.string.format-date.am-pm.locale-overload",
+        "xpath.string.format-date.short-am-pm.fast-date-format",
+        "xpath.string.format-date.numeric-timezone",
+        "xpath.string.format-date.weekday",
+        "xpath.string.format-date.day-of-year",
+        "xpath.string.format-date.week-of-year",
+        "xpath.string.format-date.week-of-month",
+        "xpath.string.format-date.day-of-week-in-month",
+        "xpath.string.format-date.millisecond-overflow",
+        "xpath.string.format-date.gmt-zone-name",
+        "xpath.string.format-date.iso-zone",
+        "xpath.string.format-date.quoted-literal",
+        "xpath.string.format-date.lenient-day-overflow",
+        "xpath.string.format-date.trailing-input"
       ],
       "classification": "runtime-fix",
       "state": "resolved",
@@ -691,7 +714,9 @@
         "output/run-x5ZNNY/report.json",
         "output/run-LeW3gZ/report.json",
         "output/run-iPZbTM/report.json",
-        "output/run-yNkAg9/report.json"
+        "output/run-yNkAg9/report.json",
+        "output/run-107kyj/report.json",
+        "output/run-c9C2Si/report.json"
       ]
     },
     {

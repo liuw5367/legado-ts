@@ -179,6 +179,45 @@ test('reader-web search evaluates Android XPath first() in the book-list rule', 
   ])
 })
 
+test('reader-web search evaluates Android XPath format-date in book rules', async (t) => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.14'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    searchUrl: `${base}/search?q={{key}}`,
+    ruleSearch: {
+      bookList: 'article',
+      name: "@xpath:format-date('2024-02-29 13:05:06 +0800','yyyy-MM-dd HH:mm:ss Z')",
+      bookUrl: 'a@href',
+    },
+  }])
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    assert.equal(new URL(String(url)).pathname, '/search')
+    return new Response('<article><h2>日期书</h2><a href="/book/1">详情</a></article>')
+  })
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  const candidate = result.candidates[0]?.candidate
+  assert.equal(candidate?.bookUrl, `${base}/book/1`)
+  const actualDate = /^(\w{3}) (\w{3}) +([0-9]{1,2}) ([0-9]{2}):([0-9]{2}):([0-9]{2}) (\S+) (-?[0-9]+)$/u.exec(candidate?.name ?? '')
+  assert.ok(actualDate, `expected Java Date.toString() shape, got ${candidate?.name}`)
+  const expectedDate = new Date(Date.UTC(2024, 1, 29, 5, 5, 6))
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  assert.deepEqual({
+    weekday: actualDate[1], month: actualDate[2], day: Number(actualDate[3]),
+    hour: Number(actualDate[4]), minute: Number(actualDate[5]), second: Number(actualDate[6]),
+    year: Number(actualDate[8]),
+  }, {
+    weekday: weekdays[expectedDate.getDay()], month: months[expectedDate.getMonth()], day: expectedDate.getDate(),
+    hour: expectedDate.getHours(), minute: expectedDate.getMinutes(), second: expectedDate.getSeconds(), year: expectedDate.getFullYear(),
+  })
+})
+
 test('global and account execution slots are shared by concurrent operations and release by token', async () => {
   const repository = new MemoryReaderRepository(); const user = randomUUID(); const other = randomUUID()
   const leases = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY + 1 }, () => repository.acquireExecutionSlot(user, randomUUID())))
