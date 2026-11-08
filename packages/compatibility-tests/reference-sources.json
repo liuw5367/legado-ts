@@ -14,6 +14,13 @@
   },
   "files": [
     {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/QueryTTF.java",
+      "sha256": "09be94396c2ac0ad85c8a8619cb7220f56156c8fcc0ea0f6ce3607c536961709",
+      "sections": [[1, 2], [5, 10], [12, 1055]],
+      "prefix": "",
+      "suffix": ""
+    },
+    {
       "path": "app/src/main/java/io/legado/app/utils/InfoMap.kt",
       "sha256": "f46d78a6d97419308061a64814553be14f9f85b06b8a8ad0751bce7682a3a3a0",
       "sections": [[1, 2], [4, 8], [10, 55]],
@@ -108,11 +115,15 @@
           1004
         ],
         [
+          1117,
+          1147
+        ],
+        [
           1167,
           1175
         ]
       ],
-      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\n\nimport java.io.ByteArrayInputStream\nimport java.io.ByteArrayOutputStream\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipInputStream\n\nobject CorpusJsExtensions {\n    fun zipBytes(bytes: ByteArray, path: String): ByteArray? {",
+      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\nimport io.legado.app.utils.toStringArray\nimport io.legado.app.model.analyzeRule.QueryTTF\n\nimport java.io.ByteArrayInputStream\nimport java.io.ByteArrayOutputStream\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipInputStream\n\nobject CorpusJsExtensions {\n    fun zipBytes(bytes: ByteArray, path: String): ByteArray? {",
       "suffix": "}"
     },
     {

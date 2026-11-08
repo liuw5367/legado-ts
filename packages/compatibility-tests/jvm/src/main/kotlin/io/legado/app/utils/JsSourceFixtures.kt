@@ -13,3 +13,5 @@ object NetworkUtils {
 
 inline fun <reified T> com.google.gson.Gson.fromJsonObject(value: String?): Result<T?> =
     runCatching { fromJson(value, object : com.google.gson.reflect.TypeToken<T>() {}.type) }
+
+fun String.toStringArray(): Array<String> = codePoints().mapToObj { String(Character.toChars(it)) }.toArray { arrayOfNulls<String>(it) }

@@ -1,0 +1,86 @@
+[
+  {
+    "id": "rule.providerCrypto.gcm-authentication",
+    "family": "provider-crypto",
+    "operation": "rule.providerCrypto",
+    "input": {
+      "kind": "gcm",
+      "key": "000102030405060708090a0b0c0d0e0f",
+      "iv": "101112131415161718191a1b",
+      "aad": "header",
+      "plaintext": "正文 fixture"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "固定 BouncyCastle AES/GCM/NoPadding / OpenSSL 固定向量"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "ciphertext": "2283a04999c896897ea52980b5422a891bdc17d1e12aaec6cf9c38b7c8f6",
+        "plaintext": "正文 fixture",
+        "rejectsWrongAad": true
+      }
+    }
+  },
+  {
+    "id": "rule.providerCrypto.oaep-same-mgf",
+    "family": "provider-crypto",
+    "operation": "rule.providerCrypto",
+    "input": {
+      "kind": "oaep",
+      "mgf": "SHA-256",
+      "privateKey": "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCyl7/xJR4Uyx4k5itZj+RLW/d/Mg9nsmoKRPL2k/DmrtKil97A4Gsi/TGFyiKn77/F3TTXQgFgYGx5W3du8n8PTNh8FaRCz3w9vBvlI4wBODn84YhQJIIvrKZdquSDkS4hqw9xQkSBYHHBC2Ox0CmGYnjg7aOavd4Bsw5dmc8mUqWiBNjsPpG86K9iVOsVwREJFt3lMrQSOPLmSXhEzdcLfjAPwEFvzOM8hR4NodllssCT/aPM2oYqGJIMGRlnfm1SLFIY8uLnfGSPXEy3kXTKYQ51Y+47EV9zLDju8/qdIjZJwOawL30HzPMpz1OuMdAwz/Ux14oMsv6C90rMPLWvAgMBAAECggEAOJYGVgS5tELrSSu4nocOAaahE6cr5GJOYPSZuvEDCkRoLuZJyPkSWSK6Nzblpio7rBi7rlyWjQ/gLs+BVyD0i0eA7Ef7JMQTDIh2mjKaIKTNEsfu5d27dhmRGOqVvu4YHMjTesJRbGC/ijfunZ9kGNVIkZQaG2R/XDB8o8GhNfW/O0/YSy62KHIX/B97i1x2k9+7u2gSLFmFSw8EcMvo9/TjvyjcgI+hkVwQicew5t0ceN7QiJ0F1PyKC2ng20hbaTJqhllx50w83wYJbcEP9x29KjTHJXzi23YFeAqDNnUmqSq/WYyjEi52Vi3uj8ssHIstKlmI1EMV8Xs+XIS56QKBgQDykm2dZeb5iPgxFEt9yGGUim+G9umcV4pEfJSzLbrOfwFs77P43yhDTH1R7DJF40HOI+U6k+B/6TN8dZ9/MuOB0KtlmFz4rSLw1TGThSAjtH6GVcH1oa5PEjd36nlVcA5rOiScy1cUOJouqPxgazysYihDl+ZhMFXTQgNURd0ixQKBgQC8eqZjl4P/VA1JjHynE0GzmURVsjxy6uDDiWYSQZDvLbIca2ErPibfg/bCwCY51oVfAJfrSET2qGysDpRgW8UclBv+jdOj7AmWG6YjSSuUBtXkQTEAU2kNJPem6txenu0LIMEbeUR/XD3LjzuPart+Rt24djfJemph7GCqLYVt4wKBgQCiIbUaay4Cw8YAJ+x9Wh2+xvjcYNSsJubH9+z8BijCNKmjQmQsiBvFP67TvuerRsaJHfztNkHrvNco7QV6Y20lK3AkK76YiEC+cAD+9RASTWX0LAXERBjZyPdCM3p93LQGf4pRMqg1X8/OOCzX1VVscv8ujqzxcPkshwbqoPe5cQKBgB4jvtfOMt1xo25PeN9+xNLjf3n0tpXp2WdrYVcqBPM6a3D/+tnfZnf3sk4STAqTs2AtyB1nwR9wb3BUJIYEJtEbHh7mryFXbXEDmt2ppb5WGX4Wrq9Op03iy3d1tyeqYl2VL0wlaD61kWwry2pztufKjUoiHWmqmbhvBEYyYVPhAoGAIfpvRzDmdT26CP/qx1Y7ohcZuzxwk18Byu+DOGlyG8HrV1yaBUpWZbAeTes3s2epEsswhC8ejtNhB9U7W2ZiMx9Tf2jeK+5F//Q8jMcgjRhMEfHkUk343yI2rHWKpa/zWlqLTfiWhbNNpEMxWyCmAIFtNlMu09ctNlvHq7CYjIE=",
+      "ciphertext": "SJnunCWIlk0L8aKzsACGgdRP8puohDm88nBKAeFXtVOnRx9gwnUIHiQF1L0MhD4e+UK4d/0nZTF0gnHuhYpNRxqUvIsKllxuKk1LPP1ftSCM5IhNpbIg1otgMLkxzSc3GtvrNjMW5JbGYvgK4lNzqsAW/q8JcXumHg01aaloc2D8G3WUhI2BGLDpeEfRtVNUY9NWT+9x7EAVBs+spwzFBmatZ0o/s07xEDPhgv+A/nohjJel0NTUBI7gwfj8+3IaudYDxvOGGc1OSi5aHW4jYIzfH+yjgtBed02ls142z48OgBmHldeaedWlaI6c4wWBDrgsw6x6pWJ7sdCDQwn6OQ=="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "固定 BouncyCastle JCA Cipher / OpenSSL 固定向量"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "status": "success",
+        "plaintext": "oaep fixture"
+      }
+    }
+  },
+  {
+    "id": "rule.providerCrypto.oaep-distinct-mgf",
+    "family": "provider-crypto",
+    "operation": "rule.providerCrypto",
+    "input": {
+      "kind": "oaep",
+      "mgf": "SHA-1",
+      "privateKey": "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCyl7/xJR4Uyx4k5itZj+RLW/d/Mg9nsmoKRPL2k/DmrtKil97A4Gsi/TGFyiKn77/F3TTXQgFgYGx5W3du8n8PTNh8FaRCz3w9vBvlI4wBODn84YhQJIIvrKZdquSDkS4hqw9xQkSBYHHBC2Ox0CmGYnjg7aOavd4Bsw5dmc8mUqWiBNjsPpG86K9iVOsVwREJFt3lMrQSOPLmSXhEzdcLfjAPwEFvzOM8hR4NodllssCT/aPM2oYqGJIMGRlnfm1SLFIY8uLnfGSPXEy3kXTKYQ51Y+47EV9zLDju8/qdIjZJwOawL30HzPMpz1OuMdAwz/Ux14oMsv6C90rMPLWvAgMBAAECggEAOJYGVgS5tELrSSu4nocOAaahE6cr5GJOYPSZuvEDCkRoLuZJyPkSWSK6Nzblpio7rBi7rlyWjQ/gLs+BVyD0i0eA7Ef7JMQTDIh2mjKaIKTNEsfu5d27dhmRGOqVvu4YHMjTesJRbGC/ijfunZ9kGNVIkZQaG2R/XDB8o8GhNfW/O0/YSy62KHIX/B97i1x2k9+7u2gSLFmFSw8EcMvo9/TjvyjcgI+hkVwQicew5t0ceN7QiJ0F1PyKC2ng20hbaTJqhllx50w83wYJbcEP9x29KjTHJXzi23YFeAqDNnUmqSq/WYyjEi52Vi3uj8ssHIstKlmI1EMV8Xs+XIS56QKBgQDykm2dZeb5iPgxFEt9yGGUim+G9umcV4pEfJSzLbrOfwFs77P43yhDTH1R7DJF40HOI+U6k+B/6TN8dZ9/MuOB0KtlmFz4rSLw1TGThSAjtH6GVcH1oa5PEjd36nlVcA5rOiScy1cUOJouqPxgazysYihDl+ZhMFXTQgNURd0ixQKBgQC8eqZjl4P/VA1JjHynE0GzmURVsjxy6uDDiWYSQZDvLbIca2ErPibfg/bCwCY51oVfAJfrSET2qGysDpRgW8UclBv+jdOj7AmWG6YjSSuUBtXkQTEAU2kNJPem6txenu0LIMEbeUR/XD3LjzuPart+Rt24djfJemph7GCqLYVt4wKBgQCiIbUaay4Cw8YAJ+x9Wh2+xvjcYNSsJubH9+z8BijCNKmjQmQsiBvFP67TvuerRsaJHfztNkHrvNco7QV6Y20lK3AkK76YiEC+cAD+9RASTWX0LAXERBjZyPdCM3p93LQGf4pRMqg1X8/OOCzX1VVscv8ujqzxcPkshwbqoPe5cQKBgB4jvtfOMt1xo25PeN9+xNLjf3n0tpXp2WdrYVcqBPM6a3D/+tnfZnf3sk4STAqTs2AtyB1nwR9wb3BUJIYEJtEbHh7mryFXbXEDmt2ppb5WGX4Wrq9Op03iy3d1tyeqYl2VL0wlaD61kWwry2pztufKjUoiHWmqmbhvBEYyYVPhAoGAIfpvRzDmdT26CP/qx1Y7ohcZuzxwk18Byu+DOGlyG8HrV1yaBUpWZbAeTes3s2epEsswhC8ejtNhB9U7W2ZiMx9Tf2jeK+5F//Q8jMcgjRhMEfHkUk343yI2rHWKpa/zWlqLTfiWhbNNpEMxWyCmAIFtNlMu09ctNlvHq7CYjIE=",
+      "ciphertext": "bez8Bdbv6EIo1CQ2iORtOVExM+4k5sKX1faXXcbA9oyUjX4An83StTXVQk53LyE3SG8gXPskNFCKqFh5BhvzqrzCSwU1SMPvToisV9B0C5qlpNFGHyibMnkaq3BJ8MTpjCTnzEzRcts4aBztS1eTEpPXpiznMALvVVQTX32Xj1aJVzJ6TPIwYq4Qsk+g9q7H5Fl1xZ3sl/6Bf4criayIXX/u8cUwQAeMGbvykdaVKTv8K2CjqwoM/Y06ggqogIcADoxQW+V+6q3LsOTlNUPJhSmz8Sdv08/hReBLcdz0e7ni1+S7g44dfSNq0faXYioeum/tnIX9U9YzK53VvSwa0g=="
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "固定 BouncyCastle JCA Cipher / OpenSSL 固定向量"
+    },
+    "tags": [
+      "edge"
+    ],
+    "allowedDifferences": [
+      {
+        "path": "$/value/status",
+        "jvm": "success",
+        "ts": "capability-missing",
+        "reason": "Node provider 的 OAEP 不支持独立 MGF1 摘要，保留显式能力诊断。"
+      },
+      {
+        "path": "$/value/plaintext",
+        "jvm": "oaep fixture",
+        "ts": null,
+        "reason": "独立 MGF1 摘要在当前 Node provider 无法执行，未交付明文。"
+      }
+    ]
+  }
+]

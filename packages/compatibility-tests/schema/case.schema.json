@@ -71,6 +71,8 @@
         "flow.contentLifecycle",
         "rule.coverStream",
         "rule.zipDownload",
+        "rule.providerCrypto",
+        "rule.font",
         "rule.legacyCrypto"
       ]
     },
@@ -1904,6 +1906,93 @@
               },
               "observeScriptBytes": {
                 "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.providerCrypto"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "iv": {
+                "type": "string"
+              },
+              "aad": {
+                "type": "string"
+              },
+              "plaintext": {
+                "type": "string"
+              },
+              "mgf": {
+                "type": "string"
+              },
+              "privateKey": {
+                "type": "string"
+              },
+              "ciphertext": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.font"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "errorFont",
+              "correctFont",
+              "point",
+              "missing",
+              "text"
+            ],
+            "properties": {
+              "errorFont": {
+                "type": "string"
+              },
+              "correctFont": {
+                "type": "string"
+              },
+              "point": {
+                "type": "integer"
+              },
+              "missing": {
+                "type": "integer"
+              },
+              "text": {
+                "type": "string"
               }
             },
             "additionalProperties": false

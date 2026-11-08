@@ -31,6 +31,8 @@ private fun execute(item: JsonObject): Any? {
         "flow.discover" -> executeBookFlow(input, discover = true)
         "flow.contentLifecycle" -> executeContentLifecycle(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
+        "rule.providerCrypto" -> providerCryptoEvidence(input)
+        "rule.font" -> fontEvidence(input)
         "rule.legacyCrypto" -> legacyCryptoEvidence(input)
         "rule.zipDownload" -> zipDownloadEvidence(input)
         "rule.coverStream" -> coverStreamEvidence(input)

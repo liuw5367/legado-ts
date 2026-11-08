@@ -1781,6 +1781,22 @@
       ]
     },
     {
+      "operation": "rule.providerCrypto",
+      "method": "Cipher.init / updateAAD / doFinal · GCM 与 OAEP 参数",
+      "reference": "jdk-direct",
+      "tsEntry": "QuickJS Java Cipher bridge",
+      "requiredDimensions": ["edge"],
+      "caseIds": ["rule.providerCrypto.gcm-authentication", "rule.providerCrypto.oaep-same-mgf", "rule.providerCrypto.oaep-distinct-mgf"]
+    },
+    {
+      "operation": "rule.font",
+      "method": "QueryTTF 字形查询 / JsExtensions.replaceFont",
+      "reference": "upstream-adapted",
+      "tsEntry": "java.queryBase64TTF / java.replaceFont",
+      "requiredDimensions": ["edge"],
+      "caseIds": ["rule.font.ttf-glyph-mapping"]
+    },
+    {
       "operation": "rule.legacyCrypto",
       "method": "JsEncodeUtils AES 历史重载和 createSymmetricCrypto 状态",
       "reference": "upstream-adapted",

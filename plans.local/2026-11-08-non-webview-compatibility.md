@@ -60,6 +60,7 @@ git diff --check
 - N3 修复前目标后损坏导致 TS 提前失败，且脚本读取 0x80/0xff 为无符号值，见 `run-Yl8E2q`。修复后 ZIP 差分 17/17，文件相关测试 14/14，类型检查通过。报告 `run-Pcqx8H`。
 - N4 固定 Rhino 与原始 JsSourceMarshaller，使用 JVM 实体及 HTTP(S) 地址解析适配，复用旧目录脚本。搜索/发现交付、同名策略、字段投影、正文与失败终态 5 例均一致。额外诊断保留在 TS 单侧验证，未映射为 Android 应用状态。报告 `run-Nu9hyj`。
 - N5 原 InfoMap 与实际 Node 发现链确认删除键未传播，修复后 3 例保存、请求及模拟快照一致，reader-web 发现回归 17/17。固定 Rhino 的同源闭包在第二次调用为 2，QuickJS 为 1，刷新后两端为 1。逐例登记闭包差异。报告 `run-soljEt`、`run-6O9K69`、`run-Jko1tK`。
+- N6 固定 BouncyCastle 和 OpenSSL 向量对照 GCM AAD、认证失败、同摘要 OAEP。独立 MGF1 摘要按实际 provider 能力逐例登记。固定合成 TrueType 经原 QueryTTF 与 replaceFont 对照，字形、缺失值和过滤一致。报告 `run-BaOMzm`、`run-hdAScc`。
 
 ## 变更记录
 

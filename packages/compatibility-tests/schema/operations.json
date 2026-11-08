@@ -564,6 +564,29 @@
       "observeScriptBytes": "boolean"
     }
   },
+  "rule.providerCrypto": {
+    "required": ["kind"],
+    "properties": {
+      "kind": "string",
+      "key": "string",
+      "iv": "string",
+      "aad": "string",
+      "plaintext": "string",
+      "mgf": "string",
+      "privateKey": "string",
+      "ciphertext": "string"
+    }
+  },
+  "rule.font": {
+    "required": ["errorFont", "correctFont", "point", "missing", "text"],
+    "properties": {
+      "errorFont": "string",
+      "correctFont": "string",
+      "point": "integer",
+      "missing": "integer",
+      "text": "string"
+    }
+  },
   "rule.legacyCrypto": {
     "required": [
       "kind",

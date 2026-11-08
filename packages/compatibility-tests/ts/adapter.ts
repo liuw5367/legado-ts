@@ -49,6 +49,41 @@ export async function execute(item: CaseInput): Promise<unknown> {
   const json = (key: string): string => JSON.stringify(i[key] ?? '')
   const host = new SourceRuleHost()
   switch (item.operation) {
+    case 'rule.providerCrypto': {
+      const cipherSetup = `var Cipher = Packages.javax.crypto.Cipher, spec = Packages.javax.crypto.spec;`
+      if (str('kind') === 'gcm') return script(host, `${cipherSetup}
+        var key = new spec.SecretKeySpec(java.hexDecodeToByteArray(${json('key')}), 'AES');
+        var iv = new spec.GCMParameterSpec(128, java.hexDecodeToByteArray(${json('iv')}));
+        var cipher = Cipher.getInstance('AES/GCM/NoPadding'), aad = ${json('aad')};
+        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
+        cipher.updateAAD(java.strToBytes(aad));
+        var encrypted = cipher.doFinal(java.strToBytes(${json('plaintext')}));
+        function decrypt(associated) {
+          cipher.init(Cipher.DECRYPT_MODE, key, iv);
+          cipher.updateAAD(java.strToBytes(associated));
+          return java.bytesToStr(cipher.doFinal(encrypted));
+        }
+        var plaintext = decrypt(aad), rejectsWrongAad = false;
+        try { decrypt('wrong'); } catch (error) { rejectsWrongAad = true; }
+        return {ciphertext: Array.from(encrypted, n => (n & 255).toString(16).padStart(2, '0')).join(''), plaintext, rejectsWrongAad};
+      `)
+      const result = await host.executeWorkflowJavaScript({ source, stage: 'book', code: `${cipherSetup}
+        var security = Packages.java.security;
+        var key = security.KeyFactory.getInstance('RSA').generatePrivate(new security.spec.PKCS8EncodedKeySpec(java.base64DecodeToByteArray(${json('privateKey')})));
+        var options = new spec.OAEPParameterSpec('SHA-256', 'MGF1', new security.spec.MGF1ParameterSpec(${json('mgf')}), new spec.PSource.PSpecified(new Uint8Array()));
+        var rsa = Cipher.getInstance('RSA/ECB/OAEPWithSHA-256AndMGF1Padding');
+        rsa.init(Cipher.DECRYPT_MODE, key, options);
+        java.bytesToStr(rsa.doFinal(java.base64DecodeToByteArray(${json('ciphertext')})));
+      ` })
+      if (result.status === 'capability-missing') return { status: result.status, plaintext: null }
+      return { status: result.status, plaintext: checked(result) }
+    }
+    case 'rule.font':
+      return script(host, `var bad = java.queryBase64TTF(${json('errorFont')}), good = java.queryBase64TTF(${json('correctFont')});
+        var point = ${Number(i.point)}, missing = ${Number(i.missing)}, text = ${json('text')}, id = bad.getGlyfIdByUnicode(point), glyph = bad.getGlyfByUnicode(point);
+        return {id, glyph, byId: bad.getGlyfById(id), missingId: bad.getGlyfIdByUnicode(missing), missingGlyph: bad.getGlyfByUnicode(missing),
+          mapped: good.getUnicodeByGlyf(glyph), preserved: java.replaceFont(text,bad,good,false), filtered: java.replaceFont(text,bad,good,true)};
+      `)
     case 'rule.legacyCrypto': {
       const bindings = `const transformation = "AES/CBC/PKCS5Padding", key = ${json('key')}, iv = ${json('iv')}, plaintext = ${json('plaintext')};`
       if (str('kind') === 'legacy') return script(host, `${bindings}
