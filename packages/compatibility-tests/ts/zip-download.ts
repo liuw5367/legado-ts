@@ -34,6 +34,7 @@ export async function executeZipDownload(input: Record<string, unknown>) {
       ? `var bytes = java.getZipByteArrayContent(${args}); JSON.stringify({
           indexed: [bytes[0], bytes[1], bytes[2], bytes[3]],
           list: Array.from(bytes),
+          decoded: Array.from(java.bytesToStr(bytes, "ISO-8859-1"), c => c.charCodeAt(0)),
           hex: Array.from(bytes, n => (n & 255).toString(16).padStart(2, "0")).join("")
         })`
       : `JSON.stringify(${value})`

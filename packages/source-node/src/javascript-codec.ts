@@ -182,6 +182,8 @@ export const guestCodecSource = String.raw`(() => {
       if (typeof value === 'symbol') throw new Error('__LEGADO_SERIALIZATION__ unsupported value type')
       if (value instanceof Date) return { t: 'date', v: value.toISOString() }
       if (value instanceof Uint8Array) return { t: 'bytes', v: Array.from(value) }
+      // Java byte[] 在脚本中有符号，传到宿主时仍使用相同的八位字节。
+      if (value instanceof Int8Array) return { t: 'bytes', v: Array.from(value, (item) => item & 255) }
       if (value instanceof Map || value instanceof Set) throw new Error('__LEGADO_SERIALIZATION__ Map and Set values are not supported')
       if (references.has(value)) return { t: 'ref', v: references.get(value) }
       const id = String(nextId++)

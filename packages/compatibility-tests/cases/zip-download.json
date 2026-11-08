@@ -475,7 +475,13 @@
             -128,
             -1
           ],
-          "hex": "007f80ff"
+          "hex": "007f80ff",
+          "decoded": [
+            0,
+            127,
+            128,
+            255
+          ]
         },
         "status": "success",
         "requests": [],
@@ -613,7 +619,13 @@
             -128,
             -1
           ],
-          "hex": "007f80ff"
+          "hex": "007f80ff",
+          "decoded": [
+            0,
+            127,
+            128,
+            255
+          ]
         },
         "status": "success",
         "requests": [],

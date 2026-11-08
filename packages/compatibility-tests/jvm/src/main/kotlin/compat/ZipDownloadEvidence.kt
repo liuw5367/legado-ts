@@ -20,11 +20,15 @@ internal fun zipDownloadEvidence(input: JsonObject): Any {
         when {
             input.get("observeScriptBytes")?.asBoolean == true -> Context.enter().use { engine ->
                 val scope = engine.initSafeStandardObjects()
-                scope.put("bytes", scope, Context.javaToJS(requireNotNull(bytes), scope))
+                val raw = requireNotNull(bytes)
+                scope.put("bytes", scope, Context.javaToJS(raw, scope))
+                // JsExtensions.bytesToStr(ByteArray, charset) 调用 JVM String 构造器。
+                scope.put("decoded", scope, String(raw, Charsets.ISO_8859_1))
                 val script = """
                     JSON.stringify({
                       indexed: [bytes[0], bytes[1], bytes[2], bytes[3]],
                       list: Array.from(bytes),
+                      decoded: Array.from(decoded, c => c.charCodeAt(0)),
                       hex: Array.from(bytes, n => (n & 255).toString(16).padStart(2, "0")).join("")
                     })
                 """.trimIndent()
