@@ -18,7 +18,7 @@ test('HTML adapter 的 html 输出保留当前元素并移除脚本和样式', (
   const document = new HtmlParserAdapter().parse('<div class="book"><a>A</a><script>bad()</script><style>.bad{}</style></div>')
   const node = document.select('div.book')[0]!
 
-  assert.equal(document.read(node, 'html'), '<div class="book"><a>A</a></div>')
+  assert.equal(document.read(node, 'html'), '<div class="book">\n <a>A</a>\n</div>')
   assert.equal(document.read(node, 'all'), '<div class="book"><a>A</a><script>bad()</script><style>.bad{}</style></div>')
 })
 
