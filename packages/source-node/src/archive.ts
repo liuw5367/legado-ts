@@ -94,7 +94,7 @@ function findEndOfCentralDirectory(bytes: Uint8Array): number {
   throw new Error('zip end of central directory is missing')
 }
 
-function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSignal, includeDirectories = false, localOrder = false): ArchiveEntry[] {
+function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSignal, includeDirectories = false, targetPath?: string): ArchiveEntry[] {
   const end = findEndOfCentralDirectory(input)
   ensureRange(input, end, 22, 'zip end of central directory is truncated')
   const count = u16(input, end + 10)
@@ -104,7 +104,7 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSign
   ensureRange(input, directoryOffset, directorySize, 'zip central directory is truncated')
   if (directoryOffset + directorySize > end) throw new Error('zip central directory is invalid')
   const result: ArchiveEntry[] = []
-  const localOffsets = localOrder ? new Map<ArchiveEntry, number>() : undefined
+  const pending = targetPath === undefined ? undefined : [] as Array<{ path: string; offset: number; read: () => ArchiveEntry }>
   let cursor = directoryOffset
   let total = 0
   let entryCount = 0
@@ -139,15 +139,27 @@ function extractZip(input: Uint8Array, limits: ArchiveLimits, signal?: AbortSign
     const localExtraLength = u16(input, localOffset + 28)
     const dataStart = localOffset + 30 + localNameLength + localExtraLength
     ensureRange(input, dataStart, compressedSize, 'zip entry data is truncated')
-    const compressed = input.slice(dataStart, dataStart + compressedSize)
-    const data = directory ? new Uint8Array() : method === 0 ? Uint8Array.from(compressed) : method === 8 ? inflateLimited(compressed, limits.maxEntryBytes) : (() => { throw new Error(`zip compression method is unsupported: ${method}`) })()
-    if (data.byteLength !== uncompressedSize || crc32(data) !== expectedCrc) throw new Error('zip entry integrity check failed')
-    total += data.byteLength
-    const entry = { path: directory ? `${path}/` : path, data, compressedSize, size: uncompressedSize, crc: expectedCrc, method, ...(comment.length === 0 ? {} : { comment }) }
-    result.push(entry)
-    localOffsets?.set(entry, localOffset)
+    total += uncompressedSize
+    const entryPath = directory ? `${path}/` : path
+    const read = (): ArchiveEntry => {
+      const compressed = input.slice(dataStart, dataStart + compressedSize)
+      const data = directory ? new Uint8Array() : method === 0 ? Uint8Array.from(compressed) : method === 8 ? inflateLimited(compressed, limits.maxEntryBytes) : (() => { throw new Error(`zip compression method is unsupported: ${method}`) })()
+      if (data.byteLength !== uncompressedSize || crc32(data) !== expectedCrc) throw new Error('zip entry integrity check failed')
+      return { path: entryPath, data, compressedSize, size: uncompressedSize, crc: expectedCrc, method, ...(comment.length === 0 ? {} : { comment }) }
+    }
+    if (pending === undefined) result.push(read())
+    else pending.push({ path: entryPath, offset: localOffset, read })
   }
-  if (localOffsets !== undefined) result.sort((left, right) => localOffsets.get(left)! - localOffsets.get(right)!)
+  if (pending !== undefined) {
+    // 完成全包元数据和预算检查后，按本地记录顺序验证 Android 实际读过的内容。
+    // 跳过的条目也会被 ZipInputStream 消费并验证，命中目标后不再读取后续条目。
+    pending.sort((left, right) => left.offset - right.offset)
+    for (const [index, entry] of pending.entries()) {
+      if (signal?.aborted) throw new Error('__LEGADO_CANCELLED__')
+      const decoded = entry.read()
+      if (index % 2 === 0 && entry.path === targetPath) return [decoded]
+    }
+  }
   return result
 }
 
@@ -158,8 +170,7 @@ export function decodeZipEntries(input: Uint8Array, signal?: AbortSignal): Archi
 
 /** 书源的 ZIP 单条目读取按本地记录顺序检查第 1、3、5… 个条目。 */
 export function readSourceZipEntry(input: Uint8Array, path: string, signal: AbortSignal): Uint8Array | undefined {
-  const entries = extractZip(input, defaults, signal, true, true)
-  return entries.find((entry, index) => index % 2 === 0 && entry.path === path)?.data
+  return extractZip(input, defaults, signal, true, path)[0]?.data
 }
 
 export class NodeArchiveHost implements ArchiveHost {

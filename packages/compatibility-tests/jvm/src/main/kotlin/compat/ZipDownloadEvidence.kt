@@ -1,6 +1,8 @@
 package compat
 
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import org.htmlunit.corejs.javascript.Context
 import io.legado.app.help.CorpusJsExtensions
 import io.legado.app.lib.icu4j.CharsetDetector
 import java.io.IOException
@@ -15,7 +17,23 @@ internal fun zipDownloadEvidence(input: JsonObject): Any {
     val result = runCatching {
         if (transportFailed) throw IOException("离线下载失败")
         val bytes = CorpusJsExtensions.zipBytes(Base64.getDecoder().decode(text("archive")), text("path"))
-        if (binary) bytes?.map { it.toInt() and 0xff } else if (bytes == null) "" else String(bytes, Charset.forName(CharsetDetector().setText(bytes).detect()?.name ?: "UTF-8"))
+        when {
+            input.get("observeScriptBytes")?.asBoolean == true -> Context.enter().use { engine ->
+                val scope = engine.initSafeStandardObjects()
+                scope.put("bytes", scope, Context.javaToJS(requireNotNull(bytes), scope))
+                val script = """
+                    JSON.stringify({
+                      indexed: [bytes[0], bytes[1], bytes[2], bytes[3]],
+                      list: Array.from(bytes),
+                      hex: Array.from(bytes, n => (n & 255).toString(16).padStart(2, "0")).join("")
+                    })
+                """.trimIndent()
+                JsonParser.parseString(Context.toString(engine.evaluateString(scope, script, "zip-byte-fixture", 1, null)))
+            }
+            binary -> bytes?.map { it.toInt() and 0xff }
+            bytes == null -> ""
+            else -> String(bytes, Charset.forName(CharsetDetector().setText(bytes).detect()?.name ?: "UTF-8"))
+        }
     }
     return mapOf(
         "text" to result.getOrNull(),

@@ -1825,6 +1825,9 @@
               },
               "hex": {
                 "type": "boolean"
+              },
+              "observeScriptBytes": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false

@@ -542,7 +542,8 @@
       "finalUrl": "string",
       "authorization": "string",
       "binary": "boolean",
-      "hex": "boolean"
+      "hex": "boolean",
+      "observeScriptBytes": "boolean"
     }
   },
   "rule.legacyCrypto": {

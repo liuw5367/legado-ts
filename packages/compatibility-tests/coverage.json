@@ -1763,7 +1763,12 @@
         "rule.zipDownload.multi-entry-4",
         "rule.zipDownload.multi-entry-5",
         "rule.zipDownload.multi-entry-directory",
-        "rule.zipDownload.multi-entry-local-order"
+        "rule.zipDownload.multi-entry-local-order",
+        "rule.zipDownload.entry-stop-early-hit",
+        "rule.zipDownload.entry-stop-corrupt-target",
+        "rule.zipDownload.entry-stop-corrupt-skipped",
+        "rule.zipDownload.entry-stop-missing-after-corrupt",
+        "rule.zipDownload.entry-stop-signed-script-bytes"
       ]
     },
     {
