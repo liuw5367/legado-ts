@@ -76,11 +76,19 @@
       "sha256": "b587bd35e58898a0197abedb352a2acbe8c1a3c5c24573d77d2b7a98b6d7be6c",
       "sections": [
         [
+          990,
+          1000
+        ],
+        [
+          1003,
+          1004
+        ],
+        [
           1167,
           1175
         ]
       ],
-      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\n\nobject CorpusJsExtensions {",
+      "prefix": "package io.legado.app.help\n\nimport io.legado.app.constant.AppPattern\nimport io.legado.app.utils.StringUtils\n\nimport java.io.ByteArrayInputStream\nimport java.io.ByteArrayOutputStream\nimport java.util.zip.ZipEntry\nimport java.util.zip.ZipInputStream\n\nobject CorpusJsExtensions {\n    fun zipBytes(bytes: ByteArray, path: String): ByteArray? {",
       "suffix": "}"
     },
     {
@@ -146,6 +154,54 @@
     {
       "path": "app/src/main/java/io/legado/app/help/http/StrResponse.kt",
       "sha256": "99b7138e4657eec7f7d546aa6ebf4fa5d7a7497d6f3cf79e2dd310fbd9cf722c"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetDetector.java",
+      "sha256": "98988942b54f8fc841e440e821b126b2cb4afc32808cc3d1a6872add4e7de226",
+      "sections": [
+        [
+          1,
+          10
+        ],
+        [
+          17,
+          101
+        ],
+        [
+          113,
+          587
+        ]
+      ],
+      "prefix": "",
+      "suffix": "@interface NonNull {}\n@interface Nullable {}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetMatch.java",
+      "sha256": "e24dacc5ee1b53df9f9fa42ae11c651f31a96cdbe555fb90253568fda0c98635"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetRecog_2022.java",
+      "sha256": "4cc3a7641da6dfbb3f177fa35f2c89021109fcd03bd0eeec32afc23022017631"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetRecog_UTF8.java",
+      "sha256": "52adb7b42afd02f4884b0ef725f0691012225bb923cdf1cee3bf8047263d707d"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetRecog_Unicode.java",
+      "sha256": "2337825722cc44471fdcb7b1192c4245d368272fda5241fbcaadef31320c95dc"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetRecog_mbcs.java",
+      "sha256": "aa9d209807f092d2fda3044d432538d4f0d3a50dc7aabaecf1a26b84316199a5"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetRecog_sbcs.java",
+      "sha256": "02e613b3fcb62e5a61ad42519ab6698a7479664834a920b7e9bc2e30fcaa7f2e"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/lib/icu4j/CharsetRecognizer.java",
+      "sha256": "e0d5d65501b92a7a56352034989603da2be08fd6c4b34275b957fb3e9a2a4e38"
     }
   ],
   "adaptations": [
@@ -165,6 +221,10 @@
     {
       "file": "scripts/prepare-jvm.mjs",
       "reason": "从校验过原文件摘要的 StringUtils 和 JsExtensions 提取纯章节数字方法，函数体原样编译。"
+    },
+    {
+      "file": "reference-sources.json",
+      "reason": "ICU CharsetDetector 原样保留字节与普通 InputStream 检测。排除只接受 Android ParcelFileDescriptor 的重载，非空注解用同包无行为声明替代。"
     }
   ],
   "scriptEngine": {

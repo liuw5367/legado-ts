@@ -65,7 +65,8 @@
         "rule.scriptLibrary",
         "rule.sourceState",
         "flow.contentLifecycle",
-        "rule.coverStream"
+        "rule.coverStream",
+        "rule.zipDownload"
       ]
     },
     "input": {
@@ -1691,6 +1692,51 @@
                 "type": "string"
               },
               "src": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.zipDownload"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "kind",
+              "path",
+              "archive",
+              "url",
+              "finalUrl",
+              "authorization"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "archive": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "finalUrl": {
+                "type": "string"
+              },
+              "authorization": {
                 "type": "string"
               }
             },

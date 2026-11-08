@@ -28,6 +28,7 @@ private fun execute(item: JsonObject): Any? {
         "flow.book" -> executeBookFlow(input)
         "flow.contentLifecycle" -> executeContentLifecycle(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
+        "rule.zipDownload" -> zipDownloadEvidence(input)
         "rule.coverStream" -> coverStreamEvidence(input)
         "rule.sourceState" -> sourceStateEvidence(input)
         "rule.scriptLibrary" -> scriptLibraryEvidence(input)

@@ -1,0 +1,42 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { NormalizedSource } from '../../source-core/src/index.ts'
+import { createNodeSourceSession } from '../../source-node/src/source-session.ts'
+
+export async function executeZipDownload(input: Record<string, unknown>) {
+  const root = await mkdtemp(join(tmpdir(), 'legado-compat-zip-'))
+  const url = String(input.url)
+  const finalUrl = String(input.finalUrl)
+  const source: NormalizedSource = { bookSourceUrl: new URL(url).origin, bookSourceName: 'zip-fixture' }
+  const requests: unknown[] = []
+  const session = createNodeSourceSession(source, {
+    fileRoot: root,
+    network: {
+      getLoginHeaders: () => ({ Authorization: String(input.authorization) }),
+      request: async (plan) => {
+        const transportFailed = input.kind === 'transport-failure' || plan.url !== url
+        requests.push({
+          method: plan.method, url: plan.url,
+          authorization: Object.entries(plan.headers).find(([name]) => name.toLowerCase() === 'authorization')?.[1] ?? null,
+          followRedirects: plan.followRedirects, finalUrl: transportFailed ? null : finalUrl,
+        })
+        if (transportFailed) throw new Error('离线下载失败')
+        return { status: 200, url: finalUrl, bytes: Buffer.from(String(input.archive), 'base64'), headers: {}, redirected: true }
+      },
+    },
+  })
+  try {
+    const code = `JSON.stringify(java.getZipStringContent(${JSON.stringify(url)}, ${JSON.stringify(input.path)}))`
+    const result = await session.run((ports) => ports.rules.evaluate({
+      source, stage: 'content', field: 'fixture', rule: `@js:${code}`, content: '',
+    }))
+    return {
+      text: result.status === 'success' ? JSON.parse(String(result.value)) : null,
+      status: result.status, requests, remainingFiles: await readdir(root, { recursive: true }),
+    }
+  } finally {
+    session.close()
+    await rm(root, { recursive: true, force: true })
+  }
+}

@@ -1703,6 +1703,25 @@
         "rule.coverStream.batch-empty",
         "rule.coverStream.batch-fail"
       ]
+    },
+    {
+      "operation": "rule.zipDownload",
+      "method": "getZipStringContent 远程下载和自动字符集",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "createNodeSourceSession → java.getZipStringContent",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "failure"
+      ],
+      "caseIds": [
+        "rule.zipDownload.batch-utf8",
+        "rule.zipDownload.batch-bom",
+        "rule.zipDownload.batch-missing",
+        "rule.zipDownload.batch-corrupt",
+        "rule.zipDownload.batch-transport-failure"
+      ]
     }
   ]
 }

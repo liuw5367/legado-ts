@@ -1,0 +1,188 @@
+[
+  {
+    "id": "rule.zipDownload.batch-utf8",
+    "operation": "rule.zipDownload",
+    "family": "zip-download",
+    "input": {
+      "kind": "utf8",
+      "path": "utf8.txt",
+      "archive": "UEsDBBQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAdXRmOC50eHQBEwDs/+WbuuWumuW9kuaho+ato+aWhwpQSwMEFAAAAAgAAAAhWA4g9AUJAAAABwAAAAsAAABwYWRkaW5nLnR4dCtITEnJzEsHAFBLAwQUAAAACAAAACFYZdugESAAAAAbAAAABwAAAGJvbS50eHQBGwDk/++7v+W4puacieWtl+iKgumhuuW6j+agh+iusFBLAQIUAxQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAAAAAAAAAAACAAQAAAAB1dGY4LnR4dFBLAQIUAxQAAAAIAAAAIVgOIPQFCQAAAAcAAAALAAAAAAAAAAAAAACAAT4AAABwYWRkaW5nLnR4dFBLAQIUAxQAAAAIAAAAIVhl26ARIAAAABsAAAAHAAAAAAAAAAAAAACAAXAAAABib20udHh0UEsFBgAAAAADAAMApAAAALUAAAAAAA==",
+      "url": "https://fixture.invalid/download",
+      "finalUrl": "https://fixture.invalid/files/test.zip",
+      "authorization": "Bearer fixture"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsExtensions 原始 ZIP 条目循环 + Android ICU 探测；传输边界按 AnalyzeUrl 编排"
+    },
+    "tags": [
+      "normal"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "text": "固定归档正文\n",
+        "status": "success",
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://fixture.invalid/download",
+            "authorization": "Bearer fixture",
+            "followRedirects": true,
+            "finalUrl": "https://fixture.invalid/files/test.zip"
+          }
+        ],
+        "remainingFiles": []
+      }
+    }
+  },
+  {
+    "id": "rule.zipDownload.batch-bom",
+    "operation": "rule.zipDownload",
+    "family": "zip-download",
+    "input": {
+      "kind": "bom",
+      "path": "bom.txt",
+      "archive": "UEsDBBQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAdXRmOC50eHQBEwDs/+WbuuWumuW9kuaho+ato+aWhwpQSwMEFAAAAAgAAAAhWA4g9AUJAAAABwAAAAsAAABwYWRkaW5nLnR4dCtITEnJzEsHAFBLAwQUAAAACAAAACFYZdugESAAAAAbAAAABwAAAGJvbS50eHQBGwDk/++7v+W4puacieWtl+iKgumhuuW6j+agh+iusFBLAQIUAxQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAAAAAAAAAAACAAQAAAAB1dGY4LnR4dFBLAQIUAxQAAAAIAAAAIVgOIPQFCQAAAAcAAAALAAAAAAAAAAAAAACAAT4AAABwYWRkaW5nLnR4dFBLAQIUAxQAAAAIAAAAIVhl26ARIAAAABsAAAAHAAAAAAAAAAAAAACAAXAAAABib20udHh0UEsFBgAAAAADAAMApAAAALUAAAAAAA==",
+      "url": "https://fixture.invalid/download",
+      "finalUrl": "https://fixture.invalid/files/test.zip",
+      "authorization": "Bearer fixture"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsExtensions 原始 ZIP 条目循环 + Android ICU 探测；传输边界按 AnalyzeUrl 编排"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "text": "﻿带有字节顺序标记",
+        "status": "success",
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://fixture.invalid/download",
+            "authorization": "Bearer fixture",
+            "followRedirects": true,
+            "finalUrl": "https://fixture.invalid/files/test.zip"
+          }
+        ],
+        "remainingFiles": []
+      }
+    }
+  },
+  {
+    "id": "rule.zipDownload.batch-missing",
+    "operation": "rule.zipDownload",
+    "family": "zip-download",
+    "input": {
+      "kind": "missing",
+      "path": "missing.txt",
+      "archive": "UEsDBBQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAdXRmOC50eHQBEwDs/+WbuuWumuW9kuaho+ato+aWhwpQSwMEFAAAAAgAAAAhWA4g9AUJAAAABwAAAAsAAABwYWRkaW5nLnR4dCtITEnJzEsHAFBLAwQUAAAACAAAACFYZdugESAAAAAbAAAABwAAAGJvbS50eHQBGwDk/++7v+W4puacieWtl+iKgumhuuW6j+agh+iusFBLAQIUAxQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAAAAAAAAAAACAAQAAAAB1dGY4LnR4dFBLAQIUAxQAAAAIAAAAIVgOIPQFCQAAAAcAAAALAAAAAAAAAAAAAACAAT4AAABwYWRkaW5nLnR4dFBLAQIUAxQAAAAIAAAAIVhl26ARIAAAABsAAAAHAAAAAAAAAAAAAACAAXAAAABib20udHh0UEsFBgAAAAADAAMApAAAALUAAAAAAA==",
+      "url": "https://fixture.invalid/download",
+      "finalUrl": "https://fixture.invalid/files/test.zip",
+      "authorization": "Bearer fixture"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsExtensions 原始 ZIP 条目循环 + Android ICU 探测；传输边界按 AnalyzeUrl 编排"
+    },
+    "tags": [
+      "empty",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "text": null,
+        "status": "failed",
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://fixture.invalid/download",
+            "authorization": "Bearer fixture",
+            "followRedirects": true,
+            "finalUrl": "https://fixture.invalid/files/test.zip"
+          }
+        ],
+        "remainingFiles": []
+      }
+    }
+  },
+  {
+    "id": "rule.zipDownload.batch-corrupt",
+    "operation": "rule.zipDownload",
+    "family": "zip-download",
+    "input": {
+      "kind": "corrupt",
+      "path": "utf8.txt",
+      "archive": "UEsDBBQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAdXRmOC50eHQBEwDs",
+      "url": "https://fixture.invalid/download",
+      "finalUrl": "https://fixture.invalid/files/test.zip",
+      "authorization": "Bearer fixture"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsExtensions 原始 ZIP 条目循环 + Android ICU 探测；传输边界按 AnalyzeUrl 编排"
+    },
+    "tags": [
+      "failure"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "text": null,
+        "status": "failed",
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://fixture.invalid/download",
+            "authorization": "Bearer fixture",
+            "followRedirects": true,
+            "finalUrl": "https://fixture.invalid/files/test.zip"
+          }
+        ],
+        "remainingFiles": []
+      }
+    }
+  },
+  {
+    "id": "rule.zipDownload.batch-transport-failure",
+    "operation": "rule.zipDownload",
+    "family": "zip-download",
+    "input": {
+      "kind": "transport-failure",
+      "path": "utf8.txt",
+      "archive": "UEsDBBQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAdXRmOC50eHQBEwDs/+WbuuWumuW9kuaho+ato+aWhwpQSwMEFAAAAAgAAAAhWA4g9AUJAAAABwAAAAsAAABwYWRkaW5nLnR4dCtITEnJzEsHAFBLAwQUAAAACAAAACFYZdugESAAAAAbAAAABwAAAGJvbS50eHQBGwDk/++7v+W4puacieWtl+iKgumhuuW6j+agh+iusFBLAQIUAxQAAAAIAAAAIVgEDPWDGAAAABMAAAAIAAAAAAAAAAAAAACAAQAAAAB1dGY4LnR4dFBLAQIUAxQAAAAIAAAAIVgOIPQFCQAAAAcAAAALAAAAAAAAAAAAAACAAT4AAABwYWRkaW5nLnR4dFBLAQIUAxQAAAAIAAAAIVhl26ARIAAAABsAAAAHAAAAAAAAAAAAAACAAXAAAABib20udHh0UEsFBgAAAAADAAMApAAAALUAAAAAAA==",
+      "url": "https://fixture.invalid/download",
+      "finalUrl": "https://fixture.invalid/files/test.zip",
+      "authorization": "Bearer fixture"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "JsExtensions 原始 ZIP 条目循环 + Android ICU 探测；传输边界按 AnalyzeUrl 编排"
+    },
+    "tags": [
+      "failure"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "text": null,
+        "status": "failed",
+        "requests": [
+          {
+            "method": "GET",
+            "url": "https://fixture.invalid/download",
+            "authorization": "Bearer fixture",
+            "followRedirects": true,
+            "finalUrl": null
+          }
+        ],
+        "remainingFiles": []
+      }
+    }
+  }
+]

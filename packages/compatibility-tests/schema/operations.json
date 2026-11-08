@@ -504,5 +504,23 @@
       "script": "string",
       "src": "string"
     }
+  },
+  "rule.zipDownload": {
+    "required": [
+      "kind",
+      "path",
+      "archive",
+      "url",
+      "finalUrl",
+      "authorization"
+    ],
+    "properties": {
+      "kind": "string",
+      "path": "string",
+      "archive": "string",
+      "url": "string",
+      "finalUrl": "string",
+      "authorization": "string"
+    }
   }
 }

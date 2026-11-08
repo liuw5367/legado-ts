@@ -153,6 +153,8 @@ git diff --check
 
 - E2 `rule.coverStream.batch-*` 由固定 Rhino 和 JDK ByteArrayInputStream 与实际 TS `decodeImage` 执行同一脚本。验证单字节、偏移缓冲区、空输入 EOF、输出字节与正常或异常的脚本 close。Android 参考按 ImageUtils 将脚本 ByteArray 包成输出流，TS 直接交付字节。原始下载流和 Glide 清理未在此验证。[封面流 3/3 一致](../packages/compatibility-tests/output/run-9bk8hH/report.md)，既有封面回归 9/9，类型检查通过。
 
+- E3 从固定 JsExtensions 原样提取 ZIP 条目循环，使用同一上游 ICU 实现探测原始字节。TS 经真实 Node 会话和文件脚本入口访问受控传输，断言 GET、虚构认证、允许重定向、最终地址与目录无残留；文件宿主专项另验证部分写入后失败/取消的清理。BOM 和缺条目分别由 `a25dce5`、`dc57a10` 修复。[修复前](../packages/compatibility-tests/output/run-OiLxGh/report.md) · [5/5 一致](../packages/compatibility-tests/output/run-sO4wNF/report.md)。重定向在传输边界模拟，未执行真实 HTTP 或 Android 应用。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。
