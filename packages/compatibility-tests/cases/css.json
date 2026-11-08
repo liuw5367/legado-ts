@@ -1000,5 +1000,28 @@
       "outcome": "return",
       "value": "<item id=\"probe\">a</item>"
     }
+  },
+  {
+    "id": "css.list.block-html-own-text-control",
+    "family": "css",
+    "operation": "css.list",
+    "input": {
+      "content": "<div class=\"outer\">needle<span>nested</span><p><b>needle descendant</b></p><script>bad()</script></div>",
+      "rule": "div@html"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getStringList(String)"
+    },
+    "tags": [
+      "edge",
+      "html-block-output"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        "<div class=\"outer\">\n needle<span>nested</span>\n <p><b>needle descendant</b></p>\n</div>"
+      ]
+    }
   }
 ]

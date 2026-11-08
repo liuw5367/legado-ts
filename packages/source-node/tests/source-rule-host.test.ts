@@ -106,7 +106,7 @@ test('HTML 规则的 text 选择器只匹配元素自身文本，html 返回外�
 
   const withHtml = await evaluate(host, 'div@html', html)
   assert.equal(withHtml.status, 'success')
-  assert.deepEqual(withHtml.value, ['<div class="outer">needle<span>nested</span><p><b>needle descendant</b></p></div>'])
+  assert.deepEqual(withHtml.value, ['<div class="outer">\n needle<span>nested</span>\n <p><b>needle descendant</b></p>\n</div>'])
 })
 
 test('HTML 规则兼容 Android 的多 class 简写选择器', async () => {

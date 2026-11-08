@@ -384,6 +384,7 @@
       ],
       "caseIds": [
         "css.list.legacy",
+        "css.list.block-html-own-text-control",
         "css.list.css",
         "css.list.negative",
         "css.list.textNodes",
