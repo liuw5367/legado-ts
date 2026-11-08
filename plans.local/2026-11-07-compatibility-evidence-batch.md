@@ -1,6 +1,6 @@
 # 书源兼容性批量复测与修复
 
-- 状态：approved
+- 状态：completed
 - 创建：2026-11-07
 - 更新：2026-11-08
 - 基线：legado-ts `fb87d93`，Android `32a87b253e7cc28273c3850de86242caac83f1fd`
@@ -173,6 +173,25 @@ git diff --check
 | `JS-TOC-001` | 整源 JS 函数返回卷节点、普通章节、VIP 与购买字段 | `flow.yiove.js.*` 对照声明式目录脚本。整源函数、卷身份及购买字段仍只由旧 fixture 验证。 |
 | `JS-TOC-001` | 正文接收下一章地址、类型为 text、清洗内容与零请求 | `flow.yck.cuoceng.next-chapter` 对照声明式下一章停止，仍需保留整源函数参数与完全不发网络请求的断言。 |
 | 三条共有 | 可导入书源、工作流终态和活动请求归零 | 新双端案例对照终态，E1 单独验证取消释放。保留旧输入的导入及逐例资源断言，原路径越权、清理和历史缺陷的 Node 回归也继续执行。 |
+
+
+### 最终批次验收
+
+24 项均有独立任务提交或对应的差异判定。
+
+| 阶段 | 任务提交 |
+| --- | --- |
+| A | A1 `eaee1d5` · A2 `fbf4037` · A3 `0dbcc31` · A4 `3c210eb` |
+| B | B1 `ffad8de` · B2 `ac32507` · B3 `8e93665` · B4 `e27637d` |
+| C | C1 `97e3d70` · C2 `13ebc41` · C3 `dcac0bb` · C4 `cd75cd7` |
+| D | D1 `2f58c4a` · D2 `0396ecc` · D3 `0226991`、`2419872` · D4 `b89214c` |
+| E | E1 `85b62c0` · E2 `3830115` · E3 `a0af31c`、`f6aee8a` · E4 `9e6bb70` |
+| F | F1 `11dbd41` · F2 `307bbe2` · F3 `e0196ed` · F4 `8749da5` |
+
+- [全量双端报告](../packages/compatibility-tests/output/run-LgkZvM/report.md) 共 564 例。基础 API 520 例，517 一致、3 例允许差异；离线流程 42 例，41 一致、1 例允许差异，其中完整流程 25 例、阶段 17 例；另有 2 个未支持的参考内部观察。无未登记差异和执行失败。
+- 两次离线流程 [第一次](../packages/compatibility-tests/output/run-1Npvc5/report.md) · [第二次](../packages/compatibility-tests/output/run-MOGGSV/report.md) 的 JVM 与 TS 逐例结果和报告案例完全一致。比较保留请求、状态和引用，仅排除运行元数据。
+- JDK 21 参考准备、机制测试 32/32、书源专项 207/207、根回归 700/700、类型检查、构建和 `git diff --check` 均通过。按原计划使用本机环回端口运行 HTTP 夹具。上游 Android 参考源码与锁定依赖路径保持只读。
+- Android 应用和真实设备的结果仍按 F3 取证。差异台账保留未核实的 HTML 序列化下游影响、ZIP 逐条枚举、其他 provider，以及逐项声明的宿主和隔离边界。F4 三个旧夹具保留，现有 Android 旧入口缺产物仍为 `not-run`。
 
 ## 变更记录
 
