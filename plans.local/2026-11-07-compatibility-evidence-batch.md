@@ -161,6 +161,19 @@ git diff --check
 
 - F3 [真实 Android 宿主取证协议](../docs/compatibility/conformance-tests.md#真实-android-宿主取证) 列出五类宿主边界、固定输入、版本、可观察输出、脱敏和离线导入方法。用空产物目录验证 preflight 与 `--require-android` 均返回退出码 2，现有六例保持 `not-run`。未执行设备采集。
 
+
+- F4 复验 `source-cross-runtime.test.ts` 的六个 manifest 案例。以下三条旧夹具均保留，保留理由按原断言拆分。
+
+| 旧夹具 | 旧断言 | 本批复核与迁移判定 |
+| --- | --- | --- |
+| `HTML-FLOW-001` | 搜索书名、作者、详情 URL；详情书名、作者、独立目录 URL；目录标题、章节 URL；四次请求顺序 | `flow.yiove.html.success` 双端验证对应契约，但源与原规则不同。旧输入及其精确字段投影仍保留。 |
+| `HTML-FLOW-001` | `contentType: html`、原响应清洗后的精确正文 | 新流程验证正文展示，`flow.synthetic.html-br.display` 额外覆盖换行。原 fixture 的 HTML 类型、选择器及清洗产物无同输入替代。 |
+| `JSON-FLOW-001` | 搜索与详情字段、JSONPath 目录筛选、顺序及 VIP 标记 | `flow.synthetic.json.page-end` 复用同组规则，行为层可替代；旧地址和响应身份仍由旧 fixture 验证。 |
+| `JSON-FLOW-001` | `contentType: text`、两页原始 `pages` 数组和五次精确请求 | `flow.synthetic.json.*` 对照页数、合并正文和停止条件。原类型、逐页内容及原地址仍保留。 |
+| `JS-TOC-001` | 整源 JS 函数返回卷节点、普通章节、VIP 与购买字段 | `flow.yiove.js.*` 对照声明式目录脚本。整源函数、卷身份及购买字段仍只由旧 fixture 验证。 |
+| `JS-TOC-001` | 正文接收下一章地址、类型为 text、清洗内容与零请求 | `flow.yck.cuoceng.next-chapter` 对照声明式下一章停止，仍需保留整源函数参数与完全不发网络请求的断言。 |
+| 三条共有 | 可导入书源、工作流终态和活动请求归零 | 新双端案例对照终态，E1 单独验证取消释放。保留旧输入的导入及逐例资源断言，原路径越权、清理和历史缺陷的 Node 回归也继续执行。 |
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。
