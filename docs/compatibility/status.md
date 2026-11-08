@@ -2,6 +2,12 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-08 P2：Jsoup `:matchText` 嵌套选择器
+
+Android/JVM 对照显示，Jsoup 的 `:matchText` evaluator 会在检查原元素时把直接文本节点改写成同标签、同属性的伪元素，并对原元素返回 `false`；后续 `:not`、`:is` 和顶层 `:matchText` 都基于改写后的节点树求值。TS 原先使用脱离真实树的虚拟节点，导致嵌套选择结果与 Android 不同。`HtmlDocumentView.matchTextEvaluator` 现在按该行为改写真实 DOM，保留伪元素文本、属性、删除映射和文档顺序。
+
+兼容集新增 `css.nodes.nested-matchtext-not`、`css.nodes.nested-matchtext-is`、`css.nodes.matchtext-order-after-nested-evaluation`，覆盖 `:not`、`:is` 和嵌套求值后的顺序；C9 将这些案例与 JVM 对照、TS 入口和运行报告关联。CSS family 为 **68/68 双端一致**，根测试 **708/708**、source **208/208**、reader-web **342/342**，类型检查通过。D18 的 CSS 族仍为 `partial`：完整 Jsoup 版本、复杂转义、畸形 HTML、XML 修复和 Android 应用 golden 尚未覆盖；本次只关闭 `:matchText` 的已验证子集。JVM 案例是固定参考端证据，不代表 Android 应用或设备实测。
+
 ## 2026-11-08 D11：副正文取消后的同步规则续跑
 
 本轮以 Android `BookContent.analyzeContent` 的实际控制流为基准。可选 `subContent` 请求和保存位于 Kotlin `runCatching` 中；请求抛出 `CancellationException` 后，代码仍会同步执行正文 `replaceRegex` 和章节 `title` 规则，而外层协程仍保持取消，最终不会交付正文。TypeScript 原先在副文请求取消时立即返回，漏掉了这两个同步规则步骤。

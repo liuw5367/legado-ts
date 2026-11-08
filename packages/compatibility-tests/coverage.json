@@ -1360,7 +1360,10 @@
         "corpus.source-7.ruleToc.chapterList",
         "corpus.source-10.ruleExplore.bookList",
         "corpus.source-5.ruleBookInfo.init",
-        "css.nodes.batch-table-has-not-eq"
+        "css.nodes.batch-table-has-not-eq",
+        "css.nodes.nested-matchtext-not",
+        "css.nodes.nested-matchtext-is",
+        "css.nodes.matchtext-order-after-nested-evaluation"
       ]
     },
     {

@@ -743,6 +743,71 @@
     }
   },
   {
+    "id": "css.nodes.nested-matchtext-not",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"a\">A <b>B</b> C</p><p id=\"empty\"><b>D</b></p></main>",
+      "rule": "@css:p:not(:matchText)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · :matchText inside :not"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "A B C", "id": "a" },
+        { "tag": "p", "text": "D", "id": "empty" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.nested-matchtext-is",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"a\">A <b>B</b> C</p><p id=\"empty\"><b>D</b></p></main>",
+      "rule": "@css:p:is(:matchText)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · :matchText inside :is"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "A", "id": "a" },
+        { "tag": "p", "text": "C", "id": "a" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.matchtext-order-after-nested-evaluation",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<div id=\"x\">A <b>B</b> C</div><p>F</p>",
+      "rule": "@css:*:matchText"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · top-level :matchText preorder after node transformation"
+    },
+    "tags": ["edge", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "div", "text": "A", "id": "x" },
+        { "tag": "b", "text": "B", "id": "" },
+        { "tag": "div", "text": "C", "id": "x" },
+        { "tag": "p", "text": "F", "id": "" }
+      ]
+    }
+  },
+  {
     "id": "css.list.batch-table-attributes",
     "family": "css",
     "operation": "css.list",

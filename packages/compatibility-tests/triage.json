@@ -850,6 +850,26 @@
         "output/run-b5MwsV/report.json",
         "output/run-MBAaq9/report.json"
       ]
+    },
+    {
+      "id": "C9-CSS-MATCHTEXT-NESTED",
+      "caseIds": [
+        "css.nodes.nested-matchtext-not",
+        "css.nodes.nested-matchtext-is",
+        "css.nodes.matchtext-order-after-nested-evaluation"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "AnalyzeByJSoup.getElements(String) · Jsoup Evaluator.MatchText"
+      },
+      "tsEntry": "packages/source-node/src/html.ts → HtmlDocumentView.matchTextEvaluator",
+      "evidence": [
+        "output/run-ycxUhX/report.json"
+      ],
+      "resolution": "按 Android/JVM 观察到的 Jsoup evaluator 行为，将直接 TextNode 改写为真实同级伪元素；原元素 evaluator 返回 false，生成伪元素匹配 :matchText。嵌套 :not/:is 与改写后的文档顺序均有双端案例。"
     }
   ]
 }

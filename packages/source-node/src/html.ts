@@ -13,7 +13,6 @@ class HtmlDocumentView implements HtmlDocument {
   private readonly ids = new Map<string, AnyNode>()
   private readonly reverse = new WeakMap<object, string>()
   private readonly matchTextMeta = new WeakMap<object, { owner: AnyNode; text: AnyNode }>()
-  private readonly matchTextParents = new WeakMap<object, Element>()
   private nextId = 0
   private readonly root: AnyNode
   private readonly xmlMode: boolean
@@ -25,20 +24,21 @@ class HtmlDocumentView implements HtmlDocument {
 
   public select(selector: string): ParserNode[] {
     try {
-      const normalized = normalizeHtmlSelector(selector)
+      const matchText = (element: AnyNode): boolean => this.matchTextEvaluator(element)
+      const normalized = normalizeHtmlSelector(selector, matchText)
       if (!normalized.matchTextTopLevel) {
         return selectAll(normalized.selector, this.root, { adapter: jsoupCssAdapter, xmlMode: this.xmlMode, lowerCaseTags: true, pseudos: normalized.pseudos }).map((node) => this.wrap(node))
       }
       const split = splitTopLevelMatchText(selector)
       if (split === undefined) throw new ParserAdapterError('unsupported-selector', ':matchText 复杂组合选择器暂不受支持')
       const ownerSelector = split.prefix.trim() || '*'
-      const ownerNormalized = normalizeHtmlSelector(ownerSelector)
+      const ownerNormalized = normalizeHtmlSelector(ownerSelector, matchText)
       if (ownerNormalized.matchTextTopLevel) throw new ParserAdapterError('unsupported-selector', ':matchText 不能重复出现在同一选择器分支')
       const owners = selectAll(ownerNormalized.selector, this.root, { adapter: jsoupCssAdapter, xmlMode: this.xmlMode, lowerCaseTags: true, pseudos: ownerNormalized.pseudos })
       const matched = this.matchTextNodes(owners)
       const suffix = split.suffix.trim()
       if (suffix.length === 0) return matched
-      const suffixNormalized = normalizeHtmlSelector(suffix)
+      const suffixNormalized = normalizeHtmlSelector(suffix, matchText)
       if (suffixNormalized.matchTextTopLevel) throw new ParserAdapterError('unsupported-selector', ':matchText 不能嵌套在同一选择器分支')
       return matched.filter((node) => {
         const element = this.node(node)
@@ -116,15 +116,10 @@ class HtmlDocumentView implements HtmlDocument {
     const value = this.node(node)
     const matchText = this.matchTextMeta.get(value)
     if (matchText !== undefined && mutation.operation === 'remove') {
-      const parent = matchText.text.parent
+      const parent = value.parent
       if (parent !== null) {
-        parent.children = parent.children.filter((child) => child !== matchText.text)
+        parent.children = parent.children.filter((child) => child !== value)
         relinkChildren(parent)
-      }
-      const virtualParent = this.matchTextParents.get(matchText.owner)
-      if (virtualParent !== undefined) {
-        virtualParent.children = virtualParent.children.filter((child) => child !== value)
-        relinkChildren(virtualParent)
       }
       return undefined
     }
@@ -157,47 +152,46 @@ class HtmlDocumentView implements HtmlDocument {
     return { id, kind: this.kind(node) }
   }
 
-  private matchTextParent(owner: AnyNode): Element {
-    // Jsoup temporarily replaces direct TextNodes in the real parent. Keep a
-    // detached clone instead so structural suffixes can inspect sibling links
-    // without mutating the document seen by later rules.
-    const existing = this.matchTextParents.get(owner)
-    if (existing !== undefined) return existing
-    const parent = new Element(isTag(owner) ? owner.name : 'div', isTag(owner) ? (owner.attribs ?? {}) : {}, [])
-    parent.parent = isTag(owner) ? owner.parent : null
-    const children = getChildren(owner).map((child) => {
-      if (isText(child)) {
-        const pseudo = new Element(isTag(owner) ? owner.name : 'div', isTag(owner) ? (owner.attribs ?? {}) : {}, [new Text(getText(child))])
-        pseudo.parent = parent
-        this.matchTextMeta.set(pseudo, { owner, text: child })
-        return pseudo
-      }
-      const clone = child.cloneNode(true)
-      clone.parent = parent
-      return clone
+  private matchTextEvaluator(element: AnyNode): boolean {
+    if (this.matchTextMeta.has(element)) return true
+    if (!isTag(element)) return false
+    const children = getChildren(element)
+    const replaced = children.map((child) => {
+      if (!isText(child) || isScriptOrStyle(child.parent)) return child
+      const pseudo = new Element(element.name, element.attribs ?? {}, [child])
+      pseudo.parent = element
+      child.parent = pseudo
+      relinkChildren(pseudo)
+      this.matchTextMeta.set(pseudo, { owner: element, text: child })
+      return pseudo
     })
-    parent.children = children
-    for (let index = 0; index < children.length; index += 1) {
-      const child = children[index]!
-      child.prev = children[index - 1] ?? null
-      child.next = children[index + 1] ?? null
+    if (replaced.some((child, index) => child !== children[index])) {
+      element.children = replaced
+      relinkChildren(element)
     }
-    this.matchTextParents.set(owner, parent)
-    return parent
+    // Jsoup 改写直接 TextNode 后对原元素返回 false；生成的伪元素随后返回 true。
+    return false
   }
 
   private matchTextNodes(nodes: AnyNode[]): ParserNode[] {
-    const selected = new Set(nodes)
     const matched: ParserNode[] = []
+    const selected = new Set(nodes)
+    const seen = new Set<AnyNode>()
+    const add = (node: AnyNode): void => {
+      if (this.matchTextMeta.has(node) && !seen.has(node)) {
+        seen.add(node)
+        matched.push(this.wrap(node))
+      }
+    }
     const visit = (node: AnyNode): void => {
       if (!isDocument(node) && !isTag(node)) return
+      if (selected.has(node)) add(node)
+      if (selected.has(node) && !this.matchTextMeta.has(node)) this.matchTextEvaluator(node)
       for (const child of getChildren(node)) {
-        if (isTag(node) && selected.has(node) && isText(child) && !isScriptOrStyle(child.parent)) {
-          const parent = this.matchTextParent(node)
-          const pseudo = getChildren(parent).find((item) => this.matchTextMeta.get(item)?.text === child)
-          if (pseudo !== undefined) matched.push(this.wrap(pseudo))
+        if (this.matchTextMeta.has(child)) {
+          if (selected.has(node) || selected.has(child)) add(child)
         }
-        if (isDocument(child) || isTag(child)) visit(child)
+        else visit(child)
       }
     }
     visit(this.root)
@@ -362,8 +356,6 @@ const htmlPseudos: Record<string, (element: AnyNode, value?: string | null) => b
   legadocontainsdata: (element, value) => dataValue(element).toLowerCase().includes((value ?? '').toLowerCase()),
   // Jsoup :blank 只检查当前元素的直接文本；子元素本身不使父元素变为非空。
   legadoblank: (element) => normalizeWhitespace(wholeOwnTextValue(element)).trim().length === 0,
-  // Jsoup :matchText 将每个直接 TextNode 替换为一个只含该节点的伪元素。
-  legadomatchtext: (element) => isTag(element) && getChildren(element).some((child) => isText(child) && !isScriptOrStyle(child.parent)),
   legadomatchesown: (element, value) => regexMatches(pseudoRegex(value), ownTextValue(element)),
   legadomatches: (element, value) => regexMatches(pseudoRegex(value), jsoupText(element)),
   legadomatcheswholetext: (element, value) => regexMatches(pseudoRegex(value), wholeTextValue(element)),
@@ -377,7 +369,7 @@ interface NormalizedHtmlSelector {
 }
 
 /** 将 Jsoup 的文本正则和属性正则转换成 css-select 可安全执行的自定义伪类。 */
-function normalizeHtmlSelector(selector: string): NormalizedHtmlSelector {
+function normalizeHtmlSelector(selector: string, matchTextEvaluator: (element: AnyNode) => boolean): NormalizedHtmlSelector {
   const dynamic: Record<string, (element: AnyNode, value?: string | null) => boolean> = {}
   let output = ''
   let index = 0
@@ -435,7 +427,7 @@ function normalizeHtmlSelector(selector: string): NormalizedHtmlSelector {
     output += selector[index]!
     index += 1
   }
-  return { selector: output, pseudos: { ...htmlPseudos, ...dynamic }, matchTextTopLevel: hasTopLevelMatchText(selector) }
+  return { selector: output, pseudos: { ...htmlPseudos, legadomatchtext: matchTextEvaluator, ...dynamic }, matchTextTopLevel: hasTopLevelMatchText(selector) }
 }
 
 function hasTopLevelMatchText(selector: string): boolean {

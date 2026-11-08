@@ -122,6 +122,12 @@ test('HTML adapter 支持 Jsoup matchText 伪元素和嵌套 has 选择', () => 
   assert.deepEqual(xmlRemovable.select('item:matchText').map((node) => xmlRemovable.read(node, 'text')), ['C'])
 })
 
+test('HTML adapter 的嵌套 :matchText 按 Jsoup evaluator 返回 false 处理', () => {
+  const document = new HtmlParserAdapter().parse('<main><p id="a">A <b>B</b> C</p><p id="empty"><b>D</b></p></main>')
+  assert.deepEqual(document.select('p:not(:matchText)').map((node) => document.attr(node, 'id')), ['a', 'empty'])
+  assert.deepEqual(document.select('p:is(:matchText)').map((node) => document.read(node, 'text')), ['A', 'C'])
+})
+
 test('HTML adapter 的 matchText 忽略 script/style DataNode', () => {
   const document = new HtmlParserAdapter().parse('<main><div>A<script>script-data</script><style>.x{}</style>B</div></main>')
   assert.deepEqual(document.select('div:matchText').map((node) => document.read(node, 'text')), ['A', 'B'])
