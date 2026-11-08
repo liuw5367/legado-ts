@@ -270,6 +270,7 @@ export class NodeNetworkHost implements NetworkHost {
     let requestCount = 0
     let totalBytes = 0
     let stripSensitiveHeaders = false
+    let stripBodyHeaders = false
     try {
     while (true) {
       if (requestCount >= plan.budget.maxRequests) throw new Error('request count budget exceeded')
@@ -281,6 +282,11 @@ export class NodeNetworkHost implements NetworkHost {
         headers.delete('authorization')
         headers.delete('proxy-authorization')
         headers.delete('cookie')
+      }
+      if (stripBodyHeaders) {
+        headers.delete('content-type')
+        headers.delete('content-length')
+        headers.delete('transfer-encoding')
       }
       const cookie = await this.cookieStore.get(currentUrl.toString())
       const mergedCookie = mergeCookieHeaders(cookie, headers.get('cookie') ?? undefined)
@@ -313,6 +319,8 @@ export class NodeNetworkHost implements NetworkHost {
         if ((response.status === 301 || response.status === 302 || response.status === 303) && currentMethod !== 'GET' && currentMethod !== 'HEAD') {
           currentMethod = 'GET'
           currentBody = undefined
+          // OkHttp 移除原请求体的描述头，后续跳转也继续使用无请求体的 GET。
+          stripBodyHeaders = true
         }
         currentUrl = nextUrl
         redirected = true

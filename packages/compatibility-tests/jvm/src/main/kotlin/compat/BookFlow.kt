@@ -34,8 +34,18 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
     }
     val headerRule = source.text("header")
     val keyword = input.text("keyword")
+    val requestDefaults = input.rule("requestDefaults")
     val headers = headerRule.takeUnless { it.startsWith("@js:", ignoreCase = true) || it.isEmpty() }
         ?.let(::flowHeaders).orEmpty()
+    fun applyRequestDefaults(address: String, sourceHeaders: Map<String, String>): Map<String, String> {
+        val userAgent = requestDefaults.text("userAgent")
+        val defaultHeaders = if ("user-agent" !in sourceHeaders && userAgent.isNotEmpty()) mapOf("user-agent" to userAgent) else emptyMap()
+        val sourceHost = URL(sourceUrl).host
+        val requestHost = URL(URL(sourceUrl), address.substringBefore(",{")).host
+        val login = if (sourceHost == requestHost) requestDefaults.rule("loginHeaders").entrySet()
+            .associate { (key, value) -> key.lowercase() to value.asString } else emptyMap()
+        return sourceHeaders + defaultHeaders + login
+    }
     fun dynamicHeaders(): Map<String, String> =
         if (!headerRule.startsWith("@js:", ignoreCase = true)) emptyMap()
         else flowHeaders(evaluateFlowRequestScript(headerRule.substring(4), keyword, "") {
@@ -139,7 +149,8 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false): Any {
         val searchRuleUrl = evaluateFlowSearchUrl(source.text("searchUrl"), keyword) { url ->
             request("search", resolve(sourceUrl, url)).first
         }
-        val searchPlan = flowSearchRequest(searchRuleUrl, keyword, headers) { resolve(sourceUrl, it) }
+        val searchHeaders = if (requestDefaults.size() == 0) headers else applyRequestDefaults(searchRuleUrl, headers)
+        val searchPlan = flowSearchRequest(searchRuleUrl, keyword, searchHeaders) { resolve(sourceUrl, it) }
         val initial = fetch("search", searchPlan)
         val searchResponse = if (loginCheck.isEmpty()) initial else {
             evaluateFlowLoginCheck(loginCheck, initial, searchPlan.headers) { updated ->

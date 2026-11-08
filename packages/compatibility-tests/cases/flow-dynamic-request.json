@@ -248,5 +248,398 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.request-headers.default",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl 请求头组装"
+    },
+    "tags": [
+      "offline",
+      "request-headers"
+    ],
+    "flowOrigin": { "fixture": "synthetic-header-precedence" },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://headers.fixture.test",
+        "bookSourceName": "请求头夹具",
+        "searchUrl": "/search",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "text"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        }
+      },
+      "keyword": "fixture",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://headers.fixture.test/search",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://headers.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHA+bm8gcmVzdWx0czwvcD4="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "requestDefaults": {
+        "userAgent": "fixture-default"
+      },
+      "requestHeaderNames": [
+        "user-agent",
+        "authorization",
+        "x-probe"
+      ]
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://headers.fixture.test/search",
+            "body": null,
+            "headers": {
+              "user-agent": "fixture-default"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.request-headers.source",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl 请求头组装"
+    },
+    "tags": [
+      "offline",
+      "request-headers"
+    ],
+    "flowOrigin": { "fixture": "synthetic-header-precedence" },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://headers.fixture.test",
+        "bookSourceName": "请求头夹具",
+        "searchUrl": "/search",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "text"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "header": "{\"User-Agent\":\"fixture-source\"}"
+      },
+      "keyword": "fixture",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://headers.fixture.test/search",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://headers.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHA+bm8gcmVzdWx0czwvcD4="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "requestDefaults": {
+        "userAgent": "fixture-default"
+      },
+      "requestHeaderNames": [
+        "user-agent",
+        "authorization",
+        "x-probe"
+      ]
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://headers.fixture.test/search",
+            "body": null,
+            "headers": {
+              "user-agent": "fixture-source"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.request-headers.options",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl 请求头组装"
+    },
+    "tags": [
+      "offline",
+      "request-headers"
+    ],
+    "flowOrigin": { "fixture": "synthetic-header-precedence" },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://headers.fixture.test",
+        "bookSourceName": "请求头夹具",
+        "searchUrl": "/search,{\"headers\":{\"User-Agent\":\"fixture-options\",\"X-Probe\":\"options\"}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "text"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "header": "{\"User-Agent\":\"fixture-source\",\"X-Probe\":\"source\"}"
+      },
+      "keyword": "fixture",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://headers.fixture.test/search",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://headers.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHA+bm8gcmVzdWx0czwvcD4="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "requestDefaults": {
+        "userAgent": "fixture-default"
+      },
+      "requestHeaderNames": [
+        "user-agent",
+        "authorization",
+        "x-probe"
+      ]
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://headers.fixture.test/search",
+            "body": null,
+            "headers": {
+              "user-agent": "fixture-options",
+              "x-probe": "options"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.request-headers.login",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl 请求头组装"
+    },
+    "tags": [
+      "offline",
+      "request-headers"
+    ],
+    "flowOrigin": { "fixture": "synthetic-header-precedence" },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://headers.fixture.test",
+        "bookSourceName": "请求头夹具",
+        "searchUrl": "/search",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "text"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "header": "{\"User-Agent\":\"fixture-source\",\"Authorization\":\"Bearer source\"}"
+      },
+      "keyword": "fixture",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://headers.fixture.test/search",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://headers.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHA+bm8gcmVzdWx0czwvcD4="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "requestDefaults": {
+        "userAgent": "fixture-default",
+        "loginHeaders": {
+          "Authorization": "Bearer login"
+        }
+      },
+      "requestHeaderNames": [
+        "user-agent",
+        "authorization",
+        "x-probe"
+      ]
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://headers.fixture.test/search",
+            "body": null,
+            "headers": {
+              "user-agent": "fixture-source",
+              "authorization": "Bearer login"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "flow.synthetic.request-headers.options-after-login",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap / AnalyzeUrl 请求头组装"
+    },
+    "tags": [
+      "offline",
+      "request-headers"
+    ],
+    "flowOrigin": { "fixture": "synthetic-header-precedence" },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://headers.fixture.test",
+        "bookSourceName": "请求头夹具",
+        "searchUrl": "/search,{\"headers\":{\"Authorization\":\"Bearer options\"}}",
+        "ruleSearch": {
+          "bookList": ".book",
+          "name": "text"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        },
+        "header": "{\"User-Agent\":\"fixture-source\",\"Authorization\":\"Bearer source\"}"
+      },
+      "keyword": "fixture",
+      "responses": {
+        "search": {
+          "method": "GET",
+          "url": "https://headers.fixture.test/search",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://headers.fixture.test/search",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PHA+bm8gcmVzdWx0czwvcD4="
+          }
+        }
+      },
+      "requestLimit": 1,
+      "requestDefaults": {
+        "userAgent": "fixture-default",
+        "loginHeaders": {
+          "Authorization": "Bearer login"
+        }
+      },
+      "requestHeaderNames": [
+        "user-agent",
+        "authorization",
+        "x-probe"
+      ]
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "empty",
+            "value": []
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://headers.fixture.test/search",
+            "body": null,
+            "headers": {
+              "user-agent": "fixture-source",
+              "authorization": "Bearer options"
+            }
+          }
+        ]
+      }
+    }
   }
 ]

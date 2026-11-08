@@ -389,6 +389,14 @@
       "text": "string"
     }
   },
+  "request.redirect": {
+    "required": ["status", "crossOrigin"],
+    "properties": {
+      "status": "integer",
+      "crossOrigin": "boolean",
+      "missingLocation": "boolean"
+    }
+  },
   "flow.book": {
     "required": [
       "source",
@@ -405,7 +413,8 @@
       "chapterIndex": "integer",
       "variableKeys": "strings",
       "stopAfter": "string",
-      "requestHeaderNames": "strings"
+      "requestHeaderNames": "strings",
+      "requestDefaults": "object"
     }
   },
   "flow.toc": {

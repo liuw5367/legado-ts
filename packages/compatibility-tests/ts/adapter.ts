@@ -1,3 +1,4 @@
+import { executeRedirect } from './redirect.ts'
 import { executeZipDownload } from './zip-download.ts'
 import { decodeImage } from '../../source-core/src/index.ts'
 import { executeContentLifecycle } from './content-lifecycle.ts'
@@ -34,6 +35,7 @@ async function script(host: SourceRuleHost, expression: string, content: unknown
   return result.value
 }
 export async function execute(item: CaseInput): Promise<unknown> {
+  if (item.operation === 'request.redirect') return executeRedirect(item.input)
   if (item.operation === 'rule.zipDownload') return executeZipDownload(item.input)
   if (item.operation === 'flow.contentLifecycle') return executeContentLifecycle(item.input)
   if (item.operation === 'flow.book' || item.operation === 'flow.toc') return executeBookFlow(item.input, item.operation === 'flow.toc')

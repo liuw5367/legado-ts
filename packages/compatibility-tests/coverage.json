@@ -1705,6 +1705,19 @@
       ]
     },
     {
+      "operation": "request.redirect",
+      "method": "OkHttpClient · HTTP 重定向请求传输",
+      "reference": "upstream-adapted",
+      "tsEntry": "NodeNetworkHost.request",
+      "requiredDimensions": ["edge", "error-or-empty"],
+      "caseIds": [
+        "request.redirect.same-origin-302",
+        "request.redirect.same-origin-307",
+        "request.redirect.cross-origin-302",
+        "request.redirect.missing-location"
+      ]
+    },
+    {
       "operation": "rule.zipDownload",
       "method": "getZipStringContent / getZipByteArrayContent · 下载、字符集和条目顺序",
       "reference": "upstream-guided-flow",

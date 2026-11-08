@@ -102,3 +102,18 @@ test('JVM 未知请求字符集报告未支持', async () => {
   assert.equal(result.execution, 'unsupported')
   assert.match(result.reason, /GBK-NOT-A-CHARSET/u)
 })
+
+test('请求头夹具缺少响应时双端报告执行器故障', async () => {
+  const [item] = await loadCases({ case: 'flow.synthetic.request-headers.options-after-login' })
+  item.input.responses.search.requestHeaders = { authorization: 'Bearer unrelated-fixture' }
+  const ts = new Worker(process.execPath, [join(root, 'scripts/ts-worker.mjs')])
+  try {
+    const [jvmResult, tsResult] = await Promise.all([worker.run(item), ts.run(item)])
+    assert.equal(jvmResult.execution, 'runner-failed')
+    assert.equal(tsResult.execution, 'runner-failed')
+    assert.match(jvmResult.reason, /缺少响应/u)
+    assert.match(tsResult.reason, /缺少响应/u)
+  } finally {
+    await ts.close()
+  }
+})

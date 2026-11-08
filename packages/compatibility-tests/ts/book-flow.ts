@@ -44,7 +44,10 @@ export async function executeBookFlow(input: Record<string, unknown>, tocOnly = 
   const stages: Record<string, unknown> = {}
   let stage = 'search'
   let fault: FlowFixtureError | undefined
+  const defaults = input.requestDefaults as { userAgent?: string; loginHeaders?: Record<string, string> } | undefined
   const network: NetworkHost = {
+    ...(defaults?.userAgent === undefined ? {} : { defaultUserAgent: defaults.userAgent }),
+    ...(defaults?.loginHeaders === undefined ? {} : { getLoginHeaders: () => defaults.loginHeaders }),
     request: async (plan) => {
       const { method, url } = plan
       const body = typeof plan.body === 'string' ? plan.body : plan.body ? Buffer.from(plan.body).toString('utf8') : null

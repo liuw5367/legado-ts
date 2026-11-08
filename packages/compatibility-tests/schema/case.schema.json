@@ -58,6 +58,7 @@
         "corpus.cssString",
         "corpus.script",
         "chapter.number",
+        "request.redirect",
         "flow.book",
         "flow.toc",
         "rule.bridgeString",
@@ -1384,6 +1385,38 @@
       "if": {
         "properties": {
           "operation": {
+            "const": "request.redirect"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "status",
+              "crossOrigin"
+            ],
+            "properties": {
+              "status": {
+                "type": "integer"
+              },
+              "crossOrigin": {
+                "type": "boolean"
+              },
+              "missingLocation": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
             "const": "flow.book"
           }
         }
@@ -1431,6 +1464,9 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "requestDefaults": {
+                "type": "object"
               }
             },
             "additionalProperties": false
