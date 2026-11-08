@@ -2174,5 +2174,82 @@
       "tsMessageIncludes": ["substring-ex with arity of 2"]
     },
     "expected": { "outcome": "throw", "errorClass": "xpath-substring-ex-two-argument-runtime-error" }
+  },
+  {
+    "id": "xpath.string.first.predicate",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[first()]", "content": "<root><li>A</li><li>B</li><li>C</li></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 First.call" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "<li>A</li>" }
+  },
+  {
+    "id": "xpath.string.last.predicate",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[last()]", "content": "<root><li>A</li><li>B</li><li>C</li></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Last.call" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "<li>C</li>" }
+  },
+  {
+    "id": "xpath.string.last.per-parent-predicate",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//section/li[last()]", "content": "<root><section><li>A</li><li>B</li></section><section><li>C</li><li>D</li></section></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Last.call sibling scope" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","node-sequence"],
+    "expected": { "outcome": "return", "value": "<li>B</li>\n<li>D</li>" }
+  },
+  {
+    "id": "xpath.string.first.ignores-argument",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[first(99)]", "content": "<root><li>A</li><li>B</li><li>C</li></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 First.call ignores arguments" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "<li>A</li>" }
+  },
+  {
+    "id": "xpath.string.last.ignores-argument",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[last(99)]", "content": "<root><li>A</li><li>B</li><li>C</li></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Last.call ignores arguments" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge"],
+    "expected": { "outcome": "return", "value": "<li>C</li>" }
+  },
+  {
+    "id": "xpath.string.first.evaluates-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[first(no-such-function())]", "content": "<root><li>A</li><li>B</li><li>C</li></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XpathProcessor.visitFunctionCall evaluates arguments before Function.call" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","error"],
+    "errorEquivalence": {
+      "category": "xpath-first-last-argument-evaluation-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException"],
+      "tsMessageIncludes": ["no-such-function"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-first-last-argument-evaluation-error" }
+  },
+  {
+    "id": "xpath.string.last.evaluates-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[last(no-such-function())]", "content": "<root><li>A</li><li>B</li><li>C</li></root>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath XpathProcessor.visitFunctionCall evaluates arguments before Function.call" },
+    "tags": ["compatibility-recheck","custom-function","xpath-string","edge","error"],
+    "errorEquivalence": {
+      "category": "xpath-first-last-argument-evaluation-error",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException"],
+      "tsMessageIncludes": ["no-such-function"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-first-last-argument-evaluation-error" }
   }
 ]

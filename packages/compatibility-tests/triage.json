@@ -659,7 +659,14 @@
         "xpath.string.substring-ex.attribute-sequence",
         "xpath.string.substring-ex.empty-sequence",
         "xpath.string.substring-ex.invalid-string-index",
-        "xpath.string.substring-ex.two-args.android-error"
+        "xpath.string.substring-ex.two-args.android-error",
+        "xpath.string.first.predicate",
+        "xpath.string.last.predicate",
+        "xpath.string.last.per-parent-predicate",
+        "xpath.string.first.ignores-argument",
+        "xpath.string.last.ignores-argument",
+        "xpath.string.first.evaluates-arguments",
+        "xpath.string.last.evaluates-arguments"
       ],
       "classification": "runtime-fix",
       "state": "resolved",
@@ -683,7 +690,8 @@
         "output/run-qCAKmE/report.json",
         "output/run-x5ZNNY/report.json",
         "output/run-LeW3gZ/report.json",
-        "output/run-iPZbTM/report.json"
+        "output/run-iPZbTM/report.json",
+        "output/run-yNkAg9/report.json"
       ]
     },
     {

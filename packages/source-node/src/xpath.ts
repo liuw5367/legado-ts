@@ -12,6 +12,9 @@ const { registerCustomXPathFunction } = fontoxpath
 
 const XPATH_FUNCTIONS_NAMESPACE = 'http://www.w3.org/2005/xpath-functions'
 
+// JsoupXpath 的 First.call 固定返回整数 1；last() 由 XPath 引擎提供并通过 JVM sibling-scope 案例验证。
+registerCustomXPathFunction({ localName: 'first', namespaceURI: XPATH_FUNCTIONS_NAMESPACE }, [], 'xs:integer', () => 1)
+
 registerCustomXPathFunction({ localName: 'substring-before-last', namespaceURI: XPATH_FUNCTIONS_NAMESPACE }, ['item()*', 'item()*'], 'xs:string', (_context, source, separator) => {
   const sourceString = androidXPathValueAsString(source)
   const separatorString = androidXPathValueAsString(separator)
@@ -669,7 +672,7 @@ export class XPathParserAdapter implements XPathParser {
     if (expression.length === 0) return null
     const androidResult = evaluateAndroidXPathCompatibility(document, expression)
     if (androidResult !== undefined) return androidResult
-    const compatibleExpression = rewriteAndroidXPathAttributeFunctionArguments(expression)
+    const compatibleExpression = rewriteAndroidXPathFunctionArguments(expression)
     const result = evaluateXPath(compatibleExpression, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
     if (result.every(isXmlNode)) return result.map((item) => document.wrap(item))
     if (result.length === 1) return normalizeXPathValue(result[0])
@@ -807,9 +810,10 @@ function maskXPathLiterals(expression: string): string {
   return output
 }
 
-function rewriteAndroidXPathAttributeFunctionArguments(expression: string): string {
+function rewriteAndroidXPathFunctionArguments(expression: string): string {
   const masked = maskXPathLiterals(expression)
-  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex)\s*\(/g
+  // 仅匹配这些函数的独立调用；前缀 QName 和更长函数名不应被改写。
+  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex|first|last)\s*\(/g
   let match: RegExpExecArray | null
   while ((match = functionPattern.exec(masked)) !== null) {
     const previous = masked[match.index - 1]
@@ -819,6 +823,18 @@ function rewriteAndroidXPathAttributeFunctionArguments(expression: string): stri
     const close = xpathCallEnd(masked, open)
     if (close === undefined) continue
     const ranges = xpathCallArgumentRanges(masked, open, close)
+
+    if (match[1] === 'first' || match[1] === 'last') {
+      const noArguments = ranges.length === 1 && expression.slice(ranges[0]![0], ranges[0]![1]).trim() === ''
+      if (noArguments) continue
+
+      // JsoupXpath 先求值全部实参、再忽略实参；把实参放入序列并取末项，保留错误和求值顺序。
+      const args = ranges.map(([start, end]) => rewriteAndroidXPathFunctionArguments(expression.slice(start, end).trim()))
+      const value = match[1] === 'first' ? '1' : 'last()'
+      const evaluatedSequence = `(${args.map((argument) => `(${argument})`).join(',')},${value})[last()]`
+      return `${expression.slice(0, match.index)}${evaluatedSequence}${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
+    }
+
     const expectedArity = match[1] === 'substring-ex' ? 3 : 2
     if (ranges.length !== expectedArity) continue
 
@@ -826,9 +842,9 @@ function rewriteAndroidXPathAttributeFunctionArguments(expression: string): stri
       const argument = expression.slice(start, end).trim()
       return isXPathAttributeSequence(argument)
         ? `string-join(${argument}, ',')`
-        : rewriteAndroidXPathAttributeFunctionArguments(argument)
+        : rewriteAndroidXPathFunctionArguments(argument)
     })
-    return `${expression.slice(0, open + 1)}${args.join(',')})${rewriteAndroidXPathAttributeFunctionArguments(expression.slice(close + 1))}`
+    return `${expression.slice(0, open + 1)}${args.join(',')})${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
   }
   return expression
 }
