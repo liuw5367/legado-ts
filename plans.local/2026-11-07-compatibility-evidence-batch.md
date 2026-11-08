@@ -157,6 +157,8 @@ git diff --check
 
 - E4 原样提取 JsEncodeUtils 的历史 AES 和工厂方法，编译原始 SymmetricCryptoAndroid 与固定 Hutool 5.8.22、BC 1.85.2。独立 OpenSSL 向量验证解密方向、Base64 文本 bytes、同对象更新 IV、另一个对象保持初始状态及解密回读。[两例一致](../packages/compatibility-tests/output/run-iC8onq/report.md)。仅用默认桌面 provider 时参考端出现 InvalidKeyException，锁定上游 provider 后消失；其他模式和 provider 单列。
 
+- F2 核对 D1–D44 的历史行及本批分类，按可执行分支关联稳定案例 ID、参考文件和任务报告。已比较的范围限于对应案例；真实宿主、仅 TS、计划外枚举和已确认差异保留独立状态。Android 基线与原算法、编排和依赖类型由 `reference-sources.json` 及实际报告记录。
+
 ## 变更记录
 
 - 2026-11-07 建立 24 项任务草稿，明确取证条件、提交边界和回归门槛。
