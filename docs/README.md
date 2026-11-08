@@ -65,7 +65,7 @@
 
 双端流程覆盖静态与动态 POST、HTML 正文分页、重定向详情识别、目录排序与去重、跨阶段书籍变量。脚本状态、取消和部分二进制行为已有离线证据。后续按已有差异的下游影响、缺失的 API 分支及真实规则组合，从固定语料选取案例。历史差异按分支关联同输入结果和参考出处，真实宿主证据单列。执行和证据范围见[一致性测试基线](compatibility/conformance-tests.md)。
 
-非 WebView 兼容性覆盖宽松 URL 请求选项、Cookie Map、日期脚本接口、批量正文回存及登录凭据生命周期。URL 请求选项与 Cookie Map 已有共享案例和固定 Android JVM 参考端对照；日期、正文回存与登录凭据仍待实施。各项按同输入验证实际请求、脚本分支或交付结果，证据范围和保留差异见[已知差异](compatibility/known-divergences.md)。
+非 WebView 兼容性覆盖宽松 URL 请求选项、Cookie Map、日期脚本接口、批量正文回存及登录凭据生命周期；这些项目已加入共享案例和固定 Android JVM 参考端对照。登录头流程对照锁定的 Android `BaseSource`、`AnalyzeUrl` 与 `CookieStore` 源码摘录，验证同站注入、Cookie 合并、快照恢复和删除；应用级密钥存储、多实例持久化、动态登录头脚本及 Android 应用网络容器仍需单独取证。各项按同输入验证实际请求、脚本分支或交付结果，证据范围和保留差异见[已知差异](compatibility/known-divergences.md)。
 
 基础双端验证按方法和重载生成场景证据。固定书源语料保留原文、摘要及全部来源位置，脚本片段使用固定上游 Rhino 与离线夹具。复现命令、覆盖分母和观察项说明见[双端测试包](../packages/compatibility-tests/README.md)。
 

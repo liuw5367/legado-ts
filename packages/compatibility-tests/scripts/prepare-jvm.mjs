@@ -30,6 +30,20 @@ export async function prepare(upstream) {
     await writeFile(destination, generated)
     manifest.push(entry)
   }
+  for (const entry of lock.excerpts ?? []) {
+    const text = git(sourceRoot, 'show', `${lock.commit}:${entry.path}`)
+    if (sha256(text) !== entry.sha256) throw new Error(`参考摘录源码摘要变化: ${entry.path}`)
+    const output = resolve(directory, 'reference', entry.output)
+    if (!output.startsWith(`${resolve(directory, 'reference')}/`)) throw new Error(`参考摘录输出路径越界: ${entry.output}`)
+    const generated = [
+      entry.prefix,
+      ...entry.sections.map(([start, end]) => text.split('\n').slice(start - 1, end).join('\n')),
+      entry.suffix,
+    ].join('\n')
+    await mkdir(resolve(output, '..'), { recursive: true })
+    await writeFile(output, generated)
+    manifest.push(entry)
+  }
   for (const entry of lock.flowEvidence) {
     if (sha256(git(sourceRoot, 'show', `${lock.commit}:${entry.path}`)) !== entry.sha256) throw new Error(`流程参考源码摘要变化: ${entry.path}`)
   }
@@ -72,7 +86,7 @@ export async function prepare(upstream) {
       else reject(new Error(`Maven 构建失败 (${code})，查看 ${join(directory, 'build.log')}`))
     })
   })
-  const metadata = { fingerprint, artifactsHash: await artifactsHash(directory), commit: lock.commit, sources: manifest, flowEvidence: lock.flowEvidence, scriptEngine: lock.scriptEngine, adaptations: lock.adaptations, versions: lock.versions, jvmHash, javaHome }
+  const metadata = { fingerprint, artifactsHash: await artifactsHash(directory), commit: lock.commit, sources: manifest, flowEvidence: lock.flowEvidence, excerpts: lock.excerpts ?? [], scriptEngine: lock.scriptEngine, adaptations: lock.adaptations, versions: lock.versions, jvmHash, javaHome }
   await writeFile(metadataPath, JSON.stringify(metadata, null, 2) + '\n')
   return { ...metadata, java }
 }

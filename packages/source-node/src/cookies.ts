@@ -41,9 +41,8 @@ export class NodeCookieStore implements CookieStore {
 
   public async replaceCookie(url: string, cookie: string): Promise<void> {
     if (url.length === 0 || cookie.length === 0) return
-    const merged = new Map(cookieMapEntriesOf(cookieToMap(await this.get(url) ?? '')))
-    for (const [key, value] of cookieMapEntriesOf(cookieToMap(cookie))) merged.set(key, value)
-    await this.set(url, serializeCookieMap(merged) ?? '')
+    const merged = mergeCookieValues(await this.get(url) ?? '', cookie)
+    await this.set(url, merged)
   }
 
   public cookieToMap(cookie: string): Record<string, string> {
@@ -67,6 +66,14 @@ export class NodeCookieStore implements CookieStore {
   public async clear(): Promise<void> {
     await this.jar.removeAllCookies()
   }
+}
+
+/** Android CookieStore.mergeCookieValues：保留旧键顺序，并以新 Cookie 覆盖同名项。 */
+export function mergeCookieValues(oldCookie: string, cookie: string): string {
+  if (oldCookie.length === 0) return cookie
+  const merged = new Map(cookieMapEntriesOf(cookieToMap(oldCookie)))
+  for (const [key, value] of cookieMapEntriesOf(cookieToMap(cookie))) merged.set(key, value)
+  return serializeCookieMap(merged) ?? ''
 }
 
 function splitCookieHeader(value: string): string[] {

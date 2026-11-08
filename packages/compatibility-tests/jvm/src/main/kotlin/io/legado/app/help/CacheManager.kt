@@ -15,6 +15,10 @@ object CacheManager {
         values[key] = Entry(value, if (saveTime == 0) 0L else now + saveTime * 1000L)
     }
 
+    fun put(key: String, value: String) = put(key, value, 0)
+
+    fun delete(key: String) { values.remove(key) }
+
     fun reset() {
         values.clear()
         now = 0

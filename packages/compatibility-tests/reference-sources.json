@@ -114,6 +114,10 @@
       "suffix": ""
     },
     {
+      "path": "app/src/main/java/io/legado/app/utils/MapExtensions.kt",
+      "sha256": "0effe0ef6110e295eb6364a57e05e96c4d9c13a2acf68200d2daef1b63727c85"
+    },
+    {
       "path": "app/src/main/java/io/legado/app/utils/NetworkUtils.kt",
       "sha256": "4309414b51161896e589132e025476d0e79d174844a1cf4cf132867dfe132442",
       "sections": [[76,91],[125,156]],
@@ -345,6 +349,40 @@
     {
       "path": "app/src/main/java/io/legado/app/data/entities/BookSource.kt",
       "sha256": "6f2e9b400f2417dc17e19969c386607097bc00c2dbde3e03ba8cad23811c8a3d"
+    }
+  ],
+  "excerpts": [
+    {
+      "path": "app/src/main/java/io/legado/app/utils/NetworkUtils.kt",
+      "sha256": "4309414b51161896e589132e025476d0e79d174844a1cf4cf132867dfe132442",
+      "output": "compat/AndroidNetworkUtilsExcerpt.kt",
+      "sections": [[192,204],[213,237],[279,298]],
+      "prefix": "package compat\n\nimport cn.hutool.core.lang.Validator\nimport okhttp3.internal.publicsuffix.PublicSuffixDatabase\nimport java.net.URL\n\ninternal object AndroidNetworkUtils {",
+      "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/help/http/CookieStore.kt",
+      "sha256": "9890bbf76428c05601981af7b3148fe87944d788f0a082a50cd4a3b591956a8e",
+      "output": "compat/AndroidCookieStoreExcerpt.kt",
+      "sections": [[55,60],[69,80]],
+      "prefix": "package compat\n\nimport android.text.TextUtils\n\ninternal interface CookieStoreReplacementReference {\n    fun replaceCookie(url: String, cookie: String)\n}\n\n/** Android CookieStore 的持久层替身；替换和合并方法来自固定上游摘录。 */\ninternal object AndroidCookieStoreExcerpt : CookieStoreReplacementReference {\n    private val values = mutableMapOf<String, String>()\n\n    fun reset() = values.clear()\n    fun seed(url: String, cookie: String) { values[AndroidNetworkUtils.getSubDomain(url)] = cookie }\n    fun getCookie(url: String): String = values[AndroidNetworkUtils.getSubDomain(url)].orEmpty()\n    fun removeCookie(url: String) { values.remove(AndroidNetworkUtils.getSubDomain(url)) }\n    private fun getCookieNoSession(url: String): String = getCookie(url)\n    private fun setCookie(url: String, cookie: String?) { values[AndroidNetworkUtils.getSubDomain(url)] = cookie.orEmpty() }\n    private fun cookieToMap(cookie: String): MutableMap<String, String> = CookieMapReference.cookieToMap(cookie)\n    private fun mapToCookie(cookieMap: Map<String, String>?): String? = CookieMapReference.mapToCookie(cookieMap)\n",
+      "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/data/entities/BaseSource.kt",
+      "sha256": "080160e06a23fdfc7f4dbe5975a370473eee5d13ad0638b46aa2075276516243",
+      "output": "compat/AndroidBaseSourceLoginExcerpt.kt",
+      "sections": [[103,109],[196,217],[222,247]],
+      "prefix": "package compat\n\nimport android.webkit.JavascriptInterface\nimport compat.AndroidCookieStoreExcerpt as CookieStore\nimport io.legado.app.help.CacheManager\nimport io.legado.app.utils.GSON\nimport io.legado.app.utils.fromJsonObject\nimport io.legado.app.utils.has\nimport java.util.regex.Pattern\n\ninternal val JS_PATTERN: Pattern = Pattern.compile(\"<js>([\\\\w\\\\W]*?)</js>|@js:([\\\\w\\\\W]*)\", Pattern.CASE_INSENSITIVE)\ninternal object AppConst { const val UA_NAME = \"User-Agent\" }\ninternal object AppLog { fun put(message: String, error: Throwable? = null) = Unit }\ninternal object AppConfig { var userAgent: String = \"fixture-user-agent\" }\ninternal object JsSourceEngine { fun normalizeJsResult(value: Any?): String? = value?.toString() }\n\ninternal interface LoginSourceKey { fun getKey(): String }\n\n/** 只替代动态 JS 求值和 Android 容器；BaseSource 的摘录方法原样执行。 */\ninternal class AndroidLoginSource(private val sourceKey: String, var header: String?) : LoginSourceKey {\n    override fun getKey(): String = sourceKey\n    private fun evalJS(script: String): Any? = error(\"本案例不执行动态 header JS\")\n",
+      "suffix": "}"
+    },
+    {
+      "path": "app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeUrl.kt",
+      "sha256": "f7ba074137c8e3a847dc7bbf9465c7fd9318646c5670c144300e7959fb931a9b",
+      "output": "compat/AndroidLoginHeaderGateExcerpt.kt",
+      "sections": [[154,170]],
+      "prefix": "package compat\n\nimport compat.AndroidNetworkUtils as NetworkUtils\n\ninternal class AndroidLoginHeaderGateExcerpt(private val source: LoginSourceKey?, private var baseUrl: String) {\n    fun includesLoginHeader(url: String): Boolean = isLoginHeaderSite(url)\n",
+      "suffix": "}"
     }
   ]
 }

@@ -1,0 +1,116 @@
+[
+  {
+    "id": "flow.login-header.lifecycle.scope-restore-delete",
+    "family": "flow",
+    "operation": "flow.loginHeader",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "BaseSource.getHeaderMap/putLoginHeader/getLoginHeader/removeLoginHeader + AnalyzeUrl.isLoginHeaderSite + CookieStore.replaceCookie"
+    },
+    "tags": ["offline", "login-header", "cookie", "state", "request-flow"],
+    "flowOrigin": { "fixture": "android-login-header-lifecycle" },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://www.login.example.com/source",
+        "header": "{\"X-Source\":\"fixture\",\"User-Agent\":\"fixture-user-agent\"}"
+      },
+      "initialCookie": "sid=old; theme=night",
+      "loginHeader": "{\"Authorization\":\"Bearer saved\",\"Cookie\":\"sid=new; token=x\"}",
+      "targets": [
+        { "name": "same-site", "url": "https://www.login.example.com/api" },
+        { "name": "same-registrable-domain", "url": "https://cdn.example.com/api" },
+        { "name": "external-site", "url": "https://media.other.net/image" },
+        {
+          "name": "url-option-overrides-login-header",
+          "url": "https://www.login.example.com/api",
+          "headers": { "Authorization": "Bearer explicit" }
+        }
+      ],
+      "requestLimit": 6,
+      "variants": {
+        "cases": [
+          {
+            "name": "uppercase-cookie-key-is-not-a-cookie-alias",
+            "initialCookie": "sid=old; theme=night",
+            "loginHeader": "{\"COOKIE\":\"upper=1\"}"
+          },
+          {
+            "name": "exact-cookie-key-wins-over-lowercase",
+            "initialCookie": "sid=old; theme=night",
+            "loginHeader": "{\"COOKIE\":\"upper=1\",\"Cookie\":\"sid=exact; exact=1\",\"cookie\":\"sid=lower; lower=1\"}"
+          },
+          {
+            "name": "lowercase-cookie-key-fallback",
+            "initialCookie": "sid=old; theme=night",
+            "loginHeader": "{\"cookie\":\"sid=lower; lower=1\"}"
+          },
+          {
+            "name": "empty-cookie-does-not-clear-existing-store",
+            "initialCookie": "sid=old; theme=night",
+            "loginHeader": "{\"Cookie\":\"\"}"
+          },
+          {
+            "name": "malformed-header-is-stored-without-cookie-change",
+            "initialCookie": "sid=old; theme=night",
+            "loginHeader": "{broken"
+          }
+        ]
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stored": "{\"Authorization\":\"Bearer saved\",\"Cookie\":\"sid=new; token=x\"}",
+        "cookieAfterPut": "sid=new; theme=night; token=x",
+        "requests": [
+          { "name": "same-site", "headers": { "authorization": "Bearer saved", "cookie": "sid=new; theme=night; token=x" } },
+          { "name": "same-registrable-domain", "headers": { "authorization": "Bearer saved", "cookie": "sid=new; theme=night; token=x" } },
+          { "name": "external-site", "headers": { "authorization": null, "cookie": null } },
+          { "name": "url-option-overrides-login-header", "headers": { "authorization": "Bearer explicit", "cookie": "sid=new; theme=night; token=x" } }
+        ],
+        "restored": {
+          "header": "{\"Authorization\":\"Bearer saved\",\"Cookie\":\"sid=new; token=x\"}",
+          "request": { "authorization": "Bearer saved", "cookie": "sid=new; theme=night; token=x" }
+        },
+        "deleted": {
+          "header": null,
+          "cookie": null,
+          "request": { "authorization": null, "cookie": null }
+        },
+        "variants": [
+          {
+            "name": "uppercase-cookie-key-is-not-a-cookie-alias",
+            "stored": "{\"COOKIE\":\"upper=1\"}",
+            "loginHeaders": { "COOKIE": "upper=1" },
+            "cookie": "sid=old; theme=night"
+          },
+          {
+            "name": "exact-cookie-key-wins-over-lowercase",
+            "stored": "{\"COOKIE\":\"upper=1\",\"Cookie\":\"sid=exact; exact=1\",\"cookie\":\"sid=lower; lower=1\"}",
+            "loginHeaders": { "COOKIE": "upper=1", "Cookie": "sid=exact; exact=1", "cookie": "sid=lower; lower=1" },
+            "cookie": "sid=exact; theme=night; exact=1"
+          },
+          {
+            "name": "lowercase-cookie-key-fallback",
+            "stored": "{\"cookie\":\"sid=lower; lower=1\"}",
+            "loginHeaders": { "cookie": "sid=lower; lower=1" },
+            "cookie": "sid=lower; theme=night; lower=1"
+          },
+          {
+            "name": "empty-cookie-does-not-clear-existing-store",
+            "stored": "{\"Cookie\":\"\"}",
+            "loginHeaders": { "Cookie": "" },
+            "cookie": "sid=old; theme=night"
+          },
+          {
+            "name": "malformed-header-is-stored-without-cookie-change",
+            "stored": "{broken",
+            "loginHeaders": null,
+            "cookie": "sid=old; theme=night"
+          }
+        ]
+      }
+    }
+  }
+]

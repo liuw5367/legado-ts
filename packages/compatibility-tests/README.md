@@ -49,6 +49,8 @@ TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJ
 
 `flow.contentBatch` 族的 TS 端调用真实 `loadChapterContentBatch`、QuickJS bridge、RequestHost 和单章正文入口。JVM 端原样编译摘要锁定的 `BatchContentContext.kt` 与 `JsExtensions.cacheContent` 方法；`BookContent.kt`、`JsSourceBook.kt`、`CacheBook.kt` 锁定流程顺序。只把 `BookHelp` 磁盘保存替换为可观察、可注入旧版本的内存 sink。该 guided flow 不覆盖 Android 磁盘、下载队列调度或设备并发。
 
+`flow.loginHeader` 族从锁定 Android 提交提取并编译 `BaseSource` 登录头方法、`AnalyzeUrl.isLoginHeaderSite` 和 `CookieStore.replaceCookie` / 合并方法；JVM 端只把 Android 缓存与 Cookie 持久层替换为内存实现，并以请求观察器代替 Android 网络发送。TS 端使用真实 `createNodeSourceSession`、`SourceRequestHost`、`NodeNetworkHost` 和 `NodeCookieStore`，只替换 `fetch` 传输。案例验证同站及同注册域注入、跨站不注入、URL Header 覆盖、快照恢复、删除登录头与 Cookie，以及 `Cookie`/`cookie` 精确键优先级、空 Cookie 和损坏 JSON。动态登录头脚本、Android 应用级 SecretStore、多实例持久化和 Android 实际网络栈不在此案例范围内；此处是锁定源码的纯 JVM 对照，不代表 Android 应用实机运行。
+
 本包初期只覆盖纯函数和轻依赖解析器。AnalyzeRule、AnalyzeUrl、WebBook 等应用入口没有被整体编译。JVM 与 TS 的可观察入口不同，输出差异需要结合适配边界判断，不能将报告中的全部条目直接视为已确认缺陷。
 
 ## 输出和比较

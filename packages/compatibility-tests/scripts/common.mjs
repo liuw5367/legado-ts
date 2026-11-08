@@ -133,6 +133,7 @@ export function validateCase(item) {
   for (const [key, value] of Object.entries(item.input)) {
     const type = shape.properties[key]
     const valid = type === 'strings' ? Array.isArray(value) && value.every((v) => typeof v === 'string')
+      : type === 'objects' ? Array.isArray(value) && value.every((v) => v !== null && typeof v === 'object' && !Array.isArray(v))
       : type === 'integer' ? Number.isSafeInteger(value)
       : type === 'object' ? value !== null && typeof value === 'object' && !Array.isArray(value)
       : typeof value === type
@@ -144,12 +145,36 @@ export function validateCase(item) {
       || !URL.canParse(item.input.auxUrl)) throw new Error('正文生命周期案例无效')
   } else if (item.operation === 'flow.contentBatch') {
     validateContentBatchCase(item)
+  } else if (item.operation === 'flow.loginHeader') {
+    validateLoginHeaderCase(item)
   } else if (item.operation.startsWith('flow.')) validateFlowCase(item)
   if (item.operation === 'rule.split' && !['&&', '||', '%%'].includes(item.input.operator)) throw new Error('未支持的分隔符')
   if (item.operation.startsWith('regex.') && item.input.patterns.length === 0) throw new Error('patterns 不能为空')
   if (item.errorEquivalence && (typeof item.errorEquivalence.category !== 'string' || !['jvm', 'ts'].every((r) => Array.isArray(item.errorEquivalence[r]) && item.errorEquivalence[r].every((v) => typeof v === 'string')))) throw new Error('异常等价声明无效')
   if (item.allowedDifferences !== undefined) {
     if (!Array.isArray(item.allowedDifferences) || !item.allowedDifferences.every((d) => typeof d.path === 'string' && d.reason?.length > 0 && Object.hasOwn(d, 'jvm') && Object.hasOwn(d, 'ts'))) throw new Error('允许差异必须指定路径、双方值和原因')
+  }
+}
+function validateLoginHeaderCase(item) {
+  const { source, targets, variants, initialCookie, loginHeader, requestLimit } = item.input
+  if (item.contractScope !== 'flow' || item.reference.kind !== 'upstream-guided-flow'
+    || typeof item.flowOrigin?.fixture !== 'string' || !URL.canParse(source?.bookSourceUrl)
+    || typeof source?.header !== 'string' || typeof initialCookie !== 'string' || typeof loginHeader !== 'string'
+    || !Array.isArray(targets) || targets.length < 2 || !Number.isSafeInteger(requestLimit) || requestLimit < 1
+    || !variants || typeof variants !== 'object' || Array.isArray(variants) || !Array.isArray(variants.cases) || variants.cases.length === 0) {
+    throw new Error(`${item.id}: 登录头生命周期案例无效`)
+  }
+  for (const target of targets) {
+    if (typeof target?.name !== 'string' || typeof target?.url !== 'string' || !URL.canParse(target.url)
+      || (target.headers !== undefined && (!target.headers || typeof target.headers !== 'object' || Array.isArray(target.headers)
+        || Object.values(target.headers).some((value) => typeof value !== 'string')))) {
+      throw new Error(`${item.id}: 登录头目标请求无效`)
+    }
+  }
+  for (const variant of variants.cases) {
+    if (typeof variant?.name !== 'string' || typeof variant?.initialCookie !== 'string' || typeof variant?.loginHeader !== 'string') {
+      throw new Error(`${item.id}: 登录 Cookie 边界用例无效`)
+    }
   }
 }
 function validateContentBatchCase(item) {

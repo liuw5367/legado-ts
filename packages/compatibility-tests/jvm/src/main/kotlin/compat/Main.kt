@@ -31,6 +31,7 @@ private fun execute(item: JsonObject): Any? {
         "flow.discover" -> executeBookFlow(input, discover = true)
         "flow.contentLifecycle" -> executeContentLifecycle(input)
         "flow.contentBatch" -> executeContentBatchFlow(input)
+        "flow.loginHeader" -> executeLoginHeaderFlow(input)
         "flow.toc" -> executeBookFlow(input, tocOnly = true)
         "url.options" -> {
             val raw = text("url")

@@ -584,6 +584,17 @@
       "faults": "object"
     }
   },
+  "flow.loginHeader": {
+    "required": ["source", "initialCookie", "loginHeader", "targets", "requestLimit", "variants"],
+    "properties": {
+      "source": "object",
+      "initialCookie": "string",
+      "loginHeader": "string",
+      "targets": "objects",
+      "requestLimit": "integer",
+      "variants": "object"
+    }
+  },
   "rule.coverStream": {
     "required": [
       "bytes",

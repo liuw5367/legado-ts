@@ -6,6 +6,7 @@ import { decodeImage } from '../../source-core/src/index.ts'
 import { splitSourceRequestUrl } from '../../source-core/src/runtime/request-url.ts'
 import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeContentBatchFlow } from './content-batch-flow.ts'
+import { executeLoginHeaderFlow } from './login-header-flow.ts'
 import { executeBookFlow } from './book-flow.ts'
 import { executeCookieMap } from './cookie-map.ts'
 import { executeDateBridge } from './date-bridge.ts'
@@ -47,6 +48,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
   if (item.operation === 'rule.zipDownload') return executeZipDownload(item.input)
   if (item.operation === 'flow.contentLifecycle') return executeContentLifecycle(item.input)
   if (item.operation === 'flow.contentBatch') return executeContentBatchFlow(item.input)
+  if (item.operation === 'flow.loginHeader') return executeLoginHeaderFlow(item.input)
   if (item.operation === 'rule.infoMap') return executeInfoMap(item.input)
   if (item.operation === 'flow.mainJs') return executeMainJsFlow(item.input)
   if (item.operation === 'flow.discover') return executeBookFlow(item.input, 'discover')

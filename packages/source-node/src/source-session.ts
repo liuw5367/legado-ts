@@ -1,6 +1,6 @@
 import { createSourceSession, MemorySourceScriptCache } from '@legado/source-core'
 import type { ClockHost, ConcurrencyHost, NetworkHost, NormalizedSource, SourceRuntimeConcurrency, SourceRuntimeState, SourceScriptCache, SourceScriptCacheSnapshot, SourceSession } from '@legado/source-core'
-import { NodeCookieStore } from './cookies.ts'
+import { mergeCookieValues, NodeCookieStore } from './cookies.ts'
 import { NodeCharsetCodec } from './charset.ts'
 import type { CookieStore, NodeNetworkOptions } from './types.ts'
 import { NodeNetworkHost } from './http.ts'
@@ -91,15 +91,22 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
       try {
         const parsed: unknown = JSON.parse(value)
         if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-          const cookie = Object.entries(parsed).find(([key]) => key.toLowerCase() === 'cookie')?.[1]
-          if (cookie !== undefined) {
+          const headerMap = parsed as Record<string, unknown>
+          // Android BaseSource 精确按 Map['Cookie'] ?: Map['cookie'] 取值；其他大小写只是普通请求头。
+          const cookie = headerMap.Cookie ?? headerMap.cookie
+          if (cookie !== undefined && cookie !== null) {
             const url = new URL(currentSource.bookSourceUrl).toString()
-            await cookieStore.remove(url)
-            await cookieStore.set(url, String(cookie))
+            const cookieValue = String(cookie)
+            if (cookieStore.replaceCookie !== undefined) {
+              await cookieStore.replaceCookie(url, cookieValue)
+            } else if (cookieValue.length > 0) {
+              // 兼容自定义 CookieStore：set 接收 Cookie 对时保留 Android 的旧值合并顺序。
+              await cookieStore.set(url, mergeCookieValues(await cookieStore.get(url) ?? '', cookieValue))
+            }
           }
         }
       } catch {
-        // Android ignores malformed login headers for cookie replacement but keeps the raw header.
+        // Android 对无效登录头不更新 Cookie，但仍保留原始登录头。
       }
     },
     removeLoginHeader: async (currentSource) => {

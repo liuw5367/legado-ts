@@ -6,7 +6,7 @@ import { root, readJson } from './common.mjs'
 export function operationSchemas(operations) {
   return Object.entries(operations).map(([operation, shape]) => ({
     if: { properties: { operation: { const: operation } } },
-    then: { properties: { input: { type: 'object', required: shape.required, properties: Object.fromEntries(Object.entries(shape.properties).map(([key, type]) => [key, type === 'strings' ? { type: 'array', items: { type: 'string' } } : { type }])), additionalProperties: false } } },
+    then: { properties: { input: { type: 'object', required: shape.required, properties: Object.fromEntries(Object.entries(shape.properties).map(([key, type]) => [key, type === 'strings' ? { type: 'array', items: { type: 'string' } } : type === 'objects' ? { type: 'array', items: { type: 'object' } } : { type }])), additionalProperties: false } } },
   }))
 }
 if (process.argv[1] === new URL(import.meta.url).pathname) {

@@ -73,6 +73,7 @@
         "rule.sourceState",
         "flow.contentLifecycle",
         "flow.contentBatch",
+        "flow.loginHeader",
         "rule.coverStream",
         "rule.zipDownload",
         "rule.providerCrypto",
@@ -1969,6 +1970,54 @@
                 "type": "integer"
               },
               "faults": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "flow.loginHeader"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "source",
+              "initialCookie",
+              "loginHeader",
+              "targets",
+              "requestLimit",
+              "variants"
+            ],
+            "properties": {
+              "source": {
+                "type": "object"
+              },
+              "initialCookie": {
+                "type": "string"
+              },
+              "loginHeader": {
+                "type": "string"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "requestLimit": {
+                "type": "integer"
+              },
+              "variants": {
                 "type": "object"
               }
             },

@@ -3,6 +3,8 @@ export interface CookieStore {
   get(url: string): Promise<string | undefined>
   /** 保存响应 Set-Cookie。 */
   set(url: string, setCookie: string | string[]): Promise<void>
+  /** 按 Android CookieStore.replaceCookie 语义合并登录 Cookie；没有该方法时由 session 以 get/set 组合替代。 */
+  replaceCookie?(url: string, cookie: string): Promise<void>
   /** 按地址清理 Cookie（Android CookieStore.removeCookie(url)），不波及整个命名空间。 */
   remove(url: string): Promise<void>
   /** 显式清理当前 Cookie 命名空间。 */
