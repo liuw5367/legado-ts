@@ -3489,10 +3489,22 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       if (compiled.error.code === 'invalid-pattern') return rule.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
       throw new SourceRuleError('failed', `${compiled.error.message}：${patternText.slice(0, 40)}`)
     }
-    if (!rule.firstMatchOnly) return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
+    if (!rule.firstMatchOnly) {
+      try {
+        return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
+      } catch {
+        // Android AnalyzeRule.replaceRegex 捕获替换异常后会把正则文本当作普通字符串处理。
+        return text.split(patternText).join(replacement)
+      }
+    }
     const first = compiled.regex.exec(text)
     if (first === null) return ''
-    return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)
+    try {
+      return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)
+    } catch {
+      // Android 首项替换在正则已匹配、替换串失败时返回原替换串。
+      return replacement
+    }
   }
 
   private async runJavaScript(code: string, stage: 'mainJs' | 'book' | 'chapter' | 'search' | 'content', source: NormalizedSource, content: unknown, signal?: AbortSignal, context?: { baseUrl?: string; redirectUrl?: string; content?: unknown; bindings?: Readonly<Record<string, unknown>>; mutableBindings?: readonly string[]; workflowStage?: WorkflowStage; ruleState?: EvaluationState; jsLibOwner?: object; mode?: 'script' | 'function-body'; captureBindings?: readonly string[]; captureGlobals?: boolean; globalState?: Readonly<Record<string, unknown>>; workflowActions?: WorkflowJavaScriptRequest['workflowActions']; javascriptBudget?: WorkflowJavaScriptRequest['javascriptBudget']; requestBudget?: Partial<RequestBudget>; resultInputKind?: WorkflowImageDecodeRequest['resultInputKind']; requestObserver?: RequestObserver; continueAfterCancellation?: boolean }): Promise<WorkflowRuleOutput> {

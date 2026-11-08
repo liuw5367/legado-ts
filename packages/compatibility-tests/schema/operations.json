@@ -20,6 +20,16 @@
       "values": "object"
     }
   },
+  "rule.regexReplace": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
+  },
   "regex.first": {
     "required": [
       "text",

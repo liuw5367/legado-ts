@@ -1015,5 +1015,146 @@
         "BB"
       ]
     }
+  },
+  {
+    "id": "pattern.matcher.inlineFlags",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "(?i:a)(?-i:b)",
+      "text": "Ab",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]",
+        "[\"group\"]",
+        "[\"start\"]",
+        "[\"end\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher inline flags"
+    },
+    "tags": [
+      "normal",
+      "flags"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true,
+        "Ab",
+        0,
+        2
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.possessiveBacktracking",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "^a++ab$",
+      "text": "aaab",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher possessive quantifier"
+    },
+    "tags": [
+      "edge",
+      "possessive"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        false
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.possessivePositive",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "^a++b$",
+      "text": "aaab",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher possessive quantifier"
+    },
+    "tags": [
+      "normal",
+      "possessive"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.classIntersection",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "^[a-z&&[def]]+$",
+      "text": "def",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher class intersection"
+    },
+    "tags": [
+      "normal",
+      "class-intersection"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        true
+      ]
+    }
+  },
+  {
+    "id": "pattern.matcher.classIntersectionExcludes",
+    "family": "pattern",
+    "operation": "pattern.matcher",
+    "input": {
+      "pattern": "^[a-z&&[def]]+$",
+      "text": "abc",
+      "flags": 0,
+      "actions": [
+        "[\"find\"]"
+      ]
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Pattern.compile / Matcher class intersection"
+    },
+    "tags": [
+      "edge",
+      "class-intersection"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        false
+      ]
+    }
   }
 ]

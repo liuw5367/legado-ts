@@ -88,6 +88,20 @@ test('Regex 返回完整匹配和缺失捕获组空字符串', () => {
   assert.deepEqual(result.value, [['ab', 'a', 'b'], ['a', 'a', '']])
 })
 
+test('AnalyzeRule 替换引用错误按 Android 字面回退语义处理', () => {
+  const all = evaluateRule(compiled('literal:前缀 (a) 后缀 a##(a)##$2'), context(''))
+  assert.equal(all.status, 'success')
+  assert.equal(all.value, '前缀 $2 后缀 a')
+
+  const first = evaluateRule(compiled('literal:前缀 a 后缀##(a)##$2###'), context(''))
+  assert.equal(first.status, 'success')
+  assert.equal(first.value, '$2')
+
+  const firstNoMatch = evaluateRule(compiled('literal:前缀 b 后缀##(a)##$2###'), context(''))
+  assert.equal(firstNoMatch.status, 'empty')
+  assert.equal(firstNoMatch.value, '')
+})
+
 test('变量优先级、@put、@get 和模板插值可观察', () => {
   const variables = new MemoryVariableView({ initial: { source: { key: 'source', empty: '' }, book: { key: 'book' }, local: { local: '' } } })
   const result = evaluateRule(compiled('@put:{"saved":"literal:value"}@get:{saved}-{{key}}-{{local}}'), context('unused', variables))

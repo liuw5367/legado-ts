@@ -338,6 +338,28 @@ test('重复的正文下一页地址正常结束分页且不产生截断告警',
   assert.equal(chapterRequests, 1)
 })
 
+test('reader-web 正文规则的非法替换组按 Android 字面回退语义处理', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    if (new URL(String(url)).pathname === '/chapter-regex-replacement') {
+      return new Response('<main>前缀 (a) 后缀 a</main>')
+    }
+    return fixtureResponse(url)
+  })
+  const { repository, runtime, run } = await setup({ content: 'main@text', replaceRegex: '##(a)##$2' })
+  await runtime.runSearchBatch('user-a', run.id)
+  const created = await runtime.createBookFromSearch('user-a', run.id, 0)
+  const source = await repository.getSourceForUser('user-a', created.edition.sourceId)
+  assert.ok(source)
+  const chapter = { sourceId: source.sourceId, bookUrl: created.edition.bookUrl, chapterUrl: 'https://8.8.8.8/chapter-regex-replacement', index: 0, title: '第一章', rawFields: {}, traceRef: '' }
+  const { chapterIdFor } = await import('../server/runtime/reader-runtime.ts')
+  const chapterId = chapterIdFor(chapter)
+  await repository.saveToc('user-a', { userId: 'user-a', bookId: created.book.id, editionKey: created.edition.editionKey, sourceFingerprint: source.fingerprint, revision: 'regex-replacement', chapters: [chapter], bookPatch: { lastCheckTime: 1, totalChapterNum: 1 } })
+
+  const result = await runtime.getOrLoadContent('user-a', created.book.id, created.edition.editionKey, chapterId, true)
+
+  assert.equal(result.content.cleaned, '　　前缀 $2 后缀 a')
+})
+
 test('正文清理失败提示规则错误，旧缓存选择器错误不再断言截断', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
     if (new URL(String(url)).pathname !== '/chapter-cleanup') return fixtureResponse(url)

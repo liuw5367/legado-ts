@@ -220,6 +220,12 @@ export async function execute(item: CaseInput): Promise<unknown> {
         var text = ${json('textRule')}, url = ${json('urlRule')};
         return {literal:java.getString(text,false),unescaped:java.getString(text,true),fallback:java.getString(text,null,false),
           url:java.getString(url,null,true),list:java.getStringList(url,null,false),urlList:java.getStringList(url,null,true)}`, i.content)
+    case 'rule.regexReplace': {
+      const result = await host.evaluate({ source, stage: 'detail', field: 'ruleContent', rule: str('rule'), content: str('content'), expect: 'text' })
+      // Android AnalyzeRule.getString exposes an empty String; SourceRuleHost represents it as status=empty.
+      if (result.status === 'empty') return ''
+      return checked(result)
+    }
     case 'rule.split': {
       const operator = str('operator') as '&&' | '||' | '%%'
       const result = i.code === true ? splitCodeBalanced(str('rule'), operator) : splitTopLevel(str('rule'), operator)

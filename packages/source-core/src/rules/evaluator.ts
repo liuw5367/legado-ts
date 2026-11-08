@@ -88,10 +88,22 @@ function applyReplacement(value: RuleValue, atom: CompiledRule, state: Evaluatio
     if (compiled.error.code !== 'invalid-pattern') throw new EvaluationStop(diagnostic('invalid-regex', compiled.error.message))
     return atom.replacement.firstMatchOnly ? replacement : text.split(patternText).join(replacement)
   }
-  if (!atom.replacement.firstMatchOnly) return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
+  if (!atom.replacement.firstMatchOnly) {
+    try {
+      return replaceWithJavaReplacement(text, compiled.regex, replacement, true)
+    } catch {
+      // Android AnalyzeRule.replaceRegex 对替换异常执行 runCatching，随后按字面量替换正则文本。
+      return text.split(patternText).join(replacement)
+    }
+  }
   const first = compiled.regex.exec(text)
   if (first === null) return ''
-  return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)
+  try {
+    return replaceWithJavaReplacement(first[0], compiled.regex, replacement, false)
+  } catch {
+    // Android 的首项替换分支在匹配存在但替换串无效时直接返回替换串。
+    return replacement
+  }
 }
 
 function evaluateRegex(body: string, input: unknown): RuleValue {

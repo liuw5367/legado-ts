@@ -23,6 +23,7 @@
       "enum": [
         "rule.split",
         "rule.inner",
+        "rule.regexReplace",
         "regex.first",
         "regex.all",
         "string.split",
@@ -292,6 +293,35 @@
               },
               "values": {
                 "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.regexReplace"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "rule"
+            ],
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
               }
             },
             "additionalProperties": false

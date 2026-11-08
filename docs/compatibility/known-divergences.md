@@ -95,6 +95,8 @@
 
 `D21` Pattern 标志补充：Java `Pattern.CANON_EQ` 支持 Unicode 规范等价匹配。QuickJS 的受控 Pattern 对该标志返回 `capability-missing`，非法标志位按输入错误处理。
 
+`D21` 正则替换回退补充（P60）：固定 Android `AnalyzeRule.kt:544–560` 后，source-core evaluator 与 `SourceRuleRuntime` 对齐其 `runCatching` 结果。全量 `result.replace(regex, replacement)` 失败会退回 `result.replace(regexText, replacement)` 字面替换；首项替换在已命中但 replacement 引用无效时返回 replacement 原文，无匹配时返回空串。JVM/TS 固定案例 `regex.ruleReplace.invalidGroup.*`、`regex.ruleReplace.namedAndUnmatchedGroups`、`regex.ruleReplace.invalidPattern.*` 均通过；reader-web 正文工作流另有真实 runtime 入口回归。D21 仍为部分实现：复杂 Java Pattern 方言和 Android app/设备 golden 没有因此宣称完成。
+
 ### 覆盖范围与未证实事项
 
 本轮逐组检查了导入/字段、规则编译与解析器、URL/网络、声明式五类读取流程及批量、整源 JS、JS 继承公开面及返回对象、Cookie/cache/源状态、发现交互、登录、编码/加密、文件/归档、字体、并发、图片/媒体、段评、付费/事件以及 Web 会话装配。已有的分页、卷/VIP/购买标志、canReName、preUpdateJs、subContent、imageDecode、contentBatch 等入口继续保留“已实现待 Android golden”，没有因为本轮未找到新缺陷而改成完整兼容。

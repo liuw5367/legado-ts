@@ -252,5 +252,131 @@
     "tags": [
       "edge"
     ]
+  },
+  {
+    "id": "regex.ruleReplace.invalidGroup.all.literalFallback",
+    "family": "regex",
+    "operation": "rule.regexReplace",
+    "input": {
+      "content": "<div class=\"item\">前缀 (a) 后缀 a</div>",
+      "rule": "div.item@text##(a)##$2"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule.replaceRegex(result, SourceRule)"
+    },
+    "tags": [
+      "edge",
+      "error-recovery"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "前缀 $2 后缀 a"
+    }
+  },
+  {
+    "id": "regex.ruleReplace.invalidGroup.first.fallbackReplacement",
+    "family": "regex",
+    "operation": "rule.regexReplace",
+    "input": {
+      "content": "<div class=\"item\">前缀 a 后缀</div>",
+      "rule": "div.item@text##(a)##$2###"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule.replaceRegex(result, SourceRule)"
+    },
+    "tags": [
+      "edge",
+      "error-recovery"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "$2"
+    }
+  },
+  {
+    "id": "regex.ruleReplace.invalidGroup.first.noMatch",
+    "family": "regex",
+    "operation": "rule.regexReplace",
+    "input": {
+      "content": "<div class=\"item\">前缀 b 后缀</div>",
+      "rule": "div.item@text##(a)##$2###"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule.replaceRegex(result, SourceRule)"
+    },
+    "tags": [
+      "edge",
+      "empty"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": ""
+    }
+  },
+  {
+    "id": "regex.ruleReplace.namedAndUnmatchedGroups",
+    "family": "regex",
+    "operation": "rule.regexReplace",
+    "input": {
+      "content": "<div class=\"item\">a ab</div>",
+      "rule": "div.item@text##(?<letter>a)(b)?##${letter}:$2"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule.replaceRegex(result, SourceRule)"
+    },
+    "tags": [
+      "normal",
+      "groups"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "a: a:b"
+    }
+  },
+  {
+    "id": "regex.ruleReplace.invalidPattern.literalFallback",
+    "family": "regex",
+    "operation": "rule.regexReplace",
+    "input": {
+      "content": "<div class=\"item\">before [ after</div>",
+      "rule": "div.item@text##[##x"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule.replaceRegex(result, SourceRule)"
+    },
+    "tags": [
+      "edge",
+      "invalid-pattern"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "before x after"
+    }
+  },
+  {
+    "id": "regex.ruleReplace.invalidPattern.firstFallback",
+    "family": "regex",
+    "operation": "rule.regexReplace",
+    "input": {
+      "content": "<div class=\"item\">before [ after</div>",
+      "rule": "div.item@text##[##x###"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeRule.replaceRegex(result, SourceRule)"
+    },
+    "tags": [
+      "edge",
+      "invalid-pattern"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": "x"
+    }
   }
 ]

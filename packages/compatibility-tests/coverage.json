@@ -78,6 +78,28 @@
       ]
     },
     {
+      "operation": "rule.regexReplace",
+      "method": "AnalyzeRule.replaceRegex(result, SourceRule)",
+      "reference": "upstream-adapted",
+      "tsEntry": "ts/adapter.ts → SourceRuleHost.evaluate replacement",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "regex.ruleReplace.invalidGroup.all.literalFallback",
+        "regex.ruleReplace.invalidGroup.first.fallbackReplacement",
+        "regex.ruleReplace.invalidGroup.first.noMatch",
+        "regex.ruleReplace.namedAndUnmatchedGroups",
+        "regex.ruleReplace.invalidPattern.literalFallback",
+        "regex.ruleReplace.invalidPattern.firstFallback"
+      ],
+      "manifestMembers": [
+        "parser-regex::002-replace"
+      ]
+    },
+    {
       "operation": "string.split",
       "method": "java.lang.String.split(String,int)",
       "reference": "jdk-direct",
@@ -1974,7 +1996,17 @@
         "pattern.matcher.batch-mixed-local-groups",
         "pattern.matcher.scoped-restore",
         "pattern.matcher.scoped-zero-width-replace",
-        "pattern.matcher.scoped-zero-width-no-match"
+        "pattern.matcher.scoped-zero-width-no-match",
+        "pattern.matcher.inlineFlags",
+        "pattern.matcher.possessiveBacktracking",
+        "pattern.matcher.possessivePositive",
+        "pattern.matcher.classIntersection",
+        "pattern.matcher.classIntersectionExcludes"
+      ],
+      "manifestMembers": [
+        "parser-regex::004-inline-flags",
+        "parser-regex::006-possessive-quantifier",
+        "parser-regex::007-class-intersection"
       ]
     },
     {
@@ -2015,6 +2047,7 @@
         "pattern.matcher.replaceThenFind",
         "pattern.matcher.empty",
         "pattern.matcher.case",
+        "pattern.matcher.inlineFlags",
         "pattern.matcher.multiline",
         "pattern.matcher.dotall",
         "pattern.matcher.literal",
@@ -2027,7 +2060,11 @@
         "pattern.matcher.startBounds",
         "pattern.matcher.invalidPattern",
         "pattern.matcher.endBounds",
-        "pattern.matcher.literalRejectsWildcard"
+        "pattern.matcher.literalRejectsWildcard",
+        "pattern.matcher.possessiveBacktracking",
+        "pattern.matcher.possessivePositive",
+        "pattern.matcher.classIntersection",
+        "pattern.matcher.classIntersectionExcludes"
       ],
       "manifestMembers": [
         "parser-regex::001-find"
