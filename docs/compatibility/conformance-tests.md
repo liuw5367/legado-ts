@@ -469,6 +469,10 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 
 有限资源测试采用最小值、恰好上限、超过上限三例；字符串位置另含代理对。并发事件只断言契约要求的先后关系（例如保存先于成功），不强制不同源回调总顺序；分页收集顺序则是固定契约。时间与随机数由测试宿主注入，真实站点波动不进入 golden。
 
+### P83 Java String whitespace
+
+`string.api.strip.*`、`string.api.stripLeading.*`、`string.api.stripTrailing.*` 与 `string.api.isBlank.*` 分别对照固定 JDK 方法。向量含 U+2003/U+3000、NBSP、空串/全空白、单侧裁剪和 continuation；测试确认 Java `Character.isWhitespace` 的目标字符分类。reader-web 搜索脚本另走 `Packages.java.lang.String` 验证结果；四组 coverage 各自需要 normal、edge、error-or-empty、continuation。
+
 ### P82 Java String.replace
 
 `string.api.replace.*` 以固定 JDK `String.replace(CharSequence, CharSequence)` 为参考，覆盖字面替换、重叠子串、空目标、空输入、代理对中的 UTF-16 code unit 边界及结果 continuation。空文本和空目标时只返回一次 replacement；不得把 astral 代理对折叠成单个边界。`coverage.json` 回链 `java-collections-string::008-string-replace`，reader-web 的 JavaScript 搜索入口另验同一行为。

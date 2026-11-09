@@ -519,6 +519,270 @@
     ]
   },
   {
+    "id": "string.api.strip.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u2003正文\u3000",
+      "method": "strip"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.strip()"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.strip.nbsp-preserved",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u00a0正文\u00a0",
+      "method": "strip"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.strip()"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.strip.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u2003\u3000",
+      "method": "strip"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.strip()"
+    },
+    "tags": [
+      "error-or-empty"
+    ]
+  },
+  {
+    "id": "string.api.strip.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": " \t正文\n",
+      "method": "strip",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.strip()"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.stripLeading.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u2003正文\u3000",
+      "method": "stripLeading"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripLeading()"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.stripLeading.nbsp-preserved",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u00a0正文",
+      "method": "stripLeading"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripLeading()"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.stripLeading.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u2003\u3000",
+      "method": "stripLeading"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripLeading()"
+    },
+    "tags": [
+      "error-or-empty"
+    ]
+  },
+  {
+    "id": "string.api.stripLeading.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": " \t正文",
+      "method": "stripLeading",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripLeading()"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.stripTrailing.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u2003正文\u3000",
+      "method": "stripTrailing"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripTrailing()"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.stripTrailing.nbsp-preserved",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "正文\u00a0",
+      "method": "stripTrailing"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripTrailing()"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.stripTrailing.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u2003\u3000",
+      "method": "stripTrailing"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripTrailing()"
+    },
+    "tags": [
+      "error-or-empty"
+    ]
+  },
+  {
+    "id": "string.api.stripTrailing.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "正文 \t",
+      "method": "stripTrailing",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.stripTrailing()"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
+    "id": "string.api.isBlank.unicode",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u3000\t\u2003",
+      "method": "isBlank"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.isBlank()"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.isBlank.nbsp-false",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "\u00a0",
+      "method": "isBlank"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.isBlank()"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.isBlank.empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "",
+      "method": "isBlank"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.isBlank()"
+    },
+    "tags": [
+      "error-or-empty"
+    ]
+  },
+  {
+    "id": "string.api.isBlank.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": " \u2003",
+      "method": "isBlank",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.isBlank()"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
     "id": "string.api.charAt.negative",
     "family": "string",
     "operation": "string.api",

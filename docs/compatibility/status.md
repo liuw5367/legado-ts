@@ -2,6 +2,12 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-09 P83：补齐 Java String Unicode 空白方法对照
+
+为 `String.strip`、`stripLeading`、`stripTrailing`、`isBlank` 增加固定 JDK 与 TS 双端覆盖，并在 reader-web 书源 JS 入口验证。向量覆盖 U+2003/U+3000 等 Java `Character.isWhitespace` 空白、NBSP 不视为空白、空结果及返回值 continuation。本轮 16 条配对向量全部一致，未发现需要修改的 TS 行为；四个清单成员的 normal、edge、error-or-empty、continuation coverage 均 verified。
+
+string family **145/145**；全量 JVM/TS **983 项：978 项相等、5 项既有允许差异、0 项未登记差异/unsupported/runner failure**，流程 **87/87**。reader-web source-execution **22/22**、兼容机制 **25/25**、根测试 **714/714**、reader-web typecheck 通过。报告见 [P83 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-804CvZ/report.md) 与 [string family 对照](../../packages/compatibility-tests/output/run-JwXE0y/report.md)。该证据为固定 JDK/Rhino 框架下的纯 JVM 对照，不代表 Android app/设备实测；D34 其余 String/集合成员仍按清单逐项补证。
+
 ## 2026-11-09 P82：对齐 Java String.replace 的空文本边界
 
 固定 JVM/TS 对照发现 `String.replace(CharSequence, CharSequence)` 在空目标、空文本时存在差异：Java 返回一次 replacement（例如 `"".replace("", "-")` 为 `"-"`），TS 原先返回两次。现在修复空文本分支；额外保留 astral 字符用例，验证代理对内部按 Java UTF-16 code unit 边界插入。

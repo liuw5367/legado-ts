@@ -80,6 +80,8 @@
 
 `D34` Java String `replace(CharSequence,CharSequence)` 补充（P82，2026-11-09）：固定 JVM/TS 对照确认空目标匹配包括 UTF-16 code unit 的所有边界；空字符串输入只插入一次 replacement，TS 原先会重复插入。现在已修复并新增普通替换、重叠字面串、astral 代理对、空输入、空返回和 continuation 案例；reader-web 书源 JS 入口也通过。string family 129/129、全量 JVM/TS 967 项（962 相等、5 项既有允许差异）。这是固定 JDK 对照，不能替代 Android app/设备 golden。
 
+`D34` String whitespace API 补充（P83，2026-11-09）：`strip/stripLeading/stripTrailing/isBlank` 均已有 4 条固定 JVM/TS 向量，验证 Java `Character.isWhitespace` 范围（包含 U+2003/U+3000，排除 NBSP）、方向性裁剪、空返回和 continuation；16/16 相等，四个覆盖成员全部 verified，reader-web 书源 JS 入口也通过。未发现这四个已测向量上的 TS 差异；更广泛 Unicode 版本和 Android 设备实现仍未以 app/设备 golden 验证。
+
 ### 需要应用或真实平台的剩余项
 
 以下项目继续使用 OPEN-01～04 和 D4/D12～14，不因本轮重复盘点而另建状态编号。

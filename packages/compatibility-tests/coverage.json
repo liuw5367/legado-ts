@@ -947,6 +947,90 @@
     },
     {
       "operation": "string.api",
+      "method": "String.isBlank()",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.isBlank.unicode",
+        "string.api.isBlank.nbsp-false",
+        "string.api.isBlank.empty",
+        "string.api.isBlank.continuation"
+      ],
+      "manifestMembers": [
+        "java-collections-string::017-string-isblank"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.strip()",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.strip.unicode",
+        "string.api.strip.nbsp-preserved",
+        "string.api.strip.empty",
+        "string.api.strip.continuation"
+      ],
+      "manifestMembers": [
+        "java-collections-string::018-string-strip"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.stripLeading()",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.stripLeading.unicode",
+        "string.api.stripLeading.nbsp-preserved",
+        "string.api.stripLeading.empty",
+        "string.api.stripLeading.continuation"
+      ],
+      "manifestMembers": [
+        "java-collections-string::019-string-stripleading"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.stripTrailing()",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.stripTrailing.unicode",
+        "string.api.stripTrailing.nbsp-preserved",
+        "string.api.stripTrailing.empty",
+        "string.api.stripTrailing.continuation"
+      ],
+      "manifestMembers": [
+        "java-collections-string::020-string-striptrailing"
+      ]
+    },
+    {
+      "operation": "string.api",
       "method": "String.offsetByCodePoints(int,int)",
       "reference": "jdk-direct",
       "tsEntry": "ts/adapter.ts → string.api",

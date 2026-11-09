@@ -491,3 +491,31 @@ test('reader-web JavaScript source matches Android String.replace empty-target b
   assert.equal(result.candidates[0]?.candidate.name, 'String replace 测试书')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web JavaScript source matches Android String whitespace methods', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.101'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var value = new Packages.java.lang.String("\\u2003正文\\u3000");
+      var stripped = value.strip().toString();
+      var leading = value.stripLeading().toString();
+      var trailing = value.stripTrailing().toString();
+      var blank = new Packages.java.lang.String("\\u3000\\t\\u2003").isBlank();
+      var nbspBlank = new Packages.java.lang.String("\\u00a0").isBlank();
+      var nbspStrip = new Packages.java.lang.String("\\u00a0正文\\u00a0").strip().toString();
+      if (stripped !== "正文" || leading !== "正文\\u3000" || trailing !== "\\u2003正文") throw new Error("String strip boundaries differ");
+      if (blank !== true || nbspBlank !== false || nbspStrip !== "\\u00a0正文\\u00a0") throw new Error("String Java whitespace classification differs");
+      return [{ name: "String whitespace 测试书", author: "兼容验证", bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'String whitespace 测试书')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})
