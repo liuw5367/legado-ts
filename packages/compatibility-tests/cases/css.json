@@ -943,6 +943,81 @@
     }
   },
   {
+    "id": "css.nodes.pseudo-contains-own-normal",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha Beta</p></main>",
+      "rule": "@css:p:containsOwn(Alpha Beta)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.ContainsOwnText"
+    },
+    "tags": ["normal", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [{ "tag": "p", "text": "Alpha Beta", "id": "direct" }] }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-own-normal",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha Beta</p></main>",
+      "rule": "@css:p:matchesOwn(^Alpha\\s+Beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.MatchesOwn"
+    },
+    "tags": ["normal", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [{ "tag": "p", "text": "Alpha Beta", "id": "direct" }] }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-normal",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha Beta</p></main>",
+      "rule": "@css:p:matches(^Alpha\\s+Beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.Matches"
+    },
+    "tags": ["normal", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [{ "tag": "p", "text": "Alpha Beta", "id": "direct" }] }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-whole-text-normal",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha Beta</p></main>",
+      "rule": "@css:p:matchesWholeText(^Alpha\\s+Beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.MatchesWholeText"
+    },
+    "tags": ["normal", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [{ "tag": "p", "text": "Alpha Beta", "id": "direct" }] }
+  },
+  {
+    "id": "css.nodes.pseudo-matches-whole-own-text-normal",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=\"direct\">Alpha Beta</p></main>",
+      "rule": "@css:p:matchesWholeOwnText(^Alpha\\s+Beta$)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup.getElements · Evaluator.MatchesWholeOwnText"
+    },
+    "tags": ["normal", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": [{ "tag": "p", "text": "Alpha Beta", "id": "direct" }] }
+  },
+  {
     "id": "css.list.batch-table-attributes",
     "family": "css",
     "operation": "css.list",
