@@ -9,8 +9,41 @@ import okhttp3.Request
 import okhttp3.Response
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
 import org.htmlunit.corejs.javascript.Context
+import org.htmlunit.corejs.javascript.ScriptableObject
 import org.jsoup.parser.Parser
+import org.jsoup.select.Elements
 import java.net.URL
+
+/** Mirrors the non-null Kotlin method entry declared by Android AnalyzeRule.getElements(String). */
+internal class AnalyzeRuleGetElementsProbe(private val parser: AnalyzeByJSoup) {
+    fun getElements(rule: String): Elements =
+        if (rule.trim { it <= ' ' }.isEmpty()) Elements() else parser.getElements(rule)
+}
+
+internal fun analyzeRuleGetElementsNullability(input: JsonObject): Any {
+    val content = input.get("content").asString
+    val rule = input.get("rule").asString
+    val parser = AnalyzeByJSoup(content)
+    val probe = AnalyzeRuleGetElementsProbe(parser)
+    val elements = probe.getElements(rule)
+    val scope = Context.enter().use { context ->
+        val currentScope = context.initStandardObjects()
+        ScriptableObject.putProperty(currentScope, "java", Context.javaToJS(probe, currentScope))
+        val output = context.evaluateString(
+            currentScope,
+            "var nullCaught=false; try { java.getElements(null); } catch (error) { nullCaught=true; } JSON.stringify({nullCaught:nullCaught,nextCount:java.getElements('p').size()});",
+            "AnalyzeRule.getElements(String)", 1, null,
+        )
+        JsonParser.parseString(Context.toString(output)).asJsonObject
+    }
+    return mapOf(
+        "count" to elements.size,
+        "firstText" to elements.firstOrNull()?.text().orEmpty(),
+        "emptyCount" to probe.getElements(" ").size,
+        "nullCaught" to scope.get("nullCaught").asBoolean,
+        "nextCount" to scope.get("nextCount").asInt,
+    )
+}
 
 /** 固定 AnalyzeRule 的 HTML 分支：布尔重载控制解实体，URL 模式选首项，null 内容回退当前文档。 */
 internal fun analyzeRuleStringOverloads(input: JsonObject): Any {

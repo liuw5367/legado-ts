@@ -91,6 +91,7 @@ private fun execute(item: JsonObject): Any? {
         "rule.scriptLibrary" -> scriptLibraryEvidence(input)
         "rule.bridgeObjects" -> bridgeReturnedObjects(input)
         "rule.bridgeString" -> analyzeRuleStringOverloads(input)
+        "rule.bridgeElements" -> analyzeRuleGetElementsNullability(input)
         "rule.regexReplace" -> analyzeRuleRegexReplacement(input)
         "rule.split" -> RuleAnalyzer(text("rule"), input.get("code")?.asBoolean ?: false).splitRule(text("operator"))
         "rule.inner" -> RuleAnalyzer(text("rule"), true).innerRule("{$.") { path -> input.getAsJsonObject("values").get(path)?.asString }

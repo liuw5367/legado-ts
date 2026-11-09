@@ -2,7 +2,11 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
-## 2026-11-09 P85：对齐 Java String.codePointBefore 与 getChars
+## 2026-11-09 P87：对齐 AnalyzeRule.getElements 的 null 入口行为
+
+按固定 Android `AnalyzeRule.getElements(String)` 的 Kotlin 非空参数签名，补充 catch-and-continue 对照：普通 `.item` 选择返回两个元素，空白规则返回空列表，JS 传入 null 时捕获入口异常，捕获后再次查询成功。TS 的三个 `java.getElements` 书源运行入口此前把 null/undefined 当空结果，现统一抛出可捕获的 `TypeError`；错误类不强求与 JVM 的 Kotlin 参数异常同名，比较的是书源可见的 catch 与后续执行行为，空白规则仍返回空列表。覆盖已关联 `analyze-rule-overloads::008-getelements`，normal、edge、error-or-empty、continuation 四维均 verified。
+
+新增的双端案例修复前仅 `nullCaught` 行为不同，修复后 rule-bridge **9/9**。全量 JVM/TS **1031 项：1026 项一致、5 项既有逐例允许差异、0 未登记差异/unsupported/runner failure**，流程 **87/87**。根测试 **714/714**、compatibility mechanism **35/35**、source-rule-host **124/124**、reader-web source-execution **25/25**、reader-web typecheck 通过。全量报告见 [P87 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-rUok2t/report.md)。参考端用固定 Android 源码签名指导的 Kotlin non-null probe、Rhino 调用及 `AnalyzeByJSoup` 选择验证；不是 Android app/设备实测，也不代表完整 `AnalyzeRule` 类已在 JVM 编译执行。
 
 ## 2026-11-09 P86：补齐 Java String.valueOf 与 copyValueOf 对照
 

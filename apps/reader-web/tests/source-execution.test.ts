@@ -586,3 +586,27 @@ test('reader-web Java String codePointBefore and getChars preserve UTF-16 bounda
   assert.equal(result.candidates[0]?.candidate.author, '128512,65,55357|?\ud83d\ude00?|true|true|true')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web Java AnalyzeRule.getElements rejects null and allows a later call', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'http://127.0.0.1:12345'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var caught = false;
+      try { java.getElements(null); } catch (error) { caught = error instanceof TypeError; }
+      var emptyCount = java.getElements(' ').length;
+      if (!caught || emptyCount !== 0) throw new Error("AnalyzeRule.getElements null/empty behavior differs");
+      return [{ name: "AnalyzeRule.getElements compatibility", author: String(caught) + "|" + emptyCount, bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'AnalyzeRule.getElements compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, 'true|0')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})

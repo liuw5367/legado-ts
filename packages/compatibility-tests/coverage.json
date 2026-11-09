@@ -1237,6 +1237,24 @@
       ]
     },
     {
+      "operation": "rule.bridgeElements",
+      "method": "AnalyzeRule.getElements(String)",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "ts/adapter.ts → rule.bridgeElements / SourceRuleHost → java.getElements",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeElements.null-argument-catch-and-continue"
+      ],
+      "manifestMembers": [
+        "analyze-rule-overloads::008-getelements"
+      ]
+    },
+    {
       "operation": "string.api",
       "method": "String.substring(int)",
       "reference": "jdk-direct",

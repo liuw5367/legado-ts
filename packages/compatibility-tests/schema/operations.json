@@ -527,6 +527,16 @@
       "redirectUrl": "string"
     }
   },
+  "rule.bridgeElements": {
+    "required": [
+      "content",
+      "rule"
+    ],
+    "properties": {
+      "content": "string",
+      "rule": "string"
+    }
+  },
   "rule.bridgeObjects": {
     "required": [
       "kind"

@@ -477,6 +477,10 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 
 `string.api.valueOf*` 和 `string.api.copyValueOf.*` 由 JVM 通过显式 Java 签名调用静态方法，TS 通过真实 QuickJS `Packages.java.lang.String` 静态 bridge。`valueOf` 覆盖 String/number 对象、null 与 `char[]`（包括空数组、astral surrogate pair）；`copyValueOf` 覆盖切片、代理对内部的单 char、数组末尾空范围、非法范围、null 数组、异常捕获后继续以及返回值 continuation。越界分别以固定案例声明 `index-bounds` 映射；null 数组声明 `null-argument` 映射，原始异常类/消息仍保留。`java-primitive-overloads::001-string-valueof` 和 `::002-string-copyvalueof` 都有 normal/edge/error-or-empty/continuation 维度证据；后者 coverage 为 error-equivalent。静态 JDK 对照不等同 Android app/设备实测。
 
+### P87 AnalyzeRule.getElements null 参数
+
+案例 `rule.bridgeElements.null-argument-catch-and-continue` 以固定 Android `AnalyzeRule.getElements(String)` 非空 Kotlin 签名为源代码依据：JVM 端让 Rhino 调用签名相同的 Kotlin probe 并传入 null，检查 JS 可以捕获入口异常且继续调用；普通选择结果由锁定 Android `AnalyzeByJSoup` 路径产生。TS 端执行真实 `SourceRuleHost → java.getElements`。两边比较可观察的捕获/继续行为，不要求 Kotlin/JVM 与 TS 错误类、消息完全相同；null 不再静默转成空列表，空白规则仍返回空列表。`analyze-rule-overloads::008-getelements` 四个维度均有案例。该 probe 不等于把 Android `AnalyzeRule` 整类编译运行，也不构成 Android app/设备 golden。
+
 ### P84 Java String 搜索与 null 参数
 
 `string.api.indexOf.*`、`indexOfFrom.*` 与 `lastIndexOf.*` 直接调用固定 JDK 方法，覆盖 null 参数异常映射、普通/空搜索、负值和越界 fromIndex、`lastIndexOf(String/int)` 重载、astral code point 及 surrogate code unit。兄弟方法 `contains/startsWith/endsWith/contentEquals` 一并核对 null 契约；`startsWith(String,int)` 另覆盖负偏移必须返回 false。修复前 9 条案例行为不同，修复后 string family 165/165；`java-collections-string::010-string-lastindexof` 与 `::016-string-contentequals` 均补齐 normal、edge、error-or-empty 证据。reader-web 的 JavaScript 搜索入口另行执行 8 个可捕获 null 调用及负偏移断言。测试结果为固定 JDK/Rhino 与 TS 的同输入对照，不等同 Android app/设备实测。

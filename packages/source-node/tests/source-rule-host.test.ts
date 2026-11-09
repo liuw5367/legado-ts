@@ -1206,6 +1206,13 @@ test('java.getElements 提供 Android 书源使用的节点链式 API', async ()
   assert.equal(collection.status, 'success')
   assert.equal(collection.value, '2|/one')
 
+  const nullRule = await evaluate(host, `@js:
+    var caught = false;
+    try { java.getElements(null); } catch (error) { caught = error instanceof TypeError; }
+    JSON.stringify({caught: caught, next: java.getElements('li').length})`, html)
+  assert.equal(nullRule.status, 'success', nullRule.message)
+  assert.deepEqual(JSON.parse(String(nullRule.value)), { caught: true, next: 2 })
+
   const replaced = await evaluate(host, "@js:java.setContent('<div class=\"other\">新内容</div>'); java.getElement('.other').text()", html)
   assert.equal(replaced.status, 'success')
   assert.equal(replaced.value, '新内容')
