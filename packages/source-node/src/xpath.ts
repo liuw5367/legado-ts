@@ -1140,6 +1140,7 @@ function androidXPathValueAsString(value: unknown): string {
   if (items.length === 0) return ''
 
   const itemString = (item: unknown): string => {
+    if (typeof item === 'number') return androidXPathDoubleAsString(item)
     if (!isXmlNode(item)) return trimAndroidWhitespace(String(item))
     if (item.nodeType === 1) return normalizeXmlText(xmlWholeOwnText(item))
     if (item.nodeType === 2 || item.nodeType === 3 || item.nodeType === 4) return trimAndroidWhitespace(item.nodeValue ?? '')
@@ -1150,6 +1151,17 @@ function androidXPathValueAsString(value: unknown): string {
   // for each element. Attribute and other node lists use XValue's comma join.
   if (items.every((item) => isXmlNode(item) && item.nodeType === 1)) return items.map(itemString).join('')
   return items.map(itemString).join(',')
+}
+
+function androidXPathDoubleAsString(value: number): string {
+  if (!Number.isFinite(value)) return String(value)
+  const magnitude = Math.abs(value)
+  if (magnitude >= 1e7 || (magnitude > 0 && magnitude < 1e-3)) {
+    const [mantissa, exponent] = value.toExponential().split('e') as [string, string]
+    return `${mantissa.includes('.') ? mantissa : `${mantissa}.0`}E${Number(exponent)}`
+  }
+  if (Object.is(value, -0)) return '-0.0'
+  return Number.isInteger(value) ? `${value}.0` : String(value)
 }
 
 function androidXPathValueAsInt(value: unknown): number {

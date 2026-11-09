@@ -478,5 +478,21 @@
     "input": { "rule": "concat('  甲  ', ' 乙 ')", "content": "<main/>", "attribute": "" },
     "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Concat XValue.asString scalar trim" },
     "tags": ["compatibility-recheck", "xpath-function", "coercion", "whitespace"]
+  },
+  {
+    "id": "xpath.function.concat.java-number-format",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "concat(1, '|', 1.5, '|', 10000000, '|', 0.0001, '|', -0, '|', 0.001, '|', 1000000, '|', 0.0000001, '|', 0.1)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Concat Java Double.toString values" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion", "numeric-format"]
+  },
+  {
+    "id": "xpath.function.string-length.numeric-value",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "string-length(1)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 StringLength XValue numeric asString" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion", "numeric-format"]
   }
 ]

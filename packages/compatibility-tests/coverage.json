@@ -1567,7 +1567,9 @@
         "xpath.function.concat.element-and-attribute-sequences",
         "xpath.function.concat.zero-arguments",
         "xpath.function.concat.single-node-sequence",
-        "xpath.function.concat.scalar-trim"
+        "xpath.function.concat.scalar-trim",
+        "xpath.function.concat.java-number-format",
+        "xpath.function.string-length.numeric-value"
       ],
       "manifestMembers": [
         "parser-xpath::003-text",

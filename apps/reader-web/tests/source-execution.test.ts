@@ -226,7 +226,7 @@ test('reader-web search evaluates Android XPath concat in book rules', async (t)
     searchUrl: `${base}/search?q={{key}}`,
     ruleSearch: {
       bookList: 'article',
-      name: "@xpath:concat(//h2, ' - ', //article/@data-author)",
+      name: "@xpath:concat(//h2, ' - ', //article/@data-author, 1)",
       bookUrl: 'a@href',
     },
   }])
@@ -241,7 +241,7 @@ test('reader-web search evaluates Android XPath concat in book rules', async (t)
   assert.equal(result.search.status, 'success')
   assert.equal(result.sourceResults[0]?.status, 'success')
   assert.deepEqual(result.candidates.map(({ candidate }) => ({ name: candidate.name, bookUrl: candidate.bookUrl })), [
-    { name: '第一本-作者甲', bookUrl: `${base}/book/1` },
+    { name: '第一本-作者甲1.0', bookUrl: `${base}/book/1` },
   ])
 })
 
