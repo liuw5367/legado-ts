@@ -76,7 +76,7 @@ export function measureCoverage(entries, cases, comparisons, jvmResults) {
       if (dimension === 'edge') return item.tags.includes('edge') || item.tags.includes('boundary')
       if (dimension === 'error-or-empty') {
         const value = jvm.value
-        return jvm.outcome === 'throw' || item.tags.includes('empty') || value === '' || value === null || (Array.isArray(value) && value.length === 0)
+        return jvm.outcome === 'throw' || item.tags.includes('empty') || item.tags.includes('error-or-empty') || value === '' || value === null || (Array.isArray(value) && value.length === 0)
       }
       return item.tags.includes(dimension)
     }).map(({ item }) => item.id)]))

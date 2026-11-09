@@ -28,6 +28,15 @@ test('方法覆盖只采用本次双端通过的维度证据', () => {
   assert.deepEqual(gap.missingDimensions, ['edge', 'error-or-empty'])
 })
 
+test('方法覆盖把显式 error-or-empty 标签识别为嵌套空值证据', () => {
+  const item = { ...fixture, tags: ['normal', 'error-or-empty'] }
+  const entries = [{ caseIds: [item.id], requiredDimensions: ['normal', 'error-or-empty'] }]
+  const result = returned({ literal: '', list: [] })
+  const actual = measureCoverage(entries, [item], [compareCase(item, result, result)], [result])[0]
+  assert.equal(actual.status, 'verified')
+  assert.deepEqual(actual.dimensionEvidence, { normal: [item.id], 'error-or-empty': [item.id] })
+})
+
 test('固定书源规则按原文摘要分组，并保留每个字段及可执行案例来源', async () => {
   const inventory = await collectCorpusRules()
   assert.equal(inventory.sourceCount, 11)
