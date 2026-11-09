@@ -1559,7 +1559,11 @@
         "xpath.function.substring.two-arguments",
         "xpath.function.substring.fractional-indexes",
         "xpath.function.sum.elements-own-text",
-        "xpath.function.sum.text-nodes"
+        "xpath.function.sum.text-nodes",
+        "xpath.function.sum.negative-elements",
+        "xpath.function.sum.fractional-numbers",
+        "xpath.function.sum.exponent-string-rejected",
+        "xpath.function.sum.empty-elements"
       ],
       "manifestMembers": [
         "parser-xpath::003-text",

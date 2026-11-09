@@ -414,5 +414,37 @@
     "input": { "rule": "//aside | //section", "content": "<main><section id='first'></section><aside id='second'></aside></main>", "attribute": "id" },
     "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath 2.5.3 UnionExpr node result" },
     "tags": ["compatibility-recheck", "xpath-axis", "ordering"]
+  },
+  {
+    "id": "xpath.function.sum.negative-elements",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "sum(//li)", "content": "<main><li>-2.5</li><li>3.5</li></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Sum negative element text" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric", "edge"]
+  },
+  {
+    "id": "xpath.function.sum.fractional-numbers",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "sum(1.25, 2.5)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Sum numeric arguments and fraction" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric"]
+  },
+  {
+    "id": "xpath.function.sum.exponent-string-rejected",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "sum('1e3')", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Sum numeric text pattern" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric", "edge"]
+  },
+  {
+    "id": "xpath.function.sum.empty-elements",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "sum(//missing)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Sum empty Elements" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric", "empty"]
   }
 ]

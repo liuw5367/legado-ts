@@ -29,7 +29,7 @@ function registerAndroidXPathFunction(name: string, arity: number): string {
   const localName = `${name}-${arity}`
   const key = `${name}/${arity}`
   if (!registeredAndroidXPathFunctions.has(key)) {
-    const returnType = name === 'string-length' || name === 'last-context' || name === 'same-tag-index' ? 'xs:integer' : name === 'sum' ? 'xs:double' : name === 'is-last-context' || name === 'same-tag-index-equals' ? 'xs:boolean' : 'xs:string'
+    const returnType = name === 'string-length' || name === 'last-context' || name === 'same-tag-index' ? 'xs:integer' : name === 'sum' ? 'item()*' : name === 'is-last-context' || name === 'same-tag-index-equals' ? 'xs:boolean' : 'xs:string'
     const signature = name === 'last-context' || name === 'is-last-context' || name === 'same-tag-index' ? ['node()'] : name === 'same-tag-index-equals' ? ['node()', 'item()*'] : Array.from({ length: arity }, () => 'item()*')
     registerCustomXPathFunction({ localName, namespaceURI: ANDROID_XPATH_FUNCTIONS_NAMESPACE }, signature, returnType, (_context, ...args) => {
       if (name === 'string-length') return args.length === 0 ? 0 : androidXPathValueAsString(args[0]).length
@@ -41,7 +41,8 @@ function registerAndroidXPathFunction(name: string, arity: number): string {
         return position.index > 0 && position.index === position.count
       }
       if (name === 'same-tag-index-equals') return androidXPathSameTagPosition(args[0]).index === androidXPathValueAsInt(args[1])
-      return androidXPathSum(args)
+      const sum = androidXPathSum(args)
+      return Array.isArray(sum) ? sum : [sum]
     })
     registeredAndroidXPathFunctions.add(key)
   }
@@ -1176,30 +1177,31 @@ function androidXPathSubstring(args: unknown[]): string {
   return source.slice(start, end)
 }
 
-function androidXPathSum(args: unknown[]): number {
+function androidXPathSum(args: unknown[]): number | [] {
   let total = 0
   for (const argument of args) {
-    if (typeof argument === 'number') {
-      total += argument
+    const items = Array.isArray(argument) ? argument : [argument]
+    if (items.length === 1 && typeof items[0] === 'number') {
+      total += items[0]
       continue
     }
-    if (typeof argument === 'string') {
-      const value = androidXPathNumberFromString(argument)
-      if (value === undefined) return Number.NaN
+    if (items.length === 1 && typeof items[0] === 'string') {
+      const value = androidXPathNumberFromString(items[0])
+      if (value === undefined) return []
       total += value
       continue
     }
-    if (!Array.isArray(argument)) continue
-    if (argument.every((item) => isXmlNode(item) && item.nodeType === 1)) {
-      for (const item of argument) {
+    if (items.length === 0) continue
+    if (items.every((item) => isXmlNode(item) && item.nodeType === 1)) {
+      for (const item of items) {
         const value = androidXPathNumberFromString(normalizeXmlText(xmlWholeOwnText(item)))
-        if (value === undefined) return Number.NaN
+        if (value === undefined) return []
         total += value
       }
-    } else if (argument.every((item) => isXmlNode(item) && (item.nodeType === 3 || item.nodeType === 4))) {
-      for (const item of argument) {
+    } else if (items.every((item) => isXmlNode(item) && (item.nodeType === 3 || item.nodeType === 4))) {
+      for (const item of items) {
         const value = androidXPathNumberFromString(item.nodeValue ?? '')
-        if (value === undefined) return Number.NaN
+        if (value === undefined) return []
         total += value
       }
     }
