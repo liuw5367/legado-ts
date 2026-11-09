@@ -34,6 +34,7 @@ function registerAndroidXPathFunction(name: string, arity: number): string {
     registerCustomXPathFunction({ localName, namespaceURI: ANDROID_XPATH_FUNCTIONS_NAMESPACE }, signature, returnType, (_context, ...args) => {
       if (name === 'string-length') return args.length === 0 ? 0 : androidXPathValueAsString(args[0]).length
       if (name === 'substring') return androidXPathSubstring(args)
+      if (name === 'concat') return androidXPathConcat(args)
       if (name === 'last-context') return androidXPathSameTagPosition(args[0]).count
       if (name === 'same-tag-index') return androidXPathSameTagPosition(args[0]).index
       if (name === 'is-last-context') {
@@ -968,7 +969,7 @@ function rewriteAndroidXPathFunctionArguments(expression: string): string {
   if (positionAdjusted !== expression) return rewriteAndroidXPathFunctionArguments(positionAdjusted)
   const masked = maskXPathLiterals(expression)
   // 仅匹配这些函数的独立调用；前缀 QName 和更长函数名不应被改写。
-  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex|format-date|string-length|substring|sum|first|last)\s*\(/g
+  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex|format-date|string-length|substring|concat|sum|first|last)\s*\(/g
   let match: RegExpExecArray | null
   while ((match = functionPattern.exec(masked)) !== null) {
     const previous = masked[match.index - 1]
@@ -1008,11 +1009,12 @@ function rewriteAndroidXPathFunctionArguments(expression: string): string {
       return `${expression.slice(0, match.index)}${evaluatedSequence}${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
     }
 
-    if (match[1] === 'string-length' || match[1] === 'substring' || match[1] === 'sum') {
+    if (match[1] === 'string-length' || match[1] === 'substring' || match[1] === 'concat' || match[1] === 'sum') {
       const compatibilityFunction = match[1]!
       const noArguments = ranges.length === 1 && expression.slice(ranges[0]![0], ranges[0]![1]).trim() === ''
       const args = noArguments ? [] : ranges.map(([start, end]) => {
         const argument = expression.slice(start, end).trim()
+        if (compatibilityFunction === 'concat' && isXPathAttributeSequence(argument)) return `string-join(${argument}, ',')`
         if (compatibilityFunction === 'sum' && isXPathAttributeSequence(argument)) return '()'
         return isXPathAttributeSequence(argument)
           ? `string-join(${argument}, ',')`
@@ -1175,6 +1177,10 @@ function androidXPathSubstring(args: unknown[]): string {
   const length = androidXPathValueAsInt(args[2])
   const end = Math.max(Math.min((start + length) | 0, source.length), 0)
   return source.slice(start, end)
+}
+
+function androidXPathConcat(args: unknown[]): string {
+  return args.map(androidXPathValueAsString).join('')
 }
 
 function androidXPathSum(args: unknown[]): number | [] {

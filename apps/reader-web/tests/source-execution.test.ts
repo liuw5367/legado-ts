@@ -218,6 +218,33 @@ test('reader-web search evaluates Android XPath format-date in book rules', asyn
   })
 })
 
+test('reader-web search evaluates Android XPath concat in book rules', async (t) => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.15'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    searchUrl: `${base}/search?q={{key}}`,
+    ruleSearch: {
+      bookList: 'article',
+      name: "@xpath:concat(//h2, ' - ', //article/@data-author)",
+      bookUrl: 'a@href',
+    },
+  }])
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    assert.equal(new URL(String(url)).pathname, '/search')
+    return new Response('<article data-author="作者甲"><h2>第一本</h2><a href="/book/1">详情</a></article>')
+  })
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.deepEqual(result.candidates.map(({ candidate }) => ({ name: candidate.name, bookUrl: candidate.bookUrl })), [
+    { name: '第一本-作者甲', bookUrl: `${base}/book/1` },
+  ])
+})
+
 test('global and account execution slots are shared by concurrent operations and release by token', async () => {
   const repository = new MemoryReaderRepository(); const user = randomUUID(); const other = randomUUID()
   const leases = await Promise.all(Array.from({ length: SOURCE_CONCURRENCY + 1 }, () => repository.acquireExecutionSlot(user, randomUUID())))

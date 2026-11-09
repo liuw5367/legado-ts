@@ -1563,7 +1563,11 @@
         "xpath.function.sum.negative-elements",
         "xpath.function.sum.fractional-numbers",
         "xpath.function.sum.exponent-string-rejected",
-        "xpath.function.sum.empty-elements"
+        "xpath.function.sum.empty-elements",
+        "xpath.function.concat.element-and-attribute-sequences",
+        "xpath.function.concat.zero-arguments",
+        "xpath.function.concat.single-node-sequence",
+        "xpath.function.concat.scalar-trim"
       ],
       "manifestMembers": [
         "parser-xpath::003-text",

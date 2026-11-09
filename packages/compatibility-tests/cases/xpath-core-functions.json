@@ -446,5 +446,37 @@
     "input": { "rule": "sum(//missing)", "content": "<main/>", "attribute": "" },
     "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Sum empty Elements" },
     "tags": ["compatibility-recheck", "xpath-function", "numeric", "empty"]
+  },
+  {
+    "id": "xpath.function.concat.element-and-attribute-sequences",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "concat(//li, '|', //li/@n)", "content": "<main><li n='2'>甲<b>章</b></li><li n='3'>乙</li></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Concat XValue.asString sequences" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion", "ordering"]
+  },
+  {
+    "id": "xpath.function.concat.zero-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "concat()", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Concat empty argument list" },
+    "tags": ["compatibility-recheck", "xpath-function", "arity", "empty"]
+  },
+  {
+    "id": "xpath.function.concat.single-node-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "concat(//li)", "content": "<main><li n='2'>甲<b>章</b></li><li n='3'>乙</li></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Concat single node-set argument" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion", "arity"]
+  },
+  {
+    "id": "xpath.function.concat.scalar-trim",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "concat('  甲  ', ' 乙 ')", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Concat XValue.asString scalar trim" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion", "whitespace"]
   }
 ]
