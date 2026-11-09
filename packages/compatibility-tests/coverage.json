@@ -1472,6 +1472,7 @@
         "xpath.string.xml-count-wildcard-prefixed-attribute",
         "xpath.string.xml-count-prefixed-attribute-from-prefixed-element",
         "xpath.string.xml-count-unprefixed-attribute",
+        "xpath.string.html-table-missing-tr",
         "xpath.string.html-fragment-document-root",
         "xpath.string.html-document-trailing-body-content",
         "xpath.string.substring-before-last.repeated",
@@ -1700,7 +1701,10 @@
         "css.nodes.batch-index-gt",
         "css.nodes.batch-index-eq-negative",
         "css.nodes.batch-index-lt-negative",
-        "css.nodes.batch-index-gt-negative"
+        "css.nodes.batch-index-gt-negative",
+        "css.nodes.html-table-missing-tr",
+        "css.nodes.html-table-missing-tbody",
+        "css.nodes.html-tbody-missing-tr"
       ]
     },
     {

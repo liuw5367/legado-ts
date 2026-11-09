@@ -682,9 +682,97 @@ function relinkChildren(parent: AnyNode): void {
   }
 }
 
+function setChildren(parent: Element, children: AnyNode[]): void {
+  parent.children = children
+  for (const child of children) child.parent = parent
+  relinkChildren(parent)
+}
+
+function isTableCell(node: AnyNode): node is Element & { name: 'td' | 'th' } {
+  return isTag(node) && (node.name === 'td' || node.name === 'th')
+}
+
+function isTableTrivia(node: AnyNode): boolean {
+  return isComment(node) || (isText(node) && node.data.trim().length === 0)
+}
+
+function repairImplicitTableRows(parent: Element, isTable: boolean): void {
+  const repaired: AnyNode[] = []
+  const bodyChildren: AnyNode[] = []
+  let pendingRow: AnyNode[] = []
+  const flushRow = (): void => {
+    if (pendingRow.some(isTableCell)) {
+      const row = new Element('tr', {}, pendingRow)
+      setChildren(row, pendingRow)
+      if (isTable) bodyChildren.push(row)
+      else repaired.push(row)
+    } else if (isTable) {
+      bodyChildren.push(...pendingRow)
+    } else {
+      repaired.push(...pendingRow)
+    }
+    pendingRow = []
+  }
+  const flushBody = (): void => {
+    flushRow()
+    if (bodyChildren.length === 0) return
+    const body = new Element('tbody', {}, bodyChildren.splice(0))
+    setChildren(body, body.children)
+    repaired.push(body)
+  }
+
+  for (const child of parent.children) {
+    if (isTableCell(child)) {
+      pendingRow.push(child)
+      continue
+    }
+    if (isTableTrivia(child)) {
+      if (pendingRow.some(isTableCell)) pendingRow.push(child)
+      else if (isTable && bodyChildren.length > 0) bodyChildren.push(child)
+      else if (isTable) repaired.push(child)
+      else repaired.push(child)
+      continue
+    }
+    flushRow()
+    if (isTable && isTag(child) && child.name === 'tr') {
+      bodyChildren.push(child)
+      continue
+    }
+    if (isTable) flushBody()
+    repaired.push(child)
+  }
+  if (isTable) flushBody()
+  else flushRow()
+
+  if (repaired.length !== parent.children.length || repaired.some((child, index) => child !== parent.children[index])) {
+    setChildren(parent, repaired)
+  }
+}
+
+function repairHtmlTableStructure(root: AnyNode): void {
+  const visit = (node: AnyNode): void => {
+    if (isTag(node)) {
+      if (node.name === 'table') repairImplicitTableRows(node, true)
+      else if (node.name === 'thead' || node.name === 'tbody' || node.name === 'tfoot') repairImplicitTableRows(node, false)
+    }
+    for (const child of getChildren(node)) visit(child)
+  }
+  visit(root)
+}
+
+/** Parse HTML and apply the table row/section insertion Jsoup performs for HTML rules. */
+export function parseAndroidHtmlDocument(input: string): ReturnType<typeof parseDocument> {
+  const document = parseDocument(input, { recognizeSelfClosing: true })
+  repairHtmlTableStructure(document)
+  return document
+}
+
 export class HtmlParserAdapter implements HtmlParser {
   public parse(input: string, mode: 'html' | 'xml' = 'html'): HtmlDocument {
-    return new HtmlDocumentView(parseDocument(input, { xmlMode: mode === 'xml', recognizeSelfClosing: true }), mode === 'xml')
+    const document = mode === 'xml'
+      ? parseDocument(input, { xmlMode: true, recognizeSelfClosing: true })
+      : parseAndroidHtmlDocument(input)
+    return new HtmlDocumentView(document, mode === 'xml')
   }
 }
 

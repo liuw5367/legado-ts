@@ -1891,6 +1891,22 @@
     }
   },
   {
+    "id": "xpath.string.html-table-missing-tr",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": {
+      "rule": "count(//tbody/tr/td[@id='book-title'])",
+      "content": "<table><td id=\"book-title\">书名</td></table>",
+      "attribute": ""
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByXPath Jsoup HTML tree builder inserts table row"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": { "outcome": "return", "value": "1" }
+  },
+  {
     "id": "xpath.string.html-fragment-document-root",
     "family": "xpath",
     "operation": "xpath.string",

@@ -6,6 +6,7 @@ import { parseDocument } from 'htmlparser2'
 import { render } from 'dom-serializer'
 import { compileSourcePattern, ParserAdapterError } from '@legado/source-core'
 import { androidXPathFormatDate } from './xpath-date.ts'
+import { parseAndroidHtmlDocument } from './html.ts'
 import type { HtmlDocument, ParserNode, ParserNodeInfo, ParserNodeMutation, RuleValue, XPathParser } from '@legado/source-core'
 
 const { evaluateXPath, ReturnType } = fontoxpath
@@ -709,7 +710,7 @@ export class XPathParserAdapter implements XPathParser {
     }
     const normalized = ensureXmlPrefixDeclarations(xml
       ? source
-      : serializeXPathHtmlDocument(parseDocument(source, { recognizeSelfClosing: true })))
+      : serializeXPathHtmlDocument(parseAndroidHtmlDocument(source)))
     const parsed = new DOMParser({ onError: () => undefined }).parseFromString(normalized.source, 'text/xml') as unknown as XmlNode
     if (normalized.syntheticPrefixes.length > 0) {
       const root = parsed.nodeType === 9 ? childNodes(parsed).find((node) => node.nodeType === 1) : parsed

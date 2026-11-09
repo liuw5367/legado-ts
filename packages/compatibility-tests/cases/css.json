@@ -1477,5 +1477,59 @@
       "ts": ["Error"],
       "tsMessageIncludes": ["CSS"]
     }
+  },
+  {
+    "id": "css.nodes.html-table-missing-tr",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<table><td id=\"book-title\">书名</td></table>",
+      "rule": "@css:table > tbody > tr > td"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup Jsoup HTML tree builder inserts table row"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "td", "text": "书名", "id": "book-title" }]
+    }
+  },
+  {
+    "id": "css.nodes.html-table-missing-tbody",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<table><tr><td id=\"book-title\">书名</td></tr></table>",
+      "rule": "@css:table > tbody > tr > td"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup Jsoup HTML tree builder inserts table section"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "td", "text": "书名", "id": "book-title" }]
+    }
+  },
+  {
+    "id": "css.nodes.html-tbody-missing-tr",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<table><tbody><td id=\"book-title\">书名</td></tbody></table>",
+      "rule": "@css:table > tbody > tr > td"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "AnalyzeByJSoup Jsoup HTML tree builder inserts table row"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "td", "text": "书名", "id": "book-title" }]
+    }
   }
 ]
