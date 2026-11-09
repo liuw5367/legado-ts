@@ -1528,7 +1528,38 @@
         "xpath.string.format-date.iso-zone",
         "xpath.string.format-date.quoted-literal",
         "xpath.string.format-date.lenient-day-overflow",
-        "xpath.string.format-date.trailing-input"
+        "xpath.string.format-date.trailing-input",
+        "xpath.function.substring.basic",
+        "xpath.function.substring-before.first-separator",
+        "xpath.function.substring-after.first-separator",
+        "xpath.function.contains.element-string-value",
+        "xpath.function.starts-with.attribute-string-value",
+        "xpath.function.string-length.astral",
+        "xpath.function.substring.astral-boundary",
+        "xpath.function.translate.basic",
+        "xpath.function.normalize-space.ascii",
+        "xpath.function.normalize-space.nbsp",
+        "xpath.function.normalize-space.element-string-value",
+        "xpath.function.sum.attributes",
+        "xpath.function.round.negative-half",
+        "xpath.function.floor-ceiling",
+        "xpath.function.boolean.node-set",
+        "xpath.function.not.empty-node-set",
+        "xpath.function.name.html-element",
+        "xpath.axis.parent",
+        "xpath.axis.ancestor",
+        "xpath.axis.following-sibling-position",
+        "xpath.axis.preceding-sibling-position",
+        "xpath.axis.following",
+        "xpath.axis.preceding",
+        "xpath.axis.ancestor-or-self-reverse-predicate",
+        "xpath.function.string-length.no-arguments",
+        "xpath.function.string-length.ignores-extra-arguments",
+        "xpath.function.string-length.element-sequence",
+        "xpath.function.substring.two-arguments",
+        "xpath.function.substring.fractional-indexes",
+        "xpath.function.sum.elements-own-text",
+        "xpath.function.sum.text-nodes"
       ],
       "manifestMembers": [
         "parser-xpath::003-text",
@@ -1564,7 +1595,18 @@
         "xpath.list.xml-fragment-local-name",
         "xpath.list.xml-fragment-prefixed-attribute",
         "xpath.list.xml-wildcard-plain-attribute",
-        "xpath.list.xml-wildcard-prefixed-attribute"
+        "xpath.list.xml-wildcard-prefixed-attribute",
+        "xpath.axis.self",
+        "xpath.axis.descendant",
+        "xpath.axis.union-document-order",
+        "xpath.function.position.same-tag-sibling-scope",
+        "xpath.function.position.mixed-tag-greater-than-zero",
+        "xpath.function.position.mixed-tag-second",
+        "xpath.function.position.filtered-same-tag-scope",
+        "xpath.function.numeric-predicate.mixed-tag-scope",
+        "xpath.function.last.mixed-tag-sibling-scope",
+        "xpath.axis.preceding-sibling.document-order",
+        "xpath.axis.ancestor-or-self.document-order"
       ],
       "manifestMembers": [
         "parser-xpath::002-getstringlist"
@@ -1609,7 +1651,8 @@
         "xpath.nodes.xml-wildcard-plain-attribute",
         "xpath.nodes.xml-prefixed-attribute-only",
         "xpath.nodes.xml-prefixed-attribute-predicate",
-        "xpath.nodes.html-fragment-position-predicate"
+        "xpath.nodes.html-fragment-position-predicate",
+        "xpath.axis.union.nodes"
       ],
       "manifestMembers": [
         "parser-xpath::001-getelements"

@@ -1,0 +1,418 @@
+[
+  {
+    "id": "xpath.function.substring.basic",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring('12345', 2, 3)", "content": "<main><ul id='chapters'><li id='c1' n='2'>一😀<em>章</em></li><li id='c2' n='3'>二章<a href='/x'>链接</a></li><li id='c3' n='5'>三章</li></ul><aside id='related'><p> 关联 </p></aside></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath substring" },
+    "tags": ["compatibility-recheck", "xpath-function", "string"]
+  },
+  {
+    "id": "xpath.function.substring-before.first-separator",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-before('a/b/c', '/')", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath substring-before" },
+    "tags": ["compatibility-recheck", "xpath-function", "string"]
+  },
+  {
+    "id": "xpath.function.substring-after.first-separator",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring-after('a/b/c', '/')", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath substring-after" },
+    "tags": ["compatibility-recheck", "xpath-function", "string"]
+  },
+  {
+    "id": "xpath.function.contains.element-string-value",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "contains(//li[@id='c2'], '二章')", "content": "<main><ul id='chapters'><li id='c1' n='2'>一😀<em>章</em></li><li id='c2' n='3'>二章<a href='/x'>链接</a></li><li id='c3' n='5'>三章</li></ul><aside id='related'><p> 关联 </p></aside></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath contains node-set coercion" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion"]
+  },
+  {
+    "id": "xpath.function.starts-with.attribute-string-value",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "starts-with(//a/@href, '/')", "content": "<main><ul><li><a href='/x'>链接</a></li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath starts-with node-set coercion" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion"]
+  },
+  {
+    "id": "xpath.function.string-length.astral",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "string-length('a😀b')", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath string-length UTF-16 boundary" },
+    "tags": ["compatibility-recheck", "xpath-function", "unicode"]
+  },
+  {
+    "id": "xpath.function.substring.astral-boundary",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring('a😀b', 2, 1)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath substring UTF-16 boundary" },
+    "tags": ["compatibility-recheck", "xpath-function", "unicode"]
+  },
+  {
+    "id": "xpath.function.translate.basic",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "translate('abcde', 'abc', 'XYZ')", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath translate" },
+    "tags": ["compatibility-recheck", "xpath-function", "string"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: translate"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: translate"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.function.normalize-space.ascii",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "normalize-space('  a\t b\n c  ') ", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath normalize-space XML whitespace" },
+    "tags": ["compatibility-recheck", "xpath-function", "whitespace"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: normalize-space"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: normalize-space"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.function.normalize-space.nbsp",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "normalize-space('a b')", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath normalize-space NBSP boundary" },
+    "tags": ["compatibility-recheck", "xpath-function", "whitespace", "unicode"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: normalize-space"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: normalize-space"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.function.normalize-space.element-string-value",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "normalize-space(//p)", "content": "<main><p>  书  <em>源</em> </p></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath normalize-space node-set coercion" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: normalize-space"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: normalize-space"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.function.sum.attributes",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "sum(//li/@n)", "content": "<main><ul><li n='2'/><li n='3'/><li n='5'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath sum attribute node-set" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric"]
+  },
+  {
+    "id": "xpath.function.round.negative-half",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "round(-1.5)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath round tie behavior" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric", "edge"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: round"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: round"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.function.floor-ceiling",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "floor(2.9) + ceiling(1.2)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath floor and ceiling" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: floor"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: floor"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.function.boolean.node-set",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "boolean(//li[@n])", "content": "<main><ul><li n='2'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath boolean node-set coercion" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: boolean"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: boolean"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.function.not.empty-node-set",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "not(//missing)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath not empty node-set" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion", "empty"]
+  },
+  {
+    "id": "xpath.function.name.html-element",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "name(//li)", "content": "<main><ul><li>一</li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 XPath name" },
+    "tags": ["compatibility-recheck", "xpath-function", "name"],
+    "errorEquivalence": {
+      "category": "xpath-unsupported-function",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["NoSuchFunctionException: not support function: name"],
+      "tsMessageIncludes": ["NoSuchFunctionException: not support function: name"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-unsupported-function" }
+  },
+  {
+    "id": "xpath.axis.parent",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[@id='c2']/parent::ul/@id", "content": "<main><ul id='chapters'><li id='c1'/><li id='c2'/><li id='c3'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 parent axis" },
+    "tags": ["compatibility-recheck", "xpath-axis"]
+  },
+  {
+    "id": "xpath.axis.ancestor",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//em/ancestor::li/@id", "content": "<main><ul><li id='c1'><em>章</em></li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 ancestor axis" },
+    "tags": ["compatibility-recheck", "xpath-axis"]
+  },
+  {
+    "id": "xpath.axis.following-sibling-position",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[@id='c1']/following-sibling::li[1]/@id", "content": "<main><ul><li id='c1'/><li id='c2'/><li id='c3'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 following-sibling reverse-independent predicate" },
+    "tags": ["compatibility-recheck", "xpath-axis", "position"]
+  },
+  {
+    "id": "xpath.axis.preceding-sibling-position",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[@id='c3']/preceding-sibling::li[1]/@id", "content": "<main><ul><li id='c1'/><li id='c2'/><li id='c3'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 preceding-sibling reverse-axis predicate" },
+    "tags": ["compatibility-recheck", "xpath-axis", "position"]
+  },
+  {
+    "id": "xpath.axis.following",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[@id='c1']/following::a/@href", "content": "<main><ul><li id='c1'/><li id='c2'><a href='/x'>链接</a></li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 following axis" },
+    "tags": ["compatibility-recheck", "xpath-axis"]
+  },
+  {
+    "id": "xpath.axis.preceding",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[@id='c2']/preceding::a/@href", "content": "<main><a href='/before'>前</a><ul><li id='c1'/><li id='c2'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 preceding axis" },
+    "tags": ["compatibility-recheck", "xpath-axis"]
+  },
+  {
+    "id": "xpath.axis.ancestor-or-self-reverse-predicate",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "//li[@id='c2']/ancestor-or-self::*[1]/@id", "content": "<main id='root'><ul id='list'><li id='c2'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 ancestor-or-self reverse-axis position" },
+    "tags": ["compatibility-recheck", "xpath-axis", "position"]
+  },
+  {
+    "id": "xpath.axis.self",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//li[@id='c2']/self::li/@id", "content": "<main><ul><li id='c1'/><li id='c2'/><li id='c3'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 self axis" },
+    "tags": ["compatibility-recheck", "xpath-axis"]
+  },
+  {
+    "id": "xpath.axis.descendant",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//main/descendant::a/@href", "content": "<main><ul><li><a href='/1'/></li><li><a href='/2'/></li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 descendant axis" },
+    "tags": ["compatibility-recheck", "xpath-axis"]
+  },
+  {
+    "id": "xpath.axis.union-document-order",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//aside/@id | //section/@id", "content": "<main><section id='first'></section><aside id='second'></aside></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 union document order" },
+    "tags": ["compatibility-recheck", "xpath-axis", "ordering"]
+  },
+  {
+    "id": "xpath.function.string-length.no-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "string-length()", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 StringLength empty argument list" },
+    "tags": ["compatibility-recheck", "xpath-function", "arity"]
+  },
+  {
+    "id": "xpath.function.string-length.ignores-extra-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "string-length('abc', 99)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 StringLength reads first argument" },
+    "tags": ["compatibility-recheck", "xpath-function", "arity"]
+  },
+  {
+    "id": "xpath.function.string-length.element-sequence",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "string-length(//li)", "content": "<main><ul><li>12<b>3</b></li><li>4</li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 StringLength XValue string conversion" },
+    "tags": ["compatibility-recheck", "xpath-function", "coercion"]
+  },
+  {
+    "id": "xpath.function.substring.two-arguments",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring('12345', 2)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubString direct third argument access" },
+    "tags": ["compatibility-recheck", "xpath-function", "arity", "error"],
+    "errorEquivalence": {
+      "category": "xpath-substring-missing-argument",
+      "jvm": ["org.seimicrawler.xpath.exception.XpathSyntaxErrorException"],
+      "ts": ["Error"],
+      "jvmMessageIncludes": ["IndexOutOfBoundsException: Index: 2, Size: 2"],
+      "tsMessageIncludes": ["IndexOutOfBoundsException: Index: 2, Size: 2"]
+    },
+    "expected": { "outcome": "throw", "errorClass": "xpath-substring-missing-argument" }
+  },
+  {
+    "id": "xpath.function.substring.fractional-indexes",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "substring('12345', 2.9, 2.9)", "content": "<main/>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 SubString XValue.asLong conversions" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric", "edge"]
+  },
+  {
+    "id": "xpath.function.sum.elements-own-text",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "sum(//li)", "content": "<main><ul><li>2<b>7</b></li><li>3</li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Sum uses Element.ownText" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric", "coercion"]
+  },
+  {
+    "id": "xpath.function.sum.text-nodes",
+    "family": "xpath",
+    "operation": "xpath.string",
+    "input": { "rule": "sum(//li/text())", "content": "<main><ul><li>2</li><li>3</li></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Sum text-node XValue type" },
+    "tags": ["compatibility-recheck", "xpath-function", "numeric", "coercion"]
+  },
+  {
+    "id": "xpath.function.position.same-tag-sibling-scope",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//main/*[position() = 1]/@id", "content": "<main><section id='s'></section><aside id='a'></aside><section id='s2'></section></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Position uses same-tag sibling index" },
+    "tags": ["compatibility-recheck", "xpath-function", "position"]
+  },
+  {
+    "id": "xpath.function.position.mixed-tag-greater-than-zero",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//main/*[position() > 0]/@id", "content": "<main><section id='s'></section><aside id='a'></aside><section id='s2'></section></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Position comparison in a mixed-tag child scope" },
+    "tags": ["compatibility-recheck", "xpath-function", "position"]
+  },
+  {
+    "id": "xpath.function.position.mixed-tag-second",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//main/*[position() = 2]/@id", "content": "<main><section id='s'></section><aside id='a'></aside><section id='s2'></section></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Position comparison with index two" },
+    "tags": ["compatibility-recheck", "xpath-function", "position"]
+  },
+  {
+    "id": "xpath.function.position.filtered-same-tag-scope",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//main/section[position() = 1]/@id", "content": "<main><section id='s'></section><aside id='a'></aside><section id='s2'></section></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Position after a tag-filtered step" },
+    "tags": ["compatibility-recheck", "xpath-function", "position"]
+  },
+  {
+    "id": "xpath.function.numeric-predicate.mixed-tag-scope",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//main/*[1]/@id", "content": "<main><section id='s'></section><aside id='a'></aside><section id='s2'></section></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 numeric predicate comparison scope" },
+    "tags": ["compatibility-recheck", "xpath-axis", "position"]
+  },
+  {
+    "id": "xpath.function.last.mixed-tag-sibling-scope",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//main/*[last()]/@id", "content": "<main><section id='s'></section><aside id='a'></aside><section id='s2'></section></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 Last uses same-tag sibling count" },
+    "tags": ["compatibility-recheck", "xpath-function", "position"]
+  },
+  {
+    "id": "xpath.axis.preceding-sibling.document-order",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//li[@id='c3']/preceding-sibling::li/@id", "content": "<main><ul><li id='c1'/><li id='c2'/><li id='c3'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 preceding-sibling axis order" },
+    "tags": ["compatibility-recheck", "xpath-axis", "ordering"]
+  },
+  {
+    "id": "xpath.axis.ancestor-or-self.document-order",
+    "family": "xpath",
+    "operation": "xpath.list",
+    "input": { "rule": "//li[@id='c2']/ancestor-or-self::*/@id", "content": "<main id='root'><ul id='list'><li id='c2'/></ul></main>", "attribute": "" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 ancestor-or-self axis order" },
+    "tags": ["compatibility-recheck", "xpath-axis", "ordering"]
+  },
+  {
+    "id": "xpath.axis.union.nodes",
+    "family": "xpath",
+    "operation": "xpath.nodes",
+    "input": { "rule": "//aside | //section", "content": "<main><section id='first'></section><aside id='second'></aside></main>", "attribute": "id" },
+    "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath 2.5.3 UnionExpr node result" },
+    "tags": ["compatibility-recheck", "xpath-axis", "ordering"]
+  }
+]

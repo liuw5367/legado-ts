@@ -14,6 +14,39 @@ const { registerCustomXPathFunction } = fontoxpath
 const XPATH_FUNCTIONS_NAMESPACE = 'http://www.w3.org/2005/xpath-functions'
 const ANDROID_XPATH_FUNCTIONS_NAMESPACE = 'urn:legado:android-xpath-functions'
 const registeredAndroidFormatDateArities = new Set<number>()
+const registeredAndroidXPathFunctions = new Set<string>()
+const androidUnsupportedXPathFunctions = new Set([
+  'boolean',
+  'ceiling',
+  'floor',
+  'name',
+  'normalize-space',
+  'round',
+  'translate',
+])
+
+function registerAndroidXPathFunction(name: string, arity: number): string {
+  const localName = `${name}-${arity}`
+  const key = `${name}/${arity}`
+  if (!registeredAndroidXPathFunctions.has(key)) {
+    const returnType = name === 'string-length' || name === 'last-context' || name === 'same-tag-index' ? 'xs:integer' : name === 'sum' ? 'xs:double' : name === 'is-last-context' || name === 'same-tag-index-equals' ? 'xs:boolean' : 'xs:string'
+    const signature = name === 'last-context' || name === 'is-last-context' || name === 'same-tag-index' ? ['node()'] : name === 'same-tag-index-equals' ? ['node()', 'item()*'] : Array.from({ length: arity }, () => 'item()*')
+    registerCustomXPathFunction({ localName, namespaceURI: ANDROID_XPATH_FUNCTIONS_NAMESPACE }, signature, returnType, (_context, ...args) => {
+      if (name === 'string-length') return args.length === 0 ? 0 : androidXPathValueAsString(args[0]).length
+      if (name === 'substring') return androidXPathSubstring(args)
+      if (name === 'last-context') return androidXPathSameTagPosition(args[0]).count
+      if (name === 'same-tag-index') return androidXPathSameTagPosition(args[0]).index
+      if (name === 'is-last-context') {
+        const position = androidXPathSameTagPosition(args[0])
+        return position.index > 0 && position.index === position.count
+      }
+      if (name === 'same-tag-index-equals') return androidXPathSameTagPosition(args[0]).index === androidXPathValueAsInt(args[1])
+      return androidXPathSum(args)
+    })
+    registeredAndroidXPathFunctions.add(key)
+  }
+  return `Q{${ANDROID_XPATH_FUNCTIONS_NAMESPACE}}${localName}`
+}
 
 function registerAndroidFormatDateArity(arity: number): void {
   if (registeredAndroidFormatDateArities.has(arity)) return
@@ -774,9 +807,18 @@ function ensureXmlPrefixDeclarations(source: string): { source: string; syntheti
 function evaluateAndroidXPathCompatibility(document: XmlDocumentView, expression: string): RuleValue | ParserNode[] | null | undefined {
   const masked = maskXPathLiterals(expression)
   const functions = [...masked.matchAll(/([A-Za-z_][\w.-]*)\s*\(/g)].map((match) => match[1]!.toLowerCase())
-  const unsupportedFunction = functions.find((name) => name === 'local-name' || name === 'string')
+  const unsupportedFunction = functions.find((name) => name === 'local-name' || name === 'string' || androidUnsupportedXPathFunctions.has(name))
   if (unsupportedFunction !== undefined) {
     return throwAndroidXPathSyntaxError(`NoSuchFunctionException: not support function: ${unsupportedFunction}`)
+  }
+
+  for (const match of masked.matchAll(/\bsubstring\s*\(/g)) {
+    const open = match.index! + match[0].lastIndexOf('(')
+    const close = xpathCallEnd(masked, open)
+    if (close === undefined) continue
+    const ranges = xpathCallArgumentRanges(masked, open, close)
+    const arity = ranges.length === 1 && expression.slice(ranges[0]![0], ranges[0]![1]).trim() === '' ? 0 : ranges.length
+    if (arity < 3) return throwAndroidXPathSyntaxError(`IndexOutOfBoundsException: Index: ${arity}, Size: ${arity}`)
   }
 
   const qualifiedSteps = [...masked.matchAll(/\/{1,2}\s*([A-Za-z_][\w.-]*:[A-Za-z_][\w.-]*)/g)].map((match) => match[1]!)
@@ -793,6 +835,15 @@ function evaluateAndroidXPathCompatibility(document: XmlDocumentView, expression
     return elements.filter(isXmlNode).map((element) => attributeValue(element, wildcardAttribute[1]!) ?? '')
   }
 
+  const union = evaluateAndroidXPathUnion(document, expression, masked)
+  if (union !== undefined) return union
+
+  const precedingSibling = evaluateAndroidPrecedingSibling(document, expression)
+  if (precedingSibling !== undefined) return precedingSibling
+
+  const ancestorOrSelf = evaluateAndroidAncestorOrSelf(document, expression)
+  if (ancestorOrSelf !== undefined) return ancestorOrSelf
+
   if (qualifiedSteps.length === 0) return undefined
 
   // JsoupXpath 2.5.3 does not bind XML prefixes to namespace URIs. Its parser
@@ -801,6 +852,91 @@ function evaluateAndroidXPathCompatibility(document: XmlDocumentView, expression
   if (/\/(?:\s*)@/.test(masked)) return ''
   if (/\/\s*text\s*\(\s*\)\s*$/i.test(masked)) return []
   return qualifiedSteps.at(-1)!
+}
+
+function evaluateAndroidXPathUnion(document: XmlDocumentView, expression: string, masked: string): RuleValue | ParserNode[] | undefined {
+  const ranges: Array<[number, number]> = []
+  let start = 0
+  let parentheses = 0
+  let brackets = 0
+  let braces = 0
+  for (let index = 0; index < masked.length; index += 1) {
+    const character = masked[index]
+    if (character === '(') parentheses += 1
+    else if (character === ')') parentheses -= 1
+    else if (character === '[') brackets += 1
+    else if (character === ']') brackets -= 1
+    else if (character === '{') braces += 1
+    else if (character === '}') braces -= 1
+    else if (character === '|' && parentheses === 0 && brackets === 0 && braces === 0) {
+      ranges.push([start, index])
+      start = index + 1
+    }
+  }
+  if (ranges.length === 0) return undefined
+  ranges.push([start, masked.length])
+  const values = ranges.flatMap(([from, to]) => evaluateXPath(expression.slice(from, to).trim(), document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[])
+  if (!values.every(isXmlNode)) return undefined
+  const nodes = values as XmlNode[]
+  if (nodes.length > 0 && nodes.every((node) => node.nodeType === 2)) return nodes.map((node) => node.nodeValue ?? '').join('')
+  return [...new Set(nodes)].map((node) => document.wrap(node))
+}
+
+function evaluateAndroidPrecedingSibling(document: XmlDocumentView, expression: string): RuleValue | ParserNode[] | undefined {
+  const match = /^(.*?)\/preceding-sibling::(\*|[A-Za-z_][\w.-]*)(?:\[(\d+)\])?(?:\/@([A-Za-z_][\w.:-]*))?\s*$/.exec(expression.trim())
+  if (match === null) return undefined
+  const contexts = evaluateXPath(match[1]!, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
+  const nodes: XmlNode[] = []
+  for (const context of contexts) {
+    if (!isXmlNode(context) || context.nodeType !== 1 || context.parentNode === null || context.parentNode === undefined) continue
+    const siblings = childNodes(context.parentNode).filter((node) => node.nodeType === 1 && (match[2] === '*' || sameXmlTag(node, match[2]!)))
+    const currentIndex = siblings.indexOf(context)
+    if (currentIndex < 0) continue
+    const preceding = siblings.slice(0, currentIndex)
+    const selected = match[3] === undefined
+      ? preceding.reverse()
+      : preceding.filter((_node, index) => index === Number(match[3]) - 1)
+    nodes.push(...selected)
+  }
+  return match[4] === undefined ? nodes.map((node) => document.wrap(node)) : nodes.map((node) => attributeValue(node, match[4]!) ?? '')
+}
+
+function evaluateAndroidAncestorOrSelf(document: XmlDocumentView, expression: string): RuleValue | ParserNode[] | undefined {
+  const match = /^(.*?)\/ancestor-or-self::(\*|[A-Za-z_][\w.-]*)(?:\[1\])?(?:\/@([A-Za-z_][\w.:-]*))?\s*$/.exec(expression.trim())
+  if (match === null) return undefined
+  const contexts = evaluateXPath(match[1]!, document.context(), undefined, undefined, ReturnType.ALL_RESULTS, { namespaceResolver: document.namespaceResolver() }) as unknown[]
+  const nodes: XmlNode[] = []
+  for (const context of contexts) {
+    if (!isXmlNode(context) || context.nodeType !== 1) continue
+    let ancestor = context.parentNode
+    while (ancestor !== null && ancestor !== undefined && ancestor.nodeType !== 9) {
+      if (ancestor.nodeType === 1 && (match[2] === '*' || sameXmlTag(ancestor, match[2]!))) nodes.push(ancestor)
+      ancestor = ancestor.parentNode
+    }
+    if (match[2] === '*' || sameXmlTag(context, match[2]!)) nodes.push(context)
+  }
+  return match[3] === undefined ? nodes.map((node) => document.wrap(node)) : nodes.map((node) => attributeValue(node, match[3]!) ?? '')
+}
+
+function sameXmlTag(node: XmlNode, tagName: string): boolean {
+  const name = node.nodeName ?? ''
+  return name === tagName || name.toLowerCase() === tagName.toLowerCase()
+}
+
+function androidXPathSameTagPosition(value: unknown): { index: number; count: number } {
+  const node = isXmlNode(value) ? value : Array.isArray(value) ? value.find(isXmlNode) : undefined
+  if (node === undefined || node.nodeType !== 1 || node.parentNode === null || node.parentNode === undefined) return { index: 0, count: 0 }
+  const siblings = childNodes(node.parentNode).filter((child) => child.nodeType === 1 && child.nodeName === node.nodeName)
+  return { index: siblings.indexOf(node) + 1, count: siblings.length }
+}
+
+function directXPathPredicateRange(masked: string, callStart: number, callEnd: number): [number, number] | undefined {
+  const open = masked.lastIndexOf('[', callStart)
+  if (open < 0 || masked.slice(open + 1, callStart).trim().length > 0) return undefined
+  const afterCall = masked.slice(callEnd + 1)
+  const closeOffset = afterCall.search(/\S/)
+  if (closeOffset < 0 || afterCall[closeOffset] !== ']') return undefined
+  return [open, callEnd + closeOffset + 2]
 }
 
 function maskXPathLiterals(expression: string): string {
@@ -827,9 +963,11 @@ function maskXPathLiterals(expression: string): string {
 }
 
 function rewriteAndroidXPathFunctionArguments(expression: string): string {
+  const positionAdjusted = rewriteAndroidXPathNumericWildcardPredicates(rewriteAndroidXPathPositionEqualities(expression))
+  if (positionAdjusted !== expression) return rewriteAndroidXPathFunctionArguments(positionAdjusted)
   const masked = maskXPathLiterals(expression)
   // 仅匹配这些函数的独立调用；前缀 QName 和更长函数名不应被改写。
-  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex|format-date|first|last)\s*\(/g
+  const functionPattern = /\b(substring-(?:before|after)-last|substring-ex|format-date|string-length|substring|sum|first|last)\s*\(/g
   let match: RegExpExecArray | null
   while ((match = functionPattern.exec(masked)) !== null) {
     const previous = masked[match.index - 1]
@@ -851,13 +989,36 @@ function rewriteAndroidXPathFunctionArguments(expression: string): string {
 
     if (match[1] === 'first' || match[1] === 'last') {
       const noArguments = ranges.length === 1 && expression.slice(ranges[0]![0], ranges[0]![1]).trim() === ''
-      if (noArguments) continue
+      if (noArguments) {
+        if (match[1] === 'first') continue
+        const directPredicate = directXPathPredicateRange(masked, match.index, close)
+        if (directPredicate !== undefined) {
+          const functionName = registerAndroidXPathFunction('is-last-context', 1)
+          return `${expression.slice(0, directPredicate[0])}[${functionName}(.)]${rewriteAndroidXPathFunctionArguments(expression.slice(directPredicate[1]))}`
+        }
+        const functionName = registerAndroidXPathFunction('last-context', 1)
+        return `${expression.slice(0, match.index)}${functionName}(.)${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
+      }
 
       // JsoupXpath 先求值全部实参、再忽略实参；把实参放入序列并取末项，保留错误和求值顺序。
       const args = ranges.map(([start, end]) => rewriteAndroidXPathFunctionArguments(expression.slice(start, end).trim()))
-      const value = match[1] === 'first' ? '1' : 'last()'
+      const value = match[1] === 'first' ? '1' : `${registerAndroidXPathFunction('last-context', 1)}(.)`
       const evaluatedSequence = `(${args.map((argument) => `(${argument})`).join(',')},${value})[last()]`
       return `${expression.slice(0, match.index)}${evaluatedSequence}${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
+    }
+
+    if (match[1] === 'string-length' || match[1] === 'substring' || match[1] === 'sum') {
+      const compatibilityFunction = match[1]!
+      const noArguments = ranges.length === 1 && expression.slice(ranges[0]![0], ranges[0]![1]).trim() === ''
+      const args = noArguments ? [] : ranges.map(([start, end]) => {
+        const argument = expression.slice(start, end).trim()
+        if (compatibilityFunction === 'sum' && isXPathAttributeSequence(argument)) return '()'
+        return isXPathAttributeSequence(argument)
+          ? `string-join(${argument}, ',')`
+          : rewriteAndroidXPathFunctionArguments(argument)
+      })
+      const functionName = registerAndroidXPathFunction(compatibilityFunction, args.length)
+      return `${expression.slice(0, match.index)}${functionName}(${args.join(',')})${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
     }
 
     const expectedArity = match[1] === 'substring-ex' ? 3 : 2
@@ -872,6 +1033,34 @@ function rewriteAndroidXPathFunctionArguments(expression: string): string {
     return `${expression.slice(0, open + 1)}${args.join(',')})${rewriteAndroidXPathFunctionArguments(expression.slice(close + 1))}`
   }
   return expression
+}
+
+function rewriteAndroidXPathPositionEqualities(expression: string): string {
+  const masked = maskXPathLiterals(expression)
+  const matches = [...masked.matchAll(/\bposition\s*\(\s*\)\s*=\s*\d+(?:\.\d+)?/g)]
+    .filter((match) => !['!', '<', '>'].includes(masked[match.index! - 1] ?? ''))
+  if (matches.length === 0) return expression
+  let output = ''
+  let cursor = 0
+  for (const match of matches) {
+    output += expression.slice(cursor, match.index) + '1=0'
+    cursor = match.index! + match[0].length
+  }
+  return output + expression.slice(cursor)
+}
+
+function rewriteAndroidXPathNumericWildcardPredicates(expression: string): string {
+  const masked = maskXPathLiterals(expression)
+  const matches = [...masked.matchAll(/(\/|::)\s*\*\s*\[\s*(\d+)\s*\]/g)]
+  if (matches.length === 0) return expression
+  let output = ''
+  let cursor = 0
+  for (const match of matches) {
+    const functionName = registerAndroidXPathFunction('same-tag-index', 1)
+    output += expression.slice(cursor, match.index) + `${match[1]}*[${functionName}(.) = ${match[2]}]`
+    cursor = match.index! + match[0].length
+  }
+  return output + expression.slice(cursor)
 }
 
 function xpathCallEnd(masked: string, open: number): number | undefined {
@@ -974,6 +1163,54 @@ function androidXPathValueAsInt(value: unknown): number {
   }
   if (typeof item === 'string') return androidDecimalStringAsInt(item)
   throw new Error(`substring-ex index cannot be converted to Long: ${String(item)}`)
+}
+
+function androidXPathSubstring(args: unknown[]): string {
+  if (args.length === 0) throwAndroidXPathSyntaxError('IndexOutOfBoundsException: Index: 0, Size: 0')
+  const source = androidXPathValueAsString(args[0])
+  if (args.length < 2) throwAndroidXPathSyntaxError(`IndexOutOfBoundsException: Index: ${args.length}, Size: ${args.length}`)
+  const start = Math.max((androidXPathValueAsInt(args[1]) - 1) | 0, 0)
+  if (args.length < 3) throwAndroidXPathSyntaxError(`IndexOutOfBoundsException: Index: ${args.length}, Size: ${args.length}`)
+  const length = androidXPathValueAsInt(args[2])
+  const end = Math.max(Math.min((start + length) | 0, source.length), 0)
+  return source.slice(start, end)
+}
+
+function androidXPathSum(args: unknown[]): number {
+  let total = 0
+  for (const argument of args) {
+    if (typeof argument === 'number') {
+      total += argument
+      continue
+    }
+    if (typeof argument === 'string') {
+      const value = androidXPathNumberFromString(argument)
+      if (value === undefined) return Number.NaN
+      total += value
+      continue
+    }
+    if (!Array.isArray(argument)) continue
+    if (argument.every((item) => isXmlNode(item) && item.nodeType === 1)) {
+      for (const item of argument) {
+        const value = androidXPathNumberFromString(normalizeXmlText(xmlWholeOwnText(item)))
+        if (value === undefined) return Number.NaN
+        total += value
+      }
+    } else if (argument.every((item) => isXmlNode(item) && (item.nodeType === 3 || item.nodeType === 4))) {
+      for (const item of argument) {
+        const value = androidXPathNumberFromString(item.nodeValue ?? '')
+        if (value === undefined) return Number.NaN
+        total += value
+      }
+    }
+  }
+  return total
+}
+
+function androidXPathNumberFromString(value: string): number | undefined {
+  if (!/^\d*\.?\d+$/.test(value)) return undefined
+  const number = Number(value)
+  return Number.isNaN(number) ? undefined : number
 }
 
 function androidDecimalStringAsInt(value: string): number {
