@@ -218,6 +218,18 @@ export async function execute(item: CaseInput): Promise<unknown> {
       }
     }
     case 'rule.bridgeString':
+      if (i.mode === 'boundaries') {
+        const code = [
+          'var stringErrorCaught=false; try { java.getString(' + json('invalidRule') + ',false); } catch (error) { stringErrorCaught=true; }',
+          'var listErrorCaught=false; try { java.getStringList(' + json('invalidRule') + '); } catch (error) { listErrorCaught=true; }',
+          'return {nullStringEmpty:java.getString(null)==="",blankStringEmpty:java.getString(" ",false)==="",',
+          'nullListNull:java.getStringList(null)===null,blankListNull:java.getStringList(" ")===null,',
+          'literal:java.getString(' + json('textRule') + ',false),unescaped:java.getString(' + json('textRule') + ',true),',
+          'missingStringEmpty:java.getString("h2@text")==="",missingListEmpty:java.getStringList("h2@href").length===0,',
+          'stringErrorCaught:stringErrorCaught,listErrorCaught:listErrorCaught,continued:java.getString(' + json('textRule') + ',true)}',
+        ].join('\n')
+        return script(host, code, i.content)
+      }
       return script(host, `java.setBaseUrl(${json('baseUrl')}); java.setRedirectUrl(${json('redirectUrl')});
         var text = ${json('textRule')}, url = ${json('urlRule')};
         return {literal:java.getString(text,false),unescaped:java.getString(text,true),fallback:java.getString(text,null,false),

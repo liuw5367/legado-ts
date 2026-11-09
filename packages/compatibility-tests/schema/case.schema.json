@@ -1827,6 +1827,12 @@
               },
               "redirectUrl": {
                 "type": "string"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "invalidRule": {
+                "type": "string"
               }
             },
             "additionalProperties": false

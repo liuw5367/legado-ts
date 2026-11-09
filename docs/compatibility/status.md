@@ -2,6 +2,12 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-09 P88：补齐 AnalyzeRule.getString/getStringList HTML 重载边界
+
+为 `AnalyzeRule.getString(String, ...)` 与 `getStringList(String, ...)` 增加 JVM/TS 配对边界案例，验证 null/空白参数、HTML 实体开关、无匹配结果、可捕获的无效选择器，以及异常后继续执行。参考端使用 Kotlin/JVM probe 暴露与 Android 一致的重载签名，并调用固定 `AnalyzeByJSoup`；TS 端通过真实 QuickJS Java bridge 执行。新增案例映射 `analyze-rule-overloads::006-getstring` 与 `::007-getstringlist`，normal、edge、error-or-empty、continuation 四维齐全。
+
+新案例和 rule-bridge **10/10** 一致；全量 JVM/TS **1032 项：1027 项一致、5 项既有逐例允许差异、0 项未登记差异/unsupported/runner failure**，流程 **87/87**。全量报告见 [P88 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-Rp7lh2/report.md)，定向报告见 [P88 rule-bridge](../../packages/compatibility-tests/output/run-d4ZBfl/report.md)。这是固定 Kotlin/JVM/Rhino 与 QuickJS 的源码引导对照，不代表 Android app/设备实测，也不代表完整 `AnalyzeRule` 类已在 Android 环境运行。
+
 ## 2026-11-09 P87：对齐 AnalyzeRule.getElements 的 null 入口行为
 
 按固定 Android `AnalyzeRule.getElements(String)` 的 Kotlin 非空参数签名，补充 catch-and-continue 对照：普通 `.item` 选择返回两个元素，空白规则返回空列表，JS 传入 null 时捕获入口异常，捕获后再次查询成功。TS 的三个 `java.getElements` 书源运行入口此前把 null/undefined 当空结果，现统一抛出可捕获的 `TypeError`；错误类不强求与 JVM 的 Kotlin 参数异常同名，比较的是书源可见的 catch 与后续执行行为，空白规则仍返回空列表。覆盖已关联 `analyze-rule-overloads::008-getelements`，normal、edge、error-or-empty、continuation 四维均 verified。

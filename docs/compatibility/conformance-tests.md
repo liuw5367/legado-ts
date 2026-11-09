@@ -481,6 +481,10 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 
 案例 `rule.bridgeElements.null-argument-catch-and-continue` 以固定 Android `AnalyzeRule.getElements(String)` 非空 Kotlin 签名为源代码依据：JVM 端让 Rhino 调用签名相同的 Kotlin probe 并传入 null，检查 JS 可以捕获入口异常且继续调用；普通选择结果由锁定 Android `AnalyzeByJSoup` 路径产生。TS 端执行真实 `SourceRuleHost → java.getElements`。两边比较可观察的捕获/继续行为，不要求 Kotlin/JVM 与 TS 错误类、消息完全相同；null 不再静默转成空列表，空白规则仍返回空列表。`analyze-rule-overloads::008-getelements` 四个维度均有案例。该 probe 不等于把 Android `AnalyzeRule` 整类编译运行，也不构成 Android app/设备 golden。
 
+### P88 AnalyzeRule.getString/getStringList HTML 重载边界
+
+案例 `rule.bridgeString.null-empty-error-catch-and-continue` 通过 Kotlin/JVM probe 暴露与 Android 一致的 `getString(String?, Any?, Boolean)`、`getString(String?, Boolean)`、`getStringList(String?, Any?, Boolean)` 重载；HTML 选择由锁定 Android `AnalyzeByJSoup` 执行。用例覆盖 null 与空白输入、实体解码开关、无匹配返回、无效 CSS selector 被 JS 捕获，以及捕获后继续取值。TS 端经 QuickJS 的 `SourceRuleHost → java.getString/getStringList` 执行同一脚本。该用例映射 `analyze-rule-overloads::006-getstring`、`::007-getstringlist` 的 normal/edge/error-or-empty/continuation 维度。固定源码引导 probe 不等同于运行 Android app 或完整 `AnalyzeRule` 类。
+
 ### P84 Java String 搜索与 null 参数
 
 `string.api.indexOf.*`、`indexOfFrom.*` 与 `lastIndexOf.*` 直接调用固定 JDK 方法，覆盖 null 参数异常映射、普通/空搜索、负值和越界 fromIndex、`lastIndexOf(String/int)` 重载、astral code point 及 surrogate code unit。兄弟方法 `contains/startsWith/endsWith/contentEquals` 一并核对 null 契约；`startsWith(String,int)` 另覆盖负偏移必须返回 false。修复前 9 条案例行为不同，修复后 string family 165/165；`java-collections-string::010-string-lastindexof` 与 `::016-string-contentequals` 均补齐 normal、edge、error-or-empty 证据。reader-web 的 JavaScript 搜索入口另行执行 8 个可捕获 null 调用及负偏移断言。测试结果为固定 JDK/Rhino 与 TS 的同输入对照，不等同 Android app/设备实测。

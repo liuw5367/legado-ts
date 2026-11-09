@@ -524,7 +524,9 @@
       "textRule": "string",
       "urlRule": "string",
       "baseUrl": "string",
-      "redirectUrl": "string"
+      "redirectUrl": "string",
+      "mode": "string",
+      "invalidRule": "string"
     }
   },
   "rule.bridgeElements": {

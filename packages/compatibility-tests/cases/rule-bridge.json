@@ -69,6 +69,41 @@
     }
   },
   {
+    "id": "rule.bridgeString.null-empty-error-catch-and-continue",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeString",
+    "input": {
+      "mode": "boundaries",
+      "content": "<h1>甲&amp;beta;</h1><a href=\"/part\">章节</a>",
+      "textRule": "h1@text",
+      "urlRule": "a@href",
+      "baseUrl": "https://source.fixture.test/book/",
+      "redirectUrl": "https://redirect.fixture.test/chapters/",
+      "invalidRule": "a:unknown@text"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.getString/getStringList(String, ...) + Kotlin overload bridge + AnalyzeByJSoup"
+    },
+    "tags": ["normal", "edge", "error-or-empty", "continuation"],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "nullStringEmpty": true,
+        "blankStringEmpty": true,
+        "nullListNull": true,
+        "blankListNull": true,
+        "literal": "甲&beta;",
+        "unescaped": "甲β",
+        "missingStringEmpty": true,
+        "missingListEmpty": true,
+        "stringErrorCaught": true,
+        "listErrorCaught": true,
+        "continued": "甲β"
+      }
+    }
+  },
+  {
     "id": "rule.bridgeElements.null-argument-catch-and-continue",
     "family": "rule-bridge",
     "operation": "rule.bridgeElements",

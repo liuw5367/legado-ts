@@ -2670,11 +2670,17 @@
       "requiredDimensions": [
         "normal",
         "edge",
-        "error-or-empty"
+        "error-or-empty",
+        "continuation"
       ],
       "caseIds": [
         "rule.bridgeString.batch-content-overloads",
-        "rule.bridgeString.batch-empty-overloads"
+        "rule.bridgeString.batch-empty-overloads",
+        "rule.bridgeString.null-empty-error-catch-and-continue"
+      ],
+      "manifestMembers": [
+        "analyze-rule-overloads::006-getstring",
+        "analyze-rule-overloads::007-getstringlist"
       ]
     },
     {
