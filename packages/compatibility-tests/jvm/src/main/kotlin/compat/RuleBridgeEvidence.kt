@@ -1,12 +1,14 @@
 package compat
 
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import io.legado.app.help.http.StrResponse
 import okhttp3.Headers
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
+import org.htmlunit.corejs.javascript.Context
 import org.jsoup.parser.Parser
 import java.net.URL
 
@@ -41,6 +43,24 @@ internal fun bridgeReturnedObjects(input: JsonObject): Any {
             val second = map.put("item", "乙")
             mapOf("missing" to missing, "first" to first, "second" to second, "current" to map["item"], "size" to map.size)
         }
+        "map-putall" -> runMapPutAllScript("""
+            var source = new Packages.java.util.HashMap();
+            source.put("shared", "new"); source.put("copied", "value");
+            source.put("nullValue", null); source.put(null, "null-key");
+            var target = new Packages.java.util.HashMap();
+            target.put("shared", "old"); target.put("retained", "keep");
+            var result = target.putAll(source);
+            JSON.stringify({voidReturn: result === undefined, overwritten: target.get("shared"),
+                copied: target.get("copied"), nullValuePresent: target.containsKey("nullValue"),
+                nullValue: target.get("nullValue"), nullKeyValue: target.get(null),
+                retained: target.get("retained"), size: target.size()})
+        """.trimIndent())
+        "map-putall-null" -> runMapPutAllScript("""
+            var target = new Packages.java.util.HashMap();
+            var threw = false;
+            try { target.putAll(null); } catch (error) { threw = true; }
+            JSON.stringify({threw: threw, size: target.size()})
+        """.trimIndent())
         "list" -> {
             val list = arrayListOf("甲", null, "乙")
             mapOf("index" to list[1], "last" to list[2], "items" to list.toArray())
@@ -63,4 +83,10 @@ internal fun bridgeReturnedObjects(input: JsonObject): Any {
         }
         else -> throw Unsupported("未知返回对象案例")
     }
+}
+
+private fun runMapPutAllScript(script: String): JsonObject = Context.enter().use { context ->
+    val scope = context.initStandardObjects()
+    val result = context.evaluateString(scope, script, "HashMap.putAll", 1, null)
+    JsonParser.parseString(Context.toString(result)).asJsonObject
 }

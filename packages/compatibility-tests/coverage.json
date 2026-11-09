@@ -2385,6 +2385,24 @@
       ]
     },
     {
+      "operation": "rule.bridgeObjects",
+      "method": "java.util.HashMap.putAll(Map)",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-core/src/rules/source-runtime.ts → mutable Java Map.putAll",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "rule.bridgeObjects.batch-map-putall",
+        "rule.bridgeObjects.batch-map-putall-null"
+      ],
+      "manifestMembers": [
+        "java-collections-string::003-map-putall"
+      ]
+    },
+    {
       "operation": "rule.scriptLibrary",
       "method": "jsLib 纯函数与来源级全局状态",
       "reference": "upstream-guided-flow",

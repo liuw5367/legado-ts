@@ -436,3 +436,33 @@ for (const scenario of ['success', 'checkpoint-failure', 'final-failure', 'cance
     finally { for (const lease of leases) if (lease) await repository.releaseExecutionSlot(user, lease) }
   })
 }
+
+test('reader-web JavaScript source matches Android HashMap.putAll return and null behavior', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.99'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var defaults = new Packages.java.util.HashMap();
+      defaults.put("name", "putAll 测试书"); defaults.put("author", "兼容验证");
+      var details = new Packages.java.util.HashMap(); details.put("bookUrl", "${base}/book");
+      var result = defaults.putAll(details);
+      if (result !== undefined) throw new Error("HashMap.putAll must return undefined");
+      var nullThrows = false;
+      try { details.putAll(null); } catch (error) { nullThrows = true; }
+      if (!nullThrows) throw new Error("HashMap.putAll(null) must throw");
+      return [{ name: defaults.get("name"), author: defaults.get("author"), bookUrl: defaults.get("bookUrl") }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates.length, 1)
+  assert.deepEqual(
+    { name: result.candidates[0]?.candidate.name, author: result.candidates[0]?.candidate.author, bookUrl: result.candidates[0]?.candidate.bookUrl },
+    { name: 'putAll 测试书', author: '兼容验证', bookUrl: `${base}/book` },
+  )
+})

@@ -185,3 +185,5 @@ Android 证据也需要分级：测试文件是可执行行为证据，流程源
 
 
 2026-11-09 P80 对齐 Jsoup 隐式 HTML 文档壳：固定 JVM/TS 案例复现片段及缺失 html/head/body 时的祖先节点差异；五条新 CSS 案例通过。CSS **106/106**、XPath **188/188**、离线流程 **87/87**；全量 **960 项（955 一致、5 项既有登记差异、0 未登记差异/unsupported/runner failure）**，报告 `packages/compatibility-tests/output/run-MP3Nwo/report.md`。根测试 **714/714**、source-node build 通过；根级 typecheck 在 6 GB 堆上 OOM。
+
+2026-11-09 P81 对齐 Java `HashMap.putAll` 的两项桥接语义：固定 Rhino/JDK 显示 `putAll(Map)` 返回 void/JS `undefined`，`putAll(null)` 抛错；TS 原先返回 Map 本身并吞掉 null。修复 mutable Map wrapper 后新增两个双端案例，覆盖覆盖复制、null key/value、void 返回及 null 参数异常，修复前 2 项 `different`、修复后 rule-bridge **8/8**；`java-collections-string::003-map-putall` 的 normal/edge/error-or-empty coverage 均 verified。reader-web JavaScript 书源搜索入口也验证同一脚本行为。全量 JVM/TS **962 项（957 相等、5 项既有允许差异、0 different/unsupported/runner failure）**，流程 **87/87**；根测试 **714/714**、compatibility mechanism **25/25**、reader-web source-execution **20/20**、reader-web typecheck 通过。全量报告 `packages/compatibility-tests/output/run-PZ4fU9/report.md`。重定向夹具只绑定获授权的本机 127.0.0.1；参考端是锁定 Android 依赖上的纯 JVM/Rhino 执行，不代表 app/设备实测；D24 仍 partial，其余 Map/List/Set 组合继续补测。

@@ -96,6 +96,58 @@
     }
   },
   {
+    "id": "rule.bridgeObjects.batch-map-putall",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "map-putall"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Rhino Java HashMap.putAll(Map)"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "voidReturn": true,
+        "overwritten": "new",
+        "copied": "value",
+        "nullValuePresent": true,
+        "nullValue": null,
+        "nullKeyValue": "null-key",
+        "retained": "keep",
+        "size": 5
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeObjects.batch-map-putall-null",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "map-putall-null"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Rhino Java HashMap.putAll(null)"
+    },
+    "tags": [
+      "edge",
+      "error-or-empty"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "threw": true,
+        "size": 0
+      }
+    }
+  },
+  {
     "id": "rule.bridgeObjects.batch-list",
     "family": "rule-bridge",
     "operation": "rule.bridgeObjects",

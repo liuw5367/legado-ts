@@ -201,6 +201,8 @@ export async function execute(item: CaseInput): Promise<unknown> {
     case 'rule.bridgeObjects': {
       switch (str('kind')) {
         case 'map': return script(host, 'var m = new Packages.java.util.HashMap(); var missing=m.get("item"); var first=m.put("item","甲"); var second=m.put("item","乙"); return {missing:missing,first:first,second:second,current:m.get("item"),size:m.size()};')
+        case 'map-putall': return script(host, `var source=new Packages.java.util.HashMap(); source.put("shared","new"); source.put("copied","value"); source.put("nullValue",null); source.put(null,"null-key"); var target=new Packages.java.util.HashMap(); target.put("shared","old"); target.put("retained","keep"); var result=target.putAll(source); return {voidReturn:result===undefined,overwritten:target.get("shared"),copied:target.get("copied"),nullValuePresent:target.containsKey("nullValue"),nullValue:target.get("nullValue"),nullKeyValue:target.get(null),retained:target.get("retained"),size:target.size()};`)
+        case 'map-putall-null': return script(host, 'var target=new Packages.java.util.HashMap(); var threw=false; try{target.putAll(null)}catch(e){threw=true} return {threw:threw,size:target.size()};')
         case 'list': return script(host, 'var l = new Packages.java.util.ArrayList(); l.add("甲"); l.add(null); l.add("乙"); return {index:l.get(1),last:l.get(2),items:l.toArray()};')
         case 'node': return script(host, 'var n=java.getElements(".item").get(0); return {text:n.text(),selected:n.select("a").attr("href")};', i.content)
         case 'response': {
