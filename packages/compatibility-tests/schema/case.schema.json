@@ -219,6 +219,15 @@
         }
       }
     },
+    "unorderedArrayPaths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^\\$/"
+      }
+    },
     "contractScope": {
       "enum": [
         "api",

@@ -1565,7 +1565,7 @@
       "kind": "upstream-adapted",
       "method": "AnalyzeByJSoup Jsoup HTML tree builder inserts table row"
     },
-    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "tags": ["edge", "html-structure", "compatibility-recheck"],
     "expected": {
       "outcome": "return",
       "value": [{ "tag": "td", "text": "书名", "id": "book-title" }]
@@ -1605,6 +1605,84 @@
     "expected": {
       "outcome": "return",
       "value": [{ "tag": "td", "text": "书名", "id": "book-title" }]
+    }
+  },
+  {
+    "id": "css.nodes.html-body-close-recovery",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<body><p id=inside>inside</body><p id=after>after",
+      "rule": "@css:body > p"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Jsoup HTML parser keeps post-body content in body"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "p", "text": "inside", "id": "inside" },
+        { "tag": "p", "text": "after", "id": "after" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.html-formatting-reconstruction",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<b id=bold>one<p id=paragraph>two</b>three",
+      "rule": "@css:p > b"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Jsoup HTML adoption agency reconstructs formatting elements"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "b", "text": "two", "id": "bold" }]
+    }
+  },
+  {
+    "id": "css.nodes.html-crossing-formatting-tags",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<p><b id=bold>one<i id=italic>two</b>three</i>four",
+      "rule": "@css:b > i, p > i"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Jsoup HTML adoption agency reconstructs nested formatting elements"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "i", "text": "two", "id": "italic" },
+        { "tag": "i", "text": "three", "id": "italic" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.html-anchor-keeps-block-child",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<div class=chapter-list><a id=chapter href='/chapter/1'><h4>第一章 初见</h4></a></div>",
+      "rule": "@css:a:has(h4)"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Jsoup preserves linked chapter heading structure"
+    },
+    "tags": ["edge", "html-structure", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "a", "text": "第一章 初见", "id": "chapter" }]
     }
   }
 ]

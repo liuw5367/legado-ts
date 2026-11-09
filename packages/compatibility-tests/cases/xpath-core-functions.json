@@ -269,7 +269,9 @@
     "operation": "xpath.list",
     "input": { "rule": "//main/descendant::a/@href", "content": "<main><ul><li><a href='/1'/></li><li><a href='/2'/></li></ul></main>", "attribute": "" },
     "reference": { "kind": "upstream-adapted", "method": "AnalyzeByXPath JsoupXpath 2.5.3 descendant axis" },
-    "tags": ["compatibility-recheck", "xpath-axis"]
+    "tags": ["compatibility-recheck", "xpath-axis"],
+    "unorderedArrayPaths": ["$/value"],
+    "expected": { "outcome": "return", "value": ["/1", "/2"] }
   },
   {
     "id": "xpath.axis.union-document-order",

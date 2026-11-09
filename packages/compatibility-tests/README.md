@@ -67,6 +67,8 @@ TS 侧使用真实 scanner、规则编译器/evaluator、SourceRuleHost、QuickJ
 
 默认只忽略对象键顺序；保留数组顺序、query、null、缺失、空串、空数组及错误原始类别和文本。双方类别名不同的异常仍报告差异；需要比较错误语义时，在具体案例声明 `errorEquivalence.category/jvm/ts`，原始输出仍保留。
 
+固定 Android 库中若某个具体操作返回无序集合，可在单条案例用 `unorderedArrayPaths` 声明需要按集合语义比较的数组路径，例如 `"$/value"`。比较器只对声明路径按稳定 JSON 表示排序，重复项仍参与比较；普通数组及其他路径继续按顺序严格比较，原始比较也保留数组顺序差异。该机制用于 Android JsoupXpath 2.5.3 descendant axis：其实现通过 `HashSet` 聚合节点，迭代顺序不稳定；对应案例保留固定 expected 成员值和原始差异，不能把此设置扩展成全局数组忽略。
+
 允许差异通过 `allowedDifferences` 指定 JSON 路径、jvm 值、ts 值及原因，三者必须精确匹配才生效；没有全局忽略项。`expected` 为可选的额外独立断言，使用 `{ "outcome": "return", "value": ... }` 形态。两端执行器不读取它。当前 MD5 固定向量及真实书源规则案例有额外断言。失败案例仍保留实际输出。
 
 每次双端运行都重新生成结果，比较前核对输入与实现摘要，不复用任意旧输出。构建缓存还会校验实际 class 文件与依赖 JAR 摘要。`output/` 和 `jvm/target/` 可在停止测试后清理，运行命令会重新生成。

@@ -151,6 +151,7 @@ export function validateCase(item) {
   if (item.operation === 'rule.split' && !['&&', '||', '%%'].includes(item.input.operator)) throw new Error('未支持的分隔符')
   if (item.operation.startsWith('regex.') && item.input.patterns.length === 0) throw new Error('patterns 不能为空')
   if (item.errorEquivalence && (typeof item.errorEquivalence.category !== 'string' || !['jvm', 'ts'].every((r) => Array.isArray(item.errorEquivalence[r]) && item.errorEquivalence[r].every((v) => typeof v === 'string')))) throw new Error('异常等价声明无效')
+  if (item.unorderedArrayPaths !== undefined && (!Array.isArray(item.unorderedArrayPaths) || item.unorderedArrayPaths.length === 0 || !item.unorderedArrayPaths.every((path) => typeof path === 'string' && /^\$\//u.test(path)) || new Set(item.unorderedArrayPaths).size !== item.unorderedArrayPaths.length)) throw new Error('无序数组路径声明无效')
   if (item.allowedDifferences !== undefined) {
     if (!Array.isArray(item.allowedDifferences) || !item.allowedDifferences.every((d) => typeof d.path === 'string' && d.reason?.length > 0 && Object.hasOwn(d, 'jvm') && Object.hasOwn(d, 'ts'))) throw new Error('允许差异必须指定路径、双方值和原因')
   }

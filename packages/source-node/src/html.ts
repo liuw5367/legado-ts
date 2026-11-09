@@ -1,5 +1,5 @@
-import { parseDocument } from 'htmlparser2'
-import { Element, Text, isCDATA, isComment, isDocument, isText, isTag, type AnyNode } from 'domhandler'
+import { parseDocument, Parser } from 'htmlparser2'
+import { Element, Text, isCDATA, isComment, isDocument, isText, isTag, type AnyNode, type ParentNode } from 'domhandler'
 import { getAttributeValue, getChildren, getText } from 'domutils'
 import * as domutils from 'domutils'
 import { is as matchesSelector, selectAll } from 'css-select'
@@ -230,6 +230,86 @@ function isScriptOrStyle(node: AnyNode | null | undefined): boolean {
 }
 
 const blockElements = new Set(['address', 'article', 'aside', 'blockquote', 'br', 'dd', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul'])
+const formattingElements = new Set(['a', 'b', 'big', 'code', 'em', 'font', 'i', 'nobr', 's', 'small', 'strike', 'strong', 'tt', 'u'])
+const voidElements = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'])
+
+interface OpenHtmlTag {
+  name: string
+  markup: string
+  start: number
+  end: number
+}
+
+/**
+ * htmlparser2 keeps misnested formatting tags in the source nesting. Jsoup reconstructs
+ * them when a formatting end tag crosses an open block or inner formatting element.
+ * Delay edits until that malformed close is observed: valid structures such as an anchor
+ * containing a heading must retain their original parent-child relationship.
+ */
+function reconstructFormattingMarkup(input: string): string {
+  const stack: OpenHtmlTag[] = []
+  const edits = new Map<number, string>()
+  const reopenAfterClose = new Map<number, OpenHtmlTag[]>()
+  let parser: Parser
+  const insert = (offset: number, value: string): void => {
+    edits.set(offset, `${edits.get(offset) ?? ''}${value}`)
+  }
+  const lastIndexOf = (name: string): number => {
+    for (let index = stack.length - 1; index >= 0; index -= 1) if (stack[index]!.name === name) return index
+    return -1
+  }
+  parser = new Parser({
+    onparserinit(value) { parser = value },
+    onopentag(name) {
+      const markup = input.slice(parser.startIndex, parser.endIndex + 1)
+      if (voidElements.has(name) || /\/\s*>$/u.test(markup)) return
+      stack.push({ name, markup, start: parser.startIndex, end: parser.endIndex })
+    },
+    onclosetag(name, implied) {
+      const start = parser.startIndex
+      const raw = input.slice(start, parser.endIndex + 1)
+      const explicitClose = /^<\s*\/\s*([a-z][\w:-]*)/iu.exec(raw)?.[1]?.toLowerCase()
+      // htmlparser2 会在格式化标签的真实闭合位置隐式关闭块标签；仅当该块是外层格式标签下第一个未闭合块时，才回溯拆分格式标签。
+      if (implied && blockElements.has(name) && explicitClose !== undefined && formattingElements.has(explicitClose)) {
+        const formattingIndex = lastIndexOf(explicitClose)
+        const blockIndex = lastIndexOf(name)
+        const firstBlockAfterFormatting = stack.findIndex((tag, index) => index > formattingIndex && blockElements.has(tag.name))
+        if (formattingIndex >= 0 && firstBlockAfterFormatting === blockIndex && blockIndex > formattingIndex) {
+          let lastAncestorBlock = -1
+          for (let index = 0; index < formattingIndex; index += 1) if (blockElements.has(stack[index]!.name)) lastAncestorBlock = index
+          const activeFormatting = stack.slice(lastAncestorBlock + 1, blockIndex).filter((tag) => formattingElements.has(tag.name))
+          if (activeFormatting.some((tag) => tag.name === explicitClose)) {
+            const block = stack[blockIndex]!
+            insert(block.start, activeFormatting.slice().reverse().map((tag) => `</${tag.name}>`).join(''))
+            insert(block.end + 1, activeFormatting.map((tag) => tag.markup).join(''))
+          }
+        }
+      }
+      if (implied && explicitClose !== undefined && formattingElements.has(explicitClose) && explicitClose !== name) {
+        const target = lastIndexOf(explicitClose)
+        const nested = target < 0 ? [] : stack.slice(target + 1)
+        if (nested.length > 0 && nested.every((tag) => formattingElements.has(tag.name))) {
+          insert(start, nested.slice().reverse().map((tag) => `</${tag.name}>`).join(''))
+          insert(parser.endIndex + 1, nested.map((tag) => tag.markup).join(''))
+          reopenAfterClose.set(start, nested)
+        }
+      }
+
+      const index = lastIndexOf(name)
+      if (index >= 0) stack.splice(index)
+      const reopened = implied ? undefined : reopenAfterClose.get(start)
+      if (reopened !== undefined) stack.push(...reopened)
+    },
+  }, { recognizeSelfClosing: true })
+  parser.end(input)
+
+  if (edits.size === 0) return input
+  let output = input
+  for (const [offset, insertion] of [...edits.entries()].sort(([left], [right]) => right - left)) {
+    output = `${output.slice(0, offset)}${insertion}${output.slice(offset)}`
+  }
+  return output
+}
 
 /** Jsoup Element.text 的可移植子集：忽略 data 节点、规范空白并在块级元素间补分隔。 */
 function jsoupText(node: AnyNode): string {
@@ -682,7 +762,7 @@ function relinkChildren(parent: AnyNode): void {
   }
 }
 
-function setChildren(parent: Element, children: AnyNode[]): void {
+function setChildren(parent: ParentNode, children: AnyNode[]): void {
   parent.children = children
   for (const child of children) child.parent = parent
   relinkChildren(parent)
@@ -760,10 +840,35 @@ function repairHtmlTableStructure(root: AnyNode): void {
   visit(root)
 }
 
-/** Parse HTML and apply the table row/section insertion Jsoup performs for HTML rules. */
+/** Jsoup 在显式 body 结束后仍把后续普通节点归入 body，保持 HTML 解析入口的文档结构一致。 */
+function repairHtmlBodyContent(root: AnyNode): void {
+  const findBody = (node: AnyNode): Element | undefined => {
+    if (isTag(node) && node.name === 'body') return node
+    for (const child of getChildren(node)) {
+      const body = findBody(child)
+      if (body !== undefined) return body
+    }
+    return undefined
+  }
+  const body = findBody(root)
+  const parent = body?.parent
+  if (body === undefined || parent === null || parent === undefined) return
+
+  const siblings = getChildren(parent)
+  const bodyIndex = siblings.indexOf(body)
+  const trailing = siblings.slice(bodyIndex + 1).filter((node) => !(isTag(node) && ['html', 'head', 'body'].includes(node.name)))
+  if (trailing.length === 0) return
+
+  const moved = new Set(trailing)
+  setChildren(body, [...body.children, ...trailing])
+  setChildren(parent, siblings.filter((node) => !moved.has(node)))
+}
+
+/** Parse HTML and apply Jsoup's table row/section and body-content repair rules. */
 export function parseAndroidHtmlDocument(input: string): ReturnType<typeof parseDocument> {
-  const document = parseDocument(input, { recognizeSelfClosing: true })
+  const document = parseDocument(reconstructFormattingMarkup(input), { recognizeSelfClosing: true })
   repairHtmlTableStructure(document)
+  repairHtmlBodyContent(document)
   return document
 }
 

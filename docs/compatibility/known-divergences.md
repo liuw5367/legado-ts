@@ -97,6 +97,14 @@
 
 `D21` 正则替换回退补充（P60）：固定 Android `AnalyzeRule.kt:544–560` 后，source-core evaluator 与 `SourceRuleRuntime` 对齐其 `runCatching` 结果。全量 `result.replace(regex, replacement)` 失败会退回 `result.replace(regexText, replacement)` 字面替换；首项替换在已命中但 replacement 引用无效时返回 replacement 原文，无匹配时返回空串。JVM/TS 固定案例 `regex.ruleReplace.invalidGroup.*`、`regex.ruleReplace.namedAndUnmatchedGroups`、`regex.ruleReplace.invalidPattern.*` 均通过；reader-web 正文工作流另有真实 runtime 入口回归。D21 仍为部分实现：复杂 Java Pattern 方言和 Android app/设备 golden 没有因此宣称完成。
 
+## 2026-11-09 P78/P79：D18/D19 新增解析证据
+
+P79 新增四条固定 JVM/TS CSS 案例，验证显式 `</body>` 后的段落归入 body、`<b>…<p>…</b>` 的格式元素重建、交叉闭合的 `b/i` 重建，以及正常链接标题 `<a><h4>…</h4></a>` 保持原有父子关系。TypeScript 仅在解析到格式元素闭合与仍打开的块元素相交时，才回头在块边界重建标签，避免把有效的章节链接结构拆开。CSS family **101/101 一致**；原书源 TOC 流程回归 `source-host-flow.test.ts` **45/45**。这几条案例扩展了 D18/D19 中 P74 表格结构以外的 HTML 修复证据，但不覆盖完整 Jsoup HTML5 tree builder。
+
+P78 对固定 JsoupXpath 2.5.3 的 `DescendantSelector.apply` 进行了重复 JVM 观察，确认其结果通过 `HashSet` 聚合，因而元素返回顺序可变化。`xpath.axis.descendant` 在单条案例的 `unorderedArrayPaths: ["$/value"]` 声明该数组按集合语义比较，并独立固定 expected 成员值。原始结果仍逐顺序报告差异；重复项保留；未声明的数组和 XPath 其他顺序语义继续严格比较。XPath family **188/188 行为相等**，其中该用例 rawComparison 为 different、behaviorComparison 为 equal。
+
+完整对照为 **955 项（950 相等、5 项既有允许差异、0 项其他差异/unsupported/runner failure）**，流程 **87/87**；固定 Kotlin/JVM 参考不代表 Android app/设备实测。详细执行记录见[状态总览](status.md)。
+
 ### 覆盖范围与未证实事项
 
 本轮逐组检查了导入/字段、规则编译与解析器、URL/网络、声明式五类读取流程及批量、整源 JS、JS 继承公开面及返回对象、Cookie/cache/源状态、发现交互、登录、编码/加密、文件/归档、字体、并发、图片/媒体、段评、付费/事件以及 Web 会话装配。已有的分页、卷/VIP/购买标志、canReName、preUpdateJs、subContent、imageDecode、contentBatch 等入口继续保留“已实现待 Android golden”，没有因为本轮未找到新缺陷而改成完整兼容。

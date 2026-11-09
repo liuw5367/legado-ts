@@ -19,6 +19,19 @@ export function differences(jvm, ts, path = '$') {
   }
   return [{ path, jvm, ts }]
 }
+function normalizeUnorderedArrays(value, paths, path = '$') {
+  if (!paths.has(path)) {
+    if (Array.isArray(value)) return value.map((item, index) => normalizeUnorderedArrays(item, paths, `${path}/${index}`))
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeUnorderedArrays(item, paths, `${path}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`)]))
+    return value
+  }
+  if (!Array.isArray(value)) return value
+  return value.map((item, index) => normalizeUnorderedArrays(item, paths, `${path}/${index}`)).sort((left, right) => {
+    const leftKey = stable(left)
+    const rightKey = stable(right)
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+  })
+}
 function observed(result, item, runtime, raw = false) {
   if (result.outcome === 'return') {
     const mapping = raw ? undefined : item.flowErrorEquivalence
@@ -45,8 +58,9 @@ export function compareCase(item, jvm, ts) {
     return { id: item.id, family: item.family, contractScope: item.contractScope ?? 'api', rawComparison: 'not-run', behaviorComparison: 'not-run', status: [jvm.execution, ts.execution].includes('runner-failed') ? 'runner-failed' : 'unsupported', jvm, ts }
   }
   const rawDelta = differences(observed(jvm, item, 'jvm', true), observed(ts, item, 'ts', true))
-  const left = observed(jvm, item, 'jvm')
-  const right = observed(ts, item, 'ts')
+  const unorderedArrayPaths = new Set(item.unorderedArrayPaths ?? [])
+  const left = normalizeUnorderedArrays(observed(jvm, item, 'jvm'), unorderedArrayPaths)
+  const right = normalizeUnorderedArrays(observed(ts, item, 'ts'), unorderedArrayPaths)
   const delta = differences(left, right)
   const allowed = []
   const unexpected = []
@@ -58,10 +72,12 @@ export function compareCase(item, jvm, ts) {
   const expectedFailures = []
   if (Object.hasOwn(item, 'expected')) {
     for (const [runtime, result] of [['jvm', left], ['ts', right]]) {
-      for (const difference of differences(item.expected, result)) expectedFailures.push({ runtime, ...difference })
+      const expected = normalizeUnorderedArrays(item.expected, unorderedArrayPaths)
+      const actual = normalizeUnorderedArrays(result, unorderedArrayPaths)
+      for (const difference of differences(expected, actual)) expectedFailures.push({ runtime, ...difference })
     }
   }
-  return { id: item.id, family: item.family, contractScope: item.contractScope ?? 'api', rawComparison: rawDelta.length ? 'different' : 'equal', rawDifferences: rawDelta, errorEquivalent: rawDelta.length > 0 && delta.length === 0 && (left.outcome === 'throw' || item.flowErrorEquivalence !== undefined), behaviorComparison: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', status: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', differences: unexpected, allowed, expectedFailures }
+  return { id: item.id, family: item.family, contractScope: item.contractScope ?? 'api', rawComparison: rawDelta.length ? 'different' : 'equal', rawDifferences: rawDelta, ...(unorderedArrayPaths.size > 0 ? { unorderedArrayPaths: [...unorderedArrayPaths] } : {}), errorEquivalent: rawDelta.length > 0 && delta.length === 0 && (left.outcome === 'throw' || item.flowErrorEquivalence !== undefined), behaviorComparison: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', status: unexpected.length || expectedFailures.length ? 'different' : allowed.length ? 'allowed-difference' : 'equal', differences: unexpected, allowed, expectedFailures }
 }
 export function assertProvenance(metadata, expected) {
   if (metadata.schemaVersion !== 1 || !metadata.inputHash || !metadata.implementationHash || metadata.inputHash !== expected.inputHash || metadata.implementationHash !== expected.implementationHash) throw new Error('产物版本或输入摘要不匹配，拒绝比较过期输出')

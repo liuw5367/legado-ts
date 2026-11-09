@@ -73,6 +73,12 @@ test('比较忽略对象键顺序，保留数组顺序、空值、Unicode 与大
   }
   assert.deepEqual(differences({ a: 1 }, { a: 2 }), [{ path: '$/a', jvm: 1, ts: 2 }])
 })
+test('只在显式声明的路径按无序集合比较数组，并保留重复项与预期断言', () => {
+  const item = { ...fixture, unorderedArrayPaths: ['$/value'], expected: { outcome: 'return', value: [1, 1, 2] } }
+  assert.equal(compareCase(item, returned([2, 1, 1]), returned([1, 2, 1])).status, 'equal')
+  assert.equal(compareCase(item, returned([2, 1, 1]), returned([1, 2, 2])).status, 'different')
+  assert.equal(compareCase(fixture, returned([2, 1]), returned([1, 2])).status, 'different')
+})
 test('缺失字段不会与实际的 missing 标记对象混同', () => {
   assert.equal(differences({}, { a: null }).length, 1)
   assert.equal(differences({}, { a: { type: 'missing' } }).length, 1)
@@ -131,6 +137,8 @@ test('案例合法且唯一；坏输入、结果及允许差异被拒绝', async
   assert.throws(() => validateCase({ ...fixture, input: {} }))
   assert.throws(() => validateCase({ ...fixture, input: { text: 'a', typo: true } }))
   assert.throws(() => validateCase({ ...fixture, allowedDifferences: [{ path: '$' }] }))
+  assert.throws(() => validateCase({ ...fixture, unorderedArrayPaths: ['value'] }))
+  assert.throws(() => validateCase({ ...fixture, unorderedArrayPaths: ['$/value', '$/value'] }))
   assert.throws(() => validateResult({ id: 'test', execution: 'completed', outcome: 'return' }, 'test'))
 })
 test('书源快照与摘要一致；语料不冒充流程执行证据', async () => {

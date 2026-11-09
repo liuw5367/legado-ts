@@ -63,6 +63,8 @@
 
 后续基础兼容工作按“差异归因与比较入口校准 → 按根因修复 → 扩大方法/重载及真实规则样本覆盖”推进。兼容性修复以固定 Android Java/Kotlin 源码的可观察行为为验收基准，并修改 TS 生产实现；纯 JVM 参考端只用于执行和观察 Android 行为，不作为 TS 功能实现。历史差异及方法清单中的未完成项必须关联同输入、可执行的 Android/JVM 与 TS 案例；缺少案例时先补双端用例，再按结果修复 TS 并更新差异记录。核心验收为 Android 能成功处理的规则在 TS 中得到相同结果、顺序和继续/终止行为；异常类别、文案和堆栈仅在不影响可观察行为时允许按错误语义放宽，Android 合法空结果不能被 TS 抛错替代。原 Android 仓库保持只读，纯 JVM 与既有安全边界继续保留；执行规则见[一致性测试基线](compatibility/conformance-tests.md)和[兼容政策](contracts/compatibility-policy.md)。
 
+当前兼容性计划获准使用仅绑定本机 loopback 地址的临时 HTTP 夹具验证请求行为；这项授权不包含公网目标。
+
 双端流程覆盖静态与动态 POST、HTML 正文分页、重定向详情识别、目录排序与去重、跨阶段书籍变量。脚本状态、取消和部分二进制行为已有离线证据。后续按已有差异的下游影响、缺失的 API 分支及真实规则组合，从固定语料选取案例。历史差异按分支关联同输入结果和参考出处，真实宿主证据单列。执行和证据范围见[一致性测试基线](compatibility/conformance-tests.md)。
 
 非 WebView 兼容性覆盖宽松 URL 请求选项、Cookie Map、日期脚本接口、批量正文回存及登录凭据生命周期；这些项目已加入共享案例和固定 Android JVM 参考端对照。登录头流程对照锁定的 Android `BaseSource`、`AnalyzeUrl` 与 `CookieStore` 源码摘录，验证同站注入、Cookie 合并、快照恢复和删除；应用级密钥存储、多实例持久化、动态登录头脚本及 Android 应用网络容器仍需单独取证。各项按同输入验证实际请求、脚本分支或交付结果，证据范围和保留差异见[已知差异](compatibility/known-divergences.md)。

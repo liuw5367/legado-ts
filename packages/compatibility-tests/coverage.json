@@ -1705,7 +1705,11 @@
         "css.nodes.batch-index-gt-negative",
         "css.nodes.html-table-missing-tr",
         "css.nodes.html-table-missing-tbody",
-        "css.nodes.html-tbody-missing-tr"
+        "css.nodes.html-tbody-missing-tr",
+        "css.nodes.html-body-close-recovery",
+        "css.nodes.html-formatting-reconstruction",
+        "css.nodes.html-crossing-formatting-tags",
+        "css.nodes.html-anchor-keeps-block-child"
       ]
     },
     {
