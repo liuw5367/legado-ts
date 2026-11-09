@@ -840,6 +840,90 @@ function repairHtmlTableStructure(root: AnyNode): void {
   visit(root)
 }
 
+const htmlHeadElements = new Set(['base', 'basefont', 'bgsound', 'link', 'meta', 'title', 'noscript', 'noframes', 'style', 'script', 'template'])
+
+function isHtmlDoctype(node: AnyNode): boolean {
+  return node.type === 'directive' && /^!doctype(?:\s|$)/iu.test(node.data)
+}
+
+/** Jsoup's HTML tree builder always exposes html/head/body, even for fragments and partial documents. */
+function repairHtmlDocumentStructure(document: ReturnType<typeof parseDocument>): void {
+  const rootChildren = getChildren(document)
+  let html = rootChildren.find((node): node is Element => isTag(node) && node.name === 'html')
+  let htmlChildren: AnyNode[]
+  const preservedRootChildren: AnyNode[] = []
+
+  if (html === undefined) {
+    html = new Element('html', {}, [])
+    htmlChildren = []
+    let contentStarted = false
+    for (const child of rootChildren) {
+      if (isHtmlDoctype(child) || (!contentStarted && isComment(child))) {
+        preservedRootChildren.push(child)
+      } else if (isText(child) && child.data.trim().length === 0) {
+        // Whitespace before the first body element is ignored by Jsoup's tree builder.
+      } else {
+        contentStarted = true
+        htmlChildren.push(child)
+      }
+    }
+  } else {
+    const htmlIndex = rootChildren.indexOf(html)
+    htmlChildren = []
+    for (const [index, child] of rootChildren.entries()) {
+      if (child === html) {
+        htmlChildren.push(...html.children)
+      } else if (isHtmlDoctype(child) || (index < htmlIndex && isComment(child))) {
+        preservedRootChildren.push(child)
+      } else if (isText(child) && child.data.trim().length === 0) {
+        // Whitespace outside the explicit html element does not become body text.
+      } else {
+        htmlChildren.push(child)
+      }
+    }
+  }
+
+  const existingHead = htmlChildren.find((node): node is Element => isTag(node) && node.name === 'head')
+  const existingBody = htmlChildren.find((node): node is Element => isTag(node) && node.name === 'body')
+  const headChildren: AnyNode[] = []
+  const bodyChildren: AnyNode[] = []
+  const commentsBeforeHead: AnyNode[] = []
+  const commentsAfterHead: AnyNode[] = []
+  let bodyStarted = false
+  let headOpen = false
+  let headClosed = false
+
+  for (const child of htmlChildren) {
+    if (child === existingHead) {
+      headChildren.push(...child.children)
+      headClosed = true
+      headOpen = false
+    } else if (child === existingBody) {
+      bodyStarted = true
+      bodyChildren.push(...child.children)
+    } else if (!bodyStarted && isText(child) && child.data.trim().length === 0) {
+      // Whitespace between html/head/body tokens is not retained by Jsoup.
+    } else if (!bodyStarted && isComment(child)) {
+      if (headOpen && !headClosed) headChildren.push(child)
+      else if (headClosed) commentsAfterHead.push(child)
+      else commentsBeforeHead.push(child)
+    } else if (!bodyStarted && isTag(child) && htmlHeadElements.has(child.name)) {
+      headChildren.push(child)
+      headOpen = true
+    } else {
+      bodyStarted = true
+      bodyChildren.push(child)
+    }
+  }
+
+  const head = existingHead ?? new Element('head', {}, [])
+  const body = existingBody ?? new Element('body', {}, [])
+  setChildren(head, headChildren)
+  setChildren(body, bodyChildren)
+  setChildren(html, [...commentsBeforeHead, head, ...commentsAfterHead, body])
+  setChildren(document, [...preservedRootChildren, html])
+}
+
 /** Jsoup 在显式 body 结束后仍把后续普通节点归入 body，保持 HTML 解析入口的文档结构一致。 */
 function repairHtmlBodyContent(root: AnyNode): void {
   const findBody = (node: AnyNode): Element | undefined => {
@@ -867,8 +951,9 @@ function repairHtmlBodyContent(root: AnyNode): void {
 /** Parse HTML and apply Jsoup's table row/section and body-content repair rules. */
 export function parseAndroidHtmlDocument(input: string): ReturnType<typeof parseDocument> {
   const document = parseDocument(reconstructFormattingMarkup(input), { recognizeSelfClosing: true })
-  repairHtmlTableStructure(document)
   repairHtmlBodyContent(document)
+  repairHtmlDocumentStructure(document)
+  repairHtmlTableStructure(document)
   return document
 }
 

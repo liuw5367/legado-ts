@@ -118,3 +118,8 @@ P78 对固定 JsoupXpath 2.5.3 的 `DescendantSelector.apply` 进行了重复 JV
 2026-10-22 D34/P21 更新后，方法清单为 27 个能力族、252 个成员（55 implemented、159 partial、38 simulated）；新增和修正 Java String/StringBuilder/Locale/Stream、Java IO 流和局部 Pattern flags 成员已有 TS 书源式回归，但受控对象和 Android golden 仍分开记录。
 
 2026-10-22 P13 已补齐逐 fixture TypeScript runner 和 Android 前置检查：六条跨运行时 fixture 均有实际 TS 输出并通过 expected 比较；Android 当前没有逐 fixture adapter，六条仍为 `not-run`，比较器使用 `--require-android` 时退出码为 2。该状态只说明跨端验证受阻，不把 Android 普通 JVM 单测或 Node 结果当作 golden。
+
+
+## 2026-11-09 P80：D18/D19 补齐 Jsoup 隐式 HTML 文档壳
+
+固定 Android `SourceHtmlParser.parseSourceHtml()` 使用 Jsoup `Jsoup.parse()`；对于 `<main>…</main>`、`<html><main>…</main></html>` 和 `<body><main>…</main></body>`，Jsoup 都会生成可查询的 `html/head/body` 祖先，而旧 TS htmlparser2 树缺少这些节点。增加五条 JVM/TS 红绿案例，覆盖片段、显式 html 缺 body、显式 body 缺 html，以及片段标题进入 head、主体进入 body、前置注释不改变 head 归属。`packages/source-node/src/html.ts` 现在补齐文档壳，并把 head-only 标签放入 head、普通节点放入 body；不把该结果推广为完整 Jsoup HTML5 tree builder 等价。CSS family **106/106**、XPath family **188/188**、离线书源流程 **87/87** 一致；全量兼容集 **960 项（955 一致、5 项既有登记差异、0 未登记差异/unsupported/runner failure）**，报告 `packages/compatibility-tests/output/run-MP3Nwo/report.md`。根测试 **714/714**、source-node build 通过；根级 typecheck 在 6 GB 堆上 OOM。

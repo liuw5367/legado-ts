@@ -1684,5 +1684,101 @@
       "outcome": "return",
       "value": [{ "tag": "a", "text": "第一章 初见", "id": "chapter" }]
     }
+  },
+  {
+    "id": "css.nodes.html-fragment-document-wrappers",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<main><p id=hit>片段正文</p></main>",
+      "rule": "@css:html > body > main > p#hit"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android SourceHtmlParser Jsoup.parse creates implicit document wrappers"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "p", "text": "片段正文", "id": "hit" }]
+    }
+  },
+  {
+    "id": "css.nodes.html-missing-body-wrapper",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<html><main id=main>正文</main></html>",
+      "rule": "@css:html > body > main#main"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android SourceHtmlParser Jsoup.parse inserts missing body"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "main", "text": "正文", "id": "main" }]
+    }
+  },
+  {
+    "id": "css.nodes.html-missing-html-wrapper",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<body><main id=main>正文</main></body>",
+      "rule": "@css:html > body > main#main"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android SourceHtmlParser Jsoup.parse inserts missing html and head"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [{ "tag": "main", "text": "正文", "id": "main" }]
+    }
+  },
+  {
+    "id": "css.nodes.html-fragment-head-and-body-wrappers",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<!doctype html><title id=title>题</title><main id=main>正文</main>",
+      "rule": "@css:html > head > title#title, html > body > main#main"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android SourceHtmlParser Jsoup.parse separates implicit head and body"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "title", "text": "题", "id": "title" },
+        { "tag": "main", "text": "正文", "id": "main" }
+      ]
+    }
+  },
+  {
+    "id": "css.nodes.html-leading-comment-preserves-head",
+    "family": "css",
+    "operation": "css.nodes",
+    "input": {
+      "content": "<!-- 前置注释 --><title id=title>题</title><main id=main>正文</main>",
+      "rule": "@css:html > head > title#title, html > body > main#main"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android Jsoup keeps document comments outside head insertion and routes title into head"
+    },
+    "tags": ["edge", "malformed-html", "compatibility-recheck"],
+    "expected": {
+      "outcome": "return",
+      "value": [
+        { "tag": "title", "text": "题", "id": "title" },
+        { "tag": "main", "text": "正文", "id": "main" }
+      ]
+    }
   }
 ]

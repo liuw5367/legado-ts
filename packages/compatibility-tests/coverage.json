@@ -1709,7 +1709,12 @@
         "css.nodes.html-body-close-recovery",
         "css.nodes.html-formatting-reconstruction",
         "css.nodes.html-crossing-formatting-tags",
-        "css.nodes.html-anchor-keeps-block-child"
+        "css.nodes.html-anchor-keeps-block-child",
+        "css.nodes.html-fragment-document-wrappers",
+        "css.nodes.html-missing-body-wrapper",
+        "css.nodes.html-missing-html-wrapper",
+        "css.nodes.html-fragment-head-and-body-wrappers",
+        "css.nodes.html-leading-comment-preserves-head"
       ]
     },
     {
