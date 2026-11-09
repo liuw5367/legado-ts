@@ -1569,6 +1569,7 @@
         "xpath.function.concat.single-node-sequence",
         "xpath.function.concat.scalar-trim",
         "xpath.function.concat.java-number-format",
+        "xpath.function.concat.subnormal-double",
         "xpath.function.string-length.numeric-value"
       ],
       "manifestMembers": [

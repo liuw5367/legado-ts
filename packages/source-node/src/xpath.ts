@@ -1156,6 +1156,17 @@ function androidXPathValueAsString(value: unknown): string {
 function androidXPathDoubleAsString(value: number): string {
   if (!Number.isFinite(value)) return String(value)
   const magnitude = Math.abs(value)
+  if (magnitude > 0 && magnitude < 2.2250738585072014e-308) {
+    // Java keeps at least two significant decimal digits for subnormal Double values;
+    // JavaScript's shortest spelling can round-trip with only one (for example 5e-324).
+    for (let fractionDigits = 1; fractionDigits <= 16; fractionDigits++) {
+      const candidate = value.toExponential(fractionDigits)
+      if (Number(candidate) === value) {
+        const [mantissa, exponent] = candidate.split('e') as [string, string]
+        return `${mantissa}E${Number(exponent)}`
+      }
+    }
+  }
   if (magnitude >= 1e7 || (magnitude > 0 && magnitude < 1e-3)) {
     const [mantissa, exponent] = value.toExponential().split('e') as [string, string]
     return `${mantissa.includes('.') ? mantissa : `${mantissa}.0`}E${Number(exponent)}`
