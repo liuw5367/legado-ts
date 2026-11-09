@@ -427,6 +427,98 @@
     ]
   },
   {
+    "id": "string.api.replace.literal",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "ababa",
+      "method": "replace",
+      "value": "aba",
+      "replacement": "x"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replace(CharSequence,CharSequence)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.replace.empty-target-astral",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "A\ud83d\ude00B",
+      "method": "replace",
+      "value": "",
+      "replacement": "-"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replace(CharSequence,CharSequence)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.replace.empty-input",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "",
+      "method": "replace",
+      "value": "",
+      "replacement": "-"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replace(CharSequence,CharSequence)"
+    },
+    "tags": [
+      "error-or-empty"
+    ]
+  },
+  {
+    "id": "string.api.replace.empty-result",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "",
+      "method": "replace",
+      "value": "",
+      "replacement": ""
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replace(CharSequence,CharSequence)"
+    },
+    "tags": [
+      "error-or-empty"
+    ]
+  },
+  {
+    "id": "string.api.replace.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "foo foo",
+      "method": "replace",
+      "value": "foo",
+      "replacement": "x",
+      "continue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.replace(CharSequence,CharSequence)"
+    },
+    "tags": [
+      "normal",
+      "continuation"
+    ]
+  },
+  {
     "id": "string.api.charAt.negative",
     "family": "string",
     "operation": "string.api",

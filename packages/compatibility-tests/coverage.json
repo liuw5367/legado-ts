@@ -925,6 +925,28 @@
     },
     {
       "operation": "string.api",
+      "method": "String.replace(CharSequence,CharSequence)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.replace.literal",
+        "string.api.replace.empty-target-astral",
+        "string.api.replace.empty-input",
+        "string.api.replace.empty-result",
+        "string.api.replace.continuation"
+      ],
+      "manifestMembers": [
+        "java-collections-string::008-string-replace"
+      ]
+    },
+    {
+      "operation": "string.api",
       "method": "String.offsetByCodePoints(int,int)",
       "reference": "jdk-direct",
       "tsEntry": "ts/adapter.ts → string.api",

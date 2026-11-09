@@ -70,6 +70,7 @@ private fun execute(item: JsonObject): Any? {
                 "codePointAt" -> java.lang.String(text("text")).codePointAt(input.get("index").asInt)
                 "codePointCount" -> java.lang.String(text("text")).codePointCount(input.get("index").asInt, input.get("end").asInt)
                 "offsetByCodePoints" -> java.lang.String(text("text")).offsetByCodePoints(input.get("index").asInt, input.get("end").asInt)
+                "replace" -> java.lang.String(text("text")).replace(text("value") as CharSequence, text("replacement") as CharSequence).toString()
                 "getBytes" -> mapOf("type" to "bytes", "base64" to Base64.getEncoder().encodeToString(java.lang.String(text("text")).getBytes(text("charset").ifEmpty { "UTF-8" })))
                 else -> throw Unsupported("未知 String 方法: $method")
             }

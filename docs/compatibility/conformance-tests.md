@@ -468,3 +468,7 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 上表解决高风险路径，不能代表所有重载已完善。CAP-ENCODE 加密工厂、CAP-FONT、动态登录等已登记未完整定义的项，必须保留 spec=blocked，不能以存在 EXT 分组标为完成。每个字段至少映射 `IMP-005/字段路径` 的往返案例；每个可执行规则字段再映射对应流程案例。父组通过比例不能代替子案例状态。
 
 有限资源测试采用最小值、恰好上限、超过上限三例；字符串位置另含代理对。并发事件只断言契约要求的先后关系（例如保存先于成功），不强制不同源回调总顺序；分页收集顺序则是固定契约。时间与随机数由测试宿主注入，真实站点波动不进入 golden。
+
+### P82 Java String.replace
+
+`string.api.replace.*` 以固定 JDK `String.replace(CharSequence, CharSequence)` 为参考，覆盖字面替换、重叠子串、空目标、空输入、代理对中的 UTF-16 code unit 边界及结果 continuation。空文本和空目标时只返回一次 replacement；不得把 astral 代理对折叠成单个边界。`coverage.json` 回链 `java-collections-string::008-string-replace`，reader-web 的 JavaScript 搜索入口另验同一行为。

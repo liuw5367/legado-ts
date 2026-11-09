@@ -271,6 +271,7 @@
       "index": "integer",
       "end": "integer",
       "value": "string",
+      "replacement": "string",
       "charset": "string",
       "continue": "boolean"
     }

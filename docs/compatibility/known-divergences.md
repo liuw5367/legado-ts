@@ -78,6 +78,8 @@
 
 `D47` JS 源 `SearchBook` 字段形态修订（P62，2026-11-09）：固定 Android `GSON` 为 `String` 和 `Int` 注册了自定义 adapter。所有声明的字符串字段会把对象/数组序列化成紧凑 JSON 字符串；缺失字段保留实体默认值，JSON null 则写入 null。`IntJsonDeserializer` 仅对数字 primitive 调用 `Number.toInt()`，其他形态返回 null，SearchBook 的 Int 原始字段因此保留构造默认值；`type` 随后另用 `JsonElement.asInt()` 校验，所以整数文本和单项数组可读，字符串 `"4.0"` 与布尔值会失败并回退书源类型，数字小数按 `Number.intValue()` 截断，超范围整数按 Java 32 位规则回绕。内建 Long adapter 处理 `time`，解析失败或溢出会跳过条目。显式 `name:null` / `bookUrl:null` 会在 Kotlin 非空字段访问处使整次搜索/发现解析失败；普通缺字段仍按默认空串丢弃条目。`author:null` / `tocUrl:null` 可留在搜索结果，但在选择书籍并调用 `SearchBook.toBook()` 时触发 `Book` 非空构造参数异常，TS 现在在详情阶段执行相同行为。`source-host-flow.test.ts` 与 6 条 `flow.synthetic.main-js.searchbook-*` Kotlin/JVM 同输入流程用例覆盖以上分支；固定参考端通过，但不是 Android app/设备实测。Gson 极端数值和 app/设备 golden 仍待验证。
 
+`D34` Java String `replace(CharSequence,CharSequence)` 补充（P82，2026-11-09）：固定 JVM/TS 对照确认空目标匹配包括 UTF-16 code unit 的所有边界；空字符串输入只插入一次 replacement，TS 原先会重复插入。现在已修复并新增普通替换、重叠字面串、astral 代理对、空输入、空返回和 continuation 案例；reader-web 书源 JS 入口也通过。string family 129/129、全量 JVM/TS 967 项（962 相等、5 项既有允许差异）。这是固定 JDK 对照，不能替代 Android app/设备 golden。
+
 ### 需要应用或真实平台的剩余项
 
 以下项目继续使用 OPEN-01～04 和 D4/D12～14，不因本轮重复盘点而另建状态编号。

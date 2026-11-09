@@ -1051,6 +1051,9 @@
               "value": {
                 "type": "string"
               },
+              "replacement": {
+                "type": "string"
+              },
               "charset": {
                 "type": "string"
               },

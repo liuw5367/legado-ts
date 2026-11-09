@@ -466,3 +466,28 @@ test('reader-web JavaScript source matches Android HashMap.putAll return and nul
     { name: 'putAll 测试书', author: '兼容验证', bookUrl: `${base}/book` },
   )
 })
+
+test('reader-web JavaScript source matches Android String.replace empty-target boundaries', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.100'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var empty = new Packages.java.lang.String("").replace("", "-").toString();
+      var astral = new Packages.java.lang.String("A\\uD83D\\uDE00B").replace("", "-").toString();
+      if (empty !== "-") throw new Error("empty String.replace target must insert once");
+      if (astral.length !== 9 || astral.charCodeAt(3) !== 0xD83D || astral.charCodeAt(4) !== 45 || astral.charCodeAt(5) !== 0xDE00) {
+        throw new Error("String.replace must preserve Java UTF-16 boundary insertions");
+      }
+      return [{ name: "String replace 测试书", author: "兼容验证", bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'String replace 测试书')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})

@@ -2,6 +2,14 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-09 P82：对齐 Java String.replace 的空文本边界
+
+固定 JVM/TS 对照发现 `String.replace(CharSequence, CharSequence)` 在空目标、空文本时存在差异：Java 返回一次 replacement（例如 `"".replace("", "-")` 为 `"-"`），TS 原先返回两次。现在修复空文本分支；额外保留 astral 字符用例，验证代理对内部按 Java UTF-16 code unit 边界插入。
+
+新增 5 条双端案例，覆盖普通字面替换、重叠子串、空目标与代理对、空文本、空返回及 continuation。修复前 `string.api.replace.empty-input` 为 different（JVM `-`、TS `--`），修复后 string family **129/129**；`java-collections-string::008-string-replace` 的 normal、edge、error-or-empty、continuation coverage 均 verified。reader-web JavaScript 书源入口覆盖同样的空文本和 UTF-16 边界。
+
+全量 JVM/TS 对照 **967 项：962 项相等、5 项既有允许差异、0 项未登记差异/unsupported/runner failure**；流程 **87/87**。根测试 **714/714**、reader-web source-execution **21/21**、兼容机制 **25/25**、reader-web typecheck 通过。报告见 [P82 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-CVE2Iv/report.md) 与 [string family 对照](../../packages/compatibility-tests/output/run-FK3KTd/report.md)；红测记录见 `run-H3txG0`。参考端是固定 Android 上游源码/依赖下的纯 JVM/JDK 对照，不代表 Android app/设备实测；测试只绑定本机 loopback。
+
 ## 2026-11-09 P81：对齐 Java HashMap.putAll 返回和 null 语义
 
 新增固定 Rhino/JDK 与 QuickJS 双端对照后确认两个 TS 差异：Android `HashMap.putAll(Map)` 返回 `void`，脚本观察为 `undefined`；`putAll(null)` 抛出异常。TS mutable Map wrapper 此前返回 Map 自身，并把 null 当空 Map 忽略。现在只调整书源 JS 可见的 mutable Map wrapper：正常 Map 复制不变，调用返回 `undefined`，null/undefined 输入会抛异常。

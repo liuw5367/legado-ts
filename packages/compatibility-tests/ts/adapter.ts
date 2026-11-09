@@ -255,6 +255,7 @@ export async function execute(item: CaseInput): Promise<unknown> {
         case 'codePointAt': expression = `text.codePointAt(${Number(i.index)})`; break
         case 'codePointCount': expression = `text.codePointCount(${Number(i.index)},${Number(i.end)})`; break
         case 'offsetByCodePoints': expression = `text.offsetByCodePoints(${Number(i.index)},${Number(i.end)})`; break
+        case 'replace': expression = `String(text.replace(${json('value')},${json('replacement')}))`; break
         case 'getBytes': return script(host, `var bytes=new Packages.java.lang.String(${json('text')}).getBytes(${JSON.stringify(str('charset') || 'UTF-8')}); var value={type:'bytes',base64:Packages.java.util.Base64.getEncoder().encodeToString(bytes)}; return ${i.continue ? `{value:value,next:String(new Packages.java.lang.String(bytes,${JSON.stringify(str('charset') || 'UTF-8')}))}` : 'value'}`)
         default: throw new UnsupportedOperation(`未知 String 方法: ${str('method')}`)
       }
