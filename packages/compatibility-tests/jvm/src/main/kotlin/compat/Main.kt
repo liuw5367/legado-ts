@@ -14,12 +14,29 @@ import io.legado.app.model.analyzeRule.RuleAnalyzer
 import java.net.URL
 import java.net.URLEncoder
 import java.net.URLDecoder
+import java.lang.reflect.InvocationTargetException
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.regex.Pattern
 
 private val gson = GsonBuilder().serializeNulls().disableHtmlEscaping().create()
 internal class Unsupported(message: String) : RuntimeException(message)
+
+private fun jdkStringCall(text: String, method: String, parameterTypes: Array<Class<*>>, arguments: Array<Any?>): Any {
+    val target = java.lang.String::class.java.getMethod(method, *parameterTypes)
+    return try {
+        target.invoke(text, *arguments) as Any
+    } catch (error: InvocationTargetException) {
+        throw error.targetException
+    }
+}
+
+private fun jdkStringType(name: String): Class<*> = when (name) {
+    "String" -> java.lang.String::class.java
+    "CharSequence" -> CharSequence::class.java
+    "int" -> Int::class.javaPrimitiveType!!
+    else -> error("Unsupported String parameter type: $name")
+}
 
 private fun execute(item: JsonObject): Any? {
     val input = item.getAsJsonObject("input")
@@ -65,8 +82,43 @@ private fun execute(item: JsonObject): Any? {
                 "charAt" -> text("text")[input.get("index").asInt].toString()
                 "substring" -> text("text").substring(input.get("index").asInt)
                 "substringRange" -> text("text").substring(input.get("index").asInt, input.get("end").asInt)
-                "indexOf" -> text("text").indexOf(text("value"))
-                "indexOfFrom" -> text("text").indexOf(text("value"), input.get("index").asInt)
+                "contains" -> {
+                    val search: String? = if (input.get("nullValue")?.asBoolean == true) null else text("value")
+                    jdkStringCall(text("text"), "contains", arrayOf(jdkStringType("CharSequence")), arrayOf<Any?>(search))
+                }
+                "startsWith" -> {
+                    val search: String? = if (input.get("nullValue")?.asBoolean == true) null else text("value")
+                    if (input.has("index")) jdkStringCall(text("text"), "startsWith", arrayOf(jdkStringType("String"), jdkStringType("int")), arrayOf(search, input.get("index").asInt))
+                    else jdkStringCall(text("text"), "startsWith", arrayOf(jdkStringType("String")), arrayOf<Any?>(search))
+                }
+                "endsWith" -> {
+                    val search: String? = if (input.get("nullValue")?.asBoolean == true) null else text("value")
+                    jdkStringCall(text("text"), "endsWith", arrayOf(jdkStringType("String")), arrayOf<Any?>(search))
+                }
+                "contentEquals" -> {
+                    val search: String? = if (input.get("nullValue")?.asBoolean == true) null else text("value")
+                    jdkStringCall(text("text"), "contentEquals", arrayOf(jdkStringType("CharSequence")), arrayOf<Any?>(search))
+                }
+                "indexOf" -> {
+                    val search: String? = if (input.get("nullValue")?.asBoolean == true) null else text("value")
+                    jdkStringCall(text("text"), "indexOf", arrayOf(jdkStringType("String")), arrayOf<Any?>(search))
+                }
+                "indexOfFrom" -> {
+                    val search: String? = if (input.get("nullValue")?.asBoolean == true) null else text("value")
+                    jdkStringCall(text("text"), "indexOf", arrayOf(jdkStringType("String"), jdkStringType("int")), arrayOf(search, input.get("index").asInt))
+                }
+                "lastIndexOf" -> {
+                    val string = text("text")
+                    if (input.has("codePoint")) {
+                        val codePoint = input.get("codePoint").asInt
+                        if (input.has("index")) jdkStringCall(string, "lastIndexOf", arrayOf(jdkStringType("int"), jdkStringType("int")), arrayOf(codePoint, input.get("index").asInt))
+                        else jdkStringCall(string, "lastIndexOf", arrayOf(jdkStringType("int")), arrayOf(codePoint))
+                    } else {
+                        val search: String? = if (input.get("nullValue")?.asBoolean == true) null else text("value")
+                        if (input.has("index")) jdkStringCall(string, "lastIndexOf", arrayOf(jdkStringType("String"), jdkStringType("int")), arrayOf(search, input.get("index").asInt))
+                        else jdkStringCall(string, "lastIndexOf", arrayOf(jdkStringType("String")), arrayOf<Any?>(search))
+                    }
+                }
                 "codePointAt" -> java.lang.String(text("text")).codePointAt(input.get("index").asInt)
                 "codePointCount" -> java.lang.String(text("text")).codePointCount(input.get("index").asInt, input.get("end").asInt)
                 "offsetByCodePoints" -> java.lang.String(text("text")).offsetByCodePoints(input.get("index").asInt, input.get("end").asInt)

@@ -448,13 +448,15 @@ test('Java String Unicode、字符数组和空白方法保持 UTF-16 语义', as
       text.getChars(1, 3, chars, 1);
       var blank = new String('\\u2003\\u3000');
       var list = new ArrayList(['a', null, 'c']);
+      var contentEqualsNullThrows = false;
+      try { text.contentEquals(null); } catch (error) { contentEqualsNullThrows = true; }
       JSON.stringify({
         codePoints: [text.codePointAt(1), text.codePointBefore(3), text.codePointBefore(2), text.codePointCount(0, text.length()), text.offsetByCodePoints(1, 1), text.offsetByCodePoints(3, -1)],
         chars: chars,
         search: [text.lastIndexOf('B'), text.lastIndexOf(0x1f600)],
         blank: [blank.isBlank(), new String('\\u2003 x\\u3000').strip().toString(), new String('\\u2003x').stripLeading().toString(), new String('x\\u3000').stripTrailing().toString()],
         repeat: new String('ab').repeat(2).toString(),
-        equals: [text.contentEquals('A😀\\u2003B'), text.contentEquals(null)],
+        equals: [text.contentEquals('A😀\\u2003B'), contentEqualsNullThrows],
         join: [String.join('-', ['a', 'b']), String.join('/', list), String.join('-', 'ab')]
       });
     }`, '')
@@ -465,7 +467,7 @@ test('Java String Unicode、字符数组和空白方法保持 UTF-16 语义', as
     search: [4, 1],
     blank: [true, 'x', 'x', 'x'],
     repeat: 'abab',
-    equals: [true, false],
+    equals: [true, true],
     join: ['a-b', 'a/null/c', 'ab'],
   })
 
@@ -584,13 +586,15 @@ test('Java String 基础方法遵循 null、偏移、空目标和 UTF-16 边界'
     with (importer) {
       var text = new String('a😀a');
       var split = new String('a,,b,');
-      JSON.stringify({ length: text.length(), equals: [text.equals(null), new String('').equals(null), new String('A').equalsIgnoreCase('a')], starts: [text.startsWith('😀', 1), text.startsWith('a', -1), text.endsWith('a'), text.endsWith(null)], replace: [text.replace('a', '-').toString(), text.replace('', '|').toString()], split: [split.split(',', 0).toArray(), split.split(',', -1).toArray()].map(function(values) { return values.map(function(value) { return value.toString(); }); }), region: [text.regionMatches(1, '😀a', 0, 3), text.regionMatches(true, 1, '😀A', 0, 3)], hash: text.hashCode(), bytes: Array.from(new String('一').getBytes('UTF-8')) });
+      var endsWithNullThrows = false;
+      try { text.endsWith(null); } catch (error) { endsWithNullThrows = true; }
+      JSON.stringify({ length: text.length(), equals: [text.equals(null), new String('').equals(null), new String('A').equalsIgnoreCase('a')], starts: [text.startsWith('😀', 1), text.startsWith('a', -1), text.endsWith('a'), endsWithNullThrows], replace: [text.replace('a', '-').toString(), text.replace('', '|').toString()], split: [split.split(',', 0).toArray(), split.split(',', -1).toArray()].map(function(values) { return values.map(function(value) { return value.toString(); }); }), region: [text.regionMatches(1, '😀a', 0, 3), text.regionMatches(true, 1, '😀A', 0, 3)], hash: text.hashCode(), bytes: Array.from(new String('一').getBytes('UTF-8')) });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
     length: 4,
     equals: [false, false, true],
-    starts: [true, true, true, false],
+    starts: [true, false, true, true],
     replace: ['-😀-', '|a|\ud83d|\ude00|a|'],
     split: [['a', '', 'b'], ['a', '', 'b', '']],
     region: [true, true],

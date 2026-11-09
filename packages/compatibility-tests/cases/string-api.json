@@ -972,6 +972,432 @@
     ]
   },
   {
+    "id": "string.api.indexOf.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "indexOf",
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.contains.normal",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "contains",
+      "value": "b"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.contains(CharSequence)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.contains.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "contains",
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.contains(CharSequence)"
+    },
+    "tags": [
+      "edge",
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.startsWith.offset",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "startsWith",
+      "value": "bc",
+      "index": 1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.startsWith(String,int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.startsWith.negative-offset",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "startsWith",
+      "value": "ab",
+      "index": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.startsWith(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.startsWith.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "startsWith",
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.startsWith(String)"
+    },
+    "tags": [
+      "edge",
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.endsWith.normal",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "endsWith",
+      "value": "bc"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.endsWith(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.endsWith.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "endsWith",
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.endsWith(String)"
+    },
+    "tags": [
+      "edge",
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.contentEquals.normal",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "contentEquals",
+      "value": "abc"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.contentEquals(CharSequence)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.contentEquals.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "contentEquals",
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.contentEquals(CharSequence)"
+    },
+    "tags": [
+      "edge",
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.indexOfFrom.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "abc",
+      "method": "indexOfFrom",
+      "index": 1,
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.indexOf(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.lastIndexOf.string",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "banana",
+      "method": "lastIndexOf",
+      "value": "na"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(String)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.lastIndexOfFrom.surrogate-boundary",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a\ud83d\ude00",
+      "method": "lastIndexOf",
+      "value": "\ud83d\ude00",
+      "index": 3
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(String,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.lastIndexOfFrom.negative-empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "banana",
+      "method": "lastIndexOf",
+      "value": "",
+      "index": -1
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(String,int)"
+    },
+    "tags": [
+      "edge",
+      "empty"
+    ]
+  },
+  {
+    "id": "string.api.lastIndexOfFrom.beyond-empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "banana",
+      "method": "lastIndexOf",
+      "value": "",
+      "index": 99
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(String,int)"
+    },
+    "tags": [
+      "edge",
+      "empty"
+    ]
+  },
+  {
+    "id": "string.api.lastIndexOf.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "banana",
+      "method": "lastIndexOf",
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(String)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.lastIndexOfFrom.null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "banana",
+      "method": "lastIndexOf",
+      "index": 3,
+      "nullValue": true
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(String,int)"
+    },
+    "tags": [
+      "error"
+    ],
+    "errorEquivalence": {
+      "category": "null-argument",
+      "jvm": [
+        "java.lang.NullPointerException"
+      ],
+      "ts": [
+        "TypeError"
+      ]
+    }
+  },
+  {
+    "id": "string.api.lastIndexOf.codePoint",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a\ud83d\ude00",
+      "method": "lastIndexOf",
+      "codePoint": 128512
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(int)"
+    },
+    "tags": [
+      "normal"
+    ]
+  },
+  {
+    "id": "string.api.lastIndexOfCodePointFrom.boundary",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a\ud83d\ude00",
+      "method": "lastIndexOf",
+      "codePoint": 128512,
+      "index": 3
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(int,int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
+    "id": "string.api.lastIndexOf.codeUnit",
+    "family": "string",
+    "operation": "string.api",
+    "input": {
+      "text": "a\ud83d\ude00a",
+      "method": "lastIndexOf",
+      "codePoint": 56832
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "String.lastIndexOf(int)"
+    },
+    "tags": [
+      "edge"
+    ]
+  },
+  {
     "id": "string.api.codePointAt.low-surrogate",
     "family": "string",
     "operation": "string.api",

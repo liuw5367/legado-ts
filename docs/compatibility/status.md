@@ -2,6 +2,12 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-09 P84：对齐 Java String 搜索参数与负偏移语义
+
+固定 JDK/TS 对照新增 Java `String` 搜索与比较重载，修复 9 项差异：`contains/startsWith/endsWith/indexOf/lastIndexOf/contentEquals(null)` 现在抛出可捕获的异常，语义对应 Java 的 `NullPointerException`；`startsWith(prefix, -1)` 现在返回 false。覆盖 `indexOf(String)` 两个重载、`lastIndexOf(String/int)` 有无起始位置的重载、空目标、越界起始位置、负偏移、代理对搜索及 low-surrogate code unit。`java-collections-string::010-string-lastindexof` 与 `::016-string-contentequals` 的 normal、edge、error-or-empty coverage verified。reader-web 的书源 JS 搜索入口也验证 8 种 null 调用均可捕获，负偏移结果一致。
+
+string family **165/165**；全量 JVM/TS **1003 项：998 项相等、5 项既有允许差异、0 项未登记差异/unsupported/runner failure**，流程 **87/87**。根测试 **714/714**、reader-web source-execution **23/23**、兼容机制 **25/25**、reader-web typecheck 通过。报告见 [P84 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-JGk90i/report.md) 与 [string family 对照](../../packages/compatibility-tests/output/run-YLg1d4/report.md)。该证据来自固定 JDK 21/Rhino 参考端，不代表 Android app/设备实测；D34 其余 Java String、集合和宿主成员仍按清单逐项补证。
+
 ## 2026-11-09 P83：补齐 Java String Unicode 空白方法对照
 
 为 `String.strip`、`stripLeading`、`stripTrailing`、`isBlank` 增加固定 JDK 与 TS 双端覆盖，并在 reader-web 书源 JS 入口验证。向量覆盖 U+2003/U+3000 等 Java `Character.isWhitespace` 空白、NBSP 不视为空白、空结果及返回值 continuation。本轮 16 条配对向量全部一致，未发现需要修改的 TS 行为；四个清单成员的 normal、edge、error-or-empty、continuation coverage 均 verified。

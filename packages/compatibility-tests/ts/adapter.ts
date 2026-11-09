@@ -250,8 +250,17 @@ export async function execute(item: CaseInput): Promise<unknown> {
         case 'charAt': expression = `String(text.charAt(${Number(i.index)}))`; break
         case 'substring': expression = `String(text.substring(${Number(i.index)}))`; break
         case 'substringRange': expression = `String(text.substring(${Number(i.index)},${Number(i.end)}))`; break
-        case 'indexOf': expression = `text.indexOf(${json('value')})`; break
-        case 'indexOfFrom': expression = `text.indexOf(${json('value')},${Number(i.index)})`; break
+        case 'contains': expression = `text.contains(${i.nullValue === true ? 'null' : json('value')})`; break
+        case 'startsWith': expression = `text.startsWith(${i.nullValue === true ? 'null' : json('value')}${i.index === undefined ? '' : `,${Number(i.index)}`})`; break
+        case 'endsWith': expression = `text.endsWith(${i.nullValue === true ? 'null' : json('value')})`; break
+        case 'contentEquals': expression = `text.contentEquals(${i.nullValue === true ? 'null' : json('value')})`; break
+        case 'indexOf': expression = `text.indexOf(${i.nullValue === true ? 'null' : json('value')})`; break
+        case 'indexOfFrom': expression = `text.indexOf(${i.nullValue === true ? 'null' : json('value')},${Number(i.index)})`; break
+        case 'lastIndexOf': {
+          const search = i.nullValue === true ? 'null' : i.codePoint !== undefined ? String(Number(i.codePoint)) : json('value')
+          expression = `text.lastIndexOf(${search}${i.index === undefined ? '' : `,${Number(i.index)}`})`
+          break
+        }
         case 'codePointAt': expression = `text.codePointAt(${Number(i.index)})`; break
         case 'codePointCount': expression = `text.codePointCount(${Number(i.index)},${Number(i.end)})`; break
         case 'offsetByCodePoints': expression = `text.offsetByCodePoints(${Number(i.index)},${Number(i.end)})`; break

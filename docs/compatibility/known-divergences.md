@@ -82,6 +82,8 @@
 
 `D34` String whitespace API 补充（P83，2026-11-09）：`strip/stripLeading/stripTrailing/isBlank` 均已有 4 条固定 JVM/TS 向量，验证 Java `Character.isWhitespace` 范围（包含 U+2003/U+3000，排除 NBSP）、方向性裁剪、空返回和 continuation；16/16 相等，四个覆盖成员全部 verified，reader-web 书源 JS 入口也通过。未发现这四个已测向量上的 TS 差异；更广泛 Unicode 版本和 Android 设备实现仍未以 app/设备 golden 验证。
 
+`D34` Java String 搜索/比较 null 语义补充（P84，2026-11-09）：原先 `contains(null)` 被当空串搜索，`startsWith/endsWith/contentEquals(null)` 被当成 false，`indexOf(null)` 返回 `-1`，`lastIndexOf(null)` 搜索空串；这些都与固定 JDK 的 `NullPointerException` 控制流不一致。另发现 `startsWith(prefix,-1)` 将负偏移夹到 0，可能错误命中。现有桥接对 null/undefined 搜索参数抛可捕获 `TypeError`，负 startsWith 偏移返回 false。9 条修复前 JVM/TS 差异全部消除；string family 165/165，全量 1003 项中没有未登记差异、unsupported 或 runner failure。测试覆盖 `String.lastIndexOf(String/int)` 的有无 fromIndex 重载、空搜索、UTF-16 代理对及 int code point。该证据固定在 JDK 21，不代表 Android app/设备 golden；String 其他参数方法和 StringBuilder 仍需逐项核对。
+
 ### 需要应用或真实平台的剩余项
 
 以下项目继续使用 OPEN-01～04 和 D4/D12～14，不因本轮重复盘点而另建状态编号。

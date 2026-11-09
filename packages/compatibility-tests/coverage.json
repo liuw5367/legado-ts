@@ -869,6 +869,70 @@
     },
     {
       "operation": "string.api",
+      "method": "String.contains(CharSequence)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.api.contains.normal",
+        "string.api.contains.null"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.startsWith(String[,int])",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.api.startsWith.offset",
+        "string.api.startsWith.negative-offset",
+        "string.api.startsWith.null"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.endsWith(String)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.api.endsWith.normal",
+        "string.api.endsWith.null"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.contentEquals(CharSequence)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.api.contentEquals.normal",
+        "string.api.contentEquals.null"
+      ],
+      "manifestMembers": [
+        "java-collections-string::016-string-contentequals"
+      ]
+    },
+    {
+      "operation": "string.api",
       "method": "String.indexOf(String)",
       "reference": "jdk-direct",
       "tsEntry": "ts/adapter.ts → string.api",
@@ -882,7 +946,8 @@
         "string.api.indexOf.unicode",
         "string.api.indexOf.continuation",
         "string.api.indexOf.empty",
-        "string.api.indexOf.missing"
+        "string.api.indexOf.missing",
+        "string.api.indexOf.null"
       ]
     },
     {
@@ -900,7 +965,33 @@
         "string.api.indexOfFrom.unicode",
         "string.api.indexOfFrom.continuation",
         "string.api.indexOfFrom.negative",
-        "string.api.indexOfFrom.beyond"
+        "string.api.indexOfFrom.beyond",
+        "string.api.indexOfFrom.null"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.lastIndexOf(String/int[,int])",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty"
+      ],
+      "caseIds": [
+        "string.api.lastIndexOf.string",
+        "string.api.lastIndexOfFrom.surrogate-boundary",
+        "string.api.lastIndexOfFrom.negative-empty",
+        "string.api.lastIndexOfFrom.beyond-empty",
+        "string.api.lastIndexOf.null",
+        "string.api.lastIndexOfFrom.null",
+        "string.api.lastIndexOf.codePoint",
+        "string.api.lastIndexOfCodePointFrom.boundary",
+        "string.api.lastIndexOf.codeUnit"
+      ],
+      "manifestMembers": [
+        "java-collections-string::010-string-lastindexof"
       ]
     },
     {

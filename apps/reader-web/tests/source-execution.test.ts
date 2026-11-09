@@ -519,3 +519,40 @@ test('reader-web JavaScript source matches Android String whitespace methods', a
   assert.equal(result.candidates[0]?.candidate.name, 'String whitespace 测试书')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web Java String search methods preserve null errors and negative startsWith offsets', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'http://127.0.0.1:12345'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var value = new Packages.java.lang.String("abc");
+      var checks = [
+        function(){ value.contains(null); },
+        function(){ value.startsWith(null); },
+        function(){ value.endsWith(null); },
+        function(){ value.indexOf(null); },
+        function(){ value.indexOf(null, 1); },
+        function(){ value.lastIndexOf(null); },
+        function(){ value.lastIndexOf(null, 1); },
+        function(){ value.contentEquals(null); }
+      ];
+      var caught = 0;
+      for (var i = 0; i < checks.length; i++) {
+        try { checks[i](); } catch (error) { if (error.name === "TypeError") caught++; }
+      }
+      if (caught !== checks.length) throw new Error("Java String null search arguments must throw");
+      if (value.startsWith("ab", -1)) throw new Error("String.startsWith negative offset must return false");
+      return [{ name: "String null search compatibility", author: String(caught), bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'String null search compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, '8')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})
