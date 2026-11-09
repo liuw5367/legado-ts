@@ -2,6 +2,12 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-09 P85：对齐 Java String.codePointBefore 与 getChars
+
+为 `String.codePointBefore(int)` 和 `String.getChars(int,int,char[],int)` 新增 14 条固定 JVM/TS 对照，并通过 `coverage.json` 回链 `java-collections-string::012-string-codepointbefore` 与 `::015-string-getchars`。用例覆盖补充字符及代理对边界、未配对 surrogate、索引越界、异常被书源 JS 捕获后继续、字符数组部分写入/空范围/目标越界/null 目标、错误校验顺序以及 void 返回。发现 TS `getChars(null)` 原先抛 `RangeError`，固定 JDK 抛 `NullPointerException`；TS 现按 null 参数抛可捕获 `TypeError`，由逐例空参数语义映射比较。源范围无效且目标为 null 时，TS 先验证源范围，与 JVM 一致。
+
+新增 String API 对照 **14/14**；两个成员的 normal、edge、error-or-empty、continuation 维度均有证据。全量 JVM/TS **1017 项：1012 项一致、5 项既有逐例允许差异、0 未登记差异/unsupported/runner failure**，流程 **87/87**。根测试 **714/714**、兼容机制 **35/35**、source-rule-host **124/124**、reader-web source-execution **24/24**、reader-web typecheck 通过。报告见 [P85 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-1DN5xX/report.md) 与 [String family 对照](../../packages/compatibility-tests/output/run-3KaHpN/report.md)。测试使用固定 JDK 21/Rhino 与实际 QuickJS Java bridge，不等同 Android app/设备实测；网络夹具仅使用用户授权的本机 loopback。D34 其他 Java String、集合和宿主成员仍按清单逐项补证。
+
 ## 2026-11-09 P84：对齐 Java String 搜索参数与负偏移语义
 
 固定 JDK/TS 对照新增 Java `String` 搜索与比较重载，修复 9 项差异：`contains/startsWith/endsWith/indexOf/lastIndexOf/contentEquals(null)` 现在抛出可捕获的异常，语义对应 Java 的 `NullPointerException`；`startsWith(prefix, -1)` 现在返回 false。覆盖 `indexOf(String)` 两个重载、`lastIndexOf(String/int)` 有无起始位置的重载、空目标、越界起始位置、负偏移、代理对搜索及 low-surrogate code unit。`java-collections-string::010-string-lastindexof` 与 `::016-string-contentequals` 的 normal、edge、error-or-empty coverage verified。reader-web 的书源 JS 搜索入口也验证 8 种 null 调用均可捕获，负偏移结果一致。

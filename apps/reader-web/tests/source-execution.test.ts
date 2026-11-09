@@ -556,3 +556,33 @@ test('reader-web Java String search methods preserve null errors and negative st
   assert.equal(result.candidates[0]?.candidate.author, '8')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web Java String codePointBefore and getChars preserve UTF-16 boundaries', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'http://127.0.0.1:12345'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var value = new Packages.java.lang.String("A\\uD83D\\uDE00B");
+      var points = [value.codePointBefore(3), value.codePointBefore(1), value.codePointBefore(2)];
+      var chars = ["?", "?", "?", "?"];
+      var returned = value.getChars(1, 3, chars, 1);
+      var indexCaught = false, nullCaught = false;
+      try { value.codePointBefore(0); } catch (error) { indexCaught = true; }
+      try { value.getChars(0, 1, null, 0); } catch (error) { nullCaught = true; }
+      if (points.join(",") !== "128512,65,55357") throw new Error("String.codePointBefore must count UTF-16 positions");
+      if (chars.join("") !== "?\\uD83D\\uDE00?" || returned !== undefined) throw new Error("String.getChars must copy UTF-16 units and return undefined");
+      if (!indexCaught || !nullCaught) throw new Error("String bridge errors must remain catchable");
+      return [{ name: "String codePointBefore/getChars compatibility", author: points.join(",") + "|" + chars.join("") + "|" + String(returned === undefined) + "|" + String(indexCaught) + "|" + String(nullCaught), bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'String codePointBefore/getChars compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, '128512,65,55357|?\ud83d\ude00?|true|true|true')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})

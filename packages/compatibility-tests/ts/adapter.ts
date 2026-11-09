@@ -262,8 +262,24 @@ export async function execute(item: CaseInput): Promise<unknown> {
           break
         }
         case 'codePointAt': expression = `text.codePointAt(${Number(i.index)})`; break
+        case 'codePointBefore': {
+          if (i.catchError === true) {
+            const index = Number(i.index)
+            return script(host, `var text = new Packages.java.lang.String(${json('text')}); var caught = 'unexpected'; try { text.codePointBefore(${index}); } catch (error) { caught = error instanceof RangeError ? 'index-bounds' : String(error.name || 'Error'); } return {caught:caught,next:text.length()}`)
+          }
+          expression = `text.codePointBefore(${Number(i.index)})`
+          break
+        }
         case 'codePointCount': expression = `text.codePointCount(${Number(i.index)},${Number(i.end)})`; break
         case 'offsetByCodePoints': expression = `text.offsetByCodePoints(${Number(i.index)},${Number(i.end)})`; break
+        case 'getChars': {
+          const begin = Number(i.index)
+          const end = Number(i.end)
+          const destinationIndex = Number(i.destinationIndex)
+          const destinationLength = Number(i.destinationLength)
+          const destination = i.nullDestination === true ? 'null' : `new Array(${destinationLength}).fill('?')`
+          return script(host, `var text = new Packages.java.lang.String(${json('text')}); var destination = ${destination}; var returned = text.getChars(${begin},${end},destination,${destinationIndex}); var value = {chars: destination === null ? null : destination.join(''), voidReturn: returned === undefined}; return ${i.continue === true ? `{value:value,next:text.codePointAt(${end})}` : 'value'}`)
+        }
         case 'replace': expression = `String(text.replace(${json('value')},${json('replacement')}))`; break
         case 'strip': expression = 'String(text.strip())'; break
         case 'stripLeading': expression = 'String(text.stripLeading())'; break

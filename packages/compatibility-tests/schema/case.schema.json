@@ -1057,6 +1057,18 @@
               "codePoint": {
                 "type": "integer"
               },
+              "destinationIndex": {
+                "type": "integer"
+              },
+              "destinationLength": {
+                "type": "integer"
+              },
+              "nullDestination": {
+                "type": "boolean"
+              },
+              "catchError": {
+                "type": "boolean"
+              },
               "replacement": {
                 "type": "string"
               },

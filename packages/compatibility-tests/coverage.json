@@ -844,6 +844,30 @@
     },
     {
       "operation": "string.api",
+      "method": "String.codePointBefore(int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.codePointBefore.astral",
+        "string.api.codePointBefore.high-surrogate-boundary",
+        "string.api.codePointBefore.unpaired-surrogate",
+        "string.api.codePointBefore.continuation",
+        "string.api.codePointBefore.index-zero",
+        "string.api.codePointBefore.index-beyond-end",
+        "string.api.codePointBefore.caught-continues"
+      ],
+      "manifestMembers": [
+        "java-collections-string::012-string-codepointbefore"
+      ]
+    },
+    {
+      "operation": "string.api",
       "method": "String.getBytes(String)",
       "reference": "jdk-direct",
       "tsEntry": "ts/adapter.ts → string.api",
@@ -1139,6 +1163,30 @@
       ],
       "manifestMembers": [
         "java-collections-string::014-string-offsetbycodepoints"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.getChars(int,int,char[],int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.getChars.surrogate-copy",
+        "string.api.getChars.empty-range",
+        "string.api.getChars.continuation",
+        "string.api.getChars.source-range-error",
+        "string.api.getChars.destination-overflow",
+        "string.api.getChars.null-destination",
+        "string.api.getChars.source-range-before-null-check"
+      ],
+      "manifestMembers": [
+        "java-collections-string::015-string-getchars"
       ]
     },
     {

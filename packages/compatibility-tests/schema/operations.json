@@ -273,6 +273,10 @@
       "value": "string",
       "nullValue": "boolean",
       "codePoint": "integer",
+      "destinationIndex": "integer",
+      "destinationLength": "integer",
+      "nullDestination": "boolean",
+      "catchError": "boolean",
       "replacement": "string",
       "charset": "string",
       "continue": "boolean"

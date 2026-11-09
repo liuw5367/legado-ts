@@ -706,7 +706,17 @@ const legadoJavaString = (input) => {
     codePointBefore: { value: (index) => { const position = legadoJavaStringIndex(text, index, true); if (position === 0) throw new RangeError("String index out of bounds"); const previous = position - 1; const low = text.charCodeAt(previous); if (low >= 0xdc00 && low <= 0xdfff && previous > 0) { const high = text.charCodeAt(previous - 1); if (high >= 0xd800 && high <= 0xdbff) return (high - 0xd800) * 0x400 + low - 0xdc00 + 0x10000 } return low } },
     codePointCount: { value: (begin, end) => legadoJavaCodePointCount(text, begin, end) },
     offsetByCodePoints: { value: (index, offset) => legadoJavaOffsetByCodePoints(text, index, offset) },
-    getChars: { value: (begin, end, destination, destinationBegin) => { const start = Number(begin); const finish = Number(end); const targetStart = Number(destinationBegin); if (!Number.isInteger(start) || !Number.isInteger(finish) || !Number.isInteger(targetStart) || start < 0 || finish < start || finish > text.length || targetStart < 0 || destination === null || destination === undefined || typeof destination.length !== "number" || targetStart + finish - start > destination.length) throw new RangeError("String char array range out of bounds"); const typed = typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(destination); for (let index = start; index < finish; index += 1) destination[targetStart + index - start] = typed ? text.charCodeAt(index) : text.charAt(index); return undefined } },
+    getChars: { value: (begin, end, destination, destinationBegin) => {
+      const start = Number(begin)
+      const finish = Number(end)
+      const targetStart = Number(destinationBegin)
+      if (!Number.isInteger(start) || !Number.isInteger(finish) || !Number.isInteger(targetStart) || start < 0 || finish < start || finish > text.length || targetStart < 0) throw new RangeError("String char array range out of bounds")
+      if (destination === null || destination === undefined) throw new TypeError("String destination must not be null")
+      if (typeof destination.length !== "number" || targetStart + finish - start > destination.length) throw new RangeError("String char array range out of bounds")
+      const typed = typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(destination)
+      for (let index = start; index < finish; index += 1) destination[targetStart + index - start] = typed ? text.charCodeAt(index) : text.charAt(index)
+      return undefined
+    } },
     trim: { value: () => legadoJavaString(text.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, "")) },
     strip: { value: () => legadoJavaString(legadoJavaStrip(text, true, true)) },
     stripLeading: { value: () => legadoJavaString(legadoJavaStrip(text, true, false)) },

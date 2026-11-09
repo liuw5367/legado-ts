@@ -2242,5 +2242,127 @@
       "edge",
       "continuation"
     ]
+  },
+  {
+    "id": "string.api.codePointBefore.astral",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A\ud83d\ude00", "method": "codePointBefore", "index": 3},
+    "reference": {"kind": "jdk-direct", "method": "String.codePointBefore(int)"},
+    "tags": ["normal"]
+  },
+  {
+    "id": "string.api.codePointBefore.high-surrogate-boundary",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "\ud83d\ude00", "method": "codePointBefore", "index": 1},
+    "reference": {"kind": "jdk-direct", "method": "String.codePointBefore(int)"},
+    "tags": ["edge"]
+  },
+  {
+    "id": "string.api.codePointBefore.unpaired-surrogate",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "x\udc00", "method": "codePointBefore", "index": 2},
+    "reference": {"kind": "jdk-direct", "method": "String.codePointBefore(int)"},
+    "tags": ["edge"]
+  },
+  {
+    "id": "string.api.codePointBefore.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A\ud83d\ude00", "method": "codePointBefore", "index": 3, "continue": true},
+    "reference": {"kind": "jdk-direct", "method": "String.codePointBefore(int)"},
+    "tags": ["normal", "continuation"]
+  },
+  {
+    "id": "string.api.codePointBefore.index-zero",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A", "method": "codePointBefore", "index": 0},
+    "reference": {"kind": "jdk-direct", "method": "String.codePointBefore(int)"},
+    "tags": ["error"],
+    "errorEquivalence": {"category": "index-bounds", "jvm": ["java.lang.StringIndexOutOfBoundsException", "java.lang.IndexOutOfBoundsException"], "ts": ["RangeError"]}
+  },
+  {
+    "id": "string.api.codePointBefore.index-beyond-end",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A", "method": "codePointBefore", "index": 2},
+    "reference": {"kind": "jdk-direct", "method": "String.codePointBefore(int)"},
+    "tags": ["error"],
+    "errorEquivalence": {"category": "index-bounds", "jvm": ["java.lang.StringIndexOutOfBoundsException", "java.lang.IndexOutOfBoundsException"], "ts": ["RangeError"]}
+  },
+  {
+    "id": "string.api.codePointBefore.caught-continues",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A", "method": "codePointBefore", "index": 0, "catchError": true},
+    "expected": {"outcome": "return", "value": {"caught": "index-bounds", "next": 1}},
+    "reference": {"kind": "jdk-direct", "method": "String.codePointBefore(int)"},
+    "tags": ["error", "continuation"]
+  },
+  {
+    "id": "string.api.getChars.surrogate-copy",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A\ud83d\ude00B", "method": "getChars", "index": 1, "end": 3, "destinationLength": 4, "destinationIndex": 1},
+    "expected": {"outcome": "return", "value": {"chars": "?\ud83d\ude00?", "voidReturn": true}},
+    "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
+    "tags": ["normal", "edge"]
+  },
+  {
+    "id": "string.api.getChars.empty-range",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A\ud83d\ude00B", "method": "getChars", "index": 2, "end": 2, "destinationLength": 3, "destinationIndex": 1},
+    "expected": {"outcome": "return", "value": {"chars": "???", "voidReturn": true}},
+    "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
+    "tags": ["edge", "empty"]
+  },
+  {
+    "id": "string.api.getChars.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "A\ud83d\ude00B", "method": "getChars", "index": 1, "end": 3, "destinationLength": 4, "destinationIndex": 0, "continue": true},
+    "expected": {"outcome": "return", "value": {"value": {"chars": "\ud83d\ude00??", "voidReturn": true}, "next": 66}},
+    "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
+    "tags": ["normal", "continuation"]
+  },
+  {
+    "id": "string.api.getChars.source-range-error",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "abc", "method": "getChars", "index": -1, "end": 1, "destinationLength": 3, "destinationIndex": 0},
+    "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
+    "tags": ["error"],
+    "errorEquivalence": {"category": "index-bounds", "jvm": ["java.lang.StringIndexOutOfBoundsException", "java.lang.IndexOutOfBoundsException"], "ts": ["RangeError"]}
+  },
+  {
+    "id": "string.api.getChars.destination-overflow",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "abc", "method": "getChars", "index": 0, "end": 2, "destinationLength": 3, "destinationIndex": 2},
+    "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
+    "tags": ["error"],
+    "errorEquivalence": {"category": "index-bounds", "jvm": ["java.lang.StringIndexOutOfBoundsException", "java.lang.IndexOutOfBoundsException", "java.lang.ArrayIndexOutOfBoundsException"], "ts": ["RangeError"]}
+  },
+  {
+    "id": "string.api.getChars.null-destination",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "abc", "method": "getChars", "index": 0, "end": 1, "destinationLength": 0, "destinationIndex": 0, "nullDestination": true},
+    "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
+    "tags": ["error"],
+    "errorEquivalence": {"category": "null-argument", "jvm": ["java.lang.NullPointerException"], "ts": ["TypeError"]}
+  },
+  {
+    "id": "string.api.getChars.source-range-before-null-check",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "abc", "method": "getChars", "index": -1, "end": 1, "destinationLength": 0, "destinationIndex": 0, "nullDestination": true},
+    "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
+    "tags": ["error", "edge"],
+    "errorEquivalence": {"category": "index-bounds", "jvm": ["java.lang.StringIndexOutOfBoundsException", "java.lang.IndexOutOfBoundsException"], "ts": ["RangeError"]}
   }
 ]

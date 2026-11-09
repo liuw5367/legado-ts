@@ -469,6 +469,10 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 
 有限资源测试采用最小值、恰好上限、超过上限三例；字符串位置另含代理对。并发事件只断言契约要求的先后关系（例如保存先于成功），不强制不同源回调总顺序；分页收集顺序则是固定契约。时间与随机数由测试宿主注入，真实站点波动不进入 golden。
 
+### P85 Java String codePointBefore 与 getChars
+
+`String.codePointBefore(int)` 和 `String.getChars(int,int,char[],int)` 分别以 JVM/JDK 直接调用为参考，TS 端通过真实 QuickJS Java bridge。`codePointBefore` 覆盖 astral code point、代理对内部 offset 返回单个 surrogate、未配对 surrogate、0/越界索引，以及异常在书源脚本中被捕获后继续执行；`getChars` 覆盖目标数组偏移和未触碰位置、空范围、源/目标边界、null 目标、void 返回、复制后访问下一 code point，以及源范围错误优先于 null 目标。异常类别依 `errorEquivalence` 逐例映射，保留双方原始错误。两个 manifest 成员都需要 normal、edge、error-or-empty、continuation 证据。固定 JDK/Rhino 对照不等同 Android app/设备 golden。
+
 ### P84 Java String 搜索与 null 参数
 
 `string.api.indexOf.*`、`indexOfFrom.*` 与 `lastIndexOf.*` 直接调用固定 JDK 方法，覆盖 null 参数异常映射、普通/空搜索、负值和越界 fromIndex、`lastIndexOf(String/int)` 重载、astral code point 及 surrogate code unit。兄弟方法 `contains/startsWith/endsWith/contentEquals` 一并核对 null 契约；`startsWith(String,int)` 另覆盖负偏移必须返回 false。修复前 9 条案例行为不同，修复后 string family 165/165；`java-collections-string::010-string-lastindexof` 与 `::016-string-contentequals` 均补齐 normal、edge、error-or-empty 证据。reader-web 的 JavaScript 搜索入口另行执行 8 个可捕获 null 调用及负偏移断言。测试结果为固定 JDK/Rhino 与 TS 的同输入对照，不等同 Android app/设备实测。

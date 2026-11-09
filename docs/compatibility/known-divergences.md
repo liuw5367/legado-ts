@@ -84,6 +84,8 @@
 
 `D34` Java String 搜索/比较 null 语义补充（P84，2026-11-09）：原先 `contains(null)` 被当空串搜索，`startsWith/endsWith/contentEquals(null)` 被当成 false，`indexOf(null)` 返回 `-1`，`lastIndexOf(null)` 搜索空串；这些都与固定 JDK 的 `NullPointerException` 控制流不一致。另发现 `startsWith(prefix,-1)` 将负偏移夹到 0，可能错误命中。现有桥接对 null/undefined 搜索参数抛可捕获 `TypeError`，负 startsWith 偏移返回 false。9 条修复前 JVM/TS 差异全部消除；string family 165/165，全量 1003 项中没有未登记差异、unsupported 或 runner failure。测试覆盖 `String.lastIndexOf(String/int)` 的有无 fromIndex 重载、空搜索、UTF-16 代理对及 int code point。该证据固定在 JDK 21，不代表 Android app/设备 golden；String 其他参数方法和 StringBuilder 仍需逐项核对。
 
+`D34` Java String code point 与字符数组 API 补充（P85，2026-11-09）：`codePointBefore(int)` 已覆盖 astral code point、代理对中间位置、未配对 surrogate、0/越界索引和异常捕获后继续；`getChars(int,int,char[],int)` 已覆盖部分写入、UTF-16 surrogate 两单元复制、空范围、源/目标边界、null 目标、void 返回、后续表达式及源范围错误优先于 null 目标。固定 JDK/TS 新增 14 条案例全等；`getChars(null)` 的 JDK NPE 与 TS 原 RangeError 差异已按空参数语义修复为可捕获 TypeError。两个 manifest 成员的四个覆盖维度齐全；string family 179/179，全量 1017 项中只有 5 项既有允许差异。结果不代表 Android app/设备 golden；D34 其他 Java String、集合与宿主成员仍需逐项核对。
+
 ### 需要应用或真实平台的剩余项
 
 以下项目继续使用 OPEN-01～04 和 D4/D12～14，不因本轮重复盘点而另建状态编号。

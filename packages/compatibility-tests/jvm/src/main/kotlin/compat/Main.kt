@@ -31,6 +31,15 @@ private fun jdkStringCall(text: String, method: String, parameterTypes: Array<Cl
     }
 }
 
+private fun jdkStringCallVoid(text: String, method: String, parameterTypes: Array<Class<*>>, arguments: Array<Any?>) {
+    val target = java.lang.String::class.java.getMethod(method, *parameterTypes)
+    try {
+        target.invoke(text, *arguments)
+    } catch (error: InvocationTargetException) {
+        throw error.targetException
+    }
+}
+
 private fun jdkStringType(name: String): Class<*> = when (name) {
     "String" -> java.lang.String::class.java
     "CharSequence" -> CharSequence::class.java
@@ -120,8 +129,31 @@ private fun execute(item: JsonObject): Any? {
                     }
                 }
                 "codePointAt" -> java.lang.String(text("text")).codePointAt(input.get("index").asInt)
+                "codePointBefore" -> {
+                    val string = java.lang.String(text("text"))
+                    try {
+                        string.codePointBefore(input.get("index").asInt)
+                    } catch (error: IndexOutOfBoundsException) {
+                        if (input.get("catchError")?.asBoolean == true) mapOf("caught" to "index-bounds", "next" to string.length) else throw error
+                    }
+                }
                 "codePointCount" -> java.lang.String(text("text")).codePointCount(input.get("index").asInt, input.get("end").asInt)
                 "offsetByCodePoints" -> java.lang.String(text("text")).offsetByCodePoints(input.get("index").asInt, input.get("end").asInt)
+                "getChars" -> {
+                    val string = text("text")
+                    val begin = input.get("index").asInt
+                    val end = input.get("end").asInt
+                    val destinationIndex = input.get("destinationIndex").asInt
+                    val destination = if (input.get("nullDestination")?.asBoolean == true) null else CharArray(input.get("destinationLength").asInt) { '?' }
+                    jdkStringCallVoid(
+                        string,
+                        "getChars",
+                        arrayOf(Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!, CharArray::class.java, Int::class.javaPrimitiveType!!),
+                        arrayOf(begin, end, destination, destinationIndex),
+                    )
+                    val value = mapOf("chars" to destination?.concatToString(), "voidReturn" to true)
+                    if (input.get("continue")?.asBoolean == true) mapOf("value" to value, "next" to string.codePointAt(end)) else value
+                }
                 "replace" -> java.lang.String(text("text")).replace(text("value") as CharSequence, text("replacement") as CharSequence).toString()
                 "strip" -> java.lang.String(text("text")).strip().toString()
                 "stripLeading" -> java.lang.String(text("text")).stripLeading().toString()
@@ -130,7 +162,8 @@ private fun execute(item: JsonObject): Any? {
                 "getBytes" -> mapOf("type" to "bytes", "base64" to Base64.getEncoder().encodeToString(java.lang.String(text("text")).getBytes(text("charset").ifEmpty { "UTF-8" })))
                 else -> throw Unsupported("未知 String 方法: $method")
             }
-            if (input.get("continue")?.asBoolean == true) {
+            if (text("method") == "getChars") value
+            else if (input.get("continue")?.asBoolean == true) {
                 val next = if (text("method") == "getBytes") java.lang.String(java.lang.String(text("text")).getBytes(text("charset").ifEmpty { "UTF-8" }), text("charset").ifEmpty { "UTF-8" }).toString() else value.toString().length
                 mapOf("value" to value, "next" to next)
             } else value
