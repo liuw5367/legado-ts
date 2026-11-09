@@ -86,6 +86,8 @@
 
 `D34` Java String code point 与字符数组 API 补充（P85，2026-11-09）：`codePointBefore(int)` 已覆盖 astral code point、代理对中间位置、未配对 surrogate、0/越界索引和异常捕获后继续；`getChars(int,int,char[],int)` 已覆盖部分写入、UTF-16 surrogate 两单元复制、空范围、源/目标边界、null 目标、void 返回、后续表达式及源范围错误优先于 null 目标。固定 JDK/TS 新增 14 条案例全等；`getChars(null)` 的 JDK NPE 与 TS 原 RangeError 差异已按空参数语义修复为可捕获 TypeError。两个 manifest 成员的四个覆盖维度齐全；string family 179/179，全量 1017 项中只有 5 项既有允许差异。结果不代表 Android app/设备 golden；D34 其他 Java String、集合与宿主成员仍需逐项核对。
 
+`D34` Java String `valueOf/copyValueOf` 补充（P86，2026-11-09）：为 `String.valueOf(Object/char[])` 和 `String.copyValueOf(char[],int,int)` 新增 13 条 JVM/TS 对照，覆盖字符串/数字对象、null、空数组、补充字符代理对、范围切片、空范围、越界/null 数组异常、捕获异常后继续及正常 continuation；新增覆盖映射到 `java-primitive-overloads::001-string-valueof` / `::002-string-copyvalueof`。发现并调整 TS `copyValueOf(null,...)` 从 RangeError 为可捕获 TypeError，最接近 Java 空参数异常。固定 JDK 的越界异常为 `StringIndexOutOfBoundsException`、null 异常为 `NullPointerException`，TS 类别及消息不同；案例只将其映射为 index-bounds/null-argument，原始差异仍保留。String family 192/192；全量 1030 项（1025 一致、5 项既有允许差异、0 未登记差异/unsupported/runner failure），流程 87/87。结果是 JDK/QuickJS 对照，不是 Android app/设备 golden。
+
 ### 需要应用或真实平台的剩余项
 
 以下项目继续使用 OPEN-01～04 和 D4/D12～14，不因本轮重复盘点而另建状态编号。

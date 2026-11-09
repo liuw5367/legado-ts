@@ -429,13 +429,14 @@ test('Java 字符串和整数重载保持 null、字符数组与 radix 解析语
       try { Long.parseLong('fg', 16); } catch (error) { invalid.push('long'); }
       try { Long.parseLong('9223372036854775808', 10); } catch (error) { invalid.push('range'); }
       try { String.copyValueOf(['a'], 2, 1); } catch (error) { invalid.push('chars'); }
+      try { String.copyValueOf(null, 0, 0); } catch (error) { invalid.push(error instanceof TypeError ? 'chars-null' : error.name); }
       JSON.stringify({ strings: [String.valueOf(null), String.valueOf(['a', 'b']), String.copyValueOf(['a', 'b', 'c'], 1, 2)], numbers: [integer, long.toString(), big], invalid: invalid });
     }`, '')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
     strings: ['null', 'ab', 'bc'],
     numbers: [255, '-9223372036854775808', '255'],
-    invalid: ['integer', 'long', 'range', 'chars'],
+    invalid: ['integer', 'long', 'range', 'chars', 'chars-null'],
   })
 })
 

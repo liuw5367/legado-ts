@@ -2364,5 +2364,122 @@
     "reference": {"kind": "jdk-direct", "method": "String.getChars(int,int,char[],int)"},
     "tags": ["error", "edge"],
     "errorEquivalence": {"category": "index-bounds", "jvm": ["java.lang.StringIndexOutOfBoundsException", "java.lang.IndexOutOfBoundsException"], "ts": ["RangeError"]}
+  },
+  {
+    "id": "string.api.valueOf.object-string",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "valueOfObject", "value": "source-name"},
+    "expected": {"outcome": "return", "value": "source-name"},
+    "reference": {"kind": "jdk-direct", "method": "String.valueOf(Object)"},
+    "tags": ["normal"]
+  },
+  {
+    "id": "string.api.valueOf.object-number",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "valueOfNumber", "number": 42},
+    "expected": {"outcome": "return", "value": "42"},
+    "reference": {"kind": "jdk-direct", "method": "String.valueOf(Object)"},
+    "tags": ["normal"]
+  },
+  {
+    "id": "string.api.valueOf.object-null",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "valueOfNull"},
+    "expected": {"outcome": "return", "value": "null"},
+    "reference": {"kind": "jdk-direct", "method": "String.valueOf(Object)"},
+    "tags": ["edge"]
+  },
+  {
+    "id": "string.api.valueOf.char-array-astral",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "valueOfChars", "chars": ["A", "\ud83d", "\ude00", "B"]},
+    "expected": {"outcome": "return", "value": "A\ud83d\ude00B"},
+    "reference": {"kind": "jdk-direct", "method": "String.valueOf(char[])"},
+    "tags": ["edge"]
+  },
+  {
+    "id": "string.api.valueOf.char-array-empty",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "valueOfChars", "chars": []},
+    "expected": {"outcome": "return", "value": ""},
+    "reference": {"kind": "jdk-direct", "method": "String.valueOf(char[])"},
+    "tags": ["empty", "error-or-empty"]
+  },
+  {
+    "id": "string.api.valueOf.char-array-continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "valueOfChars", "chars": ["x", "\ud83d", "\ude00"], "continue": true},
+    "expected": {"outcome": "return", "value": {"value": "x\ud83d\ude00", "next": 3}},
+    "reference": {"kind": "jdk-direct", "method": "String.valueOf(char[])"},
+    "tags": ["normal", "continuation"]
+  },
+  {
+    "id": "string.api.copyValueOf.slice",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "copyValueOf", "chars": ["a", "b", "c", "d"], "offset": 1, "count": 2},
+    "expected": {"outcome": "return", "value": "bc"},
+    "reference": {"kind": "jdk-direct", "method": "String.copyValueOf(char[],int,int)"},
+    "tags": ["normal"]
+  },
+  {
+    "id": "string.api.copyValueOf.surrogate-boundary",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "copyValueOf", "chars": ["A", "\ud83d", "\ude00", "B"], "offset": 2, "count": 1},
+    "expected": {"outcome": "return", "value": "\ude00"},
+    "reference": {"kind": "jdk-direct", "method": "String.copyValueOf(char[],int,int)"},
+    "tags": ["edge"]
+  },
+  {
+    "id": "string.api.copyValueOf.empty-range",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "copyValueOf", "chars": ["a", "b"], "offset": 2, "count": 0},
+    "expected": {"outcome": "return", "value": ""},
+    "reference": {"kind": "jdk-direct", "method": "String.copyValueOf(char[],int,int)"},
+    "tags": ["empty", "error-or-empty"]
+  },
+  {
+    "id": "string.api.copyValueOf.invalid-range",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "copyValueOf", "chars": ["a", "b"], "offset": 1, "count": 2},
+    "reference": {"kind": "jdk-direct", "method": "String.copyValueOf(char[],int,int)"},
+    "tags": ["error"],
+    "errorEquivalence": {"category": "index-bounds", "jvm": ["java.lang.StringIndexOutOfBoundsException", "java.lang.IndexOutOfBoundsException"], "ts": ["RangeError"]}
+  },
+  {
+    "id": "string.api.copyValueOf.null-array",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "copyValueOf", "nullChars": true, "offset": 0, "count": 0},
+    "reference": {"kind": "jdk-direct", "method": "String.copyValueOf(char[],int,int)"},
+    "tags": ["error"],
+    "errorEquivalence": {"category": "null-argument", "jvm": ["java.lang.NullPointerException"], "ts": ["TypeError"]}
+  },
+  {
+    "id": "string.api.copyValueOf.caught-continues",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "copyValueOfCaught", "chars": ["a"], "offset": 2, "count": 1},
+    "expected": {"outcome": "return", "value": {"caught": true, "next": 2}},
+    "reference": {"kind": "jdk-direct", "method": "String.copyValueOf(char[],int,int)"},
+    "tags": ["error", "continuation"]
+  },
+  {
+    "id": "string.api.copyValueOf.continuation",
+    "family": "string",
+    "operation": "string.api",
+    "input": {"text": "unused", "method": "copyValueOf", "chars": ["a", "b", "c"], "offset": 1, "count": 2, "continue": true},
+    "expected": {"outcome": "return", "value": {"value": "bc", "next": 2}},
+    "reference": {"kind": "jdk-direct", "method": "String.copyValueOf(char[],int,int)"},
+    "tags": ["normal", "continuation"]
   }
 ]

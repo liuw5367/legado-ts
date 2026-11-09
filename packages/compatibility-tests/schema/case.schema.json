@@ -1051,6 +1051,24 @@
               "value": {
                 "type": "string"
               },
+              "number": {
+                "type": "integer"
+              },
+              "chars": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nullChars": {
+                "type": "boolean"
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "count": {
+                "type": "integer"
+              },
               "nullValue": {
                 "type": "boolean"
               },

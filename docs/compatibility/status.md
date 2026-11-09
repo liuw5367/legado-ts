@@ -4,6 +4,14 @@
 
 ## 2026-11-09 P85：对齐 Java String.codePointBefore 与 getChars
 
+## 2026-11-09 P86：补齐 Java String.valueOf 与 copyValueOf 对照
+
+新增 13 条 JVM/TS 案例，经真实 QuickJS Java bridge 调用静态 `String.valueOf(Object/char[])` 与 `String.copyValueOf(char[],int,int)`。覆盖字符串和数字对象、null、空字符数组、补充字符的两个 UTF-16 char 单元、切片、仅取 low surrogate、空范围、非法范围、null 数组、异常捕获后继续及成功返回后继续执行；`coverage.json` 已关联 `java-primitive-overloads::001-string-valueof` 与 `::002-string-copyvalueof`。固定 JDK 对照发现 `copyValueOf(null,...)` 的 TS helper 报错为 RangeError，现改为 TypeError，使空数组参数作为可捕获的参数错误；越界仍是可捕获的范围错误。两类错误保留原始类别/消息，并仅在具体案例声明等价类别。valueOf 覆盖为 verified；copyValueOf 四个维度齐备，因两类错误类别不同状态为 error-equivalent。
+
+String family **192/192**；全量 JVM/TS **1030 项：1025 项一致、5 项既有逐例允许差异、0 未登记差异/unsupported/runner failure**，流程 **87/87**。根测试 **714/714**、compatibility mechanism **35/35**、source-rule-host **124/124**、reader-web source-execution **24/24**、reader-web typecheck 通过。全量报告见 [P86 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-n9DSaa/report.md) 与 [String family 对照](../../packages/compatibility-tests/output/run-buLgco/report.md)。这是固定 JDK 与 QuickJS bridge 的纯 JVM 对照，不代表 Android app/设备实测；D34 其余 Java String、集合和宿主成员继续逐个补证。
+
+## 2026-11-09 P85：对齐 Java String.codePointBefore 与 getChars
+
 为 `String.codePointBefore(int)` 和 `String.getChars(int,int,char[],int)` 新增 14 条固定 JVM/TS 对照，并通过 `coverage.json` 回链 `java-collections-string::012-string-codepointbefore` 与 `::015-string-getchars`。用例覆盖补充字符及代理对边界、未配对 surrogate、索引越界、异常被书源 JS 捕获后继续、字符数组部分写入/空范围/目标越界/null 目标、错误校验顺序以及 void 返回。发现 TS `getChars(null)` 原先抛 `RangeError`，固定 JDK 抛 `NullPointerException`；TS 现按 null 参数抛可捕获 `TypeError`，由逐例空参数语义映射比较。源范围无效且目标为 null 时，TS 先验证源范围，与 JVM 一致。
 
 新增 String API 对照 **14/14**；两个成员的 normal、edge、error-or-empty、continuation 维度均有证据。全量 JVM/TS **1017 项：1012 项一致、5 项既有逐例允许差异、0 未登记差异/unsupported/runner failure**，流程 **87/87**。根测试 **714/714**、兼容机制 **35/35**、source-rule-host **124/124**、reader-web source-execution **24/24**、reader-web typecheck 通过。报告见 [P85 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-1DN5xX/report.md) 与 [String family 对照](../../packages/compatibility-tests/output/run-3KaHpN/report.md)。测试使用固定 JDK 21/Rhino 与实际 QuickJS Java bridge，不等同 Android app/设备实测；网络夹具仅使用用户授权的本机 loopback。D34 其他 Java String、集合和宿主成员仍按清单逐项补证。

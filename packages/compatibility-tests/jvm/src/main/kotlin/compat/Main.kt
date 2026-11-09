@@ -40,6 +40,17 @@ private fun jdkStringCallVoid(text: String, method: String, parameterTypes: Arra
     }
 }
 
+private fun jdkStringStaticCall(method: String, parameterTypes: Array<Class<*>>, arguments: Array<Any?>): Any {
+    val target = java.lang.String::class.java.getMethod(method, *parameterTypes)
+    return try {
+        target.invoke(null, *arguments) as Any
+    } catch (error: InvocationTargetException) {
+        throw error.targetException
+    }
+}
+
+private fun jdkChars(input: JsonObject): CharArray = input.getAsJsonArray("chars").map { it.asString.single() }.toCharArray()
+
 private fun jdkStringType(name: String): Class<*> = when (name) {
     "String" -> java.lang.String::class.java
     "CharSequence" -> CharSequence::class.java
@@ -88,6 +99,28 @@ private fun execute(item: JsonObject): Any? {
         "string.api" -> {
             val value: Any = when (val method = text("method")) {
                 "length" -> text("text").length
+                "valueOfObject" -> jdkStringStaticCall("valueOf", arrayOf(Any::class.java), arrayOf(text("value")))
+                "valueOfNumber" -> jdkStringStaticCall("valueOf", arrayOf(Any::class.java), arrayOf(input.get("number").asInt))
+                "valueOfNull" -> jdkStringStaticCall("valueOf", arrayOf(Any::class.java), arrayOf(null))
+                "valueOfChars" -> jdkStringStaticCall("valueOf", arrayOf(CharArray::class.java), arrayOf(if (input.get("nullChars")?.asBoolean == true) null else jdkChars(input)))
+                "copyValueOf" -> jdkStringStaticCall(
+                    "copyValueOf",
+                    arrayOf(CharArray::class.java, Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!),
+                    arrayOf(if (input.get("nullChars")?.asBoolean == true) null else jdkChars(input), input.get("offset").asInt, input.get("count").asInt),
+                )
+                "copyValueOfCaught" -> {
+                    var caught = false
+                    try {
+                        jdkStringStaticCall(
+                            "copyValueOf",
+                            arrayOf(CharArray::class.java, Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!),
+                            arrayOf(if (input.get("nullChars")?.asBoolean == true) null else jdkChars(input), input.get("offset").asInt, input.get("count").asInt),
+                        )
+                    } catch (_: IndexOutOfBoundsException) {
+                        caught = true
+                    }
+                    mapOf("caught" to caught, "next" to jdkStringStaticCall("valueOf", arrayOf(CharArray::class.java), arrayOf(charArrayOf('o', 'k'))).toString().length)
+                }
                 "charAt" -> text("text")[input.get("index").asInt].toString()
                 "substring" -> text("text").substring(input.get("index").asInt)
                 "substringRange" -> text("text").substring(input.get("index").asInt, input.get("end").asInt)

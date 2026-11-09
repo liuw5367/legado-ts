@@ -1191,6 +1191,53 @@
     },
     {
       "operation": "string.api",
+      "method": "String.valueOf(Object/char[])",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.valueOf.object-string",
+        "string.api.valueOf.object-number",
+        "string.api.valueOf.object-null",
+        "string.api.valueOf.char-array-astral",
+        "string.api.valueOf.char-array-empty",
+        "string.api.valueOf.char-array-continuation"
+      ],
+      "manifestMembers": [
+        "java-primitive-overloads::001-string-valueof"
+      ]
+    },
+    {
+      "operation": "string.api",
+      "method": "String.copyValueOf(char[],int,int)",
+      "reference": "jdk-direct",
+      "tsEntry": "ts/adapter.ts → string.api",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "string.api.copyValueOf.slice",
+        "string.api.copyValueOf.surrogate-boundary",
+        "string.api.copyValueOf.empty-range",
+        "string.api.copyValueOf.invalid-range",
+        "string.api.copyValueOf.null-array",
+        "string.api.copyValueOf.continuation",
+        "string.api.copyValueOf.caught-continues"
+      ],
+      "manifestMembers": [
+        "java-primitive-overloads::002-string-copyvalueof"
+      ]
+    },
+    {
+      "operation": "string.api",
       "method": "String.substring(int)",
       "reference": "jdk-direct",
       "tsEntry": "ts/adapter.ts → string.api",

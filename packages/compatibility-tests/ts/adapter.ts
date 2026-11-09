@@ -247,6 +247,12 @@ export async function execute(item: CaseInput): Promise<unknown> {
       let expression: string
       switch (str('method')) {
         case 'length': expression = 'text.length()'; break
+        case 'valueOfObject': expression = `String(Packages.java.lang.String.valueOf(${json('value')}))`; break
+        case 'valueOfNumber': expression = `String(Packages.java.lang.String.valueOf(${Number(i.number)}))`; break
+        case 'valueOfNull': expression = 'String(Packages.java.lang.String.valueOf(null))'; break
+        case 'valueOfChars': expression = `String(Packages.java.lang.String.valueOf(${i.nullChars === true ? 'null' : json('chars')}))`; break
+        case 'copyValueOf': expression = `String(Packages.java.lang.String.copyValueOf(${i.nullChars === true ? 'null' : json('chars')},${Number(i.offset)},${Number(i.count)}))`; break
+        case 'copyValueOfCaught': return script(host, `var caught = false; try { Packages.java.lang.String.copyValueOf(${i.nullChars === true ? 'null' : json('chars')},${Number(i.offset)},${Number(i.count)}); } catch (error) { caught = true; } return {caught:caught,next:String(Packages.java.lang.String.valueOf(['o','k'])).length};`)
         case 'charAt': expression = `String(text.charAt(${Number(i.index)}))`; break
         case 'substring': expression = `String(text.substring(${Number(i.index)}))`; break
         case 'substringRange': expression = `String(text.substring(${Number(i.index)},${Number(i.end)}))`; break

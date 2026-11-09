@@ -1011,7 +1011,7 @@ const legadoJavaFormat = (format, args, locale) => {
 }
 // Java 的字符数组重载按 UTF-16 char 连接；不能复用 byte[] 解码路径，否则数值会被当作 UTF-8 字节。
 const legadoJavaCharArrayText = (value, offset, length) => {
-  if (value === null || value === undefined || typeof value.length !== "number") throw new RangeError("char array is required")
+  if (value === null || value === undefined || typeof value.length !== "number") throw new TypeError("char array is required")
   const chars = Array.from(value)
   const start = offset === undefined ? 0 : Number(offset)
   const count = length === undefined ? chars.length - start : Number(length)
