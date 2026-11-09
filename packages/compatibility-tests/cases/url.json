@@ -217,7 +217,8 @@
     },
     "tags": [
       "url-options",
-      "lenient-json"
+      "lenient-json",
+      "normal"
     ],
     "expected": {
       "outcome": "return",
@@ -245,7 +246,8 @@
     },
     "tags": [
       "url-options",
-      "lenient-json"
+      "lenient-json",
+      "edge"
     ],
     "expected": {
       "outcome": "return",
@@ -359,7 +361,9 @@
     },
     "tags": [
       "url-options",
-      "lenient-json"
+      "lenient-json",
+      "edge",
+      "empty"
     ],
     "expected": {
       "outcome": "return",
@@ -382,7 +386,9 @@
     },
     "tags": [
       "url-options",
-      "lenient-json"
+      "lenient-json",
+      "edge",
+      "empty"
     ],
     "expected": {
       "outcome": "return",
@@ -556,6 +562,26 @@
           "method": "POST",
           "body": "foo()"
         }
+      }
+    }
+  },
+  {
+    "id": "url.options.no-suffix",
+    "family": "url-options",
+    "operation": "url.options",
+    "input": {
+      "url": "https://example.test/search?q=a,b"
+    },
+    "reference": {
+      "kind": "upstream-adapted",
+      "method": "Android AnalyzeUrl.paramPattern + GSONStrict/GSON URL options parsing"
+    },
+    "tags": ["url-options", "normal", "empty"],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "url": "https://example.test/search?q=a,b",
+        "options": null
       }
     }
   }

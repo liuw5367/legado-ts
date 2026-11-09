@@ -359,7 +359,8 @@
         "url.options.block-comment",
         "url.options.case-insensitive-literal",
         "url.options.trailing-array-separator",
-        "url.options.unquoted-call-shaped-value"
+        "url.options.unquoted-call-shaped-value",
+        "url.options.no-suffix"
       ]
     },
     {
