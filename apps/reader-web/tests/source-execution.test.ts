@@ -733,3 +733,46 @@ test('reader-web Java AnalyzeRule setLocal/get preserve Android local values and
   assert.equal(result.candidates[0]?.candidate.author, 'true|saved||true|true|true')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web search preserves Android AnalyzeRule.evalJS bindings and current content', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.103'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      java.setBaseUrl("https://source.fixture.test/book/");
+      java.setContent("<p>正文内容</p>", null);
+      java.setLocal("page", "0002");
+      java.setLocal("paraIndex", "3");
+      java.setLocal("paraData", "当前段落");
+      var nested = JSON.parse(String(java.evalJS(
+        "JSON.stringify([typeof page,page,typeof paraIndex,paraIndex,typeof paraData,paraData,result.value,baseUrl,src])",
+        { value: "嵌套结果" }
+      )));
+      java.setContent("<p>更新后的正文</p>", null);
+      var contentAfterSetContent = JSON.parse(String(java.evalJS("JSON.stringify([src,baseUrl])", null)));
+      var nullSourceCaught = false;
+      try { java.evalJS(null, null); } catch (error) { nullSourceCaught = true; }
+      var continued = java.evalJS("6*7", null);
+      return [{
+        name: "AnalyzeRule.evalJS compatibility",
+        author: JSON.stringify({ nested, contentAfterSetContent, nullSourceCaught, continued }),
+        bookUrl: "${base}/book"
+      }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'AnalyzeRule.evalJS compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, JSON.stringify({
+    nested: ['number', 2, 'string', '3', 'string', '当前段落', '嵌套结果', 'https://source.fixture.test/book/', '<p>正文内容</p>'],
+    contentAfterSetContent: ['<p>更新后的正文</p>', 'https://source.fixture.test/book/'],
+    nullSourceCaught: true,
+    continued: 42,
+  }))
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})

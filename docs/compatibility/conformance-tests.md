@@ -493,6 +493,12 @@ Android 锁定源码中 `AnalyzeRule.setContent(Any?, String?)` 在内容为 nul
 
 案例 `rule.bridgeUrl.setters-null-and-fallback` 对照 Android `AnalyzeRule.setBaseUrl(String?)` 与 `setRedirectUrl(String)`（锁定源码 `AnalyzeRule.kt:118,125`）：`setBaseUrl(null)` 保持原值并返回同一对象；`setRedirectUrl(null)` 由 Kotlin 非空参数入口抛出可捕获异常。有效 URL 会更新重定向，非法 URL 保留旧重定向，base64 data URL 返回当前重定向而不覆盖。Kotlin/JVM probe 使用 JDK `URL`，并通过 `AnalyzeByJSoup` 的 URL 字符串重载观察基址、重定向与相对地址解析；TS 端由 QuickJS 的真实 `SourceRuleHost` bridge 执行同一脚本。案例映射到 `analyze-rule-overloads::002-setbaseurl`、`::003-setredirecturl` 的 normal、edge、error-or-empty、continuation 维度。reader-web mainJs 搜索入口另外检查 setter 可见性和 null catch-and-continue。修复前 `nullCaught` 不同，修复后专项 1/1 相等；全量对照 `run-9SKnPF` 中 1037 项有 1032 项一致、5 项既有逐例允许差异、0 runner failure。该 probe 不等同完整 `AnalyzeRule` 类或 Android app/设备运行。
 
+### P95 reader-web 搜索入口中的 AnalyzeRule.evalJS
+
+`apps/reader-web/tests/source-execution.test.ts` 的 `reader-web search preserves Android AnalyzeRule.evalJS bindings and current content` 经真实 `createReaderRuntime.runSearchBatch` 执行整源 `mainJs` 搜索。脚本使用与 P94 双端案例相同的 `baseUrl`、初始/更新正文、`result`、`page`、`paraIndex`、`paraData` 输入，并检查 null 参数可 catch、后续脚本可继续；搜索必须成功并返回预期候选及序列化值。
+
+这项应用入口验证复用 source-core/source-node 的共享 `SourceRuleRuntime`，不替代 P94 的 Kotlin/JVM/Rhino 与 TS/QuickJS 对照。source-execution 文件 **30/30** 通过，reader-web 类型检查通过；底层双端全量矩阵报告为 `run-3PZIiB`。它证明 reader-web 搜索调用链可观察到同一绑定行为，不证明 Android app 或设备 golden。
+
 ### P94 AnalyzeRule.evalJS 的参数、局部值和当前内容
 
 案例 `rule.bridgeEvalJS.local-bindings-and-null-source` 对照锁定 Android `AnalyzeRule.evalJS(String, Any?)` 的绑定：传入值单独进入 `result`，当前 `content`/`baseUrl` 进入 `src`/`baseUrl`，局部 `paraIndex`、`paraData`、`page` 传入嵌套 Rhino；`page` 按 Kotlin `toIntOrNull()` 转成整数。案例再调用 `java.setContent`，确认后续嵌套 `evalJS` 读取更新后的正文；`evalJS(null, null)` 可捕获参数错误，之后仍能继续求值。
