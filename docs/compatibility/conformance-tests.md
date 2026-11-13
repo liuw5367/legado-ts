@@ -493,6 +493,12 @@ Android 锁定源码中 `AnalyzeRule.setContent(Any?, String?)` 在内容为 nul
 
 案例 `rule.bridgeUrl.setters-null-and-fallback` 对照 Android `AnalyzeRule.setBaseUrl(String?)` 与 `setRedirectUrl(String)`（锁定源码 `AnalyzeRule.kt:118,125`）：`setBaseUrl(null)` 保持原值并返回同一对象；`setRedirectUrl(null)` 由 Kotlin 非空参数入口抛出可捕获异常。有效 URL 会更新重定向，非法 URL 保留旧重定向，base64 data URL 返回当前重定向而不覆盖。Kotlin/JVM probe 使用 JDK `URL`，并通过 `AnalyzeByJSoup` 的 URL 字符串重载观察基址、重定向与相对地址解析；TS 端由 QuickJS 的真实 `SourceRuleHost` bridge 执行同一脚本。案例映射到 `analyze-rule-overloads::002-setbaseurl`、`::003-setredirecturl` 的 normal、edge、error-or-empty、continuation 维度。reader-web mainJs 搜索入口另外检查 setter 可见性和 null catch-and-continue。修复前 `nullCaught` 不同，修复后专项 1/1 相等；全量对照 `run-9SKnPF` 中 1037 项有 1032 项一致、5 项既有逐例允许差异、0 runner failure。该 probe 不等同完整 `AnalyzeRule` 类或 Android app/设备运行。
 
+### P94 AnalyzeRule.evalJS 的参数、局部值和当前内容
+
+案例 `rule.bridgeEvalJS.local-bindings-and-null-source` 对照锁定 Android `AnalyzeRule.evalJS(String, Any?)` 的绑定：传入值单独进入 `result`，当前 `content`/`baseUrl` 进入 `src`/`baseUrl`，局部 `paraIndex`、`paraData`、`page` 传入嵌套 Rhino；`page` 按 Kotlin `toIntOrNull()` 转成整数。案例再调用 `java.setContent`，确认后续嵌套 `evalJS` 读取更新后的正文；`evalJS(null, null)` 可捕获参数错误，之后仍能继续求值。
+
+Kotlin/JVM 端通过 `ScriptBindings` 与 Rhino 执行签名匹配的 probe，TS 端通过实际 `SourceRuleHost → QuickJS → java.evalJS` 执行同一脚本。案例映射 `analyze-rule-overloads::005-evaljs` 与 `::001-setcontent`。旧实现先在 `run-HpBMEM` 复现 `src` 错误，修复后专项 **1/1 一致**（`run-my7NDE`）；完整 JVM/TS 矩阵 `run-3PZIiB` 有 **1039 项，1034 项一致、5 项逐例允许差异、0 项未登记差异或执行失败**，流程 **87/87**。probe 只覆盖该方法的绑定构造与当前内容更新，不代表完整 `AnalyzeRule` 类、Android app 或设备 golden。
+
 ### P93 AnalyzeRule.setLocal/get 局部值与 null 参数
 
 案例 `rule.bridgeLocal.set-local-and-null-arguments` 依据锁定 Android `AnalyzeRule.kt:867,875-890`：`setLocal(String, String)` 写入局部 HashMap 并返回当前对象；`get(String)` 先读局部值，再读书名/章节名和其他字符串变量，找不到时返回空串。Kotlin 非空参数收到 null 时，调用方可以捕获入口异常并继续执行。

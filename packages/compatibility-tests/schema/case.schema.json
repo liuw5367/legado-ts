@@ -71,6 +71,7 @@
         "rule.bridgeContent",
         "rule.bridgeUrl",
         "rule.bridgeLocal",
+        "rule.bridgeEvalJS",
         "rule.bridgeElement",
         "rule.bridgeElements",
         "rule.bridgeObjects",
@@ -1948,6 +1949,55 @@
               },
               "value": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeEvalJS"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "baseUrl",
+              "content",
+              "updatedContent",
+              "page",
+              "paraIndex",
+              "paraData",
+              "result"
+            ],
+            "properties": {
+              "baseUrl": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "updatedContent": {
+                "type": "string"
+              },
+              "page": {
+                "type": "string"
+              },
+              "paraIndex": {
+                "type": "string"
+              },
+              "paraData": {
+                "type": "string"
+              },
+              "result": {
+                "type": "object"
               }
             },
             "additionalProperties": false

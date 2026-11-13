@@ -126,6 +126,55 @@
     }
   },
   {
+    "id": "rule.bridgeEvalJS.local-bindings-and-null-source",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeEvalJS",
+    "input": {
+      "baseUrl": "https://source.fixture.test/book/",
+      "content": "<p>正文内容</p>",
+      "updatedContent": "<p>更新后的正文</p>",
+      "page": "0002",
+      "paraIndex": "3",
+      "paraData": "当前段落",
+      "result": {
+        "value": "嵌套结果"
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.evalJS(String, Any?) + localBindings"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "error-or-empty",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "localIsJava": true,
+        "nested": [
+          "number",
+          2,
+          "string",
+          "3",
+          "string",
+          "当前段落",
+          "嵌套结果",
+          "https://source.fixture.test/book/",
+          "<p>正文内容</p>"
+        ],
+        "contentAfterSetContent": [
+          "<p>更新后的正文</p>",
+          "https://source.fixture.test/book/"
+        ],
+        "nullSourceCaught": true,
+        "continued": 42
+      }
+    }
+  },
+  {
     "id": "rule.bridgeElement.null-and-empty-catch-and-continue",
     "family": "rule-bridge",
     "operation": "rule.bridgeElement",

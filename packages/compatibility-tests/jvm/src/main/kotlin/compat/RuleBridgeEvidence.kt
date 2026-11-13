@@ -9,8 +9,10 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import io.legado.app.model.analyzeRule.AnalyzeByJSoup
+import com.script.ScriptBindings
 import org.htmlunit.corejs.javascript.Context
 import org.htmlunit.corejs.javascript.ScriptableObject
+import org.htmlunit.corejs.javascript.TopLevel
 import org.jsoup.parser.Parser
 import org.jsoup.select.Elements
 import java.net.URL
@@ -192,6 +194,81 @@ internal fun analyzeRuleLocalBindings(input: JsonObject): Any {
         "nullValueCaught" to output.get("nullValueCaught").asBoolean,
         "nullGetCaught" to output.get("nullGetCaught").asBoolean,
         "continued" to output.get("continued").asBoolean,
+    )
+}
+
+/** Mirrors AnalyzeRule.evalJS bindings that carry local paragraph and page values into Rhino. */
+internal class AnalyzeRuleEvalJsProbe(
+    private var baseUrl: String,
+    private var content: String,
+) {
+    private val localBindings = HashMap<String, String>()
+
+    fun setBaseUrl(value: String?): AnalyzeRuleEvalJsProbe {
+        if (value != null) baseUrl = value
+        return this
+    }
+
+    fun setLocal(key: String, value: String): AnalyzeRuleEvalJsProbe {
+        localBindings[key] = value
+        return this
+    }
+
+    fun setContent(value: Any?, ignoredBaseUrl: String?): AnalyzeRuleEvalJsProbe {
+        requireNotNull(value) { "content must not be null" }
+        content = value.toString()
+        if (ignoredBaseUrl != null) baseUrl = ignoredBaseUrl
+        return this
+    }
+
+    fun evalJS(jsStr: String, result: Any?): Any? {
+        val bindings = ScriptBindings()
+        bindings.put("java", this)
+        bindings.put("result", result)
+        bindings.put("baseUrl", baseUrl)
+        bindings.put("src", content)
+        bindings.put("book", null)
+        bindings.put("chapter", null)
+        bindings.put("chapters", null)
+        bindings.put("title", null)
+        bindings.put("nextChapterUrl", null)
+        bindings.put("rssArticle", null)
+        bindings.put("fromBookInfo", false)
+        localBindings["paraIndex"]?.let { bindings.put("paraIndex", it) }
+        localBindings["paraData"]?.let { bindings.put("paraData", it) }
+        localBindings["page"]?.let { bindings.put("page", it.toIntOrNull() ?: it) }
+        val parent = Context.enter().use { it.initStandardObjects() as TopLevel }
+        bindings.chainTo(parent)
+        return Context.enter().use { it.evaluateString(bindings, jsStr, "AnalyzeRule.evalJS", 1, null) }
+    }
+}
+
+internal fun analyzeRuleEvalJS(input: JsonObject): Any {
+    val probe = AnalyzeRuleEvalJsProbe(input.get("baseUrl").asString, input.get("content").asString)
+    val nestedCode = "JSON.stringify([typeof page,page,typeof paraIndex,typeof paraIndex==='undefined'?null:paraIndex,typeof paraData,typeof paraData==='undefined'?null:paraData,result.value,baseUrl,src])"
+    val js = """
+        java.setBaseUrl(${Gson().toJson(input.get("baseUrl").asString)});
+        var localIsJava=java.setLocal('page',${Gson().toJson(input.get("page").asString)})===java;
+        java.setLocal('paraIndex',${Gson().toJson(input.get("paraIndex").asString)});
+        java.setLocal('paraData',${Gson().toJson(input.get("paraData").asString)});
+        var nestedText=java.evalJS(${Gson().toJson(nestedCode)},${Gson().toJson(input.get("result"))});
+        java.setContent(${Gson().toJson(input.get("updatedContent").asString)},null);
+        var contentAfterSetContent=JSON.parse(String(java.evalJS('JSON.stringify([src,baseUrl])',null)));
+        var nullSourceCaught=false; try{java.evalJS(null,null)}catch(error){nullSourceCaught=true}
+        var continued=java.evalJS('6*7',null);
+        JSON.stringify({localIsJava:localIsJava,nested:JSON.parse(String(nestedText)),contentAfterSetContent:contentAfterSetContent,nullSourceCaught:nullSourceCaught,continued:continued});
+    """.trimIndent()
+    val output = Context.enter().use { context ->
+        val scope = context.initStandardObjects()
+        ScriptableObject.putProperty(scope, "java", Context.javaToJS(probe, scope))
+        JsonParser.parseString(Context.toString(context.evaluateString(scope, js, "AnalyzeRule.evalJS", 1, null))).asJsonObject
+    }
+    return mapOf(
+        "localIsJava" to output.get("localIsJava").asBoolean,
+        "nested" to output.getAsJsonArray("nested"),
+        "contentAfterSetContent" to output.getAsJsonArray("contentAfterSetContent"),
+        "nullSourceCaught" to output.get("nullSourceCaught").asBoolean,
+        "continued" to output.get("continued").asInt,
     )
 }
 

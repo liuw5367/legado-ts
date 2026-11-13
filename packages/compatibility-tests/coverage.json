@@ -2718,6 +2718,25 @@
       ]
     },
     {
+      "operation": "rule.bridgeEvalJS",
+      "method": "AnalyzeRule.evalJS(String, Any?) bindings and localBindings",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "ts/adapter.ts → rule.bridgeEvalJS / SourceRuleHost → java.evalJS",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeEvalJS.local-bindings-and-null-source"
+      ],
+      "manifestMembers": [
+        "analyze-rule-overloads::001-setcontent",
+        "analyze-rule-overloads::005-evaljs"
+      ]
+    },
+    {
       "operation": "rule.bridgeContent",
       "method": "AnalyzeRule.setContent(Any?, String?)",
       "reference": "upstream-guided-flow",

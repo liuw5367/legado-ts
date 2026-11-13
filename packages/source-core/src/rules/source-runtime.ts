@@ -2087,7 +2087,14 @@ java.setLocal = (key, value) => {
   return java
 }
 java.getLocal = (key) => __legadoLocal[String(key)]
-java.evalJS = (code, extra) => request({ kind: "source-eval-js", value: String(code ?? ""), input: { __legadoEvalResult: extra } })
+java.evalJS = (code, extra) => {
+  if (code === null || code === undefined) throw new TypeError("jsStr must not be null")
+  const analyzeRuleLocals = Object.create(null)
+  for (const name of ["paraIndex", "paraData", "page"]) {
+    if (Object.prototype.hasOwnProperty.call(__legadoLocal, name)) analyzeRuleLocals[name] = __legadoLocal[name]
+  }
+  return request({ kind: "source-eval-js", value: String(code), input: { __legadoEvalResult: extra, __legadoAnalyzeRuleBindings: { baseUrl: globalThis.baseUrl, src: legadoContent, locals: analyzeRuleLocals } } })
+}
 java.reGetBook = () => request({ kind: "workflow-action", action: "reGetBook", input: globalThis.book })
 java.refreshTocUrl = () => request({ kind: "workflow-action", action: "refreshTocUrl", input: globalThis.book })
 const __legadoGetString = java.getString
@@ -4417,15 +4424,53 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       const rawExtra = typeof request.input === 'object' && request.input !== null && !Array.isArray(request.input) ? request.input as Record<string, unknown> : {}
       const hasEvalResult = request.kind === 'source-eval-js' && Object.prototype.hasOwnProperty.call(rawExtra, '__legadoEvalResult')
       const evalResult = hasEvalResult ? rawExtra.__legadoEvalResult : undefined
-      const extra = hasEvalResult ? Object.fromEntries(Object.entries(rawExtra).filter(([key]) => key !== '__legadoEvalResult')) : rawExtra
+      const hasAnalyzeRuleBindings = hasEvalResult && Object.prototype.hasOwnProperty.call(rawExtra, '__legadoAnalyzeRuleBindings')
+      const analyzeRuleBindings = hasAnalyzeRuleBindings && typeof rawExtra.__legadoAnalyzeRuleBindings === 'object' && rawExtra.__legadoAnalyzeRuleBindings !== null && !Array.isArray(rawExtra.__legadoAnalyzeRuleBindings)
+        ? rawExtra.__legadoAnalyzeRuleBindings as Record<string, unknown>
+        : {}
+      const extra = hasEvalResult
+        ? Object.fromEntries(Object.entries(rawExtra).filter(([key]) => key !== '__legadoEvalResult' && key !== '__legadoAnalyzeRuleBindings'))
+        : rawExtra
       let code = request.kind === 'source-eval-js' ? textValue(request.value) : `${loginJs}\nif (typeof login !== "function") throw new Error("Function login not implements!!!"); login.apply(this);`
       if (request.kind === 'source-login-ui') code = `${loginJs}\nif (typeof loginUi !== "function") throw new Error("Function loginUi not implements!!!"); loginUi(JSON.parse(String(__loginState)));`
       if (request.kind === 'source-login-action') code = `${loginJs}\nif (typeof loginAction !== "function") throw new Error("Function loginAction not implements!!!"); loginAction(String(__loginAction), JSON.parse(String(__loginState)), JSON.parse(String(__loginForm)));`
       const bindings: Record<string, unknown> = { ...currentBindings, ...(request.kind === 'source-eval-js' && typeof request.input === 'object' && request.input !== null && !Array.isArray(request.input) ? extra : {}) }
       if (hasEvalResult) bindings.result = evalResult
+      if (hasAnalyzeRuleBindings) {
+        const localValues = typeof analyzeRuleBindings.locals === 'object' && analyzeRuleBindings.locals !== null && !Array.isArray(analyzeRuleBindings.locals)
+          ? analyzeRuleBindings.locals as Record<string, unknown>
+          : {}
+        for (const name of ['paraIndex', 'paraData', 'page']) {
+          if (!Object.prototype.hasOwnProperty.call(localValues, name)) continue
+          const value = localValues[name]
+          if (name !== 'page' || typeof value !== 'string') {
+            bindings[name] = value
+            continue
+          }
+          // Android String.toIntOrNull accepts an optional ASCII sign and decimal digits only.
+          if (!/^[+-]?[0-9]+$/u.test(value)) {
+            bindings.page = value
+            continue
+          }
+          const page = Number(value)
+          bindings.page = Number.isInteger(page) && page >= -2147483648 && page <= 2147483647 ? page : value
+        }
+      }
       if (request.kind === 'source-login-ui') Object.assign(bindings, { __loginState: textValue(request.value), book: extra.book, chapter: extra.chapter })
       if (request.kind === 'source-login-action') Object.assign(bindings, { __loginAction: textValue(request.value), __loginState: textValue(request.data), __loginForm: textValue((extra as { formJson?: unknown }).formJson), book: extra.book, chapter: extra.chapter })
-      const output = await this.runJavaScript(code, this.javascriptStage(workflowStage), source, hasEvalResult ? evalResult : '', signal, { bindings, mode: 'script', ...(jsLibOwner === undefined ? {} : { jsLibOwner }), workflowStage, ...(workflowActions === undefined ? {} : { workflowActions }), ...(requestObserver === undefined ? {} : { requestObserver }) })
+      const sourceContent = hasAnalyzeRuleBindings && Object.prototype.hasOwnProperty.call(analyzeRuleBindings, 'src')
+        ? analyzeRuleBindings.src
+        : hasEvalResult ? evalResult : ''
+      const output = await this.runJavaScript(code, this.javascriptStage(workflowStage), source, sourceContent, signal, {
+        bindings,
+        mode: 'script',
+        ...(hasAnalyzeRuleBindings && typeof analyzeRuleBindings.baseUrl === 'string' ? { baseUrl: analyzeRuleBindings.baseUrl } : {}),
+        ...(hasAnalyzeRuleBindings && Object.prototype.hasOwnProperty.call(analyzeRuleBindings, 'src') ? { content: analyzeRuleBindings.src } : {}),
+        ...(jsLibOwner === undefined ? {} : { jsLibOwner }),
+        workflowStage,
+        ...(workflowActions === undefined ? {} : { workflowActions }),
+        ...(requestObserver === undefined ? {} : { requestObserver }),
+      })
       if (output.status === 'empty') return undefined
       if (output.status !== 'success') throw new SourceRuleError(output.status, output.message ?? '书源登录脚本执行失败')
       return request.kind === 'source-login' ? undefined : output.value

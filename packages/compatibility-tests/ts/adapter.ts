@@ -259,6 +259,19 @@ export async function execute(item: CaseInput): Promise<unknown> {
         var nullGetCaught=false; try{java.get(null)}catch(error){nullGetCaught=true}
         return {chained:chained,localValue:localValue,emptyLocalValue:emptyLocalValue,fallbackValue:fallbackValue,numberValue:numberValue,specialKeyValue:specialKeyValue,missingValue:missingValue,nullKeyCaught:nullKeyCaught,nullValueCaught:nullValueCaught,nullGetCaught:nullGetCaught,continued:java.setLocal('continued','ok')===java&&String(java.get('continued'))==='ok'};
       `, '', { token: 'stored-value', emptyLocal: 'stored-empty-value', fallback: 'fallback-value' })
+    case 'rule.bridgeEvalJS':
+      return script(host, `
+        java.setBaseUrl(${json('baseUrl')});
+        var localIsJava=java.setLocal('page',${json('page')})===java;
+        java.setLocal('paraIndex',${json('paraIndex')});
+        java.setLocal('paraData',${json('paraData')});
+        var nestedText=java.evalJS("JSON.stringify([typeof page,page,typeof paraIndex,typeof paraIndex==='undefined'?null:paraIndex,typeof paraData,typeof paraData==='undefined'?null:paraData,result.value,baseUrl,src])",${json('result')});
+        java.setContent(${json('updatedContent')},null);
+        var contentAfterSetContent=JSON.parse(String(java.evalJS('JSON.stringify([src,baseUrl])',null)));
+        var nullSourceCaught=false; try{java.evalJS(null,null)}catch(error){nullSourceCaught=true}
+        var continued=java.evalJS('6*7',null);
+        return {localIsJava:localIsJava,nested:JSON.parse(String(nestedText)),contentAfterSetContent:contentAfterSetContent,nullSourceCaught:nullSourceCaught,continued:continued};
+      `, str('content'))
     case 'rule.bridgeElement':
       return script(host, `var nullCaught=false; try { java.getElement(null); } catch (error) { nullCaught=true; } var empty=java.getElement(''), whitespace=java.getElement(' '), selected=java.getElement('p'); return {nullCaught:nullCaught,emptyReturnsNull:empty===null,whitespaceReturnsNull:whitespace===null,count:selected.size(),firstText:selected.get(0).text(),continued:java.getElement('p').size()};`, i.content)
     case 'rule.bridgeString':

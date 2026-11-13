@@ -571,6 +571,26 @@
       "value": "string"
     }
   },
+  "rule.bridgeEvalJS": {
+    "required": [
+      "baseUrl",
+      "content",
+      "updatedContent",
+      "page",
+      "paraIndex",
+      "paraData",
+      "result"
+    ],
+    "properties": {
+      "baseUrl": "string",
+      "content": "string",
+      "updatedContent": "string",
+      "page": "string",
+      "paraIndex": "string",
+      "paraData": "string",
+      "result": "object"
+    }
+  },
   "rule.bridgeElement": {
     "required": [
       "content"
