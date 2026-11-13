@@ -69,6 +69,36 @@
     }
   },
   {
+    "id": "rule.bridgeString.unbalanced-rule-escapes-catch",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeString",
+    "input": {
+      "mode": "unbalanced",
+      "content": "<h1>甲&amp;beta;</h1><a href=\"/part\">章节</a>",
+      "textRule": "h1@text",
+      "urlRule": "a@href",
+      "baseUrl": "https://source.fixture.test/book/",
+      "redirectUrl": "https://redirect.fixture.test/chapters/",
+      "invalidRule": "a[@text"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.getString(String, Boolean) + RuleAnalyzer.chompRuleBalanced Java Error"
+    },
+    "tags": ["edge", "error-or-empty"],
+    "errorEquivalence": {
+      "category": "android-ruleanalyzer-unbalanced-group",
+      "jvm": ["java.lang.Error"],
+      "ts": ["failed"],
+      "jvmMessageIncludes": ["后未平衡"],
+      "tsMessageIncludes": ["规则分组或插值不平衡"]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "android-ruleanalyzer-unbalanced-group"
+    }
+  },
+  {
     "id": "rule.bridgeString.null-empty-error-catch-and-continue",
     "family": "rule-bridge",
     "operation": "rule.bridgeString",

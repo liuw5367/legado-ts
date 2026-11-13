@@ -218,6 +218,9 @@ export async function execute(item: CaseInput): Promise<unknown> {
       }
     }
     case 'rule.bridgeString':
+      if (i.mode === 'unbalanced') {
+        return script(host, 'var caught=false; try { java.getString(' + json('invalidRule') + ',false); } catch (error) { caught=true; } return {caught:caught,continued:true}', i.content)
+      }
       if (i.mode === 'boundaries') {
         const code = [
           'var stringErrorCaught=false; try { java.getString(' + json('invalidRule') + ',false); } catch (error) { stringErrorCaught=true; }',

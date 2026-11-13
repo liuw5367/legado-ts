@@ -1,5 +1,6 @@
 import { DefaultIntrinsics, newAsyncContext } from 'quickjs-emscripten'
 import type { QuickJSHandle } from 'quickjs-emscripten'
+import { JavaScriptFatalBridgeError } from '@legado/source-core'
 import type { JavaScriptBridge, JavaScriptBudget, JavaScriptExecutionInput, JavaScriptExecutionResult, JavaScriptHost, JavaScriptTraceEntry, JavaScriptVariableChange } from '@legado/source-core'
 import { decodeJavaScriptValue, encodeJavaScriptValue, guestCodecSource, JavaScriptSerializationError } from './javascript-codec.ts'
 
@@ -128,9 +129,11 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
     const timer = setTimeout(timeoutAbort, budget.timeoutMs)
     const signal = controller.signal
     let bridgeCalls = 0
+    let fatalBridgeError: string | undefined
     const startedAt = Date.now()
     let context: Awaited<ReturnType<typeof newAsyncContext>> | undefined
     const callBridge = async <T>(name: string, fn: () => T | Promise<T>): Promise<T> => {
+      if (fatalBridgeError !== undefined) throw new JavaScriptFatalBridgeError(fatalBridgeError)
       if (input.signal?.aborted === true) throw new Error('__LEGADO_CANCELLED__')
       if (timedOut) throw new Error('__LEGADO_BUDGET__ timeout')
       bridgeCalls += 1
@@ -139,6 +142,10 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       try {
         return await fn()
       } catch (error) {
+        if (error instanceof JavaScriptFatalBridgeError) {
+          fatalBridgeError = error.message
+          throw error
+        }
         if (signal.aborted || messageOf(error).includes('__LEGADO_')) throw error
         throw new Error(`__LEGADO_BRIDGE__ ${name}: ${messageOf(error)}`)
       } finally {
@@ -154,7 +161,7 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       context = await newAsyncContext({ intrinsics: { ...DefaultIntrinsics } })
       context.runtime.setMemoryLimit(budget.memoryLimitBytes)
       context.runtime.setMaxStackSize(budget.maxStackSizeBytes)
-      context.runtime.setInterruptHandler(() => signal.aborted || Date.now() - startedAt >= budget.timeoutMs)
+      context.runtime.setInterruptHandler(() => signal.aborted || fatalBridgeError !== undefined || Date.now() - startedAt >= budget.timeoutMs)
 
       const installAsync = (name: string, callback: (...args: QuickJSHandle[]) => Promise<QuickJSHandle>): void => {
         const handle = context!.newAsyncifiedFunction(name, callback)
@@ -162,6 +169,7 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       }
       if (bridge.setConcurrentRate !== undefined) {
         const handle = context.newFunction('__legadoSetConcurrentRate', (value) => {
+          if (fatalBridgeError !== undefined) throw new JavaScriptFatalBridgeError(fatalBridgeError)
           bridge.setConcurrentRate!(context!.getString(value))
           return context!.undefined
         })
@@ -221,6 +229,10 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
         script,
       ].join('\n')
       const result = await context.evalCodeAsync(source, input.filename ?? `${input.stage}.js`)
+      if (fatalBridgeError !== undefined) {
+        diagnostics.push({ code: 'runtime-error', message: fatalBridgeError, stage: input.stage })
+        return { status: 'failed', value: null, diagnostics, variableChanges: changes(initialVariables, variableValues), trace }
+      }
       const valueHandle = context.unwrapResult(result)
       const serialized = context.getString(valueHandle)
       valueHandle.dispose()
@@ -235,6 +247,10 @@ export class QuickJSJavaScriptHost implements JavaScriptHost {
       return { status: 'success', value, diagnostics, variableChanges, trace }
     } catch (error) {
       const message = messageOf(error)
+      if (fatalBridgeError !== undefined) {
+        diagnostics.push({ code: 'runtime-error', message: fatalBridgeError, stage: input.stage })
+        return { status: 'failed', value: null, diagnostics, variableChanges: changes(initialVariables, variableValues), trace }
+      }
       const capability = (Object.keys(capabilityMarkers) as Array<keyof typeof capabilityMarkers>).find((key) => message.includes(capabilityMarkers[key]))
       if (capability !== undefined) {
         diagnostics.push({ code: 'capability-unavailable', message: `JavaScript bridge 不可用: ${capability}`, stage: input.stage, capability })

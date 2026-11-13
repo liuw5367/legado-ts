@@ -3,6 +3,9 @@ export type JavaScriptStage = 'mainJs' | 'book' | 'chapter' | 'search' | 'conten
 export type JavaScriptExecutionMode = 'script' | 'function-body'
 export type JavaScriptVariableScope = 'chapter' | 'book' | 'rule-data' | 'source'
 
+/** Signals a Java Error that Android's Rhino bridge cannot catch inside the book-source script. */
+export class JavaScriptFatalBridgeError extends Error {}
+
 export interface JavaScriptBudget {
   /** 单次 JS 求值的硬超时，单位为毫秒。 */
   timeoutMs: number

@@ -2676,7 +2676,8 @@
       "caseIds": [
         "rule.bridgeString.batch-content-overloads",
         "rule.bridgeString.batch-empty-overloads",
-        "rule.bridgeString.null-empty-error-catch-and-continue"
+        "rule.bridgeString.null-empty-error-catch-and-continue",
+        "rule.bridgeString.unbalanced-rule-escapes-catch"
       ],
       "manifestMembers": [
         "analyze-rule-overloads::006-getstring",

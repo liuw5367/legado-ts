@@ -20,7 +20,7 @@ import type {
   RequestBudget,
   XPathParser,
 } from '../runtime/contracts.ts'
-import type { JavaScriptHost, JavaScriptVariableScope } from '../runtime/javascript.ts'
+import { JavaScriptFatalBridgeError, type JavaScriptHost, type JavaScriptVariableScope } from '../runtime/javascript.ts'
 import type { NormalizedSource } from '../model/types.ts'
 import type { CompiledRule, RuleAtom, RuleReplacement, RuleSequence } from './types.ts'
 import type {
@@ -2282,11 +2282,50 @@ interface SelectedNode {
 
 class SourceRuleError extends Error {
   public readonly status: Extract<WorkflowRuleOutput['status'], 'failed' | 'cancelled' | 'capability-missing'>
+  public readonly fatalJavaScriptBridge: boolean
 
-  public constructor(status: Extract<WorkflowRuleOutput['status'], 'failed' | 'cancelled' | 'capability-missing'>, message: string) {
+  public constructor(status: Extract<WorkflowRuleOutput['status'], 'failed' | 'cancelled' | 'capability-missing'>, message: string, fatalJavaScriptBridge = false) {
     super(message)
     this.status = status
+    this.fatalJavaScriptBridge = fatalJavaScriptBridge
   }
+}
+
+function hasAndroidRuleAnalyzerUnbalancedGroup(rule: string): boolean {
+  const trimmed = rule.trim()
+  if (/^@(?:xpath|json|js|webjs):/iu.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('$.') || trimmed.startsWith('$[') || trimmed.startsWith(':') || /^<js>/iu.test(trimmed)) return false
+  let cursor = 0
+  while (cursor < rule.length) {
+    const square = rule.indexOf('[', cursor)
+    const round = rule.indexOf('(', cursor)
+    const start = square < 0 ? round : round < 0 ? square : Math.min(square, round)
+    if (start < 0) return false
+    const open = rule[start]
+    const close = open === '[' ? ']' : ')'
+    let depth = 0
+    let singleQuote = false
+    let doubleQuote = false
+    let balancedAt = -1
+    for (let index = start; index < rule.length; index += 1) {
+      const character = rule[index]
+      if (character === "'" && !doubleQuote) singleQuote = !singleQuote
+      else if (character === '"' && !singleQuote) doubleQuote = !doubleQuote
+      if (singleQuote || doubleQuote) continue
+      if (character === '\\') {
+        index += 1
+        continue
+      }
+      if (character === open) depth += 1
+      else if (character === close) depth -= 1
+      if (depth === 0) {
+        balancedAt = index
+        break
+      }
+    }
+    if (balancedAt < 0) return true
+    cursor = balancedAt + 1
+  }
+  return false
 }
 
 function textValue(value: unknown): string {
@@ -3222,7 +3261,12 @@ export class SourceRuleRuntime implements WorkflowRulePort {
       if (state.expect === 'text' && compiled.diagnostics[0]?.code === 'unbalanced-rule' && (explicitJson || (!trimmed.startsWith('@') && jsonContent(content)))) {
         return this.evaluateJson(explicitJson ? trimmed.slice(6) : trimmed, state, content)
       }
-      throw new SourceRuleError('failed', compiled.diagnostics[0]?.message ?? '规则编译失败')
+      const diagnostic = compiled.diagnostics[0]
+      throw new SourceRuleError(
+        'failed',
+        diagnostic?.message ?? '规则编译失败',
+        diagnostic?.code === 'unbalanced-rule' && hasAndroidRuleAnalyzerUnbalancedGroup(rule),
+      )
     }
     return this.evaluateNode(compiled.rule, state, content)
   }
@@ -3892,7 +3936,14 @@ export class SourceRuleRuntime implements WorkflowRulePort {
             : payload
           return this.handleBridge(bridged, hostSignal, source, context?.ruleState?.request.stage ?? context?.workflowStage ?? this.workflowStageForJavaScript(stage), bindings, context?.workflowActions, context?.requestObserver, context?.jsLibOwner ?? ruleState, context?.requestBudget, ruleState)
         },
-        evaluateRule: (rule, bridgeSignal, options) => this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal, options?.firstDefault === true),
+        evaluateRule: async (rule, bridgeSignal, options) => {
+          try {
+            return await this.nestedRule(rule, ruleState, options?.content ?? content, options?.expect ?? 'text', bridgeSignal, options?.firstDefault === true)
+          } catch (error) {
+            if (error instanceof SourceRuleError && error.fatalJavaScriptBridge) throw new JavaScriptFatalBridgeError(error.message)
+            throw error
+          }
+        },
       })
       let value = output.value
       if (jsLibStateKey !== undefined && typeof output.value === 'object' && output.value !== null && !Array.isArray(output.value)) {

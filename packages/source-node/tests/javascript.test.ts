@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { JavaScriptFatalBridgeError } from '@legado/source-core'
 import { QuickJSJavaScriptHost } from '../src/index.ts'
 
 test('QuickJS 执行器隔离全局并支持绑定、BigInt 和循环值编码', async () => {
@@ -89,6 +90,27 @@ test('QuickJS 变量 bridge 返回可观察 delta，并支持一次异步宿主�
   assert.deepEqual(result.variableChanges, [{ name: 'count', before: 1, after: 2 }])
   assert.deepEqual(calls, [{ path: '/books' }])
   assert.equal(result.trace.filter((entry) => entry.kind === 'bridge').length, 3)
+})
+
+test('QuickJS 不允许书源 catch 吞掉 Android Java Error，也不再执行后续宿主调用', async () => {
+  let requestCalled = false
+  const host = new QuickJSJavaScriptHost({
+    evaluateRule: () => {
+      throw new JavaScriptFatalBridgeError('Android RuleAnalyzer fatal error')
+    },
+    request: async () => {
+      requestCalled = true
+      return { ok: true }
+    },
+  })
+  const result = await host.execute({
+    code: "try { evaluateRule('a[@text'); } catch (error) {} request({}); return 'continued'",
+    stage: 'book',
+  })
+
+  assert.equal(result.status, 'failed')
+  assert.equal(result.diagnostics[0]?.message, 'Android RuleAnalyzer fatal error')
+  assert.equal(requestCalled, false)
 })
 
 test('QuickJS 拒绝未授权 bridge、不可序列化返回值和无限循环', async () => {

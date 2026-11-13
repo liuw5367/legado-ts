@@ -2,6 +2,14 @@
 
 本文是书源解析、宿主能力和 Android/TypeScript 一致性验证的唯一状态入口。详细行为仍分别记录在能力清单、差异登记和测试基线中；这些文档不再维护第二份状态表。
 
+## 2026-11-13 P89：对齐 RuleAnalyzer 不平衡选择器的致命错误
+
+Android `RuleAnalyzer` 对不平衡的 CSS/default 规则分组抛出 `java.lang.Error`，Rhino 中书源脚本的 `catch` 无法继续吞掉该错误；TS 之前会将其当成普通异常，允许脚本 catch 后继续。现在 `SourceRuleRuntime` 将这类错误标记为 fatal bridge error，QuickJS 即使执行到脚本 `catch` 后也返回失败，并阻止后续宿主桥接调用。该标记只用于 CSS/default 规则分组；XPath/JSON/JS 等模式保留原解析行为，XPath family **188/188** 回归确认没有误分类。
+
+新增 JVM/TS 案例 `rule.bridgeString.unbalanced-rule-escapes-catch`，通过 Kotlin/JVM probe、Rhino 和 QuickJS 验证 `a[@text` 的错误不能被脚本捕获后继续；coverage 回链 `analyze-rule-overloads::006-getstring`。TS 与 JVM 的原始错误类型和消息不同，但案例显式映射为同一 Android 致命分组错误类别，并断言双方最终都是 `throw`。rule-bridge **11/11**；全量 **1033 项（1028 一致、5 项既有逐例允许差异、0 未登记差异/unsupported/runner failure）**，流程 **87/87**。全量报告见 [P89 JVM/TS 全量对照](../../packages/compatibility-tests/output/run-0usy2B/report.md)，定向报告见 [P89 rule-bridge](../../packages/compatibility-tests/output/run-8AdnZI/report.md)，XPath 回归见 [XPath family](../../packages/compatibility-tests/output/run-M3VEwq/report.md)。
+
+QuickJS JavaScript 宿主测试 **9/9**、source 回归 **211/211**、source-core TypeScript build、source-node build 通过；compatibility mechanism **35/35**。参考端是固定 Kotlin/JVM/Rhino 与 QuickJS 的源码引导对照，不等于 Android app/设备实测或完整 `AnalyzeRule` 类的 JVM 执行。
+
 ## 2026-11-09 P88：补齐 AnalyzeRule.getString/getStringList HTML 重载边界
 
 为 `AnalyzeRule.getString(String, ...)` 与 `getStringList(String, ...)` 增加 JVM/TS 配对边界案例，验证 null/空白参数、HTML 实体开关、无匹配结果、可捕获的无效选择器，以及异常后继续执行。参考端使用 Kotlin/JVM probe 暴露与 Android 一致的重载签名，并调用固定 `AnalyzeByJSoup`；TS 端通过真实 QuickJS Java bridge 执行。新增案例映射 `analyze-rule-overloads::006-getstring` 与 `::007-getstringlist`，normal、edge、error-or-empty、continuation 四维齐全。

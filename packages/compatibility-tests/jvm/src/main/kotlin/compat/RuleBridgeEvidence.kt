@@ -80,10 +80,10 @@ internal fun analyzeRuleStringBoundary(input: JsonObject): Any {
     val probe = AnalyzeRuleStringProbe(input.get("content").asString)
     val invalidRule = Gson().toJson(input.get("invalidRule").asString)
     val textRule = Gson().toJson(input.get("textRule").asString)
-    val scope = Context.enter().use { context ->
-        val currentScope = context.initStandardObjects()
-        ScriptableObject.putProperty(currentScope, "java", Context.javaToJS(probe, currentScope))
-        val script = """
+    val script = if (input.get("mode")?.asString == "unbalanced") {
+        "var caught=false; try { java.getString($invalidRule,false); } catch (error) { caught=true; } JSON.stringify({caught:caught,continued:true});"
+    } else {
+        """
             var stringErrorCaught=false;
             try { java.getString($invalidRule, false); } catch (error) { stringErrorCaught=true; }
             var listErrorCaught=false;
@@ -102,12 +102,19 @@ internal fun analyzeRuleStringBoundary(input: JsonObject): Any {
               continued:java.getString($textRule,true)
             });
         """.trimIndent()
+    }
+    val scope = Context.enter().use { context ->
+        val currentScope = context.initStandardObjects()
+        ScriptableObject.putProperty(currentScope, "java", Context.javaToJS(probe, currentScope))
         val output = context.evaluateString(
             currentScope,
             script,
             "AnalyzeRule.getString/getStringList(String, ...)", 1, null,
         )
         JsonParser.parseString(Context.toString(output)).asJsonObject
+    }
+    if (input.get("mode")?.asString == "unbalanced") {
+        return mapOf("caught" to scope.get("caught").asBoolean, "continued" to scope.get("continued").asBoolean)
     }
     return mapOf(
         "nullStringEmpty" to scope.get("nullStringEmpty").asBoolean,
@@ -126,7 +133,7 @@ internal fun analyzeRuleStringBoundary(input: JsonObject): Any {
 
 /** 固定 AnalyzeRule 的 HTML 分支：布尔重载控制解实体，URL 模式选首项，null 内容回退当前文档。 */
 internal fun analyzeRuleStringOverloads(input: JsonObject): Any {
-    if (input.get("mode")?.asString == "boundaries") return analyzeRuleStringBoundary(input)
+    if (input.get("mode")?.asString in setOf("boundaries", "unbalanced")) return analyzeRuleStringBoundary(input)
     fun text(key: String) = input.get(key).asString
     val parser = AnalyzeByJSoup(text("content"))
     val textRule = text("textRule")

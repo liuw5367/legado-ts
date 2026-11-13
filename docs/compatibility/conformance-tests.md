@@ -485,6 +485,10 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 
 案例 `rule.bridgeString.null-empty-error-catch-and-continue` 通过 Kotlin/JVM probe 暴露与 Android 一致的 `getString(String?, Any?, Boolean)`、`getString(String?, Boolean)`、`getStringList(String?, Any?, Boolean)` 重载；HTML 选择由锁定 Android `AnalyzeByJSoup` 执行。用例覆盖 null 与空白输入、实体解码开关、无匹配返回、无效 CSS selector 被 JS 捕获，以及捕获后继续取值。TS 端经 QuickJS 的 `SourceRuleHost → java.getString/getStringList` 执行同一脚本。该用例映射 `analyze-rule-overloads::006-getstring`、`::007-getstringlist` 的 normal/edge/error-or-empty/continuation 维度。固定源码引导 probe 不等同于运行 Android app 或完整 `AnalyzeRule` 类。
 
+### P89 RuleAnalyzer 不平衡分组的 fatal bridge 行为
+
+案例 `rule.bridgeString.unbalanced-rule-escapes-catch` 让 Rhino 与 QuickJS 执行同一书源脚本：调用 `java.getString("a[@text", false)`，再尝试 catch 并继续。固定 JVM/Rhino 结果为 `java.lang.Error`，脚本无法 catch 后继续；TS 的 QuickJS host 将对应 CSS/default 规则分组错误标为 fatal，运行结果失败且不会执行后续宿主 bridge。比较器显式映射双方不同的错误类型/消息为 `android-ruleanalyzer-unbalanced-group`，同时保留双方原始错误信息。案例关联 `analyze-rule-overloads::006-getstring` 的 error-or-empty 维度；完整 rule-bridge 11/11，XPath family 188/188。该 probe 仅覆盖所列 CSS/default 分组，不代表所有 Android `RuleAnalyzer` 错误，也不构成 Android app/设备 golden。
+
 ### P84 Java String 搜索与 null 参数
 
 `string.api.indexOf.*`、`indexOfFrom.*` 与 `lastIndexOf.*` 直接调用固定 JDK 方法，覆盖 null 参数异常映射、普通/空搜索、负值和越界 fromIndex、`lastIndexOf(String/int)` 重载、astral code point 及 surrogate code unit。兄弟方法 `contains/startsWith/endsWith/contentEquals` 一并核对 null 契约；`startsWith(String,int)` 另覆盖负偏移必须返回 false。修复前 9 条案例行为不同，修复后 string family 165/165；`java-collections-string::010-string-lastindexof` 与 `::016-string-contentequals` 均补齐 normal、edge、error-or-empty 证据。reader-web 的 JavaScript 搜索入口另行执行 8 个可捕获 null 调用及负偏移断言。测试结果为固定 JDK/Rhino 与 TS 的同输入对照，不等同 Android app/设备实测。
