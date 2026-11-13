@@ -2067,7 +2067,8 @@ const __legadoCurrentRedirectUrl = () => {
   return __legadoRedirectUrlObject
 }
 java.setRedirectUrl = (value) => {
-  const raw = String(value ?? "")
+  if (value === null || value === undefined) throw new TypeError("url must not be null")
+  const raw = String(value)
   if (/^data:.*?;base64,/u.test(raw)) return __legadoCurrentRedirectUrl()
   try {
     const parsed = java.toURL(raw)

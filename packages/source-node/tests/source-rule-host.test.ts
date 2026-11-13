@@ -1264,6 +1264,8 @@ test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义
     var redirectResult = java.setRedirectUrl('https://cdn.fixture.invalid/final/index');
     var invalidResult = java.setRedirectUrl('not-a-url');
     var dataResult = java.setRedirectUrl('data:text/plain;base64,QQ==');
+    var nullCaught = false;
+    try { java.setRedirectUrl(null); } catch (error) { nullCaught = true; }
     JSON.stringify({
       localIsJava: localResult === java,
       localValue: java.getLocal('token'),
@@ -1275,7 +1277,8 @@ test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义
       redirectUrl: redirectUrl,
       redirect: redirectResult && redirectResult.url,
       invalidSame: invalidResult === redirectResult,
-      dataSame: dataResult === redirectResult
+      dataSame: dataResult === redirectResult,
+      nullCaught: nullCaught
     })`, '<p>原始内容</p>')
   assert.equal(result.status, 'success', result.message)
   assert.deepEqual(JSON.parse(String(result.value)), {
@@ -1290,6 +1293,7 @@ test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义
     redirect: 'https://cdn.fixture.invalid/final/index',
     invalidSame: true,
     dataSame: true,
+    nullCaught: true,
   })
 })
 

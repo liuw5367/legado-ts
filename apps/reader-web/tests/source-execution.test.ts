@@ -669,3 +669,35 @@ test('reader-web Java AnalyzeRule.getElement matches Android null and empty beha
   assert.equal(result.candidates[0]?.candidate.author, 'true|true|true|1|段落正文')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web Java AnalyzeRule URL setters preserve Android null, invalid and data URL behavior', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'http://127.0.0.1:12345'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var baseSet = java.setBaseUrl("https://source.fixture.test/book/") === java;
+      var baseAfterSet = baseUrl;
+      var baseNullSet = java.setBaseUrl(null) === java;
+      var baseAfterNull = baseUrl;
+      function urlText(value) { return value == null ? "null" : String(value.url == null ? value : value.url); }
+      var initialRedirect = urlText(java.setRedirectUrl("https://origin.fixture.test/first/"));
+      var nullCaught = false;
+      try { java.setRedirectUrl(null); } catch (error) { nullCaught = true; }
+      var afterNull = urlText(java.setRedirectUrl("data:text/plain;base64,QQ=="));
+      var updatedRedirect = urlText(java.setRedirectUrl("https://cdn.fixture.test/chapter/"));
+      var invalidRedirect = urlText(java.setRedirectUrl("not-a-url"));
+      var afterInvalid = urlText(java.setRedirectUrl("data:text/plain;base64,QQ=="));
+      return [{ name: "AnalyzeRule URL setters compatibility", author: [baseSet,baseAfterSet,baseNullSet,baseAfterNull,initialRedirect,nullCaught,afterNull,updatedRedirect,invalidRedirect,afterInvalid].join("|"), bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'AnalyzeRule URL setters compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, 'true|https://source.fixture.test/book/|true|https://source.fixture.test/book/|https://origin.fixture.test/first/|true|https://origin.fixture.test/first/|https://cdn.fixture.test/chapter/|https://cdn.fixture.test/chapter/|https://cdn.fixture.test/chapter/')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})

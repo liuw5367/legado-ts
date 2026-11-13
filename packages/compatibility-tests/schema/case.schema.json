@@ -69,7 +69,8 @@
         "flow.toc",
         "rule.bridgeString",
         "rule.bridgeContent",
-    "rule.bridgeElement",
+        "rule.bridgeUrl",
+        "rule.bridgeElement",
         "rule.bridgeElements",
         "rule.bridgeObjects",
         "rule.scriptLibrary",
@@ -1873,6 +1874,60 @@
               "rule": {
                 "type": "string"
               }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeUrl"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "content",
+              "baseUrl",
+              "initialRedirectUrl",
+              "nextRedirectUrl",
+              "invalidRedirectUrl",
+              "dataUrl"
+            ],
+            "properties": {
+              "content": { "type": "string" },
+              "baseUrl": { "type": "string" },
+              "initialRedirectUrl": { "type": "string" },
+              "nextRedirectUrl": { "type": "string" },
+              "invalidRedirectUrl": { "type": "string" },
+              "dataUrl": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeElement"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": ["content"],
+            "properties": {
+              "content": { "type": "string" }
             },
             "additionalProperties": false
           }

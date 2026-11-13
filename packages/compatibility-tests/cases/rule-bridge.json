@@ -51,6 +51,46 @@
     }
   },
   {
+    "id": "rule.bridgeUrl.setters-null-and-fallback",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeUrl",
+    "input": {
+      "content": "<a href=\"chapter.html\">章节</a>",
+      "baseUrl": "https://source.fixture.test/book/",
+      "initialRedirectUrl": "https://origin.fixture.test/first/",
+      "nextRedirectUrl": "https://cdn.fixture.test/chapter/",
+      "invalidRedirectUrl": "not-a-url",
+      "dataUrl": "data:text/plain;base64,QQ=="
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.setBaseUrl(String?) + setRedirectUrl(String)"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "error-or-empty",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "baseSet": true,
+        "baseAfterSet": "https://source.fixture.test/book/",
+        "baseNullSet": true,
+        "baseAfterNull": "https://source.fixture.test/book/",
+        "initialRedirect": "https://origin.fixture.test/first/",
+        "nullCaught": true,
+        "afterNull": "https://origin.fixture.test/first/",
+        "updatedRedirect": "https://cdn.fixture.test/chapter/",
+        "relativeUrl": "https://cdn.fixture.test/chapter/chapter.html",
+        "invalidRedirect": "https://cdn.fixture.test/chapter/",
+        "afterInvalid": "https://cdn.fixture.test/chapter/",
+        "continued": true
+      }
+    }
+  },
+  {
     "id": "rule.bridgeElement.null-and-empty-catch-and-continue",
     "family": "rule-bridge",
     "operation": "rule.bridgeElement",

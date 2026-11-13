@@ -65,6 +65,83 @@ internal fun analyzeRuleSetContent(input: JsonObject): Any {
     }
 }
 
+/** Mirrors the Android AnalyzeRule URL setters and observes their effects through URL/getString. */
+internal class AnalyzeRuleUrlSetterProbe(private val content: String) {
+    private var baseUrl: String? = null
+    private var redirectUrl: URL? = null
+
+    fun setBaseUrl(baseUrl: String?): AnalyzeRuleUrlSetterProbe {
+        if (baseUrl != null) this.baseUrl = baseUrl
+        return this
+    }
+
+    fun setRedirectUrl(url: String): URL? {
+        if (Regex("^data:.*?;base64,(.*)").matches(url)) return redirectUrl
+        try {
+            redirectUrl = URL(url)
+        } catch (_: Exception) {
+            // Android logs malformed URL input and retains the previous redirect URL.
+        }
+        return redirectUrl
+    }
+
+    @JvmOverloads
+    fun getString(rule: String?, mContent: Any? = null, isUrl: Boolean = false): String {
+        if (rule.isNullOrEmpty()) return ""
+        val value = AnalyzeByJSoup((mContent ?: content).toString()).getString0(rule).orEmpty()
+        if (!isUrl) return value
+        if (value.isBlank()) return baseUrl.orEmpty()
+        val currentRedirect = redirectUrl ?: return value.trim()
+        return URL(currentRedirect, value).toExternalForm()
+    }
+}
+
+internal fun analyzeRuleUrlSetters(input: JsonObject): Any {
+    val probe = AnalyzeRuleUrlSetterProbe(input.get("content").asString)
+    val values = mapOf(
+        "baseUrl" to input.get("baseUrl").asString,
+        "initialRedirectUrl" to input.get("initialRedirectUrl").asString,
+        "nextRedirectUrl" to input.get("nextRedirectUrl").asString,
+        "invalidRedirectUrl" to input.get("invalidRedirectUrl").asString,
+        "dataUrl" to input.get("dataUrl").asString,
+    )
+    val js = """
+        var baseSet = java.setBaseUrl(${Gson().toJson(values.getValue("baseUrl"))}) === java;
+        var baseAfterSet = java.getString('missing@href', null, true);
+        var baseNullSet = java.setBaseUrl(null) === java;
+        var baseAfterNull = java.getString('missing@href', null, true);
+        function urlText(value) { return value == null ? null : (typeof value.toExternalForm === 'function' ? String(value.toExternalForm()) : String(value.url == null ? value : value.url)); }
+        var initialRedirect = urlText(java.setRedirectUrl(${Gson().toJson(values.getValue("initialRedirectUrl"))}));
+        var nullCaught = false;
+        try { java.setRedirectUrl(null); } catch (error) { nullCaught = true; }
+        var afterNull = urlText(java.setRedirectUrl(${Gson().toJson(values.getValue("dataUrl"))}));
+        var updatedRedirect = urlText(java.setRedirectUrl(${Gson().toJson(values.getValue("nextRedirectUrl"))}));
+        var relativeUrl = java.getString('a@href', null, true);
+        var invalidRedirect = urlText(java.setRedirectUrl(${Gson().toJson(values.getValue("invalidRedirectUrl"))}));
+        var afterInvalid = urlText(java.setRedirectUrl(${Gson().toJson(values.getValue("dataUrl"))}));
+        JSON.stringify({baseSet:baseSet,baseAfterSet:baseAfterSet,baseNullSet:baseNullSet,baseAfterNull:baseAfterNull,initialRedirect:initialRedirect,nullCaught:nullCaught,afterNull:afterNull,updatedRedirect:updatedRedirect,relativeUrl:relativeUrl,invalidRedirect:invalidRedirect,afterInvalid:afterInvalid,continued:java.setBaseUrl('https://continued.fixture.test/')===java});
+    """.trimIndent()
+    val output = Context.enter().use { context ->
+        val scope = context.initStandardObjects()
+        ScriptableObject.putProperty(scope, "java", Context.javaToJS(probe, scope))
+        JsonParser.parseString(Context.toString(context.evaluateString(scope, js, "AnalyzeRule URL setters", 1, null))).asJsonObject
+    }
+    return mapOf(
+        "baseSet" to output.get("baseSet").asBoolean,
+        "baseAfterSet" to output.get("baseAfterSet").asString,
+        "baseNullSet" to output.get("baseNullSet").asBoolean,
+        "baseAfterNull" to output.get("baseAfterNull").asString,
+        "initialRedirect" to output.get("initialRedirect").asString,
+        "nullCaught" to output.get("nullCaught").asBoolean,
+        "afterNull" to output.get("afterNull").asString,
+        "updatedRedirect" to output.get("updatedRedirect").asString,
+        "relativeUrl" to output.get("relativeUrl").asString,
+        "invalidRedirect" to output.get("invalidRedirect").asString,
+        "afterInvalid" to output.get("afterInvalid").asString,
+        "continued" to output.get("continued").asBoolean,
+    )
+}
+
 /** Mirrors AnalyzeRule.getElement's non-null signature and empty splitSourceRule result. */
 internal class AnalyzeRuleGetElementProbe(private val parser: AnalyzeByJSoup) {
     fun getElement(rule: String): Any? =

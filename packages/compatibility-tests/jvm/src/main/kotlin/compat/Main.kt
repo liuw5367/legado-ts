@@ -91,6 +91,7 @@ private fun execute(item: JsonObject): Any? {
         "rule.scriptLibrary" -> scriptLibraryEvidence(input)
         "rule.bridgeObjects" -> bridgeReturnedObjects(input)
         "rule.bridgeContent" -> analyzeRuleSetContent(input)
+        "rule.bridgeUrl" -> analyzeRuleUrlSetters(input)
         "rule.bridgeString" -> analyzeRuleStringOverloads(input)
         "rule.bridgeElement" -> analyzeRuleGetElementNullability(input)
         "rule.bridgeElements" -> analyzeRuleGetElementsNullability(input)

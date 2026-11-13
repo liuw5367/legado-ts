@@ -223,6 +223,22 @@ export async function execute(item: CaseInput): Promise<unknown> {
       }
       return script(host, `var chained=java.setContent(${json('content')}, ${json('baseUrl')})===java; return {chained:chained,text:java.getString(${json('rule')}),emptyUrlFallback:java.getString('missing@href',null,true)};`, i.content)
     }
+    case 'rule.bridgeUrl':
+      return script(host, `
+        var baseSet=java.setBaseUrl(${json('baseUrl')})===java;
+        var baseAfterSet=java.getString('missing@href',null,true);
+        var baseNullSet=java.setBaseUrl(null)===java;
+        var baseAfterNull=java.getString('missing@href',null,true);
+        function urlText(value){return value==null?null:String(value.url==null?value:value.url)}
+        var initialRedirect=urlText(java.setRedirectUrl(${json('initialRedirectUrl')}));
+        var nullCaught=false; try{java.setRedirectUrl(null)}catch(error){nullCaught=true}
+        var afterNull=urlText(java.setRedirectUrl(${json('dataUrl')}));
+        var updatedRedirect=urlText(java.setRedirectUrl(${json('nextRedirectUrl')}));
+        var relativeUrl=java.getString('a@href',null,true);
+        var invalidRedirect=urlText(java.setRedirectUrl(${json('invalidRedirectUrl')}));
+        var afterInvalid=urlText(java.setRedirectUrl(${json('dataUrl')}));
+        return {baseSet:baseSet,baseAfterSet:baseAfterSet,baseNullSet:baseNullSet,baseAfterNull:baseAfterNull,initialRedirect:initialRedirect,nullCaught:nullCaught,afterNull:afterNull,updatedRedirect:updatedRedirect,relativeUrl:relativeUrl,invalidRedirect:invalidRedirect,afterInvalid:afterInvalid,continued:java.setBaseUrl('https://continued.fixture.test/')===java};
+      `, i.content)
     case 'rule.bridgeElement':
       return script(host, `var nullCaught=false; try { java.getElement(null); } catch (error) { nullCaught=true; } var empty=java.getElement(''), whitespace=java.getElement(' '), selected=java.getElement('p'); return {nullCaught:nullCaught,emptyReturnsNull:empty===null,whitespaceReturnsNull:whitespace===null,count:selected.size(),firstText:selected.get(0).text(),continued:java.getElement('p').size()};`, i.content)
     case 'rule.bridgeString':

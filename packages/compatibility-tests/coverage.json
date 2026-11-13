@@ -2681,6 +2681,25 @@
       ]
     },
     {
+      "operation": "rule.bridgeUrl",
+      "method": "AnalyzeRule.setBaseUrl(String?) / setRedirectUrl(String)",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "ts/adapter.ts → rule.bridgeUrl",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeUrl.setters-null-and-fallback"
+      ],
+      "manifestMembers": [
+        "analyze-rule-overloads::002-setbaseurl",
+        "analyze-rule-overloads::003-setredirecturl"
+      ]
+    },
+    {
       "operation": "rule.bridgeContent",
       "method": "AnalyzeRule.setContent(Any?, String?)",
       "reference": "upstream-guided-flow",

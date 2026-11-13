@@ -543,6 +543,24 @@
       "rule": "string"
     }
   },
+  "rule.bridgeUrl": {
+    "required": [
+      "content",
+      "baseUrl",
+      "initialRedirectUrl",
+      "nextRedirectUrl",
+      "invalidRedirectUrl",
+      "dataUrl"
+    ],
+    "properties": {
+      "content": "string",
+      "baseUrl": "string",
+      "initialRedirectUrl": "string",
+      "nextRedirectUrl": "string",
+      "invalidRedirectUrl": "string",
+      "dataUrl": "string"
+    }
+  },
   "rule.bridgeElement": {
     "required": [
       "content"

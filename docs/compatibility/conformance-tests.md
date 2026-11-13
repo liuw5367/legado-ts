@@ -489,6 +489,10 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 
 Android 锁定源码中 `AnalyzeRule.setContent(Any?, String?)` 在内容为 null 时直接抛出 `java.lang.AssertionError("内容不可空（Content cannot be null）")`。`rule.bridgeContent.null-assertion-cannot-be-caught` 由签名相同的 Kotlin/JVM probe 经 Rhino 调用，并由 TS 真实 QuickJS Java bridge 执行同一 catch-and-continue 脚本；JVM 抛出 AssertionError，TS 终态为 failed。TS 使用现有 fatal bridge 标记，因此即便脚本 catch，该错误也不会被吞掉，后续 host bridge 也会被阻止。`rule.bridgeContent.set-content-chain-and-base-url` 覆盖正常 `setContent` 链式返回、新内容读取和 baseUrl 空 URL 回退。两案回链 `analyze-rule-overloads::001-setcontent` 的 normal、edge、error-or-empty、continuation 维度。reader-web 搜索入口另外断言异常后只发生原始 `/search` 请求，不会调用 JS 中的后续 `java.ajax`。这属于固定 Android 源码引导的 JVM/Rhino probe，不是完整 `AnalyzeRule` 类或 Android app/设备运行。
 
+### P92 AnalyzeRule URL setter 的 null 与回退行为
+
+案例 `rule.bridgeUrl.setters-null-and-fallback` 对照 Android `AnalyzeRule.setBaseUrl(String?)` 与 `setRedirectUrl(String)`（锁定源码 `AnalyzeRule.kt:118,125`）：`setBaseUrl(null)` 保持原值并返回同一对象；`setRedirectUrl(null)` 由 Kotlin 非空参数入口抛出可捕获异常。有效 URL 会更新重定向，非法 URL 保留旧重定向，base64 data URL 返回当前重定向而不覆盖。Kotlin/JVM probe 使用 JDK `URL`，并通过 `AnalyzeByJSoup` 的 URL 字符串重载观察基址、重定向与相对地址解析；TS 端由 QuickJS 的真实 `SourceRuleHost` bridge 执行同一脚本。案例映射到 `analyze-rule-overloads::002-setbaseurl`、`::003-setredirecturl` 的 normal、edge、error-or-empty、continuation 维度。reader-web mainJs 搜索入口另外检查 setter 可见性和 null catch-and-continue。修复前 `nullCaught` 不同，修复后专项 1/1 相等；全量对照 `run-9SKnPF` 中 1037 项有 1032 项一致、5 项既有逐例允许差异、0 runner failure。该 probe 不等同完整 `AnalyzeRule` 类或 Android app/设备运行。
+
 ### P91 AnalyzeRule.getElement null 与空规则
 
 案例 `rule.bridgeElement.null-and-empty-catch-and-continue` 对照 Android `AnalyzeRule.getElement(String)`（锁定源码 `AnalyzeRule.kt:387`）的非空参数签名及规则拆分行为：Rhino 将 null 传给 Kotlin probe 后，书源 JS 可以捕获异常并继续；空串和 ASCII 空白规则经过 `splitSourceRule` 后返回 null；有效 CSS 规则仍返回可链式访问的 `Elements`。QuickJS 通过同一脚本比较捕获、空值、元素数量、文本和后续调用；异常类名不作为等价条件。案例映射到 `analyze-rule-overloads::011-getelement` 的 normal、edge、error-or-empty、continuation 维度。source-node 的真实 `SourceRuleHost` 回归及 reader-web `mainJs` 搜索入口进一步验证同一行为。JVM probe 不是完整 Android `AnalyzeRule` 类执行或 Android app/设备 golden。
