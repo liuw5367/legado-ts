@@ -68,6 +68,7 @@
         "flow.discover",
         "flow.toc",
         "rule.bridgeString",
+        "rule.bridgeContent",
         "rule.bridgeElements",
         "rule.bridgeObjects",
         "rule.scriptLibrary",
@@ -1832,6 +1833,43 @@
                 "type": "string"
               },
               "invalidRule": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeContent"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "mode",
+              "content",
+              "baseUrl",
+              "rule"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "type": "string"
+              },
+              "rule": {
                 "type": "string"
               }
             },

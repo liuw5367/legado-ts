@@ -1,5 +1,56 @@
 [
   {
+    "id": "rule.bridgeContent.set-content-chain-and-base-url",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeContent",
+    "input": {
+      "mode": "normal",
+      "content": "<h1>更新后</h1>",
+      "baseUrl": "https://source.fixture.test/book/",
+      "rule": "h1@text"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.setContent(Any?, String?)"
+    },
+    "tags": ["normal"],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "chained": true,
+        "text": "更新后",
+        "emptyUrlFallback": "https://source.fixture.test/book/"
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeContent.null-assertion-cannot-be-caught",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeContent",
+    "input": {
+      "mode": "null",
+      "content": "<h1>当前内容</h1>",
+      "baseUrl": "https://source.fixture.test/book/",
+      "rule": "h1@text"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.setContent(null, String?)"
+    },
+    "tags": ["edge", "error-or-empty", "continuation"],
+    "errorEquivalence": {
+      "category": "android-analyzerule-null-content-assertion",
+      "jvm": ["java.lang.AssertionError"],
+      "ts": ["failed"],
+      "jvmMessageIncludes": ["Content cannot be null"],
+      "tsMessageIncludes": ["Content cannot be null"]
+    },
+    "expected": {
+      "outcome": "throw",
+      "errorClass": "android-analyzerule-null-content-assertion"
+    }
+  },
+  {
     "id": "rule.bridgeString.batch-content-overloads",
     "family": "rule-bridge",
     "operation": "rule.bridgeString",

@@ -217,6 +217,12 @@ export async function execute(item: CaseInput): Promise<unknown> {
         default: throw new UnsupportedOperation('未知返回对象案例')
       }
     }
+    case 'rule.bridgeContent': {
+      if (str('mode') === 'null') {
+        return script(host, `var caught=false; try { java.setContent(null, ${json('baseUrl')}); } catch (error) { caught=true; } return {caught:caught,continued:java.getString(${json('rule')})};`, i.content)
+      }
+      return script(host, `var chained=java.setContent(${json('content')}, ${json('baseUrl')})===java; return {chained:chained,text:java.getString(${json('rule')}),emptyUrlFallback:java.getString('missing@href',null,true)};`, i.content)
+    }
     case 'rule.bridgeString':
       if (i.mode === 'unbalanced') {
         return script(host, 'var caught=false; try { java.getString(' + json('invalidRule') + ',false); } catch (error) { caught=true; } return {caught:caught,continued:true}', i.content)

@@ -90,6 +90,7 @@ private fun execute(item: JsonObject): Any? {
         "rule.sourceState" -> sourceStateEvidence(input)
         "rule.scriptLibrary" -> scriptLibraryEvidence(input)
         "rule.bridgeObjects" -> bridgeReturnedObjects(input)
+        "rule.bridgeContent" -> analyzeRuleSetContent(input)
         "rule.bridgeString" -> analyzeRuleStringOverloads(input)
         "rule.bridgeElements" -> analyzeRuleGetElementsNullability(input)
         "rule.regexReplace" -> analyzeRuleRegexReplacement(input)

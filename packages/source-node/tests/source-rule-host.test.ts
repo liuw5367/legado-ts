@@ -1216,6 +1216,13 @@ test('java.getElements 提供 Android 书源使用的节点链式 API', async ()
   const replaced = await evaluate(host, "@js:java.setContent('<div class=\"other\">新内容</div>'); java.getElement('.other').text()", html)
   assert.equal(replaced.status, 'success')
   assert.equal(replaced.value, '新内容')
+
+  const nullContent = await evaluate(host, `@js:
+    var caught = false;
+    try { java.setContent(null); } catch (error) { caught = true; }
+    java.getString('p@text')`, html)
+  assert.equal(nullContent.status, 'failed')
+  assert.match(nullContent.message ?? '', /Content cannot be null/u)
 })
 
 test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义', async () => {

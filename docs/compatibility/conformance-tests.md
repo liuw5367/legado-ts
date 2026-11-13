@@ -485,6 +485,10 @@ SUB-001 至 019 在 [订阅文档](../upstream/android/flows/source-subscription
 
 案例 `rule.bridgeString.null-empty-error-catch-and-continue` 通过 Kotlin/JVM probe 暴露与 Android 一致的 `getString(String?, Any?, Boolean)`、`getString(String?, Boolean)`、`getStringList(String?, Any?, Boolean)` 重载；HTML 选择由锁定 Android `AnalyzeByJSoup` 执行。用例覆盖 null 与空白输入、实体解码开关、无匹配返回、无效 CSS selector 被 JS 捕获，以及捕获后继续取值。TS 端经 QuickJS 的 `SourceRuleHost → java.getString/getStringList` 执行同一脚本。该用例映射 `analyze-rule-overloads::006-getstring`、`::007-getstringlist` 的 normal/edge/error-or-empty/continuation 维度。固定源码引导 probe 不等同于运行 Android app 或完整 `AnalyzeRule` 类。
 
+### P90 AnalyzeRule.setContent(null) 的 fatal bridge 行为
+
+Android 锁定源码中 `AnalyzeRule.setContent(Any?, String?)` 在内容为 null 时直接抛出 `java.lang.AssertionError("内容不可空（Content cannot be null）")`。`rule.bridgeContent.null-assertion-cannot-be-caught` 由签名相同的 Kotlin/JVM probe 经 Rhino 调用，并由 TS 真实 QuickJS Java bridge 执行同一 catch-and-continue 脚本；JVM 抛出 AssertionError，TS 终态为 failed。TS 使用现有 fatal bridge 标记，因此即便脚本 catch，该错误也不会被吞掉，后续 host bridge 也会被阻止。`rule.bridgeContent.set-content-chain-and-base-url` 覆盖正常 `setContent` 链式返回、新内容读取和 baseUrl 空 URL 回退。两案回链 `analyze-rule-overloads::001-setcontent` 的 normal、edge、error-or-empty、continuation 维度。reader-web 搜索入口另外断言异常后只发生原始 `/search` 请求，不会调用 JS 中的后续 `java.ajax`。这属于固定 Android 源码引导的 JVM/Rhino probe，不是完整 `AnalyzeRule` 类或 Android app/设备运行。
+
 ### P89 RuleAnalyzer 不平衡分组的 fatal bridge 行为
 
 案例 `rule.bridgeString.unbalanced-rule-escapes-catch` 让 Rhino 与 QuickJS 执行同一书源脚本：调用 `java.getString("a[@text", false)`，再尝试 catch 并继续。固定 JVM/Rhino 结果为 `java.lang.Error`，脚本无法 catch 后继续；TS 的 QuickJS host 将对应 CSS/default 规则分组错误标为 fatal，运行结果失败且不会执行后续宿主 bridge。比较器显式映射双方不同的错误类型/消息为 `android-ruleanalyzer-unbalanced-group`，同时保留双方原始错误信息。案例关联 `analyze-rule-overloads::006-getstring` 的 error-or-empty 维度；完整 rule-bridge 11/11，XPath family 188/188。该 probe 仅覆盖所列 CSS/default 分组，不代表所有 Android `RuleAnalyzer` 错误，也不构成 Android app/设备 golden。

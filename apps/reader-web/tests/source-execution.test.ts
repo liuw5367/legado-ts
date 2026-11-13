@@ -467,6 +467,34 @@ test('reader-web JavaScript source matches Android HashMap.putAll return and nul
   )
 })
 
+test('reader-web fails JavaScript after AnalyzeRule.setContent(null), including caught errors', async (t) => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.102'
+  const paths: string[] = []
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    searchUrl: `${base}/search?q={{key}}`,
+    ruleSearch: {
+      bookList: 'article',
+      name: `@js:try { java.setContent(null); } catch (error) {} java.ajax('${base}/should-not-run'); 'continued';`,
+      bookUrl: 'a@href',
+    },
+  }])
+  t.mock.method(globalThis, 'fetch', async (url: URL | string) => {
+    paths.push(new URL(String(url)).pathname)
+    return new Response('<article><h2>测试书</h2><a href="/book">详情</a></article>')
+  })
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.sourceResults[0]?.status, 'failed')
+  const diagnostic = result.sourceResults[0]?.diagnostics[0]
+  assert.ok(typeof diagnostic === 'object' && diagnostic !== null && 'message' in diagnostic)
+  assert.match(String(diagnostic.message), /Content cannot be null/u)
+  assert.deepEqual(paths, ['/search'])
+})
+
 test('reader-web JavaScript source matches Android String.replace empty-target boundaries', async () => {
   const repository = new MemoryReaderRepository(); const user = randomUUID()
   const base = 'https://8.8.4.100'

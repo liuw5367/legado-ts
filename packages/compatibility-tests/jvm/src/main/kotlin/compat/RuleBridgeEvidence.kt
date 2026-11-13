@@ -15,6 +15,56 @@ import org.jsoup.parser.Parser
 import org.jsoup.select.Elements
 import java.net.URL
 
+/** Source-guided AnalyzeRule.setContent probe backed by the pinned Android method contract. */
+internal class AnalyzeRuleSetContentProbe(initialContent: Any?) {
+    private var content: Any? = initialContent
+    private var baseUrl: String? = null
+
+    @JvmOverloads
+    fun setContent(content: Any?, baseUrl: String? = null): AnalyzeRuleSetContentProbe {
+        if (content == null) throw AssertionError("内容不可空（Content cannot be null）")
+        this.content = content
+        setBaseUrl(baseUrl)
+        return this
+    }
+
+    fun setBaseUrl(baseUrl: String?): AnalyzeRuleSetContentProbe {
+        if (baseUrl != null) this.baseUrl = baseUrl
+        return this
+    }
+
+    @JvmOverloads
+    fun getString(rule: String?, mContent: Any? = null, isUrl: Boolean = false): String {
+        if (rule.isNullOrBlank()) return if (isUrl) baseUrl.orEmpty() else ""
+        val parser = AnalyzeByJSoup((mContent ?: content).toString())
+        val value = if (isUrl) parser.getString0(rule).orEmpty() else parser.getString(rule).orEmpty()
+        return if (isUrl && value.isBlank()) baseUrl.orEmpty() else value
+    }
+}
+
+internal fun analyzeRuleSetContent(input: JsonObject): Any {
+    val content = input.get("content").asString
+    val baseUrl = input.get("baseUrl").asString
+    val rule = input.get("rule").asString
+    val probe = AnalyzeRuleSetContentProbe(content)
+    val script = if (input.get("mode").asString == "null") {
+        "var caught=false; try { java.setContent(null, ${Gson().toJson(baseUrl)}); } catch (error) { caught=true; } JSON.stringify({caught:caught,continued:java.getString(${Gson().toJson(rule)})});"
+    } else {
+        "var chained=java.setContent(${Gson().toJson(content)}, ${Gson().toJson(baseUrl)})===java; JSON.stringify({chained:chained,text:java.getString(${Gson().toJson(rule)}),emptyUrlFallback:java.getString('missing@href',null,true)});"
+    }
+    val scope = Context.enter().use { context ->
+        val currentScope = context.initStandardObjects()
+        ScriptableObject.putProperty(currentScope, "java", Context.javaToJS(probe, currentScope))
+        val result = context.evaluateString(currentScope, script, "AnalyzeRule.setContent", 1, null)
+        JsonParser.parseString(Context.toString(result)).asJsonObject
+    }
+    return if (input.get("mode").asString == "null") {
+        mapOf("caught" to scope.get("caught").asBoolean, "continued" to scope.get("continued").asString)
+    } else {
+        mapOf("chained" to scope.get("chained").asBoolean, "text" to scope.get("text").asString, "emptyUrlFallback" to scope.get("emptyUrlFallback").asString)
+    }
+}
+
 /** Mirrors the non-null Kotlin method entry declared by Android AnalyzeRule.getElements(String). */
 internal class AnalyzeRuleGetElementsProbe(private val parser: AnalyzeByJSoup) {
     fun getElements(rule: String): Elements =

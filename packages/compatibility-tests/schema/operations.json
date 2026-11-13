@@ -529,6 +529,20 @@
       "invalidRule": "string"
     }
   },
+  "rule.bridgeContent": {
+    "required": [
+      "mode",
+      "content",
+      "baseUrl",
+      "rule"
+    ],
+    "properties": {
+      "mode": "string",
+      "content": "string",
+      "baseUrl": "string",
+      "rule": "string"
+    }
+  },
   "rule.bridgeElements": {
     "required": [
       "content",
