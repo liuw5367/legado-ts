@@ -197,6 +197,97 @@ internal fun analyzeRuleLocalBindings(input: JsonObject): Any {
     )
 }
 
+/** Mirrors the Android AnalyzeRule.put/get scope order and BaseSource key/value fallback. */
+internal class AnalyzeRuleVariableScope(
+    private val variables: MutableMap<String, String>,
+    var name: String = "",
+    var title: String = "",
+) {
+    fun putVariable(key: String, value: String) {
+        variables[key] = value
+    }
+
+    fun getVariable(key: String): String = variables[key] ?: ""
+}
+
+internal class AnalyzeRuleSourceValueProbe(private val values: MutableMap<String, String>) {
+    fun put(key: String, value: String): String {
+        values[key] = value
+        return value
+    }
+
+    fun get(key: String): String = values[key] ?: ""
+}
+
+internal class AnalyzeRuleVariableBindingsProbe(
+    val book: AnalyzeRuleVariableScope?,
+    val chapter: AnalyzeRuleVariableScope?,
+    private val ruleData: AnalyzeRuleVariableScope?,
+    val source: AnalyzeRuleSourceValueProbe,
+) {
+    private val localBindings = HashMap<String, String>()
+
+    fun setLocal(key: String, value: String): AnalyzeRuleVariableBindingsProbe {
+        localBindings[key] = value
+        return this
+    }
+
+    fun put(key: String, value: String): String {
+        when {
+            chapter != null -> chapter.putVariable(key, value)
+            book != null -> book.putVariable(key, value)
+            ruleData != null -> ruleData.putVariable(key, value)
+            else -> source.put(key, value)
+        }
+        return value
+    }
+
+    fun get(key: String): String {
+        localBindings[key]?.let { return it }
+        when (key) {
+            "bookName" -> book?.let { return it.name }
+            "title" -> chapter?.let { return it.title }
+        }
+        return chapter?.getVariable(key)?.takeIf { it.isNotEmpty() }
+            ?: book?.getVariable(key)?.takeIf { it.isNotEmpty() }
+            ?: ruleData?.getVariable(key)?.takeIf { it.isNotEmpty() }
+            ?: source.get(key).takeIf { it.isNotEmpty() }
+            ?: ""
+    }
+}
+
+internal fun analyzeRuleVariables(input: JsonObject): Any {
+    fun variables(key: String): MutableMap<String, String> {
+        val values = input.getAsJsonObject(key)?.getAsJsonObject("variables") ?: return linkedMapOf()
+        return values.entrySet().associateTo(linkedMapOf()) { it.key to it.value.asString }
+    }
+
+    fun scope(key: String): AnalyzeRuleVariableScope? {
+        val value = input.getAsJsonObject(key) ?: return null
+        return AnalyzeRuleVariableScope(
+            variables(key),
+            name = value.get("name")?.asString.orEmpty(),
+            title = value.get("title")?.asString.orEmpty(),
+        )
+    }
+
+    val sourceValues = input.getAsJsonObject("sourceValues")
+        .entrySet().associateTo(linkedMapOf()) { it.key to it.value.asString }
+    val source = AnalyzeRuleSourceValueProbe(sourceValues)
+    val probe = AnalyzeRuleVariableBindingsProbe(scope("book"), scope("chapter"), scope("ruleData"), source)
+    val output = Context.enter().use { context ->
+        val currentScope = context.initStandardObjects()
+        ScriptableObject.putProperty(currentScope, "java", Context.javaToJS(probe, currentScope))
+        ScriptableObject.putProperty(currentScope, "source", Context.javaToJS(source, currentScope))
+        ScriptableObject.putProperty(currentScope, "book", Context.javaToJS(probe.book, currentScope))
+        ScriptableObject.putProperty(currentScope, "chapter", Context.javaToJS(probe.chapter, currentScope))
+        val script = "(function(){\n${input.get("code").asString}\n})()"
+        val result = context.evaluateString(currentScope, script, "AnalyzeRule.put/get", 1, null)
+        JsonParser.parseString(Context.toString(result))
+    }
+    return output
+}
+
 /** Mirrors AnalyzeRule.evalJS bindings that carry local paragraph and page values into Rhino. */
 internal class AnalyzeRuleEvalJsProbe(
     private var baseUrl: String,

@@ -242,8 +242,13 @@ export async function execute(item: CaseInput): Promise<unknown> {
         var afterInvalid=urlText(java.setRedirectUrl(${json('dataUrl')}));
         return {baseSet:baseSet,baseAfterSet:baseAfterSet,baseNullSet:baseNullSet,baseAfterNull:baseAfterNull,initialRedirect:initialRedirect,nullCaught:nullCaught,afterNull:afterNull,updatedRedirect:updatedRedirect,relativeUrl:relativeUrl,invalidRedirect:invalidRedirect,afterInvalid:afterInvalid,continued:java.setBaseUrl('https://continued.fixture.test/')===java};
       `, i.content)
-    case 'rule.bridgeLocal':
-      return script(host, `
+    case 'rule.bridgeLocal': {
+      const sourceValues = new Map([['token', 'stored-value'], ['emptyLocal', 'stored-empty-value'], ['fallback', 'fallback-value']])
+      const localHost = new SourceRuleHost({ sourceState: {
+        getValue: (_source, name) => sourceValues.get(name) ?? '',
+        putValue: (_source, name, value) => { sourceValues.set(name, value); return value },
+      } })
+      return script(localHost, `
         var chained=java.setLocal(${json('key')},${json('value')})===java;
         var localValue=String(java.get(${json('key')}));
         java.setLocal('emptyLocal','');
@@ -258,7 +263,31 @@ export async function execute(item: CaseInput): Promise<unknown> {
         var nullValueCaught=false; try{java.setLocal('null-value',null)}catch(error){nullValueCaught=true}
         var nullGetCaught=false; try{java.get(null)}catch(error){nullGetCaught=true}
         return {chained:chained,localValue:localValue,emptyLocalValue:emptyLocalValue,fallbackValue:fallbackValue,numberValue:numberValue,specialKeyValue:specialKeyValue,missingValue:missingValue,nullKeyCaught:nullKeyCaught,nullValueCaught:nullValueCaught,nullGetCaught:nullGetCaught,continued:java.setLocal('continued','ok')===java&&String(java.get('continued'))==='ok'};
-      `, '', { token: 'stored-value', emptyLocal: 'stored-empty-value', fallback: 'fallback-value' })
+      `)
+    }
+    case 'rule.bridgeVariables': {
+      const sourceValues = new Map(Object.entries(i.sourceValues as Record<string, string>))
+      const entity = (value: unknown): Record<string, unknown> | null => {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+        const record = value as Record<string, unknown>
+        const variables = record.variables
+        return { ...record, variable: JSON.stringify(typeof variables === 'object' && variables !== null && !Array.isArray(variables) ? variables : {}) }
+      }
+      const scopedHost = new SourceRuleHost({
+        request: async (input) => ({ url: input.url ?? '', status: 200, message: 'fixture response', body: '' }),
+        initialVariables: i.sourceVariables as Record<string, string>,
+        sourceState: {
+          getValue: (_source, key) => sourceValues.get(key) ?? '',
+          putValue: (_source, key, value) => { sourceValues.set(key, value); return value },
+        },
+      })
+      const value = await script(scopedHost, str('code'), '', {
+        book: entity(i.book),
+        chapter: entity(i.chapter),
+        ruleData: entity(i.ruleData),
+      })
+      return JSON.parse(String(value))
+    }
     case 'rule.bridgeEvalJS':
       return script(host, `
         java.setBaseUrl(${json('baseUrl')});

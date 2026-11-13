@@ -2718,6 +2718,26 @@
       ]
     },
     {
+      "operation": "rule.bridgeVariables",
+      "method": "AnalyzeRule.put(String, String) / get(String) scope behavior",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "ts/adapter.ts → rule.bridgeVariables / SourceRuleHost → java.put/get",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeVariables.scope-priority-and-binding-name-collisions",
+        "rule.bridgeVariables.source-store-fallback"
+      ],
+      "manifestMembers": [
+        "analyze-rule-overloads::012-put",
+        "analyze-rule-overloads::013-get"
+      ]
+    },
+    {
       "operation": "rule.bridgeEvalJS",
       "method": "AnalyzeRule.evalJS(String, Any?) bindings and localBindings",
       "reference": "upstream-guided-flow",

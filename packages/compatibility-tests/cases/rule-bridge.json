@@ -126,6 +126,123 @@
     }
   },
   {
+    "id": "rule.bridgeVariables.scope-priority-and-binding-name-collisions",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeVariables",
+    "input": {
+      "code": "var shadow=java.get('shadow'); var chapterFallback=java.get('chapterFallback'); var ruleDataFallback=java.get('ruleDataFallback'); var sourceFallback=java.get('sourceOnly'); var urlKey=String(java.get('https://source.fixture.test/store-key')); var bindingBook=java.get('book'); var bindingChapter=java.get('chapter'); var bindingRuleData=java.get('ruleData'); var bookName=java.get('bookName'); var title=java.get('title'); java.setLocal('shadow','local-shadow'); var localOverride=java.get('shadow'); java.setLocal('emptyLocal',''); var emptyLocalOverride=java.get('emptyLocal'); var putReturn=java.put('writeTarget','written'); return JSON.stringify({shadow:shadow,chapterFallback:chapterFallback,ruleDataFallback:ruleDataFallback,sourceFallback:sourceFallback,urlKey:urlKey,bindingBook:bindingBook,bindingChapter:bindingChapter,bindingRuleData:bindingRuleData,bookName:bookName,title:title,localOverride:localOverride,emptyLocalOverride:emptyLocalOverride,putReturn:putReturn,putReadBack:java.get('writeTarget'),chapterWrite:chapter.getVariable('writeTarget'),bookWrite:book.getVariable('writeTarget')});",
+      "sourceValues": {
+        "sourceOnly": "source-store-value",
+        "https://source.fixture.test/store-key": "url-shaped-source-key"
+      },
+      "sourceVariables": {
+        "sourceOnly": "source-variable-value"
+      },
+      "book": {
+        "name": "Android Book",
+        "variables": {
+          "shadow": "book-shadow",
+          "chapterFallback": "book-fallback",
+          "ruleDataFallback": "",
+          "book": "book-binding-variable",
+          "chapter": "book-chapter-variable",
+          "ruleData": "book-rule-data-variable",
+          "bookName": "stored-book-name",
+          "title": "book-title-variable",
+          "writeTarget": "book-before"
+        }
+      },
+      "chapter": {
+        "title": "Android Chapter",
+        "variables": {
+          "shadow": "chapter-shadow",
+          "chapterFallback": "",
+          "ruleDataFallback": "",
+          "book": "chapter-book-variable",
+          "chapter": "chapter-binding-variable",
+          "ruleData": "chapter-rule-data-variable",
+          "bookName": "stored-chapter-book-name",
+          "title": "stored-chapter-title",
+          "emptyLocal": "fallback-value"
+        }
+      },
+      "ruleData": {
+        "variables": {
+          "shadow": "rule-data-shadow",
+          "chapterFallback": "rule-data-fallback",
+          "ruleDataFallback": "rule-data-value",
+          "book": "rule-data-book-variable",
+          "chapter": "rule-data-chapter-variable",
+          "ruleData": "rule-data-binding-variable"
+        }
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.put(String, String) / get(String)"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "error-or-empty",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "shadow": "chapter-shadow",
+        "chapterFallback": "book-fallback",
+        "ruleDataFallback": "rule-data-value",
+        "sourceFallback": "source-store-value",
+        "urlKey": "url-shaped-source-key",
+        "bindingBook": "chapter-book-variable",
+        "bindingChapter": "chapter-binding-variable",
+        "bindingRuleData": "chapter-rule-data-variable",
+        "bookName": "Android Book",
+        "title": "Android Chapter",
+        "localOverride": "local-shadow",
+        "emptyLocalOverride": "",
+        "putReturn": "written",
+        "putReadBack": "written",
+        "chapterWrite": "written",
+        "bookWrite": "book-before"
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeVariables.source-store-fallback",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeVariables",
+    "input": {
+      "code": "var before=java.get('persist'); var putReturn=java.put('persist','new-value'); return JSON.stringify({before:before,putReturn:putReturn,after:java.get('persist'),sourceValue:source.get('persist')});",
+      "sourceValues": {
+        "persist": "stored-value"
+      },
+      "sourceVariables": {
+        "persist": "source-variable-value"
+      }
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.put(String, String) / get(String) → BaseSource.put/get"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "error-or-empty",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "before": "stored-value",
+        "putReturn": "new-value",
+        "after": "new-value",
+        "sourceValue": "new-value"
+      }
+    }
+  },
+  {
     "id": "rule.bridgeEvalJS.local-bindings-and-null-source",
     "family": "rule-bridge",
     "operation": "rule.bridgeEvalJS",

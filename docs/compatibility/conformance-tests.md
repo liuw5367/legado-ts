@@ -493,6 +493,14 @@ Android 锁定源码中 `AnalyzeRule.setContent(Any?, String?)` 在内容为 nul
 
 案例 `rule.bridgeUrl.setters-null-and-fallback` 对照 Android `AnalyzeRule.setBaseUrl(String?)` 与 `setRedirectUrl(String)`（锁定源码 `AnalyzeRule.kt:118,125`）：`setBaseUrl(null)` 保持原值并返回同一对象；`setRedirectUrl(null)` 由 Kotlin 非空参数入口抛出可捕获异常。有效 URL 会更新重定向，非法 URL 保留旧重定向，base64 data URL 返回当前重定向而不覆盖。Kotlin/JVM probe 使用 JDK `URL`，并通过 `AnalyzeByJSoup` 的 URL 字符串重载观察基址、重定向与相对地址解析；TS 端由 QuickJS 的真实 `SourceRuleHost` bridge 执行同一脚本。案例映射到 `analyze-rule-overloads::002-setbaseurl`、`::003-setredirecturl` 的 normal、edge、error-or-empty、continuation 维度。reader-web mainJs 搜索入口另外检查 setter 可见性和 null catch-and-continue。修复前 `nullCaught` 不同，修复后专项 1/1 相等；全量对照 `run-9SKnPF` 中 1037 项有 1032 项一致、5 项既有逐例允许差异、0 runner failure。该 probe 不等同完整 `AnalyzeRule` 类或 Android app/设备运行。
 
+### P96 AnalyzeRule.put/get 的作用域读写
+
+案例 `rule.bridgeVariables.scope-priority-and-binding-name-collisions` 与 `rule.bridgeVariables.source-store-fallback` 按锁定 Android `AnalyzeRule.put/get` 契约执行同一段脚本。`put` 写入第一个存在的 chapter、book、ruleData 实体，否则写入 `BaseSource` key/value store；`get` 按局部值、`bookName/title`、非空 chapter/book/ruleData 变量、source store 的顺序查找，未命中为空串。Android 单参数 `get(String)` 按 key 读取，即使 key 为 URL 形状；网络方法 `get(String, headers)` 是另一个重载。覆盖实体优先级、与 JS 绑定同名的 key、URL 形状 key、空值跳过、局部值优先级，以及无实体时 source store 的读写。案例关联 `analyze-rule-overloads::012-put` 和 `::013-get`。
+
+Kotlin/JVM 端用 Rhino 执行固定签名 probe，TS 端走实际 `SourceRuleHost → QuickJS → java.put/get`；reader-web 另经真实搜索执行入口确认 `java.put/get` 和 `source.put/get` 读写同一存储，且 URL 形状 key 不会触发网络。修复前 `run-rC2V1U` 暴露 4 项作用域差异，补入 URL 形状 key 后修复前 `run-sM1cij` 暴露单参数重载差异；修复后两个配对案例一致，rule-bridge **19/19**，全量 `run-VflKiK` 共 **1041 项（1036 一致、5 项既有允许差异、0 未登记差异或执行失败）**，流程 **87/87**。source-execution **31/31**，reader-web typecheck 和兼容机制 **25/25** 通过。
+
+JVM/Rhino 端按 Android 锁定源码方法契约构造 probe，使用受控实体夹具驱动作用域；这不代表完整 `AnalyzeRule` 类、Android app 或设备 golden。
+
 ### P95 reader-web 搜索入口中的 AnalyzeRule.evalJS
 
 `apps/reader-web/tests/source-execution.test.ts` 的 `reader-web search preserves Android AnalyzeRule.evalJS bindings and current content` 经真实 `createReaderRuntime.runSearchBatch` 执行整源 `mainJs` 搜索。脚本使用与 P94 双端案例相同的 `baseUrl`、初始/更新正文、`result`、`page`、`paraIndex`、`paraData` 输入，并检查 null 参数可 catch、后续脚本可继续；搜索必须成功并返回预期候选及序列化值。
@@ -509,7 +517,7 @@ Kotlin/JVM 端通过 `ScriptBindings` 与 Rhino 执行签名匹配的 probe，TS
 
 案例 `rule.bridgeLocal.set-local-and-null-arguments` 依据锁定 Android `AnalyzeRule.kt:867,875-890`：`setLocal(String, String)` 写入局部 HashMap 并返回当前对象；`get(String)` 先读局部值，再读书名/章节名和其他字符串变量，找不到时返回空串。Kotlin 非空参数收到 null 时，调用方可以捕获入口异常并继续执行。
 
-Kotlin/JVM probe 保留这两个非空方法签名，并通过 Rhino 执行同一脚本；局部 Map 与代表性存储值用于观察局部值优先级、空局部值覆盖回退值、普通变量回退、缺失值、数字到字符串转换及 `__proto__` 键。TS 端走真实 `SourceRuleHost → QuickJS → java.setLocal/get`，以相同 bindings 提供回退值。案例还分别将 null 传给 `setLocal` 的 key、value 和 `get`，比较脚本能否 catch 后继续；异常类名和消息不要求一致。案例回链 `analyze-rule-overloads::004-setlocal`，normal、edge、error-or-empty、continuation 四维均有证据。source-node 和 reader-web mainJs 搜索入口另有真实执行回归。probe 不覆盖 Android `get` 的完整 chapter/book/ruleData/source 回退生命周期，也不代表完整 `AnalyzeRule` 类或 app/设备执行。
+Kotlin/JVM probe 保留这两个非空方法签名，并通过 Rhino 执行同一脚本；局部 Map 与代表性存储值用于观察局部值优先级、空局部值覆盖回退值、普通变量回退、缺失值、数字到字符串转换及 `__proto__` 键。TS 端走真实 `SourceRuleHost → QuickJS → java.setLocal/get`，以相同 bindings 提供回退值。案例还分别将 null 传给 `setLocal` 的 key、value 和 `get`，比较脚本能否 catch 后继续执行；异常类名和消息不要求一致。案例回链 `analyze-rule-overloads::004-setlocal`，normal、edge、error-or-empty、continuation 四维均有证据。P96 的 `rule.bridgeVariables.*` 进一步覆盖完整 chapter → book → ruleData → BaseSource 的 `put/get` 查找和写入顺序。参考端仍是锁定方法契约的 JVM/Rhino probe，不代表完整 `AnalyzeRule` 类或 Android app/设备执行。
 
 ### P91 AnalyzeRule.getElement null 与空规则
 

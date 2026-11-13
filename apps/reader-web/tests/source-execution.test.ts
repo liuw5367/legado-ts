@@ -734,6 +734,33 @@ test('reader-web Java AnalyzeRule setLocal/get preserve Android local values and
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
 
+test('reader-web Java AnalyzeRule put/get falls back to BaseSource key/value storage', async (t) => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://source.fixture.test'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var before = java.get("persist");
+      var putReturn = java.put("persist", "written");
+      var after = java.get("persist");
+      var sourceValue = source.get("persist");
+      source.put("https://source.fixture.test/store-key", "url-shaped-value");
+      var urlShapedKey = java.get("https://source.fixture.test/store-key");
+      return [{ name: "AnalyzeRule put/get compatibility", author: [before,putReturn,after,sourceValue,urlShapedKey].join("|"), bookUrl: "${base}/book" }];
+    }`,
+  }])
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('single-argument java.get must read the source value store') })
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'AnalyzeRule put/get compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, '|written|written|written|url-shaped-value')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})
+
 test('reader-web search preserves Android AnalyzeRule.evalJS bindings and current content', async () => {
   const repository = new MemoryReaderRepository(); const user = randomUUID()
   const base = 'https://8.8.4.103'

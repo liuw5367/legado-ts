@@ -571,6 +571,21 @@
       "value": "string"
     }
   },
+  "rule.bridgeVariables": {
+    "required": [
+      "code",
+      "sourceValues",
+      "sourceVariables"
+    ],
+    "properties": {
+      "code": "string",
+      "sourceValues": "object",
+      "sourceVariables": "object",
+      "book": "object",
+      "chapter": "object",
+      "ruleData": "object"
+    }
+  },
   "rule.bridgeEvalJS": {
     "required": [
       "baseUrl",

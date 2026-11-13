@@ -1421,6 +1421,8 @@
         "setBaseUrl",
         "setRedirectUrl",
         "setLocal",
+        "put",
+        "get",
         "evalJS",
         "getString",
         "getStringList",
@@ -1517,6 +1519,46 @@
           "signature": "setLocal",
           "parameters": [],
           "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::012-put",
+          "owner": "AnalyzeRule",
+          "name": "put",
+          "signature": "put(String, String)",
+          "parameters": ["String", "String"],
+          "returnType": "String",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::013-get",
+          "owner": "AnalyzeRule",
+          "name": "get",
+          "signature": "get(String)",
+          "parameters": ["String"],
+          "returnType": "String",
           "implementation": "implemented",
           "verification": "ts-passed",
           "feasibility": "fixable",

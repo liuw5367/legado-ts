@@ -71,6 +71,7 @@
         "rule.bridgeContent",
         "rule.bridgeUrl",
         "rule.bridgeLocal",
+        "rule.bridgeVariables",
         "rule.bridgeEvalJS",
         "rule.bridgeElement",
         "rule.bridgeElements",
@@ -1949,6 +1950,48 @@
               },
               "value": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeVariables"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "code",
+              "sourceValues",
+              "sourceVariables"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "sourceValues": {
+                "type": "object"
+              },
+              "sourceVariables": {
+                "type": "object"
+              },
+              "book": {
+                "type": "object"
+              },
+              "chapter": {
+                "type": "object"
+              },
+              "ruleData": {
+                "type": "object"
               }
             },
             "additionalProperties": false
