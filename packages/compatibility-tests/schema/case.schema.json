@@ -70,6 +70,7 @@
         "rule.bridgeString",
         "rule.bridgeContent",
         "rule.bridgeUrl",
+        "rule.bridgeLocal",
         "rule.bridgeElement",
         "rule.bridgeElements",
         "rule.bridgeObjects",
@@ -1901,12 +1902,53 @@
               "dataUrl"
             ],
             "properties": {
-              "content": { "type": "string" },
-              "baseUrl": { "type": "string" },
-              "initialRedirectUrl": { "type": "string" },
-              "nextRedirectUrl": { "type": "string" },
-              "invalidRedirectUrl": { "type": "string" },
-              "dataUrl": { "type": "string" }
+              "content": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "type": "string"
+              },
+              "initialRedirectUrl": {
+                "type": "string"
+              },
+              "nextRedirectUrl": {
+                "type": "string"
+              },
+              "invalidRedirectUrl": {
+                "type": "string"
+              },
+              "dataUrl": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rule.bridgeLocal"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": [
+              "key",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           }
@@ -1925,9 +1967,13 @@
         "properties": {
           "input": {
             "type": "object",
-            "required": ["content"],
+            "required": [
+              "content"
+            ],
             "properties": {
-              "content": { "type": "string" }
+              "content": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           }

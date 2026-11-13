@@ -493,6 +493,12 @@ Android 锁定源码中 `AnalyzeRule.setContent(Any?, String?)` 在内容为 nul
 
 案例 `rule.bridgeUrl.setters-null-and-fallback` 对照 Android `AnalyzeRule.setBaseUrl(String?)` 与 `setRedirectUrl(String)`（锁定源码 `AnalyzeRule.kt:118,125`）：`setBaseUrl(null)` 保持原值并返回同一对象；`setRedirectUrl(null)` 由 Kotlin 非空参数入口抛出可捕获异常。有效 URL 会更新重定向，非法 URL 保留旧重定向，base64 data URL 返回当前重定向而不覆盖。Kotlin/JVM probe 使用 JDK `URL`，并通过 `AnalyzeByJSoup` 的 URL 字符串重载观察基址、重定向与相对地址解析；TS 端由 QuickJS 的真实 `SourceRuleHost` bridge 执行同一脚本。案例映射到 `analyze-rule-overloads::002-setbaseurl`、`::003-setredirecturl` 的 normal、edge、error-or-empty、continuation 维度。reader-web mainJs 搜索入口另外检查 setter 可见性和 null catch-and-continue。修复前 `nullCaught` 不同，修复后专项 1/1 相等；全量对照 `run-9SKnPF` 中 1037 项有 1032 项一致、5 项既有逐例允许差异、0 runner failure。该 probe 不等同完整 `AnalyzeRule` 类或 Android app/设备运行。
 
+### P93 AnalyzeRule.setLocal/get 局部值与 null 参数
+
+案例 `rule.bridgeLocal.set-local-and-null-arguments` 依据锁定 Android `AnalyzeRule.kt:867,875-890`：`setLocal(String, String)` 写入局部 HashMap 并返回当前对象；`get(String)` 先读局部值，再读书名/章节名和其他字符串变量，找不到时返回空串。Kotlin 非空参数收到 null 时，调用方可以捕获入口异常并继续执行。
+
+Kotlin/JVM probe 保留这两个非空方法签名，并通过 Rhino 执行同一脚本；局部 Map 与代表性存储值用于观察局部值优先级、空局部值覆盖回退值、普通变量回退、缺失值、数字到字符串转换及 `__proto__` 键。TS 端走真实 `SourceRuleHost → QuickJS → java.setLocal/get`，以相同 bindings 提供回退值。案例还分别将 null 传给 `setLocal` 的 key、value 和 `get`，比较脚本能否 catch 后继续；异常类名和消息不要求一致。案例回链 `analyze-rule-overloads::004-setlocal`，normal、edge、error-or-empty、continuation 四维均有证据。source-node 和 reader-web mainJs 搜索入口另有真实执行回归。probe 不覆盖 Android `get` 的完整 chapter/book/ruleData/source 回退生命周期，也不代表完整 `AnalyzeRule` 类或 app/设备执行。
+
 ### P91 AnalyzeRule.getElement null 与空规则
 
 案例 `rule.bridgeElement.null-and-empty-catch-and-continue` 对照 Android `AnalyzeRule.getElement(String)`（锁定源码 `AnalyzeRule.kt:387`）的非空参数签名及规则拆分行为：Rhino 将 null 传给 Kotlin probe 后，书源 JS 可以捕获异常并继续；空串和 ASCII 空白规则经过 `splitSourceRule` 后返回 null；有效 CSS 规则仍返回可链式访问的 `Elements`。QuickJS 通过同一脚本比较捕获、空值、元素数量、文本和后续调用；异常类名不作为等价条件。案例映射到 `analyze-rule-overloads::011-getelement` 的 normal、edge、error-or-empty、continuation 维度。source-node 的真实 `SourceRuleHost` 回归及 reader-web `mainJs` 搜索入口进一步验证同一行为。JVM probe 不是完整 Android `AnalyzeRule` 类执行或 Android app/设备 golden。

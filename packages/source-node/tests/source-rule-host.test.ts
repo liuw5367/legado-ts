@@ -1253,7 +1253,7 @@ test('java.getElement aligns Android null, empty rule, and continuation behavior
   })
 })
 
-test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义', async () => {
+test('AnalyzeRule 继承方法保持 Android 的链式返回、局部变量和 URL 语义', async () => {
   const host = new SourceRuleHost()
   const result = await evaluate(host, `@js:
     var before = redirectUrl;
@@ -1266,9 +1266,19 @@ test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义
     var dataResult = java.setRedirectUrl('data:text/plain;base64,QQ==');
     var nullCaught = false;
     try { java.setRedirectUrl(null); } catch (error) { nullCaught = true; }
+    var nullLocalKeyCaught = false;
+    try { java.setLocal(null, 'ignored'); } catch (error) { nullLocalKeyCaught = true; }
+    var nullLocalValueCaught = false;
+    try { java.setLocal('null-value', null); } catch (error) { nullLocalValueCaught = true; }
+    var nullGetCaught = false;
+    try { java.get(null); } catch (error) { nullGetCaught = true; }
     JSON.stringify({
       localIsJava: localResult === java,
       localValue: java.getLocal('token'),
+      localGetValue: java.get('token'),
+      nullLocalKeyCaught: nullLocalKeyCaught,
+      nullLocalValueCaught: nullLocalValueCaught,
+      nullGetCaught: nullGetCaught,
       contentIsJava: contentResult === java,
       baseIsJava: baseResult === java,
       before: before,
@@ -1284,6 +1294,10 @@ test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义
   assert.deepEqual(JSON.parse(String(result.value)), {
     localIsJava: true,
     localValue: 'ok',
+    localGetValue: 'ok',
+    nullLocalKeyCaught: true,
+    nullLocalValueCaught: true,
+    nullGetCaught: true,
     contentIsJava: true,
     baseIsJava: true,
     before: 'https://fixture.invalid',

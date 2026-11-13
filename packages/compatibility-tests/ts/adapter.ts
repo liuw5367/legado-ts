@@ -32,10 +32,13 @@ function checked(output: WorkflowRuleOutput): unknown {
   if (output.status !== 'success' && output.status !== 'empty') throw new ObservedError(output.status, output.message ?? output.status)
   return output.value
 }
-async function script(host: SourceRuleHost, expression: string, content: unknown = ''): Promise<unknown> {
+async function script(host: SourceRuleHost, expression: string, content: unknown = '', bindings?: Record<string, unknown>): Promise<unknown> {
   // 在真正的 QuickJS/Java bridge 内捕获异常，保留原始错误；不把宿主包装状态误当 API 返回值。
   const code = `JSON.stringify((function(){try{return {outcome:'return',value:(function(){${expression}})()}}catch(e){return {outcome:'throw',error:{class:String(e.name||'Error'),message:String(e.message||e)}}}})())`
-  const raw = checked(await host.executeJavaScript(code, 'content', source, content))
+  const output = bindings === undefined
+    ? await host.executeJavaScript(code, 'content', source, content)
+    : await host.executeWorkflowJavaScript({ source, stage: 'content', content, bindings, code })
+  const raw = checked(output)
   const result = JSON.parse(String(raw)) as { outcome: string; value?: unknown; error?: { class: string; message: string } }
   if (result.outcome === 'throw') throw new ObservedError(result.error!.class, result.error!.message)
   return result.value
@@ -239,6 +242,23 @@ export async function execute(item: CaseInput): Promise<unknown> {
         var afterInvalid=urlText(java.setRedirectUrl(${json('dataUrl')}));
         return {baseSet:baseSet,baseAfterSet:baseAfterSet,baseNullSet:baseNullSet,baseAfterNull:baseAfterNull,initialRedirect:initialRedirect,nullCaught:nullCaught,afterNull:afterNull,updatedRedirect:updatedRedirect,relativeUrl:relativeUrl,invalidRedirect:invalidRedirect,afterInvalid:afterInvalid,continued:java.setBaseUrl('https://continued.fixture.test/')===java};
       `, i.content)
+    case 'rule.bridgeLocal':
+      return script(host, `
+        var chained=java.setLocal(${json('key')},${json('value')})===java;
+        var localValue=String(java.get(${json('key')}));
+        java.setLocal('emptyLocal','');
+        var emptyLocalValue=String(java.get('emptyLocal'));
+        var fallbackValue=String(java.get('fallback'));
+        java.setLocal('number',12);
+        var numberValue=String(java.get('number'));
+        java.setLocal('__proto__','safe-value');
+        var specialKeyValue=java.get('__proto__');
+        var missingValue=java.get('missing');
+        var nullKeyCaught=false; try{java.setLocal(null,'ignored')}catch(error){nullKeyCaught=true}
+        var nullValueCaught=false; try{java.setLocal('null-value',null)}catch(error){nullValueCaught=true}
+        var nullGetCaught=false; try{java.get(null)}catch(error){nullGetCaught=true}
+        return {chained:chained,localValue:localValue,emptyLocalValue:emptyLocalValue,fallbackValue:fallbackValue,numberValue:numberValue,specialKeyValue:specialKeyValue,missingValue:missingValue,nullKeyCaught:nullKeyCaught,nullValueCaught:nullValueCaught,nullGetCaught:nullGetCaught,continued:java.setLocal('continued','ok')===java&&String(java.get('continued'))==='ok'};
+      `, '', { token: 'stored-value', emptyLocal: 'stored-empty-value', fallback: 'fallback-value' })
     case 'rule.bridgeElement':
       return script(host, `var nullCaught=false; try { java.getElement(null); } catch (error) { nullCaught=true; } var empty=java.getElement(''), whitespace=java.getElement(' '), selected=java.getElement('p'); return {nullCaught:nullCaught,emptyReturnsNull:empty===null,whitespaceReturnsNull:whitespace===null,count:selected.size(),firstText:selected.get(0).text(),continued:java.getElement('p').size()};`, i.content)
     case 'rule.bridgeString':

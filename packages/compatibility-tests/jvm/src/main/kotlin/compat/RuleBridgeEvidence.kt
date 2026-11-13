@@ -142,6 +142,59 @@ internal fun analyzeRuleUrlSetters(input: JsonObject): Any {
     )
 }
 
+/** Mirrors the Android AnalyzeRule.setLocal/get signatures and local lookup behavior. */
+internal class AnalyzeRuleLocalBindingsProbe {
+    private val localBindings = HashMap<String, String>()
+    private val storedBindings = mapOf("token" to "stored-value", "emptyLocal" to "stored-empty-value", "fallback" to "fallback-value")
+
+    fun setLocal(key: String, value: String): AnalyzeRuleLocalBindingsProbe {
+        localBindings[key] = value
+        return this
+    }
+
+    fun get(key: String): String = localBindings[key] ?: storedBindings[key]?.takeIf { it.isNotEmpty() } ?: ""
+}
+
+internal fun analyzeRuleLocalBindings(input: JsonObject): Any {
+    val probe = AnalyzeRuleLocalBindingsProbe()
+    val key = input.get("key").asString
+    val value = input.get("value").asString
+    val js = """
+        var chained=java.setLocal(${Gson().toJson(key)},${Gson().toJson(value)})===java;
+        var localValue=String(java.get(${Gson().toJson(key)}));
+        java.setLocal('emptyLocal','');
+        var emptyLocalValue=String(java.get('emptyLocal'));
+        var fallbackValue=String(java.get('fallback'));
+        java.setLocal('number',12);
+        var numberValue=String(java.get('number'));
+        java.setLocal('__proto__','safe-value');
+        var specialKeyValue=java.get('__proto__');
+        var missingValue=java.get('missing');
+        var nullKeyCaught=false; try{java.setLocal(null,'ignored')}catch(error){nullKeyCaught=true}
+        var nullValueCaught=false; try{java.setLocal('null-value',null)}catch(error){nullValueCaught=true}
+        var nullGetCaught=false; try{java.get(null)}catch(error){nullGetCaught=true}
+        JSON.stringify({chained:chained,localValue:localValue,emptyLocalValue:emptyLocalValue,fallbackValue:fallbackValue,numberValue:numberValue,specialKeyValue:specialKeyValue,missingValue:missingValue,nullKeyCaught:nullKeyCaught,nullValueCaught:nullValueCaught,nullGetCaught:nullGetCaught,continued:java.setLocal('continued','ok')===java&&String(java.get('continued'))==='ok'});
+    """.trimIndent()
+    val output = Context.enter().use { context ->
+        val scope = context.initStandardObjects()
+        ScriptableObject.putProperty(scope, "java", Context.javaToJS(probe, scope))
+        JsonParser.parseString(Context.toString(context.evaluateString(scope, js, "AnalyzeRule local bindings", 1, null))).asJsonObject
+    }
+    return mapOf(
+        "chained" to output.get("chained").asBoolean,
+        "localValue" to output.get("localValue").asString,
+        "emptyLocalValue" to output.get("emptyLocalValue").asString,
+        "fallbackValue" to output.get("fallbackValue").asString,
+        "numberValue" to output.get("numberValue").asString,
+        "specialKeyValue" to output.get("specialKeyValue").asString,
+        "missingValue" to output.get("missingValue").asString,
+        "nullKeyCaught" to output.get("nullKeyCaught").asBoolean,
+        "nullValueCaught" to output.get("nullValueCaught").asBoolean,
+        "nullGetCaught" to output.get("nullGetCaught").asBoolean,
+        "continued" to output.get("continued").asBoolean,
+    )
+}
+
 /** Mirrors AnalyzeRule.getElement's non-null signature and empty splitSourceRule result. */
 internal class AnalyzeRuleGetElementProbe(private val parser: AnalyzeByJSoup) {
     fun getElement(rule: String): Any? =

@@ -2700,6 +2700,24 @@
       ]
     },
     {
+      "operation": "rule.bridgeLocal",
+      "method": "AnalyzeRule.setLocal(String, String) / get(String)",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "ts/adapter.ts → rule.bridgeLocal / SourceRuleHost → java.setLocal/get",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeLocal.set-local-and-null-arguments"
+      ],
+      "manifestMembers": [
+        "analyze-rule-overloads::004-setlocal"
+      ]
+    },
+    {
       "operation": "rule.bridgeContent",
       "method": "AnalyzeRule.setContent(Any?, String?)",
       "reference": "upstream-guided-flow",

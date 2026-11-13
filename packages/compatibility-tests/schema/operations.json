@@ -561,6 +561,16 @@
       "dataUrl": "string"
     }
   },
+  "rule.bridgeLocal": {
+    "required": [
+      "key",
+      "value"
+    ],
+    "properties": {
+      "key": "string",
+      "value": "string"
+    }
+  },
   "rule.bridgeElement": {
     "required": [
       "content"

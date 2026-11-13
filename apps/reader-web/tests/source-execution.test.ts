@@ -701,3 +701,35 @@ test('reader-web Java AnalyzeRule URL setters preserve Android null, invalid and
   assert.equal(result.candidates[0]?.candidate.author, 'true|https://source.fixture.test/book/|true|https://source.fixture.test/book/|https://origin.fixture.test/first/|true|https://origin.fixture.test/first/|https://cdn.fixture.test/chapter/|https://cdn.fixture.test/chapter/|https://cdn.fixture.test/chapter/')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web Java AnalyzeRule setLocal/get preserve Android local values and null boundaries', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'http://127.0.0.1:12345'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      var chained = java.setLocal("token", "saved") === java;
+      var localValue = java.get("token");
+      var missingValue = java.get("missing");
+      var nullKeyCaught = false;
+      try { java.setLocal(null, "ignored"); } catch (error) { nullKeyCaught = true; }
+      var nullValueCaught = false;
+      try { java.setLocal("null-value", null); } catch (error) { nullValueCaught = true; }
+      var nullGetCaught = false;
+      try { java.get(null); } catch (error) { nullGetCaught = true; }
+      if (!chained || localValue !== "saved" || missingValue !== "" || !nullKeyCaught || !nullValueCaught || !nullGetCaught) {
+        throw new Error("AnalyzeRule local binding behavior differs");
+      }
+      return [{ name: "AnalyzeRule local bindings compatibility", author: [chained,localValue,missingValue,nullKeyCaught,nullValueCaught,nullGetCaught].join("|"), bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'AnalyzeRule local bindings compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, 'true|saved||true|true|true')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})
