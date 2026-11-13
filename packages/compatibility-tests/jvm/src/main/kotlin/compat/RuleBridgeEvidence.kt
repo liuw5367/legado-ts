@@ -65,6 +65,35 @@ internal fun analyzeRuleSetContent(input: JsonObject): Any {
     }
 }
 
+/** Mirrors AnalyzeRule.getElement's non-null signature and empty splitSourceRule result. */
+internal class AnalyzeRuleGetElementProbe(private val parser: AnalyzeByJSoup) {
+    fun getElement(rule: String): Any? =
+        if (rule.trim { it <= ' ' }.isEmpty()) null else parser.getElements(rule)
+}
+
+internal fun analyzeRuleGetElementNullability(input: JsonObject): Any {
+    val parser = AnalyzeByJSoup(input.get("content").asString)
+    val probe = AnalyzeRuleGetElementProbe(parser)
+    val output = Context.enter().use { context ->
+        val scope = context.initStandardObjects()
+        ScriptableObject.putProperty(scope, "java", Context.javaToJS(probe, scope))
+        val result = context.evaluateString(
+            scope,
+            "var nullCaught=false; try { java.getElement(null); } catch (error) { nullCaught=true; } var empty=java.getElement(''), whitespace=java.getElement(' '), selected=java.getElement('p'); JSON.stringify({nullCaught:nullCaught,emptyReturnsNull:empty===null,whitespaceReturnsNull:whitespace===null,count:selected.size(),firstText:selected.get(0).text(),continued:java.getElement('p').size()});",
+            "AnalyzeRule.getElement(String)", 1, null,
+        )
+        JsonParser.parseString(Context.toString(result)).asJsonObject
+    }
+    return mapOf(
+        "nullCaught" to output.get("nullCaught").asBoolean,
+        "emptyReturnsNull" to output.get("emptyReturnsNull").asBoolean,
+        "whitespaceReturnsNull" to output.get("whitespaceReturnsNull").asBoolean,
+        "count" to output.get("count").asInt,
+        "firstText" to output.get("firstText").asString,
+        "continued" to output.get("continued").asInt,
+    )
+}
+
 /** Mirrors the non-null Kotlin method entry declared by Android AnalyzeRule.getElements(String). */
 internal class AnalyzeRuleGetElementsProbe(private val parser: AnalyzeByJSoup) {
     fun getElements(rule: String): Elements =

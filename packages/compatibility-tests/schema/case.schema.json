@@ -69,6 +69,7 @@
         "flow.toc",
         "rule.bridgeString",
         "rule.bridgeContent",
+    "rule.bridgeElement",
         "rule.bridgeElements",
         "rule.bridgeObjects",
         "rule.scriptLibrary",

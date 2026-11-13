@@ -543,6 +543,14 @@
       "rule": "string"
     }
   },
+  "rule.bridgeElement": {
+    "required": [
+      "content"
+    ],
+    "properties": {
+      "content": "string"
+    }
+  },
   "rule.bridgeElements": {
     "required": [
       "content",

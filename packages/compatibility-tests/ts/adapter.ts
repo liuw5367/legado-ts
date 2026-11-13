@@ -223,6 +223,8 @@ export async function execute(item: CaseInput): Promise<unknown> {
       }
       return script(host, `var chained=java.setContent(${json('content')}, ${json('baseUrl')})===java; return {chained:chained,text:java.getString(${json('rule')}),emptyUrlFallback:java.getString('missing@href',null,true)};`, i.content)
     }
+    case 'rule.bridgeElement':
+      return script(host, `var nullCaught=false; try { java.getElement(null); } catch (error) { nullCaught=true; } var empty=java.getElement(''), whitespace=java.getElement(' '), selected=java.getElement('p'); return {nullCaught:nullCaught,emptyReturnsNull:empty===null,whitespaceReturnsNull:whitespace===null,count:selected.size(),firstText:selected.get(0).text(),continued:java.getElement('p').size()};`, i.content)
     case 'rule.bridgeString':
       if (i.mode === 'unbalanced') {
         return script(host, 'var caught=false; try { java.getString(' + json('invalidRule') + ',false); } catch (error) { caught=true; } return {caught:caught,continued:true}', i.content)

@@ -51,6 +51,35 @@
     }
   },
   {
+    "id": "rule.bridgeElement.null-and-empty-catch-and-continue",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeElement",
+    "input": {
+      "content": "<p>段落正文</p>"
+    },
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeRule.getElement(String) + splitSourceRule + AnalyzeByJSoup"
+    },
+    "tags": [
+      "normal",
+      "edge",
+      "error-or-empty",
+      "continuation"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "nullCaught": true,
+        "emptyReturnsNull": true,
+        "whitespaceReturnsNull": true,
+        "count": 1,
+        "firstText": "段落正文",
+        "continued": 1
+      }
+    }
+  },
+  {
     "id": "rule.bridgeString.batch-content-overloads",
     "family": "rule-bridge",
     "operation": "rule.bridgeString",

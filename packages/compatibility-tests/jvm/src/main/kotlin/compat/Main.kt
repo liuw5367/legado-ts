@@ -92,6 +92,7 @@ private fun execute(item: JsonObject): Any? {
         "rule.bridgeObjects" -> bridgeReturnedObjects(input)
         "rule.bridgeContent" -> analyzeRuleSetContent(input)
         "rule.bridgeString" -> analyzeRuleStringOverloads(input)
+        "rule.bridgeElement" -> analyzeRuleGetElementNullability(input)
         "rule.bridgeElements" -> analyzeRuleGetElementsNullability(input)
         "rule.regexReplace" -> analyzeRuleRegexReplacement(input)
         "rule.split" -> RuleAnalyzer(text("rule"), input.get("code")?.asBoolean ?: false).splitRule(text("operator"))

@@ -2663,6 +2663,24 @@
       ]
     },
     {
+      "operation": "rule.bridgeElement",
+      "method": "AnalyzeRule.getElement(String) + splitSourceRule + AnalyzeByJSoup",
+      "reference": "upstream-guided-flow",
+      "tsEntry": "ts/adapter.ts → rule.bridgeElement",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeElement.null-and-empty-catch-and-continue"
+      ],
+      "manifestMembers": [
+        "analyze-rule-overloads::011-getelement"
+      ]
+    },
+    {
       "operation": "rule.bridgeContent",
       "method": "AnalyzeRule.setContent(Any?, String?)",
       "reference": "upstream-guided-flow",

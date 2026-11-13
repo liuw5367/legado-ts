@@ -638,3 +638,34 @@ test('reader-web Java AnalyzeRule.getElements rejects null and allows a later ca
   assert.equal(result.candidates[0]?.candidate.author, 'true|0')
   assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
 })
+
+test('reader-web Java AnalyzeRule.getElement matches Android null and empty behavior', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'http://127.0.0.1:12345'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    mainJs: `function search(){
+      java.setContent("<p>段落正文</p>");
+      var nullCaught = false;
+      try { java.getElement(null); } catch (error) { nullCaught = true; }
+      var emptyReturnsNull = java.getElement("") === null;
+      var whitespaceReturnsNull = java.getElement(" ") === null;
+      var selected = java.getElement("p");
+      var count = selected.size();
+      var text = selected.get(0).text();
+      if (!nullCaught || !emptyReturnsNull || !whitespaceReturnsNull || count !== 1 || text !== "段落正文") {
+        throw new Error("AnalyzeRule.getElement behavior differs");
+      }
+      return [{ name: "AnalyzeRule.getElement compatibility", author: String(nullCaught) + "|" + String(emptyReturnsNull) + "|" + String(whitespaceReturnsNull) + "|" + count + "|" + text, bookUrl: "${base}/book" }];
+    }`,
+  }])
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '目标', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.sourceResults[0]?.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, 'AnalyzeRule.getElement compatibility')
+  assert.equal(result.candidates[0]?.candidate.author, 'true|true|true|1|段落正文')
+  assert.equal(result.candidates[0]?.candidate.bookUrl, `${base}/book`)
+})

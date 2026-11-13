@@ -1225,6 +1225,34 @@ test('java.getElements 提供 Android 书源使用的节点链式 API', async ()
   assert.match(nullContent.message ?? '', /Content cannot be null/u)
 })
 
+test('java.getElement aligns Android null, empty rule, and continuation behavior', async () => {
+  const host = new SourceRuleHost()
+  const output = await host.executeJavaScript(`
+    var nullCaught = false;
+    try { java.getElement(null); } catch (error) { nullCaught = true; }
+    var empty = java.getElement('');
+    var whitespace = java.getElement(' ');
+    var selected = java.getElement('p');
+    JSON.stringify({
+      nullCaught: nullCaught,
+      emptyReturnsNull: empty === null,
+      whitespaceReturnsNull: whitespace === null,
+      count: selected.size(),
+      firstText: selected.get(0).text(),
+      continued: java.getElement('p').size(),
+    });`, 'content', source, '<p>段落正文</p>')
+
+  assert.equal(output.status, 'success', output.message)
+  assert.deepEqual(JSON.parse(String(output.value)), {
+    nullCaught: true,
+    emptyReturnsNull: true,
+    whitespaceReturnsNull: true,
+    count: 1,
+    firstText: '段落正文',
+    continued: 1,
+  })
+})
+
 test('AnalyzeRule 继承方法保持 Android 的链式返回和 URL 返回语义', async () => {
   const host = new SourceRuleHost()
   const result = await evaluate(host, `@js:

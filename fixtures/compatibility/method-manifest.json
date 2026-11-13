@@ -1424,6 +1424,7 @@
         "evalJS",
         "getString",
         "getStringList",
+        "getElement",
         "getElements",
         "reGetBook",
         "refreshTocUrl"
@@ -1576,6 +1577,26 @@
           "signature": "getStringList",
           "parameters": [],
           "returnType": "unknown",
+          "implementation": "implemented",
+          "verification": "ts-passed",
+          "feasibility": "fixable",
+          "decision": "verify",
+          "fixtures": [
+            "JS-004",
+            "SCH-002"
+          ],
+          "errorCodes": [
+            "rule-failed",
+            "capability-missing"
+          ]
+        },
+        {
+          "id": "analyze-rule-overloads::011-getelement",
+          "owner": "AnalyzeRule",
+          "name": "getElement",
+          "signature": "getElement(String)",
+          "parameters": [],
+          "returnType": "Any?",
           "implementation": "implemented",
           "verification": "ts-passed",
           "feasibility": "fixable",
@@ -6112,5 +6133,5 @@
       ]
     }
   ],
-  "memberCount": 265
+  "memberCount": 266
 }
