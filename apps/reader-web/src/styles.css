@@ -85,6 +85,7 @@ a:is(.button, .brand, .nav-link, .bottom-nav-link, .back-link, .reader-exit, .re
 .bottom-nav-link.active { color: var(--primary); font-weight: 650; }
 
 .page-stack { display: flex; flex-direction: column; gap: 12px; }
+.shelf-swipe-area { flex: 1; margin-bottom: -32px; padding-bottom: 32px; touch-action: pan-y pinch-zoom; }
 .page-narrow { width: 100%; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .compact-heading { min-height: 48px; }

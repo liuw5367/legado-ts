@@ -12,7 +12,7 @@ import { PageHeader } from '../components/page-header.tsx'
 import { BookOpen, Bookmark, History, LoaderCircle, RefreshCw, Search } from 'lucide-react'
 import { EmptyState } from '../components/empty-state.tsx'
 import { useHomeResource } from '../lib/use-home-resource.ts'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type TouchEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BookCover } from '../components/book-cover.tsx'
 import { LoadingState } from '../components/loading-state.tsx'
@@ -58,6 +58,31 @@ export function AccountHomePage() {
   }, [view])
   const groups = useHomeResource<ApiShelfGroups>('/api/bookshelf-groups', 'groups')
   const groupData = groups.data
+  const groupOptions = [{ id: 'all', name: '全部' }, ...(groupData?.groups.length ? [{ id: 'ungrouped', name: '默认' }, ...groupData.groups] : [])]
+  const groupTouch = useRef<{ id: number; x: number; y: number } | null>(null)
+  const canSwipeGroups = view === 'bookshelf' && groupInitialized === user?.id && groupOptions.length > 1
+
+  function startGroupSwipe(event: TouchEvent<HTMLDivElement>) {
+    const touch = event.touches[0]
+    groupTouch.current = canSwipeGroups && event.touches.length === 1 && touch &&
+      !(event.target instanceof Element && event.target.closest('.more-menu, dialog'))
+      ? { id: touch.identifier, x: touch.clientX, y: touch.clientY }
+      : null
+  }
+
+  function endGroupSwipe(event: TouchEvent<HTMLDivElement>) {
+    const start = groupTouch.current
+    groupTouch.current = null
+    if (!start || !canSwipeGroups) return
+    const touch = Array.from(event.changedTouches).find((point) => point.identifier === start.id)
+    if (!touch) return
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    if (Math.abs(dx) < 48 || Math.abs(dx) <= Math.abs(dy) * 1.5) return
+    const index = groupOptions.findIndex((group) => group.id === selectedGroup)
+    const next = groupOptions[index + (dx < 0 ? 1 : -1)]
+    if (index >= 0 && next) setSelectedGroup(next.id)
+  }
   // 先完成分组和设置加载并提交启动分组，避免先显示全部书籍再切到目标分组。
   const shelfReady = settingsLoadStatus === 'ready' && !groups.loading && groupData !== null && groupInitialized === user?.id
   const shelf = useHomeResource<ApiBookshelf>('/api/bookshelf', 'bookshelf', view === 'bookshelf' && shelfReady, settings.general.bookshelfSort)
@@ -155,26 +180,28 @@ export function AccountHomePage() {
       <button className={view === 'history' ? 'selected' : ''} type="button" role="tab" aria-selected={view === 'history'} onClick={() => selectView('history')}>搜索 {history.data ? <span>{history.data.searchHistory.length}</span> : null}</button>
     </div>
     {view === 'bookshelf' && groups.error ? <DismissibleMessage className="error compact-message" role="alert">分组加载失败：{groups.error}<Button variant="secondary" size="sm" onClick={groups.retry}>重试分组</Button></DismissibleMessage> : null}
-    {view === 'bookshelf' && groupData && groupInitialized === user?.id ? <div className="shelf-toolbar"><div className="shelf-group-bar" aria-label="书架分组">{[{ id: 'all', name: '全部' }, ...(groupData.groups.length > 0 ? [{ id: 'ungrouped', name: '默认' }, ...groupData.groups] : [])].map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div><Button className="shelf-refresh-button" variant="secondary" size="sm" aria-label={batchBusy ? '正在刷新书架' : '刷新当前分组'} title="刷新当前分组" disabled={batchBusy || singleBusy > 0 || bookItems.length === 0} onClick={() => void refreshGroup()}><RefreshCw className={batchBusy ? 'book-refresh-spinner' : undefined} aria-hidden="true" /></Button></div> : null}
-    {view === 'bookshelf' && shelf.data && bookItems.length === 0 && selectedGroup !== 'all' ? <EmptyState icon={BookOpen} title="这个分组还没有书" description="搜索书籍后加入分组" /> : null}
-    {current.data === null ? current.error ? <div className="error-state"><DismissibleMessage className="error" role="alert">{current.error}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={current.retry}>重试</Button></div></div> : view === 'bookshelf' && (settingsLoadStatus === 'error' || groups.error) ? null : <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : <>
-      {current.loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
-      {current.error ? <DismissibleMessage className="error compact-message" role="alert">{current.error}<Button variant="secondary" size="sm" onClick={current.retry}>重试</Button></DismissibleMessage> : null}
-      {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success compact-message" role="status">{feedback}</DismissibleMessage> : null}
-      {retryBooks.length > 0 ? <Button variant="secondary" size="sm" disabled={batchBusy} onClick={() => void refreshGroup(retryBooks)}>重试未完成书籍（{retryBooks.length}）</Button> : null}
-      {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="error compact-message" role="alert">{message}</DismissibleMessage> : null}
-      {view === 'history' ? <SearchHistory items={history.data?.searchHistory ?? []} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList batchBusy={batchBusy} onSingleBusy={setSingleBusy} pendingBooks={pendingBooks} batchErrors={batchErrors} onRefreshed={updateBookChapters} onOrganized={setFeedback} view={view} items={bookItems} showRemove={view === 'bookshelf'} hideEmpty={view === 'bookshelf' && selectedGroup !== 'all'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
-    </>}
+    {view === 'bookshelf' && groupData && groupInitialized === user?.id ? <div className="shelf-toolbar"><div className="shelf-group-bar" aria-label="书架分组">{groupOptions.map((group) => <Button size="sm" variant={selectedGroup === group.id ? 'default' : 'secondary'} key={group.id} aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>{group.name}</Button>)}</div><Button className="shelf-refresh-button" variant="secondary" size="sm" aria-label={batchBusy ? '正在刷新书架' : '刷新当前分组'} title="刷新当前分组" disabled={batchBusy || singleBusy > 0 || bookItems.length === 0} onClick={() => void refreshGroup()}><RefreshCw className={batchBusy ? 'book-refresh-spinner' : undefined} aria-hidden="true" /></Button></div> : null}
+    <div className={view === 'bookshelf' ? 'page-stack shelf-swipe-area' : 'page-stack'} onTouchStart={startGroupSwipe} onTouchEnd={endGroupSwipe} onTouchCancel={() => { groupTouch.current = null }}>
+      {view === 'bookshelf' && shelf.data && bookItems.length === 0 && selectedGroup !== 'all' ? <EmptyState icon={BookOpen} title="这个分组还没有书" description="搜索书籍后加入分组" /> : null}
+      {current.data === null ? current.error ? <div className="error-state"><DismissibleMessage className="error" role="alert">{current.error}</DismissibleMessage><div className="actions"><Button variant="secondary" size="sm" type="button" onClick={current.retry}>重试</Button></div></div> : view === 'bookshelf' && (settingsLoadStatus === 'error' || groups.error) ? null : <LoadingState message="正在读取你的阅读数据…" variant="viewport" /> : <>
+        {current.loading ? <LoadingState message="正在更新你的阅读数据…" variant="inline" /> : null}
+        {current.error ? <DismissibleMessage className="error compact-message" role="alert">{current.error}<Button variant="secondary" size="sm" onClick={current.retry}>重试</Button></DismissibleMessage> : null}
+        {feedback ? <DismissibleMessage onDismiss={() => setFeedback('')} className="success compact-message" role="status">{feedback}</DismissibleMessage> : null}
+        {retryBooks.length > 0 ? <Button variant="secondary" size="sm" disabled={batchBusy} onClick={() => void refreshGroup(retryBooks)}>重试未完成书籍（{retryBooks.length}）</Button> : null}
+        {message.length > 0 ? <DismissibleMessage onDismiss={() => setMessage('')} className="error compact-message" role="alert">{message}</DismissibleMessage> : null}
+        {view === 'history' ? <SearchHistory items={history.data?.searchHistory ?? []} deletingId={deletingHistory} onRemove={(id) => void removeHistory(id)} /> : <BookList batchBusy={batchBusy} onSingleBusy={setSingleBusy} pendingBooks={pendingBooks} batchErrors={batchErrors} onRefreshed={updateBookChapters} onOrganized={setFeedback} onReadingRemoved={(bookId) => reading.setData((data) => data && { reading: data.reading.filter((row) => row.book.id !== bookId) })} view={view} items={bookItems} showRemove={view === 'bookshelf'} hideEmpty={view === 'bookshelf' && selectedGroup !== 'all'} removingId={removing} onRemove={(bookId) => void removeBook(bookId)} />}
+      </>}
+    </div>
   </section>
 }
 
-function BookList({ batchBusy, onSingleBusy, pendingBooks, batchErrors, onRefreshed, view, items, showRemove, hideEmpty = false, removingId, onRemove, onOrganized }: { batchBusy: boolean; onSingleBusy: (update: (count: number) => number) => void; pendingBooks: Set<string>; batchErrors: Record<string, string>; onRefreshed: (bookId: string, editionKey: string, chapters: RefreshShelfChaptersResponse) => void; view: View; items: BookItem[]; showRemove: boolean; hideEmpty?: boolean; onOrganized: (message: string) => void; removingId: string | undefined; onRemove: (bookId: string) => void }) {
+function BookList({ batchBusy, onSingleBusy, pendingBooks, batchErrors, onRefreshed, view, items, showRemove, hideEmpty = false, removingId, onRemove, onOrganized, onReadingRemoved }: { batchBusy: boolean; onSingleBusy: (update: (count: number) => number) => void; pendingBooks: Set<string>; batchErrors: Record<string, string>; onRefreshed: (bookId: string, editionKey: string, chapters: RefreshShelfChaptersResponse) => void; view: View; items: BookItem[]; showRemove: boolean; hideEmpty?: boolean; onOrganized: (message: string) => void; onReadingRemoved: (bookId: string) => void; removingId: string | undefined; onRemove: (bookId: string) => void }) {
   if (items.length === 0 && hideEmpty) return null
   if (items.length === 0) return <EmptyState icon={showRemove ? BookOpen : Bookmark} title={showRemove ? '书架还是空的' : '还没有阅读记录'} description={showRemove ? '搜索书籍并加入书架' : '开始阅读后会显示在这里'} />
-  return <div className="book-list">{items.map((item) => <BookRow batchBusy={batchBusy} onSingleBusy={onSingleBusy} batchLoading={pendingBooks.has(JSON.stringify([item.book.id, item.edition.editionKey]))} batchError={batchErrors[JSON.stringify([item.book.id, item.edition.editionKey])]} onRefreshed={onRefreshed} key={`${item.book.id}:${item.edition.editionKey}`} item={item} onOrganized={onOrganized} view={view} showRemove={showRemove} removing={removingId === item.book.id} onRemove={onRemove} />)}</div>
+  return <div className="book-list">{items.map((item) => <BookRow batchBusy={batchBusy} onSingleBusy={onSingleBusy} batchLoading={pendingBooks.has(JSON.stringify([item.book.id, item.edition.editionKey]))} batchError={batchErrors[JSON.stringify([item.book.id, item.edition.editionKey])]} onRefreshed={onRefreshed} key={`${item.book.id}:${item.edition.editionKey}`} item={item} onOrganized={onOrganized} onReadingRemoved={onReadingRemoved} view={view} showRemove={showRemove} removing={removingId === item.book.id} onRemove={onRemove} />)}</div>
 }
 
-function BookRow({ batchBusy, onSingleBusy, batchLoading, batchError, onRefreshed, view, item, showRemove, removing, onRemove, onOrganized }: { batchBusy: boolean; onSingleBusy: (update: (count: number) => number) => void; batchLoading: boolean; batchError: string | undefined; onRefreshed: (bookId: string, editionKey: string, chapters: RefreshShelfChaptersResponse) => void; view: View; item: BookItem; showRemove: boolean; onOrganized: (message: string) => void; removing: boolean; onRemove: (bookId: string) => void }) {
+function BookRow({ batchBusy, onSingleBusy, batchLoading, batchError, onRefreshed, view, item, showRemove, removing, onRemove, onOrganized, onReadingRemoved }: { batchBusy: boolean; onSingleBusy: (update: (count: number) => number) => void; batchLoading: boolean; batchError: string | undefined; onRefreshed: (bookId: string, editionKey: string, chapters: RefreshShelfChaptersResponse) => void; view: View; item: BookItem; showRemove: boolean; onOrganized: (message: string) => void; onReadingRemoved: (bookId: string) => void; removing: boolean; onRemove: (bookId: string) => void }) {
   const [picker, setPicker] = useState<'join' | 'move' | 'group' | null>(null)
   const [confirmReadingRemoval, setConfirmReadingRemoval] = useState(false)
   const [removingReading, setRemovingReading] = useState(false)
@@ -196,7 +223,10 @@ function BookRow({ batchBusy, onSingleBusy, batchLoading, batchError, onRefreshe
     setReadingRemovalError('')
     try {
       await navigation?.positions.flush(book.id)
-      await apiFetch(`/api/books/${encodeURIComponent(book.id)}/position`, { method: 'DELETE' }, user.id, () => cache.clear())
+      await apiFetch(`/api/books/${encodeURIComponent(book.id)}/position`, { method: 'DELETE' }, user.id, () => {
+        cache.clear()
+        onReadingRemoved(book.id)
+      })
       setConfirmReadingRemoval(false)
     } catch (error) {
       setReadingRemovalError(error instanceof Error ? error.message : `${readingAction}失败`)

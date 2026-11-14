@@ -26,7 +26,9 @@ export function mutationDomains(path: string, method: string): string[] {
   if (parts[1] === 'books' && parts[3] === 'toc' && parts[4] === 'refresh') return [`book:${decodeURIComponent(parts[2]!)}`]
   if (parts[1] !== 'books') return []
   if (parts[3] === 'cover') return ['bookshelf', 'reading-history', 'books', 'booklists', 'booklist-books', `book:${decodeURIComponent(parts[2]!)}`]
-  if (parts[3] === 'position') return ['bookshelf', 'reading-history', 'booklist-books', ...(method === 'DELETE' ? ['books', `book:${decodeURIComponent(parts[2]!)}`] : [])]
+  if (parts[3] === 'position') return method === 'DELETE'
+    ? ['bookshelf', 'booklist-books', 'books', `book:${decodeURIComponent(parts[2]!)}`]
+    : ['bookshelf', 'reading-history', 'booklist-books']
   const book = parts[2]
   return ['bookshelf', 'reading-history', 'candidates', 'booklist-books', ...(book === undefined ? ['books', ...(method === 'POST' && parts.length === 2 ? ['edition-options'] : [])] : [`book:${decodeURIComponent(book)}`])]
 }
