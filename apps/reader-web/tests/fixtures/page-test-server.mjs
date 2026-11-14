@@ -320,7 +320,7 @@ function homeSnapshot() {
     const edition = editions.get(position.editionKey)
     if (book === undefined || edition === undefined || seenReadingBooks.has(book.id)) return []
     seenReadingBooks.add(book.id)
-    return [{ book, edition, position }]
+    return [{ book, edition, position, onBookshelf: bookshelf.has(book.id) }]
   })
   return {
     bookshelf: shelfItems,
@@ -808,6 +808,11 @@ async function handleApi(request, response, url) {
     }
     if (method === 'GET' && tail === 'position') {
       json(response, { position: positionFor(bookId, url.searchParams.get('editionKey') ?? '') })
+      return
+    }
+    if (method === 'DELETE' && tail === 'position') {
+      positions.delete(bookId)
+      json(response, { ok: true })
       return
     }
     if (method === 'POST' && tail === 'position') {

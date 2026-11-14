@@ -512,6 +512,17 @@ app.delete('/api/books/:bookId/bookshelf', async (context) => {
   }
 })
 
+app.delete('/api/books/:bookId/position', async (context) => {
+  const rejected = await requireUser(context)
+  if (rejected !== undefined) return rejected
+  try {
+    await dependencies.repository.deletePosition(context.get('userId'), context.req.param('bookId'))
+    return context.json({ ok: true })
+  } catch (error) {
+    return handleError(context, error)
+  }
+})
+
 app.get('/api/books/:bookId/position', async (context) => {
   const rejected = await requireUser(context)
   if (rejected !== undefined) return rejected

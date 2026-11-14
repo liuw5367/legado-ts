@@ -162,6 +162,7 @@ export interface ReaderRepository {
   removeFromBookshelf(userId: string, bookId: string): Promise<void>
   isOnBookshelf(userId: string, bookId: string): Promise<boolean>
   getBookshelf(userId: string): Promise<HomeSnapshot['bookshelf']>
+  deletePosition(userId: string, bookId: string): Promise<void>
   getReadingHistory(userId: string): Promise<HomeSnapshot['reading']>
   getSearchHistory(userId: string): Promise<HomeSnapshot['searchHistory']>
   getHome(userId: string): Promise<HomeSnapshot>
@@ -869,10 +870,19 @@ export class PostgresReaderRepository implements ReaderRepository {
       return shelfRows.map((row) => { const book = displayBook(row.book); const edition = row.edition; const chapters = row.chapters; const position = row.position ? displayPosition(row.position) : undefined; return position === undefined ? { book, edition, chapters, groupId: row.groupId } : { book, edition, chapters, groupId: row.groupId, position } })
     })
   }
+  public async deletePosition(userId: string, bookId: string): Promise<void> {
+    await withUser(userId, async (tx) => {
+      const owner = and(eq(books.userId, userId), eq(books.id, bookId))
+      const [book] = await tx.select({ id: books.id }).from(books).where(owner).for('update')
+      if (!book) return
+      await tx.delete(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.bookId, bookId)))
+      await tx.update(books).set({ currentChapterIndex: null, currentChapterName: null }).where(owner)
+    })
+  }
   public async getReadingHistory(userId: string): Promise<HomeSnapshot['reading']> {
     return withUser(userId, async (transaction) => {
-      const readingRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, position: { chapterId: readingRecords.chapterId, title: readingRecords.title, lastReadAt: readingRecords.lastReadAt } }).from(readingRecords).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingRecords.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, readingRecords.bookId), eq(bookEditions.editionKey, readingRecords.editionKey))).where(eq(readingRecords.userId, userId)).orderBy(desc(readingRecords.lastReadAt)).limit(50)
-      return readingRows.map((row) => ({ book: displayBook(row.book), edition: row.edition, position: displayPosition(row.position) }))
+      const readingRows = await transaction.select({ book: bookDisplayColumns, edition: { editionKey: bookEditions.editionKey }, onBookshelf: sql<boolean>`exists (select 1 from ${bookshelf} where ${bookshelf.userId} = ${userId} and ${bookshelf.bookId} = ${readingRecords.bookId})`, position: { chapterId: readingRecords.chapterId, title: readingRecords.title, lastReadAt: readingRecords.lastReadAt } }).from(readingRecords).innerJoin(books, and(eq(books.userId, userId), eq(books.id, readingRecords.bookId))).innerJoin(bookEditions, and(eq(bookEditions.userId, userId), eq(bookEditions.bookId, readingRecords.bookId), eq(bookEditions.editionKey, readingRecords.editionKey))).where(eq(readingRecords.userId, userId)).orderBy(desc(readingRecords.lastReadAt)).limit(50)
+      return readingRows.map((row) => ({ book: displayBook(row.book), edition: row.edition, onBookshelf: row.onBookshelf, position: displayPosition(row.position) }))
     })
   }
   public async getSearchHistory(userId: string): Promise<HomeSnapshot['searchHistory']> {
@@ -1535,11 +1545,19 @@ export class MemoryReaderRepository implements ReaderRepository {
     const shelf = shelfValues.map((entry) => { const value = { ...entry, groupId: this.shelfGroups.get(`${userId}:${entry.book.id}`) ?? null }; const position = this.positions.get(`${userId}:${value.book.id}`); return position === undefined ? value : { ...value, position } })
     return shelf.map((row) => ({ book: displayBook(row.book), edition: { editionKey: row.edition.editionKey }, chapters: bookShelfSummary(row.book, 'position' in row), groupId: row.groupId, ...('position' in row ? { position: displayPosition(row.position) } : {}) }))
   }
+  public async deletePosition(userId: string, bookId: string): Promise<void> {
+    this.positions.delete(`${userId}:${bookId}`)
+    for (const [key, entry] of this.books) {
+      if (entry.book.userId === userId && entry.book.id === bookId) {
+        this.books.set(key, { ...entry, book: { ...entry.book, currentChapterIndex: null, currentChapterName: null } })
+      }
+    }
+  }
   public async getReadingHistory(userId: string): Promise<HomeSnapshot['reading']> {
     const values = [...this.books.values()].filter((item) => item.book.userId === userId)
     return [...this.positions.values()].filter((position) => position.userId === userId).sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt)).flatMap((position) => {
       const entry = values.find((item) => item.book.id === position.bookId && item.edition.editionKey === position.editionKey)
-      return entry ? [{ book: displayBook(entry.book), edition: { editionKey: entry.edition.editionKey }, position: displayPosition(position) }] : []
+      return entry ? [{ book: displayBook(entry.book), edition: { editionKey: entry.edition.editionKey }, onBookshelf: this.shelf.has(`${userId}:${position.bookId}`), position: displayPosition(position) }] : []
     }).slice(0, 50)
   }
   public async getSearchHistory(userId: string): Promise<HomeSnapshot['searchHistory']> {

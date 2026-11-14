@@ -151,7 +151,7 @@ export type HomePosition = Pick<StoredPosition, 'chapterId' | 'title' | 'lastRea
 export type HomeSearchHistory = Pick<SearchHistoryItem, 'id' | 'searchId' | 'keyword' | 'status' | 'resultCount' | 'summary' | 'createdAt' | 'updatedAt'>
 export interface HomeSnapshot {
   bookshelf: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; groupId?: string | null; chapters: ShelfChapterSummary } & ({ position: HomePosition } | Record<never, never>)>
-  reading: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; position: HomePosition }>
+  reading: Array<{ book: HomeBook; edition: Pick<StoredEdition, 'editionKey'>; position: HomePosition; onBookshelf: boolean }>
   searchHistory: HomeSearchHistory[]
 }
 

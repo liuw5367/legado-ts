@@ -27,7 +27,7 @@ export interface ApiHistory { id: string; searchId: string; keyword: string; sou
 export type ApiHomeBook = Pick<ApiBook, 'id' | 'name' | 'author' | 'coverUrl' | 'customCoverUrl'>
 export type ApiHomePosition = Pick<ApiPosition, 'chapterId' | 'title' | 'lastReadAt'>
 export type ApiHomeHistory = Pick<ApiHistory, 'id' | 'keyword' | 'status' | 'resultCount' | 'summary' | 'updatedAt'>
-export interface ApiHome { bookshelf: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; groupId?: string | null; chapters?: ShelfChapterSummary; position?: ApiHomePosition }>; reading: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; position: ApiHomePosition }>; searchHistory: ApiHomeHistory[] }
+export interface ApiHome { bookshelf: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; groupId?: string | null; chapters?: ShelfChapterSummary; position?: ApiHomePosition }>; reading: Array<{ book: ApiHomeBook; edition: Pick<ApiEdition, 'editionKey'>; position: ApiHomePosition; onBookshelf: boolean }>; searchHistory: ApiHomeHistory[] }
 export type ApiBookshelf = Pick<ApiHome, 'bookshelf'>
 export type ApiReadingHistory = Pick<ApiHome, 'reading'>
 export type ApiSearchHistory = Pick<ApiHome, 'searchHistory'>

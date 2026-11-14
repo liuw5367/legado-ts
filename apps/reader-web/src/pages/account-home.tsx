@@ -1,3 +1,5 @@
+import { Sheet } from '../components/ui/sheet.tsx'
+import { usePageNavigation } from '../lib/use-page-resource.ts'
 import { DialogPresence } from '../components/ui/animated-dialog.tsx'
 import { hasBookUpdate, setBookUpdate, subscribeBookUpdates } from '../lib/book-updates.ts'
 import { useBookCache } from '../lib/book-cache-context.tsx'
@@ -21,7 +23,7 @@ import { formatShanghaiDateTime } from '../lib/time-format.ts'
 import { useAuth } from '../lib/auth-context.tsx'
 import { hasSeenOnboarding } from '../lib/onboarding.ts'
 
-type BookItem = ApiHome['bookshelf'][number]
+type BookItem = ApiHome['bookshelf'][number] & { onBookshelf?: boolean }
 type View = 'bookshelf' | 'reading' | 'history'
 
 export function AccountHomePage() {
@@ -174,6 +176,11 @@ function BookList({ batchBusy, onSingleBusy, pendingBooks, batchErrors, onRefres
 
 function BookRow({ batchBusy, onSingleBusy, batchLoading, batchError, onRefreshed, view, item, showRemove, removing, onRemove, onOrganized }: { batchBusy: boolean; onSingleBusy: (update: (count: number) => number) => void; batchLoading: boolean; batchError: string | undefined; onRefreshed: (bookId: string, editionKey: string, chapters: RefreshShelfChaptersResponse) => void; view: View; item: BookItem; showRemove: boolean; onOrganized: (message: string) => void; removing: boolean; onRemove: (bookId: string) => void }) {
   const [picker, setPicker] = useState<'join' | 'move' | 'group' | null>(null)
+  const [confirmReadingRemoval, setConfirmReadingRemoval] = useState(false)
+  const [removingReading, setRemovingReading] = useState(false)
+  const [readingRemovalError, setReadingRemovalError] = useState('')
+  const navigation = usePageNavigation()
+  const readingAction = item.onBookshelf ? '清除进度' : '删除记录'
   const { book, edition, position } = item
   const { user } = useAuth()
   const cache = useBookCache()
@@ -182,6 +189,21 @@ function BookRow({ batchBusy, onSingleBusy, batchLoading, batchError, onRefreshe
   const [refreshError, setRefreshError] = useState('')
   const chapters = item.chapters
   const updated = useSyncExternalStore(subscribeBookUpdates, () => user ? hasBookUpdate(user.id, book.id, edition.editionKey) : false)
+
+  async function removeReadingPosition() {
+    if (removingReading || !user) return
+    setRemovingReading(true)
+    setReadingRemovalError('')
+    try {
+      await navigation?.positions.flush(book.id)
+      await apiFetch(`/api/books/${encodeURIComponent(book.id)}/position`, { method: 'DELETE' }, user.id, () => cache.clear())
+      setConfirmReadingRemoval(false)
+    } catch (error) {
+      setReadingRemovalError(error instanceof Error ? error.message : `${readingAction}失败`)
+    } finally {
+      setRemovingReading(false)
+    }
+  }
 
   async function refreshChapters() {
     if (refreshing || batchBusy || !user) return
@@ -214,7 +236,21 @@ function BookRow({ batchBusy, onSingleBusy, batchLoading, batchError, onRefreshe
       {showRemove ? <Link className="more-menu-item" to={`/books/${encodeURIComponent(book.id)}/sources`} state={{ backTo: '/', backState: { homeView: view } }}>切换书源</Link> : null}
       {showRemove ? <><button className="more-menu-item" onClick={() => setPicker('group')}>修改分组</button><button className="more-menu-item" onClick={() => setPicker('join')}>加入书单</button><button className="more-menu-item" onClick={() => setPicker('move')}>移入书单</button></> : null}
       {showRemove ? <button className="more-menu-item danger-action" type="button" disabled={removing} onClick={() => onRemove(book.id)}>{removing ? '移除中…' : '移出书架'}</button> : null}
+      {view === 'reading' ? <button className="more-menu-item danger-action" type="button" onClick={() => {
+        setReadingRemovalError('')
+        setConfirmReadingRemoval(true)
+      }}>{readingAction}</button> : null}
     </MoreMenu>
+    <DialogPresence>{confirmReadingRemoval ? <Sheet open title={item.onBookshelf ? `清除《${book.name}》的阅读进度？` : `删除《${book.name}》的阅读记录？`} onOpenChange={(open) => {
+      if (!open && !removingReading) setConfirmReadingRemoval(false)
+    }}>
+      <p>{item.onBookshelf ? '这本书会保留在书架中，阅读状态将恢复为未读。' : '这本书将从阅读列表移除，上次读到的位置也会清除。'}</p>
+      {readingRemovalError ? <DismissibleMessage className="error" role="alert">{readingRemovalError}</DismissibleMessage> : null}
+      <div className="actions">
+        <Button variant="secondary" disabled={removingReading} onClick={() => setConfirmReadingRemoval(false)}>取消</Button>
+        <Button variant="secondary" className="danger-action" disabled={removingReading} onClick={() => void removeReadingPosition()}>{removingReading ? '处理中…' : readingAction}</Button>
+      </div>
+    </Sheet> : null}</DialogPresence>
     {batchError ? <DismissibleMessage className="error book-row-feedback" role="alert">{batchError}</DismissibleMessage> : null}
     {refreshError ? <DismissibleMessage className="error book-row-feedback" role="alert" onDismiss={() => setRefreshError('')}>{refreshError}</DismissibleMessage> : null}
     <DialogPresence>{picker === 'group' ? <ShelfGroupPicker book={book} onSaved={() => onOrganized('已修改分组')} onClose={() => setPicker(null)} /> : picker ? <BookListPicker book={book} move={picker === 'move'} onSaved={() => onOrganized(picker === 'move' ? '已移入书单并移出书架' : '已加入书单')} onClose={() => setPicker(null)} /> : null}</DialogPresence>
