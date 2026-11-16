@@ -569,6 +569,111 @@ internal fun bridgeReturnedObjects(input: JsonObject): Any {
                 putAllNegativeValue:copyByPutAll.get(-0), putAllPositiveValue:copyByPutAll.get(0),
                 removedNegative:removedNegative, sizeAfterNegativeRemove:m.size(), remainingPositiveValue:m.get(0)})
         """.trimIndent())
+        "map-typed-default-methods" -> runMapPutAllScript("""
+            var m = new Packages.java.util.HashMap();
+            m.put(1, "number"); m.put("1", "string");
+            var putIfAbsentNumber = m.putIfAbsent(1, "ignored");
+            var replaceString = m.replace("1", "string", "string-replaced");
+            var existingCallbackCalls = 0;
+            var computeExistingNumber = m.computeIfAbsent(1, function(key) { existingCallbackCalls++; return "bad"; });
+            var computeMissingKeyType = "";
+            var computeMissingNumber = m.computeIfAbsent(2, function(key) { computeMissingKeyType = typeof key; return "created-" + key; });
+            var computePresentString = m.computeIfPresent("1", function(key, value) { return String(key) + ":" + value; });
+            var mergeNumber = m.merge(1, "-merged", function(oldValue, newValue) { return oldValue + newValue; });
+            var removeString = m.remove("1", "1:string-replaced");
+            var computeNumber = m.compute(1, function(key, value) { return value + "-computed"; });
+            var computeMissingPreviousIsNull = false;
+            var computeMissingKeyType2 = "";
+            var computeMissing = m.compute("1", function(key, value) {
+                computeMissingPreviousIsNull = value === null; computeMissingKeyType2 = typeof key; return "string-created";
+            });
+            var computeNull = m.compute(2, function(key, value) { return null; });
+            var computeNullRemoved = !m.containsKey(2);
+            var replaceAllNumberKeyType = "";
+            var replaceAllStringKeyType = "";
+            var replaceAllVoidResult = m.replaceAll(function(key, value) {
+                if (key === 1) replaceAllNumberKeyType = typeof key;
+                if (key === "1") replaceAllStringKeyType = typeof key;
+                return value + "-all";
+            });
+            var replaceAllVoid = replaceAllVoidResult === undefined;
+            var nullMergeCaught = false;
+            try { m.merge(7, null, function(oldValue, newValue) { return oldValue + newValue; }); } catch (error) { nullMergeCaught = true; }
+            var undefinedMap = new Packages.java.util.HashMap();
+            var undefinedMergeResult = String(undefinedMap.merge("merge", undefined, function(oldValue, newValue) { return oldValue + newValue; }));
+            var undefinedStoredValue = undefinedMap.get("merge");
+            var undefinedStoredType = typeof undefinedStoredValue;
+            var undefinedStoredIsPrimitive = undefinedStoredValue === undefined;
+            var undefinedPeerMap = new Packages.java.util.HashMap(); undefinedPeerMap.put("peer", undefined);
+            var undefinedSameAcrossMaps = undefinedMap.containsValue(undefinedPeerMap.get("peer"));
+            var containsUndefinedValue = undefinedMap.containsValue(undefined);
+            var undefinedDefaultValue = undefinedMap.getOrDefault("absent", undefined);
+            var undefinedDefaultType = typeof undefinedDefaultValue;
+            var undefinedDefaultIsPrimitive = undefinedDefaultValue === undefined;
+            var existingUndefinedCallbackCalls = 0;
+            var computeExistingUndefined = undefinedMap.computeIfAbsent("merge", function(key) { existingUndefinedCallbackCalls++; return "bad"; });
+            var computeExistingUndefinedType = typeof computeExistingUndefined;
+            var computeExistingUndefinedString = String(computeExistingUndefined);
+            var computeExistingUndefinedIsPrimitive = computeExistingUndefined === undefined;
+            var computePresentUndefinedCalled = false;
+            var computePresentUndefined = undefinedMap.computeIfPresent("merge", function(key, value) { computePresentUndefinedCalled = true; return undefined; });
+            var computePresentUndefinedType = typeof computePresentUndefined;
+            var computePresentUndefinedString = String(computePresentUndefined);
+            var computePresentUndefinedIsPrimitive = computePresentUndefined === undefined;
+            var undefinedKeyRemains = undefinedMap.containsKey("merge");
+            undefinedMap.put("compute", undefined);
+            var computeUndefinedCallbackType = "";
+            var computeUndefinedCallbackString = "";
+            var computeUndefinedResult = undefinedMap.compute("compute", function(key, value) {
+                computeUndefinedCallbackType = typeof value; computeUndefinedCallbackString = String(value); return undefined;
+            });
+            var computeUndefinedResultType = typeof computeUndefinedResult;
+            var computeUndefinedResultString = String(computeUndefinedResult);
+            var computeUndefinedKeyRemains = undefinedMap.containsKey("compute");
+            var mergeExistingUndefined = undefinedMap.merge("merge", "-merged", function(oldValue, newValue) { return oldValue + newValue; });
+            undefinedMap.put("remap", "old");
+            var mergeUndefinedCallbackResult = undefinedMap.merge("remap", "new", function(oldValue, newValue) { return undefined; });
+            var mergeUndefinedCallbackValue = undefinedMap.get("remap");
+            var missingUndefinedCallbackCalls = 0;
+            var computeMissingUndefined = undefinedMap.computeIfAbsent("missing", function(key) { missingUndefinedCallbackCalls++; return undefined; });
+            JSON.stringify({putIfAbsentNumber:putIfAbsentNumber, replaceString:replaceString,
+                computeExistingNumber:computeExistingNumber, existingCallbackCalls:existingCallbackCalls,
+                computeMissingNumber:computeMissingNumber, computeMissingKeyType:computeMissingKeyType,
+                computePresentString:computePresentString, mergeNumber:mergeNumber, removeString:removeString,
+                computeNumber:computeNumber, computeMissing:computeMissing, computeMissingPreviousIsNull:computeMissingPreviousIsNull,
+                computeMissingKeyType2:computeMissingKeyType2, computeNull:computeNull, computeNullRemoved:computeNullRemoved,
+                replaceAllVoid:replaceAllVoid, replaceAllNumberKeyType:replaceAllNumberKeyType,
+                replaceAllStringKeyType:replaceAllStringKeyType,
+                containsString:m.containsKey("1"), nullMergeCaught:nullMergeCaught, nullMergeInserted:m.containsKey(7),
+                undefinedMergeResult:undefinedMergeResult, undefinedStoredType:undefinedStoredType,
+                undefinedStoredIsPrimitive:undefinedStoredIsPrimitive, undefinedSameAcrossMaps:undefinedSameAcrossMaps,
+                containsUndefinedValue:containsUndefinedValue, undefinedDefaultType:undefinedDefaultType,
+                undefinedDefaultIsPrimitive:undefinedDefaultIsPrimitive,
+                existingUndefinedCallbackCalls:existingUndefinedCallbackCalls,
+                computeExistingUndefinedType:computeExistingUndefinedType,
+                computeExistingUndefinedString:computeExistingUndefinedString,
+                computeExistingUndefinedIsPrimitive:computeExistingUndefinedIsPrimitive,
+                computePresentUndefinedCalled:computePresentUndefinedCalled,
+                computePresentUndefinedType:computePresentUndefinedType,
+                computePresentUndefinedString:computePresentUndefinedString,
+                computePresentUndefinedIsPrimitive:computePresentUndefinedIsPrimitive,
+                computeUndefinedCallbackType:computeUndefinedCallbackType,
+                computeUndefinedCallbackString:computeUndefinedCallbackString,
+                computeUndefinedResultType:computeUndefinedResultType,
+                computeUndefinedResultString:computeUndefinedResultString,
+                computeUndefinedKeyRemains:computeUndefinedKeyRemains,
+                undefinedKeyRemains:undefinedKeyRemains, mergeExistingUndefined:mergeExistingUndefined,
+                mergeUndefinedCallbackType:typeof mergeUndefinedCallbackResult,
+                mergeUndefinedCallbackString:String(mergeUndefinedCallbackResult),
+                mergeUndefinedCallbackIsPrimitive:mergeUndefinedCallbackResult === undefined,
+                mergeUndefinedCallbackKeyRemains:undefinedMap.containsKey("remap"),
+                mergeUndefinedCallbackStoredType:typeof mergeUndefinedCallbackValue,
+                mergeUndefinedCallbackStoredString:String(mergeUndefinedCallbackValue),
+                missingUndefinedCallbackCalls:missingUndefinedCallbackCalls,
+                computeMissingUndefinedIsPrimitive:computeMissingUndefined === undefined,
+                missingUndefinedKeyPresent:undefinedMap.containsKey("missing"), finalUndefinedMapSize:undefinedMap.size(),
+                finalNumber:m.get(1), finalString:m.get("1"), size:m.size()})
+        """.trimIndent())
         "map-putall" -> runMapPutAllScript("""
             var source = new Packages.java.util.HashMap();
             source.put("shared", "new"); source.put("copied", "value");

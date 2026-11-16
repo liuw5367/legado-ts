@@ -611,6 +611,33 @@
       "resolution": "固定 JVM/Rhino 对照发现 TS 将数字键 1 与字符串键 \"1\" 合并，并将 Double -0.0 与 0.0 合并。TS Map 现保留类型化键并单独编码负零；HashMap(Map) 构造和 putAll 复制也保留两类键。remove 使用同一类型化索引，数字键删除不会误命中同名字符串键。"
     },
     {
+      "id": "C13-MAP-DEFAULTS",
+      "caseIds": [
+        "rule.bridgeObjects.hashmap-typed-default-methods"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "Rhino Java HashMap Map default methods"
+      },
+      "tsEntry": "SourceRuleHost → legadoMap",
+      "evidence": [
+        "output/run-rSPPqj/report.json",
+        "output/run-bFcFgX/report.json",
+        "output/run-RM69dt/report.json",
+        "output/run-Eh4Z1l/report.json",
+        "output/run-YhgIeQ/report.json",
+        "output/run-VU22Ve/report.json",
+        "output/run-7T4ueD/report.json",
+        "output/run-9B9Ekg/report.json",
+        "output/run-WeFDHz/report.json",
+        "output/run-wEfefn/report.json"
+      ],
+      "resolution": "固定 JVM/Rhino 对照确认 HashMap.merge(key, null, callback) 必须抛异常且不插入键；TS 现拒绝 null，同时保留 JS undefined 在 Rhino 中对应的非空 Undefined 对象语义。跨 Map 共享的 Undefined 可被 containsValue/getOrDefault 观察；computeIfAbsent 将其视为已映射值，computeIfPresent/merge 回调收到对象，HashMap.compute 回调则观察到字符串 \"undefined\"，其 undefined 返回值仍存为 Undefined 对象。TS 现与参考一致。配对案例同时覆盖 typed key、putIfAbsent、replace、所有 compute 变体、merge、replaceAll、containsValue、getOrDefault 和异常后的 continuation。"
+    },
+    {
       "id": "C6-XPATH",
       "caseIds": [
         "xpath.string.elementString",

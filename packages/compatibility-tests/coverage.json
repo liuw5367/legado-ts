@@ -2847,7 +2847,8 @@
       ],
       "manifestMembers": [
         "java-collections-string::001-map-get",
-        "java-collections-string::002-map-put"
+        "java-collections-string::002-map-put",
+        "java-collections-string::037-map-remove"
       ]
     },
     {
@@ -3173,6 +3174,34 @@
       ],
       "manifestMembers": [
         "parser-jsonpath::015-append"
+      ]
+    },
+    {
+      "operation": "rule.bridgeObjects",
+      "method": "HashMap default methods with typed keys, undefined values and null merge rejection",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-core/src/rules/source-runtime.ts → legadoMap default methods",
+      "requiredDimensions": [
+        "normal",
+        "edge",
+        "error-or-empty",
+        "continuation"
+      ],
+      "caseIds": [
+        "rule.bridgeObjects.hashmap-typed-default-methods"
+      ],
+      "manifestMembers": [
+        "java-collections-string::035-map-containskey",
+        "java-collections-string::036-map-size",
+        "java-collections-string::038-map-putifabsent",
+        "java-collections-string::039-map-replace-value",
+        "java-collections-string::040-map-computeifabsent",
+        "java-collections-string::041-map-computeifpresent",
+        "java-collections-string::042-map-merge",
+        "java-collections-string::043-map-containsvalue",
+        "java-collections-string::044-map-getordefault",
+        "java-collections-string::045-map-compute",
+        "java-collections-string::046-map-replaceall"
       ]
     }
   ]

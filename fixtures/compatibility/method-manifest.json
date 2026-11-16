@@ -3863,7 +3863,19 @@
         "String.stripIndent",
         "String.translateEscapes",
         "String.transform",
-        "String.intern"
+        "String.intern",
+        "Map.containsKey",
+        "Map.size",
+        "Map.remove",
+        "Map.putIfAbsent",
+        "Map.replace",
+        "Map.computeIfAbsent",
+        "Map.computeIfPresent",
+        "Map.merge",
+        "Map.containsValue",
+        "Map.getOrDefault",
+        "Map.compute",
+        "Map.replaceAll"
       ],
       "tsPaths": [
         "packages/source-core/src/rules/source-runtime.ts",
@@ -4475,6 +4487,246 @@
             "JS-005"
           ],
           "errorCodes": []
+        },
+        {
+          "id": "java-collections-string::035-map-containskey",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.containsKey",
+          "signature": "Map.containsKey(Object)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::036-map-size",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.size",
+          "signature": "Map.size()",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::037-map-remove",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.remove",
+          "signature": "Map.remove(Object), Map.remove(Object,Object)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::038-map-putifabsent",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.putIfAbsent",
+          "signature": "Map.putIfAbsent(Object,Object)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::039-map-replace-value",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.replace",
+          "signature": "Map.replace(Object,Object,Object)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::040-map-computeifabsent",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.computeIfAbsent",
+          "signature": "Map.computeIfAbsent(Object,Function)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::041-map-computeifpresent",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.computeIfPresent",
+          "signature": "Map.computeIfPresent(Object,BiFunction)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::042-map-merge",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.merge",
+          "signature": "Map.merge(Object,Object,BiFunction)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::043-map-containsvalue",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.containsValue",
+          "signature": "Map.containsValue(Object)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::044-map-getordefault",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.getOrDefault",
+          "signature": "Map.getOrDefault(Object,Object)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::045-map-compute",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.compute",
+          "signature": "Map.compute(Object,BiFunction)",
+          "parameters": [],
+          "returnType": "unknown",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
+        },
+        {
+          "id": "java-collections-string::046-map-replaceall",
+          "owner": "Rhino/Java wrappers",
+          "name": "Map.replaceAll",
+          "signature": "Map.replaceAll(BiFunction)",
+          "parameters": [],
+          "returnType": "void",
+          "implementation": "simulated",
+          "verification": "ts-passed",
+          "feasibility": "simulatable",
+          "decision": "preserve",
+          "fixtures": [
+            "JS-004",
+            "JS-007"
+          ],
+          "errorCodes": [
+            "unsupported-java-class",
+            "rule-failed"
+          ]
         }
       ]
     },
@@ -6175,5 +6427,5 @@
       ]
     }
   ],
-  "memberCount": 268
+  "memberCount": 280
 }
