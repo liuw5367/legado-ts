@@ -26,6 +26,7 @@ internal data class FlowRequest(
     val method: String = "GET",
     val body: String? = null,
     val bodyScript: String? = null,
+    val urlOptionHeaders: Map<String, String> = emptyMap(),
 )
 
 internal fun flowSearchRequest(
@@ -53,6 +54,8 @@ internal fun flowSearchRequest(
     }
     val requestHeaders = headers + options.getAsJsonObject("headers")?.entrySet()
         .orEmpty().associate { (name, value) -> (if (exactHeaders) name else name.lowercase()) to value.asString }
+    val urlOptionHeaders = options.getAsJsonObject("headers")?.entrySet()
+        .orEmpty().associate { (name, value) -> name to value.asString }
     val bodyScript = options.get("bodyJs")?.asString?.takeIf(String::isNotBlank)
     if (method == "GET") {
         // AnalyzeUrl 的查询编码保留 RFC3986 UNRESERVED 和固定的查询分隔字符。
@@ -66,15 +69,15 @@ internal fun flowSearchRequest(
             }
             resolve(address.substringBefore('?') + "?" + query)
         }
-        return FlowRequest(url, requestHeaders, bodyScript = bodyScript)
+        return FlowRequest(url, requestHeaders, bodyScript = bodyScript, urlOptionHeaders = urlOptionHeaders)
     }
     val url = resolve(address)
     val body = options.get("body")?.asString.orEmpty()
     if (requestHeaders["content-type"].isNullOrEmpty()) {
         if (body.startsWith("{") || body.startsWith("[") || body.startsWith("<")) throw Unsupported("离线请求仅支持表单 POST")
-        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body, charset, checkEncoded = charsetName == null), bodyScript)
+        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body, charset, checkEncoded = charsetName == null), bodyScript, urlOptionHeaders)
     }
-    return FlowRequest(url, requestHeaders, "POST", body, bodyScript)
+    return FlowRequest(url, requestHeaders, "POST", body, bodyScript, urlOptionHeaders)
 }
 
 /** AnalyzeUrl 的 URL 脚本片段，仅提供当前离线案例所需的 GET 与表单关键字编码。 */
@@ -113,6 +116,7 @@ internal fun evaluateFlowLoginCheck(
     initial: FlowHttpResponse,
     headers: Map<String, String>,
     exactHeaders: Boolean,
+    urlOptionHeaders: Map<String, String> = emptyMap(),
     refetch: (Map<String, String>) -> FlowHttpResponse,
 ): FlowHttpResponse? {
     val mutableHeaders = headers.toMutableMap()
@@ -139,6 +143,12 @@ internal fun evaluateFlowLoginCheck(
         bind(headerMap, "get") { args -> mutableHeaders[headerName(args[0])] }
         bind(headerMap, "put") { args -> mutableHeaders.put(headerName(args[0]), Context.toString(args[1])) }
         bind(java, "getHeaderMap") { headerMap }
+        bind(java, "initUrl") {
+            // AnalyzeUrl.initUrl() reparses the immutable original mUrl. Its analyzeUrl()
+            // applies URL option headers to the existing headerMap again.
+            mutableHeaders.putAll(urlOptionHeaders)
+            null
+        }
         bind(java, "getStrResponse") { args ->
             require(args.size == 3 && args[0] == null && args[1] == null && args[2] == false) {
                 "离线参考仅支持 getStrResponse(null, null, false)"

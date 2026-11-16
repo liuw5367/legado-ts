@@ -592,5 +592,181 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.login-check.init-url-option-header-reset",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "WebBook.loginCheckJs / AnalyzeUrl.initUrl 重解析 URL option headers"
+    },
+    "tags": [
+      "offline",
+      "login-check",
+      "url-options"
+    ],
+    "flowOrigin": {
+      "fixture": "login-check-init-url-option-headers"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://login-init-url-options.fixture.test",
+        "bookSourceName": "initUrl URL options",
+        "searchUrl": "/search,{\"method\":\"POST\",\"body\":\"token=1\",\"headers\":{\"X-Option\":\"from-url\",\"content-type\":\"application/x-www-form-urlencoded\"}}",
+        "loginCheckJs": "if (result.code() === 401) { java.getHeaderMap().put(\"X-Option\", \"from-script\"); java.getHeaderMap().put(\"X-Refresh\", \"yes\"); java.initUrl(); var next = java.getStrResponse(null, null, false); if (next.code() !== 200) throw new Error(\"fixture retry failed\"); next } else result",
+        "ruleSearch": {
+          "bookList": "$.books[*]",
+          "name": "$.name",
+          "bookUrl": "$.url"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        }
+      },
+      "keyword": "header",
+      "stopAfter": "detail",
+      "exactRequestHeaders": true,
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "X-Option",
+        "X-Refresh"
+      ],
+      "requestLimit": 3,
+      "responses": {
+        "initial": {
+          "method": "POST",
+          "url": "https://login-init-url-options.fixture.test/search",
+          "body": "token=1",
+          "requestHeaders": {
+            "x-option": "from-url",
+            "x-refresh": null
+          },
+          "response": {
+            "status": 401,
+            "url": "https://login-init-url-options.fixture.test/search",
+            "statusMessage": "Unauthorized",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "e30="
+          }
+        },
+        "retryAndroid": {
+          "method": "POST",
+          "url": "https://login-init-url-options.fixture.test/search",
+          "body": "token=1",
+          "requestHeaders": {
+            "x-option": "from-url",
+            "x-refresh": "yes"
+          },
+          "response": {
+            "status": 200,
+            "url": "https://login-init-url-options.fixture.test/search",
+            "statusMessage": "OK",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IumHjeWPlue7k+aenCIsInVybCI6Ii9ib29rLzEifV19"
+          }
+        },
+        "retryTs": {
+          "method": "POST",
+          "url": "https://login-init-url-options.fixture.test/search",
+          "body": "token=1",
+          "requestHeaders": {
+            "x-option": "from-script",
+            "x-refresh": "yes"
+          },
+          "response": {
+            "status": 200,
+            "url": "https://login-init-url-options.fixture.test/search",
+            "statusMessage": "OK",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IumHjeWPlue7k+aenCIsInVybCI6Ii9ib29rLzEifV19"
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://login-init-url-options.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://login-init-url-options.fixture.test/book/1",
+            "statusMessage": "OK",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPuivpuaDhemhteS5puWQjTwvaDE+"
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "重取结果",
+                "bookUrl": "https://login-init-url-options.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "重取结果",
+              "bookUrl": "https://login-init-url-options.fixture.test/book/1",
+              "tocUrl": "https://login-init-url-options.fixture.test/book/1"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://login-init-url-options.fixture.test/search",
+            "body": "token=1",
+            "headers": {
+              "X-Option": "from-url",
+              "content-type": "application/x-www-form-urlencoded"
+            },
+            "bodyBase64": "dG9rZW49MQ==",
+            "responseUrl": "https://login-init-url-options.fixture.test/search",
+            "responseStatus": 401
+          },
+          {
+            "stage": "search",
+            "method": "POST",
+            "url": "https://login-init-url-options.fixture.test/search",
+            "body": "token=1",
+            "headers": {
+              "X-Option": "from-url",
+              "content-type": "application/x-www-form-urlencoded",
+              "X-Refresh": "yes"
+            },
+            "bodyBase64": "dG9rZW49MQ==",
+            "responseUrl": "https://login-init-url-options.fixture.test/search",
+            "responseStatus": 200
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://login-init-url-options.fixture.test/book/1",
+            "body": null,
+            "headers": {},
+            "bodyBase64": null,
+            "responseUrl": "https://login-init-url-options.fixture.test/book/1",
+            "responseStatus": 200
+          }
+        ]
+      }
+    }
   }
 ]

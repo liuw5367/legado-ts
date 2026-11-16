@@ -558,6 +558,7 @@ export class SourceRequestRuntime {
     if (typeof urlContext.ruleUrl !== 'string') urlContext.ruleUrl = rawUrl
     const effectiveRawUrl = urlContext.urlDirty === true && typeof urlContext.url === 'string' ? urlContext.url : rawUrl
     const split = splitSourceRequestUrl(effectiveRawUrl)
+    urlContext.urlOptionHeaders = { ...(headerObject(split.options?.headers) ?? {}) }
     const options = { ...(split.options as SourceRequestOptions | undefined), ...overrides }
     if (useWebViewOption(options.webView) || (typeof options.webJs === 'string' && options.webJs.length > 0)) {
       throw new SourceRequestError('capability-missing', '书源请求需要 WebView')

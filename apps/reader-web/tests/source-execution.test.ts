@@ -35,6 +35,33 @@ test('search workers follow link priority, refill across groups and skip stale s
   assert.equal(paths.length, groupSize * 2)
 })
 
+test('reader-web 重取请求的 initUrl 会重新应用书源 URL options Header', async (t) => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID()
+  const base = 'https://8.8.4.20'
+  await importBatch(repository, user, [{
+    ...sourceDefinition(`${base}/source`),
+    searchUrl: '/search,{"method":"POST","body":"token=1","headers":{"X-Option":"from-url","content-type":"application/x-www-form-urlencoded"}}',
+    loginCheckJs: 'if (result.code() === 401) { java.getHeaderMap().put("X-Option", "from-script"); java.initUrl(); java.getStrResponse(null, null, false) } else result',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
+  }])
+  const requests: Array<{ method: string; optionHeader: string | null }> = []
+  t.mock.method(globalThis, 'fetch', async (_url: URL | string, init?: RequestInit) => {
+    requests.push({ method: String(init?.method ?? 'GET'), optionHeader: new Headers(init?.headers).get('X-Option') })
+    if (requests.length === 1) return new Response('{}', { status: 401, headers: { 'content-type': 'application/json; charset=utf-8' } })
+    return new Response(JSON.stringify({ books: [{ name: '登录后书目', url: '/book/1' }] }), { headers: { 'content-type': 'application/json; charset=utf-8' } })
+  })
+  const source = (await repository.listSourcesForUser(user))[0]!
+  const run = await repository.createSearch(user, { keyword: '登录后', sourceId: source.sourceId, sourceIds: [source.sourceId] })
+  const result = await createReaderRuntime(repository).runSearchBatch(user, run.id)
+
+  assert.equal(result.search.status, 'success')
+  assert.equal(result.candidates[0]?.candidate.name, '登录后书目')
+  assert.deepEqual(requests, [
+    { method: 'POST', optionHeader: 'from-url' },
+    { method: 'POST', optionHeader: 'from-url' },
+  ])
+})
+
 test('reader-web search parses Android balanced inline JSONPath in a source response', async (t) => {
   const repository = new MemoryReaderRepository(); const user = randomUUID()
   const base = 'https://8.8.4.9'

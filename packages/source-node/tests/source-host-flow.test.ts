@@ -886,6 +886,29 @@ test('loginCheckJs 的 initUrl 重新解析原始 URL options', async () => {
   ])
 })
 
+test('loginCheckJs 的 initUrl 重新应用原始 URL option header', async () => {
+  const source = {
+    bookSourceUrl: 'https://login-init-header.test',
+    bookSourceName: 'Login Init Header',
+    searchUrl: '/search,{"method":"POST","body":"token=1","headers":{"X-Option":"from-url"}}',
+    loginCheckJs: 'if (result.code() === 401) { java.getHeaderMap().put("X-Option", "from-script"); java.initUrl(); java.getStrResponse(null, null, false) } else result',
+    ruleSearch: { bookList: '$.books[*]', name: '$.name', bookUrl: '$.url' },
+  } as unknown as NormalizedSource
+  const optionHeaders: Array<string | undefined> = []
+  const network: NetworkHost = { request: async (plan) => {
+    optionHeaders.push(plan.headers['X-Option'])
+    if (optionHeaders.length === 1) return { ...response(plan.url, '{}'), status: 401 }
+    return response(plan.url, '{"books":[{"name":"重取结果","url":"/book"}]}')
+  } }
+  const requestHost = new SourceRequestHost({ network, cookieStore: new NodeCookieStore() })
+  const ruleHost = new SourceRuleHost({ request: (input, signal, currentSource) => requestHost.requestFromBridge(input, signal, currentSource) })
+  requestHost.attachRuleHost(ruleHost)
+  const ports: WorkflowPorts = { network, rules: ruleHost, request: (input) => requestHost.request(input), decodeResponse: (input) => requestHost.decodeResponse(input) }
+  const result = await searchBooks(ports, { source, keyword: '重取', maxItems: 3 })
+  assert.equal(result.status, 'success', JSON.stringify(result.diagnostics))
+  assert.deepEqual(optionHeaders, ['from-url', 'from-url'])
+})
+
 test('loginCheckJs 重取请求保留 POST body、bodyJs 和请求元数据', async () => {
   const source = {
     bookSourceUrl: 'https://login-refresh-options.test',
