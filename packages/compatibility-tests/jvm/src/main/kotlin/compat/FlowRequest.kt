@@ -27,6 +27,7 @@ internal data class FlowRequest(
     val body: String? = null,
     val bodyScript: String? = null,
     val urlOptionHeaders: Map<String, String> = emptyMap(),
+    val urlOptionJs: String? = null,
 )
 
 internal fun flowSearchRequest(
@@ -43,7 +44,7 @@ internal fun flowSearchRequest(
     val optionText = rule.substring(separator.range.last + 1).replace("{{key}}", keyword)
     val options = parseFlowUrlOptions(optionText) ?: JsonObject()
     val method = options.get("method")?.asString?.uppercase() ?: "GET"
-    if (options.keySet().any { it !in setOf("method", "body", "charset", "headers", "bodyJs") } || method !in setOf("GET", "POST")) {
+    if (options.keySet().any { it !in setOf("method", "body", "charset", "headers", "bodyJs", "js") } || method !in setOf("GET", "POST")) {
         throw Unsupported("离线请求仅支持静态 GET 或表单 POST 选项")
     }
     val charsetName = options.get("charset")?.asString?.takeIf(String::isNotEmpty)
@@ -57,6 +58,7 @@ internal fun flowSearchRequest(
     val urlOptionHeaders = options.getAsJsonObject("headers")?.entrySet()
         .orEmpty().associate { (name, value) -> name to value.asString }
     val bodyScript = options.get("bodyJs")?.asString?.takeIf(String::isNotBlank)
+    val urlOptionJs = options.get("js")?.asString?.takeIf(String::isNotBlank)
     if (method == "GET") {
         // AnalyzeUrl 的查询编码保留 RFC3986 UNRESERVED 和固定的查询分隔字符。
         val querySafe = "-._~!$%&()*+,/:;=?@[\\]^`{|}"
@@ -69,15 +71,15 @@ internal fun flowSearchRequest(
             }
             resolve(address.substringBefore('?') + "?" + query)
         }
-        return FlowRequest(url, requestHeaders, bodyScript = bodyScript, urlOptionHeaders = urlOptionHeaders)
+        return FlowRequest(url, requestHeaders, bodyScript = bodyScript, urlOptionHeaders = urlOptionHeaders, urlOptionJs = urlOptionJs)
     }
     val url = resolve(address)
     val body = options.get("body")?.asString.orEmpty()
     if (requestHeaders["content-type"].isNullOrEmpty()) {
         if (body.startsWith("{") || body.startsWith("[") || body.startsWith("<")) throw Unsupported("离线请求仅支持表单 POST")
-        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body, charset, checkEncoded = charsetName == null), bodyScript, urlOptionHeaders)
+        return FlowRequest(url, requestHeaders + ("content-type" to "application/x-www-form-urlencoded"), "POST", FlowFormEncoding.encodeForm(body, charset, checkEncoded = charsetName == null), bodyScript, urlOptionHeaders, urlOptionJs)
     }
-    return FlowRequest(url, requestHeaders, "POST", body, bodyScript, urlOptionHeaders)
+    return FlowRequest(url, requestHeaders, "POST", body, bodyScript, urlOptionHeaders, urlOptionJs)
 }
 
 /** AnalyzeUrl 的 URL 脚本片段，仅提供当前离线案例所需的 GET 与表单关键字编码。 */
@@ -108,6 +110,29 @@ internal fun evaluateFlowRequestScript(code: String, keyword: String, content: S
     }
 }
 
+/** URL option-js runs after URL headers are applied and may mutate the AnalyzeUrl Header Map. */
+internal fun evaluateFlowUrlOptionScript(code: String, url: String, headers: MutableMap<String, String>, exactHeaders: Boolean): String {
+    val newContext = Context.getCurrentContext() == null
+    return Context.enter().use { engine ->
+        if (newContext) engine.setClassShutter { false }
+        val scope = engine.initSafeStandardObjects()
+        val java = engine.newObject(scope)
+        val headerMap = engine.newObject(scope)
+        fun headerName(value: Any): String = Context.toString(value).let { if (exactHeaders) it else it.lowercase() }
+        fun bind(target: Scriptable, name: String, callback: (Array<Any>) -> Any?) {
+            target.put(name, target, object : BaseFunction() {
+                override fun call(cx: Context, scope: VarScope, thisObj: Scriptable, args: Array<Any>): Any? = callback(args)
+            })
+        }
+        bind(headerMap, "get") { args -> headers[headerName(args[0])] }
+        bind(headerMap, "put") { args -> headers.put(headerName(args[0]), Context.toString(args[1])) }
+        bind(java, "getHeaderMap") { headerMap }
+        scope.put("java", scope, java)
+        scope.put("result", scope, url)
+        Context.toString(engine.evaluateString(scope, code, "offline-url-option-js", 1, null))
+    }
+}
+
 internal data class FlowHttpResponse(val body: String, val url: String, val status: Int)
 
 /** WebBook 的登录检查片段。仅暴露本案例读取的响应成员及同一请求的重取。 */
@@ -117,6 +142,8 @@ internal fun evaluateFlowLoginCheck(
     headers: Map<String, String>,
     exactHeaders: Boolean,
     urlOptionHeaders: Map<String, String> = emptyMap(),
+    urlOptionJs: String? = null,
+    urlOptionUrl: String? = null,
     refetch: (Map<String, String>) -> FlowHttpResponse,
 ): FlowHttpResponse? {
     val mutableHeaders = headers.toMutableMap()
@@ -145,8 +172,9 @@ internal fun evaluateFlowLoginCheck(
         bind(java, "getHeaderMap") { headerMap }
         bind(java, "initUrl") {
             // AnalyzeUrl.initUrl() reparses the immutable original mUrl. Its analyzeUrl()
-            // applies URL option headers to the existing headerMap again.
+            // applies URL option headers to the existing headerMap again, then reruns URL option-js.
             mutableHeaders.putAll(urlOptionHeaders)
+            urlOptionJs?.let { evaluateFlowUrlOptionScript(it, urlOptionUrl ?: initial.url, mutableHeaders, exactHeaders) }
             null
         }
         bind(java, "getStrResponse") { args ->

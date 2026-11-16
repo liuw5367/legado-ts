@@ -768,5 +768,163 @@
         ]
       }
     }
+  },
+  {
+    "id": "flow.synthetic.login-check.init-url-option-js-rerun",
+    "family": "flow",
+    "operation": "flow.book",
+    "contractScope": "flow",
+    "reference": {
+      "kind": "upstream-guided-flow",
+      "method": "AnalyzeUrl.initUrl() reruns URL option js against the reapplied Header Map"
+    },
+    "tags": [
+      "offline",
+      "login-check",
+      "url-options",
+      "js"
+    ],
+    "flowOrigin": {
+      "fixture": "login-check-init-url-option-js"
+    },
+    "input": {
+      "source": {
+        "bookSourceUrl": "https://login-init-url-js.fixture.test",
+        "bookSourceName": "initUrl URL option js",
+        "searchUrl": "/search,{\"headers\":{\"X-Option\":\"from-url\"},\"js\":\"var count = Number(java.getHeaderMap().get(\\\"X-Init-Count\\\") || \\\"0\\\") + 1; java.getHeaderMap().put(\\\"X-Init-Count\\\", String(count)); result\"}",
+        "loginCheckJs": "if (result.code() === 401) { java.initUrl(); var next = java.getStrResponse(null, null, false); if (next.code() !== 200) throw new Error(\"fixture retry failed\"); next } else result",
+        "ruleSearch": {
+          "bookList": "$.books[*]",
+          "name": "$.name",
+          "bookUrl": "$.url"
+        },
+        "ruleBookInfo": {
+          "name": "h1@text"
+        }
+      },
+      "keyword": "rerun",
+      "stopAfter": "detail",
+      "exactRequestHeaders": true,
+      "requestEvidence": true,
+      "requestHeaderNames": [
+        "X-Option",
+        "X-Init-Count"
+      ],
+      "requestLimit": 3,
+      "responses": {
+        "initial": {
+          "method": "GET",
+          "url": "https://login-init-url-js.fixture.test/search",
+          "body": null,
+          "requestHeaders": {
+            "x-option": "from-url",
+            "x-init-count": "1"
+          },
+          "response": {
+            "status": 401,
+            "url": "https://login-init-url-js.fixture.test/search",
+            "statusMessage": "Unauthorized",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "e30="
+          }
+        },
+        "retryAndroid": {
+          "method": "GET",
+          "url": "https://login-init-url-js.fixture.test/search",
+          "body": null,
+          "requestHeaders": {
+            "x-option": "from-url",
+            "x-init-count": "2"
+          },
+          "response": {
+            "status": 200,
+            "url": "https://login-init-url-js.fixture.test/search",
+            "statusMessage": "OK",
+            "headers": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "base64": "eyJib29rcyI6W3sibmFtZSI6IumHjei3kSBVUkwgSlMiLCJ1cmwiOiIvYm9vay8xIn1dfQ=="
+          }
+        },
+        "detail": {
+          "method": "GET",
+          "url": "https://login-init-url-js.fixture.test/book/1",
+          "body": null,
+          "response": {
+            "status": 200,
+            "url": "https://login-init-url-js.fixture.test/book/1",
+            "statusMessage": "OK",
+            "headers": {
+              "content-type": "text/html; charset=utf-8"
+            },
+            "base64": "PGgxPumHjei3kSBVUkwgSlM8L2gxPg=="
+          }
+        }
+      }
+    },
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "stages": {
+          "search": {
+            "status": "success",
+            "value": [
+              {
+                "name": "重跑 URL JS",
+                "bookUrl": "https://login-init-url-js.fixture.test/book/1"
+              }
+            ]
+          },
+          "detail": {
+            "status": "success",
+            "value": {
+              "name": "重跑 URL JS",
+              "bookUrl": "https://login-init-url-js.fixture.test/book/1",
+              "tocUrl": "https://login-init-url-js.fixture.test/book/1"
+            }
+          }
+        },
+        "requests": [
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://login-init-url-js.fixture.test/search",
+            "body": null,
+            "headers": {
+              "X-Option": "from-url",
+              "X-Init-Count": "1"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://login-init-url-js.fixture.test/search",
+            "responseStatus": 401
+          },
+          {
+            "stage": "search",
+            "method": "GET",
+            "url": "https://login-init-url-js.fixture.test/search",
+            "body": null,
+            "headers": {
+              "X-Option": "from-url",
+              "X-Init-Count": "2"
+            },
+            "bodyBase64": null,
+            "responseUrl": "https://login-init-url-js.fixture.test/search",
+            "responseStatus": 200
+          },
+          {
+            "stage": "detail",
+            "method": "GET",
+            "url": "https://login-init-url-js.fixture.test/book/1",
+            "body": null,
+            "headers": {},
+            "bodyBase64": null,
+            "responseUrl": "https://login-init-url-js.fixture.test/book/1",
+            "responseStatus": 200
+          }
+        ]
+      }
+    }
   }
 ]

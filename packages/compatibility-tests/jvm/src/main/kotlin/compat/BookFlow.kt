@@ -182,10 +182,23 @@ internal fun executeBookFlow(input: JsonObject, tocOnly: Boolean = false, discov
             request("search", resolve(sourceUrl, url)).first
         }
         val searchHeaders = applyRequestDefaults(searchRuleUrl, headers)
-        val searchPlan = flowSearchRequest(searchRuleUrl, keyword, searchHeaders, exactHeaders) { resolve(sourceUrl, it) }
+        val parsedSearchPlan = flowSearchRequest(searchRuleUrl, keyword, searchHeaders, exactHeaders) { resolve(sourceUrl, it) }
+        val initialSearchHeaders = parsedSearchPlan.headers.toMutableMap()
+        val initializedSearchUrl = parsedSearchPlan.urlOptionJs?.let {
+            resolve(sourceUrl, evaluateFlowUrlOptionScript(it, parsedSearchPlan.url, initialSearchHeaders, exactHeaders))
+        } ?: parsedSearchPlan.url
+        val searchPlan = parsedSearchPlan.copy(url = initializedSearchUrl, headers = initialSearchHeaders)
         val initial = fetch("search", searchPlan)
         val searchResponse = if (loginCheck.isEmpty()) initial else {
-            evaluateFlowLoginCheck(loginCheck, initial, searchPlan.headers, exactHeaders, urlOptionHeaders = searchPlan.urlOptionHeaders) { updated ->
+            evaluateFlowLoginCheck(
+                loginCheck,
+                initial,
+                searchPlan.headers,
+                exactHeaders,
+                urlOptionHeaders = searchPlan.urlOptionHeaders,
+                urlOptionJs = searchPlan.urlOptionJs,
+                urlOptionUrl = searchPlan.url,
+            ) { updated ->
                 fetch("search", searchPlan.copy(headers = updated))
             } ?: run {
                 result("search", "failed", null)
