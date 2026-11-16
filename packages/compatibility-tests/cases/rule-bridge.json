@@ -547,6 +547,76 @@
     }
   },
   {
+    "id": "rule.bridgeObjects.hashmap-key-types",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "map-key-types"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Rhino Java HashMap primitive and String keys"
+    },
+    "tags": [
+      "normal",
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "size": 1,
+        "numberPrevious": null,
+        "stringPrevious": null,
+        "updatedNumberPrevious": "numeric",
+        "numberValue": "numeric-updated",
+        "stringValue": "text",
+        "copySize": 2,
+        "copyNumberValue": "numeric-updated",
+        "copyStringValue": "text",
+        "putAllSize": 2,
+        "putAllNumberValue": "numeric-updated",
+        "putAllStringValue": "text",
+        "removedNumber": "numeric-updated",
+        "sizeAfterNumberRemove": 1,
+        "remainingStringValue": "text"
+      }
+    }
+  },
+  {
+    "id": "rule.bridgeObjects.hashmap-signed-zero-key",
+    "family": "rule-bridge",
+    "operation": "rule.bridgeObjects",
+    "input": {
+      "kind": "map-signed-zero-key"
+    },
+    "reference": {
+      "kind": "jdk-direct",
+      "method": "Rhino Java HashMap distinguishes Double negative zero"
+    },
+    "tags": [
+      "edge"
+    ],
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "size": 1,
+        "negativePrevious": null,
+        "positivePrevious": null,
+        "negativeValue": "negative-zero",
+        "positiveValue": "positive-zero",
+        "copySize": 2,
+        "copyNegativeValue": "negative-zero",
+        "copyPositiveValue": "positive-zero",
+        "putAllSize": 2,
+        "putAllNegativeValue": "negative-zero",
+        "putAllPositiveValue": "positive-zero",
+        "removedNegative": "negative-zero",
+        "sizeAfterNegativeRemove": 1,
+        "remainingPositiveValue": "positive-zero"
+      }
+    }
+  },
+  {
     "id": "rule.bridgeObjects.batch-map-putall",
     "family": "rule-bridge",
     "operation": "rule.bridgeObjects",

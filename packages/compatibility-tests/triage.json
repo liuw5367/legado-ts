@@ -588,6 +588,29 @@
       ]
     },
     {
+      "id": "C12-MAPKEY-TYPES",
+      "caseIds": [
+        "rule.bridgeObjects.hashmap-key-types",
+        "rule.bridgeObjects.hashmap-signed-zero-key"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "jdk-direct",
+        "method": "Rhino Java HashMap primitive key equality"
+      },
+      "tsEntry": "SourceRuleHost → legadoMap",
+      "evidence": [
+        "output/run-brqgXP/report.json",
+        "output/run-bqU41k/report.json",
+        "output/run-qKfjQS/report.json",
+        "output/run-TKxlFc/report.json",
+        "output/run-nWBtPs/report.json"
+      ],
+      "resolution": "固定 JVM/Rhino 对照发现 TS 将数字键 1 与字符串键 \"1\" 合并，并将 Double -0.0 与 0.0 合并。TS Map 现保留类型化键并单独编码负零；HashMap(Map) 构造和 putAll 复制也保留两类键。remove 使用同一类型化索引，数字键删除不会误命中同名字符串键。"
+    },
+    {
       "id": "C6-XPATH",
       "caseIds": [
         "xpath.string.elementString",

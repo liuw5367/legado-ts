@@ -1735,8 +1735,8 @@ test('Java Cipher 支持 GCMParameterSpec/updateAAD 和 OAEPParameterSpec 的同
   assert.deepEqual(JSON.parse(String(result.value)), ['正文', 6 + 12, 'hello', true])
 })
 
-test('Java Cipher 对独立 OAEP MGF1 摘要报告 provider 能力缺口', async () => {
-  const { publicKey } = generateKeyPairSync('rsa', {
+test('Java Cipher 对独立 OAEP MGF1 摘要在 provider 支持时完成往返', async () => {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'der' },
     privateKeyEncoding: { type: 'pkcs8', format: 'der' },
@@ -1744,15 +1744,25 @@ test('Java Cipher 对独立 OAEP MGF1 摘要报告 provider 能力缺口', async
   const result = await evaluate(new SourceRuleHost(), `@js:
     var importer = new JavaImporter(Packages.java.lang, Packages.java.security, Packages.java.security.spec, Packages.javax.crypto, Packages.javax.crypto.spec);
     with (importer) {
+      var privateSpec = new PKCS8EncodedKeySpec(java.base64DecodeToByteArray('${privateKey.toString('base64')}'));
       var publicSpec = new X509EncodedKeySpec(java.base64DecodeToByteArray('${publicKey.toString('base64')}'));
       var factory = KeyFactory.getInstance('RSA');
       var oaepSpec = new OAEPParameterSpec('SHA-256', 'MGF1', new MGF1ParameterSpec('SHA-1'), new PSource.PSpecified(new Uint8Array()));
       var rsa = Cipher.getInstance('RSA/ECB/OAEPWithSHA-256AndMGF1Padding');
       rsa.init(Cipher.ENCRYPT_MODE, factory.generatePublic(publicSpec), oaepSpec);
-      rsa.doFinal(String('hello').getBytes());
+      var encrypted = rsa.doFinal(String('hello').getBytes());
+      rsa.init(Cipher.DECRYPT_MODE, factory.generatePrivate(privateSpec), oaepSpec);
+      JSON.stringify(String(rsa.doFinal(encrypted)));
     }`, '')
-  assert.equal(result.status, 'capability-missing')
-  assert.match(result.message ?? '', /runtime/iu)
+  const [major = 0, minor = 0] = process.versions.node.split('.').map(Number)
+  const supportsIndependentOaepMgf = major > 26 || (major === 26 && minor >= 8)
+  if (!supportsIndependentOaepMgf) {
+    assert.equal(result.status, 'capability-missing', result.message)
+    assert.match(result.message ?? '', /provider/iu)
+    return
+  }
+  assert.equal(result.status, 'success', result.message)
+  assert.equal(JSON.parse(String(result.value)), 'hello')
 })
 
 test('对称加密工厂保持随机 key 和 setIv 状态，并支持 CTR/NoPadding', async () => {

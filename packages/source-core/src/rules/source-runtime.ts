@@ -299,17 +299,22 @@ interface StoredNode {
 
 const javaCompatibilityPrelude = String.raw`
 const legadoMap = (input, insertionOrdered = false) => {
-  // 数据与方法分别存储，避免 get/size 等合法键覆盖 API；null 键独立于字符串 "null"。
+  // 字符串键保留为可见属性；非字符串键单独索引，避免与同名字符串键合并。
   const target = Object.create(null)
   const data = Object.create(null)
+  const typedData = new Map()
   const orderedKeys = []
   const nullKey = Symbol("Java Map null key")
-  const keyOf = (key) => key === null ? nullKey : typeof key === "symbol" ? key : String(key)
-  const publicKey = (key) => key === nullKey ? null : key
-  const mapKeys = () => insertionOrdered ? orderedKeys.slice() : Reflect.ownKeys(data)
-  const entries = () => mapKeys().map((key) => [publicKey(key), data[key]])
-  const assign = (key, value) => { const name = keyOf(key); if (insertionOrdered && !Object.prototype.hasOwnProperty.call(data, name)) orderedKeys.push(name); Object.defineProperty(data, name, { value, writable: true, enumerable: true, configurable: true }) }
-  const erase = (key) => { const exists = Object.prototype.hasOwnProperty.call(data, key); if (!exists) return false; delete data[key]; if (insertionOrdered) { const index = orderedKeys.indexOf(key); if (index >= 0) orderedKeys.splice(index, 1); } return true }
+  const negativeZeroKey = Symbol("Java Map negative zero key")
+  const keyOf = (key) => key === null ? nullKey : typeof key === "number" && Object.is(key, -0) ? negativeZeroKey : key
+  const publicKey = (key) => key === nullKey ? null : key === negativeZeroKey ? -0 : key
+  const isPropertyKey = (key) => typeof key === "string" || typeof key === "symbol"
+  const hasKey = (key) => isPropertyKey(key) ? Object.prototype.hasOwnProperty.call(data, key) : typedData.has(key)
+  const valueOf = (key) => isPropertyKey(key) ? data[key] : typedData.get(key)
+  const mapKeys = () => insertionOrdered ? orderedKeys.slice() : [...Reflect.ownKeys(data), ...typedData.keys()]
+  const entries = () => mapKeys().map((key) => [publicKey(key), valueOf(key)])
+  const assign = (key, value) => { const name = keyOf(key); if (insertionOrdered && !hasKey(name)) orderedKeys.push(name); if (isPropertyKey(name)) Object.defineProperty(data, name, { value, writable: true, enumerable: true, configurable: true }); else typedData.set(name, value) }
+  const erase = (key) => { if (!hasKey(key)) return false; if (isPropertyKey(key)) delete data[key]; else typedData.delete(key); if (insertionOrdered) { const index = orderedKeys.indexOf(key); if (index >= 0) orderedKeys.splice(index, 1); } return true }
   const inputEntries = () => {
     if (input !== null && typeof input === "object" && typeof input.entrySet === "function") {
       const entries = input.entrySet()
@@ -326,36 +331,36 @@ const legadoMap = (input, insertionOrdered = false) => {
     return input !== null && typeof input === "object" && !Array.isArray(input) ? Object.entries(input) : []
   }
   for (const [key, value] of inputEntries()) assign(key, value)
-  const mapEntry = (key) => ({ getKey: () => publicKey(key), getValue: () => data[key], setValue: (next) => { const previous = data[key]; assign(key, next); return previous } })
+  const mapEntry = (key) => ({ getKey: () => publicKey(key), getValue: () => valueOf(key), setValue: (next) => { const previous = valueOf(key); assign(key, next); return previous } })
   Object.defineProperties(target, {
-    get: { value: (key) => { const name = keyOf(key); return Object.prototype.hasOwnProperty.call(data, name) ? data[name] : null } },
-    getOrDefault: { value: (key, fallback) => { const name = keyOf(key); return Object.prototype.hasOwnProperty.call(data, name) ? data[name] : fallback } },
-    put: { value: (key, value) => { const name = keyOf(key); const previous = Object.prototype.hasOwnProperty.call(data, name) ? data[name] : null; assign(name, value); return previous } },
-    putIfAbsent: { value: (key, value) => { const name = keyOf(key); const exists = Object.prototype.hasOwnProperty.call(data, name); const previous = exists ? data[name] : null; if (!exists || previous === null) assign(name, value); return previous } },
+    get: { value: (key) => { const name = keyOf(key); return hasKey(name) ? valueOf(name) : null } },
+    getOrDefault: { value: (key, fallback) => { const name = keyOf(key); return hasKey(name) ? valueOf(name) : fallback } },
+    put: { value: (key, value) => { const name = keyOf(key); const previous = hasKey(name) ? valueOf(name) : null; assign(name, value); return previous } },
+    putIfAbsent: { value: (key, value) => { const name = keyOf(key); const exists = hasKey(name); const previous = exists ? valueOf(name) : null; if (!exists || previous === null) assign(name, value); return previous } },
     putAll: { value: (value) => { if (value === null || value === undefined) throw new TypeError("Map source must not be null"); if (typeof value === "object" && typeof value.entrySet === "function") { const entries = value.entrySet(); const iterator = entries?.iterator?.(); if (iterator) while (iterator.hasNext()) { const entry = iterator.next(); const key = typeof entry?.getKey === "function" ? entry.getKey() : entry?.key; const item = typeof entry?.getValue === "function" ? entry.getValue() : entry?.value; assign(key, item) } } else if (typeof value === "object" && !Array.isArray(value)) for (const [key, item] of Object.entries(value)) assign(key, item); return undefined } },
-    remove: { value: function(key, expected) { const name = keyOf(key); const exists = Object.prototype.hasOwnProperty.call(data, name); const previous = exists ? data[name] : null; if (arguments.length > 1) { if (!exists || !Object.is(previous, expected)) return false; erase(name); return true } erase(name); return previous } },
-    replace: { value: function(key, oldOrValue, next) { const name = keyOf(key); const exists = Object.prototype.hasOwnProperty.call(data, name); const previous = exists ? data[name] : null; if (arguments.length > 2) { if (!exists || !Object.is(previous, oldOrValue)) return false; assign(name, next); return true } if (!exists) return previous; assign(name, oldOrValue); return previous } },
+    remove: { value: function(key, expected) { const name = keyOf(key); const exists = hasKey(name); const previous = exists ? valueOf(name) : null; if (arguments.length > 1) { if (!exists || !Object.is(previous, expected)) return false; erase(name); return true } erase(name); return previous } },
+    replace: { value: function(key, oldOrValue, next) { const name = keyOf(key); const exists = hasKey(name); const previous = exists ? valueOf(name) : null; if (arguments.length > 2) { if (!exists || !Object.is(previous, oldOrValue)) return false; assign(name, next); return true } if (!exists) return previous; assign(name, oldOrValue); return previous } },
     replaceAll: { value: (callback) => { if (typeof callback !== "function") throw new TypeError("Map replaceAll callback must be a function"); for (const [key, value] of entries()) assign(key, callback(key, value, api)); return undefined } },
-    computeIfAbsent: { value: (key, callback) => { if (typeof callback !== "function") throw new TypeError("Map computeIfAbsent callback must be a function"); const name = keyOf(key); const previous = data[name]; if (previous !== undefined && previous !== null) return previous; const next = callback(key); if (next !== undefined && next !== null) assign(name, next); return next } },
-    computeIfPresent: { value: (key, callback) => { if (typeof callback !== "function") throw new TypeError("Map computeIfPresent callback must be a function"); const name = keyOf(key); const previous = Object.prototype.hasOwnProperty.call(data, name) ? data[name] : null; if (previous === null || previous === undefined) return null; const next = callback(key, previous); if (next === undefined || next === null) erase(name); else assign(name, next); return next } },
-    merge: { value: (key, value, callback) => { if (typeof callback !== "function") throw new TypeError("Map merge callback must be a function"); const name = keyOf(key); const previous = data[name]; if (previous === undefined || previous === null) { assign(name, value); return value } const next = callback(previous, value); if (next === undefined || next === null) erase(name); else assign(name, next); return next } },
+    computeIfAbsent: { value: (key, callback) => { if (typeof callback !== "function") throw new TypeError("Map computeIfAbsent callback must be a function"); const name = keyOf(key); const previous = valueOf(name); if (previous !== undefined && previous !== null) return previous; const next = callback(key); if (next !== undefined && next !== null) assign(name, next); return next } },
+    computeIfPresent: { value: (key, callback) => { if (typeof callback !== "function") throw new TypeError("Map computeIfPresent callback must be a function"); const name = keyOf(key); const previous = hasKey(name) ? valueOf(name) : null; if (previous === null || previous === undefined) return null; const next = callback(key, previous); if (next === undefined || next === null) erase(name); else assign(name, next); return next } },
+    merge: { value: (key, value, callback) => { if (typeof callback !== "function") throw new TypeError("Map merge callback must be a function"); const name = keyOf(key); const previous = valueOf(name); if (previous === undefined || previous === null) { assign(name, value); return value } const next = callback(previous, value); if (next === undefined || next === null) erase(name); else assign(name, next); return next } },
     clear: { value: () => { for (const key of mapKeys()) erase(key) } },
-    containsKey: { value: (key) => Object.prototype.hasOwnProperty.call(data, keyOf(key)) },
-    containsValue: { value: (value) => mapKeys().map((key) => data[key]).some((item) => Object.is(item, value)) },
+    containsKey: { value: (key) => hasKey(keyOf(key)) },
+    containsValue: { value: (value) => mapKeys().map(valueOf).some((item) => Object.is(item, value)) },
     keySet: { value: () => legadoListView(() => mapKeys().map(publicKey), undefined, undefined, (index) => { const keys = mapKeys(); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; erase(key); return publicKey(key) }, () => { for (const key of mapKeys()) erase(key) }, undefined, false) },
-    values: { value: () => legadoListView(() => mapKeys().map((key) => data[key]), (index, value) => { const keys = mapKeys(); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const previous = data[key]; assign(key, value); return previous }, undefined, (index) => { const keys = mapKeys(); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const previous = data[key]; erase(key); return previous }, () => { for (const key of mapKeys()) erase(key) }, undefined, false) },
+    values: { value: () => legadoListView(() => mapKeys().map(valueOf), (index, value) => { const keys = mapKeys(); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const previous = valueOf(key); assign(key, value); return previous }, undefined, (index) => { const keys = mapKeys(); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const previous = valueOf(key); erase(key); return previous }, () => { for (const key of mapKeys()) erase(key) }, undefined, false) },
     entrySet: { value: () => legadoListView(() => mapKeys().map(mapEntry), undefined, undefined, (index) => { const keys = mapKeys(); if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= keys.length) throw new RangeError("List index out of bounds"); const key = keys[Number(index)]; const entry = mapEntry(key); erase(key); return entry }, () => { for (const key of mapKeys()) erase(key) }, (left, right) => { const leftKey = typeof left?.getKey === "function" ? left.getKey() : left?.key; const rightKey = typeof right?.getKey === "function" ? right.getKey() : right?.key; if (leftKey === undefined || rightKey === undefined || !Object.is(leftKey, rightKey)) return false; const leftValue = typeof left?.getValue === "function" ? left.getValue() : left?.value; const rightValue = typeof right?.getValue === "function" ? right.getValue() : right?.value; return Object.is(leftValue, rightValue) }, false) },
     size: { value: () => mapKeys().length },
     isEmpty: { value: () => mapKeys().length === 0 },
     forEach: { value: (callback) => { if (typeof callback === "function") for (const [key, value] of entries()) callback(key, value, api) } },
   })
   const api = new Proxy(target, {
-    get: (object, key, receiver) => Object.prototype.hasOwnProperty.call(object, key) ? Reflect.get(object, key, receiver) : data[key],
+    get: (object, key, receiver) => Object.prototype.hasOwnProperty.call(object, key) ? Reflect.get(object, key, receiver) : hasKey(key) ? valueOf(key) : undefined,
     set: (object, key, value) => { assign(key, value); return true },
-    has: (object, key) => Reflect.has(object, key) || Object.prototype.hasOwnProperty.call(data, key),
-    ownKeys: (object) => [...new Set([...Reflect.ownKeys(object), ...mapKeys()])],
+    has: (object, key) => Reflect.has(object, key) || hasKey(key),
+    ownKeys: (object) => [...new Set([...Reflect.ownKeys(object), ...Reflect.ownKeys(data)])],
     getOwnPropertyDescriptor: (object, key) => Reflect.getOwnPropertyDescriptor(object, key) ?? Reflect.getOwnPropertyDescriptor(data, key),
-    deleteProperty: (object, key) => Reflect.has(object, key) ? false : erase(key),
+    deleteProperty: (object, key) => Reflect.has(object, key) ? false : erase(keyOf(key)),
   })
   return api
 }

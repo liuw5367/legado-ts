@@ -2833,6 +2833,24 @@
       ]
     },
     {
+      "operation": "rule.bridgeObjects",
+      "method": "java.util.HashMap numeric and String keys",
+      "reference": "jdk-direct",
+      "tsEntry": "packages/source-core/src/rules/source-runtime.ts → Java Map key storage",
+      "requiredDimensions": [
+        "normal",
+        "edge"
+      ],
+      "caseIds": [
+        "rule.bridgeObjects.hashmap-key-types",
+        "rule.bridgeObjects.hashmap-signed-zero-key"
+      ],
+      "manifestMembers": [
+        "java-collections-string::001-map-get",
+        "java-collections-string::002-map-put"
+      ]
+    },
+    {
       "operation": "rule.scriptLibrary",
       "method": "jsLib 纯函数与来源级全局状态",
       "reference": "upstream-guided-flow",

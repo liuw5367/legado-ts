@@ -542,6 +542,33 @@ internal fun bridgeReturnedObjects(input: JsonObject): Any {
             val second = map.put("item", "乙")
             mapOf("missing" to missing, "first" to first, "second" to second, "current" to map["item"], "size" to map.size)
         }
+        "map-key-types" -> runMapPutAllScript("""
+            var m = new Packages.java.util.HashMap();
+            var numberPrevious = m.put(1, "numeric");
+            var stringPrevious = m.put("1", "text");
+            var updatedNumberPrevious = m.put(1, "numeric-updated");
+            var copy = new Packages.java.util.HashMap(m);
+            var copyByPutAll = new Packages.java.util.HashMap(); copyByPutAll.putAll(m);
+            var removedNumber = m.remove(1);
+            JSON.stringify({size:m.size(), numberPrevious:numberPrevious, stringPrevious:stringPrevious,
+                updatedNumberPrevious:updatedNumberPrevious, numberValue:copy.get(1), stringValue:copy.get("1"),
+                copySize:copy.size(), copyNumberValue:copy.get(1), copyStringValue:copy.get("1"),
+                putAllSize:copyByPutAll.size(), putAllNumberValue:copyByPutAll.get(1), putAllStringValue:copyByPutAll.get("1"),
+                removedNumber:removedNumber, sizeAfterNumberRemove:m.size(), remainingStringValue:m.get("1")})
+        """.trimIndent())
+        "map-signed-zero-key" -> runMapPutAllScript("""
+            var m = new Packages.java.util.HashMap();
+            var negativePrevious = m.put(-0, "negative-zero");
+            var positivePrevious = m.put(0, "positive-zero");
+            var copy = new Packages.java.util.HashMap(m);
+            var copyByPutAll = new Packages.java.util.HashMap(); copyByPutAll.putAll(m);
+            var removedNegative = m.remove(-0);
+            JSON.stringify({size:m.size(), negativePrevious:negativePrevious, positivePrevious:positivePrevious,
+                negativeValue:copy.get(-0), positiveValue:copy.get(0), copySize:copy.size(),
+                copyNegativeValue:copy.get(-0), copyPositiveValue:copy.get(0), putAllSize:copyByPutAll.size(),
+                putAllNegativeValue:copyByPutAll.get(-0), putAllPositiveValue:copyByPutAll.get(0),
+                removedNegative:removedNegative, sizeAfterNegativeRemove:m.size(), remainingPositiveValue:m.get(0)})
+        """.trimIndent())
         "map-putall" -> runMapPutAllScript("""
             var source = new Packages.java.util.HashMap();
             source.put("shared", "new"); source.put("copied", "value");
