@@ -189,13 +189,24 @@ function rsaHash(value: string | undefined): string | undefined {
   return `sha${match[1]}`
 }
 
-function rsaOptions(transformation: string, parameters: { hash?: string; mgfHash?: string; label?: Uint8Array } = {}): { padding: number; oaepHash?: string; oaepLabel?: Buffer } {
+function supportsIndependentOaepMgf(): boolean {
+  // Node 26.8 才加入 mgf1Hash；更早版本可能忽略未知选项，不能按默认摘要继续解密。
+  const [major = 0, minor = 0] = process.versions.node.split('.').map(Number)
+  return major > 26 || (major === 26 && minor >= 8)
+}
+
+function rsaOptions(transformation: string, parameters: { hash?: string; mgfHash?: string; label?: Uint8Array } = {}): { padding: number; oaepHash?: string; mgf1Hash?: string; oaepLabel?: Buffer } {
   if (/NoPadding/iu.test(transformation)) return { padding: constants.RSA_NO_PADDING }
   if (/OAEP/iu.test(transformation)) {
-    const hash = rsaHash(parameters.hash) ?? rsaHash(/SHA-(\d+)/iu.exec(transformation)?.[1] ?? /SHA(\d+)/iu.exec(transformation)?.[1])
+    const hash = rsaHash(parameters.hash) ?? rsaHash(/SHA-(\d+)/iu.exec(transformation)?.[1] ?? /SHA(\d+)/iu.exec(transformation)?.[1]) ?? 'sha1'
     const mgfHash = rsaHash(parameters.mgfHash) ?? hash
-    if (hash !== undefined && mgfHash !== undefined && hash !== mgfHash) throw unsupportedTransformation(transformation, 'provider')
-    return { padding: constants.RSA_PKCS1_OAEP_PADDING, ...(hash === undefined ? {} : { oaepHash: hash }), ...(parameters.label === undefined ? {} : { oaepLabel: Buffer.from(parameters.label) }) }
+    if (mgfHash !== hash && !supportsIndependentOaepMgf()) throw unsupportedTransformation(transformation, 'provider')
+    return {
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: hash,
+      ...(mgfHash === hash ? {} : { mgf1Hash: mgfHash }),
+      ...(parameters.label === undefined ? {} : { oaepLabel: Buffer.from(parameters.label) }),
+    }
   }
   return { padding: constants.RSA_PKCS1_PADDING }
 }

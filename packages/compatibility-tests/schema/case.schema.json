@@ -2506,6 +2506,15 @@
               "mgf": {
                 "type": "string"
               },
+              "publicKey": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "roundtripPlaintext": {
+                "type": "string"
+              },
               "privateKey": {
                 "type": "string"
               },

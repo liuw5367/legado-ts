@@ -79,16 +79,27 @@ export async function execute(item: CaseInput): Promise<unknown> {
         try { decrypt('wrong'); } catch (error) { rejectsWrongAad = true; }
         return {ciphertext: Array.from(encrypted, n => (n & 255).toString(16).padStart(2, '0')).join(''), plaintext, rejectsWrongAad};
       `)
+      const roundtrip = typeof i.publicKey === 'string' && typeof i.label === 'string' && typeof i.roundtripPlaintext === 'string'
+        ? `var publicKey = security.KeyFactory.getInstance('RSA').generatePublic(new security.spec.X509EncodedKeySpec(java.base64DecodeToByteArray(${json('publicKey')})));
+        var labeledOptions = new spec.OAEPParameterSpec('SHA-256', 'MGF1', new security.spec.MGF1ParameterSpec(${json('mgf')}), new spec.PSource.PSpecified(java.strToBytes(${json('label')})));
+        rsa.init(Cipher.ENCRYPT_MODE, publicKey, labeledOptions);
+        var encrypted = rsa.doFinal(java.strToBytes(${json('roundtripPlaintext')}));
+        rsa.init(Cipher.DECRYPT_MODE, key, labeledOptions);
+        output.roundtripPlaintext = java.bytesToStr(rsa.doFinal(encrypted));`
+        : ''
       const result = await host.executeWorkflowJavaScript({ source, stage: 'book', code: `${cipherSetup}
         var security = Packages.java.security;
         var key = security.KeyFactory.getInstance('RSA').generatePrivate(new security.spec.PKCS8EncodedKeySpec(java.base64DecodeToByteArray(${json('privateKey')})));
         var options = new spec.OAEPParameterSpec('SHA-256', 'MGF1', new security.spec.MGF1ParameterSpec(${json('mgf')}), new spec.PSource.PSpecified(new Uint8Array()));
         var rsa = Cipher.getInstance('RSA/ECB/OAEPWithSHA-256AndMGF1Padding');
         rsa.init(Cipher.DECRYPT_MODE, key, options);
-        java.bytesToStr(rsa.doFinal(java.base64DecodeToByteArray(${json('ciphertext')})));
+        var plaintext = java.bytesToStr(rsa.doFinal(java.base64DecodeToByteArray(${json('ciphertext')})));
+        var output = {status:'success', plaintext};
+        ${roundtrip}
+        output;
       ` })
       if (result.status === 'capability-missing') return { status: result.status, plaintext: null }
-      return { status: result.status, plaintext: checked(result) }
+      return { status: result.status, ...(checked(result) as Record<string, unknown>) }
     }
     case 'rule.font':
       return script(host, `var bad = java.queryBase64TTF(${json('errorFont')}), good = java.queryBase64TTF(${json('correctFont')});

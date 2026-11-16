@@ -7,6 +7,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.KeyFactory
 import java.security.spec.MGF1ParameterSpec
 import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 import java.util.HexFormat
 import javax.crypto.AEADBadTagException
@@ -36,11 +37,22 @@ internal fun providerCryptoEvidence(input: JsonObject): Any {
         return mapOf("ciphertext" to HexFormat.of().formatHex(encrypted), "plaintext" to decrypt(aad),
             "rejectsWrongAad" to (runCatching { decrypt("wrong".encodeToByteArray()) }.exceptionOrNull() is AEADBadTagException))
     }
-    val key = KeyFactory.getInstance("RSA", provider).generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(text("privateKey"))))
+    val keyFactory = KeyFactory.getInstance("RSA", provider)
+    val key = keyFactory.generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(text("privateKey"))))
     val cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding", provider)
     val spec = OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec(text("mgf")), PSource.PSpecified.DEFAULT)
     cipher.init(Cipher.DECRYPT_MODE, key, spec)
-    return mapOf("status" to "success", "plaintext" to cipher.doFinal(Base64.getDecoder().decode(text("ciphertext"))).decodeToString())
+    val plaintext = cipher.doFinal(Base64.getDecoder().decode(text("ciphertext"))).decodeToString()
+    val result = mutableMapOf("status" to "success", "plaintext" to plaintext)
+    if (input.has("publicKey") && input.has("label") && input.has("roundtripPlaintext")) {
+        val publicKey = keyFactory.generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(text("publicKey"))))
+        val labeledSpec = OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec(text("mgf")), PSource.PSpecified(text("label").toByteArray(Charsets.UTF_8)))
+        cipher.init(Cipher.ENCRYPT_MODE, publicKey, labeledSpec)
+        val encrypted = cipher.doFinal(text("roundtripPlaintext").toByteArray(Charsets.UTF_8))
+        cipher.init(Cipher.DECRYPT_MODE, key, labeledSpec)
+        result["roundtripPlaintext"] = cipher.doFinal(encrypted).decodeToString()
+    }
+    return result
 }
 
 internal fun fontEvidence(input: JsonObject): Any {

@@ -760,6 +760,9 @@
       "aad": "string",
       "plaintext": "string",
       "mgf": "string",
+      "publicKey": "string",
+      "label": "string",
+      "roundtripPlaintext": "string",
       "privateKey": "string",
       "ciphertext": "string"
     }
