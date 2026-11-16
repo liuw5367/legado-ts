@@ -2,7 +2,7 @@ import { executeInfoMap } from './info-map.ts'
 import { executeMainJsFlow } from './main-js-flow.ts'
 import { executeRedirect } from './redirect.ts'
 import { executeZipDownload } from './zip-download.ts'
-import { decodeImage, parseRelaxedJsonPreservingKeyOrder } from '../../source-core/src/index.ts'
+import { decodeImage, MemorySourceScriptCache, parseRelaxedJsonPreservingKeyOrder } from '../../source-core/src/index.ts'
 import { splitSourceRequestUrl } from '../../source-core/src/runtime/request-url.ts'
 import { executeContentLifecycle } from './content-lifecycle.ts'
 import { executeContentBatchFlow } from './content-batch-flow.ts'
@@ -150,6 +150,8 @@ export async function execute(item: CaseInput): Promise<unknown> {
         }))
         return JSON.parse(String(checked(result)))
       }
+      const kind = str('kind')
+      const sharedCache = kind === 'isolation' ? new MemorySourceScriptCache() : undefined
       const observe = async (session: NodeSourceSession, setup = '') => {
         const observed = await executeState(session, `${setup}
           var bytes = cache.getByteArray(${key});
@@ -157,15 +159,14 @@ export async function execute(item: CaseInput): Promise<unknown> {
         `)
         return { ...observed, storedVariable: session.snapshotRuntimeState().sourceVariables?.[session.source.bookSourceUrl] ?? null }
       }
-      const first = createNodeSourceSession(source)
+      const first = createNodeSourceSession(source, sharedCache === undefined ? {} : { sharedCache })
       try {
         const missing = await observe(first)
         const empty = await observe(first, `cache.put(${key}, ""); cache.put(${key}, Uint8Array.from(${bytes})); source.putVariable("");`)
         const overwritten = await observe(first, `cache.put(${key}, ${value}); source.putVariable(${value}); source.put(${key}, ${value});`)
         const snapshot = JSON.parse(JSON.stringify(first.snapshotRuntimeState())) as NodeSourceRuntimeSnapshot
-        const kind = str('kind')
         if (kind === 'isolation') {
-          const other = createNodeSourceSession({ ...source, bookSourceUrl: 'https://second.fixture.invalid' }, { initialRuntimeState: snapshot })
+          const other = createNodeSourceSession({ ...source, bookSourceUrl: 'https://second.fixture.invalid' }, { initialRuntimeState: snapshot, sharedCache: sharedCache! })
           try {
             return { first: overwritten, other: await observe(other), unchanged: await observe(first) }
           } finally {

@@ -23,6 +23,8 @@ createNodeSourceSession
 
 `NodeSourceSessionOptions` 可替换网络、Cookie、字符集、脚本缓存、初始 source 变量、时钟、并发端口、平台端口和文件根目录。没有传入 `cookieStore` 时，session 创建自己的 `NodeCookieStore`；没有传入网络时，`NodeNetworkHost` 使用同一个 Cookie store。请求 host 把当前书源通过每次 bridge 调用传入，避免并发书源共享可变的“当前 source”字段。登录 header、登录信息、source variable 和 source key/value 在 session 内按源 URL 隔离；动态 loginUi 默认值沿用 `BaseSource.getLoginInfoMap()` 的执行顺序。默认 `NodeSourceRuntimePlatform` 提供 t2s/s2t、稳定的宿主 deviceID、阅读/主题配置和 source 导航上下文；浏览器、WebView、验证码、媒体和 UI 动作通过 `platform` 注入，未注入时保留明确的 capability-missing。`NodeSourceConcurrency` 把 Android `singleFlight`、`lock` 和 `tick` 的等待、跳过、取消、溢出与 LRU 语义放在 session 之外的宿主端口中，避免同一源的不同脚本执行只看到局部锁。
 
+`sharedCache` 可由应用注入宿主共享缓存：普通 CacheManager 键和 ByteArray 键优先按同一宿主提供的缓存跨 session 读取与写入；未命中时再读取本 session 缓存。变量、内存缓存和文件缓存仍按 session 管理。`sharedCache` 的用户隔离、进程间持久化与清理周期由应用负责；reader-web 将共享缓存按 repository 实例和 userId 分开，并只在当前 Node 进程内保留共享层。
+
 ## 请求与规则桥接
 
 `SourceRequestHost` 只组合 Node 能力，书源请求选项和工作流语义仍由 core 执行。规则中的 network、network-all 和 network-response bridge 经过同一请求运行时；Cookie get/set/remove 只作用于当前 URL 和 session 的 Cookie store，token bridge 当前明确拒绝。`network-all` 最多同时处理 8 个地址；异步 bridge 调用链的嵌套深度上限为 3，超出返回配置错误。嵌套请求会跳过动态 source header，只保留静态头，以切断 header 脚本自递归。

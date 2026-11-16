@@ -1098,6 +1098,26 @@
         "output/run-eOc0JJ/report.json"
       ],
       "resolution": "固定 Jsoup 1.23.2 的 QueryParser.consumeIndex 对参数执行 StringUtil.isNumeric 并解析为 Int，CSS :eq/:lt/:gt 的负数不是倒数索引或空/全匹配，而是 SelectorParseException。HTML 和 XML adapter 现在接受经过 Java 字符串空白裁剪的非负 ASCII Int，并拒绝负数、非数字和 Int 溢出；legacy tag.a.-1 属于另一套规则索引语法，不受此限制。四个负值选择器（含 XML 模式）均由 JVM/TS 同输入案例验证为拒绝。"
+    },
+    {
+      "id": "C12-SOURCE-STATE-CACHE-SHARING",
+      "caseIds": [
+        "rule.sourceState.batch-isolation"
+      ],
+      "classification": "runtime-fix",
+      "state": "resolved",
+      "owner": "implementation-agent",
+      "reference": {
+        "kind": "upstream-adapted",
+        "method": "CacheManager.get/put/getByteArray/putByteArray"
+      },
+      "tsEntry": "packages/source-node/src/source-session.ts → NodeSourceSessionOptions.sharedCache; apps/reader-web/server/runtime/source-session.ts → repository/user cache",
+      "evidence": [
+        "output/run-GfNwcb/report.json",
+        "output/run-Mi9MVY/report.json",
+        "apps/reader-web/tests/source-execution.test.ts"
+      ],
+      "resolution": "Android/JVM 对照确认普通与 ByteArray CacheManager 值按原始 key 跨书源可见。Node session 可注入 sharedCache；reader-web 在同一 repository 实例和 userId 下共享普通/字节键，source variable 与其他用户仍隔离。双端案例、完整矩阵和 reader-web 搜索入口回归均通过。共享层仅保留于当前 Node 进程；跨进程/重启持久化与旧每源快照迁移仍由应用宿主负责。"
     }
   ]
 }

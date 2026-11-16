@@ -71,6 +71,8 @@
 
 非 WebView 兼容性覆盖宽松 URL 请求选项、Cookie Map、日期脚本接口、批量正文回存及登录凭据生命周期；这些项目已加入共享案例和固定 Android JVM 参考端对照。登录头流程对照锁定的 Android `BaseSource`、`AnalyzeUrl` 与 `CookieStore` 源码摘录，验证同站注入、Cookie 合并、快照恢复和删除；应用级密钥存储、多实例持久化、动态登录头脚本及 Android 应用网络容器仍需单独取证。各项按同输入验证实际请求、脚本分支或交付结果，证据范围和保留差异见[已知差异](compatibility/known-divergences.md)。
 
+P105 已将 Android 普通与 ByteArray CacheManager 的跨书源 raw key 可见性用于同进程、同用户的 reader-web shared cache；源变量及跨用户缓存仍隔离。该共享层是进程内状态，进程重启和多进程持久化仍由应用宿主负责，验证状态见[兼容性状态总览](compatibility/status.md)和[已知差异](compatibility/known-divergences.md)。
+
 基础双端验证按方法和重载生成场景证据。固定书源语料保留原文、摘要及全部来源位置，脚本片段使用固定上游 Rhino 与离线夹具。复现命令、覆盖分母和观察项说明见[双端测试包](../packages/compatibility-tests/README.md)。
 
 - **源码事实**：可以从当前源码或已有测试核验的行为。

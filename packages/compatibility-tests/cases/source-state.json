@@ -88,22 +88,40 @@
       "state",
       "boundary"
     ],
-    "allowedDifferences": [
-      {
-        "path": "$/value/other/cached",
-        "jvm": "复写",
-        "ts": null,
-        "reason": "Android CacheManager 普通缓存使用应用级原始键，Node 默认会话按书源隔离缓存。"
-      },
-      {
-        "path": "$/value/other/bytes",
-        "jvm": [
-          0,
-          255
-        ],
-        "ts": null,
-        "reason": "Android ACache 字节使用应用级原始键，Node 默认会话按书源隔离缓存。"
+    "expected": {
+      "outcome": "return",
+      "value": {
+        "first": {
+          "cached": "复写",
+          "bytes": [
+            0,
+            255
+          ],
+          "variable": "复写",
+          "storedVariable": "复写",
+          "key": "复写"
+        },
+        "other": {
+          "cached": "复写",
+          "bytes": [
+            0,
+            255
+          ],
+          "variable": "",
+          "storedVariable": null,
+          "key": ""
+        },
+        "unchanged": {
+          "cached": "复写",
+          "bytes": [
+            0,
+            255
+          ],
+          "variable": "复写",
+          "storedVariable": "复写",
+          "key": "复写"
+        }
       }
-    ]
+    }
   }
 ]

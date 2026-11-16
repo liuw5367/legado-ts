@@ -133,6 +133,43 @@ test('reader-web search follows OkHttp cross-origin redirects with explicit Cook
   }
 })
 
+test('reader-web shares Android CacheManager raw keys across sources for one user', async () => {
+  const repository = new MemoryReaderRepository(); const user = randomUUID(); const otherUser = randomUUID()
+  const sourceAUrl = 'https://8.8.4.30/source-a'
+  const sourceBUrl = 'https://8.8.4.31/source-b'
+  const sourceB = {
+    ...sourceDefinition(sourceBUrl),
+    mainJs: `function search(){
+      var bytes = cache.getByteArray("peer-bytes");
+      return [{ name: String(cache.get("peer-value") || "missing") + "|" + Array.from(bytes || []).join(",") + "|" + source.getVariable(), bookUrl: "${sourceBUrl}/book" }];
+    }`,
+  }
+  const sourceA = {
+    ...sourceDefinition(sourceAUrl),
+    mainJs: `function search(){
+      cache.put("peer-value", "from-source-a");
+      cache.put("peer-bytes", Uint8Array.from([0, 255]));
+      source.putVariable("source-a-only");
+      return [{ name: "写入来源", bookUrl: "${sourceAUrl}/book" }];
+    }`,
+  }
+  await importBatch(repository, user, [sourceA, sourceB])
+  await importBatch(repository, otherUser, [sourceB])
+  const runtime = createReaderRuntime(repository)
+  const searchOne = async (userId: string, sourceId: string) => {
+    const run = await repository.createSearch(userId, { keyword: '共享缓存', sourceId, sourceIds: [sourceId] })
+    return runtime.runSearchBatch(userId, run.id)
+  }
+
+  const first = await searchOne(user, sourceAUrl)
+  const second = await searchOne(user, sourceBUrl)
+  const isolated = await searchOne(otherUser, sourceBUrl)
+
+  assert.equal(first.search.status, 'success', JSON.stringify(first.sourceResults))
+  assert.equal(second.candidates[0]?.candidate.name, 'from-source-a|0,255|')
+  assert.equal(isolated.candidates[0]?.candidate.name, 'missing||')
+})
+
 test('reader-web search parses Android balanced inline JSONPath in a source response', async (t) => {
   const repository = new MemoryReaderRepository(); const user = randomUUID()
   const base = 'https://8.8.4.9'

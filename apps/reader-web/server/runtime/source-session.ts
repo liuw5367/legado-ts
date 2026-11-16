@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { KeyedConcurrencyHost, NodeCookieStore, createNodeSourceSession } from '@legado/source-node'
 import type { NodeSourceSession, NodeSourceRuntimeSnapshot } from '@legado/source-node'
+import { MemorySourceScriptCache } from '@legado/source-core'
 import type { InfoMapSaveRequest, SourceSession } from '@legado/source-core'
 import type { ReaderRepository, StoredSourceRecord } from '../db/repository.ts'
 import type { RuntimeStateSnapshot } from '../domain/types.ts'
@@ -13,6 +14,23 @@ const SOURCE_RUNTIME_LEASE_MS = 5 * 60 * 1000
  * 200 个分页请求同时打出去。
  */
 const SOURCE_PAGE_CONCURRENCY = 6
+
+// The weak key ties cache lifetime to one reader runtime/repository; the user key keeps tenants isolated.
+const sourceCaches = new WeakMap<ReaderRepository, Map<string, MemorySourceScriptCache>>()
+
+function sharedSourceCache(repository: ReaderRepository, userId: string): MemorySourceScriptCache {
+  let byUser = sourceCaches.get(repository)
+  if (byUser === undefined) {
+    byUser = new Map()
+    sourceCaches.set(repository, byUser)
+  }
+  let cache = byUser.get(userId)
+  if (cache === undefined) {
+    cache = new MemorySourceScriptCache()
+    byUser.set(userId, cache)
+  }
+  return cache
+}
 
 export interface PersistentSourceState {
   /** Android InfoMap 的当前快照；仅在本次租约内向书源脚本暴露。 */
@@ -113,6 +131,7 @@ export async function withPersistentSourceSession<T>(repository: ReaderRepositor
     session = createNodeSourceSession(source.normalizedSource, {
       cookieStore,
       concurrency: new KeyedConcurrencyHost({ maxConcurrent: SOURCE_PAGE_CONCURRENCY }),
+      sharedCache: sharedSourceCache(repository, userId),
       ...(lease.snapshot.variables === undefined ? {} : { initialVariables: lease.snapshot.variables }),
       ...(lease.snapshot.nodeRuntime === undefined ? {} : { initialRuntimeState: lease.snapshot.nodeRuntime as NodeSourceRuntimeSnapshot }),
       fileRoot: sourceFileRoot(userId, source.sourceId, source.fingerprint),

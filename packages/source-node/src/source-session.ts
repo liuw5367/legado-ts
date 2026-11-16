@@ -17,7 +17,10 @@ export interface NodeSourceSessionOptions {
   networkOptions?: Omit<NodeNetworkOptions, 'cookieStore'>
   cookieStore?: CookieStore
   encoding?: NodeCharsetCodec
+  /** 当前书源会话的缓存；缺省时会从每书源 runtime snapshot 恢复。 */
   cache?: SourceScriptCache
+  /** Android CacheManager 普通/字节缓存的宿主共享范围；不写入每书源 snapshot。 */
+  sharedCache?: SourceScriptCache
   initialVariables?: Readonly<Record<string, string>>
   clock?: ClockHost
   concurrency?: ConcurrencyHost
@@ -75,6 +78,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
   if (restoredLoginInfos !== undefined) loginInfos.set(sourceKey, restoredLoginInfos)
   const cache = options.cache ?? new MemorySourceScriptCache()
   if (runtimeState?.cache !== undefined) cache.restore?.(runtimeState.cache)
+  const scriptCache = options.sharedCache === undefined ? cache : withSharedCache(cache, options.sharedCache)
   const sourceState: SourceRuntimeState = {
     getVariable: (currentSource) => sourceVariables.get(currentSource.bookSourceUrl) ?? '',
     setVariable: (currentSource, value) => { if (value === null) sourceVariables.delete(currentSource.bookSourceUrl); else sourceVariables.set(currentSource.bookSourceUrl, value) },
@@ -152,7 +156,7 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
   const session = createSourceSession({
     source,
     ...(options.initialVariables === undefined ? {} : { initialVariables: options.initialVariables }),
-    cache,
+    cache: scriptCache,
     ...(options.clock === undefined ? {} : { clock: options.clock }),
     network,
     createPorts: ({ initialVariables, cache, network: limitedNetwork, updateConcurrentRate, requestObserver }) => {
@@ -198,6 +202,45 @@ export function createNodeSourceSession(source: NormalizedSource, options: NodeS
       }
     },
   })
+}
+
+/** 普通与字节 CacheManager 键按宿主共享；内存/文件缓存仍留在书源会话内并随源快照保存。 */
+function withSharedCache(local: SourceScriptCache, shared: SourceScriptCache): SourceScriptCache {
+  const cache: SourceScriptCache = {
+    get: async (key, signal) => (await shared.get(key, signal)) ?? await local.get(key, signal),
+    put: async (key, value, saveTime, signal) => {
+      await local.put(key, value, saveTime, signal)
+      await shared.put(key, value, saveTime, signal)
+    },
+    delete: async (key, signal) => {
+      await local.delete(key, signal)
+      await shared.delete(key, signal)
+    },
+    getFromMemory: (key) => local.getFromMemory(key),
+    putMemory: (key, value, signal) => local.putMemory(key, value, signal),
+    deleteMemory: (key, signal) => local.deleteMemory(key, signal),
+    getFile: (key) => local.getFile(key),
+    putFile: (key, value, saveTime, signal) => local.putFile(key, value, saveTime, signal),
+  }
+  if (local.getByteArray !== undefined || shared.getByteArray !== undefined) {
+    cache.getByteArray = async (key, signal) => (await shared.getByteArray?.(key, signal)) ?? await local.getByteArray?.(key, signal)
+  }
+  if (local.putByteArray !== undefined || shared.putByteArray !== undefined) {
+    cache.putByteArray = async (key, value, saveTime, signal) => {
+      await local.putByteArray?.(key, value, saveTime, signal)
+      await shared.putByteArray?.(key, value, saveTime, signal)
+    }
+  }
+  if (local.getFromDisk !== undefined || shared.getFromDisk !== undefined) {
+    cache.getFromDisk = async (key, signal) => (await shared.getFromDisk?.(key, signal)) ?? await local.getFromDisk?.(key, signal)
+  }
+  if (local.clear !== undefined && shared.clear !== undefined) {
+    cache.clear = async () => {
+      await local.clear?.()
+      await shared.clear?.()
+    }
+  }
+  return cache
 }
 
 function validRuntimeSnapshot(value: NodeSourceRuntimeSnapshot | undefined, sourceKey: string): value is NodeSourceRuntimeSnapshot {
